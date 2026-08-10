@@ -4,6 +4,8 @@ node_modules/
 .next/
 .next-e2e/
 dist/
+packages/db/src/generated/
+packages/db/generated/
 coverage/
 output/
 ops/release/production.json

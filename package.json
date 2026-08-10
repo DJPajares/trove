@@ -10,6 +10,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
+    "predev": "pnpm --filter @trove/db build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "turbo run lint",

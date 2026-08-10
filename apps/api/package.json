@@ -2,12 +2,20 @@
   "name": "@trove/api",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "devDependencies": {
-    "@trove/config": "workspace:*"
+    "@trove/config": "workspace:*",
+    "@types/node": "^26.2.0",
+    "tsx": "^4.23.11"
   },
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
-    "lint": "eslint src --max-warnings=0",
+    "dev": "tsx watch src/server.ts",
+    "lint": "eslint . --max-warnings=0",
+    "start": "node dist/server.js",
     "typecheck": "tsc --noEmit --project tsconfig.json"
+  },
+  "dependencies": {
+    "fastify": "^5.11.3"
   }
 }

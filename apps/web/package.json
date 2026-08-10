@@ -2,12 +2,22 @@
   "name": "@trove/web",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "devDependencies": {
-    "@trove/config": "workspace:*"
+    "@trove/config": "workspace:*",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4"
   },
   "scripts": {
-    "build": "tsc --project tsconfig.build.json",
-    "lint": "eslint src --max-warnings=0",
+    "build": "next build",
+    "dev": "next dev --port 3000",
+    "lint": "eslint . --max-warnings=0",
+    "start": "next start --port 3000",
     "typecheck": "tsc --noEmit --project tsconfig.json"
+  },
+  "dependencies": {
+    "next": "^16.3.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   }
 }

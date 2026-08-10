@@ -11,7 +11,7 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev --port 3000",
-    "lint": "eslint . --max-warnings=0",
+    "lint": "oxlint --deny-warnings src",
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit --project tsconfig.json"
   },

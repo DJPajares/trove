@@ -7,7 +7,7 @@
   },
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
-    "lint": "eslint src --max-warnings=0",
+    "lint": "oxlint --deny-warnings src",
     "typecheck": "tsc --noEmit --project tsconfig.json"
   }
 }

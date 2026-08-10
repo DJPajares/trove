@@ -11,7 +11,7 @@
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
     "dev": "tsx watch src/server.ts",
-    "lint": "eslint . --max-warnings=0",
+    "lint": "oxlint --deny-warnings src",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit --project tsconfig.json"
   },

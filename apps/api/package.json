@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {
+    "@trove/db": "workspace:*",
     "fastify": "^5.11.3"
   }
 }

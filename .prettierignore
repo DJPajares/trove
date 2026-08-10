@@ -1,0 +1,14 @@
+.git/
+node_modules/
+.pnpm-store/
+.turbo/
+dist/
+.next/
+coverage/
+pnpm-lock.yaml
+
+# Approved project documentation is intentionally preserved as accepted.
+AGENTS.md
+CLAUDE.md
+PRD.md
+README.md

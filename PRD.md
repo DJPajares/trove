@@ -1,6 +1,6 @@
 # Trove — Product Requirements Document
 
-**Status:** Approved for implementation planning  
+**Status:** Approved as the definitive product-requirements source for implementation
 **Product:** Trove  
 **Category:** Travel Companion  
 **Core philosophy:** **Plan it. Live it. Remember it.**
@@ -263,7 +263,9 @@ Rules:
 - Before the local start date: Planning.
 - From the local start date through the local end date, inclusive: Active.
 - After the local end date: Completed.
-- Changing trip dates must explicitly preserve, move, unschedule, or otherwise resolve itinerary data that falls outside the new range. It must not silently delete affected itinerary items.
+- If a trip date change would remove one or more itinerary days that contain items, Trove must require confirmation before applying the date change.
+- On confirmation, itinerary items from removed/out-of-range days are moved to **Unscheduled** with all item data and relationships preserved; they are never silently deleted.
+- Expanding the trip date range creates the additional empty itinerary days. Items on dates that remain inside the new range keep their assigned dates.
 
 ## 6.2 Planning Readiness
 
@@ -311,7 +313,9 @@ Start/end dates are inclusive and end date cannot precede start date.
 
 - User Profile contains a default home location.
 - A trip may override this with a specific Starting Location.
-- Starting Location represents where the traveller begins the trip and may contribute to relevant first-day routing context.
+- Starting Location represents where the traveller begins the trip.
+- For the first trip day, Starting Location is used as the origin of the first calculated route segment only when there is no more specific explicit origin for that segment and the day does not begin from an explicit/inferred Daily Base.
+- If a Daily Base applies to the first day, normal day routing starts from that Daily Base; Starting Location does not create an automatic extra route leg to the base. Travel from Starting Location to the first-day base must be represented explicitly in the itinerary/logistics if the user wants it routed.
 - Starting Location is not the automatic base for every trip day and remains separate from Daily Base and Accommodation.
 
 ## 7.5 Travel Party
@@ -756,7 +760,7 @@ Each date between the inclusive trip start/end dates produces a day in the itine
 
 Each day uses the deterministic local timezone rules in Section 32.1.
 
-If trip dates change, itinerary items that would fall outside the new range must be handled explicitly. Trove must not silently delete them; they may be moved, unscheduled, or resolved through a clear user-facing flow.
+Trip-date-change behavior is authoritative in Section 6.1. If removed/out-of-range days contain itinerary items, Trove requires confirmation and moves those items to **Unscheduled** while preserving their data and relationships.
 
 ## 17.2 Minimum Item
 
@@ -786,7 +790,8 @@ Optional:
 - reservation,
 - tasks,
 - transport details,
-- expense,
+- planned cost,
+- linked actual Expense(s),
 - priority,
 - custom location.
 
@@ -811,7 +816,7 @@ Provide an Unscheduled area for items not assigned to a day.
 
 Planning order and travel-time execution state are separate.
 
-Trip Mode may use these item states:
+Trip Mode uses these item states:
 
 - upcoming,
 - completed,
@@ -843,11 +848,13 @@ Route calculations are estimates and should degrade honestly when location/provi
 
 ## 18.2 Daily Route Summary
 
-Possible summary:
+When the required route/location data is available, the MVP daily route summary must show:
 
-- number of places,
+- number of scheduled place-backed itinerary items,
 - estimated travel time,
 - distance.
+
+If route/location data is incomplete, show the available item count and an honest unavailable/partial state for travel time or distance rather than fabricating values.
 
 This later contributes to Plan Score.
 
@@ -873,7 +880,7 @@ For normal per-day base context, use this precedence:
 2. applicable Accommodation,
 3. no daily base.
 
-Starting Location is **not** a fallback daily base. It may separately contribute to relevant first-day routing before/alongside that day's base context.
+Starting Location is **not** a fallback daily base. Its first-day route-origin behavior is defined in Section 7.4 and must not add an implicit route leg when a Daily Base already governs the start of the day.
 
 An applicable Accommodation may provide the day's base automatically unless the user explicitly overrides the day with a Daily Base.
 
@@ -905,7 +912,8 @@ Optional:
 - attachment/document,
 - notes,
 - linked itinerary item,
-- linked Place.
+- linked Place,
+- planned cost (amount + ISO currency).
 
 Possible reservation types include:
 
@@ -917,7 +925,7 @@ Possible reservation types include:
 - rental car,
 - tour.
 
-Classification should not be mandatory unless needed.
+Classification should not be mandatory unless behavior depends on it. A Reservation that supplies Accommodation/Daily Base behavior must be explicitly identified as **Accommodation** (or stored using the equivalent accommodation subtype) so routing and applicable-day rules are deterministic.
 
 ## 19.2 Flights
 
@@ -1108,6 +1116,8 @@ Optional:
 - itinerary item,
 - note.
 
+A dated Expense stores the resolved local timezone used to assign it to a trip day. Timezone inheritance/re-resolution follows Section 32.1 and must not change merely because the app is opened from another device timezone.
+
 Suggested categories:
 
 - Food
@@ -1127,9 +1137,20 @@ Optional trip-level intended spend set by the user.
 
 ### Projected Cost
 
-Expected cost from known user-entered planned costs attached to the current trip plan, itinerary, reservations, or similar accepted planned-cost sources.
+Expected cost derived only from explicit user-entered **planned cost** values in the current trip plan.
 
-MVP Projected Cost must not invent AI/provider estimates.
+Valid MVP Projected Cost sources are:
+
+- optional planned cost on an itinerary item, and
+- optional planned cost on a Reservation, including Accommodation/Flight/Transport reservations.
+
+Rules:
+
+- Planned cost requires amount + ISO currency.
+- If a Reservation with a planned cost is linked to an itinerary item, that Reservation planned cost is authoritative for the link and the itinerary item's planned cost is excluded from Projected Cost while the link exists.
+- A separate planned purchase must be represented by a separate unlinked planned-cost source; Trove must not infer that two linked planned-cost values are separate purchases.
+- Actual Expense records never feed Projected Cost.
+- MVP Projected Cost must not invent AI/provider estimates.
 
 ### Actual Spend
 
@@ -1151,7 +1172,7 @@ Always preserve:
 - original amount,
 - original ISO currency.
 
-Optionally show an approximate converted home-currency value and the rate/reference used where practical.
+Optionally show an approximate converted home-currency value together with the exchange-rate source/reference and the rate date (or effective timestamp where the provider supplies one).
 
 Conversion/display values must never overwrite the original amount/currency.
 
@@ -1182,6 +1203,8 @@ Optional:
 - due date/time,
 - note,
 - completed state.
+
+A Task due date/time inherits timezone from its attachment context in this order: itinerary item, trip day, then trip reference timezone. The resolved due timezone is persisted with the dated Task and is re-resolved only when the user changes the due date/time or its attached day/item context.
 
 Task Templates are part of the MVP under global Tools and may populate reusable trip tasks without turning Trove into a generic task manager.
 
@@ -1266,12 +1289,15 @@ Notifications should be:
 - actionable,
 - low-frequency.
 
-MVP triggers may include:
+The MVP must support these triggers when notifications are enabled and the required source data exists:
+
+- incomplete Task with a due date/time,
+- upcoming Reservation with a date/time,
+- leave-by reminder when a timed itinerary item and sufficiently reliable route duration are available.
+
+Additional MVP triggers may include:
 
 - upcoming trip,
-- incomplete important task,
-- upcoming reservation,
-- leave-by reminder,
 - current/forecast weather that could affect an immediate planned action when reliable data exists,
 - known timing issue,
 - minimal post-trip Memory/Experience Rating prompt.
@@ -1299,13 +1325,13 @@ Offline support is core.
 After a trip has been loaded/prepared for offline use, Trove must preserve the Trove-owned data required for the supported travel experience, including where implemented:
 
 - Trip Mode shell and core Now/Today/Trip content,
-- current/upcoming itinerary,
+- the **entire trip itinerary from start date through end date**,
 - Trip Places and understandable Place context,
 - reservation/accommodation information,
 - Tasks,
 - contextual Notes,
 - pinned/relevant Trip Info,
-- expense entry,
+- expense entry and previously loaded Expense data,
 - queued Memories/photos,
 - cached currency rates,
 - previously fetched route information where provider terms permit,
@@ -1332,7 +1358,7 @@ The sync system must:
 
 Supported domains include, as they are implemented:
 
-- itinerary complete/skip/reorder/move/time/daypart edits,
+- itinerary item create, complete/skip, reorder/move, time/daypart edits, and delete/unschedule,
 - tasks,
 - expenses,
 - notes,
@@ -1349,7 +1375,7 @@ Cached weather/routes/currency/provider data must not be presented as current wh
 
 ## 28.4 Ready Offline
 
-Provide trip offline-readiness state based on the supported categories actually prepared.
+Provide trip offline-readiness state based on the supported categories actually prepared for the **entire trip date range**, not only the current day.
 
 Possible categories include:
 
@@ -1358,7 +1384,19 @@ Possible categories include:
 - Reservations/accommodation
 - Important selected documents
 - Tasks/Notes/Trip Info
+- Expenses
 - Currency/route context where supported
+
+The minimum Trove-owned payload required for **Ready** is:
+
+- trip identity/dates and required trip metadata,
+- every itinerary day and itinerary item for the full trip date range,
+- Trip Place identity plus permitted location/display context needed to understand those items,
+- applicable Daily Base/Accommodation context,
+- implemented travel-critical Reservations, Tasks, Notes, and pinned Trip Info included in the offline contract,
+- previously loaded Expense records for the trip plus the ability to queue new Expense entries.
+
+Selected documents are required only when the user has explicitly selected them for offline use. Provider-derived route/weather/currency/place enrichment may affect freshness (`Stale`) but must not make otherwise complete Trove-owned itinerary data disappear.
 
 Readiness must support:
 
@@ -1389,32 +1427,155 @@ Available:
 
 Plan Score is deterministic and advisory. It does not require an LLM for MVP scoring or explanations and never automatically edits the itinerary.
 
-Primary factors may include:
+## 29.1 Required MVP Factors
 
-- feasibility,
-- opening-hours evidence,
-- timing conflicts,
-- travel effort,
-- pace/buffer,
-- route efficiency/backtracking,
-- Must Go priority fit,
-- public place quality as a supporting signal,
-- clearly better provider-backed alternatives when a material improvement can be explained.
+Each factor produces an internal **0–100 factor score** when applicable/evaluable, or an explicit `unknown` / `not applicable` state.
 
-Rules:
+Required MVP factor groups and base weights:
 
-- Feasibility and travel effort must have materially greater influence than small public-rating differences.
-- Missing, stale, unknown, or not-applicable evidence must not be treated as poor planning by default.
-- **Confidence** and **completeness** are separate from the numeric score.
-- When there is not enough evidence to justify a useful score, Trove may withhold the number and show `Not enough information yet` or equivalent.
-- Travel-heavy days may use different factor applicability while remaining part of the same scoring system.
-- Per-day results aggregate into an overall trip score without allowing low-information days to create false precision or disproportionate influence.
-- Relevant itinerary/order/time/place/route/reservation/provider-evidence changes should invalidate/recalculate affected results.
-- Explanations should show concise **What works** and **Worth improving** guidance.
-- Better-alternative suggestions must preserve the user's original itinerary until explicitly accepted.
-- MVP Plan Score must not depend on future AI, traffic-aware replanning, or disruption-intelligence features.
+These weights are the initial MVP scoring contract used for implementation and regression testing. They are internal product logic and are not exposed as a formula in normal user-facing UI. Any later recalibration must preserve the product invariants in this section and be covered by the Plan Score calibration/regression task.
+
+| Factor | Base weight | Notes |
+| --- | ---: | --- |
+| Feasibility | 35% | Includes timing conflicts, opening-hours evidence, reservation/logistics conflicts, and impossible/tight transitions. |
+| Travel effort | 25% | Uses known route duration/distance and relevant day/start context. |
+| Pace / buffer | 15% | Evaluates whether known activity/travel timing is overpacked or has reasonable breathing room. |
+| Route efficiency / backtracking | 10% | Evaluates meaningful geographic inefficiency without automatically optimizing order. |
+| Must Go priority fit | 10% | Trip-scoped factor used only in the overall score; it is not assigned arbitrarily to individual days. |
+| Place quality | 5% | Supporting provider-backed quality signal only; small rating differences must never outweigh feasibility/travel effort. |
+
+Opening hours and timing conflicts are evidence inside **Feasibility**, not separate independently weighted factors.
+
+Provider-backed **better alternatives are recommendation outputs, not an additional weighted factor**.
+
+Must Go priority fit is always `not applicable` to day scores. For travel-heavy days, other factors that genuinely do not apply (for example Place quality) are also marked `not applicable`; remaining applicable weights are renormalized rather than penalizing the day.
+
+### Initial Factor-Score Rubrics
+
+These are the authoritative initial MVP calibration rules. A factor is evaluable only when at least one required evidence point for its rubric exists. Missing inputs remain `unknown`; they are not scored as zero. All calculated factor scores are clamped to **0–100**.
+
+**Feasibility** starts at 100. Each distinct known conflict applies only its single highest applicable deduction:
+
+- 50 points: a hard conflict, including overlapping fixed commitments, a planned visit entirely outside known opening hours, or a required route that arrives more than 30 minutes after a fixed start;
+- 25 points: a material conflict, including arrival 1–30 minutes after a fixed start or a planned visit partially outside known opening hours;
+- 10 points: a tight but still possible transition with less than 15 minutes of positive buffer after required travel.
+
+The same underlying conflict must not be deducted more than once merely because it is detected from multiple evidence sources.
+
+**Travel effort** uses total known local/base-to-item/inter-item route time for the day. Structured long-distance flight/train/ferry journey duration is evaluated as logistics/feasibility rather than local travel effort.
+
+A zero-minute total is evaluable only when all required local/base/inter-item segments are known and their total is actually zero. Missing route segments make this factor `unknown` rather than producing a zero-minute/100 score.
+
+| Known local route time | Score |
+| --- | ---: |
+| 0–60 minutes | 100 |
+| 61–120 minutes | 85 |
+| 121–180 minutes | 70 |
+| 181–240 minutes | 50 |
+| More than 240 minutes | 30 |
+
+**Pace / buffer** uses the lower score produced by the applicable rules below:
+
+- For two or more fixed-time items, use the smallest positive buffer remaining after activity duration and required travel: at least 30 minutes = 100; 15–29 = 80; 5–14 = 60; 0–4 = 40; negative buffer = 20.
+- When known activity durations plus local travel describe most of the day: up to 8 hours = 100; more than 8–10 hours = 75; more than 10–12 hours = 50; more than 12 hours = 25.
+- If neither timing/duration rule can be evaluated, the factor is `unknown`.
+
+**Route efficiency / backtracking** applies when at least three stops/base points are routable. Compare planned route duration with the best available duration for the same stops while respecting fixed-order commitments:
+
+| Planned ÷ best available route duration | Score |
+| --- | ---: |
+| Up to 1.10 | 100 |
+| More than 1.10–1.25 | 80 |
+| More than 1.25–1.50 | 60 |
+| More than 1.50–2.00 | 40 |
+| More than 2.00 | 20 |
+
+This comparison is advisory and must not automatically reorder the itinerary.
+
+**Must Go priority fit** is trip-scoped rather than assigned arbitrarily to individual days. It is `not applicable` to day scores. When at least one Trip Place is marked Must Go, the trip-level score is:
+
+`100 × distinct Must Go Trip Places scheduled in the itinerary ÷ total distinct Must Go Trip Places`
+
+**Place quality** uses the mean score of provider-backed places with an available current/permitted public rating:
+
+| Public rating | Place score |
+| --- | ---: |
+| 4.50–5.00 | 100 |
+| 4.00–4.49 | 85 |
+| 3.50–3.99 | 70 |
+| 3.00–3.49 | 55 |
+| Below 3.00 | 40 |
+
+Places without usable rating evidence are excluded rather than penalized. Place quality remains capped at its 5% weight.
+
+## 29.2 Score, Completeness, and Confidence
+
+For evaluable factors, the day score is the weighted average of factor scores using the applicable base weights above, renormalized across factors that are both applicable and evaluable.
+
+**Completeness** and **confidence** are separate internal 0–100 values:
+
+- Completeness = `100 × sum of base weights for evaluable day factors ÷ sum of base weights for applicable day factors`. Must Go is excluded because it is trip-scoped. A factor is evaluable only under its rubric in Section 29.1.
+- Confidence = reliability/freshness of the evidence used for the evaluated factors.
+
+For the initial MVP, evaluated evidence receives these reliability values:
+
+- 100: explicit user-owned timing/reservation data or fresh provider/route evidence;
+- 75: permitted cached provider/route evidence that is not stale;
+- 50: normal/estimated duration or coarse daypart evidence;
+- 25: stale evidence that remains safe to use with a visible stale qualification.
+
+Evidence too stale or incomplete to support the factor is `unknown` and affects completeness rather than receiving a misleading confidence value. Factor confidence is the mean reliability of the evidence used by that factor. Day confidence is the applicable-factor-weighted mean of evaluated factor confidence values.
+
+Their user-facing presentation (percentage, label, meter, etc.) is a design decision, but the semantics above are authoritative.
+
+A numeric day Plan Score is shown only when:
+
+- completeness is at least **60%**, and
+- at least one core factor (**Feasibility** or **Travel effort**) is applicable and evaluable.
+
+Otherwise Trove withholds the number and shows `Not enough information yet` or equivalent. Missing, stale, unknown, or not-applicable evidence must never be treated as a zero/poor score merely to reach the threshold.
+
+## 29.3 Overall Trip Score
+
+The overall trip score uses only days that meet the numeric-score threshold above.
+
+First calculate the completeness-weighted mean of scorable day scores, with each day's contribution weighted by `day completeness / 100`, so low-information days cannot have the same influence as well-evidenced days.
+
+- If Must Go priority fit is `not applicable`, that completeness-weighted day mean is the overall trip score.
+- If Must Go priority fit applies, the overall trip score is **90%** of the completeness-weighted day mean plus **10%** of the trip-level Must Go priority-fit score.
+- If no trip day is scorable, the overall trip score is withheld even if Must Go priority fit can be calculated.
+
+Repeated evaluation of identical evidence must produce identical results.
+
+The **numeric 0–100 score is canonical** for MVP. User-facing qualitative labels/bands are optional presentation and must not introduce a second scoring meaning or alter calculation semantics.
+
+Calculations use unrounded intermediate values. Displayed factor/day/overall scores are rounded to the nearest whole number using standard half-up rounding.
+
+## 29.4 Explanations and Alternatives
+
+Explanations should show concise **What works** and **Worth improving** guidance and prioritize issues in this order:
+
+1. feasibility/timing conflicts,
+2. travel effort,
+3. pace/buffer,
+4. route efficiency,
+5. Must Go fit,
+6. supporting Place quality.
+
+Better-alternative suggestions must preserve the user's original itinerary until the user explicitly confirms an action. Every suggestion must declare its action type:
+
+- **Replace** — on confirmation, replace the targeted Place reference on the existing itinerary item while preserving compatible item metadata (date/time/daypart/duration/notes/priority); incompatible linked data must be reviewed rather than silently discarded.
+- **Add** — on confirmation, create a new itinerary item in the suggested day/position or Unscheduled location shown to the user.
+
+No alternative may silently add, replace, remove, or reorder itinerary items.
+
+## 29.5 Recalculation and Boundaries
+
+Relevant itinerary/order/time/place/route/reservation/provider-evidence changes invalidate/recalculate affected results.
 
 Plan Score remains independent from lifecycle, manual Ready status, Trip Mode availability, Preview availability, and Experience Rating.
+
+MVP Plan Score must not depend on future AI, traffic-aware replanning, disruption-intelligence features, or Smart Cost Forecasting.
 
 ---
 
@@ -1469,6 +1630,8 @@ Where possible, automatically associate:
 - Place.
 
 Automatically inferred context must remain correctable.
+
+A Memory persists the resolved local timezone used for its captured timestamp. It inherits from the associated itinerary item/Place/day context, then the trip reference timezone. If the user explicitly corrects the Memory's date/time, day, or Place context, Trove re-resolves and persists the corresponding timezone; ordinary trip changes must not silently reinterpret an existing Memory timestamp.
 
 Photo-only and note-only Memories are valid.
 
@@ -1556,11 +1719,41 @@ The fallback must be persisted/resolved deterministically so lifecycle does not 
 
 ### Day and Item Timezones
 
-- A dated/timed itinerary item, reservation, or logistics record should use its applicable local timezone when it can be resolved from its Place/location.
+- A dated/timed itinerary item, reservation, or logistics record must use its applicable local timezone when it can be resolved from its Place/location.
 - A trip day resolves its default local timezone in this order: explicit Daily Base, applicable Accommodation, first ordered located itinerary item with a resolvable timezone, then the trip reference timezone.
 - Exact-time items without a more specific timezone use the applicable day timezone.
 - Cross-timezone transport must preserve separate local departure and arrival times/timezones.
 - Home, Trip Mode, Today, notifications, and date-driven lifecycle behavior must not rely on device timezone alone when a more authoritative trip/day/item timezone exists.
+
+### Other Dated Records
+
+All dated MVP records must persist or resolve a deterministic timezone rather than relying on the current device timezone at render time:
+
+- **Tasks:** inherit from attached itinerary item, then trip day, then trip reference timezone. Re-resolve when the user changes the Task's due date/time or attachment context.
+- **Expenses:** inherit from linked itinerary item/Place/day where available, otherwise the trip reference timezone. Persist the resolved timezone used to assign the Expense to a local day. Re-resolve only when the user changes its date/time or linked day/item/Place context.
+- **Memories:** inherit from capture/associated item/Place/day context, otherwise the trip reference timezone, and persist that timezone with the captured timestamp. Re-resolve only when the user explicitly corrects the Memory's time/day/Place context.
+- **Notifications:** use the timezone of the underlying dated source record/event they represent.
+
+### Timezone Stability and Re-resolution
+
+Persisted timezone context must not change merely because the user opens Trove from another device/location.
+
+Re-resolution is scoped to the affected level:
+
+- **Trip reference timezone:** re-resolve when the user changes the destination/Starting Location currently supplying that timezone or explicitly corrects the trip timezone.
+- **Day default timezone:** re-resolve when that day's explicit Daily Base, applicable Accommodation, or first ordered located itinerary-item fallback changes.
+- **Itinerary/reservation/logistics record:** re-resolve when the user changes that record's local date/time, linked Place/location, or assigned day.
+- **Task, Expense, and Memory:** follow the domain-specific triggers under **Other Dated Records**. A later change to a trip/day default does not reinterpret a timezone already persisted on one of these records unless the user changes that record's own date/time or attachment/link context.
+
+Updated trip/day defaults apply to newly created records and records that do not yet have persisted timezone context. Domain-specific rules take precedence over the general trip/day fallback rules for already-persisted dated records.
+
+When timezone re-resolution changes the relationship between an instant and local civil time:
+
+- records anchored to an authoritative instant (for example captured Memory time or provider-confirmed transport time) preserve that instant and recompute their local representation;
+- user-entered floating local plans without an authoritative instant preserve the entered local date/time and recompute the derived instant;
+- cross-timezone transport preserves its authoritative departure and arrival endpoint semantics independently.
+
+If either rule changes the displayed local calendar day or derived instant, Trove must surface that consequence explicitly rather than silently moving unrelated records.
 
 ---
 
@@ -1622,6 +1815,8 @@ Users should be able to:
 - delete local/offline copies.
 
 Deleting local offline content must not delete the cloud trip.
+
+Explicit sign-out must remove locally accessible private authenticated data, including selected offline documents and authentication/session material. If unsynchronized local changes exist, Trove must warn that signing out will discard those unsynced local changes before completing sign-out. Cloud data is not deleted.
 
 Offline local data must remain scoped to the authenticated Trove user and must not be exposed when a different user signs in on the same device.
 

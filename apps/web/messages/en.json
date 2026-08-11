@@ -19,6 +19,16 @@
     "light": "Light",
     "dark": "Dark"
   },
+  "account": {
+    "button": "Open account menu",
+    "signedOut": "Not signed in",
+    "profile": "Profile",
+    "signIn": "Sign in",
+    "signUp": "Create account",
+    "signOut": "Sign out",
+    "signingOut": "Signing out…",
+    "signOutError": "We couldn't sign you out. Try again."
+  },
   "profile": {
     "eyebrow": "Your account",
     "title": "Profile and travel settings",
@@ -67,11 +77,26 @@
     "empty": "Not set"
   },
   "auth": {
-    "title": "Welcome to Trove",
-    "description": "Sign in to keep your travel plans private and available across devices.",
-    "google": "Continue with Google",
-    "pending": "Continuing…",
-    "error": "We couldn't start sign-in. Check your connection and try again."
+    "signInTitle": "Sign in to Trove",
+    "signInDescription": "Sign in to keep your travel plans private and available across devices.",
+    "signUpTitle": "Create your Trove account",
+    "signUpDescription": "Create an account to keep your travel plans private and available across devices.",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm password",
+    "sign-in": "Sign in",
+    "sign-up": "Create account",
+    "signIn": "Sign in",
+    "createAccount": "Create account",
+    "newToTrove": "New to Trove?",
+    "alreadyHaveAccount": "Already have an account?",
+    "pendingSignIn": "Signing in…",
+    "pendingSignUp": "Creating account…",
+    "passwordTooShort": "Password must be at least 6 characters.",
+    "passwordMismatch": "Passwords do not match.",
+    "confirmationSent": "Check your email to confirm your account before signing in.",
+    "configurationError": "Sign-in is not configured. Check your connection and try again.",
+    "error": "We couldn't complete that request. Check your details and try again."
   },
   "home": {
     "eyebrow": "Your travel companion",

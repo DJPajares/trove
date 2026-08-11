@@ -1,40 +1,40 @@
-import { LogIn } from 'lucide-react';
+import { UserPlus } from 'lucide-react';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 
 import { EmailAuthForm } from '@/components/email-auth-form';
 import { getSafeRedirectPath } from '@/lib/auth/redirect';
 
-type SignInPageProps = {
+type SignUpPageProps = {
   searchParams: Promise<{ next?: string }>;
 };
 
-export default async function SignInPage({ searchParams }: Readonly<SignInPageProps>) {
+export default async function SignUpPage({ searchParams }: Readonly<SignUpPageProps>) {
   const [{ next }, t] = await Promise.all([searchParams, getTranslations('auth')]);
 
   return (
     <section
-      aria-labelledby="sign-in-heading"
+      aria-labelledby="sign-up-heading"
       className="grid min-h-[calc(100svh-8rem)] place-items-center"
     >
       <div className="w-full max-w-md rounded-[var(--radius-2xl)] border border-border bg-card p-6 shadow-sm sm:p-8">
         <div className="mb-6 flex size-12 items-center justify-center rounded-[var(--radius-lg)] bg-brand/10 text-brand">
-          <LogIn aria-hidden="true" className="size-6" />
+          <UserPlus aria-hidden="true" className="size-6" />
         </div>
-        <h1 id="sign-in-heading" className="text-3xl font-semibold tracking-tight text-foreground">
-          {t('signInTitle')}
+        <h1 id="sign-up-heading" className="text-3xl font-semibold tracking-tight text-foreground">
+          {t('signUpTitle')}
         </h1>
-        <p className="mt-3 text-base leading-7 text-muted-foreground">{t('signInDescription')}</p>
+        <p className="mt-3 text-base leading-7 text-muted-foreground">{t('signUpDescription')}</p>
         <div className="mt-8">
-          <EmailAuthForm mode="sign-in" nextPath={getSafeRedirectPath(next)} />
+          <EmailAuthForm mode="sign-up" nextPath={getSafeRedirectPath(next)} />
         </div>
         <p className="mt-6 text-center text-sm text-muted-foreground">
-          {t('newToTrove')}{' '}
+          {t('alreadyHaveAccount')}{' '}
           <Link
             className="font-medium text-foreground underline underline-offset-4"
-            href="/sign-up"
+            href="/sign-in"
           >
-            {t('createAccount')}
+            {t('signIn')}
           </Link>
         </p>
       </div>

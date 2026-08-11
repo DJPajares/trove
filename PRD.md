@@ -122,7 +122,7 @@ The Fastify API should remain reusable by web and future native clients.
 ## 3.6 Authentication Foundation
 
 - Use the existing Supabase project and Supabase Auth user pool.
-- Google is the initial Trove sign-in provider.
+- Email/password is the initial Trove sign-in method.
 - Trove must not create a second credentials/account system for a user who already exists in the shared Supabase Auth project.
 - The existing `auth.users.id` remains the identity anchor for Trove-owned Profile and domain data.
 - Trove establishes and manages its own application session even when the underlying Supabase Auth user is shared with another app.
@@ -1829,7 +1829,7 @@ Onboarding is accepted but should be implemented later in the initial developmen
 Keep it short:
 
 1. Welcome
-2. Sign in with the existing Supabase/Google authentication flow
+2. Sign in with the existing Supabase Auth email/password flow
 3. Name
 4. Home location
 5. Preferred/home currency

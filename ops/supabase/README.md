@@ -1,3 +1,8 @@
 # Supabase project setup
 
-Run `profile-photos.sql` in the Supabase SQL editor before testing profile photo uploads. It creates the private `profile-photos` bucket and owner-scoped Storage policies. The bucket and policies are intentionally kept outside Prisma because Supabase owns the `storage` schema.
+Run the relevant setup scripts in the Supabase SQL editor before testing uploads:
+
+- `profile-photos.sql` creates the private Profile photo bucket.
+- `trip-covers.sql` creates the private trip cover bucket.
+
+Both scripts add owner-scoped Storage policies. The buckets and policies stay outside Prisma because Supabase owns the `storage` schema.

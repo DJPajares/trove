@@ -326,7 +326,10 @@ export async function listItinerary(userId: string, tripId: string) {
       referenceTimeZone: true,
       startDate: true,
       itineraryDays: {
-        include: { items: { include: itineraryItemInclude, orderBy: { position: 'asc' } } },
+        include: {
+          dailyBaseTripPlace: true,
+          items: { include: itineraryItemInclude, orderBy: { position: 'asc' } },
+        },
         orderBy: { date: 'asc' },
       },
       itineraryItems: {
@@ -347,6 +350,7 @@ export async function listItinerary(userId: string, tripId: string) {
       date: formatDateOnly(day.date),
       defaultTimeZone: day.defaultTimeZone,
       defaultTimeZoneSource: mapDayTimeZoneSource(day.defaultTimeZoneSource),
+      dailyBaseTripPlaceId: day.dailyBaseTripPlaceId,
       id: day.id,
       items: day.items.map(serializeItem),
       notes: day.notes,
@@ -361,6 +365,118 @@ export async function listItinerary(userId: string, tripId: string) {
     tripPlaces: trip.tripPlaces.map((tripPlace) => serializeTripPlace(tripPlace)),
     unscheduledItems: trip.itineraryItems.map(serializeItem),
   };
+}
+
+export async function organizeItineraryItem(
+  userId: string,
+  tripId: string,
+  itemId: string,
+  input: { itineraryDayId: string | null; position: number },
+) {
+  const prisma = getPrismaClient();
+  await prisma.$transaction(async (transaction) => {
+    await findOwnedTrip(transaction, userId, tripId);
+    const current = await transaction.itineraryItem.findFirst({
+      where: { id: itemId, tripId },
+      include: itineraryItemInclude,
+    });
+    if (!current) throw new ItineraryNotFoundError('itinerary_item_not_found');
+    const targetDay = input.itineraryDayId
+      ? await findDay(transaction, tripId, input.itineraryDayId)
+      : null;
+    const siblings = await transaction.itineraryItem.findMany({
+      where: {
+        id: { not: itemId },
+        itineraryDayId: input.itineraryDayId,
+        tripId,
+      },
+      orderBy: { position: 'asc' },
+      select: { id: true },
+    });
+    const position = Math.min(Math.max(input.position, 0), siblings.length);
+    siblings.splice(position, 0, { id: itemId });
+    await Promise.all(
+      siblings.map((item, index) =>
+        transaction.itineraryItem.update({ where: { id: item.id }, data: { position: index } }),
+      ),
+    );
+
+    const movingDay = current.itineraryDayId !== input.itineraryDayId;
+    const targetTripPlace = movingDay
+      ? await findTripPlace(transaction, tripId, current.tripPlaceId)
+      : null;
+    const timeZone = targetDay
+      ? resolveItemTimeZone({
+          customLocationTimeZone: current.customLocationTimeZone,
+          dayTimeZone: targetDay.defaultTimeZone,
+          tripPlaceTimeZone: targetTripPlace?.place.customTimeZone ?? null,
+        })
+      : null;
+    const schedule =
+      targetDay && current.localStartTime && current.timeSemantics === 'FLOATING_LOCAL' && timeZone
+        ? scheduleData(
+            { kind: 'exact', localTime: formatLocalTime(current.localStartTime) ?? '' },
+            formatDateOnly(targetDay.date),
+            timeZone.timeZone,
+          )
+        : null;
+    await transaction.itineraryItem.update({
+      where: { id: itemId },
+      data: {
+        itineraryDayId: input.itineraryDayId,
+        position,
+        ...(timeZone
+          ? {
+              startInstant: schedule?.startInstant ?? current.startInstant,
+              timeZone: timeZone.timeZone,
+              timeZoneResolvedAt: new Date(),
+              timeZoneSource: timeZone.source,
+            }
+          : {}),
+      },
+    });
+    if (current.itineraryDayId)
+      await refreshDayDefaultTimeZone(transaction, tripId, current.itineraryDayId);
+    if (targetDay && targetDay.id !== current.itineraryDayId) {
+      await refreshDayDefaultTimeZone(transaction, tripId, targetDay.id);
+    }
+  });
+}
+
+export async function duplicateItineraryItem(userId: string, tripId: string, itemId: string) {
+  const prisma = getPrismaClient();
+  await prisma.$transaction(async (transaction) => {
+    await findOwnedTrip(transaction, userId, tripId);
+    const current = await transaction.itineraryItem.findFirst({ where: { id: itemId, tripId } });
+    if (!current) throw new ItineraryNotFoundError('itinerary_item_not_found');
+    const maxPosition = await transaction.itineraryItem.aggregate({
+      where: { itineraryDayId: current.itineraryDayId, tripId },
+      _max: { position: true },
+    });
+    const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...copy } = current;
+    await transaction.itineraryItem.create({
+      data: { ...copy, position: (maxPosition._max.position ?? -1) + 1 },
+    });
+  });
+}
+
+export async function setItineraryDayBase(
+  userId: string,
+  tripId: string,
+  itineraryDayId: string,
+  tripPlaceId: string | null,
+) {
+  const prisma = getPrismaClient();
+  await prisma.$transaction(async (transaction) => {
+    await findOwnedTrip(transaction, userId, tripId);
+    await findDay(transaction, tripId, itineraryDayId);
+    await findTripPlace(transaction, tripId, tripPlaceId);
+    await transaction.itineraryDay.update({
+      where: { id: itineraryDayId },
+      data: { dailyBaseTripPlaceId: tripPlaceId },
+    });
+    await refreshDayDefaultTimeZone(transaction, tripId, itineraryDayId);
+  });
 }
 
 export async function createItineraryItem(

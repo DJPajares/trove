@@ -4,6 +4,7 @@ import {
   Bookmark,
   Check,
   CircleAlert,
+  Eye,
   FolderPlus,
   MapPinned,
   NotebookPen,
@@ -16,6 +17,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/page-header';
+import { PlaceDetailSheet } from '@/components/place-detail-sheet';
 import { PageState } from '@/components/page-state';
 import { SearchField } from '@/components/search-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -131,6 +133,7 @@ export function SavedPlacesManager() {
   const [noteValue, setNoteValue] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [unsavingPlaceId, setUnsavingPlaceId] = useState<string | null>(null);
+  const [detailPlace, setDetailPlace] = useState<SavedPlace | null>(null);
 
   const refresh = useCallback(async () => {
     setStatus('loading');
@@ -705,6 +708,14 @@ export function SavedPlacesManager() {
                       </ItemContent>
                       <ItemActions className="shrink-0 self-start">
                         <Button
+                          aria-label={t('viewDetails', { name: getPlaceName(savedPlace) })}
+                          onClick={() => setDetailPlace(savedPlace)}
+                          size="icon-sm"
+                          variant="ghost"
+                        >
+                          <Eye aria-hidden="true" />
+                        </Button>
+                        <Button
                           aria-label={t('manageCollections', { name: getPlaceName(savedPlace) })}
                           onClick={() => setCollectionPickerPlace(savedPlace)}
                           size="icon-sm"
@@ -739,6 +750,12 @@ export function SavedPlacesManager() {
         </div>
       )}
 
+      <PlaceDetailSheet
+        context={{ isSaved: true, note: detailPlace?.note }}
+        onOpenChange={(open) => !open && setDetailPlace(null)}
+        open={Boolean(detailPlace)}
+        place={detailPlace?.place ?? null}
+      />
       <Sheet
         onOpenChange={(open) => {
           setAddOpen(open);

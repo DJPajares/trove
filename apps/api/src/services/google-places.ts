@@ -30,10 +30,15 @@ export const GOOGLE_PLACE_DETAILS_FIELD_MASK = [
   'displayName',
   'formattedAddress',
   'location',
+  'nationalPhoneNumber',
   'types',
   'primaryType',
   'googleMapsUri',
   'photos',
+  'rating',
+  'regularOpeningHours',
+  'userRatingCount',
+  'websiteUri',
 ].join(',');
 
 type Fetcher = (input: string | URL, init?: RequestInit) => Promise<Response>;
@@ -78,9 +83,14 @@ type GooglePlaceDetails = {
     latitude?: number;
     longitude?: number;
   };
+  nationalPhoneNumber?: string;
   photos?: GooglePhoto[];
   primaryType?: string;
+  rating?: number;
+  regularOpeningHours?: { weekdayDescriptions?: string[] };
   types?: string[];
+  userRatingCount?: number;
+  websiteUri?: string;
 };
 
 type GooglePhotoMedia = {
@@ -353,12 +363,19 @@ export class GooglePlacesProvider implements PlacesProvider {
       googleMapsUri: cleanString(response.googleMapsUri),
       location: hasLocation ? { latitude, longitude } : null,
       name,
+      nationalPhoneNumber: cleanString(response.nationalPhoneNumber),
       photos: (response.photos ?? [])
         .map(mapPhoto)
         .filter((photo): photo is PlacePhotoReference => photo !== null),
       primaryType,
       provider: 'google',
+      rating: typeof response.rating === 'number' ? response.rating : null,
       rawTypes,
+      regularOpeningHours: cleanStringList(response.regularOpeningHours?.weekdayDescriptions),
+      userRatingCount: Number.isInteger(response.userRatingCount)
+        ? (response.userRatingCount ?? null)
+        : null,
+      websiteUri: cleanString(response.websiteUri),
     };
   }
 

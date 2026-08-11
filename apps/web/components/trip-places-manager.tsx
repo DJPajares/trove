@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Bookmark,
   CircleAlert,
+  Eye,
   MapPinned,
   NotebookPen,
   Plus,
@@ -14,6 +15,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/page-header';
+import { PlaceDetailSheet } from '@/components/place-detail-sheet';
 import { PageState } from '@/components/page-state';
 import { SearchField } from '@/components/search-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -117,6 +119,7 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
   const [savingNote, setSavingNote] = useState(false);
   const [removingPlace, setRemovingPlace] = useState<TripPlace | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [detailPlace, setDetailPlace] = useState<TripPlace | null>(null);
 
   const refresh = useCallback(async () => {
     setStatus('loading');
@@ -507,6 +510,14 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
                 ) : null}
               </ItemContent>
               <ItemActions className="ml-auto flex-wrap justify-end gap-1">
+                <Button
+                  aria-label={t('viewDetails', { name: placeName(tripPlace) })}
+                  onClick={() => setDetailPlace(tripPlace)}
+                  size="icon-sm"
+                  variant="ghost"
+                >
+                  <Eye aria-hidden="true" />
+                </Button>
                 <Select
                   onValueChange={(value) =>
                     void handlePriority(
@@ -553,6 +564,12 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
           ))}
         </ItemGroup>
       )}
+      <PlaceDetailSheet
+        context={{ isSaved: detailPlace?.isSaved, note: detailPlace?.note, tripName }}
+        onOpenChange={(open) => !open && setDetailPlace(null)}
+        open={Boolean(detailPlace)}
+        place={detailPlace?.place ?? null}
+      />
       <Sheet
         onOpenChange={(open) => {
           setAddOpen(open);

@@ -20,6 +20,7 @@ export type SavedPlace = {
 export type SavedCollection = {
   id: string;
   name: string;
+  nationalPhoneNumber?: string | null;
   placeCount: number;
 };
 
@@ -35,7 +36,20 @@ export type ProviderSuggestion = {
 export type ProviderPlaceDetails = {
   category: ProviderSuggestion['category'];
   formattedAddress: string | null;
+  googleMapsUri?: string | null;
   name: string;
+  nationalPhoneNumber?: string | null;
+  photos?: Array<{
+    authorAttributions: Array<{ displayName: string; photoUri: string | null; uri: string | null }>;
+    heightPx: number | null;
+    name: string;
+    widthPx: number | null;
+  }>;
+  primaryType?: string | null;
+  rating?: number | null;
+  regularOpeningHours?: string[];
+  userRatingCount?: number | null;
+  websiteUri?: string | null;
 };
 
 type CachedProviderPlaceDetails = ProviderPlaceDetails & {
@@ -187,6 +201,13 @@ export function getProviderPlaceDetails(externalPlaceId: string) {
     place?: ProviderPlaceDetails;
     status: 'empty' | 'ok' | 'unavailable';
   }>(`/places/${encodeURIComponent(externalPlaceId)}`);
+}
+
+export function resolveProviderPlacePhoto(name: string) {
+  return savedRequest<{ photo?: { uri: string }; status: 'empty' | 'ok' | 'unavailable' }>(
+    '/places/photos/resolve',
+    { body: JSON.stringify({ maxWidthPx: 960, name }), method: 'POST' },
+  );
 }
 
 export function resolveProviderPlace(externalPlaceId: string) {

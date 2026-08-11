@@ -175,6 +175,22 @@
     "deleting": "Deleting…",
     "deleteError": "We couldn't delete this trip. Try again."
   },
+  "placeDetail": {
+    "close": "Close place details",
+    "customDescription": "A private Trove place.",
+    "customPlace": "Custom place",
+    "freshness": "Google data refreshed when this view opened. Check before making a time-sensitive plan.",
+    "googleMaps": "Google Maps",
+    "googleRating": "Google rating from {count} reviews",
+    "openingHours": "Typical opening hours",
+    "place": "Place",
+    "refreshing": "Refreshing Google details...",
+    "saved": "Saved in Trove",
+    "tripContext": "Considering for {trip}",
+    "unavailable": "Google details are unavailable right now. Your saved and trip context is still available.",
+    "unavailableDescription": "Current provider details are unavailable.",
+    "website": "Website"
+  },
   "itinerary": {
     "title": "Itinerary for {trip}",
     "description": "Shape each day with only the detail you need. Times, notes, and costs can stay flexible.",
@@ -298,6 +314,7 @@
     "scheduledReference": "Used by {count, plural, one {one itinerary reference} other {# itinerary references}}",
     "editNote": "Edit note for {name}",
     "remove": "Remove {name} from this trip",
+    "viewDetails": "View details for {name}",
     "referencedError": "This place is still used by {count, plural, one {one itinerary reference} other {# itinerary references}}. Resolve those references before removing it.",
     "addPlaceTitle": "Add a place",
     "addPlaceDescription": "Start with Saved Places, search Google when you need something new, or add a private place.",
@@ -387,6 +404,7 @@
     "personalNote": "Note",
     "personalNotePlaceholder": "Why you want to remember this place",
     "unsave": "Remove {name} from saved places",
+    "viewDetails": "View details for {name}",
     "addPlaceTitle": "Add a place",
     "addPlaceDescription": "Search Google when you need a new place, or add a spot that is personal to you.",
     "searchLabel": "Search Google places",

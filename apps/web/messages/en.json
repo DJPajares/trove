@@ -91,7 +91,7 @@
     "destinations": "Destinations",
     "editTrip": "Edit trip",
     "planningReadiness": "Planning readiness",
-    "readiness": { "in_progress": "In progress", "ready": "Ready" },
+    "readinessState": { "in_progress": "In progress", "ready": "Ready" },
     "sections": { "active": "Active", "completed": "Past", "planning": "Planning and upcoming" },
     "startingLocation": "Starting location",
     "startingLocationUnavailable": "No starting location set",

@@ -308,7 +308,7 @@ export function TripsManager() {
                   <div>
                     <p className="text-sm font-medium">{t('planningReadiness')}</p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {t(`readiness.${overviewTrip.planningReadiness}`)}
+                      {t(`readinessState.${overviewTrip.planningReadiness}`)}
                     </p>
                   </div>
                   <div>

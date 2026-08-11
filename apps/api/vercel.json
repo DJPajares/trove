@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "pnpm --filter @trove/db build && pnpm --filter @trove/api build",
+  "outputDirectory": "dist",
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
 }

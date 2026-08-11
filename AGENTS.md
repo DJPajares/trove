@@ -62,7 +62,8 @@ For each task:
 11. Link the PR to the Linear issue.
 12. Move the issue to `In Review`.
 13. Identify the next unblocked suggested task.
-14. Stop for human review.
+14. Move the next suggested task to `Todo`.
+15. Stop for human review.
 
 Do not auto-merge PRs. A user must manually review and approve.
 

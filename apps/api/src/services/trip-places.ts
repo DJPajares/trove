@@ -1,0 +1,221 @@
+import { getPrismaClient } from '@trove/db';
+
+import type { CanonicalPlace } from './canonical-places.js';
+
+export type TripPlacePriority = 'interested' | 'maybe' | 'must_go';
+
+export type TripPlace = {
+  createdAt: string;
+  id: string;
+  isSaved: boolean;
+  note: string | null;
+  place: CanonicalPlace;
+  priority: TripPlacePriority | null;
+  referenceCount: number;
+};
+
+export class TripPlaceNotFoundError extends Error {
+  constructor() {
+    super('trip_place_not_found');
+  }
+}
+
+export class TripPlaceReferencedError extends Error {
+  constructor(public readonly referenceCount: number) {
+    super('trip_place_referenced');
+  }
+}
+
+export class TripPlaceSourceNotFoundError extends Error {
+  constructor() {
+    super('trip_place_source_not_found');
+  }
+}
+
+export class TripPlaceTripNotFoundError extends Error {
+  constructor() {
+    super('trip_not_found');
+  }
+}
+
+function mapPriority(
+  priority: 'INTERESTED' | 'MAYBE' | 'MUST_GO' | null,
+): TripPlacePriority | null {
+  if (priority === 'MUST_GO') return 'must_go';
+  if (priority === 'INTERESTED') return 'interested';
+  if (priority === 'MAYBE') return 'maybe';
+  return null;
+}
+
+function mapPriorityInput(priority: TripPlacePriority | null) {
+  if (priority === 'must_go') return 'MUST_GO' as const;
+  if (priority === 'interested') return 'INTERESTED' as const;
+  if (priority === 'maybe') return 'MAYBE' as const;
+  return null;
+}
+
+function serializePlace(place: {
+  customLatitude: { toNumber(): number } | null;
+  customLongitude: { toNumber(): number } | null;
+  customName: string | null;
+  customNote: string | null;
+  customTimeZone: string | null;
+  id: string;
+  kind: 'CUSTOM' | 'PROVIDER';
+  providerRefs: Array<{ externalPlaceId: string; provider: 'GOOGLE' }>;
+}): CanonicalPlace {
+  return {
+    id: place.id,
+    kind: place.kind === 'CUSTOM' ? 'custom' : 'provider',
+    location:
+      place.customLatitude === null || place.customLongitude === null
+        ? null
+        : {
+            latitude: place.customLatitude.toNumber(),
+            longitude: place.customLongitude.toNumber(),
+            timeZone: place.customTimeZone,
+          },
+    name: place.customName,
+    note: place.customNote,
+    providerRefs: place.providerRefs.map((reference) => ({
+      externalPlaceId: reference.externalPlaceId,
+      provider: 'google' as const,
+    })),
+  };
+}
+
+const tripPlaceInclude = {
+  _count: {
+    select: { dailyBaseForDays: true, itineraryItems: true, timeZoneSourceForDays: true },
+  },
+  place: { include: { providerRefs: true, savedPlaces: { select: { id: true } } } },
+} as const;
+
+function serializeTripPlace(tripPlace: {
+  _count: { dailyBaseForDays: number; itineraryItems: number; timeZoneSourceForDays: number };
+  createdAt: Date;
+  id: string;
+  note: string | null;
+  place: Parameters<typeof serializePlace>[0] & { savedPlaces: Array<{ id: string }> };
+  priority: 'INTERESTED' | 'MAYBE' | 'MUST_GO' | null;
+}): TripPlace {
+  return {
+    createdAt: tripPlace.createdAt.toISOString(),
+    id: tripPlace.id,
+    isSaved: tripPlace.place.savedPlaces.length > 0,
+    note: tripPlace.note,
+    place: serializePlace(tripPlace.place),
+    priority: mapPriority(tripPlace.priority),
+    referenceCount:
+      tripPlace._count.itineraryItems +
+      tripPlace._count.dailyBaseForDays +
+      tripPlace._count.timeZoneSourceForDays,
+  };
+}
+
+async function assertOwnedTrip(userId: string, tripId: string) {
+  const trip = await getPrismaClient().trip.findFirst({
+    where: { id: tripId, ownerId: userId },
+    select: { id: true, name: true },
+  });
+  if (!trip) throw new TripPlaceTripNotFoundError();
+  return trip;
+}
+
+export async function listTripPlaces(userId: string, tripId: string) {
+  const trip = await assertOwnedTrip(userId, tripId);
+  const tripPlaces = await getPrismaClient().tripPlace.findMany({
+    where: { tripId },
+    include: {
+      ...tripPlaceInclude,
+      place: {
+        include: {
+          providerRefs: true,
+          savedPlaces: { where: { ownerId: userId }, select: { id: true } },
+        },
+      },
+    },
+    orderBy: [{ priority: 'asc' }, { createdAt: 'desc' }],
+  });
+
+  return { trip, tripPlaces: tripPlaces.map(serializeTripPlace) };
+}
+
+export async function addTripPlace(userId: string, tripId: string, placeId: string) {
+  await assertOwnedTrip(userId, tripId);
+  const prisma = getPrismaClient();
+  const place = await prisma.place.findFirst({
+    where: { id: placeId, OR: [{ kind: 'PROVIDER' }, { kind: 'CUSTOM', ownerId: userId }] },
+    select: { id: true },
+  });
+  if (!place) throw new TripPlaceSourceNotFoundError();
+
+  const tripPlace = await prisma.tripPlace.upsert({
+    where: { tripId_placeId: { placeId: place.id, tripId } },
+    create: { placeId: place.id, tripId },
+    update: {},
+    include: {
+      ...tripPlaceInclude,
+      place: {
+        include: {
+          providerRefs: true,
+          savedPlaces: { where: { ownerId: userId }, select: { id: true } },
+        },
+      },
+    },
+  });
+  return serializeTripPlace(tripPlace);
+}
+
+export async function updateTripPlace(
+  userId: string,
+  tripId: string,
+  tripPlaceId: string,
+  input: { note?: string | null; priority?: TripPlacePriority | null },
+) {
+  await assertOwnedTrip(userId, tripId);
+  const result = await getPrismaClient().tripPlace.updateMany({
+    where: { id: tripPlaceId, tripId },
+    data: {
+      ...(input.note !== undefined ? { note: input.note?.trim() || null } : {}),
+      ...(input.priority !== undefined ? { priority: mapPriorityInput(input.priority) } : {}),
+    },
+  });
+  if (!result.count) throw new TripPlaceNotFoundError();
+
+  const tripPlace = await getPrismaClient().tripPlace.findFirst({
+    where: { id: tripPlaceId, tripId },
+    include: {
+      ...tripPlaceInclude,
+      place: {
+        include: {
+          providerRefs: true,
+          savedPlaces: { where: { ownerId: userId }, select: { id: true } },
+        },
+      },
+    },
+  });
+  if (!tripPlace) throw new TripPlaceNotFoundError();
+  return serializeTripPlace(tripPlace);
+}
+
+export async function removeTripPlace(userId: string, tripId: string, tripPlaceId: string) {
+  await assertOwnedTrip(userId, tripId);
+  const prisma = getPrismaClient();
+  const tripPlace = await prisma.tripPlace.findFirst({
+    where: { id: tripPlaceId, tripId },
+    select: {
+      _count: {
+        select: { dailyBaseForDays: true, itineraryItems: true, timeZoneSourceForDays: true },
+      },
+    },
+  });
+  if (!tripPlace) throw new TripPlaceNotFoundError();
+  const referenceCount =
+    tripPlace._count.itineraryItems +
+    tripPlace._count.dailyBaseForDays +
+    tripPlace._count.timeZoneSourceForDays;
+  if (referenceCount) throw new TripPlaceReferencedError(referenceCount);
+
+  await prisma.tripPlace.delete({ where: { id: tripPlaceId } });
+}

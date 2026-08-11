@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { CalendarDays, CircleAlert, MapPinned, Plus, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
@@ -231,15 +232,25 @@ export function TripsManager() {
                 </SheetDescription>
               </div>
               {editor.mode === 'edit' ? (
-                <Button
-                  aria-label={t('deleteTripLabel', { name: editor.trip.name })}
-                  onClick={() => setTripToDelete(editor.trip)}
-                  size="icon-sm"
-                  type="button"
-                  variant="destructive"
-                >
-                  <Trash2 aria-hidden="true" />
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    render={<Link href={`/trips/${editor.trip.id}/places`} />}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <MapPinned aria-hidden="true" data-icon="inline-start" />
+                    {t('places')}
+                  </Button>
+                  <Button
+                    aria-label={t('deleteTripLabel', { name: editor.trip.name })}
+                    onClick={() => setTripToDelete(editor.trip)}
+                    size="icon-sm"
+                    type="button"
+                    variant="destructive"
+                  >
+                    <Trash2 aria-hidden="true" />
+                  </Button>
+                </div>
               ) : null}
             </div>
           </SheetHeader>

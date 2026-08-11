@@ -28,6 +28,13 @@ import {
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { SheetFooter } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -438,20 +445,23 @@ export function TripForm({ onCancel, onSaved, trip }: TripFormProps) {
               </Field>
               <Field>
                 <FieldLabel htmlFor="trip-readiness">{t('readiness')}</FieldLabel>
-                <NativeSelect
-                  className="w-full"
-                  id="trip-readiness"
-                  onChange={(event) =>
-                    updateField(
-                      'planningReadiness',
-                      event.target.value as FormState['planningReadiness'],
-                    )
-                  }
+                <Select
+                  onValueChange={(value) => {
+                    if (!value) return;
+                    updateField('planningReadiness', value as FormState['planningReadiness']);
+                  }}
                   value={form.planningReadiness}
                 >
-                  <NativeSelectOption value="in_progress">{t('inProgress')}</NativeSelectOption>
-                  <NativeSelectOption value="ready">{t('ready')}</NativeSelectOption>
-                </NativeSelect>
+                  <SelectTrigger className="w-full" id="trip-readiness">
+                    <SelectValue>
+                      {(value) => (value === 'ready' ? t('ready') : t('inProgress'))}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="in_progress">{t('inProgress')}</SelectItem>
+                    <SelectItem value="ready">{t('ready')}</SelectItem>
+                  </SelectContent>
+                </Select>
                 <FieldDescription>{t('readinessHint')}</FieldDescription>
               </Field>
             </div>

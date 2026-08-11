@@ -1,0 +1,36 @@
+import type { MetadataRoute } from 'next';
+import { getTranslations } from 'next-intl/server';
+
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const app = await getTranslations('app');
+
+  return {
+    background_color: '#f8f6ed',
+    description: app('description'),
+    display: 'standalone',
+    icons: [
+      {
+        purpose: 'any',
+        sizes: '192x192',
+        src: '/icons/trove-192.png',
+        type: 'image/png',
+      },
+      {
+        purpose: 'any',
+        sizes: '512x512',
+        src: '/icons/trove-512.png',
+        type: 'image/png',
+      },
+      {
+        purpose: 'maskable',
+        sizes: '512x512',
+        src: '/icons/trove-512.png',
+        type: 'image/png',
+      },
+    ],
+    name: app('name'),
+    short_name: app('name'),
+    start_url: '/',
+    theme_color: '#315f46',
+  };
+}

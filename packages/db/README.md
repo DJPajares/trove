@@ -2,6 +2,12 @@
 
 `@trove/db` owns Prisma configuration and migrations for the `trove` PostgreSQL schema only. It must never manage Supabase-owned schemas such as `auth` or `storage`.
 
+The Prisma schema contains a minimal `AuthUser` model only so Trove profiles can reference `auth.users.id`. Prisma's externally managed table configuration excludes `auth.users` from every migration; only Trove-owned objects are created or changed.
+
+Core private records are addressable through a profile owner or trip, while canonical provider-backed Places remain separate from Saved and Trip Place relationships. Database constraints preserve same-trip itinerary references, minimum itinerary-item content, and nullable day assignment for Unscheduled items.
+
+Keep the `trove` schema out of Supabase Data API exposure until task-scoped RLS policies are added; application access currently goes through the server-side database package.
+
 ## Environment
 
 Copy the root `.env.example` to `.env` and use the exact connection strings from the target project's Supabase **Connect** panel:

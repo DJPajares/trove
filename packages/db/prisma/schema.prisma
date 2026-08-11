@@ -5,5 +5,378 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  schemas  = ["trove"]
+  schemas  = ["auth", "trove"]
+}
+
+enum PlaceKind {
+  PROVIDER @map("provider")
+  CUSTOM   @map("custom")
+
+  @@map("place_kind")
+  @@schema("trove")
+}
+
+enum PlaceProvider {
+  GOOGLE @map("google")
+
+  @@map("place_provider")
+  @@schema("trove")
+}
+
+enum TripPlanningReadiness {
+  IN_PROGRESS @map("in_progress")
+  READY       @map("ready")
+
+  @@map("trip_planning_readiness")
+  @@schema("trove")
+}
+
+enum TripVisibility {
+  PRIVATE @map("private")
+  SHARED  @map("shared")
+  PUBLIC  @map("public")
+
+  @@map("trip_visibility")
+  @@schema("trove")
+}
+
+enum TripUserRole {
+  OWNER        @map("owner")
+  COLLABORATOR @map("collaborator")
+  VIEWER       @map("viewer")
+
+  @@map("trip_user_role")
+  @@schema("trove")
+}
+
+enum TripTimeZoneSource {
+  EXPLICIT          @map("explicit")
+  DESTINATION       @map("destination")
+  STARTING_LOCATION @map("starting_location")
+  PROFILE_HOME      @map("profile_home")
+  DEVICE_FALLBACK   @map("device_fallback")
+
+  @@map("trip_time_zone_source")
+  @@schema("trove")
+}
+
+enum DayTimeZoneSource {
+  EXPLICIT_DAILY_BASE @map("explicit_daily_base")
+  ACCOMMODATION       @map("accommodation")
+  FIRST_LOCATED_ITEM  @map("first_located_item")
+  TRIP_REFERENCE      @map("trip_reference")
+
+  @@map("day_time_zone_source")
+  @@schema("trove")
+}
+
+enum ItemTimeZoneSource {
+  EXPLICIT    @map("explicit")
+  PLACE       @map("place")
+  DAY_DEFAULT @map("day_default")
+
+  @@map("item_time_zone_source")
+  @@schema("trove")
+}
+
+enum TripPlacePriority {
+  MUST_GO    @map("must_go")
+  INTERESTED @map("interested")
+  MAYBE      @map("maybe")
+
+  @@map("trip_place_priority")
+  @@schema("trove")
+}
+
+enum ItineraryDayPart {
+  MORNING   @map("morning")
+  AFTERNOON @map("afternoon")
+  EVENING   @map("evening")
+  ANYTIME   @map("anytime")
+
+  @@map("itinerary_day_part")
+  @@schema("trove")
+}
+
+/// Supabase owns this table. Prisma Client may reference its primary key, but
+/// Prisma Migrate excludes it through `tables.external` in prisma.config.ts.
+model AuthUser {
+  id      String   @id @db.Uuid
+  profile Profile?
+
+  @@map("users")
+  @@schema("auth")
+}
+
+model Profile {
+  id               String  @id @db.Uuid
+  displayName      String? @map("display_name")
+  avatarPath       String? @map("avatar_path")
+  homePlaceId      String? @map("home_place_id") @db.Uuid
+  homeCurrencyCode String? @map("home_currency_code") @db.Char(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  authUser         AuthUser               @relation(fields: [id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  homePlace        Place?                 @relation("ProfileHomePlace", fields: [homePlaceId], references: [id], onDelete: SetNull)
+  ownedPlaces      Place[]                @relation("PlaceOwner")
+  ownedTrips       Trip[]                 @relation("TripOwner")
+  createdTrips     Trip[]                 @relation("TripCreator")
+  tripRelations    TripUserRelationship[]
+  savedPlaces      SavedPlace[]
+  savedCollections SavedCollection[]
+  collectionPlaces SavedCollectionPlace[]
+
+  @@index([homePlaceId])
+  @@map("profiles")
+  @@schema("trove")
+}
+
+model Place {
+  id              String    @id @default(uuid(7)) @db.Uuid
+  kind            PlaceKind
+  ownerId         String?   @map("owner_id") @db.Uuid
+  customName      String?   @map("custom_name")
+  customLatitude  Decimal?  @map("custom_latitude") @db.Decimal(9, 6)
+  customLongitude Decimal?  @map("custom_longitude") @db.Decimal(9, 6)
+  customTimeZone  String?   @map("custom_time_zone")
+  customNote      String?   @map("custom_note") @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner                    Profile?           @relation("PlaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  homeForProfiles          Profile[]          @relation("ProfileHomePlace")
+  providerRefs             PlaceProviderRef[]
+  savedPlaces              SavedPlace[]
+  tripPlaces               TripPlace[]
+  tripDestinations         TripDestination[]
+  startingLocationForTrips Trip[]             @relation("TripStartingPlace")
+  timeZoneSourceForTrips   Trip[]             @relation("TripTimeZoneSourcePlace")
+
+  @@index([ownerId])
+  @@map("places")
+  @@schema("trove")
+}
+
+model PlaceProviderRef {
+  id              String        @id @default(uuid(7)) @db.Uuid
+  placeId         String        @map("place_id") @db.Uuid
+  provider        PlaceProvider
+  externalPlaceId String        @map("external_place_id")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  place Place @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalPlaceId])
+  @@index([placeId])
+  @@map("place_provider_refs")
+  @@schema("trove")
+}
+
+model Trip {
+  id                             String                @id @default(uuid(7)) @db.Uuid
+  ownerId                        String                @map("owner_id") @db.Uuid
+  creatorId                      String?               @map("creator_id") @db.Uuid
+  name                           String
+  startDate                      DateTime              @map("start_date") @db.Date
+  endDate                        DateTime              @map("end_date") @db.Date
+  partySize                      Int                   @default(1) @map("party_size")
+  startingPlaceId                String?               @map("starting_place_id") @db.Uuid
+  notes                          String?               @db.Text
+  coverPhotoPath                 String?               @map("cover_photo_path")
+  planningReadiness              TripPlanningReadiness @default(IN_PROGRESS) @map("planning_readiness")
+  visibility                     TripVisibility        @default(PRIVATE)
+  referenceTimeZone              String                @map("reference_time_zone")
+  referenceTimeZoneSource        TripTimeZoneSource    @map("reference_time_zone_source")
+  referenceTimeZoneSourcePlaceId String?               @map("reference_time_zone_source_place_id") @db.Uuid
+  referenceTimeZoneResolvedAt    DateTime              @default(now()) @map("reference_time_zone_resolved_at") @db.Timestamptz(3)
+  sourceTripId                   String?               @map("source_trip_id") @db.Uuid
+  sourceAttribution              String?               @map("source_attribution") @db.Text
+  createdAt                      DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                      DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner                        Profile                @relation("TripOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  creator                      Profile?               @relation("TripCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  startingPlace                Place?                 @relation("TripStartingPlace", fields: [startingPlaceId], references: [id], onDelete: SetNull)
+  referenceTimeZoneSourcePlace Place?                 @relation("TripTimeZoneSourcePlace", fields: [referenceTimeZoneSourcePlaceId], references: [id], onDelete: SetNull)
+  sourceTrip                   Trip?                  @relation("TripSource", fields: [sourceTripId], references: [id], onDelete: SetNull)
+  derivedTrips                 Trip[]                 @relation("TripSource")
+  destinations                 TripDestination[]
+  userRelationships            TripUserRelationship[]
+  tripPlaces                   TripPlace[]
+  itineraryDays                ItineraryDay[]
+  itineraryItems               ItineraryItem[]
+
+  @@index([ownerId])
+  @@index([creatorId])
+  @@index([startingPlaceId])
+  @@index([referenceTimeZoneSourcePlaceId])
+  @@index([sourceTripId])
+  @@map("trips")
+  @@schema("trove")
+}
+
+model TripDestination {
+  id                 String    @id @default(uuid(7)) @db.Uuid
+  tripId             String    @map("trip_id") @db.Uuid
+  placeId            String    @map("place_id") @db.Uuid
+  position           Int
+  timeZone           String?   @map("time_zone")
+  timeZoneResolvedAt DateTime? @map("time_zone_resolved_at") @db.Timestamptz(3)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  trip  Trip  @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  place Place @relation(fields: [placeId], references: [id], onDelete: Restrict)
+
+  @@unique([tripId, position])
+  @@unique([tripId, placeId])
+  @@index([placeId])
+  @@map("trip_destinations")
+  @@schema("trove")
+}
+
+model TripUserRelationship {
+  tripId    String       @map("trip_id") @db.Uuid
+  profileId String       @map("profile_id") @db.Uuid
+  role      TripUserRole
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  trip    Trip    @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@id([tripId, profileId])
+  @@index([profileId, role])
+  @@map("trip_user_relationships")
+  @@schema("trove")
+}
+
+model SavedPlace {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  ownerId   String   @map("owner_id") @db.Uuid
+  placeId   String   @map("place_id") @db.Uuid
+  note      String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner           Profile                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  place           Place                  @relation(fields: [placeId], references: [id], onDelete: Restrict)
+  collectionLinks SavedCollectionPlace[]
+
+  @@unique([ownerId, placeId])
+  @@unique([id, ownerId])
+  @@index([placeId])
+  @@map("saved_places")
+  @@schema("trove")
+}
+
+model SavedCollection {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  ownerId   String   @map("owner_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner  Profile                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  places SavedCollectionPlace[]
+
+  @@unique([ownerId, name])
+  @@unique([id, ownerId])
+  @@index([ownerId])
+  @@map("saved_collections")
+  @@schema("trove")
+}
+
+model SavedCollectionPlace {
+  ownerId      String   @map("owner_id") @db.Uuid
+  collectionId String   @map("collection_id") @db.Uuid
+  savedPlaceId String   @map("saved_place_id") @db.Uuid
+  addedAt      DateTime @default(now()) @map("added_at") @db.Timestamptz(3)
+
+  owner      Profile         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  collection SavedCollection @relation(fields: [collectionId, ownerId], references: [id, ownerId], onDelete: Cascade)
+  savedPlace SavedPlace      @relation(fields: [savedPlaceId, ownerId], references: [id, ownerId], onDelete: Cascade)
+
+  @@id([collectionId, savedPlaceId])
+  @@index([ownerId])
+  @@index([savedPlaceId, ownerId])
+  @@map("saved_collection_places")
+  @@schema("trove")
+}
+
+model TripPlace {
+  id        String             @id @default(uuid(7)) @db.Uuid
+  tripId    String             @map("trip_id") @db.Uuid
+  placeId   String             @map("place_id") @db.Uuid
+  priority  TripPlacePriority?
+  note      String?            @db.Text
+  createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  trip                  Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  place                 Place           @relation(fields: [placeId], references: [id], onDelete: Restrict)
+  itineraryItems        ItineraryItem[]
+  dailyBaseForDays      ItineraryDay[]  @relation("ItineraryDayDailyBase")
+  timeZoneSourceForDays ItineraryDay[]  @relation("ItineraryDayTimeZoneSource")
+
+  @@unique([tripId, placeId])
+  @@unique([id, tripId])
+  @@index([placeId])
+  @@map("trip_places")
+  @@schema("trove")
+}
+
+model ItineraryDay {
+  id                               String            @id @default(uuid(7)) @db.Uuid
+  tripId                           String            @map("trip_id") @db.Uuid
+  date                             DateTime          @db.Date
+  dailyBaseTripPlaceId             String?           @map("daily_base_trip_place_id") @db.Uuid
+  notes                            String?           @db.Text
+  defaultTimeZone                  String            @map("default_time_zone")
+  defaultTimeZoneSource            DayTimeZoneSource @map("default_time_zone_source")
+  defaultTimeZoneSourceTripPlaceId String?           @map("default_time_zone_source_trip_place_id") @db.Uuid
+  defaultTimeZoneResolvedAt        DateTime          @default(now()) @map("default_time_zone_resolved_at") @db.Timestamptz(3)
+  createdAt                        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  trip                    Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  dailyBaseTripPlace      TripPlace?      @relation("ItineraryDayDailyBase", fields: [dailyBaseTripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
+  timeZoneSourceTripPlace TripPlace?      @relation("ItineraryDayTimeZoneSource", fields: [defaultTimeZoneSourceTripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
+  items                   ItineraryItem[]
+
+  @@unique([tripId, date])
+  @@unique([id, tripId])
+  @@index([dailyBaseTripPlaceId, tripId])
+  @@index([defaultTimeZoneSourceTripPlaceId, tripId])
+  @@map("itinerary_days")
+  @@schema("trove")
+}
+
+model ItineraryItem {
+  id                 String              @id @default(uuid(7)) @db.Uuid
+  tripId             String              @map("trip_id") @db.Uuid
+  itineraryDayId     String?             @map("itinerary_day_id") @db.Uuid
+  tripPlaceId        String?             @map("trip_place_id") @db.Uuid
+  customLabel        String?             @map("custom_label")
+  position           Int
+  localStartTime     DateTime?           @map("local_start_time") @db.Time(0)
+  timeZone           String?             @map("time_zone")
+  timeZoneSource     ItemTimeZoneSource? @map("time_zone_source")
+  timeZoneResolvedAt DateTime?           @map("time_zone_resolved_at") @db.Timestamptz(3)
+  dayPart            ItineraryDayPart?   @map("day_part")
+  durationMinutes    Int?                @map("duration_minutes")
+  notes              String?             @db.Text
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  trip         Trip          @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  itineraryDay ItineraryDay? @relation(fields: [itineraryDayId, tripId], references: [id, tripId], onDelete: NoAction)
+  tripPlace    TripPlace?    @relation(fields: [tripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
+
+  @@index([tripId])
+  @@index([itineraryDayId, tripId])
+  @@index([tripPlaceId, tripId])
+  @@map("itinerary_items")
+  @@schema("trove")
 }

@@ -75,10 +75,15 @@ export type ProviderPlaceDetails = {
   googleMapsUri: string | null;
   location: PlaceCoordinates | null;
   name: string;
+  nationalPhoneNumber: string | null;
   photos: PlacePhotoReference[];
   primaryType: string | null;
   provider: PlaceProviderName;
+  rating: number | null;
   rawTypes: string[];
+  regularOpeningHours: string[];
+  userRatingCount: number | null;
+  websiteUri: string | null;
 };
 
 export type ResolvedPlacePhoto = {

@@ -1,8 +1,9 @@
-import { Bookmark, House, MapPinned, UserRound, Wrench } from 'lucide-react';
+import { Bookmark, House, MapPinned, Wrench } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { ComponentType, ReactNode } from 'react';
 
+import { AccountMenu } from '@/components/account-menu';
 import { AppearanceMenu } from '@/components/appearance-menu';
 
 type NavigationItem = {
@@ -49,13 +50,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
 
           <div className="flex items-center gap-1">
             <AppearanceMenu />
-            <Link
-              aria-label={navigation('profile')}
-              className="inline-flex size-8 items-center justify-center rounded-[var(--radius-md)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-              href="/profile"
-            >
-              <UserRound aria-hidden="true" className="size-4" />
-            </Link>
+            <AccountMenu />
           </div>
         </div>
       </header>

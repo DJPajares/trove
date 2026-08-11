@@ -40,4 +40,4 @@ In Supabase Auth URL Configuration, preserve all existing entries and add:
 - `https://trove.wndrhive.com/auth/callback`
 - `https://*-djpajares-projects.vercel.app/**`
 
-Set the production Site URL to `https://trove.wndrhive.com`. Do not add API URLs as OAuth callback URLs.
+Set the production Site URL to `https://trove.wndrhive.com`. Do not add API URLs as Auth callback URLs.

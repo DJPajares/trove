@@ -16,6 +16,7 @@ import type { ChangeEvent, FormEvent } from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { DatePicker } from '@/components/date-picker';
 import {
   Dialog,
   DialogContent,
@@ -301,26 +302,26 @@ export function TripForm({ onCancel, onSaved, trip }: TripFormProps) {
             <div className="grid gap-4 sm:grid-cols-2">
               <Field data-invalid={Boolean(dateError)}>
                 <FieldLabel htmlFor="trip-start-date">{t('startDate')}</FieldLabel>
-                <Input
+                <DatePicker
                   aria-describedby={dateError ? 'trip-date-error' : undefined}
                   aria-invalid={Boolean(dateError)}
                   id="trip-start-date"
-                  onChange={(event) => updateField('startDate', event.target.value)}
+                  label={t('startDate')}
+                  onChange={(value) => updateField('startDate', value)}
                   required
-                  type="date"
                   value={form.startDate}
                 />
               </Field>
               <Field data-invalid={Boolean(dateError)}>
                 <FieldLabel htmlFor="trip-end-date">{t('endDate')}</FieldLabel>
-                <Input
+                <DatePicker
                   aria-describedby={dateError ? 'trip-date-error' : undefined}
                   aria-invalid={Boolean(dateError)}
                   id="trip-end-date"
+                  label={t('endDate')}
                   min={form.startDate}
-                  onChange={(event) => updateField('endDate', event.target.value)}
+                  onChange={(value) => updateField('endDate', value)}
                   required
-                  type="date"
                   value={form.endDate}
                 />
               </Field>

@@ -77,6 +77,15 @@
     "required": "Required",
     "empty": "Not set"
   },
+  "calendar": {
+    "placeholder": "Choose a date",
+    "chooseDate": "Choose {label}",
+    "changeDate": "Change {label}, currently {date}",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "clear": "Clear",
+    "today": "Today"
+  },
   "trips": {
     "eyebrow": "Your journeys",
     "title": "Trips",
@@ -92,7 +101,7 @@
     "tripListLabel": "Your trips",
     "editTripLabel": "Edit {name}",
     "deleteTripLabel": "Delete {name}",
-    "dateRange": "{startDate} – {endDate}",
+    "dateRange": "{startDate} to {endDate}",
     "destinationOpen": "Destination open",
     "lifecycle": {
       "planning": "Planning",

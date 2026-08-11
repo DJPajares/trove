@@ -6,14 +6,46 @@ import { registerAuthenticationRoutes } from './routes/auth.js';
 import { registerProfileRoutes } from './routes/profile.js';
 import { registerHealthRoutes } from './routes/health.js';
 
+function originMatches(allowedOrigin: string, origin: string) {
+  if (allowedOrigin === origin) {
+    return true;
+  }
+
+  if (!allowedOrigin.includes('*')) {
+    return false;
+  }
+
+  try {
+    const allowedUrl = new URL(allowedOrigin);
+    const originUrl = new URL(origin);
+
+    if (allowedUrl.protocol !== originUrl.protocol || allowedUrl.port !== originUrl.port) {
+      return false;
+    }
+
+    const hostnamePattern = allowedUrl.hostname
+      .split('*')
+      .map((part) => part.replace(/[|\\{}()[\]^$+?.]/g, '\\$&'))
+      .join('[^.]*');
+
+    return new RegExp(`^${hostnamePattern}$`).test(originUrl.hostname);
+  } catch {
+    return false;
+  }
+}
+
 export function buildApp() {
   const app = Fastify({ logger: true });
-  const allowedOrigins = new Set(getWebOrigins());
+  const allowedOrigins = getWebOrigins();
 
   void app.register(cors, {
     methods: ['GET', 'PATCH', 'OPTIONS'],
     origin(origin, callback) {
-      callback(null, origin === undefined || allowedOrigins.has(origin));
+      callback(
+        null,
+        origin === undefined ||
+          allowedOrigins.some((allowedOrigin) => originMatches(allowedOrigin, origin)),
+      );
     },
   });
 

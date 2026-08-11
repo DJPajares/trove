@@ -3,6 +3,15 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": [
+        "DATABASE_URL",
+        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "NEXT_PUBLIC_TROVE_API_URL",
+        "SUPABASE_PUBLISHABLE_KEY",
+        "SUPABASE_URL",
+        "TROVE_WEB_ORIGINS"
+      ],
       "outputs": ["dist/**", ".next/**"]
     },
     "dev": {

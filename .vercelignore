@@ -1,0 +1,10 @@
+# Dependencies are installed by Vercel from the committed lockfile.
+node_modules/
+.pnpm-store/
+
+# Local-only build and environment artifacts.
+.turbo/
+.env
+.env.*
+**/.env
+**/.env.*

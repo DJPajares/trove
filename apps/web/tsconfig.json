@@ -4,12 +4,27 @@
     "allowJs": false,
     "incremental": true,
     "jsx": "preserve",
+    "module": "Preserve",
+    "moduleResolution": "bundler",
     "noEmit": true,
+    "paths": {
+      "@/*": ["./*"]
+    },
     "plugins": [
       {
         "name": "next"
       }
-    ]
+    ],
+    "types": ["node"]
   },
-  "include": ["next-env.d.ts", ".next/types/**/*.ts", "app/**/*.ts", "app/**/*.tsx", "i18n/**/*.ts"]
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "i18n/**/*.ts",
+    "lib/**/*.ts"
+  ]
 }

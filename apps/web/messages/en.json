@@ -1,9 +1,48 @@
 {
   "app": {
     "name": "Trove",
-    "description": "Trove application scaffold"
+    "description": "Plan it. Live it. Remember it."
+  },
+  "navigation": {
+    "primary": "Primary navigation",
+    "mobile": "Mobile navigation",
+    "home": "Home",
+    "trips": "Trips",
+    "saved": "Saved",
+    "tools": "Tools",
+    "profile": "Profile"
+  },
+  "appearance": {
+    "button": "Change appearance",
+    "label": "Appearance",
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark"
   },
   "home": {
-    "title": "Trove application scaffold"
+    "eyebrow": "Your travel companion",
+    "title": "Plan it. Live it. Remember it.",
+    "description": "Trove's planning workspace is taking shape.",
+    "status": "The foundation is ready for your next trip."
+  },
+  "placeholder": {
+    "eyebrow": "Trove",
+    "status": "This space is ready for its next foundation task.",
+    "trips": {
+      "title": "Trips",
+      "description": "Your trips will appear here."
+    },
+    "saved": {
+      "title": "Saved",
+      "description": "Your saved places will appear here."
+    },
+    "tools": {
+      "title": "Tools",
+      "description": "Your travel tools will appear here."
+    },
+    "profile": {
+      "title": "Profile",
+      "description": "Your travel settings will appear here."
+    }
   }
 }

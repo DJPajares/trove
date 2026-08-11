@@ -98,6 +98,14 @@ enum ItineraryDayPart {
   @@schema("trove")
 }
 
+enum ItineraryTimeSemantics {
+  FLOATING_LOCAL        @map("floating_local")
+  AUTHORITATIVE_INSTANT @map("authoritative_instant")
+
+  @@map("itinerary_time_semantics")
+  @@schema("trove")
+}
+
 enum ProfileDistanceUnit {
   KILOMETERS @map("km")
   MILES      @map("mi")
@@ -383,6 +391,7 @@ model ItineraryDay {
   defaultTimeZone                  String            @map("default_time_zone")
   defaultTimeZoneSource            DayTimeZoneSource @map("default_time_zone_source")
   defaultTimeZoneSourceTripPlaceId String?           @map("default_time_zone_source_trip_place_id") @db.Uuid
+  defaultTimeZoneSourceItemId      String?           @map("default_time_zone_source_item_id") @db.Uuid
   defaultTimeZoneResolvedAt        DateTime          @default(now()) @map("default_time_zone_resolved_at") @db.Timestamptz(3)
   createdAt                        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -390,37 +399,48 @@ model ItineraryDay {
   trip                    Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
   dailyBaseTripPlace      TripPlace?      @relation("ItineraryDayDailyBase", fields: [dailyBaseTripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
   timeZoneSourceTripPlace TripPlace?      @relation("ItineraryDayTimeZoneSource", fields: [defaultTimeZoneSourceTripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
-  items                   ItineraryItem[]
+  timeZoneSourceItem      ItineraryItem?  @relation("ItineraryDayTimeZoneSourceItem", fields: [defaultTimeZoneSourceItemId, tripId], references: [id, tripId], onDelete: NoAction)
+  items                   ItineraryItem[] @relation("ItineraryDayItems")
 
   @@unique([tripId, date])
   @@unique([id, tripId])
   @@index([dailyBaseTripPlaceId, tripId])
   @@index([defaultTimeZoneSourceTripPlaceId, tripId])
+  @@index([defaultTimeZoneSourceItemId, tripId])
   @@map("itinerary_days")
   @@schema("trove")
 }
 
 model ItineraryItem {
-  id                 String              @id @default(uuid(7)) @db.Uuid
-  tripId             String              @map("trip_id") @db.Uuid
-  itineraryDayId     String?             @map("itinerary_day_id") @db.Uuid
-  tripPlaceId        String?             @map("trip_place_id") @db.Uuid
-  customLabel        String?             @map("custom_label")
-  position           Int
-  localStartTime     DateTime?           @map("local_start_time") @db.Time(0)
-  timeZone           String?             @map("time_zone")
-  timeZoneSource     ItemTimeZoneSource? @map("time_zone_source")
-  timeZoneResolvedAt DateTime?           @map("time_zone_resolved_at") @db.Timestamptz(3)
-  dayPart            ItineraryDayPart?   @map("day_part")
-  durationMinutes    Int?                @map("duration_minutes")
-  notes              String?             @db.Text
-  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                      String                  @id @default(uuid(7)) @db.Uuid
+  tripId                  String                  @map("trip_id") @db.Uuid
+  itineraryDayId          String?                 @map("itinerary_day_id") @db.Uuid
+  tripPlaceId             String?                 @map("trip_place_id") @db.Uuid
+  customLabel             String?                 @map("custom_label")
+  customLocation          String?                 @map("custom_location")
+  customLocationTimeZone  String?                 @map("custom_location_time_zone")
+  position                Int
+  localStartTime          DateTime?               @map("local_start_time") @db.Time(0)
+  startInstant            DateTime?               @map("start_instant") @db.Timestamptz(3)
+  timeSemantics           ItineraryTimeSemantics? @map("time_semantics")
+  timeZone                String?                 @map("time_zone")
+  timeZoneSource          ItemTimeZoneSource?     @map("time_zone_source")
+  timeZoneResolvedAt      DateTime?               @map("time_zone_resolved_at") @db.Timestamptz(3)
+  dayPart                 ItineraryDayPart?       @map("day_part")
+  durationMinutes         Int?                    @map("duration_minutes")
+  notes                   String?                 @db.Text
+  priority                TripPlacePriority?
+  plannedCostAmount       Decimal?                @map("planned_cost_amount") @db.Decimal(12, 2)
+  plannedCostCurrencyCode String?                 @map("planned_cost_currency_code") @db.Char(3)
+  createdAt               DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  trip         Trip          @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  itineraryDay ItineraryDay? @relation(fields: [itineraryDayId, tripId], references: [id, tripId], onDelete: NoAction)
-  tripPlace    TripPlace?    @relation(fields: [tripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
+  trip                  Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  itineraryDay          ItineraryDay?  @relation("ItineraryDayItems", fields: [itineraryDayId, tripId], references: [id, tripId], onDelete: NoAction)
+  tripPlace             TripPlace?     @relation(fields: [tripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
+  timeZoneSourceForDays ItineraryDay[] @relation("ItineraryDayTimeZoneSourceItem")
 
+  @@unique([id, tripId])
   @@index([tripId])
   @@index([itineraryDayId, tripId])
   @@index([tripPlaceId, tripId])

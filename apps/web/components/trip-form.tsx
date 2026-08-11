@@ -52,6 +52,7 @@ import { cn } from '@/lib/utils';
 
 type TripFormProps = {
   onCancel: () => void;
+  onDelete?: () => void;
   onSaved: (trip: Trip) => void;
   trip: Trip | null;
 };
@@ -98,7 +99,7 @@ function createInitialForm(trip: Trip | null): FormState {
   };
 }
 
-export function TripForm({ onCancel, onSaved, trip }: TripFormProps) {
+export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
   const t = useTranslations('trips');
   const [form, setForm] = useState(() => createInitialForm(trip));
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -590,13 +591,34 @@ export function TripForm({ onCancel, onSaved, trip }: TripFormProps) {
           </section>
         </div>
 
-        <SheetFooter className="sm:flex-row sm:justify-end">
-          <Button disabled={status === 'saving'} onClick={onCancel} type="button" variant="outline">
-            {t('cancel')}
-          </Button>
-          <Button disabled={status === 'saving'} type="submit">
-            {status === 'saving' ? t('saving') : trip ? t('saveChanges') : t('createTrip')}
-          </Button>
+        <SheetFooter className="gap-3 sm:flex-row sm:items-center sm:justify-between">
+          {onDelete ? (
+            <Button
+              className="self-start text-destructive hover:bg-destructive/10 hover:text-destructive"
+              disabled={status === 'saving'}
+              onClick={onDelete}
+              type="button"
+              variant="ghost"
+            >
+              <Trash2 aria-hidden="true" data-icon="inline-start" />
+              {t('deleteTrip')}
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button
+              disabled={status === 'saving'}
+              onClick={onCancel}
+              type="button"
+              variant="outline"
+            >
+              {t('cancel')}
+            </Button>
+            <Button disabled={status === 'saving'} type="submit">
+              {status === 'saving' ? t('saving') : trip ? t('saveChanges') : t('createTrip')}
+            </Button>
+          </div>
         </SheetFooter>
       </form>
 

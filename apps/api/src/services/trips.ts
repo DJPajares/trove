@@ -346,10 +346,28 @@ export async function updateTrip(
     const removedDayIds = removedDays.map((day) => day.id);
     if (removedDayIds.length) {
       if (affectedItemCount > 0) {
-        await transaction.itineraryItem.updateMany({
-          where: { tripId, itineraryDayId: { in: removedDayIds } },
-          data: { itineraryDayId: null },
-        });
+        const [removedItems, unscheduledPositions] = await Promise.all([
+          transaction.itineraryItem.findMany({
+            where: { tripId, itineraryDayId: { in: removedDayIds } },
+            select: { id: true, itineraryDay: { select: { date: true } }, position: true },
+            orderBy: [{ itineraryDay: { date: 'asc' } }, { position: 'asc' }],
+          }),
+          transaction.itineraryItem.aggregate({
+            where: { tripId, itineraryDayId: null },
+            _max: { position: true },
+          }),
+        ]);
+        const firstUnscheduledPosition = (unscheduledPositions._max.position ?? -1) + 1;
+
+        for (const [index, item] of removedItems.entries()) {
+          await transaction.itineraryItem.update({
+            where: { id: item.id },
+            data: {
+              itineraryDayId: null,
+              position: firstUnscheduledPosition + index,
+            },
+          });
+        }
       }
       await transaction.itineraryDay.deleteMany({ where: { id: { in: removedDayIds }, tripId } });
     }

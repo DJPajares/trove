@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { CalendarDays, CircleAlert, MapPinned, Plus, Trash2 } from 'lucide-react';
+import { CalendarClock, CalendarDays, CircleAlert, MapPinned, Plus } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
@@ -223,43 +223,40 @@ export function TripsManager() {
           closeLabel={t('close')}
         >
           <SheetHeader className="border-b">
-            <div className="flex items-start justify-between gap-4 pr-8">
-              <div>
-                <SheetTitle>
-                  {editor.mode === 'edit' ? t('editTitle') : t('createTitle')}
-                </SheetTitle>
-                <SheetDescription>
-                  {editor.mode === 'edit' ? t('editDescription') : t('createDescription')}
-                </SheetDescription>
-              </div>
-              {editor.mode === 'edit' ? (
-                <div className="flex items-center gap-1">
-                  <Button
-                    nativeButton={false}
-                    render={<Link href={`/trips/${editor.trip.id}/places`} />}
-                    size="sm"
-                    variant="outline"
-                  >
-                    <MapPinned aria-hidden="true" data-icon="inline-start" />
-                    {t('places')}
-                  </Button>
-                  <Button
-                    aria-label={t('deleteTripLabel', { name: editor.trip.name })}
-                    onClick={() => setTripToDelete(editor.trip)}
-                    size="icon-sm"
-                    type="button"
-                    variant="destructive"
-                  >
-                    <Trash2 aria-hidden="true" />
-                  </Button>
-                </div>
-              ) : null}
-            </div>
+            <SheetTitle>{editor.mode === 'edit' ? t('editTitle') : t('createTitle')}</SheetTitle>
+            <SheetDescription>
+              {editor.mode === 'edit' ? t('editDescription') : t('createDescription')}
+            </SheetDescription>
+            {editor.mode === 'edit' ? (
+              <nav aria-label={t('tripNavigation')} className="mt-3 flex flex-wrap gap-1">
+                <Button
+                  className="text-muted-foreground hover:text-foreground"
+                  nativeButton={false}
+                  render={<Link href={`/trips/${editor.trip.id}/itinerary`} />}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <CalendarClock aria-hidden="true" data-icon="inline-start" />
+                  {t('itinerary')}
+                </Button>
+                <Button
+                  className="text-muted-foreground hover:text-foreground"
+                  nativeButton={false}
+                  render={<Link href={`/trips/${editor.trip.id}/places`} />}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <MapPinned aria-hidden="true" data-icon="inline-start" />
+                  {t('places')}
+                </Button>
+              </nav>
+            ) : null}
           </SheetHeader>
           {editor.mode !== 'closed' ? (
             <TripForm
               key={editor.trip?.id ?? 'new'}
               onCancel={() => setEditor({ mode: 'closed', trip: null })}
+              onDelete={editor.mode === 'edit' ? () => setTripToDelete(editor.trip) : undefined}
               onSaved={handleSaved}
               trip={editor.trip}
             />

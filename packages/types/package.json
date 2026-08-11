@@ -6,8 +6,8 @@
     "@trove/config": "workspace:*"
   },
   "scripts": {
-    "build": "tsc --project tsconfig.build.json",
-    "lint": "oxlint --deny-warnings src",
-    "typecheck": "tsc --noEmit --project tsconfig.json"
+    "build": "../../node_modules/.bin/tsc --project tsconfig.build.json",
+    "lint": "../../node_modules/.bin/oxlint --deny-warnings src",
+    "typecheck": "../../node_modules/.bin/tsc --noEmit --project tsconfig.json"
   }
 }

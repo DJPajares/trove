@@ -79,6 +79,20 @@ The actual application structure will be created through the Foundation implemen
 8. Merge only after human approval.
 9. Continue with the next unblocked Linear task.
 
+## Pull Request Quality Gates
+
+Every pull request runs the root validation commands through GitHub Actions:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm format:check
+pnpm lint
+pnpm typecheck
+pnpm build
+```
+
+These checks intentionally do not include unit-test or E2E jobs during the initial implementation phase. PR summaries should report each command and its result.
+
 ## Delivery Order
 
 1. Foundation

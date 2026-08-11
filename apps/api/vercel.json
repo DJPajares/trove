@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm --filter @trove/api build",
+  "buildCommand": "pnpm --filter @trove/db build && pnpm --filter @trove/api build",
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
 }

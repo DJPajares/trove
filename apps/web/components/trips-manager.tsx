@@ -7,6 +7,7 @@ import {
   CalendarDays,
   ClipboardCheck,
   CircleAlert,
+  Info,
   MapPinned,
   Pencil,
   Plus,
@@ -46,6 +47,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { deleteTrip, fetchTrips, type Trip } from '@/lib/trips/api';
+import { fetchTripInfo, type TripInfoEntry } from '@/lib/trip-info/api';
 import { cn } from '@/lib/utils';
 
 type EditorState =
@@ -57,6 +59,10 @@ export function TripsManager() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [editor, setEditor] = useState<EditorState>({ mode: 'closed', trip: null });
   const [overviewTrip, setOverviewTrip] = useState<Trip | null>(null);
+  const [overviewTripInfo, setOverviewTripInfo] = useState<TripInfoEntry[]>([]);
+  const [overviewTripInfoStatus, setOverviewTripInfoStatus] = useState<
+    'error' | 'idle' | 'loading'
+  >('idle');
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
@@ -80,6 +86,33 @@ export function TripsManager() {
       active = false;
     };
   }, []);
+
+  const overviewTripId = overviewTrip?.id;
+
+  useEffect(() => {
+    if (!overviewTripId) {
+      setOverviewTripInfo([]);
+      setOverviewTripInfoStatus('idle');
+      return;
+    }
+
+    let active = true;
+    setOverviewTripInfoStatus('loading');
+    void fetchTripInfo(overviewTripId)
+      .then(({ entries }) => {
+        if (!active) return;
+        setOverviewTripInfo(entries.filter((entry) => entry.isPinned));
+        setOverviewTripInfoStatus('idle');
+      })
+      .catch(() => {
+        if (!active) return;
+        setOverviewTripInfoStatus('error');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [overviewTripId]);
 
   function handleSaved(trip: Trip) {
     setTrips((current) => {
@@ -286,6 +319,14 @@ export function TripsManager() {
                     {t('tasks')}
                   </Button>
                   <Button
+                    nativeButton={false}
+                    render={<Link href={`/trips/${overviewTrip.id}/info`} />}
+                    variant="outline"
+                  >
+                    <Info aria-hidden="true" data-icon="inline-start" />
+                    {t('tripInfo')}
+                  </Button>
+                  <Button
                     onClick={() => {
                       setOverviewTrip(null);
                       setEditor({ mode: 'edit', trip: overviewTrip });
@@ -334,6 +375,46 @@ export function TripsManager() {
                       {overviewTrip.notes}
                     </p>
                   </div>
+                ) : null}
+                {overviewTripInfoStatus === 'loading' ? (
+                  <section aria-busy="true" aria-live="polite" className="space-y-2 border-t pt-5">
+                    <h2 className="text-base font-semibold">{t('tripInfo')}</h2>
+                    <p className="text-sm text-muted-foreground">{t('tripInfoLoading')}</p>
+                  </section>
+                ) : null}
+                {overviewTripInfoStatus === 'error' ? (
+                  <section className="border-t pt-5">
+                    <h2 className="text-base font-semibold">{t('tripInfo')}</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">{t('tripInfoUnavailable')}</p>
+                  </section>
+                ) : null}
+                {overviewTripInfoStatus === 'idle' && overviewTripInfo.length ? (
+                  <section className="space-y-3 border-t pt-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h2 className="text-base font-semibold">{t('tripInfo')}</h2>
+                        <p className="mt-1 text-sm text-muted-foreground">{t('pinnedTripInfo')}</p>
+                      </div>
+                      <Button
+                        nativeButton={false}
+                        render={<Link href={`/trips/${overviewTrip.id}/info`} />}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        {t('viewTripInfo')}
+                      </Button>
+                    </div>
+                    <div className="space-y-3">
+                      {overviewTripInfo.map((entry) => (
+                        <div className="space-y-1" key={entry.id}>
+                          <p className="text-sm font-medium">{entry.label}</p>
+                          <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                            {entry.value}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
                 ) : null}
               </div>
             </>

@@ -10,6 +10,7 @@ import { registerProfileRoutes } from './routes/profile.js';
 import { registerTripRoutes } from './routes/trips.js';
 import { registerTripPlacesRoutes } from './routes/trip-places.js';
 import { registerSavedPlacesRoutes } from './routes/saved-places.js';
+import { registerTasksRoutes } from './routes/tasks.js';
 
 function originMatches(allowedOrigin: string, origin: string) {
   if (allowedOrigin === origin) {
@@ -59,6 +60,7 @@ export function buildApp() {
   registerProfileRoutes(app);
   registerSavedPlacesRoutes(app);
   registerItineraryRoutes(app);
+  registerTasksRoutes(app);
   registerTripPlacesRoutes(app);
   registerTripRoutes(app);
   registerHealthRoutes(app);

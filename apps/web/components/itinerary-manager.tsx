@@ -521,6 +521,14 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
               <MapPinned aria-hidden="true" data-icon="inline-start" />
               {t('tripPlaces')}
             </Button>
+            <Button
+              nativeButton={false}
+              render={<Link href={`/trips/${tripId}/tasks`} />}
+              variant="outline"
+            >
+              <CalendarClock aria-hidden="true" data-icon="inline-start" />
+              {t('tripTasks')}
+            </Button>
           </>
         }
         description={t('description')}

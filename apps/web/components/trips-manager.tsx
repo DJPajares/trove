@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   CalendarClock,
   CalendarDays,
+  ClipboardCheck,
   CircleAlert,
   MapPinned,
   Pencil,
@@ -277,6 +278,14 @@ export function TripsManager() {
                     {t('places')}
                   </Button>
                   <Button
+                    nativeButton={false}
+                    render={<Link href={`/trips/${overviewTrip.id}/tasks`} />}
+                    variant="outline"
+                  >
+                    <ClipboardCheck aria-hidden="true" data-icon="inline-start" />
+                    {t('tasks')}
+                  </Button>
+                  <Button
                     onClick={() => {
                       setOverviewTrip(null);
                       setEditor({ mode: 'edit', trip: overviewTrip });
@@ -366,6 +375,16 @@ export function TripsManager() {
                 >
                   <MapPinned aria-hidden="true" data-icon="inline-start" />
                   {t('places')}
+                </Button>
+                <Button
+                  className="text-muted-foreground hover:text-foreground"
+                  nativeButton={false}
+                  render={<Link href={`/trips/${editor.trip.id}/tasks`} />}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <ClipboardCheck aria-hidden="true" data-icon="inline-start" />
+                  {t('tasks')}
                 </Button>
               </nav>
             ) : null}

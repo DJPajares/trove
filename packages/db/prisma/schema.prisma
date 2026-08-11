@@ -106,6 +106,15 @@ enum ItineraryTimeSemantics {
   @@schema("trove")
 }
 
+enum TaskTimeZoneSource {
+  ITINERARY_ITEM @map("itinerary_item")
+  ITINERARY_DAY  @map("itinerary_day")
+  TRIP_REFERENCE @map("trip_reference")
+
+  @@map("task_time_zone_source")
+  @@schema("trove")
+}
+
 enum ProfileDistanceUnit {
   KILOMETERS @map("km")
   MILES      @map("mi")
@@ -182,6 +191,7 @@ model Profile {
   savedPlaces      SavedPlace[]
   savedCollections SavedCollection[]
   collectionPlaces SavedCollectionPlace[]
+  taskTemplates    TaskTemplate[]
 
   @@index([homePlaceId])
   @@map("profiles")
@@ -263,6 +273,7 @@ model Trip {
   tripPlaces                   TripPlace[]
   itineraryDays                ItineraryDay[]
   itineraryItems               ItineraryItem[]
+  tasks                        Task[]
 
   @@index([ownerId])
   @@index([creatorId])
@@ -401,6 +412,7 @@ model ItineraryDay {
   timeZoneSourceTripPlace TripPlace?      @relation("ItineraryDayTimeZoneSource", fields: [defaultTimeZoneSourceTripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
   timeZoneSourceItem      ItineraryItem?  @relation("ItineraryDayTimeZoneSourceItem", fields: [defaultTimeZoneSourceItemId, tripId], references: [id, tripId], onDelete: NoAction)
   items                   ItineraryItem[] @relation("ItineraryDayItems")
+  tasks                   Task[]          @relation("TaskItineraryDay")
 
   @@unique([tripId, date])
   @@unique([id, tripId])
@@ -439,11 +451,72 @@ model ItineraryItem {
   itineraryDay          ItineraryDay?  @relation("ItineraryDayItems", fields: [itineraryDayId, tripId], references: [id, tripId], onDelete: NoAction)
   tripPlace             TripPlace?     @relation(fields: [tripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
   timeZoneSourceForDays ItineraryDay[] @relation("ItineraryDayTimeZoneSourceItem")
+  tasks                 Task[]         @relation("TaskItineraryItem")
 
   @@unique([id, tripId])
   @@index([tripId])
   @@index([itineraryDayId, tripId])
   @@index([tripPlaceId, tripId])
   @@map("itinerary_items")
+  @@schema("trove")
+}
+
+model Task {
+  id                        String              @id @default(uuid(7)) @db.Uuid
+  tripId                    String              @map("trip_id") @db.Uuid
+  itineraryDayId            String?             @map("itinerary_day_id") @db.Uuid
+  itineraryItemId           String?             @map("itinerary_item_id") @db.Uuid
+  label                     String
+  note                      String?             @db.Text
+  dueDate                   DateTime?           @map("due_date") @db.Date
+  dueLocalTime              DateTime?           @map("due_local_time") @db.Time(0)
+  dueTimeZone               String?             @map("due_time_zone")
+  dueTimeZoneSource         TaskTimeZoneSource? @map("due_time_zone_source")
+  dueTimeZoneResolvedAt     DateTime?           @map("due_time_zone_resolved_at") @db.Timestamptz(3)
+  completedAt               DateTime?           @map("completed_at") @db.Timestamptz(3)
+  createdAt                 DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                 DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  trip          Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  itineraryDay  ItineraryDay?  @relation("TaskItineraryDay", fields: [itineraryDayId, tripId], references: [id, tripId], onDelete: NoAction)
+  itineraryItem ItineraryItem? @relation("TaskItineraryItem", fields: [itineraryItemId, tripId], references: [id, tripId], onDelete: NoAction)
+
+  @@index([tripId, completedAt])
+  @@index([itineraryDayId, tripId])
+  @@index([itineraryItemId, tripId])
+  @@map("tasks")
+  @@schema("trove")
+}
+
+model TaskTemplate {
+  id        String             @id @default(uuid(7)) @db.Uuid
+  ownerId   String             @map("owner_id") @db.Uuid
+  name      String
+  createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner Profile            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  items TaskTemplateItem[]
+
+  @@unique([ownerId, name])
+  @@index([ownerId])
+  @@map("task_templates")
+  @@schema("trove")
+}
+
+model TaskTemplateItem {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  taskTemplateId String       @map("task_template_id") @db.Uuid
+  position       Int
+  label          String
+  note           String?      @db.Text
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  taskTemplate TaskTemplate @relation(fields: [taskTemplateId], references: [id], onDelete: Cascade)
+
+  @@unique([taskTemplateId, position])
+  @@index([taskTemplateId])
+  @@map("task_template_items")
   @@schema("trove")
 }

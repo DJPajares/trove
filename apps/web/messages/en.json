@@ -1,0 +1,9 @@
+{
+  "app": {
+    "name": "Trove",
+    "description": "Trove application scaffold"
+  },
+  "home": {
+    "title": "Trove application scaffold"
+  }
+}

@@ -19,6 +19,13 @@
     "light": "Light",
     "dark": "Dark"
   },
+  "auth": {
+    "title": "Welcome to Trove",
+    "description": "Sign in to keep your travel plans private and available across devices.",
+    "google": "Continue with Google",
+    "pending": "Continuing…",
+    "error": "We couldn't start sign-in. Check your connection and try again."
+  },
   "home": {
     "eyebrow": "Your travel companion",
     "title": "Plan it. Live it. Remember it.",

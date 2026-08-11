@@ -274,6 +274,7 @@ model Trip {
   itineraryDays                ItineraryDay[]
   itineraryItems               ItineraryItem[]
   tasks                        Task[]
+  tripInfoEntries              TripInfo[]
 
   @@index([ownerId])
   @@index([creatorId])
@@ -518,5 +519,24 @@ model TaskTemplateItem {
   @@unique([taskTemplateId, position])
   @@index([taskTemplateId])
   @@map("task_template_items")
+  @@schema("trove")
+}
+
+model TripInfo {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tripId    String   @map("trip_id") @db.Uuid
+  label     String
+  value     String   @db.Text
+  category  String?
+  note      String?  @db.Text
+  link      String?  @db.Text
+  isPinned  Boolean  @default(false) @map("is_pinned")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId, isPinned, updatedAt])
+  @@map("trip_info")
   @@schema("trove")
 }

@@ -22,11 +22,13 @@
   --accent-foreground: oklch(0.27 0.025 55);
   --destructive: oklch(0.55 0.193 28);
   --border: oklch(0.867 0.019 85);
+  --border-strong: oklch(0.79 0.026 85);
   --input: oklch(0.867 0.019 85);
   --ring: oklch(0.51 0.086 153);
   --surface: oklch(0.973 0.014 85);
   --surface-raised: oklch(0.993 0.007 85);
   --surface-sunken: oklch(0.938 0.014 85);
+  --surface-hover: oklch(0.952 0.02 85);
   --text-subtle: oklch(0.497 0.025 65);
   --brand: oklch(0.374 0.072 153);
   --brand-strong: oklch(0.298 0.061 153);
@@ -49,6 +51,7 @@
   --shadow-surface:
     0 1px 2px oklch(0.274 0.021 62 / 0.04), 0 12px 32px oklch(0.274 0.021 62 / 0.06);
   --shadow-overlay: 0 20px 60px oklch(0.274 0.021 62 / 0.16);
+  --shadow-control: 0 1px 2px oklch(0.274 0.021 62 / 0.12);
   --layer-sticky: 40;
   --layer-overlay: 50;
 }
@@ -71,11 +74,13 @@
   --accent-foreground: oklch(0.229 0.027 53);
   --destructive: oklch(0.75 0.151 29);
   --border: oklch(0.388 0.027 154);
+  --border-strong: oklch(0.47 0.032 154);
   --input: oklch(0.388 0.027 154);
   --ring: oklch(0.72 0.083 151);
   --surface: oklch(0.196 0.026 154);
   --surface-raised: oklch(0.243 0.032 154);
   --surface-sunken: oklch(0.166 0.023 154);
+  --surface-hover: oklch(0.294 0.032 154);
   --text-subtle: oklch(0.718 0.021 85);
   --brand: oklch(0.77 0.09 151);
   --brand-strong: oklch(0.824 0.074 151);
@@ -86,6 +91,7 @@
   --shadow-surface:
     0 1px 2px oklch(0.08 0.014 154 / 0.16), 0 16px 40px oklch(0.08 0.014 154 / 0.18);
   --shadow-overlay: 0 24px 72px oklch(0.08 0.014 154 / 0.48);
+  --shadow-control: 0 1px 2px oklch(0.08 0.014 154 / 0.32);
 }
 
 @theme inline {
@@ -107,11 +113,13 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-surface: var(--surface);
   --color-surface-raised: var(--surface-raised);
   --color-surface-sunken: var(--surface-sunken);
+  --color-surface-hover: var(--surface-hover);
   --color-text-subtle: var(--text-subtle);
   --color-brand: var(--brand);
   --color-brand-strong: var(--brand-strong);

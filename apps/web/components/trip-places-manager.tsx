@@ -16,6 +16,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -248,7 +258,7 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
   return (
     <section className="mx-auto w-full max-w-5xl space-y-8">
       <div>
-        <Button render={<Link href="/trips" />} size="sm" variant="ghost">
+        <Button nativeButton={false} render={<Link href="/trips" />} size="sm" variant="ghost">
           <ArrowLeft aria-hidden="true" data-icon="inline-start" />
           {t('backToTrips')}
         </Button>
@@ -261,7 +271,6 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
           </Button>
         }
         description={t('description')}
-        eyebrow={t('eyebrow')}
         title={tripName ? t('title', { trip: tripName }) : t('titleLoading')}
       />
       {error ? (
@@ -296,12 +305,12 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
           title={t('emptyTitle')}
         />
       ) : (
-        <ItemGroup aria-label={t('listLabel')} className="gap-2">
+        <ItemGroup aria-label={t('listLabel')} variant="list">
           {sortedPlaces.map((tripPlace) => (
             <Item
               className="min-h-20 items-start gap-3 px-3 py-3"
               key={tripPlace.id}
-              variant="outline"
+              variant="default"
             >
               <ItemMedia
                 className="mt-0.5 size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
@@ -488,27 +497,29 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog
+      <AlertDialog
         open={Boolean(removingPlace)}
         onOpenChange={(open) => !open && setRemovingPlace(null)}
       >
-        <DialogContent closeLabel={t('close')}>
-          <DialogHeader>
-            <DialogTitle>{t('removeTitle')}</DialogTitle>
-            <DialogDescription>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('removeTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
               {t('removeDescription', { name: removingPlace ? placeName(removingPlace) : '' })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button disabled={removing} onClick={() => setRemovingPlace(null)} variant="outline">
-              {t('cancel')}
-            </Button>
-            <Button disabled={removing} onClick={() => void handleRemove()} variant="destructive">
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removing}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={removing}
+              onClick={() => void handleRemove()}
+              variant="destructive"
+            >
               {removing ? t('removing') : t('removePlace')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

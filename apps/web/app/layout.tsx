@@ -8,6 +8,7 @@ import './globals.css';
 import { AppShell } from '@/components/app-shell';
 import { PwaProvider } from '@/components/pwa-provider';
 import { ThemeProvider } from '@/components/theme-provider';
+import { TroveMotionProvider } from '@/components/trove-motion-provider';
 
 const geistSans = Geist({
   subsets: ['latin'],
@@ -54,11 +55,13 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     >
       <body>
         <ThemeProvider>
-          <PwaProvider>
-            <NextIntlClientProvider>
-              <AppShell>{children}</AppShell>
-            </NextIntlClientProvider>
-          </PwaProvider>
+          <TroveMotionProvider>
+            <PwaProvider>
+              <NextIntlClientProvider>
+                <AppShell>{children}</AppShell>
+              </NextIntlClientProvider>
+            </PwaProvider>
+          </TroveMotionProvider>
         </ThemeProvider>
       </body>
     </html>

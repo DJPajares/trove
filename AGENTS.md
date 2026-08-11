@@ -17,6 +17,8 @@ The approved product requirements live in `PRD.md` once generated. Linear is the
 - Preserve future extensibility without building unused parallel systems.
 - Do not hard-code user-facing text; keep the app localization-ready.
 - Follow the existing Trove Design System and established UX patterns. Apply TasteSkill principles when making UI/UX decisions without overriding the PRD or established Trove patterns.
+- For frontend work, apply TasteSkill v2 and prefer established shadcn/Base UI primitives over raw controls. Preserve native semantics: actions are buttons, navigation is links, and form controls retain their native behavior.
+- Follow Trove's shared motion language and respect reduced-motion preferences. Verify unfamiliar shadcn/Base UI composition against current official guidance before implementation.
 - Use current stable dependency versions where practical.
 - Use pnpm.
 

@@ -10,8 +10,8 @@ import type { ChangeEvent, FormEvent } from 'react';
 import { PageState } from '@/components/page-state';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
+import { Card } from '@/components/ui/card';
+import { Field, FieldDescription, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -178,164 +178,166 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
         </Alert>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle as="h2">{t('profileSection')}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-6 sm:grid-cols-2">
-          <Field>
-            <FieldLabel htmlFor="profile-display-name">{t('displayName')}</FieldLabel>
-            <Input
-              aria-describedby="profile-display-name-hint"
-              id="profile-display-name"
-              maxLength={100}
-              onChange={(event) => updateField('displayName', event.target.value)}
-              value={form.displayName}
-            />
-            <FieldDescription id="profile-display-name-hint">
-              {t('displayNameHint')}
-            </FieldDescription>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="profile-home-location">{t('homeLocation')}</FieldLabel>
-            <Input
-              aria-describedby="profile-home-location-hint"
-              id="profile-home-location"
-              maxLength={200}
-              onChange={(event) => updateField('homeLocation', event.target.value)}
-              value={form.homeLocation}
-            />
-            <FieldDescription id="profile-home-location-hint">
-              {t('homeLocationHint')}
-            </FieldDescription>
-          </Field>
-          <Field className="sm:max-w-xs">
-            <FieldLabel htmlFor="profile-home-currency">{t('homeCurrency')}</FieldLabel>
-            <Input
-              aria-describedby="profile-home-currency-hint"
-              autoCapitalize="characters"
-              className="uppercase"
-              id="profile-home-currency"
-              maxLength={3}
-              onChange={(event) =>
-                updateField('homeCurrencyCode', event.target.value.toUpperCase())
-              }
-              value={form.homeCurrencyCode}
-            />
-            <FieldDescription id="profile-home-currency-hint">
-              {t('homeCurrencyHint')}
-            </FieldDescription>
-          </Field>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle as="h2">{t('photoSection')}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-5">
-          <div className="flex size-20 items-center justify-center overflow-hidden rounded-full bg-secondary text-2xl font-semibold text-secondary-foreground">
-            {profile?.avatarUrl ? (
-              <Image
-                alt={t('photoAlt')}
-                className="size-full object-cover"
-                height={80}
-                src={profile.avatarUrl}
-                unoptimized
-                width={80}
+      <Card className="gap-0 py-0">
+        <FieldSet className="gap-5 p-5 sm:p-6">
+          <FieldLegend className="text-lg leading-6 font-semibold tracking-tight">
+            {t('profileSection')}
+          </FieldLegend>
+          <div className="grid gap-6 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="profile-display-name">{t('displayName')}</FieldLabel>
+              <Input
+                aria-describedby="profile-display-name-hint"
+                id="profile-display-name"
+                maxLength={100}
+                onChange={(event) => updateField('displayName', event.target.value)}
+                value={form.displayName}
               />
-            ) : (
-              form.displayName.slice(0, 1).toUpperCase() || '?'
-            )}
+              <FieldDescription id="profile-display-name-hint">
+                {t('displayNameHint')}
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="profile-home-location">{t('homeLocation')}</FieldLabel>
+              <Input
+                aria-describedby="profile-home-location-hint"
+                id="profile-home-location"
+                maxLength={200}
+                onChange={(event) => updateField('homeLocation', event.target.value)}
+                value={form.homeLocation}
+              />
+              <FieldDescription id="profile-home-location-hint">
+                {t('homeLocationHint')}
+              </FieldDescription>
+            </Field>
+            <Field className="sm:max-w-xs">
+              <FieldLabel htmlFor="profile-home-currency">{t('homeCurrency')}</FieldLabel>
+              <Input
+                aria-describedby="profile-home-currency-hint"
+                autoCapitalize="characters"
+                className="uppercase"
+                id="profile-home-currency"
+                maxLength={3}
+                onChange={(event) =>
+                  updateField('homeCurrencyCode', event.target.value.toUpperCase())
+                }
+                value={form.homeCurrencyCode}
+              />
+              <FieldDescription id="profile-home-currency-hint">
+                {t('homeCurrencyHint')}
+              </FieldDescription>
+            </Field>
           </div>
-          <div className="space-y-2">
-            <label
-              className={cn(
-                buttonVariants({ size: 'default' }),
-                photoBusy ? 'pointer-events-none opacity-50' : 'cursor-pointer',
+        </FieldSet>
+
+        <FieldSet className="gap-5 border-t p-5 sm:p-6">
+          <FieldLegend className="text-lg leading-6 font-semibold tracking-tight">
+            {t('photoSection')}
+          </FieldLegend>
+          <div className="flex flex-wrap items-center gap-5">
+            <div className="flex size-20 items-center justify-center overflow-hidden rounded-full bg-secondary text-2xl font-semibold text-secondary-foreground">
+              {profile?.avatarUrl ? (
+                <Image
+                  alt={t('photoAlt')}
+                  className="size-full object-cover"
+                  height={80}
+                  src={profile.avatarUrl}
+                  unoptimized
+                  width={80}
+                />
+              ) : (
+                form.displayName.slice(0, 1).toUpperCase() || '?'
               )}
-            >
-              <span aria-disabled={photoBusy}>
-                {profile?.avatarPath ? t('changePhoto') : t('choosePhoto')}
-              </span>
-              <input
-                accept="image/jpeg,image/png,image/webp"
-                className="sr-only"
-                disabled={photoBusy}
-                onChange={handlePhotoChange}
-                type="file"
-              />
-            </label>
-            {profile?.avatarPath ? (
-              <Button
-                disabled={photoBusy}
-                onClick={handlePhotoRemove}
-                type="button"
-                variant="outline"
+            </div>
+            <div className="space-y-2">
+              <label
+                className={cn(
+                  buttonVariants({ size: 'default' }),
+                  photoBusy ? 'pointer-events-none opacity-50' : 'cursor-pointer',
+                )}
               >
-                {t('removePhoto')}
-              </Button>
-            ) : null}
-            <p className="text-xs text-muted-foreground">{t('photoHint')}</p>
+                <span aria-disabled={photoBusy}>
+                  {profile?.avatarPath ? t('changePhoto') : t('choosePhoto')}
+                </span>
+                <Input
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sr-only"
+                  disabled={photoBusy}
+                  onChange={handlePhotoChange}
+                  type="file"
+                />
+              </label>
+              {profile?.avatarPath ? (
+                <Button
+                  disabled={photoBusy}
+                  onClick={handlePhotoRemove}
+                  type="button"
+                  variant="outline"
+                >
+                  {t('removePhoto')}
+                </Button>
+              ) : null}
+              <p className="text-xs text-muted-foreground">{t('photoHint')}</p>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </FieldSet>
 
-      <Card>
-        <CardHeader>
-          <CardTitle as="h2">{t('preferencesSection')}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <SelectField
-            label={t('distanceUnit')}
-            onChange={(value) => updateField('distanceUnit', value as FormState['distanceUnit'])}
-            options={[
-              ['km', t('kilometers')],
-              ['mi', t('miles')],
-            ]}
-            value={form.distanceUnit}
-          />
-          <SelectField
-            label={t('temperatureUnit')}
-            onChange={(value) =>
-              updateField('temperatureUnit', value as FormState['temperatureUnit'])
-            }
-            options={[
-              ['celsius', t('celsius')],
-              ['fahrenheit', t('fahrenheit')],
-            ]}
-            value={form.temperatureUnit}
-          />
-          <SelectField
-            label={t('timeFormat')}
-            onChange={(value) => updateField('timeFormat', value as FormState['timeFormat'])}
-            options={[
-              ['12h', t('hour12')],
-              ['24h', t('hour24')],
-            ]}
-            value={form.timeFormat}
-          />
-          <SelectField
-            label={t('dateFormat')}
-            onChange={(value) => updateField('dateFormat', value as FormState['dateFormat'])}
-            options={[
-              ['mdy', t('monthDayYear')],
-              ['dmy', t('dayMonthYear')],
-              ['ymd', t('yearMonthDay')],
-            ]}
-            value={form.dateFormat}
-          />
-          <SelectField
-            label={t('appearance')}
-            onChange={(value) => updateField('appearance', value as FormState['appearance'])}
-            options={[
-              ['system', t('system')],
-              ['light', t('light')],
-              ['dark', t('dark')],
-            ]}
-            value={form.appearance}
-          />
-        </CardContent>
+        <FieldSet className="gap-5 border-t p-5 sm:p-6">
+          <FieldLegend className="text-lg leading-6 font-semibold tracking-tight">
+            {t('preferencesSection')}
+          </FieldLegend>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <SelectField
+              label={t('distanceUnit')}
+              onChange={(value) => updateField('distanceUnit', value as FormState['distanceUnit'])}
+              options={[
+                ['km', t('kilometers')],
+                ['mi', t('miles')],
+              ]}
+              value={form.distanceUnit}
+            />
+            <SelectField
+              label={t('temperatureUnit')}
+              onChange={(value) =>
+                updateField('temperatureUnit', value as FormState['temperatureUnit'])
+              }
+              options={[
+                ['celsius', t('celsius')],
+                ['fahrenheit', t('fahrenheit')],
+              ]}
+              value={form.temperatureUnit}
+            />
+            <SelectField
+              label={t('timeFormat')}
+              onChange={(value) => updateField('timeFormat', value as FormState['timeFormat'])}
+              options={[
+                ['12h', t('hour12')],
+                ['24h', t('hour24')],
+              ]}
+              value={form.timeFormat}
+            />
+            <SelectField
+              label={t('dateFormat')}
+              onChange={(value) => updateField('dateFormat', value as FormState['dateFormat'])}
+              options={[
+                ['mdy', t('monthDayYear')],
+                ['dmy', t('dayMonthYear')],
+                ['ymd', t('yearMonthDay')],
+              ]}
+              value={form.dateFormat}
+            />
+            <SelectField
+              label={t('appearance')}
+              onChange={(value) => updateField('appearance', value as FormState['appearance'])}
+              options={[
+                ['system', t('system')],
+                ['light', t('light')],
+                ['dark', t('dark')],
+              ]}
+              value={form.appearance}
+            />
+          </div>
+        </FieldSet>
       </Card>
 
       <div className="flex flex-wrap items-center gap-3">

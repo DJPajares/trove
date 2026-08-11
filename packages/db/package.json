@@ -17,13 +17,13 @@
     "tsx": "^4.23.11"
   },
   "scripts": {
-    "build": "pnpm db:generate && tsc --project tsconfig.build.json",
+    "build": "pnpm db:generate && ../../node_modules/.bin/tsc --project tsconfig.build.json",
     "db:generate": "prisma generate",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:validate-env": "tsx src/validate-environment.ts",
-    "lint": "oxlint --deny-warnings src",
-    "typecheck": "pnpm db:generate && tsc --noEmit --project tsconfig.json"
+    "lint": "../../node_modules/.bin/oxlint --deny-warnings src",
+    "typecheck": "pnpm db:generate && ../../node_modules/.bin/tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

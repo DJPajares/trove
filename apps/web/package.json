@@ -15,9 +15,9 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev --port 3000",
-    "lint": "oxlint --deny-warnings app components i18n lib",
+    "lint": "../../node_modules/.bin/oxlint --deny-warnings app components i18n lib",
     "start": "next start --port 3000",
-    "typecheck": "tsc --noEmit --project tsconfig.json"
+    "typecheck": "../../node_modules/.bin/tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

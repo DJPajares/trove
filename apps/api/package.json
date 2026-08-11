@@ -9,11 +9,11 @@
     "tsx": "^4.23.11"
   },
   "scripts": {
-    "build": "tsc --project tsconfig.build.json",
+    "build": "../../node_modules/.bin/tsc --project tsconfig.build.json",
     "dev": "tsx watch src/server.ts",
-    "lint": "oxlint --deny-warnings src",
+    "lint": "../../node_modules/.bin/oxlint --deny-warnings src",
     "start": "node dist/server.js",
-    "typecheck": "tsc --noEmit --project tsconfig.json"
+    "typecheck": "../../node_modules/.bin/tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {
     "@trove/db": "workspace:*",

@@ -16,6 +16,7 @@ The approved product requirements live in `PRD.md` once generated. Linear is the
 - Do not introduce future features unless explicitly included in the current Linear task.
 - Preserve future extensibility without building unused parallel systems.
 - Do not hard-code user-facing text; keep the app localization-ready.
+- Follow the existing Trove Design System and established UX patterns. Apply TasteSkill principles when making UI/UX decisions without overriding the PRD or established Trove patterns.
 - Use current stable dependency versions where practical.
 - Use pnpm.
 

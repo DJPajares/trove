@@ -4,7 +4,10 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { getSafeRedirectPath } from '@/lib/auth/redirect';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
@@ -26,9 +29,6 @@ export function EmailAuthForm({ mode, nextPath }: Readonly<EmailAuthFormProps>) 
 
   const isSignUp = mode === 'sign-up';
   const redirectPath = getSafeRedirectPath(nextPath);
-  const fieldClass =
-    'mt-2 h-11 w-full rounded-[var(--radius-md)] border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/40';
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -93,66 +93,59 @@ export function EmailAuthForm({ mode, nextPath }: Readonly<EmailAuthFormProps>) 
   }
 
   return (
-    <form className="space-y-5" onSubmit={handleSubmit}>
+    <form className="space-y-6" onSubmit={handleSubmit}>
       {error ? (
-        <p
-          className="rounded-[var(--radius-md)] border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          role="alert"
-        >
-          {error}
-        </p>
+        <Alert role="alert" variant="destructive">
+          <AlertDescription className="text-destructive">{error}</AlertDescription>
+        </Alert>
       ) : null}
       {confirmationSent ? (
-        <p
-          className="rounded-[var(--radius-md)] border border-status-success/30 bg-status-success/10 px-4 py-3 text-sm text-status-success"
-          role="status"
-        >
-          {t('confirmationSent')}
-        </p>
+        <Alert aria-live="polite" role="status" variant="success">
+          <AlertDescription className="text-foreground">{t('confirmationSent')}</AlertDescription>
+        </Alert>
       ) : null}
 
-      <label className="block text-sm font-medium" htmlFor="auth-email">
-        {t('email')}
-        <input
-          autoComplete="email"
-          className={fieldClass}
-          id="auth-email"
-          onChange={(event) => setEmail(event.target.value)}
-          required
-          type="email"
-          value={email}
-        />
-      </label>
+      <FieldGroup>
+        <Field>
+          <FieldLabel htmlFor="auth-email">{t('email')}</FieldLabel>
+          <Input
+            autoComplete="email"
+            id="auth-email"
+            onChange={(event) => setEmail(event.target.value)}
+            required
+            type="email"
+            value={email}
+          />
+        </Field>
 
-      <label className="block text-sm font-medium" htmlFor="auth-password">
-        {t('password')}
-        <input
-          autoComplete={isSignUp ? 'new-password' : 'current-password'}
-          className={fieldClass}
-          id="auth-password"
-          minLength={6}
-          onChange={(event) => setPassword(event.target.value)}
-          required
-          type="password"
-          value={password}
-        />
-      </label>
-
-      {isSignUp ? (
-        <label className="block text-sm font-medium" htmlFor="auth-confirmation">
-          {t('confirmPassword')}
-          <input
-            autoComplete="new-password"
-            className={fieldClass}
-            id="auth-confirmation"
+        <Field>
+          <FieldLabel htmlFor="auth-password">{t('password')}</FieldLabel>
+          <Input
+            autoComplete={isSignUp ? 'new-password' : 'current-password'}
+            id="auth-password"
             minLength={6}
-            onChange={(event) => setConfirmation(event.target.value)}
+            onChange={(event) => setPassword(event.target.value)}
             required
             type="password"
-            value={confirmation}
+            value={password}
           />
-        </label>
-      ) : null}
+        </Field>
+
+        {isSignUp ? (
+          <Field>
+            <FieldLabel htmlFor="auth-confirmation">{t('confirmPassword')}</FieldLabel>
+            <Input
+              autoComplete="new-password"
+              id="auth-confirmation"
+              minLength={6}
+              onChange={(event) => setConfirmation(event.target.value)}
+              required
+              type="password"
+              value={confirmation}
+            />
+          </Field>
+        ) : null}
+      </FieldGroup>
 
       <Button className="w-full" disabled={isPending} size="lg" type="submit">
         {isPending ? (isSignUp ? t('pendingSignUp') : t('pendingSignIn')) : t(mode)}

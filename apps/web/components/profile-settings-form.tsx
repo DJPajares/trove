@@ -1,12 +1,19 @@
 'use client';
 
 import Image from 'next/image';
+import { CircleAlert } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 
-import { Button } from '@/components/ui/button';
+import { PageState } from '@/components/page-state';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import {
   fetchProfile,
   removeProfilePhoto,
@@ -15,6 +22,7 @@ import {
   uploadProfilePhoto,
 } from '@/lib/profile/api';
 import { getPreferenceDefaults, type ProfilePreferences } from '@/lib/profile/preferences';
+import { cn } from '@/lib/utils';
 
 type FormState = ProfilePreferences & {
   displayName: string;
@@ -147,73 +155,79 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
 
   if (!form) {
     return (
-      <p className="rounded-[var(--radius-lg)] border border-border bg-card p-6 text-sm text-muted-foreground">
-        {error ?? t('loading')}
-      </p>
+      <PageState
+        headingLevel={2}
+        icon={error ? <CircleAlert aria-hidden="true" /> : undefined}
+        kind={error ? 'error' : 'loading'}
+        title={error ?? t('loading')}
+      />
     );
   }
-
-  const fieldClass =
-    'mt-2 h-10 w-full rounded-[var(--radius-md)] border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/40';
 
   return (
     <form className="space-y-6" onSubmit={handleSubmit}>
       {error ? (
-        <p
-          className="rounded-[var(--radius-md)] border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          role="alert"
-        >
-          {error}
-        </p>
+        <Alert role="alert" variant="destructive">
+          <AlertDescription className="text-destructive">{error}</AlertDescription>
+        </Alert>
       ) : null}
 
-      <section className="rounded-[var(--radius-xl)] border border-border bg-card p-5 shadow-sm sm:p-7">
-        <h2 className="text-lg font-semibold">{t('profileSection')}</h2>
-        <div className="mt-5 grid gap-5 sm:grid-cols-2">
-          <label className="text-sm font-medium">
-            {t('displayName')}
-            <input
-              className={fieldClass}
+      <Card>
+        <CardHeader>
+          <CardTitle as="h2">{t('profileSection')}</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-6 sm:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor="profile-display-name">{t('displayName')}</FieldLabel>
+            <Input
+              aria-describedby="profile-display-name-hint"
+              id="profile-display-name"
               maxLength={100}
               onChange={(event) => updateField('displayName', event.target.value)}
               value={form.displayName}
             />
-            <span className="mt-1 block text-xs font-normal text-muted-foreground">
+            <FieldDescription id="profile-display-name-hint">
               {t('displayNameHint')}
-            </span>
-          </label>
-          <label className="text-sm font-medium">
-            {t('homeLocation')}
-            <input
-              className={fieldClass}
+            </FieldDescription>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="profile-home-location">{t('homeLocation')}</FieldLabel>
+            <Input
+              aria-describedby="profile-home-location-hint"
+              id="profile-home-location"
               maxLength={200}
               onChange={(event) => updateField('homeLocation', event.target.value)}
               value={form.homeLocation}
             />
-            <span className="mt-1 block text-xs font-normal text-muted-foreground">
+            <FieldDescription id="profile-home-location-hint">
               {t('homeLocationHint')}
-            </span>
-          </label>
-          <label className="text-sm font-medium sm:max-w-xs">
-            {t('homeCurrency')}
-            <input
-              className={`${fieldClass} uppercase`}
+            </FieldDescription>
+          </Field>
+          <Field className="sm:max-w-xs">
+            <FieldLabel htmlFor="profile-home-currency">{t('homeCurrency')}</FieldLabel>
+            <Input
+              aria-describedby="profile-home-currency-hint"
+              autoCapitalize="characters"
+              className="uppercase"
+              id="profile-home-currency"
               maxLength={3}
               onChange={(event) =>
                 updateField('homeCurrencyCode', event.target.value.toUpperCase())
               }
               value={form.homeCurrencyCode}
             />
-            <span className="mt-1 block text-xs font-normal text-muted-foreground">
+            <FieldDescription id="profile-home-currency-hint">
               {t('homeCurrencyHint')}
-            </span>
-          </label>
-        </div>
-      </section>
+            </FieldDescription>
+          </Field>
+        </CardContent>
+      </Card>
 
-      <section className="rounded-[var(--radius-xl)] border border-border bg-card p-5 shadow-sm sm:p-7">
-        <h2 className="text-lg font-semibold">{t('photoSection')}</h2>
-        <div className="mt-5 flex flex-wrap items-center gap-5">
+      <Card>
+        <CardHeader>
+          <CardTitle as="h2">{t('photoSection')}</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-5">
           <div className="flex size-20 items-center justify-center overflow-hidden rounded-full bg-secondary text-2xl font-semibold text-secondary-foreground">
             {profile?.avatarUrl ? (
               <Image
@@ -229,8 +243,13 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
             )}
           </div>
           <div className="space-y-2">
-            <label className="inline-flex cursor-pointer">
-              <span className="inline-flex h-9 items-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/80">
+            <label
+              className={cn(
+                buttonVariants({ size: 'default' }),
+                photoBusy ? 'pointer-events-none opacity-50' : 'cursor-pointer',
+              )}
+            >
+              <span aria-disabled={photoBusy}>
                 {profile?.avatarPath ? t('changePhoto') : t('choosePhoto')}
               </span>
               <input
@@ -253,12 +272,14 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
             ) : null}
             <p className="text-xs text-muted-foreground">{t('photoHint')}</p>
           </div>
-        </div>
-      </section>
+        </CardContent>
+      </Card>
 
-      <section className="rounded-[var(--radius-xl)] border border-border bg-card p-5 shadow-sm sm:p-7">
-        <h2 className="text-lg font-semibold">{t('preferencesSection')}</h2>
-        <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <Card>
+        <CardHeader>
+          <CardTitle as="h2">{t('preferencesSection')}</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <SelectField
             label={t('distanceUnit')}
             onChange={(value) => updateField('distanceUnit', value as FormState['distanceUnit'])}
@@ -308,10 +329,10 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
             ]}
             value={form.appearance}
           />
-        </div>
-      </section>
+        </CardContent>
+      </Card>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button disabled={status === 'saving'} type="submit">
           {status === 'saving' ? t('saving') : t('save')}
         </Button>
@@ -336,23 +357,23 @@ function SelectField({
   options: [string, string][];
   value: string;
 }) {
+  const id = useId();
+
   return (
-    <label className="text-sm font-medium">
-      {label}
-      <select
-        className={fieldClass}
+    <Field>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <NativeSelect
+        className="w-full"
+        id={id}
         onChange={(event) => onChange(event.target.value)}
         value={value}
       >
         {options.map(([option, optionLabel]) => (
-          <option key={option} value={option}>
+          <NativeSelectOption key={option} value={option}>
             {optionLabel}
-          </option>
+          </NativeSelectOption>
         ))}
-      </select>
-    </label>
+      </NativeSelect>
+    </Field>
   );
 }
-
-const fieldClass =
-  'mt-2 h-10 w-full rounded-[var(--radius-md)] border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/40';

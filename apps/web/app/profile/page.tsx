@@ -9,7 +9,7 @@ export default async function ProfilePage() {
 
   return (
     <section className="mx-auto w-full max-w-5xl space-y-10">
-      <PageHeader description={t('description')} eyebrow={t('eyebrow')} title={t('title')} />
+      <PageHeader description={t('description')} title={t('title')} />
       <ProfileSettingsForm locale={locale} />
     </section>
   );

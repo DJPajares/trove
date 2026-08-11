@@ -1,12 +1,14 @@
 'use client';
 
 import { Bookmark, House, MapPinned, Wrench } from 'lucide-react';
+import { motion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { ComponentType } from 'react';
 
 import { cn } from '@/lib/utils';
+import { navigationTransition } from '@/lib/motion';
 
 type NavigationItem = {
   href: string;
@@ -42,15 +44,23 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
             <Link
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'rounded-[var(--radius-md)] px-3 py-2 text-sm font-medium transition-colors duration-[var(--motion-standard)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                'relative isolate rounded-[var(--radius-md)] px-3 py-2 text-sm font-medium transition-colors duration-[var(--motion-standard)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
                 active
-                  ? 'bg-secondary text-secondary-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                  ? 'text-secondary-foreground'
+                  : 'text-muted-foreground hover:text-foreground',
               )}
               href={href}
               key={href}
             >
-              {label}
+              {active ? (
+                <motion.span
+                  aria-hidden="true"
+                  className="absolute inset-0 -z-10 rounded-[var(--radius-md)] bg-secondary"
+                  layoutId="primary-navigation-desktop"
+                  transition={navigationTransition}
+                />
+              ) : null}
+              <span className="relative">{label}</span>
             </Link>
           );
         })}
@@ -73,15 +83,23 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
               <Link
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-1 py-1.5 text-xs font-medium transition-colors duration-[var(--motion-standard)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                  'relative isolate flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-1 py-1.5 text-xs font-medium transition-colors duration-[var(--motion-standard)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
                   active
-                    ? 'bg-secondary text-secondary-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    ? 'text-secondary-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
                 href={href}
               >
-                <Icon aria-hidden="true" className="size-4" />
-                <span className="max-w-full truncate">{label}</span>
+                {active ? (
+                  <motion.span
+                    aria-hidden="true"
+                    className="absolute inset-0 -z-10 rounded-[var(--radius-md)] bg-secondary"
+                    layoutId="primary-navigation-mobile"
+                    transition={navigationTransition}
+                  />
+                ) : null}
+                <Icon aria-hidden="true" className="relative size-4" />
+                <span className="relative max-w-full truncate">{label}</span>
               </Link>
             </li>
           );

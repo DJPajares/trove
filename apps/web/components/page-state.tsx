@@ -82,15 +82,19 @@ export function PageState({
             {icon}
           </EmptyMedia>
         ) : null}
-        {eyebrow ? <p className="mb-3 text-sm font-medium text-brand">{eyebrow}</p> : null}
+        {eyebrow ? (
+          <p className="mb-2 text-xs font-semibold tracking-[0.08em] text-brand uppercase">
+            {eyebrow}
+          </p>
+        ) : null}
         <Heading
-          className="text-3xl leading-tight font-semibold tracking-tight text-pretty text-foreground sm:text-4xl"
+          className="text-[clamp(1.875rem,5vw,2.5rem)] leading-[1.12] font-semibold tracking-[-0.025em] text-pretty text-foreground"
           id={headingId}
         >
           {title}
         </Heading>
         {description ? (
-          <p className="mt-4 max-w-[65ch] text-base leading-7 text-pretty text-muted-foreground">
+          <p className="mt-3 max-w-[62ch] text-base leading-7 text-pretty text-muted-foreground">
             {description}
           </p>
         ) : null}

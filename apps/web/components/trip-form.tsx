@@ -16,15 +16,17 @@ import type { ChangeEvent, FormEvent } from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { DatePicker } from '@/components/date-picker';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { DatePicker } from '@/components/date-picker';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
@@ -564,7 +566,7 @@ export function TripForm({ onCancel, onSaved, trip }: TripFormProps) {
               <label className={cn(buttonVariants({ variant: 'outline' }), 'cursor-pointer')}>
                 <ImagePlus aria-hidden="true" data-icon="inline-start" />
                 {coverPreview ? t('changeCover') : t('chooseCover')}
-                <input
+                <Input
                   accept="image/jpeg,image/png,image/webp"
                   className="sr-only"
                   onChange={handleCoverChange}
@@ -598,27 +600,31 @@ export function TripForm({ onCancel, onSaved, trip }: TripFormProps) {
         </SheetFooter>
       </form>
 
-      <Dialog
+      <AlertDialog
         open={Boolean(pendingShrink)}
         onOpenChange={(open) => !open && void cancelDateShrink()}
       >
-        <DialogContent closeLabel={t('close')}>
-          <DialogHeader>
-            <DialogTitle>{t('dateShrinkTitle')}</DialogTitle>
-            <DialogDescription>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('dateShrinkTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
               {t('dateShrinkDescription', { count: pendingShrink?.affectedItemCount ?? 0 })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button onClick={() => void cancelDateShrink()} type="button" variant="outline">
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => void cancelDateShrink()}>
               {t('keepDates')}
-            </Button>
-            <Button onClick={() => void confirmDateShrink()} type="button" variant="destructive">
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void confirmDateShrink()}
+              type="button"
+              variant="destructive"
+            >
               {t('moveToUnscheduled')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

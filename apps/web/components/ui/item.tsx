@@ -6,15 +6,30 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 
-function ItemGroup({ className, ...props }: React.ComponentProps<'div'>) {
+const itemGroupVariants = cva(
+  'group/item-group flex w-full flex-col has-data-[size=sm]:gap-2.5 has-data-[size=xs]:gap-2',
+  {
+    variants: {
+      variant: {
+        default: 'gap-4',
+        list: 'gap-0 overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card shadow-[var(--shadow-surface)] [&>[data-slot=item]+[data-slot=item]]:border-t',
+      },
+    },
+    defaultVariants: { variant: 'default' },
+  },
+);
+
+function ItemGroup({
+  className,
+  variant = 'default',
+  ...props
+}: React.ComponentProps<'div'> & VariantProps<typeof itemGroupVariants>) {
   return (
     <div
       role="list"
       data-slot="item-group"
-      className={cn(
-        'group/item-group flex w-full flex-col gap-4 has-data-[size=sm]:gap-2.5 has-data-[size=xs]:gap-2',
-        className,
-      )}
+      data-variant={variant}
+      className={cn(itemGroupVariants({ variant, className }))}
       {...props}
     />
   );
@@ -32,7 +47,7 @@ function ItemSeparator({ className, ...props }: React.ComponentProps<typeof Sepa
 }
 
 const itemVariants = cva(
-  'group/item flex min-h-12 w-full flex-wrap items-center rounded-[var(--radius-md)] border text-sm transition-[color,background-color,border-color,box-shadow] duration-[var(--motion-standard)] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 [a]:hover:bg-muted',
+  'group/item flex min-h-12 w-full flex-wrap items-center rounded-[var(--radius-md)] border text-sm transition-[color,background-color,border-color,box-shadow] duration-[var(--motion-standard)] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 in-data-[variant=list]:rounded-none in-data-[variant=list]:border-0 [a]:hover:bg-surface-hover [button]:hover:bg-surface-hover',
   {
     variants: {
       variant: {

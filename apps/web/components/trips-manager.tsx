@@ -10,15 +10,17 @@ import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
 import { TripForm } from '@/components/trip-form';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 import {
   Item,
   ItemContent,
@@ -114,7 +116,6 @@ export function TripsManager() {
           </Button>
         }
         description={t('description')}
-        eyebrow={t('eyebrow')}
         title={t('title')}
       />
 
@@ -151,7 +152,7 @@ export function TripsManager() {
           title={t('emptyTitle')}
         />
       ) : (
-        <ItemGroup className="gap-2" aria-label={t('tripListLabel')}>
+        <ItemGroup aria-label={t('tripListLabel')} variant="list">
           {trips.map((trip) => (
             <Item
               className="group min-h-20 flex-nowrap px-3 py-3 text-left hover:bg-muted/60"
@@ -163,7 +164,7 @@ export function TripsManager() {
                   type="button"
                 />
               }
-              variant="outline"
+              variant="default"
             >
               <ItemMedia
                 className="size-14 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground sm:size-16"
@@ -234,6 +235,7 @@ export function TripsManager() {
               {editor.mode === 'edit' ? (
                 <div className="flex items-center gap-1">
                   <Button
+                    nativeButton={false}
                     render={<Link href={`/trips/${editor.trip.id}/places`} />}
                     size="sm"
                     variant="outline"
@@ -265,24 +267,29 @@ export function TripsManager() {
         </SheetContent>
       </Sheet>
 
-      <Dialog open={Boolean(tripToDelete)} onOpenChange={(open) => !open && setTripToDelete(null)}>
-        <DialogContent closeLabel={t('close')}>
-          <DialogHeader>
-            <DialogTitle>{t('deleteTitle')}</DialogTitle>
-            <DialogDescription>
+      <AlertDialog
+        open={Boolean(tripToDelete)}
+        onOpenChange={(open) => !open && setTripToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('deleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
               {t('deleteDescription', { name: tripToDelete?.name ?? '' })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button disabled={deleting} onClick={() => setTripToDelete(null)} variant="outline">
-              {t('cancel')}
-            </Button>
-            <Button disabled={deleting} onClick={() => void handleDelete()} variant="destructive">
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              onClick={() => void handleDelete()}
+              variant="destructive"
+            >
               {deleting ? t('deleting') : t('deleteTrip')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

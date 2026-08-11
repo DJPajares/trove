@@ -19,6 +19,16 @@ import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
 import { SearchField } from '@/components/search-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -494,7 +504,6 @@ export function SavedPlacesManager() {
           </Button>
         }
         description={t('description')}
-        eyebrow={t('eyebrow')}
         title={t('title')}
       />
 
@@ -626,14 +635,14 @@ export function SavedPlacesManager() {
                 title={t('filterEmptyTitle')}
               />
             ) : (
-              <ItemGroup aria-label={t('listLabel')} className="gap-2">
+              <ItemGroup aria-label={t('listLabel')} variant="list">
                 {visibleSavedPlaces.map((savedPlace) => {
                   const category = providerDetails[savedPlace.place.id]?.category;
                   return (
                     <Item
                       className="min-h-20 flex-nowrap px-3 py-3 text-left hover:bg-muted/60"
                       key={savedPlace.id}
-                      variant="outline"
+                      variant="default"
                     >
                       <ItemMedia
                         className={cn(
@@ -886,27 +895,25 @@ export function SavedPlacesManager() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
+      <AlertDialog
         open={Boolean(collectionToDelete)}
         onOpenChange={(open) => !open && setCollectionToDelete(null)}
       >
-        <DialogContent closeLabel={t('close')}>
-          <DialogHeader>
-            <DialogTitle>{t('deleteCollectionTitle')}</DialogTitle>
-            <DialogDescription>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('deleteCollectionTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
               {t('deleteCollectionDescription', { name: collectionToDelete?.name ?? '' })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button onClick={() => setCollectionToDelete(null)} variant="outline">
-              {t('cancel')}
-            </Button>
-            <Button onClick={() => void handleCollectionDelete()} variant="destructive">
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleCollectionDelete()} variant="destructive">
               {t('deleteCollection')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog
         onOpenChange={(open) => {

@@ -8,9 +8,10 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-brand-strong',
+        default:
+          'bg-primary text-primary-foreground shadow-[var(--shadow-control)] hover:bg-brand-strong hover:shadow-none',
         outline:
-          'border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50',
+          'border-border-strong bg-background shadow-[var(--shadow-control)] hover:bg-surface-hover hover:text-foreground hover:shadow-none aria-expanded:bg-surface-hover aria-expanded:text-foreground dark:bg-input/30',
         secondary:
           'bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground',
         ghost:
@@ -21,11 +22,11 @@ const buttonVariants = cva(
       },
       size: {
         default:
-          'h-10 gap-2 px-3.5 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3',
+          'h-11 gap-2 px-4 has-data-[icon=inline-end]:pr-3.5 has-data-[icon=inline-start]:pl-3.5',
         xs: "h-7 gap-1 rounded-[var(--radius-sm)] px-2 text-xs in-data-[slot=button-group]:rounded-[var(--radius-md)] has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
         sm: "h-9 gap-1.5 px-3 text-[0.8rem] in-data-[slot=button-group]:rounded-[var(--radius-md)] has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5 [&_svg:not([class*='size-'])]:size-3.5",
         lg: 'h-11 gap-2 px-4 has-data-[icon=inline-end]:pr-3.5 has-data-[icon=inline-start]:pl-3.5',
-        icon: 'size-10',
+        icon: 'size-11',
         'icon-xs':
           "size-7 rounded-[var(--radius-sm)] in-data-[slot=button-group]:rounded-[var(--radius-md)] [&_svg:not([class*='size-'])]:size-3",
         'icon-sm':

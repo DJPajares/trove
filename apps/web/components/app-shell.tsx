@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 
 import { AccountMenu } from '@/components/account-menu';
 import { AppearanceMenu } from '@/components/appearance-menu';
+import { PageTransition } from '@/components/page-transition';
 import { PrimaryNavigation } from '@/components/primary-navigation';
 
 export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
@@ -24,12 +25,12 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         className="sticky top-0 z-[var(--layer-sticky)] border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85"
         data-translucent-surface
       >
-        <div className="mx-auto flex h-16 w-full max-w-[1400px] items-center justify-between px-4 sm:px-6 md:px-8">
+        <div className="mx-auto flex h-16 w-full max-w-[1400px] items-center justify-between gap-4 px-[var(--layout-gutter)]">
           <Link
             className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground"
             href="/"
           >
-            <span className="flex size-8 items-center justify-center rounded-[var(--radius-md)] bg-brand text-primary-foreground">
+            <span className="flex size-8 items-center justify-center rounded-[var(--radius-md)] bg-brand text-primary-foreground shadow-[var(--shadow-control)]">
               <MapPinned aria-hidden="true" className="size-4" />
             </span>
             {app('name')}
@@ -45,11 +46,11 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
       </header>
 
       <main
-        className="mx-auto w-full max-w-[1400px] scroll-mt-20 px-4 py-8 pb-28 outline-none sm:px-6 md:px-8 md:py-12 md:pb-12"
+        className="mx-auto w-full max-w-[1400px] scroll-mt-20 px-[var(--layout-gutter)] py-8 pb-28 outline-none md:py-12 md:pb-12"
         id="main-content"
         tabIndex={-1}
       >
-        {children}
+        <PageTransition>{children}</PageTransition>
       </main>
 
       <PrimaryNavigation variant="mobile" />

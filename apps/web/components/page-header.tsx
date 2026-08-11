@@ -21,19 +21,23 @@ export function PageHeader({
 }: Readonly<PageHeaderProps>) {
   return (
     <header
-      className={cn('flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between', className)}
+      className={cn('flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between', className)}
       data-slot="page-header"
     >
       <div className="max-w-3xl">
-        {eyebrow ? <p className="mb-3 text-sm font-medium text-brand">{eyebrow}</p> : null}
+        {eyebrow ? (
+          <p className="mb-2 text-xs font-semibold tracking-[0.08em] text-brand uppercase">
+            {eyebrow}
+          </p>
+        ) : null}
         <h1
-          className="text-3xl leading-tight font-semibold tracking-tight text-pretty text-foreground sm:text-4xl"
+          className="text-[clamp(1.875rem,5vw,2.5rem)] leading-[1.12] font-semibold tracking-[-0.025em] text-pretty text-foreground"
           id={headingId}
         >
           {title}
         </h1>
         {description ? (
-          <p className="mt-4 max-w-[65ch] text-base leading-7 text-pretty text-muted-foreground">
+          <p className="mt-3 max-w-[62ch] text-base leading-7 text-pretty text-muted-foreground">
             {description}
           </p>
         ) : null}

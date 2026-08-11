@@ -137,10 +137,11 @@ export function removeFromCollection(savedPlaceId: string, collectionId: string)
   });
 }
 
-export function searchProviderPlaces(input: string) {
+export function searchProviderPlaces(input: string, signal?: AbortSignal) {
   return savedRequest<ProviderSearchResult>('/places/search', {
     body: JSON.stringify({ input }),
     method: 'POST',
+    signal,
   });
 }
 

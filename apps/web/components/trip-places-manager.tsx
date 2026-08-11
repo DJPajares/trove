@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
+import { SearchField } from '@/components/search-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -47,6 +48,13 @@ import {
 } from '@/components/ui/item';
 import { Label } from '@/components/ui/label';
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -59,7 +67,10 @@ import {
   fetchSavedPlaces,
   getProviderPlaceDetails,
   type ProviderPlaceDetails,
+  type ProviderSuggestion,
+  resolveProviderPlace,
   type SavedPlace,
+  searchProviderPlaces,
 } from '@/lib/saved/api';
 import {
   addTripPlace,
@@ -85,9 +96,16 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
   const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [addMode, setAddMode] = useState<'custom' | 'search'>('search');
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
   const [addStatus, setAddStatus] = useState<'error' | 'idle' | 'loading'>('idle');
   const [addingPlaceId, setAddingPlaceId] = useState<string | null>(null);
+  const [addingProviderId, setAddingProviderId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<ProviderSuggestion[]>([]);
+  const [searchStatus, setSearchStatus] = useState<'empty' | 'idle' | 'loading' | 'unavailable'>(
+    'idle',
+  );
   const [customName, setCustomName] = useState('');
   const [customNote, setCustomNote] = useState('');
   const [creatingCustom, setCreatingCustom] = useState(false);
@@ -115,7 +133,7 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
   }, [refresh]);
 
   useEffect(() => {
-    const pending = [...tripPlaces, ...savedPlaces].filter(
+    const pending = tripPlaces.filter(
       (item) =>
         item.place.kind === 'provider' &&
         providerDetails[item.place.id] === undefined &&
@@ -147,7 +165,47 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
     return () => {
       active = false;
     };
-  }, [providerDetails, savedPlaces, tripPlaces]);
+  }, [providerDetails, tripPlaces]);
+
+  useEffect(() => {
+    const input = searchQuery.trim();
+    if (!input) {
+      setSearchResults([]);
+      setSearchStatus('idle');
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      setSearchStatus('loading');
+      void searchProviderPlaces(input, controller.signal)
+        .then((result) => {
+          if (controller.signal.aborted) return;
+          if (result.status === 'unavailable') {
+            setSearchResults([]);
+            setSearchStatus('unavailable');
+            return;
+          }
+          setSearchResults(result.suggestions ?? []);
+          setSearchStatus(result.status === 'empty' ? 'empty' : 'idle');
+        })
+        .catch((cause: unknown) => {
+          if (
+            controller.signal.aborted ||
+            (cause instanceof DOMException && cause.name === 'AbortError')
+          ) {
+            return;
+          }
+          setSearchResults([]);
+          setSearchStatus('unavailable');
+        });
+    }, 250);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [searchQuery]);
 
   const sortedPlaces = useMemo(
     () =>
@@ -159,6 +217,41 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
     [tripPlaces],
   );
 
+  const matchingSavedPlaces = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase();
+    if (!query) return savedPlaces;
+
+    const matchingProviderIds = new Set(
+      searchResults.map((suggestion) => suggestion.externalPlaceId),
+    );
+    return savedPlaces.filter((savedPlace) => {
+      if (savedPlace.place.kind === 'custom') {
+        return [savedPlace.place.name, savedPlace.place.note]
+          .filter((value): value is string => Boolean(value))
+          .some((value) => value.toLocaleLowerCase().includes(query));
+      }
+
+      const details = providerDetails[savedPlace.place.id];
+      return (
+        [details?.name, details?.formattedAddress]
+          .filter((value): value is string => Boolean(value))
+          .some((value) => value.toLocaleLowerCase().includes(query)) ||
+        savedPlace.place.providerRefs.some((reference) =>
+          matchingProviderIds.has(reference.externalPlaceId),
+        )
+      );
+    });
+  }, [providerDetails, savedPlaces, searchQuery, searchResults]);
+
+  const providerResults = useMemo(() => {
+    const savedProviderIds = new Set(
+      savedPlaces.flatMap((savedPlace) =>
+        savedPlace.place.providerRefs.map((reference) => reference.externalPlaceId),
+      ),
+    );
+    return searchResults.filter((suggestion) => !savedProviderIds.has(suggestion.externalPlaceId));
+  }, [savedPlaces, searchResults]);
+
   function placeName(place: TripPlace | SavedPlace) {
     if (place.place.kind === 'custom') return place.place.name ?? t('customPlace');
     return providerDetails[place.place.id]?.name ?? t('providerPlace');
@@ -167,10 +260,42 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
     if (place.place.kind === 'custom') return place.place.note ?? t('customPlaceDescription');
     return providerDetails[place.place.id]?.formattedAddress ?? t('providerDetailsUnavailable');
   }
+  function savedPlaceSuggestion(savedPlace: SavedPlace) {
+    return searchResults.find((suggestion) =>
+      savedPlace.place.providerRefs.some(
+        (reference) => reference.externalPlaceId === suggestion.externalPlaceId,
+      ),
+    );
+  }
+  function savedPlaceName(savedPlace: SavedPlace) {
+    return savedPlaceSuggestion(savedPlace)?.name ?? placeName(savedPlace);
+  }
+  function savedPlaceDescription(savedPlace: SavedPlace) {
+    return savedPlaceSuggestion(savedPlace)?.description ?? placeDescription(savedPlace);
+  }
+  function hasTripPlaceForProvider(suggestion: ProviderSuggestion) {
+    return tripPlaces.some((tripPlace) =>
+      tripPlace.place.providerRefs.some(
+        (reference) => reference.externalPlaceId === suggestion.externalPlaceId,
+      ),
+    );
+  }
   function replaceTripPlace(next: TripPlace) {
     setTripPlaces((current) => current.map((item) => (item.id === next.id ? next : item)));
   }
+  function resetAddFlow() {
+    setAddMode('search');
+    setCustomName('');
+    setCustomNote('');
+    setSearchQuery('');
+    setSearchResults([]);
+    setSearchStatus('idle');
+    setAddingPlaceId(null);
+    setAddingProviderId(null);
+    setAddStatus('idle');
+  }
   async function openAdd() {
+    resetAddFlow();
     setAddOpen(true);
     setAddStatus('loading');
     try {
@@ -196,6 +321,29 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
       setAddingPlaceId(null);
     }
   }
+  async function handleProviderAdd(suggestion: ProviderSuggestion) {
+    setAddingProviderId(suggestion.externalPlaceId);
+    setError(null);
+    try {
+      const { place } = await resolveProviderPlace(suggestion.externalPlaceId);
+      const { tripPlace } = await addTripPlace(tripId, place.id);
+      setTripPlaces((current) =>
+        current.some((item) => item.id === tripPlace.id) ? current : [...current, tripPlace],
+      );
+      setProviderDetails((current) => ({
+        ...current,
+        [place.id]: {
+          category: suggestion.category,
+          formattedAddress: suggestion.description,
+          name: suggestion.name,
+        },
+      }));
+    } catch {
+      setError(t('actionError'));
+    } finally {
+      setAddingProviderId(null);
+    }
+  }
   async function handleCreateCustom(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!customName.trim()) return;
@@ -207,6 +355,7 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
       if (!added) return;
       setCustomName('');
       setCustomNote('');
+      resetAddFlow();
       setAddOpen(false);
     } catch {
       setError(t('actionError'));
@@ -386,70 +535,162 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
           ))}
         </ItemGroup>
       )}
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent closeLabel={t('close')}>
-          <DialogHeader>
-            <DialogTitle>{t('addPlaceTitle')}</DialogTitle>
-            <DialogDescription>{t('addPlaceDescription')}</DialogDescription>
-          </DialogHeader>
-          {addStatus === 'loading' ? (
-            <PageState headingLevel={2} kind="loading" title={t('loadingSaved')} />
-          ) : addStatus === 'error' ? (
-            <Alert role="alert" variant="destructive">
-              <AlertDescription>{t('loadSavedError')}</AlertDescription>
-            </Alert>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <h2 className="text-sm font-medium">{t('savedPlaces')}</h2>
-                {savedPlaces.length ? (
-                  <ItemGroup className="max-h-64 overflow-y-auto pr-1">
-                    {savedPlaces.map((savedPlace) => {
-                      const existing = tripPlaces.some(
-                        (item) => item.place.id === savedPlace.place.id,
-                      );
-                      return (
-                        <Item className="gap-3 px-3 py-2" key={savedPlace.id} variant="outline">
-                          <ItemContent className="min-w-0">
-                            <ItemTitle>{placeName(savedPlace)}</ItemTitle>
-                            <ItemDescription>{placeDescription(savedPlace)}</ItemDescription>
-                          </ItemContent>
-                          <Button
-                            disabled={existing || addingPlaceId === savedPlace.place.id}
-                            onClick={() => void handleAdd(savedPlace.place.id)}
-                            size="sm"
-                            variant={existing ? 'secondary' : 'outline'}
-                          >
-                            {existing
-                              ? t('added')
-                              : addingPlaceId === savedPlace.place.id
-                                ? t('adding')
-                                : t('add')}
-                          </Button>
-                        </Item>
-                      );
-                    })}
-                  </ItemGroup>
-                ) : (
-                  <p className="text-sm text-muted-foreground">{t('noSavedPlaces')}</p>
-                )}
-              </div>
-              <form
-                className="space-y-4 border-t pt-5"
-                onSubmit={(event) => void handleCreateCustom(event)}
-              >
-                <div>
-                  <h2 className="text-sm font-medium">{t('customPlaceTitle')}</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {t('customPlaceDescription')}
+      <Sheet
+        onOpenChange={(open) => {
+          setAddOpen(open);
+          if (!open) resetAddFlow();
+        }}
+        open={addOpen}
+      >
+        <SheetContent
+          className="data-[side=right]:w-[min(34rem,calc(100%-0.5rem))]"
+          closeLabel={t('close')}
+        >
+          <SheetHeader className="border-b">
+            <SheetTitle>{t('addPlaceTitle')}</SheetTitle>
+            <SheetDescription>{t('addPlaceDescription')}</SheetDescription>
+          </SheetHeader>
+          <div className="min-h-0 overflow-y-auto p-5">
+            {addMode === 'search' ? (
+              <div className="space-y-5">
+                <SearchField
+                  autoFocus
+                  label={t('searchLabel')}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder={t('searchPlaceholder')}
+                  value={searchQuery}
+                />
+
+                {addStatus === 'loading' ? (
+                  <p aria-live="polite" className="text-sm text-muted-foreground" role="status">
+                    {t('loadingSaved')}
                   </p>
-                </div>
+                ) : addStatus === 'error' ? (
+                  <Alert role="alert" variant="destructive">
+                    <CircleAlert aria-hidden="true" />
+                    <AlertDescription>{t('loadSavedError')}</AlertDescription>
+                  </Alert>
+                ) : matchingSavedPlaces.length ? (
+                  <div className="space-y-2">
+                    <h2 className="text-sm font-medium">{t('savedPlaces')}</h2>
+                    <ItemGroup aria-label={t('savedPlaces')} className="gap-2">
+                      {matchingSavedPlaces.map((savedPlace) => {
+                        const existing = tripPlaces.some(
+                          (item) => item.place.id === savedPlace.place.id,
+                        );
+                        return (
+                          <Item className="gap-3 px-3 py-3" key={savedPlace.id} variant="outline">
+                            <ItemMedia
+                              className="size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
+                              variant="icon"
+                            >
+                              {savedPlace.place.kind === 'custom' ? (
+                                <NotebookPen aria-hidden="true" />
+                              ) : (
+                                <Bookmark aria-hidden="true" />
+                              )}
+                            </ItemMedia>
+                            <ItemContent className="min-w-0">
+                              <ItemTitle>{savedPlaceName(savedPlace)}</ItemTitle>
+                              <ItemDescription>{savedPlaceDescription(savedPlace)}</ItemDescription>
+                            </ItemContent>
+                            <ItemActions className="shrink-0">
+                              <Button
+                                disabled={existing || addingPlaceId === savedPlace.place.id}
+                                onClick={() => void handleAdd(savedPlace.place.id)}
+                                size="sm"
+                                variant={existing ? 'secondary' : 'outline'}
+                              >
+                                {existing
+                                  ? t('added')
+                                  : addingPlaceId === savedPlace.place.id
+                                    ? t('adding')
+                                    : t('add')}
+                              </Button>
+                            </ItemActions>
+                          </Item>
+                        );
+                      })}
+                    </ItemGroup>
+                  </div>
+                ) : addStatus === 'idle' && !searchQuery.trim() ? (
+                  <p className="text-sm leading-6 text-muted-foreground">{t('noSavedPlaces')}</p>
+                ) : null}
+
+                {!searchQuery.trim() ? (
+                  <p className="text-sm leading-6 text-muted-foreground">{t('searchHint')}</p>
+                ) : searchStatus === 'loading' ? (
+                  <p aria-live="polite" className="text-sm text-muted-foreground" role="status">
+                    {t('searching')}
+                  </p>
+                ) : searchStatus === 'unavailable' ? (
+                  <Alert role="alert" variant="warning">
+                    <CircleAlert aria-hidden="true" />
+                    <AlertDescription>{t('searchUnavailable')}</AlertDescription>
+                  </Alert>
+                ) : providerResults.length ? (
+                  <div className="space-y-2">
+                    <h2 className="text-sm font-medium">{t('searchResults')}</h2>
+                    <ItemGroup aria-label={t('searchResults')} className="gap-2">
+                      {providerResults.map((suggestion) => {
+                        const existing = hasTripPlaceForProvider(suggestion);
+                        return (
+                          <Item
+                            className="gap-3 px-3 py-3"
+                            key={suggestion.externalPlaceId}
+                            variant="outline"
+                          >
+                            <ItemMedia
+                              className="size-10 rounded-[var(--radius-md)] bg-brand/10 text-brand"
+                              variant="icon"
+                            >
+                              <MapPinned aria-hidden="true" />
+                            </ItemMedia>
+                            <ItemContent className="min-w-0">
+                              <ItemTitle>{suggestion.name}</ItemTitle>
+                              <ItemDescription>
+                                {suggestion.description ?? t('providerPlace')}
+                              </ItemDescription>
+                            </ItemContent>
+                            <ItemActions className="shrink-0">
+                              <Button
+                                disabled={
+                                  existing || addingProviderId === suggestion.externalPlaceId
+                                }
+                                onClick={() => void handleProviderAdd(suggestion)}
+                                size="sm"
+                                variant={existing ? 'secondary' : 'outline'}
+                              >
+                                {existing
+                                  ? t('added')
+                                  : addingProviderId === suggestion.externalPlaceId
+                                    ? t('adding')
+                                    : t('add')}
+                              </Button>
+                            </ItemActions>
+                          </Item>
+                        );
+                      })}
+                    </ItemGroup>
+                  </div>
+                ) : searchStatus === 'empty' ? (
+                  <p className="text-sm leading-6 text-muted-foreground">{t('searchEmpty')}</p>
+                ) : null}
+
+                <Button className="px-0" onClick={() => setAddMode('custom')} variant="link">
+                  {t('createCustomPlace')}
+                </Button>
+              </div>
+            ) : (
+              <form className="space-y-5" onSubmit={(event) => void handleCreateCustom(event)}>
                 <div className="space-y-2">
                   <Label htmlFor="trip-place-name">{t('customName')}</Label>
                   <Input
+                    autoFocus
                     id="trip-place-name"
                     onChange={(event) => setCustomName(event.target.value)}
                     placeholder={t('customNamePlaceholder')}
+                    required
                     value={customName}
                   />
                 </div>
@@ -462,14 +703,19 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
                     value={customNote}
                   />
                 </div>
-                <Button disabled={creatingCustom || !customName.trim()} type="submit">
-                  {creatingCustom ? t('adding') : t('addCustomPlace')}
-                </Button>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button disabled={creatingCustom || !customName.trim()} type="submit">
+                    {creatingCustom ? t('adding') : t('addCustomPlace')}
+                  </Button>
+                  <Button onClick={() => setAddMode('search')} type="button" variant="outline">
+                    {t('backToSearch')}
+                  </Button>
+                </div>
               </form>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
       <Dialog open={Boolean(notePlace)} onOpenChange={(open) => !open && setNotePlace(null)}>
         <DialogContent closeLabel={t('close')}>
           <DialogHeader>

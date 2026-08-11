@@ -19,6 +19,18 @@ export type ProfileUpdate = {
 
 type ProfileRecord = Awaited<ReturnType<typeof findOrCreateProfile>>;
 
+type ProfilePersistenceUpdate = {
+  appearance?: 'DARK' | 'LIGHT' | 'SYSTEM' | null;
+  avatarPath?: string | null;
+  dateFormat?: 'DAY_MONTH_YEAR' | 'MONTH_DAY_YEAR' | 'YEAR_MONTH_DAY' | null;
+  displayName?: string | null;
+  distanceUnit?: 'KILOMETERS' | 'MILES' | null;
+  homeCurrencyCode?: string | null;
+  homePlaceId?: string | null;
+  temperatureUnit?: 'CELSIUS' | 'FAHRENHEIT' | null;
+  timeFormat?: 'HOUR_12' | 'HOUR_24' | null;
+};
+
 function mapProfileValue(value: string | null | undefined) {
   if (!value) {
     return null;
@@ -40,6 +52,26 @@ function mapProfileValue(value: string | null | undefined) {
   };
 
   return values[value] ?? null;
+}
+
+function toAppearance(value: Exclude<ProfileUpdate['appearance'], null | undefined>) {
+  return value === 'dark' ? 'DARK' : value === 'light' ? 'LIGHT' : 'SYSTEM';
+}
+
+function toDateFormat(value: Exclude<ProfileUpdate['dateFormat'], null | undefined>) {
+  return value === 'dmy' ? 'DAY_MONTH_YEAR' : value === 'ymd' ? 'YEAR_MONTH_DAY' : 'MONTH_DAY_YEAR';
+}
+
+function toDistanceUnit(value: Exclude<ProfileUpdate['distanceUnit'], null | undefined>) {
+  return value === 'km' ? 'KILOMETERS' : 'MILES';
+}
+
+function toTemperatureUnit(value: Exclude<ProfileUpdate['temperatureUnit'], null | undefined>) {
+  return value === 'celsius' ? 'CELSIUS' : 'FAHRENHEIT';
+}
+
+function toTimeFormat(value: Exclude<ProfileUpdate['timeFormat'], null | undefined>) {
+  return value === '12h' ? 'HOUR_12' : 'HOUR_24';
 }
 
 async function findOrCreateProfile(userId: string) {
@@ -127,93 +159,39 @@ export async function updateProfile(userId: string, accessToken: string, changes
       }
     }
 
-    return transaction.profile.upsert({
+    const profileUpdate: ProfilePersistenceUpdate = {
+      ...(changes.appearance !== undefined
+        ? { appearance: changes.appearance === null ? null : toAppearance(changes.appearance) }
+        : {}),
+      ...(changes.avatarPath !== undefined ? { avatarPath: changes.avatarPath } : {}),
+      ...(changes.dateFormat !== undefined
+        ? { dateFormat: changes.dateFormat === null ? null : toDateFormat(changes.dateFormat) }
+        : {}),
+      ...(changes.displayName !== undefined ? { displayName: changes.displayName } : {}),
+      ...(changes.distanceUnit !== undefined
+        ? {
+            distanceUnit:
+              changes.distanceUnit === null ? null : toDistanceUnit(changes.distanceUnit),
+          }
+        : {}),
+      ...(changes.homeCurrencyCode !== undefined
+        ? { homeCurrencyCode: changes.homeCurrencyCode }
+        : {}),
+      ...(homePlaceId !== undefined ? { homePlaceId } : {}),
+      ...(changes.temperatureUnit !== undefined
+        ? {
+            temperatureUnit:
+              changes.temperatureUnit === null ? null : toTemperatureUnit(changes.temperatureUnit),
+          }
+        : {}),
+      ...(changes.timeFormat !== undefined
+        ? { timeFormat: changes.timeFormat === null ? null : toTimeFormat(changes.timeFormat) }
+        : {}),
+    };
+
+    return transaction.profile.update({
       where: { id: userId },
-      create: {
-        appearance: changes.appearance?.toUpperCase() as 'DARK' | 'LIGHT' | 'SYSTEM' | undefined,
-        avatarPath: changes.avatarPath,
-        dateFormat: changes.dateFormat
-          ? changes.dateFormat === 'dmy'
-            ? 'DAY_MONTH_YEAR'
-            : changes.dateFormat === 'ymd'
-              ? 'YEAR_MONTH_DAY'
-              : 'MONTH_DAY_YEAR'
-          : undefined,
-        displayName: changes.displayName,
-        distanceUnit:
-          changes.distanceUnit === 'km'
-            ? 'KILOMETERS'
-            : changes.distanceUnit === 'mi'
-              ? 'MILES'
-              : undefined,
-        homeCurrencyCode: changes.homeCurrencyCode,
-        homePlaceId,
-        temperatureUnit:
-          changes.temperatureUnit === 'celsius'
-            ? 'CELSIUS'
-            : changes.temperatureUnit === 'fahrenheit'
-              ? 'FAHRENHEIT'
-              : undefined,
-        timeFormat:
-          changes.timeFormat === '12h'
-            ? 'HOUR_12'
-            : changes.timeFormat === '24h'
-              ? 'HOUR_24'
-              : undefined,
-      },
-      update: {
-        ...(changes.appearance !== undefined
-          ? { appearance: changes.appearance ? changes.appearance.toUpperCase() : null }
-          : {}),
-        ...(changes.avatarPath !== undefined ? { avatarPath: changes.avatarPath } : {}),
-        ...(changes.dateFormat !== undefined
-          ? {
-              dateFormat:
-                changes.dateFormat === null
-                  ? null
-                  : changes.dateFormat === 'dmy'
-                    ? 'DAY_MONTH_YEAR'
-                    : changes.dateFormat === 'ymd'
-                      ? 'YEAR_MONTH_DAY'
-                      : 'MONTH_DAY_YEAR',
-            }
-          : {}),
-        ...(changes.displayName !== undefined ? { displayName: changes.displayName } : {}),
-        ...(changes.distanceUnit !== undefined
-          ? {
-              distanceUnit:
-                changes.distanceUnit === null
-                  ? null
-                  : changes.distanceUnit === 'km'
-                    ? 'KILOMETERS'
-                    : 'MILES',
-            }
-          : {}),
-        ...(changes.homeCurrencyCode !== undefined
-          ? { homeCurrencyCode: changes.homeCurrencyCode }
-          : {}),
-        ...(homePlaceId !== undefined ? { homePlaceId } : {}),
-        ...(changes.temperatureUnit !== undefined
-          ? {
-              temperatureUnit:
-                changes.temperatureUnit === null
-                  ? null
-                  : changes.temperatureUnit === 'celsius'
-                    ? 'CELSIUS'
-                    : 'FAHRENHEIT',
-            }
-          : {}),
-        ...(changes.timeFormat !== undefined
-          ? {
-              timeFormat:
-                changes.timeFormat === null
-                  ? null
-                  : changes.timeFormat === '12h'
-                    ? 'HOUR_12'
-                    : 'HOUR_24',
-            }
-          : {}),
-      },
+      data: profileUpdate,
       include: { homePlace: true },
     });
   });

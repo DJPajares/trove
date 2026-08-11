@@ -3,8 +3,9 @@ import Fastify from 'fastify';
 
 import { getWebOrigins } from './environment.js';
 import { registerAuthenticationRoutes } from './routes/auth.js';
-import { registerProfileRoutes } from './routes/profile.js';
 import { registerHealthRoutes } from './routes/health.js';
+import { registerPlacesRoutes } from './routes/places.js';
+import { registerProfileRoutes } from './routes/profile.js';
 
 function originMatches(allowedOrigin: string, origin: string) {
   if (allowedOrigin === origin) {
@@ -39,7 +40,7 @@ export function buildApp() {
   const allowedOrigins = getWebOrigins();
 
   void app.register(cors, {
-    methods: ['GET', 'PATCH', 'OPTIONS'],
+    methods: ['GET', 'PATCH', 'POST', 'OPTIONS'],
     origin(origin, callback) {
       callback(
         null,
@@ -50,6 +51,7 @@ export function buildApp() {
   });
 
   registerAuthenticationRoutes(app);
+  registerPlacesRoutes(app);
   registerProfileRoutes(app);
   registerHealthRoutes(app);
 

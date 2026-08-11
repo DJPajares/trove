@@ -10,6 +10,10 @@ type AuthenticationEnvironment = {
   url: string;
 };
 
+type PlacesEnvironment = {
+  googlePlacesApiKey: string;
+};
+
 export function getAuthenticationEnvironment(
   environment: Record<string, string | undefined> = process.env,
 ): AuthenticationEnvironment | null {
@@ -34,4 +38,12 @@ export function getWebOrigins(environment: Record<string, string | undefined> = 
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
+}
+
+export function getPlacesEnvironment(
+  environment: Record<string, string | undefined> = process.env,
+): PlacesEnvironment | null {
+  const googlePlacesApiKey = environment.GOOGLE_PLACES_API_KEY?.trim();
+
+  return googlePlacesApiKey ? { googlePlacesApiKey } : null;
 }

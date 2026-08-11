@@ -2,7 +2,15 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { CalendarClock, CalendarDays, CircleAlert, MapPinned, Plus } from 'lucide-react';
+import {
+  CalendarClock,
+  CalendarDays,
+  CircleAlert,
+  MapPinned,
+  Pencil,
+  Plus,
+  Users,
+} from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
@@ -47,6 +55,7 @@ export function TripsManager() {
   const locale = useLocale();
   const [trips, setTrips] = useState<Trip[]>([]);
   const [editor, setEditor] = useState<EditorState>({ mode: 'closed', trip: null });
+  const [overviewTrip, setOverviewTrip] = useState<Trip | null>(null);
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
@@ -105,6 +114,72 @@ export function TripsManager() {
     year: 'numeric',
   });
   const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00.000Z`));
+  const groupedTrips = {
+    active: trips.filter((trip) => trip.lifecycle === 'active'),
+    planning: trips.filter((trip) => trip.lifecycle === 'planning'),
+    completed: trips.filter((trip) => trip.lifecycle === 'completed'),
+  };
+
+  function renderTrip(trip: Trip) {
+    return (
+      <Item
+        className="group min-h-20 flex-nowrap px-3 py-3 text-left hover:bg-muted/60"
+        key={trip.id}
+        render={
+          <button
+            aria-label={t('viewTripLabel', { name: trip.name })}
+            onClick={() => setOverviewTrip(trip)}
+            type="button"
+          />
+        }
+        variant="default"
+      >
+        <ItemMedia
+          className="size-14 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground sm:size-16"
+          variant={trip.coverPhotoUrl ? 'image' : 'icon'}
+        >
+          {trip.coverPhotoUrl ? (
+            <Image
+              alt=""
+              className="size-full object-cover"
+              height={64}
+              src={trip.coverPhotoUrl}
+              unoptimized
+              width={64}
+            />
+          ) : (
+            <MapPinned aria-hidden="true" className="size-5" />
+          )}
+        </ItemMedia>
+        <ItemContent className="min-w-0 gap-1.5">
+          <div className="flex min-w-0 items-baseline justify-between gap-3">
+            <ItemTitle className="truncate text-base">{trip.name}</ItemTitle>
+            <span
+              className={cn(
+                'shrink-0 text-xs font-medium',
+                trip.lifecycle === 'active' ? 'text-status-success' : 'text-muted-foreground',
+              )}
+            >
+              {t(`lifecycle.${trip.lifecycle}`)}
+            </span>
+          </div>
+          <ItemDescription className="line-clamp-1">
+            <CalendarDays aria-hidden="true" className="mr-1.5 inline size-3.5" />
+            {t('dateRange', {
+              endDate: formatDate(trip.endDate),
+              startDate: formatDate(trip.startDate),
+            })}
+          </ItemDescription>
+          <p className="truncate text-xs text-muted-foreground">
+            {trip.destinations.length
+              ? trip.destinations.map((destination) => destination.name).join(', ')
+              : t('destinationOpen')}
+            {trip.planningReadiness === 'ready' ? ` · ${t('ready')}` : ''}
+          </p>
+        </ItemContent>
+      </Item>
+    );
+  }
 
   return (
     <section className="mx-auto w-full max-w-5xl space-y-8">
@@ -152,67 +227,110 @@ export function TripsManager() {
           title={t('emptyTitle')}
         />
       ) : (
-        <ItemGroup aria-label={t('tripListLabel')} variant="list">
-          {trips.map((trip) => (
-            <Item
-              className="group min-h-20 flex-nowrap px-3 py-3 text-left hover:bg-muted/60"
-              key={trip.id}
-              render={
-                <button
-                  aria-label={t('editTripLabel', { name: trip.name })}
-                  onClick={() => setEditor({ mode: 'edit', trip })}
-                  type="button"
-                />
-              }
-              variant="default"
-            >
-              <ItemMedia
-                className="size-14 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground sm:size-16"
-                variant={trip.coverPhotoUrl ? 'image' : 'icon'}
-              >
-                {trip.coverPhotoUrl ? (
-                  <Image
-                    alt=""
-                    className="size-full object-cover"
-                    height={64}
-                    src={trip.coverPhotoUrl}
-                    unoptimized
-                    width={64}
-                  />
-                ) : (
-                  <MapPinned aria-hidden="true" className="size-5" />
-                )}
-              </ItemMedia>
-              <ItemContent className="min-w-0 gap-1.5">
-                <div className="flex min-w-0 items-baseline justify-between gap-3">
-                  <ItemTitle className="truncate text-base">{trip.name}</ItemTitle>
-                  <span
-                    className={cn(
-                      'shrink-0 text-xs font-medium',
-                      trip.lifecycle === 'active' ? 'text-status-success' : 'text-muted-foreground',
-                    )}
-                  >
-                    {t(`lifecycle.${trip.lifecycle}`)}
-                  </span>
-                </div>
-                <ItemDescription className="line-clamp-1">
-                  <CalendarDays aria-hidden="true" className="mr-1.5 inline size-3.5" />
-                  {t('dateRange', {
-                    endDate: formatDate(trip.endDate),
-                    startDate: formatDate(trip.startDate),
-                  })}
-                </ItemDescription>
-                <p className="truncate text-xs text-muted-foreground">
-                  {trip.destinations.length
-                    ? trip.destinations.map((destination) => destination.name).join(' · ')
-                    : t('destinationOpen')}
-                  {trip.planningReadiness === 'ready' ? ` · ${t('ready')}` : ''}
-                </p>
-              </ItemContent>
-            </Item>
-          ))}
-        </ItemGroup>
+        <div className="space-y-8">
+          {(['active', 'planning', 'completed'] as const).map((lifecycle) =>
+            groupedTrips[lifecycle].length ? (
+              <section key={lifecycle} className="space-y-3">
+                <h2 className="text-sm font-medium text-muted-foreground">
+                  {t(`sections.${lifecycle}`)}
+                </h2>
+                <ItemGroup aria-label={t(`sections.${lifecycle}`)} variant="list">
+                  {groupedTrips[lifecycle].map(renderTrip)}
+                </ItemGroup>
+              </section>
+            ) : null,
+          )}
+        </div>
       )}
+
+      <Sheet onOpenChange={(open) => !open && setOverviewTrip(null)} open={Boolean(overviewTrip)}>
+        <SheetContent
+          className="data-[side=right]:w-[min(42rem,calc(100%-0.5rem))]"
+          closeLabel={t('close')}
+        >
+          {overviewTrip ? (
+            <>
+              <SheetHeader className="border-b">
+                <SheetTitle>{overviewTrip.name}</SheetTitle>
+                <SheetDescription>
+                  {t('dateRange', {
+                    endDate: formatDate(overviewTrip.endDate),
+                    startDate: formatDate(overviewTrip.startDate),
+                  })}
+                </SheetDescription>
+              </SheetHeader>
+              <div className="space-y-6 overflow-y-auto p-5">
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    nativeButton={false}
+                    render={<Link href={`/trips/${overviewTrip.id}/itinerary`} />}
+                  >
+                    <CalendarClock aria-hidden="true" data-icon="inline-start" />
+                    {t('continuePlanning')}
+                  </Button>
+                  <Button
+                    nativeButton={false}
+                    render={<Link href={`/trips/${overviewTrip.id}/places`} />}
+                    variant="outline"
+                  >
+                    <MapPinned aria-hidden="true" data-icon="inline-start" />
+                    {t('places')}
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setOverviewTrip(null);
+                      setEditor({ mode: 'edit', trip: overviewTrip });
+                    }}
+                    variant="ghost"
+                  >
+                    <Pencil aria-hidden="true" data-icon="inline-start" />
+                    {t('editTrip')}
+                  </Button>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <p className="text-sm font-medium">{t('destinations')}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {overviewTrip.destinations.length
+                        ? overviewTrip.destinations
+                            .map((destination) => destination.name)
+                            .join(', ')
+                        : t('destinationOpen')}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{t('travellers')}</p>
+                    <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+                      <Users aria-hidden="true" className="size-4" />
+                      {t('travellerCount', { count: overviewTrip.partySize })}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{t('planningReadiness')}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {t(`readiness.${overviewTrip.planningReadiness}`)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{t('startingLocation')}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {overviewTrip.startingLocation?.name ?? t('startingLocationUnavailable')}
+                    </p>
+                  </div>
+                </div>
+                {overviewTrip.notes ? (
+                  <div>
+                    <p className="text-sm font-medium">{t('notes')}</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                      {overviewTrip.notes}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            </>
+          ) : null}
+        </SheetContent>
+      </Sheet>
 
       <Sheet
         open={editor.mode !== 'closed'}

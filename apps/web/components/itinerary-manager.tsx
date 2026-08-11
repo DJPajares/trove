@@ -31,7 +31,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
   Item,
@@ -128,6 +128,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const [editor, setEditor] = useState<EditorState>({ dayId: null, item: null, mode: 'closed' });
   const [form, setForm] = useState<FormState>(() => createFormState(null));
   const [formError, setFormError] = useState<string | null>(null);
+  const [exactTimeInvalid, setExactTimeInvalid] = useState(false);
   const [saving, setSaving] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<ItineraryItem | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -240,6 +241,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   function openCreate(day: ItineraryDay) {
     setForm(createFormState(null));
     setFormError(null);
+    setExactTimeInvalid(false);
     setEditor({ dayId: day.id, item: null, mode: 'create' });
   }
 
@@ -247,17 +249,27 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     if (!item.itineraryDayId) return;
     setForm(createFormState(item));
     setFormError(null);
+    setExactTimeInvalid(false);
     setEditor({ dayId: item.itineraryDayId, item, mode: 'edit' });
   }
 
   function closeEditor() {
     setEditor({ dayId: null, item: null, mode: 'closed' });
     setFormError(null);
+    setExactTimeInvalid(false);
   }
 
   function updateForm<Key extends keyof FormState>(key: Key, value: FormState[Key]) {
     setForm((current) => ({ ...current, [key]: value }));
     setFormError(null);
+    if (key === 'exactTime' || key === 'schedule') setExactTimeInvalid(false);
+  }
+
+  function normalizeLocalTime(value: string) {
+    const candidate = value.trim();
+    const match = candidate.match(/^(?:([01]?\d|2[0-3])(?::?([0-5]\d)))$/);
+    if (!match) return candidate;
+    return `${match[1]!.padStart(2, '0')}:${match[2]!}`;
   }
 
   function buildInput(): ItineraryItemInput | null {
@@ -266,8 +278,9 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
       setFormError(t('minimumContentError'));
       return null;
     }
-    if (form.schedule === 'exact' && !form.exactTime) {
-      setFormError(t('exactTimeError'));
+    const exactTime = normalizeLocalTime(form.exactTime);
+    if (form.schedule === 'exact' && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(exactTime)) {
+      setExactTimeInvalid(true);
       return null;
     }
     const duration = form.durationMinutes ? Number(form.durationMinutes) : null;
@@ -304,7 +317,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
       priority: form.priority || null,
       schedule:
         form.schedule === 'exact'
-          ? { kind: 'exact', localTime: form.exactTime }
+          ? { kind: 'exact', localTime: exactTime }
           : form.schedule === 'none'
             ? { kind: 'none' }
             : { dayPart: form.schedule, kind: 'day_part' },
@@ -702,15 +715,35 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                   </Field>
 
                   {form.schedule === 'exact' ? (
-                    <Field>
+                    <Field data-invalid={exactTimeInvalid}>
                       <FieldLabel htmlFor="itinerary-exact-time">{t('exactTime')}</FieldLabel>
-                      <Input
-                        id="itinerary-exact-time"
-                        onChange={(event) => updateForm('exactTime', event.target.value)}
-                        type="time"
-                        value={form.exactTime}
-                      />
-                      <FieldDescription>{t('floatingTimeHint')}</FieldDescription>
+                      <div className="relative max-w-48">
+                        <Clock3
+                          aria-hidden="true"
+                          className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                        />
+                        <Input
+                          aria-describedby="itinerary-exact-time-hint"
+                          aria-invalid={exactTimeInvalid}
+                          autoComplete="off"
+                          className="pl-10 tabular-nums"
+                          id="itinerary-exact-time"
+                          inputMode="numeric"
+                          maxLength={5}
+                          onBlur={(event) =>
+                            updateForm('exactTime', normalizeLocalTime(event.currentTarget.value))
+                          }
+                          onChange={(event) => updateForm('exactTime', event.target.value)}
+                          pattern="(?:[01]\\d|2[0-3]):[0-5]\\d"
+                          placeholder={t('exactTimePlaceholder')}
+                          type="text"
+                          value={form.exactTime}
+                        />
+                      </div>
+                      <FieldDescription id="itinerary-exact-time-hint">
+                        {t('exactTimeHint')} {t('floatingTimeHint')}
+                      </FieldDescription>
+                      <FieldError>{exactTimeInvalid ? t('exactTimeError') : null}</FieldError>
                     </Field>
                   ) : null}
 

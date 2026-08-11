@@ -93,6 +93,12 @@ pnpm build
 
 These checks intentionally do not include unit-test or E2E jobs during the initial implementation phase. PR summaries should report each command and its result.
 
+## Authentication Configuration
+
+Trove uses the existing Supabase Auth user pool with Google as its first sign-in provider. Keep existing Auth redirect URLs for other applications, then add Trove's local and production `/auth/callback` URLs to the Supabase Auth allow list. Configure the environment values in [`.env.example`](.env.example) and [`apps/web/.env.example`](apps/web/.env.example); do not commit credentials.
+
+Prepared offline trip data is reserved for the last authenticated Trove user on that device. Offline access never authorizes server operations. Future offline storage must register a local-data clearer with `signOutFromTrove`, and Settings must warn about unsynced changes before invoking it.
+
 ## Delivery Order
 
 1. Foundation

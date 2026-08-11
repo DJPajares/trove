@@ -38,6 +38,10 @@ export type ProviderPlaceDetails = {
   name: string;
 };
 
+type CachedProviderPlaceDetails = ProviderPlaceDetails & {
+  cachedAt: number;
+};
+
 type ProviderSearchResult =
   { status: 'empty' | 'ok'; suggestions: ProviderSuggestion[] } | { status: 'unavailable' };
 
@@ -51,6 +55,39 @@ export class SavedApiError extends Error {
 }
 
 const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
+const PROVIDER_DETAILS_CACHE_KEY = 'trove.provider-place-details';
+const PROVIDER_DETAILS_CACHE_TTL_MS = 60 * 60 * 1_000;
+export const GOOGLE_PLACES_SEARCH_DEBOUNCE_MS = 600;
+
+function readProviderDetailsCache() {
+  if (typeof window === 'undefined') return {} as Record<string, CachedProviderPlaceDetails>;
+  try {
+    return JSON.parse(window.sessionStorage.getItem(PROVIDER_DETAILS_CACHE_KEY) ?? '{}') as Record<
+      string,
+      CachedProviderPlaceDetails
+    >;
+  } catch {
+    return {} as Record<string, CachedProviderPlaceDetails>;
+  }
+}
+
+export function getCachedProviderPlaceDetails(placeId: string) {
+  const entry = readProviderDetailsCache()[placeId];
+  if (!entry || Date.now() - entry.cachedAt > PROVIDER_DETAILS_CACHE_TTL_MS) return null;
+  const { cachedAt: _cachedAt, ...details } = entry;
+  return details;
+}
+
+export function cacheProviderPlaceDetails(placeId: string, details: ProviderPlaceDetails) {
+  if (typeof window === 'undefined') return;
+  const cache = readProviderDetailsCache();
+  cache[placeId] = { ...details, cachedAt: Date.now() };
+  try {
+    window.sessionStorage.setItem(PROVIDER_DETAILS_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // The UI can fall back to provider details when session storage is unavailable.
+  }
+}
 
 async function getAuthContext() {
   const supabase = createBrowserSupabaseClient();

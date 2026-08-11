@@ -63,8 +63,11 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  cacheProviderPlaceDetails,
   createCustomPlace,
   fetchSavedPlaces,
+  getCachedProviderPlaceDetails,
+  GOOGLE_PLACES_SEARCH_DEBOUNCE_MS,
   getProviderPlaceDetails,
   type ProviderPlaceDetails,
   type ProviderSuggestion,
@@ -199,7 +202,7 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
           setSearchResults([]);
           setSearchStatus('unavailable');
         });
-    }, 250);
+    }, GOOGLE_PLACES_SEARCH_DEBOUNCE_MS);
 
     return () => {
       controller.abort();
@@ -299,7 +302,17 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
     setAddOpen(true);
     setAddStatus('loading');
     try {
-      setSavedPlaces((await fetchSavedPlaces()).savedPlaces);
+      const nextSavedPlaces = (await fetchSavedPlaces()).savedPlaces;
+      setSavedPlaces(nextSavedPlaces);
+      setProviderDetails((current) => ({
+        ...current,
+        ...Object.fromEntries(
+          nextSavedPlaces.flatMap((savedPlace) => {
+            const details = getCachedProviderPlaceDetails(savedPlace.place.id);
+            return details ? [[savedPlace.place.id, details]] : [];
+          }),
+        ),
+      }));
       setAddStatus('idle');
     } catch {
       setAddStatus('error');
@@ -338,6 +351,11 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
           name: suggestion.name,
         },
       }));
+      cacheProviderPlaceDetails(place.id, {
+        category: suggestion.category,
+        formattedAddress: suggestion.description,
+        name: suggestion.name,
+      });
     } catch {
       setError(t('actionError'));
     } finally {

@@ -58,9 +58,11 @@ import {
 } from '@/components/ui/sheet';
 import {
   addToCollection,
+  cacheProviderPlaceDetails,
   createCollection,
   createCustomPlace,
   fetchSavedPlaces,
+  GOOGLE_PLACES_SEARCH_DEBOUNCE_MS,
   getProviderPlaceDetails,
   removeCollection,
   removeFromCollection,
@@ -166,9 +168,11 @@ export function SavedPlacesManager() {
 
         try {
           const result = await getProviderPlaceDetails(externalPlaceId);
+          const details = result.status === 'ok' ? (result.place ?? null) : null;
+          if (details) cacheProviderPlaceDetails(savedPlace.place.id, details);
           return {
             placeId: savedPlace.place.id,
-            details: result.status === 'ok' ? (result.place ?? null) : null,
+            details,
           };
         } catch {
           return { placeId: savedPlace.place.id, details: null };
@@ -195,12 +199,12 @@ export function SavedPlacesManager() {
       return;
     }
 
-    let active = true;
+    const controller = new AbortController();
     const timeout = window.setTimeout(() => {
       setSearchStatus('loading');
-      void searchProviderPlaces(input)
+      void searchProviderPlaces(input, controller.signal)
         .then((result) => {
-          if (!active) return;
+          if (controller.signal.aborted) return;
           if (result.status === 'unavailable') {
             setSearchResults([]);
             setSearchStatus('unavailable');
@@ -209,15 +213,20 @@ export function SavedPlacesManager() {
           setSearchResults(result.suggestions ?? []);
           setSearchStatus(result.status === 'empty' ? 'empty' : 'idle');
         })
-        .catch(() => {
-          if (!active) return;
+        .catch((cause: unknown) => {
+          if (
+            controller.signal.aborted ||
+            (cause instanceof DOMException && cause.name === 'AbortError')
+          ) {
+            return;
+          }
           setSearchResults([]);
           setSearchStatus('unavailable');
         });
-    }, 250);
+    }, GOOGLE_PLACES_SEARCH_DEBOUNCE_MS);
 
     return () => {
-      active = false;
+      controller.abort();
       window.clearTimeout(timeout);
     };
   }, [searchQuery]);
@@ -302,6 +311,11 @@ export function SavedPlacesManager() {
           name: suggestion.name,
         },
       }));
+      cacheProviderPlaceDetails(place.id, {
+        category: suggestion.category,
+        formattedAddress: suggestion.description,
+        name: suggestion.name,
+      });
       setAddOpen(false);
       resetAddForm();
     } catch (errorValue) {

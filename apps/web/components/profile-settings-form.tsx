@@ -13,7 +13,13 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   fetchProfile,
   removeProfilePhoto,
@@ -362,18 +368,25 @@ function SelectField({
   return (
     <Field>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <NativeSelect
-        className="w-full"
-        id={id}
-        onChange={(event) => onChange(event.target.value)}
+      <Select
+        onValueChange={(nextValue) => {
+          if (nextValue) onChange(nextValue);
+        }}
         value={value}
       >
-        {options.map(([option, optionLabel]) => (
-          <NativeSelectOption key={option} value={option}>
-            {optionLabel}
-          </NativeSelectOption>
-        ))}
-      </NativeSelect>
+        <SelectTrigger className="w-full" id={id}>
+          <SelectValue>
+            {(selectedValue) => options.find(([option]) => option === selectedValue)?.[1] ?? ''}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {options.map(([option, optionLabel]) => (
+            <SelectItem key={option} value={option}>
+              {optionLabel}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </Field>
   );
 }

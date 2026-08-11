@@ -7,6 +7,7 @@ import { registerHealthRoutes } from './routes/health.js';
 import { registerPlacesRoutes } from './routes/places.js';
 import { registerProfileRoutes } from './routes/profile.js';
 import { registerTripRoutes } from './routes/trips.js';
+import { registerTripPlacesRoutes } from './routes/trip-places.js';
 import { registerSavedPlacesRoutes } from './routes/saved-places.js';
 
 function originMatches(allowedOrigin: string, origin: string) {
@@ -56,6 +57,7 @@ export function buildApp() {
   registerPlacesRoutes(app);
   registerProfileRoutes(app);
   registerSavedPlacesRoutes(app);
+  registerTripPlacesRoutes(app);
   registerTripRoutes(app);
   registerHealthRoutes(app);
 

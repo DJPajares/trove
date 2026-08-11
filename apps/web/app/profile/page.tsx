@@ -1,4 +1,6 @@
 import { getLocale, getTranslations } from 'next-intl/server';
+
+import { PageHeader } from '@/components/page-header';
 import { ProfileSettingsForm } from '@/components/profile-settings-form';
 
 export default async function ProfilePage() {
@@ -6,14 +8,8 @@ export default async function ProfilePage() {
   const locale = await getLocale();
 
   return (
-    <section className="mx-auto w-full max-w-5xl space-y-8">
-      <div>
-        <p className="mb-3 text-sm font-medium tracking-wide text-brand">{t('eyebrow')}</p>
-        <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">{t('title')}</h1>
-        <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
-          {t('description')}
-        </p>
-      </div>
+    <section className="mx-auto w-full max-w-5xl space-y-10">
+      <PageHeader description={t('description')} eyebrow={t('eyebrow')} title={t('title')} />
       <ProfileSettingsForm locale={locale} />
     </section>
   );

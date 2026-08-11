@@ -6,6 +6,7 @@
   "navigation": {
     "primary": "Primary navigation",
     "mobile": "Mobile navigation",
+    "skipToContent": "Skip to content",
     "home": "Home",
     "trips": "Trips",
     "saved": "Saved",

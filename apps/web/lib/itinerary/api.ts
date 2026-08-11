@@ -40,6 +40,7 @@ export type ItineraryItem = {
 };
 
 export type ItineraryDay = {
+  dailyBaseTripPlaceId: string | null;
   date: string;
   defaultTimeZone: string;
   defaultTimeZoneSource:
@@ -142,5 +143,33 @@ export function updateItineraryItem(tripId: string, itemId: string, input: Itine
 export function deleteItineraryItem(tripId: string, itemId: string) {
   return itineraryRequest<void>(`/trips/${tripId}/itinerary/items/${itemId}`, {
     method: 'DELETE',
+  });
+}
+
+export function organizeItineraryItem(
+  tripId: string,
+  itemId: string,
+  input: { itineraryDayId: string | null; position: number },
+) {
+  return itineraryRequest<void>(`/trips/${tripId}/itinerary/items/${itemId}/organization`, {
+    body: JSON.stringify(input),
+    method: 'PATCH',
+  });
+}
+
+export function duplicateItineraryItem(tripId: string, itemId: string) {
+  return itineraryRequest<void>(`/trips/${tripId}/itinerary/items/${itemId}/duplicate`, {
+    method: 'POST',
+  });
+}
+
+export function setItineraryDayBase(
+  tripId: string,
+  itineraryDayId: string,
+  tripPlaceId: string | null,
+) {
+  return itineraryRequest<void>(`/trips/${tripId}/itinerary/days/${itineraryDayId}/base`, {
+    body: JSON.stringify({ tripPlaceId }),
+    method: 'PATCH',
   });
 }

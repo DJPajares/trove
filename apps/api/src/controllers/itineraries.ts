@@ -4,14 +4,22 @@ import { z } from 'zod';
 import {
   createItineraryItem,
   deleteItineraryItem,
+  duplicateItineraryItem,
   ItineraryNotFoundError,
   ItineraryValidationError,
   listItinerary,
+  organizeItineraryItem,
+  setItineraryDayBase,
   updateItineraryItem,
 } from '../services/itineraries.js';
 
 const tripParamsSchema = z.object({ tripId: z.uuid() }).strict();
 const itemParamsSchema = z.object({ itemId: z.uuid(), tripId: z.uuid() }).strict();
+const dayParamsSchema = z.object({ itineraryDayId: z.uuid(), tripId: z.uuid() }).strict();
+const organizeItemSchema = z
+  .object({ itineraryDayId: z.uuid().nullable(), position: z.number().int().min(0) })
+  .strict();
+const dayBaseSchema = z.object({ tripPlaceId: z.uuid().nullable() }).strict();
 const timeZoneSchema = z.string().trim().min(1).max(100);
 const scheduleSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('none') }).strict(),
@@ -90,6 +98,19 @@ function handleError(reply: FastifyReply, error: unknown) {
 
 export function createItineraryControllers() {
   return {
+    async duplicateItem(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = itemParamsSchema.safeParse(request.params);
+      if (!userId) return;
+      if (!params.success) return reply.code(400).send({ code: 'invalid_itinerary_item' });
+      try {
+        await duplicateItineraryItem(userId, params.data.tripId, params.data.itemId);
+        return reply.code(201).send();
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
+
     async createItem(request: FastifyRequest, reply: FastifyReply) {
       const userId = getUserId(request, reply);
       const params = tripParamsSchema.safeParse(request.params);
@@ -126,6 +147,41 @@ export function createItineraryControllers() {
       if (!params.success) return reply.code(400).send({ code: 'invalid_trip_id' });
       try {
         return reply.send(await listItinerary(userId, params.data.tripId));
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
+
+    async organizeItem(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = itemParamsSchema.safeParse(request.params);
+      const body = organizeItemSchema.safeParse(request.body);
+      if (!userId) return;
+      if (!params.success || !body.success)
+        return reply.code(400).send({ code: 'invalid_itinerary_item' });
+      try {
+        await organizeItineraryItem(userId, params.data.tripId, params.data.itemId, body.data);
+        return reply.code(204).send();
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
+
+    async setDayBase(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = dayParamsSchema.safeParse(request.params);
+      const body = dayBaseSchema.safeParse(request.body);
+      if (!userId) return;
+      if (!params.success || !body.success)
+        return reply.code(400).send({ code: 'invalid_itinerary_day' });
+      try {
+        await setItineraryDayBase(
+          userId,
+          params.data.tripId,
+          params.data.itineraryDayId,
+          body.data.tripPlaceId,
+        );
+        return reply.code(204).send();
       } catch (error) {
         return handleError(reply, error);
       }

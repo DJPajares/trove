@@ -2,11 +2,14 @@
 
 import {
   ArrowLeft,
+  ArrowDown,
+  ArrowUp,
   CalendarClock,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
   Clock3,
+  Copy,
   ExternalLink,
   MapPinned,
   Pencil,
@@ -63,12 +66,15 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   createItineraryItem,
   deleteItineraryItem,
+  duplicateItineraryItem,
   fetchItinerary,
   type Itinerary,
   type ItineraryDay,
   type ItineraryItem,
   type ItineraryItemInput,
   type ItineraryTripPlace,
+  organizeItineraryItem,
+  setItineraryDayBase,
   updateItineraryItem,
 } from '@/lib/itinerary/api';
 import {
@@ -149,6 +155,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     'idle',
   );
   const [selectingPlace, setSelectingPlace] = useState(false);
+  const [organizingItemId, setOrganizingItemId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -436,6 +443,46 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     }
   }
 
+  async function handleOrganize(
+    item: ItineraryItem,
+    itineraryDayId: string | null,
+    position: number,
+  ) {
+    setOrganizingItemId(item.id);
+    setError(null);
+    try {
+      await organizeItineraryItem(tripId, item.id, { itineraryDayId, position });
+      await refresh();
+    } catch {
+      setError(t('organizeError'));
+    } finally {
+      setOrganizingItemId(null);
+    }
+  }
+
+  async function handleDuplicate(item: ItineraryItem) {
+    setOrganizingItemId(item.id);
+    setError(null);
+    try {
+      await duplicateItineraryItem(tripId, item.id);
+      await refresh();
+    } catch {
+      setError(t('organizeError'));
+    } finally {
+      setOrganizingItemId(null);
+    }
+  }
+
+  async function handleDailyBase(day: ItineraryDay, tripPlaceId: string | null) {
+    setError(null);
+    try {
+      await setItineraryDayBase(tripId, day.id, tripPlaceId);
+      await refresh();
+    } catch {
+      setError(t('dailyBaseError'));
+    }
+  }
+
   function selectAdjacentDay(offset: number) {
     const day = itinerary?.days[selectedIndex + offset];
     if (day) setSelectedDayId(day.id);
@@ -587,16 +634,44 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                   {t('dayTimeZone', { timeZone: selectedDay.defaultTimeZone })}
                 </p>
               </div>
-              <Button onClick={() => openCreate(selectedDay)}>
-                <Plus aria-hidden="true" data-icon="inline-start" />
-                {t('addItem')}
-              </Button>
+              <div className="flex flex-col gap-2 sm:items-end">
+                <Select
+                  onValueChange={(value) =>
+                    void handleDailyBase(selectedDay, value === 'none' ? null : value)
+                  }
+                  value={selectedDay.dailyBaseTripPlaceId ?? 'none'}
+                >
+                  <SelectTrigger aria-label={t('dailyBase')} className="w-full sm:w-56" size="sm">
+                    <SelectValue>
+                      {selectedDay.dailyBaseTripPlaceId
+                        ? placeName(
+                            itinerary.tripPlaces.find(
+                              (place) => place.id === selectedDay.dailyBaseTripPlaceId,
+                            ) ?? null,
+                          )
+                        : t('noDailyBase')}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent align="end">
+                    <SelectItem value="none">{t('noDailyBase')}</SelectItem>
+                    {itinerary.tripPlaces.map((place) => (
+                      <SelectItem key={place.id} value={place.id}>
+                        {placeName(place)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button onClick={() => openCreate(selectedDay)}>
+                  <Plus aria-hidden="true" data-icon="inline-start" />
+                  {t('addItem')}
+                </Button>
+              </div>
             </div>
 
             <div className="p-4 sm:p-6">
               {selectedDay.items.length ? (
                 <ItemGroup aria-label={t('itemListLabel')} variant="list">
-                  {selectedDay.items.map((item) => {
+                  {selectedDay.items.map((item, itemIndex) => {
                     const name = itemName(item);
                     const mapsHref = item.tripPlace ? googleMapsHref(item.tripPlace) : null;
                     return (
@@ -644,6 +719,59 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                           </ItemDescription>
                         </ItemContent>
                         <ItemActions>
+                          <Button
+                            aria-label={t('moveEarlier', { name })}
+                            disabled={itemIndex === 0 || organizingItemId === item.id}
+                            onClick={() => void handleOrganize(item, selectedDay.id, itemIndex - 1)}
+                            size="icon-sm"
+                            variant="ghost"
+                          >
+                            <ArrowUp aria-hidden="true" />
+                          </Button>
+                          <Button
+                            aria-label={t('moveLater', { name })}
+                            disabled={
+                              itemIndex === selectedDay.items.length - 1 ||
+                              organizingItemId === item.id
+                            }
+                            onClick={() => void handleOrganize(item, selectedDay.id, itemIndex + 1)}
+                            size="icon-sm"
+                            variant="ghost"
+                          >
+                            <ArrowDown aria-hidden="true" />
+                          </Button>
+                          <Select
+                            onValueChange={(value) =>
+                              void handleOrganize(item, value === 'unscheduled' ? null : value, 999)
+                            }
+                            value={selectedDay.id}
+                          >
+                            <SelectTrigger aria-label={t('moveItem', { name })} size="sm">
+                              <SelectValue>{t('move')}</SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="unscheduled">{t('unscheduled')}</SelectItem>
+                              {itinerary.days
+                                .filter((day) => day.id !== selectedDay.id)
+                                .map((day, index) => (
+                                  <SelectItem key={day.id} value={day.id}>
+                                    {t('dayOption', {
+                                      date: formatDate(day.date),
+                                      number: index + 1,
+                                    })}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            aria-label={t('duplicateItem', { name })}
+                            disabled={organizingItemId === item.id}
+                            onClick={() => void handleDuplicate(item)}
+                            size="icon-sm"
+                            variant="ghost"
+                          >
+                            <Copy aria-hidden="true" />
+                          </Button>
                           {mapsHref ? (
                             <Button
                               aria-label={t('openPlace', { name })}
@@ -697,6 +825,66 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
           </div>
         ) : null}
       </div>
+
+      {itinerary.unscheduledItems.length ? (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-lg font-semibold">{t('unscheduled')}</h2>
+            <p className="text-sm text-muted-foreground">{t('unscheduledDescription')}</p>
+          </div>
+          <ItemGroup aria-label={t('unscheduled')} variant="list">
+            {itinerary.unscheduledItems.map((item) => {
+              const name = itemName(item);
+              return (
+                <Item className="px-3 py-3" key={item.id}>
+                  <ItemMedia variant="icon">
+                    <CalendarClock aria-hidden="true" />
+                  </ItemMedia>
+                  <ItemContent>
+                    <ItemTitle>{name}</ItemTitle>
+                    <ItemDescription>{item.notes}</ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    <Select
+                      onValueChange={(value) =>
+                        void handleOrganize(item, (value ?? null) as string | null, 999)
+                      }
+                    >
+                      <SelectTrigger aria-label={t('scheduleItem', { name })} size="sm">
+                        <SelectValue>{t('moveToDay')}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {itinerary.days.map((day, index) => (
+                          <SelectItem key={day.id} value={day.id}>
+                            {t('dayOption', { date: formatDate(day.date), number: index + 1 })}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      aria-label={t('duplicateItem', { name })}
+                      disabled={organizingItemId === item.id}
+                      onClick={() => void handleDuplicate(item)}
+                      size="icon-sm"
+                      variant="ghost"
+                    >
+                      <Copy aria-hidden="true" />
+                    </Button>
+                    <Button
+                      aria-label={t('deleteItem', { name })}
+                      onClick={() => setItemToDelete(item)}
+                      size="icon-sm"
+                      variant="ghost"
+                    >
+                      <Trash2 aria-hidden="true" />
+                    </Button>
+                  </ItemActions>
+                </Item>
+              );
+            })}
+          </ItemGroup>
+        </section>
+      ) : null}
 
       <Sheet open={editor.mode !== 'closed'} onOpenChange={(open) => !open && closeEditor()}>
         <SheetContent

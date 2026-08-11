@@ -12,6 +12,11 @@ export type DayTimeZoneResolution = {
   timeZone: string;
 };
 
+export type TaskTimeZoneResolution = {
+  source: 'ITINERARY_DAY' | 'ITINERARY_ITEM' | 'TRIP_REFERENCE';
+  timeZone: string;
+};
+
 const LOCAL_TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 
 function getLocalParts(instant: Date, timeZone: string) {
@@ -134,4 +139,20 @@ export function resolveDayTimeZone(input: {
     sourceTripPlaceId: null,
     timeZone: input.tripTimeZone,
   };
+}
+
+export function resolveTaskTimeZone(input: {
+  itineraryDayTimeZone: string | null;
+  itineraryItemTimeZone: string | null;
+  tripTimeZone: string;
+}): TaskTimeZoneResolution {
+  if (input.itineraryItemTimeZone && isValidIanaTimeZone(input.itineraryItemTimeZone)) {
+    return { source: 'ITINERARY_ITEM', timeZone: input.itineraryItemTimeZone };
+  }
+
+  if (input.itineraryDayTimeZone && isValidIanaTimeZone(input.itineraryDayTimeZone)) {
+    return { source: 'ITINERARY_DAY', timeZone: input.itineraryDayTimeZone };
+  }
+
+  return { source: 'TRIP_REFERENCE', timeZone: input.tripTimeZone };
 }

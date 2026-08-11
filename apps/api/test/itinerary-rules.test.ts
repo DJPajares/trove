@@ -7,6 +7,7 @@ import {
   parseLocalTime,
   resolveDayTimeZone,
   resolveItemTimeZone,
+  resolveTaskTimeZone,
 } from '../src/services/itinerary-rules.js';
 
 test('persists a floating local plan as a deterministic derived instant', () => {
@@ -94,5 +95,32 @@ test('resolves a day from daily base, first ordered located item, then trip time
       sourceTripPlaceId: null,
       timeZone: 'Asia/Singapore',
     },
+  );
+});
+
+test('resolves task timezone from its item, then day, then trip reference', () => {
+  assert.deepEqual(
+    resolveTaskTimeZone({
+      itineraryDayTimeZone: 'Asia/Singapore',
+      itineraryItemTimeZone: 'Pacific/Auckland',
+      tripTimeZone: 'Europe/London',
+    }),
+    { source: 'ITINERARY_ITEM', timeZone: 'Pacific/Auckland' },
+  );
+  assert.deepEqual(
+    resolveTaskTimeZone({
+      itineraryDayTimeZone: 'Asia/Singapore',
+      itineraryItemTimeZone: null,
+      tripTimeZone: 'Europe/London',
+    }),
+    { source: 'ITINERARY_DAY', timeZone: 'Asia/Singapore' },
+  );
+  assert.deepEqual(
+    resolveTaskTimeZone({
+      itineraryDayTimeZone: null,
+      itineraryItemTimeZone: null,
+      tripTimeZone: 'Europe/London',
+    }),
+    { source: 'TRIP_REFERENCE', timeZone: 'Europe/London' },
   );
 });

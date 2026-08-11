@@ -98,6 +98,48 @@ enum ItineraryDayPart {
   @@schema("trove")
 }
 
+enum ProfileDistanceUnit {
+  KILOMETERS @map("km")
+  MILES      @map("mi")
+
+  @@map("profile_distance_unit")
+  @@schema("trove")
+}
+
+enum ProfileTemperatureUnit {
+  CELSIUS    @map("celsius")
+  FAHRENHEIT @map("fahrenheit")
+
+  @@map("profile_temperature_unit")
+  @@schema("trove")
+}
+
+enum ProfileTimeFormat {
+  HOUR_12 @map("12h")
+  HOUR_24 @map("24h")
+
+  @@map("profile_time_format")
+  @@schema("trove")
+}
+
+enum ProfileDateFormat {
+  MONTH_DAY_YEAR @map("mdy")
+  DAY_MONTH_YEAR @map("dmy")
+  YEAR_MONTH_DAY @map("ymd")
+
+  @@map("profile_date_format")
+  @@schema("trove")
+}
+
+enum ProfileAppearance {
+  SYSTEM @map("system")
+  LIGHT  @map("light")
+  DARK   @map("dark")
+
+  @@map("profile_appearance")
+  @@schema("trove")
+}
+
 /// Supabase owns this table. Prisma Client may reference its primary key, but
 /// Prisma Migrate excludes it through `tables.external` in prisma.config.ts.
 model AuthUser {
@@ -114,6 +156,11 @@ model Profile {
   avatarPath       String? @map("avatar_path")
   homePlaceId      String? @map("home_place_id") @db.Uuid
   homeCurrencyCode String? @map("home_currency_code") @db.Char(3)
+  distanceUnit     ProfileDistanceUnit?     @map("distance_unit")
+  temperatureUnit  ProfileTemperatureUnit?  @map("temperature_unit")
+  timeFormat       ProfileTimeFormat?       @map("time_format")
+  dateFormat       ProfileDateFormat?       @map("date_format")
+  appearance       ProfileAppearance?       @map("appearance")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)

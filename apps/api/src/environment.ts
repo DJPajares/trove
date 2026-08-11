@@ -28,3 +28,10 @@ export function getAuthenticationEnvironment(
 
   return { publishableKey, url };
 }
+
+export function getWebOrigins(environment: Record<string, string | undefined> = process.env) {
+  return (environment.TROVE_WEB_ORIGINS ?? 'http://localhost:3000')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}

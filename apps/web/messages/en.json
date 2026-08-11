@@ -32,6 +32,11 @@
     "description": "Trove's planning workspace is taking shape.",
     "status": "The foundation is ready for your next trip."
   },
+  "offline": {
+    "eyebrow": "Offline",
+    "title": "Trove needs a connection for this page.",
+    "description": "The basic app shell is available. Offline trip details will arrive in a later travel update."
+  },
   "placeholder": {
     "eyebrow": "Trove",
     "status": "This space is ready for its next foundation task.",

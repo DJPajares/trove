@@ -4,12 +4,15 @@
   "private": true,
   "type": "module",
   "devDependencies": {
+    "@serwist/turbopack": "9.5.12",
     "@tailwindcss/postcss": "^4.3.3",
     "@trove/config": "workspace:*",
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
+    "esbuild": "0.28.2",
     "postcss": "^8.5.26",
+    "serwist": "9.5.12",
     "tailwindcss": "^4.3.3"
   },
   "scripts": {

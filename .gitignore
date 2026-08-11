@@ -20,3 +20,6 @@ ops/release/production.json
 .DS_Store
 
 *next-env.d.ts
+
+# Serwist production artifacts
+apps/web/public/serwist/

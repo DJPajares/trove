@@ -16,6 +16,36 @@ Copy the root `.env.example` to `.env` and use the exact connection strings from
 - `DIRECT_URL` uses Supavisor session mode (`5432`) only for Prisma CLI commands.
 - `SHADOW_DATABASE_URL` is optional for `prisma migrate dev` and must point to an isolated local or Supabase branch database, never the shared project.
 
+## Local Docker PostgreSQL
+
+The repository includes a local PostgreSQL 17 container for development workflows that should not use the hosted Supabase database. It publishes PostgreSQL on port `54329` so it can coexist with other local database services:
+
+```bash
+docker compose up -d postgres
+docker compose ps
+docker compose exec -T postgres pg_isready -U trove -d trove
+```
+
+Copy `docker/local.env.example` to `docker/local.env`, then load it in the shell before Prisma or API commands so the local URLs override the hosted values from the root `.env`:
+
+```bash
+cp docker/local.env.example docker/local.env
+set -a; source docker/local.env; set +a
+pnpm --filter @trove/db db:migrate:deploy
+```
+
+The Docker init script creates only a minimal local `auth.users` compatibility table because the committed Trove migration references Supabase Auth's external table. It is not a local Auth service and must not be added to Prisma migrations. Hosted Supabase remains the source of truth for Auth, Storage, and production data.
+
+If the API uses a hosted Supabase session while writing to this local database, insert that signed-in user's UUID into the compatibility table once so the profile foreign key can resolve it:
+
+```sql
+insert into auth.users (id, email)
+values ('<supabase-user-uuid>', '<email>')
+on conflict (id) do nothing;
+```
+
+Stop the container with `docker compose stop postgres`; remove its persisted local data only when intentionally resetting the database with `docker compose down -v`.
+
 ## Workflow
 
 1. Confirm the environment with `pnpm --filter @trove/db db:validate-env`.

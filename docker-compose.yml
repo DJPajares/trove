@@ -1,0 +1,24 @@
+name: trove-local
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: trove-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: trove
+      POSTGRES_USER: trove
+      POSTGRES_PASSWORD: trove_dev
+    ports:
+      - '${TROVE_POSTGRES_PORT:-54329}:5432'
+    volumes:
+      - trove-postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U trove -d trove']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  trove-postgres-data:

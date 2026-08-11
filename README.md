@@ -99,6 +99,19 @@ Trove uses the existing Supabase Auth user pool with email/password as its initi
 
 Prepared offline trip data is reserved for the last authenticated Trove user on that device. Offline access never authorizes server operations. Future offline storage must register a local-data clearer with `signOutFromTrove`, and Settings must warn about unsynced changes before invoking it.
 
+## Local PostgreSQL with Docker
+
+For local Prisma and API development, start the repository's PostgreSQL container and load the local connection values before running database commands:
+
+```bash
+docker compose up -d postgres
+cp docker/local.env.example docker/local.env
+set -a; source docker/local.env; set +a
+pnpm --filter @trove/db db:migrate:deploy
+```
+
+The database is available at `localhost:54329`. See [`packages/db/README.md`](packages/db/README.md) for health checks, shadow database setup, and reset behavior. This container provides PostgreSQL only; hosted Supabase remains the Auth, Storage, and production platform.
+
 ## PWA Foundation
 
 Trove registers its Serwist service worker only in production. It precaches the static application shell and the `~offline` fallback page; it does not cache Trip Mode, maps, API responses, or queued travel data. During `next dev`, Trove removes a prior Trove service-worker registration and its `trove-pwa-*` caches for the current origin to avoid stale-cache confusion.

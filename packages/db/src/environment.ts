@@ -5,7 +5,7 @@ import { config } from 'dotenv';
 import { z } from 'zod';
 
 config({
-  path: resolve(dirname(fileURLToPath(import.meta.url)), '../../.env'),
+  path: resolve(dirname(fileURLToPath(import.meta.url)), '../../../.env'),
 });
 
 const databaseEnvironmentSchema = z.object({
@@ -14,17 +14,31 @@ const databaseEnvironmentSchema = z.object({
 
 export type DatabaseEnvironment = z.infer<typeof databaseEnvironmentSchema>;
 
-function validatePooledDatabaseUrl(databaseUrl: string) {
-  let url: URL;
-
+function parseDatabaseUrl(databaseUrl: string) {
   try {
-    url = new URL(databaseUrl);
+    return new URL(databaseUrl);
   } catch {
     throw new Error('DATABASE_URL must be a valid PostgreSQL connection URL.');
   }
+}
+
+function isLocalDatabaseUrl(url: URL) {
+  return ['127.0.0.1', '::1', 'localhost'].includes(url.hostname);
+}
+
+function validateDatabaseUrl(databaseUrl: string) {
+  const url = parseDatabaseUrl(databaseUrl);
 
   if (!['postgres:', 'postgresql:'].includes(url.protocol)) {
     throw new Error('DATABASE_URL must use the PostgreSQL protocol.');
+  }
+
+  if (isLocalDatabaseUrl(url)) {
+    if (url.searchParams.get('schema') !== 'trove') {
+      throw new Error('Local DATABASE_URL must target the trove schema.');
+    }
+
+    return;
   }
 
   if (!url.hostname.endsWith('.pooler.supabase.com') || url.port !== '6543') {
@@ -49,7 +63,7 @@ export function getDatabaseEnvironment(
     throw new Error('DATABASE_URL is required.');
   }
 
-  validatePooledDatabaseUrl(parsedEnvironment.data.DATABASE_URL);
+  validateDatabaseUrl(parsedEnvironment.data.DATABASE_URL);
 
   return parsedEnvironment.data;
 }

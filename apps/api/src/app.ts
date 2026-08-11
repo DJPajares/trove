@@ -6,6 +6,7 @@ import { registerAuthenticationRoutes } from './routes/auth.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerPlacesRoutes } from './routes/places.js';
 import { registerProfileRoutes } from './routes/profile.js';
+import { registerTripRoutes } from './routes/trips.js';
 
 function originMatches(allowedOrigin: string, origin: string) {
   if (allowedOrigin === origin) {
@@ -40,7 +41,7 @@ export function buildApp() {
   const allowedOrigins = getWebOrigins();
 
   void app.register(cors, {
-    methods: ['GET', 'PATCH', 'POST', 'OPTIONS'],
+    methods: ['DELETE', 'GET', 'PATCH', 'POST', 'OPTIONS'],
     origin(origin, callback) {
       callback(
         null,
@@ -53,6 +54,7 @@ export function buildApp() {
   registerAuthenticationRoutes(app);
   registerPlacesRoutes(app);
   registerProfileRoutes(app);
+  registerTripRoutes(app);
   registerHealthRoutes(app);
 
   return app;

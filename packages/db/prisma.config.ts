@@ -14,6 +14,12 @@ export default defineConfig({
   migrations: {
     path: 'prisma/migrations',
   },
+  experimental: {
+    externalTables: true,
+  },
+  tables: {
+    external: ['auth.users'],
+  },
   datasource: {
     url: process.env.DIRECT_URL ?? '',
     ...(process.env.SHADOW_DATABASE_URL

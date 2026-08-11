@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { CalendarDays, CircleAlert, MapPinned, Plus, Trash2 } from 'lucide-react';
+import { CalendarClock, CalendarDays, CircleAlert, MapPinned, Plus, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
@@ -234,6 +234,15 @@ export function TripsManager() {
               </div>
               {editor.mode === 'edit' ? (
                 <div className="flex items-center gap-1">
+                  <Button
+                    nativeButton={false}
+                    render={<Link href={`/trips/${editor.trip.id}/itinerary`} />}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <CalendarClock aria-hidden="true" data-icon="inline-start" />
+                    {t('itinerary')}
+                  </Button>
                   <Button
                     nativeButton={false}
                     render={<Link href={`/trips/${editor.trip.id}/places`} />}

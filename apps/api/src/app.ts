@@ -4,6 +4,7 @@ import Fastify from 'fastify';
 import { getWebOrigins } from './environment.js';
 import { registerAuthenticationRoutes } from './routes/auth.js';
 import { registerHealthRoutes } from './routes/health.js';
+import { registerItineraryRoutes } from './routes/itineraries.js';
 import { registerPlacesRoutes } from './routes/places.js';
 import { registerProfileRoutes } from './routes/profile.js';
 import { registerTripRoutes } from './routes/trips.js';
@@ -57,6 +58,7 @@ export function buildApp() {
   registerPlacesRoutes(app);
   registerProfileRoutes(app);
   registerSavedPlacesRoutes(app);
+  registerItineraryRoutes(app);
   registerTripPlacesRoutes(app);
   registerTripRoutes(app);
   registerHealthRoutes(app);

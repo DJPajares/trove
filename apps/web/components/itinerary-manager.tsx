@@ -11,6 +11,7 @@ import {
   MapPinned,
   Pencil,
   Plus,
+  Search,
   Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -19,6 +20,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
+import { SearchField } from '@/components/search-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -72,8 +74,13 @@ import {
 import {
   getCachedProviderPlaceDetails,
   getProviderPlaceDetails,
+  GOOGLE_PLACES_SEARCH_DEBOUNCE_MS,
   type ProviderPlaceDetails,
+  type ProviderSuggestion,
+  resolveProviderPlace,
+  searchProviderPlaces,
 } from '@/lib/saved/api';
+import { addTripPlace } from '@/lib/trip-places/api';
 import { cn } from '@/lib/utils';
 
 type EditorState =
@@ -136,6 +143,12 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const [providerDetails, setProviderDetails] = useState<
     Record<string, ProviderPlaceDetails | null | undefined>
   >({});
+  const [placeQuery, setPlaceQuery] = useState('');
+  const [providerResults, setProviderResults] = useState<ProviderSuggestion[]>([]);
+  const [placeSearchStatus, setPlaceSearchStatus] = useState<'idle' | 'loading' | 'unavailable'>(
+    'idle',
+  );
+  const [selectingPlace, setSelectingPlace] = useState(false);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -195,6 +208,30 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     };
   }, [itinerary, providerDetails]);
 
+  useEffect(() => {
+    const query = placeQuery.trim();
+    if (!query || editor.mode === 'closed') {
+      setProviderResults([]);
+      setPlaceSearchStatus('idle');
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setPlaceSearchStatus('loading');
+      void searchProviderPlaces(query, controller.signal)
+        .then((result) => {
+          if (controller.signal.aborted) return;
+          setProviderResults(result.status === 'ok' ? result.suggestions : []);
+          setPlaceSearchStatus(result.status === 'unavailable' ? 'unavailable' : 'idle');
+        })
+        .catch(() => !controller.signal.aborted && setPlaceSearchStatus('unavailable'));
+    }, GOOGLE_PLACES_SEARCH_DEBOUNCE_MS);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [editor.mode, placeQuery]);
+
   const selectedDay = useMemo(
     () => itinerary?.days.find((day) => day.id === selectedDayId) ?? null,
     [itinerary, selectedDayId],
@@ -240,6 +277,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   function openCreate(day: ItineraryDay) {
     setForm(createFormState(null));
     setFormError(null);
+    setPlaceQuery('');
     setEditor({ dayId: day.id, item: null, mode: 'create' });
   }
 
@@ -253,11 +291,58 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   function closeEditor() {
     setEditor({ dayId: null, item: null, mode: 'closed' });
     setFormError(null);
+    setPlaceQuery('');
   }
 
   function updateForm<Key extends keyof FormState>(key: Key, value: FormState[Key]) {
     setForm((current) => ({ ...current, [key]: value }));
     setFormError(null);
+  }
+
+  const matchingTripPlaces = useMemo(() => {
+    const query = placeQuery.trim().toLocaleLowerCase();
+    if (!query) return itinerary?.tripPlaces ?? [];
+    return (itinerary?.tripPlaces ?? []).filter((tripPlace) =>
+      [placeName(tripPlace), providerDetails[tripPlace.place.id]?.formattedAddress]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLocaleLowerCase().includes(query)),
+    );
+  }, [itinerary?.tripPlaces, placeQuery, providerDetails]);
+
+  async function selectProviderPlace(suggestion: ProviderSuggestion) {
+    setSelectingPlace(true);
+    try {
+      const { place } = await resolveProviderPlace(suggestion.externalPlaceId);
+      const { tripPlace } = await addTripPlace(tripId, place.id);
+      setItinerary((current) =>
+        current
+          ? {
+              ...current,
+              tripPlaces: current.tripPlaces.some((item) => item.id === tripPlace.id)
+                ? current.tripPlaces
+                : [
+                    ...current.tripPlaces,
+                    {
+                      id: tripPlace.id,
+                      place: {
+                        id: tripPlace.place.id,
+                        kind: tripPlace.place.kind,
+                        name: tripPlace.place.name,
+                        providerRefs: tripPlace.place.providerRefs,
+                        timeZone: tripPlace.place.location?.timeZone ?? null,
+                      },
+                    },
+                  ],
+            }
+          : current,
+      );
+      updateForm('tripPlaceId', tripPlace.id);
+      setPlaceQuery('');
+    } catch {
+      setFormError(t('placeSelectionError'));
+    } finally {
+      setSelectingPlace(false);
+    }
   }
 
   function buildInput(): ItineraryItemInput | null {
@@ -636,34 +721,98 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                   ) : null}
 
                   <Field>
-                    <FieldLabel htmlFor="itinerary-trip-place">{t('tripPlace')}</FieldLabel>
-                    <Select
-                      onValueChange={(value) =>
-                        updateForm('tripPlaceId', value === 'none' ? '' : (value ?? ''))
-                      }
-                      value={form.tripPlaceId || 'none'}
-                    >
-                      <SelectTrigger className="w-full" id="itinerary-trip-place">
-                        <SelectValue>
-                          {form.tripPlaceId
-                            ? placeName(
-                                itinerary.tripPlaces.find(
-                                  (tripPlace) => tripPlace.id === form.tripPlaceId,
-                                ) ?? null,
-                              )
-                            : t('noTripPlace')}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent align="start">
-                        <SelectItem value="none">{t('noTripPlace')}</SelectItem>
-                        {itinerary.tripPlaces.map((tripPlace) => (
-                          <SelectItem key={tripPlace.id} value={tripPlace.id}>
-                            {placeName(tripPlace)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FieldLabel>{t('tripPlace')}</FieldLabel>
+                    <SearchField
+                      label={t('tripPlace')}
+                      onChange={(event) => setPlaceQuery(event.target.value)}
+                      placeholder={t('tripPlaceSearchPlaceholder')}
+                      value={placeQuery}
+                    />
                     <FieldDescription>{t('tripPlaceHint')}</FieldDescription>
+                    {form.tripPlaceId ? (
+                      <Button
+                        className="mt-2"
+                        onClick={() => updateForm('tripPlaceId', '')}
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        {t('clearTripPlace')}
+                      </Button>
+                    ) : null}
+                    <ItemGroup aria-label={t('tripPlaceResults')} className="mt-3 gap-2">
+                      {matchingTripPlaces
+                        .map((tripPlace) => (
+                          <Item key={tripPlace.id} variant="outline">
+                            <ItemMedia variant="icon">
+                              <MapPinned aria-hidden="true" />
+                            </ItemMedia>
+                            <ItemContent>
+                              <ItemTitle>{placeName(tripPlace)}</ItemTitle>
+                            </ItemContent>
+                            <ItemActions>
+                              <Button
+                                disabled={selectingPlace}
+                                onClick={() => {
+                                  updateForm('tripPlaceId', tripPlace.id);
+                                  setPlaceQuery('');
+                                }}
+                                size="sm"
+                                type="button"
+                                variant={
+                                  form.tripPlaceId === tripPlace.id ? 'secondary' : 'outline'
+                                }
+                              >
+                                {form.tripPlaceId === tripPlace.id
+                                  ? t('selected')
+                                  : t('selectTripPlace')}
+                              </Button>
+                            </ItemActions>
+                          </Item>
+                        ))
+                        .slice(0, 8)}
+                      {placeQuery.trim()
+                        ? providerResults
+                            .filter(
+                              (suggestion) =>
+                                !itinerary.tripPlaces.some((tripPlace) =>
+                                  tripPlace.place.providerRefs.some(
+                                    (ref) => ref.externalPlaceId === suggestion.externalPlaceId,
+                                  ),
+                                ),
+                            )
+                            .map((suggestion) => (
+                              <Item key={suggestion.externalPlaceId} variant="outline">
+                                <ItemMedia variant="icon">
+                                  <Search aria-hidden="true" />
+                                </ItemMedia>
+                                <ItemContent>
+                                  <ItemTitle>{suggestion.name}</ItemTitle>
+                                  <ItemDescription>{suggestion.description}</ItemDescription>
+                                </ItemContent>
+                                <ItemActions>
+                                  <Button
+                                    disabled={selectingPlace}
+                                    onClick={() => void selectProviderPlace(suggestion)}
+                                    size="sm"
+                                    type="button"
+                                    variant="outline"
+                                  >
+                                    {selectingPlace ? t('selectingPlace') : t('addTripPlace')}
+                                  </Button>
+                                </ItemActions>
+                              </Item>
+                            ))
+                        : null}
+                    </ItemGroup>
+                    {placeSearchStatus === 'loading' ? (
+                      <p className="mt-2 text-sm text-muted-foreground">{t('searchingPlaces')}</p>
+                    ) : null}
+                    {placeSearchStatus === 'unavailable' ? (
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {t('providerSearchUnavailable')}
+                      </p>
+                    ) : null}
                   </Field>
 
                   <Field>

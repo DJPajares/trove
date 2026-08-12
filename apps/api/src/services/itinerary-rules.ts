@@ -6,7 +6,7 @@ export type ItemTimeZoneResolution = {
 };
 
 export type DayTimeZoneResolution = {
-  source: 'EXPLICIT_DAILY_BASE' | 'FIRST_LOCATED_ITEM' | 'TRIP_REFERENCE';
+  source: 'ACCOMMODATION' | 'EXPLICIT_DAILY_BASE' | 'FIRST_LOCATED_ITEM' | 'TRIP_REFERENCE';
   sourceItemId: string | null;
   sourceTripPlaceId: string | null;
   timeZone: string;
@@ -103,6 +103,7 @@ export function resolveItemTimeZone(input: {
 }
 
 export function resolveDayTimeZone(input: {
+  accommodations: Array<{ timeZone: string | null; tripPlaceId: string | null }>;
   dailyBase: { timeZone: string | null; tripPlaceId: string } | null;
   items: Array<{
     customLocationTimeZone: string | null;
@@ -119,6 +120,18 @@ export function resolveDayTimeZone(input: {
       sourceTripPlaceId: input.dailyBase.tripPlaceId,
       timeZone: input.dailyBase.timeZone,
     };
+  }
+
+  if (input.accommodations.length === 1) {
+    const accommodation = input.accommodations[0]!;
+    if (accommodation.timeZone && isValidIanaTimeZone(accommodation.timeZone)) {
+      return {
+        source: 'ACCOMMODATION',
+        sourceItemId: null,
+        sourceTripPlaceId: accommodation.tripPlaceId,
+        timeZone: accommodation.timeZone,
+      };
+    }
   }
 
   for (const item of input.items) {

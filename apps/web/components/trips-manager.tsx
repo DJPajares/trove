@@ -11,6 +11,7 @@ import {
   MapPinned,
   Pencil,
   Plus,
+  ReceiptText,
   Users,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -325,6 +326,14 @@ export function TripsManager() {
                   >
                     <Info aria-hidden="true" data-icon="inline-start" />
                     {t('tripInfo')}
+                  </Button>
+                  <Button
+                    nativeButton={false}
+                    render={<Link href={`/trips/${overviewTrip.id}/reservations`} />}
+                    variant="outline"
+                  >
+                    <ReceiptText aria-hidden="true" data-icon="inline-start" />
+                    {t('reservations')}
                   </Button>
                   <Button
                     onClick={() => {

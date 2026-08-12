@@ -14,6 +14,7 @@ import {
   MapPinned,
   Pencil,
   Plus,
+  ReceiptText,
   Search,
   Trash2,
 } from 'lucide-react';
@@ -529,6 +530,14 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
               <CalendarClock aria-hidden="true" data-icon="inline-start" />
               {t('tripTasks')}
             </Button>
+            <Button
+              nativeButton={false}
+              render={<Link href={`/trips/${tripId}/reservations`} />}
+              variant="outline"
+            >
+              <ReceiptText aria-hidden="true" data-icon="inline-start" />
+              {t('tripReservations')}
+            </Button>
           </>
         }
         description={t('description')}
@@ -641,6 +650,19 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                 <p className="mt-1 text-xs text-muted-foreground">
                   {t('dayTimeZone', { timeZone: selectedDay.defaultTimeZone })}
                 </p>
+                {selectedDay.defaultTimeZoneSource === 'accommodation' &&
+                selectedDay.defaultTimeZoneSourceTripPlaceId ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t('accommodationBase', {
+                      name:
+                        placeName(
+                          itinerary.tripPlaces.find(
+                            (place) => place.id === selectedDay.defaultTimeZoneSourceTripPlaceId,
+                          ) ?? null,
+                        ) ?? t('accommodationBaseUnnamed'),
+                    })}
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-col gap-2 sm:items-end">
                 <Select

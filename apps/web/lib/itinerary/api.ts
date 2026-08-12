@@ -45,6 +45,7 @@ export type ItineraryDay = {
   defaultTimeZone: string;
   defaultTimeZoneSource:
     'accommodation' | 'explicit_daily_base' | 'first_located_item' | 'trip_reference';
+  defaultTimeZoneSourceTripPlaceId: string | null;
   id: string;
   items: ItineraryItem[];
   notes: string | null;

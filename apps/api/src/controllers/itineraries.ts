@@ -10,6 +10,7 @@ import {
   listItinerary,
   organizeItineraryItem,
   setItineraryDayBase,
+  updateItineraryDayNote,
   updateItineraryItem,
 } from '../services/itineraries.js';
 
@@ -20,6 +21,7 @@ const organizeItemSchema = z
   .object({ itineraryDayId: z.uuid().nullable(), position: z.number().int().min(0) })
   .strict();
 const dayBaseSchema = z.object({ tripPlaceId: z.uuid().nullable() }).strict();
+const dayNoteSchema = z.object({ note: z.string().trim().max(5_000).nullable() }).strict();
 const timeZoneSchema = z.string().trim().min(1).max(100);
 const scheduleSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('none') }).strict(),
@@ -182,6 +184,27 @@ export function createItineraryControllers() {
           body.data.tripPlaceId,
         );
         return reply.code(204).send();
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
+
+    async updateDayNote(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = dayParamsSchema.safeParse(request.params);
+      const body = dayNoteSchema.safeParse(request.body);
+      if (!userId) return;
+      if (!params.success || !body.success)
+        return reply.code(400).send({ code: 'invalid_itinerary_day' });
+      try {
+        return reply.send(
+          await updateItineraryDayNote(
+            userId,
+            params.data.tripId,
+            params.data.itineraryDayId,
+            body.data.note,
+          ),
+        );
       } catch (error) {
         return handleError(reply, error);
       }

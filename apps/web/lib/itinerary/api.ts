@@ -176,3 +176,14 @@ export function setItineraryDayBase(
     method: 'PATCH',
   });
 }
+
+export function updateItineraryDayNote(
+  tripId: string,
+  itineraryDayId: string,
+  note: string | null,
+) {
+  return itineraryRequest<{ id: string; notes: string | null }>(
+    `/trips/${tripId}/itinerary/days/${itineraryDayId}/note`,
+    { body: JSON.stringify({ note }), method: 'PATCH' },
+  );
+}

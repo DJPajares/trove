@@ -500,6 +500,25 @@ export async function setItineraryDayBase(
   });
 }
 
+export async function updateItineraryDayNote(
+  userId: string,
+  tripId: string,
+  itineraryDayId: string,
+  note: string | null,
+) {
+  const prisma = getPrismaClient();
+  const result = await prisma.$transaction(async (transaction) => {
+    await findOwnedTrip(transaction, userId, tripId);
+    const day = await findDay(transaction, tripId, itineraryDayId);
+    return transaction.itineraryDay.update({
+      where: { id: day.id },
+      data: { notes: note?.trim() || null },
+      select: { id: true, notes: true },
+    });
+  });
+  return { id: result.id, notes: result.notes };
+}
+
 export async function createItineraryItem(
   userId: string,
   tripId: string,

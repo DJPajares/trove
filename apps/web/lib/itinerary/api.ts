@@ -12,7 +12,9 @@ export type ItineraryTripPlace = {
   place: {
     id: string;
     kind: 'custom' | 'provider';
+    location: { latitude: number; longitude: number; timeZone: string | null } | null;
     name: string | null;
+    note: string | null;
     providerRefs: Array<{ externalPlaceId: string; provider: 'google' }>;
     timeZone: string | null;
   };

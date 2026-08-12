@@ -11,6 +11,8 @@ import {
   Clock3,
   Copy,
   ExternalLink,
+  List,
+  Map as MapIcon,
   MapPinned,
   Pencil,
   Plus,
@@ -24,6 +26,8 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
+import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
+import { PlaceDetailSheet } from '@/components/place-detail-sheet';
 import { SearchField } from '@/components/search-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -78,6 +82,7 @@ import {
   setItineraryDayBase,
   updateItineraryItem,
 } from '@/lib/itinerary/api';
+import { buildItineraryMapPoints, type ItineraryMapPoint } from '@/lib/maps/itinerary-map';
 import {
   getCachedProviderPlaceDetails,
   getProviderPlaceDetails,
@@ -132,6 +137,20 @@ function googleMapsHref(tripPlace: ItineraryTripPlace) {
     : null;
 }
 
+function useDesktopMapLayout() {
+  const [matches, setMatches] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia('(min-width: 1024px)');
+    const update = () => setMatches(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
+  return matches;
+}
+
 export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('itinerary');
   const locale = useLocale();
@@ -157,6 +176,11 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   );
   const [selectingPlace, setSelectingPlace] = useState(false);
   const [organizingItemId, setOrganizingItemId] = useState<string | null>(null);
+  const [mobileView, setMobileView] = useState<'list' | 'map'>('list');
+  const [selectedMapPointId, setSelectedMapPointId] = useState<string | null>(null);
+  const [selectedMapItemId, setSelectedMapItemId] = useState<string | null>(null);
+  const [detailTripPlaceId, setDetailTripPlaceId] = useState<string | null>(null);
+  const desktopMapLayout = useDesktopMapLayout();
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -282,6 +306,55 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     return item.customLabel ?? placeName(item.tripPlace) ?? t('untitledItem');
   }
 
+  const mapPoints = useMemo(() => {
+    if (!itinerary || !selectedDay) return [];
+    return buildItineraryMapPoints({
+      itinerary,
+      resolveItemName: itemName,
+      resolvePlaceName: (tripPlace) => placeName(tripPlace) ?? t('providerPlace'),
+      selectedDay,
+    });
+  }, [itinerary, providerDetails, selectedDay, t]);
+
+  useEffect(() => {
+    if (selectedMapPointId && !mapPoints.some((point) => point.id === selectedMapPointId)) {
+      setSelectedMapPointId(null);
+      setSelectedMapItemId(null);
+    }
+  }, [mapPoints, selectedMapPointId]);
+
+  useEffect(() => {
+    setSelectedMapPointId(null);
+    setSelectedMapItemId(null);
+  }, [selectedDayId]);
+
+  function scrollToItem(itemId: string, focus = false) {
+    window.requestAnimationFrame(() => {
+      const element = document.getElementById(`itinerary-item-${itemId}`);
+      element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (focus) element?.focus({ preventScroll: true });
+    });
+  }
+
+  function selectItemOnMap(item: ItineraryItem) {
+    if (!item.tripPlace?.place.location) return;
+    setSelectedMapPointId(item.tripPlace.id);
+    setSelectedMapItemId(item.id);
+    if (!desktopMapLayout) setMobileView('map');
+  }
+
+  function handleMapPointSelection(point: ItineraryMapPoint) {
+    setSelectedMapPointId(point.id);
+    setSelectedMapItemId(point.itemId);
+    if (desktopMapLayout && point.itemId) scrollToItem(point.itemId);
+  }
+
+  function viewMapItem(itemId: string) {
+    setSelectedMapItemId(itemId);
+    if (!desktopMapLayout) setMobileView('list');
+    scrollToItem(itemId, true);
+  }
+
   function openCreate(day: ItineraryDay) {
     setForm(createFormState(null));
     setFormError(null);
@@ -335,7 +408,9 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                       place: {
                         id: tripPlace.place.id,
                         kind: tripPlace.place.kind,
+                        location: tripPlace.place.location,
                         name: tripPlace.place.name,
+                        note: tripPlace.place.note,
                         providerRefs: tripPlace.place.providerRefs,
                         timeZone: tripPlace.place.location?.timeZone ?? null,
                       },
@@ -698,159 +773,239 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
               </div>
             </div>
 
-            <div className="p-4 sm:p-6">
-              {selectedDay.items.length ? (
-                <ItemGroup aria-label={t('itemListLabel')} variant="list">
-                  {selectedDay.items.map((item, itemIndex) => {
-                    const name = itemName(item);
-                    const mapsHref = item.tripPlace ? googleMapsHref(item.tripPlace) : null;
-                    return (
-                      <Item className="flex-nowrap px-3 py-3" key={item.id} role="listitem">
-                        <ItemMedia
-                          className="size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
-                          variant="icon"
+            <div
+              aria-label={t('map.viewNavigation')}
+              className="grid grid-cols-2 gap-1 border-b border-border bg-muted/30 p-1 lg:hidden"
+              role="tablist"
+            >
+              <Button
+                aria-selected={mobileView === 'list'}
+                onClick={() => setMobileView('list')}
+                role="tab"
+                size="sm"
+                variant={mobileView === 'list' ? 'secondary' : 'ghost'}
+              >
+                <List aria-hidden="true" data-icon="inline-start" />
+                {t('map.listView')}
+              </Button>
+              <Button
+                aria-selected={mobileView === 'map'}
+                onClick={() => setMobileView('map')}
+                role="tab"
+                size="sm"
+                variant={mobileView === 'map' ? 'secondary' : 'ghost'}
+              >
+                <MapIcon aria-hidden="true" data-icon="inline-start" />
+                {t('map.mapView')}
+              </Button>
+            </div>
+
+            <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.9fr)]">
+              <div className={cn('p-4 sm:p-6', mobileView === 'map' && 'hidden lg:block')}>
+                {selectedDay.items.length ? (
+                  <ItemGroup aria-label={t('itemListLabel')} variant="list">
+                    {selectedDay.items.map((item, itemIndex) => {
+                      const name = itemName(item);
+                      const mapsHref = item.tripPlace ? googleMapsHref(item.tripPlace) : null;
+                      const isMapSelected = selectedMapItemId === item.id;
+                      return (
+                        <Item
+                          className={cn('px-3 py-3', isMapSelected && 'bg-secondary/70')}
+                          id={`itinerary-item-${item.id}`}
+                          key={item.id}
+                          role="listitem"
+                          tabIndex={-1}
                         >
-                          <Clock3 aria-hidden="true" />
-                        </ItemMedia>
-                        <ItemContent className="min-w-0">
-                          <ItemTitle className="text-base">{name}</ItemTitle>
-                          <ItemDescription className="line-clamp-none">
-                            <span className="flex flex-wrap gap-x-2 gap-y-1">
-                              <span>
-                                {item.localStartTime
-                                  ? item.timeZone && item.timeZone !== selectedDay.defaultTimeZone
-                                    ? t('exactTimeWithTimeZone', {
-                                        time: item.localStartTime,
-                                        timeZone: item.timeZone,
-                                      })
-                                    : t('exactTimeValue', { time: item.localStartTime })
-                                  : item.dayPart
-                                    ? t(`schedule.${item.dayPart}`)
-                                    : t('schedule.none')}
-                              </span>
-                              {item.durationMinutes ? (
-                                <span>{t('durationValue', { minutes: item.durationMinutes })}</span>
-                              ) : null}
-                              {item.plannedCost ? (
+                          <ItemMedia
+                            className="size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
+                            variant="icon"
+                          >
+                            <Clock3 aria-hidden="true" />
+                          </ItemMedia>
+                          <ItemContent className="min-w-0">
+                            <ItemTitle className="text-base">
+                              {item.tripPlace?.place.location ? (
+                                <button
+                                  aria-label={t('map.showItem', { name })}
+                                  aria-pressed={isMapSelected}
+                                  className="rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+                                  onClick={() => selectItemOnMap(item)}
+                                  type="button"
+                                >
+                                  {name}
+                                </button>
+                              ) : (
+                                name
+                              )}
+                            </ItemTitle>
+                            <ItemDescription className="line-clamp-none">
+                              <span className="flex flex-wrap gap-x-2 gap-y-1">
                                 <span>
-                                  {t('costValue', {
-                                    amount: item.plannedCost.amount,
-                                    currency: item.plannedCost.currencyCode,
-                                  })}
+                                  {item.localStartTime
+                                    ? item.timeZone && item.timeZone !== selectedDay.defaultTimeZone
+                                      ? t('exactTimeWithTimeZone', {
+                                          time: item.localStartTime,
+                                          timeZone: item.timeZone,
+                                        })
+                                      : t('exactTimeValue', { time: item.localStartTime })
+                                    : item.dayPart
+                                      ? t(`schedule.${item.dayPart}`)
+                                      : t('schedule.none')}
                                 </span>
-                              ) : null}
-                              {item.customLocation ? (
-                                <span>{item.customLocation.label}</span>
-                              ) : null}
-                            </span>
-                            {item.notes ? (
-                              <span className="mt-1 block line-clamp-2">{item.notes}</span>
-                            ) : null}
-                          </ItemDescription>
-                        </ItemContent>
-                        <ItemActions>
-                          <Button
-                            aria-label={t('moveEarlier', { name })}
-                            disabled={itemIndex === 0 || organizingItemId === item.id}
-                            onClick={() => void handleOrganize(item, selectedDay.id, itemIndex - 1)}
-                            size="icon-sm"
-                            variant="ghost"
-                          >
-                            <ArrowUp aria-hidden="true" />
-                          </Button>
-                          <Button
-                            aria-label={t('moveLater', { name })}
-                            disabled={
-                              itemIndex === selectedDay.items.length - 1 ||
-                              organizingItemId === item.id
-                            }
-                            onClick={() => void handleOrganize(item, selectedDay.id, itemIndex + 1)}
-                            size="icon-sm"
-                            variant="ghost"
-                          >
-                            <ArrowDown aria-hidden="true" />
-                          </Button>
-                          <Select
-                            onValueChange={(value) =>
-                              void handleOrganize(item, value === 'unscheduled' ? null : value, 999)
-                            }
-                            value={selectedDay.id}
-                          >
-                            <SelectTrigger aria-label={t('moveItem', { name })} size="sm">
-                              <SelectValue>{t('move')}</SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="unscheduled">{t('unscheduled')}</SelectItem>
-                              {itinerary.days
-                                .filter((day) => day.id !== selectedDay.id)
-                                .map((day, index) => (
-                                  <SelectItem key={day.id} value={day.id}>
-                                    {t('dayOption', {
-                                      date: formatDate(day.date),
-                                      number: index + 1,
+                                {item.durationMinutes ? (
+                                  <span>
+                                    {t('durationValue', { minutes: item.durationMinutes })}
+                                  </span>
+                                ) : null}
+                                {item.plannedCost ? (
+                                  <span>
+                                    {t('costValue', {
+                                      amount: item.plannedCost.amount,
+                                      currency: item.plannedCost.currencyCode,
                                     })}
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
-                          <Button
-                            aria-label={t('duplicateItem', { name })}
-                            disabled={organizingItemId === item.id}
-                            onClick={() => void handleDuplicate(item)}
-                            size="icon-sm"
-                            variant="ghost"
-                          >
-                            <Copy aria-hidden="true" />
-                          </Button>
-                          {mapsHref ? (
+                                  </span>
+                                ) : null}
+                                {item.customLocation ? (
+                                  <span>{item.customLocation.label}</span>
+                                ) : null}
+                              </span>
+                              {item.notes ? (
+                                <span className="mt-1 block line-clamp-2">{item.notes}</span>
+                              ) : null}
+                            </ItemDescription>
+                          </ItemContent>
+                          <ItemActions className="ml-auto flex-wrap justify-end">
                             <Button
-                              aria-label={t('openPlace', { name })}
-                              nativeButton={false}
-                              render={<a href={mapsHref} rel="noreferrer" target="_blank" />}
+                              aria-label={t('moveEarlier', { name })}
+                              disabled={itemIndex === 0 || organizingItemId === item.id}
+                              onClick={() =>
+                                void handleOrganize(item, selectedDay.id, itemIndex - 1)
+                              }
                               size="icon-sm"
                               variant="ghost"
                             >
-                              <ExternalLink aria-hidden="true" />
+                              <ArrowUp aria-hidden="true" />
                             </Button>
-                          ) : item.tripPlace ? (
                             <Button
-                              aria-label={t('openPlace', { name })}
-                              nativeButton={false}
-                              render={<Link href={`/trips/${tripId}/places`} />}
+                              aria-label={t('moveLater', { name })}
+                              disabled={
+                                itemIndex === selectedDay.items.length - 1 ||
+                                organizingItemId === item.id
+                              }
+                              onClick={() =>
+                                void handleOrganize(item, selectedDay.id, itemIndex + 1)
+                              }
                               size="icon-sm"
                               variant="ghost"
                             >
-                              <MapPinned aria-hidden="true" />
+                              <ArrowDown aria-hidden="true" />
                             </Button>
-                          ) : null}
-                          <Button
-                            aria-label={t('editItem', { name })}
-                            onClick={() => openEdit(item)}
-                            size="icon-sm"
-                            variant="ghost"
-                          >
-                            <Pencil aria-hidden="true" />
-                          </Button>
-                        </ItemActions>
-                      </Item>
-                    );
-                  })}
-                </ItemGroup>
-              ) : (
-                <PageState
-                  actions={
-                    <Button onClick={() => openCreate(selectedDay)} variant="outline">
-                      <Plus aria-hidden="true" data-icon="inline-start" />
-                      {t('addFirstItem')}
-                    </Button>
-                  }
-                  className="min-h-60 justify-center"
-                  description={t('emptyDescription')}
-                  headingLevel={2}
-                  icon={<CalendarClock aria-hidden="true" />}
-                  title={t('emptyTitle')}
-                />
-              )}
+                            <Select
+                              onValueChange={(value) =>
+                                void handleOrganize(
+                                  item,
+                                  value === 'unscheduled' ? null : value,
+                                  999,
+                                )
+                              }
+                              value={selectedDay.id}
+                            >
+                              <SelectTrigger aria-label={t('moveItem', { name })} size="sm">
+                                <SelectValue>{t('move')}</SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="unscheduled">{t('unscheduled')}</SelectItem>
+                                {itinerary.days
+                                  .filter((day) => day.id !== selectedDay.id)
+                                  .map((day, index) => (
+                                    <SelectItem key={day.id} value={day.id}>
+                                      {t('dayOption', {
+                                        date: formatDate(day.date),
+                                        number: index + 1,
+                                      })}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              aria-label={t('duplicateItem', { name })}
+                              disabled={organizingItemId === item.id}
+                              onClick={() => void handleDuplicate(item)}
+                              size="icon-sm"
+                              variant="ghost"
+                            >
+                              <Copy aria-hidden="true" />
+                            </Button>
+                            {mapsHref ? (
+                              <Button
+                                aria-label={t('openPlace', { name })}
+                                nativeButton={false}
+                                render={<a href={mapsHref} rel="noreferrer" target="_blank" />}
+                                size="icon-sm"
+                                variant="ghost"
+                              >
+                                <ExternalLink aria-hidden="true" />
+                              </Button>
+                            ) : item.tripPlace ? (
+                              <Button
+                                aria-label={t('openPlace', { name })}
+                                nativeButton={false}
+                                render={<Link href={`/trips/${tripId}/places`} />}
+                                size="icon-sm"
+                                variant="ghost"
+                              >
+                                <MapPinned aria-hidden="true" />
+                              </Button>
+                            ) : null}
+                            <Button
+                              aria-label={t('editItem', { name })}
+                              onClick={() => openEdit(item)}
+                              size="icon-sm"
+                              variant="ghost"
+                            >
+                              <Pencil aria-hidden="true" />
+                            </Button>
+                          </ItemActions>
+                        </Item>
+                      );
+                    })}
+                  </ItemGroup>
+                ) : (
+                  <PageState
+                    actions={
+                      <Button onClick={() => openCreate(selectedDay)} variant="outline">
+                        <Plus aria-hidden="true" data-icon="inline-start" />
+                        {t('addFirstItem')}
+                      </Button>
+                    }
+                    className="min-h-60 justify-center"
+                    description={t('emptyDescription')}
+                    headingLevel={2}
+                    icon={<CalendarClock aria-hidden="true" />}
+                    title={t('emptyTitle')}
+                  />
+                )}
+              </div>
+
+              <aside
+                aria-label={t('map.regionLabel')}
+                className={cn(
+                  'min-w-0 border-border lg:block lg:border-l',
+                  mobileView === 'list' && 'hidden',
+                )}
+              >
+                {desktopMapLayout || mobileView === 'map' ? (
+                  <ItineraryPlanningMap
+                    onOpenPlace={setDetailTripPlaceId}
+                    onSelectPoint={handleMapPointSelection}
+                    onViewItem={viewMapItem}
+                    points={mapPoints}
+                    selectedPointId={selectedMapPointId}
+                  />
+                ) : (
+                  <div aria-hidden="true" className="hidden min-h-[34rem] bg-muted/40 lg:block" />
+                )}
+              </aside>
             </div>
           </div>
         ) : null}
@@ -865,13 +1020,33 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
           <ItemGroup aria-label={t('unscheduled')} variant="list">
             {itinerary.unscheduledItems.map((item) => {
               const name = itemName(item);
+              const isMapSelected = selectedMapItemId === item.id;
               return (
-                <Item className="px-3 py-3" key={item.id}>
+                <Item
+                  className={cn('px-3 py-3', isMapSelected && 'bg-secondary/70')}
+                  id={`itinerary-item-${item.id}`}
+                  key={item.id}
+                  tabIndex={-1}
+                >
                   <ItemMedia variant="icon">
                     <CalendarClock aria-hidden="true" />
                   </ItemMedia>
                   <ItemContent>
-                    <ItemTitle>{name}</ItemTitle>
+                    <ItemTitle>
+                      {item.tripPlace?.place.location ? (
+                        <button
+                          aria-label={t('map.showItem', { name })}
+                          aria-pressed={isMapSelected}
+                          className="rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+                          onClick={() => selectItemOnMap(item)}
+                          type="button"
+                        >
+                          {name}
+                        </button>
+                      ) : (
+                        name
+                      )}
+                    </ItemTitle>
                     <ItemDescription>{item.notes}</ItemDescription>
                   </ItemContent>
                   <ItemActions>
@@ -915,6 +1090,16 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
           </ItemGroup>
         </section>
       ) : null}
+
+      <PlaceDetailSheet
+        context={{ tripName: itinerary.trip.name }}
+        onOpenChange={(open) => !open && setDetailTripPlaceId(null)}
+        open={Boolean(detailTripPlaceId)}
+        place={
+          itinerary.tripPlaces.find((tripPlace) => tripPlace.id === detailTripPlaceId)?.place ??
+          null
+        }
+      />
 
       <Sheet open={editor.mode !== 'closed'} onOpenChange={(open) => !open && closeEditor()}>
         <SheetContent

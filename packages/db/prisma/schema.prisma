@@ -102,6 +102,28 @@ enum ReservationTimeZoneSource {
   @@schema("trove")
 }
 
+enum ExpenseCategory {
+  FOOD       @map("food")
+  TRANSPORT  @map("transport")
+  STAY       @map("stay")
+  ACTIVITIES @map("activities")
+  SHOPPING   @map("shopping")
+  OTHER      @map("other")
+
+  @@map("expense_category")
+  @@schema("trove")
+}
+
+enum ExpenseTimeZoneSource {
+  ITINERARY_ITEM @map("itinerary_item")
+  TRIP_PLACE     @map("trip_place")
+  ITINERARY_DAY  @map("itinerary_day")
+  TRIP_REFERENCE @map("trip_reference")
+
+  @@map("expense_time_zone_source")
+  @@schema("trove")
+}
+
 enum TripPlacePriority {
   MUST_GO    @map("must_go")
   INTERESTED @map("interested")
@@ -275,6 +297,8 @@ model Trip {
   notes                          String?               @db.Text
   coverPhotoPath                 String?               @map("cover_photo_path")
   planningReadiness              TripPlanningReadiness @default(IN_PROGRESS) @map("planning_readiness")
+  budgetAmount                   Decimal?              @map("budget_amount") @db.Decimal(12, 2)
+  budgetCurrencyCode             String?               @map("budget_currency_code") @db.Char(3)
   visibility                     TripVisibility        @default(PRIVATE)
   referenceTimeZone              String                @map("reference_time_zone")
   referenceTimeZoneSource        TripTimeZoneSource    @map("reference_time_zone_source")
@@ -299,6 +323,7 @@ model Trip {
   tasks                        Task[]
   tripInfoEntries              TripInfo[]
   reservations                 Reservation[]
+  expenses                     Expense[]
 
   @@index([ownerId])
   @@index([creatorId])
@@ -411,6 +436,7 @@ model TripPlace {
   dailyBaseForDays      ItineraryDay[]  @relation("ItineraryDayDailyBase")
   timeZoneSourceForDays ItineraryDay[]  @relation("ItineraryDayTimeZoneSource")
   reservations          Reservation[]
+  expenses              Expense[]
 
   @@unique([tripId, placeId])
   @@unique([id, tripId])
@@ -439,6 +465,7 @@ model ItineraryDay {
   timeZoneSourceItem      ItineraryItem?  @relation("ItineraryDayTimeZoneSourceItem", fields: [defaultTimeZoneSourceItemId, tripId], references: [id, tripId], onDelete: NoAction)
   items                   ItineraryItem[] @relation("ItineraryDayItems")
   tasks                   Task[]          @relation("TaskItineraryDay")
+  expenses                Expense[]       @relation("ExpenseItineraryDay")
   accommodationReservations ReservationAccommodationDay[]
 
   @@unique([tripId, date])
@@ -480,6 +507,7 @@ model ItineraryItem {
   timeZoneSourceForDays ItineraryDay[] @relation("ItineraryDayTimeZoneSourceItem")
   tasks                 Task[]         @relation("TaskItineraryItem")
   reservations          Reservation[]
+  expenses              Expense[]        @relation("ExpenseItineraryItem")
 
   @@unique([id, tripId])
   @@index([tripId])
@@ -634,5 +662,37 @@ model ReservationAccommodationDay {
   @@id([reservationId, itineraryDayId])
   @@index([itineraryDayId, tripId])
   @@map("reservation_accommodation_days")
+  @@schema("trove")
+}
+
+model Expense {
+  id                    String                 @id @default(uuid(7)) @db.Uuid
+  tripId                String                 @map("trip_id") @db.Uuid
+  itineraryDayId        String?                @map("itinerary_day_id") @db.Uuid
+  itineraryItemId       String?                @map("itinerary_item_id") @db.Uuid
+  tripPlaceId           String?                @map("trip_place_id") @db.Uuid
+  amount                Decimal                @db.Decimal(12, 2)
+  currencyCode          String                 @map("currency_code") @db.Char(3)
+  title                 String?
+  category              ExpenseCategory?
+  localDate             DateTime?              @map("local_date") @db.Date
+  localTime             DateTime?              @map("local_time") @db.Time(0)
+  timeZone              String?                @map("time_zone")
+  timeZoneSource        ExpenseTimeZoneSource? @map("time_zone_source")
+  timeZoneResolvedAt    DateTime?              @map("time_zone_resolved_at") @db.Timestamptz(3)
+  note                  String?                @db.Text
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  trip          Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  itineraryDay  ItineraryDay?  @relation("ExpenseItineraryDay", fields: [itineraryDayId, tripId], references: [id, tripId], onDelete: NoAction)
+  itineraryItem ItineraryItem? @relation("ExpenseItineraryItem", fields: [itineraryItemId, tripId], references: [id, tripId], onDelete: NoAction)
+  tripPlace     TripPlace?     @relation(fields: [tripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
+
+  @@index([tripId, localDate])
+  @@index([itineraryDayId, tripId])
+  @@index([itineraryItemId, tripId])
+  @@index([tripPlaceId, tripId])
+  @@map("expenses")
   @@schema("trove")
 }

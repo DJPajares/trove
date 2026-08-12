@@ -13,6 +13,7 @@ import {
   Plus,
   ReceiptText,
   Users,
+  WalletCards,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
@@ -336,6 +337,14 @@ export function TripsManager() {
                     {t('reservations')}
                   </Button>
                   <Button
+                    nativeButton={false}
+                    render={<Link href={`/trips/${overviewTrip.id}/expenses`} />}
+                    variant="outline"
+                  >
+                    <WalletCards aria-hidden="true" data-icon="inline-start" />
+                    {t('expenses')}
+                  </Button>
+                  <Button
                     onClick={() => {
                       setOverviewTrip(null);
                       setEditor({ mode: 'edit', trip: overviewTrip });
@@ -475,6 +484,16 @@ export function TripsManager() {
                 >
                   <ClipboardCheck aria-hidden="true" data-icon="inline-start" />
                   {t('tasks')}
+                </Button>
+                <Button
+                  className="text-muted-foreground hover:text-foreground"
+                  nativeButton={false}
+                  render={<Link href={`/trips/${editor.trip.id}/expenses`} />}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <WalletCards aria-hidden="true" data-icon="inline-start" />
+                  {t('expenses')}
                 </Button>
               </nav>
             ) : null}

@@ -2,9 +2,8 @@
 
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useTheme } from 'next-themes';
-import { useEffect, useState } from 'react';
 
+import { usePreferences } from '@/components/preferences-provider';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -26,14 +25,9 @@ const appearanceIcons = {
 
 export function AppearanceMenu() {
   const t = useTranslations('appearance');
-  const { setTheme, theme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  const appearance = mounted && (theme === 'dark' || theme === 'light') ? theme : 'system';
+  const { appearanceSaveError, preferences, setAppearance } = usePreferences();
+  const appearance = preferences.appearance;
   const CurrentIcon = appearanceIcons[appearance];
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   return (
     <DropdownMenu>
@@ -46,7 +40,10 @@ export function AppearanceMenu() {
         <DropdownMenuGroup>
           <DropdownMenuLabel>{t('label')}</DropdownMenuLabel>
         </DropdownMenuGroup>
-        <DropdownMenuRadioGroup onValueChange={setTheme} value={appearance}>
+        <DropdownMenuRadioGroup
+          onValueChange={(value) => setAppearance(value as Appearance)}
+          value={appearance}
+        >
           {(Object.keys(appearanceIcons) as Appearance[]).map((option) => {
             const Icon = appearanceIcons[option];
 
@@ -58,6 +55,11 @@ export function AppearanceMenu() {
             );
           })}
         </DropdownMenuRadioGroup>
+        {appearanceSaveError ? (
+          <p className="px-2 py-1.5 text-xs leading-4 text-destructive" role="status">
+            {t('unsaved')}
+          </p>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

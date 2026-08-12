@@ -281,7 +281,7 @@ export function TripsManager() {
 
       <Sheet onOpenChange={(open) => !open && setOverviewTrip(null)} open={Boolean(overviewTrip)}>
         <SheetContent
-          className="data-[side=right]:w-[min(42rem,calc(100%-0.5rem))]"
+          className="w-full md:data-[side=right]:w-[min(42rem,calc(100%-0.5rem))]"
           closeLabel={t('close')}
         >
           {overviewTrip ? (
@@ -445,7 +445,7 @@ export function TripsManager() {
         onOpenChange={(open) => !open && setEditor({ mode: 'closed', trip: null })}
       >
         <SheetContent
-          className="data-[side=right]:w-[min(44rem,calc(100%-0.5rem))]"
+          className="w-full md:data-[side=right]:w-[min(44rem,calc(100%-0.5rem))]"
           closeLabel={t('close')}
         >
           <SheetHeader className="border-b">

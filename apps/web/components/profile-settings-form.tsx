@@ -3,11 +3,12 @@
 import Image from 'next/image';
 import { CircleAlert } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useTheme } from 'next-themes';
 import { useEffect, useId, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 
 import { PageState } from '@/components/page-state';
+import { usePreferences } from '@/components/preferences-provider';
+import { CurrencyCombobox } from '@/components/currency-combobox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -20,13 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  fetchProfile,
-  removeProfilePhoto,
-  saveProfile,
-  type Profile,
-  uploadProfilePhoto,
-} from '@/lib/profile/api';
+import { removeProfilePhoto, type Profile, uploadProfilePhoto } from '@/lib/profile/api';
 import { getPreferenceDefaults, type ProfilePreferences } from '@/lib/profile/preferences';
 import { cn } from '@/lib/utils';
 
@@ -54,34 +49,36 @@ function getFormState(profile: Profile, locale: string): FormState {
 
 export function ProfileSettingsForm({ locale }: { locale: string }) {
   const t = useTranslations('profile');
-  const { setTheme } = useTheme();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const {
+    appearanceSaveError,
+    preferences,
+    profile,
+    saveProfileChanges,
+    setAppearance,
+    status: preferencesStatus,
+  } = usePreferences();
   const [form, setForm] = useState<FormState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'loading' | 'saving' | 'saved'>('loading');
   const [photoBusy, setPhotoBusy] = useState(false);
 
   useEffect(() => {
-    let active = true;
+    if (profile && !form) {
+      setForm(getFormState(profile, locale));
+      setStatus('idle');
+    } else if (preferencesStatus === 'unavailable' && !profile) {
+      setError(t('loadError'));
+      setStatus('idle');
+    }
+  }, [form, locale, preferencesStatus, profile, t]);
 
-    void fetchProfile()
-      .then(({ profile: nextProfile }) => {
-        if (!active) return;
-        setProfile(nextProfile);
-        setForm(getFormState(nextProfile, locale));
-        if (nextProfile.appearance) setTheme(nextProfile.appearance);
-        setStatus('idle');
-      })
-      .catch(() => {
-        if (!active) return;
-        setError(t('loadError'));
-        setStatus('idle');
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [locale, setTheme, t]);
+  useEffect(() => {
+    setForm((current) =>
+      current && current.appearance !== preferences.appearance
+        ? { ...current, appearance: preferences.appearance }
+        : current,
+    );
+  }, [preferences.appearance]);
 
   function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((current) => (current ? { ...current, [field]: value } : current));
@@ -96,7 +93,7 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
     setStatus('saving');
 
     try {
-      const { profile: nextProfile } = await saveProfile({
+      const nextProfile = await saveProfileChanges({
         appearance: form.appearance,
         dateFormat: form.dateFormat,
         distanceUnit: form.distanceUnit,
@@ -106,9 +103,7 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
         temperatureUnit: form.temperatureUnit,
         timeFormat: form.timeFormat,
       });
-      setProfile(nextProfile);
       setForm(getFormState(nextProfile, locale));
-      setTheme(form.appearance);
       setStatus('saved');
     } catch {
       setError(t('saveError'));
@@ -127,8 +122,7 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
     try {
       const { path, supabase } = await uploadProfilePhoto(file);
       const previousPath = profile.avatarPath;
-      const { profile: nextProfile } = await saveProfile({ avatarPath: path });
-      setProfile(nextProfile);
+      await saveProfileChanges({ avatarPath: path });
       if (previousPath) await removeProfilePhoto(supabase, previousPath);
     } catch (photoError) {
       setError(
@@ -148,9 +142,8 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
     setPhotoBusy(true);
 
     try {
-      const { profile: nextProfile } = await saveProfile({ avatarPath: null });
+      await saveProfileChanges({ avatarPath: null });
       const supabase = (await import('@/lib/supabase/client')).createBrowserSupabaseClient();
-      setProfile(nextProfile);
       if (supabase) await removeProfilePhoto(supabase, profile.avatarPath);
     } catch {
       setError(t('photoError'));
@@ -175,6 +168,12 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
       {error ? (
         <Alert role="alert" variant="destructive">
           <AlertDescription className="text-destructive">{error}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {appearanceSaveError ? (
+        <Alert role="status" variant="destructive">
+          <AlertDescription className="text-destructive">{t('appearanceUnsaved')}</AlertDescription>
         </Alert>
       ) : null}
 
@@ -212,15 +211,12 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
             </Field>
             <Field className="sm:max-w-xs">
               <FieldLabel htmlFor="profile-home-currency">{t('homeCurrency')}</FieldLabel>
-              <Input
+              <CurrencyCombobox
                 aria-describedby="profile-home-currency-hint"
-                autoCapitalize="characters"
-                className="uppercase"
+                aria-label={t('homeCurrency')}
                 id="profile-home-currency"
-                maxLength={3}
-                onChange={(event) =>
-                  updateField('homeCurrencyCode', event.target.value.toUpperCase())
-                }
+                onValueChange={(value) => updateField('homeCurrencyCode', value)}
+                placeholder={t('homeCurrencyPlaceholder')}
                 value={form.homeCurrencyCode}
               />
               <FieldDescription id="profile-home-currency-hint">
@@ -328,7 +324,11 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
             />
             <SelectField
               label={t('appearance')}
-              onChange={(value) => updateField('appearance', value as FormState['appearance'])}
+              onChange={(value) => {
+                const appearance = value as FormState['appearance'];
+                updateField('appearance', appearance);
+                setAppearance(appearance);
+              }}
               options={[
                 ['system', t('system')],
                 ['light', t('light')],

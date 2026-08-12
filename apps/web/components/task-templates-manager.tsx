@@ -296,7 +296,7 @@ export function TaskTemplatesManager({ embedded = false }: Readonly<{ embedded?:
 
       <Sheet onOpenChange={(open) => !open && closeEditor()} open={editor.mode !== 'closed'}>
         <SheetContent
-          className="data-[side=right]:w-[min(38rem,calc(100%-0.5rem))]"
+          className="w-full md:data-[side=right]:w-[min(38rem,calc(100%-0.5rem))]"
           closeLabel={t('close')}
         >
           <SheetHeader className="border-b">
@@ -405,7 +405,7 @@ export function TaskTemplatesManager({ embedded = false }: Readonly<{ embedded?:
         open={Boolean(applyingTemplate)}
       >
         <SheetContent
-          className="data-[side=right]:w-[min(30rem,calc(100%-0.5rem))]"
+          className="w-full md:data-[side=right]:w-[min(30rem,calc(100%-0.5rem))]"
           closeLabel={t('close')}
         >
           <SheetHeader className="border-b">

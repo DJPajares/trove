@@ -352,7 +352,7 @@ export function TripInfoManager({ tripId }: Readonly<{ tripId: string }>) {
 
       <Sheet onOpenChange={(open) => !open && closeEditor()} open={editor.mode !== 'closed'}>
         <SheetContent
-          className="data-[side=right]:w-[min(38rem,calc(100%-0.5rem))]"
+          className="w-full md:data-[side=right]:w-[min(38rem,calc(100%-0.5rem))]"
           closeLabel={t('close')}
         >
           <SheetHeader className="border-b">

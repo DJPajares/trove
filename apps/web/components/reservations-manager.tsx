@@ -16,8 +16,12 @@ import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } fr
 import { useTranslations } from 'next-intl';
 
 import { DatePicker } from '@/components/date-picker';
+import { CurrencyCombobox } from '@/components/currency-combobox';
+import { MoneyInput } from '@/components/money-input';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
+import { usePreferences } from '@/components/preferences-provider';
+import { TimeInput } from '@/components/time-input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -111,7 +115,10 @@ type ReservationForm = {
   type: ReservationType | 'none';
 };
 
-function createForm(reservation: Reservation | null): ReservationForm {
+function createForm(
+  reservation: Reservation | null,
+  preferredCurrency: string | null = null,
+): ReservationForm {
   return {
     accommodationAddress: reservation?.accommodationAddress ?? '',
     applicableDayIds: reservation?.applicableDays.map((day) => day.id) ?? [],
@@ -138,7 +145,7 @@ function createForm(reservation: Reservation | null): ReservationForm {
     localTime: reservation?.localTime ?? '',
     notes: reservation?.notes ?? '',
     plannedCostAmount: reservation?.plannedCost?.amount ?? '',
-    plannedCostCurrencyCode: reservation?.plannedCost?.currencyCode ?? '',
+    plannedCostCurrencyCode: reservation?.plannedCost?.currencyCode ?? preferredCurrency ?? '',
     provider: reservation?.provider ?? '',
     title: reservation?.title ?? '',
     transportDropoffLocation: reservation?.transport?.dropoffLocation ?? '',
@@ -170,6 +177,7 @@ function hasInvalidFlightEndpoint(input: { date: string; time: string; timeZone:
 
 export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('reservations');
+  const { preferredCurrency } = usePreferences();
   const formatFileSize = (bytes: number) =>
     bytes < 1024 * 1024
       ? t('documentKilobytes', { value: Math.ceil(bytes / 1024) })
@@ -204,7 +212,7 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
   }, [refresh]);
 
   function openCreate() {
-    setForm(createForm(null));
+    setForm(createForm(null, preferredCurrency));
     setFormError(null);
     setEditor({ mode: 'create', reservation: null });
   }
@@ -499,7 +507,7 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
 
       <Sheet onOpenChange={(open) => !open && closeEditor()} open={editor.mode !== 'closed'}>
         <SheetContent
-          className="data-[side=right]:w-[min(42rem,calc(100%-0.5rem))]"
+          className="w-full md:data-[side=right]:w-[min(42rem,calc(100%-0.5rem))]"
           closeLabel={t('close')}
         >
           <SheetHeader className="border-b">
@@ -589,10 +597,9 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
                     </Field>
                     <Field>
                       <FieldLabel htmlFor="reservation-time">{t('time')}</FieldLabel>
-                      <Input
+                      <TimeInput
                         id="reservation-time"
-                        onChange={(event) => updateForm('localTime', event.target.value)}
-                        type="time"
+                        onValueChange={(value) => updateForm('localTime', value)}
                         value={form.localTime}
                       />
                       <FieldDescription>{t('timeHint')}</FieldDescription>
@@ -662,22 +669,19 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
                   <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem]">
                     <Field>
                       <FieldLabel htmlFor="reservation-cost">{t('plannedCost')}</FieldLabel>
-                      <Input
+                      <MoneyInput
                         id="reservation-cost"
-                        inputMode="decimal"
-                        onChange={(event) => updateForm('plannedCostAmount', event.target.value)}
+                        onValueChange={(value) => updateForm('plannedCostAmount', value)}
                         placeholder={t('plannedCostPlaceholder')}
                         value={form.plannedCostAmount}
                       />
                     </Field>
                     <Field>
                       <FieldLabel htmlFor="reservation-currency">{t('currency')}</FieldLabel>
-                      <Input
+                      <CurrencyCombobox
+                        aria-label={t('currency')}
                         id="reservation-currency"
-                        maxLength={3}
-                        onChange={(event) =>
-                          updateForm('plannedCostCurrencyCode', event.target.value.toUpperCase())
-                        }
+                        onValueChange={(value) => updateForm('plannedCostCurrencyCode', value)}
                         placeholder={t('currencyPlaceholder')}
                         value={form.plannedCostCurrencyCode}
                       />
@@ -747,12 +751,9 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
                             </Field>
                             <Field>
                               <FieldLabel htmlFor="flight-departure-time">{t('time')}</FieldLabel>
-                              <Input
+                              <TimeInput
                                 id="flight-departure-time"
-                                onChange={(event) =>
-                                  updateForm('flightDepartureTime', event.target.value)
-                                }
-                                type="time"
+                                onValueChange={(value) => updateForm('flightDepartureTime', value)}
                                 value={form.flightDepartureTime}
                               />
                             </Field>
@@ -798,12 +799,9 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
                             </Field>
                             <Field>
                               <FieldLabel htmlFor="flight-arrival-time">{t('time')}</FieldLabel>
-                              <Input
+                              <TimeInput
                                 id="flight-arrival-time"
-                                onChange={(event) =>
-                                  updateForm('flightArrivalTime', event.target.value)
-                                }
-                                type="time"
+                                onValueChange={(value) => updateForm('flightArrivalTime', value)}
                                 value={form.flightArrivalTime}
                               />
                             </Field>

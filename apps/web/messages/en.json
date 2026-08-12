@@ -18,7 +18,8 @@
     "label": "Appearance",
     "system": "System",
     "light": "Light",
-    "dark": "Dark"
+    "dark": "Dark",
+    "unsaved": "This appearance is active, but couldn't be saved to your profile."
   },
   "account": {
     "button": "Open account menu",
@@ -42,7 +43,8 @@
     "homeLocation": "Home location",
     "homeLocationHint": "Used as the starting point when a trip has no starting location.",
     "homeCurrency": "Home currency",
-    "homeCurrencyHint": "Use the three-letter currency code, such as SGD.",
+    "homeCurrencyPlaceholder": "Choose a currency",
+    "homeCurrencyHint": "Used as the default for new costs and conversions.",
     "distanceUnit": "Distance",
     "temperatureUnit": "Temperature",
     "timeFormat": "Time",
@@ -71,6 +73,7 @@
     "loading": "Loading your profile…",
     "loadError": "We couldn't load your profile. Try again.",
     "saveError": "We couldn't save your changes. Try again.",
+    "appearanceUnsaved": "This appearance is active, but couldn't be saved to your profile.",
     "photoError": "We couldn't update your photo. Try again.",
     "photoInvalid": "Choose a JPEG, PNG, or WebP image up to 5 MB.",
     "notConfigured": "Profile settings need the Trove API and Supabase configuration.",
@@ -85,6 +88,28 @@
     "nextMonth": "Next month",
     "clear": "Clear",
     "today": "Today"
+  },
+  "travelInputs": {
+    "currency": {
+      "loading": "Loading currencies…",
+      "open": "Open {label}",
+      "search": "Search currencies",
+      "empty": "No currencies match this search."
+    },
+    "time": {
+      "title": "Choose a time",
+      "open": "Open time picker",
+      "close": "Close time picker",
+      "clear": "Clear time",
+      "hour": "Hour",
+      "minute": "Minute",
+      "period": "Period",
+      "am": "AM",
+      "pm": "PM",
+      "done": "Done",
+      "placeholder12": "9:30 AM",
+      "placeholder24": "09:30"
+    }
   },
   "trips": {
     "continuePlanning": "Continue planning",
@@ -461,7 +486,7 @@
     "swap": "Swap currencies",
     "convert": "Convert",
     "converting": "Converting…",
-    "invalidInput": "Enter a valid amount and two different three-letter currency codes.",
+    "invalidInput": "Enter a valid amount and two three-letter currency codes.",
     "conversionUnavailable": "A current or saved exchange rate is unavailable for this pair. Try again when you are online.",
     "referenceOnly": "Reference rate only. Your bank or cash exchange rate may differ.",
     "result": "Approximate value",

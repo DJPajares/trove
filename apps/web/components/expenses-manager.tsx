@@ -14,8 +14,12 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { useLocale, useTranslations } from 'next-intl';
 
 import { DatePicker } from '@/components/date-picker';
+import { CurrencyCombobox } from '@/components/currency-combobox';
+import { MoneyInput } from '@/components/money-input';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
+import { usePreferences } from '@/components/preferences-provider';
+import { TimeInput } from '@/components/time-input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -72,7 +76,6 @@ import {
   getCurrencyRate,
   type CachedCurrencyRate,
 } from '@/lib/currency/api';
-import { fetchProfile } from '@/lib/profile/api';
 
 type EditorState =
   | { kind: 'closed'; expense: null }
@@ -103,11 +106,15 @@ const categories: ExpenseCategory[] = [
   'other',
 ];
 
-function createExpenseForm(expense: Expense | null, budget: CurrencyTotal | null): ExpenseForm {
+function createExpenseForm(
+  expense: Expense | null,
+  budget: CurrencyTotal | null,
+  preferredCurrency: string | null = null,
+): ExpenseForm {
   return {
     amount: expense?.amount ?? '',
     category: expense?.category ?? 'none',
-    currencyCode: expense?.currencyCode ?? budget?.currencyCode ?? '',
+    currencyCode: expense?.currencyCode ?? preferredCurrency ?? budget?.currencyCode ?? '',
     itineraryItemId: expense?.itineraryItem?.id ?? 'none',
     localDate: expense?.localDate ?? '',
     localTime: expense?.localTime ?? '',
@@ -117,8 +124,14 @@ function createExpenseForm(expense: Expense | null, budget: CurrencyTotal | null
   };
 }
 
-function createBudgetForm(budget: CurrencyTotal | null): BudgetForm {
-  return { amount: budget?.amount ?? '', currencyCode: budget?.currencyCode ?? '' };
+function createBudgetForm(
+  budget: CurrencyTotal | null,
+  preferredCurrency: string | null = null,
+): BudgetForm {
+  return {
+    amount: budget?.amount ?? '',
+    currencyCode: budget?.currencyCode ?? preferredCurrency ?? '',
+  };
 }
 
 function hasValidMoney(amount: string, currencyCode: string) {
@@ -128,6 +141,7 @@ function hasValidMoney(amount: string, currencyCode: string) {
 export function ExpensesManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('expenses');
   const locale = useLocale();
+  const { preferredCurrency } = usePreferences();
   const [data, setData] = useState<ExpensesResponse | null>(null);
   const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -138,7 +152,7 @@ export function ExpensesManager({ tripId }: Readonly<{ tripId: string }>) {
   const [saving, setSaving] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [homeCurrencyCode, setHomeCurrencyCode] = useState<string | null>(null);
+  const homeCurrencyCode = preferredCurrency;
   const [homeRates, setHomeRates] = useState<Record<string, CachedCurrencyRate>>({});
 
   const refresh = useCallback(async () => {
@@ -154,22 +168,6 @@ export function ExpensesManager({ tripId }: Readonly<{ tripId: string }>) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
-
-  useEffect(() => {
-    let active = true;
-
-    void fetchProfile()
-      .then(({ profile }) => {
-        if (active) setHomeCurrencyCode(profile.homeCurrencyCode?.trim().toUpperCase() ?? null);
-      })
-      .catch(() => {
-        if (active) setHomeCurrencyCode(null);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   useEffect(() => {
     if (!data || !homeCurrencyCode) {
@@ -214,7 +212,7 @@ export function ExpensesManager({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   function openCreate() {
-    setExpenseForm(createExpenseForm(null, data?.budget ?? null));
+    setExpenseForm(createExpenseForm(null, data?.budget ?? null, preferredCurrency));
     setFormError(null);
     setEditor({ kind: 'create', expense: null });
   }
@@ -226,7 +224,7 @@ export function ExpensesManager({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   function openBudget() {
-    setBudgetForm(createBudgetForm(data?.budget ?? null));
+    setBudgetForm(createBudgetForm(data?.budget ?? null, preferredCurrency));
     setFormError(null);
     setEditor({ kind: 'budget', expense: null });
   }
@@ -553,7 +551,7 @@ export function ExpensesManager({ tripId }: Readonly<{ tripId: string }>) {
 
       <Sheet onOpenChange={(open) => !open && closeEditor()} open={editor.kind !== 'closed'}>
         <SheetContent
-          className="data-[side=right]:w-[min(42rem,calc(100%-0.5rem))]"
+          className="w-full md:data-[side=right]:w-[min(42rem,calc(100%-0.5rem))]"
           closeLabel={t('close')}
         >
           <SheetHeader className="border-b">
@@ -586,22 +584,19 @@ export function ExpensesManager({ tripId }: Readonly<{ tripId: string }>) {
                   <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem]">
                     <Field>
                       <FieldLabel htmlFor="budget-amount">{t('amount')}</FieldLabel>
-                      <Input
+                      <MoneyInput
                         id="budget-amount"
-                        inputMode="decimal"
-                        onChange={(event) => updateBudgetForm('amount', event.target.value)}
+                        onValueChange={(value) => updateBudgetForm('amount', value)}
                         placeholder={t('amountPlaceholder')}
                         value={budgetForm.amount}
                       />
                     </Field>
                     <Field>
                       <FieldLabel htmlFor="budget-currency">{t('currency')}</FieldLabel>
-                      <Input
+                      <CurrencyCombobox
+                        aria-label={t('currency')}
                         id="budget-currency"
-                        maxLength={3}
-                        onChange={(event) =>
-                          updateBudgetForm('currencyCode', event.target.value.toUpperCase())
-                        }
+                        onValueChange={(value) => updateBudgetForm('currencyCode', value)}
                         placeholder={t('currencyPlaceholder')}
                         value={budgetForm.currencyCode}
                       />
@@ -635,10 +630,9 @@ export function ExpensesManager({ tripId }: Readonly<{ tripId: string }>) {
                   <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem]">
                     <Field>
                       <FieldLabel htmlFor="expense-amount">{t('amount')}</FieldLabel>
-                      <Input
+                      <MoneyInput
                         id="expense-amount"
-                        inputMode="decimal"
-                        onChange={(event) => updateExpenseForm('amount', event.target.value)}
+                        onValueChange={(value) => updateExpenseForm('amount', value)}
                         placeholder={t('amountPlaceholder')}
                         required
                         value={expenseForm.amount}
@@ -646,12 +640,10 @@ export function ExpensesManager({ tripId }: Readonly<{ tripId: string }>) {
                     </Field>
                     <Field>
                       <FieldLabel htmlFor="expense-currency">{t('currency')}</FieldLabel>
-                      <Input
+                      <CurrencyCombobox
+                        aria-label={t('currency')}
                         id="expense-currency"
-                        maxLength={3}
-                        onChange={(event) =>
-                          updateExpenseForm('currencyCode', event.target.value.toUpperCase())
-                        }
+                        onValueChange={(value) => updateExpenseForm('currencyCode', value)}
                         placeholder={t('currencyPlaceholder')}
                         required
                         value={expenseForm.currencyCode}
@@ -705,11 +697,9 @@ export function ExpensesManager({ tripId }: Readonly<{ tripId: string }>) {
                     </Field>
                     <Field>
                       <FieldLabel htmlFor="expense-time">{t('time')}</FieldLabel>
-                      <Input
+                      <TimeInput
                         id="expense-time"
-                        onChange={(event) => updateExpenseForm('localTime', event.target.value)}
-                        step="60"
-                        type="time"
+                        onValueChange={(value) => updateExpenseForm('localTime', value)}
                         value={expenseForm.localTime}
                       />
                       <FieldDescription>{t('timeHint')}</FieldDescription>

@@ -14,6 +14,7 @@ import {
   List,
   Map as MapIcon,
   MapPinned,
+  NotebookPen,
   Pencil,
   Plus,
   ReceiptText,
@@ -41,6 +42,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
@@ -80,6 +89,7 @@ import {
   type ItineraryTripPlace,
   organizeItineraryItem,
   setItineraryDayBase,
+  updateItineraryDayNote,
   updateItineraryItem,
 } from '@/lib/itinerary/api';
 import { buildItineraryMapPoints, type ItineraryMapPoint } from '@/lib/maps/itinerary-map';
@@ -165,6 +175,9 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const [itemToDelete, setItemToDelete] = useState<ItineraryItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [dayNoteEditor, setDayNoteEditor] = useState<ItineraryDay | null>(null);
+  const [dayNoteValue, setDayNoteValue] = useState('');
+  const [savingDayNote, setSavingDayNote] = useState(false);
   const [timeZoneConsequence, setTimeZoneConsequence] = useState(false);
   const [providerDetails, setProviderDetails] = useState<
     Record<string, ProviderPlaceDetails | null | undefined>
@@ -559,6 +572,36 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     }
   }
 
+  async function handleDayNoteSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!dayNoteEditor) return;
+
+    setSavingDayNote(true);
+    setError(null);
+    try {
+      const result = await updateItineraryDayNote(
+        tripId,
+        dayNoteEditor.id,
+        dayNoteValue.trim() || null,
+      );
+      setItinerary((current) =>
+        current
+          ? {
+              ...current,
+              days: current.days.map((day) =>
+                day.id === result.id ? { ...day, notes: result.notes } : day,
+              ),
+            }
+          : current,
+      );
+      setDayNoteEditor(null);
+    } catch {
+      setError(t('dayNoteError'));
+    } finally {
+      setSavingDayNote(false);
+    }
+  }
+
   function selectAdjacentDay(offset: number) {
     const day = itinerary?.days[selectedIndex + offset];
     if (day) setSelectedDayId(day.id);
@@ -738,6 +781,11 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                     })}
                   </p>
                 ) : null}
+                {selectedDay.notes ? (
+                  <p className="mt-3 max-w-2xl whitespace-pre-wrap text-sm text-muted-foreground">
+                    {selectedDay.notes}
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-col gap-2 sm:items-end">
                 <Select
@@ -766,10 +814,23 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button onClick={() => openCreate(selectedDay)}>
-                  <Plus aria-hidden="true" data-icon="inline-start" />
-                  {t('addItem')}
-                </Button>
+                <div className="flex w-full gap-2 sm:w-auto">
+                  <Button
+                    className="flex-1 sm:flex-none"
+                    onClick={() => {
+                      setDayNoteEditor(selectedDay);
+                      setDayNoteValue(selectedDay.notes ?? '');
+                    }}
+                    variant="outline"
+                  >
+                    <NotebookPen aria-hidden="true" data-icon="inline-start" />
+                    {selectedDay.notes ? t('editDayNote') : t('addDayNote')}
+                  </Button>
+                  <Button className="flex-1 sm:flex-none" onClick={() => openCreate(selectedDay)}>
+                    <Plus aria-hidden="true" data-icon="inline-start" />
+                    {t('addItem')}
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -1400,6 +1461,50 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
           ) : null}
         </SheetContent>
       </Sheet>
+
+      <Dialog
+        open={Boolean(dayNoteEditor)}
+        onOpenChange={(open) => {
+          if (!open && !savingDayNote) setDayNoteEditor(null);
+        }}
+      >
+        <DialogContent closeLabel={t('close')}>
+          <form className="space-y-6" onSubmit={handleDayNoteSave}>
+            <DialogHeader>
+              <DialogTitle>{t('dayNoteTitle')}</DialogTitle>
+              <DialogDescription>
+                {t('dayNoteDescription', {
+                  date: dayNoteEditor ? formatDate(dayNoteEditor.date, true) : '',
+                })}
+              </DialogDescription>
+            </DialogHeader>
+            <Field>
+              <FieldLabel htmlFor="itinerary-day-note">{t('dayNoteLabel')}</FieldLabel>
+              <Textarea
+                id="itinerary-day-note"
+                maxLength={5_000}
+                onChange={(event) => setDayNoteValue(event.target.value)}
+                placeholder={t('dayNotePlaceholder')}
+                rows={5}
+                value={dayNoteValue}
+              />
+            </Field>
+            <DialogFooter>
+              <Button
+                disabled={savingDayNote}
+                onClick={() => setDayNoteEditor(null)}
+                type="button"
+                variant="outline"
+              >
+                {t('cancel')}
+              </Button>
+              <Button disabled={savingDayNote} type="submit">
+                {savingDayNote ? t('saving') : t('saveDayNote')}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog
         open={Boolean(itemToDelete)}

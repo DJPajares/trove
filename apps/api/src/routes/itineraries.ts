@@ -24,6 +24,11 @@ export function registerItineraryRoutes(app: FastifyInstance) {
     authenticated,
     controllers.setDayBase,
   );
+  app.patch(
+    '/trips/:tripId/itinerary/days/:itineraryDayId/note',
+    authenticated,
+    controllers.updateDayNote,
+  );
   app.patch('/trips/:tripId/itinerary/items/:itemId', authenticated, controllers.updateItem);
   app.delete('/trips/:tripId/itinerary/items/:itemId', authenticated, controllers.deleteItem);
 }

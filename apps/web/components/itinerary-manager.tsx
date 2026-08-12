@@ -28,8 +28,12 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
+import { CurrencyCombobox } from '@/components/currency-combobox';
+import { MoneyInput } from '@/components/money-input';
 import { PlaceDetailSheet } from '@/components/place-detail-sheet';
+import { usePreferences } from '@/components/preferences-provider';
 import { SearchField } from '@/components/search-field';
+import { TimeInput } from '@/components/time-input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -125,10 +129,13 @@ type FormState = {
   tripPlaceId: string;
 };
 
-function createFormState(item: ItineraryItem | null): FormState {
+function createFormState(
+  item: ItineraryItem | null,
+  preferredCurrency: string | null = null,
+): FormState {
   return {
     costAmount: item?.plannedCost?.amount ?? '',
-    costCurrency: item?.plannedCost?.currencyCode ?? '',
+    costCurrency: item?.plannedCost?.currencyCode ?? preferredCurrency ?? '',
     customLabel: item?.customLabel ?? '',
     customLocation: item?.customLocation?.label ?? '',
     customLocationTimeZone: item?.customLocation?.timeZone ?? '',
@@ -165,6 +172,7 @@ function useDesktopMapLayout() {
 export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('itinerary');
   const locale = useLocale();
+  const { preferredCurrency } = usePreferences();
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
@@ -377,7 +385,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   function openCreate(day: ItineraryDay) {
-    setForm(createFormState(null));
+    setForm(createFormState(null, preferredCurrency));
     setFormError(null);
     setPlaceQuery('');
     setEditor({ dayId: day.id, item: null, mode: 'create' });
@@ -1184,7 +1192,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
 
       <Sheet open={editor.mode !== 'closed'} onOpenChange={(open) => !open && closeEditor()}>
         <SheetContent
-          className="data-[side=right]:w-[min(38rem,calc(100%-0.5rem))]"
+          className="w-full md:data-[side=right]:w-[min(38rem,calc(100%-0.5rem))]"
           closeLabel={t('close')}
         >
           <SheetHeader className="border-b">
@@ -1337,14 +1345,11 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                   {form.schedule === 'exact' ? (
                     <Field>
                       <FieldLabel htmlFor="itinerary-exact-time">{t('exactTime')}</FieldLabel>
-                      <Input
+                      <TimeInput
                         aria-describedby="itinerary-exact-time-hint"
-                        className="max-w-48 appearance-none bg-background tabular-nums [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
                         id="itinerary-exact-time"
-                        onChange={(event) => updateForm('exactTime', event.target.value)}
+                        onValueChange={(value) => updateForm('exactTime', value)}
                         required
-                        step="60"
-                        type="time"
                         value={form.exactTime}
                       />
                       <FieldDescription id="itinerary-exact-time-hint">
@@ -1420,24 +1425,19 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                   <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_8rem]">
                     <Field>
                       <FieldLabel htmlFor="itinerary-cost">{t('plannedCost')}</FieldLabel>
-                      <Input
+                      <MoneyInput
                         id="itinerary-cost"
-                        inputMode="decimal"
-                        min="0"
-                        onChange={(event) => updateForm('costAmount', event.target.value)}
+                        onValueChange={(value) => updateForm('costAmount', value)}
                         placeholder={t('plannedCostPlaceholder')}
-                        step="0.01"
-                        type="number"
                         value={form.costAmount}
                       />
                     </Field>
                     <Field>
                       <FieldLabel htmlFor="itinerary-currency">{t('currency')}</FieldLabel>
-                      <Input
-                        className="uppercase"
+                      <CurrencyCombobox
+                        aria-label={t('currency')}
                         id="itinerary-currency"
-                        maxLength={3}
-                        onChange={(event) => updateForm('costCurrency', event.target.value)}
+                        onValueChange={(value) => updateForm('costCurrency', value)}
                         placeholder={t('currencyPlaceholder')}
                         value={form.costCurrency}
                       />

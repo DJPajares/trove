@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { DatePicker } from '@/components/date-picker';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
+import { TimeInput } from '@/components/time-input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -378,7 +379,7 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
 
       <Sheet onOpenChange={(open) => !open && closeEditor()} open={editor.mode !== 'closed'}>
         <SheetContent
-          className="data-[side=right]:w-[min(38rem,calc(100%-0.5rem))]"
+          className="w-full md:data-[side=right]:w-[min(38rem,calc(100%-0.5rem))]"
           closeLabel={t('close')}
         >
           <SheetHeader className="border-b">
@@ -448,13 +449,10 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
                     </Field>
                     <Field>
                       <FieldLabel htmlFor="task-due-time">{t('dueTimeLabel')}</FieldLabel>
-                      <Input
-                        className="appearance-none bg-background tabular-nums [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+                      <TimeInput
                         disabled={!form.dueDate}
                         id="task-due-time"
-                        onChange={(event) => updateForm('dueLocalTime', event.target.value)}
-                        step="60"
-                        type="time"
+                        onValueChange={(value) => updateForm('dueLocalTime', value)}
                         value={form.dueLocalTime}
                       />
                     </Field>

@@ -802,7 +802,7 @@ export function SavedPlacesManager() {
         open={addOpen}
       >
         <SheetContent
-          className="data-[side=right]:w-[min(34rem,calc(100%-0.5rem))]"
+          className="w-full md:data-[side=right]:w-[min(34rem,calc(100%-0.5rem))]"
           closeLabel={t('close')}
         >
           <SheetHeader className="border-b">

@@ -7,6 +7,7 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import './globals.css';
 import { AppShell } from '@/components/app-shell';
 import { PwaProvider } from '@/components/pwa-provider';
+import { PreferencesProvider } from '@/components/preferences-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import { TroveMotionProvider } from '@/components/trove-motion-provider';
 
@@ -58,7 +59,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <TroveMotionProvider>
             <PwaProvider>
               <NextIntlClientProvider>
-                <AppShell>{children}</AppShell>
+                <PreferencesProvider locale={locale}>
+                  <AppShell>{children}</AppShell>
+                </PreferencesProvider>
               </NextIntlClientProvider>
             </PwaProvider>
           </TroveMotionProvider>

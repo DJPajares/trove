@@ -539,7 +539,9 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
                         value={form.type}
                       >
                         <SelectTrigger id="reservation-type" className="w-full">
-                          <SelectValue />
+                          <SelectValue>
+                            {form.type === 'none' ? t('noType') : t(`types.${form.type}`)}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">{t('noType')}</SelectItem>
@@ -604,7 +606,12 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
                         value={form.tripPlaceId}
                       >
                         <SelectTrigger id="reservation-place" className="w-full">
-                          <SelectValue />
+                          <SelectValue>
+                            {form.tripPlaceId === 'none'
+                              ? t('noLinkedPlace')
+                              : (data.tripPlaces.find((place) => place.id === form.tripPlaceId)
+                                  ?.name ?? t('unnamedPlace'))}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">{t('noLinkedPlace')}</SelectItem>
@@ -623,7 +630,13 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
                         value={form.itineraryItemId}
                       >
                         <SelectTrigger id="reservation-item" className="w-full">
-                          <SelectValue />
+                          <SelectValue>
+                            {form.itineraryItemId === 'none'
+                              ? t('noLinkedItem')
+                              : (data.itineraryItems.find(
+                                  (item) => item.id === form.itineraryItemId,
+                                )?.label ?? t('unnamedItem'))}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">{t('noLinkedItem')}</SelectItem>

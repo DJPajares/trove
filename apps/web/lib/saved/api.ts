@@ -1,5 +1,7 @@
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
+import { hasProviderPlaceDetailsLocation } from './provider-details-cache';
+
 export type CanonicalPlace = {
   id: string;
   kind: 'custom' | 'provider';
@@ -37,6 +39,7 @@ export type ProviderPlaceDetails = {
   category: ProviderSuggestion['category'];
   formattedAddress: string | null;
   googleMapsUri?: string | null;
+  location: { latitude: number; longitude: number } | null;
   name: string;
   nationalPhoneNumber?: string | null;
   photos?: Array<{
@@ -87,7 +90,13 @@ function readProviderDetailsCache() {
 
 export function getCachedProviderPlaceDetails(placeId: string) {
   const entry = readProviderDetailsCache()[placeId];
-  if (!entry || Date.now() - entry.cachedAt > PROVIDER_DETAILS_CACHE_TTL_MS) return null;
+  if (
+    !entry ||
+    Date.now() - entry.cachedAt > PROVIDER_DETAILS_CACHE_TTL_MS ||
+    !hasProviderPlaceDetailsLocation(entry)
+  ) {
+    return null;
+  }
   const { cachedAt: _cachedAt, ...details } = entry;
   return details;
 }

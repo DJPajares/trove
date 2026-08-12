@@ -94,6 +94,7 @@ import {
 } from '@/lib/itinerary/api';
 import { buildItineraryMapPoints, type ItineraryMapPoint } from '@/lib/maps/itinerary-map';
 import {
+  cacheProviderPlaceDetails,
   getCachedProviderPlaceDetails,
   getProviderPlaceDetails,
   GOOGLE_PLACES_SEARCH_DEBOUNCE_MS,
@@ -233,8 +234,10 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
         if (!providerId) return { details: null, placeId: tripPlace.place.id };
         try {
           const result = await getProviderPlaceDetails(providerId);
+          const details = result.status === 'ok' ? (result.place ?? null) : null;
+          if (details) cacheProviderPlaceDetails(tripPlace.place.id, details);
           return {
-            details: result.status === 'ok' ? (result.place ?? null) : null,
+            details,
             placeId: tripPlace.place.id,
           };
         } catch {
@@ -319,11 +322,16 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     return item.customLabel ?? placeName(item.tripPlace) ?? t('untitledItem');
   }
 
+  function placeLocation(tripPlace: ItineraryTripPlace) {
+    return tripPlace.place.location ?? providerDetails[tripPlace.place.id]?.location ?? null;
+  }
+
   const mapPoints = useMemo(() => {
     if (!itinerary || !selectedDay) return [];
     return buildItineraryMapPoints({
       itinerary,
       resolveItemName: itemName,
+      resolvePlaceLocation: placeLocation,
       resolvePlaceName: (tripPlace) => placeName(tripPlace) ?? t('providerPlace'),
       selectedDay,
     });
@@ -350,7 +358,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   function selectItemOnMap(item: ItineraryItem) {
-    if (!item.tripPlace?.place.location) return;
+    if (!item.tripPlace || !placeLocation(item.tripPlace)) return;
     setSelectedMapPointId(item.tripPlace.id);
     setSelectedMapItemId(item.id);
     if (!desktopMapLayout) setMobileView('map');
@@ -868,6 +876,9 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                     {selectedDay.items.map((item, itemIndex) => {
                       const name = itemName(item);
                       const mapsHref = item.tripPlace ? googleMapsHref(item.tripPlace) : null;
+                      const hasMapLocation = Boolean(
+                        item.tripPlace && placeLocation(item.tripPlace),
+                      );
                       const isMapSelected = selectedMapItemId === item.id;
                       return (
                         <Item
@@ -885,7 +896,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                           </ItemMedia>
                           <ItemContent className="min-w-0">
                             <ItemTitle className="text-base">
-                              {item.tripPlace?.place.location ? (
+                              {hasMapLocation ? (
                                 <button
                                   aria-label={t('map.showItem', { name })}
                                   aria-pressed={isMapSelected}
@@ -1026,6 +1037,14 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                             >
                               <Pencil aria-hidden="true" />
                             </Button>
+                            <Button
+                              aria-label={t('deleteItem', { name })}
+                              onClick={() => setItemToDelete(item)}
+                              size="icon-sm"
+                              variant="ghost"
+                            >
+                              <Trash2 aria-hidden="true" />
+                            </Button>
                           </ItemActions>
                         </Item>
                       );
@@ -1081,6 +1100,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
           <ItemGroup aria-label={t('unscheduled')} variant="list">
             {itinerary.unscheduledItems.map((item) => {
               const name = itemName(item);
+              const hasMapLocation = Boolean(item.tripPlace && placeLocation(item.tripPlace));
               const isMapSelected = selectedMapItemId === item.id;
               return (
                 <Item
@@ -1094,7 +1114,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                   </ItemMedia>
                   <ItemContent>
                     <ItemTitle>
-                      {item.tripPlace?.place.location ? (
+                      {hasMapLocation ? (
                         <button
                           aria-label={t('map.showItem', { name })}
                           aria-pressed={isMapSelected}

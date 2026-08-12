@@ -67,6 +67,12 @@ import {
   type ExpenseInput,
   type ExpensesResponse,
 } from '@/lib/expenses/api';
+import {
+  convertCurrencyAmount,
+  getCurrencyRate,
+  type CachedCurrencyRate,
+} from '@/lib/currency/api';
+import { fetchProfile } from '@/lib/profile/api';
 
 type EditorState =
   | { kind: 'closed'; expense: null }
@@ -132,6 +138,8 @@ export function ExpensesManager({ tripId }: Readonly<{ tripId: string }>) {
   const [saving, setSaving] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [homeCurrencyCode, setHomeCurrencyCode] = useState<string | null>(null);
+  const [homeRates, setHomeRates] = useState<Record<string, CachedCurrencyRate>>({});
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -146,6 +154,59 @@ export function ExpensesManager({ tripId }: Readonly<{ tripId: string }>) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    let active = true;
+
+    void fetchProfile()
+      .then(({ profile }) => {
+        if (active) setHomeCurrencyCode(profile.homeCurrencyCode?.trim().toUpperCase() ?? null);
+      })
+      .catch(() => {
+        if (active) setHomeCurrencyCode(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!data || !homeCurrencyCode) {
+      setHomeRates({});
+      return;
+    }
+
+    let active = true;
+    const sourceCurrencies = [
+      ...new Set(
+        data.expenses
+          .map((expense) => expense.currencyCode.trim().toUpperCase())
+          .filter((currencyCode) => currencyCode !== homeCurrencyCode),
+      ),
+    ];
+
+    void Promise.all(
+      sourceCurrencies.map(async (currencyCode) => {
+        try {
+          return [currencyCode, await getCurrencyRate(currencyCode, homeCurrencyCode)] as const;
+        } catch {
+          return null;
+        }
+      }),
+    ).then((entries) => {
+      if (!active) return;
+      setHomeRates(
+        Object.fromEntries(
+          entries.filter((entry): entry is readonly [string, CachedCurrencyRate] => entry !== null),
+        ),
+      );
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [data, homeCurrencyCode]);
 
   function closeEditor() {
     setEditor({ kind: 'closed', expense: null });
@@ -313,46 +374,64 @@ export function ExpensesManager({ tripId }: Readonly<{ tripId: string }>) {
 
   const expenseTitle = (expense: Expense) => expense.title ?? t('untitledExpense');
 
-  const renderExpense = (expense: Expense) => (
-    <Item className="flex-nowrap px-3 py-3" key={expense.id}>
-      <ItemMedia
-        className="size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
-        variant="icon"
-      >
-        <ReceiptText aria-hidden="true" />
-      </ItemMedia>
-      <ItemContent className="min-w-0 gap-1">
-        <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          <ItemTitle className="min-w-0 truncate text-base">{expenseTitle(expense)}</ItemTitle>
-          <span className="shrink-0 text-sm font-semibold">
-            {currencyFormatter({ amount: expense.amount, currencyCode: expense.currencyCode })}
-          </span>
-        </div>
-        <ItemDescription className="line-clamp-none">
-          <span className="flex flex-wrap gap-x-2 gap-y-1">
-            {expense.category ? <span>{t(`categories.${expense.category}`)}</span> : null}
-            {expense.tripPlace?.name ? <span>{expense.tripPlace.name}</span> : null}
-            {expense.itineraryItem?.label ? <span>{expense.itineraryItem.label}</span> : null}
-            {expense.localDate && !expense.itineraryDay ? <span>{expense.localDate}</span> : null}
-            {expense.localTime ? <span>{expense.localTime}</span> : null}
-          </span>
-          {!expense.itineraryDay && expense.localDate ? (
-            <span className="mt-1 block">{t('unassignedDatedExpense')}</span>
-          ) : null}
-        </ItemDescription>
-      </ItemContent>
-      <ItemActions className="shrink-0">
-        <Button
-          aria-label={t('editExpense', { title: expenseTitle(expense) })}
-          onClick={() => openEdit(expense)}
-          size="icon-sm"
-          variant="ghost"
+  const homeCurrencyAmount = (expense: Expense) => {
+    const sourceCurrency = expense.currencyCode.trim().toUpperCase();
+    const rate = homeRates[sourceCurrency];
+    if (!homeCurrencyCode || sourceCurrency === homeCurrencyCode || !rate) return null;
+
+    const amount = convertCurrencyAmount(expense.amount, rate.rate);
+    return amount ? currencyFormatter({ amount, currencyCode: homeCurrencyCode }) : null;
+  };
+
+  const renderExpense = (expense: Expense) => {
+    const convertedHomeAmount = homeCurrencyAmount(expense);
+
+    return (
+      <Item className="flex-nowrap px-3 py-3" key={expense.id}>
+        <ItemMedia
+          className="size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
+          variant="icon"
         >
-          <Pencil aria-hidden="true" />
-        </Button>
-      </ItemActions>
-    </Item>
-  );
+          <ReceiptText aria-hidden="true" />
+        </ItemMedia>
+        <ItemContent className="min-w-0 gap-1">
+          <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <ItemTitle className="min-w-0 truncate text-base">{expenseTitle(expense)}</ItemTitle>
+            <span className="shrink-0 text-sm font-semibold">
+              {currencyFormatter({ amount: expense.amount, currencyCode: expense.currencyCode })}
+            </span>
+          </div>
+          <ItemDescription className="line-clamp-none">
+            <span className="flex flex-wrap gap-x-2 gap-y-1">
+              {expense.category ? <span>{t(`categories.${expense.category}`)}</span> : null}
+              {expense.tripPlace?.name ? <span>{expense.tripPlace.name}</span> : null}
+              {expense.itineraryItem?.label ? <span>{expense.itineraryItem.label}</span> : null}
+              {expense.localDate && !expense.itineraryDay ? <span>{expense.localDate}</span> : null}
+              {expense.localTime ? <span>{expense.localTime}</span> : null}
+            </span>
+            {!expense.itineraryDay && expense.localDate ? (
+              <span className="mt-1 block">{t('unassignedDatedExpense')}</span>
+            ) : null}
+            {convertedHomeAmount ? (
+              <span className="mt-1 block">
+                {t('approximateHome', { amount: convertedHomeAmount })}
+              </span>
+            ) : null}
+          </ItemDescription>
+        </ItemContent>
+        <ItemActions className="shrink-0">
+          <Button
+            aria-label={t('editExpense', { title: expenseTitle(expense) })}
+            onClick={() => openEdit(expense)}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <Pencil aria-hidden="true" />
+          </Button>
+        </ItemActions>
+      </Item>
+    );
+  };
 
   return (
     <section className="mx-auto w-full max-w-5xl space-y-7">

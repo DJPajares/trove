@@ -86,6 +86,8 @@ enum ReservationType {
   ATTRACTION   @map("attraction")
   TRAIN        @map("train")
   RENTAL_CAR   @map("rental_car")
+  FERRY        @map("ferry")
+  BUS          @map("bus")
   TOUR         @map("tour")
   OTHER        @map("other")
 
@@ -616,6 +618,25 @@ model Reservation {
   checkInDate             DateTime?                  @map("check_in_date") @db.Date
   checkOutDate            DateTime?                  @map("check_out_date") @db.Date
   accommodationAddress    String?                    @map("accommodation_address") @db.Text
+  flightAirline           String?                    @map("flight_airline")
+  flightNumber            String?                    @map("flight_number")
+  flightDepartureAirport  String?                    @map("flight_departure_airport")
+  flightDepartureLocalDate DateTime?                 @map("flight_departure_local_date") @db.Date
+  flightDepartureLocalTime DateTime?                 @map("flight_departure_local_time") @db.Time(0)
+  flightDepartureTimeZone String?                    @map("flight_departure_time_zone")
+  flightDepartureInstant  DateTime?                  @map("flight_departure_instant") @db.Timestamptz(3)
+  flightArrivalAirport    String?                    @map("flight_arrival_airport")
+  flightArrivalLocalDate  DateTime?                  @map("flight_arrival_local_date") @db.Date
+  flightArrivalLocalTime  DateTime?                  @map("flight_arrival_local_time") @db.Time(0)
+  flightArrivalTimeZone   String?                    @map("flight_arrival_time_zone")
+  flightArrivalInstant    DateTime?                  @map("flight_arrival_instant") @db.Timestamptz(3)
+  flightTerminal          String?                    @map("flight_terminal")
+  flightGate              String?                    @map("flight_gate")
+  flightSeat              String?                    @map("flight_seat")
+  transportOperator       String?                    @map("transport_operator")
+  transportServiceNumber  String?                    @map("transport_service_number")
+  transportPickupLocation String?                    @map("transport_pickup_location")
+  transportDropoffLocation String?                   @map("transport_dropoff_location")
   createdAt               DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt               DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
 

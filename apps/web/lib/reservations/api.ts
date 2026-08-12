@@ -3,6 +3,8 @@ import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 export type ReservationType =
   | 'accommodation'
   | 'attraction'
+  | 'bus'
+  | 'ferry'
   | 'flight'
   | 'other'
   | 'rental_car'
@@ -31,15 +33,42 @@ export type Reservation = {
   itineraryItem: { id: string; label: string | null } | null;
   localDate: string | null;
   localTime: string | null;
+  flight: FlightDetails | null;
   notes: string | null;
   plannedCost: { amount: string; currencyCode: string } | null;
   provider: string | null;
   timeZone: string | null;
   timeZoneSource: 'itinerary_item' | 'trip_place' | 'trip_reference' | null;
   title: string;
+  transport: TransportDetails | null;
   tripPlace: { id: string; name: string | null; placeId: string } | null;
   type: ReservationType | null;
   updatedAt: string;
+};
+
+export type FlightEndpoint = {
+  airport: string | null;
+  authoritativeInstant: string | null;
+  localDate: string | null;
+  localTime: string | null;
+  timeZone: string | null;
+};
+
+export type FlightDetails = {
+  airline: string | null;
+  arrival: FlightEndpoint | null;
+  departure: FlightEndpoint | null;
+  gate: string | null;
+  number: string | null;
+  seat: string | null;
+  terminal: string | null;
+};
+
+export type TransportDetails = {
+  dropoffLocation: string | null;
+  operator: string | null;
+  pickupLocation: string | null;
+  serviceNumber: string | null;
 };
 
 export type ReservationInput = {
@@ -48,6 +77,7 @@ export type ReservationInput = {
   bookingReference?: string | null;
   checkInDate?: string | null;
   checkOutDate?: string | null;
+  flight?: FlightDetails | null;
   itineraryItemId?: string | null;
   localDate?: string | null;
   localTime?: string | null;
@@ -56,6 +86,7 @@ export type ReservationInput = {
   provider?: string | null;
   title?: string;
   tripPlaceId?: string | null;
+  transport?: TransportDetails | null;
   type?: ReservationType | null;
 };
 

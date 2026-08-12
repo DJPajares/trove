@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   floatingLocalTimeToInstant,
+  formatInstantInTimeZone,
   formatLocalTime,
   parseLocalTime,
   resolveDayTimeZone,
@@ -16,6 +17,19 @@ test('persists a floating local plan as a deterministic derived instant', () => 
     '2026-08-12T01:30:00.000Z',
   );
   assert.equal(formatLocalTime(parseLocalTime('09:30')), '09:30');
+});
+
+test('formats one authoritative instant independently for flight departure and arrival timezones', () => {
+  const instant = new Date('2026-09-05T01:30:00.000Z');
+
+  assert.deepEqual(formatInstantInTimeZone(instant, 'Asia/Singapore'), {
+    date: '2026-09-05',
+    time: '09:30',
+  });
+  assert.deepEqual(formatInstantInTimeZone(instant, 'Pacific/Auckland'), {
+    date: '2026-09-05',
+    time: '13:30',
+  });
 });
 
 test('rejects local civil times that do not exist during a daylight-saving jump', () => {

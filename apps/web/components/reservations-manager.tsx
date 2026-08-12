@@ -80,6 +80,21 @@ type ReservationForm = {
   bookingReference: string;
   checkInDate: string;
   checkOutDate: string;
+  flightAirline: string;
+  flightArrivalAirport: string;
+  flightArrivalAuthoritativeInstant: string;
+  flightArrivalDate: string;
+  flightArrivalTime: string;
+  flightArrivalTimeZone: string;
+  flightDepartureAirport: string;
+  flightDepartureAuthoritativeInstant: string;
+  flightDepartureDate: string;
+  flightDepartureTime: string;
+  flightDepartureTimeZone: string;
+  flightGate: string;
+  flightNumber: string;
+  flightSeat: string;
+  flightTerminal: string;
   itineraryItemId: string;
   localDate: string;
   localTime: string;
@@ -88,6 +103,10 @@ type ReservationForm = {
   plannedCostCurrencyCode: string;
   provider: string;
   title: string;
+  transportDropoffLocation: string;
+  transportOperator: string;
+  transportPickupLocation: string;
+  transportServiceNumber: string;
   tripPlaceId: string;
   type: ReservationType | 'none';
 };
@@ -99,6 +118,21 @@ function createForm(reservation: Reservation | null): ReservationForm {
     bookingReference: reservation?.bookingReference ?? '',
     checkInDate: reservation?.checkInDate ?? '',
     checkOutDate: reservation?.checkOutDate ?? '',
+    flightAirline: reservation?.flight?.airline ?? '',
+    flightArrivalAirport: reservation?.flight?.arrival?.airport ?? '',
+    flightArrivalAuthoritativeInstant: reservation?.flight?.arrival?.authoritativeInstant ?? '',
+    flightArrivalDate: reservation?.flight?.arrival?.localDate ?? '',
+    flightArrivalTime: reservation?.flight?.arrival?.localTime ?? '',
+    flightArrivalTimeZone: reservation?.flight?.arrival?.timeZone ?? '',
+    flightDepartureAirport: reservation?.flight?.departure?.airport ?? '',
+    flightDepartureAuthoritativeInstant: reservation?.flight?.departure?.authoritativeInstant ?? '',
+    flightDepartureDate: reservation?.flight?.departure?.localDate ?? '',
+    flightDepartureTime: reservation?.flight?.departure?.localTime ?? '',
+    flightDepartureTimeZone: reservation?.flight?.departure?.timeZone ?? '',
+    flightGate: reservation?.flight?.gate ?? '',
+    flightNumber: reservation?.flight?.number ?? '',
+    flightSeat: reservation?.flight?.seat ?? '',
+    flightTerminal: reservation?.flight?.terminal ?? '',
     itineraryItemId: reservation?.itineraryItem?.id ?? 'none',
     localDate: reservation?.localDate ?? '',
     localTime: reservation?.localTime ?? '',
@@ -107,9 +141,31 @@ function createForm(reservation: Reservation | null): ReservationForm {
     plannedCostCurrencyCode: reservation?.plannedCost?.currencyCode ?? '',
     provider: reservation?.provider ?? '',
     title: reservation?.title ?? '',
+    transportDropoffLocation: reservation?.transport?.dropoffLocation ?? '',
+    transportOperator: reservation?.transport?.operator ?? '',
+    transportPickupLocation: reservation?.transport?.pickupLocation ?? '',
+    transportServiceNumber: reservation?.transport?.serviceNumber ?? '',
     tripPlaceId: reservation?.tripPlace?.id ?? 'none',
     type: reservation?.type ?? 'none',
   };
+}
+
+function isStructuredTransport(type: ReservationForm['type']) {
+  return (
+    type === 'bus' ||
+    type === 'ferry' ||
+    type === 'other' ||
+    type === 'rental_car' ||
+    type === 'train'
+  );
+}
+
+function hasInvalidFlightEndpoint(input: { date: string; time: string; timeZone: string }) {
+  return Boolean(
+    (input.time && !input.date) ||
+    ((input.date || input.time) && !input.timeZone) ||
+    (!input.date && input.timeZone),
+  );
 }
 
 export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
@@ -200,6 +256,22 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
       setFormError(t('accommodationDatesError'));
       return;
     }
+    if (
+      form.type === 'flight' &&
+      (hasInvalidFlightEndpoint({
+        date: form.flightDepartureDate,
+        time: form.flightDepartureTime,
+        timeZone: form.flightDepartureTimeZone,
+      }) ||
+        hasInvalidFlightEndpoint({
+          date: form.flightArrivalDate,
+          time: form.flightArrivalTime,
+          timeZone: form.flightArrivalTimeZone,
+        }))
+    ) {
+      setFormError(t('flightEndpointError'));
+      return;
+    }
 
     setSaving(true);
     setFormError(null);
@@ -209,6 +281,30 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
       bookingReference: form.bookingReference.trim() || null,
       checkInDate: form.checkInDate || null,
       checkOutDate: form.checkOutDate || null,
+      flight:
+        form.type === 'flight'
+          ? {
+              airline: form.flightAirline.trim() || null,
+              arrival: {
+                airport: form.flightArrivalAirport.trim() || null,
+                authoritativeInstant: form.flightArrivalAuthoritativeInstant || null,
+                localDate: form.flightArrivalDate || null,
+                localTime: form.flightArrivalTime || null,
+                timeZone: form.flightArrivalTimeZone.trim() || null,
+              },
+              departure: {
+                airport: form.flightDepartureAirport.trim() || null,
+                authoritativeInstant: form.flightDepartureAuthoritativeInstant || null,
+                localDate: form.flightDepartureDate || null,
+                localTime: form.flightDepartureTime || null,
+                timeZone: form.flightDepartureTimeZone.trim() || null,
+              },
+              gate: form.flightGate.trim() || null,
+              number: form.flightNumber.trim() || null,
+              seat: form.flightSeat.trim() || null,
+              terminal: form.flightTerminal.trim() || null,
+            }
+          : null,
       itineraryItemId: form.itineraryItemId === 'none' ? null : form.itineraryItemId,
       localDate: form.localDate || null,
       localTime: form.localTime || null,
@@ -219,6 +315,14 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
       provider: form.provider.trim() || null,
       title,
       tripPlaceId: form.tripPlaceId === 'none' ? null : form.tripPlaceId,
+      transport: isStructuredTransport(form.type)
+        ? {
+            dropoffLocation: form.transportDropoffLocation.trim() || null,
+            operator: form.transportOperator.trim() || null,
+            pickupLocation: form.transportPickupLocation.trim() || null,
+            serviceNumber: form.transportServiceNumber.trim() || null,
+          }
+        : null,
       type: form.type === 'none' ? null : form.type,
     };
     try {
@@ -447,6 +551,8 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
                               'attraction',
                               'train',
                               'rental_car',
+                              'ferry',
+                              'bus',
                               'tour',
                               'other',
                             ] as const
@@ -564,6 +670,249 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
                       />
                     </Field>
                   </div>
+                  {form.type === 'flight' ? (
+                    <section
+                      aria-labelledby="flight-details-heading"
+                      className="space-y-4 border-t pt-5"
+                    >
+                      <div>
+                        <h3 className="text-base font-semibold" id="flight-details-heading">
+                          {t('flightDetails')}
+                        </h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {t('flightDetailsHint')}
+                        </p>
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <Field>
+                          <FieldLabel htmlFor="flight-airline">{t('airline')}</FieldLabel>
+                          <Input
+                            id="flight-airline"
+                            maxLength={200}
+                            onChange={(event) => updateForm('flightAirline', event.target.value)}
+                            placeholder={t('airlinePlaceholder')}
+                            value={form.flightAirline}
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="flight-number">{t('flightNumber')}</FieldLabel>
+                          <Input
+                            id="flight-number"
+                            maxLength={100}
+                            onChange={(event) => updateForm('flightNumber', event.target.value)}
+                            placeholder={t('flightNumberPlaceholder')}
+                            value={form.flightNumber}
+                          />
+                        </Field>
+                      </div>
+                      <div className="grid gap-6 md:grid-cols-2">
+                        <div className="space-y-4">
+                          <p className="text-sm font-medium">{t('departure')}</p>
+                          <Field>
+                            <FieldLabel htmlFor="flight-departure-airport">
+                              {t('airport')}
+                            </FieldLabel>
+                            <Input
+                              id="flight-departure-airport"
+                              maxLength={100}
+                              onChange={(event) =>
+                                updateForm('flightDepartureAirport', event.target.value)
+                              }
+                              placeholder={t('airportPlaceholder')}
+                              value={form.flightDepartureAirport}
+                            />
+                          </Field>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <Field>
+                              <FieldLabel>{t('date')}</FieldLabel>
+                              <DatePicker
+                                id="flight-departure-date"
+                                label={t('date')}
+                                onChange={(value) => updateForm('flightDepartureDate', value)}
+                                value={form.flightDepartureDate}
+                              />
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor="flight-departure-time">{t('time')}</FieldLabel>
+                              <Input
+                                id="flight-departure-time"
+                                onChange={(event) =>
+                                  updateForm('flightDepartureTime', event.target.value)
+                                }
+                                type="time"
+                                value={form.flightDepartureTime}
+                              />
+                            </Field>
+                          </div>
+                          <Field>
+                            <FieldLabel htmlFor="flight-departure-time-zone">
+                              {t('timeZone')}
+                            </FieldLabel>
+                            <Input
+                              id="flight-departure-time-zone"
+                              maxLength={100}
+                              onChange={(event) =>
+                                updateForm('flightDepartureTimeZone', event.target.value)
+                              }
+                              placeholder={t('timeZonePlaceholder')}
+                              value={form.flightDepartureTimeZone}
+                            />
+                          </Field>
+                        </div>
+                        <div className="space-y-4">
+                          <p className="text-sm font-medium">{t('arrival')}</p>
+                          <Field>
+                            <FieldLabel htmlFor="flight-arrival-airport">{t('airport')}</FieldLabel>
+                            <Input
+                              id="flight-arrival-airport"
+                              maxLength={100}
+                              onChange={(event) =>
+                                updateForm('flightArrivalAirport', event.target.value)
+                              }
+                              placeholder={t('airportPlaceholder')}
+                              value={form.flightArrivalAirport}
+                            />
+                          </Field>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <Field>
+                              <FieldLabel>{t('date')}</FieldLabel>
+                              <DatePicker
+                                id="flight-arrival-date"
+                                label={t('date')}
+                                onChange={(value) => updateForm('flightArrivalDate', value)}
+                                value={form.flightArrivalDate}
+                              />
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor="flight-arrival-time">{t('time')}</FieldLabel>
+                              <Input
+                                id="flight-arrival-time"
+                                onChange={(event) =>
+                                  updateForm('flightArrivalTime', event.target.value)
+                                }
+                                type="time"
+                                value={form.flightArrivalTime}
+                              />
+                            </Field>
+                          </div>
+                          <Field>
+                            <FieldLabel htmlFor="flight-arrival-time-zone">
+                              {t('timeZone')}
+                            </FieldLabel>
+                            <Input
+                              id="flight-arrival-time-zone"
+                              maxLength={100}
+                              onChange={(event) =>
+                                updateForm('flightArrivalTimeZone', event.target.value)
+                              }
+                              placeholder={t('timeZonePlaceholder')}
+                              value={form.flightArrivalTimeZone}
+                            />
+                          </Field>
+                        </div>
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-3">
+                        <Field>
+                          <FieldLabel htmlFor="flight-terminal">{t('terminal')}</FieldLabel>
+                          <Input
+                            id="flight-terminal"
+                            maxLength={100}
+                            onChange={(event) => updateForm('flightTerminal', event.target.value)}
+                            value={form.flightTerminal}
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="flight-gate">{t('gate')}</FieldLabel>
+                          <Input
+                            id="flight-gate"
+                            maxLength={100}
+                            onChange={(event) => updateForm('flightGate', event.target.value)}
+                            value={form.flightGate}
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="flight-seat">{t('seat')}</FieldLabel>
+                          <Input
+                            id="flight-seat"
+                            maxLength={100}
+                            onChange={(event) => updateForm('flightSeat', event.target.value)}
+                            value={form.flightSeat}
+                          />
+                        </Field>
+                      </div>
+                    </section>
+                  ) : null}
+                  {isStructuredTransport(form.type) ? (
+                    <section
+                      aria-labelledby="transport-details-heading"
+                      className="space-y-4 border-t pt-5"
+                    >
+                      <div>
+                        <h3 className="text-base font-semibold" id="transport-details-heading">
+                          {t('transportDetails')}
+                        </h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {t('transportDetailsHint')}
+                        </p>
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <Field>
+                          <FieldLabel htmlFor="transport-operator">{t('operator')}</FieldLabel>
+                          <Input
+                            id="transport-operator"
+                            maxLength={200}
+                            onChange={(event) =>
+                              updateForm('transportOperator', event.target.value)
+                            }
+                            placeholder={t('operatorPlaceholder')}
+                            value={form.transportOperator}
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="transport-service-number">
+                            {t('serviceNumber')}
+                          </FieldLabel>
+                          <Input
+                            id="transport-service-number"
+                            maxLength={100}
+                            onChange={(event) =>
+                              updateForm('transportServiceNumber', event.target.value)
+                            }
+                            placeholder={t('serviceNumberPlaceholder')}
+                            value={form.transportServiceNumber}
+                          />
+                        </Field>
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <Field>
+                          <FieldLabel htmlFor="transport-pickup-location">
+                            {t('pickupLocation')}
+                          </FieldLabel>
+                          <Input
+                            id="transport-pickup-location"
+                            maxLength={300}
+                            onChange={(event) =>
+                              updateForm('transportPickupLocation', event.target.value)
+                            }
+                            value={form.transportPickupLocation}
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="transport-dropoff-location">
+                            {t('dropoffLocation')}
+                          </FieldLabel>
+                          <Input
+                            id="transport-dropoff-location"
+                            maxLength={300}
+                            onChange={(event) =>
+                              updateForm('transportDropoffLocation', event.target.value)
+                            }
+                            value={form.transportDropoffLocation}
+                          />
+                        </Field>
+                      </div>
+                    </section>
+                  ) : null}
                   {form.type === 'accommodation' ? (
                     <>
                       <div className="grid gap-4 sm:grid-cols-2">

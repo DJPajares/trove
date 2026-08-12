@@ -30,12 +30,41 @@ const plannedCostSchema = z
       .transform((value) => value.toUpperCase()),
   })
   .strict();
+const flightEndpointSchema = z
+  .object({
+    airport: z.string().trim().max(100).nullable().optional(),
+    authoritativeInstant: z.string().datetime({ offset: true }).nullable().optional(),
+    localDate: dateSchema.nullable().optional(),
+    localTime: timeSchema.nullable().optional(),
+    timeZone: z.string().trim().max(100).nullable().optional(),
+  })
+  .strict();
+const flightDetailsSchema = z
+  .object({
+    airline: z.string().trim().max(200).nullable().optional(),
+    arrival: flightEndpointSchema.nullable().optional(),
+    departure: flightEndpointSchema.nullable().optional(),
+    gate: z.string().trim().max(100).nullable().optional(),
+    number: z.string().trim().max(100).nullable().optional(),
+    seat: z.string().trim().max(100).nullable().optional(),
+    terminal: z.string().trim().max(100).nullable().optional(),
+  })
+  .strict();
+const transportDetailsSchema = z
+  .object({
+    dropoffLocation: z.string().trim().max(300).nullable().optional(),
+    operator: z.string().trim().max(200).nullable().optional(),
+    pickupLocation: z.string().trim().max(300).nullable().optional(),
+    serviceNumber: z.string().trim().max(100).nullable().optional(),
+  })
+  .strict();
 const reservationFields = {
   accommodationAddress: z.string().trim().max(2_000).nullable().optional(),
   applicableDayIds: z.array(z.uuid()).max(366).optional(),
   bookingReference: z.string().trim().max(300).nullable().optional(),
   checkInDate: dateSchema.nullable().optional(),
   checkOutDate: dateSchema.nullable().optional(),
+  flight: flightDetailsSchema.nullable().optional(),
   itineraryItemId: z.uuid().nullable().optional(),
   localDate: dateSchema.nullable().optional(),
   localTime: timeSchema.nullable().optional(),
@@ -50,6 +79,8 @@ const reservationFields = {
       'accommodation',
       'restaurant',
       'attraction',
+      'bus',
+      'ferry',
       'train',
       'rental_car',
       'tour',
@@ -57,6 +88,7 @@ const reservationFields = {
     ])
     .nullable()
     .optional(),
+  transport: transportDetailsSchema.nullable().optional(),
 } as const;
 const createReservationSchema = z
   .object(reservationFields)

@@ -43,6 +43,15 @@ function getLocalParts(instant: Date, timeZone: string) {
   };
 }
 
+export function formatInstantInTimeZone(instant: Date, timeZone: string) {
+  if (!isValidIanaTimeZone(timeZone)) throw new Error('invalid_time_zone');
+  const local = getLocalParts(instant, timeZone);
+  return {
+    date: local.date,
+    time: `${String(local.hour).padStart(2, '0')}:${String(local.minute).padStart(2, '0')}`,
+  };
+}
+
 function getTimeZoneOffset(instant: Date, timeZone: string) {
   const local = getLocalParts(instant, timeZone);
   const localAsUtc = Date.UTC(

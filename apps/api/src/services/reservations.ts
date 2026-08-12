@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPrismaClient, type Prisma } from '@trove/db';
 
-import { formatLocalTime, parseLocalTime } from './itinerary-rules.js';
+import { formatInstantInTimeZone, formatLocalTime, parseLocalTime } from './itinerary-rules.js';
 import { refreshDayDefaultTimeZone } from './itineraries.js';
 import { createAuthenticatedSupabaseClient } from './supabase-auth.js';
 import { formatDateOnly, isValidIanaTimeZone } from './trip-rules.js';
@@ -15,6 +15,8 @@ export type PlannedCostInput = { amount: string; currencyCode: string };
 export type ReservationType =
   | 'accommodation'
   | 'attraction'
+  | 'bus'
+  | 'ferry'
   | 'flight'
   | 'other'
   | 'rental_car'
@@ -28,6 +30,7 @@ export type ReservationInput = {
   bookingReference?: string | null;
   checkInDate?: string | null;
   checkOutDate?: string | null;
+  flight?: FlightDetailsInput | null;
   itineraryItemId?: string | null;
   localDate?: string | null;
   localTime?: string | null;
@@ -36,7 +39,33 @@ export type ReservationInput = {
   provider?: string | null;
   title?: string;
   tripPlaceId?: string | null;
+  transport?: TransportDetailsInput | null;
   type?: ReservationType | null;
+};
+
+export type FlightEndpointInput = {
+  airport?: string | null;
+  authoritativeInstant?: string | null;
+  localDate?: string | null;
+  localTime?: string | null;
+  timeZone?: string | null;
+};
+
+export type FlightDetailsInput = {
+  airline?: string | null;
+  arrival?: FlightEndpointInput | null;
+  departure?: FlightEndpointInput | null;
+  gate?: string | null;
+  number?: string | null;
+  seat?: string | null;
+  terminal?: string | null;
+};
+
+export type TransportDetailsInput = {
+  dropoffLocation?: string | null;
+  operator?: string | null;
+  pickupLocation?: string | null;
+  serviceNumber?: string | null;
 };
 
 export class ReservationNotFoundError extends Error {
@@ -60,7 +89,8 @@ export class ReservationValidationError extends Error {
       | 'invalid_document'
       | 'invalid_reservation'
       | 'invalid_reservation_date'
-      | 'invalid_reservation_time',
+      | 'invalid_reservation_time'
+      | 'invalid_flight_details',
   ) {
     super(code);
   }
@@ -97,6 +127,8 @@ function mapType(value: ReservationType | null | undefined) {
   const values = {
     accommodation: 'ACCOMMODATION',
     attraction: 'ATTRACTION',
+    bus: 'BUS',
+    ferry: 'FERRY',
     flight: 'FLIGHT',
     other: 'OTHER',
     rental_car: 'RENTAL_CAR',
@@ -111,6 +143,8 @@ function serializeType(value: string | null) {
   const values: Record<string, ReservationType> = {
     ACCOMMODATION: 'accommodation',
     ATTRACTION: 'attraction',
+    BUS: 'bus',
+    FERRY: 'ferry',
     FLIGHT: 'flight',
     OTHER: 'other',
     RENTAL_CAR: 'rental_car',
@@ -250,6 +284,224 @@ function costData(value: PlannedCostInput | null | undefined) {
   };
 }
 
+const emptyFlightData = {
+  flightAirline: null,
+  flightArrivalAirport: null,
+  flightArrivalInstant: null,
+  flightArrivalLocalDate: null,
+  flightArrivalLocalTime: null,
+  flightArrivalTimeZone: null,
+  flightDepartureAirport: null,
+  flightDepartureInstant: null,
+  flightDepartureLocalDate: null,
+  flightDepartureLocalTime: null,
+  flightDepartureTimeZone: null,
+  flightGate: null,
+  flightNumber: null,
+  flightSeat: null,
+  flightTerminal: null,
+};
+
+const emptyTransportData = {
+  transportDropoffLocation: null,
+  transportOperator: null,
+  transportPickupLocation: null,
+  transportServiceNumber: null,
+};
+
+function parseAuthoritativeInstant(value: string | null | undefined) {
+  if (!value) return null;
+  const instant = new Date(value);
+  if (Number.isNaN(instant.getTime())) {
+    throw new ReservationValidationError('invalid_flight_details');
+  }
+  return instant;
+}
+
+function flightEndpointData(
+  endpoint: FlightEndpointInput | null | undefined,
+  prefix: 'flightDeparture' | 'flightArrival',
+) {
+  if (!endpoint) {
+    return prefix === 'flightDeparture'
+      ? {
+          flightDepartureAirport: null,
+          flightDepartureInstant: null,
+          flightDepartureLocalDate: null,
+          flightDepartureLocalTime: null,
+          flightDepartureTimeZone: null,
+        }
+      : {
+          flightArrivalAirport: null,
+          flightArrivalInstant: null,
+          flightArrivalLocalDate: null,
+          flightArrivalLocalTime: null,
+          flightArrivalTimeZone: null,
+        };
+  }
+
+  const airport = normalizeOptional(endpoint.airport);
+  const localDate = endpoint.localDate ?? null;
+  const localTime = endpoint.localTime ?? null;
+  const timeZone = normalizeOptional(endpoint.timeZone);
+  const authoritativeInstant = parseAuthoritativeInstant(endpoint.authoritativeInstant);
+  if ((localTime && !localDate) || (localDate && !timeZone) || (!localDate && timeZone)) {
+    throw new ReservationValidationError('invalid_flight_details');
+  }
+  if (timeZone && !isValidIanaTimeZone(timeZone)) {
+    throw new ReservationValidationError('invalid_flight_details');
+  }
+
+  try {
+    const resolved =
+      authoritativeInstant && timeZone
+        ? formatInstantInTimeZone(authoritativeInstant, timeZone)
+        : null;
+    const date = resolved?.date ?? localDate;
+    const time = resolved?.time ?? localTime;
+    const dateValue = date ? parseDateOnly(date) : null;
+    const timeValue = time ? parseLocalTime(time) : null;
+    if (authoritativeInstant && (!dateValue || !timeZone)) {
+      throw new ReservationValidationError('invalid_flight_details');
+    }
+    return prefix === 'flightDeparture'
+      ? {
+          flightDepartureAirport: airport,
+          flightDepartureInstant: authoritativeInstant,
+          flightDepartureLocalDate: dateValue,
+          flightDepartureLocalTime: timeValue,
+          flightDepartureTimeZone: timeZone,
+        }
+      : {
+          flightArrivalAirport: airport,
+          flightArrivalInstant: authoritativeInstant,
+          flightArrivalLocalDate: dateValue,
+          flightArrivalLocalTime: timeValue,
+          flightArrivalTimeZone: timeZone,
+        };
+  } catch (error) {
+    if (error instanceof ReservationValidationError) throw error;
+    throw new ReservationValidationError('invalid_flight_details');
+  }
+}
+
+function flightData(value: FlightDetailsInput | null | undefined, type: ReservationType | null) {
+  if (type !== 'flight' || !value) return emptyFlightData;
+  return {
+    flightAirline: normalizeOptional(value.airline),
+    ...flightEndpointData(value.departure, 'flightDeparture'),
+    ...flightEndpointData(value.arrival, 'flightArrival'),
+    flightGate: normalizeOptional(value.gate),
+    flightNumber: normalizeOptional(value.number),
+    flightSeat: normalizeOptional(value.seat),
+    flightTerminal: normalizeOptional(value.terminal),
+  };
+}
+
+function isStructuredTransport(type: ReservationType | null) {
+  return (
+    type === 'bus' ||
+    type === 'ferry' ||
+    type === 'other' ||
+    type === 'rental_car' ||
+    type === 'train'
+  );
+}
+
+function transportData(
+  value: TransportDetailsInput | null | undefined,
+  type: ReservationType | null,
+) {
+  if (!isStructuredTransport(type) || !value) return emptyTransportData;
+  return {
+    transportDropoffLocation: normalizeOptional(value.dropoffLocation),
+    transportOperator: normalizeOptional(value.operator),
+    transportPickupLocation: normalizeOptional(value.pickupLocation),
+    transportServiceNumber: normalizeOptional(value.serviceNumber),
+  };
+}
+
+function flightDetailsFromReservation(reservation: {
+  flightAirline: string | null;
+  flightArrivalAirport: string | null;
+  flightArrivalInstant: Date | null;
+  flightArrivalLocalDate: Date | null;
+  flightArrivalLocalTime: Date | null;
+  flightArrivalTimeZone: string | null;
+  flightDepartureAirport: string | null;
+  flightDepartureInstant: Date | null;
+  flightDepartureLocalDate: Date | null;
+  flightDepartureLocalTime: Date | null;
+  flightDepartureTimeZone: string | null;
+  flightGate: string | null;
+  flightNumber: string | null;
+  flightSeat: string | null;
+  flightTerminal: string | null;
+}): FlightDetailsInput | null {
+  if (
+    !reservation.flightAirline &&
+    !reservation.flightArrivalAirport &&
+    !reservation.flightArrivalInstant &&
+    !reservation.flightArrivalLocalDate &&
+    !reservation.flightDepartureAirport &&
+    !reservation.flightDepartureInstant &&
+    !reservation.flightDepartureLocalDate &&
+    !reservation.flightGate &&
+    !reservation.flightNumber &&
+    !reservation.flightSeat &&
+    !reservation.flightTerminal
+  ) {
+    return null;
+  }
+  return {
+    airline: reservation.flightAirline,
+    arrival: {
+      airport: reservation.flightArrivalAirport,
+      authoritativeInstant: reservation.flightArrivalInstant?.toISOString() ?? null,
+      localDate: reservation.flightArrivalLocalDate
+        ? formatDateOnly(reservation.flightArrivalLocalDate)
+        : null,
+      localTime: formatLocalTime(reservation.flightArrivalLocalTime),
+      timeZone: reservation.flightArrivalTimeZone,
+    },
+    departure: {
+      airport: reservation.flightDepartureAirport,
+      authoritativeInstant: reservation.flightDepartureInstant?.toISOString() ?? null,
+      localDate: reservation.flightDepartureLocalDate
+        ? formatDateOnly(reservation.flightDepartureLocalDate)
+        : null,
+      localTime: formatLocalTime(reservation.flightDepartureLocalTime),
+      timeZone: reservation.flightDepartureTimeZone,
+    },
+    gate: reservation.flightGate,
+    number: reservation.flightNumber,
+    seat: reservation.flightSeat,
+    terminal: reservation.flightTerminal,
+  };
+}
+
+function transportDetailsFromReservation(reservation: {
+  transportDropoffLocation: string | null;
+  transportOperator: string | null;
+  transportPickupLocation: string | null;
+  transportServiceNumber: string | null;
+}): TransportDetailsInput | null {
+  if (
+    !reservation.transportDropoffLocation &&
+    !reservation.transportOperator &&
+    !reservation.transportPickupLocation &&
+    !reservation.transportServiceNumber
+  ) {
+    return null;
+  }
+  return {
+    dropoffLocation: reservation.transportDropoffLocation,
+    operator: reservation.transportOperator,
+    pickupLocation: reservation.transportPickupLocation,
+    serviceNumber: reservation.transportServiceNumber,
+  };
+}
+
 function validateAccommodationDates(checkInDate: Date | null, checkOutDate: Date | null) {
   if (checkInDate && checkOutDate && checkOutDate < checkInDate) {
     throw new ReservationValidationError('invalid_accommodation');
@@ -293,6 +545,7 @@ async function serializeReservation(
       : null,
     localDate: reservation.localDate ? formatDateOnly(reservation.localDate) : null,
     localTime: formatLocalTime(reservation.localTime),
+    flight: flightDetailsFromReservation(reservation),
     notes: reservation.notes,
     plannedCost:
       reservation.plannedCostAmount && reservation.plannedCostCurrencyCode
@@ -305,6 +558,7 @@ async function serializeReservation(
     timeZone: reservation.timeZone,
     timeZoneSource: mapTimeZoneSource(reservation.timeZoneSource),
     title: reservation.title,
+    transport: transportDetailsFromReservation(reservation),
     tripPlace: reservation.tripPlace
       ? {
           id: reservation.tripPlace.id,
@@ -390,12 +644,15 @@ export async function createReservation(
     const checkInDate = input.checkInDate ? parseDateOnly(input.checkInDate) : null;
     const checkOutDate = input.checkOutDate ? parseDateOnly(input.checkOutDate) : null;
     validateAccommodationDates(checkInDate, checkOutDate);
+    const structuredFlight = flightData(input.flight, type);
+    const structuredTransport = transportData(input.transport, type);
     const reservation = await transaction.reservation.create({
       data: {
         accommodationAddress: normalizeOptional(input.accommodationAddress),
         bookingReference: normalizeOptional(input.bookingReference),
         checkInDate,
         checkOutDate,
+        ...structuredFlight,
         itineraryItemId: itineraryItem?.id ?? null,
         localDate: dateTime.localDate,
         localTime: dateTime.localTime,
@@ -408,6 +665,7 @@ export async function createReservation(
         title: normalizeTitle(input.title),
         tripId,
         tripPlaceId: tripPlace?.id ?? null,
+        ...structuredTransport,
         type: mapType(type),
       },
     });
@@ -472,6 +730,14 @@ export async function updateReservation(
           ? parseDateOnly(input.checkOutDate)
           : null;
     validateAccommodationDates(checkInDate, checkOutDate);
+    const structuredFlight = flightData(
+      input.flight === undefined ? flightDetailsFromReservation(current) : input.flight,
+      type,
+    );
+    const structuredTransport = transportData(
+      input.transport === undefined ? transportDetailsFromReservation(current) : input.transport,
+      type,
+    );
     const shouldResolveTimeZone =
       input.localDate !== undefined ||
       input.localTime !== undefined ||
@@ -507,6 +773,7 @@ export async function updateReservation(
           : {}),
         ...(input.checkInDate !== undefined ? { checkInDate } : {}),
         ...(input.checkOutDate !== undefined ? { checkOutDate } : {}),
+        ...structuredFlight,
         itineraryItemId: itineraryItem?.id ?? null,
         localDate: dateTime.localDate,
         localTime: dateTime.localTime,
@@ -518,6 +785,7 @@ export async function updateReservation(
         timeZoneSource: dateTime.timeZoneSource,
         ...(input.title !== undefined ? { title: normalizeTitle(input.title) } : {}),
         tripPlaceId: tripPlace?.id ?? null,
+        ...structuredTransport,
         type: mapType(type),
       },
     });

@@ -70,6 +70,7 @@ test('resolves a day from daily base, first ordered located item, then trip time
 
   assert.deepEqual(
     resolveDayTimeZone({
+      accommodations: [],
       dailyBase: { timeZone: 'Australia/Sydney', tripPlaceId: 'base' },
       items,
       tripTimeZone: 'Asia/Singapore',
@@ -81,14 +82,61 @@ test('resolves a day from daily base, first ordered located item, then trip time
       timeZone: 'Australia/Sydney',
     },
   );
-  assert.deepEqual(resolveDayTimeZone({ dailyBase: null, items, tripTimeZone: 'Asia/Singapore' }), {
-    source: 'FIRST_LOCATED_ITEM',
-    sourceItemId: 'located',
-    sourceTripPlaceId: null,
-    timeZone: 'Pacific/Auckland',
-  });
   assert.deepEqual(
-    resolveDayTimeZone({ dailyBase: null, items: [], tripTimeZone: 'Asia/Singapore' }),
+    resolveDayTimeZone({
+      accommodations: [],
+      dailyBase: null,
+      items,
+      tripTimeZone: 'Asia/Singapore',
+    }),
+    {
+      source: 'FIRST_LOCATED_ITEM',
+      sourceItemId: 'located',
+      sourceTripPlaceId: null,
+      timeZone: 'Pacific/Auckland',
+    },
+  );
+  assert.deepEqual(
+    resolveDayTimeZone({
+      accommodations: [],
+      dailyBase: null,
+      items: [],
+      tripTimeZone: 'Asia/Singapore',
+    }),
+    {
+      source: 'TRIP_REFERENCE',
+      sourceItemId: null,
+      sourceTripPlaceId: null,
+      timeZone: 'Asia/Singapore',
+    },
+  );
+});
+
+test('uses one applicable accommodation as a day base without guessing across overlaps', () => {
+  assert.deepEqual(
+    resolveDayTimeZone({
+      accommodations: [{ timeZone: 'Pacific/Auckland', tripPlaceId: 'stay' }],
+      dailyBase: null,
+      items: [],
+      tripTimeZone: 'Asia/Singapore',
+    }),
+    {
+      source: 'ACCOMMODATION',
+      sourceItemId: null,
+      sourceTripPlaceId: 'stay',
+      timeZone: 'Pacific/Auckland',
+    },
+  );
+  assert.deepEqual(
+    resolveDayTimeZone({
+      accommodations: [
+        { timeZone: 'Pacific/Auckland', tripPlaceId: 'stay-one' },
+        { timeZone: 'Australia/Sydney', tripPlaceId: 'stay-two' },
+      ],
+      dailyBase: null,
+      items: [],
+      tripTimeZone: 'Asia/Singapore',
+    }),
     {
       source: 'TRIP_REFERENCE',
       sourceItemId: null,

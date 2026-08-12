@@ -260,7 +260,7 @@ function scheduleData(schedule: ItineraryScheduleInput, date: string, timeZone: 
   }
 }
 
-async function refreshDayDefaultTimeZone(
+export async function refreshDayDefaultTimeZone(
   transaction: Prisma.TransactionClient,
   tripId: string,
   itineraryDayId: string,
@@ -275,12 +275,23 @@ async function refreshDayDefaultTimeZone(
         include: { tripPlace: { include: { place: true } } },
         orderBy: { position: 'asc' },
       },
+      accommodationReservations: {
+        include: {
+          reservation: {
+            include: { tripPlace: { include: { place: true } } },
+          },
+        },
+      },
       trip: { select: { referenceTimeZone: true } },
     },
   });
   if (!day) throw new ItineraryNotFoundError('itinerary_day_not_found');
 
   const resolution = resolveDayTimeZone({
+    accommodations: day.accommodationReservations.map(({ reservation }) => ({
+      timeZone: reservation.tripPlace?.place.customTimeZone ?? null,
+      tripPlaceId: reservation.tripPlaceId,
+    })),
     dailyBase: day.dailyBaseTripPlace
       ? {
           timeZone: day.dailyBaseTripPlace.place.customTimeZone,
@@ -350,6 +361,7 @@ export async function listItinerary(userId: string, tripId: string) {
       date: formatDateOnly(day.date),
       defaultTimeZone: day.defaultTimeZone,
       defaultTimeZoneSource: mapDayTimeZoneSource(day.defaultTimeZoneSource),
+      defaultTimeZoneSourceTripPlaceId: day.defaultTimeZoneSourceTripPlaceId,
       dailyBaseTripPlaceId: day.dailyBaseTripPlaceId,
       id: day.id,
       items: day.items.map(serializeItem),

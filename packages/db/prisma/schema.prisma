@@ -79,6 +79,29 @@ enum ItemTimeZoneSource {
   @@schema("trove")
 }
 
+enum ReservationType {
+  FLIGHT       @map("flight")
+  ACCOMMODATION @map("accommodation")
+  RESTAURANT   @map("restaurant")
+  ATTRACTION   @map("attraction")
+  TRAIN        @map("train")
+  RENTAL_CAR   @map("rental_car")
+  TOUR         @map("tour")
+  OTHER        @map("other")
+
+  @@map("reservation_type")
+  @@schema("trove")
+}
+
+enum ReservationTimeZoneSource {
+  TRIP_PLACE     @map("trip_place")
+  ITINERARY_ITEM @map("itinerary_item")
+  TRIP_REFERENCE @map("trip_reference")
+
+  @@map("reservation_time_zone_source")
+  @@schema("trove")
+}
+
 enum TripPlacePriority {
   MUST_GO    @map("must_go")
   INTERESTED @map("interested")
@@ -275,6 +298,7 @@ model Trip {
   itineraryItems               ItineraryItem[]
   tasks                        Task[]
   tripInfoEntries              TripInfo[]
+  reservations                 Reservation[]
 
   @@index([ownerId])
   @@index([creatorId])
@@ -386,6 +410,7 @@ model TripPlace {
   itineraryItems        ItineraryItem[]
   dailyBaseForDays      ItineraryDay[]  @relation("ItineraryDayDailyBase")
   timeZoneSourceForDays ItineraryDay[]  @relation("ItineraryDayTimeZoneSource")
+  reservations          Reservation[]
 
   @@unique([tripId, placeId])
   @@unique([id, tripId])
@@ -414,6 +439,7 @@ model ItineraryDay {
   timeZoneSourceItem      ItineraryItem?  @relation("ItineraryDayTimeZoneSourceItem", fields: [defaultTimeZoneSourceItemId, tripId], references: [id, tripId], onDelete: NoAction)
   items                   ItineraryItem[] @relation("ItineraryDayItems")
   tasks                   Task[]          @relation("TaskItineraryDay")
+  accommodationReservations ReservationAccommodationDay[]
 
   @@unique([tripId, date])
   @@unique([id, tripId])
@@ -453,6 +479,7 @@ model ItineraryItem {
   tripPlace             TripPlace?     @relation(fields: [tripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
   timeZoneSourceForDays ItineraryDay[] @relation("ItineraryDayTimeZoneSourceItem")
   tasks                 Task[]         @relation("TaskItineraryItem")
+  reservations          Reservation[]
 
   @@unique([id, tripId])
   @@index([tripId])
@@ -538,5 +565,74 @@ model TripInfo {
 
   @@index([tripId, isPinned, updatedAt])
   @@map("trip_info")
+  @@schema("trove")
+}
+
+model Reservation {
+  id                      String                     @id @default(uuid(7)) @db.Uuid
+  tripId                  String                     @map("trip_id") @db.Uuid
+  tripPlaceId             String?                    @map("trip_place_id") @db.Uuid
+  itineraryItemId         String?                    @map("itinerary_item_id") @db.Uuid
+  title                   String
+  type                    ReservationType?
+  provider                String?
+  bookingReference        String?                    @map("booking_reference")
+  notes                   String?                    @db.Text
+  localDate               DateTime?                  @map("local_date") @db.Date
+  localTime               DateTime?                  @map("local_time") @db.Time(0)
+  timeZone                String?                    @map("time_zone")
+  timeZoneSource          ReservationTimeZoneSource? @map("time_zone_source")
+  timeZoneResolvedAt      DateTime?                  @map("time_zone_resolved_at") @db.Timestamptz(3)
+  plannedCostAmount       Decimal?                   @map("planned_cost_amount") @db.Decimal(12, 2)
+  plannedCostCurrencyCode String?                    @map("planned_cost_currency_code") @db.Char(3)
+  checkInDate             DateTime?                  @map("check_in_date") @db.Date
+  checkOutDate            DateTime?                  @map("check_out_date") @db.Date
+  accommodationAddress    String?                    @map("accommodation_address") @db.Text
+  createdAt               DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  trip            Trip                        @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  tripPlace       TripPlace?                  @relation(fields: [tripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
+  itineraryItem   ItineraryItem?              @relation(fields: [itineraryItemId, tripId], references: [id, tripId], onDelete: NoAction)
+  attachments     ReservationAttachment[]
+  accommodationDays ReservationAccommodationDay[]
+
+  @@unique([id, tripId])
+  @@index([tripId, localDate])
+  @@index([tripPlaceId, tripId])
+  @@index([itineraryItemId, tripId])
+  @@map("reservations")
+  @@schema("trove")
+}
+
+model ReservationAttachment {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  reservationId String   @map("reservation_id") @db.Uuid
+  path          String
+  fileName      String   @map("file_name")
+  contentType   String   @map("content_type")
+  sizeBytes     Int      @map("size_bytes")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  @@unique([reservationId, path])
+  @@index([reservationId])
+  @@map("reservation_attachments")
+  @@schema("trove")
+}
+
+model ReservationAccommodationDay {
+  reservationId  String   @map("reservation_id") @db.Uuid
+  itineraryDayId String   @map("itinerary_day_id") @db.Uuid
+  tripId         String   @map("trip_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  reservation  Reservation  @relation(fields: [reservationId, tripId], references: [id, tripId], onDelete: Cascade)
+  itineraryDay ItineraryDay @relation(fields: [itineraryDayId, tripId], references: [id, tripId], onDelete: Cascade)
+
+  @@id([reservationId, itineraryDayId])
+  @@index([itineraryDayId, tripId])
+  @@map("reservation_accommodation_days")
   @@schema("trove")
 }

@@ -414,7 +414,36 @@
     "deleting": "Deleting…",
     "deleteError": "We couldn't delete that expense. Try again.",
     "untitledExpense": "Expense",
-    "unassignedDatedExpense": "This date is outside the trip days, so it only counts toward the trip total."
+    "unassignedDatedExpense": "This date is outside the trip days, so it only counts toward the trip total.",
+    "approximateHome": "Approx. {amount} in your home currency"
+  },
+  "tools": {
+    "title": "Tools",
+    "description": "Simple utilities for the travel details you need to compare or reuse."
+  },
+  "currency": {
+    "title": "Currency",
+    "description": "Convert a reference amount without changing the original currency you recorded.",
+    "amount": "Amount",
+    "amountPlaceholder": "100.00",
+    "from": "From",
+    "to": "To",
+    "currencyPlaceholder": "USD",
+    "currencyCodeHint": "Use a three-letter currency code.",
+    "searchPlaceholder": "Search currencies",
+    "searchUnavailable": "No currencies match this search.",
+    "swap": "Swap currencies",
+    "convert": "Convert",
+    "converting": "Converting…",
+    "invalidInput": "Enter a valid amount and two different three-letter currency codes.",
+    "conversionUnavailable": "A current or saved exchange rate is unavailable for this pair. Try again when you are online.",
+    "referenceOnly": "Reference rate only. Your bank or cash exchange rate may differ.",
+    "result": "Approximate value",
+    "rateDetails": "1 {source} = {rate} {target}, rate date {date}.",
+    "liveRate": "Fetched {refreshedAt}.",
+    "cachedRate": "Using a saved rate from {refreshedAt}.",
+    "sameCurrency": "This is the same currency, so no reference conversion is needed.",
+    "currencyListCached": "Currency names are from your last saved list."
   },
   "placeDetail": {
     "close": "Close place details",

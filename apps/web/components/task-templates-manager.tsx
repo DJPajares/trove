@@ -67,7 +67,7 @@ function createForm(template: TaskTemplate | null): TemplateForm {
   };
 }
 
-export function TaskTemplatesManager() {
+export function TaskTemplatesManager({ embedded = false }: Readonly<{ embedded?: boolean }>) {
   const t = useTranslations('taskTemplates');
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
@@ -182,13 +182,19 @@ export function TaskTemplatesManager() {
   }
 
   if (status === 'loading') {
-    return <PageState className="mx-auto max-w-5xl" kind="loading" title={t('loading')} />;
+    return (
+      <PageState
+        className={embedded ? undefined : 'mx-auto max-w-5xl'}
+        kind="loading"
+        title={t('loading')}
+      />
+    );
   }
   if (status === 'error') {
     return (
       <PageState
         actions={<Button onClick={() => void refresh()}>{t('tryAgain')}</Button>}
-        className="mx-auto max-w-5xl"
+        className={embedded ? undefined : 'mx-auto max-w-5xl'}
         description={t('loadErrorDescription')}
         icon={<CircleAlert aria-hidden="true" />}
         kind="error"
@@ -198,17 +204,30 @@ export function TaskTemplatesManager() {
   }
 
   return (
-    <section className="mx-auto w-full max-w-5xl space-y-7">
-      <PageHeader
-        actions={
+    <section className={embedded ? 'space-y-5' : 'mx-auto w-full max-w-5xl space-y-7'}>
+      {embedded ? (
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-3xl">
+            <h2 className="text-xl font-semibold tracking-tight text-foreground">{t('title')}</h2>
+            <p className="mt-2 text-base leading-7 text-muted-foreground">{t('description')}</p>
+          </div>
           <Button onClick={openCreate}>
             <Plus aria-hidden="true" data-icon="inline-start" />
             {t('newTemplate')}
           </Button>
-        }
-        description={t('description')}
-        title={t('title')}
-      />
+        </header>
+      ) : (
+        <PageHeader
+          actions={
+            <Button onClick={openCreate}>
+              <Plus aria-hidden="true" data-icon="inline-start" />
+              {t('newTemplate')}
+            </Button>
+          }
+          description={t('description')}
+          title={t('title')}
+        />
+      )}
 
       {error ? (
         <Alert role="alert" variant="destructive">

@@ -677,7 +677,11 @@ export function ExpensesManager({ tripId }: Readonly<{ tripId: string }>) {
                       value={expenseForm.category}
                     >
                       <SelectTrigger id="expense-category" className="w-full">
-                        <SelectValue />
+                        <SelectValue>
+                          {expenseForm.category === 'none'
+                            ? t('noCategory')
+                            : t(`categories.${expenseForm.category}`)}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">{t('noCategory')}</SelectItem>
@@ -719,7 +723,13 @@ export function ExpensesManager({ tripId }: Readonly<{ tripId: string }>) {
                         value={expenseForm.tripPlaceId}
                       >
                         <SelectTrigger id="expense-place" className="w-full">
-                          <SelectValue />
+                          <SelectValue>
+                            {expenseForm.tripPlaceId === 'none'
+                              ? t('noLinkedPlace')
+                              : (data.tripPlaces.find(
+                                  (place) => place.id === expenseForm.tripPlaceId,
+                                )?.name ?? t('unnamedPlace'))}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">{t('noLinkedPlace')}</SelectItem>
@@ -740,7 +750,13 @@ export function ExpensesManager({ tripId }: Readonly<{ tripId: string }>) {
                         value={expenseForm.itineraryItemId}
                       >
                         <SelectTrigger id="expense-item" className="w-full">
-                          <SelectValue />
+                          <SelectValue>
+                            {expenseForm.itineraryItemId === 'none'
+                              ? t('noLinkedItem')
+                              : (data.itineraryItems.find(
+                                  (item) => item.id === expenseForm.itineraryItemId,
+                                )?.label ?? t('unnamedItem'))}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">{t('noLinkedItem')}</SelectItem>

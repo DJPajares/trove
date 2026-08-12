@@ -151,8 +151,12 @@ export function createSavedPlacesControllers() {
       if (!userId) return;
       if (!params.success) return reply.code(400).send({ code: 'invalid_saved_place' });
 
-      await unsavePlace(userId, params.data.id);
-      return reply.code(204).send();
+      try {
+        await unsavePlace(userId, params.data.id);
+        return reply.code(204).send();
+      } catch (error) {
+        return sendSavedPlaceError(reply, error);
+      }
     },
 
     async updatePlaceNote(request: FastifyRequest, reply: FastifyReply) {

@@ -7,6 +7,7 @@ import {
   resolveDayTimeZone,
   resolveItemTimeZone,
 } from './itinerary-rules.js';
+import { unlinkItineraryItemReferences } from './itinerary-item-deletion.js';
 import { formatDateOnly, isValidIanaTimeZone } from './trip-rules.js';
 
 export type ItineraryScheduleInput =
@@ -708,6 +709,7 @@ export async function deleteItineraryItem(userId: string, tripId: string, itemId
     if (item.itineraryDayId) {
       await refreshDayDefaultTimeZone(transaction, tripId, item.itineraryDayId, item.id);
     }
+    await unlinkItineraryItemReferences(transaction, tripId, item.id);
     await transaction.itineraryItem.delete({ where: { id: item.id } });
   });
 }

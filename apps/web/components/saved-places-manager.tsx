@@ -4,6 +4,7 @@ import {
   Bookmark,
   Check,
   CircleAlert,
+  Ellipsis,
   Eye,
   FolderPlus,
   MapPinned,
@@ -40,6 +41,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import {
   Item,
@@ -80,6 +88,10 @@ import {
   unsavePlace,
   updateSavedPlaceNote,
 } from '@/lib/saved/api';
+import {
+  removeSavedPlaceState,
+  updateCollectionMembershipState,
+} from '@/lib/saved/collection-membership';
 import { cn } from '@/lib/utils';
 
 type CollectionEditor =
@@ -128,10 +140,14 @@ export function SavedPlacesManager() {
   const [savingCollection, setSavingCollection] = useState(false);
   const [collectionToDelete, setCollectionToDelete] = useState<SavedCollection | null>(null);
   const [collectionPickerPlace, setCollectionPickerPlace] = useState<SavedPlace | null>(null);
+  const [collectionCreateTarget, setCollectionCreateTarget] = useState<SavedPlace | null>(null);
+  const [collectionError, setCollectionError] = useState<string | null>(null);
   const [togglingCollectionId, setTogglingCollectionId] = useState<string | null>(null);
   const [noteEditorPlace, setNoteEditorPlace] = useState<SavedPlace | null>(null);
   const [noteValue, setNoteValue] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+  const [savedPlaceToUnsave, setSavedPlaceToUnsave] = useState<SavedPlace | null>(null);
+  const [unsaveError, setUnsaveError] = useState<string | null>(null);
   const [unsavingPlaceId, setUnsavingPlaceId] = useState<string | null>(null);
   const [detailPlace, setDetailPlace] = useState<SavedPlace | null>(null);
 
@@ -306,19 +322,6 @@ export function SavedPlacesManager() {
         savedPlace,
         ...current.filter((item) => item.id !== savedPlace.id),
       ]);
-      setProviderDetails((current) => ({
-        ...current,
-        [place.id]: {
-          category: suggestion.category,
-          formattedAddress: suggestion.description,
-          name: suggestion.name,
-        },
-      }));
-      cacheProviderPlaceDetails(place.id, {
-        category: suggestion.category,
-        formattedAddress: suggestion.description,
-        name: suggestion.name,
-      });
       setAddOpen(false);
       resetAddForm();
     } catch (errorValue) {
@@ -354,26 +357,21 @@ export function SavedPlacesManager() {
     }
   }
 
-  async function handleUnsave(savedPlace: SavedPlace) {
+  async function handleUnsave() {
+    if (!savedPlaceToUnsave) return;
+    const savedPlace = savedPlaceToUnsave;
     setUnsavingPlaceId(savedPlace.id);
-    setError(null);
+    setUnsaveError(null);
 
     try {
       await unsavePlace(savedPlace.id);
-      setSavedPlaces((current) => current.filter((item) => item.id !== savedPlace.id));
-      setCollections((current) =>
-        current.map((collection) => ({
-          ...collection,
-          placeCount: Math.max(
-            0,
-            collection.placeCount -
-              Number(savedPlace.collections.some((item) => item.id === collection.id)),
-          ),
-        })),
-      );
+      const nextState = removeSavedPlaceState({ collections, savedPlace, savedPlaces });
+      setSavedPlaces(nextState.savedPlaces);
+      setCollections(nextState.collections);
       if (collectionPickerPlace?.id === savedPlace.id) setCollectionPickerPlace(null);
+      setSavedPlaceToUnsave(null);
     } catch (errorValue) {
-      setError(getErrorMessage(errorValue));
+      setUnsaveError(getErrorMessage(errorValue));
     } finally {
       setUnsavingPlaceId(null);
     }
@@ -382,11 +380,15 @@ export function SavedPlacesManager() {
   function openCollectionEditor(
     mode: CollectionEditor['mode'],
     collection: SavedCollection | null = null,
+    createTarget: SavedPlace | null = null,
   ) {
     if (mode === 'closed') {
       setCollectionEditor({ collection: null, mode: 'closed' });
+      setCollectionCreateTarget(null);
       return;
     }
+    setCollectionError(null);
+    setCollectionCreateTarget(mode === 'create' ? createTarget : null);
     setCollectionName(collection?.name ?? '');
     setCollectionEditor(
       mode === 'rename' && collection ? { collection, mode } : { collection: null, mode: 'create' },
@@ -420,10 +422,32 @@ export function SavedPlacesManager() {
       } else {
         const { collection } = await createCollection(collectionName);
         setCollections((current) => sortCollections([...current, collection]));
+
+        if (collectionCreateTarget) {
+          try {
+            await addToCollection(collectionCreateTarget.id, collection.id);
+          } catch (errorValue) {
+            setCollectionError(getErrorMessage(errorValue));
+            setCollectionPickerPlace(collectionCreateTarget);
+            openCollectionEditor('closed');
+            return;
+          }
+
+          const nextState = updateCollectionMembershipState({
+            collection,
+            collections: [...collections, collection],
+            isMember: true,
+            savedPlace: collectionCreateTarget,
+            savedPlaces,
+          });
+          setCollections(sortCollections(nextState.collections));
+          setSavedPlaces(nextState.savedPlaces);
+          setCollectionPickerPlace(nextState.savedPlace);
+        }
       }
       openCollectionEditor('closed');
     } catch (errorValue) {
-      setError(getErrorMessage(errorValue));
+      setCollectionError(getErrorMessage(errorValue));
     } finally {
       setSavingCollection(false);
     }
@@ -456,7 +480,7 @@ export function SavedPlacesManager() {
     const savedPlace = collectionPickerPlace;
     const isMember = savedPlace.collections.some((item) => item.id === collection.id);
     setTogglingCollectionId(collection.id);
-    setError(null);
+    setCollectionError(null);
 
     try {
       if (isMember) {
@@ -465,23 +489,18 @@ export function SavedPlacesManager() {
         await addToCollection(savedPlace.id, collection.id);
       }
 
-      const nextCollections = isMember
-        ? savedPlace.collections.filter((item) => item.id !== collection.id)
-        : [...savedPlace.collections, { id: collection.id, name: collection.name }];
-      const nextSavedPlace = { ...savedPlace, collections: nextCollections };
-      setCollectionPickerPlace(nextSavedPlace);
-      setSavedPlaces((current) =>
-        current.map((item) => (item.id === savedPlace.id ? nextSavedPlace : item)),
-      );
-      setCollections((current) =>
-        current.map((item) =>
-          item.id === collection.id
-            ? { ...item, placeCount: Math.max(0, item.placeCount + (isMember ? -1 : 1)) }
-            : item,
-        ),
-      );
+      const nextState = updateCollectionMembershipState({
+        collection,
+        collections,
+        isMember: !isMember,
+        savedPlace,
+        savedPlaces,
+      });
+      setCollectionPickerPlace(nextState.savedPlace);
+      setSavedPlaces(nextState.savedPlaces);
+      setCollections(nextState.collections);
     } catch (errorValue) {
-      setError(getErrorMessage(errorValue));
+      setCollectionError(getErrorMessage(errorValue));
     } finally {
       setTogglingCollectionId(null);
     }
@@ -710,36 +729,55 @@ export function SavedPlacesManager() {
                         <Button
                           aria-label={t('viewDetails', { name: getPlaceName(savedPlace) })}
                           onClick={() => setDetailPlace(savedPlace)}
-                          size="icon-sm"
+                          size="sm"
                           variant="ghost"
                         >
                           <Eye aria-hidden="true" />
+                          <span className="hidden sm:inline">{t('viewDetailsAction')}</span>
                         </Button>
-                        <Button
-                          aria-label={t('manageCollections', { name: getPlaceName(savedPlace) })}
-                          onClick={() => setCollectionPickerPlace(savedPlace)}
-                          size="icon-sm"
-                          variant="ghost"
-                        >
-                          <FolderPlus aria-hidden="true" />
-                        </Button>
-                        <Button
-                          aria-label={t('editNote', { name: getPlaceName(savedPlace) })}
-                          onClick={() => openNoteEditor(savedPlace)}
-                          size="icon-sm"
-                          variant="ghost"
-                        >
-                          <Pencil aria-hidden="true" />
-                        </Button>
-                        <Button
-                          aria-label={t('unsave', { name: getPlaceName(savedPlace) })}
-                          disabled={unsavingPlaceId === savedPlace.id}
-                          onClick={() => void handleUnsave(savedPlace)}
-                          size="icon-sm"
-                          variant="ghost"
-                        >
-                          <Trash2 aria-hidden="true" />
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={
+                              <Button
+                                aria-label={t('moreActions', {
+                                  name: getPlaceName(savedPlace),
+                                })}
+                                size="icon-sm"
+                                type="button"
+                                variant="ghost"
+                              />
+                            }
+                          >
+                            <Ellipsis aria-hidden="true" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setCollectionError(null);
+                                setCollectionPickerPlace(savedPlace);
+                              }}
+                            >
+                              <FolderPlus aria-hidden="true" />
+                              {t('manageCollectionsAction')}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openNoteEditor(savedPlace)}>
+                              <Pencil aria-hidden="true" />
+                              {t('editNoteAction')}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              disabled={unsavingPlaceId === savedPlace.id}
+                              onClick={() => {
+                                setUnsaveError(null);
+                                setSavedPlaceToUnsave(savedPlace);
+                              }}
+                              variant="destructive"
+                            >
+                              <Trash2 aria-hidden="true" />
+                              {t('removeFromSaved')}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </ItemActions>
                     </Item>
                   );
@@ -889,6 +927,12 @@ export function SavedPlacesManager() {
                   : t('createCollectionDescription')}
               </DialogDescription>
             </DialogHeader>
+            {collectionError ? (
+              <Alert className="mt-5" role="alert" variant="destructive">
+                <CircleAlert aria-hidden="true" />
+                <AlertDescription>{collectionError}</AlertDescription>
+              </Alert>
+            ) : null}
             <div className="mt-5 space-y-2">
               <Label htmlFor="saved-collection-name">{t('collectionName')}</Label>
               <Input
@@ -961,6 +1005,12 @@ export function SavedPlacesManager() {
               })}
             </DialogDescription>
           </DialogHeader>
+          {collectionError ? (
+            <Alert role="alert" variant="destructive">
+              <CircleAlert aria-hidden="true" />
+              <AlertDescription>{collectionError}</AlertDescription>
+            </Alert>
+          ) : null}
           {collections.length ? (
             <div className="mt-1 space-y-1">
               {collections.map((collection) => {
@@ -971,7 +1021,7 @@ export function SavedPlacesManager() {
                   <Button
                     aria-pressed={selected}
                     className="w-full justify-between"
-                    disabled={togglingCollectionId === collection.id}
+                    disabled={Boolean(togglingCollectionId)}
                     key={collection.id}
                     onClick={() => void handleCollectionMembership(collection)}
                     variant={selected ? 'secondary' : 'ghost'}
@@ -988,8 +1038,9 @@ export function SavedPlacesManager() {
           <DialogFooter>
             <Button
               onClick={() => {
+                const target = collectionPickerPlace;
                 setCollectionPickerPlace(null);
-                openCollectionEditor('create');
+                openCollectionEditor('create', null, target);
               }}
               variant="outline"
             >
@@ -1041,6 +1092,43 @@ export function SavedPlacesManager() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={Boolean(savedPlaceToUnsave)}
+        onOpenChange={(open) => {
+          if (!open && !unsavingPlaceId) {
+            setSavedPlaceToUnsave(null);
+            setUnsaveError(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('unsaveTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('unsaveDescription', {
+                name: savedPlaceToUnsave ? getPlaceName(savedPlaceToUnsave) : '',
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {unsaveError ? (
+            <Alert role="alert" variant="destructive">
+              <CircleAlert aria-hidden="true" />
+              <AlertDescription>{unsaveError}</AlertDescription>
+            </Alert>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(unsavingPlaceId)}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={Boolean(unsavingPlaceId)}
+              onClick={() => void handleUnsave()}
+              variant="destructive"
+            >
+              {unsavingPlaceId ? t('removingFromSaved') : t('removeFromSaved')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

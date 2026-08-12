@@ -1,6 +1,7 @@
 import { getPrismaClient } from '@trove/db';
 
 import type { CanonicalPlace } from './canonical-places.js';
+import { removeOwnedSavedPlace } from './saved-place-removal.js';
 
 export type SavedPlace = {
   collections: Array<{ id: string; name: string }>;
@@ -181,7 +182,11 @@ export async function updateSavedPlaceNote(
 }
 
 export async function unsavePlace(userId: string, savedPlaceId: string) {
-  await getPrismaClient().savedPlace.deleteMany({ where: { id: savedPlaceId, ownerId: userId } });
+  const removed = await removeOwnedSavedPlace(getPrismaClient().savedPlace, userId, savedPlaceId);
+
+  if (!removed) {
+    throw new SavedPlaceNotFoundError();
+  }
 }
 
 export async function createSavedCollection(userId: string, name: string) {

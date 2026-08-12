@@ -153,9 +153,11 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
         if (!providerId) return { id: item.place.id, details: null };
         try {
           const result = await getProviderPlaceDetails(providerId);
+          const details = result.status === 'ok' ? (result.place ?? null) : null;
+          if (details) cacheProviderPlaceDetails(item.place.id, details);
           return {
             id: item.place.id,
-            details: result.status === 'ok' ? (result.place ?? null) : null,
+            details,
           };
         } catch {
           return { id: item.place.id, details: null };
@@ -346,19 +348,6 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
       setTripPlaces((current) =>
         current.some((item) => item.id === tripPlace.id) ? current : [...current, tripPlace],
       );
-      setProviderDetails((current) => ({
-        ...current,
-        [place.id]: {
-          category: suggestion.category,
-          formattedAddress: suggestion.description,
-          name: suggestion.name,
-        },
-      }));
-      cacheProviderPlaceDetails(place.id, {
-        category: suggestion.category,
-        formattedAddress: suggestion.description,
-        name: suggestion.name,
-      });
     } catch {
       setError(t('actionError'));
     } finally {
@@ -531,7 +520,7 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
                     aria-label={t('priorityFor', { name: placeName(tripPlace) })}
                     size="sm"
                   >
-                    <SelectValue />
+                    <SelectValue>{t(`priority.${tripPlace.priority ?? 'none'}`)}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">{t('priority.none')}</SelectItem>

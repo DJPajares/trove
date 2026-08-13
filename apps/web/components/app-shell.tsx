@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 
 import { AccountMenu } from '@/components/account-menu';
 import { AppearanceMenu } from '@/components/appearance-menu';
+import { NotificationCenter } from '@/components/notification-center';
 import { PageTransition } from '@/components/page-transition';
 import { PrimaryNavigation } from '@/components/primary-navigation';
 
@@ -39,6 +40,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
           <PrimaryNavigation variant="desktop" />
 
           <div className="flex items-center justify-self-end gap-1">
+            <NotificationCenter />
             <AppearanceMenu />
             <AccountMenu />
           </div>

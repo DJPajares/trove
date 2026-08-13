@@ -12,6 +12,27 @@ declare global {
 
 declare const self: ServiceWorkerGlobalScope;
 
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const requestedUrl = new URL(
+    typeof event.notification.data?.url === 'string' ? event.notification.data.url : '/',
+    self.location.origin,
+  );
+  const url = new URL(
+    requestedUrl.origin === self.location.origin
+      ? `${requestedUrl.pathname}${requestedUrl.search}${requestedUrl.hash}`
+      : '/',
+    self.location.origin,
+  ).toString();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clients) => {
+      const matchingClient = clients.find((client) => client.url === url);
+      if (matchingClient && 'focus' in matchingClient) return matchingClient.focus();
+      return self.clients.openWindow(url);
+    }),
+  );
+});
+
 const tripModeRscCacheKey: SerwistPlugin = {
   cacheKeyWillBeUsed: ({ request }) => {
     const url = new URL(request.url);

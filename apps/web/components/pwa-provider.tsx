@@ -4,6 +4,7 @@ import { SerwistProvider } from '@serwist/turbopack/react';
 import { useEffect, type ReactNode } from 'react';
 
 import { OfflineSyncManager } from '@/components/offline-sync-manager';
+import { NotificationsProvider } from '@/components/notifications-provider';
 
 const TROVE_WORKER_PATH = '/serwist/sw.js';
 const TROVE_CACHE_PREFIX = 'trove-pwa-';
@@ -48,18 +49,20 @@ function DevelopmentPwaCleanup() {
 export function PwaProvider({ children }: Readonly<{ children: ReactNode }>) {
   if (process.env.NODE_ENV !== 'production') {
     return (
-      <>
+      <NotificationsProvider>
         <DevelopmentPwaCleanup />
         <OfflineSyncManager />
         {children}
-      </>
+      </NotificationsProvider>
     );
   }
 
   return (
     <SerwistProvider cacheOnNavigation={false} reloadOnOnline={false} swUrl={TROVE_WORKER_PATH}>
-      <OfflineSyncManager />
-      {children}
+      <NotificationsProvider>
+        <OfflineSyncManager />
+        {children}
+      </NotificationsProvider>
     </SerwistProvider>
   );
 }

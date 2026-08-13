@@ -1484,6 +1484,48 @@
       "saveError": "Trove could not update this trip's notification setting."
     }
   },
+  "globalSearch": {
+    "button": "Search Trove",
+    "close": "Close search",
+    "shortcut": "⌘K",
+    "title": "Search Trove",
+    "description": "Find your trips, places, reservations, details, and notes.",
+    "label": "Search your Trove",
+    "placeholder": "Search trips, places, reservations, and notes",
+    "startTitle": "Find something in Trove",
+    "startDescription": "Search across the travel details saved to your account.",
+    "minChars": "Enter at least two characters to search.",
+    "searching": "Searching your Trove...",
+    "resultCount": "{count, plural, =0 {No results} one {One result} other {# results}}",
+    "errorTitle": "Search is unavailable",
+    "errorDescription": "Your Trove data is unchanged. Try again in a moment.",
+    "noResultsTitle": "No Trove results",
+    "noResultsDescription": "Try another name or detail. Google Places is available below when useful.",
+    "inTrip": "In {trip}",
+    "searchGoogle": "Search Google Places",
+    "searchingGoogle": "Searching Google Places...",
+    "googleTitle": "Google Places",
+    "googleDescription": "External suggestions, shown after your Trove results.",
+    "googleUnavailable": "Google Places is unavailable right now. Your Trove results are still shown above.",
+    "googleEmpty": "Google Places did not find another match.",
+    "opensGoogle": "Open in Google Maps",
+    "groups": {
+      "trip": "Trips",
+      "reservation": "Reservations",
+      "trip_place": "Trip places",
+      "saved_place": "Saved places",
+      "trip_info": "Trip info",
+      "note": "Notes"
+    },
+    "noteSources": {
+      "itinerary": "Itinerary note",
+      "reservation": "Reservation note",
+      "saved_place": "Saved place note",
+      "trip": "Trip note",
+      "trip_info": "Trip info note",
+      "trip_place": "Trip place note"
+    }
+  },
   "offline": {
     "eyebrow": "Offline",
     "title": "Trove needs a connection for this page.",

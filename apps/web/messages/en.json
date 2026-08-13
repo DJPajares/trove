@@ -1384,10 +1384,58 @@
     "error": "We couldn't complete that request. Check your details and try again."
   },
   "home": {
-    "eyebrow": "Your travel companion",
-    "title": "Plan it. Live it. Remember it.",
-    "description": "Trove's planning workspace is taking shape.",
-    "status": "The foundation is ready for your next trip."
+    "loading": "Loading your travel context…",
+    "loadError": "We couldn't load Home",
+    "loadErrorDescription": "Check your connection and try again.",
+    "tryAgain": "Try again",
+    "states": {
+      "active": {
+        "title": "Your trip is under way",
+        "description": "Keep the next useful detail close, then step into Trip Mode when you need it."
+      },
+      "planning": {
+        "title": "Your next trip is taking shape",
+        "description": "Keep planning at your own pace. Trove keeps the practical details within reach."
+      },
+      "completed": {
+        "title": "A trip to revisit",
+        "description": "Your trip is complete. Revisit the itinerary whenever you want.",
+        "tripDescription": "{startDate} to {endDate}. The itinerary is still here whenever you need it."
+      },
+      "empty": {
+        "title": "Where would you like to go next?",
+        "description": "Start a trip when the dates are clear, or keep places for later while the idea is still forming."
+      }
+    },
+    "activeLabel": "Active trip",
+    "planningLabel": "Next trip",
+    "completedLabel": "Recently completed",
+    "openTripMode": "Open Trip Mode",
+    "continuePlanning": "Continue planning",
+    "previewTripMode": "Preview Trip Mode",
+    "viewTrip": "View trip",
+    "nextUp": "Next up",
+    "nextItem": "{name} is the next useful stop.",
+    "currentItem": "Right now: {name}.",
+    "noNextItem": "Your schedule is clear for now.",
+    "countdown": "{count, plural, =0 {Starts today} one {Starts in # day} other {Starts in # days}}",
+    "readiness": {
+      "in_progress": "Planning is in progress",
+      "ready": "Plan marked Ready"
+    },
+    "destinationOpen": "Destination still open",
+    "startTitle": "Start with the trip, not every detail",
+    "startDescription": "A name and travel dates are enough to begin. You can build the rest when it becomes useful.",
+    "createTrip": "Create trip",
+    "viewSavedPlaces": "View Saved Places",
+    "savedPlacesTitle": "Saved Places",
+    "savedPlacesDescription": "A few places worth keeping close for a future trip.",
+    "savedPlaceFallback": "Saved place",
+    "savedPlaceDescription": "Saved for later",
+    "otherTripsTitle": "Other trips",
+    "viewTrips": "View all trips",
+    "pastTripTitle": "A past trip",
+    "pastTripDescription": "Revisit {name} whenever you want to look back at the plan."
   },
   "offline": {
     "eyebrow": "Offline",

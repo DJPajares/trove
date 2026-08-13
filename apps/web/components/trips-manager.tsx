@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   CalendarClock,
   CalendarDays,
@@ -69,6 +70,10 @@ const overviewTools = [
 export function TripsManager() {
   const t = useTranslations('trips');
   const locale = useLocale();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const shouldCreateTrip = searchParams.get('create') === '1';
   const [trips, setTrips] = useState<Trip[]>([]);
   const [editor, setEditor] = useState<EditorState>({ mode: 'closed', trip: null });
   const [overviewTrip, setOverviewTrip] = useState<Trip | null>(null);
@@ -80,6 +85,12 @@ export function TripsManager() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
   const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    if (!shouldCreateTrip) return;
+    setEditor((current) => (current.mode === 'closed' ? { mode: 'create', trip: null } : current));
+    router.replace(pathname, { scroll: false });
+  }, [pathname, router, shouldCreateTrip]);
 
   useEffect(() => {
     let active = true;

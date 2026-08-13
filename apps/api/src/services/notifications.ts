@@ -1,4 +1,4 @@
-import { getPrismaClient, Prisma } from '@trove/db';
+import { getPrismaClient } from '@trove/db';
 
 import { floatingLocalTimeToInstant, formatLocalTime } from './itinerary-rules.js';
 import { resolveTripModeContext } from './trip-mode-context.js';
@@ -34,6 +34,10 @@ export class NotificationNotFoundError extends Error {
 function inNotificationWindow(eventAt: Date, now: Date, leadMs: number) {
   const difference = eventAt.getTime() - now.getTime();
   return difference <= leadMs && difference >= -RECENT_EVENT_MS;
+}
+
+function isUniqueConstraintError(error: unknown) {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
 }
 
 function taskCandidate(
@@ -199,7 +203,7 @@ async function upsertCandidate(userId: string, candidate: NotificationCandidate)
         },
       });
     } catch (error) {
-      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+      if (!isUniqueConstraintError(error)) {
         throw error;
       }
       return prisma.notification.update({

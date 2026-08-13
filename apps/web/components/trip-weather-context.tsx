@@ -53,7 +53,7 @@ export function TripWeatherContext({
   location: WeatherLocation | null;
   selectedDate: string;
 }>) {
-  const t = useTranslations('tripMode.weather');
+  const t = useTranslations('tripMode.views.weather');
   const locale = useLocale();
   const { preferences } = usePreferences();
   const [reloadKey, setReloadKey] = useState(0);

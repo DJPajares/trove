@@ -1,6 +1,5 @@
 'use client';
 
-import { Combobox } from '@base-ui/react/combobox';
 import { Check, ChevronDown } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState, type ComponentProps } from 'react';
@@ -8,6 +7,14 @@ import { useEffect, useMemo, useState, type ComponentProps } from 'react';
 import { Input } from '@/components/ui/input';
 import { getCurrenciesWithCache, type CurrencyMetadata } from '@/lib/currency/api';
 import { cn } from '@/lib/utils';
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from './ui/combobox';
 
 type CurrencyMetadataState = {
   currencies: CurrencyMetadata[];
@@ -104,62 +111,32 @@ export function CurrencyCombobox({
   }
 
   return (
-    <Combobox.Root
-      disabled={disabled}
-      itemToStringLabel={(currency) => `${currency.code} ${currency.name}`}
+    <Combobox
       items={currencies}
-      onValueChange={(currency) => onValueChange(currency?.code ?? '')}
+      itemToStringLabel={(currency) => `${currency.name} (${currency.code})`}
       value={selected}
+      onValueChange={(currency) => onValueChange(currency?.code ?? '')}
+      disabled={disabled}
     >
-      <Combobox.InputGroup className={cn('relative flex w-full', className)}>
-        <Combobox.Input
-          aria-describedby={ariaDescribedBy}
-          aria-invalid={ariaInvalid}
-          aria-label={ariaLabel}
-          aria-required={required}
-          className="h-11 w-full min-w-0 rounded-[var(--radius-md)] border border-input bg-background px-3 py-2 pr-11 text-base shadow-[var(--shadow-control)] transition-[color,background-color,border-color,box-shadow] duration-[var(--motion-standard)] outline-none placeholder:text-muted-foreground hover:border-border-strong focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/20"
-          id={id}
-          placeholder={status === 'loading' ? t('loading') : placeholder}
-          required={required}
-        />
-        <Combobox.Trigger
-          aria-label={t('open', { label: ariaLabel })}
-          className="absolute inset-y-1 right-1 flex size-9 items-center justify-center rounded-[var(--radius-sm)] text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
-        >
-          <ChevronDown aria-hidden="true" className="size-4" />
-        </Combobox.Trigger>
-      </Combobox.InputGroup>
-      <Combobox.Portal>
-        <Combobox.Positioner align="start" className="z-(--layer-overlay)" sideOffset={6}>
-          <Combobox.Popup
-            aria-label={ariaLabel}
-            className="w-(--anchor-width) min-w-64 overflow-hidden rounded-[var(--radius-md)] border border-border bg-popover p-1 text-popover-foreground shadow-[var(--shadow-overlay)] outline-none"
-          >
-            <Combobox.Empty className="px-3 py-6 text-center text-sm text-muted-foreground">
-              {t('empty')}
-            </Combobox.Empty>
-            <Combobox.List className="max-h-64 overflow-y-auto">
-              {(currency: CurrencyMetadata) => (
-                <Combobox.Item
-                  className="relative flex min-h-10 w-full cursor-default items-center gap-3 rounded-[var(--radius-sm)] py-2 pr-9 pl-3 text-sm outline-none select-none data-highlighted:bg-secondary data-highlighted:text-secondary-foreground"
-                  key={currency.code}
-                  value={currency}
-                >
-                  <span className="min-w-0 flex-1 truncate">
-                    <span className="font-medium">{currency.code}</span>
-                    <span className="ml-2 text-muted-foreground data-highlighted:text-secondary-foreground/80">
-                      {currency.name}
-                    </span>
-                  </span>
-                  <Combobox.ItemIndicator className="absolute right-3 flex size-4 items-center justify-center">
-                    <Check aria-hidden="true" className="size-4 text-primary" />
-                  </Combobox.ItemIndicator>
-                </Combobox.Item>
-              )}
-            </Combobox.List>
-          </Combobox.Popup>
-        </Combobox.Positioner>
-      </Combobox.Portal>
-    </Combobox.Root>
+      <ComboboxInput
+        className="h-11 w-full min-w-0 rounded-[var(--radius-md)] border border-input bg-background py-2 text-base shadow-[var(--shadow-control)] transition-[color,background-color,border-color,box-shadow] duration-[var(--motion-standard)] outline-none placeholder:text-muted-foreground hover:border-border-strong focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/20"
+        placeholder="Select a currency"
+        showClear
+      />
+      <ComboboxContent>
+        <ComboboxEmpty>No currencies found.</ComboboxEmpty>
+        <ComboboxList>
+          {(item) => (
+            <ComboboxItem
+              className="relative flex min-h-10 w-full cursor-default items-center gap-3 rounded-[var(--radius-sm)] py-2 pr-9 pl-3 text-sm outline-none select-none data-highlighted:bg-secondary data-highlighted:text-secondary-foreground"
+              key={item.code}
+              value={item}
+            >
+              {item.name} ({item.code})
+            </ComboboxItem>
+          )}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
   );
 }

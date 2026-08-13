@@ -2,6 +2,7 @@ import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 export type ItineraryDayPart = 'afternoon' | 'anytime' | 'evening' | 'morning';
 export type ItineraryPriority = 'interested' | 'maybe' | 'must_go';
+export type ItineraryTravelStatus = 'completed' | 'skipped' | 'upcoming';
 export type RouteTravelMode = 'drive' | 'transit' | 'walk';
 export type ItineraryScheduleInput =
   | { kind: 'none' }
@@ -39,6 +40,7 @@ export type ItineraryItem = {
   timeZone: string | null;
   timeZoneSource: 'day_default' | 'explicit' | 'place' | null;
   travelModeToNext?: RouteTravelMode;
+  travelStatus: ItineraryTravelStatus;
   tripPlace: ItineraryTripPlace | null;
   updatedAt: string;
 };
@@ -104,6 +106,46 @@ export type Itinerary = {
   unscheduledItems: ItineraryItem[];
 };
 
+export type TripModeContext = {
+  contextAt: string;
+  contextSource: 'live' | 'preview';
+  currentOrRelevant: {
+    itemId: string;
+    kind: 'current' | 'relevant';
+    reason: 'day_part' | 'exact_time' | 'itinerary_order' | 'overdue';
+  } | null;
+  day: {
+    date: string;
+    defaultTimeZone: string;
+    id: string;
+    items: ItineraryItem[];
+  } | null;
+  leaveBy: {
+    at: string;
+    bufferSeconds: number | null;
+    destinationItemId: string;
+    mode: RouteTravelMode;
+    originItemId: string;
+    routeDurationSeconds: number;
+    targetStartAt: string;
+  } | null;
+  nextItemId: string | null;
+  selectedDate: string;
+  state: 'current' | 'free_time' | 'no_day' | 'no_next_item' | 'relevant';
+  trip: {
+    endDate: string;
+    id: string;
+    name: string;
+    referenceTimeZone: string;
+    startDate: string;
+  };
+};
+
+export type TripModeContextRequestOptions =
+  | { at: string; date?: never; signal?: AbortSignal; time?: never }
+  | { at?: never; date: string; signal?: AbortSignal; time: string }
+  | { at?: never; date?: never; signal?: AbortSignal; time?: never };
+
 export type ItineraryItemInput = {
   customLabel?: string | null;
   customLocation?: { label: string; timeZone?: string | null } | null;
@@ -158,6 +200,17 @@ async function itineraryRequest<T>(path: string, init?: RequestInit) {
 
 export function fetchItinerary(tripId: string) {
   return itineraryRequest<Itinerary>(`/trips/${tripId}/itinerary`);
+}
+
+export function fetchTripModeContext(tripId: string, options: TripModeContextRequestOptions = {}) {
+  const query = new URLSearchParams();
+  if (options.at) query.set('at', options.at);
+  if (options.date) query.set('date', options.date);
+  if (options.time) query.set('time', options.time);
+  const suffix = query.size ? `?${query.toString()}` : '';
+  return itineraryRequest<TripModeContext>(`/trips/${tripId}/trip-mode/context${suffix}`, {
+    signal: options.signal,
+  });
 }
 
 export function fetchItineraryDayRoutes(
@@ -261,4 +314,18 @@ export function updateItineraryItemRouteMode(
     body: JSON.stringify({ mode }),
     method: 'PATCH',
   });
+}
+
+export function updateItineraryItemTravelStatus(
+  tripId: string,
+  itemId: string,
+  travelStatus: ItineraryTravelStatus,
+) {
+  return itineraryRequest<{ id: string; travelStatus: ItineraryTravelStatus }>(
+    `/trips/${tripId}/itinerary/items/${itemId}/travel-status`,
+    {
+      body: JSON.stringify({ travelStatus }),
+      method: 'PATCH',
+    },
+  );
 }

@@ -280,7 +280,7 @@ export async function getItineraryDayRoutes(
   userId: string,
   tripId: string,
   itineraryDayId: string,
-  options: { includePolyline?: boolean; languageCode?: string } = {},
+  options: { includePolyline?: boolean; itemIds?: string[]; languageCode?: string } = {},
   services: RouteServices = {},
 ): Promise<ItineraryDayRoutes> {
   const prisma = getPrismaClient();
@@ -298,6 +298,7 @@ export async function getItineraryDayRoutes(
           },
           dailyBaseTripPlace: { include: tripPlaceInclude },
           items: {
+            where: options.itemIds ? { id: { in: options.itemIds } } : undefined,
             include: { tripPlace: { include: tripPlaceInclude } },
             orderBy: { position: 'asc' },
           },

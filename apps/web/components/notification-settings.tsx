@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 
-type PermissionState = 'denied' | 'granted' | 'prompt' | 'unsupported';
+type PermissionState = NotificationPermission | 'unsupported';
 
 function browserPermission(): PermissionState {
   if (typeof Notification === 'undefined') return 'unsupported';
@@ -21,7 +21,7 @@ export function NotificationSettings() {
   const { settings, status, updateSettings } = useNotifications();
   const [saving, setSaving] = useState<'browser' | 'enabled' | null>(null);
   const [error, setError] = useState(false);
-  const [permission, setPermission] = useState<PermissionState>('prompt');
+  const [permission, setPermission] = useState<PermissionState>('default');
 
   useEffect(() => {
     setPermission(browserPermission());

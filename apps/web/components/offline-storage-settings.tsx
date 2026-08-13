@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useOnlineStatus } from '@/components/trip-sync-status';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,6 +18,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import {
   Item,
   ItemContent,
@@ -122,106 +124,118 @@ export function OfflineStorageSettings() {
   }
 
   return (
-    <section aria-labelledby="offline-storage-heading" className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground" id="offline-storage-heading">
-          {t('title')}
-        </h2>
-        <p className="mt-1 text-sm leading-6 text-muted-foreground">{t('description')}</p>
-      </div>
-
-      <p className="rounded-[var(--radius-md)] bg-muted/50 px-4 py-3 text-sm leading-6 text-muted-foreground">
-        {t('cloudSafetyNote')}
-      </p>
-
-      {actionError ? (
-        <p className="text-sm leading-6 text-destructive" role="alert">
-          {t('actionError')}
-        </p>
-      ) : null}
-
-      <div aria-live="polite">
-        {status === 'loading' ? (
-          <div className="space-y-3">
-            {Array.from({ length: 2 }, (_, index) => (
-              <div className="flex items-center gap-3" key={index}>
-                <Skeleton className="size-9 shrink-0 motion-reduce:animate-none" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-2/5 motion-reduce:animate-none" />
-                  <Skeleton className="h-3 w-3/5 motion-reduce:animate-none" />
-                </div>
-              </div>
-            ))}
+    <Card className="gap-0 py-0" id="offline-storage">
+      <section aria-labelledby="offline-storage-heading" className="p-5 sm:p-6">
+        <div className="flex items-start gap-3">
+          <HardDrive aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand" />
+          <div className="min-w-0">
+            <h2
+              className="text-lg leading-6 font-semibold tracking-tight"
+              id="offline-storage-heading"
+            >
+              {t('title')}
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+              {t('description')}
+            </p>
           </div>
+        </div>
+
+        {actionError ? (
+          <Alert className="mt-5" role="alert" variant="destructive">
+            <TriangleAlert aria-hidden="true" />
+            <AlertDescription>{t('actionError')}</AlertDescription>
+          </Alert>
         ) : null}
 
-        {status === 'error' ? (
-          <p className="text-sm leading-6 text-muted-foreground">{t('unavailable')}</p>
-        ) : null}
-
-        {status === 'ready' && !trips.length ? (
-          <p className="text-sm leading-6 text-muted-foreground">{t('empty')}</p>
-        ) : null}
-
-        {status === 'ready' && trips.length ? (
-          <ItemGroup>
-            {trips.map((trip) => (
-              <Item key={trip.tripId} size="sm" variant="outline">
-                <ItemMedia className="text-muted-foreground" variant="icon">
-                  <HardDrive aria-hidden="true" />
-                </ItemMedia>
-                <ItemContent className="min-w-0">
-                  <ItemTitle>{trip.name ?? t('untitledTrip')}</ItemTitle>
-                  <ItemDescription>
-                    {[
-                      t(`readiness.${trip.readiness}`),
-                      trip.documentCount ? t('documentCount', { count: trip.documentCount }) : null,
-                      trip.unsyncedChanges
-                        ? t('unsyncedCount', { count: trip.unsyncedChanges })
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </ItemDescription>
-                </ItemContent>
-                <div className="flex shrink-0 flex-wrap gap-1">
-                  <Button
-                    disabled={!online || busyTripId === trip.tripId}
-                    onClick={() => void refreshTrip(trip.tripId)}
-                    size="xs"
-                    variant="outline"
-                  >
-                    {busyTripId === trip.tripId ? (
-                      <RefreshCw
-                        aria-hidden="true"
-                        className="animate-spin motion-reduce:animate-none"
-                        data-icon="inline-start"
-                      />
-                    ) : (
-                      <CloudDownload aria-hidden="true" data-icon="inline-start" />
-                    )}
-                    {t('refresh')}
-                  </Button>
-                  <Button
-                    disabled={busyTripId === trip.tripId || trip.unsyncedChanges > 0}
-                    onClick={() => {
-                      setActionError(false);
-                      setRemoveTarget(trip);
-                    }}
-                    size="xs"
-                    variant="ghost"
-                  >
-                    <Trash2 aria-hidden="true" data-icon="inline-start" />
-                    {t('remove')}
-                  </Button>
+        <div aria-live="polite" className="mt-6 border-y border-border py-1">
+          {status === 'loading' ? (
+            <div className="space-y-3 py-4">
+              {Array.from({ length: 2 }, (_, index) => (
+                <div className="flex items-center gap-3" key={index}>
+                  <Skeleton className="size-9 shrink-0 motion-reduce:animate-none" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-2/5 motion-reduce:animate-none" />
+                    <Skeleton className="h-3 w-3/5 motion-reduce:animate-none" />
+                  </div>
                 </div>
-              </Item>
-            ))}
-          </ItemGroup>
-        ) : null}
-      </div>
+              ))}
+            </div>
+          ) : null}
 
-      {!online ? <p className="text-xs leading-5 text-text-subtle">{t('offlineHint')}</p> : null}
+          {status === 'error' ? (
+            <p className="py-4 text-sm leading-6 text-muted-foreground">{t('unavailable')}</p>
+          ) : null}
+
+          {status === 'ready' && !trips.length ? (
+            <p className="py-4 text-sm leading-6 text-muted-foreground">{t('empty')}</p>
+          ) : null}
+
+          {status === 'ready' && trips.length ? (
+            <ItemGroup className="py-1">
+              {trips.map((trip) => (
+                <Item key={trip.tripId} size="sm" variant="outline">
+                  <ItemMedia className="text-muted-foreground" variant="icon">
+                    <HardDrive aria-hidden="true" />
+                  </ItemMedia>
+                  <ItemContent className="min-w-0">
+                    <ItemTitle>{trip.name ?? t('untitledTrip')}</ItemTitle>
+                    <ItemDescription>
+                      {[
+                        t(`readiness.${trip.readiness}`),
+                        trip.documentCount
+                          ? t('documentCount', { count: trip.documentCount })
+                          : null,
+                        trip.unsyncedChanges
+                          ? t('unsyncedCount', { count: trip.unsyncedChanges })
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </ItemDescription>
+                  </ItemContent>
+                  <div className="flex shrink-0 flex-wrap gap-1">
+                    <Button
+                      disabled={!online || busyTripId === trip.tripId}
+                      onClick={() => void refreshTrip(trip.tripId)}
+                      size="xs"
+                      variant="outline"
+                    >
+                      {busyTripId === trip.tripId ? (
+                        <RefreshCw
+                          aria-hidden="true"
+                          className="animate-spin motion-reduce:animate-none"
+                          data-icon="inline-start"
+                        />
+                      ) : (
+                        <CloudDownload aria-hidden="true" data-icon="inline-start" />
+                      )}
+                      {t('refresh')}
+                    </Button>
+                    <Button
+                      disabled={busyTripId === trip.tripId || trip.unsyncedChanges > 0}
+                      onClick={() => {
+                        setActionError(false);
+                        setRemoveTarget(trip);
+                      }}
+                      size="xs"
+                      variant="ghost"
+                    >
+                      <Trash2 aria-hidden="true" data-icon="inline-start" />
+                      {t('remove')}
+                    </Button>
+                  </div>
+                </Item>
+              ))}
+            </ItemGroup>
+          ) : null}
+        </div>
+
+        {!online ? (
+          <p className="mt-4 text-xs leading-5 text-text-subtle">{t('offlineHint')}</p>
+        ) : null}
+        <p className="mt-4 text-xs leading-5 text-text-subtle">{t('cloudSafetyNote')}</p>
+      </section>
 
       <AlertDialog
         onOpenChange={(open) => !open && setRemoveTarget(null)}
@@ -247,6 +261,6 @@ export function OfflineStorageSettings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </section>
+    </Card>
   );
 }

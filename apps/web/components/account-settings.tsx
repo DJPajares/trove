@@ -1,10 +1,11 @@
 'use client';
 
 import type { User } from '@supabase/supabase-js';
-import { LogOut, ShieldCheck } from 'lucide-react';
+import { CircleAlert, LogOut, ShieldCheck, UserRound } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,6 +17,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSignOut } from '@/lib/auth/use-sign-out';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
@@ -24,17 +26,24 @@ export function PrivacySecuritySettings() {
   const t = useTranslations('privacySecurity');
 
   return (
-    <section aria-labelledby="privacy-security-heading" className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground" id="privacy-security-heading">
-          {t('title')}
-        </h2>
-        <p className="mt-1 text-sm leading-6 text-muted-foreground">{t('description')}</p>
-      </div>
+    <Card className="gap-0 py-0" id="privacy-security">
+      <section aria-labelledby="privacy-security-heading" className="p-5 sm:p-6">
+        <div className="flex items-start gap-3">
+          <ShieldCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand" />
+          <div className="min-w-0">
+            <h2
+              className="text-lg leading-6 font-semibold tracking-tight"
+              id="privacy-security-heading"
+            >
+              {t('title')}
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+              {t('description')}
+            </p>
+          </div>
+        </div>
 
-      <div className="flex gap-3 rounded-[var(--radius-md)] border border-border p-4">
-        <ShieldCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-status-success" />
-        <div className="space-y-2">
+        <div className="mt-6 space-y-3 border-y border-border py-4">
           <p className="text-sm font-medium text-foreground">{t('privateByDefaultTitle')}</p>
           <ul className="space-y-1.5 text-sm leading-6 text-muted-foreground">
             <li>{t('ownerOnly')}</li>
@@ -42,10 +51,10 @@ export function PrivacySecuritySettings() {
             <li>{t('sharedPlaces')}</li>
           </ul>
         </div>
-      </div>
 
-      <p className="text-xs leading-5 text-text-subtle">{t('futureSharingNote')}</p>
-    </section>
+        <p className="mt-4 text-xs leading-5 text-text-subtle">{t('futureSharingNote')}</p>
+      </section>
+    </Card>
   );
 }
 
@@ -91,42 +100,65 @@ export function AccountSettings() {
     };
   }, []);
 
+  async function handleRequestSignOut() {
+    if (await requestSignOut()) setUser(null);
+  }
+
+  async function handleSignOut() {
+    if (await signOut()) setUser(null);
+  }
+
   return (
-    <section aria-labelledby="account-settings-heading" className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground" id="account-settings-heading">
-          {t('title')}
-        </h2>
-        <p className="mt-1 text-sm leading-6 text-muted-foreground">{t('description')}</p>
-      </div>
+    <Card className="gap-0 py-0" id="account">
+      <section aria-labelledby="account-settings-heading" className="p-5 sm:p-6">
+        <div className="flex items-start gap-3">
+          <UserRound aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand" />
+          <div className="min-w-0">
+            <h2
+              className="text-lg leading-6 font-semibold tracking-tight"
+              id="account-settings-heading"
+            >
+              {t('title')}
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+              {t('description')}
+            </p>
+          </div>
+        </div>
 
-      <div className="rounded-[var(--radius-md)] border border-border p-4">
-        <p className="text-xs font-medium text-muted-foreground">{t('signedInAs')}</p>
-        {isReady ? (
-          <p className="mt-1 truncate text-sm font-medium text-foreground">
-            {user?.email ?? t('noAccount')}
-          </p>
-        ) : (
-          <Skeleton className="mt-2 h-4 w-48 motion-reduce:animate-none" />
-        )}
-      </div>
+        {hasSignOutError ? (
+          <Alert className="mt-5" role="alert" variant="destructive">
+            <CircleAlert aria-hidden="true" />
+            <AlertDescription>{account('signOutError')}</AlertDescription>
+          </Alert>
+        ) : null}
 
-      <p className="text-sm leading-6 text-muted-foreground">{t('signOutNote')}</p>
+        <div className="mt-6 flex items-center justify-between gap-5 border-y border-border py-4">
+          <span>
+            <span className="block text-xs font-medium text-muted-foreground">
+              {t('signedInAs')}
+            </span>
+            {isReady ? (
+              <span className="mt-1 block truncate text-sm font-medium text-foreground">
+                {user?.email ?? t('noAccount')}
+              </span>
+            ) : (
+              <Skeleton className="mt-2 h-4 w-48 motion-reduce:animate-none" />
+            )}
+          </span>
+          <Button
+            disabled={!user || isSigningOut}
+            onClick={() => void handleRequestSignOut()}
+            size="sm"
+            variant="outline"
+          >
+            <LogOut aria-hidden="true" data-icon="inline-start" />
+            {isSigningOut ? account('signingOut') : account('signOut')}
+          </Button>
+        </div>
 
-      {hasSignOutError ? (
-        <p className="text-sm leading-6 text-destructive" role="alert">
-          {account('signOutError')}
-        </p>
-      ) : null}
-
-      <Button
-        disabled={!user || isSigningOut}
-        onClick={() => void requestSignOut()}
-        variant="outline"
-      >
-        <LogOut aria-hidden="true" data-icon="inline-start" />
-        {isSigningOut ? account('signingOut') : account('signOut')}
-      </Button>
+        <p className="mt-4 text-xs leading-5 text-text-subtle">{t('signOutNote')}</p>
+      </section>
 
       <AlertDialog onOpenChange={setShowUnsyncedWarning} open={showUnsyncedWarning}>
         <AlertDialogContent>
@@ -138,7 +170,7 @@ export function AccountSettings() {
             <AlertDialogCancel>{account('keepSignedIn')}</AlertDialogCancel>
             <AlertDialogAction
               disabled={isSigningOut}
-              onClick={() => void signOut()}
+              onClick={() => void handleSignOut()}
               variant="destructive"
             >
               {isSigningOut ? account('signingOut') : account('discardAndSignOut')}
@@ -146,6 +178,6 @@ export function AccountSettings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </section>
+    </Card>
   );
 }

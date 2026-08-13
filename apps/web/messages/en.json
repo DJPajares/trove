@@ -327,6 +327,37 @@
         "noNextTitle": "You're clear for now",
         "noNextDescription": "There are no remaining itinerary items for today."
       },
+      "weather": {
+        "loading": "Loading weather",
+        "now": "Weather now",
+        "forecast": "Weather forecast",
+        "today": "Today",
+        "forDate": "Forecast for {date}",
+        "feelsLike": "Feels like {temperature}",
+        "range": "High {high}, low {low}",
+        "forecastLater": "Weather for this day will be available closer to your trip.",
+        "noForecast": "A forecast is not available for this day.",
+        "savedData": "Saved weather from {time}. It may be out of date.",
+        "unavailableTitle": "Weather is unavailable right now",
+        "unavailableDescription": "Your trip details are still available. Try again when you have a connection.",
+        "tryAgain": "Try weather again",
+        "unit": {
+          "celsius": "°C",
+          "fahrenheit": "°F"
+        },
+        "condition": {
+          "clear": "Clear",
+          "cloudy": "Cloudy",
+          "fog": "Foggy",
+          "drizzle": "Drizzle",
+          "rain": "Rain",
+          "snow": "Snow",
+          "showers": "Showers",
+          "snowShowers": "Snow showers",
+          "thunderstorm": "Thunderstorms",
+          "unknown": "Conditions unavailable"
+        }
+      },
       "today": {
         "label": "Today",
         "title": "Today",

@@ -20,6 +20,7 @@ import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
 import { useTripModePreview } from '@/components/trip-mode-shell';
 import { useOfflineDataRefreshKey, useOnlineStatus } from '@/components/trip-sync-status';
+import { TripWeatherContext } from '@/components/trip-weather-context';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -233,6 +234,26 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   const currentDetails = getDetails(currentItem);
   const nextDetails = getDetails(nextItem);
   const nextName = nextItem ? itemName(nextItem, nextDetails, t('placeFallback')) : null;
+  const weatherItem = nextItem ?? currentItem;
+  const weatherDetails = weatherItem ? getDetails(weatherItem) : null;
+  const weatherProviderId = providerId(weatherItem);
+  const cachedWeatherDetails = weatherProviderId
+    ? getCachedProviderPlaceDetails(weatherProviderId)
+    : null;
+  const persistedWeatherLocation = weatherItem?.tripPlace?.place.location;
+  const providerWeatherLocation = weatherDetails?.location ?? cachedWeatherDetails?.location;
+  const weatherCoordinates = persistedWeatherLocation ?? providerWeatherLocation;
+  const weatherLocation = weatherCoordinates
+    ? {
+        latitude: weatherCoordinates.latitude,
+        longitude: weatherCoordinates.longitude,
+        timeZone:
+          persistedWeatherLocation?.timeZone ??
+          weatherItem?.timeZone ??
+          readyContext.day?.defaultTimeZone ??
+          readyContext.trip.referenceTimeZone,
+      }
+    : null;
   const route =
     readyContext.leaveBy?.destinationItemId === nextItem?.id ? readyContext.leaveBy : null;
   const directions = online && nextItem && nextName ? directionsHref(nextItem, nextName) : null;
@@ -299,6 +320,12 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
           </div>
         </div>
       ) : null}
+
+      <TripWeatherContext
+        isPreview={isPreview}
+        location={weatherLocation}
+        selectedDate={readyContext.selectedDate}
+      />
 
       {nextItem && nextName ? (
         <section

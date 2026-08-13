@@ -1541,7 +1541,18 @@
       "partial": "Partly ready",
       "not_ready": "Not ready",
       "error": "Last refresh failed"
-    }
+    },
+    "installTitle": "Install Trove",
+    "installDescription": "Add Trove to this device for a full-screen app and faster access while travelling.",
+    "installedDescription": "Trove is installed on this device.",
+    "install": "Install"
+  },
+  "pwaUpdate": {
+    "title": "Update available",
+    "description": "Reload to get the latest version of Trove.",
+    "reload": "Reload",
+    "reloading": "Reloading...",
+    "later": "Later"
   },
   "privacySecurity": {
     "title": "Privacy & Security",
@@ -1604,7 +1615,10 @@
   "offline": {
     "eyebrow": "Offline",
     "title": "Trove needs a connection for this page.",
-    "description": "The basic app shell is available. Offline trip details will arrive in a later travel update."
+    "description": "This page needs a connection. Trips you prepared for offline use are still available.",
+    "availableTitle": "Available offline",
+    "availableDescription": "These trips are stored on this device.",
+    "untitledTrip": "Untitled trip"
   },
   "placeholder": {
     "eyebrow": "Trove",

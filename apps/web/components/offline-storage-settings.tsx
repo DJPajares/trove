@@ -1,6 +1,6 @@
 'use client';
 
-import { CloudDownload, HardDrive, RefreshCw, Trash2, TriangleAlert } from 'lucide-react';
+import { CloudDownload, Download, HardDrive, RefreshCw, Trash2, TriangleAlert } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -38,6 +38,7 @@ import {
   type OfflineReadinessState,
 } from '@/lib/offline/trip-store';
 import { getOfflineAuthContext } from '@/lib/offline/trip-sync';
+import { useInstallPrompt } from '@/lib/pwa/install';
 
 type PreparedTrip = {
   documentCount: number;
@@ -52,6 +53,7 @@ type LoadState = 'error' | 'loading' | 'ready';
 export function OfflineStorageSettings() {
   const t = useTranslations('offlineStorage');
   const online = useOnlineStatus();
+  const { availability, install } = useInstallPrompt();
   const [trips, setTrips] = useState<PreparedTrip[]>([]);
   const [status, setStatus] = useState<LoadState>('loading');
   const [busyTripId, setBusyTripId] = useState<string | null>(null);
@@ -146,6 +148,23 @@ export function OfflineStorageSettings() {
             <TriangleAlert aria-hidden="true" />
             <AlertDescription>{t('actionError')}</AlertDescription>
           </Alert>
+        ) : null}
+
+        {availability !== 'unavailable' ? (
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-md)] border border-border p-4">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">{t('installTitle')}</p>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                {availability === 'installed' ? t('installedDescription') : t('installDescription')}
+              </p>
+            </div>
+            {availability === 'available' ? (
+              <Button onClick={() => void install()} size="sm" variant="outline">
+                <Download aria-hidden="true" data-icon="inline-start" />
+                {t('install')}
+              </Button>
+            ) : null}
+          </div>
         ) : null}
 
         <div aria-live="polite" className="mt-6 border-y border-border py-1">

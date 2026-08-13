@@ -28,7 +28,9 @@ export async function generateMetadata(): Promise<Metadata> {
     applicationName: t('name'),
     description: t('description'),
     icons: {
-      apple: '/icon.svg',
+      // iOS ignores SVG for the home-screen icon, so point it at the PNG the
+      // manifest already ships.
+      apple: '/icons/trove-192.png',
       icon: '/icon.svg',
     },
     title: {

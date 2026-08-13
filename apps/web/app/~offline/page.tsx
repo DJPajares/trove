@@ -1,6 +1,7 @@
 import { WifiOff } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 
+import { OfflineAvailableTrips } from '@/components/offline-available-trips';
 import { PageState } from '@/components/page-state';
 
 export default async function OfflinePage() {
@@ -9,7 +10,7 @@ export default async function OfflinePage() {
   return (
     <section
       aria-labelledby="offline-heading"
-      className="grid min-h-[calc(100dvh-10rem)] items-center"
+      className="grid min-h-[calc(100dvh-10rem)] content-center"
     >
       <PageState
         description={t('description')}
@@ -19,6 +20,7 @@ export default async function OfflinePage() {
         kind="offline"
         title={t('title')}
       />
+      <OfflineAvailableTrips />
     </section>
   );
 }

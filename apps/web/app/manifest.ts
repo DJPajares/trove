@@ -6,8 +6,12 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
 
   return {
     background_color: '#f8f6ed',
+    categories: ['travel', 'productivity'],
     description: app('description'),
     display: 'standalone',
+    // A stable id keeps an installed Trove tied to this app across deploys
+    // even if start_url ever changes.
+    id: '/',
     icons: [
       {
         purpose: 'any',
@@ -29,6 +33,8 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
       },
     ],
     name: app('name'),
+    orientation: 'portrait-primary',
+    scope: '/',
     short_name: app('name'),
     start_url: '/',
     theme_color: '#315f46',

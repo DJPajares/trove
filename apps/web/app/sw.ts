@@ -87,7 +87,10 @@ const serwist = new Serwist({
   navigationPreload: true,
   precacheEntries: self.__SW_MANIFEST,
   runtimeCaching,
-  skipWaiting: true,
+  // A new build waits until the user accepts it. Taking over an open tab
+  // immediately would leave the running page requesting chunks the new
+  // precache no longer serves.
+  skipWaiting: false,
 });
 
 serwist.addEventListeners();

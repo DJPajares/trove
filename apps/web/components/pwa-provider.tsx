@@ -5,6 +5,7 @@ import { useEffect, type ReactNode } from 'react';
 
 import { OfflineSyncManager } from '@/components/offline-sync-manager';
 import { NotificationsProvider } from '@/components/notifications-provider';
+import { PwaUpdatePrompt } from '@/components/pwa-update-prompt';
 
 const TROVE_WORKER_PATH = '/serwist/sw.js';
 const TROVE_CACHE_PREFIX = 'trove-pwa-';
@@ -61,6 +62,7 @@ export function PwaProvider({ children }: Readonly<{ children: ReactNode }>) {
     <SerwistProvider cacheOnNavigation={false} reloadOnOnline={false} swUrl={TROVE_WORKER_PATH}>
       <NotificationsProvider>
         <OfflineSyncManager />
+        <PwaUpdatePrompt />
         {children}
       </NotificationsProvider>
     </SerwistProvider>

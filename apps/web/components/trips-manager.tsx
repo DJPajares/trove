@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   CircleAlert,
   Compass,
+  Eye,
   Info,
   MapPinned,
   Pencil,
@@ -307,10 +308,23 @@ export function TripsManager() {
                       {t('openTripMode')}
                     </Button>
                   ) : null}
+                  {overviewTrip.lifecycle === 'planning' ? (
+                    <Button
+                      nativeButton={false}
+                      render={
+                        <Link
+                          href={`/trips/${overviewTrip.id}/mode?preview=1&date=${overviewTrip.startDate}&time=09%3A00`}
+                        />
+                      }
+                    >
+                      <Eye aria-hidden="true" data-icon="inline-start" />
+                      {t('previewTripMode')}
+                    </Button>
+                  ) : null}
                   <Button
                     nativeButton={false}
                     render={<Link href={`/trips/${overviewTrip.id}/itinerary`} />}
-                    variant={overviewTrip.lifecycle === 'active' ? 'outline' : 'default'}
+                    variant={overviewTrip.lifecycle === 'completed' ? 'default' : 'outline'}
                   >
                     <CalendarClock aria-hidden="true" data-icon="inline-start" />
                     {t('continuePlanning')}

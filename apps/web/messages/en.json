@@ -114,6 +114,7 @@
   "trips": {
     "continuePlanning": "Continue planning",
     "openTripMode": "Open Trip Mode",
+    "previewTripMode": "Preview Trip Mode",
     "destinations": "Destinations",
     "editTrip": "Edit trip",
     "planningReadiness": "Planning readiness",
@@ -222,6 +223,14 @@
   },
   "tripMode": {
     "label": "Trip Mode",
+    "preview": {
+      "label": "Trip Mode Preview",
+      "title": "Preview Trip Mode",
+      "description": "Choose a trip day and local time. This uses your real itinerary, and any edits you make update the actual trip.",
+      "date": "Trip day",
+      "time": "Local time",
+      "timeDescription": "Uses the selected day's timezone. Route times are estimates, not future traffic."
+    },
     "navigation": "Trip Mode navigation",
     "exit": "Exit Trip Mode",
     "backToTrips": "Back to Trips",
@@ -238,6 +247,7 @@
         "label": "Now",
         "title": "Now",
         "eyebrow": "Your trip right now",
+        "previewEyebrow": "Your trip at the preview time",
         "loading": "Checking your trip…",
         "loadError": "We couldn't load your current trip context",
         "loadErrorDescription": "Check your connection and try again.",
@@ -298,6 +308,7 @@
         "skip": "Skip",
         "undoComplete": "Undo complete",
         "undoSkip": "Undo skip",
+        "undo": "Undo",
         "moreActions": "More actions for {name}",
         "editTime": "Edit time",
         "moveEarlier": "Move earlier",
@@ -329,7 +340,8 @@
           "reordered": "Itinerary order updated.",
           "moved": "Item moved to another day.",
           "schedule": "Item time updated.",
-          "added": "Item added to today."
+          "added": "Item added to today.",
+          "undone": "The last preview change was undone."
         },
         "scheduleEditor": {
           "title": "Edit time",
@@ -367,6 +379,8 @@
         "label": "Map",
         "title": "Map",
         "description": "See today's planned route, day base, and useful Trip Places. Your device location appears only when you choose to share it.",
+        "previewDescription": "See the selected day's planned route, day base, and useful Trip Places.",
+        "previewLocation": "Preview uses planned itinerary locations only. It does not use or imply your current device location.",
         "loading": "Loading today's map…",
         "loadError": "We couldn't load today's map context",
         "loadErrorDescription": "Check your connection and try again. Your itinerary remains available in Today.",

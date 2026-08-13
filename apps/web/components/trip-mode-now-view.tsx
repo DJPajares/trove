@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
+import { useTripModePreview } from '@/components/trip-mode-shell';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -86,6 +87,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripMode.views.now');
   const locale = useLocale();
   const { preferences } = usePreferences();
+  const { contextOptions, isPreview, withPreviewHref } = useTripModePreview();
   const [reloadKey, setReloadKey] = useState(0);
   const [state, setState] = useState<LoadState>({ context: null, status: 'loading' });
   const [details, setDetails] = useState<Record<string, ProviderPlaceDetails>>({});
@@ -94,7 +96,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
     const controller = new AbortController();
     setState({ context: null, status: 'loading' });
     setDetails({});
-    void fetchTripModeContext(tripId, { signal: controller.signal })
+    void fetchTripModeContext(tripId, contextOptions(controller.signal))
       .then((context) => setState({ context, status: 'ready' }))
       .catch((error) => {
         if (!(error instanceof DOMException && error.name === 'AbortError')) {
@@ -102,7 +104,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
         }
       });
     return () => controller.abort();
-  }, [reloadKey, tripId]);
+  }, [contextOptions, reloadKey, tripId]);
 
   const context = state.context;
   const currentItem = useMemo(
@@ -156,7 +158,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
             <Button onClick={() => setReloadKey((value) => value + 1)}>{t('tryAgain')}</Button>
             <Button
               nativeButton={false}
-              render={<Link href={`/trips/${tripId}/mode/today`} />}
+              render={<Link href={withPreviewHref(`/trips/${tripId}/mode/today`)} />}
               variant="outline"
             >
               {t('openToday')}
@@ -235,7 +237,9 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
     <div className="space-y-7">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm font-medium text-brand">{t('eyebrow')}</p>
+          <p className="text-sm font-medium text-brand">
+            {t(isPreview ? 'previewEyebrow' : 'eyebrow')}
+          </p>
           <h2 className="mt-1 text-3xl font-semibold tracking-[-0.025em] text-foreground sm:text-4xl">
             {t('title')}
           </h2>
@@ -243,7 +247,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
         </div>
         <Button
           nativeButton={false}
-          render={<Link href={`/trips/${tripId}/mode/today`} />}
+          render={<Link href={withPreviewHref(`/trips/${tripId}/mode/today`)} />}
           variant="outline"
         >
           <CalendarDays aria-hidden="true" data-icon="inline-start" />
@@ -366,7 +370,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
             <Button
               className="sm:w-auto"
               nativeButton={false}
-              render={<Link href={`/trips/${tripId}/mode/today`} />}
+              render={<Link href={withPreviewHref(`/trips/${tripId}/mode/today`)} />}
               variant="outline"
             >
               {t('openToday')}
@@ -394,7 +398,10 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
       ) : (
         <PageState
           actions={
-            <Button nativeButton={false} render={<Link href={`/trips/${tripId}/mode/today`} />}>
+            <Button
+              nativeButton={false}
+              render={<Link href={withPreviewHref(`/trips/${tripId}/mode/today`)} />}
+            >
               {t('openToday')}
             </Button>
           }

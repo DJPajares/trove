@@ -21,12 +21,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
+import { useTripModePreview } from '@/components/trip-mode-shell';
 import { TripModeAddItemDialog } from '@/components/trip-mode-add-item-dialog';
 import {
   TripModeScheduleFields,
   type TripModeSchedule,
 } from '@/components/trip-mode-schedule-fields';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -73,6 +74,11 @@ type LoadState =
   | { data: null; status: 'loading' }
   | { data: { context: TripModeContext; itinerary: Itinerary }; status: 'ready' };
 
+type UndoAction =
+  | { itemId: string; kind: 'organize'; itineraryDayId: string; position: number }
+  | { itemId: string; kind: 'schedule'; schedule: ItineraryScheduleInput }
+  | { itemId: string; kind: 'status'; travelStatus: ItineraryTravelStatus };
+
 function providerId(item: ItineraryItem) {
   return item.tripPlace?.place.providerRefs.find((ref) => ref.provider === 'google')
     ?.externalPlaceId;
@@ -82,6 +88,12 @@ function scheduleInput(schedule: TripModeSchedule, exactTime: string): Itinerary
   if (schedule === 'exact') return { kind: 'exact', localTime: exactTime };
   if (schedule === 'none') return { kind: 'none' };
   return { dayPart: schedule, kind: 'day_part' };
+}
+
+function scheduleInputFromItem(item: ItineraryItem): ItineraryScheduleInput {
+  if (item.localStartTime) return { kind: 'exact', localTime: item.localStartTime };
+  if (item.dayPart) return { dayPart: item.dayPart, kind: 'day_part' };
+  return { kind: 'none' };
 }
 
 function TodaySkeleton({ label }: Readonly<{ label: string }>) {
@@ -105,10 +117,12 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripMode.views.today');
   const locale = useLocale();
   const { preferences } = usePreferences();
+  const { contextOptions, isPreview } = useTripModePreview();
   const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
   const [reloadKey, setReloadKey] = useState(0);
   const [mutatingItemId, setMutatingItemId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [scheduleItem, setScheduleItem] = useState<ItineraryItem | null>(null);
@@ -121,16 +135,17 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
 
   const refresh = useCallback(async () => {
     const [context, itinerary] = await Promise.all([
-      fetchTripModeContext(tripId),
+      fetchTripModeContext(tripId, contextOptions()),
       fetchItinerary(tripId),
     ]);
     setState({ data: { context, itinerary }, status: 'ready' });
-  }, [tripId]);
+  }, [contextOptions, tripId]);
 
   useEffect(() => {
     let active = true;
     setState({ data: null, status: 'loading' });
-    void Promise.all([fetchTripModeContext(tripId), fetchItinerary(tripId)])
+    setUndoAction(null);
+    void Promise.all([fetchTripModeContext(tripId, contextOptions()), fetchItinerary(tripId)])
       .then(([context, itinerary]) => {
         if (active) setState({ data: { context, itinerary }, status: 'ready' });
       })
@@ -140,7 +155,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     return () => {
       active = false;
     };
-  }, [reloadKey, tripId]);
+  }, [contextOptions, reloadKey, tripId]);
 
   const day = useMemo(() => {
     if (state.status !== 'ready') return null;
@@ -274,10 +289,14 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     setMutatingItemId(item.id);
     setError(null);
     setFeedback(null);
+    setUndoAction(null);
     setLocalStatus(item.id, travelStatus);
     try {
       await updateItineraryItemTravelStatus(tripId, item.id, travelStatus);
       await refresh();
+      if (isPreview) {
+        setUndoAction({ itemId: item.id, kind: 'status', travelStatus: previous });
+      }
       setFeedback(t(`feedback.${travelStatus}`));
     } catch {
       setLocalStatus(item.id, previous);
@@ -294,16 +313,26 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     const upcomingIndex = upcomingItems.findIndex((candidate) => candidate.id === item.id);
     const target = upcomingItems[upcomingIndex + (direction === 'earlier' ? -1 : 1)];
     if (!target) return;
+    const previousPosition = day.items.findIndex((candidate) => candidate.id === item.id);
     const targetPosition = day.items.findIndex((candidate) => candidate.id === target.id);
     setMutatingItemId(item.id);
     setError(null);
     setFeedback(null);
+    setUndoAction(null);
     try {
       await organizeItineraryItem(tripId, item.id, {
         itineraryDayId: day.id,
         position: targetPosition,
       });
       await refresh();
+      if (isPreview) {
+        setUndoAction({
+          itemId: item.id,
+          itineraryDayId: day.id,
+          kind: 'organize',
+          position: previousPosition,
+        });
+      }
       setFeedback(t('feedback.reordered'));
     } catch {
       setError(t('actionError'));
@@ -313,12 +342,23 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   async function moveToDay(item: ItineraryItem, itineraryDayId: string) {
+    if (!day) return;
+    const previousPosition = day.items.findIndex((candidate) => candidate.id === item.id);
     setMutatingItemId(item.id);
     setError(null);
     setFeedback(null);
+    setUndoAction(null);
     try {
       await organizeItineraryItem(tripId, item.id, { itineraryDayId, position: 999 });
       await refresh();
+      if (isPreview) {
+        setUndoAction({
+          itemId: item.id,
+          itineraryDayId: day.id,
+          kind: 'organize',
+          position: previousPosition,
+        });
+      }
       setFeedback(t('feedback.moved'));
     } catch {
       setError(t('actionError'));
@@ -342,15 +382,50 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     }
     setMutatingItemId(scheduleItem.id);
     setScheduleError(null);
+    setUndoAction(null);
     try {
+      const previousSchedule = scheduleInputFromItem(scheduleItem);
       await updateItineraryItem(tripId, scheduleItem.id, {
         schedule: scheduleInput(schedule, exactTime),
       });
       await refresh();
+      if (isPreview) {
+        setUndoAction({
+          itemId: scheduleItem.id,
+          kind: 'schedule',
+          schedule: previousSchedule,
+        });
+      }
       setScheduleItem(null);
       setFeedback(t('feedback.schedule'));
     } catch {
       setScheduleError(t('scheduleEditor.saveError'));
+    } finally {
+      setMutatingItemId(null);
+    }
+  }
+
+  async function undoLastAction() {
+    const action = undoAction;
+    if (!action) return;
+    setMutatingItemId(action.itemId);
+    setError(null);
+    try {
+      if (action.kind === 'status') {
+        await updateItineraryItemTravelStatus(tripId, action.itemId, action.travelStatus);
+      } else if (action.kind === 'organize') {
+        await organizeItineraryItem(tripId, action.itemId, {
+          itineraryDayId: action.itineraryDayId,
+          position: action.position,
+        });
+      } else {
+        await updateItineraryItem(tripId, action.itemId, { schedule: action.schedule });
+      }
+      await refresh();
+      setUndoAction(null);
+      setFeedback(t('feedback.undone'));
+    } catch {
+      setError(t('actionError'));
     } finally {
       setMutatingItemId(null);
     }
@@ -390,6 +465,19 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
           <Alert>
             <CheckCircle2 aria-hidden="true" />
             <AlertDescription>{feedback}</AlertDescription>
+            {undoAction ? (
+              <AlertAction>
+                <Button
+                  disabled={mutatingItemId === undoAction.itemId}
+                  onClick={() => void undoLastAction()}
+                  size="xs"
+                  variant="ghost"
+                >
+                  <RotateCcw aria-hidden="true" data-icon="inline-start" />
+                  {t('undo')}
+                </Button>
+              </AlertAction>
+            ) : null}
           </Alert>
         ) : null}
         {error ? (
@@ -608,6 +696,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
         dayId={day.id}
         onAdded={async () => {
           await refresh();
+          setUndoAction(null);
           setFeedback(t('feedback.added'));
         }}
         onOpenChange={setAddOpen}

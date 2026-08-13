@@ -186,17 +186,6 @@ export async function resolveTripModeContext(
   if (!trip) throw new ItineraryNotFoundError('trip_not_found');
 
   let at = options.at ?? new Date();
-  if (options.preview) {
-    try {
-      at = floatingLocalTimeToInstant(
-        options.preview.date,
-        options.preview.time,
-        trip.referenceTimeZone,
-      );
-    } catch {
-      throw new TripModeContextValidationError('invalid_preview_time');
-    }
-  }
   const selectedDate = options.preview?.date ?? getLocalDate(at, trip.referenceTimeZone);
   const day = await prisma.itineraryDay.findFirst({
     where: { date: parseDateOnly(selectedDate), tripId: trip.id },
@@ -207,6 +196,17 @@ export async function resolveTripModeContext(
       },
     },
   });
+  if (options.preview) {
+    try {
+      at = floatingLocalTimeToInstant(
+        options.preview.date,
+        options.preview.time,
+        day?.defaultTimeZone ?? trip.referenceTimeZone,
+      );
+    } catch {
+      throw new TripModeContextValidationError('invalid_preview_time');
+    }
+  }
 
   const base = {
     contextAt: at.toISOString(),

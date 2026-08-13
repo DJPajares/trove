@@ -4,6 +4,7 @@ import {
   BedDouble,
   CalendarDays,
   CircleAlert,
+  Eye,
   ExternalLink,
   LocateFixed,
   MapPin,
@@ -20,6 +21,7 @@ import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
 import { PageState } from '@/components/page-state';
 import { PlaceDetailSheet } from '@/components/place-detail-sheet';
 import { usePreferences } from '@/components/preferences-provider';
+import { useTripModePreview } from '@/components/trip-mode-shell';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -99,6 +101,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
   const locale = useLocale();
   const router = useRouter();
   const { preferences } = usePreferences();
+  const { contextOptions, isPreview, withPreviewHref } = useTripModePreview();
   const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
   const [routeState, setRouteState] = useState<RouteState>({ data: null, status: 'idle' });
   const [reloadKey, setReloadKey] = useState(0);
@@ -111,14 +114,19 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
   const [deviceLocation, setDeviceLocation] = useState<DeviceLocation | null>(null);
 
   useEffect(() => {
+    if (isPreview) {
+      setDeviceLocation(null);
+      setLocationStatus('idle');
+      return;
+    }
     if (!('geolocation' in navigator)) setLocationStatus('unsupported');
-  }, []);
+  }, [isPreview]);
 
   useEffect(() => {
     let active = true;
     setState({ data: null, status: 'loading' });
     setProviderDetails({});
-    void Promise.all([fetchTripModeContext(tripId), fetchItinerary(tripId)])
+    void Promise.all([fetchTripModeContext(tripId, contextOptions()), fetchItinerary(tripId)])
       .then(([context, itinerary]) => {
         if (active) setState({ data: { context, itinerary }, status: 'ready' });
       })
@@ -128,7 +136,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
     return () => {
       active = false;
     };
-  }, [reloadKey, tripId]);
+  }, [contextOptions, reloadKey, tripId]);
 
   const day = useMemo(() => {
     if (state.status !== 'ready') return null;
@@ -245,7 +253,10 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
     return (
       <PageState
         actions={
-          <Button nativeButton={false} render={<Link href={`/trips/${tripId}/mode/today`} />}>
+          <Button
+            nativeButton={false}
+            render={<Link href={withPreviewHref(`/trips/${tripId}/mode/today`)} />}
+          >
             <CalendarDays aria-hidden="true" data-icon="inline-start" />
             {t('openToday')}
           </Button>
@@ -355,9 +366,11 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
             {t('title')}
           </h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">{date}</p>
-          <p className="max-w-2xl text-xs leading-5 text-text-subtle">{t('description')}</p>
+          <p className="max-w-2xl text-xs leading-5 text-text-subtle">
+            {t(isPreview ? 'previewDescription' : 'description')}
+          </p>
         </div>
-        {locationStatus !== 'unsupported' ? (
+        {!isPreview && locationStatus !== 'unsupported' ? (
           <Button
             disabled={locationStatus === 'loading'}
             onClick={requestLocation}
@@ -373,7 +386,12 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
         ) : null}
       </header>
 
-      {locationStatus === 'ready' ? (
+      {isPreview ? (
+        <Alert variant="info">
+          <Eye aria-hidden="true" />
+          <AlertDescription>{t('previewLocation')}</AlertDescription>
+        </Alert>
+      ) : locationStatus === 'ready' ? (
         <Alert variant="info">
           <LocateFixed aria-hidden="true" />
           <AlertDescription>{t('locationShown')}</AlertDescription>
@@ -437,7 +455,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
             onOpenPlace={setDetailTripPlaceId}
             onSelectPoint={(point) => setSelectedPointId(point.id)}
             onViewItem={(itemId) =>
-              router.push(`/trips/${tripId}/mode/today#trip-mode-item-${itemId}`)
+              router.push(withPreviewHref(`/trips/${tripId}/mode/today#trip-mode-item-${itemId}`))
             }
             points={mapPoints}
             routePolylines={routePolylines}
@@ -475,7 +493,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
               </h3>
               <Button
                 nativeButton={false}
-                render={<Link href={`/trips/${tripId}/mode/today`} />}
+                render={<Link href={withPreviewHref(`/trips/${tripId}/mode/today`)} />}
                 size="sm"
                 variant="ghost"
               >

@@ -16,6 +16,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
 import { PageState } from '@/components/page-state';
+import { useTripModePreview } from '@/components/trip-mode-shell';
 import { Button } from '@/components/ui/button';
 import {
   Item,
@@ -77,6 +78,7 @@ function TripViewSkeleton({ label }: Readonly<{ label: string }>) {
 export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripMode.views.trip');
   const locale = useLocale();
+  const { contextOptions } = useTripModePreview();
   const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
   const [pinnedInfo, setPinnedInfo] = useState<TripInfoEntry[]>([]);
   const [reloadKey, setReloadKey] = useState(0);
@@ -86,7 +88,11 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
     setState({ data: null, status: 'loading' });
     setPinnedInfo([]);
 
-    void Promise.all([fetchTripModeContext(tripId), fetchItinerary(tripId), fetchTrip(tripId)])
+    void Promise.all([
+      fetchTripModeContext(tripId, contextOptions()),
+      fetchItinerary(tripId),
+      fetchTrip(tripId),
+    ])
       .then(([context, itinerary, { trip }]) => {
         if (active) setState({ data: { context, itinerary, trip }, status: 'ready' });
       })
@@ -105,7 +111,7 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
     return () => {
       active = false;
     };
-  }, [reloadKey, tripId]);
+  }, [contextOptions, reloadKey, tripId]);
 
   const dateFormatter = useMemo(
     () =>

@@ -7,6 +7,7 @@ import {
   Check,
   CheckCircle2,
   CircleAlert,
+  ClipboardCheck,
   Clock3,
   ExternalLink,
   MapPin,
@@ -15,7 +16,10 @@ import {
   Plus,
   RotateCcw,
   SkipForward,
+  StickyNote,
+  WalletCards,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -68,12 +72,16 @@ import {
   getProviderPlaceDetails,
   type ProviderPlaceDetails,
 } from '@/lib/saved/api';
+import { fetchReservations, type Reservation } from '@/lib/reservations/api';
+import { fetchTasks, type Task } from '@/lib/tasks/api';
 import { cn } from '@/lib/utils';
 
 type LoadState =
   | { data: null; status: 'error' }
   | { data: null; status: 'loading' }
   | { data: { context: TripModeContext; itinerary: Itinerary }; status: 'ready' };
+
+type SupportingContext = { reservations: Reservation[]; tasks: Task[] };
 
 type UndoAction =
   | { itemId: string; kind: 'organize'; itineraryDayId: string; position: number }
@@ -135,6 +143,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   const [providerDetails, setProviderDetails] = useState<
     Record<string, ProviderPlaceDetails | null | undefined>
   >({});
+  const [supporting, setSupporting] = useState<SupportingContext>({ reservations: [], tasks: [] });
 
   const refresh = useCallback(async () => {
     const [context, itinerary] = await Promise.all([
@@ -147,6 +156,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   useEffect(() => {
     let active = true;
     setState({ data: null, status: 'loading' });
+    setSupporting({ reservations: [], tasks: [] });
     setUndoAction(null);
     void Promise.all([fetchTripModeContext(tripId, contextOptions()), fetchItinerary(tripId)])
       .then(([context, itinerary]) => {
@@ -155,6 +165,16 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
       .catch(() => {
         if (active) setState({ data: null, status: 'error' });
       });
+    void Promise.allSettled([fetchReservations(tripId), fetchTasks(tripId)]).then(
+      ([reservationsResult, tasksResult]) => {
+        if (!active) return;
+        setSupporting({
+          reservations:
+            reservationsResult.status === 'fulfilled' ? reservationsResult.value.reservations : [],
+          tasks: tasksResult.status === 'fulfilled' ? tasksResult.value.tasks : [],
+        });
+      },
+    );
     return () => {
       active = false;
     };
@@ -168,6 +188,26 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
       ) ?? null
     );
   }, [state]);
+  const reservationsByItem = useMemo(() => {
+    const grouped = new Map<string, Reservation[]>();
+    for (const reservation of supporting.reservations) {
+      if (!reservation.itineraryItem) continue;
+      const current = grouped.get(reservation.itineraryItem.id) ?? [];
+      current.push(reservation);
+      grouped.set(reservation.itineraryItem.id, current);
+    }
+    return grouped;
+  }, [supporting.reservations]);
+  const openTasksByItem = useMemo(() => {
+    const grouped = new Map<string, Task[]>();
+    for (const task of supporting.tasks) {
+      if (task.completed || task.context.kind !== 'item') continue;
+      const current = grouped.get(task.context.itineraryItemId) ?? [];
+      current.push(task);
+      grouped.set(task.context.itineraryItemId, current);
+    }
+    return grouped;
+  }, [supporting.tasks]);
 
   useEffect(() => {
     if (!day || !online) return;
@@ -265,6 +305,11 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     const query = new URLSearchParams({ api: '1', destination });
     if (externalPlaceId) query.set('destination_place_id', externalPlaceId);
     return `https://www.google.com/maps/dir/?${query.toString()}`;
+  };
+  const expenseHref = (itineraryItemId?: string) => {
+    const query = new URLSearchParams({ create: '1', date: context.selectedDate });
+    if (itineraryItemId) query.set('itineraryItemId', itineraryItemId);
+    return `/trips/${tripId}/expenses?${query.toString()}`;
   };
 
   const setLocalStatus = (itemId: string, travelStatus: ItineraryTravelStatus) => {
@@ -458,11 +503,29 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
             {t('timeZone', { timeZone: day.defaultTimeZone })}
           </p>
         </div>
-        <Button onClick={() => setAddOpen(true)}>
-          <Plus aria-hidden="true" data-icon="inline-start" />
-          {t('addItem')}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button nativeButton={false} render={<Link href={expenseHref()} />} variant="outline">
+            <Plus aria-hidden="true" data-icon="inline-start" />
+            {t('expense')}
+          </Button>
+          <Button onClick={() => setAddOpen(true)}>
+            <Plus aria-hidden="true" data-icon="inline-start" />
+            {t('addItem')}
+          </Button>
+        </div>
       </header>
+
+      {day.notes ? (
+        <section className="flex items-start gap-3 border-y border-border py-4">
+          <StickyNote aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand" />
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-foreground">{t('dayNote')}</h3>
+            <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+              {day.notes}
+            </p>
+          </div>
+        </section>
+      ) : null}
 
       <div aria-live="polite" className="space-y-2">
         {feedback ? (
@@ -503,6 +566,8 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
             const isCurrent = context.currentOrRelevant?.itemId === item.id;
             const busy = mutatingItemId === item.id;
             const upcomingIndex = upcomingItems.findIndex((candidate) => candidate.id === item.id);
+            const linkedReservations = reservationsByItem.get(item.id) ?? [];
+            const linkedTasks = openTasksByItem.get(item.id) ?? [];
             return (
               <li
                 className={cn(
@@ -556,15 +621,49 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                         <span>{location}</span>
                       </p>
                     ) : null}
-                    {item.notes ? (
-                      <p className="mt-2 line-clamp-2 text-sm leading-5 text-text-subtle">
-                        {item.notes}
-                      </p>
+                    {item.notes || (item.tripPlace?.note && item.tripPlace.note !== item.notes) ? (
+                      <div className="mt-2 flex items-start gap-2 text-sm leading-5 text-text-subtle">
+                        <StickyNote aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                        <div className="min-w-0 space-y-1">
+                          {item.notes ? <p className="line-clamp-2">{item.notes}</p> : null}
+                          {item.tripPlace?.note && item.tripPlace.note !== item.notes ? (
+                            <p className="line-clamp-2">{item.tripPlace.note}</p>
+                          ) : null}
+                        </div>
+                      </div>
                     ) : null}
-                    {item.tripPlace?.note && item.tripPlace.note !== item.notes ? (
-                      <p className="mt-2 line-clamp-2 text-sm leading-5 text-text-subtle">
-                        {item.tripPlace.note}
-                      </p>
+                    {linkedReservations.length || linkedTasks.length ? (
+                      <div className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
+                        {linkedReservations.length ? (
+                          <Link
+                            className="flex min-h-8 items-center gap-2 rounded-[var(--radius-sm)] text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+                            href={`/trips/${tripId}/reservations`}
+                          >
+                            <ClipboardCheck
+                              aria-hidden="true"
+                              className="size-4 shrink-0 text-brand"
+                            />
+                            <span className="min-w-0 truncate">{linkedReservations[0]!.title}</span>
+                            {linkedReservations.length > 1 ? (
+                              <span className="shrink-0 text-xs text-text-subtle">
+                                {t('moreReservations', { count: linkedReservations.length - 1 })}
+                              </span>
+                            ) : null}
+                          </Link>
+                        ) : null}
+                        {linkedTasks.length ? (
+                          <Link
+                            className="flex min-h-8 items-center gap-2 rounded-[var(--radius-sm)] text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+                            href={`/trips/${tripId}/tasks`}
+                          >
+                            <CheckCircle2
+                              aria-hidden="true"
+                              className="size-4 shrink-0 text-brand"
+                            />
+                            <span>{t('linkedTasks', { count: linkedTasks.length })}</span>
+                          </Link>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
                 </div>
@@ -615,6 +714,10 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                         <Pencil aria-hidden="true" />
                         {t('editTime')}
                       </DropdownMenuItem>
+                      <DropdownMenuLinkItem render={<Link href={expenseHref(item.id)} />}>
+                        <WalletCards aria-hidden="true" />
+                        {t('addExpense')}
+                      </DropdownMenuLinkItem>
                       {item.travelStatus === 'upcoming' ? (
                         <>
                           <DropdownMenuItem

@@ -4,10 +4,13 @@ import {
   ArrowRight,
   CalendarDays,
   CarFront,
+  ChevronRight,
+  ClipboardCheck,
   Clock3,
   Compass,
   ExternalLink,
   Footprints,
+  ListChecks,
   MapPin,
   Route,
   TramFront,
@@ -35,11 +38,15 @@ import {
   getProviderPlaceDetails,
   type ProviderPlaceDetails,
 } from '@/lib/saved/api';
+import { fetchReservations, type Reservation } from '@/lib/reservations/api';
+import { fetchTasks, type Task } from '@/lib/tasks/api';
 
 type LoadState =
   | { context: null; status: 'error' }
   | { context: null; status: 'loading' }
   | { context: TripModeContext; status: 'ready' };
+
+type SupportingContext = { reservations: Reservation[]; tasks: Task[] };
 
 function providerId(item: ItineraryItem | null) {
   return item?.tripPlace?.place.providerRefs.find((ref) => ref.provider === 'google')
@@ -95,6 +102,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   const [reloadKey, setReloadKey] = useState(0);
   const [state, setState] = useState<LoadState>({ context: null, status: 'loading' });
   const [details, setDetails] = useState<Record<string, ProviderPlaceDetails>>({});
+  const [supporting, setSupporting] = useState<SupportingContext>({ reservations: [], tasks: [] });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -109,6 +117,24 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
       });
     return () => controller.abort();
   }, [contextOptions, offlineDataRefreshKey, reloadKey, tripId]);
+
+  useEffect(() => {
+    let active = true;
+    setSupporting({ reservations: [], tasks: [] });
+    void Promise.allSettled([fetchReservations(tripId), fetchTasks(tripId)]).then(
+      ([reservationsResult, tasksResult]) => {
+        if (!active) return;
+        setSupporting({
+          reservations:
+            reservationsResult.status === 'fulfilled' ? reservationsResult.value.reservations : [],
+          tasks: tasksResult.status === 'fulfilled' ? tasksResult.value.tasks : [],
+        });
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [offlineDataRefreshKey, reloadKey, tripId]);
 
   const context = state.context;
   const currentItem = useMemo(
@@ -191,6 +217,11 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
       minute: '2-digit',
       timeZone,
     }).format(new Date(value));
+  const dateFormat = (value: string) =>
+    new Intl.DateTimeFormat(locale, {
+      dateStyle: 'medium',
+      timeZone: 'UTC',
+    }).format(new Date(`${value}T00:00:00.000Z`));
   const formatSchedule = (item: ItineraryItem) => {
     if (item.startInstant) {
       return timeFormat(
@@ -257,6 +288,43 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   const route =
     readyContext.leaveBy?.destinationItemId === nextItem?.id ? readyContext.leaveBy : null;
   const directions = online && nextItem && nextName ? directionsHref(nextItem, nextName) : null;
+  const selectedDayId = readyContext.day?.id;
+  const reservationDate = (reservation: Reservation) =>
+    reservation.localDate ??
+    reservation.flight?.departure?.localDate ??
+    reservation.checkInDate ??
+    null;
+  const relevantReservation =
+    supporting.reservations.find((reservation) => reservation.itineraryItem?.id === nextItem?.id) ??
+    supporting.reservations.find(
+      (reservation) => reservation.itineraryItem?.id === currentItem?.id,
+    ) ??
+    supporting.reservations.find(
+      (reservation) =>
+        reservationDate(reservation) === readyContext.selectedDate ||
+        reservation.applicableDays.some((day) => day.id === selectedDayId),
+    ) ??
+    null;
+  const relevantTask =
+    supporting.tasks.find(
+      (task) =>
+        !task.completed &&
+        task.context.kind === 'item' &&
+        task.context.itineraryItemId === nextItem?.id,
+    ) ??
+    supporting.tasks.find(
+      (task) =>
+        !task.completed &&
+        task.context.kind === 'item' &&
+        task.context.itineraryItemId === currentItem?.id,
+    ) ??
+    supporting.tasks.find(
+      (task) =>
+        !task.completed &&
+        (task.dueDate === readyContext.selectedDate ||
+          (task.context.kind === 'day' && task.context.itineraryDayId === selectedDayId)),
+    ) ??
+    null;
 
   return (
     <div className="space-y-7">
@@ -326,6 +394,62 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
         location={weatherLocation}
         selectedDate={readyContext.selectedDate}
       />
+
+      {relevantReservation || relevantTask ? (
+        <section aria-labelledby="trip-mode-context-heading">
+          <h3 className="text-sm font-semibold text-foreground" id="trip-mode-context-heading">
+            {t('supportingContext')}
+          </h3>
+          <ul className="mt-2 border-y border-border">
+            {relevantReservation ? (
+              <li>
+                <Link
+                  className="flex min-h-14 items-center gap-3 rounded-[var(--radius-sm)] py-2.5 outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+                  href={`/trips/${tripId}/reservations`}
+                >
+                  <ClipboardCheck aria-hidden="true" className="size-5 shrink-0 text-brand" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {relevantReservation.title}
+                    </span>
+                    {relevantReservation.bookingReference || relevantReservation.localTime ? (
+                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                        {relevantReservation.bookingReference
+                          ? t('bookingReference', {
+                              reference: relevantReservation.bookingReference,
+                            })
+                          : relevantReservation.localTime}
+                      </span>
+                    ) : null}
+                  </span>
+                  <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-text-subtle" />
+                </Link>
+              </li>
+            ) : null}
+            {relevantTask ? (
+              <li className={relevantReservation ? 'border-t border-border' : undefined}>
+                <Link
+                  className="flex min-h-14 items-center gap-3 rounded-[var(--radius-sm)] py-2.5 outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+                  href={`/trips/${tripId}/tasks`}
+                >
+                  <ListChecks aria-hidden="true" className="size-5 shrink-0 text-brand" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {relevantTask.label}
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                      {relevantTask.dueDate
+                        ? t('taskDue', { date: dateFormat(relevantTask.dueDate) })
+                        : t('taskContext')}
+                    </span>
+                  </span>
+                  <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-text-subtle" />
+                </Link>
+              </li>
+            ) : null}
+          </ul>
+        </section>
+      ) : null}
 
       {nextItem && nextName ? (
         <section

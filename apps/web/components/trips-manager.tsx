@@ -7,6 +7,7 @@ import {
   CalendarDays,
   ClipboardCheck,
   CircleAlert,
+  Compass,
   Info,
   MapPinned,
   Pencil,
@@ -297,9 +298,19 @@ export function TripsManager() {
               </SheetHeader>
               <div className="space-y-6 overflow-y-auto p-5">
                 <div className="flex flex-wrap gap-2">
+                  {overviewTrip.lifecycle === 'active' ? (
+                    <Button
+                      nativeButton={false}
+                      render={<Link href={`/trips/${overviewTrip.id}/mode`} />}
+                    >
+                      <Compass aria-hidden="true" data-icon="inline-start" />
+                      {t('openTripMode')}
+                    </Button>
+                  ) : null}
                   <Button
                     nativeButton={false}
                     render={<Link href={`/trips/${overviewTrip.id}/itinerary`} />}
+                    variant={overviewTrip.lifecycle === 'active' ? 'outline' : 'default'}
                   >
                     <CalendarClock aria-hidden="true" data-icon="inline-start" />
                     {t('continuePlanning')}

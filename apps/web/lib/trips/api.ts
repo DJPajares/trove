@@ -97,6 +97,10 @@ export async function fetchTrips() {
   return tripRequest<{ trips: Trip[] }>('/trips');
 }
 
+export async function fetchTrip(tripId: string) {
+  return tripRequest<{ trip: Trip }>(`/trips/${tripId}`);
+}
+
 export async function createTrip(input: TripInput) {
   return tripRequest<{ trip: Trip }>('/trips', {
     body: JSON.stringify(input),

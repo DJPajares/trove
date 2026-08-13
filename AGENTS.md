@@ -61,11 +61,12 @@ For each task:
 8. Create or update the Git branch.
 9. Commit and push.
 10. Open a GitHub Pull Request.
-11. Link the PR to the Linear issue.
-12. Move the issue to `In Review`.
-13. Identify the next unblocked suggested task.
-14. Move the next suggested task to `Todo`.
-15. Stop for human review.
+11. Assign the PR to `DJPajares` and verify the assignee so GitHub mobile notifications reach the user.
+12. Link the PR to the Linear issue.
+13. Move the issue to `In Review`.
+14. Identify the next unblocked suggested task.
+15. Move the next suggested task to `Todo`.
+16. Stop for human review.
 
 Do not auto-merge PRs. A user must manually review and approve.
 
@@ -111,6 +112,7 @@ Example:
 ## GitHub Rules
 
 - Create a PR for implementation tasks unless the task clearly does not modify code.
+- Assign every implementation PR to `DJPajares` before handoff, then verify it with `gh pr view <number> --json assignees`.
 - Include a concise summary and validation performed.
 - Never auto-merge.
 - Human approval is required before merge.

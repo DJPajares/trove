@@ -8,6 +8,7 @@ packages/db/src/generated/
 packages/db/generated/
 coverage/
 output/
+.playwright-cli/
 ops/release/production.json
 .husky/_/
 

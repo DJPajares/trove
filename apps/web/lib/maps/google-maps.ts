@@ -30,6 +30,10 @@ export async function loadGoogleMaps(language: string) {
     throw new Error('google_maps_language_change_requires_reload');
   }
 
-  const [maps, marker] = await Promise.all([importLibrary('maps'), importLibrary('marker')]);
-  return { maps, marker };
+  const [core, maps, marker] = await Promise.all([
+    importLibrary('core'),
+    importLibrary('maps'),
+    importLibrary('marker'),
+  ]);
+  return { core, maps, marker };
 }

@@ -255,10 +255,7 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
       setFormError(t('dateRequiredForTime'));
       return;
     }
-    if (
-      (form.plannedCostAmount && !form.plannedCostCurrencyCode) ||
-      (!form.plannedCostAmount && form.plannedCostCurrencyCode)
-    ) {
+    if (form.plannedCostAmount && !form.plannedCostCurrencyCode) {
       setFormError(t('plannedCostPairError'));
       return;
     }

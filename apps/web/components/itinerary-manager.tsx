@@ -565,10 +565,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     }
     const costAmount = form.costAmount.trim();
     const costCurrency = form.costCurrency.trim().toUpperCase();
-    if (
-      Boolean(costAmount) !== Boolean(costCurrency) ||
-      (costCurrency && !/^[A-Z]{3}$/.test(costCurrency))
-    ) {
+    if (costAmount && !/^[A-Z]{3}$/.test(costCurrency)) {
       setFormError(t('plannedCostError'));
       return null;
     }

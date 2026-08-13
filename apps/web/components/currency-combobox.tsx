@@ -135,11 +135,6 @@ export function CurrencyCombobox({
             aria-label={ariaLabel}
             className="w-(--anchor-width) min-w-64 overflow-hidden rounded-[var(--radius-md)] border border-border bg-popover p-1 text-popover-foreground shadow-[var(--shadow-overlay)] outline-none"
           >
-            <Combobox.Input
-              aria-label={t('search')}
-              className="mb-1 h-10 w-full rounded-[var(--radius-sm)] border border-input bg-background px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40"
-              placeholder={t('search')}
-            />
             <Combobox.Empty className="px-3 py-6 text-center text-sm text-muted-foreground">
               {t('empty')}
             </Combobox.Empty>

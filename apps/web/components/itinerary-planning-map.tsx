@@ -136,7 +136,7 @@ export function ItineraryPlanningMap({
     if (status !== 'ready' || !mapRef.current) return;
     let active = true;
     void loadGoogleMaps(locale)
-      .then(({ maps, marker }) => {
+      .then(({ core, maps, marker }) => {
         if (!active || !mapRef.current) return;
         markerRefs.current.forEach((existingMarker) => {
           existingMarker.map = null;
@@ -147,7 +147,7 @@ export function ItineraryPlanningMap({
         polylineRefs.current.forEach((polyline) => polyline.setMap(null));
         polylineRefs.current = [];
 
-        const bounds = new maps.LatLngBounds();
+        const bounds = new core.LatLngBounds();
         points.forEach((point) => {
           const content = markerContent(point);
           const advancedMarker = new marker.AdvancedMarkerElement({

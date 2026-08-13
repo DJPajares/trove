@@ -25,6 +25,10 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 
 import { PageState } from '@/components/page-state';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
+import {
+  ItineraryRouteSegmentRow,
+  ItineraryRouteSummary,
+} from '@/components/itinerary-route-details';
 import { CurrencyCombobox } from '@/components/currency-combobox';
 import { MoneyInput } from '@/components/money-input';
 import { PlaceDetailSheet } from '@/components/place-detail-sheet';
@@ -84,15 +88,21 @@ import {
   deleteItineraryItem,
   duplicateItineraryItem,
   fetchItinerary,
+  fetchItineraryDayRoutes,
   type Itinerary,
   type ItineraryDay,
+  type ItineraryDayRoutes,
   type ItineraryItem,
   type ItineraryItemInput,
+  type ItineraryRouteSegment,
   type ItineraryTripPlace,
+  type RouteTravelMode,
   organizeItineraryItem,
   setItineraryDayBase,
   updateItineraryDayNote,
+  updateItineraryDayRouteMode,
   updateItineraryItem,
+  updateItineraryItemRouteMode,
 } from '@/lib/itinerary/api';
 import { buildItineraryMapPoints, type ItineraryMapPoint } from '@/lib/maps/itinerary-map';
 import {
@@ -154,7 +164,7 @@ function googleMapsHref(tripPlace: ItineraryTripPlace) {
 }
 
 function useDesktopMapLayout() {
-  const [matches, setMatches] = useState(false);
+  const [matches, setMatches] = useState<boolean | null>(null);
 
   useEffect(() => {
     const query = window.matchMedia('(min-width: 1024px)');
@@ -170,7 +180,7 @@ function useDesktopMapLayout() {
 export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('itinerary');
   const locale = useLocale();
-  const { preferredCurrency } = usePreferences();
+  const { preferredCurrency, preferences } = usePreferences();
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
@@ -200,6 +210,13 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const [selectedMapPointId, setSelectedMapPointId] = useState<string | null>(null);
   const [selectedMapItemId, setSelectedMapItemId] = useState<string | null>(null);
   const [detailTripPlaceId, setDetailTripPlaceId] = useState<string | null>(null);
+  const [routeSnapshot, setRouteSnapshot] = useState<{
+    data: ItineraryDayRoutes;
+    includesPolylines: boolean;
+    revision: string;
+  } | null>(null);
+  const [routeStatus, setRouteStatus] = useState<'error' | 'idle' | 'loading'>('loading');
+  const [savingRouteOwner, setSavingRouteOwner] = useState<string | null>(null);
   const desktopMapLayout = useDesktopMapLayout();
 
   const refresh = useCallback(async () => {
@@ -290,6 +307,75 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     () => itinerary?.days.find((day) => day.id === selectedDayId) ?? null,
     [itinerary, selectedDayId],
   );
+  const routeRevision = selectedDay
+    ? [
+        selectedDay.id,
+        selectedDay.dailyBaseTripPlaceId,
+        selectedDay.routeStartTravelMode,
+        ...selectedDay.items.flatMap((item) => [
+          item.id,
+          item.position,
+          item.tripPlace?.id ?? '',
+          item.travelModeToNext,
+          item.updatedAt,
+        ]),
+      ].join(':')
+    : '';
+  const includeRoutePolylines = desktopMapLayout === true || mobileView === 'map';
+  const routes = routeSnapshot?.revision === routeRevision ? routeSnapshot.data : null;
+  const routePolylines = useMemo(
+    () =>
+      routes?.segments
+        .map((segment) => segment.encodedPolyline)
+        .filter((polyline): polyline is string => Boolean(polyline)) ?? [],
+    [routes],
+  );
+
+  useEffect(() => {
+    if (!selectedDay) {
+      setRouteSnapshot(null);
+      setRouteStatus('idle');
+      return;
+    }
+    if (desktopMapLayout === null) return;
+    if (
+      routeSnapshot?.revision === routeRevision &&
+      (!includeRoutePolylines || routeSnapshot.includesPolylines)
+    ) {
+      setRouteStatus('idle');
+      return;
+    }
+
+    const controller = new AbortController();
+    setRouteStatus('loading');
+    void fetchItineraryDayRoutes(tripId, selectedDay.id, {
+      includePolyline: includeRoutePolylines,
+      languageCode: locale,
+      signal: controller.signal,
+    })
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        setRouteSnapshot({
+          data: result,
+          includesPolylines: includeRoutePolylines,
+          revision: routeRevision,
+        });
+        setRouteStatus('idle');
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setRouteStatus('error');
+      });
+
+    return () => controller.abort();
+  }, [
+    desktopMapLayout,
+    includeRoutePolylines,
+    locale,
+    routeRevision,
+    routeSnapshot,
+    selectedDay,
+    tripId,
+  ]);
   const selectedIndex = itinerary?.days.findIndex((day) => day.id === selectedDayId) ?? -1;
   const dateFormatter = useMemo(
     () =>
@@ -586,6 +672,25 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     }
   }
 
+  async function handleRouteModeChange(segment: ItineraryRouteSegment, mode: RouteTravelMode) {
+    if (mode === segment.mode) return;
+    const ownerKey = `${segment.modeOwner.kind}:${segment.modeOwner.id}`;
+    setSavingRouteOwner(ownerKey);
+    setError(null);
+    try {
+      if (segment.modeOwner.kind === 'day_start') {
+        await updateItineraryDayRouteMode(tripId, segment.modeOwner.id, mode);
+      } else {
+        await updateItineraryItemRouteMode(tripId, segment.modeOwner.id, mode);
+      }
+      await refresh();
+    } catch {
+      setError(t('routes.modeSaveError'));
+    } finally {
+      setSavingRouteOwner(null);
+    }
+  }
+
   async function handleDayNoteSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!dayNoteEditor) return;
@@ -817,6 +922,13 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
               </div>
             </div>
 
+            <ItineraryRouteSummary
+              data={routes}
+              distanceUnit={preferences.distanceUnit}
+              locale={locale}
+              status={routeStatus}
+            />
+
             <div
               aria-label={t('map.viewNavigation')}
               className="grid grid-cols-2 gap-1 border-b border-border bg-muted/30 p-1 lg:hidden"
@@ -855,7 +967,27 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                         item.tripPlace && placeLocation(item.tripPlace),
                       );
                       const isMapSelected = selectedMapItemId === item.id;
-                      return (
+                      const incomingRoute = routes?.segments.find(
+                        (segment) =>
+                          segment.destination.kind === 'itinerary_item' &&
+                          segment.destination.id === item.id,
+                      );
+                      return [
+                        incomingRoute ? (
+                          <ItineraryRouteSegmentRow
+                            distanceUnit={preferences.distanceUnit}
+                            key={`route-${incomingRoute.id}`}
+                            locale={locale}
+                            onModeChange={(segment, mode) =>
+                              void handleRouteModeChange(segment, mode)
+                            }
+                            saving={
+                              savingRouteOwner ===
+                              `${incomingRoute.modeOwner.kind}:${incomingRoute.modeOwner.id}`
+                            }
+                            segment={incomingRoute}
+                          />
+                        ) : null,
                         <Item
                           className={cn('px-3 py-3', isMapSelected && 'bg-secondary/70')}
                           id={`itinerary-item-${item.id}`}
@@ -1021,9 +1153,25 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                               <Trash2 aria-hidden="true" />
                             </Button>
                           </ItemActions>
-                        </Item>
-                      );
+                        </Item>,
+                      ];
                     })}
+                    {routes?.segments
+                      .filter((segment) => segment.destination.kind === 'daily_base')
+                      .map((segment) => (
+                        <ItineraryRouteSegmentRow
+                          distanceUnit={preferences.distanceUnit}
+                          key={segment.id}
+                          locale={locale}
+                          onModeChange={(routeSegment, mode) =>
+                            void handleRouteModeChange(routeSegment, mode)
+                          }
+                          saving={
+                            savingRouteOwner === `${segment.modeOwner.kind}:${segment.modeOwner.id}`
+                          }
+                          segment={segment}
+                        />
+                      ))}
                   </ItemGroup>
                 ) : (
                   <PageState
@@ -1055,6 +1203,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                     onSelectPoint={handleMapPointSelection}
                     onViewItem={viewMapItem}
                     points={mapPoints}
+                    routePolylines={routePolylines}
                     selectedPointId={selectedMapPointId}
                   />
                 ) : (

@@ -21,6 +21,35 @@ export type ItineraryMapLocation = {
   longitude: number;
 };
 
+export function decodeGooglePolyline(encoded: string): ItineraryMapLocation[] {
+  const path: ItineraryMapLocation[] = [];
+  let index = 0;
+  let latitude = 0;
+  let longitude = 0;
+
+  while (index < encoded.length) {
+    const coordinates: number[] = [];
+    for (let coordinateIndex = 0; coordinateIndex < 2; coordinateIndex += 1) {
+      let result = 0;
+      let shift = 0;
+      let byte: number;
+      do {
+        byte = encoded.charCodeAt(index) - 63;
+        index += 1;
+        result |= (byte & 0x1f) << shift;
+        shift += 5;
+      } while (byte >= 0x20 && index <= encoded.length);
+      coordinates.push(result & 1 ? ~(result >> 1) : result >> 1);
+    }
+
+    latitude += coordinates[0] ?? 0;
+    longitude += coordinates[1] ?? 0;
+    path.push({ latitude: latitude / 1e5, longitude: longitude / 1e5 });
+  }
+
+  return path;
+}
+
 export function buildItineraryMapPoints(input: {
   itinerary: Pick<Itinerary, 'tripPlaces' | 'unscheduledItems'>;
   resolveItemName: (item: ItineraryItem) => string;

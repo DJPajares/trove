@@ -590,6 +590,38 @@
       "unavailableTitle": "Map unavailable",
       "unavailableDescription": "Google Maps could not load. Your itinerary and place details remain available."
     },
+    "routes": {
+      "summaryLabel": "Daily travel summary",
+      "loading": "Estimating travel for this day...",
+      "stops": "{count, plural, =0 {No scheduled places} one {# scheduled place} other {# scheduled places}}",
+      "duration": "{value} travel",
+      "knownDuration": "{value} known travel",
+      "distance": "{value} {unit}",
+      "knownDistance": "{value} {unit} known",
+      "travelTimeUnavailable": "Travel estimate unavailable",
+      "unavailable": "Route estimates are unavailable. Your itinerary remains usable.",
+      "partial": "Some stops do not have enough location data. Totals include known routes only.",
+      "walkingBeta": "Walking routes are in beta and may not include clear pedestrian paths.",
+      "googleAttribution": "Estimated with Google Maps",
+      "segmentEstimate": "From {origin}: {duration}, {distance} {unit}",
+      "segmentUnavailable": "Route from {origin} unavailable",
+      "changeMode": "Change travel mode from {origin}",
+      "modeSaveError": "We couldn't update that travel mode. Try again.",
+      "mode": {
+        "drive": "Drive",
+        "transit": "Transit",
+        "walk": "Walk"
+      },
+      "units": {
+        "km": "km",
+        "mi": "mi"
+      },
+      "point": {
+        "daily_base": "Day base",
+        "itinerary_item": "Previous stop",
+        "starting_location": "Starting location"
+      }
+    },
     "exactTimeValue": "{time}",
     "exactTimeWithTimeZone": "{time} {timeZone}",
     "durationValue": "{minutes} min",

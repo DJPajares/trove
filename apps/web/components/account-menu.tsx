@@ -27,8 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { signOutFromTrove } from '@/lib/auth/sign-out';
-import { hasUnsyncedOfflineChanges } from '@/lib/offline/trip-store';
+import { useSignOut } from '@/lib/auth/use-sign-out';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 function getDisplayName(user: User | null, fallback: string) {
@@ -46,9 +45,14 @@ export function AccountMenu() {
   const t = useTranslations('account');
   const [user, setUser] = useState<User | null>(null);
   const [isReady, setIsReady] = useState(false);
-  const [isSigningOut, setIsSigningOut] = useState(false);
-  const [hasSignOutError, setHasSignOutError] = useState(false);
-  const [showUnsyncedWarning, setShowUnsyncedWarning] = useState(false);
+  const {
+    hasSignOutError,
+    isSigningOut,
+    requestSignOut,
+    setShowUnsyncedWarning,
+    showUnsyncedWarning,
+    signOut,
+  } = useSignOut(user?.id);
 
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
@@ -81,29 +85,11 @@ export function AccountMenu() {
   }, []);
 
   async function handleSignOut() {
-    setHasSignOutError(false);
-    setIsSigningOut(true);
-
-    try {
-      await signOutFromTrove();
-      setUser(null);
-    } catch {
-      setHasSignOutError(true);
-    } finally {
-      setIsSigningOut(false);
-    }
+    if (await signOut()) setUser(null);
   }
 
-  async function requestSignOut() {
-    try {
-      if (await hasUnsyncedOfflineChanges(user?.id)) {
-        setShowUnsyncedWarning(true);
-        return;
-      }
-    } catch {
-      // If local storage is unavailable there cannot be a readable queue to preserve.
-    }
-    await handleSignOut();
+  async function handleRequestSignOut() {
+    if (await requestSignOut()) setUser(null);
   }
 
   const displayName = getDisplayName(user, t('signedOut'));
@@ -141,7 +127,7 @@ export function AccountMenu() {
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 disabled={isSigningOut}
-                onClick={() => void requestSignOut()}
+                onClick={() => void handleRequestSignOut()}
                 variant="destructive"
               >
                 <LogOut aria-hidden="true" className="size-4" />

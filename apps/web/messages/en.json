@@ -122,9 +122,16 @@
     "destinations": "Destinations",
     "editTrip": "Edit trip",
     "planningReadiness": "Planning readiness",
-    "readinessState": { "in_progress": "In progress", "ready": "Ready" },
-    "sections": { "active": "Active", "completed": "Past", "planning": "Planning and upcoming" },
-    "startingLocation": "Starting location",
+    "readinessState": {
+      "in_progress": "In progress",
+      "ready": "Ready"
+    },
+    "sections": {
+      "active": "Active",
+      "completed": "Past",
+      "planning": "Planning and upcoming"
+    },
+    "startingLocation": "Starting location override",
     "startingLocationUnavailable": "No starting location set",
     "travellerCount": "{count, plural, one {# traveller} other {# travellers}}",
     "travellers": "Travellers",
@@ -193,7 +200,6 @@
     "readinessHint": "Ready is a planning marker. It never locks this trip.",
     "locationAndTimeZone": "Starting point and timezone",
     "locationAndTimeZoneHint": "Uses your Profile defaults unless you change them.",
-    "startingLocation": "Starting location override",
     "startingLocationPlaceholder": "Use your Profile home location",
     "startingLocationHint": "Leave blank to use your Profile home location.",
     "startingLocationHome": "Using your Profile home location: {location}.",
@@ -961,7 +967,7 @@
     "moveToDay": "Move to day",
     "scheduleItem": "Assign {name} to a day",
     "duplicateItem": "Duplicate {name}",
-    "deleteItem": "Delete {name}",
+    "deleteItem": "Delete item",
     "organizeError": "We couldn't update that item. Try again.",
     "dailyBaseError": "We couldn't update the daily base. Try again.",
     "timeZoneConsequence": "The local date and time stayed the same. The corresponding instant changed for the updated timezone.",
@@ -1094,7 +1100,6 @@
     "saveError": "We couldn't save this itinerary item. Check the details and try again.",
     "cancel": "Cancel",
     "close": "Close",
-    "deleteItem": "Delete item",
     "deleteTitle": "Delete this item?",
     "deleteDescription": "{name} will be removed from this itinerary. Linked tasks, reservations, and expenses will stay on the trip.",
     "deleting": "Deleting…",
@@ -1483,6 +1488,47 @@
       "toggleLabel": "Enable notifications for this trip",
       "saveError": "Trove could not update this trip's notification setting."
     }
+  },
+  "offlineStorage": {
+    "title": "Offline & Storage",
+    "description": "Manage the trips Trove keeps on this device for offline use.",
+    "cloudSafetyNote": "Removing a local copy only clears this device. Your trip stays safe in Trove.",
+    "empty": "No trips are stored on this device yet. Prepare a trip from Trip Mode to use it offline.",
+    "unavailable": "Trove can't read offline storage in this browser.",
+    "untitledTrip": "Untitled trip",
+    "refresh": "Refresh",
+    "remove": "Remove",
+    "cancel": "Keep local copy",
+    "removeTitle": "Remove local copy?",
+    "removeDescription": "This clears the offline copy and any saved documents from this device. The trip itself stays in Trove.",
+    "removeConfirm": "Remove from device",
+    "actionError": "That didn't work. Try again.",
+    "offlineHint": "Reconnect to refresh offline data.",
+    "documentCount": "{count, plural, one {# document} other {# documents}}",
+    "unsyncedCount": "{count, plural, one {# unsynced change} other {# unsynced changes}}",
+    "readiness": {
+      "ready": "Ready offline",
+      "stale": "Needs a refresh",
+      "partial": "Partly ready",
+      "not_ready": "Not ready",
+      "error": "Last refresh failed"
+    }
+  },
+  "privacySecurity": {
+    "title": "Privacy & Security",
+    "description": "Everything you save in Trove is private to your account.",
+    "privateByDefaultTitle": "Private by default",
+    "ownerOnly": "Only you can read or change your trips, places, reservations, tasks, notes, trip info, and expenses.",
+    "privateMedia": "Documents and media you upload stay private and are only reachable through your own signed-in session.",
+    "sharedPlaces": "Trove reuses shared place details from providers, but never exposes your saved places, notes, or trip content to anyone else.",
+    "futureSharingNote": "Sharing and collaboration aren't available yet. If they arrive, you'll choose what to share."
+  },
+  "accountSettings": {
+    "title": "Account",
+    "description": "The Trove account signed in on this device.",
+    "signedInAs": "Signed in as",
+    "noAccount": "Not signed in",
+    "signOutNote": "Signing out clears your session and any private Trove data saved on this device, including offline documents. Your cloud data is untouched."
   },
   "globalSearch": {
     "button": "Search Trove",

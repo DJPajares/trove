@@ -1,7 +1,9 @@
 import { getLocale, getTranslations } from 'next-intl/server';
 
+import { AccountSettings, PrivacySecuritySettings } from '@/components/account-settings';
 import { PageHeader } from '@/components/page-header';
 import { NotificationSettings } from '@/components/notification-settings';
+import { OfflineStorageSettings } from '@/components/offline-storage-settings';
 import { ProfileSettingsForm } from '@/components/profile-settings-form';
 
 export default async function ProfilePage() {
@@ -13,6 +15,9 @@ export default async function ProfilePage() {
       <PageHeader description={t('description')} title={t('title')} />
       <ProfileSettingsForm locale={locale} />
       <NotificationSettings />
+      <OfflineStorageSettings />
+      <PrivacySecuritySettings />
+      <AccountSettings />
     </section>
   );
 }

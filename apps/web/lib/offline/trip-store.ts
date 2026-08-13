@@ -478,6 +478,15 @@ export async function recordTripPreparationError(
   }));
 }
 
+export async function listTripSnapshots(userId: string) {
+  const database = await openDatabase();
+  const transaction = database.transaction(SNAPSHOT_STORE, 'readonly');
+  const snapshots = await requestResult<OfflineTripSnapshot[]>(
+    transaction.objectStore(SNAPSHOT_STORE).index('by-user').getAll(IDBKeyRange.only(userId)),
+  );
+  return snapshots.toSorted((left, right) => right.savedAt.localeCompare(left.savedAt));
+}
+
 export async function listUserMutations(userId: string, tripId?: string) {
   const database = await openDatabase();
   const transaction = database.transaction(MUTATION_STORE, 'readonly');

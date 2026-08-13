@@ -113,6 +113,7 @@
   },
   "trips": {
     "continuePlanning": "Continue planning",
+    "openTripMode": "Open Trip Mode",
     "destinations": "Destinations",
     "editTrip": "Edit trip",
     "planningReadiness": "Planning readiness",
@@ -218,6 +219,42 @@
     "deleteTrip": "Delete trip",
     "deleting": "Deleting…",
     "deleteError": "We couldn't delete this trip. Try again."
+  },
+  "tripMode": {
+    "label": "Trip Mode",
+    "navigation": "Trip Mode navigation",
+    "exit": "Exit Trip Mode",
+    "backToTrips": "Back to Trips",
+    "openPlanning": "Open planning",
+    "dateRange": "{startDate} to {endDate}",
+    "loading": "Opening Trip Mode…",
+    "loadError": "We couldn't open Trip Mode",
+    "loadErrorDescription": "Check your connection and try again.",
+    "tryAgain": "Try again",
+    "unavailableTitle": "Trip Mode is not available today",
+    "unavailableDescription": "This trip is active from {startDate} to {endDate} in {timeZone}.",
+    "views": {
+      "now": {
+        "label": "Now",
+        "title": "Now",
+        "description": "Your immediate trip context will appear here as it becomes available."
+      },
+      "today": {
+        "label": "Today",
+        "title": "Today",
+        "description": "Today's itinerary context will appear here as it becomes available."
+      },
+      "map": {
+        "label": "Map",
+        "title": "Map",
+        "description": "Route and place context will appear here when reliable location data is available."
+      },
+      "trip": {
+        "label": "Trip",
+        "title": "Trip",
+        "description": "Trip-wide context will appear here as it becomes available."
+      }
+    }
   },
   "tripInfo": {
     "title": "Trip info for {trip}",

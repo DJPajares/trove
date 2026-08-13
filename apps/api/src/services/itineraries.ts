@@ -16,6 +16,7 @@ export type ItineraryScheduleInput =
   | { kind: 'exact'; localTime: string };
 
 export type ItineraryItemInput = {
+  clientItemId?: string;
   customLabel?: string | null;
   customLocation?: { label: string; timeZone?: string | null } | null;
   durationMinutes?: number | null;
@@ -26,6 +27,12 @@ export type ItineraryItemInput = {
   schedule?: ItineraryScheduleInput;
   tripPlaceId?: string | null;
 };
+
+export class ItineraryConflictError extends Error {
+  constructor() {
+    super('itinerary_item_conflict');
+  }
+}
 
 export class ItineraryNotFoundError extends Error {
   constructor(code: 'itinerary_day_not_found' | 'itinerary_item_not_found' | 'trip_not_found') {
@@ -131,6 +138,7 @@ function serializeTripPlace(tripPlace: NonNullable<ItineraryItemRecord['tripPlac
   const place = tripPlace.place;
   return {
     id: tripPlace.id,
+    note: tripPlace.note,
     place: {
       id: place.id,
       kind: place.kind === 'CUSTOM' ? ('custom' as const) : ('provider' as const),
@@ -147,9 +155,11 @@ function serializeTripPlace(tripPlace: NonNullable<ItineraryItemRecord['tripPlac
       providerRefs: place.providerRefs.map((reference) => ({
         externalPlaceId: reference.externalPlaceId,
         provider: 'google' as const,
+        resolvedAt: reference.updatedAt.toISOString(),
       })),
       timeZone: place.customTimeZone,
     },
+    priority: mapPriority(tripPlace.priority),
   };
 }
 
@@ -409,6 +419,7 @@ export async function organizeItineraryItem(
   tripId: string,
   itemId: string,
   input: { itineraryDayId: string | null; position: number },
+  expectedUpdatedAt?: string,
 ) {
   const prisma = getPrismaClient();
   await prisma.$transaction(async (transaction) => {
@@ -418,6 +429,9 @@ export async function organizeItineraryItem(
       include: itineraryItemInclude,
     });
     if (!current) throw new ItineraryNotFoundError('itinerary_item_not_found');
+    if (expectedUpdatedAt && current.updatedAt.toISOString() !== expectedUpdatedAt) {
+      throw new ItineraryConflictError();
+    }
     const targetDay = input.itineraryDayId
       ? await findDay(transaction, tripId, input.itineraryDayId)
       : null;
@@ -547,6 +561,14 @@ export async function createItineraryItem(
   const prisma = getPrismaClient();
   const itemId = await prisma.$transaction(async (transaction) => {
     await findOwnedTrip(transaction, userId, tripId);
+    if (input.clientItemId) {
+      const existing = await transaction.itineraryItem.findUnique({
+        where: { id: input.clientItemId },
+        select: { id: true, tripId: true },
+      });
+      if (existing?.tripId === tripId) return existing.id;
+      if (existing) throw new ItineraryValidationError('invalid_itinerary_item');
+    }
     const day = await findDay(transaction, tripId, input.itineraryDayId);
     const tripPlace = await findTripPlace(transaction, tripId, input.tripPlaceId ?? null);
     const customLabel = normalizeContent(input.customLabel, tripPlace?.id ?? null);
@@ -566,6 +588,7 @@ export async function createItineraryItem(
     const schedule = scheduleData(input.schedule, formatDateOnly(day.date), timeZone.timeZone);
     const item = await transaction.itineraryItem.create({
       data: {
+        ...(input.clientItemId ? { id: input.clientItemId } : {}),
         customLabel,
         customLocation: customLocation.label,
         customLocationTimeZone: customLocation.timeZone,
@@ -604,6 +627,7 @@ export async function updateItineraryItem(
   tripId: string,
   itemId: string,
   input: ItineraryItemInput,
+  expectedUpdatedAt?: string,
 ) {
   const prisma = getPrismaClient();
   const result = await prisma.$transaction(async (transaction) => {
@@ -614,6 +638,9 @@ export async function updateItineraryItem(
     });
     if (!current || !current.itineraryDayId || !current.itineraryDay) {
       throw new ItineraryNotFoundError('itinerary_item_not_found');
+    }
+    if (expectedUpdatedAt && current.updatedAt.toISOString() !== expectedUpdatedAt) {
+      throw new ItineraryConflictError();
     }
 
     const tripPlaceId = input.tripPlaceId === undefined ? current.tripPlaceId : input.tripPlaceId;
@@ -716,15 +743,23 @@ export async function updateItineraryItem(
   return result;
 }
 
-export async function deleteItineraryItem(userId: string, tripId: string, itemId: string) {
+export async function deleteItineraryItem(
+  userId: string,
+  tripId: string,
+  itemId: string,
+  expectedUpdatedAt?: string,
+) {
   const prisma = getPrismaClient();
   await prisma.$transaction(async (transaction) => {
     await findOwnedTrip(transaction, userId, tripId);
     const item = await transaction.itineraryItem.findFirst({
       where: { id: itemId, tripId },
-      select: { id: true, itineraryDayId: true },
+      select: { id: true, itineraryDayId: true, updatedAt: true },
     });
     if (!item) throw new ItineraryNotFoundError('itinerary_item_not_found');
+    if (expectedUpdatedAt && item.updatedAt.toISOString() !== expectedUpdatedAt) {
+      throw new ItineraryConflictError();
+    }
     if (item.itineraryDayId) {
       await refreshDayDefaultTimeZone(transaction, tripId, item.itineraryDayId, item.id);
     }

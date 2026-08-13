@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
 import { useTripModePreview } from '@/components/trip-mode-shell';
+import { useOfflineDataRefreshKey, useOnlineStatus } from '@/components/trip-sync-status';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -87,6 +88,8 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripMode.views.now');
   const locale = useLocale();
   const { preferences } = usePreferences();
+  const online = useOnlineStatus();
+  const offlineDataRefreshKey = useOfflineDataRefreshKey();
   const { contextOptions, isPreview, withPreviewHref } = useTripModePreview();
   const [reloadKey, setReloadKey] = useState(0);
   const [state, setState] = useState<LoadState>({ context: null, status: 'loading' });
@@ -104,7 +107,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
         }
       });
     return () => controller.abort();
-  }, [contextOptions, reloadKey, tripId]);
+  }, [contextOptions, offlineDataRefreshKey, reloadKey, tripId]);
 
   const context = state.context;
   const currentItem = useMemo(
@@ -117,6 +120,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   );
 
   useEffect(() => {
+    if (!online) return;
     let active = true;
     const ids = [providerId(currentItem), providerId(nextItem)].filter((value): value is string =>
       Boolean(value),
@@ -138,14 +142,14 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
     return () => {
       active = false;
     };
-  }, [currentItem, nextItem]);
+  }, [currentItem, nextItem, online]);
 
   const getDetails = useCallback(
     (item: ItineraryItem | null) => {
       const id = providerId(item);
-      return id ? (details[id] ?? null) : null;
+      return online && id ? (details[id] ?? null) : null;
     },
-    [details],
+    [details, online],
   );
 
   if (state.status === 'loading') return <TripModeNowSkeleton label={t('loading')} />;
@@ -231,7 +235,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   const nextName = nextItem ? itemName(nextItem, nextDetails, t('placeFallback')) : null;
   const route =
     readyContext.leaveBy?.destinationItemId === nextItem?.id ? readyContext.leaveBy : null;
-  const directions = nextItem && nextName ? directionsHref(nextItem, nextName) : null;
+  const directions = online && nextItem && nextName ? directionsHref(nextItem, nextName) : null;
 
   return (
     <div className="space-y-7">

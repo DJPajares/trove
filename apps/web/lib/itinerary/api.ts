@@ -1,4 +1,16 @@
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import {
+  applyMutationToStoredItinerary,
+  getRememberedOfflineUser,
+  mergeQueuedMutations,
+  type OfflineMutation,
+  type OfflineMutationOperation,
+  queueOfflineMutation,
+  readTripSnapshot,
+  rememberOfflineUser,
+  saveItinerarySnapshot,
+  setOfflineApiReachable,
+} from '@/lib/offline/trip-store';
 
 export type ItineraryDayPart = 'afternoon' | 'anytime' | 'evening' | 'morning';
 export type ItineraryPriority = 'interested' | 'maybe' | 'must_go';
@@ -11,15 +23,17 @@ export type ItineraryScheduleInput =
 
 export type ItineraryTripPlace = {
   id: string;
+  note: string | null;
   place: {
     id: string;
     kind: 'custom' | 'provider';
     location: { latitude: number; longitude: number; timeZone: string | null } | null;
     name: string | null;
     note: string | null;
-    providerRefs: Array<{ externalPlaceId: string; provider: 'google' }>;
+    providerRefs: Array<{ externalPlaceId: string; provider: 'google'; resolvedAt?: string }>;
     timeZone: string | null;
   };
+  priority: ItineraryPriority | null;
 };
 
 export type ItineraryItem = {
@@ -171,24 +185,44 @@ export class ItineraryApiError extends Error {
 
 const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
 
-async function getAccessToken() {
+async function getAuthContext() {
   const supabase = createBrowserSupabaseClient();
   if (!supabase) throw new ItineraryApiError('supabase_not_configured', 500);
   const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session) throw new ItineraryApiError('not_authenticated', 401);
-  return data.session.access_token;
+  if (!error && data.session) {
+    rememberOfflineUser(data.session.user.id);
+    return { accessToken: data.session.access_token, userId: data.session.user.id };
+  }
+  const rememberedUser =
+    typeof navigator !== 'undefined' && !navigator.onLine ? getRememberedOfflineUser() : null;
+  if (rememberedUser) return { accessToken: null, userId: rememberedUser };
+  throw new ItineraryApiError('not_authenticated', 401);
 }
 
-async function itineraryRequest<T>(path: string, init?: RequestInit) {
-  const accessToken = await getAccessToken();
-  const response = await fetch(`${apiUrl}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
-  });
+async function itineraryRequest<T>(
+  path: string,
+  init?: RequestInit,
+  authContext?: Awaited<ReturnType<typeof getAuthContext>>,
+) {
+  const { accessToken } = authContext ?? (await getAuthContext());
+  if (!accessToken) throw new ItineraryApiError('offline_session', 503);
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        ...init?.headers,
+      },
+    });
+  } catch (error) {
+    if (!(error instanceof DOMException && error.name === 'AbortError')) {
+      setOfflineApiReachable(false);
+    }
+    throw error;
+  }
+  setOfflineApiReachable(response.status < 500);
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { code?: string };
     throw new ItineraryApiError(
@@ -200,19 +234,199 @@ async function itineraryRequest<T>(path: string, init?: RequestInit) {
   return response.json() as Promise<T>;
 }
 
-export function fetchItinerary(tripId: string) {
-  return itineraryRequest<Itinerary>(`/trips/${tripId}/itinerary`);
+function canUseOfflineFallback(error: unknown) {
+  return (
+    error instanceof TypeError ||
+    (error instanceof ItineraryApiError && error.status >= 500) ||
+    (typeof navigator !== 'undefined' && !navigator.onLine)
+  );
 }
 
-export function fetchTripModeContext(tripId: string, options: TripModeContextRequestOptions = {}) {
+function findItem(itinerary: Itinerary, itemId: string) {
+  for (const day of itinerary.days) {
+    const item = day.items.find((candidate) => candidate.id === itemId);
+    if (item) return item;
+  }
+  return itinerary.unscheduledItems.find((candidate) => candidate.id === itemId) ?? null;
+}
+
+function localDateInTimeZone(timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone,
+    year: 'numeric',
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
+function localTimeInTimeZone(at: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    hourCycle: 'h23',
+    minute: '2-digit',
+    timeZone,
+  }).formatToParts(at);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.hour}:${value.minute}`;
+}
+
+function localPreviewInstant(date: string, time: string, timeZone: string) {
+  const [year = 1970, month = 1, day = 1] = date.split('-').map(Number);
+  const [hour = 0, minute = 0] = time.split(':').map(Number);
+  const desired = Date.UTC(year, month - 1, day, hour, minute);
+  let guess = desired;
+  for (let index = 0; index < 3; index += 1) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      day: '2-digit',
+      hour: '2-digit',
+      hourCycle: 'h23',
+      minute: '2-digit',
+      month: '2-digit',
+      timeZone,
+      year: 'numeric',
+    }).formatToParts(new Date(guess));
+    const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    const represented = Date.UTC(
+      Number(value.year),
+      Number(value.month) - 1,
+      Number(value.day),
+      Number(value.hour),
+      Number(value.minute),
+    );
+    guess += desired - represented;
+  }
+  return new Date(guess);
+}
+
+function minuteOfDay(value: string) {
+  const [hour = 0, minute = 0] = value.split(':').map(Number);
+  return hour * 60 + minute;
+}
+
+function dayPartIndex(value: ItineraryDayPart | null) {
+  if (value === 'morning') return 0;
+  if (value === 'afternoon') return 1;
+  if (value === 'evening') return 2;
+  return null;
+}
+
+function offlineTripModeContext(
+  itinerary: Itinerary,
+  options: TripModeContextRequestOptions,
+): TripModeContext {
+  const selectedDate = options.date ?? localDateInTimeZone(itinerary.trip.referenceTimeZone);
+  const day = itinerary.days.find((candidate) => candidate.date === selectedDate) ?? null;
+  const activeItems = day?.items.filter((item) => item.travelStatus === 'upcoming') ?? [];
+  const contextTimeZone = day?.defaultTimeZone ?? itinerary.trip.referenceTimeZone;
+  const at = options.date
+    ? localPreviewInstant(options.date, options.time, contextTimeZone)
+    : options.at
+      ? new Date(options.at)
+      : new Date();
+  const localTime = options.time ?? localTimeInTimeZone(at, contextTimeZone);
+  const localMinute = minuteOfDay(localTime);
+  const localPart = localMinute < 12 * 60 ? 0 : localMinute < 17 * 60 ? 1 : 2;
+  const phases = activeItems.map((item) => {
+    if (item.localStartTime) {
+      const start = minuteOfDay(item.localStartTime);
+      const end = start + (item.durationMinutes ?? 1);
+      return localMinute < start ? 'future' : localMinute < end ? 'current' : 'overdue';
+    }
+    const itemPart = dayPartIndex(item.dayPart);
+    if (itemPart === null) return 'flexible';
+    return localPart < itemPart ? 'future' : localPart === itemPart ? 'current' : 'overdue';
+  });
+  const currentIndex = phases.findIndex((phase) => phase === 'current');
+  const overdueIndex = phases.findLastIndex((phase) => phase === 'overdue');
+  const flexibleIndex = phases.findIndex((phase) => phase === 'flexible');
+  const relevantIndex = currentIndex >= 0 ? currentIndex : Math.max(overdueIndex, flexibleIndex);
+  const current = relevantIndex >= 0 ? activeItems[relevantIndex] : null;
+  const nextIndex = phases.findIndex(
+    (phase, index) => index > relevantIndex && (phase === 'future' || phase === 'flexible'),
+  );
+  const next = nextIndex >= 0 ? activeItems[nextIndex] : null;
+  const currentReason = current?.localStartTime
+    ? 'exact_time'
+    : dayPartIndex(current?.dayPart ?? null) !== null
+      ? 'day_part'
+      : current
+        ? 'itinerary_order'
+        : null;
+  return {
+    contextAt: at.toISOString(),
+    contextSource: options.date ? 'preview' : 'live',
+    currentOrRelevant:
+      current && currentReason
+        ? {
+            itemId: current.id,
+            kind: currentIndex >= 0 ? 'current' : 'relevant',
+            reason: currentReason,
+          }
+        : null,
+    day: day
+      ? {
+          date: day.date,
+          defaultTimeZone: day.defaultTimeZone,
+          id: day.id,
+          items: day.items,
+        }
+      : null,
+    leaveBy: null,
+    nextItemId: next?.id ?? null,
+    selectedDate,
+    state: day
+      ? current
+        ? currentIndex >= 0
+          ? 'current'
+          : 'relevant'
+        : next
+          ? 'free_time'
+          : 'no_next_item'
+      : 'no_day',
+    trip: itinerary.trip,
+  };
+}
+
+export async function fetchItinerary(tripId: string) {
+  const auth = await getAuthContext();
+  const snapshot = await readTripSnapshot(auth.userId, tripId).catch(() => undefined);
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    if (snapshot?.itinerary) return snapshot.itinerary;
+    throw new ItineraryApiError('offline_trip_not_prepared', 503);
+  }
+  try {
+    const server = await itineraryRequest<Itinerary>(`/trips/${tripId}/itinerary`, undefined, auth);
+    const itinerary = await mergeQueuedMutations(auth.userId, tripId, server);
+    await saveItinerarySnapshot(auth.userId, tripId, itinerary);
+    return itinerary;
+  } catch (error) {
+    if (canUseOfflineFallback(error) && snapshot?.itinerary) return snapshot.itinerary;
+    throw error;
+  }
+}
+
+export async function fetchTripModeContext(
+  tripId: string,
+  options: TripModeContextRequestOptions = {},
+) {
   const query = new URLSearchParams();
   if (options.at) query.set('at', options.at);
   if (options.date) query.set('date', options.date);
   if (options.time) query.set('time', options.time);
   const suffix = query.size ? `?${query.toString()}` : '';
-  return itineraryRequest<TripModeContext>(`/trips/${tripId}/trip-mode/context${suffix}`, {
-    signal: options.signal,
-  });
+  try {
+    return await itineraryRequest<TripModeContext>(`/trips/${tripId}/trip-mode/context${suffix}`, {
+      signal: options.signal,
+    });
+  } catch (error) {
+    if (!canUseOfflineFallback(error)) throw error;
+    const auth = await getAuthContext();
+    const snapshot = await readTripSnapshot(auth.userId, tripId).catch(() => undefined);
+    if (!snapshot?.itinerary) throw error;
+    return offlineTripModeContext(snapshot.itinerary, options);
+  }
 }
 
 export function fetchItineraryDayRoutes(
@@ -230,42 +444,167 @@ export function fetchItineraryDayRoutes(
   );
 }
 
-export function createItineraryItem(tripId: string, input: ItineraryItemInput) {
-  return itineraryRequest<{ item: ItineraryItem }>(`/trips/${tripId}/itinerary/items`, {
-    body: JSON.stringify(input),
-    method: 'POST',
-  });
+function createMutation(
+  userId: string,
+  tripId: string,
+  operation: OfflineMutationOperation,
+): OfflineMutation {
+  const now = new Date().toISOString();
+  return {
+    attempts: 0,
+    createdAt: now,
+    errorCode: null,
+    id: crypto.randomUUID(),
+    operation,
+    state: 'pending',
+    tripId,
+    updatedAt: now,
+    userId,
+  };
 }
 
-export function updateItineraryItem(tripId: string, itemId: string, input: ItineraryItemInput) {
-  return itineraryRequest<{
-    item: ItineraryItem;
-    timeZoneConsequence: {
-      kind: 'derived_instant_changed';
-      previousStartInstant: string;
-      startInstant: string;
-    } | null;
-  }>(`/trips/${tripId}/itinerary/items/${itemId}`, {
-    body: JSON.stringify(input),
-    method: 'PATCH',
-  });
+async function queueOrThrow(
+  error: unknown,
+  userId: string,
+  tripId: string,
+  operation: OfflineMutationOperation,
+) {
+  if (!canUseOfflineFallback(error)) throw error;
+  await queueOfflineMutation(createMutation(userId, tripId, operation));
 }
 
-export function deleteItineraryItem(tripId: string, itemId: string) {
-  return itineraryRequest<void>(`/trips/${tripId}/itinerary/items/${itemId}`, {
-    method: 'DELETE',
-  });
+async function baseItem(userId: string, tripId: string, itemId: string) {
+  const snapshot = await readTripSnapshot(userId, tripId);
+  const item = snapshot?.itinerary ? findItem(snapshot.itinerary, itemId) : null;
+  if (!item) throw new ItineraryApiError('offline_item_not_available', 503);
+  return structuredClone(item);
 }
 
-export function organizeItineraryItem(
+async function applyOnlineMutation(
+  userId: string,
+  tripId: string,
+  operation: OfflineMutationOperation,
+) {
+  await applyMutationToStoredItinerary(userId, tripId, operation).catch(() => undefined);
+}
+
+export async function createItineraryItem(tripId: string, input: ItineraryItemInput) {
+  if (!input.itineraryDayId) throw new ItineraryApiError('invalid_itinerary_item', 400);
+  const auth = await getAuthContext();
+  const clientItemId = crypto.randomUUID();
+  const operation: OfflineMutationOperation = {
+    clientItemId,
+    input: { ...input, itineraryDayId: input.itineraryDayId },
+    kind: 'itinerary_item_create',
+  };
+  try {
+    const result = await itineraryRequest<{ item: ItineraryItem }>(
+      `/trips/${tripId}/itinerary/items`,
+      { body: JSON.stringify({ ...input, clientItemId }), method: 'POST' },
+      auth,
+    );
+    await applyOnlineMutation(auth.userId, tripId, operation);
+    return result;
+  } catch (error) {
+    await queueOrThrow(error, auth.userId, tripId, operation);
+    const snapshot = await readTripSnapshot(auth.userId, tripId);
+    const item = snapshot?.itinerary ? findItem(snapshot.itinerary, clientItemId) : null;
+    if (!item) throw error;
+    return { item };
+  }
+}
+
+export async function updateItineraryItem(
+  tripId: string,
+  itemId: string,
+  input: ItineraryItemInput,
+) {
+  const auth = await getAuthContext();
+  const storedBaseItem = await baseItem(auth.userId, tripId, itemId).catch(() => null);
+  const operation: OfflineMutationOperation | null = storedBaseItem
+    ? {
+        baseItem: storedBaseItem,
+        input,
+        itemId,
+        kind: 'itinerary_item_update',
+      }
+    : null;
+  try {
+    const result = await itineraryRequest<{
+      item: ItineraryItem;
+      timeZoneConsequence: {
+        kind: 'derived_instant_changed';
+        previousStartInstant: string;
+        startInstant: string;
+      } | null;
+    }>(
+      `/trips/${tripId}/itinerary/items/${itemId}`,
+      { body: JSON.stringify(input), method: 'PATCH' },
+      auth,
+    );
+    if (operation) await applyOnlineMutation(auth.userId, tripId, operation);
+    return result;
+  } catch (error) {
+    if (!operation) throw error;
+    await queueOrThrow(error, auth.userId, tripId, operation);
+    const snapshot = await readTripSnapshot(auth.userId, tripId);
+    const item = snapshot?.itinerary ? findItem(snapshot.itinerary, itemId) : null;
+    if (!item) throw error;
+    return { item, timeZoneConsequence: null };
+  }
+}
+
+export async function deleteItineraryItem(tripId: string, itemId: string) {
+  const auth = await getAuthContext();
+  const storedBaseItem = await baseItem(auth.userId, tripId, itemId).catch(() => null);
+  const operation: OfflineMutationOperation | null = storedBaseItem
+    ? {
+        baseItem: storedBaseItem,
+        itemId,
+        kind: 'itinerary_item_delete',
+      }
+    : null;
+  try {
+    const result = await itineraryRequest<void>(
+      `/trips/${tripId}/itinerary/items/${itemId}`,
+      { method: 'DELETE' },
+      auth,
+    );
+    if (operation) await applyOnlineMutation(auth.userId, tripId, operation);
+    return result;
+  } catch (error) {
+    if (!operation) throw error;
+    await queueOrThrow(error, auth.userId, tripId, operation);
+  }
+}
+
+export async function organizeItineraryItem(
   tripId: string,
   itemId: string,
   input: { itineraryDayId: string | null; position: number },
 ) {
-  return itineraryRequest<void>(`/trips/${tripId}/itinerary/items/${itemId}/organization`, {
-    body: JSON.stringify(input),
-    method: 'PATCH',
-  });
+  const auth = await getAuthContext();
+  const storedBaseItem = await baseItem(auth.userId, tripId, itemId).catch(() => null);
+  const operation: OfflineMutationOperation | null = storedBaseItem
+    ? {
+        baseItem: storedBaseItem,
+        input,
+        itemId,
+        kind: 'itinerary_item_organize',
+      }
+    : null;
+  try {
+    const result = await itineraryRequest<void>(
+      `/trips/${tripId}/itinerary/items/${itemId}/organization`,
+      { body: JSON.stringify(input), method: 'PATCH' },
+      auth,
+    );
+    if (operation) await applyOnlineMutation(auth.userId, tripId, operation);
+    return result;
+  } catch (error) {
+    if (!operation) throw error;
+    await queueOrThrow(error, auth.userId, tripId, operation);
+  }
 }
 
 export function duplicateItineraryItem(tripId: string, itemId: string) {
@@ -318,16 +657,32 @@ export function updateItineraryItemRouteMode(
   });
 }
 
-export function updateItineraryItemTravelStatus(
+export async function updateItineraryItemTravelStatus(
   tripId: string,
   itemId: string,
   travelStatus: ItineraryTravelStatus,
 ) {
-  return itineraryRequest<{ id: string; travelStatus: ItineraryTravelStatus }>(
-    `/trips/${tripId}/itinerary/items/${itemId}/travel-status`,
-    {
-      body: JSON.stringify({ travelStatus }),
-      method: 'PATCH',
-    },
-  );
+  const auth = await getAuthContext();
+  const storedBaseItem = await baseItem(auth.userId, tripId, itemId).catch(() => null);
+  const operation: OfflineMutationOperation | null = storedBaseItem
+    ? {
+        baseItem: storedBaseItem,
+        itemId,
+        kind: 'itinerary_travel_status',
+        travelStatus,
+      }
+    : null;
+  try {
+    const result = await itineraryRequest<{ id: string; travelStatus: ItineraryTravelStatus }>(
+      `/trips/${tripId}/itinerary/items/${itemId}/travel-status`,
+      { body: JSON.stringify({ travelStatus }), method: 'PATCH' },
+      auth,
+    );
+    if (operation) await applyOnlineMutation(auth.userId, tripId, operation);
+    return result;
+  } catch (error) {
+    if (!operation) throw error;
+    await queueOrThrow(error, auth.userId, tripId, operation);
+    return { id: itemId, travelStatus };
+  }
 }

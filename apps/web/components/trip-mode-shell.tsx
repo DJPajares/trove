@@ -11,9 +11,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { DatePicker } from '@/components/date-picker';
 import { PageState } from '@/components/page-state';
 import { TimeInput } from '@/components/time-input';
+import { TripSyncStatus } from '@/components/trip-sync-status';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
-import type { TripModeContextRequestOptions } from '@/lib/itinerary/api';
+import { fetchItinerary, type TripModeContextRequestOptions } from '@/lib/itinerary/api';
 import { fetchTrip, type Trip } from '@/lib/trips/api';
 import { cn } from '@/lib/utils';
 
@@ -93,8 +94,8 @@ export function TripModeShell({ children, tripId }: Readonly<TripModeShellProps>
     let active = true;
     setState({ status: 'loading', trip: null });
 
-    void fetchTrip(tripId)
-      .then(({ trip }) => {
+    void Promise.all([fetchTrip(tripId), fetchItinerary(tripId)])
+      .then(([{ trip }]) => {
         if (active) setState({ status: 'idle', trip });
       })
       .catch(() => {
@@ -145,6 +146,12 @@ export function TripModeShell({ children, tripId }: Readonly<TripModeShellProps>
     }),
     [contextOptions, previewSelection, withPreviewHref],
   );
+
+  useEffect(() => {
+    if (state.status !== 'idle' || !navigator.onLine) return;
+    const basePath = `/trips/${state.trip.id}/mode`;
+    for (const { path } of tripModeViews) router.prefetch(`${basePath}${path}`);
+  }, [router, state]);
 
   function updatePreview(next: { date?: string; time?: string }) {
     if (!previewSelection) return;
@@ -323,6 +330,8 @@ export function TripModeShell({ children, tripId }: Readonly<TripModeShellProps>
             </div>
           </section>
         ) : null}
+
+        <TripSyncStatus tripId={trip.id} />
 
         <nav
           aria-label={t('navigation')}

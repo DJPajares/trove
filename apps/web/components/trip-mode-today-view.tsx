@@ -22,6 +22,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
 import { useTripModePreview } from '@/components/trip-mode-shell';
+import { useOfflineDataRefreshKey, useOnlineStatus } from '@/components/trip-sync-status';
 import { TripModeAddItemDialog } from '@/components/trip-mode-add-item-dialog';
 import {
   TripModeScheduleFields,
@@ -117,6 +118,8 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripMode.views.today');
   const locale = useLocale();
   const { preferences } = usePreferences();
+  const online = useOnlineStatus();
+  const offlineDataRefreshKey = useOfflineDataRefreshKey();
   const { contextOptions, isPreview } = useTripModePreview();
   const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
   const [reloadKey, setReloadKey] = useState(0);
@@ -155,7 +158,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     return () => {
       active = false;
     };
-  }, [contextOptions, reloadKey, tripId]);
+  }, [contextOptions, offlineDataRefreshKey, reloadKey, tripId]);
 
   const day = useMemo(() => {
     if (state.status !== 'ready') return null;
@@ -167,7 +170,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   }, [state]);
 
   useEffect(() => {
-    if (!day) return;
+    if (!day || !online) return;
     const pending = day.items.filter(
       (item) =>
         item.tripPlace?.place.kind === 'provider' &&
@@ -200,7 +203,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     return () => {
       active = false;
     };
-  }, [day, providerDetails]);
+  }, [day, online, providerDetails]);
 
   useEffect(() => {
     if (!day || !window.location.hash.startsWith('#trip-mode-item-')) return;
@@ -233,7 +236,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     new Date(`${context.selectedDate}T00:00:00.000Z`),
   );
   const detailsFor = (item: ItineraryItem) =>
-    item.tripPlace ? (providerDetails[item.tripPlace.place.id] ?? null) : null;
+    online && item.tripPlace ? (providerDetails[item.tripPlace.place.id] ?? null) : null;
   const itemName = (item: ItineraryItem) =>
     item.customLabel ?? item.tripPlace?.place.name ?? detailsFor(item)?.name ?? t('itemFallback');
   const itemLocation = (item: ItineraryItem) =>
@@ -254,6 +257,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
         ? t(`schedule.${item.dayPart}`)
         : t('schedule.none');
   const directionsHref = (item: ItineraryItem) => {
+    if (!online) return null;
     const externalPlaceId = providerId(item);
     const location = item.tripPlace?.place.location;
     if (!externalPlaceId && !location) return null;
@@ -555,6 +559,11 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                     {item.notes ? (
                       <p className="mt-2 line-clamp-2 text-sm leading-5 text-text-subtle">
                         {item.notes}
+                      </p>
+                    ) : null}
+                    {item.tripPlace?.note && item.tripPlace.note !== item.notes ? (
+                      <p className="mt-2 line-clamp-2 text-sm leading-5 text-text-subtle">
+                        {item.tripPlace.note}
                       </p>
                     ) : null}
                   </div>

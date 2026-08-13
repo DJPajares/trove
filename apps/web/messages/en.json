@@ -29,7 +29,11 @@
     "signUp": "Create account",
     "signOut": "Sign out",
     "signingOut": "Signing out…",
-    "signOutError": "We couldn't sign you out. Try again."
+    "signOutError": "We couldn't sign you out. Try again.",
+    "unsyncedSignOutTitle": "Discard unsynced changes?",
+    "unsyncedSignOutDescription": "Some trip changes are still stored only on this device. Signing out will remove them before they reach Trove.",
+    "keepSignedIn": "Keep me signed in",
+    "discardAndSignOut": "Discard and sign out"
   },
   "profile": {
     "eyebrow": "Your account",
@@ -242,6 +246,38 @@
     "tryAgain": "Try again",
     "unavailableTitle": "Trip Mode is not available today",
     "unavailableDescription": "This trip is active from {startDate} to {endDate} in {timeZone}.",
+    "sync": {
+      "offlineTitle": "You are offline",
+      "offlineDescription": "This prepared trip remains available. Changes stay on this device until you reconnect.",
+      "savedTitle": "Using your saved trip",
+      "savedDescription": "Trove cannot reach the server right now. Your prepared itinerary remains available on this device.",
+      "pendingTitle": "{count, plural, one {One change is waiting to sync} other {# changes are waiting to sync}}",
+      "pendingDescription": "You can keep using the trip while Trove reconnects.",
+      "attentionTitle": "{count, plural, one {One change needs attention} other {# changes need attention}}",
+      "attentionDescription": "Your local work is still safe. Review it when you are online.",
+      "review": "Review",
+      "title": "Offline changes",
+      "description": "Pending work stays on this device until Trove can apply it safely.",
+      "listLabel": "Offline itinerary changes",
+      "close": "Close offline changes",
+      "states": {
+        "pending": "Waiting for a connection.",
+        "failed": "Trove could not sync this change. It is still stored locally.",
+        "conflict": "This item also changed in the cloud. Choose which version to keep.",
+        "missing": "This item was removed in the cloud. Use the cloud version to clear the local change."
+      },
+      "operations": {
+        "itinerary_item_create": "Add itinerary item",
+        "itinerary_item_delete": "Delete itinerary item",
+        "itinerary_item_organize": "Move itinerary item",
+        "itinerary_item_update": "Update itinerary item",
+        "itinerary_travel_status": "Update itinerary status"
+      },
+      "retry": "Retry",
+      "syncNow": "Sync now",
+      "useCloud": "Use cloud version",
+      "keepMine": "Keep my change"
+    },
     "views": {
       "now": {
         "label": "Now",
@@ -391,6 +427,9 @@
         "locationShown": "Your latest device location is shown separately from Trove's planned route. Trove is not tracking you in the background.",
         "locationDenied": "Location access was not granted. The planned map and itinerary still work without it.",
         "locationUnavailable": "Your device location is unavailable right now. The planned map and itinerary are unchanged.",
+        "offlineMap": "Live map tiles, routes, and provider details are unavailable offline. Your itinerary and location text remain below.",
+        "offlineMapTitle": "Map unavailable offline",
+        "offlineMapDescription": "Use the itinerary beside this space for planned stops, times, and day-base context.",
         "mapSectionLabel": "Today's route map",
         "interactiveMapLabel": "Interactive map for today's route and places",
         "legendLabel": "Map marker guide",

@@ -4,6 +4,7 @@ import { floatingLocalTimeToInstant, formatInstantInTimeZone } from './itinerary
 import { getItineraryDayRoutes } from './itinerary-routes.js';
 import {
   itineraryItemInclude,
+  ItineraryConflictError,
   ItineraryNotFoundError,
   serializeItineraryItem,
 } from './itineraries.js';
@@ -282,13 +283,17 @@ export async function updateItineraryItemTravelStatus(
   tripId: string,
   itemId: string,
   travelStatus: ItineraryTravelStatus,
+  expectedUpdatedAt?: string,
 ) {
   const prisma = getPrismaClient();
   const item = await prisma.itineraryItem.findFirst({
     where: { id: itemId, tripId, trip: { ownerId: userId } },
-    select: { id: true },
+    select: { id: true, updatedAt: true },
   });
   if (!item) throw new ItineraryNotFoundError('itinerary_item_not_found');
+  if (expectedUpdatedAt && item.updatedAt.toISOString() !== expectedUpdatedAt) {
+    throw new ItineraryConflictError();
+  }
 
   await prisma.itineraryItem.update({
     where: { id: item.id },

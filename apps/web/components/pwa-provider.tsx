@@ -3,6 +3,8 @@
 import { SerwistProvider } from '@serwist/turbopack/react';
 import { useEffect, type ReactNode } from 'react';
 
+import { OfflineSyncManager } from '@/components/offline-sync-manager';
+
 const TROVE_WORKER_PATH = '/serwist/sw.js';
 const TROVE_CACHE_PREFIX = 'trove-pwa-';
 
@@ -48,6 +50,7 @@ export function PwaProvider({ children }: Readonly<{ children: ReactNode }>) {
     return (
       <>
         <DevelopmentPwaCleanup />
+        <OfflineSyncManager />
         {children}
       </>
     );
@@ -55,6 +58,7 @@ export function PwaProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   return (
     <SerwistProvider cacheOnNavigation={false} reloadOnOnline={false} swUrl={TROVE_WORKER_PATH}>
+      <OfflineSyncManager />
       {children}
     </SerwistProvider>
   );

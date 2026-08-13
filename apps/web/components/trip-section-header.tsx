@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuLinkItem,
   DropdownMenuSeparator,
@@ -124,7 +125,9 @@ export function TripSectionHeader({
             <ChevronDown aria-hidden="true" className="size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-(--anchor-width)">
-            <DropdownMenuLabel>{t('tripNavigation')}</DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>{t('tripNavigation')}</DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             {sections.map(({ icon: Icon, labelKey, path, route }) => (
               <DropdownMenuLinkItem

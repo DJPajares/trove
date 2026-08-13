@@ -61,12 +61,11 @@ For each task:
 8. Create or update the Git branch.
 9. Commit and push.
 10. Open a GitHub Pull Request.
-11. Request a review from `DJPajares` with `gh pr edit <number> --add-reviewer DJPajares`, then verify it with `gh pr view <number> --json reviewRequests`; if GitHub disallows a self-review request, assign the PR to `DJPajares` and verify `assignees` instead.
-12. Link the PR to the Linear issue.
-13. Move the issue to `In Review`.
-14. Identify the next unblocked suggested task.
-15. Move the next suggested task to `Todo`.
-16. Stop for human review.
+11. Link the PR to the Linear issue.
+12. Move the issue to `In Review`.
+13. Identify the next unblocked suggested task.
+14. Move the next suggested task to `Todo`.
+15. Stop for human review.
 
 Do not auto-merge PRs. A user must manually review and approve.
 
@@ -112,9 +111,7 @@ Example:
 ## GitHub Rules
 
 - Create a PR for implementation tasks unless the task clearly does not modify code.
-- Request a review from `DJPajares` before handoff and verify it with `gh pr view <number> --json reviewRequests`; when the authenticated author cannot request a self-review, assign the PR to `DJPajares` and verify it with `gh pr view <number> --json assignees`.
-- Write PR descriptions as real multiline Markdown with headings and bullets; never send literal escaped `\n` text.
-- Include a concise summary and validation performed.
+- Include a concise summary and a simple list of things to manually see the changes.
 - Never auto-merge.
 - Human approval is required before merge.
 - Mark the Linear issue `Done` only after the relevant PR is merged, unless the issue is explicitly non-code work.

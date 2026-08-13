@@ -158,8 +158,10 @@ async function resolveLeaveBy(input: {
     at: leaveAt.toISOString(),
     bufferSeconds: input.bufferSeconds === null ? null : bufferSeconds,
     destinationItemId: input.nextItem.id,
+    distanceMeters: segment.distanceMeters,
     mode: segment.mode,
     originItemId: input.currentItem.id,
+    provider: segment.provider,
     routeDurationSeconds: segment.durationSeconds,
     targetStartAt: input.nextItem.startInstant.toISOString(),
   };

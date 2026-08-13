@@ -237,7 +237,49 @@
       "now": {
         "label": "Now",
         "title": "Now",
-        "description": "Your immediate trip context will appear here as it becomes available."
+        "eyebrow": "Your trip right now",
+        "loading": "Checking your trip…",
+        "loadError": "We couldn't load your current trip context",
+        "loadErrorDescription": "Check your connection and try again.",
+        "tryAgain": "Try again",
+        "openToday": "View today",
+        "currentKind": {
+          "current": "Happening now",
+          "relevant": "Relevant now"
+        },
+        "locationDisclaimer": "Based on your itinerary, not your live location.",
+        "freeTimeTitle": "You have some breathing room.",
+        "freeTimeDescription": "Nothing is scheduled right now. Your next plan is ready below.",
+        "nextLabel": "Next",
+        "leaveByLabel": "Leave by",
+        "travelEstimate": "{duration} by {mode}",
+        "travelMode": {
+          "drive": "car",
+          "transit": "transit",
+          "walk": "foot"
+        },
+        "distance": "{value} {unit}",
+        "unit": {
+          "km": "km",
+          "mi": "mi"
+        },
+        "googleAttribution": "Route estimate from Google Maps.",
+        "routeUnavailable": "Travel time is not available for this leg yet.",
+        "timingFlexible": "No exact time is set, so there is no leave-by time.",
+        "directions": "Directions",
+        "directionsExternal": "Directions, opens in Google Maps",
+        "scheduleFlexible": "Anytime",
+        "dayPart": {
+          "anytime": "Anytime",
+          "morning": "Morning",
+          "afternoon": "Afternoon",
+          "evening": "Evening"
+        },
+        "placeFallback": "Planned place",
+        "noDayTitle": "No itinerary for today",
+        "noDayDescription": "There is no itinerary planned for {date}.",
+        "noNextTitle": "You're clear for now",
+        "noNextDescription": "There are no remaining itinerary items for today."
       },
       "today": {
         "label": "Today",

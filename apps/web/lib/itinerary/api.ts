@@ -124,8 +124,10 @@ export type TripModeContext = {
     at: string;
     bufferSeconds: number | null;
     destinationItemId: string;
+    distanceMeters: number | null;
     mode: RouteTravelMode;
     originItemId: string;
+    provider: 'google' | null;
     routeDurationSeconds: number;
     targetStartAt: string;
   } | null;

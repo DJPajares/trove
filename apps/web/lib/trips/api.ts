@@ -4,6 +4,7 @@ import {
   readTripSnapshot,
   rememberOfflineUser,
   saveTripSnapshot,
+  setOfflineApiReachable,
 } from '@/lib/offline/trip-store';
 
 export type TripDestination = {
@@ -85,14 +86,21 @@ async function getAuthContext() {
 async function tripRequest<T>(path: string, init?: RequestInit) {
   const { accessToken } = await getAuthContext();
   if (!accessToken) throw new TripApiError('offline_session', 503);
-  const response = await fetch(`${apiUrl}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        ...init?.headers,
+      },
+    });
+  } catch (error) {
+    setOfflineApiReachable(false);
+    throw error;
+  }
+  setOfflineApiReachable(response.status < 500);
 
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as {

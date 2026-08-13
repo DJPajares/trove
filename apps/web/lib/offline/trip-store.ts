@@ -12,6 +12,7 @@ const DATABASE_VERSION = 1;
 const SNAPSHOT_STORE = 'trip-snapshots';
 const MUTATION_STORE = 'mutations';
 const LAST_OFFLINE_USER_KEY = 'trove.last-offline-user';
+const OFFLINE_SNAPSHOT_STALE_AFTER_MS = 14 * 24 * 60 * 60 * 1_000;
 
 export const OFFLINE_SYNC_EVENT = 'trove:offline-sync-change';
 export const OFFLINE_CONNECTIVITY_EVENT = 'trove:offline-connectivity-change';
@@ -94,10 +95,26 @@ export type OfflineMutation = {
 export type OfflineTripSnapshot = {
   itinerary: Itinerary | null;
   key: string;
+  lastPreparationAttemptAt: string | null;
+  preparationError: string | null;
+  preparedAt: string | null;
   savedAt: string;
   trip: Trip | null;
   tripId: string;
   userId: string;
+};
+
+export type OfflineReadinessState = 'error' | 'not_ready' | 'partial' | 'ready' | 'stale';
+
+export type OfflineReadinessCategory = {
+  key: 'itinerary' | 'places' | 'trip';
+  state: 'error' | 'not_ready' | 'ready';
+};
+
+export type OfflineTripReadiness = {
+  categories: OfflineReadinessCategory[];
+  lastPreparedAt: string | null;
+  state: OfflineReadinessState;
 };
 
 export type TripSyncSummary = {
@@ -205,6 +222,9 @@ export async function saveItinerarySnapshot(userId: string, tripId: string, itin
   await updateSnapshot(userId, tripId, (current) => ({
     itinerary,
     key: snapshotKey(userId, tripId),
+    lastPreparationAttemptAt: current?.lastPreparationAttemptAt ?? null,
+    preparationError: current?.preparationError ?? null,
+    preparedAt: current?.preparedAt ?? null,
     savedAt: new Date().toISOString(),
     trip: current?.trip ?? null,
     tripId,
@@ -224,9 +244,104 @@ export async function saveTripSnapshot(userId: string, trip: Trip) {
   await updateSnapshot(userId, trip.id, (current) => ({
     itinerary: current?.itinerary ?? null,
     key: snapshotKey(userId, trip.id),
+    lastPreparationAttemptAt: current?.lastPreparationAttemptAt ?? null,
+    preparationError: current?.preparationError ?? null,
+    preparedAt: current?.preparedAt ?? null,
     savedAt: new Date().toISOString(),
     trip: { ...trip, coverPhotoUrl: null },
     tripId: trip.id,
+    userId,
+  }));
+}
+
+function isCompleteTripRange(itinerary: Itinerary) {
+  const start = new Date(`${itinerary.trip.startDate}T00:00:00.000Z`).getTime();
+  const end = new Date(`${itinerary.trip.endDate}T00:00:00.000Z`).getTime();
+  const expectedDays = Math.round((end - start) / (24 * 60 * 60 * 1_000)) + 1;
+  if (expectedDays < 1 || itinerary.days.length !== expectedDays) return false;
+
+  return itinerary.days.every((day, index) => {
+    const expected = new Date(start + index * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10);
+    return day.date === expected;
+  });
+}
+
+function hasPlaceContext(itinerary: Itinerary) {
+  const tripPlaceIds = new Set(itinerary.tripPlaces.map((tripPlace) => tripPlace.id));
+  const references = [
+    ...itinerary.days.flatMap((day) => [
+      ...(day.dailyBaseTripPlaceId ? [day.dailyBaseTripPlaceId] : []),
+      ...day.items.flatMap((item) => (item.tripPlace ? [item.tripPlace.id] : [])),
+    ]),
+    ...itinerary.unscheduledItems.flatMap((item) => (item.tripPlace ? [item.tripPlace.id] : [])),
+  ];
+  return references.every((tripPlaceId) => tripPlaceIds.has(tripPlaceId));
+}
+
+export function getOfflineTripReadiness(
+  snapshot: OfflineTripSnapshot | undefined,
+): OfflineTripReadiness {
+  const tripReady = Boolean(snapshot?.trip && snapshot.itinerary?.trip.id === snapshot.trip.id);
+  const itineraryReady = Boolean(snapshot?.itinerary && isCompleteTripRange(snapshot.itinerary));
+  const placesReady = Boolean(snapshot?.itinerary && hasPlaceContext(snapshot.itinerary));
+  const categories: OfflineReadinessCategory[] = [
+    { key: 'trip', state: tripReady ? 'ready' : 'not_ready' },
+    { key: 'itinerary', state: itineraryReady ? 'ready' : 'not_ready' },
+    { key: 'places', state: placesReady ? 'ready' : 'not_ready' },
+  ];
+  const coreReady = categories.every((category) => category.state === 'ready');
+
+  if (snapshot?.preparationError) {
+    return {
+      categories: categories.map((category) =>
+        category.state === 'not_ready' ? { ...category, state: 'error' } : category,
+      ),
+      lastPreparedAt: snapshot.preparedAt,
+      state: 'error',
+    };
+  }
+  if (!coreReady) {
+    return {
+      categories,
+      lastPreparedAt: snapshot?.preparedAt ?? null,
+      state: categories.some((category) => category.state === 'ready') ? 'partial' : 'not_ready',
+    };
+  }
+  if (!snapshot?.preparedAt) return { categories, lastPreparedAt: null, state: 'partial' };
+  const preparedAt = new Date(snapshot.preparedAt).getTime();
+  if (!Number.isFinite(preparedAt) || Date.now() - preparedAt > OFFLINE_SNAPSHOT_STALE_AFTER_MS) {
+    return { categories, lastPreparedAt: snapshot.preparedAt, state: 'stale' };
+  }
+  return { categories, lastPreparedAt: snapshot.preparedAt, state: 'ready' };
+}
+
+export async function markTripPrepared(userId: string, tripId: string) {
+  await updateSnapshot(userId, tripId, (current) => {
+    if (!current) throw new Error('offline_trip_not_prepared');
+    const now = new Date().toISOString();
+    return {
+      ...current,
+      lastPreparationAttemptAt: now,
+      preparationError: null,
+      preparedAt: now,
+    };
+  });
+}
+
+export async function recordTripPreparationError(
+  userId: string,
+  tripId: string,
+  errorCode: string,
+) {
+  await updateSnapshot(userId, tripId, (current) => ({
+    itinerary: current?.itinerary ?? null,
+    key: snapshotKey(userId, tripId),
+    lastPreparationAttemptAt: new Date().toISOString(),
+    preparationError: errorCode,
+    preparedAt: current?.preparedAt ?? null,
+    savedAt: current?.savedAt ?? new Date().toISOString(),
+    trip: current?.trip ?? null,
+    tripId,
     userId,
   }));
 }
@@ -317,6 +432,41 @@ export async function clearAllOfflineTripData() {
       cacheNames
         .filter((cacheName) => cacheName.includes('trove-pwa-trip-mode'))
         .map((cacheName) => caches.delete(cacheName)),
+    );
+  }
+  announceChange();
+}
+
+export async function removeTripOfflineData(userId: string, tripId: string) {
+  const database = await openDatabase();
+  const transaction = database.transaction([SNAPSHOT_STORE, MUTATION_STORE], 'readwrite');
+  const snapshotStore = transaction.objectStore(SNAPSHOT_STORE);
+  const mutationStore = transaction.objectStore(MUTATION_STORE);
+  const pendingCount = await requestResult(
+    mutationStore.index('by-user-trip').count(IDBKeyRange.only([userId, tripId])),
+  );
+  if (pendingCount > 0) {
+    throw new Error('offline_changes_pending');
+  }
+  snapshotStore.delete(snapshotKey(userId, tripId));
+  await transactionDone(transaction);
+
+  if ('caches' in window) {
+    const cacheNames = await caches.keys();
+    await Promise.all(
+      cacheNames
+        .filter((cacheName) => cacheName.includes('trove-pwa-trip-mode'))
+        .map(async (cacheName) => {
+          const cache = await caches.open(cacheName);
+          const requests = await cache.keys();
+          await Promise.all(
+            requests
+              .filter((request) =>
+                new URL(request.url).pathname.startsWith(`/trips/${tripId}/mode`),
+              )
+              .map((request) => cache.delete(request)),
+          );
+        }),
     );
   }
   announceChange();

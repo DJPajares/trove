@@ -278,6 +278,49 @@
       "useCloud": "Use cloud version",
       "keepMine": "Keep my change"
     },
+    "offlineReady": {
+      "title": "Ready Offline",
+      "description": "Prepare this trip's essential planning context for travel without a connection.",
+      "states": {
+        "ready": "Ready for offline use",
+        "partial": "Partially prepared",
+        "stale": "Refresh recommended",
+        "error": "Preparation needs attention",
+        "not_ready": "Not prepared"
+      },
+      "stateDescriptions": {
+        "ready": "Your full trip range and essential place context are stored on this device.",
+        "partial": "Some local trip data is available, but prepare it before relying on offline access.",
+        "stale": "Your saved trip still works, but refresh it before travel for the latest planning context.",
+        "error": "Trove could not finish preparing this trip. Your existing local data is still safe.",
+        "not_ready": "Prepare this trip before travelling so its planning context is available without a connection."
+      },
+      "categories": {
+        "trip": "Trip details",
+        "itinerary": "Full itinerary",
+        "places": "Places and day bases"
+      },
+      "categoryStates": {
+        "ready": "Ready",
+        "not_ready": "Not ready",
+        "error": "Needs attention"
+      },
+      "lastPrepared": "Last prepared {date}",
+      "notPrepared": "Not yet prepared on this device.",
+      "providerNote": "Live map tiles and changing provider details are not downloaded for offline use.",
+      "offlineHint": "Connect to refresh or prepare this trip.",
+      "pendingChanges": "{count, plural, one {One local change must sync before this copy can be removed.} other {# local changes must sync before this copy can be removed.}}",
+      "prepare": "Prepare offline",
+      "refresh": "Refresh offline data",
+      "preparing": "Preparing…",
+      "remove": "Remove local copy",
+      "removeTitle": "Remove offline trip data?",
+      "removeDescription": "This removes the local trip copy from this device. Your cloud trip and its planning data stay unchanged.",
+      "cancel": "Cancel",
+      "removeConfirm": "Remove local copy",
+      "removing": "Removing…",
+      "actionError": "Trove could not update this offline copy. Try again when you are connected."
+    },
     "views": {
       "now": {
         "label": "Now",

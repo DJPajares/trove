@@ -187,6 +187,15 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     };
   }, [day, providerDetails]);
 
+  useEffect(() => {
+    if (!day || !window.location.hash.startsWith('#trip-mode-item-')) return;
+    window.requestAnimationFrame(() => {
+      const element = document.getElementById(window.location.hash.slice(1));
+      element?.scrollIntoView({ block: 'center' });
+      element?.focus({ preventScroll: true });
+    });
+  }, [day]);
+
   if (state.status === 'loading') return <TodaySkeleton label={t('loading')} />;
 
   if (state.status === 'error') {
@@ -409,7 +418,9 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                   isCurrent && 'bg-secondary/45',
                   item.travelStatus !== 'upcoming' && 'bg-muted/20',
                 )}
+                id={`trip-mode-item-${item.id}`}
                 key={item.id}
+                tabIndex={-1}
               >
                 <div className="flex min-w-0 items-start gap-3">
                   <div

@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 
+import { TripModeMapView } from '@/components/trip-mode-map-view';
 import { TripModeTodayView } from '@/components/trip-mode-today-view';
 import { TripModeViewContent, type TripModeView } from '@/components/trip-mode-view';
 
@@ -12,5 +13,6 @@ export default async function TripModeViewPage({
   if (!supportedViews.has(view as TripModeView)) notFound();
 
   if (view === 'today') return <TripModeTodayView tripId={tripId} />;
+  if (view === 'map') return <TripModeMapView tripId={tripId} />;
   return <TripModeViewContent view={view as TripModeView} />;
 }

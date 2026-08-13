@@ -1,6 +1,6 @@
 'use client';
 
-import { Eye, MapPinned } from 'lucide-react';
+import { Eye, MapPinned, Navigation } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -16,6 +16,12 @@ import { decodeGooglePolyline, type ItineraryMapPoint } from '@/lib/maps/itinera
 import { cn } from '@/lib/utils';
 
 type ItineraryPlanningMapProps = {
+  ariaLabel?: string;
+  currentLocation?: {
+    accuracyMeters: number | null;
+    latitude: number;
+    longitude: number;
+  } | null;
   onOpenPlace: (tripPlaceId: string) => void;
   onSelectPoint: (point: ItineraryMapPoint) => void;
   onViewItem: (itemId: string) => void;
@@ -34,10 +40,12 @@ type GooglePolylineInstance = InstanceType<LoadedGoogleMaps['maps']['Polyline']>
 function markerContent(point: ItineraryMapPoint) {
   const element = document.createElement('span');
   element.className = cn(
-    'grid place-items-center rounded-full border-2 font-semibold shadow-[var(--shadow-control)] transition-[transform,box-shadow] duration-[var(--motion-fast)]',
+    'grid place-items-center border-2 font-semibold shadow-[var(--shadow-control)] transition-[transform,box-shadow] duration-[var(--motion-fast)]',
     point.kind === 'scheduled'
-      ? 'size-9 border-background bg-primary text-xs text-primary-foreground'
-      : 'size-7 border-primary bg-card text-primary',
+      ? 'size-9 rounded-full border-background bg-primary text-xs text-primary-foreground'
+      : point.kind === 'base'
+        ? 'size-8 rounded-[var(--radius-sm)] border-primary bg-card text-[0.6875rem] text-primary'
+        : 'size-7 rounded-full border-primary bg-card text-primary',
     'data-[selected=true]:scale-110 data-[selected=true]:ring-4 data-[selected=true]:ring-ring/35',
   );
   element.dataset.selected = 'false';
@@ -45,7 +53,19 @@ function markerContent(point: ItineraryMapPoint) {
   return element;
 }
 
+function currentLocationContent() {
+  const element = document.createElement('span');
+  element.className =
+    'grid size-7 place-items-center rounded-full border-2 border-background bg-status-info shadow-[var(--shadow-control)] ring-4 ring-status-info/25';
+  const center = document.createElement('span');
+  center.className = 'size-2 rounded-full bg-white';
+  element.append(center);
+  return element;
+}
+
 export function ItineraryPlanningMap({
+  ariaLabel,
+  currentLocation = null,
   onOpenPlace,
   onSelectPoint,
   onViewItem,
@@ -59,6 +79,7 @@ export function ItineraryPlanningMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<GoogleMapInstance | null>(null);
   const markerRefs = useRef(new Map<string, GoogleAdvancedMarkerInstance>());
+  const currentLocationMarkerRef = useRef<GoogleAdvancedMarkerInstance | null>(null);
   const polylineRefs = useRef<GooglePolylineInstance[]>([]);
   const onSelectPointRef = useRef(onSelectPoint);
   const [status, setStatus] = useState<'error' | 'loading' | 'ready'>(
@@ -75,7 +96,7 @@ export function ItineraryPlanningMap({
   }, [onSelectPoint]);
 
   useEffect(() => {
-    const initialPoint = points[0];
+    const initialPoint = points[0] ?? currentLocation;
     if (!containerRef.current || !initialPoint || !resolvedTheme || !hasGoogleMapsConfiguration())
       return;
     let active = true;
@@ -103,11 +124,13 @@ export function ItineraryPlanningMap({
         marker.map = null;
       });
       markerRefs.current.clear();
+      if (currentLocationMarkerRef.current) currentLocationMarkerRef.current.map = null;
+      currentLocationMarkerRef.current = null;
       polylineRefs.current.forEach((polyline) => polyline.setMap(null));
       polylineRefs.current = [];
       mapRef.current = null;
     };
-  }, [hasPoints, locale, resolvedTheme]);
+  }, [currentLocation, hasPoints, locale, resolvedTheme]);
 
   useEffect(() => {
     if (status !== 'ready' || !mapRef.current) return;
@@ -119,6 +142,8 @@ export function ItineraryPlanningMap({
           existingMarker.map = null;
         });
         markerRefs.current.clear();
+        if (currentLocationMarkerRef.current) currentLocationMarkerRef.current.map = null;
+        currentLocationMarkerRef.current = null;
         polylineRefs.current.forEach((polyline) => polyline.setMap(null));
         polylineRefs.current = [];
 
@@ -132,8 +157,11 @@ export function ItineraryPlanningMap({
             title:
               point.kind === 'scheduled'
                 ? t('scheduledMarkerLabel', { name: point.name, order: point.order ?? 0 })
-                : t('consideredMarkerLabel', { name: point.name }),
-            zIndex: point.kind === 'scheduled' ? 10 + (point.order ?? 0) : 1,
+                : point.kind === 'base'
+                  ? t('baseMarkerLabel', { name: point.name })
+                  : t('consideredMarkerLabel', { name: point.name }),
+            zIndex:
+              point.kind === 'scheduled' ? 10 + (point.order ?? 0) : point.kind === 'base' ? 8 : 1,
           });
           advancedMarker.append(content);
           advancedMarker.addEventListener('gmp-click', () => onSelectPointRef.current(point));
@@ -163,7 +191,20 @@ export function ItineraryPlanningMap({
           bounds.extend({ lat: point.latitude, lng: point.longitude });
         });
 
-        if (points.length === 1 && routePaths.length === 0) {
+        if (currentLocation) {
+          const advancedMarker = new marker.AdvancedMarkerElement({
+            map: mapRef.current,
+            position: { lat: currentLocation.latitude, lng: currentLocation.longitude },
+            title: t('currentLocationMarkerLabel'),
+            zIndex: 50,
+          });
+          advancedMarker.append(currentLocationContent());
+          currentLocationMarkerRef.current = advancedMarker;
+          bounds.extend({ lat: currentLocation.latitude, lng: currentLocation.longitude });
+        }
+
+        const locationCount = points.length + (currentLocation ? 1 : 0);
+        if (locationCount === 1 && routePaths.length === 0) {
           mapRef.current.setCenter(bounds.getCenter());
           mapRef.current.setZoom(14);
         } else {
@@ -174,7 +215,7 @@ export function ItineraryPlanningMap({
     return () => {
       active = false;
     };
-  }, [locale, points, routePolylines, status, t]);
+  }, [currentLocation, locale, points, routePolylines, status, t]);
 
   useEffect(() => {
     markerRefs.current.forEach((marker, id) => {
@@ -184,7 +225,7 @@ export function ItineraryPlanningMap({
     });
   }, [selectedPointId]);
 
-  if (!points.length) {
+  if (!points.length && !currentLocation) {
     return (
       <PageState
         className="min-h-[28rem] justify-center rounded-none border-0 bg-muted/35"
@@ -211,7 +252,12 @@ export function ItineraryPlanningMap({
 
   return (
     <div className="relative min-h-[28rem] overflow-hidden bg-muted/40 lg:min-h-[34rem]">
-      <div aria-label={t('label')} className="absolute inset-0" ref={containerRef} role="region" />
+      <div
+        aria-label={ariaLabel ?? t('label')}
+        className="absolute inset-0"
+        ref={containerRef}
+        role="region"
+      />
       {status === 'loading' ? (
         <PageState
           className="absolute inset-0 z-[1] justify-center rounded-none border-0 bg-muted/80"
@@ -235,7 +281,9 @@ export function ItineraryPlanningMap({
           <p className="mt-0.5 text-xs text-muted-foreground">
             {selectedPoint.kind === 'scheduled'
               ? t('scheduledSelection', { order: selectedPoint.order ?? 0 })
-              : t('consideredSelection')}
+              : selectedPoint.kind === 'base'
+                ? t('baseSelection')
+                : t('consideredSelection')}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {selectedPoint.itemId ? (
@@ -251,6 +299,21 @@ export function ItineraryPlanningMap({
             >
               <MapPinned aria-hidden="true" data-icon="inline-start" />
               {t('viewPlace')}
+            </Button>
+            <Button
+              nativeButton={false}
+              render={
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${selectedPoint.latitude},${selectedPoint.longitude}`}
+                  rel="noreferrer"
+                  target="_blank"
+                />
+              }
+              size="sm"
+              variant="outline"
+            >
+              <Navigation aria-hidden="true" data-icon="inline-start" />
+              {t('directions')}
             </Button>
           </div>
         </div>

@@ -6,6 +6,7 @@ import { getLocale, getTranslations } from 'next-intl/server';
 
 import './globals.css';
 import { AppShell } from '@/components/app-shell';
+import { OnboardingGate } from '@/components/onboarding-gate';
 import { PwaProvider } from '@/components/pwa-provider';
 import { PreferencesProvider } from '@/components/preferences-provider';
 import { ThemeProvider } from '@/components/theme-provider';
@@ -60,6 +61,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <NextIntlClientProvider>
               <PwaProvider>
                 <PreferencesProvider locale={locale}>
+                  <OnboardingGate />
                   <AppShell>{children}</AppShell>
                 </PreferencesProvider>
               </PwaProvider>

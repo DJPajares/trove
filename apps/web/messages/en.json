@@ -1489,6 +1489,35 @@
       "saveError": "Trove could not update this trip's notification setting."
     }
   },
+  "onboarding": {
+    "loading": "Loading your Trove profile...",
+    "loadError": "Trove couldn't load your profile. Check your connection and try again.",
+    "stepLabel": "Step {current} of {total}",
+    "welcome": "Plan it. Live it. Remember it. Just a few details to get you started.",
+    "saving": "Saving...",
+    "saveError": "That didn't save. Try again.",
+    "back": "Back",
+    "continue": "Continue",
+    "finish": "Get started",
+    "name": {
+      "title": "What should we call you?",
+      "description": "This name appears across your trips.",
+      "label": "Your name"
+    },
+    "location": {
+      "title": "Where do you call home?",
+      "description": "Trove uses this as your default starting point for new trips.",
+      "label": "Home location",
+      "hint": "A city is enough, e.g. Singapore."
+    },
+    "currency": {
+      "title": "What's your home currency?",
+      "description": "Trove uses this to show expenses and budgets in a currency you know.",
+      "label": "Home currency",
+      "placeholder": "Search currencies",
+      "hint": "You can change this later in Settings."
+    }
+  },
   "offlineStorage": {
     "title": "Offline & Storage",
     "description": "Manage the trips Trove keeps on this device for offline use.",

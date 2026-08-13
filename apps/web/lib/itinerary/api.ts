@@ -2,6 +2,7 @@ import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 export type ItineraryDayPart = 'afternoon' | 'anytime' | 'evening' | 'morning';
 export type ItineraryPriority = 'interested' | 'maybe' | 'must_go';
+export type RouteTravelMode = 'drive' | 'transit' | 'walk';
 export type ItineraryScheduleInput =
   | { kind: 'none' }
   | { dayPart: ItineraryDayPart; kind: 'day_part' }
@@ -37,6 +38,7 @@ export type ItineraryItem = {
   timeSemantics: 'authoritative_instant' | 'floating_local' | null;
   timeZone: string | null;
   timeZoneSource: 'day_default' | 'explicit' | 'place' | null;
+  travelModeToNext?: RouteTravelMode;
   tripPlace: ItineraryTripPlace | null;
   updatedAt: string;
 };
@@ -51,6 +53,42 @@ export type ItineraryDay = {
   id: string;
   items: ItineraryItem[];
   notes: string | null;
+  routeStartTravelMode: RouteTravelMode;
+};
+
+export type ItineraryRouteSegment = {
+  destination: {
+    id: string;
+    kind: 'daily_base' | 'itinerary_item' | 'starting_location';
+    label: string | null;
+  };
+  distanceMeters: number | null;
+  durationSeconds: number | null;
+  encodedPolyline: string | null;
+  id: string;
+  mode: RouteTravelMode;
+  modeOwner: { id: string; kind: 'day_start' | 'item_departure' };
+  origin: {
+    id: string;
+    kind: 'daily_base' | 'itinerary_item' | 'starting_location';
+    label: string | null;
+  };
+  provider: 'google' | null;
+  reason: string | null;
+  status: 'ok' | 'unavailable';
+};
+
+export type ItineraryDayRoutes = {
+  generatedAt: string;
+  segments: ItineraryRouteSegment[];
+  summary: {
+    distanceMeters: number | null;
+    durationSeconds: number | null;
+    knownSegmentCount: number;
+    scheduledPlaceCount: number;
+    status: 'complete' | 'partial' | 'unavailable';
+    totalSegmentCount: number;
+  };
 };
 
 export type Itinerary = {
@@ -122,6 +160,21 @@ export function fetchItinerary(tripId: string) {
   return itineraryRequest<Itinerary>(`/trips/${tripId}/itinerary`);
 }
 
+export function fetchItineraryDayRoutes(
+  tripId: string,
+  itineraryDayId: string,
+  options: { includePolyline?: boolean; languageCode?: string; signal?: AbortSignal } = {},
+) {
+  const query = new URLSearchParams();
+  if (options.includePolyline) query.set('includePolyline', 'true');
+  if (options.languageCode) query.set('languageCode', options.languageCode);
+  const suffix = query.size ? `?${query.toString()}` : '';
+  return itineraryRequest<ItineraryDayRoutes>(
+    `/trips/${tripId}/itinerary/days/${itineraryDayId}/routes${suffix}`,
+    { signal: options.signal },
+  );
+}
+
 export function createItineraryItem(tripId: string, input: ItineraryItemInput) {
   return itineraryRequest<{ item: ItineraryItem }>(`/trips/${tripId}/itinerary/items`, {
     body: JSON.stringify(input),
@@ -186,4 +239,26 @@ export function updateItineraryDayNote(
     `/trips/${tripId}/itinerary/days/${itineraryDayId}/note`,
     { body: JSON.stringify({ note }), method: 'PATCH' },
   );
+}
+
+export function updateItineraryDayRouteMode(
+  tripId: string,
+  itineraryDayId: string,
+  mode: RouteTravelMode,
+) {
+  return itineraryRequest<void>(`/trips/${tripId}/itinerary/days/${itineraryDayId}/route-mode`, {
+    body: JSON.stringify({ mode }),
+    method: 'PATCH',
+  });
+}
+
+export function updateItineraryItemRouteMode(
+  tripId: string,
+  itemId: string,
+  mode: RouteTravelMode,
+) {
+  return itineraryRequest<void>(`/trips/${tripId}/itinerary/items/${itemId}/route-mode`, {
+    body: JSON.stringify({ mode }),
+    method: 'PATCH',
+  });
 }

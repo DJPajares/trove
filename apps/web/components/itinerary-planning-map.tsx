@@ -12,7 +12,7 @@ import {
   hasGoogleMapsConfiguration,
   loadGoogleMaps,
 } from '@/lib/maps/google-maps';
-import type { ItineraryMapPoint } from '@/lib/maps/itinerary-map';
+import { decodeGooglePolyline, type ItineraryMapPoint } from '@/lib/maps/itinerary-map';
 import { cn } from '@/lib/utils';
 
 type ItineraryPlanningMapProps = {
@@ -20,6 +20,7 @@ type ItineraryPlanningMapProps = {
   onSelectPoint: (point: ItineraryMapPoint) => void;
   onViewItem: (itemId: string) => void;
   points: ItineraryMapPoint[];
+  routePolylines: string[];
   selectedPointId: string | null;
 };
 
@@ -28,6 +29,7 @@ type GoogleMapInstance = InstanceType<LoadedGoogleMaps['maps']['Map']>;
 type GoogleAdvancedMarkerInstance = InstanceType<
   LoadedGoogleMaps['marker']['AdvancedMarkerElement']
 >;
+type GooglePolylineInstance = InstanceType<LoadedGoogleMaps['maps']['Polyline']>;
 
 function markerContent(point: ItineraryMapPoint) {
   const element = document.createElement('span');
@@ -48,6 +50,7 @@ export function ItineraryPlanningMap({
   onSelectPoint,
   onViewItem,
   points,
+  routePolylines,
   selectedPointId,
 }: Readonly<ItineraryPlanningMapProps>) {
   const t = useTranslations('itinerary.map');
@@ -56,6 +59,7 @@ export function ItineraryPlanningMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<GoogleMapInstance | null>(null);
   const markerRefs = useRef(new Map<string, GoogleAdvancedMarkerInstance>());
+  const polylineRefs = useRef<GooglePolylineInstance[]>([]);
   const onSelectPointRef = useRef(onSelectPoint);
   const [status, setStatus] = useState<'error' | 'loading' | 'ready'>(
     hasGoogleMapsConfiguration() ? 'loading' : 'error',
@@ -99,6 +103,8 @@ export function ItineraryPlanningMap({
         marker.map = null;
       });
       markerRefs.current.clear();
+      polylineRefs.current.forEach((polyline) => polyline.setMap(null));
+      polylineRefs.current = [];
       mapRef.current = null;
     };
   }, [hasPoints, locale, resolvedTheme]);
@@ -113,6 +119,8 @@ export function ItineraryPlanningMap({
           existingMarker.map = null;
         });
         markerRefs.current.clear();
+        polylineRefs.current.forEach((polyline) => polyline.setMap(null));
+        polylineRefs.current = [];
 
         const bounds = new maps.LatLngBounds();
         points.forEach((point) => {
@@ -133,7 +141,29 @@ export function ItineraryPlanningMap({
           bounds.extend({ lat: point.latitude, lng: point.longitude });
         });
 
-        if (points.length === 1) {
+        const routePaths = routePolylines
+          .map(decodeGooglePolyline)
+          .filter((path) => path.length > 1);
+        const routeColor = getComputedStyle(document.documentElement)
+          .getPropertyValue('--primary')
+          .trim();
+        polylineRefs.current = routePaths.map(
+          (path) =>
+            new maps.Polyline({
+              clickable: false,
+              map: mapRef.current,
+              path: path.map((point) => ({ lat: point.latitude, lng: point.longitude })),
+              strokeColor: routeColor,
+              strokeOpacity: 0.82,
+              strokeWeight: 5,
+              zIndex: 2,
+            }),
+        );
+        routePaths.flat().forEach((point) => {
+          bounds.extend({ lat: point.latitude, lng: point.longitude });
+        });
+
+        if (points.length === 1 && routePaths.length === 0) {
           mapRef.current.setCenter(bounds.getCenter());
           mapRef.current.setZoom(14);
         } else {
@@ -144,7 +174,7 @@ export function ItineraryPlanningMap({
     return () => {
       active = false;
     };
-  }, [locale, points, status, t]);
+  }, [locale, points, routePolylines, status, t]);
 
   useEffect(() => {
     markerRefs.current.forEach((marker, id) => {

@@ -153,6 +153,15 @@ enum ItineraryTimeSemantics {
   @@schema("trove")
 }
 
+enum RouteTravelMode {
+  DRIVE   @map("drive")
+  TRANSIT @map("transit")
+  WALK    @map("walk")
+
+  @@map("route_travel_mode")
+  @@schema("trove")
+}
+
 enum TaskTimeZoneSource {
   ITINERARY_ITEM @map("itinerary_item")
   ITINERARY_DAY  @map("itinerary_day")
@@ -453,6 +462,7 @@ model ItineraryDay {
   date                             DateTime          @db.Date
   dailyBaseTripPlaceId             String?           @map("daily_base_trip_place_id") @db.Uuid
   notes                            String?           @db.Text
+  routeStartTravelMode             RouteTravelMode   @default(DRIVE) @map("route_start_travel_mode")
   defaultTimeZone                  String            @map("default_time_zone")
   defaultTimeZoneSource            DayTimeZoneSource @map("default_time_zone_source")
   defaultTimeZoneSourceTripPlaceId String?           @map("default_time_zone_source_trip_place_id") @db.Uuid
@@ -488,6 +498,7 @@ model ItineraryItem {
   customLocation          String?                 @map("custom_location")
   customLocationTimeZone  String?                 @map("custom_location_time_zone")
   position                Int
+  travelModeToNext        RouteTravelMode         @default(DRIVE) @map("travel_mode_to_next")
   localStartTime          DateTime?               @map("local_start_time") @db.Time(0)
   startInstant            DateTime?               @map("start_instant") @db.Timestamptz(3)
   timeSemantics           ItineraryTimeSemantics? @map("time_semantics")

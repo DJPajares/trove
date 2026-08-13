@@ -14,6 +14,10 @@ type PlacesEnvironment = {
   googlePlacesApiKey: string;
 };
 
+type RoutesEnvironment = {
+  googleRoutesApiKey: string;
+};
+
 export function getAuthenticationEnvironment(
   environment: Record<string, string | undefined> = process.env,
 ): AuthenticationEnvironment | null {
@@ -46,4 +50,12 @@ export function getPlacesEnvironment(
   const googlePlacesApiKey = environment.GOOGLE_PLACES_API_KEY?.trim();
 
   return googlePlacesApiKey ? { googlePlacesApiKey } : null;
+}
+
+export function getRoutesEnvironment(
+  environment: Record<string, string | undefined> = process.env,
+): RoutesEnvironment | null {
+  const googleRoutesApiKey = environment.GOOGLE_ROUTES_API_KEY?.trim();
+
+  return googleRoutesApiKey ? { googleRoutesApiKey } : null;
 }

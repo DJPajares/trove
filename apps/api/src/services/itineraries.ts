@@ -96,6 +96,12 @@ function mapPriorityInput(value: 'interested' | 'maybe' | 'must_go' | null) {
   return value ? values[value] : null;
 }
 
+function mapTravelMode(value: string) {
+  if (value === 'TRANSIT') return 'transit' as const;
+  if (value === 'WALK') return 'walk' as const;
+  return 'drive' as const;
+}
+
 function mapDayTimeZoneSource(value: string) {
   const values: Record<string, string> = {
     ACCOMMODATION: 'accommodation',
@@ -172,6 +178,7 @@ function serializeItem(item: ItineraryItemRecord) {
           : null,
     timeZone: item.timeZone,
     timeZoneSource: mapItemTimeZoneSource(item.timeZoneSource),
+    travelModeToNext: mapTravelMode(item.travelModeToNext),
     tripPlace: item.tripPlace ? serializeTripPlace(item.tripPlace) : null,
     updatedAt: item.updatedAt.toISOString(),
   };
@@ -376,6 +383,7 @@ export async function listItinerary(userId: string, tripId: string) {
       id: day.id,
       items: day.items.map(serializeItem),
       notes: day.notes,
+      routeStartTravelMode: mapTravelMode(day.routeStartTravelMode),
     })),
     trip: {
       endDate: formatDateOnly(trip.endDate),

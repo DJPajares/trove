@@ -1,4 +1,10 @@
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import {
+  getRememberedOfflineUser,
+  readTripSnapshot,
+  rememberOfflineUser,
+  saveTripSnapshot,
+} from '@/lib/offline/trip-store';
 
 export type TripDestination = {
   id: string;
@@ -61,13 +67,24 @@ async function getAuthContext() {
   if (!supabase) throw new TripApiError('supabase_not_configured', 500);
 
   const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session) throw new TripApiError('not_authenticated', 401);
+  if (!error && data.session) {
+    rememberOfflineUser(data.session.user.id);
+    return {
+      accessToken: data.session.access_token,
+      supabase,
+      userId: data.session.user.id,
+    };
+  }
 
-  return { accessToken: data.session.access_token, supabase, userId: data.session.user.id };
+  const rememberedUser =
+    typeof navigator !== 'undefined' && !navigator.onLine ? getRememberedOfflineUser() : null;
+  if (rememberedUser) return { accessToken: null, supabase, userId: rememberedUser };
+  throw new TripApiError('not_authenticated', 401);
 }
 
 async function tripRequest<T>(path: string, init?: RequestInit) {
   const { accessToken } = await getAuthContext();
+  if (!accessToken) throw new TripApiError('offline_session', 503);
   const response = await fetch(`${apiUrl}${path}`, {
     ...init,
     headers: {
@@ -98,7 +115,25 @@ export async function fetchTrips() {
 }
 
 export async function fetchTrip(tripId: string) {
-  return tripRequest<{ trip: Trip }>(`/trips/${tripId}`);
+  const { userId } = await getAuthContext();
+  const snapshot = await readTripSnapshot(userId, tripId).catch(() => undefined);
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    if (snapshot?.trip) return { trip: snapshot.trip };
+    throw new TripApiError('offline_trip_not_prepared', 503);
+  }
+  try {
+    const result = await tripRequest<{ trip: Trip }>(`/trips/${tripId}`);
+    await saveTripSnapshot(userId, result.trip);
+    return result;
+  } catch (error) {
+    if (
+      snapshot?.trip &&
+      (error instanceof TypeError || (error instanceof TripApiError && error.status >= 500))
+    ) {
+      return { trip: snapshot.trip };
+    }
+    throw error;
+  }
 }
 
 export async function createTrip(input: TripInput) {

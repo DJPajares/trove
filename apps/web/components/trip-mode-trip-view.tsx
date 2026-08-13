@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { PageState } from '@/components/page-state';
 import { useTripModePreview } from '@/components/trip-mode-shell';
+import { useOfflineDataRefreshKey } from '@/components/trip-sync-status';
 import { Button } from '@/components/ui/button';
 import {
   Item,
@@ -79,6 +80,7 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripMode.views.trip');
   const locale = useLocale();
   const { contextOptions } = useTripModePreview();
+  const offlineDataRefreshKey = useOfflineDataRefreshKey();
   const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
   const [pinnedInfo, setPinnedInfo] = useState<TripInfoEntry[]>([]);
   const [reloadKey, setReloadKey] = useState(0);
@@ -111,7 +113,7 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
     return () => {
       active = false;
     };
-  }, [contextOptions, reloadKey, tripId]);
+  }, [contextOptions, offlineDataRefreshKey, reloadKey, tripId]);
 
   const dateFormatter = useMemo(
     () =>

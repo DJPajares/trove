@@ -5,6 +5,7 @@ import {
   createItineraryItem,
   deleteItineraryItem,
   duplicateItineraryItem,
+  ItineraryConflictError,
   ItineraryNotFoundError,
   ItineraryValidationError,
   listItinerary,
@@ -68,6 +69,7 @@ const itemFields = {
 const createItemSchema = z
   .object({
     ...itemFields,
+    clientItemId: z.uuid().optional(),
     itineraryDayId: z.uuid(),
     schedule: scheduleSchema.default({ kind: 'none' }),
   })
@@ -88,7 +90,17 @@ function getUserId(request: FastifyRequest, reply: FastifyReply) {
   return request.authUserId;
 }
 
+function getExpectedUpdatedAt(request: FastifyRequest) {
+  const value = request.headers['x-trove-expected-updated-at'];
+  if (typeof value !== 'string') return undefined;
+  const parsed = z.string().datetime({ offset: true }).safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+}
+
 function handleError(reply: FastifyReply, error: unknown) {
+  if (error instanceof ItineraryConflictError) {
+    return reply.code(409).send({ code: error.message });
+  }
   if (error instanceof ItineraryNotFoundError) {
     return reply.code(404).send({ code: error.message });
   }
@@ -135,7 +147,12 @@ export function createItineraryControllers() {
       if (!userId) return;
       if (!params.success) return reply.code(400).send({ code: 'invalid_itinerary_item' });
       try {
-        await deleteItineraryItem(userId, params.data.tripId, params.data.itemId);
+        await deleteItineraryItem(
+          userId,
+          params.data.tripId,
+          params.data.itemId,
+          getExpectedUpdatedAt(request),
+        );
         return reply.code(204).send();
       } catch (error) {
         return handleError(reply, error);
@@ -162,7 +179,13 @@ export function createItineraryControllers() {
       if (!params.success || !body.success)
         return reply.code(400).send({ code: 'invalid_itinerary_item' });
       try {
-        await organizeItineraryItem(userId, params.data.tripId, params.data.itemId, body.data);
+        await organizeItineraryItem(
+          userId,
+          params.data.tripId,
+          params.data.itemId,
+          body.data,
+          getExpectedUpdatedAt(request),
+        );
         return reply.code(204).send();
       } catch (error) {
         return handleError(reply, error);
@@ -220,7 +243,13 @@ export function createItineraryControllers() {
       }
       try {
         return reply.send(
-          await updateItineraryItem(userId, params.data.tripId, params.data.itemId, body.data),
+          await updateItineraryItem(
+            userId,
+            params.data.tripId,
+            params.data.itemId,
+            body.data,
+            getExpectedUpdatedAt(request),
+          ),
         );
       } catch (error) {
         return handleError(reply, error);

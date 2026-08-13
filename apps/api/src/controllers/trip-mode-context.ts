@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
-import { ItineraryNotFoundError } from '../services/itineraries.js';
+import { ItineraryConflictError, ItineraryNotFoundError } from '../services/itineraries.js';
 import {
   resolveTripModeContext,
   TripModeContextValidationError,
@@ -34,7 +34,17 @@ function getUserId(request: FastifyRequest, reply: FastifyReply) {
   return request.authUserId;
 }
 
+function getExpectedUpdatedAt(request: FastifyRequest) {
+  const value = request.headers['x-trove-expected-updated-at'];
+  if (typeof value !== 'string') return undefined;
+  const parsed = z.string().datetime({ offset: true }).safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+}
+
 function handleError(reply: FastifyReply, error: unknown) {
+  if (error instanceof ItineraryConflictError) {
+    return reply.code(409).send({ code: error.message });
+  }
   if (error instanceof ItineraryNotFoundError) {
     return reply.code(404).send({ code: error.message });
   }
@@ -86,6 +96,7 @@ export function createTripModeContextControllers() {
             params.data.tripId,
             params.data.itemId,
             body.data.travelStatus,
+            getExpectedUpdatedAt(request),
           ),
         );
       } catch (error) {

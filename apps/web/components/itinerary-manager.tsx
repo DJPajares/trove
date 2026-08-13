@@ -523,6 +523,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                     ...current.tripPlaces,
                     {
                       id: tripPlace.id,
+                      note: tripPlace.note,
                       place: {
                         id: tripPlace.place.id,
                         kind: tripPlace.place.kind,
@@ -532,6 +533,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                         providerRefs: tripPlace.place.providerRefs,
                         timeZone: tripPlace.place.location?.timeZone ?? null,
                       },
+                      priority: tripPlace.priority,
                     },
                   ],
             }

@@ -8,6 +8,16 @@ import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -18,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { signOutFromTrove } from '@/lib/auth/sign-out';
+import { hasUnsyncedOfflineChanges } from '@/lib/offline/trip-store';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 function getDisplayName(user: User | null, fallback: string) {
@@ -37,6 +48,7 @@ export function AccountMenu() {
   const [isReady, setIsReady] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [hasSignOutError, setHasSignOutError] = useState(false);
+  const [showUnsyncedWarning, setShowUnsyncedWarning] = useState(false);
 
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
@@ -82,61 +94,98 @@ export function AccountMenu() {
     }
   }
 
+  async function requestSignOut() {
+    try {
+      if (await hasUnsyncedOfflineChanges(user?.id)) {
+        setShowUnsyncedWarning(true);
+        return;
+      }
+    } catch {
+      // If local storage is unavailable there cannot be a readable queue to preserve.
+    }
+    await handleSignOut();
+  }
+
   const displayName = getDisplayName(user, t('signedOut'));
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={<Button aria-label={t('button')} size="icon" type="button" variant="ghost" />}
-      >
-        <UserRound aria-hidden="true" className="size-4" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="px-2 py-2">
-            <span className="block truncate text-sm font-semibold text-foreground">
-              {displayName}
-            </span>
-            {isReady && user?.email ? (
-              <span className="mt-0.5 block truncate text-xs font-normal text-muted-foreground">
-                {user.email}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={<Button aria-label={t('button')} size="icon" type="button" variant="ghost" />}
+        >
+          <UserRound aria-hidden="true" className="size-4" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className="px-2 py-2">
+              <span className="block truncate text-sm font-semibold text-foreground">
+                {displayName}
               </span>
-            ) : null}
-          </DropdownMenuLabel>
-        </DropdownMenuGroup>
+              {isReady && user?.email ? (
+                <span className="mt-0.5 block truncate text-xs font-normal text-muted-foreground">
+                  {user.email}
+                </span>
+              ) : null}
+            </DropdownMenuLabel>
+          </DropdownMenuGroup>
 
-        <DropdownMenuSeparator />
+          <DropdownMenuSeparator />
 
-        {user ? (
-          <>
-            <DropdownMenuLinkItem render={<Link href="/profile" />}>
-              <UserRound aria-hidden="true" className="size-4" />
-              {t('profile')}
-            </DropdownMenuLinkItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem disabled={isSigningOut} onClick={handleSignOut} variant="destructive">
-              <LogOut aria-hidden="true" className="size-4" />
-              {isSigningOut ? t('signingOut') : t('signOut')}
-            </DropdownMenuItem>
-            {hasSignOutError ? (
-              <p className="px-2 py-1 text-xs text-destructive" role="alert">
-                {t('signOutError')}
-              </p>
-            ) : null}
-          </>
-        ) : (
-          <>
-            <DropdownMenuLinkItem render={<Link href="/sign-in" />}>
-              <LogIn aria-hidden="true" className="size-4" />
-              {t('signIn')}
-            </DropdownMenuLinkItem>
-            <DropdownMenuLinkItem render={<Link href="/sign-up" />}>
-              <UserPlus aria-hidden="true" className="size-4" />
-              {t('signUp')}
-            </DropdownMenuLinkItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          {user ? (
+            <>
+              <DropdownMenuLinkItem render={<Link href="/profile" />}>
+                <UserRound aria-hidden="true" className="size-4" />
+                {t('profile')}
+              </DropdownMenuLinkItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={isSigningOut}
+                onClick={() => void requestSignOut()}
+                variant="destructive"
+              >
+                <LogOut aria-hidden="true" className="size-4" />
+                {isSigningOut ? t('signingOut') : t('signOut')}
+              </DropdownMenuItem>
+              {hasSignOutError ? (
+                <p className="px-2 py-1 text-xs text-destructive" role="alert">
+                  {t('signOutError')}
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <DropdownMenuLinkItem render={<Link href="/sign-in" />}>
+                <LogIn aria-hidden="true" className="size-4" />
+                {t('signIn')}
+              </DropdownMenuLinkItem>
+              <DropdownMenuLinkItem render={<Link href="/sign-up" />}>
+                <UserPlus aria-hidden="true" className="size-4" />
+                {t('signUp')}
+              </DropdownMenuLinkItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog onOpenChange={setShowUnsyncedWarning} open={showUnsyncedWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('unsyncedSignOutTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('unsyncedSignOutDescription')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('keepSignedIn')}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isSigningOut}
+              onClick={() => void handleSignOut()}
+              variant="destructive"
+            >
+              {isSigningOut ? t('signingOut') : t('discardAndSignOut')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

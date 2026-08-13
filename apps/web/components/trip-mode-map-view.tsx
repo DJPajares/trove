@@ -22,6 +22,7 @@ import { PageState } from '@/components/page-state';
 import { PlaceDetailSheet } from '@/components/place-detail-sheet';
 import { usePreferences } from '@/components/preferences-provider';
 import { useTripModePreview } from '@/components/trip-mode-shell';
+import { useOfflineDataRefreshKey, useOnlineStatus } from '@/components/trip-sync-status';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -101,6 +102,8 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
   const locale = useLocale();
   const router = useRouter();
   const { preferences } = usePreferences();
+  const online = useOnlineStatus();
+  const offlineDataRefreshKey = useOfflineDataRefreshKey();
   const { contextOptions, isPreview, withPreviewHref } = useTripModePreview();
   const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
   const [routeState, setRouteState] = useState<RouteState>({ data: null, status: 'idle' });
@@ -136,7 +139,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
     return () => {
       active = false;
     };
-  }, [contextOptions, reloadKey, tripId]);
+  }, [contextOptions, offlineDataRefreshKey, reloadKey, tripId]);
 
   const day = useMemo(() => {
     if (state.status !== 'ready') return null;
@@ -148,7 +151,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
   }, [state]);
 
   useEffect(() => {
-    if (!day) {
+    if (!day || !online) {
       setRouteState({ data: null, status: 'idle' });
       return;
     }
@@ -166,10 +169,10 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
         }
       });
     return () => controller.abort();
-  }, [day, locale, tripId]);
+  }, [day, locale, online, tripId]);
 
   useEffect(() => {
-    if (state.status !== 'ready') return;
+    if (state.status !== 'ready' || !online) return;
     const pending = state.data.itinerary.tripPlaces.filter(
       (tripPlace) =>
         tripPlace.place.kind === 'provider' &&
@@ -202,7 +205,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
     return () => {
       active = false;
     };
-  }, [providerDetails, state]);
+  }, [online, providerDetails, state]);
 
   if (state.status === 'loading') return <MapSkeleton label={t('loading')} />;
 
@@ -227,7 +230,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
     timeZone: 'UTC',
   }).format(new Date(`${context.selectedDate}T00:00:00.000Z`));
   const detailsFor = (tripPlace: ItineraryTripPlace | null) =>
-    tripPlace ? (providerDetails[tripPlace.place.id] ?? null) : null;
+    online && tripPlace ? (providerDetails[tripPlace.place.id] ?? null) : null;
   const placeName = (tripPlace: ItineraryTripPlace) =>
     tripPlace.place.name ?? detailsFor(tripPlace)?.name ?? t('placeFallback');
   const placeLocation = (tripPlace: ItineraryTripPlace) =>
@@ -370,7 +373,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
             {t(isPreview ? 'previewDescription' : 'description')}
           </p>
         </div>
-        {!isPreview && locationStatus !== 'unsupported' ? (
+        {!isPreview && online && locationStatus !== 'unsupported' ? (
           <Button
             disabled={locationStatus === 'loading'}
             onClick={requestLocation}
@@ -402,6 +405,13 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
           <AlertDescription>
             {locationStatus === 'denied' ? t('locationDenied') : t('locationUnavailable')}
           </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {!online ? (
+        <Alert variant="warning">
+          <CircleAlert aria-hidden="true" />
+          <AlertDescription>{t('offlineMap')}</AlertDescription>
         </Alert>
       ) : null}
 
@@ -449,18 +459,30 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
               </li>
             ) : null}
           </ul>
-          <ItineraryPlanningMap
-            ariaLabel={t('interactiveMapLabel')}
-            currentLocation={deviceLocation}
-            onOpenPlace={setDetailTripPlaceId}
-            onSelectPoint={(point) => setSelectedPointId(point.id)}
-            onViewItem={(itemId) =>
-              router.push(withPreviewHref(`/trips/${tripId}/mode/today#trip-mode-item-${itemId}`))
-            }
-            points={mapPoints}
-            routePolylines={routePolylines}
-            selectedPointId={selectedPointId}
-          />
+          {online ? (
+            <ItineraryPlanningMap
+              ariaLabel={t('interactiveMapLabel')}
+              currentLocation={deviceLocation}
+              onOpenPlace={setDetailTripPlaceId}
+              onSelectPoint={(point) => setSelectedPointId(point.id)}
+              onViewItem={(itemId) =>
+                router.push(withPreviewHref(`/trips/${tripId}/mode/today#trip-mode-item-${itemId}`))
+              }
+              points={mapPoints}
+              routePolylines={routePolylines}
+              selectedPointId={selectedPointId}
+            />
+          ) : (
+            <div className="flex min-h-72 items-center justify-center bg-surface-sunken px-6 text-center">
+              <div className="max-w-sm">
+                <MapPin aria-hidden="true" className="mx-auto size-6 text-brand" />
+                <p className="mt-3 font-medium text-foreground">{t('offlineMapTitle')}</p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  {t('offlineMapDescription')}
+                </p>
+              </div>
+            </div>
+          )}
         </section>
 
         <aside aria-label={t('dayContextLabel')} className="space-y-6">
@@ -529,6 +551,11 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
                               {itemLocation(item)}
                             </p>
                           ) : null}
+                          {item.notes || item.tripPlace?.note ? (
+                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-subtle">
+                              {item.notes ?? item.tripPlace?.note}
+                            </p>
+                          ) : null}
                           <div className="mt-2 flex flex-wrap gap-1">
                             {point ? (
                               <Button
@@ -541,7 +568,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
                                 {t('show')}
                               </Button>
                             ) : null}
-                            {location ? (
+                            {online && location ? (
                               <Button
                                 nativeButton={false}
                                 render={

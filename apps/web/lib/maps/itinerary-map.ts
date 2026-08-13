@@ -8,7 +8,7 @@ import type {
 export type ItineraryMapPoint = {
   id: string;
   itemId: string | null;
-  kind: 'considered' | 'scheduled';
+  kind: 'base' | 'considered' | 'scheduled';
   latitude: number;
   longitude: number;
   name: string;

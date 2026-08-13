@@ -1,4 +1,14 @@
-import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import {
+  canUseSupportingOfflineFallback,
+  queueSupportingMutation,
+  readPreparedSupportingData,
+} from '@/lib/offline/supporting-sync';
+import {
+  saveSupportingSnapshot,
+  setOfflineApiReachable,
+  type OfflineMutationOperation,
+} from '@/lib/offline/trip-store';
+import { getOfflineAuthContext } from '@/lib/offline/trip-sync';
 
 export type ExpenseCategory = 'activities' | 'food' | 'other' | 'shopping' | 'stay' | 'transport';
 
@@ -61,24 +71,35 @@ export class ExpensesApiError extends Error {
 
 const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
 
-async function getAccessToken() {
-  const supabase = createBrowserSupabaseClient();
-  if (!supabase) throw new ExpensesApiError('supabase_not_configured', 500);
-  const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session) throw new ExpensesApiError('not_authenticated', 401);
-  return data.session.access_token;
+async function getAuthContext() {
+  try {
+    return await getOfflineAuthContext();
+  } catch {
+    throw new ExpensesApiError('not_authenticated', 401);
+  }
 }
 
-async function expenseRequest<T>(path: string, init?: RequestInit) {
-  const accessToken = await getAccessToken();
-  const response = await fetch(`${apiUrl}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
-  });
+async function expenseRequest<T>(
+  path: string,
+  init: RequestInit | undefined,
+  auth: Awaited<ReturnType<typeof getAuthContext>>,
+) {
+  if (!auth.accessToken) throw new ExpensesApiError('offline_session', 503);
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${auth.accessToken}`,
+        'Content-Type': 'application/json',
+        ...init?.headers,
+      },
+    });
+  } catch {
+    setOfflineApiReachable(false);
+    throw new ExpensesApiError('expenses_unavailable', 503);
+  }
+  setOfflineApiReachable(response.status < 500);
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { code?: string };
     throw new ExpensesApiError(
@@ -90,31 +111,129 @@ async function expenseRequest<T>(path: string, init?: RequestInit) {
   return response.json() as Promise<T>;
 }
 
-export function fetchExpenses(tripId: string) {
-  return expenseRequest<ExpensesResponse>(`/trips/${tripId}/expenses`);
+export async function fetchExpenses(tripId: string) {
+  const auth = await getAuthContext();
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return readPreparedSupportingData(auth.userId, tripId, 'expenses');
+  }
+  try {
+    const data = await expenseRequest<ExpensesResponse>(
+      `/trips/${tripId}/expenses`,
+      undefined,
+      auth,
+    );
+    await saveSupportingSnapshot(auth.userId, tripId, 'expenses', data);
+    return data;
+  } catch (error) {
+    if (canUseSupportingOfflineFallback(error)) {
+      return readPreparedSupportingData(auth.userId, tripId, 'expenses');
+    }
+    throw error;
+  }
 }
 
-export function createExpense(tripId: string, input: ExpenseInput) {
-  return expenseRequest<{ expense: Expense }>(`/trips/${tripId}/expenses`, {
-    body: JSON.stringify(input),
-    method: 'POST',
-  });
+export async function createExpense(tripId: string, input: ExpenseInput) {
+  const auth = await getAuthContext();
+  const operation: OfflineMutationOperation = {
+    clientExpenseId: crypto.randomUUID(),
+    input,
+    kind: 'expense_create',
+  };
+  try {
+    const result = await expenseRequest<{ expense: Expense }>(
+      `/trips/${tripId}/expenses`,
+      {
+        body: JSON.stringify({ ...input, clientExpenseId: operation.clientExpenseId }),
+        method: 'POST',
+      },
+      auth,
+    );
+    const current = await expenseRequest<ExpensesResponse>(
+      `/trips/${tripId}/expenses`,
+      undefined,
+      auth,
+    ).catch(() => null);
+    if (current) await saveSupportingSnapshot(auth.userId, tripId, 'expenses', current);
+    return result;
+  } catch (error) {
+    if (!canUseSupportingOfflineFallback(error)) throw error;
+    await queueSupportingMutation(auth.userId, tripId, operation);
+    const data = await readPreparedSupportingData(auth.userId, tripId, 'expenses');
+    const expense = data.expenses.find((candidate) => candidate.id === operation.clientExpenseId);
+    if (!expense) throw error;
+    return { expense };
+  }
 }
 
-export function updateExpense(tripId: string, expenseId: string, input: ExpenseInput) {
-  return expenseRequest<{ expense: Expense }>(`/trips/${tripId}/expenses/${expenseId}`, {
-    body: JSON.stringify(input),
-    method: 'PATCH',
-  });
+export async function updateExpense(tripId: string, expenseId: string, input: ExpenseInput) {
+  const auth = await getAuthContext();
+  const stored = await readPreparedSupportingData(auth.userId, tripId, 'expenses').catch(
+    () => null,
+  );
+  const baseExpense = stored?.expenses.find((expense) => expense.id === expenseId) ?? null;
+  try {
+    const result = await expenseRequest<{ expense: Expense }>(
+      `/trips/${tripId}/expenses/${expenseId}`,
+      { body: JSON.stringify(input), method: 'PATCH' },
+      auth,
+    );
+    const current = await expenseRequest<ExpensesResponse>(
+      `/trips/${tripId}/expenses`,
+      undefined,
+      auth,
+    ).catch(() => null);
+    if (current) await saveSupportingSnapshot(auth.userId, tripId, 'expenses', current);
+    return result;
+  } catch (error) {
+    if (!baseExpense || !canUseSupportingOfflineFallback(error)) throw error;
+    await queueSupportingMutation(auth.userId, tripId, {
+      baseExpense: structuredClone(baseExpense),
+      expenseId,
+      input,
+      kind: 'expense_update',
+    });
+    const data = await readPreparedSupportingData(auth.userId, tripId, 'expenses');
+    const expense = data.expenses.find((candidate) => candidate.id === expenseId);
+    if (!expense) throw error;
+    return { expense };
+  }
 }
 
-export function deleteExpense(tripId: string, expenseId: string) {
-  return expenseRequest<void>(`/trips/${tripId}/expenses/${expenseId}`, { method: 'DELETE' });
+export async function deleteExpense(tripId: string, expenseId: string) {
+  const auth = await getAuthContext();
+  const stored = await readPreparedSupportingData(auth.userId, tripId, 'expenses').catch(
+    () => null,
+  );
+  const baseExpense = stored?.expenses.find((expense) => expense.id === expenseId) ?? null;
+  try {
+    const result = await expenseRequest<void>(
+      `/trips/${tripId}/expenses/${expenseId}`,
+      { method: 'DELETE' },
+      auth,
+    );
+    const current = await expenseRequest<ExpensesResponse>(
+      `/trips/${tripId}/expenses`,
+      undefined,
+      auth,
+    ).catch(() => null);
+    if (current) await saveSupportingSnapshot(auth.userId, tripId, 'expenses', current);
+    return result;
+  } catch (error) {
+    if (!baseExpense || !canUseSupportingOfflineFallback(error)) throw error;
+    await queueSupportingMutation(auth.userId, tripId, {
+      baseExpense: structuredClone(baseExpense),
+      expenseId,
+      kind: 'expense_delete',
+    });
+  }
 }
 
 export function updateBudget(tripId: string, budget: CurrencyTotal | null) {
-  return expenseRequest<{ budget: CurrencyTotal | null }>(`/trips/${tripId}/expenses/budget`, {
-    body: JSON.stringify({ budget }),
-    method: 'PATCH',
-  });
+  return getAuthContext().then((auth) =>
+    expenseRequest<{ budget: CurrencyTotal | null }>(
+      `/trips/${tripId}/expenses/budget`,
+      { body: JSON.stringify({ budget }), method: 'PATCH' },
+      auth,
+    ),
+  );
 }

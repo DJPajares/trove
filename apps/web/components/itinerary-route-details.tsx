@@ -115,6 +115,16 @@ export function ItineraryRouteSummary({
       ) : partial ? (
         <p className="mt-1 text-xs text-muted-foreground">{t('partial')}</p>
       ) : null}
+      {data?.source === 'cache' ? (
+        <p className="mt-1 text-xs text-status-warning">
+          {t('cachedRoute', {
+            date: new Intl.DateTimeFormat(locale, {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+            }).format(new Date(data.generatedAt)),
+          })}
+        </p>
+      ) : null}
       {hasWalkingRoute ? (
         <p className="mt-1 text-xs text-muted-foreground">{t('walkingBeta')}</p>
       ) : null}

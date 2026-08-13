@@ -168,7 +168,9 @@ export function TripSyncStatus({ tripId }: Readonly<{ tripId: string }>) {
                       </p>
                       <p className="mt-1 text-sm leading-5 text-muted-foreground">
                         {t(
-                          mutation.errorCode === 'itinerary_item_missing'
+                          mutation.errorCode === 'itinerary_item_missing' ||
+                            mutation.errorCode === 'supporting_data_missing' ||
+                            mutation.errorCode === 'day_missing'
                             ? 'states.missing'
                             : `states.${mutation.state}`,
                         )}
@@ -189,7 +191,11 @@ export function TripSyncStatus({ tripId }: Readonly<{ tripId: string }>) {
                         >
                           {t('useCloud')}
                         </Button>
-                        {mutation.errorCode !== 'itinerary_item_missing' ? (
+                        {![
+                          'day_missing',
+                          'itinerary_item_missing',
+                          'supporting_data_missing',
+                        ].includes(mutation.errorCode ?? '') ? (
                           <Button
                             disabled={busyId === mutation.id || !online}
                             onClick={() =>

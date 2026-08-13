@@ -1,4 +1,14 @@
-import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import {
+  canUseSupportingOfflineFallback,
+  queueSupportingMutation,
+  readPreparedSupportingData,
+} from '@/lib/offline/supporting-sync';
+import {
+  saveSupportingSnapshot,
+  setOfflineApiReachable,
+  type OfflineMutationOperation,
+} from '@/lib/offline/trip-store';
+import { getOfflineAuthContext } from '@/lib/offline/trip-sync';
 
 export type TripInfoEntry = {
   category: string | null;
@@ -37,24 +47,35 @@ export class TripInfoApiError extends Error {
 
 const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
 
-async function getAccessToken() {
-  const supabase = createBrowserSupabaseClient();
-  if (!supabase) throw new TripInfoApiError('supabase_not_configured', 500);
-  const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session) throw new TripInfoApiError('not_authenticated', 401);
-  return data.session.access_token;
+async function getAuthContext() {
+  try {
+    return await getOfflineAuthContext();
+  } catch {
+    throw new TripInfoApiError('not_authenticated', 401);
+  }
 }
 
-async function tripInfoRequest<T>(path: string, init?: RequestInit) {
-  const accessToken = await getAccessToken();
-  const response = await fetch(`${apiUrl}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
-  });
+async function tripInfoRequest<T>(
+  path: string,
+  init: RequestInit | undefined,
+  auth: Awaited<ReturnType<typeof getAuthContext>>,
+) {
+  if (!auth.accessToken) throw new TripInfoApiError('offline_session', 503);
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${auth.accessToken}`,
+        'Content-Type': 'application/json',
+        ...init?.headers,
+      },
+    });
+  } catch {
+    setOfflineApiReachable(false);
+    throw new TripInfoApiError('trip_info_unavailable', 503);
+  }
+  setOfflineApiReachable(response.status < 500);
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { code?: string };
     throw new TripInfoApiError(
@@ -66,27 +87,121 @@ async function tripInfoRequest<T>(path: string, init?: RequestInit) {
   return response.json() as Promise<T>;
 }
 
-export function fetchTripInfo(tripId: string) {
-  return tripInfoRequest<TripInfoResponse>(`/trips/${tripId}/info`);
+export async function fetchTripInfo(tripId: string) {
+  const auth = await getAuthContext();
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return readPreparedSupportingData(auth.userId, tripId, 'tripInfo');
+  }
+  try {
+    const data = await tripInfoRequest<TripInfoResponse>(`/trips/${tripId}/info`, undefined, auth);
+    await saveSupportingSnapshot(auth.userId, tripId, 'tripInfo', data);
+    return data;
+  } catch (error) {
+    if (canUseSupportingOfflineFallback(error)) {
+      return readPreparedSupportingData(auth.userId, tripId, 'tripInfo');
+    }
+    throw error;
+  }
 }
 
-export function createTripInfo(
+export async function createTripInfo(
   tripId: string,
   input: Required<Pick<TripInfoInput, 'label' | 'value'>> & TripInfoInput,
 ) {
-  return tripInfoRequest<{ entry: TripInfoEntry }>(`/trips/${tripId}/info`, {
-    body: JSON.stringify(input),
-    method: 'POST',
-  });
+  const auth = await getAuthContext();
+  const operation: OfflineMutationOperation = {
+    clientEntryId: crypto.randomUUID(),
+    input,
+    kind: 'trip_info_create',
+  };
+  try {
+    const result = await tripInfoRequest<{ entry: TripInfoEntry }>(
+      `/trips/${tripId}/info`,
+      {
+        body: JSON.stringify({ ...input, clientEntryId: operation.clientEntryId }),
+        method: 'POST',
+      },
+      auth,
+    );
+    const current = await readPreparedSupportingData(auth.userId, tripId, 'tripInfo').catch(
+      () => null,
+    );
+    if (current) {
+      await saveSupportingSnapshot(auth.userId, tripId, 'tripInfo', {
+        ...current,
+        entries: [result.entry, ...current.entries.filter((entry) => entry.id !== result.entry.id)],
+      });
+    }
+    return result;
+  } catch (error) {
+    if (!canUseSupportingOfflineFallback(error)) throw error;
+    await queueSupportingMutation(auth.userId, tripId, operation);
+    const data = await readPreparedSupportingData(auth.userId, tripId, 'tripInfo');
+    const entry = data.entries.find((candidate) => candidate.id === operation.clientEntryId);
+    if (!entry) throw error;
+    return { entry };
+  }
 }
 
-export function updateTripInfo(tripId: string, entryId: string, input: TripInfoInput) {
-  return tripInfoRequest<{ entry: TripInfoEntry }>(`/trips/${tripId}/info/${entryId}`, {
-    body: JSON.stringify(input),
-    method: 'PATCH',
-  });
+export async function updateTripInfo(tripId: string, entryId: string, input: TripInfoInput) {
+  const auth = await getAuthContext();
+  const stored = await readPreparedSupportingData(auth.userId, tripId, 'tripInfo').catch(
+    () => null,
+  );
+  const baseEntry = stored?.entries.find((entry) => entry.id === entryId) ?? null;
+  try {
+    const result = await tripInfoRequest<{ entry: TripInfoEntry }>(
+      `/trips/${tripId}/info/${entryId}`,
+      { body: JSON.stringify(input), method: 'PATCH' },
+      auth,
+    );
+    if (stored) {
+      await saveSupportingSnapshot(auth.userId, tripId, 'tripInfo', {
+        ...stored,
+        entries: stored.entries.map((entry) => (entry.id === entryId ? result.entry : entry)),
+      });
+    }
+    return result;
+  } catch (error) {
+    if (!baseEntry || !canUseSupportingOfflineFallback(error)) throw error;
+    await queueSupportingMutation(auth.userId, tripId, {
+      baseEntry: structuredClone(baseEntry),
+      entryId,
+      input,
+      kind: 'trip_info_update',
+    });
+    const data = await readPreparedSupportingData(auth.userId, tripId, 'tripInfo');
+    const entry = data.entries.find((candidate) => candidate.id === entryId);
+    if (!entry) throw error;
+    return { entry };
+  }
 }
 
-export function deleteTripInfo(tripId: string, entryId: string) {
-  return tripInfoRequest<void>(`/trips/${tripId}/info/${entryId}`, { method: 'DELETE' });
+export async function deleteTripInfo(tripId: string, entryId: string) {
+  const auth = await getAuthContext();
+  const stored = await readPreparedSupportingData(auth.userId, tripId, 'tripInfo').catch(
+    () => null,
+  );
+  const baseEntry = stored?.entries.find((entry) => entry.id === entryId) ?? null;
+  try {
+    const result = await tripInfoRequest<void>(
+      `/trips/${tripId}/info/${entryId}`,
+      { method: 'DELETE' },
+      auth,
+    );
+    if (stored) {
+      await saveSupportingSnapshot(auth.userId, tripId, 'tripInfo', {
+        ...stored,
+        entries: stored.entries.filter((entry) => entry.id !== entryId),
+      });
+    }
+    return result;
+  } catch (error) {
+    if (!baseEntry || !canUseSupportingOfflineFallback(error)) throw error;
+    await queueSupportingMutation(auth.userId, tripId, {
+      baseEntry: structuredClone(baseEntry),
+      entryId,
+      kind: 'trip_info_delete',
+    });
+  }
 }

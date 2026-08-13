@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   createExpense,
   deleteExpense,
+  ExpenseConflictError,
   ExpenseNotFoundError,
   ExpenseValidationError,
   listExpenses,
@@ -41,7 +42,7 @@ const expenseFields = {
   tripPlaceId: z.uuid().nullable().optional(),
 } as const;
 const createExpenseSchema = z
-  .object(expenseFields)
+  .object({ ...expenseFields, clientExpenseId: z.uuid().optional() })
   .strict()
   .refine((value) => !value.localTime || Boolean(value.localDate), {
     message: 'invalid_expense_time',
@@ -66,9 +67,15 @@ function getRequestContext(request: FastifyRequest, reply: FastifyReply) {
 }
 
 function handleError(reply: FastifyReply, error: unknown) {
+  if (error instanceof ExpenseConflictError) return reply.code(409).send({ code: error.message });
   if (error instanceof ExpenseNotFoundError) return reply.code(404).send({ code: error.message });
   if (error instanceof ExpenseValidationError) return reply.code(400).send({ code: error.code });
   throw error;
+}
+
+function getExpectedUpdatedAt(request: FastifyRequest) {
+  const value = request.headers['x-trove-expected-updated-at'];
+  return typeof value === 'string' ? value : undefined;
 }
 
 export function createExpenseControllers() {
@@ -93,17 +100,23 @@ export function createExpenseControllers() {
       if (!params.success || !body.success)
         return reply.code(400).send({ code: 'invalid_expense' });
       try {
+        const { clientExpenseId, ...input } = body.data;
         return reply.code(201).send({
-          expense: await createExpense(context.userId, params.data.tripId, {
-            ...body.data,
-            category: body.data.category ?? null,
-            itineraryItemId: body.data.itineraryItemId ?? null,
-            localDate: body.data.localDate ?? null,
-            localTime: body.data.localTime ?? null,
-            note: body.data.note ?? null,
-            title: body.data.title ?? null,
-            tripPlaceId: body.data.tripPlaceId ?? null,
-          }),
+          expense: await createExpense(
+            context.userId,
+            params.data.tripId,
+            {
+              ...input,
+              category: input.category ?? null,
+              itineraryItemId: input.itineraryItemId ?? null,
+              localDate: input.localDate ?? null,
+              localTime: input.localTime ?? null,
+              note: input.note ?? null,
+              title: input.title ?? null,
+              tripPlaceId: input.tripPlaceId ?? null,
+            },
+            clientExpenseId,
+          ),
         });
       } catch (error) {
         return handleError(reply, error);
@@ -124,6 +137,7 @@ export function createExpenseControllers() {
             params.data.tripId,
             params.data.expenseId,
             body.data,
+            getExpectedUpdatedAt(request),
           ),
         });
       } catch (error) {
@@ -137,7 +151,12 @@ export function createExpenseControllers() {
       if (!context) return;
       if (!params.success) return reply.code(400).send({ code: 'invalid_expense_id' });
       try {
-        await deleteExpense(context.userId, params.data.tripId, params.data.expenseId);
+        await deleteExpense(
+          context.userId,
+          params.data.tripId,
+          params.data.expenseId,
+          getExpectedUpdatedAt(request),
+        );
         return reply.code(204).send();
       } catch (error) {
         return handleError(reply, error);

@@ -1,4 +1,16 @@
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import {
+  listOfflineReservationDocuments,
+  removeOfflineReservationDocument,
+  saveSupportingSnapshot,
+  selectOfflineReservationDocument,
+  setOfflineApiReachable,
+} from '@/lib/offline/trip-store';
+import { getOfflineAuthContext } from '@/lib/offline/trip-sync';
+import {
+  canUseSupportingOfflineFallback,
+  readPreparedSupportingData,
+} from '@/lib/offline/supporting-sync';
 
 export type ReservationType =
   | 'accommodation'
@@ -17,6 +29,8 @@ export type ReservationAttachment = {
   createdAt: string;
   fileName: string;
   id: string;
+  offlineAvailable: boolean;
+  offlineSelected: boolean;
   sizeBytes: number;
   url: string | null;
 };
@@ -122,14 +136,21 @@ async function getAuthContext() {
 
 async function reservationRequest<T>(path: string, init?: RequestInit) {
   const { accessToken } = await getAuthContext();
-  const response = await fetch(`${apiUrl}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        ...init?.headers,
+      },
+    });
+  } catch {
+    setOfflineApiReachable(false);
+    throw new ReservationsApiError('reservations_unavailable', 503);
+  }
+  setOfflineApiReachable(response.status < 500);
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { code?: string };
     throw new ReservationsApiError(
@@ -141,8 +162,100 @@ async function reservationRequest<T>(path: string, init?: RequestInit) {
   return response.json() as Promise<T>;
 }
 
-export function fetchReservations(tripId: string) {
-  return reservationRequest<ReservationsResponse>(`/trips/${tripId}/reservations`);
+function withoutDocumentUrls(data: ReservationsResponse): ReservationsResponse {
+  return {
+    ...data,
+    reservations: data.reservations.map((reservation) => ({
+      ...reservation,
+      attachments: reservation.attachments.map((attachment) => ({
+        ...attachment,
+        offlineAvailable: false,
+        offlineSelected: false,
+        url: null,
+      })),
+    })),
+  };
+}
+
+async function withOfflineDocuments(
+  userId: string,
+  tripId: string,
+  data: ReservationsResponse,
+  preserveLiveUrls: boolean,
+) {
+  const documents = await listOfflineReservationDocuments(userId, tripId).catch(() => []);
+  const byAttachment = new Map(documents.map((document) => [document.attachmentId, document]));
+  return {
+    ...data,
+    reservations: data.reservations.map((reservation) => ({
+      ...reservation,
+      attachments: reservation.attachments.map((attachment) => {
+        const document = byAttachment.get(attachment.id);
+        return {
+          ...attachment,
+          offlineAvailable: Boolean(document?.blob),
+          offlineSelected: Boolean(document),
+          url:
+            preserveLiveUrls && attachment.url
+              ? attachment.url
+              : document?.blob
+                ? URL.createObjectURL(document.blob)
+                : null,
+        };
+      }),
+    })),
+  };
+}
+
+export async function fetchReservations(tripId: string) {
+  const auth = await getOfflineAuthContext();
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    const stored = await readPreparedSupportingData(auth.userId, tripId, 'reservations');
+    return withOfflineDocuments(auth.userId, tripId, stored, false);
+  }
+  try {
+    const data = await reservationRequest<ReservationsResponse>(`/trips/${tripId}/reservations`);
+    await saveSupportingSnapshot(auth.userId, tripId, 'reservations', withoutDocumentUrls(data));
+    return withOfflineDocuments(auth.userId, tripId, data, true);
+  } catch (error) {
+    if (canUseSupportingOfflineFallback(error)) {
+      const stored = await readPreparedSupportingData(auth.userId, tripId, 'reservations');
+      return withOfflineDocuments(auth.userId, tripId, stored, false);
+    }
+    throw error;
+  }
+}
+
+export async function setReservationDocumentOffline(
+  tripId: string,
+  reservationId: string,
+  attachment: ReservationAttachment,
+  selected: boolean,
+) {
+  const auth = await getOfflineAuthContext();
+  if (!selected) {
+    await removeOfflineReservationDocument(auth.userId, tripId, attachment.id);
+    return;
+  }
+  if (!auth.accessToken || !attachment.url || !navigator.onLine) {
+    throw new ReservationsApiError('document_offline_requires_connection', 503);
+  }
+  const response = await fetch(attachment.url);
+  if (!response.ok) throw new ReservationsApiError('document_download_failed', response.status);
+  const blob = await response.blob();
+  await selectOfflineReservationDocument({
+    attachmentId: attachment.id,
+    blob,
+    contentType: attachment.contentType,
+    fileName: attachment.fileName,
+    reservationId,
+    savedAt: new Date().toISOString(),
+    selectedAt: new Date().toISOString(),
+    sizeBytes: attachment.sizeBytes,
+    sourceUrl: attachment.url,
+    tripId,
+    userId: auth.userId,
+  });
 }
 
 export function createReservation(tripId: string, input: ReservationInput) {
@@ -197,13 +310,16 @@ export async function uploadReservationDocument(tripId: string, reservationId: s
   }
 }
 
-export function deleteReservationDocument(
+export async function deleteReservationDocument(
   tripId: string,
   reservationId: string,
   attachmentId: string,
 ) {
-  return reservationRequest<void>(
+  const auth = await getOfflineAuthContext();
+  const result = await reservationRequest<void>(
     `/trips/${tripId}/reservations/${reservationId}/attachments/${attachmentId}`,
     { method: 'DELETE' },
   );
+  await removeOfflineReservationDocument(auth.userId, tripId, attachmentId).catch(() => undefined);
+  return result;
 }

@@ -7,6 +7,7 @@ import {
   deleteTripInfo,
   listTripInfo,
   TripInfoNotFoundError,
+  TripInfoConflictError,
   TripInfoValidationError,
   updateTripInfo,
 } from '../services/trip-info.js';
@@ -21,7 +22,7 @@ const infoFields = {
   note: z.string().trim().max(5_000).nullable().optional(),
   value: z.string().trim().min(1).max(5_000),
 } as const;
-const createSchema = z.object(infoFields).strict();
+const createSchema = z.object({ ...infoFields, clientEntryId: z.uuid().optional() }).strict();
 const updateSchema = z
   .object({
     category: infoFields.category,
@@ -56,6 +57,9 @@ function parseParams<T>(
 }
 
 function handleError(error: unknown, reply: FastifyReply) {
+  if (error instanceof TripInfoConflictError) {
+    return reply.code(409).send({ code: error.message });
+  }
   if (error instanceof TripInfoNotFoundError) {
     return reply.code(404).send({ code: error.message });
   }
@@ -63,6 +67,11 @@ function handleError(error: unknown, reply: FastifyReply) {
     return reply.code(400).send({ code: error.code });
   }
   throw error;
+}
+
+function getExpectedUpdatedAt(request: FastifyRequest) {
+  const value = request.headers['x-trove-expected-updated-at'];
+  return typeof value === 'string' ? value : undefined;
 }
 
 export async function getTripInfoController(request: FastifyRequest, reply: FastifyReply) {
@@ -85,7 +94,10 @@ export async function createTripInfoController(request: FastifyRequest, reply: F
   if (!body.success) return reply.code(400).send({ code: 'invalid_trip_info' });
 
   try {
-    return reply.code(201).send({ entry: await createTripInfo(userId, params.tripId, body.data) });
+    const { clientEntryId, ...input } = body.data;
+    return reply
+      .code(201)
+      .send({ entry: await createTripInfo(userId, params.tripId, input, clientEntryId) });
   } catch (error) {
     return handleError(error, reply);
   }
@@ -100,7 +112,13 @@ export async function updateTripInfoController(request: FastifyRequest, reply: F
 
   try {
     return reply.send({
-      entry: await updateTripInfo(userId, params.tripId, params.entryId, body.data),
+      entry: await updateTripInfo(
+        userId,
+        params.tripId,
+        params.entryId,
+        body.data,
+        getExpectedUpdatedAt(request),
+      ),
     });
   } catch (error) {
     return handleError(error, reply);
@@ -113,7 +131,7 @@ export async function deleteTripInfoController(request: FastifyRequest, reply: F
   if (!userId || !params) return;
 
   try {
-    await deleteTripInfo(userId, params.tripId, params.entryId);
+    await deleteTripInfo(userId, params.tripId, params.entryId, getExpectedUpdatedAt(request));
     return reply.code(204).send();
   } catch (error) {
     return handleError(error, reply);

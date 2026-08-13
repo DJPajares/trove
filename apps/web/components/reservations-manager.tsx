@@ -2,6 +2,8 @@
 
 import {
   CircleAlert,
+  CloudDownload,
+  CloudOff,
   FileText,
   MapPin,
   Pencil,
@@ -64,6 +66,7 @@ import {
   deleteReservation,
   deleteReservationDocument,
   fetchReservations,
+  setReservationDocumentOffline,
   type Reservation,
   type ReservationsResponse,
   type ReservationType,
@@ -190,6 +193,7 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
   const [reservationToDelete, setReservationToDelete] = useState<Reservation | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [offlineDocumentId, setOfflineDocumentId] = useState<string | null>(null);
   const [attachmentToDelete, setAttachmentToDelete] = useState<{
     id: string;
     reservation: Reservation;
@@ -393,6 +397,27 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
       setFormError(t('deleteDocumentError'));
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function toggleOfflineDocument(
+    reservation: Reservation,
+    attachment: Reservation['attachments'][number],
+  ) {
+    setOfflineDocumentId(attachment.id);
+    setFormError(null);
+    try {
+      await setReservationDocumentOffline(
+        tripId,
+        reservation.id,
+        attachment,
+        !attachment.offlineSelected,
+      );
+      await refresh();
+    } catch {
+      setFormError(t('offlineDocumentError'));
+    } finally {
+      setOfflineDocumentId(null);
     }
   }
 
@@ -1016,9 +1041,35 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
                                 {attachment.fileName}
                               </span>
                             )}
-                            <span className="text-xs text-muted-foreground">
-                              {formatFileSize(attachment.sizeBytes)}
+                            <span className="shrink-0 text-right text-xs text-muted-foreground">
+                              <span className="block">{formatFileSize(attachment.sizeBytes)}</span>
+                              {attachment.offlineAvailable ? (
+                                <span className="block text-status-success">
+                                  {t('availableOffline')}
+                                </span>
+                              ) : null}
                             </span>
+                            <Button
+                              aria-label={t(
+                                attachment.offlineSelected
+                                  ? 'removeDocumentOffline'
+                                  : 'saveDocumentOffline',
+                                { fileName: attachment.fileName },
+                              )}
+                              disabled={offlineDocumentId === attachment.id}
+                              onClick={() =>
+                                void toggleOfflineDocument(editingReservation, attachment)
+                              }
+                              size="icon-sm"
+                              type="button"
+                              variant="ghost"
+                            >
+                              {attachment.offlineSelected ? (
+                                <CloudOff aria-hidden="true" />
+                              ) : (
+                                <CloudDownload aria-hidden="true" />
+                              )}
+                            </Button>
                             <Button
                               aria-label={t('deleteDocument', { fileName: attachment.fileName })}
                               onClick={() =>

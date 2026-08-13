@@ -3,12 +3,14 @@ import {
   applyMutationToStoredItinerary,
   getRememberedOfflineUser,
   mergeQueuedMutations,
+  type OfflineItineraryMutationOperation,
   type OfflineMutation,
   type OfflineMutationOperation,
   queueOfflineMutation,
   readTripSnapshot,
   rememberOfflineUser,
   saveItinerarySnapshot,
+  saveSupportingSnapshot,
   setOfflineApiReachable,
 } from '@/lib/offline/trip-store';
 
@@ -96,6 +98,8 @@ export type ItineraryRouteSegment = {
 
 export type ItineraryDayRoutes = {
   generatedAt: string;
+  source?: 'cache' | 'live';
+  stale?: boolean;
   segments: ItineraryRouteSegment[];
   summary: {
     distanceMeters: number | null;
@@ -429,7 +433,7 @@ export async function fetchTripModeContext(
   }
 }
 
-export function fetchItineraryDayRoutes(
+export async function fetchItineraryDayRoutes(
   tripId: string,
   itineraryDayId: string,
   options: { includePolyline?: boolean; languageCode?: string; signal?: AbortSignal } = {},
@@ -438,10 +442,32 @@ export function fetchItineraryDayRoutes(
   if (options.includePolyline) query.set('includePolyline', 'true');
   if (options.languageCode) query.set('languageCode', options.languageCode);
   const suffix = query.size ? `?${query.toString()}` : '';
-  return itineraryRequest<ItineraryDayRoutes>(
-    `/trips/${tripId}/itinerary/days/${itineraryDayId}/routes${suffix}`,
-    { signal: options.signal },
-  );
+  const auth = await getAuthContext();
+  const snapshot = await readTripSnapshot(auth.userId, tripId).catch(() => undefined);
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    const cached = snapshot?.routes?.[itineraryDayId];
+    if (cached) return { ...cached, source: 'cache' as const, stale: true };
+    throw new ItineraryApiError('offline_route_not_available', 503);
+  }
+  try {
+    const response = await itineraryRequest<ItineraryDayRoutes>(
+      `/trips/${tripId}/itinerary/days/${itineraryDayId}/routes${suffix}`,
+      { signal: options.signal },
+      auth,
+    );
+    const data = { ...response, source: 'live' as const, stale: false };
+    await saveSupportingSnapshot(auth.userId, tripId, 'routes', {
+      ...snapshot?.routes,
+      [itineraryDayId]: data,
+    });
+    return data;
+  } catch (error) {
+    const cached = snapshot?.routes?.[itineraryDayId];
+    if (canUseOfflineFallback(error) && cached) {
+      return { ...cached, source: 'cache' as const, stale: true };
+    }
+    throw error;
+  }
 }
 
 function createMutation(
@@ -483,7 +509,7 @@ async function baseItem(userId: string, tripId: string, itemId: string) {
 async function applyOnlineMutation(
   userId: string,
   tripId: string,
-  operation: OfflineMutationOperation,
+  operation: OfflineItineraryMutationOperation,
 ) {
   await applyMutationToStoredItinerary(userId, tripId, operation).catch(() => undefined);
 }
@@ -624,15 +650,30 @@ export function setItineraryDayBase(
   });
 }
 
-export function updateItineraryDayNote(
+export async function updateItineraryDayNote(
   tripId: string,
   itineraryDayId: string,
   note: string | null,
 ) {
-  return itineraryRequest<{ id: string; notes: string | null }>(
-    `/trips/${tripId}/itinerary/days/${itineraryDayId}/note`,
-    { body: JSON.stringify({ note }), method: 'PATCH' },
-  );
+  const auth = await getAuthContext();
+  const snapshot = await readTripSnapshot(auth.userId, tripId).catch(() => undefined);
+  const day = snapshot?.itinerary?.days.find((candidate) => candidate.id === itineraryDayId);
+  const operation: OfflineItineraryMutationOperation | null = day
+    ? { baseNote: day.notes, itineraryDayId, kind: 'itinerary_day_note', note }
+    : null;
+  try {
+    const result = await itineraryRequest<{ id: string; notes: string | null }>(
+      `/trips/${tripId}/itinerary/days/${itineraryDayId}/note`,
+      { body: JSON.stringify({ note }), method: 'PATCH' },
+      auth,
+    );
+    if (operation) await applyOnlineMutation(auth.userId, tripId, operation);
+    return result;
+  } catch (error) {
+    if (!operation) throw error;
+    await queueOrThrow(error, auth.userId, tripId, operation);
+    return { id: itineraryDayId, notes: note?.trim() || null };
+  }
 }
 
 export function updateItineraryDayRouteMode(

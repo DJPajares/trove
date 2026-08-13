@@ -45,7 +45,7 @@ export class ItineraryValidationError extends Error {
   }
 }
 
-const itineraryItemInclude = {
+export const itineraryItemInclude = {
   itineraryDay: { select: { date: true, defaultTimeZone: true } },
   tripPlace: {
     include: {
@@ -102,6 +102,12 @@ function mapTravelMode(value: string) {
   return 'drive' as const;
 }
 
+function mapTravelStatus(value: string) {
+  if (value === 'COMPLETED') return 'completed' as const;
+  if (value === 'SKIPPED') return 'skipped' as const;
+  return 'upcoming' as const;
+}
+
 function mapDayTimeZoneSource(value: string) {
   const values: Record<string, string> = {
     ACCOMMODATION: 'accommodation',
@@ -147,7 +153,7 @@ function serializeTripPlace(tripPlace: NonNullable<ItineraryItemRecord['tripPlac
   };
 }
 
-function serializeItem(item: ItineraryItemRecord) {
+export function serializeItineraryItem(item: ItineraryItemRecord) {
   return {
     createdAt: item.createdAt.toISOString(),
     customLabel: item.customLabel,
@@ -179,6 +185,7 @@ function serializeItem(item: ItineraryItemRecord) {
     timeZone: item.timeZone,
     timeZoneSource: mapItemTimeZoneSource(item.timeZoneSource),
     travelModeToNext: mapTravelMode(item.travelModeToNext),
+    travelStatus: mapTravelStatus(item.travelStatus),
     tripPlace: item.tripPlace ? serializeTripPlace(item.tripPlace) : null,
     updatedAt: item.updatedAt.toISOString(),
   };
@@ -381,7 +388,7 @@ export async function listItinerary(userId: string, tripId: string) {
       defaultTimeZoneSourceTripPlaceId: day.defaultTimeZoneSourceTripPlaceId,
       dailyBaseTripPlaceId: day.dailyBaseTripPlaceId,
       id: day.id,
-      items: day.items.map(serializeItem),
+      items: day.items.map(serializeItineraryItem),
       notes: day.notes,
       routeStartTravelMode: mapTravelMode(day.routeStartTravelMode),
     })),
@@ -393,7 +400,7 @@ export async function listItinerary(userId: string, tripId: string) {
       startDate: formatDateOnly(trip.startDate),
     },
     tripPlaces: trip.tripPlaces.map((tripPlace) => serializeTripPlace(tripPlace)),
-    unscheduledItems: trip.itineraryItems.map(serializeItem),
+    unscheduledItems: trip.itineraryItems.map(serializeItineraryItem),
   };
 }
 
@@ -485,7 +492,11 @@ export async function duplicateItineraryItem(userId: string, tripId: string, ite
     });
     const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...copy } = current;
     await transaction.itineraryItem.create({
-      data: { ...copy, position: (maxPosition._max.position ?? -1) + 1 },
+      data: {
+        ...copy,
+        position: (maxPosition._max.position ?? -1) + 1,
+        travelStatus: 'UPCOMING',
+      },
     });
   });
 }
@@ -585,7 +596,7 @@ export async function createItineraryItem(
     include: itineraryItemInclude,
   });
   if (!item) throw new ItineraryNotFoundError('itinerary_item_not_found');
-  return serializeItem(item);
+  return serializeItineraryItem(item);
 }
 
 export async function updateItineraryItem(
@@ -690,7 +701,7 @@ export async function updateItineraryItem(
     const previousInstant = current.startInstant?.toISOString() ?? null;
     const nextInstant = updated.startInstant?.toISOString() ?? null;
     return {
-      item: serializeItem(updated),
+      item: serializeItineraryItem(updated),
       timeZoneConsequence:
         previousInstant && nextInstant && previousInstant !== nextInstant
           ? {

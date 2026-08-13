@@ -1,6 +1,7 @@
 import { getLocale, getTranslations } from 'next-intl/server';
 
 import { PageHeader } from '@/components/page-header';
+import { NotificationSettings } from '@/components/notification-settings';
 import { ProfileSettingsForm } from '@/components/profile-settings-form';
 
 export default async function ProfilePage() {
@@ -11,6 +12,7 @@ export default async function ProfilePage() {
     <section className="mx-auto w-full max-w-5xl space-y-10">
       <PageHeader description={t('description')} title={t('title')} />
       <ProfileSettingsForm locale={locale} />
+      <NotificationSettings />
     </section>
   );
 }

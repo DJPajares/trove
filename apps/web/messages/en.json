@@ -1437,6 +1437,53 @@
     "pastTripTitle": "A past trip",
     "pastTripDescription": "Revisit {name} whenever you want to look back at the plan."
   },
+  "notifications": {
+    "centerButton": "Notifications, {count, plural, =0 {none new} one {one new} other {# new}}",
+    "centerTitle": "Notifications",
+    "centerDescription": "Only trip details that may change what you should do next.",
+    "markAllRead": "Clear all",
+    "centerMeta": "{trip}, {time}",
+    "emptyTitle": "Nothing needs your attention",
+    "emptyDescription": "Time-sensitive trip reminders will appear here when notifications are enabled.",
+    "loadError": "Trove could not refresh notifications. Your trips still work normally.",
+    "manage": "Notification settings",
+    "kinds": {
+      "task_due": {
+        "title": "Task due soon",
+        "body": "{label} for {trip} is due at {time}.",
+        "centerTitle": "Task due: {label}"
+      },
+      "reservation_upcoming": {
+        "title": "Reservation coming up",
+        "body": "{label} for {trip} starts at {time}.",
+        "centerTitle": "Reservation: {label}"
+      },
+      "leave_by": {
+        "title": "Time to leave",
+        "body": "Leave for {label} in {trip}. Your route is based on the latest available estimate.",
+        "centerTitle": "Leave for {label}"
+      }
+    },
+    "settings": {
+      "title": "Notifications",
+      "description": "Choose whether Trove should surface low-frequency reminders for timed tasks, reservations, and reliable leave-by context.",
+      "inAppLabel": "In-app notifications",
+      "inAppDescription": "Show actionable reminders in Trove. This does not affect core trip features.",
+      "browserLabel": "Browser notifications",
+      "browserDescription": "Allow this browser to show the same reminders outside the open Trove tab.",
+      "permissionDenied": "Browser permission is blocked. Change the site permission in your browser to enable it.",
+      "unsupported": "This browser does not support notifications. In-app reminders remain available.",
+      "privacyNote": "Notification content is derived from your private trip data and stays scoped to your account.",
+      "saveError": "Trove could not update notification settings. Try again."
+    },
+    "trip": {
+      "title": "Trip notifications",
+      "description": "Receive reminders for this trip when global notifications are enabled.",
+      "globallyDisabled": "This trip is ready for notifications, but global notifications are currently off.",
+      "toggleLabel": "Enable notifications for this trip",
+      "saveError": "Trove could not update this trip's notification setting."
+    }
+  },
   "offline": {
     "eyebrow": "Offline",
     "title": "Trove needs a connection for this page.",

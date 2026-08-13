@@ -57,13 +57,13 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body>
         <ThemeProvider>
           <TroveMotionProvider>
-            <PwaProvider>
-              <NextIntlClientProvider>
+            <NextIntlClientProvider>
+              <PwaProvider>
                 <PreferencesProvider locale={locale}>
                   <AppShell>{children}</AppShell>
                 </PreferencesProvider>
-              </NextIntlClientProvider>
-            </PwaProvider>
+              </PwaProvider>
+            </NextIntlClientProvider>
           </TroveMotionProvider>
         </ThemeProvider>
       </body>

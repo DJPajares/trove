@@ -222,6 +222,15 @@ enum ProfileAppearance {
   @@schema("trove")
 }
 
+enum NotificationKind {
+  TASK_DUE             @map("task_due")
+  RESERVATION_UPCOMING @map("reservation_upcoming")
+  LEAVE_BY             @map("leave_by")
+
+  @@map("notification_kind")
+  @@schema("trove")
+}
+
 /// Supabase owns this table. Prisma Client may reference its primary key, but
 /// Prisma Migrate excludes it through `tables.external` in prisma.config.ts.
 model AuthUser {
@@ -243,6 +252,8 @@ model Profile {
   timeFormat       ProfileTimeFormat?       @map("time_format")
   dateFormat       ProfileDateFormat?       @map("date_format")
   appearance       ProfileAppearance?       @map("appearance")
+  notificationsEnabled        Boolean @default(false) @map("notifications_enabled")
+  browserNotificationsEnabled Boolean @default(false) @map("browser_notifications_enabled")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -257,6 +268,8 @@ model Profile {
   savedCollections SavedCollection[]
   collectionPlaces SavedCollectionPlace[]
   taskTemplates    TaskTemplate[]
+  notifications    Notification[]
+  tripNotificationPreferences TripNotificationPreference[]
 
   @@index([homePlaceId])
   @@map("profiles")
@@ -344,13 +357,56 @@ model Trip {
   tripInfoEntries              TripInfo[]
   reservations                 Reservation[]
   expenses                     Expense[]
+  notifications                Notification[]
+  notificationPreferences      TripNotificationPreference[]
 
+  @@unique([id, ownerId])
   @@index([ownerId])
   @@index([creatorId])
   @@index([startingPlaceId])
   @@index([referenceTimeZoneSourcePlaceId])
   @@index([sourceTripId])
   @@map("trips")
+  @@schema("trove")
+}
+
+model TripNotificationPreference {
+  ownerId  String   @map("owner_id") @db.Uuid
+  tripId   String   @map("trip_id") @db.Uuid
+  muted    Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner Profile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  trip  Trip    @relation(fields: [tripId, ownerId], references: [id, ownerId], onDelete: Cascade)
+
+  @@id([ownerId, tripId])
+  @@index([tripId, ownerId])
+  @@map("trip_notification_preferences")
+  @@schema("trove")
+}
+
+model Notification {
+  id                 String           @id @default(uuid(7)) @db.Uuid
+  ownerId            String           @map("owner_id") @db.Uuid
+  tripId             String           @map("trip_id") @db.Uuid
+  kind               NotificationKind
+  sourceId           String           @map("source_id") @db.Uuid
+  sourceVersion      String           @map("source_version")
+  eventAt            DateTime         @map("event_at") @db.Timestamptz(3)
+  timeZone           String           @map("time_zone")
+  readAt             DateTime?        @map("read_at") @db.Timestamptz(3)
+  browserDeliveredAt DateTime?        @map("browser_delivered_at") @db.Timestamptz(3)
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner Profile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  trip  Trip    @relation(fields: [tripId, ownerId], references: [id, ownerId], onDelete: Cascade)
+
+  @@unique([ownerId, kind, sourceId])
+  @@index([ownerId, readAt, eventAt])
+  @@index([tripId, eventAt])
+  @@map("notifications")
   @@schema("trove")
 }
 
@@ -669,6 +725,7 @@ model Reservation {
 
   @@unique([id, tripId])
   @@index([tripId, localDate])
+  @@index([tripId, flightDepartureLocalDate])
   @@index([tripPlaceId, tripId])
   @@index([itineraryItemId, tripId])
   @@map("reservations")
@@ -731,6 +788,7 @@ model Expense {
   itineraryItem ItineraryItem? @relation("ExpenseItineraryItem", fields: [itineraryItemId, tripId], references: [id, tripId], onDelete: NoAction)
   tripPlace     TripPlace?     @relation(fields: [tripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
 
+  @@unique([id, tripId])
   @@index([tripId, localDate])
   @@index([itineraryDayId, tripId])
   @@index([itineraryItemId, tripId])

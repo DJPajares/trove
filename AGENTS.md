@@ -113,6 +113,7 @@ Example:
 
 - Create a PR for implementation tasks unless the task clearly does not modify code.
 - Request a review from `DJPajares` before handoff and verify it with `gh pr view <number> --json reviewRequests`; when the authenticated author cannot request a self-review, assign the PR to `DJPajares` and verify it with `gh pr view <number> --json assignees`.
+- Write PR descriptions as real multiline Markdown with headings and bullets; never send literal escaped `\n` text.
 - Include a concise summary and validation performed.
 - Never auto-merge.
 - Human approval is required before merge.

@@ -1,14 +1,14 @@
 'use client';
 
-import { ArrowLeft, CircleAlert, ClipboardCheck, Pencil, Plus, Trash2, Wrench } from 'lucide-react';
+import { CircleAlert, ClipboardCheck, Pencil, Plus, Trash2, Wrench } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 
 import { DatePicker } from '@/components/date-picker';
-import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
 import { TimeInput } from '@/components/time-input';
+import { TripSectionHeader } from '@/components/trip-section-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -299,17 +299,9 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
 
   return (
     <section className="mx-auto w-full max-w-5xl space-y-7">
-      <PageHeader
+      <TripSectionHeader
         actions={
           <>
-            <Button
-              nativeButton={false}
-              render={<Link href={`/trips/${tripId}/itinerary`} />}
-              variant="ghost"
-            >
-              <ArrowLeft aria-hidden="true" data-icon="inline-start" />
-              {t('backToItinerary')}
-            </Button>
             <Button nativeButton={false} render={<Link href="/tools" />} variant="outline">
               <Wrench aria-hidden="true" data-icon="inline-start" />
               {t('templates')}
@@ -320,8 +312,10 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
             </Button>
           </>
         }
+        currentSection="tasks"
         description={t('description')}
         title={t('title', { trip: data.trip.name })}
+        tripId={tripId}
       />
 
       {error ? (

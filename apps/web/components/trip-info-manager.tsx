@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  ArrowLeft,
   CircleAlert,
   Copy,
   ExternalLink,
@@ -12,12 +11,11 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
-import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
 
-import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
+import { TripSectionHeader } from '@/components/trip-section-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -282,21 +280,17 @@ export function TripInfoManager({ tripId }: Readonly<{ tripId: string }>) {
 
   return (
     <section className="mx-auto w-full max-w-5xl space-y-7">
-      <PageHeader
+      <TripSectionHeader
         actions={
-          <>
-            <Button nativeButton={false} render={<Link href="/trips" />} variant="ghost">
-              <ArrowLeft aria-hidden="true" data-icon="inline-start" />
-              {t('backToTrips')}
-            </Button>
-            <Button onClick={openCreate}>
-              <Plus aria-hidden="true" data-icon="inline-start" />
-              {t('addEntry')}
-            </Button>
-          </>
+          <Button onClick={openCreate}>
+            <Plus aria-hidden="true" data-icon="inline-start" />
+            {t('addEntry')}
+          </Button>
         }
+        currentSection="info"
         description={t('description')}
         title={t('title', { trip: data.trip.name })}
+        tripId={tripId}
       />
 
       {error ? (

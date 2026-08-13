@@ -25,7 +25,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         className="sticky top-0 z-[var(--layer-sticky)] border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85"
         data-translucent-surface
       >
-        <div className="mx-auto flex h-16 w-full max-w-[1400px] items-center justify-between gap-4 px-[var(--layout-gutter)]">
+        <div className="mx-auto grid h-16 w-full max-w-[1400px] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-[var(--layout-gutter)] md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
           <Link
             className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground"
             href="/"
@@ -38,7 +38,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
 
           <PrimaryNavigation variant="desktop" />
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center justify-self-end gap-1">
             <AppearanceMenu />
             <AccountMenu />
           </div>

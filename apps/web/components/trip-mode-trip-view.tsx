@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  BedDouble,
   CalendarDays,
   ChevronRight,
   CircleAlert,
@@ -9,6 +10,7 @@ import {
   MapPinned,
   ReceiptText,
   Route,
+  StickyNote,
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -34,6 +36,9 @@ import {
   type Itinerary,
   type TripModeContext,
 } from '@/lib/itinerary/api';
+import { fetchExpenses } from '@/lib/expenses/api';
+import { fetchReservations } from '@/lib/reservations/api';
+import { fetchTasks } from '@/lib/tasks/api';
 import { fetchTripInfo, type TripInfoEntry } from '@/lib/trip-info/api';
 import { fetchTrip, type Trip } from '@/lib/trips/api';
 
@@ -50,12 +55,19 @@ type Tool = {
     | 'expensesDescription'
     | 'infoDescription'
     | 'itineraryDescription'
+    | 'notesDescription'
     | 'placesDescription'
     | 'reservationsDescription'
     | 'tasksDescription';
   href: string;
   icon: typeof CalendarDays;
-  key: 'expenses' | 'info' | 'itinerary' | 'places' | 'reservations' | 'tasks';
+  key: 'expenses' | 'info' | 'itinerary' | 'notes' | 'places' | 'reservations' | 'tasks';
+};
+
+type SupportingCounts = {
+  expenses: number | null;
+  reservations: number | null;
+  tasks: number | null;
 };
 
 function TripViewSkeleton({ label }: Readonly<{ label: string }>) {
@@ -83,12 +95,18 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
   const offlineDataRefreshKey = useOfflineDataRefreshKey();
   const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
   const [pinnedInfo, setPinnedInfo] = useState<TripInfoEntry[]>([]);
+  const [supportingCounts, setSupportingCounts] = useState<SupportingCounts>({
+    expenses: null,
+    reservations: null,
+    tasks: null,
+  });
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let active = true;
     setState({ data: null, status: 'loading' });
     setPinnedInfo([]);
+    setSupportingCounts({ expenses: null, reservations: null, tasks: null });
 
     void Promise.all([
       fetchTripModeContext(tripId, contextOptions()),
@@ -109,6 +127,26 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
       .catch(() => {
         // Trip Info is a supporting destination. Its separate failure should not hide the trip.
       });
+
+    void Promise.allSettled([
+      fetchReservations(tripId),
+      fetchTasks(tripId),
+      fetchExpenses(tripId),
+    ]).then(([reservationsResult, tasksResult, expensesResult]) => {
+      if (!active) return;
+      setSupportingCounts({
+        expenses:
+          expensesResult.status === 'fulfilled' ? expensesResult.value.expenses.length : null,
+        reservations:
+          reservationsResult.status === 'fulfilled'
+            ? reservationsResult.value.reservations.length
+            : null,
+        tasks:
+          tasksResult.status === 'fulfilled'
+            ? tasksResult.value.tasks.filter((task) => !task.completed).length
+            : null,
+      });
+    });
 
     return () => {
       active = false;
@@ -144,8 +182,34 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
   const { context, itinerary, trip } = state.data;
   const selectedDayIndex = itinerary.days.findIndex((day) => day.date >= context.selectedDate);
   const upcomingDays = selectedDayIndex >= 0 ? itinerary.days.slice(selectedDayIndex) : [];
+  const selectedDay = selectedDayIndex >= 0 ? itinerary.days[selectedDayIndex]! : null;
   const visibleDays = upcomingDays.slice(0, 4);
   const remainingDayCount = upcomingDays.length - visibleDays.length;
+  const dailyBase = selectedDay?.dailyBaseTripPlaceId
+    ? itinerary.tripPlaces.find((place) => place.id === selectedDay.dailyBaseTripPlaceId)
+    : null;
+  const notes = [
+    ...(trip.notes ? [{ label: t('tripNote'), value: trip.notes }] : []),
+    ...(selectedDay?.notes
+      ? [
+          {
+            label: t('dayNote', {
+              date: dateFormatter.format(new Date(`${selectedDay.date}T00:00:00.000Z`)),
+            }),
+            value: selectedDay.notes,
+          },
+        ]
+      : []),
+    ...(selectedDay?.items
+      .filter((item) => item.notes)
+      .map((item) => ({
+        label: item.customLabel ?? item.tripPlace?.place.name ?? t('itemNote'),
+        value: item.notes!,
+      })) ?? []),
+  ];
+  const itineraryHref = selectedDay
+    ? `/trips/${tripId}/itinerary?day=${encodeURIComponent(selectedDay.id)}`
+    : `/trips/${tripId}/itinerary`;
   const tools: Tool[] = [
     {
       descriptionKey: 'itineraryDescription',
@@ -176,6 +240,12 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
       href: `/trips/${tripId}/expenses`,
       icon: ReceiptText,
       key: 'expenses',
+    },
+    {
+      descriptionKey: 'notesDescription',
+      href: itineraryHref,
+      icon: StickyNote,
+      key: 'notes',
     },
     {
       descriptionKey: 'infoDescription',
@@ -302,6 +372,30 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
         </section>
 
         <div className="space-y-8">
+          {dailyBase ? (
+            <section aria-labelledby="trip-mode-base-heading">
+              <div className="flex items-start gap-3 border-y border-border py-4">
+                <BedDouble aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand" />
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-semibold text-foreground" id="trip-mode-base-heading">
+                    {t('dailyBase')}
+                  </h3>
+                  <p className="mt-1 truncate text-sm text-muted-foreground">
+                    {dailyBase.place.name ?? t('dailyBaseFallback')}
+                  </p>
+                </div>
+                <Button
+                  nativeButton={false}
+                  render={<Link href={itineraryHref} />}
+                  size="xs"
+                  variant="ghost"
+                >
+                  {t('viewDay')}
+                </Button>
+              </div>
+            </section>
+          ) : null}
+
           {pinnedInfo.length ? (
             <section aria-labelledby="trip-mode-pinned-info-heading">
               <div className="flex items-center justify-between gap-3">
@@ -330,6 +424,34 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
             </section>
           ) : null}
 
+          {notes.length ? (
+            <section aria-labelledby="trip-mode-notes-heading">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-base font-semibold" id="trip-mode-notes-heading">
+                  {t('notes')}
+                </h3>
+                <Button
+                  nativeButton={false}
+                  render={<Link href={itineraryHref} />}
+                  size="xs"
+                  variant="ghost"
+                >
+                  {t('viewNotes')}
+                </Button>
+              </div>
+              <dl className="mt-3 space-y-3 border-y border-border py-3">
+                {notes.slice(0, 3).map((note) => (
+                  <div key={`${note.label}-${note.value}`}>
+                    <dt className="text-xs font-medium text-muted-foreground">{note.label}</dt>
+                    <dd className="mt-0.5 line-clamp-3 whitespace-pre-wrap text-sm text-foreground">
+                      {note.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          ) : null}
+
           <section aria-labelledby="trip-mode-tools-heading">
             <h3 className="text-base font-semibold" id="trip-mode-tools-heading">
               {t('tripTools')}
@@ -346,7 +468,19 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
                   <ItemContent>
                     <ItemTitle>{t(`tools.${key}`)}</ItemTitle>
                     <ItemDescription>
-                      {t(`tools.${descriptionKey}`, { count: itinerary.tripPlaces.length })}
+                      {key === 'places'
+                        ? t('tools.placesDescription', { count: itinerary.tripPlaces.length })
+                        : key === 'reservations' && supportingCounts.reservations !== null
+                          ? t('tools.reservationsCount', {
+                              count: supportingCounts.reservations,
+                            })
+                          : key === 'tasks' && supportingCounts.tasks !== null
+                            ? t('tools.tasksCount', { count: supportingCounts.tasks })
+                            : key === 'expenses' && supportingCounts.expenses !== null
+                              ? t('tools.expensesCount', { count: supportingCounts.expenses })
+                              : key === 'notes'
+                                ? t('tools.notesCount', { count: notes.length })
+                                : t(`tools.${descriptionKey}`)}
                     </ItemDescription>
                   </ItemContent>
                   <ChevronRight aria-hidden="true" className="size-4 text-muted-foreground" />

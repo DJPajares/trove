@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   CalendarClock,
   CalendarDays,
+  ChevronRight,
   ClipboardCheck,
   CircleAlert,
   Compass,
@@ -56,6 +57,14 @@ import { cn } from '@/lib/utils';
 
 type EditorState =
   { mode: 'closed'; trip: null } | { mode: 'create'; trip: null } | { mode: 'edit'; trip: Trip };
+
+const overviewTools = [
+  { href: 'places', icon: MapPinned, label: 'places' },
+  { href: 'reservations', icon: ReceiptText, label: 'reservations' },
+  { href: 'tasks', icon: ClipboardCheck, label: 'tasks' },
+  { href: 'expenses', icon: WalletCards, label: 'expenses' },
+  { href: 'info', icon: Info, label: 'tripInfo' },
+] as const;
 
 export function TripsManager() {
   const t = useTranslations('trips');
@@ -330,46 +339,6 @@ export function TripsManager() {
                     {t('continuePlanning')}
                   </Button>
                   <Button
-                    nativeButton={false}
-                    render={<Link href={`/trips/${overviewTrip.id}/places`} />}
-                    variant="outline"
-                  >
-                    <MapPinned aria-hidden="true" data-icon="inline-start" />
-                    {t('places')}
-                  </Button>
-                  <Button
-                    nativeButton={false}
-                    render={<Link href={`/trips/${overviewTrip.id}/tasks`} />}
-                    variant="outline"
-                  >
-                    <ClipboardCheck aria-hidden="true" data-icon="inline-start" />
-                    {t('tasks')}
-                  </Button>
-                  <Button
-                    nativeButton={false}
-                    render={<Link href={`/trips/${overviewTrip.id}/info`} />}
-                    variant="outline"
-                  >
-                    <Info aria-hidden="true" data-icon="inline-start" />
-                    {t('tripInfo')}
-                  </Button>
-                  <Button
-                    nativeButton={false}
-                    render={<Link href={`/trips/${overviewTrip.id}/reservations`} />}
-                    variant="outline"
-                  >
-                    <ReceiptText aria-hidden="true" data-icon="inline-start" />
-                    {t('reservations')}
-                  </Button>
-                  <Button
-                    nativeButton={false}
-                    render={<Link href={`/trips/${overviewTrip.id}/expenses`} />}
-                    variant="outline"
-                  >
-                    <WalletCards aria-hidden="true" data-icon="inline-start" />
-                    {t('expenses')}
-                  </Button>
-                  <Button
                     onClick={() => {
                       setOverviewTrip(null);
                       setEditor({ mode: 'edit', trip: overviewTrip });
@@ -419,6 +388,26 @@ export function TripsManager() {
                     </p>
                   </div>
                 ) : null}
+                <nav aria-label={t('tripTools')} className="border-t pt-5">
+                  <h2 className="text-base font-semibold">{t('tripTools')}</h2>
+                  <ItemGroup className="mt-3" variant="list">
+                    {overviewTools.map(({ href, icon: Icon, label }) => (
+                      <Item
+                        key={href}
+                        render={<Link href={`/trips/${overviewTrip.id}/${href}`} />}
+                        size="sm"
+                      >
+                        <ItemMedia variant="icon">
+                          <Icon aria-hidden="true" className="text-brand" />
+                        </ItemMedia>
+                        <ItemContent>
+                          <ItemTitle>{t(label)}</ItemTitle>
+                        </ItemContent>
+                        <ChevronRight aria-hidden="true" className="size-4 text-text-subtle" />
+                      </Item>
+                    ))}
+                  </ItemGroup>
+                </nav>
                 {overviewTripInfoStatus === 'loading' ? (
                   <section aria-busy="true" aria-live="polite" className="space-y-2 border-t pt-5">
                     <h2 className="text-base font-semibold">{t('tripInfo')}</h2>

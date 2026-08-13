@@ -1,7 +1,7 @@
 'use client';
 
 import { CircleAlert, Pencil, Plus, ReceiptText, Trash2, WalletCards } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { DatePicker } from '@/components/date-picker';
@@ -129,7 +129,13 @@ function hasValidMoney(amount: string, currencyCode: string) {
   return /^(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/.test(amount) && /^[A-Za-z]{3}$/.test(currencyCode);
 }
 
-export function ExpensesManager({ tripId }: Readonly<{ tripId: string }>) {
+export function ExpensesManager({
+  quickAdd,
+  tripId,
+}: Readonly<{
+  quickAdd?: { itineraryItemId?: string; localDate?: string };
+  tripId: string;
+}>) {
   const t = useTranslations('expenses');
   const locale = useLocale();
   const { preferredCurrency } = usePreferences();
@@ -145,6 +151,7 @@ export function ExpensesManager({ tripId }: Readonly<{ tripId: string }>) {
   const [deleting, setDeleting] = useState(false);
   const homeCurrencyCode = preferredCurrency;
   const [homeRates, setHomeRates] = useState<Record<string, CachedCurrencyRate>>({});
+  const quickAddHandled = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -159,6 +166,30 @@ export function ExpensesManager({ tripId }: Readonly<{ tripId: string }>) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!quickAdd) {
+      quickAddHandled.current = null;
+      return;
+    }
+    if (!data) return;
+    const quickAddKey = `${quickAdd.localDate ?? ''}:${quickAdd.itineraryItemId ?? ''}`;
+    if (quickAddHandled.current === quickAddKey) return;
+    quickAddHandled.current = quickAddKey;
+    const draft = createExpenseForm(null, data.budget, preferredCurrency);
+    if (quickAdd.localDate && /^\d{4}-\d{2}-\d{2}$/.test(quickAdd.localDate)) {
+      draft.localDate = quickAdd.localDate;
+    }
+    if (
+      quickAdd.itineraryItemId &&
+      data.itineraryItems.some((item) => item.id === quickAdd.itineraryItemId)
+    ) {
+      draft.itineraryItemId = quickAdd.itineraryItemId;
+    }
+    setExpenseForm(draft);
+    setFormError(null);
+    setEditor({ kind: 'create', expense: null });
+  }, [data, preferredCurrency, quickAdd]);
 
   useEffect(() => {
     if (!data || !homeCurrencyCode) {

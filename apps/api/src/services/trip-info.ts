@@ -21,6 +21,12 @@ export class TripInfoValidationError extends Error {
   }
 }
 
+export class TripInfoConflictError extends Error {
+  constructor() {
+    super('trip_info_conflict');
+  }
+}
+
 type TripInfoRecord = Prisma.TripInfoGetPayload<Record<string, never>>;
 
 function normalizeRequired(value: string | undefined) {
@@ -96,15 +102,24 @@ export async function createTripInfo(
   userId: string,
   tripId: string,
   input: Required<Pick<TripInfoInput, 'label' | 'value'>> & TripInfoInput,
+  clientEntryId?: string,
 ) {
   const prisma = getPrismaClient();
   const entryId = await prisma.$transaction(async (transaction) => {
     await findOwnedTrip(transaction, userId, tripId);
+    if (clientEntryId) {
+      const existing = await transaction.tripInfo.findFirst({
+        where: { id: clientEntryId, tripId, trip: { ownerId: userId } },
+        select: { id: true },
+      });
+      if (existing) return existing.id;
+    }
     return (
       await transaction.tripInfo.create({
         data: {
           category: normalizeOptional(input.category),
           isPinned: input.isPinned ?? false,
+          ...(clientEntryId ? { id: clientEntryId } : {}),
           label: normalizeRequired(input.label),
           link: normalizeLink(input.link),
           note: normalizeOptional(input.note),
@@ -126,15 +141,22 @@ export async function updateTripInfo(
   tripId: string,
   entryId: string,
   input: TripInfoInput,
+  expectedUpdatedAt?: string,
 ) {
   const prisma = getPrismaClient();
   const updatedId = await prisma.$transaction(async (transaction) => {
     await findOwnedTrip(transaction, userId, tripId);
     const current = await transaction.tripInfo.findFirst({ where: { id: entryId, tripId } });
     if (!current) throw new TripInfoNotFoundError('trip_info_not_found');
+    if (expectedUpdatedAt && current.updatedAt.toISOString() !== expectedUpdatedAt) {
+      throw new TripInfoConflictError();
+    }
 
-    await transaction.tripInfo.update({
-      where: { id: current.id },
+    const updated = await transaction.tripInfo.updateMany({
+      where: {
+        id: current.id,
+        ...(expectedUpdatedAt ? { updatedAt: current.updatedAt } : {}),
+      },
       data: {
         ...(input.category !== undefined ? { category: normalizeOptional(input.category) } : {}),
         ...(input.isPinned !== undefined ? { isPinned: input.isPinned } : {}),
@@ -144,6 +166,7 @@ export async function updateTripInfo(
         ...(input.value !== undefined ? { value: normalizeRequired(input.value) } : {}),
       },
     });
+    if (!updated.count) throw new TripInfoConflictError();
     return current.id;
   });
   const entry = await prisma.tripInfo.findFirst({
@@ -153,15 +176,29 @@ export async function updateTripInfo(
   return serializeTripInfo(entry);
 }
 
-export async function deleteTripInfo(userId: string, tripId: string, entryId: string) {
+export async function deleteTripInfo(
+  userId: string,
+  tripId: string,
+  entryId: string,
+  expectedUpdatedAt?: string,
+) {
   const prisma = getPrismaClient();
   await prisma.$transaction(async (transaction) => {
     await findOwnedTrip(transaction, userId, tripId);
     const entry = await transaction.tripInfo.findFirst({
       where: { id: entryId, tripId },
-      select: { id: true },
+      select: { id: true, updatedAt: true },
     });
     if (!entry) throw new TripInfoNotFoundError('trip_info_not_found');
-    await transaction.tripInfo.delete({ where: { id: entry.id } });
+    if (expectedUpdatedAt && entry.updatedAt.toISOString() !== expectedUpdatedAt) {
+      throw new TripInfoConflictError();
+    }
+    const deleted = await transaction.tripInfo.deleteMany({
+      where: {
+        id: entry.id,
+        ...(expectedUpdatedAt ? { updatedAt: entry.updatedAt } : {}),
+      },
+    });
+    if (!deleted.count) throw new TripInfoConflictError();
   });
 }

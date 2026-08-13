@@ -10,6 +10,7 @@ import {
   listTasks,
   listTaskTemplates,
   TaskNotFoundError,
+  TaskConflictError,
   TaskValidationError,
   updateTask,
   updateTaskTemplate,
@@ -34,7 +35,12 @@ const taskFields = {
   note: z.string().trim().max(5_000).nullable().optional(),
 } as const;
 const createTaskSchema = z
-  .object({ ...taskFields, context: contextSchema, label: z.string().trim().min(1).max(200) })
+  .object({
+    ...taskFields,
+    clientTaskId: z.uuid().optional(),
+    context: contextSchema,
+    label: z.string().trim().min(1).max(200),
+  })
   .strict()
   .superRefine((value, context) => {
     if (!value.dueDate && value.dueLocalTime) {
@@ -85,9 +91,15 @@ function getUserId(request: FastifyRequest, reply: FastifyReply) {
 }
 
 function handleError(reply: FastifyReply, error: unknown) {
+  if (error instanceof TaskConflictError) return reply.code(409).send({ code: error.message });
   if (error instanceof TaskNotFoundError) return reply.code(404).send({ code: error.message });
   if (error instanceof TaskValidationError) return reply.code(400).send({ code: error.code });
   throw error;
+}
+
+function getExpectedUpdatedAt(request: FastifyRequest) {
+  const value = request.headers['x-trove-expected-updated-at'];
+  return typeof value === 'string' ? value : undefined;
 }
 
 export function createTasksControllers() {
@@ -114,9 +126,10 @@ export function createTasksControllers() {
       if (!userId) return;
       if (!params.success || !body.success) return reply.code(400).send({ code: 'invalid_task' });
       try {
+        const { clientTaskId, ...input } = body.data;
         return reply
           .code(201)
-          .send({ task: await createTask(userId, params.data.tripId, body.data) });
+          .send({ task: await createTask(userId, params.data.tripId, input, clientTaskId) });
       } catch (error) {
         return handleError(reply, error);
       }
@@ -140,7 +153,12 @@ export function createTasksControllers() {
       if (!userId) return;
       if (!params.success) return reply.code(400).send({ code: 'invalid_task' });
       try {
-        await deleteTask(userId, params.data.tripId, params.data.taskId);
+        await deleteTask(
+          userId,
+          params.data.tripId,
+          params.data.taskId,
+          getExpectedUpdatedAt(request),
+        );
         return reply.code(204).send();
       } catch (error) {
         return handleError(reply, error);
@@ -186,7 +204,13 @@ export function createTasksControllers() {
       if (!params.success || !body.success) return reply.code(400).send({ code: 'invalid_task' });
       try {
         return reply.send({
-          task: await updateTask(userId, params.data.tripId, params.data.taskId, body.data),
+          task: await updateTask(
+            userId,
+            params.data.tripId,
+            params.data.taskId,
+            body.data,
+            getExpectedUpdatedAt(request),
+          ),
         });
       } catch (error) {
         return handleError(reply, error);

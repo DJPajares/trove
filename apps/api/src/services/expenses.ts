@@ -38,6 +38,12 @@ export class ExpenseValidationError extends Error {
   }
 }
 
+export class ExpenseConflictError extends Error {
+  constructor() {
+    super('expense_conflict');
+  }
+}
+
 const expenseInclude = {
   itineraryDay: { select: { date: true, id: true } },
   itineraryItem: {
@@ -420,10 +426,22 @@ export async function listExpenses(userId: string, tripId: string) {
   };
 }
 
-export async function createExpense(userId: string, tripId: string, input: Required<ExpenseInput>) {
+export async function createExpense(
+  userId: string,
+  tripId: string,
+  input: Required<ExpenseInput>,
+  clientExpenseId?: string,
+) {
   const prisma = getPrismaClient();
   return prisma.$transaction(async (transaction) => {
     const trip = await findOwnedTrip(transaction, userId, tripId);
+    if (clientExpenseId) {
+      const existing = await transaction.expense.findFirst({
+        where: { id: clientExpenseId, tripId, trip: { ownerId: userId } },
+        include: expenseInclude,
+      });
+      if (existing) return serializeExpense(existing);
+    }
     const links = await resolveExpenseLinks(transaction, tripId, input);
     const timing = dateTimeData({
       ...links,
@@ -436,6 +454,7 @@ export async function createExpense(userId: string, tripId: string, input: Requi
         amount: input.amount,
         category: mapCategory(input.category),
         currencyCode: input.currencyCode.trim().toUpperCase(),
+        ...(clientExpenseId ? { id: clientExpenseId } : {}),
         itineraryItemId: input.itineraryItemId,
         note: normalizeOptional(input.note),
         title: normalizeOptional(input.title),
@@ -454,10 +473,14 @@ export async function updateExpense(
   tripId: string,
   expenseId: string,
   input: ExpenseInput,
+  expectedUpdatedAt?: string,
 ) {
   const prisma = getPrismaClient();
   return prisma.$transaction(async (transaction) => {
     const existing = await getExpenseForUpdate(transaction, userId, tripId, expenseId);
+    if (expectedUpdatedAt && existing.updatedAt.toISOString() !== expectedUpdatedAt) {
+      throw new ExpenseConflictError();
+    }
     const next = {
       itineraryItemId:
         input.itineraryItemId === undefined ? existing.itineraryItemId : input.itineraryItemId,
@@ -478,8 +501,11 @@ export async function updateExpense(
       shouldReresolve && trip && links
         ? dateTimeData({ ...links, ...next, tripTimeZone: trip.referenceTimeZone })
         : {};
-    const expense = await transaction.expense.update({
-      where: { id: expenseId },
+    const updated = await transaction.expense.updateMany({
+      where: {
+        id: expenseId,
+        ...(expectedUpdatedAt ? { updatedAt: existing.updatedAt } : {}),
+      },
       data: {
         ...(input.amount !== undefined ? { amount: input.amount } : {}),
         ...(input.category !== undefined ? { category: mapCategory(input.category) } : {}),
@@ -492,17 +518,36 @@ export async function updateExpense(
         ...(input.tripPlaceId !== undefined ? { tripPlaceId: input.tripPlaceId } : {}),
         ...timing,
       },
+    });
+    if (!updated.count) throw new ExpenseConflictError();
+    const expense = await transaction.expense.findUnique({
+      where: { id: expenseId },
       include: expenseInclude,
     });
+    if (!expense) throw new ExpenseNotFoundError('expense_not_found');
     return serializeExpense(expense);
   });
 }
 
-export async function deleteExpense(userId: string, tripId: string, expenseId: string) {
+export async function deleteExpense(
+  userId: string,
+  tripId: string,
+  expenseId: string,
+  expectedUpdatedAt?: string,
+) {
   const prisma = getPrismaClient();
   await prisma.$transaction(async (transaction) => {
-    await getExpenseForUpdate(transaction, userId, tripId, expenseId);
-    await transaction.expense.delete({ where: { id: expenseId } });
+    const existing = await getExpenseForUpdate(transaction, userId, tripId, expenseId);
+    if (expectedUpdatedAt && existing.updatedAt.toISOString() !== expectedUpdatedAt) {
+      throw new ExpenseConflictError();
+    }
+    const deleted = await transaction.expense.deleteMany({
+      where: {
+        id: expenseId,
+        ...(expectedUpdatedAt ? { updatedAt: existing.updatedAt } : {}),
+      },
+    });
+    if (!deleted.count) throw new ExpenseConflictError();
   });
 }
 

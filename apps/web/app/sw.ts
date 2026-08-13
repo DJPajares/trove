@@ -20,6 +20,9 @@ const tripModeRscCacheKey: SerwistPlugin = {
   },
 };
 
+const offlineTripPath =
+  /^\/trips\/[^/]+\/(?:expenses|info|itinerary|mode(?:\/[^/]+)?|places|reservations|tasks)\/?$/;
+
 const runtimeCaching: RuntimeCaching[] = [
   {
     handler: new NetworkFirst({
@@ -29,7 +32,7 @@ const runtimeCaching: RuntimeCaching[] = [
     }),
     matcher: ({ request, url }) =>
       request.method === 'GET' &&
-      /^\/trips\/[^/]+\/mode(?:\/|$)/.test(url.pathname) &&
+      offlineTripPath.test(url.pathname) &&
       (request.headers.get('RSC') === '1' || request.headers.get('Next-Router-Prefetch') === '1'),
     method: 'GET',
   },
@@ -39,7 +42,7 @@ const runtimeCaching: RuntimeCaching[] = [
       networkTimeoutSeconds: 3,
     }),
     matcher: ({ request, url }) =>
-      request.mode === 'navigate' && /^\/trips\/[^/]+\/mode(?:\/|$)/.test(url.pathname),
+      request.mode === 'navigate' && offlineTripPath.test(url.pathname),
     method: 'GET',
   },
   {

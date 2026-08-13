@@ -1,4 +1,14 @@
-import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import {
+  canUseSupportingOfflineFallback,
+  queueSupportingMutation,
+  readPreparedSupportingData,
+} from '@/lib/offline/supporting-sync';
+import {
+  saveSupportingSnapshot,
+  setOfflineApiReachable,
+  type OfflineMutationOperation,
+} from '@/lib/offline/trip-store';
+import { getOfflineAuthContext } from '@/lib/offline/trip-sync';
 
 export type TaskContext =
   | { kind: 'trip' }
@@ -61,24 +71,35 @@ export class TasksApiError extends Error {
 
 const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
 
-async function getAccessToken() {
-  const supabase = createBrowserSupabaseClient();
-  if (!supabase) throw new TasksApiError('supabase_not_configured', 500);
-  const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session) throw new TasksApiError('not_authenticated', 401);
-  return data.session.access_token;
+async function getAuthContext() {
+  try {
+    return await getOfflineAuthContext();
+  } catch {
+    throw new TasksApiError('not_authenticated', 401);
+  }
 }
 
-async function tasksRequest<T>(path: string, init?: RequestInit) {
-  const accessToken = await getAccessToken();
-  const response = await fetch(`${apiUrl}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
-  });
+async function tasksRequest<T>(
+  path: string,
+  init: RequestInit | undefined,
+  auth: Awaited<ReturnType<typeof getAuthContext>>,
+) {
+  if (!auth.accessToken) throw new TasksApiError('offline_session', 503);
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${auth.accessToken}`,
+        'Content-Type': 'application/json',
+        ...init?.headers,
+      },
+    });
+  } catch {
+    setOfflineApiReachable(false);
+    throw new TasksApiError('tasks_unavailable', 503);
+  }
+  setOfflineApiReachable(response.status < 500);
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { code?: string };
     throw new TasksApiError(
@@ -91,55 +112,159 @@ async function tasksRequest<T>(path: string, init?: RequestInit) {
 }
 
 export function fetchTasks(tripId: string) {
-  return tasksRequest<TasksResponse>(`/trips/${tripId}/tasks`);
+  return fetchTasksWithOffline(tripId);
 }
 
-export function createTask(
+async function fetchTasksWithOffline(tripId: string) {
+  const auth = await getAuthContext();
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return readPreparedSupportingData(auth.userId, tripId, 'tasks');
+  }
+  try {
+    const data = await tasksRequest<TasksResponse>(`/trips/${tripId}/tasks`, undefined, auth);
+    await saveSupportingSnapshot(auth.userId, tripId, 'tasks', data);
+    return data;
+  } catch (error) {
+    if (canUseSupportingOfflineFallback(error)) {
+      return readPreparedSupportingData(auth.userId, tripId, 'tasks');
+    }
+    throw error;
+  }
+}
+
+export async function createTask(
   tripId: string,
   input: Required<Pick<TaskInput, 'context' | 'label'>> & TaskInput,
 ) {
-  return tasksRequest<{ task: Task }>(`/trips/${tripId}/tasks`, {
-    body: JSON.stringify(input),
-    method: 'POST',
-  });
+  const auth = await getAuthContext();
+  const operation: OfflineMutationOperation = {
+    clientTaskId: crypto.randomUUID(),
+    input,
+    kind: 'task_create',
+  };
+  try {
+    const result = await tasksRequest<{ task: Task }>(
+      `/trips/${tripId}/tasks`,
+      { body: JSON.stringify({ ...input, clientTaskId: operation.clientTaskId }), method: 'POST' },
+      auth,
+    );
+    const current = await readPreparedSupportingData(auth.userId, tripId, 'tasks').catch(
+      () => null,
+    );
+    if (current) {
+      await saveSupportingSnapshot(auth.userId, tripId, 'tasks', {
+        ...current,
+        tasks: [result.task, ...current.tasks.filter((task) => task.id !== result.task.id)],
+      });
+    }
+    return result;
+  } catch (error) {
+    if (!canUseSupportingOfflineFallback(error)) throw error;
+    await queueSupportingMutation(auth.userId, tripId, operation);
+    const data = await readPreparedSupportingData(auth.userId, tripId, 'tasks');
+    const task = data.tasks.find((candidate) => candidate.id === operation.clientTaskId);
+    if (!task) throw error;
+    return { task };
+  }
 }
 
-export function updateTask(tripId: string, taskId: string, input: TaskInput) {
-  return tasksRequest<{ task: Task }>(`/trips/${tripId}/tasks/${taskId}`, {
-    body: JSON.stringify(input),
-    method: 'PATCH',
-  });
+export async function updateTask(tripId: string, taskId: string, input: TaskInput) {
+  const auth = await getAuthContext();
+  const stored = await readPreparedSupportingData(auth.userId, tripId, 'tasks').catch(() => null);
+  const baseTask = stored?.tasks.find((task) => task.id === taskId) ?? null;
+  try {
+    const result = await tasksRequest<{ task: Task }>(
+      `/trips/${tripId}/tasks/${taskId}`,
+      { body: JSON.stringify(input), method: 'PATCH' },
+      auth,
+    );
+    if (stored) {
+      await saveSupportingSnapshot(auth.userId, tripId, 'tasks', {
+        ...stored,
+        tasks: stored.tasks.map((task) => (task.id === taskId ? result.task : task)),
+      });
+    }
+    return result;
+  } catch (error) {
+    if (!baseTask || !canUseSupportingOfflineFallback(error)) throw error;
+    await queueSupportingMutation(auth.userId, tripId, {
+      baseTask: structuredClone(baseTask),
+      input,
+      kind: 'task_update',
+      taskId,
+    });
+    const data = await readPreparedSupportingData(auth.userId, tripId, 'tasks');
+    const task = data.tasks.find((candidate) => candidate.id === taskId);
+    if (!task) throw error;
+    return { task };
+  }
 }
 
-export function deleteTask(tripId: string, taskId: string) {
-  return tasksRequest<void>(`/trips/${tripId}/tasks/${taskId}`, { method: 'DELETE' });
+export async function deleteTask(tripId: string, taskId: string) {
+  const auth = await getAuthContext();
+  const stored = await readPreparedSupportingData(auth.userId, tripId, 'tasks').catch(() => null);
+  const baseTask = stored?.tasks.find((task) => task.id === taskId) ?? null;
+  try {
+    const result = await tasksRequest<void>(
+      `/trips/${tripId}/tasks/${taskId}`,
+      { method: 'DELETE' },
+      auth,
+    );
+    if (stored) {
+      await saveSupportingSnapshot(auth.userId, tripId, 'tasks', {
+        ...stored,
+        tasks: stored.tasks.filter((task) => task.id !== taskId),
+      });
+    }
+    return result;
+  } catch (error) {
+    if (!baseTask || !canUseSupportingOfflineFallback(error)) throw error;
+    await queueSupportingMutation(auth.userId, tripId, {
+      baseTask: structuredClone(baseTask),
+      kind: 'task_delete',
+      taskId,
+    });
+  }
 }
 
 export function fetchTaskTemplates() {
-  return tasksRequest<{ templates: TaskTemplate[] }>('/task-templates');
+  return getAuthContext().then((auth) =>
+    tasksRequest<{ templates: TaskTemplate[] }>('/task-templates', undefined, auth),
+  );
 }
 
 export function createTaskTemplate(input: TaskTemplateInput) {
-  return tasksRequest<{ template: TaskTemplate }>('/task-templates', {
-    body: JSON.stringify(input),
-    method: 'POST',
-  });
+  return getAuthContext().then((auth) =>
+    tasksRequest<{ template: TaskTemplate }>(
+      '/task-templates',
+      { body: JSON.stringify(input), method: 'POST' },
+      auth,
+    ),
+  );
 }
 
 export function updateTaskTemplate(templateId: string, input: TaskTemplateInput) {
-  return tasksRequest<{ template: TaskTemplate }>(`/task-templates/${templateId}`, {
-    body: JSON.stringify(input),
-    method: 'PATCH',
-  });
+  return getAuthContext().then((auth) =>
+    tasksRequest<{ template: TaskTemplate }>(
+      `/task-templates/${templateId}`,
+      { body: JSON.stringify(input), method: 'PATCH' },
+      auth,
+    ),
+  );
 }
 
 export function deleteTaskTemplate(templateId: string) {
-  return tasksRequest<void>(`/task-templates/${templateId}`, { method: 'DELETE' });
+  return getAuthContext().then((auth) =>
+    tasksRequest<void>(`/task-templates/${templateId}`, { method: 'DELETE' }, auth),
+  );
 }
 
 export function applyTaskTemplate(templateId: string, tripId: string) {
-  return tasksRequest<{ createdCount: number }>(`/task-templates/${templateId}/apply`, {
-    body: JSON.stringify({ tripId }),
-    method: 'POST',
-  });
+  return getAuthContext().then((auth) =>
+    tasksRequest<{ createdCount: number }>(
+      `/task-templates/${templateId}/apply`,
+      { body: JSON.stringify({ tripId }), method: 'POST' },
+      auth,
+    ),
+  );
 }

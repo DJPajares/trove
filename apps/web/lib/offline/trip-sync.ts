@@ -4,16 +4,23 @@ import {
   getRememberedOfflineUser,
   listUserMutations,
   mergeQueuedMutations,
+  OFFLINE_DATA_REFRESH_EVENT,
+  type OfflineItineraryMutationOperation,
   type OfflineMutation,
   type OfflineMutationOperation,
+  type OfflineSupportingMutationOperation,
   putOfflineMutation,
   readTripSnapshot,
   rememberOfflineUser,
   removeOfflineMutation,
   saveItinerarySnapshot,
+  saveSupportingSnapshot,
   setOfflineApiReachable,
 } from './trip-store';
 import type { Itinerary, ItineraryItem } from '../itinerary/api';
+import type { Expense, ExpensesResponse } from '../expenses/api';
+import type { Task, TasksResponse } from '../tasks/api';
+import type { TripInfoEntry, TripInfoResponse } from '../trip-info/api';
 
 const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
 
@@ -54,8 +61,8 @@ function scheduleFields(item: ItineraryItem) {
   };
 }
 
-function operationAlreadyApplied(
-  operation: OfflineMutationOperation,
+function itineraryOperationAlreadyApplied(
+  operation: Exclude<OfflineItineraryMutationOperation, { kind: 'itinerary_day_note' }>,
   current: ItineraryItem | null,
 ) {
   if (operation.kind === 'itinerary_item_create') return Boolean(current);
@@ -100,7 +107,10 @@ function operationAlreadyApplied(
   return comparisons.length > 0 && comparisons.every(Boolean);
 }
 
-function operationConflicts(operation: OfflineMutationOperation, current: ItineraryItem | null) {
+function itineraryOperationConflicts(
+  operation: Exclude<OfflineItineraryMutationOperation, { kind: 'itinerary_day_note' }>,
+  current: ItineraryItem | null,
+) {
   if (operation.kind === 'itinerary_item_create') return false;
   if (operation.kind === 'itinerary_item_delete') {
     return current !== null && current.updatedAt !== operation.baseItem.updatedAt;
@@ -184,6 +194,71 @@ function requestFor(
       path: `/trips/${tripId}/itinerary/items/${operation.itemId}`,
     };
   }
+  if (operation.kind === 'itinerary_day_note') {
+    return {
+      body: JSON.stringify({ note: operation.note }),
+      headers,
+      method: 'PATCH',
+      path: `/trips/${tripId}/itinerary/days/${operation.itineraryDayId}/note`,
+    };
+  }
+  if (operation.kind === 'task_create') {
+    return {
+      body: JSON.stringify({ ...operation.input, clientTaskId: operation.clientTaskId }),
+      headers,
+      method: 'POST',
+      path: `/trips/${tripId}/tasks`,
+    };
+  }
+  if (operation.kind === 'task_update') {
+    return {
+      body: JSON.stringify(operation.input),
+      headers,
+      method: 'PATCH',
+      path: `/trips/${tripId}/tasks/${operation.taskId}`,
+    };
+  }
+  if (operation.kind === 'task_delete') {
+    return { headers, method: 'DELETE', path: `/trips/${tripId}/tasks/${operation.taskId}` };
+  }
+  if (operation.kind === 'trip_info_create') {
+    return {
+      body: JSON.stringify({ ...operation.input, clientEntryId: operation.clientEntryId }),
+      headers,
+      method: 'POST',
+      path: `/trips/${tripId}/info`,
+    };
+  }
+  if (operation.kind === 'trip_info_update') {
+    return {
+      body: JSON.stringify(operation.input),
+      headers,
+      method: 'PATCH',
+      path: `/trips/${tripId}/info/${operation.entryId}`,
+    };
+  }
+  if (operation.kind === 'trip_info_delete') {
+    return { headers, method: 'DELETE', path: `/trips/${tripId}/info/${operation.entryId}` };
+  }
+  if (operation.kind === 'expense_create') {
+    return {
+      body: JSON.stringify({ ...operation.input, clientExpenseId: operation.clientExpenseId }),
+      headers,
+      method: 'POST',
+      path: `/trips/${tripId}/expenses`,
+    };
+  }
+  if (operation.kind === 'expense_update') {
+    return {
+      body: JSON.stringify(operation.input),
+      headers,
+      method: 'PATCH',
+      path: `/trips/${tripId}/expenses/${operation.expenseId}`,
+    };
+  }
+  if (operation.kind === 'expense_delete') {
+    return { headers, method: 'DELETE', path: `/trips/${tripId}/expenses/${operation.expenseId}` };
+  }
   return {
     body: JSON.stringify({ travelStatus: operation.travelStatus }),
     headers,
@@ -235,19 +310,147 @@ async function updateMutationState(
   });
 }
 
-async function replayMutation(mutation: OfflineMutation, accessToken: string, force: boolean) {
+function matchingFields(current: object, input: object) {
+  return Object.entries(input).every(
+    ([key, value]) =>
+      JSON.stringify(current[key as keyof typeof current]) === JSON.stringify(value),
+  );
+}
+
+async function supportingEntity(
+  accessToken: string,
+  tripId: string,
+  operation: OfflineSupportingMutationOperation,
+): Promise<Task | TripInfoEntry | Expense | null> {
+  if (
+    operation.kind === 'task_create' ||
+    operation.kind === 'task_update' ||
+    operation.kind === 'task_delete'
+  ) {
+    const response = await apiRequest(accessToken, {
+      method: 'GET',
+      path: `/trips/${tripId}/tasks`,
+    });
+    if (!response.ok) throw new OfflineSyncError(`tasks_request_failed_${response.status}`);
+    const data = (await response.json()) as TasksResponse;
+    const id = operation.kind === 'task_create' ? operation.clientTaskId : operation.taskId;
+    return data.tasks.find((task) => task.id === id) ?? null;
+  }
+  if (
+    operation.kind === 'trip_info_create' ||
+    operation.kind === 'trip_info_update' ||
+    operation.kind === 'trip_info_delete'
+  ) {
+    const response = await apiRequest(accessToken, {
+      method: 'GET',
+      path: `/trips/${tripId}/info`,
+    });
+    if (!response.ok) throw new OfflineSyncError(`trip_info_request_failed_${response.status}`);
+    const data = (await response.json()) as TripInfoResponse;
+    const id = operation.kind === 'trip_info_create' ? operation.clientEntryId : operation.entryId;
+    return data.entries.find((entry) => entry.id === id) ?? null;
+  }
+  if (
+    operation.kind !== 'expense_create' &&
+    operation.kind !== 'expense_update' &&
+    operation.kind !== 'expense_delete'
+  ) {
+    return null;
+  }
+  const response = await apiRequest(accessToken, {
+    method: 'GET',
+    path: `/trips/${tripId}/expenses`,
+  });
+  if (!response.ok) throw new OfflineSyncError(`expenses_request_failed_${response.status}`);
+  const data = (await response.json()) as ExpensesResponse;
+  const id = operation.kind === 'expense_create' ? operation.clientExpenseId : operation.expenseId;
+  return data.expenses.find((expense) => expense.id === id) ?? null;
+}
+
+function supportingAlreadyApplied(
+  operation: OfflineSupportingMutationOperation,
+  current: Task | TripInfoEntry | Expense | null,
+) {
+  if (operation.kind.endsWith('_create')) return Boolean(current);
+  if (operation.kind.endsWith('_delete')) return current === null;
+  if (!current) return false;
+  if (operation.kind === 'task_update') return matchingFields(current, operation.input);
+  if (operation.kind === 'trip_info_update') return matchingFields(current, operation.input);
+  if (operation.kind === 'expense_update') {
+    const expense = current as Expense;
+    return Object.entries(operation.input).every(([key, value]) => {
+      if (key === 'itineraryItemId') return expense.itineraryItem?.id === value;
+      if (key === 'tripPlaceId') return expense.tripPlace?.id === value;
+      return JSON.stringify(expense[key as keyof Expense]) === JSON.stringify(value);
+    });
+  }
+  return false;
+}
+
+function supportingConflict(
+  operation: OfflineSupportingMutationOperation,
+  current: Task | TripInfoEntry | Expense | null,
+) {
+  if (operation.kind.endsWith('_create')) return false;
+  if (!current) return !operation.kind.endsWith('_delete');
+  if (operation.kind === 'task_update' || operation.kind === 'task_delete') {
+    return current.updatedAt !== operation.baseTask.updatedAt;
+  }
+  if (operation.kind === 'trip_info_update' || operation.kind === 'trip_info_delete') {
+    return current.updatedAt !== operation.baseEntry.updatedAt;
+  }
+  if (operation.kind === 'expense_update' || operation.kind === 'expense_delete') {
+    return current.updatedAt !== operation.baseExpense.updatedAt;
+  }
+  return false;
+}
+
+async function replayItineraryMutation(
+  mutation: OfflineMutation,
+  operation: OfflineItineraryMutationOperation,
+  accessToken: string,
+  force: boolean,
+) {
   const serverItinerary = await fetchServerItinerary(accessToken, mutation.tripId);
+  if (operation.kind === 'itinerary_day_note') {
+    const day = serverItinerary.days.find((candidate) => candidate.id === operation.itineraryDayId);
+    if (day?.notes === operation.note) {
+      await removeOfflineMutation(mutation.id);
+      return;
+    }
+    if (!force && (!day || day.notes !== operation.baseNote)) {
+      await updateMutationState(
+        mutation,
+        'conflict',
+        day ? 'itinerary_day_conflict' : 'day_missing',
+      );
+      return;
+    }
+    const response = await apiRequest(
+      accessToken,
+      requestFor(operation, mutation.tripId, undefined),
+    );
+    if (response.ok) {
+      await removeOfflineMutation(mutation.id);
+      return;
+    }
+    const body = (await response.json().catch(() => ({}))) as { code?: string };
+    await updateMutationState(
+      mutation,
+      response.status === 409 ? 'conflict' : 'failed',
+      body.code ?? `itinerary_request_failed_${response.status}`,
+    );
+    return;
+  }
   const itemId =
-    mutation.operation.kind === 'itinerary_item_create'
-      ? mutation.operation.clientItemId
-      : mutation.operation.itemId;
+    operation.kind === 'itinerary_item_create' ? operation.clientItemId : operation.itemId;
   const current = findItem(serverItinerary, itemId);
 
-  if (operationAlreadyApplied(mutation.operation, current)) {
+  if (itineraryOperationAlreadyApplied(operation, current)) {
     await removeOfflineMutation(mutation.id);
     return;
   }
-  if (!force && operationConflicts(mutation.operation, current)) {
+  if (!force && itineraryOperationConflicts(operation, current)) {
     await updateMutationState(
       mutation,
       'conflict',
@@ -258,12 +461,9 @@ async function replayMutation(mutation: OfflineMutation, accessToken: string, fo
 
   const response = await apiRequest(
     accessToken,
-    requestFor(mutation.operation, mutation.tripId, current?.updatedAt),
+    requestFor(operation, mutation.tripId, current?.updatedAt),
   );
-  if (
-    response.ok ||
-    (response.status === 404 && mutation.operation.kind === 'itinerary_item_delete')
-  ) {
+  if (response.ok || (response.status === 404 && operation.kind === 'itinerary_item_delete')) {
     await removeOfflineMutation(mutation.id);
     return;
   }
@@ -279,10 +479,85 @@ async function replayMutation(mutation: OfflineMutation, accessToken: string, fo
   );
 }
 
+async function replaySupportingMutation(
+  mutation: OfflineMutation,
+  accessToken: string,
+  force: boolean,
+) {
+  const operation = mutation.operation as OfflineSupportingMutationOperation;
+  const current = await supportingEntity(accessToken, mutation.tripId, operation);
+  if (supportingAlreadyApplied(operation, current)) {
+    await removeOfflineMutation(mutation.id);
+    return;
+  }
+  if (!force && supportingConflict(operation, current)) {
+    await updateMutationState(
+      mutation,
+      'conflict',
+      current ? 'supporting_data_conflict' : 'supporting_data_missing',
+    );
+    return;
+  }
+  const response = await apiRequest(
+    accessToken,
+    requestFor(operation, mutation.tripId, current?.updatedAt),
+  );
+  if (response.ok || (response.status === 404 && operation.kind.endsWith('_delete'))) {
+    await removeOfflineMutation(mutation.id);
+    return;
+  }
+  const body = (await response.json().catch(() => ({}))) as { code?: string };
+  await updateMutationState(
+    mutation,
+    response.status === 409 ? 'conflict' : 'failed',
+    body.code ?? `supporting_request_failed_${response.status}`,
+  );
+}
+
+async function replayMutation(mutation: OfflineMutation, accessToken: string, force: boolean) {
+  if (mutation.operation.kind.startsWith('itinerary_')) {
+    return replayItineraryMutation(
+      mutation,
+      mutation.operation as OfflineItineraryMutationOperation,
+      accessToken,
+      force,
+    );
+  }
+  return replaySupportingMutation(mutation, accessToken, force);
+}
+
 async function refreshSnapshot(accessToken: string, userId: string, tripId: string) {
-  const server = await fetchServerItinerary(accessToken, tripId);
-  const merged = await mergeQueuedMutations(userId, tripId, server);
-  await saveItinerarySnapshot(userId, tripId, merged);
+  const [server, tasksResponse, tripInfoResponse, expensesResponse] = await Promise.all([
+    fetchServerItinerary(accessToken, tripId),
+    apiRequest(accessToken, { method: 'GET', path: `/trips/${tripId}/tasks` }),
+    apiRequest(accessToken, { method: 'GET', path: `/trips/${tripId}/info` }),
+    apiRequest(accessToken, { method: 'GET', path: `/trips/${tripId}/expenses` }),
+  ]);
+  await saveItinerarySnapshot(userId, tripId, await mergeQueuedMutations(userId, tripId, server));
+  if (tasksResponse.ok) {
+    await saveSupportingSnapshot(
+      userId,
+      tripId,
+      'tasks',
+      (await tasksResponse.json()) as TasksResponse,
+    );
+  }
+  if (tripInfoResponse.ok) {
+    await saveSupportingSnapshot(
+      userId,
+      tripId,
+      'tripInfo',
+      (await tripInfoResponse.json()) as TripInfoResponse,
+    );
+  }
+  if (expensesResponse.ok) {
+    await saveSupportingSnapshot(
+      userId,
+      tripId,
+      'expenses',
+      (await expensesResponse.json()) as ExpensesResponse,
+    );
+  }
 }
 
 export async function syncOfflineMutations(options: { mutationId?: string; force?: boolean } = {}) {
@@ -315,6 +590,9 @@ export async function syncOfflineMutations(options: { mutationId?: string; force
     } catch {
       // The optimistic snapshot remains valid until the next successful refresh.
     }
+  }
+  if (touchedTrips.size && typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(OFFLINE_DATA_REFRESH_EVENT));
   }
 }
 

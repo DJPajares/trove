@@ -41,6 +41,12 @@ export class TaskValidationError extends Error {
   }
 }
 
+export class TaskConflictError extends Error {
+  constructor() {
+    super('task_conflict');
+  }
+}
+
 const taskInclude = {
   itineraryDay: { select: { date: true } },
   itineraryItem: {
@@ -260,10 +266,18 @@ export async function createTask(
   userId: string,
   tripId: string,
   input: Required<Pick<TaskInput, 'context' | 'label'>> & TaskInput,
+  clientTaskId?: string,
 ) {
   const prisma = getPrismaClient();
   const createdId = await prisma.$transaction(async (transaction) => {
     const trip = await findOwnedTrip(transaction, userId, tripId);
+    if (clientTaskId) {
+      const existing = await transaction.task.findFirst({
+        where: { id: clientTaskId, tripId, trip: { ownerId: userId } },
+        select: { id: true },
+      });
+      if (existing) return existing.id;
+    }
     const context = await resolveContext(
       transaction,
       tripId,
@@ -276,6 +290,7 @@ export async function createTask(
           ...context.data,
           ...dueData(input.dueDate ?? null, input.dueLocalTime ?? null, context.resolution),
           label: normalizeLabel(input.label),
+          ...(clientTaskId ? { id: clientTaskId } : {}),
           note: input.note?.trim() || null,
           tripId,
         },
@@ -290,12 +305,21 @@ export async function createTask(
   return serializeTask(task);
 }
 
-export async function updateTask(userId: string, tripId: string, taskId: string, input: TaskInput) {
+export async function updateTask(
+  userId: string,
+  tripId: string,
+  taskId: string,
+  input: TaskInput,
+  expectedUpdatedAt?: string,
+) {
   const prisma = getPrismaClient();
   const updatedId = await prisma.$transaction(async (transaction) => {
     const trip = await findOwnedTrip(transaction, userId, tripId);
     const current = await transaction.task.findFirst({ where: { id: taskId, tripId } });
     if (!current) throw new TaskNotFoundError('task_not_found');
+    if (expectedUpdatedAt && current.updatedAt.toISOString() !== expectedUpdatedAt) {
+      throw new TaskConflictError();
+    }
 
     const currentContext = taskContextFromRecord(current);
     const nextContext = input.context ?? currentContext;
@@ -311,8 +335,11 @@ export async function updateTask(userId: string, tripId: string, taskId: string,
       ? await resolveContext(transaction, tripId, trip.referenceTimeZone, nextContext)
       : null;
 
-    await transaction.task.update({
-      where: { id: current.id },
+    const updated = await transaction.task.updateMany({
+      where: {
+        id: current.id,
+        ...(expectedUpdatedAt ? { updatedAt: current.updatedAt } : {}),
+      },
       data: {
         ...context?.data,
         ...(input.label !== undefined ? { label: normalizeLabel(input.label) } : {}),
@@ -334,6 +361,7 @@ export async function updateTask(userId: string, tripId: string, taskId: string,
           : {}),
       },
     });
+    if (!updated.count) throw new TaskConflictError();
     return current.id;
   });
   const task = await prisma.task.findFirst({
@@ -350,16 +378,30 @@ function contextValue(context: TaskContextInput) {
   return 'trip';
 }
 
-export async function deleteTask(userId: string, tripId: string, taskId: string) {
+export async function deleteTask(
+  userId: string,
+  tripId: string,
+  taskId: string,
+  expectedUpdatedAt?: string,
+) {
   const prisma = getPrismaClient();
   await prisma.$transaction(async (transaction) => {
     await findOwnedTrip(transaction, userId, tripId);
     const task = await transaction.task.findFirst({
       where: { id: taskId, tripId },
-      select: { id: true },
+      select: { id: true, updatedAt: true },
     });
     if (!task) throw new TaskNotFoundError('task_not_found');
-    await transaction.task.delete({ where: { id: task.id } });
+    if (expectedUpdatedAt && task.updatedAt.toISOString() !== expectedUpdatedAt) {
+      throw new TaskConflictError();
+    }
+    const deleted = await transaction.task.deleteMany({
+      where: {
+        id: task.id,
+        ...(expectedUpdatedAt ? { updatedAt: task.updatedAt } : {}),
+      },
+    });
+    if (!deleted.count) throw new TaskConflictError();
   });
 }
 

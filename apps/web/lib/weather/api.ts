@@ -37,6 +37,7 @@ export type WeatherContext = {
 
 export type CachedWeatherContext = WeatherContext & {
   source: 'cache' | 'live';
+  stale: boolean;
 };
 
 export type WeatherRequest = {
@@ -58,6 +59,7 @@ export class WeatherApiError extends Error {
 
 const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
 const CACHE_MAX_AGE_MS = 6 * 60 * 60_000;
+const OFFLINE_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60_000;
 const cachePrefix = 'trove:weather:v1:';
 
 async function getAccessToken() {
@@ -82,14 +84,16 @@ function cacheKey(input: Omit<WeatherRequest, 'signal'>) {
   ].join(':');
 }
 
-function readCache(key: string) {
+function readCache(key: string, allowStale: boolean) {
   if (!hasStorage()) return null;
   try {
     const value: unknown = JSON.parse(window.localStorage.getItem(key) ?? 'null');
     if (!isWeatherContext(value)) return null;
     const fetchedAt = new Date(value.fetchedAt).getTime();
-    if (!Number.isFinite(fetchedAt) || Date.now() - fetchedAt > CACHE_MAX_AGE_MS) return null;
-    return { ...value, source: 'cache' as const };
+    const age = Date.now() - fetchedAt;
+    if (!Number.isFinite(fetchedAt) || age > OFFLINE_CACHE_MAX_AGE_MS) return null;
+    if (!allowStale && age > CACHE_MAX_AGE_MS) return null;
+    return { ...value, source: 'cache' as const, stale: age > CACHE_MAX_AGE_MS };
   } catch {
     return null;
   }
@@ -145,8 +149,9 @@ async function weatherRequest<T>(path: string, signal?: AbortSignal) {
 export async function getWeather(input: WeatherRequest): Promise<CachedWeatherContext> {
   const { signal, ...request } = input;
   const key = cacheKey(request);
-  const cached = readCache(key);
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+  const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+  const cached = readCache(key, offline);
+  if (offline) {
     if (cached) return cached;
     throw new WeatherApiError('weather_unavailable', 503);
   }
@@ -160,7 +165,7 @@ export async function getWeather(input: WeatherRequest): Promise<CachedWeatherCo
   try {
     const weather = await weatherRequest<WeatherContext>(`/weather?${query.toString()}`, signal);
     writeCache(key, weather);
-    return { ...weather, source: 'live' };
+    return { ...weather, source: 'live', stale: false };
   } catch (error) {
     if (cached) return cached;
     throw error;

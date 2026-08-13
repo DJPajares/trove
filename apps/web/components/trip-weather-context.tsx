@@ -137,8 +137,8 @@ export function TripWeatherContext({
     timeZone: 'UTC',
   }).format(new Date(`${selectedDate}T00:00:00.000Z`));
   const fetchedAt = new Intl.DateTimeFormat(locale, {
-    hour: 'numeric',
-    minute: '2-digit',
+    dateStyle: 'medium',
+    timeStyle: 'short',
     timeZone: location.timeZone,
   }).format(new Date(data.fetchedAt));
 
@@ -186,7 +186,7 @@ export function TripWeatherContext({
 
           {data.source === 'cache' ? (
             <p className="mt-2 text-xs leading-5 text-text-subtle">
-              {t('savedData', { time: fetchedAt })}
+              {t(data.stale ? 'staleData' : 'savedData', { time: fetchedAt })}
             </p>
           ) : null}
           <a

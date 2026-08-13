@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  ArrowLeft,
   ArrowDown,
   ArrowUp,
   CalendarClock,
@@ -17,7 +16,6 @@ import {
   NotebookPen,
   Pencil,
   Plus,
-  ReceiptText,
   Search,
   Trash2,
 } from 'lucide-react';
@@ -25,7 +23,6 @@ import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 
-import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { CurrencyCombobox } from '@/components/currency-combobox';
@@ -34,6 +31,7 @@ import { PlaceDetailSheet } from '@/components/place-detail-sheet';
 import { usePreferences } from '@/components/preferences-provider';
 import { SearchField } from '@/components/search-field';
 import { TimeInput } from '@/components/time-input';
+import { TripSectionHeader } from '@/components/trip-section-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -641,41 +639,11 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
 
   return (
     <section className="mx-auto w-full max-w-6xl space-y-7">
-      <PageHeader
-        actions={
-          <>
-            <Button nativeButton={false} render={<Link href="/trips" />} variant="ghost">
-              <ArrowLeft aria-hidden="true" data-icon="inline-start" />
-              {t('backToTrips')}
-            </Button>
-            <Button
-              nativeButton={false}
-              render={<Link href={`/trips/${tripId}/places`} />}
-              variant="outline"
-            >
-              <MapPinned aria-hidden="true" data-icon="inline-start" />
-              {t('tripPlaces')}
-            </Button>
-            <Button
-              nativeButton={false}
-              render={<Link href={`/trips/${tripId}/tasks`} />}
-              variant="outline"
-            >
-              <CalendarClock aria-hidden="true" data-icon="inline-start" />
-              {t('tripTasks')}
-            </Button>
-            <Button
-              nativeButton={false}
-              render={<Link href={`/trips/${tripId}/reservations`} />}
-              variant="outline"
-            >
-              <ReceiptText aria-hidden="true" data-icon="inline-start" />
-              {t('tripReservations')}
-            </Button>
-          </>
-        }
+      <TripSectionHeader
+        currentSection="itinerary"
         description={t('description')}
         title={t('title', { trip: itinerary.trip.name })}
+        tripId={tripId}
       />
 
       {error ? (
@@ -773,7 +741,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
 
         {selectedDay ? (
           <div className="min-w-0">
-            <div className="flex flex-col gap-4 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div className="flex flex-col gap-5 border-b border-border px-4 py-4 sm:px-6 xl:flex-row xl:items-start xl:justify-between">
               <div>
                 <p className="text-xs font-medium text-muted-foreground">
                   {t('dayNumber', { number: selectedIndex + 1 })}
@@ -803,14 +771,14 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                   </p>
                 ) : null}
               </div>
-              <div className="flex flex-col gap-2 sm:items-end">
+              <div className="flex w-full flex-col gap-2 xl:w-auto xl:items-end">
                 <Select
                   onValueChange={(value) =>
                     void handleDailyBase(selectedDay, value === 'none' ? null : value)
                   }
                   value={selectedDay.dailyBaseTripPlaceId ?? 'none'}
                 >
-                  <SelectTrigger aria-label={t('dailyBase')} className="w-full sm:w-56" size="sm">
+                  <SelectTrigger aria-label={t('dailyBase')} className="w-full xl:w-64" size="sm">
                     <SelectValue>
                       {selectedDay.dailyBaseTripPlaceId
                         ? placeName(
@@ -830,9 +798,8 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                     ))}
                   </SelectContent>
                 </Select>
-                <div className="flex w-full gap-2 sm:w-auto">
+                <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:w-auto">
                   <Button
-                    className="flex-1 sm:flex-none"
                     onClick={() => {
                       setDayNoteEditor(selectedDay);
                       setDayNoteValue(selectedDay.notes ?? '');
@@ -842,7 +809,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                     <NotebookPen aria-hidden="true" data-icon="inline-start" />
                     {selectedDay.notes ? t('editDayNote') : t('addDayNote')}
                   </Button>
-                  <Button className="flex-1 sm:flex-none" onClick={() => openCreate(selectedDay)}>
+                  <Button onClick={() => openCreate(selectedDay)}>
                     <Plus aria-hidden="true" data-icon="inline-start" />
                     {t('addItem')}
                   </Button>

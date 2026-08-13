@@ -1,23 +1,22 @@
 'use client';
 
 import {
-  ArrowLeft,
   Bookmark,
   CircleAlert,
+  Ellipsis,
   Eye,
   MapPinned,
   NotebookPen,
   Plus,
   Trash2,
 } from 'lucide-react';
-import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { PageHeader } from '@/components/page-header';
 import { PlaceDetailSheet } from '@/components/place-detail-sheet';
 import { PageState } from '@/components/page-state';
 import { SearchField } from '@/components/search-field';
+import { TripSectionHeader } from '@/components/trip-section-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -30,6 +29,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -416,21 +421,17 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
 
   return (
     <section className="mx-auto w-full max-w-5xl space-y-8">
-      <div>
-        <Button nativeButton={false} render={<Link href="/trips" />} size="sm" variant="ghost">
-          <ArrowLeft aria-hidden="true" data-icon="inline-start" />
-          {t('backToTrips')}
-        </Button>
-      </div>
-      <PageHeader
+      <TripSectionHeader
         actions={
           <Button onClick={() => void openAdd()}>
             <Plus aria-hidden="true" data-icon="inline-start" />
             {t('addPlace')}
           </Button>
         }
+        currentSection="places"
         description={t('description')}
         title={tripName ? t('title', { trip: tripName }) : t('titleLoading')}
+        tripId={tripId}
       />
       {error ? (
         <Alert role="alert" variant="destructive">
@@ -467,88 +468,121 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
         <ItemGroup aria-label={t('listLabel')} variant="list">
           {sortedPlaces.map((tripPlace) => (
             <Item
-              className="min-h-20 items-start gap-3 px-3 py-3"
+              className="min-h-20 items-start px-3 py-4 sm:px-4"
               key={tripPlace.id}
+              role="listitem"
               variant="default"
             >
-              <ItemMedia
-                className="mt-0.5 size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
-                variant="icon"
-              >
-                {tripPlace.place.kind === 'custom' ? (
-                  <MapPinned aria-hidden="true" className="size-4" />
-                ) : (
-                  <Bookmark aria-hidden="true" className="size-4" />
-                )}
-              </ItemMedia>
-              <ItemContent className="min-w-0 gap-1.5">
-                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                  <ItemTitle className="min-w-0 flex-1 truncate">{placeName(tripPlace)}</ItemTitle>
-                  {tripPlace.isSaved ? (
-                    <span className="text-xs font-medium text-brand">{t('alsoSaved')}</span>
+              <div className="grid w-full grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 lg:grid-cols-[auto_minmax(0,1fr)_8rem_12rem_7rem] lg:gap-x-5">
+                <ItemMedia
+                  className="mt-0.5 size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
+                  variant="icon"
+                >
+                  {tripPlace.place.kind === 'custom' ? (
+                    <MapPinned aria-hidden="true" className="size-4" />
+                  ) : (
+                    <Bookmark aria-hidden="true" className="size-4" />
+                  )}
+                </ItemMedia>
+                <ItemContent className="min-w-0 gap-1.5">
+                  <ItemTitle className="min-w-0 max-w-full truncate">
+                    {placeName(tripPlace)}
+                  </ItemTitle>
+                  <ItemDescription>{placeDescription(tripPlace)}</ItemDescription>
+                  {tripPlace.note ? (
+                    <p className="line-clamp-2 text-sm text-text-subtle">{tripPlace.note}</p>
                   ) : null}
+                  {tripPlace.referenceCount ? (
+                    <p className="text-xs text-muted-foreground">
+                      {t('scheduledReference', { count: tripPlace.referenceCount })}
+                    </p>
+                  ) : null}
+                </ItemContent>
+
+                <div className="col-start-2 mt-4 flex flex-wrap items-end gap-3 lg:contents">
+                  <div className="space-y-1 lg:self-center">
+                    <p className="text-xs font-medium text-muted-foreground">{t('status')}</p>
+                    <span
+                      className={
+                        tripPlace.isSaved
+                          ? 'inline-flex rounded-full bg-brand/10 px-2 py-1 text-xs font-medium text-brand'
+                          : 'inline-flex py-1 text-xs text-muted-foreground'
+                      }
+                    >
+                      {tripPlace.isSaved ? t('alsoSaved') : t('notSaved')}
+                    </span>
+                  </div>
+
+                  <div className="min-w-40 flex-1 space-y-1 lg:min-w-0 lg:self-center">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {t('priorityLabel')}
+                    </p>
+                    <Select
+                      onValueChange={(value) =>
+                        void handlePriority(
+                          tripPlace,
+                          value === 'none' ? null : (value as TripPlacePriority),
+                        )
+                      }
+                      value={tripPlace.priority ?? 'none'}
+                    >
+                      <SelectTrigger
+                        aria-label={t('priorityFor', { name: placeName(tripPlace) })}
+                        className="w-full"
+                        size="sm"
+                      >
+                        <SelectValue>{t(`priority.${tripPlace.priority ?? 'none'}`)}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">{t('priority.none')}</SelectItem>
+                        <SelectItem value="must_go">{t('priority.must_go')}</SelectItem>
+                        <SelectItem value="interested">{t('priority.interested')}</SelectItem>
+                        <SelectItem value="maybe">{t('priority.maybe')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <ItemActions className="lg:self-center lg:justify-end">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button
+                            aria-label={t('actionsFor', { name: placeName(tripPlace) })}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                          />
+                        }
+                      >
+                        <Ellipsis aria-hidden="true" data-icon="inline-start" />
+                        {t('actions')}
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-44">
+                        <DropdownMenuItem onClick={() => setDetailPlace(tripPlace)}>
+                          <Eye aria-hidden="true" />
+                          {t('viewDetailsAction')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setNotePlace(tripPlace);
+                            setNoteValue(tripPlace.note ?? '');
+                          }}
+                        >
+                          <NotebookPen aria-hidden="true" />
+                          {t('editNoteAction')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => setRemovingPlace(tripPlace)}
+                          variant="destructive"
+                        >
+                          <Trash2 aria-hidden="true" />
+                          {t('removeAction')}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </ItemActions>
                 </div>
-                <ItemDescription>{placeDescription(tripPlace)}</ItemDescription>
-                {tripPlace.note ? (
-                  <p className="line-clamp-2 text-sm text-text-subtle">{tripPlace.note}</p>
-                ) : null}
-                {tripPlace.referenceCount ? (
-                  <p className="text-xs text-muted-foreground">
-                    {t('scheduledReference', { count: tripPlace.referenceCount })}
-                  </p>
-                ) : null}
-              </ItemContent>
-              <ItemActions className="ml-auto flex-wrap justify-end gap-1">
-                <Button
-                  aria-label={t('viewDetails', { name: placeName(tripPlace) })}
-                  onClick={() => setDetailPlace(tripPlace)}
-                  size="icon-sm"
-                  variant="ghost"
-                >
-                  <Eye aria-hidden="true" />
-                </Button>
-                <Select
-                  onValueChange={(value) =>
-                    void handlePriority(
-                      tripPlace,
-                      value === 'none' ? null : (value as TripPlacePriority),
-                    )
-                  }
-                  value={tripPlace.priority ?? 'none'}
-                >
-                  <SelectTrigger
-                    aria-label={t('priorityFor', { name: placeName(tripPlace) })}
-                    size="sm"
-                  >
-                    <SelectValue>{t(`priority.${tripPlace.priority ?? 'none'}`)}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">{t('priority.none')}</SelectItem>
-                    <SelectItem value="must_go">{t('priority.must_go')}</SelectItem>
-                    <SelectItem value="interested">{t('priority.interested')}</SelectItem>
-                    <SelectItem value="maybe">{t('priority.maybe')}</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  aria-label={t('editNote', { name: placeName(tripPlace) })}
-                  onClick={() => {
-                    setNotePlace(tripPlace);
-                    setNoteValue(tripPlace.note ?? '');
-                  }}
-                  size="icon-sm"
-                  variant="ghost"
-                >
-                  <NotebookPen aria-hidden="true" />
-                </Button>
-                <Button
-                  aria-label={t('remove', { name: placeName(tripPlace) })}
-                  onClick={() => setRemovingPlace(tripPlace)}
-                  size="icon-sm"
-                  variant="ghost"
-                >
-                  <Trash2 aria-hidden="true" />
-                </Button>
-              </ItemActions>
+              </div>
             </Item>
           ))}
         </ItemGroup>

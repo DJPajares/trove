@@ -16,6 +16,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
 import { PageState } from '@/components/page-state';
+import { OfflineReadyStatus } from '@/components/offline-ready-status';
 import { useTripModePreview } from '@/components/trip-mode-shell';
 import { useOfflineDataRefreshKey } from '@/components/trip-sync-status';
 import { Button } from '@/components/ui/button';
@@ -302,6 +303,8 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
         </section>
 
         <div className="space-y-8">
+          <OfflineReadyStatus tripId={tripId} />
+
           {pinnedInfo.length ? (
             <section aria-labelledby="trip-mode-pinned-info-heading">
               <div className="flex items-center justify-between gap-3">

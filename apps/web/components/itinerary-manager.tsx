@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 
 import { PageState } from '@/components/page-state';
@@ -180,6 +181,8 @@ function useDesktopMapLayout() {
 export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('itinerary');
   const locale = useLocale();
+  const searchParams = useSearchParams();
+  const requestedDayId = searchParams.get('day');
   const { preferredCurrency, preferences } = usePreferences();
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
@@ -225,15 +228,17 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
       const next = await fetchItinerary(tripId);
       setItinerary(next);
       setSelectedDayId((current) =>
-        current && next.days.some((day) => day.id === current)
-          ? current
-          : (next.days[0]?.id ?? null),
+        next.days.some((day) => day.id === requestedDayId)
+          ? requestedDayId
+          : current && next.days.some((day) => day.id === current)
+            ? current
+            : (next.days[0]?.id ?? null),
       );
       setStatus('idle');
     } catch {
       setStatus('error');
     }
-  }, [tripId]);
+  }, [requestedDayId, tripId]);
 
   useEffect(() => {
     void refresh();

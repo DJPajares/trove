@@ -1,4 +1,3 @@
-◇ injected env (8) from ../../.env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
 -- CreateEnum
 CREATE TYPE "trove"."memory_time_zone_source" AS ENUM ('itinerary_item', 'trip_place', 'itinerary_day', 'trip_reference');
 

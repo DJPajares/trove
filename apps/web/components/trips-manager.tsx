@@ -24,7 +24,9 @@ import { useEffect, useState } from 'react';
 
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
+import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripForm } from '@/components/trip-form';
+import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -69,6 +71,7 @@ const overviewTools = [
 
 export function TripsManager() {
   const t = useTranslations('trips');
+  const planScoreTranslations = useTranslations('planScore');
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
@@ -112,6 +115,10 @@ export function TripsManager() {
   }, []);
 
   const overviewTripId = overviewTrip?.id;
+  const planScore = useTripPlanScore(
+    overviewTrip && overviewTrip.lifecycle !== 'completed' ? overviewTrip.id : null,
+    overviewTrip?.updatedAt ?? '',
+  );
 
   useEffect(() => {
     if (!overviewTripId) {
@@ -360,6 +367,21 @@ export function TripsManager() {
                     {t('editTrip')}
                   </Button>
                 </div>
+                {overviewTrip.lifecycle === 'completed' ? null : (
+                  <PlanScorePanel
+                    explanations={
+                      planScore.data?.explanations ?? {
+                        uncertainty: [],
+                        whatWorks: [],
+                        worthImproving: [],
+                      }
+                    }
+                    onRetry={planScore.retry}
+                    score={planScore.data?.score ?? null}
+                    status={planScore.status}
+                    title={planScoreTranslations('title')}
+                  />
+                )}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <p className="text-sm font-medium">{t('destinations')}</p>

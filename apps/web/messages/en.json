@@ -1641,6 +1641,26 @@
     }
   },
   "planScore": {
+    "title": "Plan Score",
+    "dayTitle": "Plan Score for this day",
+    "outOf": "out of 100",
+    "notEnoughInformation": "Not enough information yet.",
+    "loading": "Checking this plan…",
+    "unavailable": "We could not check this plan just now.",
+    "retry": "Try again",
+    "confidence": "Confidence",
+    "completeness": "Completeness",
+    "whatWorks": "What works",
+    "worthImproving": "Worth improving",
+    "uncertainty": "Still uncertain",
+    "actions": {
+      "ADD_BUFFER": "Add buffer",
+      "ADJUST_TIME": "Adjust the time",
+      "RECONSIDER_DETOUR": "Review this day",
+      "REORDER_MANUALLY": "Reorder the day",
+      "REVIEW_ALTERNATIVE": "Review the alternative",
+      "SCHEDULE_MUST_GO": "Schedule it"
+    },
     "feasibility": {
       "noConflicts": "The timings you have set fit together.",
       "overlappingCommitments": "Two booked commitments overlap here.",

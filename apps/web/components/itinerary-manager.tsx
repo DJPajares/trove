@@ -33,6 +33,7 @@ import {
 import { CurrencyCombobox } from '@/components/currency-combobox';
 import { MoneyInput } from '@/components/money-input';
 import { PlaceDetailSheet } from '@/components/place-detail-sheet';
+import { PlanScorePanel } from '@/components/plan-score-panel';
 import { usePreferences } from '@/components/preferences-provider';
 import { SearchField } from '@/components/search-field';
 import { TimeInput } from '@/components/time-input';
@@ -106,6 +107,7 @@ import {
   updateItineraryItemRouteMode,
 } from '@/lib/itinerary/api';
 import { buildItineraryMapPoints, type ItineraryMapPoint } from '@/lib/maps/itinerary-map';
+import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import {
   cacheProviderPlaceDetails,
   getCachedProviderPlaceDetails,
@@ -180,6 +182,7 @@ function useDesktopMapLayout() {
 
 export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('itinerary');
+  const planScoreTranslations = useTranslations('planScore');
   const locale = useLocale();
   const searchParams = useSearchParams();
   const requestedDayId = searchParams.get('day');
@@ -381,6 +384,30 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     selectedDay,
     tripId,
   ]);
+  const planScoreRevision = useMemo(
+    () =>
+      (itinerary?.days ?? [])
+        .flatMap((day) => [
+          day.id,
+          day.dailyBaseTripPlaceId ?? '',
+          day.routeStartTravelMode,
+          ...day.items.flatMap((item) => [
+            item.id,
+            String(item.position),
+            item.tripPlace?.id ?? '',
+            item.travelModeToNext ?? '',
+            item.updatedAt,
+          ]),
+        ])
+        .join(':'),
+    [itinerary],
+  );
+  const planScore = useTripPlanScore(itinerary ? tripId : null, planScoreRevision);
+  const planScoreDay = planScore.data?.days.find((day) => day.dayId === selectedDayId) ?? null;
+  const focusItineraryItem = useCallback((reference: string) => {
+    setSelectedMapItemId(reference);
+    document.getElementById(`itinerary-item-${reference}`)?.focus();
+  }, []);
   const selectedIndex = itinerary?.days.findIndex((day) => day.id === selectedDayId) ?? -1;
   const dateFormatter = useMemo(
     () =>
@@ -1192,6 +1219,25 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                     title={t('emptyTitle')}
                   />
                 )}
+                {planScoreDay || planScore.status === 'error' ? (
+                  <PlanScorePanel
+                    className="mt-4"
+                    completeness={planScoreDay?.completeness ?? null}
+                    confidence={planScoreDay?.confidence ?? null}
+                    explanations={
+                      planScoreDay?.explanations ?? {
+                        uncertainty: [],
+                        whatWorks: [],
+                        worthImproving: [],
+                      }
+                    }
+                    onRetry={planScore.retry}
+                    onSelectReference={focusItineraryItem}
+                    score={planScoreDay?.score ?? null}
+                    status={planScore.status}
+                    title={planScoreTranslations('dayTitle')}
+                  />
+                ) : null}
               </div>
 
               <aside

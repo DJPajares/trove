@@ -7,6 +7,7 @@ import { registerCurrencyRoutes } from './routes/currency.js';
 import { registerExpenseRoutes } from './routes/expenses.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerItineraryRoutes } from './routes/itineraries.js';
+import { registerMemoryRoutes } from './routes/memories.js';
 import { registerNotificationRoutes } from './routes/notifications.js';
 import { registerPlacesRoutes } from './routes/places.js';
 import { registerPlanScoreRoutes } from './routes/plan-score.js';
@@ -78,6 +79,7 @@ export function buildApp() {
   registerTripPlacesRoutes(app);
   registerTripRoutes(app);
   registerPlanScoreRoutes(app);
+  registerMemoryRoutes(app);
   registerSearchRoutes(app);
   registerHealthRoutes(app);
 

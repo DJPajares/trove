@@ -369,6 +369,11 @@ export async function updateTrip(
           });
         }
       }
+      // Memories outlive the day they were captured against; detach before removal.
+      await transaction.memory.updateMany({
+        where: { itineraryDayId: { in: removedDayIds }, tripId },
+        data: { itineraryDayId: null },
+      });
       await transaction.itineraryDay.deleteMany({ where: { id: { in: removedDayIds }, tripId } });
     }
 

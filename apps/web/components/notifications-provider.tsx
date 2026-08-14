@@ -82,7 +82,21 @@ export function NotificationsProvider({ children }: Readonly<{ children: ReactNo
     window.addEventListener('trove-notifications-refresh', handleRefresh);
 
     const supabase = createBrowserSupabaseClient();
-    const subscription = supabase?.auth.onAuthStateChange(() => void refresh()).data.subscription;
+    // Restoring a session on load emits INITIAL_SESSION and SIGNED_IN, and a
+    // token rotation emits TOKEN_REFRESHED — none of which change whose
+    // notifications these are, so refetching on them just repeats the load
+    // above. Only a different signed-in user is worth another request.
+    let knownUserId: string | null | undefined;
+    const subscription = supabase?.auth.onAuthStateChange((_event, session) => {
+      const userId = session?.user.id ?? null;
+      if (knownUserId === undefined) {
+        knownUserId = userId;
+        return;
+      }
+      if (userId === knownUserId) return;
+      knownUserId = userId;
+      void refresh();
+    }).data.subscription;
 
     return () => {
       window.clearInterval(interval);

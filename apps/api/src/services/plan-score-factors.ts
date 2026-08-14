@@ -678,7 +678,11 @@ export type PlanScoreReplacementCandidate = {
 
 export type PlanScoreAlternative = {
   action: PlanScoreAlternativeAction;
+  /** Public rating of the suggested Place, so the benefit can be explained in user terms. */
+  candidateRating: number;
   candidateTripPlaceId: string;
+  /** Public rating of the Place currently on the targeted item. */
+  currentRating: number;
   /** Place-quality points gained; at least one full rubric band. */
   improvement: number;
   targetItemId: string;
@@ -707,7 +711,9 @@ export function buildReplacementAlternatives(
     return [
       {
         action: 'REPLACE' as const,
+        candidateRating: entry.candidate.rating.rating,
         candidateTripPlaceId: entry.candidate.tripPlaceId,
+        currentRating: entry.current.rating.rating,
         improvement,
         targetItemId: entry.targetItemId,
       },

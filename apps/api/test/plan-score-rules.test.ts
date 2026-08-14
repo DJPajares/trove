@@ -5,6 +5,8 @@ import {
   planScoreFingerprint,
   scoreDay,
   scoreTrip,
+  toPlanScoreDayPayload,
+  toPlanScoreTripPayload,
   type PlanScoreEvidenceSource,
   type PlanScoreFactorResult,
 } from '../src/services/plan-score-rules.js';
@@ -35,6 +37,13 @@ test('scores a fully evidenced sightseeing day with the authoritative base weigh
     completeness: 100,
     confidence: 99,
     dayId: 'day-complete',
+    evidence: {
+      FEASIBILITY: [{ ref: 'evidence-0', source: 'USER_OWNED' }],
+      PACE_BUFFER: [{ ref: 'evidence-0', source: 'USER_OWNED' }],
+      PLACE_QUALITY: [{ ref: 'evidence-0', source: 'CACHED_PROVIDER' }],
+      ROUTE_EFFICIENCY: [{ ref: 'evidence-0', source: 'FRESH_PROVIDER' }],
+      TRAVEL_EFFORT: [{ ref: 'evidence-0', source: 'FRESH_PROVIDER' }],
+    },
     factors: {
       FEASIBILITY: { confidence: 100, score: 100, state: 'EVALUATED' },
       PACE_BUFFER: { confidence: 100, score: 80, state: 'EVALUATED' },
@@ -217,6 +226,119 @@ test('changes the fingerprint when evidence reliability changes', () => {
       days: [{ dayId: 'day-a', factors: { FEASIBILITY: evaluated(100, 'STALE') } }],
       mustGoPriorityFit: NOT_APPLICABLE,
     }),
+  );
+});
+
+test('preserves the evidence snapshot and keeps it out of the user-facing payload', () => {
+  const result = scoreDay(completeSightseeingDay);
+  const payload = toPlanScoreDayPayload(result);
+
+  assert.deepEqual(result.evidence.PLACE_QUALITY, [
+    { ref: 'evidence-0', source: 'CACHED_PROVIDER' },
+  ]);
+  assert.deepEqual(Object.keys(payload).toSorted(), [
+    'completeness',
+    'confidence',
+    'dayId',
+    'factors',
+    'score',
+    'withheldReasons',
+  ]);
+  assert.deepEqual(Object.keys(payload.factors.FEASIBILITY).toSorted(), [
+    'confidence',
+    'score',
+    'state',
+  ]);
+});
+
+test('keeps trip evidence snapshots out of the trip payload', () => {
+  const result = scoreTrip({ days: tripDays, mustGoPriorityFit: evaluated(50, 'USER_OWNED') });
+  const payload = toPlanScoreTripPayload(result);
+
+  assert.deepEqual(result.mustGoEvidence, [{ ref: 'evidence-0', source: 'USER_OWNED' }]);
+  assert.deepEqual(Object.keys(payload).toSorted(), [
+    'days',
+    'mustGoPriorityFit',
+    'score',
+    'withheldReasons',
+  ]);
+  assert.equal(
+    payload.days.every((day) => !Object.hasOwn(day, 'evidence')),
+    true,
+  );
+  assert.equal(payload.score, result.score);
+});
+
+test('derives day confidence from the frozen evidence reliability tiers', () => {
+  const dayFrom = (source: PlanScoreEvidenceSource) =>
+    scoreDay({
+      dayId: 'day',
+      factors: { FEASIBILITY: evaluated(100, source), TRAVEL_EFFORT: evaluated(100, source) },
+    });
+  const stale = dayFrom('STALE');
+
+  assert.equal(dayFrom('USER_OWNED').confidence, 100);
+  assert.equal(dayFrom('FRESH_PROVIDER').confidence, 100);
+  assert.equal(dayFrom('CACHED_PROVIDER').confidence, 75);
+  assert.equal(dayFrom('ESTIMATED').confidence, 50);
+  assert.deepEqual(
+    { confidence: stale.confidence, score: stale.score },
+    { confidence: 25, score: 100 },
+  );
+});
+
+const fullyEvidencedDay = {
+  dayId: 'planned',
+  factors: {
+    FEASIBILITY: evaluated(100, 'USER_OWNED'),
+    PACE_BUFFER: evaluated(100, 'USER_OWNED'),
+    PLACE_QUALITY: evaluated(100, 'USER_OWNED'),
+    ROUTE_EFFICIENCY: evaluated(100, 'USER_OWNED'),
+    TRAVEL_EFFORT: evaluated(100, 'USER_OWNED'),
+  },
+};
+
+test('moves completeness and confidence for a partially evidenced day without collapsing its score', () => {
+  const complete = scoreDay(fullyEvidencedDay);
+  const partial = scoreDay({
+    dayId: 'partial',
+    factors: {
+      FEASIBILITY: evaluated(100, 'USER_OWNED'),
+      TRAVEL_EFFORT: evaluated(100, 'ESTIMATED'),
+    },
+  });
+
+  assert.equal(complete.score, partial.score);
+  assert.deepEqual(
+    { completeness: complete.completeness, confidence: complete.confidence },
+    { completeness: 100, confidence: 100 },
+  );
+  assert.deepEqual(
+    { completeness: partial.completeness, confidence: partial.confidence },
+    { completeness: 67, confidence: 79 },
+  );
+});
+
+test('stops a low-information day from pulling the trip score toward its own', () => {
+  const trip = scoreTrip({
+    days: [
+      fullyEvidencedDay,
+      {
+        dayId: 'travel',
+        factors: {
+          FEASIBILITY: evaluated(60, 'USER_OWNED'),
+          TRAVEL_EFFORT: evaluated(60, 'USER_OWNED'),
+        },
+      },
+    ],
+    mustGoPriorityFit: NOT_APPLICABLE,
+  });
+
+  // An unweighted mean of the two day scores would be 80.
+  assert.equal(trip.score, 84);
+  assert.deepEqual(
+    trip.days.map((day) => day.completeness),
+    [100, 67],
   );
 });
 

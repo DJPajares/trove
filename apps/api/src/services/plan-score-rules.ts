@@ -99,6 +99,8 @@ export type PlanScoreDayResult = {
   completeness: number;
   confidence: number | null;
   dayId: string;
+  /** Evidence each factor actually used, retained for explanations and debugging. */
+  evidence: Record<PlanScoreDayFactorId, PlanScoreEvidence[]>;
   factors: Record<PlanScoreDayFactorId, PlanScoreFactorOutcome>;
   /** Withheld as `null` rather than reported as a poor score. */
   score: number | null;
@@ -114,9 +116,20 @@ export type PlanScoreTripWithheldReason = 'NO_SCORABLE_DAY';
 
 export type PlanScoreTripResult = {
   days: PlanScoreDayResult[];
+  mustGoEvidence: PlanScoreEvidence[];
   mustGoPriorityFit: PlanScoreFactorOutcome;
   score: number | null;
   withheldReasons: PlanScoreTripWithheldReason[];
+};
+
+/**
+ * User-facing shape. Score, confidence, completeness, and factor states only:
+ * no base weights, no formula, and no evidence snapshots.
+ */
+export type PlanScoreDayPayload = Omit<PlanScoreDayResult, 'evidence'>;
+
+export type PlanScoreTripPayload = Omit<PlanScoreTripResult, 'days' | 'mustGoEvidence'> & {
+  days: PlanScoreDayPayload[];
 };
 
 export type PlanScoreInvalidationTrigger =
@@ -182,16 +195,24 @@ function roundOutcome(outcome: PlanScoreFactorOutcome): PlanScoreFactorOutcome {
 type EvaluatedDay = {
   completeness: number;
   confidence: number | null;
+  evidence: Record<PlanScoreDayFactorId, PlanScoreEvidence[]>;
   factors: Record<PlanScoreDayFactorId, PlanScoreFactorOutcome>;
   score: number | null;
   withheldReasons: PlanScoreDayWithheldReason[];
 };
+
+function snapshotEvidence(result: PlanScoreFactorResult) {
+  return result.state === 'EVALUATED' ? result.evidence.map((entry) => ({ ...entry })) : [];
+}
 
 /** Unrounded evaluation so trip aggregation can use exact intermediate values. */
 function evaluateDay(day: PlanScoreDayInput): EvaluatedDay {
   const factors = Object.fromEntries(
     DAY_FACTOR_IDS.map((id) => [id, toOutcome(day.factors[id] ?? MISSING_FACTOR)]),
   ) as Record<PlanScoreDayFactorId, PlanScoreFactorOutcome>;
+  const evidence = Object.fromEntries(
+    DAY_FACTOR_IDS.map((id) => [id, snapshotEvidence(day.factors[id] ?? MISSING_FACTOR)]),
+  ) as Record<PlanScoreDayFactorId, PlanScoreEvidence[]>;
 
   let applicableWeight = 0;
   let evaluatedWeight = 0;
@@ -224,6 +245,7 @@ function evaluateDay(day: PlanScoreDayInput): EvaluatedDay {
   return {
     completeness,
     confidence: evaluatedWeight === 0 ? null : weightedConfidence / evaluatedWeight,
+    evidence,
     factors,
     score: withheldReasons.length > 0 ? null : weightedScore / evaluatedWeight,
     withheldReasons,
@@ -235,6 +257,7 @@ function toDayResult(dayId: string, evaluated: EvaluatedDay): PlanScoreDayResult
     completeness: roundHalfUp(evaluated.completeness),
     confidence: evaluated.confidence === null ? null : roundHalfUp(evaluated.confidence),
     dayId,
+    evidence: evaluated.evidence,
     factors: Object.fromEntries(
       DAY_FACTOR_IDS.map((id) => [id, roundOutcome(evaluated.factors[id])]),
     ) as Record<PlanScoreDayFactorId, PlanScoreFactorOutcome>,
@@ -280,10 +303,22 @@ export function scoreTrip(input: PlanScoreTripInput): PlanScoreTripResult {
 
   return {
     days: evaluatedDays.map(({ day, evaluated }) => toDayResult(day.dayId, evaluated)),
+    mustGoEvidence: snapshotEvidence(input.mustGoPriorityFit),
     mustGoPriorityFit: roundOutcome(mustGoPriorityFit),
     score: score === null ? null : roundHalfUp(score),
     withheldReasons,
   };
+}
+
+/** Drops the evidence snapshot so normal product responses carry no scoring internals. */
+export function toPlanScoreDayPayload(result: PlanScoreDayResult): PlanScoreDayPayload {
+  const { evidence: _evidence, ...payload } = result;
+  return payload;
+}
+
+export function toPlanScoreTripPayload(result: PlanScoreTripResult): PlanScoreTripPayload {
+  const { days, mustGoEvidence: _mustGoEvidence, ...payload } = result;
+  return { ...payload, days: days.map(toPlanScoreDayPayload) };
 }
 
 function canonicalFactor(result: PlanScoreFactorResult | undefined) {

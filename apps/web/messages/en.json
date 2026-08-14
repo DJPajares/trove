@@ -1639,5 +1639,49 @@
       "title": "Profile",
       "description": "Your travel settings will appear here."
     }
+  },
+  "planScore": {
+    "feasibility": {
+      "noConflicts": "The timings you have set fit together.",
+      "overlappingCommitments": "Two booked commitments overlap here.",
+      "outsideOpeningHours": "{severity, select, HARD {This visit falls outside the opening hours we know about.} other {Part of this visit falls outside the opening hours we know about.}}",
+      "arrivesAfterFixedStart": "{severity, select, HARD {Travel time lands you well after this fixed start.} other {Travel time lands you a little after this fixed start.}}",
+      "tightTransition": "There is very little room between these two stops.",
+      "unknown": "We do not have enough timing detail to check this day yet.",
+      "stale": "{count, plural, one {One timing detail we used may be out of date.} other {# timing details we used may be out of date.}}"
+    },
+    "travelEffort": {
+      "light": "Local travel stays light, around {minutes} minutes.",
+      "heavy": "This day includes around {minutes} minutes of local travel.",
+      "unknown": "We do not know every route for this day yet.",
+      "stale": "{count, plural, one {One route estimate we used may be out of date.} other {# route estimates we used may be out of date.}}"
+    },
+    "pace": {
+      "comfortable": "The day has room to breathe.",
+      "tight": "The day is packed, with about {bufferMinutes} minutes spare between stops.",
+      "unknown": "We do not have enough duration detail to judge the pace yet.",
+      "stale": "{count, plural, one {One duration estimate we used may be out of date.} other {# duration estimates we used may be out of date.}}"
+    },
+    "routeEfficiency": {
+      "direct": "The order of stops keeps travel direct.",
+      "backtracking": "A different order could bring travel from about {plannedMinutes} to {bestMinutes} minutes.",
+      "unknown": "We do not know enough routes to compare the order yet.",
+      "stale": "{count, plural, one {One route estimate we used may be out of date.} other {# route estimates we used may be out of date.}}"
+    },
+    "mustGo": {
+      "allScheduled": "Every Must Go place is on the plan.",
+      "unscheduled": "{count, plural, one {One Must Go place is not scheduled yet.} other {# Must Go places are not scheduled yet.}}",
+      "unknown": "We cannot tell which Must Go places are scheduled yet.",
+      "stale": "{count, plural, one {One Must Go detail we used may be out of date.} other {# Must Go details we used may be out of date.}}"
+    },
+    "placeQuality": {
+      "strong": "The places on this day are well reviewed.",
+      "unknown": "We do not have current ratings for these places.",
+      "stale": "{count, plural, one {One place rating we used may be out of date.} other {# place ratings we used may be out of date.}}"
+    },
+    "alternative": {
+      "replace": "A nearby place is rated {candidateRating} compared with {currentRating} here.",
+      "add": "A nearby place rated {candidateRating} could fit this day."
+    }
   }
 }

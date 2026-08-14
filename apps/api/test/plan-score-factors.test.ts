@@ -615,8 +615,22 @@ test('suggests a replacement only for a material, provider-backed improvement', 
   const snapshot = structuredClone(candidates);
 
   assert.deepEqual(buildReplacementAlternatives(candidates), [
-    { action: 'REPLACE', candidateTripPlaceId: 'great', improvement: 45, targetItemId: 'item-1' },
-    { action: 'REPLACE', candidateTripPlaceId: 'band-up', improvement: 15, targetItemId: 'item-2' },
+    {
+      action: 'REPLACE',
+      candidateRating: 4.7,
+      candidateTripPlaceId: 'great',
+      currentRating: 3.2,
+      improvement: 45,
+      targetItemId: 'item-1',
+    },
+    {
+      action: 'REPLACE',
+      candidateRating: 4.6,
+      candidateTripPlaceId: 'band-up',
+      currentRating: 4.2,
+      improvement: 15,
+      targetItemId: 'item-2',
+    },
   ]);
   assert.deepEqual(candidates, snapshot);
 });

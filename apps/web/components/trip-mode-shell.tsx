@@ -11,10 +11,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { DatePicker } from '@/components/date-picker';
 import { PageState } from '@/components/page-state';
 import { TimeInput } from '@/components/time-input';
+import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripSyncStatus } from '@/components/trip-sync-status';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { fetchItinerary, type TripModeContextRequestOptions } from '@/lib/itinerary/api';
+import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import { fetchTrip, type Trip } from '@/lib/trips/api';
 import { cn } from '@/lib/utils';
 
@@ -83,6 +85,7 @@ function addPreviewParams(href: string, date: string, time: string) {
 
 export function TripModeShell({ children, tripId }: Readonly<TripModeShellProps>) {
   const t = useTranslations('tripMode');
+  const planScoreTranslations = useTranslations('planScore');
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
@@ -137,6 +140,12 @@ export function TripModeShell({ children, tripId }: Readonly<TripModeShellProps>
         : href,
     [previewSelection],
   );
+  const planScore = useTripPlanScore(
+    previewSelection && state.trip ? state.trip.id : null,
+    state.trip?.updatedAt ?? '',
+  );
+  const previewDayScore =
+    planScore.data?.days.find((day) => day.date === previewSelection?.date) ?? null;
   const previewContext = useMemo<TripModePreviewContextValue>(
     () => ({
       contextOptions,
@@ -329,6 +338,24 @@ export function TripModeShell({ children, tripId }: Readonly<TripModeShellProps>
               </Field>
             </div>
           </section>
+        ) : null}
+
+        {previewSelection ? (
+          <PlanScorePanel
+            completeness={previewDayScore?.completeness ?? null}
+            confidence={previewDayScore?.confidence ?? null}
+            explanations={
+              previewDayScore?.explanations ?? {
+                uncertainty: [],
+                whatWorks: [],
+                worthImproving: [],
+              }
+            }
+            onRetry={planScore.retry}
+            score={previewDayScore?.score ?? null}
+            status={planScore.status}
+            title={planScoreTranslations('dayTitle')}
+          />
         ) : null}
 
         <TripSyncStatus tripId={trip.id} />

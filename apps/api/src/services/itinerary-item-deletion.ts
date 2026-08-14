@@ -7,6 +7,7 @@ type ItineraryItemReferenceModel = {
 
 export type ItineraryItemReferenceTransaction = {
   expense: ItineraryItemReferenceModel;
+  memory: ItineraryItemReferenceModel;
   reservation: ItineraryItemReferenceModel;
   task: ItineraryItemReferenceModel;
 };
@@ -25,5 +26,6 @@ export async function unlinkItineraryItemReferences(
     transaction.task.updateMany(input),
     transaction.reservation.updateMany(input),
     transaction.expense.updateMany(input),
+    transaction.memory.updateMany(input),
   ]);
 }

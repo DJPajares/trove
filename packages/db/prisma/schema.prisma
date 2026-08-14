@@ -95,6 +95,16 @@ enum ReservationType {
   @@schema("trove")
 }
 
+enum MemoryTimeZoneSource {
+  ITINERARY_ITEM @map("itinerary_item")
+  TRIP_PLACE     @map("trip_place")
+  ITINERARY_DAY  @map("itinerary_day")
+  TRIP_REFERENCE @map("trip_reference")
+
+  @@map("memory_time_zone_source")
+  @@schema("trove")
+}
+
 enum ReservationTimeZoneSource {
   TRIP_PLACE     @map("trip_place")
   ITINERARY_ITEM @map("itinerary_item")
@@ -359,6 +369,7 @@ model Trip {
   expenses                     Expense[]
   notifications                Notification[]
   notificationPreferences      TripNotificationPreference[]
+  memories                     Memory[]
 
   @@unique([id, ownerId])
   @@index([ownerId])
@@ -513,6 +524,7 @@ model TripPlace {
   timeZoneSourceForDays ItineraryDay[]  @relation("ItineraryDayTimeZoneSource")
   reservations          Reservation[]
   expenses              Expense[]
+  memories              Memory[]
 
   @@unique([tripId, placeId])
   @@unique([id, tripId])
@@ -541,6 +553,7 @@ model ItineraryDay {
   timeZoneSourceTripPlace TripPlace?      @relation("ItineraryDayTimeZoneSource", fields: [defaultTimeZoneSourceTripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
   timeZoneSourceItem      ItineraryItem?  @relation("ItineraryDayTimeZoneSourceItem", fields: [defaultTimeZoneSourceItemId, tripId], references: [id, tripId], onDelete: NoAction)
   items                   ItineraryItem[] @relation("ItineraryDayItems")
+  memories                Memory[]
   tasks                   Task[]          @relation("TaskItineraryDay")
   expenses                Expense[]       @relation("ExpenseItineraryDay")
   accommodationReservations ReservationAccommodationDay[]
@@ -584,6 +597,7 @@ model ItineraryItem {
   itineraryDay          ItineraryDay?  @relation("ItineraryDayItems", fields: [itineraryDayId, tripId], references: [id, tripId], onDelete: NoAction)
   tripPlace             TripPlace?     @relation(fields: [tripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
   timeZoneSourceForDays ItineraryDay[] @relation("ItineraryDayTimeZoneSourceItem")
+  memories              Memory[]
   tasks                 Task[]         @relation("TaskItineraryItem")
   reservations          Reservation[]
   expenses              Expense[]        @relation("ExpenseItineraryItem")
@@ -794,5 +808,56 @@ model Expense {
   @@index([itineraryItemId, tripId])
   @@index([tripPlaceId, tripId])
   @@map("expenses")
+  @@schema("trove")
+}
+
+model Memory {
+  id                 String               @id @default(uuid(7)) @db.Uuid
+  tripId             String               @map("trip_id") @db.Uuid
+  itineraryDayId     String?              @map("itinerary_day_id") @db.Uuid
+  itineraryItemId    String?              @map("itinerary_item_id") @db.Uuid
+  tripPlaceId        String?              @map("trip_place_id") @db.Uuid
+  note               String?              @db.Text
+  isHighlight        Boolean              @default(false) @map("is_highlight")
+  capturedInstant    DateTime             @map("captured_instant") @db.Timestamptz(3)
+  capturedLocalDate  DateTime             @map("captured_local_date") @db.Date
+  capturedLocalTime  DateTime             @map("captured_local_time") @db.Time(0)
+  timeZone           String               @map("time_zone")
+  timeZoneSource     MemoryTimeZoneSource @map("time_zone_source")
+  timeZoneResolvedAt DateTime             @default(now()) @map("time_zone_resolved_at") @db.Timestamptz(3)
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  trip          Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  itineraryDay  ItineraryDay?  @relation(fields: [itineraryDayId, tripId], references: [id, tripId], onDelete: NoAction)
+  itineraryItem ItineraryItem? @relation(fields: [itineraryItemId, tripId], references: [id, tripId], onDelete: NoAction)
+  tripPlace     TripPlace?     @relation(fields: [tripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
+  photos        MemoryPhoto[]
+
+  @@unique([id, tripId])
+  @@index([tripId, capturedInstant])
+  @@index([tripId, isHighlight])
+  @@index([itineraryDayId, tripId])
+  @@index([itineraryItemId, tripId])
+  @@index([tripPlaceId, tripId])
+  @@map("memories")
+  @@schema("trove")
+}
+
+model MemoryPhoto {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  memoryId    String   @map("memory_id") @db.Uuid
+  path        String
+  fileName    String   @map("file_name")
+  contentType String   @map("content_type")
+  sizeBytes   Int      @map("size_bytes")
+  position    Int
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  memory Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+
+  @@unique([memoryId, path])
+  @@index([memoryId, position])
+  @@map("memory_photos")
   @@schema("trove")
 }

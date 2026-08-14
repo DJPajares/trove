@@ -28,6 +28,7 @@ import { usePreferences } from '@/components/preferences-provider';
 import { useTripModePreview } from '@/components/trip-mode-shell';
 import { useOfflineDataRefreshKey, useOnlineStatus } from '@/components/trip-sync-status';
 import { TripModeAddItemDialog } from '@/components/trip-mode-add-item-dialog';
+import { TripModeMemoryDialog } from '@/components/trip-mode-memory-dialog';
 import {
   TripModeScheduleFields,
   type TripModeSchedule,
@@ -124,6 +125,7 @@ function TodaySkeleton({ label }: Readonly<{ label: string }>) {
 
 export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripMode.views.today');
+  const memoryTranslations = useTranslations('memories.capture');
   const locale = useLocale();
   const { preferences } = usePreferences();
   const online = useOnlineStatus();
@@ -136,6 +138,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
   const [scheduleItem, setScheduleItem] = useState<ItineraryItem | null>(null);
   const [schedule, setSchedule] = useState<TripModeSchedule>('none');
   const [exactTime, setExactTime] = useState('');
@@ -508,6 +511,10 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
             <Plus aria-hidden="true" data-icon="inline-start" />
             {t('expense')}
           </Button>
+          <Button onClick={() => setMemoryOpen(true)} variant="outline">
+            <Plus aria-hidden="true" data-icon="inline-start" />
+            {memoryTranslations('quickAction')}
+          </Button>
           <Button onClick={() => setAddOpen(true)}>
             <Plus aria-hidden="true" data-icon="inline-start" />
             {t('addItem')}
@@ -803,6 +810,20 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
           title={t('emptyTitle')}
         />
       )}
+
+      <TripModeMemoryDialog
+        dayDate={date}
+        dayId={day.id}
+        items={day.items}
+        onOpenChange={setMemoryOpen}
+        onSaved={() => {
+          setUndoAction(null);
+          setFeedback(memoryTranslations('saved'));
+        }}
+        open={memoryOpen}
+        timeZone={day.defaultTimeZone}
+        tripId={tripId}
+      />
 
       <TripModeAddItemDialog
         dayId={day.id}

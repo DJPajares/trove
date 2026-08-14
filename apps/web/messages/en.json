@@ -1703,5 +1703,28 @@
       "replace": "A nearby place is rated {candidateRating} compared with {currentRating} here.",
       "add": "A nearby place rated {candidateRating} could fit this day."
     }
+  },
+  "memories": {
+    "capture": {
+      "quickAction": "Memory",
+      "title": "Keep this moment",
+      "description": "A photo, a line, or both. Nothing here is required.",
+      "addPhotos": "Add photos",
+      "photoList": "Photos to save",
+      "removePhoto": "Remove {name}",
+      "photoRejected": "That file is not a supported photo, or it is too large.",
+      "note": "Note",
+      "notePlaceholder": "What do you want to remember?",
+      "context": "Where",
+      "contextDescription": "We use the place you were at. Change it or leave it out.",
+      "noContext": "No place",
+      "highlight": "Mark as a highlight",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving…",
+      "saved": "Memory saved.",
+      "saveError": "We could not save that memory. Try again.",
+      "capturedContext": "Saving to {date} · {timeZone}"
+    }
   }
 }

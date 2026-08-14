@@ -13,6 +13,7 @@ import {
   ListChecks,
   MapPin,
   Route,
+  Sparkles,
   TramFront,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -21,6 +22,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
+import { TripModeMemoryDialog } from '@/components/trip-mode-memory-dialog';
 import { useTripModePreview } from '@/components/trip-mode-shell';
 import { useOfflineDataRefreshKey, useOnlineStatus } from '@/components/trip-sync-status';
 import { TripWeatherContext } from '@/components/trip-weather-context';
@@ -94,6 +96,8 @@ function TripModeNowSkeleton({ label }: Readonly<{ label: string }>) {
 
 export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripMode.views.now');
+  const memoryTranslations = useTranslations('memories.capture');
+  const [memoryOpen, setMemoryOpen] = useState(false);
   const locale = useLocale();
   const { preferences } = usePreferences();
   const online = useOnlineStatus();
@@ -338,15 +342,37 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
           </h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">{date}</p>
         </div>
-        <Button
-          nativeButton={false}
-          render={<Link href={withPreviewHref(`/trips/${tripId}/mode/today`)} />}
-          variant="outline"
-        >
-          <CalendarDays aria-hidden="true" data-icon="inline-start" />
-          {t('openToday')}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {readyContext.day ? (
+            <Button onClick={() => setMemoryOpen(true)} variant="outline">
+              <Sparkles aria-hidden="true" data-icon="inline-start" />
+              {memoryTranslations('quickAction')}
+            </Button>
+          ) : null}
+          <Button
+            nativeButton={false}
+            render={<Link href={withPreviewHref(`/trips/${tripId}/mode/today`)} />}
+            variant="outline"
+          >
+            <CalendarDays aria-hidden="true" data-icon="inline-start" />
+            {t('openToday')}
+          </Button>
+        </div>
       </header>
+
+      {readyContext.day ? (
+        <TripModeMemoryDialog
+          dayDate={date}
+          dayId={readyContext.day.id}
+          defaultItemId={currentItem?.id ?? null}
+          items={readyContext.day.items}
+          onOpenChange={setMemoryOpen}
+          onSaved={() => setMemoryOpen(false)}
+          open={memoryOpen}
+          timeZone={readyContext.day.defaultTimeZone}
+          tripId={tripId}
+        />
+      ) : null}
 
       {currentItem && readyContext.currentOrRelevant ? (
         <section

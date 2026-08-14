@@ -33,7 +33,9 @@
   --brand: oklch(0.374 0.072 153);
   --brand-strong: oklch(0.298 0.061 153);
   --status-success: oklch(0.52 0.119 150);
-  --status-warning: oklch(0.62 0.126 72);
+  /* Dark enough to carry small warning text at WCAG AA on background, card,
+     and muted surfaces; same amber hue and chroma as before. */
+  --status-warning: oklch(0.53 0.126 72);
   --status-info: oklch(0.578 0.091 230);
   --status-danger: oklch(0.55 0.193 28);
   --radius: 0.875rem;

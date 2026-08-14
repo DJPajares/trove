@@ -214,7 +214,9 @@ export function GlobalSearch() {
                 ? t('searchingGoogle')
                 : status === 'ready'
                   ? t('resultCount', { count: resultCount })
-                  : ''}
+                  : status === 'error'
+                    ? t('errorTitle')
+                    : ''}
           </p>
           {status === 'loading' ? <SearchLoading /> : null}
           {status === 'error' ? (

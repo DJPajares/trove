@@ -60,7 +60,19 @@ const memoryInclude = {
   itineraryDay: { select: { date: true, id: true } },
   itineraryItem: { select: { customLabel: true, id: true } },
   photos: { orderBy: { position: 'asc' } },
-  tripPlace: { select: { id: true, place: { select: { customName: true, id: true } } } },
+  tripPlace: {
+    select: {
+      id: true,
+      place: {
+        select: {
+          customName: true,
+          id: true,
+          kind: true,
+          providerRefs: { select: { externalPlaceId: true, provider: true } },
+        },
+      },
+    },
+  },
 } as const;
 
 type MemoryRecord = Prisma.MemoryGetPayload<{ include: typeof memoryInclude }>;
@@ -186,8 +198,20 @@ async function serializeMemory(memory: MemoryRecord, supabase: SupabaseClient | 
     ),
     timeZone: memory.timeZone,
     timeZoneSource: mapTimeZoneSource(memory.timeZoneSource),
+    // Provider names stay provider-owned: only the reference travels, so a story
+    // can resolve the current name on demand rather than storing a stale copy.
     tripPlace: memory.tripPlace
-      ? { id: memory.tripPlace.id, name: memory.tripPlace.place.customName }
+      ? {
+          id: memory.tripPlace.id,
+          kind:
+            memory.tripPlace.place.kind === 'CUSTOM' ? ('custom' as const) : ('provider' as const),
+          name: memory.tripPlace.place.customName,
+          placeId: memory.tripPlace.place.id,
+          providerRefs: memory.tripPlace.place.providerRefs.map((reference) => ({
+            externalPlaceId: reference.externalPlaceId,
+            provider: 'google' as const,
+          })),
+        }
       : null,
     updatedAt: memory.updatedAt.toISOString(),
   };

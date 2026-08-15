@@ -1289,7 +1289,16 @@ function memoryFromOperation(
     timeZone,
     timeZoneSource: item ? 'itinerary_item' : tripPlace ? 'trip_place' : 'itinerary_day',
     tripPlace: tripPlace
-      ? { id: tripPlace.id, name: tripPlace.place.kind === 'custom' ? tripPlace.place.name : null }
+      ? {
+          id: tripPlace.id,
+          kind: tripPlace.place.kind,
+          name: tripPlace.place.kind === 'custom' ? tripPlace.place.name : null,
+          placeId: tripPlace.place.id,
+          providerRefs: tripPlace.place.providerRefs.map((reference) => ({
+            externalPlaceId: reference.externalPlaceId,
+            provider: reference.provider,
+          })),
+        }
       : null,
     updatedAt: now.toISOString(),
   };

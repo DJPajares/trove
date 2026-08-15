@@ -9,6 +9,7 @@ import {
   ListChecks,
   MapPinned,
   ReceiptText,
+  Sparkles,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
@@ -27,7 +28,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 
-export type TripSection = 'itinerary' | 'places' | 'tasks' | 'reservations' | 'expenses' | 'info';
+export type TripSection =
+  'itinerary' | 'places' | 'tasks' | 'reservations' | 'expenses' | 'info' | 'memories';
 
 type TripSectionHeaderProps = {
   actions?: ReactNode;
@@ -39,7 +41,8 @@ type TripSectionHeaderProps = {
 
 type SectionDefinition = {
   icon: LucideIcon;
-  labelKey: 'itinerary' | 'places' | 'tasks' | 'reservations' | 'expenses' | 'tripInfo';
+  labelKey:
+    'itinerary' | 'places' | 'tasks' | 'reservations' | 'expenses' | 'tripInfo' | 'memories';
   path: TripSection;
   route: string;
 };
@@ -51,6 +54,7 @@ const sections: SectionDefinition[] = [
   { icon: ReceiptText, labelKey: 'reservations', path: 'reservations', route: 'reservations' },
   { icon: CircleDollarSign, labelKey: 'expenses', path: 'expenses', route: 'expenses' },
   { icon: Info, labelKey: 'tripInfo', path: 'info', route: 'info' },
+  { icon: Sparkles, labelKey: 'memories', path: 'memories', route: 'memories' },
 ];
 
 export function TripSectionHeader({

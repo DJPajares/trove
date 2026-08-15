@@ -55,8 +55,16 @@ export type Memory = {
   photos: MemoryPhoto[];
   timeZone: string;
   timeZoneSource: string;
-  tripPlace: { id: string; name: string | null } | null;
+  tripPlace: MemoryTripPlace | null;
   updatedAt: string;
+};
+
+export type MemoryTripPlace = {
+  id: string;
+  kind: 'custom' | 'provider';
+  name: string | null;
+  placeId: string;
+  providerRefs: Array<{ externalPlaceId: string; provider: 'google' }>;
 };
 
 export type MemoriesResponse = { memories: Memory[] };

@@ -777,7 +777,7 @@ export async function queueOfflineMemoryCapture(
 
   const memories = mutations.reduce(
     (current, mutation) => applyMemoryOperation(snapshot, current, mutation.operation),
-    snapshot.memories ?? { memories: [] },
+    snapshot.memories ?? { memories: [], storyCover: null },
   );
   snapshotStore.put({ ...snapshot, memories, savedAt: new Date().toISOString() });
   for (const mutation of mutations) mutationStore.put(mutation);
@@ -1280,6 +1280,7 @@ function memoryFromOperation(
     capturedLocalDate: local.date,
     capturedLocalTime: local.time,
     createdAt: now.toISOString(),
+    highlightPosition: null,
     id: operation.clientMemoryId,
     isHighlight: operation.input.isHighlight ?? false,
     itineraryDay: day ? { date: day.date, id: day.id } : null,

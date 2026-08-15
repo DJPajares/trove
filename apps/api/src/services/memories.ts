@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPrismaClient, type Prisma } from '@trove/db';
 
-import { formatLocalTime, parseLocalTime } from './itinerary-rules.js';
+import { floatingLocalTimeToInstant, formatLocalTime, parseLocalTime } from './itinerary-rules.js';
 import {
   describeCapturedLocalChange,
   deriveCapturedLocal,
@@ -52,6 +52,9 @@ export type MemoryContextInput = {
 
 export type MemoryInput = MemoryContextInput & {
   capturedAt?: string;
+  /** A same-timezone correction: the captured wall time, resolved with the Memory's timezone. */
+  capturedLocalDate?: string;
+  capturedLocalTime?: string;
   isHighlight?: boolean;
   note?: string | null;
 };
@@ -162,6 +165,29 @@ function parseCapturedAt(value: string | undefined) {
   return instant;
 }
 
+/** A same-timezone correction: `date`/`time` must arrive together or not at all. */
+function parseLocalCorrection(input: Pick<MemoryInput, 'capturedLocalDate' | 'capturedLocalTime'>) {
+  const has = input.capturedLocalDate !== undefined || input.capturedLocalTime !== undefined;
+  if (!has) return undefined;
+  if (!input.capturedLocalDate || !input.capturedLocalTime) {
+    throw new MemoryValidationError('invalid_memory');
+  }
+  return { date: input.capturedLocalDate, time: input.capturedLocalTime };
+}
+
+function resolveCapturedInstant(
+  local: { date: string; time: string } | undefined,
+  timeZone: string,
+  fallback: Date,
+) {
+  if (!local) return fallback;
+  try {
+    return floatingLocalTimeToInstant(local.date, local.time, timeZone);
+  } catch {
+    throw new MemoryValidationError('invalid_memory');
+  }
+}
+
 async function createPhotoUrl(supabase: SupabaseClient | null, path: string) {
   if (!supabase) return null;
   const { data, error } = await supabase.storage
@@ -176,6 +202,7 @@ async function serializeMemory(memory: MemoryRecord, supabase: SupabaseClient | 
     capturedLocalDate: formatDateOnly(memory.capturedLocalDate),
     capturedLocalTime: formatLocalTime(memory.capturedLocalTime),
     createdAt: memory.createdAt.toISOString(),
+    highlightPosition: memory.highlightPosition,
     id: memory.id,
     isHighlight: memory.isHighlight,
     itineraryDay: memory.itineraryDay
@@ -217,11 +244,22 @@ async function serializeMemory(memory: MemoryRecord, supabase: SupabaseClient | 
   };
 }
 
+async function serializeStoryCover(
+  trip: { storyCoverPhoto: { id: string; path: string } | null },
+  supabase: SupabaseClient | null,
+) {
+  if (!trip.storyCoverPhoto) return null;
+  return {
+    photoId: trip.storyCoverPhoto.id,
+    url: await createPhotoUrl(supabase, trip.storyCoverPhoto.path),
+  };
+}
+
 export async function listMemories(userId: string, tripId: string, accessToken: string | null) {
   const prisma = getPrismaClient();
   const trip = await prisma.trip.findFirst({
     where: { id: tripId, ownerId: userId },
-    select: { id: true },
+    select: { id: true, storyCoverPhoto: { select: { id: true, path: true } } },
   });
   if (!trip) throw new MemoryNotFoundError('trip_not_found');
 
@@ -234,6 +272,7 @@ export async function listMemories(userId: string, tripId: string, accessToken: 
 
   return {
     memories: await Promise.all(memories.map((memory) => serializeMemory(memory, supabase))),
+    storyCover: await serializeStoryCover(trip, supabase),
   };
 }
 
@@ -249,7 +288,8 @@ export async function createMemory(
   clientMemoryId?: string,
 ) {
   const note = parseNote(input.note);
-  const capturedInstant = parseCapturedAt(input.capturedAt) ?? new Date();
+  const explicitInstant = parseCapturedAt(input.capturedAt);
+  const localCorrection = parseLocalCorrection(input);
   const prisma = getPrismaClient();
 
   const created = await prisma.$transaction(async (transaction) => {
@@ -266,6 +306,13 @@ export async function createMemory(
       itineraryItemId: input.itineraryItemId ?? null,
       tripPlaceId: input.tripPlaceId ?? null,
     });
+    // A missing Memory added after travel can be dated to when it actually
+    // happened; live capture leaves both unset and simply uses now.
+    const capturedInstant = resolveCapturedInstant(
+      localCorrection,
+      timeZone.timeZone,
+      explicitInstant ?? new Date(),
+    );
     const local = deriveCapturedLocal(capturedInstant, timeZone.timeZone);
 
     return transaction.memory.create({
@@ -305,6 +352,7 @@ export async function updateMemory(
 ) {
   const note = parseNote(input.note);
   const capturedInstant = parseCapturedAt(input.capturedAt);
+  const localCorrection = parseLocalCorrection(input);
   const prisma = getPrismaClient();
 
   const result = await prisma.$transaction(async (transaction) => {
@@ -323,18 +371,40 @@ export async function updateMemory(
       context.itineraryDayId !== current.itineraryDayId ||
       context.itineraryItemId !== current.itineraryItemId ||
       context.tripPlaceId !== current.tripPlaceId ||
-      capturedInstant !== undefined;
+      capturedInstant !== undefined ||
+      localCorrection !== undefined;
 
     const timeZone = contextCorrected
       ? await resolveContext(transaction, tripId, trip.referenceTimeZone, context)
       : { source: current.timeZoneSource, timeZone: current.timeZone };
-    const instant = capturedInstant ?? current.capturedInstant;
+
+    // A local-time correction is resolved in whichever timezone applies after any
+    // day/item/Place correction above, so both can be fixed in the same save.
+    const instant = resolveCapturedInstant(
+      localCorrection,
+      timeZone.timeZone,
+      capturedInstant ?? current.capturedInstant,
+    );
+
     const change = describeCapturedLocalChange(
       instant,
       { timeZone: current.timeZone },
       { timeZone: timeZone.timeZone },
     );
     const local = deriveCapturedLocal(instant, timeZone.timeZone);
+
+    // Newly marked highlights join at the end of the curated order; removing a
+    // Memory from Highlights drops its position so it does not linger unseen.
+    let highlightPosition: number | null | undefined;
+    if (input.isHighlight === true && !current.isHighlight) {
+      const last = await transaction.memory.aggregate({
+        where: { tripId, isHighlight: true },
+        _max: { highlightPosition: true },
+      });
+      highlightPosition = (last._max.highlightPosition ?? -1) + 1;
+    } else if (input.isHighlight === false && current.isHighlight) {
+      highlightPosition = null;
+    }
 
     const memory = await transaction.memory.update({
       where: { id: current.id },
@@ -352,6 +422,7 @@ export async function updateMemory(
             }
           : {}),
         ...(input.isHighlight === undefined ? {} : { isHighlight: input.isHighlight }),
+        ...(highlightPosition === undefined ? {} : { highlightPosition }),
         ...(note === undefined ? {} : { note }),
       },
       include: memoryInclude,
@@ -470,4 +541,104 @@ export async function deleteMemoryPhoto(
 
   const supabase = accessToken ? createAuthenticatedSupabaseClient(accessToken) : null;
   if (supabase) await supabase.storage.from(MEMORY_PHOTOS_BUCKET).remove([path]);
+}
+
+/**
+ * The Highlights view can carry its own curated order, distinct from the
+ * chronological order Days always uses. The caller supplies the complete
+ * highlighted set so the result is unambiguous; a partial or stale list is
+ * rejected rather than silently dropping a Memory from Highlights.
+ */
+export async function reorderHighlights(
+  userId: string,
+  tripId: string,
+  order: string[],
+  accessToken: string | null,
+) {
+  if (new Set(order).size !== order.length) throw new MemoryValidationError('invalid_memory');
+
+  const prisma = getPrismaClient();
+  await prisma.$transaction(async (transaction) => {
+    await findOwnedTrip(transaction, userId, tripId);
+    const current = await transaction.memory.findMany({
+      where: { tripId, isHighlight: true },
+      select: { id: true },
+    });
+    const currentIds = new Set(current.map((memory) => memory.id));
+    if (currentIds.size !== order.length || order.some((id) => !currentIds.has(id))) {
+      throw new MemoryValidationError('invalid_memory');
+    }
+    await Promise.all(
+      order.map((id, position) =>
+        transaction.memory.update({ where: { id }, data: { highlightPosition: position } }),
+      ),
+    );
+  });
+
+  return listMemories(userId, tripId, accessToken);
+}
+
+/** Reorders one Memory's own photos; every other Memory's photos are untouched. */
+export async function reorderMemoryPhotos(
+  userId: string,
+  tripId: string,
+  memoryId: string,
+  order: string[],
+  accessToken: string | null,
+) {
+  if (new Set(order).size !== order.length) throw new MemoryValidationError('invalid_memory_photo');
+
+  const prisma = getPrismaClient();
+  const memory = await prisma.$transaction(async (transaction) => {
+    await findOwnedTrip(transaction, userId, tripId);
+    const current = await transaction.memory.findFirst({
+      where: { id: memoryId, tripId },
+      include: { photos: { select: { id: true } } },
+    });
+    if (!current) throw new MemoryNotFoundError('memory_not_found');
+    const currentIds = new Set(current.photos.map((photo) => photo.id));
+    if (currentIds.size !== order.length || order.some((id) => !currentIds.has(id))) {
+      throw new MemoryValidationError('invalid_memory_photo');
+    }
+    await Promise.all(
+      order.map((id, position) =>
+        transaction.memoryPhoto.update({ where: { id }, data: { position } }),
+      ),
+    );
+    return transaction.memory.findFirstOrThrow({ where: { id: memoryId }, include: memoryInclude });
+  });
+
+  const supabase = accessToken ? createAuthenticatedSupabaseClient(accessToken) : null;
+  return serializeMemory(memory, supabase);
+}
+
+/**
+ * The Trip Story cover is chosen from the traveller's own Memory photos, never
+ * uploaded separately. Clearing it (`null`) removes the story's cover without
+ * touching the Memory or photo it pointed at.
+ */
+export async function setStoryCoverPhoto(
+  userId: string,
+  tripId: string,
+  memoryPhotoId: string | null,
+  accessToken: string | null,
+) {
+  const prisma = getPrismaClient();
+  const trip = await prisma.$transaction(async (transaction) => {
+    await findOwnedTrip(transaction, userId, tripId);
+    if (memoryPhotoId) {
+      const photo = await transaction.memoryPhoto.findFirst({
+        where: { id: memoryPhotoId, memory: { tripId } },
+      });
+      if (!photo) throw new MemoryNotFoundError('memory_photo_not_found');
+    }
+    return transaction.trip.update({
+      where: { id: tripId },
+      data: { storyCoverMemoryPhotoId: memoryPhotoId },
+      select: { storyCoverPhoto: { select: { id: true, path: true } } },
+    });
+  });
+
+  const supabase = accessToken ? createAuthenticatedSupabaseClient(accessToken) : null;
+  return serializeStoryCover(trip, supabase);
 }

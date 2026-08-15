@@ -1,13 +1,25 @@
 'use client';
 
-import { CircleAlert, ImageOff, MapPin, Sparkles } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  CircleAlert,
+  ImageOff,
+  MapPin,
+  Pencil,
+  Plus,
+  Sparkles,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
+import { MemoryEditorDialog } from '@/components/memory-editor-dialog';
 import { PageState } from '@/components/page-state';
+import { StoryCoverPicker } from '@/components/story-cover-picker';
 import { TripSectionHeader } from '@/components/trip-section-header';
 import { Button } from '@/components/ui/button';
-import { fetchMemories, type Memory } from '@/lib/memories/api';
+import { fetchItinerary, type Itinerary } from '@/lib/itinerary/api';
+import { fetchMemories, reorderHighlights, type Memory, type StoryCover } from '@/lib/memories/api';
 import {
   buildTripStory,
   placeName,
@@ -25,7 +37,15 @@ import { fetchTrip, type Trip } from '@/lib/trips/api';
 type LoadState =
   | { data: null; status: 'error' }
   | { data: null; status: 'loading' }
-  | { data: { memories: Memory[]; trip: Trip }; status: 'ready' };
+  | {
+      data: { memories: Memory[]; storyCover: StoryCover | null; trip: Trip };
+      status: 'ready';
+    };
+
+type EditorState =
+  | { memory: null; mode: 'closed' }
+  | { memory: null; mode: 'create' }
+  | { memory: Memory; mode: 'edit' };
 
 function MemoryPhotos({ memory, photoAlt }: Readonly<{ memory: Memory; photoAlt: string }>) {
   if (!memory.photos.length) return null;
@@ -54,13 +74,24 @@ function MemoryPhotos({ memory, photoAlt }: Readonly<{ memory: Memory; photoAlt:
 
 /**
  * One captured moment, shown as the traveller left it: their own note, their own
- * photos, and the context already resolved when it was captured.
+ * photos, and the context already resolved when it was captured. An edit
+ * affordance, and optional Highlights reorder controls, sit alongside it.
  */
 function MemoryEntry({
+  highlightControls,
   memory,
+  onEdit,
   photoAlt,
   time,
-}: Readonly<{ memory: Memory; photoAlt: string; time: string | null }>) {
+}: Readonly<{
+  highlightControls?: { onMoveDown: (() => void) | null; onMoveUp: (() => void) | null };
+  memory: Memory;
+  onEdit: () => void;
+  photoAlt: string;
+  time: string | null;
+}>) {
+  const t = useTranslations('memories.story');
+
   return (
     <li className="border-b border-border py-5 last:border-b-0">
       <div className="flex items-start gap-3">
@@ -72,9 +103,36 @@ function MemoryEntry({
             </p>
           ) : null}
         </div>
-        {memory.isHighlight ? (
-          <Sparkles aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-brand" />
-        ) : null}
+        <div className="flex shrink-0 items-center gap-1">
+          {memory.isHighlight ? (
+            <Sparkles aria-hidden="true" className="mr-1 size-4 shrink-0 text-brand" />
+          ) : null}
+          {highlightControls ? (
+            <>
+              <Button
+                aria-label={t('moveHighlightUp')}
+                disabled={!highlightControls.onMoveUp}
+                onClick={() => highlightControls.onMoveUp?.()}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <ChevronUp aria-hidden="true" />
+              </Button>
+              <Button
+                aria-label={t('moveHighlightDown')}
+                disabled={!highlightControls.onMoveDown}
+                onClick={() => highlightControls.onMoveDown?.()}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <ChevronDown aria-hidden="true" />
+              </Button>
+            </>
+          ) : null}
+          <Button aria-label={t('editMemory')} onClick={onEdit} size="icon-sm" variant="ghost">
+            <Pencil aria-hidden="true" />
+          </Button>
+        </div>
       </div>
       <MemoryPhotos memory={memory} photoAlt={photoAlt} />
     </li>
@@ -85,16 +143,27 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('memories.story');
   const locale = useLocale();
   const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
+  const [itinerary, setItinerary] = useState<Itinerary | null>(null);
   const [placeNames, setPlaceNames] = useState<Record<string, string>>({});
+  const [editor, setEditor] = useState<EditorState>({ memory: null, mode: 'closed' });
+  const [coverPickerOpen, setCoverPickerOpen] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [highlightBusyId, setHighlightBusyId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setState({ data: null, status: 'loading' });
     try {
       const [memories, trip] = await Promise.all([fetchMemories(tripId), fetchTrip(tripId)]);
-      setState({ data: { memories: memories.memories, trip: trip.trip }, status: 'ready' });
+      setState({
+        data: { memories: memories.memories, storyCover: memories.storyCover, trip: trip.trip },
+        status: 'ready',
+      });
     } catch {
       setState({ data: null, status: 'error' });
     }
+    void fetchItinerary(tripId)
+      .then(setItinerary)
+      .catch(() => setItinerary(null));
   }, [tripId]);
 
   useEffect(() => {
@@ -136,6 +205,32 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
     };
   }, [story]);
 
+  async function moveHighlight(memoryId: string, direction: -1 | 1) {
+    if (!story) return;
+    const index = story.highlights.findIndex((memory) => memory.id === memoryId);
+    const targetIndex = index + direction;
+    if (index < 0 || targetIndex < 0 || targetIndex >= story.highlights.length) return;
+
+    const reordered = [...story.highlights];
+    const [moved] = reordered.splice(index, 1);
+    if (!moved) return;
+    reordered.splice(targetIndex, 0, moved);
+
+    setHighlightBusyId(memoryId);
+    setFeedback(null);
+    try {
+      await reorderHighlights(
+        tripId,
+        reordered.map((memory) => memory.id),
+      );
+      await refresh();
+    } catch {
+      setFeedback(t('reorderError'));
+    } finally {
+      setHighlightBusyId(null);
+    }
+  }
+
   if (state.status === 'loading') {
     return <PageState className="mx-auto max-w-5xl" kind="loading" title={t('loading')} />;
   }
@@ -153,7 +248,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
     );
   }
 
-  const { trip } = state.data;
+  const { storyCover, trip } = state.data;
   const dateOnly = (value: string) =>
     new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeZone: 'UTC' }).format(
       new Date(`${value}T00:00:00.000Z`),
@@ -181,6 +276,12 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
 
   const header = (
     <TripSectionHeader
+      actions={
+        <Button onClick={() => setEditor({ memory: null, mode: 'create' })} variant="outline">
+          <Plus aria-hidden="true" data-icon="inline-start" />
+          {t('addMemory')}
+        </Button>
+      }
       currentSection="memories"
       description={t('description', {
         end: shortDate(trip.endDate),
@@ -189,6 +290,43 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
       title={t('title', { trip: trip.name })}
       tripId={tripId}
     />
+  );
+
+  const dialogs = (
+    <>
+      <MemoryEditorDialog
+        itinerary={itinerary}
+        memory={editor.mode === 'edit' ? editor.memory : null}
+        onClose={() => setEditor({ memory: null, mode: 'closed' })}
+        onDeleted={() => {
+          setEditor({ memory: null, mode: 'closed' });
+          setFeedback(t('deleted'));
+          void refresh();
+        }}
+        onSaved={(result) => {
+          setFeedback(
+            t(result.queued ? 'savedOffline' : result.localDateChanged ? 'dayMoved' : 'saved'),
+          );
+          void refresh();
+        }}
+        open={editor.mode !== 'closed'}
+        tripId={tripId}
+      />
+      <StoryCoverPicker
+        memories={state.data.memories}
+        onOpenChange={setCoverPickerOpen}
+        onSelected={(cover) =>
+          setState((current) =>
+            current.status === 'ready'
+              ? { data: { ...current.data, storyCover: cover }, status: 'ready' }
+              : current,
+          )
+        }
+        open={coverPickerOpen}
+        storyCover={storyCover}
+        tripId={tripId}
+      />
+    </>
   );
 
   if (!story.memoryCount) {
@@ -202,6 +340,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
           icon={<Sparkles aria-hidden="true" />}
           title={t('emptyTitle')}
         />
+        {dialogs}
       </section>
     );
   }
@@ -210,16 +349,33 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
     <section className="mx-auto w-full max-w-5xl space-y-9">
       {header}
 
-      <p className="text-sm leading-6 text-muted-foreground">
-        {[
-          t('memoryCount', { count: story.memoryCount }),
-          story.photoCount ? t('photoCount', { count: story.photoCount }) : null,
-          t('dayCount', { count: story.days.length }),
-          story.places.length ? t('placeCount', { count: story.places.length }) : null,
-        ]
-          .filter(Boolean)
-          .join(' · ')}
+      <p aria-live="polite" className="sr-only" role="status">
+        {feedback}
       </p>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm leading-6 text-muted-foreground">
+          {[
+            t('memoryCount', { count: story.memoryCount }),
+            story.photoCount ? t('photoCount', { count: story.photoCount }) : null,
+            t('dayCount', { count: story.days.length }),
+            story.places.length ? t('placeCount', { count: story.places.length }) : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+        <Button onClick={() => setCoverPickerOpen(true)} size="sm" variant="outline">
+          {storyCover ? t('changeCover') : t('chooseCover')}
+        </Button>
+      </div>
+
+      {storyCover?.url ? (
+        <img
+          alt=""
+          className="aspect-[21/9] w-full rounded-[var(--radius-xl)] object-cover"
+          src={storyCover.url}
+        />
+      ) : null}
 
       {story.highlights.length ? (
         <section aria-labelledby="trip-story-highlights">
@@ -233,10 +389,19 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
             {t('highlightsDescription')}
           </p>
           <ul className="mt-3 border-y border-border">
-            {story.highlights.map((memory) => (
+            {story.highlights.map((memory, index) => (
               <MemoryEntry
+                highlightControls={{
+                  onMoveDown:
+                    highlightBusyId || index === story.highlights.length - 1
+                      ? null
+                      : () => void moveHighlight(memory.id, 1),
+                  onMoveUp:
+                    highlightBusyId || index === 0 ? null : () => void moveHighlight(memory.id, -1),
+                }}
                 key={memory.id}
                 memory={memory}
+                onEdit={() => setEditor({ memory, mode: 'edit' })}
                 photoAlt={t('photoAlt')}
                 time={`${shortDate(memory.capturedLocalDate)}${
                   localTime(memory) ? ` · ${localTime(memory)}` : ''
@@ -268,6 +433,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
                   <MemoryEntry
                     key={memory.id}
                     memory={memory}
+                    onEdit={() => setEditor({ memory, mode: 'edit' })}
                     photoAlt={t('photoAlt')}
                     time={localTime(memory)}
                   />
@@ -304,6 +470,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
                     <MemoryEntry
                       key={memory.id}
                       memory={memory}
+                      onEdit={() => setEditor({ memory, mode: 'edit' })}
                       photoAlt={t('photoAlt')}
                       time={shortDate(memory.capturedLocalDate)}
                     />
@@ -323,6 +490,8 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
       <p className="border-t border-border pt-5 text-xs leading-5 text-text-subtle">
         {t('privacyNote')}
       </p>
+
+      {dialogs}
     </section>
   );
 }

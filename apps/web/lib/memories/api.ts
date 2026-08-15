@@ -47,6 +47,7 @@ export type Memory = {
   capturedLocalDate: string;
   capturedLocalTime: string | null;
   createdAt: string;
+  highlightPosition: number | null;
   id: string;
   isHighlight: boolean;
   itineraryDay: { date: string; id: string } | null;
@@ -67,10 +68,15 @@ export type MemoryTripPlace = {
   providerRefs: Array<{ externalPlaceId: string; provider: 'google' }>;
 };
 
-export type MemoriesResponse = { memories: Memory[] };
+export type StoryCover = { photoId: string; url: string | null };
+
+export type MemoriesResponse = { memories: Memory[]; storyCover: StoryCover | null };
 
 export type MemoryInput = {
   capturedAt?: string;
+  /** A same-timezone correction: resolved by the server using the Memory's timezone. */
+  capturedLocalDate?: string;
+  capturedLocalTime?: string;
   isHighlight?: boolean;
   itineraryDayId?: string | null;
   itineraryItemId?: string | null;
@@ -199,6 +205,43 @@ export function updateMemory(tripId: string, memoryId: string, input: MemoryInpu
 
 export function deleteMemory(tripId: string, memoryId: string) {
   return memoryRequest<void>(`/trips/${tripId}/memories/${memoryId}`, { method: 'DELETE' });
+}
+
+export function deleteMemoryPhoto(tripId: string, memoryId: string, photoId: string) {
+  return memoryRequest<void>(`/trips/${tripId}/memories/${memoryId}/photos/${photoId}`, {
+    method: 'DELETE',
+  });
+}
+
+/** Reorders one Memory's own photos; every other Memory's photos are untouched. */
+export function reorderMemoryPhotos(tripId: string, memoryId: string, order: string[]) {
+  return memoryRequest<Memory>(`/trips/${tripId}/memories/${memoryId}/photos/order`, {
+    body: JSON.stringify({ order }),
+    method: 'PATCH',
+  });
+}
+
+/**
+ * The Highlights view can carry its own curated order, distinct from the
+ * chronological order Days always uses. `order` must be the complete set of
+ * currently highlighted Memory ids.
+ */
+export function reorderHighlights(tripId: string, order: string[]) {
+  return memoryRequest<MemoriesResponse>(`/trips/${tripId}/memories/highlights/order`, {
+    body: JSON.stringify({ order }),
+    method: 'PATCH',
+  });
+}
+
+/**
+ * The Trip Story cover is chosen from the traveller's own Memory photos, never
+ * uploaded separately. Pass `null` to clear it.
+ */
+export function setStoryCoverPhoto(tripId: string, memoryPhotoId: string | null) {
+  return memoryRequest<StoryCover | null>(`/trips/${tripId}/memories/story-cover`, {
+    body: JSON.stringify({ memoryPhotoId }),
+    method: 'PATCH',
+  });
 }
 
 type PlannedPhoto = {
@@ -406,6 +449,35 @@ export async function captureMemory(tripId: string, input: MemoryInput, files: F
 
   await rememberCapturedMemory(auth.userId, tripId, { ...created, photos: uploaded });
   return { queued: false };
+}
+
+/**
+ * Adds photos to a Memory that already exists, reusing the same queue an
+ * interrupted capture retries through: the real Memory id stands in for a
+ * client id, so a retried or offline attempt resolves to the same photos.
+ */
+export async function addMemoryPhotos(tripId: string, memoryId: string, files: File[]) {
+  const auth = await getOfflineAuthContext();
+  const photos = planPhotos(auth.userId, tripId, memoryId, files);
+  const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+
+  if (offline || !auth.accessToken) {
+    await queueCapture(auth.userId, tripId, memoryId, {}, photos, false);
+    return { photos: [], queued: true };
+  }
+
+  const uploaded: MemoryPhoto[] = [];
+  for (const [index, photo] of photos.entries()) {
+    try {
+      uploaded.push(await uploadPlannedPhoto(tripId, memoryId, photo));
+    } catch (error) {
+      if (!canUseSupportingOfflineFallback(error)) throw error;
+      await queueCapture(auth.userId, tripId, memoryId, {}, photos.slice(index), false);
+      return { photos: uploaded, queued: true };
+    }
+  }
+
+  return { photos: uploaded, queued: false };
 }
 
 /**

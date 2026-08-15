@@ -112,6 +112,17 @@ pnpm --filter @trove/db db:migrate:deploy
 
 The database is available at `localhost:54329`. See [`packages/db/README.md`](packages/db/README.md) for health checks, shadow database setup, and reset behavior. This container provides PostgreSQL only; hosted Supabase remains the Auth, Storage, and production platform.
 
+## Production Database Migrations
+
+Deploy migrations to production using the Supabase connection string:
+
+```bash
+export DATABASE_URL="postgresql://postgres.[YOUR-DB]:[YOUR-PASSWORD]@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres?schema=trove"
+pnpm db:migrate:deploy
+```
+
+Replace placeholders with your Supabase connection details from the project settings. The `DATABASE_URL` environment variable is required; verify it is set before running migrations. Never commit credentials to the repository.
+
 ## PWA Foundation
 
 Trove registers its Serwist service worker only in production. It precaches the static application shell and the `~offline` fallback page; it does not cache Trip Mode, maps, API responses, or queued travel data. During `next dev`, Trove removes a prior Trove service-worker registration and its `trove-pwa-*` caches for the current origin to avoid stale-cache confusion.

@@ -92,7 +92,8 @@ export function ExperienceRatingField({
     <div className="space-y-1.5">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium text-foreground">{label}</span>
-        <div aria-label={label} className="flex items-center gap-0.5" role="radiogroup">
+        {/* Toggle buttons, not radios: selecting the current value clears the rating. */}
+        <div aria-label={label} className="flex items-center gap-0.5" role="group">
           {VALUES.map((value) => (
             <button
               aria-label={t('starLabel', { value })}

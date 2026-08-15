@@ -217,5 +217,14 @@ export async function removeTripPlace(userId: string, tripId: string, tripPlaceI
     tripPlace._count.timeZoneSourceForDays;
   if (referenceCount) throw new TripPlaceReferencedError(referenceCount);
 
-  await prisma.tripPlace.delete({ where: { id: tripPlaceId } });
+  await prisma.$transaction(async (transaction) => {
+    // Memories outlive the Place they were captured at, the same way they outlive
+    // a removed day. Detaching keeps the traveller's own note and photos; only the
+    // Places grouping in their Trip Story loses this entry.
+    await transaction.memory.updateMany({
+      where: { tripId, tripPlaceId },
+      data: { tripPlaceId: null },
+    });
+    await transaction.tripPlace.delete({ where: { id: tripPlaceId } });
+  });
 }

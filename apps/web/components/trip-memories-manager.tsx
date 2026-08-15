@@ -26,18 +26,8 @@ import {
   type Itinerary,
 } from '@/lib/itinerary/api';
 import { fetchMemories, reorderHighlights, type Memory, type StoryCover } from '@/lib/memories/api';
-import {
-  buildTripStory,
-  placeName,
-  providerPlaceId,
-  type StoryPlace,
-  type TripStory,
-} from '@/lib/memories/story';
-import {
-  cacheProviderPlaceDetails,
-  getCachedProviderPlaceDetails,
-  getProviderPlaceDetails,
-} from '@/lib/saved/api';
+import { buildTripStory, placeName, type StoryPlace, type TripStory } from '@/lib/memories/story';
+import { useProviderPlaceNames } from '@/lib/saved/provider-names';
 import { fetchTrip, updateTripExperienceRating, type Trip } from '@/lib/trips/api';
 import { cn } from '@/lib/utils';
 
@@ -163,7 +153,6 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   const locale = useLocale();
   const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
-  const [placeNames, setPlaceNames] = useState<Record<string, string>>({});
   const [editor, setEditor] = useState<EditorState>({ memory: null, mode: 'closed' });
   const [coverPickerOpen, setCoverPickerOpen] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -207,34 +196,18 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   );
 
   // Provider Place names are resolved on demand and never stored as Trove data.
-  useEffect(() => {
-    if (!story) return;
-    let active = true;
-    const pending = story.places.flatMap((place) => {
-      const externalPlaceId = place.tripPlace.name ? null : providerPlaceId(place.tripPlace);
-      return externalPlaceId ? [{ externalPlaceId, tripPlaceId: place.tripPlace.id }] : [];
-    });
-
-    for (const { externalPlaceId, tripPlaceId } of pending) {
-      const cached = getCachedProviderPlaceDetails(externalPlaceId);
-      if (cached) {
-        setPlaceNames((current) => ({ ...current, [tripPlaceId]: cached.name }));
-        continue;
-      }
-      if (typeof navigator !== 'undefined' && !navigator.onLine) continue;
-      void getProviderPlaceDetails(externalPlaceId)
-        .then((result) => {
-          if (!active || result.status !== 'ok' || !result.place) return;
-          cacheProviderPlaceDetails(externalPlaceId, result.place);
-          setPlaceNames((current) => ({ ...current, [tripPlaceId]: result.place!.name }));
-        })
-        .catch(() => undefined);
-    }
-
-    return () => {
-      active = false;
-    };
-  }, [story]);
+  const placeNames = useProviderPlaceNames(
+    useMemo(
+      () =>
+        (story?.places ?? []).map((place) => ({
+          id: place.tripPlace.placeId,
+          kind: place.tripPlace.kind,
+          name: place.tripPlace.name,
+          providerRefs: place.tripPlace.providerRefs,
+        })),
+      [story?.places],
+    ),
+  );
 
   async function moveHighlight(memoryId: string, direction: -1 | 1) {
     if (!story) return;
@@ -330,7 +303,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   const placeLabel = (place: StoryPlace) =>
     placeName(
       place.tripPlace,
-      placeNames[place.tripPlace.id] ?? null,
+      placeNames[place.tripPlace.placeId] ?? null,
       place.memories.find((memory) => memory.itineraryItem?.label)?.itineraryItem?.label ?? null,
     ) ?? t('unnamedPlace');
 

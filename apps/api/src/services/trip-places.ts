@@ -1,6 +1,7 @@
 import { getPrismaClient } from '@trove/db';
 
 import type { CanonicalPlace } from './canonical-places.js';
+import { refreshDayDefaultTimeZone } from './itineraries.js';
 
 export type TripPlacePriority = 'interested' | 'maybe' | 'must_go';
 
@@ -84,15 +85,18 @@ function serializePlace(place: {
   };
 }
 
+/**
+ * Only scheduled itinerary items hold a Place in the trip. A Daily Base or a
+ * day's timezone source is a day setting that re-resolves once the Place goes,
+ * so neither is counted here or allowed to block removal.
+ */
 const tripPlaceInclude = {
-  _count: {
-    select: { dailyBaseForDays: true, itineraryItems: true, timeZoneSourceForDays: true },
-  },
+  _count: { select: { itineraryItems: true } },
   place: { include: { providerRefs: true, savedPlaces: { select: { id: true } } } },
 } as const;
 
 function serializeTripPlace(tripPlace: {
-  _count: { dailyBaseForDays: number; itineraryItems: number; timeZoneSourceForDays: number };
+  _count: { itineraryItems: number };
   createdAt: Date;
   id: string;
   note: string | null;
@@ -106,10 +110,7 @@ function serializeTripPlace(tripPlace: {
     note: tripPlace.note,
     place: serializePlace(tripPlace.place),
     priority: mapPriority(tripPlace.priority),
-    referenceCount:
-      tripPlace._count.itineraryItems +
-      tripPlace._count.dailyBaseForDays +
-      tripPlace._count.timeZoneSourceForDays,
+    referenceCount: tripPlace._count.itineraryItems,
   };
 }
 
@@ -199,32 +200,59 @@ export async function updateTripPlace(
   return serializeTripPlace(tripPlace);
 }
 
+/**
+ * Everything a Place gathered around it during the trip — expenses, reservations,
+ * Memories — outlives the Place itself, the same way those records already outlive
+ * a removed day. Each is detached first so removing a Place from the trip's
+ * collection never destroys the traveller's own work, and never leaves a dangling
+ * reference for the database to refuse.
+ *
+ * Scheduled itinerary items are the exception: an item's Place is its identity, so
+ * removal is refused while the itinerary still schedules it.
+ */
 export async function removeTripPlace(userId: string, tripId: string, tripPlaceId: string) {
   await assertOwnedTrip(userId, tripId);
   const prisma = getPrismaClient();
   const tripPlace = await prisma.tripPlace.findFirst({
     where: { id: tripPlaceId, tripId },
-    select: {
-      _count: {
-        select: { dailyBaseForDays: true, itineraryItems: true, timeZoneSourceForDays: true },
-      },
-    },
+    select: { _count: { select: { itineraryItems: true } } },
   });
   if (!tripPlace) throw new TripPlaceNotFoundError();
-  const referenceCount =
-    tripPlace._count.itineraryItems +
-    tripPlace._count.dailyBaseForDays +
-    tripPlace._count.timeZoneSourceForDays;
-  if (referenceCount) throw new TripPlaceReferencedError(referenceCount);
+  if (tripPlace._count.itineraryItems) {
+    throw new TripPlaceReferencedError(tripPlace._count.itineraryItems);
+  }
 
   await prisma.$transaction(async (transaction) => {
-    // Memories outlive the Place they were captured at, the same way they outlive
-    // a removed day. Detaching keeps the traveller's own note and photos; only the
-    // Places grouping in their Trip Story loses this entry.
-    await transaction.memory.updateMany({
-      where: { tripId, tripPlaceId },
-      data: { tripPlaceId: null },
+    const detached = { data: { tripPlaceId: null }, where: { tripId, tripPlaceId } } as const;
+    await transaction.memory.updateMany(detached);
+    await transaction.expense.updateMany(detached);
+    await transaction.reservation.updateMany(detached);
+
+    // A day that leaned on this Place for its Daily Base or timezone falls back to
+    // whatever else it holds, rather than keeping the Place alive to serve a default.
+    const affectedDays = await transaction.itineraryDay.findMany({
+      where: {
+        tripId,
+        OR: [
+          { dailyBaseTripPlaceId: tripPlaceId },
+          { defaultTimeZoneSourceTripPlaceId: tripPlaceId },
+        ],
+      },
+      select: { id: true },
     });
+    await transaction.itineraryDay.updateMany({
+      where: { tripId, dailyBaseTripPlaceId: tripPlaceId },
+      data: { dailyBaseTripPlaceId: null },
+    });
+    await transaction.itineraryDay.updateMany({
+      where: { tripId, defaultTimeZoneSourceTripPlaceId: tripPlaceId },
+      data: { defaultTimeZoneSourceTripPlaceId: null },
+    });
+
     await transaction.tripPlace.delete({ where: { id: tripPlaceId } });
+
+    for (const day of affectedDays) {
+      await refreshDayDefaultTimeZone(transaction, tripId, day.id);
+    }
   });
 }

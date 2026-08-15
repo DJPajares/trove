@@ -46,6 +46,22 @@ on conflict (id) do nothing;
 
 Stop the container with `docker compose stop postgres`; remove its persisted local data only when intentionally resetting the database with `docker compose down -v`.
 
+## Development seed
+
+`pnpm db:seed` builds a complete, browsable Japan trip: Places, a ten-day itinerary, a flight and an accommodation, tasks, trip info, expenses in JPY against a non-JPY home currency, Memories with highlights, and day and trip Experience Ratings.
+
+Trove profiles are keyed by the Supabase auth user id, so the seed writes against the account you actually sign in with:
+
+```bash
+TROVE_SEED_USER_ID="<your-supabase-user-uuid>" pnpm db:seed
+```
+
+Find the UUID in the Supabase dashboard under Authentication, or run `(await supabase.auth.getUser()).data.user.id` in the browser console while signed in. Against the local database the seed inserts the matching `auth.users` compatibility row itself.
+
+The trip is dated to have finished two weeks ago, which is what puts Home, Trip Overview, and Trip Story into their completed states. Re-running shifts those dates forward; everything else is keyed by fixed ids and upserted. `pnpm db:seed -- --reset` removes the seeded rows first, scoped to the ids the seed owns so real trips and saved Places are untouched.
+
+Memory photos are not seeded, because rows without matching objects in the private `memory-photos` bucket render as broken images. Add a few through the UI to exercise the Trip Story cover.
+
 ## Workflow
 
 1. Confirm the environment with `pnpm --filter @trove/db db:validate-env`.

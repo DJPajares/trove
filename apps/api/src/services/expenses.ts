@@ -54,10 +54,10 @@ const expenseInclude = {
       itineraryDayId: true,
       itineraryDay: { select: { defaultTimeZone: true } },
       timeZone: true,
-      tripPlace: { include: { place: true } },
+      tripPlace: { include: { place: { include: { providerRefs: true } } } },
     },
   },
-  tripPlace: { include: { place: true } },
+  tripPlace: { include: { place: { include: { providerRefs: true } } } },
 } as const;
 
 type ExpenseRecord = Prisma.ExpenseGetPayload<{ include: typeof expenseInclude }>;
@@ -111,6 +111,28 @@ function serializeTimeZoneSource(value: string | null) {
   return value ? (values[value] ?? null) : null;
 }
 
+/**
+ * A provider Place has no name of its own in Trove, so only the reference travels
+ * and the client resolves the current name on demand. Sending the reference is what
+ * lets an expense show a real Place instead of a placeholder.
+ */
+function serializeExpensePlace(tripPlace: NonNullable<ExpenseRecord['tripPlace']>) {
+  return {
+    id: tripPlace.id,
+    kind: tripPlace.place.kind === 'CUSTOM' ? ('custom' as const) : ('provider' as const),
+    name: tripPlace.place.customName,
+    placeId: tripPlace.placeId,
+    providerRefs: tripPlace.place.providerRefs.map((reference) => ({
+      externalPlaceId: reference.externalPlaceId,
+      provider: 'google' as const,
+    })),
+  };
+}
+
+function serializeOptionalExpensePlace(tripPlace: NonNullable<ExpenseRecord['tripPlace']> | null) {
+  return tripPlace ? serializeExpensePlace(tripPlace) : null;
+}
+
 function itemLabel(item: NonNullable<ExpenseRecord['itineraryItem']>) {
   return item.customLabel ?? item.customLocation ?? item.tripPlace?.place.customName ?? null;
 }
@@ -126,7 +148,12 @@ function serializeExpense(expense: ExpenseRecord) {
       ? { date: formatDateOnly(expense.itineraryDay.date), id: expense.itineraryDay.id }
       : null,
     itineraryItem: expense.itineraryItem
-      ? { id: expense.itineraryItem.id, label: itemLabel(expense.itineraryItem) }
+      ? {
+          id: expense.itineraryItem.id,
+          label: itemLabel(expense.itineraryItem),
+          // An item named only by its provider Place has no label to send.
+          place: serializeOptionalExpensePlace(expense.itineraryItem.tripPlace),
+        }
       : null,
     localDate: expense.localDate ? formatDateOnly(expense.localDate) : null,
     localTime: formatLocalTime(expense.localTime),
@@ -134,13 +161,7 @@ function serializeExpense(expense: ExpenseRecord) {
     timeZone: expense.timeZone,
     timeZoneSource: serializeTimeZoneSource(expense.timeZoneSource),
     title: expense.title,
-    tripPlace: expense.tripPlace
-      ? {
-          id: expense.tripPlace.id,
-          name: expense.tripPlace.place.customName,
-          placeId: expense.tripPlace.placeId,
-        }
-      : null,
+    tripPlace: serializeOptionalExpensePlace(expense.tripPlace),
     updatedAt: expense.updatedAt.toISOString(),
   };
 }
@@ -311,7 +332,7 @@ export async function listExpenses(userId: string, tripId: string) {
           itineraryDayId: true,
           plannedCostAmount: true,
           plannedCostCurrencyCode: true,
-          tripPlace: { include: { place: true } },
+          tripPlace: { include: { place: { include: { providerRefs: true } } } },
         },
       },
       reservations: {
@@ -322,7 +343,10 @@ export async function listExpenses(userId: string, tripId: string) {
           plannedCostCurrencyCode: true,
         },
       },
-      tripPlaces: { include: { place: true }, orderBy: { createdAt: 'asc' } },
+      tripPlaces: {
+        include: { place: { include: { providerRefs: true } } },
+        orderBy: { createdAt: 'asc' },
+      },
     },
   });
   if (!trip) throw new ExpenseNotFoundError('trip_not_found');
@@ -412,17 +436,14 @@ export async function listExpenses(userId: string, tripId: string) {
     itineraryItems: trip.itineraryItems.map((item) => ({
       id: item.id,
       label: item.customLabel ?? item.customLocation ?? item.tripPlace?.place.customName ?? null,
+      place: serializeOptionalExpensePlace(item.tripPlace),
     })),
     projectedCost: projectedCostTotals({
       itineraryItems: trip.itineraryItems,
       reservations: trip.reservations,
     }),
     trip: { id: trip.id, name: trip.name },
-    tripPlaces: trip.tripPlaces.map((tripPlace) => ({
-      id: tripPlace.id,
-      name: tripPlace.place.customName,
-      placeId: tripPlace.placeId,
-    })),
+    tripPlaces: trip.tripPlaces.map(serializeExpensePlace),
   };
 }
 

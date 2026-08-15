@@ -774,7 +774,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   return (
-    <section className="mx-auto w-full max-w-6xl space-y-7">
+    <section className="mx-auto w-full max-w-5xl space-y-7">
       <TripSectionHeader
         currentSection="itinerary"
         description={t('description')}

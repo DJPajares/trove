@@ -19,6 +19,7 @@
     "db:generate": "pnpm --filter @trove/db db:generate",
     "db:migrate": "pnpm --filter @trove/db db:migrate:dev",
     "db:migrate:deploy": "pnpm --filter @trove/db db:migrate:deploy",
+    "db:seed": "pnpm --filter @trove/db db:seed",
     "db:validate-env": "pnpm --filter @trove/db db:validate-env"
   },
   "devDependencies": {

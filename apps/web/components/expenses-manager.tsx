@@ -60,6 +60,7 @@ import {
   type Expense,
   type ExpenseCategory,
   type ExpenseInput,
+  type ExpensePlace,
   type ExpensesResponse,
 } from '@/lib/expenses/api';
 import {
@@ -67,6 +68,7 @@ import {
   getCurrencyRate,
   type CachedCurrencyRate,
 } from '@/lib/currency/api';
+import { useProviderPlaceNames } from '@/lib/saved/provider-names';
 
 type EditorState =
   | { kind: 'closed'; expense: null }
@@ -152,6 +154,20 @@ export function ExpensesManager({
   const homeCurrencyCode = preferredCurrency;
   const [homeRates, setHomeRates] = useState<Record<string, CachedCurrencyRate>>({});
   const quickAddHandled = useRef<string | null>(null);
+
+  // Provider Place names are resolved on demand and never stored as Trove data.
+  const providerNames = useProviderPlaceNames(
+    useMemo(
+      () =>
+        (data?.tripPlaces ?? []).map((place) => ({
+          id: place.placeId,
+          kind: place.kind,
+          name: place.name,
+          providerRefs: place.providerRefs,
+        })),
+      [data?.tripPlaces],
+    ),
+  );
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -394,6 +410,17 @@ export function ExpensesManager({
 
   const expenseTitle = (expense: Expense) => expense.title ?? t('untitledExpense');
 
+  /**
+   * A provider Place has no name stored in Trove, so without this every one of them
+   * reads as "Unnamed place" and they become impossible to tell apart.
+   */
+  const placeLabel = (place: ExpensePlace | null, fallback: string) =>
+    place ? (place.name ?? providerNames[place.placeId] ?? fallback) : fallback;
+
+  // An item named only by its Place has no label of its own to fall back on.
+  const itemLabel = (item: { label: string | null; place: ExpensePlace | null }) =>
+    item.label ?? placeLabel(item.place, t('unnamedItem'));
+
   const homeCurrencyAmount = (expense: Expense) => {
     const sourceCurrency = expense.currencyCode.trim().toUpperCase();
     const rate = homeRates[sourceCurrency];
@@ -424,8 +451,10 @@ export function ExpensesManager({
           <ItemDescription className="line-clamp-none">
             <span className="flex flex-wrap gap-x-2 gap-y-1">
               {expense.category ? <span>{t(`categories.${expense.category}`)}</span> : null}
-              {expense.tripPlace?.name ? <span>{expense.tripPlace.name}</span> : null}
-              {expense.itineraryItem?.label ? <span>{expense.itineraryItem.label}</span> : null}
+              {expense.tripPlace ? (
+                <span>{placeLabel(expense.tripPlace, t('unnamedPlace'))}</span>
+              ) : null}
+              {expense.itineraryItem ? <span>{itemLabel(expense.itineraryItem)}</span> : null}
               {expense.localDate && !expense.itineraryDay ? <span>{expense.localDate}</span> : null}
               {expense.localTime ? <span>{expense.localTime}</span> : null}
             </span>
@@ -734,16 +763,19 @@ export function ExpensesManager({
                           <SelectValue>
                             {expenseForm.tripPlaceId === 'none'
                               ? t('noLinkedPlace')
-                              : (data.tripPlaces.find(
-                                  (place) => place.id === expenseForm.tripPlaceId,
-                                )?.name ?? t('unnamedPlace'))}
+                              : placeLabel(
+                                  data.tripPlaces.find(
+                                    (place) => place.id === expenseForm.tripPlaceId,
+                                  ) ?? null,
+                                  t('unnamedPlace'),
+                                )}
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">{t('noLinkedPlace')}</SelectItem>
                           {data.tripPlaces.map((place) => (
                             <SelectItem key={place.id} value={place.id}>
-                              {place.name ?? t('unnamedPlace')}
+                              {placeLabel(place, t('unnamedPlace'))}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -761,16 +793,19 @@ export function ExpensesManager({
                           <SelectValue>
                             {expenseForm.itineraryItemId === 'none'
                               ? t('noLinkedItem')
-                              : (data.itineraryItems.find(
-                                  (item) => item.id === expenseForm.itineraryItemId,
-                                )?.label ?? t('unnamedItem'))}
+                              : (() => {
+                                  const item = data.itineraryItems.find(
+                                    (candidate) => candidate.id === expenseForm.itineraryItemId,
+                                  );
+                                  return item ? itemLabel(item) : t('unnamedItem');
+                                })()}
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">{t('noLinkedItem')}</SelectItem>
                           {data.itineraryItems.map((item) => (
                             <SelectItem key={item.id} value={item.id}>
-                              {item.label ?? t('unnamedItem')}
+                              {itemLabel(item)}
                             </SelectItem>
                           ))}
                         </SelectContent>

@@ -288,7 +288,10 @@
         "trip_info_delete": "Delete trip info",
         "expense_create": "Add expense",
         "expense_update": "Update expense",
-        "expense_delete": "Delete expense"
+        "expense_delete": "Delete expense",
+        "memory_create": "Save memory",
+        "memory_photo_create": "Upload memory photo",
+        "memory_delete": "Delete memory"
       },
       "retry": "Retry",
       "syncNow": "Sync now",
@@ -1534,6 +1537,7 @@
     "actionError": "That didn't work. Try again.",
     "offlineHint": "Reconnect to refresh offline data.",
     "documentCount": "{count, plural, one {# document} other {# documents}}",
+    "pendingMemoryMedia": "{value} MB of memory photos waiting to sync",
     "unsyncedCount": "{count, plural, one {# unsynced change} other {# unsynced changes}}",
     "readiness": {
       "ready": "Ready offline",
@@ -1723,8 +1727,27 @@
       "save": "Save",
       "saving": "Saving…",
       "saved": "Memory saved.",
+      "savedOffline": "Memory kept on this device. It syncs when you are back online.",
       "saveError": "We could not save that memory. Try again.",
+      "storageFull": "This device has no room left for more photos. Sync or remove a few, then try again.",
+      "offlineHint": "You are offline. This memory and its photos stay on this device until you reconnect.",
       "capturedContext": "Saving to {date} · {timeZone}"
+    },
+    "pending": {
+      "title": "Waiting to sync",
+      "description": "These memories are kept on this device until they reach your account.",
+      "listLabel": "Memories waiting to sync",
+      "states": {
+        "pending": "Waiting for a connection.",
+        "partial": "Saved. Photos are still uploading.",
+        "failed": "Trove could not sync this memory. It is still stored on this device.",
+        "conflict": "This memory needs attention before it can sync."
+      },
+      "noteFallback": "Photo memory",
+      "photoCount": "{count, plural, one {# photo waiting} other {# photos waiting}}",
+      "highlight": "Highlight",
+      "removeMemory": "Remove this memory",
+      "removePhoto": "Remove {name}"
     }
   }
 }

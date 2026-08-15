@@ -1,17 +1,22 @@
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import { uploadMemoryPhotoObject } from '@/lib/memories/storage';
 
 import {
+  getOfflineMemoryMedia,
   getRememberedOfflineUser,
   listUserMutations,
+  mergeQueuedMemories,
   mergeQueuedMutations,
   OFFLINE_DATA_REFRESH_EVENT,
   type OfflineItineraryMutationOperation,
+  type OfflineMemoryMutationOperation,
   type OfflineMutation,
   type OfflineMutationOperation,
   type OfflineSupportingMutationOperation,
   putOfflineMutation,
   readTripSnapshot,
   rememberOfflineUser,
+  removeOfflineMemoryMedia,
   removeOfflineMutation,
   saveItinerarySnapshot,
   saveSupportingSnapshot,
@@ -19,6 +24,7 @@ import {
 } from './trip-store';
 import type { Itinerary, ItineraryItem } from '../itinerary/api';
 import type { Expense, ExpensesResponse } from '../expenses/api';
+import type { MemoriesResponse } from '../memories/api';
 import type { Task, TasksResponse } from '../tasks/api';
 import type { TripInfoEntry, TripInfoResponse } from '../trip-info/api';
 
@@ -258,6 +264,30 @@ function requestFor(
   }
   if (operation.kind === 'expense_delete') {
     return { headers, method: 'DELETE', path: `/trips/${tripId}/expenses/${operation.expenseId}` };
+  }
+  if (operation.kind === 'memory_create') {
+    return {
+      body: JSON.stringify({ ...operation.input, clientMemoryId: operation.clientMemoryId }),
+      headers,
+      method: 'POST',
+      path: `/trips/${tripId}/memories`,
+    };
+  }
+  if (operation.kind === 'memory_photo_create') {
+    return {
+      body: JSON.stringify({
+        contentType: operation.contentType,
+        fileName: operation.fileName,
+        path: operation.path,
+        sizeBytes: operation.sizeBytes,
+      }),
+      headers,
+      method: 'POST',
+      path: `/trips/${tripId}/memories/${operation.clientMemoryId}/photos`,
+    };
+  }
+  if (operation.kind === 'memory_delete') {
+    return { headers, method: 'DELETE', path: `/trips/${tripId}/memories/${operation.memoryId}` };
   }
   return {
     body: JSON.stringify({ travelStatus: operation.travelStatus }),
@@ -514,6 +544,99 @@ async function replaySupportingMutation(
   );
 }
 
+async function fetchServerMemories(accessToken: string, tripId: string) {
+  const response = await apiRequest(accessToken, {
+    method: 'GET',
+    path: `/trips/${tripId}/memories`,
+  });
+  if (!response.ok) throw new OfflineSyncError(`memories_request_failed_${response.status}`);
+  return response.json() as Promise<MemoriesResponse>;
+}
+
+async function failMemoryMutation(mutation: OfflineMutation, response: Response, fallback: string) {
+  const body = (await response.json().catch(() => ({}))) as { code?: string };
+  await updateMutationState(mutation, 'failed', body.code ?? fallback);
+}
+
+/**
+ * Metadata and photos replay as separate units against the same queue, so a
+ * Memory that saved but still owes a photo keeps only that photo outstanding.
+ * Both are keyed by identifiers chosen at capture time, which is what makes a
+ * repeated attempt resolve to the record that already exists rather than a copy.
+ */
+async function replayMemoryMutation(
+  mutation: OfflineMutation,
+  operation: OfflineMemoryMutationOperation,
+  accessToken: string,
+) {
+  if (operation.kind === 'memory_delete') {
+    const response = await apiRequest(accessToken, requestFor(operation, mutation.tripId));
+    if (response.ok || response.status === 404) {
+      await removeOfflineMutation(mutation.id);
+      return;
+    }
+    await failMemoryMutation(mutation, response, `memory_request_failed_${response.status}`);
+    return;
+  }
+
+  const { memories } = await fetchServerMemories(accessToken, mutation.tripId);
+  const memory = memories.find((candidate) => candidate.id === operation.clientMemoryId) ?? null;
+
+  if (operation.kind === 'memory_create') {
+    if (memory) {
+      await removeOfflineMutation(mutation.id);
+      return;
+    }
+    const response = await apiRequest(accessToken, requestFor(operation, mutation.tripId));
+    if (response.ok) {
+      await removeOfflineMutation(mutation.id);
+      return;
+    }
+    await failMemoryMutation(mutation, response, `memory_request_failed_${response.status}`);
+    return;
+  }
+
+  const media = await getOfflineMemoryMedia(
+    mutation.userId,
+    mutation.tripId,
+    operation.clientPhotoId,
+  );
+  if (!memory || !media) {
+    // The Memory or the photo itself was removed before this ran; nothing to upload.
+    const stillQueued = (await listUserMutations(mutation.userId, mutation.tripId)).some(
+      (candidate) =>
+        candidate.operation.kind === 'memory_create' &&
+        candidate.operation.clientMemoryId === operation.clientMemoryId,
+    );
+    if (memory || !stillQueued) {
+      await removeOfflineMutation(mutation.id);
+      await removeOfflineMemoryMedia(mutation.userId, mutation.tripId, operation.clientPhotoId);
+    }
+    return;
+  }
+
+  const supabase = createBrowserSupabaseClient();
+  if (!supabase) throw new OfflineSyncError('supabase_not_configured');
+  const uploaded = await uploadMemoryPhotoObject(
+    supabase,
+    operation.path,
+    media.blob,
+    operation.contentType,
+  );
+  if (!uploaded) {
+    await updateMutationState(mutation, 'failed', 'memory_photo_upload_failed');
+    return;
+  }
+
+  const response = await apiRequest(accessToken, requestFor(operation, mutation.tripId));
+  if (response.ok) {
+    await removeOfflineMutation(mutation.id);
+    await removeOfflineMemoryMedia(mutation.userId, mutation.tripId, operation.clientPhotoId);
+    return;
+  }
+  await failMemoryMutation(mutation, response, `memory_photo_request_failed_${response.status}`);
+}
+
 async function replayMutation(mutation: OfflineMutation, accessToken: string, force: boolean) {
   if (mutation.operation.kind.startsWith('itinerary_')) {
     return replayItineraryMutation(
@@ -521,6 +644,13 @@ async function replayMutation(mutation: OfflineMutation, accessToken: string, fo
       mutation.operation as OfflineItineraryMutationOperation,
       accessToken,
       force,
+    );
+  }
+  if (mutation.operation.kind.startsWith('memory_')) {
+    return replayMemoryMutation(
+      mutation,
+      mutation.operation as OfflineMemoryMutationOperation,
+      accessToken,
     );
   }
   return replaySupportingMutation(mutation, accessToken, force);
@@ -558,6 +688,27 @@ async function refreshSnapshot(accessToken: string, userId: string, tripId: stri
       (await expensesResponse.json()) as ExpensesResponse,
     );
   }
+
+  // Memories are read on demand, so this refreshes what the device already holds
+  // rather than pulling a trip's whole history and media down behind the scenes.
+  const snapshot = await readTripSnapshot(userId, tripId);
+  if (!snapshot?.memories) return;
+  const memoriesResponse = await apiRequest(accessToken, {
+    method: 'GET',
+    path: `/trips/${tripId}/memories`,
+  });
+  if (!memoriesResponse.ok) return;
+  await saveSupportingSnapshot(
+    userId,
+    tripId,
+    'memories',
+    await mergeQueuedMemories(
+      userId,
+      tripId,
+      (await memoriesResponse.json()) as MemoriesResponse,
+      snapshot,
+    ),
+  );
 }
 
 export async function syncOfflineMutations(options: { mutationId?: string; force?: boolean } = {}) {

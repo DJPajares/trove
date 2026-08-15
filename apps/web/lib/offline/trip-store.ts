@@ -7,16 +7,18 @@ import type {
   ItineraryTravelStatus,
 } from '@/lib/itinerary/api';
 import type { Expense, ExpenseInput, ExpensesResponse } from '@/lib/expenses/api';
+import type { MemoriesResponse, Memory, MemoryInput } from '@/lib/memories/api';
 import type { ReservationsResponse } from '@/lib/reservations/api';
 import type { Task, TaskInput, TasksResponse } from '@/lib/tasks/api';
 import type { TripInfoEntry, TripInfoInput, TripInfoResponse } from '@/lib/trip-info/api';
 import type { Trip } from '@/lib/trips/api';
 
 const DATABASE_NAME = 'trove-offline';
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 const SNAPSHOT_STORE = 'trip-snapshots';
 const MUTATION_STORE = 'mutations';
 const DOCUMENT_STORE = 'reservation-documents';
+const MEMORY_MEDIA_STORE = 'memory-media';
 const LAST_OFFLINE_USER_KEY = 'trove.last-offline-user';
 const OFFLINE_SNAPSHOT_STALE_AFTER_MS = 14 * 24 * 60 * 60 * 1_000;
 
@@ -112,10 +114,38 @@ export type OfflineMutationOperation =
   | { baseEntry: TripInfoEntry; entryId: string; kind: 'trip_info_delete' }
   | { clientExpenseId: string; input: ExpenseInput; kind: 'expense_create' }
   | { baseExpense: Expense; expenseId: string; input: ExpenseInput; kind: 'expense_update' }
-  | { baseExpense: Expense; expenseId: string; kind: 'expense_delete' };
+  | { baseExpense: Expense; expenseId: string; kind: 'expense_delete' }
+  | { clientMemoryId: string; input: MemoryInput; kind: 'memory_create' }
+  | {
+      clientMemoryId: string;
+      clientPhotoId: string;
+      contentType: string;
+      fileName: string;
+      kind: 'memory_photo_create';
+      path: string;
+      sizeBytes: number;
+    }
+  | { kind: 'memory_delete'; memoryId: string };
 
 export type OfflineSupportingSnapshotKey =
-  'expenses' | 'reservations' | 'routes' | 'tasks' | 'tripInfo';
+  'expenses' | 'memories' | 'reservations' | 'routes' | 'tasks' | 'tripInfo';
+
+/**
+ * A photo captured offline. The blob is held here rather than in the mutation so
+ * the queue stays small and each photo can be retried or removed on its own. The
+ * storage path is decided at capture time, which is what makes an interrupted
+ * upload safe to repeat.
+ */
+export type OfflineMemoryMedia = {
+  blob: Blob;
+  clientMemoryId: string;
+  clientPhotoId: string;
+  createdAt: string;
+  key: string;
+  sizeBytes: number;
+  tripId: string;
+  userId: string;
+};
 
 export type OfflineReservationDocument = {
   attachmentId: string;
@@ -137,9 +167,14 @@ export type OfflineItineraryMutationOperation = Extract<
   { kind: `itinerary_${string}` }
 >;
 
+export type OfflineMemoryMutationOperation = Extract<
+  OfflineMutationOperation,
+  { kind: `memory_${string}` }
+>;
+
 export type OfflineSupportingMutationOperation = Exclude<
   OfflineMutationOperation,
-  OfflineItineraryMutationOperation
+  OfflineItineraryMutationOperation | OfflineMemoryMutationOperation
 >;
 
 export type OfflineMutation = {
@@ -158,6 +193,7 @@ export type OfflineTripSnapshot = {
   expenses: ExpensesResponse | null;
   itinerary: Itinerary | null;
   key: string;
+  memories: MemoriesResponse | null;
   lastPreparationAttemptAt: string | null;
   preparationError: string | null;
   preparedAt: string | null;
@@ -237,6 +273,11 @@ function openDatabase() {
           store.createIndex('by-user', 'userId');
           store.createIndex('by-user-trip', ['userId', 'tripId']);
         }
+        if (!database.objectStoreNames.contains(MEMORY_MEDIA_STORE)) {
+          const store = database.createObjectStore(MEMORY_MEDIA_STORE, { keyPath: 'key' });
+          store.createIndex('by-user', 'userId');
+          store.createIndex('by-user-trip', ['userId', 'tripId']);
+        }
       },
       { once: true },
     );
@@ -296,6 +337,7 @@ export async function saveItinerarySnapshot(userId: string, tripId: string, itin
     itinerary,
     key: snapshotKey(userId, tripId),
     lastPreparationAttemptAt: current?.lastPreparationAttemptAt ?? null,
+    memories: current?.memories ?? null,
     preparationError: current?.preparationError ?? null,
     preparedAt: current?.preparedAt ?? null,
     reservations: current?.reservations ?? null,
@@ -326,6 +368,7 @@ export async function saveTripSnapshot(userId: string, trip: Trip) {
     itinerary: current?.itinerary ?? null,
     key: snapshotKey(userId, trip.id),
     lastPreparationAttemptAt: current?.lastPreparationAttemptAt ?? null,
+    memories: current?.memories ?? null,
     preparationError: current?.preparationError ?? null,
     preparedAt: current?.preparedAt ?? null,
     reservations: current?.reservations ?? null,
@@ -350,6 +393,7 @@ export async function saveSupportingSnapshot<Key extends OfflineSupportingSnapsh
     itinerary: current?.itinerary ?? null,
     key: snapshotKey(userId, tripId),
     lastPreparationAttemptAt: current?.lastPreparationAttemptAt ?? null,
+    memories: current?.memories ?? null,
     preparationError: current?.preparationError ?? null,
     preparedAt: current?.preparedAt ?? null,
     reservations: current?.reservations ?? null,
@@ -465,6 +509,7 @@ export async function recordTripPreparationError(
     itinerary: current?.itinerary ?? null,
     key: snapshotKey(userId, tripId),
     lastPreparationAttemptAt: new Date().toISOString(),
+    memories: current?.memories ?? null,
     preparationError: errorCode,
     preparedAt: current?.preparedAt ?? null,
     reservations: current?.reservations ?? null,
@@ -556,12 +601,13 @@ export async function clearAllOfflineTripData() {
   try {
     const database = await openDatabase();
     const transaction = database.transaction(
-      [SNAPSHOT_STORE, MUTATION_STORE, DOCUMENT_STORE],
+      [SNAPSHOT_STORE, MUTATION_STORE, DOCUMENT_STORE, MEMORY_MEDIA_STORE],
       'readwrite',
     );
     transaction.objectStore(SNAPSHOT_STORE).clear();
     transaction.objectStore(MUTATION_STORE).clear();
     transaction.objectStore(DOCUMENT_STORE).clear();
+    transaction.objectStore(MEMORY_MEDIA_STORE).clear();
     await transactionDone(transaction);
   } catch {
     // Continue clearing the user marker and private route caches.
@@ -585,12 +631,13 @@ export async function clearAllOfflineTripData() {
 export async function removeTripOfflineData(userId: string, tripId: string) {
   const database = await openDatabase();
   const transaction = database.transaction(
-    [SNAPSHOT_STORE, MUTATION_STORE, DOCUMENT_STORE],
+    [SNAPSHOT_STORE, MUTATION_STORE, DOCUMENT_STORE, MEMORY_MEDIA_STORE],
     'readwrite',
   );
   const snapshotStore = transaction.objectStore(SNAPSHOT_STORE);
   const mutationStore = transaction.objectStore(MUTATION_STORE);
   const documentStore = transaction.objectStore(DOCUMENT_STORE);
+  const mediaStore = transaction.objectStore(MEMORY_MEDIA_STORE);
   const pendingCount = await requestResult(
     mutationStore.index('by-user-trip').count(IDBKeyRange.only([userId, tripId])),
   );
@@ -602,6 +649,10 @@ export async function removeTripOfflineData(userId: string, tripId: string) {
     documentStore.index('by-user-trip').getAllKeys(IDBKeyRange.only([userId, tripId])),
   );
   for (const key of documentKeys) documentStore.delete(key);
+  const mediaKeys = await requestResult<IDBValidKey[]>(
+    mediaStore.index('by-user-trip').getAllKeys(IDBKeyRange.only([userId, tripId])),
+  );
+  for (const key of mediaKeys) mediaStore.delete(key);
   await transactionDone(transaction);
 
   if ('caches' in window) {
@@ -659,6 +710,199 @@ export async function removeOfflineReservationDocument(
   const database = await openDatabase();
   const transaction = database.transaction(DOCUMENT_STORE, 'readwrite');
   transaction.objectStore(DOCUMENT_STORE).delete(documentKey(userId, tripId, attachmentId));
+  await transactionDone(transaction);
+  announceChange();
+}
+
+function memoryMediaKey(userId: string, tripId: string, clientPhotoId: string) {
+  return `${userId}:${tripId}:${clientPhotoId}`;
+}
+
+export async function listOfflineMemoryMedia(userId: string, tripId?: string) {
+  const database = await openDatabase();
+  const transaction = database.transaction(MEMORY_MEDIA_STORE, 'readonly');
+  const store = transaction.objectStore(MEMORY_MEDIA_STORE);
+  const request = tripId
+    ? store.index('by-user-trip').getAll(IDBKeyRange.only([userId, tripId]))
+    : store.index('by-user').getAll(IDBKeyRange.only(userId));
+  return requestResult<OfflineMemoryMedia[]>(request);
+}
+
+export async function getOfflineMemoryMedia(userId: string, tripId: string, clientPhotoId: string) {
+  const database = await openDatabase();
+  const transaction = database.transaction(MEMORY_MEDIA_STORE, 'readonly');
+  return requestResult<OfflineMemoryMedia | undefined>(
+    transaction.objectStore(MEMORY_MEDIA_STORE).get(memoryMediaKey(userId, tripId, clientPhotoId)),
+  );
+}
+
+export async function removeOfflineMemoryMedia(
+  userId: string,
+  tripId: string,
+  clientPhotoId: string,
+) {
+  const database = await openDatabase();
+  const transaction = database.transaction(MEMORY_MEDIA_STORE, 'readwrite');
+  transaction.objectStore(MEMORY_MEDIA_STORE).delete(memoryMediaKey(userId, tripId, clientPhotoId));
+  await transactionDone(transaction);
+  announceChange();
+}
+
+/**
+ * Writes a capture, its photo blobs, and the local preview in one transaction so
+ * a reload can never find a queued Memory whose photos were lost, or the reverse.
+ */
+export async function queueOfflineMemoryCapture(
+  mutations: OfflineMutation[],
+  media: Array<Omit<OfflineMemoryMedia, 'key'>>,
+) {
+  const [first] = mutations;
+  if (!first) return;
+
+  const database = await openDatabase();
+  const transaction = database.transaction(
+    [SNAPSHOT_STORE, MUTATION_STORE, MEMORY_MEDIA_STORE],
+    'readwrite',
+  );
+  const snapshotStore = transaction.objectStore(SNAPSHOT_STORE);
+  const mutationStore = transaction.objectStore(MUTATION_STORE);
+  const mediaStore = transaction.objectStore(MEMORY_MEDIA_STORE);
+  const snapshot = await requestResult<OfflineTripSnapshot | undefined>(
+    snapshotStore.get(snapshotKey(first.userId, first.tripId)),
+  );
+  if (!snapshot) {
+    transaction.abort();
+    throw new Error('offline_trip_not_prepared');
+  }
+
+  const memories = mutations.reduce(
+    (current, mutation) => applyMemoryOperation(snapshot, current, mutation.operation),
+    snapshot.memories ?? { memories: [] },
+  );
+  snapshotStore.put({ ...snapshot, memories, savedAt: new Date().toISOString() });
+  for (const mutation of mutations) mutationStore.put(mutation);
+  for (const entry of media) {
+    mediaStore.put({
+      ...entry,
+      key: memoryMediaKey(entry.userId, entry.tripId, entry.clientPhotoId),
+    });
+  }
+  await transactionDone(transaction);
+  announceChange();
+}
+
+/**
+ * Removes a Memory that has not finished syncing. Queued work and its blobs go
+ * first so nothing can still be uploaded; when the metadata already reached the
+ * server the removal continues as an ordinary queued delete.
+ */
+export async function removePendingMemoryCapture(
+  userId: string,
+  tripId: string,
+  clientMemoryId: string,
+) {
+  const database = await openDatabase();
+  const transaction = database.transaction(
+    [SNAPSHOT_STORE, MUTATION_STORE, MEMORY_MEDIA_STORE],
+    'readwrite',
+  );
+  const snapshotStore = transaction.objectStore(SNAPSHOT_STORE);
+  const mutationStore = transaction.objectStore(MUTATION_STORE);
+  const mediaStore = transaction.objectStore(MEMORY_MEDIA_STORE);
+  const mutations = await requestResult<OfflineMutation[]>(
+    mutationStore.index('by-user-trip').getAll(IDBKeyRange.only([userId, tripId])),
+  );
+
+  let createQueued = false;
+  for (const mutation of mutations) {
+    const operation = mutation.operation;
+    if (operation.kind === 'memory_create' && operation.clientMemoryId === clientMemoryId) {
+      createQueued = true;
+      mutationStore.delete(mutation.id);
+    }
+    if (operation.kind === 'memory_photo_create' && operation.clientMemoryId === clientMemoryId) {
+      mutationStore.delete(mutation.id);
+      mediaStore.delete(memoryMediaKey(userId, tripId, operation.clientPhotoId));
+    }
+  }
+
+  if (!createQueued) {
+    const now = new Date().toISOString();
+    mutationStore.put({
+      attempts: 0,
+      createdAt: now,
+      errorCode: null,
+      id: crypto.randomUUID(),
+      operation: { kind: 'memory_delete', memoryId: clientMemoryId },
+      state: 'pending',
+      tripId,
+      updatedAt: now,
+      userId,
+    } satisfies OfflineMutation);
+  }
+
+  const snapshot = await requestResult<OfflineTripSnapshot | undefined>(
+    snapshotStore.get(snapshotKey(userId, tripId)),
+  );
+  if (snapshot?.memories) {
+    snapshotStore.put({
+      ...snapshot,
+      memories: {
+        ...snapshot.memories,
+        memories: snapshot.memories.memories.filter((memory) => memory.id !== clientMemoryId),
+      },
+      savedAt: new Date().toISOString(),
+    });
+  }
+  await transactionDone(transaction);
+  announceChange();
+}
+
+/** Drops one queued photo; the Memory and every other photo stay as they are. */
+export async function removePendingMemoryPhoto(
+  userId: string,
+  tripId: string,
+  clientPhotoId: string,
+) {
+  const database = await openDatabase();
+  const transaction = database.transaction(
+    [SNAPSHOT_STORE, MUTATION_STORE, MEMORY_MEDIA_STORE],
+    'readwrite',
+  );
+  const snapshotStore = transaction.objectStore(SNAPSHOT_STORE);
+  const mutationStore = transaction.objectStore(MUTATION_STORE);
+  const mutations = await requestResult<OfflineMutation[]>(
+    mutationStore.index('by-user-trip').getAll(IDBKeyRange.only([userId, tripId])),
+  );
+  const queued = mutations.find(
+    (mutation) =>
+      mutation.operation.kind === 'memory_photo_create' &&
+      mutation.operation.clientPhotoId === clientPhotoId,
+  );
+  if (!queued) {
+    transaction.abort();
+    throw new Error('offline_memory_photo_already_uploaded');
+  }
+
+  mutationStore.delete(queued.id);
+  transaction.objectStore(MEMORY_MEDIA_STORE).delete(memoryMediaKey(userId, tripId, clientPhotoId));
+
+  const snapshot = await requestResult<OfflineTripSnapshot | undefined>(
+    snapshotStore.get(snapshotKey(userId, tripId)),
+  );
+  if (snapshot?.memories) {
+    snapshotStore.put({
+      ...snapshot,
+      memories: {
+        ...snapshot.memories,
+        memories: snapshot.memories.memories.map((memory) => ({
+          ...memory,
+          photos: memory.photos.filter((photo) => photo.id !== clientPhotoId),
+        })),
+      },
+      savedAt: new Date().toISOString(),
+    });
+  }
   await transactionDone(transaction);
   announceChange();
 }
@@ -982,6 +1226,128 @@ function applyExpenseOperation(data: ExpensesResponse, operation: OfflineMutatio
   }
   refreshExpenseTotals(next);
   return next;
+}
+
+/**
+ * The trip-local capture time is the server's to resolve. This local preview uses
+ * the same day/item/trip context the server will read, so what the traveller sees
+ * offline matches what is stored once the capture syncs.
+ */
+function localCapture(instant: Date, timeZone: string) {
+  const format = (zone: string) =>
+    new Intl.DateTimeFormat('en-CA', {
+      day: '2-digit',
+      hour: '2-digit',
+      hourCycle: 'h23',
+      minute: '2-digit',
+      month: '2-digit',
+      second: '2-digit',
+      timeZone: zone,
+      year: 'numeric',
+    }).formatToParts(instant);
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = format(timeZone);
+  } catch {
+    parts = format('UTC');
+  }
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? '00';
+  return {
+    date: `${value('year')}-${value('month')}-${value('day')}`,
+    time: `${value('hour')}:${value('minute')}:${value('second')}`,
+  };
+}
+
+function memoryFromOperation(
+  snapshot: OfflineTripSnapshot,
+  operation: Extract<OfflineMutationOperation, { kind: 'memory_create' }>,
+): Memory {
+  const itinerary = snapshot.itinerary;
+  const day = itinerary?.days.find((candidate) => candidate.id === operation.input.itineraryDayId);
+  const item = day?.items.find((candidate) => candidate.id === operation.input.itineraryItemId);
+  const tripPlace = itinerary?.tripPlaces.find(
+    (candidate) => candidate.id === operation.input.tripPlaceId,
+  );
+  const timeZone =
+    item?.timeZone ?? day?.defaultTimeZone ?? itinerary?.trip.referenceTimeZone ?? 'UTC';
+  const now = new Date();
+  const capturedAt = operation.input.capturedAt ?? now.toISOString();
+  const local = localCapture(new Date(capturedAt), timeZone);
+
+  return {
+    capturedAt,
+    capturedLocalDate: local.date,
+    capturedLocalTime: local.time,
+    createdAt: now.toISOString(),
+    id: operation.clientMemoryId,
+    isHighlight: operation.input.isHighlight ?? false,
+    itineraryDay: day ? { date: day.date, id: day.id } : null,
+    itineraryItem: item ? { id: item.id, label: item.customLabel } : null,
+    note: operation.input.note?.trim() || null,
+    photos: [],
+    timeZone,
+    timeZoneSource: item ? 'itinerary_item' : tripPlace ? 'trip_place' : 'itinerary_day',
+    tripPlace: tripPlace
+      ? { id: tripPlace.id, name: tripPlace.place.kind === 'custom' ? tripPlace.place.name : null }
+      : null,
+    updatedAt: now.toISOString(),
+  };
+}
+
+function applyMemoryOperation(
+  snapshot: OfflineTripSnapshot,
+  data: MemoriesResponse,
+  operation: OfflineMutationOperation,
+): MemoriesResponse {
+  const next = { ...data, memories: [...data.memories] };
+  if (operation.kind === 'memory_create') {
+    if (next.memories.some((memory) => memory.id === operation.clientMemoryId)) return next;
+    next.memories = [...next.memories, memoryFromOperation(snapshot, operation)];
+    return next;
+  }
+  if (operation.kind === 'memory_photo_create') {
+    next.memories = next.memories.map((memory) => {
+      if (memory.id !== operation.clientMemoryId) return memory;
+      if (memory.photos.some((photo) => photo.id === operation.clientPhotoId)) return memory;
+      return {
+        ...memory,
+        photos: [
+          ...memory.photos,
+          {
+            contentType: operation.contentType,
+            createdAt: new Date().toISOString(),
+            fileName: operation.fileName,
+            id: operation.clientPhotoId,
+            position: memory.photos.length,
+            sizeBytes: operation.sizeBytes,
+            url: null,
+          },
+        ],
+      };
+    });
+    return next;
+  }
+  if (operation.kind === 'memory_delete') {
+    next.memories = next.memories.filter((memory) => memory.id !== operation.memoryId);
+  }
+  return next;
+}
+
+export async function mergeQueuedMemories(
+  userId: string,
+  tripId: string,
+  data: MemoriesResponse,
+  snapshot: OfflineTripSnapshot,
+) {
+  const mutations = await listUserMutations(userId, tripId);
+  return mutations.reduce(
+    (current, mutation) =>
+      mutation.operation.kind.startsWith('memory_')
+        ? applyMemoryOperation(snapshot, current, mutation.operation)
+        : current,
+    data,
+  );
 }
 
 function applyOperationToSnapshot(

@@ -68,6 +68,8 @@ export type ItineraryDay = {
   defaultTimeZoneSource:
     'accommodation' | 'explicit_daily_base' | 'first_located_item' | 'trip_reference';
   defaultTimeZoneSourceTripPlaceId: string | null;
+  experienceNote: string | null;
+  experienceRating: number | null;
   id: string;
   items: ItineraryItem[];
   notes: string | null;
@@ -674,6 +676,26 @@ export async function updateItineraryDayNote(
     await queueOrThrow(error, auth.userId, tripId, operation);
     return { id: itineraryDayId, notes: note?.trim() || null };
   }
+}
+
+/**
+ * Experience Rating is the traveller's own private reflection on the day,
+ * entered independently of Plan Score and never averaged into the trip rating.
+ */
+export function updateItineraryDayExperienceRating(
+  tripId: string,
+  itineraryDayId: string,
+  rating: number | null,
+  note: string | null,
+) {
+  return itineraryRequest<{
+    experienceNote: string | null;
+    experienceRating: number | null;
+    id: string;
+  }>(`/trips/${tripId}/itinerary/days/${itineraryDayId}/experience-rating`, {
+    body: JSON.stringify({ note, rating }),
+    method: 'PATCH',
+  });
 }
 
 export function updateItineraryDayRouteMode(

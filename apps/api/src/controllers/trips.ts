@@ -11,6 +11,7 @@ import {
   TripNotFoundError,
   TripValidationError,
   updateTrip,
+  updateTripExperienceRating,
 } from '../services/trips.js';
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -65,6 +66,12 @@ const tripUpdateSchema = z
   })
   .strict();
 const tripParamsSchema = z.object({ tripId: z.uuid() }).strict();
+const experienceRatingSchema = z
+  .object({
+    note: z.string().trim().max(2_000).nullable().optional(),
+    rating: z.number().int().min(1).max(5).nullable(),
+  })
+  .strict();
 
 function getRequestContext(request: FastifyRequest, reply: FastifyReply) {
   const userId = request.authUserId;
@@ -150,6 +157,31 @@ export async function updateTripController(request: FastifyRequest, reply: Fasti
 
   try {
     return { trip: await updateTrip(context.userId, context.accessToken, tripId, parsed.data) };
+  } catch (error) {
+    return handleTripError(error, reply);
+  }
+}
+
+export async function updateTripExperienceRatingController(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const context = getRequestContext(request, reply);
+  const tripId = parseTripId(request, reply);
+  if (!context || !tripId) return;
+  const parsed = experienceRatingSchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ code: 'invalid_experience_rating' });
+
+  try {
+    return {
+      trip: await updateTripExperienceRating(
+        context.userId,
+        context.accessToken,
+        tripId,
+        parsed.data.rating,
+        parsed.data.note,
+      ),
+    };
   } catch (error) {
     return handleTripError(error, reply);
   }

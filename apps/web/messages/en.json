@@ -1645,6 +1645,13 @@
       "description": "Your travel settings will appear here."
     }
   },
+  "experienceRating": {
+    "starLabel": "{value, plural, one {# star} other {# stars}}",
+    "addNote": "Add a note",
+    "noteLabel": "Note for {label}",
+    "notePlaceholder": "What made it feel that way?",
+    "saveError": "We could not save that rating. Try again."
+  },
   "planScore": {
     "title": "Plan Score",
     "dayTitle": "Plan Score for this day",
@@ -1771,6 +1778,8 @@
       "unplaced": "{count, plural, one {# memory is not tied to a place} other {# memories are not tied to a place}}.",
       "photoAlt": "Your photo from this trip",
       "privacyNote": "Only you can see these memories.",
+      "overallRating": "How was the trip?",
+      "dayRating": "How was this day?",
       "addMemory": "Add memory",
       "editMemory": "Edit memory",
       "moveHighlightUp": "Move up in Highlights",

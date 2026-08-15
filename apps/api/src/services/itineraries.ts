@@ -397,6 +397,8 @@ export async function listItinerary(userId: string, tripId: string) {
       defaultTimeZoneSource: mapDayTimeZoneSource(day.defaultTimeZoneSource),
       defaultTimeZoneSourceTripPlaceId: day.defaultTimeZoneSourceTripPlaceId,
       dailyBaseTripPlaceId: day.dailyBaseTripPlaceId,
+      experienceNote: day.experienceNote,
+      experienceRating: day.experienceRating,
       id: day.id,
       items: day.items.map(serializeItineraryItem),
       notes: day.notes,
@@ -551,6 +553,39 @@ export async function updateItineraryDayNote(
     });
   });
   return { id: result.id, notes: result.notes };
+}
+
+/**
+ * Experience Rating is the traveller's own private reflection on how the day
+ * felt, separate from Plan Score's computed planning-quality signal and from
+ * any provider/public Place rating (PRD section 30). It never feeds the
+ * overall trip rating, which is entered and cleared independently.
+ */
+export async function updateItineraryDayExperienceRating(
+  userId: string,
+  tripId: string,
+  itineraryDayId: string,
+  rating: number | null,
+  note: string | null | undefined,
+) {
+  const prisma = getPrismaClient();
+  const result = await prisma.$transaction(async (transaction) => {
+    await findOwnedTrip(transaction, userId, tripId);
+    const day = await findDay(transaction, tripId, itineraryDayId);
+    return transaction.itineraryDay.update({
+      where: { id: day.id },
+      data: {
+        experienceRating: rating,
+        ...(note === undefined ? {} : { experienceNote: note?.trim() || null }),
+      },
+      select: { experienceNote: true, experienceRating: true, id: true },
+    });
+  });
+  return {
+    experienceNote: result.experienceNote,
+    experienceRating: result.experienceRating,
+    id: result.id,
+  };
 }
 
 export async function createItineraryItem(

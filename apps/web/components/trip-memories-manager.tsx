@@ -13,12 +13,17 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
+import { ExperienceRatingField } from '@/components/experience-rating-field';
 import { MemoryEditorDialog } from '@/components/memory-editor-dialog';
 import { PageState } from '@/components/page-state';
 import { StoryCoverPicker } from '@/components/story-cover-picker';
 import { TripSectionHeader } from '@/components/trip-section-header';
 import { Button } from '@/components/ui/button';
-import { fetchItinerary, type Itinerary } from '@/lib/itinerary/api';
+import {
+  fetchItinerary,
+  updateItineraryDayExperienceRating,
+  type Itinerary,
+} from '@/lib/itinerary/api';
 import { fetchMemories, reorderHighlights, type Memory, type StoryCover } from '@/lib/memories/api';
 import {
   buildTripStory,
@@ -32,7 +37,7 @@ import {
   getCachedProviderPlaceDetails,
   getProviderPlaceDetails,
 } from '@/lib/saved/api';
-import { fetchTrip, type Trip } from '@/lib/trips/api';
+import { fetchTrip, updateTripExperienceRating, type Trip } from '@/lib/trips/api';
 
 type LoadState =
   | { data: null; status: 'error' }
@@ -231,6 +236,35 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
     }
   }
 
+  async function saveTripRating(rating: number | null, note: string | null) {
+    const result = await updateTripExperienceRating(tripId, rating, note);
+    setState((current) =>
+      current.status === 'ready'
+        ? { data: { ...current.data, trip: result.trip }, status: 'ready' }
+        : current,
+    );
+  }
+
+  async function saveDayRating(itineraryDayId: string, rating: number | null, note: string | null) {
+    const result = await updateItineraryDayExperienceRating(tripId, itineraryDayId, rating, note);
+    setItinerary((current) =>
+      current
+        ? {
+            ...current,
+            days: current.days.map((day) =>
+              day.id === itineraryDayId
+                ? {
+                    ...day,
+                    experienceNote: result.experienceNote,
+                    experienceRating: result.experienceRating,
+                  }
+                : day,
+            ),
+          }
+        : current,
+    );
+  }
+
   if (state.status === 'loading') {
     return <PageState className="mx-auto max-w-5xl" kind="loading" title={t('loading')} />;
   }
@@ -333,6 +367,12 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
     return (
       <section className="mx-auto w-full max-w-5xl space-y-7">
         {header}
+        <ExperienceRatingField
+          initialNote={trip.experienceNote}
+          initialRating={trip.experienceRating}
+          label={t('overallRating')}
+          onSave={saveTripRating}
+        />
         <PageState
           className="min-h-64 justify-center"
           description={t('emptyDescription')}
@@ -377,6 +417,13 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
         />
       ) : null}
 
+      <ExperienceRatingField
+        initialNote={trip.experienceNote}
+        initialRating={trip.experienceRating}
+        label={t('overallRating')}
+        onSave={saveTripRating}
+      />
+
       {story.highlights.length ? (
         <section aria-labelledby="trip-story-highlights">
           <h2
@@ -420,27 +467,40 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
           {t('days')}
         </h2>
         <div className="mt-3 space-y-7">
-          {story.days.map((day) => (
-            <article aria-labelledby={`trip-story-day-${day.date}`} key={day.date}>
-              <h3
-                className="text-base font-semibold text-foreground"
-                id={`trip-story-day-${day.date}`}
-              >
-                {dateOnly(day.date)}
-              </h3>
-              <ul className="mt-2 border-y border-border">
-                {day.memories.map((memory) => (
-                  <MemoryEntry
-                    key={memory.id}
-                    memory={memory}
-                    onEdit={() => setEditor({ memory, mode: 'edit' })}
-                    photoAlt={t('photoAlt')}
-                    time={localTime(memory)}
-                  />
-                ))}
-              </ul>
-            </article>
-          ))}
+          {story.days.map((day) => {
+            const itineraryDay = itinerary?.days.find((candidate) => candidate.date === day.date);
+            return (
+              <article aria-labelledby={`trip-story-day-${day.date}`} key={day.date}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h3
+                    className="text-base font-semibold text-foreground"
+                    id={`trip-story-day-${day.date}`}
+                  >
+                    {dateOnly(day.date)}
+                  </h3>
+                  {itineraryDay ? (
+                    <ExperienceRatingField
+                      initialNote={itineraryDay.experienceNote}
+                      initialRating={itineraryDay.experienceRating}
+                      label={t('dayRating')}
+                      onSave={(rating, note) => saveDayRating(itineraryDay.id, rating, note)}
+                    />
+                  ) : null}
+                </div>
+                <ul className="mt-2 border-y border-border">
+                  {day.memories.map((memory) => (
+                    <MemoryEntry
+                      key={memory.id}
+                      memory={memory}
+                      onEdit={() => setEditor({ memory, mode: 'edit' })}
+                      photoAlt={t('photoAlt')}
+                      time={localTime(memory)}
+                    />
+                  ))}
+                </ul>
+              </article>
+            );
+          })}
         </div>
       </section>
 

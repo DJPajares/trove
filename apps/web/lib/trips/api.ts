@@ -21,6 +21,8 @@ export type Trip = {
   createdAt: string;
   destinations: TripDestination[];
   endDate: string;
+  experienceNote: string | null;
+  experienceRating: number | null;
   id: string;
   lifecycle: 'active' | 'completed' | 'planning';
   name: string;
@@ -160,6 +162,21 @@ export async function saveTrip(tripId: string, input: TripInput) {
 
 export async function deleteTrip(tripId: string) {
   return tripRequest<void>(`/trips/${tripId}`, { method: 'DELETE' });
+}
+
+/**
+ * Experience Rating is the traveller's own private reflection on the trip,
+ * entered independently of Plan Score and never averaged from day ratings.
+ */
+export async function updateTripExperienceRating(
+  tripId: string,
+  rating: number | null,
+  note: string | null,
+) {
+  return tripRequest<{ trip: Trip }>(`/trips/${tripId}/experience-rating`, {
+    body: JSON.stringify({ note, rating }),
+    method: 'PATCH',
+  });
 }
 
 export async function uploadTripCover(file: File) {

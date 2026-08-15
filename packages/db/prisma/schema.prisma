@@ -350,6 +350,8 @@ model Trip {
   sourceTripId                   String?               @map("source_trip_id") @db.Uuid
   sourceAttribution              String?               @map("source_attribution") @db.Text
   storyCoverMemoryPhotoId        String?               @map("story_cover_memory_photo_id") @db.Uuid
+  experienceRating               Int?                  @map("experience_rating")
+  experienceNote                 String?               @map("experience_note") @db.Text
   createdAt                      DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                      DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -542,6 +544,8 @@ model ItineraryDay {
   date                             DateTime          @db.Date
   dailyBaseTripPlaceId             String?           @map("daily_base_trip_place_id") @db.Uuid
   notes                            String?           @db.Text
+  experienceRating                 Int?              @map("experience_rating")
+  experienceNote                   String?           @map("experience_note") @db.Text
   routeStartTravelMode             RouteTravelMode   @default(DRIVE) @map("route_start_travel_mode")
   defaultTimeZone                  String            @map("default_time_zone")
   defaultTimeZoneSource            DayTimeZoneSource @map("default_time_zone_source")

@@ -544,11 +544,17 @@ async function replaySupportingMutation(
   );
 }
 
+/**
+ * A 404 here means the trip is no longer reachable for the signed-in user, which
+ * a retry can never fix. Returning null lets the caller offer a way out instead of
+ * failing the same way forever.
+ */
 async function fetchServerMemories(accessToken: string, tripId: string) {
   const response = await apiRequest(accessToken, {
     method: 'GET',
     path: `/trips/${tripId}/memories`,
   });
+  if (response.status === 404) return null;
   if (!response.ok) throw new OfflineSyncError(`memories_request_failed_${response.status}`);
   return response.json() as Promise<MemoriesResponse>;
 }
@@ -579,8 +585,13 @@ async function replayMemoryMutation(
     return;
   }
 
-  const { memories } = await fetchServerMemories(accessToken, mutation.tripId);
-  const memory = memories.find((candidate) => candidate.id === operation.clientMemoryId) ?? null;
+  const server = await fetchServerMemories(accessToken, mutation.tripId);
+  if (!server) {
+    await updateMutationState(mutation, 'conflict', 'trip_missing');
+    return;
+  }
+  const memory =
+    server.memories.find((candidate) => candidate.id === operation.clientMemoryId) ?? null;
 
   if (operation.kind === 'memory_create') {
     if (memory) {

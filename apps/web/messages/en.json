@@ -274,7 +274,7 @@
         "pending": "Waiting for a connection.",
         "failed": "Trove could not sync this change. It is still stored locally.",
         "conflict": "This detail also changed in the cloud. Choose which version to keep.",
-        "missing": "This detail was removed in the cloud. Use the cloud version to clear the local change."
+        "missing": "This no longer exists in the cloud. Use the cloud version to clear the local change."
       },
       "reasons": {
         "database_schema_outdated": "The server's database is missing a recent update. It needs its migrations applied.",
@@ -283,6 +283,7 @@
         "internal_error": "The server could not complete this change.",
         "memory_photo_upload_failed": "The photo could not be uploaded.",
         "memory_storage_full": "This device has no room left for more photos.",
+        "trip_missing": "This trip is no longer in your account, so the change cannot be applied.",
         "unknown": "Reported reason: {code}"
       },
       "operations": {
@@ -306,6 +307,7 @@
         "memory_delete": "Delete memory"
       },
       "retry": "Retry",
+      "discard": "Discard",
       "syncNow": "Sync now",
       "useCloud": "Use cloud version",
       "keepMine": "Keep my change"

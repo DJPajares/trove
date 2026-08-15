@@ -22,8 +22,9 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:validate-env": "tsx src/validate-environment.ts",
-    "lint": "../../node_modules/.bin/oxlint --deny-warnings src",
-    "typecheck": "pnpm db:generate && ../../node_modules/.bin/tsc --noEmit --project tsconfig.json"
+    "lint": "../../node_modules/.bin/oxlint --deny-warnings prisma/seed.ts src",
+    "typecheck": "pnpm db:generate && ../../node_modules/.bin/tsc --noEmit --project tsconfig.json",
+    "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

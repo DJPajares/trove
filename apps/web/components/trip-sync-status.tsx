@@ -58,7 +58,12 @@ export function useOfflineDataRefreshKey() {
 }
 
 /** Codes whose own state line already explains the situation fully. */
-const MISSING_ERROR_CODES = ['day_missing', 'itinerary_item_missing', 'supporting_data_missing'];
+const MISSING_ERROR_CODES = [
+  'day_missing',
+  'itinerary_item_missing',
+  'supporting_data_missing',
+  'trip_missing',
+];
 
 const NAMED_REASONS = [
   'database_schema_outdated',
@@ -218,11 +223,7 @@ export function TripSyncStatus({ tripId }: Readonly<{ tripId: string }>) {
                         >
                           {t('useCloud')}
                         </Button>
-                        {![
-                          'day_missing',
-                          'itinerary_item_missing',
-                          'supporting_data_missing',
-                        ].includes(mutation.errorCode ?? '') ? (
+                        {!MISSING_ERROR_CODES.includes(mutation.errorCode ?? '') ? (
                           <Button
                             disabled={busyId === mutation.id || !online}
                             onClick={() =>
@@ -237,22 +238,37 @@ export function TripSyncStatus({ tripId }: Readonly<{ tripId: string }>) {
                         ) : null}
                       </>
                     ) : mutation.state === 'failed' ? (
-                      <Button
-                        disabled={busyId === mutation.id || !online}
-                        onClick={() =>
-                          void runAction(mutation.id, () => retryOfflineMutation(mutation.id))
-                        }
-                        size="sm"
-                      >
-                        <RotateCcw
-                          aria-hidden="true"
-                          className={
-                            busyId === mutation.id ? 'animate-spin motion-reduce:animate-none' : ''
+                      <>
+                        {/* Without this a change that can never succeed is stuck here forever. */}
+                        <Button
+                          disabled={busyId === mutation.id || !online}
+                          onClick={() =>
+                            void runAction(mutation.id, () => discardOfflineMutation(mutation.id))
                           }
-                          data-icon="inline-start"
-                        />
-                        {t('retry')}
-                      </Button>
+                          size="sm"
+                          variant="outline"
+                        >
+                          {t('discard')}
+                        </Button>
+                        <Button
+                          disabled={busyId === mutation.id || !online}
+                          onClick={() =>
+                            void runAction(mutation.id, () => retryOfflineMutation(mutation.id))
+                          }
+                          size="sm"
+                        >
+                          <RotateCcw
+                            aria-hidden="true"
+                            className={
+                              busyId === mutation.id
+                                ? 'animate-spin motion-reduce:animate-none'
+                                : ''
+                            }
+                            data-icon="inline-start"
+                          />
+                          {t('retry')}
+                        </Button>
+                      </>
                     ) : null}
                   </div>
                 </li>

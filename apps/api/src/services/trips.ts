@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPrismaClient, type Prisma } from '@trove/db';
 
+import { MEMORY_PHOTOS_BUCKET } from './memories.js';
 import { createAuthenticatedSupabaseClient } from './supabase-auth.js';
 import {
   deriveTripLifecycle,
@@ -469,18 +470,37 @@ export async function updateTripExperienceRating(
   return getTrip(userId, accessToken, tripId);
 }
 
+/** Storage removes a bounded number of objects per request. */
+const STORAGE_REMOVE_BATCH = 100;
+
 export async function deleteTrip(userId: string, accessToken: string, tripId: string) {
   const prisma = getPrismaClient();
   const trip = await prisma.trip.findFirst({
     where: { id: tripId, ownerId: userId },
-    select: { coverPhotoPath: true },
+    select: {
+      coverPhotoPath: true,
+      // Deleting the trip cascades its Memories away; the traveller's own photos
+      // must leave private storage with them rather than outliving the trip.
+      memories: { select: { photos: { select: { path: true } } } },
+    },
   });
   if (!trip) throw new TripNotFoundError();
 
   await prisma.trip.delete({ where: { id: tripId } });
 
+  const memoryPhotoPaths = trip.memories.flatMap((memory) =>
+    memory.photos.map((photo) => photo.path),
+  );
+  if (!trip.coverPhotoPath && !memoryPhotoPaths.length) return;
+
+  const supabase = createAuthenticatedSupabaseClient(accessToken);
+  if (!supabase) return;
   if (trip.coverPhotoPath) {
-    const supabase = createAuthenticatedSupabaseClient(accessToken);
-    await supabase?.storage.from(TRIP_COVERS_BUCKET).remove([trip.coverPhotoPath]);
+    await supabase.storage.from(TRIP_COVERS_BUCKET).remove([trip.coverPhotoPath]);
+  }
+  for (let index = 0; index < memoryPhotoPaths.length; index += STORAGE_REMOVE_BATCH) {
+    await supabase.storage
+      .from(MEMORY_PHOTOS_BUCKET)
+      .remove(memoryPhotoPaths.slice(index, index + STORAGE_REMOVE_BATCH));
   }
 }

@@ -19,8 +19,9 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev --port 3000",
-    "lint": "../../node_modules/.bin/oxlint --deny-warnings app components i18n lib",
+    "lint": "../../node_modules/.bin/oxlint --deny-warnings app components i18n lib test",
     "start": "next start --port 3000",
+    "test": "../../node_modules/.bin/tsc --noEmit --project tsconfig.test.json && node --test test/*.test.ts",
     "typecheck": "../../node_modules/.bin/tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {

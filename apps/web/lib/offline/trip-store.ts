@@ -1259,6 +1259,26 @@ function localCapture(instant: Date, timeZone: string) {
   };
 }
 
+/**
+ * Mirrors the order the server resolves a Memory's timezone in: the itinerary
+ * item, then the Place, then the day, then the trip reference. A queued capture
+ * therefore previews on the story day it will actually land on, instead of
+ * jumping to another day once it syncs.
+ */
+function queuedMemoryTimeZone(
+  itinerary: Itinerary | null,
+  day: Itinerary['days'][number] | undefined,
+  item: ItineraryItem | undefined,
+  tripPlace: Itinerary['tripPlaces'][number] | undefined,
+) {
+  if (item?.timeZone) return { source: 'itinerary_item', timeZone: item.timeZone };
+  if (tripPlace?.place.timeZone) {
+    return { source: 'trip_place', timeZone: tripPlace.place.timeZone };
+  }
+  if (day) return { source: 'itinerary_day', timeZone: day.defaultTimeZone };
+  return { source: 'trip_reference', timeZone: itinerary?.trip.referenceTimeZone ?? 'UTC' };
+}
+
 function memoryFromOperation(
   snapshot: OfflineTripSnapshot,
   operation: Extract<OfflineMutationOperation, { kind: 'memory_create' }>,
@@ -1269,8 +1289,7 @@ function memoryFromOperation(
   const tripPlace = itinerary?.tripPlaces.find(
     (candidate) => candidate.id === operation.input.tripPlaceId,
   );
-  const timeZone =
-    item?.timeZone ?? day?.defaultTimeZone ?? itinerary?.trip.referenceTimeZone ?? 'UTC';
+  const { source, timeZone } = queuedMemoryTimeZone(itinerary, day, item, tripPlace);
   const now = new Date();
   const capturedAt = operation.input.capturedAt ?? now.toISOString();
   const local = localCapture(new Date(capturedAt), timeZone);
@@ -1288,7 +1307,7 @@ function memoryFromOperation(
     note: operation.input.note?.trim() || null,
     photos: [],
     timeZone,
-    timeZoneSource: item ? 'itinerary_item' : tripPlace ? 'trip_place' : 'itinerary_day',
+    timeZoneSource: source,
     tripPlace: tripPlace
       ? {
           id: tripPlace.id,

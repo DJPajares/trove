@@ -45,6 +45,21 @@ function byCapturedLocal(left: Memory, right: Memory) {
   return time !== 0 ? time : left.capturedAt.localeCompare(right.capturedAt);
 }
 
+/**
+ * Highlights carry their own curated order, distinct from the chronological
+ * order Days always uses. A Memory without a position yet (freshly toggled, or
+ * predating this feature) falls back to chronological order and sorts after
+ * every explicitly ordered Memory.
+ */
+function byHighlightPosition(left: Memory, right: Memory) {
+  if (left.highlightPosition === null && right.highlightPosition === null) {
+    return byCapturedLocal(left, right);
+  }
+  if (left.highlightPosition === null) return 1;
+  if (right.highlightPosition === null) return -1;
+  return left.highlightPosition - right.highlightPosition;
+}
+
 export function buildTripStory(memories: Memory[]): TripStory {
   const ordered = [...memories].sort(byCapturedLocal);
 
@@ -81,7 +96,7 @@ export function buildTripStory(memories: Memory[]): TripStory {
         photoCount: photoTotal(dayMemories),
       }))
       .sort((left, right) => left.date.localeCompare(right.date)),
-    highlights: ordered.filter((memory) => memory.isHighlight),
+    highlights: ordered.filter((memory) => memory.isHighlight).sort(byHighlightPosition),
     memoryCount: ordered.length,
     photoCount: photoTotal(ordered),
     places: [...placeGroups.values()].sort(

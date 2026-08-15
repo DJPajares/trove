@@ -9,6 +9,9 @@ import {
   listMemories,
   MemoryNotFoundError,
   MemoryValidationError,
+  reorderHighlights,
+  reorderMemoryPhotos,
+  setStoryCoverPhoto,
   updateMemory,
 } from '../services/memories.js';
 import { getBearerToken } from '../services/request-auth.js';
@@ -22,6 +25,11 @@ const photoParamsSchema = z
 const memorySchema = z
   .object({
     capturedAt: z.iso.datetime({ offset: true }).optional(),
+    capturedLocalDate: z.iso.date().optional(),
+    capturedLocalTime: z
+      .string()
+      .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/)
+      .optional(),
     isHighlight: z.boolean().optional(),
     itineraryDayId: z.uuid().nullable().optional(),
     itineraryItemId: z.uuid().nullable().optional(),
@@ -41,6 +49,9 @@ const photoSchema = z
     sizeBytes: z.number().int().min(0),
   })
   .strict();
+
+const orderSchema = z.object({ order: z.array(z.uuid()).min(1).max(200) }).strict();
+const storyCoverSchema = z.object({ memoryPhotoId: z.uuid().nullable() }).strict();
 
 function getUserId(request: FastifyRequest, reply: FastifyReply) {
   if (!request.authUserId) {
@@ -168,6 +179,76 @@ export function createMemoryControllers() {
           getBearerToken(request.headers.authorization),
         );
         return reply.code(204).send();
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
+
+    async reorderHighlights(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = tripParamsSchema.safeParse(request.params);
+      const body = orderSchema.safeParse(request.body);
+      if (!userId) return;
+      if (!params.success || !body.success) {
+        return reply.code(400).send({ code: 'invalid_memory' });
+      }
+
+      try {
+        return reply.send(
+          await reorderHighlights(
+            userId,
+            params.data.tripId,
+            body.data.order,
+            getBearerToken(request.headers.authorization),
+          ),
+        );
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
+
+    async reorderPhotos(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = memoryParamsSchema.safeParse(request.params);
+      const body = orderSchema.safeParse(request.body);
+      if (!userId) return;
+      if (!params.success || !body.success) {
+        return reply.code(400).send({ code: 'invalid_memory_photo' });
+      }
+
+      try {
+        return reply.send(
+          await reorderMemoryPhotos(
+            userId,
+            params.data.tripId,
+            params.data.memoryId,
+            body.data.order,
+            getBearerToken(request.headers.authorization),
+          ),
+        );
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
+
+    async setStoryCover(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = tripParamsSchema.safeParse(request.params);
+      const body = storyCoverSchema.safeParse(request.body);
+      if (!userId) return;
+      if (!params.success || !body.success) {
+        return reply.code(400).send({ code: 'invalid_memory_photo' });
+      }
+
+      try {
+        return reply.send(
+          await setStoryCoverPhoto(
+            userId,
+            params.data.tripId,
+            body.data.memoryPhotoId,
+            getBearerToken(request.headers.authorization),
+          ),
+        );
       } catch (error) {
         return handleError(reply, error);
       }

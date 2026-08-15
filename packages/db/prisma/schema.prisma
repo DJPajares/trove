@@ -80,16 +80,16 @@ enum ItemTimeZoneSource {
 }
 
 enum ReservationType {
-  FLIGHT       @map("flight")
+  FLIGHT        @map("flight")
   ACCOMMODATION @map("accommodation")
-  RESTAURANT   @map("restaurant")
-  ATTRACTION   @map("attraction")
-  TRAIN        @map("train")
-  RENTAL_CAR   @map("rental_car")
-  FERRY        @map("ferry")
-  BUS          @map("bus")
-  TOUR         @map("tour")
-  OTHER        @map("other")
+  RESTAURANT    @map("restaurant")
+  ATTRACTION    @map("attraction")
+  TRAIN         @map("train")
+  RENTAL_CAR    @map("rental_car")
+  FERRY         @map("ferry")
+  BUS           @map("bus")
+  TOUR          @map("tour")
+  OTHER         @map("other")
 
   @@map("reservation_type")
   @@schema("trove")
@@ -252,33 +252,33 @@ model AuthUser {
 }
 
 model Profile {
-  id               String  @id @db.Uuid
-  displayName      String? @map("display_name")
-  avatarPath       String? @map("avatar_path")
-  homePlaceId      String? @map("home_place_id") @db.Uuid
-  homeCurrencyCode String? @map("home_currency_code") @db.Char(3)
-  distanceUnit     ProfileDistanceUnit?     @map("distance_unit")
-  temperatureUnit  ProfileTemperatureUnit?  @map("temperature_unit")
-  timeFormat       ProfileTimeFormat?       @map("time_format")
-  dateFormat       ProfileDateFormat?       @map("date_format")
-  appearance       ProfileAppearance?       @map("appearance")
-  notificationsEnabled        Boolean @default(false) @map("notifications_enabled")
-  browserNotificationsEnabled Boolean @default(false) @map("browser_notifications_enabled")
+  id                          String                  @id @db.Uuid
+  displayName                 String?                 @map("display_name")
+  avatarPath                  String?                 @map("avatar_path")
+  homePlaceId                 String?                 @map("home_place_id") @db.Uuid
+  homeCurrencyCode            String?                 @map("home_currency_code") @db.Char(3)
+  distanceUnit                ProfileDistanceUnit?    @map("distance_unit")
+  temperatureUnit             ProfileTemperatureUnit? @map("temperature_unit")
+  timeFormat                  ProfileTimeFormat?      @map("time_format")
+  dateFormat                  ProfileDateFormat?      @map("date_format")
+  appearance                  ProfileAppearance?      @map("appearance")
+  notificationsEnabled        Boolean                 @default(false) @map("notifications_enabled")
+  browserNotificationsEnabled Boolean                 @default(false) @map("browser_notifications_enabled")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  authUser         AuthUser               @relation(fields: [id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  homePlace        Place?                 @relation("ProfileHomePlace", fields: [homePlaceId], references: [id], onDelete: SetNull)
-  ownedPlaces      Place[]                @relation("PlaceOwner")
-  ownedTrips       Trip[]                 @relation("TripOwner")
-  createdTrips     Trip[]                 @relation("TripCreator")
-  tripRelations    TripUserRelationship[]
-  savedPlaces      SavedPlace[]
-  savedCollections SavedCollection[]
-  collectionPlaces SavedCollectionPlace[]
-  taskTemplates    TaskTemplate[]
-  notifications    Notification[]
+  authUser                    AuthUser                     @relation(fields: [id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  homePlace                   Place?                       @relation("ProfileHomePlace", fields: [homePlaceId], references: [id], onDelete: SetNull)
+  ownedPlaces                 Place[]                      @relation("PlaceOwner")
+  ownedTrips                  Trip[]                       @relation("TripOwner")
+  createdTrips                Trip[]                       @relation("TripCreator")
+  tripRelations               TripUserRelationship[]
+  savedPlaces                 SavedPlace[]
+  savedCollections            SavedCollection[]
+  collectionPlaces            SavedCollectionPlace[]
+  taskTemplates               TaskTemplate[]
+  notifications               Notification[]
   tripNotificationPreferences TripNotificationPreference[]
 
   @@index([homePlaceId])
@@ -349,15 +349,17 @@ model Trip {
   referenceTimeZoneResolvedAt    DateTime              @default(now()) @map("reference_time_zone_resolved_at") @db.Timestamptz(3)
   sourceTripId                   String?               @map("source_trip_id") @db.Uuid
   sourceAttribution              String?               @map("source_attribution") @db.Text
+  storyCoverMemoryPhotoId        String?               @map("story_cover_memory_photo_id") @db.Uuid
   createdAt                      DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                      DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  owner                        Profile                @relation("TripOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  creator                      Profile?               @relation("TripCreator", fields: [creatorId], references: [id], onDelete: SetNull)
-  startingPlace                Place?                 @relation("TripStartingPlace", fields: [startingPlaceId], references: [id], onDelete: SetNull)
-  referenceTimeZoneSourcePlace Place?                 @relation("TripTimeZoneSourcePlace", fields: [referenceTimeZoneSourcePlaceId], references: [id], onDelete: SetNull)
-  sourceTrip                   Trip?                  @relation("TripSource", fields: [sourceTripId], references: [id], onDelete: SetNull)
-  derivedTrips                 Trip[]                 @relation("TripSource")
+  owner                        Profile                      @relation("TripOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  creator                      Profile?                     @relation("TripCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  startingPlace                Place?                       @relation("TripStartingPlace", fields: [startingPlaceId], references: [id], onDelete: SetNull)
+  referenceTimeZoneSourcePlace Place?                       @relation("TripTimeZoneSourcePlace", fields: [referenceTimeZoneSourcePlaceId], references: [id], onDelete: SetNull)
+  sourceTrip                   Trip?                        @relation("TripSource", fields: [sourceTripId], references: [id], onDelete: SetNull)
+  derivedTrips                 Trip[]                       @relation("TripSource")
+  storyCoverPhoto              MemoryPhoto?                 @relation("TripStoryCoverPhoto", fields: [storyCoverMemoryPhotoId], references: [id], onDelete: SetNull)
   destinations                 TripDestination[]
   userRelationships            TripUserRelationship[]
   tripPlaces                   TripPlace[]
@@ -377,14 +379,15 @@ model Trip {
   @@index([startingPlaceId])
   @@index([referenceTimeZoneSourcePlaceId])
   @@index([sourceTripId])
+  @@index([storyCoverMemoryPhotoId])
   @@map("trips")
   @@schema("trove")
 }
 
 model TripNotificationPreference {
-  ownerId  String   @map("owner_id") @db.Uuid
-  tripId   String   @map("trip_id") @db.Uuid
-  muted    Boolean  @default(false)
+  ownerId   String   @map("owner_id") @db.Uuid
+  tripId    String   @map("trip_id") @db.Uuid
+  muted     Boolean  @default(false)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -548,14 +551,14 @@ model ItineraryDay {
   createdAt                        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  trip                    Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  dailyBaseTripPlace      TripPlace?      @relation("ItineraryDayDailyBase", fields: [dailyBaseTripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
-  timeZoneSourceTripPlace TripPlace?      @relation("ItineraryDayTimeZoneSource", fields: [defaultTimeZoneSourceTripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
-  timeZoneSourceItem      ItineraryItem?  @relation("ItineraryDayTimeZoneSourceItem", fields: [defaultTimeZoneSourceItemId, tripId], references: [id, tripId], onDelete: NoAction)
-  items                   ItineraryItem[] @relation("ItineraryDayItems")
-  memories                Memory[]
-  tasks                   Task[]          @relation("TaskItineraryDay")
-  expenses                Expense[]       @relation("ExpenseItineraryDay")
+  trip                      Trip                          @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  dailyBaseTripPlace        TripPlace?                    @relation("ItineraryDayDailyBase", fields: [dailyBaseTripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
+  timeZoneSourceTripPlace   TripPlace?                    @relation("ItineraryDayTimeZoneSource", fields: [defaultTimeZoneSourceTripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
+  timeZoneSourceItem        ItineraryItem?                @relation("ItineraryDayTimeZoneSourceItem", fields: [defaultTimeZoneSourceItemId, tripId], references: [id, tripId], onDelete: NoAction)
+  items                     ItineraryItem[]               @relation("ItineraryDayItems")
+  memories                  Memory[]
+  tasks                     Task[]                        @relation("TaskItineraryDay")
+  expenses                  Expense[]                     @relation("ExpenseItineraryDay")
   accommodationReservations ReservationAccommodationDay[]
 
   @@unique([tripId, date])
@@ -600,7 +603,7 @@ model ItineraryItem {
   memories              Memory[]
   tasks                 Task[]         @relation("TaskItineraryItem")
   reservations          Reservation[]
-  expenses              Expense[]        @relation("ExpenseItineraryItem")
+  expenses              Expense[]      @relation("ExpenseItineraryItem")
 
   @@unique([id, tripId])
   @@index([tripId])
@@ -611,20 +614,20 @@ model ItineraryItem {
 }
 
 model Task {
-  id                        String              @id @default(uuid(7)) @db.Uuid
-  tripId                    String              @map("trip_id") @db.Uuid
-  itineraryDayId            String?             @map("itinerary_day_id") @db.Uuid
-  itineraryItemId           String?             @map("itinerary_item_id") @db.Uuid
-  label                     String
-  note                      String?             @db.Text
-  dueDate                   DateTime?           @map("due_date") @db.Date
-  dueLocalTime              DateTime?           @map("due_local_time") @db.Time(0)
-  dueTimeZone               String?             @map("due_time_zone")
-  dueTimeZoneSource         TaskTimeZoneSource? @map("due_time_zone_source")
-  dueTimeZoneResolvedAt     DateTime?           @map("due_time_zone_resolved_at") @db.Timestamptz(3)
-  completedAt               DateTime?           @map("completed_at") @db.Timestamptz(3)
-  createdAt                 DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt                 DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                    String              @id @default(uuid(7)) @db.Uuid
+  tripId                String              @map("trip_id") @db.Uuid
+  itineraryDayId        String?             @map("itinerary_day_id") @db.Uuid
+  itineraryItemId       String?             @map("itinerary_item_id") @db.Uuid
+  label                 String
+  note                  String?             @db.Text
+  dueDate               DateTime?           @map("due_date") @db.Date
+  dueLocalTime          DateTime?           @map("due_local_time") @db.Time(0)
+  dueTimeZone           String?             @map("due_time_zone")
+  dueTimeZoneSource     TaskTimeZoneSource? @map("due_time_zone_source")
+  dueTimeZoneResolvedAt DateTime?           @map("due_time_zone_resolved_at") @db.Timestamptz(3)
+  completedAt           DateTime?           @map("completed_at") @db.Timestamptz(3)
+  createdAt             DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   trip          Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
   itineraryDay  ItineraryDay?  @relation("TaskItineraryDay", fields: [itineraryDayId, tripId], references: [id, tripId], onDelete: NoAction)
@@ -638,11 +641,11 @@ model Task {
 }
 
 model TaskTemplate {
-  id        String             @id @default(uuid(7)) @db.Uuid
-  ownerId   String             @map("owner_id") @db.Uuid
+  id        String   @id @default(uuid(7)) @db.Uuid
+  ownerId   String   @map("owner_id") @db.Uuid
   name      String
-  createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   owner Profile            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   items TaskTemplateItem[]
@@ -654,13 +657,13 @@ model TaskTemplate {
 }
 
 model TaskTemplateItem {
-  id             String       @id @default(uuid(7)) @db.Uuid
-  taskTemplateId String       @map("task_template_id") @db.Uuid
+  id             String   @id @default(uuid(7)) @db.Uuid
+  taskTemplateId String   @map("task_template_id") @db.Uuid
   position       Int
   label          String
-  note           String?      @db.Text
-  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  note           String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   taskTemplate TaskTemplate @relation(fields: [taskTemplateId], references: [id], onDelete: Cascade)
 
@@ -690,51 +693,51 @@ model TripInfo {
 }
 
 model Reservation {
-  id                      String                     @id @default(uuid(7)) @db.Uuid
-  tripId                  String                     @map("trip_id") @db.Uuid
-  tripPlaceId             String?                    @map("trip_place_id") @db.Uuid
-  itineraryItemId         String?                    @map("itinerary_item_id") @db.Uuid
-  title                   String
-  type                    ReservationType?
-  provider                String?
-  bookingReference        String?                    @map("booking_reference")
-  notes                   String?                    @db.Text
-  localDate               DateTime?                  @map("local_date") @db.Date
-  localTime               DateTime?                  @map("local_time") @db.Time(0)
-  timeZone                String?                    @map("time_zone")
-  timeZoneSource          ReservationTimeZoneSource? @map("time_zone_source")
-  timeZoneResolvedAt      DateTime?                  @map("time_zone_resolved_at") @db.Timestamptz(3)
-  plannedCostAmount       Decimal?                   @map("planned_cost_amount") @db.Decimal(12, 2)
-  plannedCostCurrencyCode String?                    @map("planned_cost_currency_code") @db.Char(3)
-  checkInDate             DateTime?                  @map("check_in_date") @db.Date
-  checkOutDate            DateTime?                  @map("check_out_date") @db.Date
-  accommodationAddress    String?                    @map("accommodation_address") @db.Text
-  flightAirline           String?                    @map("flight_airline")
-  flightNumber            String?                    @map("flight_number")
-  flightDepartureAirport  String?                    @map("flight_departure_airport")
-  flightDepartureLocalDate DateTime?                 @map("flight_departure_local_date") @db.Date
-  flightDepartureLocalTime DateTime?                 @map("flight_departure_local_time") @db.Time(0)
-  flightDepartureTimeZone String?                    @map("flight_departure_time_zone")
-  flightDepartureInstant  DateTime?                  @map("flight_departure_instant") @db.Timestamptz(3)
-  flightArrivalAirport    String?                    @map("flight_arrival_airport")
-  flightArrivalLocalDate  DateTime?                  @map("flight_arrival_local_date") @db.Date
-  flightArrivalLocalTime  DateTime?                  @map("flight_arrival_local_time") @db.Time(0)
-  flightArrivalTimeZone   String?                    @map("flight_arrival_time_zone")
-  flightArrivalInstant    DateTime?                  @map("flight_arrival_instant") @db.Timestamptz(3)
-  flightTerminal          String?                    @map("flight_terminal")
-  flightGate              String?                    @map("flight_gate")
-  flightSeat              String?                    @map("flight_seat")
-  transportOperator       String?                    @map("transport_operator")
-  transportServiceNumber  String?                    @map("transport_service_number")
-  transportPickupLocation String?                    @map("transport_pickup_location")
-  transportDropoffLocation String?                   @map("transport_dropoff_location")
-  createdAt               DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt               DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                       String                     @id @default(uuid(7)) @db.Uuid
+  tripId                   String                     @map("trip_id") @db.Uuid
+  tripPlaceId              String?                    @map("trip_place_id") @db.Uuid
+  itineraryItemId          String?                    @map("itinerary_item_id") @db.Uuid
+  title                    String
+  type                     ReservationType?
+  provider                 String?
+  bookingReference         String?                    @map("booking_reference")
+  notes                    String?                    @db.Text
+  localDate                DateTime?                  @map("local_date") @db.Date
+  localTime                DateTime?                  @map("local_time") @db.Time(0)
+  timeZone                 String?                    @map("time_zone")
+  timeZoneSource           ReservationTimeZoneSource? @map("time_zone_source")
+  timeZoneResolvedAt       DateTime?                  @map("time_zone_resolved_at") @db.Timestamptz(3)
+  plannedCostAmount        Decimal?                   @map("planned_cost_amount") @db.Decimal(12, 2)
+  plannedCostCurrencyCode  String?                    @map("planned_cost_currency_code") @db.Char(3)
+  checkInDate              DateTime?                  @map("check_in_date") @db.Date
+  checkOutDate             DateTime?                  @map("check_out_date") @db.Date
+  accommodationAddress     String?                    @map("accommodation_address") @db.Text
+  flightAirline            String?                    @map("flight_airline")
+  flightNumber             String?                    @map("flight_number")
+  flightDepartureAirport   String?                    @map("flight_departure_airport")
+  flightDepartureLocalDate DateTime?                  @map("flight_departure_local_date") @db.Date
+  flightDepartureLocalTime DateTime?                  @map("flight_departure_local_time") @db.Time(0)
+  flightDepartureTimeZone  String?                    @map("flight_departure_time_zone")
+  flightDepartureInstant   DateTime?                  @map("flight_departure_instant") @db.Timestamptz(3)
+  flightArrivalAirport     String?                    @map("flight_arrival_airport")
+  flightArrivalLocalDate   DateTime?                  @map("flight_arrival_local_date") @db.Date
+  flightArrivalLocalTime   DateTime?                  @map("flight_arrival_local_time") @db.Time(0)
+  flightArrivalTimeZone    String?                    @map("flight_arrival_time_zone")
+  flightArrivalInstant     DateTime?                  @map("flight_arrival_instant") @db.Timestamptz(3)
+  flightTerminal           String?                    @map("flight_terminal")
+  flightGate               String?                    @map("flight_gate")
+  flightSeat               String?                    @map("flight_seat")
+  transportOperator        String?                    @map("transport_operator")
+  transportServiceNumber   String?                    @map("transport_service_number")
+  transportPickupLocation  String?                    @map("transport_pickup_location")
+  transportDropoffLocation String?                    @map("transport_dropoff_location")
+  createdAt                DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  trip            Trip                        @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  tripPlace       TripPlace?                  @relation(fields: [tripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
-  itineraryItem   ItineraryItem?              @relation(fields: [itineraryItemId, tripId], references: [id, tripId], onDelete: NoAction)
-  attachments     ReservationAttachment[]
+  trip              Trip                          @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  tripPlace         TripPlace?                    @relation(fields: [tripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
+  itineraryItem     ItineraryItem?                @relation(fields: [itineraryItemId, tripId], references: [id, tripId], onDelete: NoAction)
+  attachments       ReservationAttachment[]
   accommodationDays ReservationAccommodationDay[]
 
   @@unique([id, tripId])
@@ -779,23 +782,23 @@ model ReservationAccommodationDay {
 }
 
 model Expense {
-  id                    String                 @id @default(uuid(7)) @db.Uuid
-  tripId                String                 @map("trip_id") @db.Uuid
-  itineraryDayId        String?                @map("itinerary_day_id") @db.Uuid
-  itineraryItemId       String?                @map("itinerary_item_id") @db.Uuid
-  tripPlaceId           String?                @map("trip_place_id") @db.Uuid
-  amount                Decimal                @db.Decimal(12, 2)
-  currencyCode          String                 @map("currency_code") @db.Char(3)
-  title                 String?
-  category              ExpenseCategory?
-  localDate             DateTime?              @map("local_date") @db.Date
-  localTime             DateTime?              @map("local_time") @db.Time(0)
-  timeZone              String?                @map("time_zone")
-  timeZoneSource        ExpenseTimeZoneSource? @map("time_zone_source")
-  timeZoneResolvedAt    DateTime?              @map("time_zone_resolved_at") @db.Timestamptz(3)
-  note                  String?                @db.Text
-  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                 String                 @id @default(uuid(7)) @db.Uuid
+  tripId             String                 @map("trip_id") @db.Uuid
+  itineraryDayId     String?                @map("itinerary_day_id") @db.Uuid
+  itineraryItemId    String?                @map("itinerary_item_id") @db.Uuid
+  tripPlaceId        String?                @map("trip_place_id") @db.Uuid
+  amount             Decimal                @db.Decimal(12, 2)
+  currencyCode       String                 @map("currency_code") @db.Char(3)
+  title              String?
+  category           ExpenseCategory?
+  localDate          DateTime?              @map("local_date") @db.Date
+  localTime          DateTime?              @map("local_time") @db.Time(0)
+  timeZone           String?                @map("time_zone")
+  timeZoneSource     ExpenseTimeZoneSource? @map("time_zone_source")
+  timeZoneResolvedAt DateTime?              @map("time_zone_resolved_at") @db.Timestamptz(3)
+  note               String?                @db.Text
+  createdAt          DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   trip          Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
   itineraryDay  ItineraryDay?  @relation("ExpenseItineraryDay", fields: [itineraryDayId, tripId], references: [id, tripId], onDelete: NoAction)
@@ -819,6 +822,7 @@ model Memory {
   tripPlaceId        String?              @map("trip_place_id") @db.Uuid
   note               String?              @db.Text
   isHighlight        Boolean              @default(false) @map("is_highlight")
+  highlightPosition  Int?                 @map("highlight_position")
   capturedInstant    DateTime             @map("captured_instant") @db.Timestamptz(3)
   capturedLocalDate  DateTime             @map("captured_local_date") @db.Date
   capturedLocalTime  DateTime             @map("captured_local_time") @db.Time(0)
@@ -836,7 +840,7 @@ model Memory {
 
   @@unique([id, tripId])
   @@index([tripId, capturedInstant])
-  @@index([tripId, isHighlight])
+  @@index([tripId, isHighlight, highlightPosition])
   @@index([itineraryDayId, tripId])
   @@index([itineraryItemId, tripId])
   @@index([tripPlaceId, tripId])
@@ -854,7 +858,8 @@ model MemoryPhoto {
   position    Int
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  memory Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  memory             Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  storyCoverForTrips Trip[] @relation("TripStoryCoverPhoto")
 
   @@unique([memoryId, path])
   @@index([memoryId, position])

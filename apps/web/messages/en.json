@@ -168,6 +168,8 @@
     "expenses": "Expenses",
     "tripInfo": "Trip info",
     "memories": "Memories",
+    "viewMemories": "View memories",
+    "addMemories": "Add memories",
     "tripInfoLoading": "Loading pinned travel details…",
     "tripInfoUnavailable": "Pinned travel details are unavailable right now.",
     "pinnedTripInfo": "Fast access to the details you chose to pin.",
@@ -1423,6 +1425,13 @@
     "continuePlanning": "Continue planning",
     "previewTripMode": "Preview Trip Mode",
     "viewTrip": "View trip",
+    "viewMemories": "View memories",
+    "addMemories": "Add memories",
+    "yourRating": "Your rating",
+    "completedPrompt": "Add a few memories or rate this trip while it is still fresh.",
+    "completedPromptMemories": "Add a few memories while this trip is still fresh.",
+    "completedPromptRating": "Rate this trip while it is still fresh.",
+    "dismissPrompt": "Dismiss this suggestion",
     "nextUp": "Next up",
     "nextItem": "{name} is the next useful stop.",
     "currentItem": "Right now: {name}.",
@@ -1606,6 +1615,7 @@
       "trip_place": "Trip places",
       "saved_place": "Saved places",
       "trip_info": "Trip info",
+      "memory": "Memories",
       "note": "Notes"
     },
     "noteSources": {
@@ -1646,6 +1656,7 @@
     }
   },
   "experienceRating": {
+    "summaryLabel": "Your rating",
     "starLabel": "{value, plural, one {# star} other {# stars}}",
     "addNote": "Add a note",
     "noteLabel": "Note for {label}",

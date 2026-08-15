@@ -11,6 +11,34 @@ import { cn } from '@/lib/utils';
 const VALUES = [1, 2, 3, 4, 5] as const;
 
 /**
+ * A read-only echo of a rating already given, for surfaces that report rather
+ * than collect. Uses the same stars as the field so the concept stays visually
+ * consistent, and stays distinct from Plan Score wherever both could appear.
+ */
+export function ExperienceRatingSummary({
+  className,
+  label,
+  rating,
+}: Readonly<{ className?: string; label: string; rating: number }>) {
+  const t = useTranslations('experienceRating');
+
+  return (
+    <p className={cn('flex items-center gap-2 text-sm text-muted-foreground', className)}>
+      <span>{label}</span>
+      <span aria-label={t('starLabel', { value: rating })} className="flex items-center gap-0.5">
+        {VALUES.map((value) => (
+          <Star
+            aria-hidden="true"
+            className={cn('size-4', value <= rating ? 'fill-current text-brand' : 'text-border')}
+            key={value}
+          />
+        ))}
+      </span>
+    </p>
+  );
+}
+
+/**
  * Experience Rating is the traveller's private reflection on how something
  * felt: five plain stars, no numeric score, no meters. That's deliberate — it
  * keeps this visually unmistakable from Plan Score's computed 0-100 signal and

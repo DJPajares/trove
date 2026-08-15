@@ -9,11 +9,14 @@ import {
   Eye,
   MapPinned,
   Plus,
+  Sparkles,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
+import { ExperienceRatingSummary } from '@/components/experience-rating-field';
 import { PageState } from '@/components/page-state';
 import { OfflineReadyStatus } from '@/components/offline-ready-status';
 import { Button } from '@/components/ui/button';
@@ -67,6 +70,23 @@ function tripLabel(trip: Trip) {
   return trip.destinations.map((destination) => destination.name).join(', ');
 }
 
+/**
+ * A traveller who skips Memories or a rating should be asked once, not every
+ * time they open Home. The dismissal is per trip and purely local: it hides a
+ * suggestion, so it never needs to travel with the account.
+ */
+const DISMISSED_PROMPTS_KEY = 'trove.dismissed-completed-prompts';
+
+function readDismissedPrompts() {
+  try {
+    const raw = window.localStorage.getItem(DISMISSED_PROMPTS_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((id) => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 function itemLabel(item: ItineraryItem) {
   return item.customLabel ?? item.customLocation?.label ?? item.tripPlace?.place.name ?? null;
 }
@@ -97,6 +117,23 @@ export function HomeExperience() {
   const [data, setData] = useState<HomeData>({ savedPlaces: [], trips: [] });
   const [status, setStatus] = useState<HomeStatus>('loading');
   const [tripModeContext, setTripModeContext] = useState<TripModeContext | null>(null);
+  const [dismissedPrompts, setDismissedPrompts] = useState<string[]>([]);
+
+  useEffect(() => {
+    setDismissedPrompts(readDismissedPrompts());
+  }, []);
+
+  function dismissCompletedPrompt(tripId: string) {
+    setDismissedPrompts((current) => {
+      const next = current.includes(tripId) ? current : [...current, tripId];
+      try {
+        window.localStorage.setItem(DISMISSED_PROMPTS_KEY, JSON.stringify(next));
+      } catch {
+        // The prompt stays hidden for this session even without local storage.
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     let active = true;
@@ -176,6 +213,17 @@ export function HomeExperience() {
   const nextItemId = tripModeContext?.nextItemId ?? tripModeContext?.currentOrRelevant?.itemId;
   const nextItem = tripModeContext?.day?.items.find((item) => item.id === nextItemId) ?? null;
   const nextItemName = nextItem ? itemLabel(nextItem) : null;
+  // Suggest only what is actually still missing, once, and never after a dismissal.
+  const completedPromptKey =
+    primary?.kind !== 'completed' || dismissedPrompts.includes(primary.trip.id)
+      ? null
+      : !primary.trip.memoryCount && primary.trip.experienceRating === null
+        ? 'completedPrompt'
+        : !primary.trip.memoryCount
+          ? 'completedPromptMemories'
+          : primary.trip.experienceRating === null
+            ? 'completedPromptRating'
+            : null;
 
   return (
     <section aria-labelledby="home-heading" className="mx-auto w-full max-w-5xl space-y-9">
@@ -311,7 +359,21 @@ export function HomeExperience() {
               startDate: formatDate(primary.trip.startDate),
             })}
           </p>
-          <div className="mt-5">
+          {primary.trip.experienceRating === null ? null : (
+            <ExperienceRatingSummary
+              className="mt-3"
+              label={t('yourRating')}
+              rating={primary.trip.experienceRating}
+            />
+          )}
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Button
+              nativeButton={false}
+              render={<Link href={`/trips/${primary.trip.id}/memories`} />}
+            >
+              <Sparkles aria-hidden="true" data-icon="inline-start" />
+              {t(primary.trip.memoryCount ? 'viewMemories' : 'addMemories')}
+            </Button>
             <Button
               nativeButton={false}
               render={<Link href={`/trips/${primary.trip.id}/itinerary`} />}
@@ -321,6 +383,19 @@ export function HomeExperience() {
               {t('viewTrip')}
             </Button>
           </div>
+          {completedPromptKey ? (
+            <div className="mt-5 flex items-start justify-between gap-3 border-t border-border pt-4">
+              <p className="text-sm leading-6 text-muted-foreground">{t(completedPromptKey)}</p>
+              <Button
+                aria-label={t('dismissPrompt')}
+                onClick={() => dismissCompletedPrompt(primary.trip.id)}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <X aria-hidden="true" />
+              </Button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -426,14 +501,25 @@ export function HomeExperience() {
           <p className="mt-1 text-sm leading-6 text-muted-foreground">
             {t('pastTripDescription', { name: recentCompleted.name })}
           </p>
+          {recentCompleted.experienceRating === null ? null : (
+            <ExperienceRatingSummary
+              className="mt-2"
+              label={t('yourRating')}
+              rating={recentCompleted.experienceRating}
+            />
+          )}
           <Button
             className="mt-3"
             nativeButton={false}
-            render={<Link href={`/trips/${recentCompleted.id}/itinerary`} />}
+            render={
+              <Link
+                href={`/trips/${recentCompleted.id}/${recentCompleted.memoryCount ? 'memories' : 'itinerary'}`}
+              />
+            }
             size="sm"
             variant="ghost"
           >
-            {t('viewTrip')}
+            {t(recentCompleted.memoryCount ? 'viewMemories' : 'viewTrip')}
             <ChevronRight aria-hidden="true" data-icon="inline-end" />
           </Button>
         </section>

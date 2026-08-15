@@ -1,7 +1,7 @@
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 export type SearchResultKind =
-  'note' | 'reservation' | 'saved_place' | 'trip' | 'trip_info' | 'trip_place';
+  'memory' | 'note' | 'reservation' | 'saved_place' | 'trip' | 'trip_info' | 'trip_place';
 export type SearchNoteSource =
   'itinerary' | 'reservation' | 'saved_place' | 'trip' | 'trip_info' | 'trip_place';
 

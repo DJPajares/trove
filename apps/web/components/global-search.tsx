@@ -10,6 +10,7 @@ import {
   Plane,
   ReceiptText,
   Search,
+  Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -45,6 +46,7 @@ const LOCAL_SEARCH_DELAY_MS = 350;
 
 function ResultIcon({ kind }: Readonly<{ kind: SearchResultKind }>) {
   const Icon = {
+    memory: Sparkles,
     note: FileText,
     reservation: ReceiptText,
     saved_place: Bookmark,

@@ -57,6 +57,18 @@ export function useOfflineDataRefreshKey() {
   return refreshKey;
 }
 
+/** Codes whose own state line already explains the situation fully. */
+const MISSING_ERROR_CODES = ['day_missing', 'itinerary_item_missing', 'supporting_data_missing'];
+
+const NAMED_REASONS = [
+  'database_schema_outdated',
+  'database_unavailable',
+  'internal_error',
+  'memory_photo_upload_failed',
+  'memory_storage_full',
+  'record_referenced',
+];
+
 export function TripSyncStatus({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripMode.sync');
   const online = useOnlineStatus();
@@ -92,6 +104,17 @@ export function TripSyncStatus({ tripId }: Readonly<{ tripId: string }>) {
       window.removeEventListener('online', update);
     };
   }, [refresh]);
+
+  /**
+   * Names the failure where Trove can, and otherwise passes the raw code through
+   * so a retry that keeps failing is at least reportable.
+   */
+  function reason(errorCode: string | null) {
+    if (!errorCode || MISSING_ERROR_CODES.includes(errorCode)) return null;
+    return NAMED_REASONS.includes(errorCode)
+      ? t(`reasons.${errorCode}`)
+      : t('reasons.unknown', { code: errorCode });
+  }
 
   async function runAction(id: string, action: () => Promise<void>) {
     setBusyId(id);
@@ -168,13 +191,17 @@ export function TripSyncStatus({ tripId }: Readonly<{ tripId: string }>) {
                       </p>
                       <p className="mt-1 text-sm leading-5 text-muted-foreground">
                         {t(
-                          mutation.errorCode === 'itinerary_item_missing' ||
-                            mutation.errorCode === 'supporting_data_missing' ||
-                            mutation.errorCode === 'day_missing'
+                          MISSING_ERROR_CODES.includes(mutation.errorCode ?? '')
                             ? 'states.missing'
                             : `states.${mutation.state}`,
                         )}
                       </p>
+                      {/* Without this a repeatedly failing retry explains nothing. */}
+                      {reason(mutation.errorCode) ? (
+                        <p className="mt-1 text-xs leading-5 text-text-subtle">
+                          {reason(mutation.errorCode)}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
 

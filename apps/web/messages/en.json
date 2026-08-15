@@ -276,6 +276,15 @@
         "conflict": "This detail also changed in the cloud. Choose which version to keep.",
         "missing": "This detail was removed in the cloud. Use the cloud version to clear the local change."
       },
+      "reasons": {
+        "database_schema_outdated": "The server's database is missing a recent update. It needs its migrations applied.",
+        "database_unavailable": "Trove could not reach its database.",
+        "record_referenced": "Something else still links to this record.",
+        "internal_error": "The server could not complete this change.",
+        "memory_photo_upload_failed": "The photo could not be uploaded.",
+        "memory_storage_full": "This device has no room left for more photos.",
+        "unknown": "Reported reason: {code}"
+      },
       "operations": {
         "itinerary_item_create": "Add itinerary item",
         "itinerary_item_delete": "Delete itinerary item",
@@ -1243,11 +1252,11 @@
       "interested": "Interested",
       "maybe": "Maybe"
     },
-    "scheduledReference": "Used by {count, plural, one {one itinerary reference} other {# itinerary references}}",
+    "scheduledReference": "On your itinerary {count, plural, one {once} other {# times}}",
     "editNote": "Edit note for {name}",
     "remove": "Remove {name} from this trip",
     "viewDetails": "View details for {name}",
-    "referencedError": "This place is still used by {count, plural, one {one itinerary reference} other {# itinerary references}}. Resolve those references before removing it.",
+    "referencedError": "This place is on your itinerary in {count, plural, one {one place} other {# places}}. Remove it from those days first, then remove it here \u2014 your notes, expenses and memories stay either way.",
     "addPlaceTitle": "Add a place",
     "addPlaceDescription": "Start with Saved Places, search Google when you need something new, or add a private place.",
     "loadingSaved": "Loading saved places…",

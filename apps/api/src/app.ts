@@ -49,9 +49,42 @@ function originMatches(allowedOrigin: string, origin: string) {
   }
 }
 
+/**
+ * Prisma reports schema and constraint problems through codes rather than
+ * distinguishable error types. Naming the few that a running deployment can
+ * actually hit turns an opaque failure into one the client can explain: a
+ * database behind on migrations reads very differently from a real bug.
+ */
+function describeError(error: unknown) {
+  const { code, statusCode } = (error ?? {}) as { code?: unknown; statusCode?: unknown };
+  const known: Record<string, string> = {
+    P1001: 'database_unavailable',
+    P1002: 'database_unavailable',
+    P2003: 'record_referenced',
+    P2021: 'database_schema_outdated',
+    P2022: 'database_schema_outdated',
+  };
+
+  return {
+    code: typeof code === 'string' ? (known[code] ?? code) : 'internal_error',
+    isKnownPrismaFailure: typeof code === 'string' && code in known,
+    statusCode: typeof statusCode === 'number' ? statusCode : 500,
+  };
+}
+
 export function buildApp() {
   const app = Fastify({ logger: true });
   const allowedOrigins = getWebOrigins();
+
+  app.setErrorHandler((error: unknown, request, reply) => {
+    const described = describeError(error);
+    // Fastify's own client errors already carry a usable status and code.
+    if (described.statusCode < 500 && !described.isKnownPrismaFailure) {
+      return reply.code(described.statusCode).send({ code: described.code });
+    }
+    request.log.error({ err: error }, 'unhandled request error');
+    return reply.code(500).send({ code: described.code });
+  });
 
   void app.register(cors, {
     methods: ['DELETE', 'GET', 'PATCH', 'POST', 'PUT', 'OPTIONS'],

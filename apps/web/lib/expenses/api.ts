@@ -14,6 +14,15 @@ export type ExpenseCategory = 'activities' | 'food' | 'other' | 'shopping' | 'st
 
 export type CurrencyTotal = { amount: string; currencyCode: string };
 
+/** A provider Place arrives unnamed; the reference is what resolves it on demand. */
+export type ExpensePlace = {
+  id: string;
+  kind: 'custom' | 'provider';
+  name: string | null;
+  placeId: string;
+  providerRefs: Array<{ externalPlaceId: string; provider: 'google' }>;
+};
+
 export type Expense = {
   amount: string;
   category: ExpenseCategory | null;
@@ -21,14 +30,14 @@ export type Expense = {
   currencyCode: string;
   id: string;
   itineraryDay: { date: string; id: string } | null;
-  itineraryItem: { id: string; label: string | null } | null;
+  itineraryItem: { id: string; label: string | null; place: ExpensePlace | null } | null;
   localDate: string | null;
   localTime: string | null;
   note: string | null;
   timeZone: string | null;
   timeZoneSource: 'itinerary_day' | 'itinerary_item' | 'trip_place' | 'trip_reference' | null;
   title: string | null;
-  tripPlace: { id: string; name: string | null; placeId: string } | null;
+  tripPlace: ExpensePlace | null;
   updatedAt: string;
 };
 
@@ -54,10 +63,10 @@ export type ExpensesResponse = {
     projectedCost: CurrencyTotal[];
   }>;
   expenses: Expense[];
-  itineraryItems: Array<{ id: string; label: string | null }>;
+  itineraryItems: Array<{ id: string; label: string | null; place: ExpensePlace | null }>;
   projectedCost: CurrencyTotal[];
   trip: { id: string; name: string };
-  tripPlaces: Array<{ id: string; name: string | null; placeId: string }>;
+  tripPlaces: ExpensePlace[];
 };
 
 export class ExpensesApiError extends Error {

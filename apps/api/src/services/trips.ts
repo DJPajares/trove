@@ -375,11 +375,15 @@ export async function updateTrip(
           });
         }
       }
-      // Memories outlive the day they were captured against; detach before removal.
-      await transaction.memory.updateMany({
-        where: { itineraryDayId: { in: removedDayIds }, tripId },
+      // Memories, tasks, and expenses outlive the day they were filed against;
+      // detach before removal so a shorter trip never discards them.
+      const detached = {
         data: { itineraryDayId: null },
-      });
+        where: { itineraryDayId: { in: removedDayIds }, tripId },
+      } as const;
+      await transaction.memory.updateMany(detached);
+      await transaction.task.updateMany(detached);
+      await transaction.expense.updateMany(detached);
       await transaction.itineraryDay.deleteMany({ where: { id: { in: removedDayIds }, tripId } });
     }
 

@@ -430,7 +430,6 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
         }
         currentSection="places"
         description={t('description')}
-        title={tripName ? t('title', { trip: tripName }) : t('titleLoading')}
         tripId={tripId}
       />
       {error ? (

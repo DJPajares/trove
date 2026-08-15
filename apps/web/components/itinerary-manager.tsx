@@ -778,7 +778,6 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
       <TripSectionHeader
         currentSection="itinerary"
         description={t('description')}
-        title={t('title', { trip: itinerary.trip.name })}
         tripId={tripId}
       />
 

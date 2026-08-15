@@ -314,7 +314,6 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
         }
         currentSection="tasks"
         description={t('description')}
-        title={t('title', { trip: data.trip.name })}
         tripId={tripId}
       />
 

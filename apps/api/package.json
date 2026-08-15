@@ -6,7 +6,7 @@
   "devDependencies": {
     "@trove/config": "workspace:*",
     "@types/node": "^26.2.0",
-    "tsx": "^4.23.11"
+    "tsx": "^4.23.12"
   },
   "scripts": {
     "build": "../../node_modules/.bin/tsc --project tsconfig.build.json",
@@ -18,10 +18,10 @@
   },
   "dependencies": {
     "@fastify/cors": "11.3.0",
-    "@supabase/supabase-js": "^2.112.2",
+    "@supabase/supabase-js": "^2.112.3",
     "@trove/db": "workspace:*",
     "dotenv": "^17.4.2",
-    "fastify": "^5.11.3",
+    "fastify": "^5.12.0",
     "zod": "4.4.3"
   }
 }

@@ -132,17 +132,11 @@ Use:
 - Reason: `<one short sentence>`
 
 ### Usage
-Report token/quota percentages only when the current AI platform explicitly exposes them.
+Report token/quota percentages usage.
 
 Examples:
 - `5-hour limit: 22.50%`
 - `Weekly limit: 5.93%`
-
-If unavailable, write:
-
-`Usage: unavailable from current platform`
-
-Never estimate hidden usage.
 
 ## Context Efficiency
 

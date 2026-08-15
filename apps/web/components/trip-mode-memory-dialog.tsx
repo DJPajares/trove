@@ -1,9 +1,10 @@
 'use client';
 
-import { ImagePlus, Sparkles, X } from 'lucide-react';
+import { CloudOff, ImagePlus, Sparkles, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { useOnlineStatus } from '@/components/trip-sync-status';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,9 +27,9 @@ import { Textarea } from '@/components/ui/textarea';
 import type { ItineraryItem } from '@/lib/itinerary/api';
 import {
   allowedMemoryPhotoTypes,
-  createMemory,
+  captureMemory,
   maxMemoryPhotoSize,
-  uploadMemoryPhoto,
+  MemoriesApiError,
 } from '@/lib/memories/api';
 
 const NO_CONTEXT = 'none';
@@ -39,6 +40,9 @@ const NO_CONTEXT = 'none';
  * changed or cleared without blocking the save. The trip-local capture time and
  * timezone are resolved by the server from that context, so a device in another
  * timezone never decides when a Memory happened.
+ *
+ * Capture does not depend on connectivity: anything that cannot be sent now is
+ * queued with its photos and syncs later.
  */
 export function TripModeMemoryDialog({
   dayDate,
@@ -56,12 +60,13 @@ export function TripModeMemoryDialog({
   defaultItemId?: string | null;
   items: ItineraryItem[];
   onOpenChange: (open: boolean) => void;
-  onSaved: (note: string | null) => void;
+  onSaved: (queued: boolean) => void;
   open: boolean;
   timeZone: string;
   tripId: string;
 }>) {
   const t = useTranslations('memories.capture');
+  const online = useOnlineStatus();
   const fileInput = useRef<HTMLInputElement>(null);
   const [note, setNote] = useState('');
   const [isHighlight, setIsHighlight] = useState(false);
@@ -108,22 +113,26 @@ export function TripModeMemoryDialog({
     setError(null);
 
     try {
-      const memory = await createMemory(tripId, {
-        isHighlight,
-        itineraryDayId: dayId,
-        itineraryItemId: selectedItem?.id ?? null,
-        note: note.trim() ? note.trim() : null,
-        tripPlaceId: selectedItem?.tripPlace?.id ?? null,
-      });
+      const result = await captureMemory(
+        tripId,
+        {
+          isHighlight,
+          itineraryDayId: dayId,
+          itineraryItemId: selectedItem?.id ?? null,
+          note: note.trim() ? note.trim() : null,
+          tripPlaceId: selectedItem?.tripPlace?.id ?? null,
+        },
+        photos,
+      );
 
-      for (const photo of photos) {
-        await uploadMemoryPhoto(tripId, memory.id, photo);
-      }
-
-      onSaved(memory.note);
+      onSaved(result.queued);
       onOpenChange(false);
-    } catch {
-      setError(t('saveError'));
+    } catch (error) {
+      setError(
+        error instanceof MemoriesApiError && error.code === 'memory_storage_full'
+          ? t('storageFull')
+          : t('saveError'),
+      );
       setSaving(false);
     }
   }
@@ -140,6 +149,13 @@ export function TripModeMemoryDialog({
           <p className="text-xs leading-5 text-text-subtle">
             {t('capturedContext', { date: dayDate, timeZone })}
           </p>
+
+          {online ? null : (
+            <p className="flex items-start gap-2 text-xs leading-5 text-text-subtle">
+              <CloudOff aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+              {t('offlineHint')}
+            </p>
+          )}
 
           <div className="space-y-2">
             <input

@@ -213,11 +213,16 @@ export async function listMemories(userId: string, tripId: string, accessToken: 
   };
 }
 
+/**
+ * A capture queued offline replays with the id it was given on the device, so a
+ * retried or interrupted sync resolves to the same Memory instead of a second one.
+ */
 export async function createMemory(
   userId: string,
   tripId: string,
   input: MemoryInput,
   accessToken: string | null,
+  clientMemoryId?: string,
 ) {
   const note = parseNote(input.note);
   const capturedInstant = parseCapturedAt(input.capturedAt) ?? new Date();
@@ -225,6 +230,13 @@ export async function createMemory(
 
   const created = await prisma.$transaction(async (transaction) => {
     const trip = await findOwnedTrip(transaction, userId, tripId);
+    if (clientMemoryId) {
+      const existing = await transaction.memory.findFirst({
+        where: { id: clientMemoryId, tripId },
+        include: memoryInclude,
+      });
+      if (existing) return existing;
+    }
     const timeZone = await resolveContext(transaction, tripId, trip.referenceTimeZone, {
       itineraryDayId: input.itineraryDayId ?? null,
       itineraryItemId: input.itineraryItemId ?? null,
@@ -241,6 +253,7 @@ export async function createMemory(
         itineraryDayId: input.itineraryDayId ?? null,
         itineraryItemId: input.itineraryItemId ?? null,
         note: note ?? null,
+        ...(clientMemoryId ? { id: clientMemoryId } : {}),
         timeZone: timeZone.timeZone,
         timeZoneSource: timeZone.source,
         tripId,
@@ -376,6 +389,12 @@ export async function addMemoryPhoto(
     await findOwnedTrip(transaction, userId, tripId);
     const memory = await transaction.memory.findFirst({ where: { id: memoryId, tripId } });
     if (!memory) throw new MemoryNotFoundError('memory_not_found');
+
+    // A retried upload re-registers the same stored object rather than a duplicate.
+    const existing = await transaction.memoryPhoto.findFirst({
+      where: { memoryId, path: input.path },
+    });
+    if (existing) return existing;
 
     const last = await transaction.memoryPhoto.aggregate({
       where: { memoryId },

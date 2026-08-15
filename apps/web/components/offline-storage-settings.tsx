@@ -31,6 +31,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { prepareTripForOffline, removePreparedTrip } from '@/lib/offline/trip-preparation';
 import {
   getOfflineTripReadiness,
+  listOfflineMemoryMedia,
   listOfflineReservationDocuments,
   listTripSnapshots,
   listUserMutations,
@@ -43,6 +44,7 @@ import { useInstallPrompt } from '@/lib/pwa/install';
 type PreparedTrip = {
   documentCount: number;
   name: string | null;
+  pendingMediaBytes: number;
   readiness: OfflineReadinessState;
   tripId: string;
   unsyncedChanges: number;
@@ -69,10 +71,14 @@ export function OfflineStorageSettings() {
       ]);
       const prepared = await Promise.all(
         snapshots.map(async (snapshot) => {
-          const documents = await listOfflineReservationDocuments(userId, snapshot.tripId);
+          const [documents, media] = await Promise.all([
+            listOfflineReservationDocuments(userId, snapshot.tripId),
+            listOfflineMemoryMedia(userId, snapshot.tripId).catch(() => []),
+          ]);
           return {
             documentCount: documents.length,
             name: snapshot.trip?.name ?? snapshot.itinerary?.trip.name ?? null,
+            pendingMediaBytes: media.reduce((total, entry) => total + entry.sizeBytes, 0),
             readiness: getOfflineTripReadiness(snapshot, documents).state,
             tripId: snapshot.tripId,
             unsyncedChanges: mutations.filter((mutation) => mutation.tripId === snapshot.tripId)
@@ -204,6 +210,11 @@ export function OfflineStorageSettings() {
                         t(`readiness.${trip.readiness}`),
                         trip.documentCount
                           ? t('documentCount', { count: trip.documentCount })
+                          : null,
+                        trip.pendingMediaBytes
+                          ? t('pendingMemoryMedia', {
+                              value: (trip.pendingMediaBytes / (1024 * 1024)).toFixed(1),
+                            })
                           : null,
                         trip.unsyncedChanges
                           ? t('unsyncedCount', { count: trip.unsyncedChanges })

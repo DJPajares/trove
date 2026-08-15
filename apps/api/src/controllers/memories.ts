@@ -30,6 +30,9 @@ const memorySchema = z
   })
   .strict();
 
+/** A queued offline capture replays with its own id so retries never duplicate. */
+const createMemorySchema = memorySchema.extend({ clientMemoryId: z.uuid().optional() }).strict();
+
 const photoSchema = z
   .object({
     contentType: z.string().min(1).max(100),
@@ -88,12 +91,13 @@ export function createMemoryControllers() {
     async create(request: FastifyRequest, reply: FastifyReply) {
       const userId = getUserId(request, reply);
       const params = tripParamsSchema.safeParse(request.params);
-      const body = memorySchema.safeParse(request.body);
+      const body = createMemorySchema.safeParse(request.body);
       if (!userId) return;
       if (!params.success || !body.success) {
         return reply.code(400).send({ code: 'invalid_memory' });
       }
 
+      const { clientMemoryId, ...input } = body.data;
       try {
         return reply
           .code(201)
@@ -101,8 +105,9 @@ export function createMemoryControllers() {
             await createMemory(
               userId,
               params.data.tripId,
-              body.data,
+              input,
               getBearerToken(request.headers.authorization),
+              clientMemoryId,
             ),
           );
       } catch (error) {

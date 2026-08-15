@@ -29,6 +29,7 @@ import { useTripModePreview } from '@/components/trip-mode-shell';
 import { useOfflineDataRefreshKey, useOnlineStatus } from '@/components/trip-sync-status';
 import { TripModeAddItemDialog } from '@/components/trip-mode-add-item-dialog';
 import { TripModeMemoryDialog } from '@/components/trip-mode-memory-dialog';
+import { TripModePendingMemories } from '@/components/trip-mode-pending-memories';
 import {
   TripModeScheduleFields,
   type TripModeSchedule,
@@ -139,6 +140,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   const [error, setError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
+  const [pendingMemoriesKey, setPendingMemoriesKey] = useState(0);
   const [scheduleItem, setScheduleItem] = useState<ItineraryItem | null>(null);
   const [schedule, setSchedule] = useState<TripModeSchedule>('none');
   const [exactTime, setExactTime] = useState('');
@@ -811,14 +813,17 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
         />
       )}
 
+      <TripModePendingMemories key={pendingMemoriesKey} tripId={tripId} />
+
       <TripModeMemoryDialog
         dayDate={date}
         dayId={day.id}
         items={day.items}
         onOpenChange={setMemoryOpen}
-        onSaved={() => {
+        onSaved={(queued) => {
           setUndoAction(null);
-          setFeedback(memoryTranslations('saved'));
+          setPendingMemoriesKey((current) => current + 1);
+          setFeedback(memoryTranslations(queued ? 'savedOffline' : 'saved'));
         }}
         open={memoryOpen}
         timeZone={day.defaultTimeZone}

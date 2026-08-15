@@ -1,19 +1,9 @@
 'use client';
 
-import {
-  ArrowLeft,
-  CalendarCheck2,
-  ChevronDown,
-  CircleDollarSign,
-  Info,
-  ListChecks,
-  MapPinned,
-  ReceiptText,
-  Sparkles,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Ellipsis } from 'lucide-react';
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useEffect, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -26,47 +16,76 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { fetchTrip, type Trip } from '@/lib/trips/api';
+import {
+  primaryTripDestinations,
+  supportingTripDestinations,
+  type TripDestination,
+  type TripSection,
+} from '@/lib/trips/navigation';
 import { cn } from '@/lib/utils';
 
-export type TripSection =
-  'itinerary' | 'places' | 'tasks' | 'reservations' | 'expenses' | 'info' | 'memories';
+export type { TripSection };
 
 type TripSectionHeaderProps = {
   actions?: ReactNode;
   currentSection: TripSection;
-  description: string;
-  title: string;
+  description?: string;
   tripId: string;
 };
 
-type SectionDefinition = {
-  icon: LucideIcon;
-  labelKey:
-    'itinerary' | 'places' | 'tasks' | 'reservations' | 'expenses' | 'tripInfo' | 'memories';
-  path: TripSection;
-  route: string;
-};
+function emphasisClasses(destination: TripDestination, active: boolean) {
+  if (active) return 'bg-secondary text-secondary-foreground';
+  if (destination.emphasis === 'leading') {
+    return 'text-foreground hover:bg-surface-hover';
+  }
+  if (destination.emphasis === 'quiet') {
+    return 'text-text-subtle hover:bg-surface-hover hover:text-foreground';
+  }
+  return 'text-muted-foreground hover:bg-surface-hover hover:text-foreground';
+}
 
-const sections: SectionDefinition[] = [
-  { icon: CalendarCheck2, labelKey: 'itinerary', path: 'itinerary', route: 'itinerary' },
-  { icon: MapPinned, labelKey: 'places', path: 'places', route: 'places' },
-  { icon: ListChecks, labelKey: 'tasks', path: 'tasks', route: 'tasks' },
-  { icon: ReceiptText, labelKey: 'reservations', path: 'reservations', route: 'reservations' },
-  { icon: CircleDollarSign, labelKey: 'expenses', path: 'expenses', route: 'expenses' },
-  { icon: Info, labelKey: 'tripInfo', path: 'info', route: 'info' },
-  { icon: Sparkles, labelKey: 'memories', path: 'memories', route: 'memories' },
-];
-
+/**
+ * The header every trip page shares. The trip is the subject — its name is the
+ * heading wherever you are inside it — and the three experiences Trove is built
+ * around are the only destinations on show. Everything else a trip needs stays one
+ * interaction away rather than competing for the same attention.
+ */
 export function TripSectionHeader({
   actions,
   currentSection,
   description,
-  title,
   tripId,
 }: Readonly<TripSectionHeaderProps>) {
   const t = useTranslations('trips');
-  const activeSection = sections.find((section) => section.path === currentSection) ?? sections[0]!;
-  const ActiveIcon = activeSection.icon;
+  const locale = useLocale();
+  const [trip, setTrip] = useState<Trip | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setTrip(null);
+    void fetchTrip(tripId)
+      .then((result) => {
+        if (active) setTrip(result.trip);
+      })
+      // Navigation must never be the thing that breaks: without the trip the
+      // header simply loses its name and dates.
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, [tripId]);
+
+  const lifecycle = trip?.lifecycle ?? 'planning';
+  const primary = primaryTripDestinations(tripId, lifecycle, trip?.startDate ?? '');
+  const supporting = supportingTripDestinations(tripId);
+  const activeSupporting = supporting.find((entry) => entry.section === currentSection);
+
+  const formatDate = (value: string) =>
+    new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
+      new Date(`${value}T00:00:00.000Z`),
+    );
 
   return (
     <header className="space-y-5" data-slot="trip-section-header">
@@ -78,74 +97,103 @@ export function TripSectionHeader({
         {t('title')}
       </Link>
 
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-        <div className="max-w-3xl">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0 max-w-3xl">
           <h1 className="text-[clamp(1.875rem,5vw,2.5rem)] leading-[1.12] font-semibold tracking-[-0.025em] text-pretty text-foreground">
-            {title}
+            {trip?.name ?? t('titleLoading')}
           </h1>
-          <p className="mt-3 max-w-[62ch] text-base leading-7 text-pretty text-muted-foreground">
-            {description}
-          </p>
+          {trip ? (
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {t('dateRange', {
+                endDate: formatDate(trip.endDate),
+                startDate: formatDate(trip.startDate),
+              })}
+              {' · '}
+              {t(`lifecycle.${trip.lifecycle}`)}
+            </p>
+          ) : null}
         </div>
         {actions ? (
           <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
         ) : null}
       </div>
 
-      <nav aria-label={t('tripNavigation')} className="hidden border-b border-border md:block">
-        <ul className="flex items-center gap-1 overflow-x-auto pb-2">
-          {sections.map(({ icon: Icon, labelKey, path, route }) => {
-            const active = path === currentSection;
-            return (
-              <li key={path}>
-                <Link
-                  aria-current={active ? 'page' : undefined}
-                  className={cn(
-                    'inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-[var(--radius-md)] px-3 text-sm font-medium outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40',
-                    active
-                      ? 'bg-secondary text-secondary-foreground'
-                      : 'text-muted-foreground hover:bg-surface-hover hover:text-foreground',
-                  )}
-                  href={`/trips/${tripId}/${route}`}
-                >
-                  <Icon aria-hidden="true" className="size-4" />
-                  {t(labelKey)}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+      <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
+        <nav aria-label={t('tripNavigation')} className="min-w-0">
+          <ul className="flex items-center gap-1 overflow-x-auto">
+            {primary.map((destination) => {
+              const active = destination.section === currentSection;
+              return (
+                <li key={destination.section}>
+                  <Link
+                    aria-current={active ? 'page' : undefined}
+                    className={cn(
+                      'inline-flex min-h-10 items-center whitespace-nowrap rounded-[var(--radius-md)] px-3 text-sm font-medium outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40',
+                      emphasisClasses(destination, active),
+                    )}
+                    href={destination.href}
+                  >
+                    {t(destination.labelKey)}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
 
-      <div className="md:hidden">
         <DropdownMenu>
           <DropdownMenuTrigger
-            render={<Button className="w-full justify-between" type="button" variant="outline" />}
+            render={
+              <Button
+                // The accessible name has to contain the visible one, so when the
+                // trigger reads "Expenses" the label leads with it.
+                aria-label={
+                  activeSupporting
+                    ? t('moreLabelCurrent', { section: t(activeSupporting.labelKey) })
+                    : t('moreLabel')
+                }
+                className={cn(
+                  'shrink-0',
+                  activeSupporting ? 'bg-secondary text-secondary-foreground' : undefined,
+                )}
+                size="sm"
+                type="button"
+                variant="ghost"
+              />
+            }
           >
-            <span className="inline-flex items-center gap-2">
-              <ActiveIcon aria-hidden="true" className="size-4" />
-              {t(activeSection.labelKey)}
+            {/* Icon or name, never both — the row is tight at 375px. On a supporting
+                page the name always shows, because it is the only thing telling the
+                traveller where they are. */}
+            {activeSupporting ? null : <Ellipsis aria-hidden="true" data-icon="inline-start" />}
+            <span className={activeSupporting ? undefined : 'hidden sm:inline'}>
+              {activeSupporting ? t(activeSupporting.labelKey) : t('more')}
             </span>
-            <ChevronDown aria-hidden="true" className="size-4" />
+            <ChevronDown aria-hidden="true" data-icon="inline-end" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-(--anchor-width)">
+          <DropdownMenuContent align="end" className="min-w-52">
             <DropdownMenuGroup>
-              <DropdownMenuLabel>{t('tripNavigation')}</DropdownMenuLabel>
+              <DropdownMenuLabel>{t('supportingTools')}</DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            {sections.map(({ icon: Icon, labelKey, path, route }) => (
+            {supporting.map((destination) => (
               <DropdownMenuLinkItem
-                aria-current={path === currentSection ? 'page' : undefined}
-                key={path}
-                render={<Link href={`/trips/${tripId}/${route}`} />}
+                aria-current={destination.section === currentSection ? 'page' : undefined}
+                key={destination.section}
+                render={<Link href={destination.href} />}
               >
-                <Icon aria-hidden="true" className="size-4" />
-                {t(labelKey)}
+                {t(destination.labelKey)}
               </DropdownMenuLinkItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {description ? (
+        <p className="max-w-[62ch] text-sm leading-6 text-pretty text-muted-foreground">
+          {description}
+        </p>
+      ) : null}
     </header>
   );
 }

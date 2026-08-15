@@ -198,6 +198,26 @@ Trip Mode must not replace global navigation.
 
 Trip Mode may introduce its own Now / Today / Map / Trip navigation, but the user must retain a clear way to leave Trip Mode and reach the stable global navigation on every supported form factor.
 
+### Trip Navigation
+
+Inside a trip, the trip itself is the subject: its name is the page heading on every trip screen, with its dates and lifecycle beneath.
+
+Trip navigation presents only the three core experiences, in a stable order:
+
+- **Itinerary** — Plan it.
+- **Trip Mode** — Live it.
+- **Memories** — Remember it.
+
+Supporting tools — Places, Tasks, Reservations, Expenses, Trip Info — are reachable in one interaction from a single grouped menu on every trip screen, and must never occupy the primary navigation.
+
+Trip lifecycle changes emphasis only. All three core destinations remain present and reachable at every stage; none is hidden or reordered, because navigation that rearranges itself between visits costs more than it gives.
+
+- **Planning:** Itinerary leads. Trip Mode is offered as Preview, opening at the first day.
+- **Active:** Trip Mode leads.
+- **Completed:** Memories leads.
+
+When the current screen is a supporting tool, its name must remain visible in the navigation so the user can always tell where they are.
+
 ## 4.6 Accessibility
 
 Applicable web UI should target **WCAG 2.2 AA**.

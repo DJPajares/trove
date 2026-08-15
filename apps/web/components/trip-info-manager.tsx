@@ -289,7 +289,6 @@ export function TripInfoManager({ tripId }: Readonly<{ tripId: string }>) {
         }
         currentSection="info"
         description={t('description')}
-        title={t('title', { trip: data.trip.name })}
         tripId={tripId}
       />
 

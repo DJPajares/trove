@@ -161,6 +161,18 @@
     "editTitle": "Edit trip",
     "editDescription": "Adjust the trip without locking the plan.",
     "tripNavigation": "Trip navigation",
+    "titleLoading": "Trip",
+    "tripMode": "Trip Mode",
+    "preview": "Preview",
+    "more": "More",
+    "moreLabel": "More trip tools",
+    "moreLabelCurrent": "{section}. More trip tools",
+    "supportingTools": "Trip tools",
+    "lifecycle": {
+      "planning": "Planning",
+      "active": "Travelling now",
+      "completed": "Completed"
+    },
     "tripTools": "Trip tools",
     "itinerary": "Itinerary",
     "tasks": "Tasks",

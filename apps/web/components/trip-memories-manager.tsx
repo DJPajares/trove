@@ -320,7 +320,6 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
         end: shortDate(trip.endDate),
         start: shortDate(trip.startDate),
       })}
-      title={t('title', { trip: trip.name })}
       tripId={tripId}
     />
   );

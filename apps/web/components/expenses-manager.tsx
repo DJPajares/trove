@@ -493,7 +493,6 @@ export function ExpensesManager({
         }
         currentSection="expenses"
         description={t('description')}
-        title={t('title', { trip: data.trip.name })}
         tripId={tripId}
       />
 

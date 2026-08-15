@@ -451,7 +451,6 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
         }
         currentSection="reservations"
         description={t('description')}
-        title={t('title', { trip: data.trip.name })}
         tripId={tripId}
       />
 

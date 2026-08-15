@@ -1,17 +1,19 @@
 import { getPrismaClient } from '@trove/db';
 
 import type { PlacesService, PlaceSuggestion } from './places.js';
+import { formatDateOnly } from './trip-rules.js';
 
 const CANDIDATE_LIMIT = 30;
 const RESULT_LIMIT_PER_GROUP = 5;
 const PLACE_FALLBACK_RESULT_THRESHOLD = 5;
 
 export type SearchResultKind =
-  'note' | 'reservation' | 'saved_place' | 'trip' | 'trip_info' | 'trip_place';
+  'memory' | 'note' | 'reservation' | 'saved_place' | 'trip' | 'trip_info' | 'trip_place';
 export type SearchNoteSource =
   'itinerary' | 'reservation' | 'saved_place' | 'trip' | 'trip_info' | 'trip_place';
 
-// Memories can join this owned-result contract without changing provider search behavior.
+// Memories join this owned-result contract without changing provider search behavior:
+// they are user-owned and never leave the authenticated owner's own trips.
 
 export type TroveSearchResult = {
   description: string | null;
@@ -39,7 +41,8 @@ const groupOrder: Record<SearchResultKind, number> = {
   trip_place: 2,
   saved_place: 3,
   trip_info: 4,
-  note: 5,
+  memory: 5,
+  note: 6,
 };
 
 function normalize(value: string) {
@@ -111,7 +114,7 @@ async function searchOwnedContent(userId: string, input: string) {
   const query = normalize(input);
   const contains = { contains: input, mode: 'insensitive' as const };
 
-  const [trips, savedPlaces, tripPlaces, reservations, tripInfo, days, itineraryItems] =
+  const [trips, savedPlaces, tripPlaces, reservations, tripInfo, days, itineraryItems, memories] =
     await Promise.all([
       prisma.trip.findMany({
         where: { ownerId: userId, OR: [{ name: contains }, { notes: contains }] },
@@ -234,6 +237,22 @@ async function searchOwnedContent(userId: string, input: string) {
           tripPlace: { select: { place: { select: { customName: true } } } },
         },
         orderBy: { updatedAt: 'desc' },
+        take: CANDIDATE_LIMIT,
+      }),
+      // Memories are private: scoped to trips this user owns, like every other result here.
+      prisma.memory.findMany({
+        where: {
+          trip: { ownerId: userId },
+          OR: [{ note: contains }, { tripPlace: { place: { customName: contains } } }],
+        },
+        select: {
+          capturedLocalDate: true,
+          id: true,
+          note: true,
+          trip: { select: { id: true, name: true } },
+          tripPlace: { select: { place: { select: { customName: true } } } },
+        },
+        orderBy: { capturedInstant: 'desc' },
         take: CANDIDATE_LIMIT,
       }),
     ]);
@@ -440,6 +459,23 @@ async function searchOwnedContent(userId: string, input: string) {
         item.tripPlace?.place.customName ??
         item.trip.name,
       trip: item.trip,
+    });
+  }
+
+  // A Memory opens in its own Trip Story rather than a separate Memories search view.
+  for (const memory of memories) {
+    const placeName = memory.tripPlace?.place.customName ?? null;
+    const score = bestScore(query, [{ value: memory.note, weight: 4 }, { value: placeName }]);
+    if (!score) continue;
+    results.push({
+      description: memory.note ? excerpt(memory.note) : null,
+      href: `/trips/${memory.trip.id}/memories?memory=${encodeURIComponent(memory.id)}`,
+      id: memory.id,
+      kind: 'memory',
+      noteSource: null,
+      score,
+      title: placeName ?? formatDateOnly(memory.capturedLocalDate),
+      trip: memory.trip,
     });
   }
 

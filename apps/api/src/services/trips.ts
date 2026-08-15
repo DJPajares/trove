@@ -51,6 +51,8 @@ export class TripDateShrinkConfirmationError extends Error {
 }
 
 const tripInclude = {
+  // Lets completed-trip surfaces offer Memories only when there are some to open.
+  _count: { select: { memories: true } },
   destinations: { include: { place: true }, orderBy: { position: 'asc' as const } },
   owner: { include: { homePlace: true } },
   startingPlace: true,
@@ -109,6 +111,7 @@ async function serializeTrip(
     experienceRating: trip.experienceRating,
     id: trip.id,
     lifecycle: deriveTripLifecycle(startDate, endDate, trip.referenceTimeZone, now),
+    memoryCount: trip._count.memories,
     name: trip.name,
     notes: trip.notes,
     partySize: trip.partySize,

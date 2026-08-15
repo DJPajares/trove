@@ -25,6 +25,7 @@ export type Trip = {
   experienceRating: number | null;
   id: string;
   lifecycle: 'active' | 'completed' | 'planning';
+  memoryCount: number;
   name: string;
   notes: string | null;
   partySize: number;

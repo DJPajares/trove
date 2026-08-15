@@ -16,12 +16,14 @@ import {
   Pencil,
   Plus,
   ReceiptText,
+  Sparkles,
   Users,
   WalletCards,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
+import { ExperienceRatingSummary } from '@/components/experience-rating-field';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
 import { PlanScorePanel } from '@/components/plan-score-panel';
@@ -67,11 +69,13 @@ const overviewTools = [
   { href: 'tasks', icon: ClipboardCheck, label: 'tasks' },
   { href: 'expenses', icon: WalletCards, label: 'expenses' },
   { href: 'info', icon: Info, label: 'tripInfo' },
+  { href: 'memories', icon: Sparkles, label: 'memories' },
 ] as const;
 
 export function TripsManager() {
   const t = useTranslations('trips');
   const planScoreTranslations = useTranslations('planScore');
+  const experienceRatingTranslations = useTranslations('experienceRating');
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
@@ -348,10 +352,19 @@ export function TripsManager() {
                       {t('previewTripMode')}
                     </Button>
                   ) : null}
+                  {overviewTrip.lifecycle === 'completed' ? (
+                    <Button
+                      nativeButton={false}
+                      render={<Link href={`/trips/${overviewTrip.id}/memories`} />}
+                    >
+                      <Sparkles aria-hidden="true" data-icon="inline-start" />
+                      {t(overviewTrip.memoryCount ? 'viewMemories' : 'addMemories')}
+                    </Button>
+                  ) : null}
                   <Button
                     nativeButton={false}
                     render={<Link href={`/trips/${overviewTrip.id}/itinerary`} />}
-                    variant={overviewTrip.lifecycle === 'completed' ? 'default' : 'outline'}
+                    variant="outline"
                   >
                     <CalendarClock aria-hidden="true" data-icon="inline-start" />
                     {t('continuePlanning')}
@@ -367,7 +380,19 @@ export function TripsManager() {
                     {t('editTrip')}
                   </Button>
                 </div>
-                {overviewTrip.lifecycle === 'completed' ? null : (
+                {/*
+                  Plan Score judges the plan and only applies while there is still
+                  planning to do; Experience Rating is the traveller's own reflection
+                  afterwards. They never occupy this slot at the same time.
+                */}
+                {overviewTrip.lifecycle === 'completed' ? (
+                  overviewTrip.experienceRating === null ? null : (
+                    <ExperienceRatingSummary
+                      label={experienceRatingTranslations('summaryLabel')}
+                      rating={overviewTrip.experienceRating}
+                    />
+                  )
+                ) : (
                   <PlanScorePanel
                     explanations={
                       planScore.data?.explanations ?? {

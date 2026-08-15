@@ -10,6 +10,7 @@ import {
   Plus,
   Sparkles,
 } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
@@ -38,6 +39,7 @@ import {
   getProviderPlaceDetails,
 } from '@/lib/saved/api';
 import { fetchTrip, updateTripExperienceRating, type Trip } from '@/lib/trips/api';
+import { cn } from '@/lib/utils';
 
 type LoadState =
   | { data: null; status: 'error' }
@@ -83,12 +85,16 @@ function MemoryPhotos({ memory, photoAlt }: Readonly<{ memory: Memory; photoAlt:
  * affordance, and optional Highlights reorder controls, sit alongside it.
  */
 function MemoryEntry({
+  anchorId,
+  highlighted,
   highlightControls,
   memory,
   onEdit,
   photoAlt,
   time,
 }: Readonly<{
+  anchorId?: string;
+  highlighted?: boolean;
   highlightControls?: { onMoveDown: (() => void) | null; onMoveUp: (() => void) | null };
   memory: Memory;
   onEdit: () => void;
@@ -98,7 +104,15 @@ function MemoryEntry({
   const t = useTranslations('memories.story');
 
   return (
-    <li className="border-b border-border py-5 last:border-b-0">
+    <li
+      className={cn(
+        'border-b border-border py-5 last:border-b-0',
+        highlighted
+          ? '-mx-3 rounded-[var(--radius-md)] bg-secondary/60 px-3 transition-colors duration-[var(--motion-standard)]'
+          : undefined,
+      )}
+      id={anchorId}
+    >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           {time ? <p className="text-xs text-text-subtle tabular-nums">{time}</p> : null}
@@ -154,6 +168,18 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   const [coverPickerOpen, setCoverPickerOpen] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [highlightBusyId, setHighlightBusyId] = useState<string | null>(null);
+  // A search result opens the story already scrolled to the Memory it matched.
+  const focusedMemoryId = useSearchParams().get('memory');
+
+  useEffect(() => {
+    if (!focusedMemoryId || state.status !== 'ready') return;
+    const target = document.getElementById(`memory-${focusedMemoryId}`);
+    if (!target) return;
+    target.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'center',
+    });
+  }, [focusedMemoryId, state.status]);
 
   const refresh = useCallback(async () => {
     setState({ data: null, status: 'loading' });
@@ -489,7 +515,11 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
                 </div>
                 <ul className="mt-2 border-y border-border">
                   {day.memories.map((memory) => (
+                    // Days lists every Memory exactly once, so it carries the anchor
+                    // a search result or deep link points at.
                     <MemoryEntry
+                      anchorId={`memory-${memory.id}`}
+                      highlighted={memory.id === focusedMemoryId}
                       key={memory.id}
                       memory={memory}
                       onEdit={() => setEditor({ memory, mode: 'edit' })}

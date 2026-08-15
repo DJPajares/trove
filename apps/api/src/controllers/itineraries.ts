@@ -11,6 +11,7 @@ import {
   listItinerary,
   organizeItineraryItem,
   setItineraryDayBase,
+  updateItineraryDayExperienceRating,
   updateItineraryDayNote,
   updateItineraryItem,
 } from '../services/itineraries.js';
@@ -23,6 +24,12 @@ const organizeItemSchema = z
   .strict();
 const dayBaseSchema = z.object({ tripPlaceId: z.uuid().nullable() }).strict();
 const dayNoteSchema = z.object({ note: z.string().trim().max(5_000).nullable() }).strict();
+const dayExperienceRatingSchema = z
+  .object({
+    note: z.string().trim().max(2_000).nullable().optional(),
+    rating: z.number().int().min(1).max(5).nullable(),
+  })
+  .strict();
 const timeZoneSchema = z.string().trim().min(1).max(100);
 const scheduleSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('none') }).strict(),
@@ -225,6 +232,29 @@ export function createItineraryControllers() {
             userId,
             params.data.tripId,
             params.data.itineraryDayId,
+            body.data.note,
+          ),
+        );
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
+
+    async updateDayExperienceRating(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = dayParamsSchema.safeParse(request.params);
+      const body = dayExperienceRatingSchema.safeParse(request.body);
+      if (!userId) return;
+      if (!params.success || !body.success) {
+        return reply.code(400).send({ code: 'invalid_experience_rating' });
+      }
+      try {
+        return reply.send(
+          await updateItineraryDayExperienceRating(
+            userId,
+            params.data.tripId,
+            params.data.itineraryDayId,
+            body.data.rating,
             body.data.note,
           ),
         );

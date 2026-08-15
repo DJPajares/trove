@@ -6,6 +6,7 @@ import {
   getTripController,
   listTripsController,
   updateTripController,
+  updateTripExperienceRatingController,
 } from '../controllers/trips.js';
 import { requireAuthenticatedUser } from '../services/request-auth.js';
 
@@ -14,5 +15,10 @@ export function registerTripRoutes(app: FastifyInstance) {
   app.post('/trips', { preHandler: requireAuthenticatedUser }, createTripController);
   app.get('/trips/:tripId', { preHandler: requireAuthenticatedUser }, getTripController);
   app.patch('/trips/:tripId', { preHandler: requireAuthenticatedUser }, updateTripController);
+  app.patch(
+    '/trips/:tripId/experience-rating',
+    { preHandler: requireAuthenticatedUser },
+    updateTripExperienceRatingController,
+  );
   app.delete('/trips/:tripId', { preHandler: requireAuthenticatedUser }, deleteTripController);
 }

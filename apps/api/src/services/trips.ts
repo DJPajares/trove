@@ -105,6 +105,8 @@ async function serializeTrip(
       timeZone: destination.timeZone,
     })),
     endDate,
+    experienceNote: trip.experienceNote,
+    experienceRating: trip.experienceRating,
     id: trip.id,
     lifecycle: deriveTripLifecycle(startDate, endDate, trip.referenceTimeZone, now),
     name: trip.name,
@@ -428,6 +430,37 @@ export async function updateTrip(
           : {}),
       },
     });
+  });
+
+  return getTrip(userId, accessToken, tripId);
+}
+
+/**
+ * Experience Rating is the traveller's own private reflection on how the trip
+ * felt, entered independently of Plan Score's computed planning-quality signal
+ * and of any provider/public Place rating (PRD section 30). The overall trip
+ * rating is never derived from day ratings; each is set and cleared on its own.
+ */
+export async function updateTripExperienceRating(
+  userId: string,
+  accessToken: string,
+  tripId: string,
+  rating: number | null,
+  note: string | null | undefined,
+) {
+  const prisma = getPrismaClient();
+  const existing = await prisma.trip.findFirst({
+    where: { id: tripId, ownerId: userId },
+    select: { id: true },
+  });
+  if (!existing) throw new TripNotFoundError();
+
+  await prisma.trip.update({
+    where: { id: tripId },
+    data: {
+      experienceRating: rating,
+      ...(note === undefined ? {} : { experienceNote: note?.trim() || null }),
+    },
   });
 
   return getTrip(userId, accessToken, tripId);

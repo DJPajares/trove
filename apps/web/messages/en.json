@@ -1057,8 +1057,9 @@
       "cachedRoute": "Cached route from {date}. Check current conditions before relying on it.",
       "walkingBeta": "Walking routes are in beta and may not include clear pedestrian paths.",
       "googleAttribution": "Estimated with Google Maps",
-      "segmentEstimate": "From {origin}: {duration}, {distance} {unit}",
-      "segmentUnavailable": "Route from {origin} unavailable",
+      "segmentEstimateMetrics": "{duration} · {distance} {unit}",
+      "segmentUnavailableMetrics": "No route",
+      "segmentOrigin": "from {origin}",
       "changeMode": "Change travel mode from {origin}",
       "modeSaveError": "We couldn't update that travel mode. Try again.",
       "mode": {

@@ -159,15 +159,26 @@ export function ItineraryRouteSegmentRow({
       role="listitem"
     >
       <span aria-hidden="true" className="ml-3 h-5 w-px bg-border-strong" />
-      <span className="min-w-0 flex-1 truncate">
-        {isAvailable
-          ? t('segmentEstimate', {
-              distance: formatDistance(segment.distanceMeters!, distanceUnit, locale),
-              duration: formatDuration(segment.durationSeconds!, locale),
-              origin: originLabel,
-              unit: t(`units.${distanceUnit}`),
-            })
-          : t('segmentUnavailable', { origin: originLabel })}
+      {/* Metrics and origin are separate spans so the travel estimate — the reason
+          this row exists — can never be the part that ellipses on a narrow screen. */}
+      <span className="flex min-w-0 flex-1 flex-col items-start sm:flex-row sm:items-center sm:gap-1.5">
+        <span
+          className={cn(
+            'shrink-0 whitespace-nowrap tabular-nums',
+            isAvailable && 'font-medium text-foreground',
+          )}
+        >
+          {isAvailable
+            ? t('segmentEstimateMetrics', {
+                distance: formatDistance(segment.distanceMeters!, distanceUnit, locale),
+                duration: formatDuration(segment.durationSeconds!, locale),
+                unit: t(`units.${distanceUnit}`),
+              })
+            : t('segmentUnavailableMetrics')}
+        </span>
+        <span className="min-w-0 max-w-full truncate">
+          {t('segmentOrigin', { origin: originLabel })}
+        </span>
       </span>
       <Select
         disabled={saving}
@@ -176,13 +187,19 @@ export function ItineraryRouteSegmentRow({
       >
         <SelectTrigger
           aria-label={t('changeMode', { origin: originLabel })}
-          className={cn('h-11 w-auto min-w-28 bg-background px-2 sm:h-8', saving && 'opacity-70')}
+          className={cn(
+            'h-11 w-auto min-w-0 bg-background px-2 sm:h-8 sm:min-w-28',
+            saving && 'opacity-70',
+          )}
           size="sm"
         >
           <SelectValue>
+            {/* Icon-only below sm to give the estimate its space back. `sr-only` rather
+                than `hidden` keeps the selected mode in the accessibility tree, since
+                the trigger's aria-label names the origin but not the current mode. */}
             <span className="inline-flex items-center gap-1.5">
               {modeIcon(segment.mode)}
-              {t(`mode.${segment.mode}`)}
+              <span className="sr-only sm:not-sr-only">{t(`mode.${segment.mode}`)}</span>
             </span>
           </SelectValue>
         </SelectTrigger>

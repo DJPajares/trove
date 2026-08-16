@@ -16,10 +16,11 @@ import {
   NotebookPen,
   Pencil,
   Plus,
+  Ellipsis,
   Search,
+  Settings2,
   Trash2,
 } from 'lucide-react';
-import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -32,8 +33,10 @@ import {
 } from '@/components/itinerary-route-details';
 import { CurrencyCombobox } from '@/components/currency-combobox';
 import { MoneyInput } from '@/components/money-input';
+import { ItineraryPlacesDrawer } from '@/components/itinerary-places-drawer';
 import { PlaceDetailSheet } from '@/components/place-detail-sheet';
 import { PlanScorePanel } from '@/components/plan-score-panel';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { usePreferences } from '@/components/preferences-provider';
 import { SearchField } from '@/components/search-field';
 import { TimeInput } from '@/components/time-input';
@@ -50,6 +53,19 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLinkItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -106,6 +122,7 @@ import {
   updateItineraryItem,
   updateItineraryItemRouteMode,
 } from '@/lib/itinerary/api';
+import { scheduledPlaceUse } from '@/lib/itinerary/places';
 import { buildItineraryMapPoints, type ItineraryMapPoint } from '@/lib/maps/itinerary-map';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import {
@@ -118,7 +135,7 @@ import {
   resolveProviderPlace,
   searchProviderPlaces,
 } from '@/lib/saved/api';
-import { addTripPlace } from '@/lib/trip-places/api';
+import { addTripPlace, type TripPlace } from '@/lib/trip-places/api';
 import { cn } from '@/lib/utils';
 
 type EditorState =
@@ -183,6 +200,7 @@ function useDesktopMapLayout() {
 export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('itinerary');
   const planScoreTranslations = useTranslations('planScore');
+  const tripPlacesTranslations = useTranslations('tripPlaces');
   const locale = useLocale();
   const searchParams = useSearchParams();
   const requestedDayId = searchParams.get('day');
@@ -223,6 +241,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   } | null>(null);
   const [routeStatus, setRouteStatus] = useState<'error' | 'idle' | 'loading'>('loading');
   const [savingRouteOwner, setSavingRouteOwner] = useState<string | null>(null);
+  const [placesDrawerOpen, setPlacesDrawerOpen] = useState(false);
   const desktopMapLayout = useDesktopMapLayout();
 
   const refresh = useCallback(async () => {
@@ -409,6 +428,8 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     document.getElementById(`itinerary-item-${reference}`)?.focus();
   }, []);
   const selectedIndex = itinerary?.days.findIndex((day) => day.id === selectedDayId) ?? -1;
+  // Shown in the Places drawer so nothing gets added to a day twice unnoticed.
+  const placeUse = useMemo(() => (itinerary ? scheduledPlaceUse(itinerary) : {}), [itinerary]);
   const dateFormatter = useMemo(
     () =>
       new Intl.DateTimeFormat(locale, {
@@ -693,6 +714,26 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     }
   }
 
+  /**
+   * Adds a Place from the drawer straight onto the open day, unscheduled within it.
+   * Timing is the traveller's to decide afterwards; getting it onto the day is the
+   * point of having the collection beside the plan.
+   */
+  async function addPlaceToSelectedDay(tripPlace: TripPlace) {
+    if (!selectedDay) return false;
+    try {
+      await createItineraryItem(tripId, {
+        itineraryDayId: selectedDay.id,
+        schedule: { kind: 'none' },
+        tripPlaceId: tripPlace.id,
+      });
+      await refresh();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async function handleDailyBase(day: ItineraryDay, tripPlaceId: string | null) {
     setError(null);
     try {
@@ -815,7 +856,12 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
         <Select onValueChange={(value) => setSelectedDayId(value)} value={selectedDayId}>
           <SelectTrigger aria-label={t('chooseDay')} className="min-w-0 flex-1">
             <SelectValue>
-              {selectedDay ? formatDate(selectedDay.date, true) : t('chooseDay')}
+              {selectedDay
+                ? t('dayOption', {
+                    date: formatDate(selectedDay.date),
+                    number: selectedIndex + 1,
+                  })
+                : t('chooseDay')}
             </SelectValue>
           </SelectTrigger>
           <SelectContent align="start">
@@ -876,79 +922,106 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
 
         {selectedDay ? (
           <div className="min-w-0">
-            <div className="flex flex-col gap-5 border-b border-border px-4 py-4 sm:px-6 xl:flex-row xl:items-start xl:justify-between">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">
-                  {t('dayNumber', { number: selectedIndex + 1 })}
-                </p>
-                <h2 className="mt-1 text-xl font-semibold tracking-tight">
+            <div className="flex flex-col gap-4 border-b border-border px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+              <div className="min-w-0">
+                {/* The day picker above already carries the date; this is the heading
+                    for the day being planned, not a second copy of it. */}
+                <h2 className="text-lg font-semibold tracking-tight">
                   {formatDate(selectedDay.date, true)}
                 </h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t('dayTimeZone', { timeZone: selectedDay.defaultTimeZone })}
-                </p>
-                {selectedDay.defaultTimeZoneSource === 'accommodation' &&
-                selectedDay.defaultTimeZoneSourceTripPlaceId ? (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {t('accommodationBase', {
-                      name:
-                        placeName(
-                          itinerary.tripPlaces.find(
-                            (place) => place.id === selectedDay.defaultTimeZoneSourceTripPlaceId,
-                          ) ?? null,
-                        ) ?? t('accommodationBaseUnnamed'),
-                    })}
-                  </p>
-                ) : null}
                 {selectedDay.notes ? (
-                  <p className="mt-3 max-w-2xl whitespace-pre-wrap text-sm text-muted-foreground">
+                  <p className="mt-1.5 max-w-2xl whitespace-pre-wrap text-sm leading-6 text-text-subtle">
                     {selectedDay.notes}
                   </p>
                 ) : null}
               </div>
-              <div className="flex w-full flex-col gap-2 xl:w-auto xl:items-end">
-                <Select
-                  onValueChange={(value) =>
-                    void handleDailyBase(selectedDay, value === 'none' ? null : value)
-                  }
-                  value={selectedDay.dailyBaseTripPlaceId ?? 'none'}
-                >
-                  <SelectTrigger aria-label={t('dailyBase')} className="w-full xl:w-64" size="sm">
-                    <SelectValue>
-                      {selectedDay.dailyBaseTripPlaceId
-                        ? placeName(
-                            itinerary.tripPlaces.find(
-                              (place) => place.id === selectedDay.dailyBaseTripPlaceId,
-                            ) ?? null,
-                          )
-                        : t('noDailyBase')}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent align="end">
-                    <SelectItem value="none">{t('noDailyBase')}</SelectItem>
-                    {itinerary.tripPlaces.map((place) => (
-                      <SelectItem key={place.id} value={place.id}>
-                        {placeName(place)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:w-auto">
-                  <Button
-                    onClick={() => {
-                      setDayNoteEditor(selectedDay);
-                      setDayNoteValue(selectedDay.notes ?? '');
-                    }}
-                    variant="outline"
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Button onClick={() => setPlacesDrawerOpen(true)} variant="outline">
+                  <MapPinned aria-hidden="true" data-icon="inline-start" />
+                  {tripPlacesTranslations('openPlaces')}
+                </Button>
+                <Button onClick={() => openCreate(selectedDay)}>
+                  <Plus aria-hidden="true" data-icon="inline-start" />
+                  {t('addItem')}
+                </Button>
+                <Popover>
+                  <PopoverTrigger
+                    render={
+                      <Button
+                        aria-label={t('daySettings')}
+                        size="icon"
+                        type="button"
+                        variant="ghost"
+                      />
+                    }
                   >
-                    <NotebookPen aria-hidden="true" data-icon="inline-start" />
-                    {selectedDay.notes ? t('editDayNote') : t('addDayNote')}
-                  </Button>
-                  <Button onClick={() => openCreate(selectedDay)}>
-                    <Plus aria-hidden="true" data-icon="inline-start" />
-                    {t('addItem')}
-                  </Button>
-                </div>
+                    <Settings2 aria-hidden="true" />
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-80 space-y-4">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{t('daySettings')}</p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        {t('dayTimeZone', { timeZone: selectedDay.defaultTimeZone })}
+                      </p>
+                      {selectedDay.defaultTimeZoneSource === 'accommodation' &&
+                      selectedDay.defaultTimeZoneSourceTripPlaceId ? (
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                          {t('accommodationBase', {
+                            name:
+                              placeName(
+                                itinerary.tripPlaces.find(
+                                  (place) =>
+                                    place.id === selectedDay.defaultTimeZoneSourceTripPlaceId,
+                                ) ?? null,
+                              ) ?? t('accommodationBaseUnnamed'),
+                          })}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium text-muted-foreground">{t('dailyBase')}</p>
+                      <Select
+                        onValueChange={(value) =>
+                          void handleDailyBase(selectedDay, value === 'none' ? null : value)
+                        }
+                        value={selectedDay.dailyBaseTripPlaceId ?? 'none'}
+                      >
+                        <SelectTrigger aria-label={t('dailyBase')} className="w-full" size="sm">
+                          <SelectValue>
+                            {selectedDay.dailyBaseTripPlaceId
+                              ? placeName(
+                                  itinerary.tripPlaces.find(
+                                    (place) => place.id === selectedDay.dailyBaseTripPlaceId,
+                                  ) ?? null,
+                                )
+                              : t('noDailyBase')}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent align="end">
+                          <SelectItem value="none">{t('noDailyBase')}</SelectItem>
+                          {itinerary.tripPlaces.map((place) => (
+                            <SelectItem key={place.id} value={place.id}>
+                              {placeName(place)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <Button
+                      className="w-full"
+                      onClick={() => {
+                        setDayNoteEditor(selectedDay);
+                        setDayNoteValue(selectedDay.notes ?? '');
+                      }}
+                      variant="outline"
+                    >
+                      <NotebookPen aria-hidden="true" data-icon="inline-start" />
+                      {selectedDay.notes ? t('editDayNote') : t('addDayNote')}
+                    </Button>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
 
@@ -1083,105 +1156,104 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                               ) : null}
                             </ItemDescription>
                           </ItemContent>
-                          <ItemActions className="ml-auto flex-wrap justify-end">
-                            <Button
-                              aria-label={t('moveEarlier', { name })}
-                              disabled={itemIndex === 0 || organizingItemId === item.id}
-                              onClick={() =>
-                                void handleOrganize(item, selectedDay.id, itemIndex - 1)
-                              }
-                              size="icon-sm"
-                              variant="ghost"
-                            >
-                              <ArrowUp aria-hidden="true" />
-                            </Button>
-                            <Button
-                              aria-label={t('moveLater', { name })}
-                              disabled={
-                                itemIndex === selectedDay.items.length - 1 ||
-                                organizingItemId === item.id
-                              }
-                              onClick={() =>
-                                void handleOrganize(item, selectedDay.id, itemIndex + 1)
-                              }
-                              size="icon-sm"
-                              variant="ghost"
-                            >
-                              <ArrowDown aria-hidden="true" />
-                            </Button>
-                            <Select
-                              onValueChange={(value) =>
-                                void handleOrganize(
-                                  item,
-                                  value === 'unscheduled' ? null : value,
-                                  999,
-                                )
-                              }
-                              value={selectedDay.id}
-                            >
-                              <SelectTrigger aria-label={t('moveItem', { name })} size="sm">
-                                <SelectValue>{t('move')}</SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="unscheduled">{t('unscheduled')}</SelectItem>
-                                {itinerary.days
-                                  .filter((day) => day.id !== selectedDay.id)
-                                  .map((day, index) => (
-                                    <SelectItem key={day.id} value={day.id}>
-                                      {t('dayOption', {
-                                        date: formatDate(day.date),
-                                        number: index + 1,
-                                      })}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                            <Button
-                              aria-label={t('duplicateItem', { name })}
-                              disabled={organizingItemId === item.id}
-                              onClick={() => void handleDuplicate(item)}
-                              size="icon-sm"
-                              variant="ghost"
-                            >
-                              <Copy aria-hidden="true" />
-                            </Button>
-                            {mapsHref ? (
-                              <Button
-                                aria-label={t('openPlace', { name })}
-                                nativeButton={false}
-                                render={<a href={mapsHref} rel="noreferrer" target="_blank" />}
-                                size="icon-sm"
-                                variant="ghost"
+                          <ItemActions className="ml-auto shrink-0">
+                            {/* One menu instead of seven controls: the row is content,
+                                not a toolbar, and this behaves the same without hover. */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger
+                                render={
+                                  <Button
+                                    aria-label={t('itemActions', { name })}
+                                    disabled={organizingItemId === item.id}
+                                    size="icon-sm"
+                                    type="button"
+                                    variant="ghost"
+                                  />
+                                }
                               >
-                                <ExternalLink aria-hidden="true" />
-                              </Button>
-                            ) : item.tripPlace ? (
-                              <Button
-                                aria-label={t('openPlace', { name })}
-                                nativeButton={false}
-                                render={<Link href={`/trips/${tripId}/places`} />}
-                                size="icon-sm"
-                                variant="ghost"
-                              >
-                                <MapPinned aria-hidden="true" />
-                              </Button>
-                            ) : null}
-                            <Button
-                              aria-label={t('editItem', { name })}
-                              onClick={() => openEdit(item)}
-                              size="icon-sm"
-                              variant="ghost"
-                            >
-                              <Pencil aria-hidden="true" />
-                            </Button>
-                            <Button
-                              aria-label={t('deleteItem', { name })}
-                              onClick={() => setItemToDelete(item)}
-                              size="icon-sm"
-                              variant="ghost"
-                            >
-                              <Trash2 aria-hidden="true" />
-                            </Button>
+                                <Ellipsis aria-hidden="true" />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="min-w-48">
+                                <DropdownMenuItem
+                                  disabled={itemIndex === 0}
+                                  onClick={() =>
+                                    void handleOrganize(item, selectedDay.id, itemIndex - 1)
+                                  }
+                                >
+                                  <ArrowUp aria-hidden="true" />
+                                  {t('itemMenu.moveEarlier')}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={itemIndex === selectedDay.items.length - 1}
+                                  onClick={() =>
+                                    void handleOrganize(item, selectedDay.id, itemIndex + 1)
+                                  }
+                                >
+                                  <ArrowDown aria-hidden="true" />
+                                  {t('itemMenu.moveLater')}
+                                </DropdownMenuItem>
+
+                                <DropdownMenuSub>
+                                  <DropdownMenuSubTrigger>
+                                    <CalendarClock aria-hidden="true" />
+                                    {t('moveToDay')}
+                                  </DropdownMenuSubTrigger>
+                                  <DropdownMenuSubContent className="max-h-80 overflow-y-auto">
+                                    <DropdownMenuRadioGroup
+                                      onValueChange={(value) =>
+                                        void handleOrganize(
+                                          item,
+                                          value === 'unscheduled' ? null : value,
+                                          999,
+                                        )
+                                      }
+                                      value={selectedDay.id}
+                                    >
+                                      {itinerary.days.map((day, dayIndex) => (
+                                        <DropdownMenuRadioItem key={day.id} value={day.id}>
+                                          {t('dayOption', {
+                                            date: formatDate(day.date),
+                                            number: dayIndex + 1,
+                                          })}
+                                        </DropdownMenuRadioItem>
+                                      ))}
+                                      <DropdownMenuRadioItem value="unscheduled">
+                                        {t('unscheduled')}
+                                      </DropdownMenuRadioItem>
+                                    </DropdownMenuRadioGroup>
+                                  </DropdownMenuSubContent>
+                                </DropdownMenuSub>
+
+                                <DropdownMenuSeparator />
+
+                                <DropdownMenuItem onClick={() => openEdit(item)}>
+                                  <Pencil aria-hidden="true" />
+                                  {t('itemMenu.edit')}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => void handleDuplicate(item)}>
+                                  <Copy aria-hidden="true" />
+                                  {t('itemMenu.duplicate')}
+                                </DropdownMenuItem>
+                                {mapsHref ? (
+                                  <DropdownMenuLinkItem
+                                    render={<a href={mapsHref} rel="noreferrer" target="_blank" />}
+                                  >
+                                    <ExternalLink aria-hidden="true" />
+                                    {t('itemMenu.openPlace')}
+                                  </DropdownMenuLinkItem>
+                                ) : null}
+
+                                <DropdownMenuSeparator />
+
+                                <DropdownMenuItem
+                                  onClick={() => setItemToDelete(item)}
+                                  variant="destructive"
+                                >
+                                  <Trash2 aria-hidden="true" />
+                                  {t('itemMenu.delete')}
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </ItemActions>
                         </Item>,
                       ];
@@ -1343,6 +1415,16 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
             })}
           </ItemGroup>
         </section>
+      ) : null}
+
+      {placesDrawerOpen && selectedDay ? (
+        <ItineraryPlacesDrawer
+          dayNumber={selectedIndex + 1}
+          onAddToDay={addPlaceToSelectedDay}
+          onOpenChange={setPlacesDrawerOpen}
+          placeUse={placeUse}
+          tripId={tripId}
+        />
       ) : null}
 
       <PlaceDetailSheet

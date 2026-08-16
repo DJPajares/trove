@@ -730,6 +730,8 @@ Selecting a Saved Place creates/reuses the Trip Place relationship.
 
 Custom Place creation remains available without requiring provider search.
 
+Trip Places are curated from within the itinerary as well as from their own page. The itinerary offers the collection in a contextual workspace beside the day being planned, where a Place can be reviewed, prioritised, annotated, removed, or added to the open day without leaving the itinerary. The same collection appears in both places; neither is a separate copy.
+
 ## 16.2 Adding to an Itinerary Day
 
 ### Empty Search
@@ -798,6 +800,15 @@ Examples:
 - Dinner with Sarah
 
 Users must not be forced to classify item type upfront.
+
+## 17.2.1 Planning Surface
+
+The itinerary is the primary planning workspace and should stay readable before it is capable.
+
+- A day states its date once. The day picker identifies the day being chosen; the day heading names the day being planned.
+- Day configuration — resolved timezone, accommodation base, and Daily Base — is available on request rather than displayed permanently. It describes how the day resolves, not what is planned in it.
+- A day note is optional content, shown quietly when written and never presented as a field the day is waiting on.
+- Item actions are grouped in a single per-item menu rather than rendered as a permanent row of controls. The menu behaves identically on every form factor, so no action depends on hover.
 
 ## 17.3 Optional Item Data
 

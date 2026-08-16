@@ -42,7 +42,7 @@ const TRIP = id('1');
 const HOME_PLACE = id('10');
 
 const PLACES = {
-  fushimiInari: { id: id('25'), providerId: 'ChIJIW0uPRAIAWARQz-D2ZKDH0g' },
+  fushimiInari: { id: id('25'), providerId: 'ChIJIW0uPRUPAWAR6eI6dRzKGns' },
   gionAlley: { id: id('23'), name: 'Gion back alley', timeZone: TRIP_TIME_ZONE },
   hakoneRyokan: { id: id('22'), name: 'Hakone ryokan', timeZone: TRIP_TIME_ZONE },
   narapark: { id: id('26'), name: 'Nara deer park', timeZone: TRIP_TIME_ZONE },
@@ -172,6 +172,12 @@ async function seedPlaces() {
       },
       create: { externalPlaceId: place.providerId, placeId: place.id, provider: 'GOOGLE' },
       update: { placeId: place.id },
+    });
+    // Google retires place ids. Re-seeding with a corrected one would otherwise
+    // leave the dead reference attached, and the Place would keep resolving
+    // through whichever row came back first.
+    await prisma.placeProviderRef.deleteMany({
+      where: { externalPlaceId: { not: place.providerId }, placeId: place.id, provider: 'GOOGLE' },
     });
   }
 

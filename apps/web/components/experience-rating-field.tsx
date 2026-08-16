@@ -5,10 +5,59 @@ import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
 const VALUES = [1, 2, 3, 4, 5] as const;
+
+/**
+ * The five stars on their own, for tight surfaces that already carry their own
+ * label — a day heading, or a cover where the rating sits over the photograph.
+ * `onImage` swaps the palette for one that survives a dark scrim.
+ */
+export function ExperienceRatingStars({
+  'aria-label': ariaLabel,
+  className,
+  rating,
+  tone = 'default',
+}: Readonly<{
+  'aria-label'?: string;
+  className?: string;
+  rating: number;
+  tone?: 'default' | 'onImage';
+}>) {
+  const onImage = tone === 'onImage';
+
+  return (
+    <span aria-label={ariaLabel} className={cn('flex items-center gap-0.5', className)}>
+      {VALUES.map((value) => (
+        <Star
+          aria-hidden="true"
+          className={cn(
+            'size-4',
+            value <= rating
+              ? onImage
+                ? 'fill-current text-white'
+                : 'fill-current text-brand'
+              : onImage
+                ? 'text-white/40'
+                : 'text-border',
+          )}
+          key={value}
+        />
+      ))}
+    </span>
+  );
+}
 
 /**
  * A read-only echo of a rating already given, for surfaces that report rather
@@ -25,15 +74,7 @@ export function ExperienceRatingSummary({
   return (
     <p className={cn('flex items-center gap-2 text-sm text-muted-foreground', className)}>
       <span>{label}</span>
-      <span aria-label={t('starLabel', { value: rating })} className="flex items-center gap-0.5">
-        {VALUES.map((value) => (
-          <Star
-            aria-hidden="true"
-            className={cn('size-4', value <= rating ? 'fill-current text-brand' : 'text-border')}
-            key={value}
-          />
-        ))}
-      </span>
+      <ExperienceRatingStars aria-label={t('starLabel', { value: rating })} rating={rating} />
     </p>
   );
 }
@@ -141,5 +182,51 @@ export function ExperienceRatingField({
       ) : null}
       {error ? <p className="text-xs text-destructive">{t('saveError')}</p> : null}
     </div>
+  );
+}
+
+/**
+ * Rating as a deliberate act. Surfaces that are being read rather than filled in
+ * — a finished trip's story — offer the rating behind a quiet affordance and
+ * collect it here, instead of standing a prompt beside everything on the page.
+ * Saving is unchanged: a star commits on click, a note commits on blur.
+ */
+export function ExperienceRatingDialog({
+  description,
+  initialNote,
+  initialRating,
+  onOpenChange,
+  onSave,
+  open,
+  title,
+}: Readonly<{
+  description: string;
+  initialNote: string | null;
+  initialRating: number | null;
+  onOpenChange: (open: boolean) => void;
+  onSave: (rating: number | null, note: string | null) => Promise<void>;
+  open: boolean;
+  title: string;
+}>) {
+  const t = useTranslations('experienceRating');
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent closeLabel={t('close')}>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <ExperienceRatingField
+          initialNote={initialNote}
+          initialRating={initialRating}
+          label={t('summaryLabel')}
+          onSave={onSave}
+        />
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>{t('done')}</DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

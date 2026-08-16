@@ -120,16 +120,21 @@ function inboundTravelMinutes(routes: ItineraryDayRoutes | undefined, itemId: st
 }
 
 function toRouteSegments(routes: ItineraryDayRoutes | undefined): PlanScoreRouteSegment[] {
-  return (routes?.segments ?? []).map((segment) =>
-    segment.durationSeconds === null
-      ? { id: segment.id, scope: 'LOCAL', status: 'UNKNOWN' }
+  return (routes?.segments ?? []).map((segment) => {
+    // A long-distance leg carries no estimate by design. Travel effort and pace both
+    // filter on scope, so passing it through keeps flights out of local travel
+    // without pretending its duration is merely unknown.
+    const scope = segment.scope === 'long_distance' ? 'LONG_DISTANCE' : 'LOCAL';
+
+    return segment.durationSeconds === null
+      ? { id: segment.id, scope, status: 'UNKNOWN' }
       : {
           duration: { minutes: segment.durationSeconds / 60, source: 'FRESH_PROVIDER' },
           id: segment.id,
-          scope: 'LOCAL',
+          scope,
           status: 'KNOWN',
-        },
-  );
+        };
+  });
 }
 
 function toDayItems(day: PlanScoreDayRecord, routes: ItineraryDayRoutes | undefined) {

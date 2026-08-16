@@ -130,6 +130,12 @@ function assertMinutes(value: number) {
  * Total local route time across the day's required segments. Structured
  * long-distance journeys are excluded, and a zero total is only evaluable when
  * every required local segment is known and actually totals zero.
+ *
+ * A day whose only movement is long-distance has no local travel to weigh, so the
+ * factor is `NOT_APPLICABLE` rather than `UNKNOWN`: PRD section 29.1 renormalizes
+ * the remaining weights on travel-heavy days instead of penalizing them, and
+ * treating a flight as missing route evidence would withhold the day's score for
+ * information Trove never intended to hold.
  */
 export function evaluateTravelEffort(
   segments: PlanScoreRouteSegment[],
@@ -138,7 +144,9 @@ export function evaluateTravelEffort(
   const known = local.flatMap((segment) => (segment.status === 'KNOWN' ? [segment] : []));
 
   if (local.length === 0) {
-    return { factor: { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' }, totalMinutes: null };
+    return segments.length === 0
+      ? { factor: { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' }, totalMinutes: null }
+      : { factor: { state: 'NOT_APPLICABLE' }, totalMinutes: null };
   }
   if (known.length < local.length) {
     return { factor: { reason: 'INSUFFICIENT_EVIDENCE', state: 'UNKNOWN' }, totalMinutes: null };

@@ -395,7 +395,8 @@
         "travelMode": {
           "drive": "car",
           "transit": "transit",
-          "walk": "foot"
+          "walk": "foot",
+          "flight": "air"
         },
         "distance": "{value} {unit}",
         "unit": {
@@ -404,6 +405,7 @@
         },
         "googleAttribution": "Route estimate from Google Maps.",
         "routeUnavailable": "Travel time is not available for this leg yet.",
+        "routeFlight": "This leg is a flight, so Trove does not estimate a leave-by time. Check your airline for departure and check-in times.",
         "timingFlexible": "No exact time is set, so there is no leave-by time.",
         "supportingContext": "Keep close",
         "bookingReference": "Booking {reference}",
@@ -1057,14 +1059,17 @@
       "cachedRoute": "Cached route from {date}. Check current conditions before relying on it.",
       "walkingBeta": "Walking routes are in beta and may not include clear pedestrian paths.",
       "googleAttribution": "Estimated with Google Maps",
-      "segmentEstimate": "From {origin}: {duration}, {distance} {unit}",
-      "segmentUnavailable": "Route from {origin} unavailable",
+      "segmentEstimateMetrics": "{duration} · {distance} {unit}",
+      "segmentUnavailableMetrics": "No route",
+      "segmentNotEstimatedMetrics": "No estimate",
+      "segmentOrigin": "from {origin}",
       "changeMode": "Change travel mode from {origin}",
       "modeSaveError": "We couldn't update that travel mode. Try again.",
       "mode": {
         "drive": "Drive",
         "transit": "Transit",
-        "walk": "Walk"
+        "walk": "Walk",
+        "flight": "Flight"
       },
       "units": {
         "km": "km",

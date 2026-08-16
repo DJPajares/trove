@@ -19,7 +19,25 @@ function segment(id: string, destinationId: string, durationSeconds: number | nu
     origin: { id: 'base', kind: 'daily_base', label: null },
     provider: 'google',
     reason: null,
+    scope: 'local',
     status: durationSeconds === null ? 'unavailable' : 'ok',
+  } satisfies ItineraryRouteSegment;
+}
+
+function flightSegment(id: string, destinationId: string) {
+  return {
+    destination: { id: destinationId, kind: 'itinerary_item', label: null },
+    distanceMeters: null,
+    durationSeconds: null,
+    encodedPolyline: null,
+    id,
+    mode: 'flight',
+    modeOwner: { id: 'day-1', kind: 'day_start' },
+    origin: { id: 'base', kind: 'daily_base', label: null },
+    provider: null,
+    reason: null,
+    scope: 'long_distance',
+    status: 'not_estimated',
   } satisfies ItineraryRouteSegment;
 }
 
@@ -213,4 +231,51 @@ test('keeps the internal weighting out of the payload', () => {
     'score',
     'withheldReasons',
   ]);
+});
+
+function dayWithSecondLeg(second: ItineraryRouteSegment) {
+  return buildTripPlanScore({
+    ...plannedTrip,
+    routes: new Map([['day-1', dayRoutes([segment('seg-base-a', 'item-a', 600), second])]]),
+  }).days[0];
+}
+
+test('a flight leg leaves travel effort evaluable where a failed route does not', () => {
+  const flight = dayWithSecondLeg(flightSegment('seg-a-b', 'item-b'));
+  const failedRoute = dayWithSecondLeg(segment('seg-a-b', 'item-b', null));
+
+  // The defect this fixes: routing a long-distance hop as a drive returns nothing,
+  // which dragged the whole day's travel effort into unknown and cost completeness.
+  assert.deepEqual(failedRoute?.factors.TRAVEL_EFFORT, {
+    reason: 'INSUFFICIENT_EVIDENCE',
+    state: 'UNKNOWN',
+  });
+  assert.deepEqual(flight?.factors.TRAVEL_EFFORT, {
+    confidence: 100,
+    score: 100,
+    state: 'EVALUATED',
+  });
+  assert.ok((flight?.completeness ?? 0) > (failedRoute?.completeness ?? 0));
+});
+
+test('a flight leg contributes no travel minutes alongside local legs', () => {
+  const mixed = dayWithSecondLeg(flightSegment('seg-a-b', 'item-b'));
+  const localOnly = buildTripPlanScore({
+    ...plannedTrip,
+    routes: new Map([['day-1', dayRoutes([segment('seg-base-a', 'item-a', 600)])]]),
+  }).days[0];
+
+  assert.deepEqual(mixed?.factors.TRAVEL_EFFORT, localOnly?.factors.TRAVEL_EFFORT);
+});
+
+test('a day whose only movement is a flight drops travel effort from the weight base', () => {
+  const flightOnly = buildTripPlanScore({
+    ...plannedTrip,
+    routes: new Map([['day-1', dayRoutes([flightSegment('seg-a-b', 'item-b')])]]),
+  }).days[0];
+
+  // Not applicable rather than unknown, so the factor is renormalized away instead
+  // of costing completeness. The day is still withheld here, but on the honest
+  // grounds that nothing else about it is known -- not because of the flight.
+  assert.deepEqual(flightOnly?.factors.TRAVEL_EFFORT, { state: 'NOT_APPLICABLE' });
 });

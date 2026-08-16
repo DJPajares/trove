@@ -1,5 +1,18 @@
-export const ROUTE_TRAVEL_MODES = ['drive', 'transit', 'walk'] as const;
+export const ROUTE_TRAVEL_MODES = ['drive', 'flight', 'transit', 'walk'] as const;
 export type RouteTravelMode = (typeof ROUTE_TRAVEL_MODES)[number];
+
+/**
+ * Modes the routing provider can actually estimate. Flight is deliberately absent:
+ * Trove does not plan flights, so a flight leg is recorded as a long-distance hop
+ * with no estimate rather than being routed. Keeping it out of `RouteRequest`
+ * makes sending one to the provider a type error rather than a runtime surprise.
+ */
+export const ROUTABLE_TRAVEL_MODES = ['drive', 'transit', 'walk'] as const;
+export type RoutableTravelMode = (typeof ROUTABLE_TRAVEL_MODES)[number];
+
+export function isRoutableTravelMode(mode: RouteTravelMode): mode is RoutableTravelMode {
+  return mode !== 'flight';
+}
 
 export type RouteCoordinates = {
   latitude: number;
@@ -10,7 +23,7 @@ export type RouteRequest = {
   destination: RouteCoordinates;
   includePolyline?: boolean;
   languageCode?: string;
-  mode: RouteTravelMode;
+  mode: RoutableTravelMode;
   origin: RouteCoordinates;
 };
 

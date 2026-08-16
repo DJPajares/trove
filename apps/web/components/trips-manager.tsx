@@ -403,6 +403,7 @@ export function TripsManager() {
                     }
                     onRetry={planScore.retry}
                     score={planScore.data?.score ?? null}
+                    scope="trip"
                     status={planScore.status}
                     title={planScoreTranslations('title')}
                   />

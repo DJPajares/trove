@@ -1330,6 +1330,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                     onRetry={planScore.retry}
                     onSelectReference={focusItineraryItem}
                     score={planScoreDay?.score ?? null}
+                    scope="day"
                     status={planScore.status}
                     title={planScoreTranslations('dayTitle')}
                   />

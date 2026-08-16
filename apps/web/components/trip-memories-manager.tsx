@@ -133,7 +133,9 @@ function MemoryPhotos({ memory, photoAlt }: Readonly<{ memory: Memory; photoAlt:
   return (
     <div className="space-y-2">
       <StoryPhoto alt={leadAlt} aspect="aspect-[4/3]" photo={lead} />
-      <ul className="grid grid-cols-3 gap-2">
+      {/* The strip fills its row rather than leaving a gap where a third
+          photograph would have gone. */}
+      <ul className={cn('grid gap-2', rest.length === 2 ? 'grid-cols-2' : 'grid-cols-3')}>
         {rest.map((photo) => (
           <li key={photo.id}>
             <StoryPhoto alt={photoAlt} aspect="aspect-square" photo={photo} />

@@ -990,6 +990,7 @@
     "unscheduledSummary": "{count, plural, one {One item is} other {# items are}} safely kept in Unscheduled after date changes.",
     "unscheduled": "Unscheduled",
     "unscheduledDescription": "Ideas kept here retain their details until you assign a day.",
+    "advancedOptions": "Advanced",
     "dailyBase": "Daily base",
     "noDailyBase": "No daily base",
     "addDayNote": "Add note",

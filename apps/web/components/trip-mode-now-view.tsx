@@ -12,6 +12,7 @@ import {
   Footprints,
   ListChecks,
   MapPin,
+  Plane,
   Route,
   Sparkles,
   TramFront,
@@ -75,6 +76,7 @@ function directionsHref(item: ItineraryItem, name: string) {
 }
 
 function travelIcon(mode: RouteTravelMode): ReactNode {
+  if (mode === 'flight') return <Plane aria-hidden="true" />;
   if (mode === 'walk') return <Footprints aria-hidden="true" />;
   if (mode === 'transit') return <TramFront aria-hidden="true" />;
   return <CarFront aria-hidden="true" />;
@@ -291,6 +293,10 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
     : null;
   const route =
     readyContext.leaveBy?.destinationItemId === nextItem?.id ? readyContext.leaveBy : null;
+  // The leg into the next item is owned by the current item. A flight has no
+  // leave-by because Trove never estimates one, which is a different thing to say
+  // than an estimate that has not arrived yet.
+  const nextLegIsFlight = currentItem?.travelModeToNext === 'flight';
   const directions = online && nextItem && nextName ? directionsHref(nextItem, nextName) : null;
   const selectedDayId = readyContext.day?.id;
   const reservationDate = (reservation: Reservation) =>
@@ -543,7 +549,11 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
             </div>
           ) : (
             <p className="mt-6 border-t border-border pt-4 text-sm leading-6 text-muted-foreground">
-              {nextItem.startInstant ? t('routeUnavailable') : t('timingFlexible')}
+              {nextLegIsFlight
+                ? t('routeFlight')
+                : nextItem.startInstant
+                  ? t('routeUnavailable')
+                  : t('timingFlexible')}
             </p>
           )}
 

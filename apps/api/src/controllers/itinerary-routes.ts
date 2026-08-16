@@ -7,6 +7,7 @@ import {
   updateItineraryItemRouteMode,
 } from '../services/itinerary-routes.js';
 import { ItineraryNotFoundError } from '../services/itineraries.js';
+import { ROUTE_TRAVEL_MODES } from '../services/routes.js';
 
 const dayParamsSchema = z.object({ itineraryDayId: z.uuid(), tripId: z.uuid() }).strict();
 const itemParamsSchema = z.object({ itemId: z.uuid(), tripId: z.uuid() }).strict();
@@ -16,7 +17,7 @@ const querySchema = z
     languageCode: z.string().trim().min(2).max(35).optional(),
   })
   .strict();
-const routeModeSchema = z.object({ mode: z.enum(['drive', 'transit', 'walk']) }).strict();
+const routeModeSchema = z.object({ mode: z.enum(ROUTE_TRAVEL_MODES) }).strict();
 
 function getUserId(request: FastifyRequest, reply: FastifyReply) {
   if (!request.authUserId) {

@@ -17,7 +17,7 @@ import {
 export type ItineraryDayPart = 'afternoon' | 'anytime' | 'evening' | 'morning';
 export type ItineraryPriority = 'interested' | 'maybe' | 'must_go';
 export type ItineraryTravelStatus = 'completed' | 'skipped' | 'upcoming';
-export type RouteTravelMode = 'drive' | 'transit' | 'walk';
+export type RouteTravelMode = 'drive' | 'flight' | 'transit' | 'walk';
 export type ItineraryScheduleInput =
   | { kind: 'none' }
   | { dayPart: ItineraryDayPart; kind: 'day_part' }
@@ -95,7 +95,10 @@ export type ItineraryRouteSegment = {
   };
   provider: 'google' | null;
   reason: string | null;
-  status: 'ok' | 'unavailable';
+  /** `long_distance` legs are never routed and are excluded from the day's totals. */
+  scope: 'local' | 'long_distance';
+  /** `not_estimated` is a deliberate absence of an estimate, not a failure to get one. */
+  status: 'not_estimated' | 'ok' | 'unavailable';
 };
 
 export type ItineraryDayRoutes = {

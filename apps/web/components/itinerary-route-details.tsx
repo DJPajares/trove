@@ -1,6 +1,6 @@
 'use client';
 
-import { CarFront, Footprints, Route, TramFront } from 'lucide-react';
+import { CarFront, Footprints, Plane, Route, TramFront } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 type RouteLoadStatus = 'error' | 'idle' | 'loading';
 
 function modeIcon(mode: RouteTravelMode): ReactNode {
+  if (mode === 'flight') return <Plane aria-hidden="true" />;
   if (mode === 'transit') return <TramFront aria-hidden="true" />;
   if (mode === 'walk') return <Footprints aria-hidden="true" />;
   return <CarFront aria-hidden="true" />;
@@ -152,6 +153,17 @@ export function ItineraryRouteSegmentRow({
   const originLabel = segment.origin.label ?? t(`point.${segment.origin.kind}`);
   const isAvailable =
     segment.status === 'ok' && segment.durationSeconds !== null && segment.distanceMeters !== null;
+  // A flight is not estimated by design, which is a different thing to say than a
+  // routing attempt that failed.
+  const metricsLabel = isAvailable
+    ? t('segmentEstimateMetrics', {
+        distance: formatDistance(segment.distanceMeters!, distanceUnit, locale),
+        duration: formatDuration(segment.durationSeconds!, locale),
+        unit: t(`units.${distanceUnit}`),
+      })
+    : segment.status === 'not_estimated'
+      ? t('segmentNotEstimatedMetrics')
+      : t('segmentUnavailableMetrics');
 
   return (
     <div
@@ -168,13 +180,7 @@ export function ItineraryRouteSegmentRow({
             isAvailable && 'font-medium text-foreground',
           )}
         >
-          {isAvailable
-            ? t('segmentEstimateMetrics', {
-                distance: formatDistance(segment.distanceMeters!, distanceUnit, locale),
-                duration: formatDuration(segment.durationSeconds!, locale),
-                unit: t(`units.${distanceUnit}`),
-              })
-            : t('segmentUnavailableMetrics')}
+          {metricsLabel}
         </span>
         <span className="min-w-0 max-w-full truncate">
           {t('segmentOrigin', { origin: originLabel })}
@@ -204,7 +210,7 @@ export function ItineraryRouteSegmentRow({
           </SelectValue>
         </SelectTrigger>
         <SelectContent align="end">
-          {(['drive', 'transit', 'walk'] as const).map((mode) => (
+          {(['drive', 'transit', 'walk', 'flight'] as const).map((mode) => (
             <SelectItem key={mode} value={mode}>
               <span className="inline-flex items-center gap-2">
                 {modeIcon(mode)}

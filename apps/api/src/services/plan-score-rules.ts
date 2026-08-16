@@ -14,7 +14,7 @@ import { createHash } from 'node:crypto';
  */
 
 /** Bump when weights, rubric bands, or aggregation semantics change; invalidates cached results. */
-export const PLAN_SCORE_CONTRACT_VERSION = 1;
+export const PLAN_SCORE_CONTRACT_VERSION = 2;
 
 /**
  * Fixed evaluation order (PRD section 29.4 explanation priority). Iterating this

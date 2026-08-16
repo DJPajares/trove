@@ -4,6 +4,7 @@ import { createPlacesService } from './places-runtime.js';
 import type { PlacesService } from './places.js';
 import { createRoutesService } from './routes-runtime.js';
 import {
+  isRoutableTravelMode,
   type RouteCoordinates,
   type RouteProviderErrorCode,
   type RouteTravelMode,
@@ -20,6 +21,13 @@ type RoutePoint = {
   label: string | null;
 };
 
+/**
+ * `long_distance` legs are logistics rather than local travel: they are never
+ * routed, never estimated, and are excluded from the day's travel totals and
+ * from Plan Score's travel effort (PRD sections 18.1 and 29.1).
+ */
+export type RouteSegmentScope = 'local' | 'long_distance';
+
 export type ItineraryRouteSegment = {
   destination: Omit<RoutePoint, 'coordinates'>;
   distanceMeters: number | null;
@@ -31,7 +39,9 @@ export type ItineraryRouteSegment = {
   origin: Omit<RoutePoint, 'coordinates'>;
   provider: 'google' | null;
   reason: RouteProviderErrorCode | 'route_not_found' | null;
-  status: 'ok' | 'unavailable';
+  scope: RouteSegmentScope;
+  /** `not_estimated` is a deliberate absence of an estimate, not a failure to get one. */
+  status: 'not_estimated' | 'ok' | 'unavailable';
 };
 
 type RouteSummaryStatus = 'complete' | 'partial' | 'unavailable';
@@ -60,13 +70,14 @@ type RouteServices = {
 };
 
 function mapMode(value: string): RouteTravelMode {
+  if (value === 'FLIGHT') return 'flight';
   if (value === 'TRANSIT') return 'transit';
   if (value === 'WALK') return 'walk';
   return 'drive';
 }
 
 function mapModeInput(value: RouteTravelMode) {
-  const modes = { drive: 'DRIVE', transit: 'TRANSIT', walk: 'WALK' } as const;
+  const modes = { drive: 'DRIVE', flight: 'FLIGHT', transit: 'TRANSIT', walk: 'WALK' } as const;
   return modes[value];
 }
 
@@ -187,7 +198,23 @@ async function resolveSegment(
     mode: plan.mode,
     modeOwner: plan.modeOwner,
     origin: serializePoint(plan.origin),
+    scope: 'local' as RouteSegmentScope,
   };
+
+  // Trove does not plan flights, so a flight leg is recorded without ever asking
+  // the provider for an estimate it cannot give.
+  if (!isRoutableTravelMode(plan.mode)) {
+    return {
+      ...base,
+      distanceMeters: null,
+      durationSeconds: null,
+      encodedPolyline: null,
+      provider: null,
+      reason: null,
+      scope: 'long_distance',
+      status: 'not_estimated',
+    };
+  }
 
   if (sameCoordinates(plan.origin.coordinates, plan.destination.coordinates)) {
     return {
@@ -247,13 +274,16 @@ function createSummary(
   scheduledPlaceCount: number,
   hasIncompleteLocations: boolean,
 ) {
-  const available = segments.filter(
+  // Totals and completeness describe local travel only. A long-distance leg has no
+  // estimate by design, so counting it would report the day as perpetually partial.
+  const local = segments.filter((segment) => segment.scope === 'local');
+  const available = local.filter(
     (segment) =>
       segment.status === 'ok' &&
       segment.distanceMeters !== null &&
       segment.durationSeconds !== null,
   );
-  const isComplete = !hasIncompleteLocations && available.length === segments.length;
+  const isComplete = !hasIncompleteLocations && available.length === local.length;
   const status: RouteSummaryStatus = isComplete
     ? 'complete'
     : available.length > 0

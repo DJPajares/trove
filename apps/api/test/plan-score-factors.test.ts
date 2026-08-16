@@ -275,7 +275,19 @@ test('evaluates structured long-distance journeys as logistics, not local travel
 
   assert.equal(withJourney.totalMinutes, 30);
   assert.equal(withJourney.factor.state === 'EVALUATED' && withJourney.factor.score, 100);
-  assert.deepEqual(journeyOnly.factor, { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' });
+  // Deliberate recalibration: a day whose only movement is long-distance has no
+  // local travel to weigh, so the factor drops out of the weight base instead of
+  // costing completeness. Treating it as missing evidence withheld the score of
+  // flight days for information Trove never intended to hold.
+  assert.deepEqual(journeyOnly.factor, { state: 'NOT_APPLICABLE' });
+  assert.equal(journeyOnly.totalMinutes, null);
+});
+
+test('a day with no segments at all is still missing evidence, not inapplicable', () => {
+  const empty = evaluateTravelEffort([]);
+
+  assert.deepEqual(empty.factor, { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' });
+  assert.equal(empty.totalMinutes, null);
 });
 
 test('feeds both factors into the day contract without changing the inputs', () => {

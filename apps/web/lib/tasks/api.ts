@@ -91,7 +91,9 @@ async function tasksRequest<T>(
       ...init,
       headers: {
         Authorization: `Bearer ${auth.accessToken}`,
-        'Content-Type': 'application/json',
+        // A JSON content type with no body makes Fastify reject the request, so this
+        // is declared only when the request actually carries one.
+        ...(init?.body === undefined ? {} : { 'Content-Type': 'application/json' }),
         ...init?.headers,
       },
     });

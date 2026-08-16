@@ -128,7 +128,9 @@ async function savedRequest<T>(path: string, init?: RequestInit) {
     ...init,
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
+      // A JSON content type with no body makes Fastify reject the request, so this
+      // is declared only when the request actually carries one.
+      ...(init?.body === undefined ? {} : { 'Content-Type': 'application/json' }),
       ...init?.headers,
     },
   });

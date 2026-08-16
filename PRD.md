@@ -1594,7 +1594,7 @@ Explanations should show concise **What works** and **Worth improving** guidance
 5. Must Go fit,
 6. supporting Place quality.
 
-Presentation follows a progressive-disclosure model. By default Trove answers only two questions: does this look good, and what should I change. That is a short plain-language verdict derived from the numeric score, plus the single highest-priority entry from the ordering above, with its suggested action. The numeric score, the confidence and completeness meters, and the remaining explanations appear only when the user explicitly asks for the detail.
+Presentation follows a progressive-disclosure model. By default Trove answers only two questions: does this look good, and what should I change. That is a short plain-language verdict derived from the numeric score — shown together with a compact score badge — plus the single highest-priority entry from the ordering above, with its suggested action. The full "N out of 100" score text, the confidence and completeness meters, and the remaining explanations appear only when the user explicitly asks for the detail.
 
 Qualitative verdict wording is display-only. It is derived from the canonical numeric score and never feeds back into calculation, consistent with Section 29.3.
 

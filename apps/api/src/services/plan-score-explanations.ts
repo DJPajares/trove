@@ -247,6 +247,11 @@ function knownValues(values: Record<string, number | null>) {
   );
 }
 
+/** Display boundary only — the scoring math upstream keeps the exact float. */
+function roundMinutes(minutes: number | null): number | null {
+  return minutes === null ? null : Math.round(minutes);
+}
+
 function alternativeEntries(alternatives: PlanScoreAlternative[]): Entry[] {
   return alternatives
     .toSorted(
@@ -284,6 +289,26 @@ function group(entries: Entry[]): PlanScoreExplanationGroups {
  * preference signal, so improvement is offered through alternatives instead.
  */
 export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplanationGroups {
+  const bufferMinutes = input.pace.smallestBufferMinutes;
+  const overlapping = bufferMinutes !== null && bufferMinutes < 0;
+  const paceWeak = overlapping
+    ? {
+        action: 'ADD_BUFFER' as const,
+        messageKey: 'pace.overlapping',
+        values: knownValues({
+          activeMinutes: roundMinutes(input.pace.activeMinutes),
+          overlapMinutes: roundMinutes(Math.abs(bufferMinutes as number)),
+        }),
+      }
+    : {
+        action: 'ADD_BUFFER' as const,
+        messageKey: 'pace.tight',
+        values: knownValues({
+          activeMinutes: roundMinutes(input.pace.activeMinutes),
+          bufferMinutes: roundMinutes(bufferMinutes),
+        }),
+      };
+
   return group([
     ...feasibilityEntries(input),
     ...bandedEntries(
@@ -292,12 +317,12 @@ export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplan
       input.day.evidence.TRAVEL_EFFORT,
       {
         messageKey: 'travelEffort.light',
-        values: knownValues({ minutes: input.travel.totalMinutes }),
+        values: knownValues({ minutes: roundMinutes(input.travel.totalMinutes) }),
       },
       {
         action: 'RECONSIDER_DETOUR',
         messageKey: 'travelEffort.heavy',
-        values: knownValues({ minutes: input.travel.totalMinutes }),
+        values: knownValues({ minutes: roundMinutes(input.travel.totalMinutes) }),
       },
     ),
     ...bandedEntries(
@@ -305,14 +330,7 @@ export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplan
       input.day.factors.PACE_BUFFER,
       input.day.evidence.PACE_BUFFER,
       { messageKey: 'pace.comfortable', values: {} },
-      {
-        action: 'ADD_BUFFER',
-        messageKey: 'pace.tight',
-        values: knownValues({
-          activeMinutes: input.pace.activeMinutes,
-          bufferMinutes: input.pace.smallestBufferMinutes,
-        }),
-      },
+      paceWeak,
     ),
     ...bandedEntries(
       'ROUTE_EFFICIENCY',
@@ -323,8 +341,8 @@ export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplan
         action: 'REORDER_MANUALLY',
         messageKey: 'routeEfficiency.backtracking',
         values: knownValues({
-          bestMinutes: input.route.bestMinutes,
-          plannedMinutes: input.route.plannedMinutes,
+          bestMinutes: roundMinutes(input.route.bestMinutes),
+          plannedMinutes: roundMinutes(input.route.plannedMinutes),
         }),
       },
     ),

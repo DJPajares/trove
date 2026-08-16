@@ -1735,6 +1735,7 @@
     "improvementLead": "One thing worth a look:",
     "showDetails": "Show the details",
     "hideDetails": "Hide the details",
+    "scoreBadgeLabel": "Score {score} out of 100",
     "loading": "Taking a look at this plan…",
     "unavailable": "We could not look at this plan just now.",
     "retry": "Try again",
@@ -1743,6 +1744,19 @@
     "whatWorks": "What is working",
     "worthImproving": "Also worth a look",
     "uncertainty": "Not enough to say yet",
+    "factorLabels": {
+      "FEASIBILITY": "Feasibility",
+      "TRAVEL_EFFORT": "Travel effort",
+      "PACE_BUFFER": "Pace",
+      "ROUTE_EFFICIENCY": "Route efficiency",
+      "PLACE_QUALITY": "Place quality"
+    },
+    "factorStatus": {
+      "groupLabel": "Factor status",
+      "working": "Working",
+      "worthImproving": "Worth improving",
+      "unknown": "Unknown"
+    },
     "actions": {
       "ADD_BUFFER": "Add buffer",
       "ADJUST_TIME": "Adjust the time",
@@ -1769,6 +1783,7 @@
     "pace": {
       "comfortable": "The day has room to breathe.",
       "tight": "The day is packed, with only about {bufferMinutes} minutes spare between stops.",
+      "overlapping": "The day is overbooked, with stops running into each other by about {overlapMinutes} minutes.",
       "unknown": "We cannot judge the pace yet.",
       "stale": "{count, plural, one {One duration estimate we used may be out of date.} other {# duration estimates we used may be out of date.}}"
     },

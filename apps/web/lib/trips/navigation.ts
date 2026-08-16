@@ -58,6 +58,26 @@ export function primaryTripDestinations(
 }
 
 /**
+ * What every section is called, including the ones that appear in neither the primary
+ * set nor the menu. A screen the traveller can reach must still be able to say its
+ * name, so nothing is left having to describe itself as "More".
+ */
+const sectionLabelKeys: Record<TripSection, string> = {
+  expenses: 'expenses',
+  info: 'tripInfo',
+  itinerary: 'itinerary',
+  memories: 'memories',
+  mode: 'tripMode',
+  places: 'places',
+  reservations: 'reservations',
+  tasks: 'tasks',
+};
+
+export function tripSectionLabelKey(section: TripSection): string {
+  return sectionLabelKeys[section];
+}
+
+/**
  * Everything a trip needs but should not have to look at. Places sits here until
  * the itinerary carries it directly.
  */

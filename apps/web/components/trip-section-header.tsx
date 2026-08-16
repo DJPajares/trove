@@ -20,6 +20,7 @@ import { fetchTrip, type Trip } from '@/lib/trips/api';
 import {
   primaryTripDestinations,
   supportingTripDestinations,
+  tripSectionLabelKey,
   type TripDestination,
   type TripSection,
 } from '@/lib/trips/navigation';
@@ -81,6 +82,15 @@ export function TripSectionHeader({
   const primary = primaryTripDestinations(tripId, lifecycle, trip?.startDate ?? '');
   const supporting = supportingTripDestinations(tripId);
   const activeSupporting = supporting.find((entry) => entry.section === currentSection);
+  const onCoreExperience = primary.some((entry) => entry.section === currentSection);
+  // Places is reached from the itinerary rather than from the menu, so it belongs to
+  // neither set. It is still a screen the traveller can be standing on, and a header
+  // that reads "More" there tells them nothing about where they are.
+  const currentLabel = activeSupporting
+    ? t(activeSupporting.labelKey)
+    : onCoreExperience
+      ? undefined
+      : t(tripSectionLabelKey(currentSection));
 
   const formatDate = (value: string) =>
     new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
@@ -148,13 +158,11 @@ export function TripSectionHeader({
                 // The accessible name has to contain the visible one, so when the
                 // trigger reads "Expenses" the label leads with it.
                 aria-label={
-                  activeSupporting
-                    ? t('moreLabelCurrent', { section: t(activeSupporting.labelKey) })
-                    : t('moreLabel')
+                  currentLabel ? t('moreLabelCurrent', { section: currentLabel }) : t('moreLabel')
                 }
                 className={cn(
                   'shrink-0',
-                  activeSupporting ? 'bg-secondary text-secondary-foreground' : undefined,
+                  currentLabel ? 'bg-secondary text-secondary-foreground' : undefined,
                 )}
                 size="sm"
                 type="button"
@@ -162,12 +170,12 @@ export function TripSectionHeader({
               />
             }
           >
-            {/* Icon or name, never both — the row is tight at 375px. On a supporting
-                page the name always shows, because it is the only thing telling the
-                traveller where they are. */}
-            {activeSupporting ? null : <Ellipsis aria-hidden="true" data-icon="inline-start" />}
-            <span className={activeSupporting ? undefined : 'hidden sm:inline'}>
-              {activeSupporting ? t(activeSupporting.labelKey) : t('more')}
+            {/* Icon or name, never both — the row is tight at 375px. Off the core
+                experiences the name always shows, because it is the only thing telling
+                the traveller where they are. */}
+            {currentLabel ? null : <Ellipsis aria-hidden="true" data-icon="inline-start" />}
+            <span className={currentLabel ? undefined : 'hidden sm:inline'}>
+              {currentLabel ?? t('more')}
             </span>
             <ChevronDown aria-hidden="true" data-icon="inline-end" />
           </DropdownMenuTrigger>

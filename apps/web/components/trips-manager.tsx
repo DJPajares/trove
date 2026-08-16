@@ -63,13 +63,14 @@ import { cn } from '@/lib/utils';
 type EditorState =
   { mode: 'closed'; trip: null } | { mode: 'create'; trip: null } | { mode: 'edit'; trip: Trip };
 
+// Tools only. Memories is one of the three experiences the trip is built around and
+// belongs with them, and the itinerary opens the Places collection itself — listing
+// either here would make a core experience look like a utility.
 const overviewTools = [
-  { href: 'places', icon: MapPinned, label: 'places' },
   { href: 'reservations', icon: ReceiptText, label: 'reservations' },
   { href: 'tasks', icon: ClipboardCheck, label: 'tasks' },
   { href: 'expenses', icon: WalletCards, label: 'expenses' },
   { href: 'info', icon: Info, label: 'tripInfo' },
-  { href: 'memories', icon: Sparkles, label: 'memories' },
 ] as const;
 
 export function TripsManager() {
@@ -537,16 +538,6 @@ export function TripsManager() {
                 >
                   <CalendarClock aria-hidden="true" data-icon="inline-start" />
                   {t('itinerary')}
-                </Button>
-                <Button
-                  className="text-muted-foreground hover:text-foreground"
-                  nativeButton={false}
-                  render={<Link href={`/trips/${editor.trip.id}/places`} />}
-                  size="sm"
-                  variant="ghost"
-                >
-                  <MapPinned aria-hidden="true" data-icon="inline-start" />
-                  {t('places')}
                 </Button>
                 <Button
                   className="text-muted-foreground hover:text-foreground"

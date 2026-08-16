@@ -214,7 +214,9 @@ Trip navigation presents only the three core experiences, in a stable order:
 - **Trip Mode** — Live it.
 - **Memories** — Remember it.
 
-Supporting tools — Places, Tasks, Reservations, Expenses, Trip Info — are reachable in one interaction from a single grouped menu on every trip screen, and must never occupy the primary navigation.
+Supporting tools — Tasks, Reservations, Expenses, Trip Info — are reachable in one interaction from a single grouped menu on every trip screen, and must never occupy the primary navigation.
+
+The trip's Places collection is not a destination in that menu. The itinerary opens it directly, as Section 16.1 describes, so listing it again would be a second door to the same room. Wherever a trip is summarised outside its own screens — the Trips library, for example — the same rule holds: the three experiences are offered as themselves, and the tools listed are only the four above.
 
 Trip lifecycle changes emphasis only. All three core destinations remain present and reachable at every stage; none is hidden or reordered, because navigation that rearranges itself between visits costs more than it gives.
 
@@ -222,7 +224,7 @@ Trip lifecycle changes emphasis only. All three core destinations remain present
 - **Active:** Trip Mode leads.
 - **Completed:** Memories leads.
 
-When the current screen is a supporting tool, its name must remain visible in the navigation so the user can always tell where they are.
+Whenever the current screen is not one of the three core experiences, its name must remain visible in the navigation so the user can always tell where they are. That includes screens reached from somewhere other than the menu, such as Places opened directly.
 
 ## 4.6 Accessibility
 
@@ -1609,7 +1611,7 @@ Calculations use unrounded intermediate values. Displayed factor/day/overall sco
 
 ## 29.4 Explanations and Alternatives
 
-Explanations should show concise **What works** and **Worth improving** guidance and prioritize issues in this order:
+Explanations are generated as concise **What works** and **Worth improving** guidance, with issues prioritized in this order:
 
 1. feasibility/timing conflicts,
 2. travel effort,
@@ -1618,11 +1620,13 @@ Explanations should show concise **What works** and **Worth improving** guidance
 5. Must Go fit,
 6. supporting Place quality.
 
-Presentation follows a progressive-disclosure model. By default Trove answers only two questions: does this look good, and what should I change. That is a short plain-language verdict derived from the numeric score — shown together with a compact score badge — plus the single highest-priority entry from the ordering above, with its suggested action. The full "N out of 100" score text, the confidence and completeness meters, and the remaining explanations appear only when the user explicitly asks for the detail.
+That ordering governs which explanation matters most; it does not mean the full set is displayed. Presentation follows a progressive-disclosure model. By default Trove answers only two questions: does this look good, and what should I change. That is a short plain-language verdict derived from the numeric score — shown together with a compact score badge — plus the single highest-priority entry from the ordering above, with its suggested action. The full "N out of 100" score text, the confidence and completeness meters, the remaining explanations, and — at day scope — a compact per-factor status summary appear only when the user explicitly asks for the detail.
 
 Qualitative verdict wording is display-only. It is derived from the canonical numeric score and never feeds back into calculation, consistent with Section 29.3.
 
 Where the numeric score is withheld under Section 29.2, Trove says so in one line and stops. It does not enumerate what it could not determine.
+
+Where there is no result for the scope at all — a day the current calculation does not cover — the surface omits Plan Score rather than presenting an empty one. Nothing is a quieter answer than a panel explaining its own absence.
 
 Better-alternative suggestions must preserve the user's original itinerary until the user explicitly confirms an action. Every suggestion must declare its action type:
 
@@ -1726,7 +1730,7 @@ The reading experience must be visual:
 - captured date and time are context beneath a Memory, not the heading above it,
 - the shape of the trip is felt through its progression rather than enumerated as counts.
 
-Experience Rating for the trip and for a day must remain reachable, but must never appear as a prompt attached to every day or standing beside the reading flow. Rating is a deliberate act.
+Experience Rating for the trip and for a day must remain reachable from the story itself. Rating is offered, never asked: a rating already given is shown as itself, and one not yet given is a single quiet control on the trip and on a day's own chapter marker. It must never appear as a prompt, a question, or a call to action soliciting a rating, and must never stand beside the reading flow as something the page is waiting on. Rating is a deliberate act.
 
 Curation must remain reachable, including by keyboard and screen reader, without those controls narrating the page. Reveal them on request.
 

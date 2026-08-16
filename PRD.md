@@ -1675,19 +1675,34 @@ Provider photos must never be copied into Memories or Trove Storage as if they w
 
 ## 31.2 Completed Trip Story
 
-Suggested structure:
+Revisiting a finished trip should feel like reading and reliving it, not like reviewing a log.
+
+Structure:
 
 ```text
 Memories
-├── Trip Story
-├── Highlights
-├── Days
-└── Places
+└── Days                    the narrative spine, in the trip's own order
+    └── Memory              rendered exactly once
+        Highlights          a way into the spine
+        Places              a way into the spine
 ```
+
+Days is the narrative spine and follows the trip's own progression. Each Memory must be rendered exactly once in the reading flow. Highlights and Places are ways into that spine — entry points, filters, or jumps — and must never become parallel listings of the same Memories.
+
+The reading experience must be visual:
+
+- user photos are the leading element of a Memory wherever they exist,
+- the cover carries the top of the story,
+- captured date and time are context beneath a Memory, not the heading above it,
+- the shape of the trip is felt through its progression rather than enumerated as counts.
+
+Experience Rating for the trip and for a day must remain reachable, but must never appear as a prompt attached to every day or standing beside the reading flow. Rating is a deliberate act.
+
+Curation must remain reachable, including by keyboard and screen reader, without those controls narrating the page. Reveal them on request.
 
 The Trip Story should derive from the user's actual trip, itinerary context, notes, highlights, Places, and user-uploaded photos.
 
-Sparse trips must remain valid and should not be padded with fabricated events, provider photos treated as Memories, or fictional narrative.
+Sparse trips must remain valid and should not be padded with fabricated events, provider photos treated as Memories, or fictional narrative. A trip with few Memories, or none, must still read as an intentional page.
 
 Users must be able to:
 

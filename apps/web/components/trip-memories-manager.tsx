@@ -1,31 +1,49 @@
 'use client';
 
 import {
-  ChevronDown,
-  ChevronUp,
+  ArrowDown,
+  ArrowUp,
   CircleAlert,
+  Ellipsis,
   ImageOff,
-  MapPin,
+  ImagePlus,
   Pencil,
   Plus,
   Sparkles,
+  Star,
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
-import { ExperienceRatingField } from '@/components/experience-rating-field';
+import {
+  ExperienceRatingDialog,
+  ExperienceRatingStars,
+} from '@/components/experience-rating-field';
 import { MemoryEditorDialog } from '@/components/memory-editor-dialog';
 import { PageState } from '@/components/page-state';
 import { StoryCoverPicker } from '@/components/story-cover-picker';
 import { TripSectionHeader } from '@/components/trip-section-header';
 import { Button } from '@/components/ui/button';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   fetchItinerary,
   updateItineraryDayExperienceRating,
   type Itinerary,
 } from '@/lib/itinerary/api';
-import { fetchMemories, reorderHighlights, type Memory, type StoryCover } from '@/lib/memories/api';
+import {
+  fetchMemories,
+  reorderHighlights,
+  type Memory,
+  type MemoryPhoto,
+  type MemoryTripPlace,
+  type StoryCover,
+} from '@/lib/memories/api';
 import { buildTripStory, placeName, type StoryPlace, type TripStory } from '@/lib/memories/story';
 import { useProviderPlaceNames } from '@/lib/saved/provider-names';
 import { fetchTrip, updateTripExperienceRating, type Trip } from '@/lib/trips/api';
@@ -44,107 +62,176 @@ type EditorState =
   | { memory: null; mode: 'create' }
   | { memory: Memory; mode: 'edit' };
 
-function MemoryPhotos({ memory, photoAlt }: Readonly<{ memory: Memory; photoAlt: string }>) {
-  if (!memory.photos.length) return null;
+/** Which target the rating dialog is collecting for, held by id so it stays current. */
+type RatingEditor = { itineraryDayId: string; kind: 'day' } | { kind: 'trip' } | null;
 
-  return (
-    <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-      {memory.photos.map((photo) => (
-        <li key={photo.id}>
-          {photo.url ? (
-            <img
-              alt={memory.note ?? photoAlt}
-              className="aspect-square w-full rounded-[var(--radius-md)] bg-muted/40 object-cover"
-              loading="lazy"
-              src={photo.url}
-            />
-          ) : (
-            <span className="flex aspect-square w-full items-center justify-center rounded-[var(--radius-md)] bg-muted/40 text-muted-foreground">
-              <ImageOff aria-hidden="true" className="size-5" />
-            </span>
-          )}
-        </li>
-      ))}
-    </ul>
+/**
+ * `null` reads the whole story. Anything else narrows it to Highlights, to one
+ * Place, or to what was captured away from any Place.
+ */
+type Lens = string | null;
+
+type LensOption = { count: number; id: Lens; label: string; marked?: boolean };
+
+function StoryPhoto({
+  alt,
+  aspect,
+  photo,
+}: Readonly<{ alt: string; aspect: string; photo: MemoryPhoto }>) {
+  // Photo URLs are signed and expire after an hour, so a missing one is an
+  // ordinary state to draw, not an error to report.
+  return photo.url ? (
+    <img
+      alt={alt}
+      className={cn('w-full rounded-[var(--radius-lg)] bg-muted/40 object-cover', aspect)}
+      loading="lazy"
+      src={photo.url}
+    />
+  ) : (
+    <span
+      className={cn(
+        'flex w-full items-center justify-center rounded-[var(--radius-lg)] bg-muted/40 text-muted-foreground',
+        aspect,
+      )}
+    >
+      <ImageOff aria-hidden="true" className="size-5" />
+    </span>
   );
 }
 
 /**
- * One captured moment, shown as the traveller left it: their own note, their own
- * photos, and the context already resolved when it was captured. An edit
- * affordance, and optional Highlights reorder controls, sit alongside it.
+ * Photographs lead. One is given room, a pair reads as a pair, and beyond that a
+ * lead image carries the moment while the rest follow beneath it — so no number
+ * of photos ever looks like an accident of the grid.
+ */
+function MemoryPhotos({ memory, photoAlt }: Readonly<{ memory: Memory; photoAlt: string }>) {
+  const [lead, ...rest] = memory.photos;
+  if (!lead) return null;
+
+  // The lead photo answers to the note. Repeating that sentence on every frame
+  // would only make a screen reader say the same thing four times over.
+  const leadAlt = memory.note ?? photoAlt;
+
+  if (!rest.length) return <StoryPhoto alt={leadAlt} aspect="aspect-[4/3]" photo={lead} />;
+
+  if (rest.length === 1) {
+    return (
+      <ul className="grid grid-cols-2 gap-2">
+        {memory.photos.map((photo, index) => (
+          <li key={photo.id}>
+            <StoryPhoto
+              alt={index === 0 ? leadAlt : photoAlt}
+              aspect="aspect-[4/5]"
+              photo={photo}
+            />
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <StoryPhoto alt={leadAlt} aspect="aspect-[4/3]" photo={lead} />
+      {/* The strip fills its row rather than leaving a gap where a third
+          photograph would have gone. */}
+      <ul className={cn('grid gap-2', rest.length === 2 ? 'grid-cols-2' : 'grid-cols-3')}>
+        {rest.map((photo) => (
+          <li key={photo.id}>
+            <StoryPhoto alt={photoAlt} aspect="aspect-square" photo={photo} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * One captured moment, read rather than logged: the traveller's own photographs
+ * first, then what they wrote, then the quiet context underneath. Curation waits
+ * in a single menu on that context line — the entry is something to look at, not
+ * a toolbar — and this is the only place a Memory is drawn, so it carries the
+ * anchor a deep link or search result points at.
  */
 function MemoryEntry({
-  anchorId,
-  highlighted,
+  focused,
   highlightControls,
   memory,
+  meta,
   onEdit,
   photoAlt,
-  time,
 }: Readonly<{
-  anchorId?: string;
-  highlighted?: boolean;
-  highlightControls?: { onMoveDown: (() => void) | null; onMoveUp: (() => void) | null };
+  focused: boolean;
+  highlightControls: { onMoveDown: (() => void) | null; onMoveUp: (() => void) | null } | null;
   memory: Memory;
+  meta: string;
   onEdit: () => void;
   photoAlt: string;
-  time: string | null;
 }>) {
   const t = useTranslations('memories.story');
 
   return (
-    <li
+    <article
       className={cn(
-        'border-b border-border py-5 last:border-b-0',
-        highlighted
-          ? '-mx-3 rounded-[var(--radius-md)] bg-secondary/60 px-3 transition-colors duration-[var(--motion-standard)]'
+        'scroll-mt-24 space-y-3',
+        focused
+          ? '-mx-3 rounded-[var(--radius-lg)] bg-secondary/60 px-3 py-3 transition-colors duration-[var(--motion-standard)]'
           : undefined,
       )}
-      id={anchorId}
+      id={`memory-${memory.id}`}
     >
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          {time ? <p className="text-xs text-text-subtle tabular-nums">{time}</p> : null}
-          {memory.note ? (
-            <p className="mt-1 whitespace-pre-wrap text-base leading-7 text-pretty text-foreground">
-              {memory.note}
-            </p>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {memory.isHighlight ? (
-            <Sparkles aria-hidden="true" className="mr-1 size-4 shrink-0 text-brand" />
-          ) : null}
-          {highlightControls ? (
-            <>
-              <Button
-                aria-label={t('moveHighlightUp')}
-                disabled={!highlightControls.onMoveUp}
-                onClick={() => highlightControls.onMoveUp?.()}
-                size="icon-sm"
-                variant="ghost"
-              >
-                <ChevronUp aria-hidden="true" />
-              </Button>
-              <Button
-                aria-label={t('moveHighlightDown')}
-                disabled={!highlightControls.onMoveDown}
-                onClick={() => highlightControls.onMoveDown?.()}
-                size="icon-sm"
-                variant="ghost"
-              >
-                <ChevronDown aria-hidden="true" />
-              </Button>
-            </>
-          ) : null}
-          <Button aria-label={t('editMemory')} onClick={onEdit} size="icon-sm" variant="ghost">
-            <Pencil aria-hidden="true" />
-          </Button>
-        </div>
-      </div>
       <MemoryPhotos memory={memory} photoAlt={photoAlt} />
-    </li>
+      {memory.note ? (
+        <p className="text-base leading-7 whitespace-pre-wrap text-pretty text-foreground">
+          {memory.note}
+        </p>
+      ) : null}
+      <div className="flex items-center gap-2 text-xs text-text-subtle">
+        {memory.isHighlight ? (
+          <Sparkles aria-hidden="true" className="size-3.5 shrink-0 text-brand" />
+        ) : null}
+        <span className="min-w-0 truncate">{meta}</span>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                aria-label={t('memoryActions')}
+                className="ml-auto shrink-0"
+                size="icon-sm"
+                type="button"
+                variant="ghost"
+              />
+            }
+          >
+            <Ellipsis aria-hidden="true" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-48">
+            <DropdownMenuItem onClick={onEdit}>
+              <Pencil aria-hidden="true" />
+              {t('editMemory')}
+            </DropdownMenuItem>
+            {highlightControls ? (
+              <>
+                <DropdownMenuItem
+                  disabled={!highlightControls.onMoveUp}
+                  onClick={() => highlightControls.onMoveUp?.()}
+                >
+                  <ArrowUp aria-hidden="true" />
+                  {t('moveHighlightUp')}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!highlightControls.onMoveDown}
+                  onClick={() => highlightControls.onMoveDown?.()}
+                >
+                  <ArrowDown aria-hidden="true" />
+                  {t('moveHighlightDown')}
+                </DropdownMenuItem>
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </article>
   );
 }
 
@@ -154,9 +241,11 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
   const [editor, setEditor] = useState<EditorState>({ memory: null, mode: 'closed' });
+  const [ratingEditor, setRatingEditor] = useState<RatingEditor>(null);
   const [coverPickerOpen, setCoverPickerOpen] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [highlightBusyId, setHighlightBusyId] = useState<string | null>(null);
+  const [lens, setLens] = useState<Lens>(null);
   // A search result opens the story already scrolled to the Memory it matched.
   const focusedMemoryId = useSearchParams().get('memory');
 
@@ -300,29 +389,190 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
       timeZone: 'UTC',
     }).format(new Date(`1970-01-01T${hour}:${minute}:00.000Z`));
   };
+  const resolvePlaceName = (tripPlace: MemoryTripPlace, itemLabel: string | null) =>
+    placeName(tripPlace, placeNames[tripPlace.placeId] ?? null, itemLabel) ?? t('unnamedPlace');
   const placeLabel = (place: StoryPlace) =>
-    placeName(
+    resolvePlaceName(
       place.tripPlace,
-      placeNames[place.tripPlace.placeId] ?? null,
       place.memories.find((memory) => memory.itineraryItem?.label)?.itineraryItem?.label ?? null,
-    ) ?? t('unnamedPlace');
+    );
+  // Place context lives on the Memory now that Places is a way in rather than a
+  // second listing, so reading the story never loses where something happened.
+  const memoryMeta = (memory: Memory) =>
+    [
+      localTime(memory),
+      memory.tripPlace
+        ? resolvePlaceName(memory.tripPlace, memory.itineraryItem?.label ?? null)
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+
+  const matchesLens = (memory: Memory) =>
+    lens === null
+      ? true
+      : lens === 'highlights'
+        ? memory.isHighlight
+        : lens === 'unplaced'
+          ? !memory.tripPlace
+          : memory.tripPlace?.id === lens;
+
+  const visibleDays = story.days
+    .map((day) => ({ ...day, memories: day.memories.filter(matchesLens) }))
+    .filter((day) => day.memories.length);
+
+  const lensOptions: LensOption[] = [
+    { count: story.memoryCount, id: null, label: t('lensAll') },
+    ...(story.highlights.length
+      ? [
+          {
+            count: story.highlights.length,
+            id: 'highlights',
+            label: t('highlights'),
+            marked: true,
+          },
+        ]
+      : []),
+    ...story.places.map((place) => ({
+      count: place.memories.length,
+      id: place.tripPlace.id,
+      label: placeLabel(place),
+    })),
+    ...(story.unplacedCount
+      ? [{ count: story.unplacedCount, id: 'unplaced', label: t('lensUnplaced') }]
+      : []),
+  ];
+
+  function selectLens(option: LensOption) {
+    setLens(option.id);
+    setFeedback(t('lensShowing', { count: option.count, label: option.label }));
+  }
+
+  function highlightControlsFor(memory: Memory) {
+    if (!story || !memory.isHighlight) return null;
+    const index = story.highlights.findIndex((candidate) => candidate.id === memory.id);
+    if (index < 0) return null;
+    return {
+      onMoveDown:
+        highlightBusyId || index === story.highlights.length - 1
+          ? null
+          : () => void moveHighlight(memory.id, 1),
+      onMoveUp: highlightBusyId || index === 0 ? null : () => void moveHighlight(memory.id, -1),
+    };
+  }
+
+  /**
+   * Rating is offered, never asked. A rating already given shows as itself; one
+   * not yet given is a single quiet star, not a question standing beside the day.
+   */
+  function ratingAffordance(
+    label: string,
+    rating: number | null,
+    onOpen: () => void,
+    tone: 'default' | 'onImage' = 'default',
+  ) {
+    const onImage = tone === 'onImage';
+    return rating ? (
+      <Button
+        aria-label={label}
+        className={cn('h-auto px-1.5 py-1', onImage ? 'hover:bg-white/15' : undefined)}
+        onClick={onOpen}
+        size="sm"
+        type="button"
+        variant="ghost"
+      >
+        <ExperienceRatingStars rating={rating} tone={tone} />
+      </Button>
+    ) : (
+      <Button
+        aria-label={label}
+        className={cn(
+          onImage ? 'text-white/70 hover:bg-white/15 hover:text-white' : 'text-text-subtle',
+        )}
+        onClick={onOpen}
+        size="icon-sm"
+        type="button"
+        variant="ghost"
+      >
+        <Star aria-hidden="true" />
+      </Button>
+    );
+  }
+
+  const dateRange = t('dateRange', {
+    end: shortDate(trip.endDate),
+    start: shortDate(trip.startDate),
+  });
 
   const header = (
     <TripSectionHeader
       actions={
-        <Button onClick={() => setEditor({ memory: null, mode: 'create' })} variant="outline">
-          <Plus aria-hidden="true" data-icon="inline-start" />
-          {t('addMemory')}
-        </Button>
+        <>
+          <Button onClick={() => setEditor({ memory: null, mode: 'create' })} variant="outline">
+            <Plus aria-hidden="true" data-icon="inline-start" />
+            {t('addMemory')}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button aria-label={t('storyActions')} size="icon" type="button" variant="ghost" />
+              }
+            >
+              <Ellipsis aria-hidden="true" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-48">
+              <DropdownMenuItem onClick={() => setCoverPickerOpen(true)}>
+                <ImagePlus aria-hidden="true" />
+                {storyCover ? t('changeCover') : t('chooseCover')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
       }
       currentSection="memories"
-      description={t('description', {
-        end: shortDate(trip.endDate),
-        start: shortDate(trip.startDate),
-      })}
       tripId={tripId}
     />
   );
+
+  const tripRating = ratingAffordance(
+    t('rateTrip'),
+    trip.experienceRating,
+    () => setRatingEditor({ kind: 'trip' }),
+    storyCover?.url ? 'onImage' : 'default',
+  );
+
+  /**
+   * With a cover, the traveller's own photograph opens the story and carries the
+   * dates over it. Without one, the same line stands on its own — an empty frame
+   * would be a decoration standing in for something that isn't there.
+   */
+  const storyHead = storyCover?.url ? (
+    <div className="relative -mx-[var(--layout-gutter)] overflow-hidden md:mx-0 md:rounded-[var(--radius-xl)]">
+      <img
+        alt=""
+        className="aspect-[4/5] w-full object-cover sm:aspect-[2/1]"
+        src={storyCover.url}
+      />
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent"
+      />
+      <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-center gap-x-2 gap-y-1 p-4 sm:p-6">
+        <p className="text-sm font-medium text-white/90">{dateRange}</p>
+        {tripRating}
+      </div>
+    </div>
+  ) : (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <p className="text-sm font-medium text-muted-foreground">{dateRange}</p>
+      {tripRating}
+    </div>
+  );
+
+  const ratingDay =
+    ratingEditor?.kind === 'day'
+      ? (itinerary?.days.find((day) => day.id === ratingEditor.itineraryDayId) ?? null)
+      : null;
 
   const dialogs = (
     <>
@@ -358,19 +608,41 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
         storyCover={storyCover}
         tripId={tripId}
       />
+      <ExperienceRatingDialog
+        description={t('tripRatingDescription', { trip: trip.name })}
+        initialNote={trip.experienceNote}
+        initialRating={trip.experienceRating}
+        onOpenChange={(open) => !open && setRatingEditor(null)}
+        onSave={saveTripRating}
+        open={ratingEditor?.kind === 'trip'}
+        title={t('tripRatingTitle')}
+      />
+      {ratingDay ? (
+        <ExperienceRatingDialog
+          description={t('dayRatingDescription', { date: dateOnly(ratingDay.date) })}
+          initialNote={ratingDay.experienceNote}
+          initialRating={ratingDay.experienceRating}
+          onOpenChange={(open) => !open && setRatingEditor(null)}
+          onSave={(rating, note) => saveDayRating(ratingDay.id, rating, note)}
+          open
+          title={t('dayRatingTitle')}
+        />
+      ) : null}
     </>
+  );
+
+  const liveRegion = (
+    <p aria-live="polite" className="sr-only" role="status">
+      {feedback}
+    </p>
   );
 
   if (!story.memoryCount) {
     return (
       <section className="mx-auto w-full max-w-5xl space-y-7">
         {header}
-        <ExperienceRatingField
-          initialNote={trip.experienceNote}
-          initialRating={trip.experienceRating}
-          label={t('overallRating')}
-          onSave={saveTripRating}
-        />
+        {liveRegion}
+        {storyHead}
         <PageState
           className="min-h-64 justify-center"
           description={t('emptyDescription')}
@@ -384,170 +656,78 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   return (
-    <section className="mx-auto w-full max-w-5xl space-y-9">
+    <section className="mx-auto w-full max-w-5xl space-y-8">
       {header}
+      {liveRegion}
+      {storyHead}
 
-      <p aria-live="polite" className="sr-only" role="status">
-        {feedback}
-      </p>
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm leading-6 text-muted-foreground">
-          {[
-            t('memoryCount', { count: story.memoryCount }),
-            story.photoCount ? t('photoCount', { count: story.photoCount }) : null,
-            t('dayCount', { count: story.days.length }),
-            story.places.length ? t('placeCount', { count: story.places.length }) : null,
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </p>
-        <Button onClick={() => setCoverPickerOpen(true)} size="sm" variant="outline">
-          {storyCover ? t('changeCover') : t('chooseCover')}
-        </Button>
-      </div>
-
-      {storyCover?.url ? (
-        <img
-          alt=""
-          className="aspect-[21/9] w-full rounded-[var(--radius-xl)] object-cover"
-          src={storyCover.url}
-        />
-      ) : null}
-
-      <ExperienceRatingField
-        initialNote={trip.experienceNote}
-        initialRating={trip.experienceRating}
-        label={t('overallRating')}
-        onSave={saveTripRating}
-      />
-
-      {story.highlights.length ? (
-        <section aria-labelledby="trip-story-highlights">
-          <h2
-            className="text-xl font-semibold tracking-[-0.02em] text-foreground"
-            id="trip-story-highlights"
-          >
-            {t('highlights')}
-          </h2>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            {t('highlightsDescription')}
-          </p>
-          <ul className="mt-3 border-y border-border">
-            {story.highlights.map((memory, index) => (
-              <MemoryEntry
-                highlightControls={{
-                  onMoveDown:
-                    highlightBusyId || index === story.highlights.length - 1
-                      ? null
-                      : () => void moveHighlight(memory.id, 1),
-                  onMoveUp:
-                    highlightBusyId || index === 0 ? null : () => void moveHighlight(memory.id, -1),
-                }}
-                key={memory.id}
-                memory={memory}
-                onEdit={() => setEditor({ memory, mode: 'edit' })}
-                photoAlt={t('photoAlt')}
-                time={`${shortDate(memory.capturedLocalDate)}${
-                  localTime(memory) ? ` · ${localTime(memory)}` : ''
-                }`}
-              />
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      <section aria-labelledby="trip-story-days">
-        <h2
-          className="text-xl font-semibold tracking-[-0.02em] text-foreground"
-          id="trip-story-days"
-        >
-          {t('days')}
-        </h2>
-        <div className="mt-3 space-y-7">
-          {story.days.map((day) => {
-            const itineraryDay = itinerary?.days.find((candidate) => candidate.date === day.date);
+      {/* Highlights and Places are ways into the story, not second copies of it. */}
+      {lensOptions.length > 1 ? (
+        <div aria-label={t('lensLabel')} className="flex flex-wrap gap-2" role="group">
+          {lensOptions.map((option) => {
+            const active = lens === option.id;
             return (
-              <article aria-labelledby={`trip-story-day-${day.date}`} key={day.date}>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h3
-                    className="text-base font-semibold text-foreground"
-                    id={`trip-story-day-${day.date}`}
-                  >
-                    {dateOnly(day.date)}
-                  </h3>
-                  {itineraryDay ? (
-                    <ExperienceRatingField
-                      initialNote={itineraryDay.experienceNote}
-                      initialRating={itineraryDay.experienceRating}
-                      label={t('dayRating')}
-                      onSave={(rating, note) => saveDayRating(itineraryDay.id, rating, note)}
-                    />
-                  ) : null}
-                </div>
-                <ul className="mt-2 border-y border-border">
-                  {day.memories.map((memory) => (
-                    // Days lists every Memory exactly once, so it carries the anchor
-                    // a search result or deep link points at.
-                    <MemoryEntry
-                      anchorId={`memory-${memory.id}`}
-                      highlighted={memory.id === focusedMemoryId}
-                      key={memory.id}
-                      memory={memory}
-                      onEdit={() => setEditor({ memory, mode: 'edit' })}
-                      photoAlt={t('photoAlt')}
-                      time={localTime(memory)}
-                    />
-                  ))}
-                </ul>
-              </article>
+              <button
+                aria-label={`${option.label}, ${t('memoryCount', { count: option.count })}`}
+                aria-pressed={active}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40',
+                  active
+                    ? 'border-transparent bg-brand/15 text-brand'
+                    : 'border-border text-muted-foreground hover:bg-surface-hover hover:text-foreground',
+                )}
+                key={option.id ?? 'all'}
+                onClick={() => selectLens(option)}
+                type="button"
+              >
+                {option.marked ? <Sparkles aria-hidden="true" className="size-3" /> : null}
+                <span className="max-w-40 truncate">{option.label}</span>
+                <span className="tabular-nums opacity-60">{option.count}</span>
+              </button>
             );
           })}
         </div>
-      </section>
-
-      {story.places.length ? (
-        <section aria-labelledby="trip-story-places">
-          <h2
-            className="text-xl font-semibold tracking-[-0.02em] text-foreground"
-            id="trip-story-places"
-          >
-            {t('places')}
-          </h2>
-          <div className="mt-3 space-y-7">
-            {story.places.map((place) => (
-              <article
-                aria-labelledby={`trip-story-place-${place.tripPlace.id}`}
-                key={place.tripPlace.id}
-              >
-                <h3
-                  className="inline-flex items-center gap-2 text-base font-semibold text-foreground"
-                  id={`trip-story-place-${place.tripPlace.id}`}
-                >
-                  <MapPin aria-hidden="true" className="size-4 shrink-0 text-brand" />
-                  {placeLabel(place)}
-                </h3>
-                <ul className="mt-2 border-y border-border">
-                  {place.memories.map((memory) => (
-                    <MemoryEntry
-                      key={memory.id}
-                      memory={memory}
-                      onEdit={() => setEditor({ memory, mode: 'edit' })}
-                      photoAlt={t('photoAlt')}
-                      time={shortDate(memory.capturedLocalDate)}
-                    />
-                  ))}
-                </ul>
-              </article>
-            ))}
-          </div>
-          {story.unplacedCount ? (
-            <p className="mt-4 text-sm leading-6 text-muted-foreground">
-              {t('unplaced', { count: story.unplacedCount })}
-            </p>
-          ) : null}
-        </section>
       ) : null}
+
+      <div className="space-y-10">
+        {visibleDays.map((day) => {
+          const itineraryDay = itinerary?.days.find((candidate) => candidate.date === day.date);
+          return (
+            <article aria-labelledby={`trip-story-day-${day.date}`} key={day.date}>
+              {/* The date marks a chapter rather than titling one, so the
+                  photographs and what was written carry the page. */}
+              <div className="flex items-center gap-3 border-b border-border pb-2">
+                <h2
+                  className="text-sm font-medium text-text-subtle"
+                  id={`trip-story-day-${day.date}`}
+                >
+                  {dateOnly(day.date)}
+                </h2>
+                {itineraryDay ? (
+                  <span className="ml-auto shrink-0">
+                    {ratingAffordance(t('rateDay'), itineraryDay.experienceRating, () =>
+                      setRatingEditor({ itineraryDayId: itineraryDay.id, kind: 'day' }),
+                    )}
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-5 space-y-8">
+                {day.memories.map((memory) => (
+                  <MemoryEntry
+                    focused={memory.id === focusedMemoryId}
+                    highlightControls={highlightControlsFor(memory)}
+                    key={memory.id}
+                    memory={memory}
+                    meta={memoryMeta(memory)}
+                    onEdit={() => setEditor({ memory, mode: 'edit' })}
+                    photoAlt={t('photoAlt')}
+                  />
+                ))}
+              </div>
+            </article>
+          );
+        })}
+      </div>
 
       <p className="border-t border-border pt-5 text-xs leading-5 text-text-subtle">
         {t('privacyNote')}

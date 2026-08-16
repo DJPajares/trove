@@ -1,13 +1,13 @@
 'use client';
 
-import { Bookmark, CircleAlert, MapPinned, NotebookPen, Plus } from 'lucide-react';
+import { CircleAlert, MapPinned, Plus } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { AddTripPlaceSheet } from '@/components/add-trip-place-sheet';
+import { PageState } from '@/components/page-state';
 import { PlaceDetailSheet } from '@/components/place-detail-sheet';
 import { TripPlacesPanel } from '@/components/trip-places-panel';
-import { PageState } from '@/components/page-state';
-import { SearchField } from '@/components/search-field';
 import { TripSectionHeader } from '@/components/trip-section-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -29,413 +29,84 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemMedia,
-  ItemTitle,
-} from '@/components/ui/item';
 import { Label } from '@/components/ui/label';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  cacheProviderPlaceDetails,
-  createCustomPlace,
-  fetchSavedPlaces,
-  getCachedProviderPlaceDetails,
-  GOOGLE_PLACES_SEARCH_DEBOUNCE_MS,
-  getProviderPlaceDetails,
-  type ProviderPlaceDetails,
-  type ProviderSuggestion,
-  resolveProviderPlace,
-  type SavedPlace,
-  searchProviderPlaces,
-} from '@/lib/saved/api';
-import {
-  addTripPlace,
-  fetchTripPlaces,
-  removeTripPlace,
-  TripPlaceApiError,
-  type TripPlace,
-  type TripPlacePriority,
-  updateTripPlace,
-} from '@/lib/trip-places/api';
+import type { TripPlace } from '@/lib/trip-places/api';
+import { useTripPlaces } from '@/lib/trip-places/use-trip-places';
 
-type ProviderDetails = Record<string, ProviderPlaceDetails | null | undefined>;
-
-function priorityRank(priority: TripPlacePriority | null) {
-  return priority === 'must_go' ? 0 : priority === 'interested' ? 1 : priority === 'maybe' ? 2 : 3;
-}
-
+/**
+ * The Places page. Navigation no longer points here — the itinerary opens the same
+ * collection beside the day being planned — but the route stays for deep links,
+ * bookmarks, and search results, and it gives the collection room to breathe.
+ */
 export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripPlaces');
-  const [tripName, setTripName] = useState('');
-  const [tripPlaces, setTripPlaces] = useState<TripPlace[]>([]);
-  const [providerDetails, setProviderDetails] = useState<ProviderDetails>({});
-  const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
-  const [error, setError] = useState<string | null>(null);
+  const places = useTripPlaces(tripId);
   const [addOpen, setAddOpen] = useState(false);
-  const [addMode, setAddMode] = useState<'custom' | 'search'>('search');
-  const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
-  const [addStatus, setAddStatus] = useState<'error' | 'idle' | 'loading'>('idle');
-  const [addingPlaceId, setAddingPlaceId] = useState<string | null>(null);
-  const [addingProviderId, setAddingProviderId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<ProviderSuggestion[]>([]);
-  const [searchStatus, setSearchStatus] = useState<'empty' | 'idle' | 'loading' | 'unavailable'>(
-    'idle',
-  );
-  const [customName, setCustomName] = useState('');
-  const [customNote, setCustomNote] = useState('');
-  const [creatingCustom, setCreatingCustom] = useState(false);
+  const [detailPlace, setDetailPlace] = useState<TripPlace | null>(null);
   const [notePlace, setNotePlace] = useState<TripPlace | null>(null);
   const [noteValue, setNoteValue] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [removingPlace, setRemovingPlace] = useState<TripPlace | null>(null);
   const [removing, setRemoving] = useState(false);
-  const [detailPlace, setDetailPlace] = useState<TripPlace | null>(null);
 
-  const refresh = useCallback(async () => {
-    setStatus('loading');
-    setError(null);
-    try {
-      const result = await fetchTripPlaces(tripId);
-      setTripName(result.trip.name);
-      setTripPlaces(result.tripPlaces);
-      setStatus('idle');
-    } catch {
-      setStatus('error');
-    }
-  }, [tripId]);
+  const placeName = (tripPlace: TripPlace) =>
+    tripPlace.place.kind === 'custom'
+      ? (tripPlace.place.name ?? t('customPlace'))
+      : (places.providerDetails[tripPlace.place.id]?.name ?? t('providerPlace'));
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    const pending = tripPlaces.filter(
-      (item) =>
-        item.place.kind === 'provider' &&
-        providerDetails[item.place.id] === undefined &&
-        item.place.providerRefs[0],
-    );
-    if (!pending.length) return;
-    let active = true;
-    void Promise.all(
-      pending.map(async (item) => {
-        const providerId = item.place.providerRefs[0]?.externalPlaceId;
-        if (!providerId) return { id: item.place.id, details: null };
-        try {
-          const result = await getProviderPlaceDetails(providerId);
-          const details = result.status === 'ok' ? (result.place ?? null) : null;
-          if (details) cacheProviderPlaceDetails(item.place.id, details);
-          return {
-            id: item.place.id,
-            details,
-          };
-        } catch {
-          return { id: item.place.id, details: null };
-        }
-      }),
-    ).then((results) => {
-      if (!active) return;
-      setProviderDetails((current) => ({
-        ...current,
-        ...Object.fromEntries(results.map((result) => [result.id, result.details])),
-      }));
-    });
-    return () => {
-      active = false;
-    };
-  }, [providerDetails, tripPlaces]);
-
-  useEffect(() => {
-    const input = searchQuery.trim();
-    if (!input) {
-      setSearchResults([]);
-      setSearchStatus('idle');
-      return;
-    }
-
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => {
-      setSearchStatus('loading');
-      void searchProviderPlaces(input, controller.signal)
-        .then((result) => {
-          if (controller.signal.aborted) return;
-          if (result.status === 'unavailable') {
-            setSearchResults([]);
-            setSearchStatus('unavailable');
-            return;
-          }
-          setSearchResults(result.suggestions ?? []);
-          setSearchStatus(result.status === 'empty' ? 'empty' : 'idle');
-        })
-        .catch((cause: unknown) => {
-          if (
-            controller.signal.aborted ||
-            (cause instanceof DOMException && cause.name === 'AbortError')
-          ) {
-            return;
-          }
-          setSearchResults([]);
-          setSearchStatus('unavailable');
-        });
-    }, GOOGLE_PLACES_SEARCH_DEBOUNCE_MS);
-
-    return () => {
-      controller.abort();
-      window.clearTimeout(timeout);
-    };
-  }, [searchQuery]);
-
-  const sortedPlaces = useMemo(
-    () =>
-      tripPlaces.toSorted(
-        (left, right) =>
-          priorityRank(left.priority) - priorityRank(right.priority) ||
-          left.createdAt.localeCompare(right.createdAt),
-      ),
-    [tripPlaces],
-  );
-
-  const matchingSavedPlaces = useMemo(() => {
-    const query = searchQuery.trim().toLocaleLowerCase();
-    if (!query) return savedPlaces;
-
-    const matchingProviderIds = new Set(
-      searchResults.map((suggestion) => suggestion.externalPlaceId),
-    );
-    return savedPlaces.filter((savedPlace) => {
-      if (savedPlace.place.kind === 'custom') {
-        return [savedPlace.place.name, savedPlace.place.note]
-          .filter((value): value is string => Boolean(value))
-          .some((value) => value.toLocaleLowerCase().includes(query));
-      }
-
-      const details = providerDetails[savedPlace.place.id];
-      return (
-        [details?.name, details?.formattedAddress]
-          .filter((value): value is string => Boolean(value))
-          .some((value) => value.toLocaleLowerCase().includes(query)) ||
-        savedPlace.place.providerRefs.some((reference) =>
-          matchingProviderIds.has(reference.externalPlaceId),
-        )
-      );
-    });
-  }, [providerDetails, savedPlaces, searchQuery, searchResults]);
-
-  const providerResults = useMemo(() => {
-    const savedProviderIds = new Set(
-      savedPlaces.flatMap((savedPlace) =>
-        savedPlace.place.providerRefs.map((reference) => reference.externalPlaceId),
-      ),
-    );
-    return searchResults.filter((suggestion) => !savedProviderIds.has(suggestion.externalPlaceId));
-  }, [savedPlaces, searchResults]);
-
-  function placeName(place: TripPlace | SavedPlace) {
-    if (place.place.kind === 'custom') return place.place.name ?? t('customPlace');
-    return providerDetails[place.place.id]?.name ?? t('providerPlace');
-  }
-  function placeDescription(place: TripPlace | SavedPlace) {
-    if (place.place.kind === 'custom') return place.place.note ?? t('customPlaceDescription');
-    return providerDetails[place.place.id]?.formattedAddress ?? t('providerDetailsUnavailable');
-  }
-  function savedPlaceSuggestion(savedPlace: SavedPlace) {
-    return searchResults.find((suggestion) =>
-      savedPlace.place.providerRefs.some(
-        (reference) => reference.externalPlaceId === suggestion.externalPlaceId,
-      ),
-    );
-  }
-  function savedPlaceName(savedPlace: SavedPlace) {
-    return savedPlaceSuggestion(savedPlace)?.name ?? placeName(savedPlace);
-  }
-  function savedPlaceDescription(savedPlace: SavedPlace) {
-    return savedPlaceSuggestion(savedPlace)?.description ?? placeDescription(savedPlace);
-  }
-  function hasTripPlaceForProvider(suggestion: ProviderSuggestion) {
-    return tripPlaces.some((tripPlace) =>
-      tripPlace.place.providerRefs.some(
-        (reference) => reference.externalPlaceId === suggestion.externalPlaceId,
-      ),
-    );
-  }
-  function replaceTripPlace(next: TripPlace) {
-    setTripPlaces((current) => current.map((item) => (item.id === next.id ? next : item)));
-  }
-  function resetAddFlow() {
-    setAddMode('search');
-    setCustomName('');
-    setCustomNote('');
-    setSearchQuery('');
-    setSearchResults([]);
-    setSearchStatus('idle');
-    setAddingPlaceId(null);
-    setAddingProviderId(null);
-    setAddStatus('idle');
-  }
-  async function openAdd() {
-    resetAddFlow();
-    setAddOpen(true);
-    setAddStatus('loading');
-    try {
-      const nextSavedPlaces = (await fetchSavedPlaces()).savedPlaces;
-      setSavedPlaces(nextSavedPlaces);
-      setProviderDetails((current) => ({
-        ...current,
-        ...Object.fromEntries(
-          nextSavedPlaces.flatMap((savedPlace) => {
-            const details = getCachedProviderPlaceDetails(savedPlace.place.id);
-            return details ? [[savedPlace.place.id, details]] : [];
-          }),
-        ),
-      }));
-      setAddStatus('idle');
-    } catch {
-      setAddStatus('error');
-    }
-  }
-  async function handleAdd(placeId: string) {
-    setAddingPlaceId(placeId);
-    setError(null);
-    try {
-      const { tripPlace } = await addTripPlace(tripId, placeId);
-      setTripPlaces((current) =>
-        current.some((item) => item.id === tripPlace.id) ? current : [...current, tripPlace],
-      );
-      return true;
-    } catch {
-      setError(t('actionError'));
-      return false;
-    } finally {
-      setAddingPlaceId(null);
-    }
-  }
-  async function handleProviderAdd(suggestion: ProviderSuggestion) {
-    setAddingProviderId(suggestion.externalPlaceId);
-    setError(null);
-    try {
-      const { place } = await resolveProviderPlace(suggestion.externalPlaceId);
-      const { tripPlace } = await addTripPlace(tripId, place.id);
-      setTripPlaces((current) =>
-        current.some((item) => item.id === tripPlace.id) ? current : [...current, tripPlace],
-      );
-    } catch {
-      setError(t('actionError'));
-    } finally {
-      setAddingProviderId(null);
-    }
-  }
-  async function handleCreateCustom(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!customName.trim()) return;
-    setCreatingCustom(true);
-    setError(null);
-    try {
-      const { place } = await createCustomPlace({ name: customName, note: customNote || null });
-      const added = await handleAdd(place.id);
-      if (!added) return;
-      setCustomName('');
-      setCustomNote('');
-      resetAddFlow();
-      setAddOpen(false);
-    } catch {
-      setError(t('actionError'));
-    } finally {
-      setCreatingCustom(false);
-    }
-  }
-  async function handlePriority(tripPlace: TripPlace, priority: TripPlacePriority | null) {
-    try {
-      replaceTripPlace((await updateTripPlace(tripId, tripPlace.id, { priority })).tripPlace);
-    } catch {
-      setError(t('actionError'));
-    }
-  }
-  async function handleSaveNote() {
+  async function saveNote() {
     if (!notePlace) return;
     setSavingNote(true);
-    try {
-      replaceTripPlace(
-        (await updateTripPlace(tripId, notePlace.id, { note: noteValue || null })).tripPlace,
-      );
-      setNotePlace(null);
-    } catch {
-      setError(t('actionError'));
-    } finally {
-      setSavingNote(false);
-    }
+    if (await places.saveNote(notePlace, noteValue)) setNotePlace(null);
+    setSavingNote(false);
   }
-  async function handleRemove() {
+
+  async function removePlace() {
     if (!removingPlace) return;
     setRemoving(true);
-    setError(null);
-    try {
-      await removeTripPlace(tripId, removingPlace.id);
-      setTripPlaces((current) => current.filter((item) => item.id !== removingPlace.id));
-      setRemovingPlace(null);
-    } catch (cause) {
-      setRemovingPlace(null);
-      setError(
-        cause instanceof TripPlaceApiError && cause.code === 'trip_place_referenced'
-          ? t('referencedError', { count: cause.referenceCount ?? 0 })
-          : t('actionError'),
-      );
-    } finally {
-      setRemoving(false);
-    }
+    await places.remove(removingPlace);
+    setRemovingPlace(null);
+    setRemoving(false);
   }
+
+  const addButton = (label: string) => (
+    <Button onClick={() => setAddOpen(true)}>
+      <Plus aria-hidden="true" data-icon="inline-start" />
+      {label}
+    </Button>
+  );
 
   return (
     <section className="mx-auto w-full max-w-5xl space-y-8">
       <TripSectionHeader
-        actions={
-          <Button onClick={() => void openAdd()}>
-            <Plus aria-hidden="true" data-icon="inline-start" />
-            {t('addPlace')}
-          </Button>
-        }
+        actions={addButton(t('addPlace'))}
         currentSection="places"
         description={t('description')}
         tripId={tripId}
       />
-      {error ? (
+
+      {places.error ? (
         <Alert role="alert" variant="destructive">
           <CircleAlert aria-hidden="true" />
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{t(places.error.key, places.error.values)}</AlertDescription>
         </Alert>
       ) : null}
-      {status === 'loading' ? (
+
+      {places.status === 'loading' ? (
         <PageState headingLevel={2} kind="loading" title={t('loading')} />
-      ) : status === 'error' ? (
+      ) : places.status === 'error' ? (
         <PageState
-          actions={<Button onClick={() => void refresh()}>{t('tryAgain')}</Button>}
+          actions={<Button onClick={() => void places.refresh()}>{t('tryAgain')}</Button>}
           description={t('loadErrorDescription')}
           headingLevel={2}
           icon={<CircleAlert aria-hidden="true" />}
           kind="error"
           title={t('loadError')}
         />
-      ) : tripPlaces.length === 0 ? (
+      ) : places.sorted.length === 0 ? (
         <PageState
-          actions={
-            <Button onClick={() => void openAdd()}>
-              <Plus aria-hidden="true" data-icon="inline-start" />
-              {t('addFirstPlace')}
-            </Button>
-          }
+          actions={addButton(t('addFirstPlace'))}
           description={t('emptyDescription')}
           headingLevel={2}
           icon={<MapPinned aria-hidden="true" />}
@@ -448,201 +119,39 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
             setNotePlace(tripPlace);
             setNoteValue(tripPlace.note ?? '');
           }}
-          onPriorityChange={(tripPlace, priority) => void handlePriority(tripPlace, priority)}
+          onPriorityChange={(tripPlace, priority) => void places.setPriority(tripPlace, priority)}
           onRemove={setRemovingPlace}
           onViewDetails={setDetailPlace}
-          providerDetails={providerDetails}
-          tripPlaces={sortedPlaces}
+          providerDetails={places.providerDetails}
+          tripPlaces={places.sorted}
         />
       )}
+
       <PlaceDetailSheet
-        context={{ isSaved: detailPlace?.isSaved, note: detailPlace?.note, tripName }}
+        context={{
+          isSaved: detailPlace?.isSaved,
+          note: detailPlace?.note,
+          tripName: places.tripName,
+        }}
         onOpenChange={(open) => !open && setDetailPlace(null)}
         open={Boolean(detailPlace)}
         place={detailPlace?.place ?? null}
       />
-      <Sheet
-        onOpenChange={(open) => {
-          setAddOpen(open);
-          if (!open) resetAddFlow();
-        }}
-        open={addOpen}
-      >
-        <SheetContent
-          className="w-full md:data-[side=right]:w-[min(34rem,calc(100%-0.5rem))]"
-          closeLabel={t('close')}
-        >
-          <SheetHeader className="border-b">
-            <SheetTitle>{t('addPlaceTitle')}</SheetTitle>
-            <SheetDescription>{t('addPlaceDescription')}</SheetDescription>
-          </SheetHeader>
-          <div className="min-h-0 overflow-y-auto p-5">
-            {addMode === 'search' ? (
-              <div className="space-y-5">
-                <SearchField
-                  autoFocus
-                  label={t('searchLabel')}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder={t('searchPlaceholder')}
-                  value={searchQuery}
-                />
 
-                {addStatus === 'loading' ? (
-                  <p aria-live="polite" className="text-sm text-muted-foreground" role="status">
-                    {t('loadingSaved')}
-                  </p>
-                ) : addStatus === 'error' ? (
-                  <Alert role="alert" variant="destructive">
-                    <CircleAlert aria-hidden="true" />
-                    <AlertDescription>{t('loadSavedError')}</AlertDescription>
-                  </Alert>
-                ) : matchingSavedPlaces.length ? (
-                  <div className="space-y-2">
-                    <h2 className="text-sm font-medium">{t('savedPlaces')}</h2>
-                    <ItemGroup aria-label={t('savedPlaces')} className="gap-2">
-                      {matchingSavedPlaces.map((savedPlace) => {
-                        const existing = tripPlaces.some(
-                          (item) => item.place.id === savedPlace.place.id,
-                        );
-                        return (
-                          <Item className="gap-3 px-3 py-3" key={savedPlace.id} variant="outline">
-                            <ItemMedia
-                              className="size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
-                              variant="icon"
-                            >
-                              {savedPlace.place.kind === 'custom' ? (
-                                <NotebookPen aria-hidden="true" />
-                              ) : (
-                                <Bookmark aria-hidden="true" />
-                              )}
-                            </ItemMedia>
-                            <ItemContent className="min-w-0">
-                              <ItemTitle>{savedPlaceName(savedPlace)}</ItemTitle>
-                              <ItemDescription>{savedPlaceDescription(savedPlace)}</ItemDescription>
-                            </ItemContent>
-                            <ItemActions className="shrink-0">
-                              <Button
-                                disabled={existing || addingPlaceId === savedPlace.place.id}
-                                onClick={() => void handleAdd(savedPlace.place.id)}
-                                size="sm"
-                                variant={existing ? 'secondary' : 'outline'}
-                              >
-                                {existing
-                                  ? t('added')
-                                  : addingPlaceId === savedPlace.place.id
-                                    ? t('adding')
-                                    : t('add')}
-                              </Button>
-                            </ItemActions>
-                          </Item>
-                        );
-                      })}
-                    </ItemGroup>
-                  </div>
-                ) : addStatus === 'idle' && !searchQuery.trim() ? (
-                  <p className="text-sm leading-6 text-muted-foreground">{t('noSavedPlaces')}</p>
-                ) : null}
+      {addOpen ? (
+        <AddTripPlaceSheet
+          onAdded={(tripPlace) =>
+            places.setPlaces((current) =>
+              current.some((item) => item.id === tripPlace.id) ? current : [...current, tripPlace],
+            )
+          }
+          onOpenChange={setAddOpen}
+          tripId={tripId}
+          tripPlaces={places.places}
+        />
+      ) : null}
 
-                {!searchQuery.trim() ? (
-                  <p className="text-sm leading-6 text-muted-foreground">{t('searchHint')}</p>
-                ) : searchStatus === 'loading' ? (
-                  <p aria-live="polite" className="text-sm text-muted-foreground" role="status">
-                    {t('searching')}
-                  </p>
-                ) : searchStatus === 'unavailable' ? (
-                  <Alert role="alert" variant="warning">
-                    <CircleAlert aria-hidden="true" />
-                    <AlertDescription>{t('searchUnavailable')}</AlertDescription>
-                  </Alert>
-                ) : providerResults.length ? (
-                  <div className="space-y-2">
-                    <h2 className="text-sm font-medium">{t('searchResults')}</h2>
-                    <ItemGroup aria-label={t('searchResults')} className="gap-2">
-                      {providerResults.map((suggestion) => {
-                        const existing = hasTripPlaceForProvider(suggestion);
-                        return (
-                          <Item
-                            className="gap-3 px-3 py-3"
-                            key={suggestion.externalPlaceId}
-                            variant="outline"
-                          >
-                            <ItemMedia
-                              className="size-10 rounded-[var(--radius-md)] bg-brand/10 text-brand"
-                              variant="icon"
-                            >
-                              <MapPinned aria-hidden="true" />
-                            </ItemMedia>
-                            <ItemContent className="min-w-0">
-                              <ItemTitle>{suggestion.name}</ItemTitle>
-                              <ItemDescription>
-                                {suggestion.description ?? t('providerPlace')}
-                              </ItemDescription>
-                            </ItemContent>
-                            <ItemActions className="shrink-0">
-                              <Button
-                                disabled={
-                                  existing || addingProviderId === suggestion.externalPlaceId
-                                }
-                                onClick={() => void handleProviderAdd(suggestion)}
-                                size="sm"
-                                variant={existing ? 'secondary' : 'outline'}
-                              >
-                                {existing
-                                  ? t('added')
-                                  : addingProviderId === suggestion.externalPlaceId
-                                    ? t('adding')
-                                    : t('add')}
-                              </Button>
-                            </ItemActions>
-                          </Item>
-                        );
-                      })}
-                    </ItemGroup>
-                  </div>
-                ) : searchStatus === 'empty' ? (
-                  <p className="text-sm leading-6 text-muted-foreground">{t('searchEmpty')}</p>
-                ) : null}
-
-                <Button className="px-0" onClick={() => setAddMode('custom')} variant="link">
-                  {t('createCustomPlace')}
-                </Button>
-              </div>
-            ) : (
-              <form className="space-y-5" onSubmit={(event) => void handleCreateCustom(event)}>
-                <div className="space-y-2">
-                  <Label htmlFor="trip-place-name">{t('customName')}</Label>
-                  <Input
-                    autoFocus
-                    id="trip-place-name"
-                    onChange={(event) => setCustomName(event.target.value)}
-                    placeholder={t('customNamePlaceholder')}
-                    required
-                    value={customName}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="trip-place-note">{t('customNote')}</Label>
-                  <Textarea
-                    id="trip-place-note"
-                    onChange={(event) => setCustomNote(event.target.value)}
-                    placeholder={t('customNotePlaceholder')}
-                    value={customNote}
-                  />
-                </div>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <Button disabled={creatingCustom || !customName.trim()} type="submit">
-                    {creatingCustom ? t('adding') : t('addCustomPlace')}
-                  </Button>
-                  <Button onClick={() => setAddMode('search')} type="button" variant="outline">
-                    {t('backToSearch')}
-                  </Button>
-                </div>
-              </form>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
-      <Dialog open={Boolean(notePlace)} onOpenChange={(open) => !open && setNotePlace(null)}>
+      <Dialog onOpenChange={(open) => !open && setNotePlace(null)} open={Boolean(notePlace)}>
         <DialogContent closeLabel={t('close')}>
           <DialogHeader>
             <DialogTitle>{t('noteTitle')}</DialogTitle>
@@ -663,15 +172,16 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
             <Button disabled={savingNote} onClick={() => setNotePlace(null)} variant="outline">
               {t('cancel')}
             </Button>
-            <Button disabled={savingNote} onClick={() => void handleSaveNote()}>
+            <Button disabled={savingNote} onClick={() => void saveNote()}>
               {savingNote ? t('saving') : t('save')}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
       <AlertDialog
-        open={Boolean(removingPlace)}
         onOpenChange={(open) => !open && setRemovingPlace(null)}
+        open={Boolean(removingPlace)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -684,7 +194,7 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
             <AlertDialogCancel disabled={removing}>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction
               disabled={removing}
-              onClick={() => void handleRemove()}
+              onClick={() => void removePlace()}
               variant="destructive"
             >
               {removing ? t('removing') : t('removePlace')}

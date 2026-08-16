@@ -817,6 +817,12 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   return (
     <section className="mx-auto w-full max-w-5xl space-y-7">
       <TripSectionHeader
+        actions={
+          <Button onClick={() => setPlacesDrawerOpen(true)} variant="outline">
+            <MapPinned aria-hidden="true" data-icon="inline-start" />
+            {tripPlacesTranslations('openPlaces')}
+          </Button>
+        }
         currentSection="itinerary"
         description={t('description')}
         tripId={tripId}
@@ -936,10 +942,6 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                 ) : null}
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
-                <Button onClick={() => setPlacesDrawerOpen(true)} variant="outline">
-                  <MapPinned aria-hidden="true" data-icon="inline-start" />
-                  {tripPlacesTranslations('openPlaces')}
-                </Button>
                 <Button onClick={() => openCreate(selectedDay)}>
                   <Plus aria-hidden="true" data-icon="inline-start" />
                   {t('addItem')}

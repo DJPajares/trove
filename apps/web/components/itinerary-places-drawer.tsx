@@ -1,9 +1,10 @@
 'use client';
 
-import { MapPinned } from 'lucide-react';
+import { MapPinned, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 
+import { AddTripPlaceSheet } from '@/components/add-trip-place-sheet';
 import { PageState } from '@/components/page-state';
 import { PlaceDetailSheet } from '@/components/place-detail-sheet';
 import { TripPlacesPanel } from '@/components/trip-places-panel';
@@ -68,6 +69,7 @@ export function ItineraryPlacesDrawer({
   const [removing, setRemoving] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   const placeName = (tripPlace: TripPlace) =>
     tripPlace.place.kind === 'custom'
@@ -105,6 +107,13 @@ export function ItineraryPlacesDrawer({
             <SheetTitle>{t('placesDrawerTitle')}</SheetTitle>
             <SheetDescription>{t('placesDrawerDescription')}</SheetDescription>
           </SheetHeader>
+
+          <div className="px-5 pb-3">
+            <Button className="w-full" onClick={() => setAddOpen(true)} variant="outline">
+              <Plus aria-hidden="true" data-icon="inline-start" />
+              {t('addPlace')}
+            </Button>
+          </div>
 
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-5">
             <p aria-live="polite" className="sr-only" role="status">
@@ -151,6 +160,21 @@ export function ItineraryPlacesDrawer({
           </div>
         </SheetContent>
       </Sheet>
+
+      {addOpen ? (
+        <AddTripPlaceSheet
+          onAdded={(tripPlace) => {
+            places.setPlaces((current) =>
+              current.some((entry) => entry.id === tripPlace.id)
+                ? current
+                : [...current, tripPlace],
+            );
+          }}
+          onOpenChange={setAddOpen}
+          tripId={tripId}
+          tripPlaces={places.places}
+        />
+      ) : null}
 
       <PlaceDetailSheet
         context={{

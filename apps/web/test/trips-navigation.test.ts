@@ -68,18 +68,19 @@ test('supporting tools stay complete and out of the primary set', () => {
 
   assert.deepEqual(
     supporting.map((entry) => entry.section),
-    ['places', 'tasks', 'reservations', 'expenses', 'info'],
+    ['tasks', 'reservations', 'expenses', 'info'],
   );
   assert.deepEqual(
     supporting.map((entry) => entry.href),
     [
-      `/trips/${TRIP}/places`,
       `/trips/${TRIP}/tasks`,
       `/trips/${TRIP}/reservations`,
       `/trips/${TRIP}/expenses`,
       `/trips/${TRIP}/info`,
     ],
   );
+  // The itinerary opens Places itself, so listing it here would be a second door.
+  assert.ok(supporting.every((entry) => entry.section !== 'places'));
   // Trip Info's route and its label have never matched; the mapping must survive.
   assert.equal(supporting.at(-1)?.labelKey, 'tripInfo');
 });

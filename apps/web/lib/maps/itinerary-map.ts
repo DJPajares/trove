@@ -50,6 +50,20 @@ export function decodeGooglePolyline(encoded: string): ItineraryMapLocation[] {
   return path;
 }
 
+/**
+ * Which points the viewport should frame. A trip's other Places are worth seeing
+ * on the map, but they are not where the traveller is going that day — letting a
+ * consideration two hundred kilometres away stretch the bounds zooms the day out
+ * to nothing. Only the day's own locations decide the frame.
+ *
+ * A day with nothing located yet falls back to everything, so the map never opens
+ * on empty space.
+ */
+export function viewportPoints(points: ItineraryMapPoint[]) {
+  const ofTheDay = points.filter((point) => point.kind !== 'considered');
+  return ofTheDay.length ? ofTheDay : points;
+}
+
 export function buildItineraryMapPoints(input: {
   itinerary: Pick<Itinerary, 'tripPlaces' | 'unscheduledItems'>;
   resolveItemName: (item: ItineraryItem) => string;

@@ -1308,6 +1308,8 @@
     "added": "Added",
     "customPlaceTitle": "Private place",
     "createCustomPlace": "Create a private place",
+    "createNamedCustomPlace": "Add \"{name}\" as a private place",
+    "noSearchResults": "No places matched that search.",
     "customName": "Place name",
     "customNamePlaceholder": "A meeting point or quiet viewpoint",
     "customNote": "Place note",

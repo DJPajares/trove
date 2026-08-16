@@ -31,6 +31,18 @@ export type PlanScoreOpeningHours =
   | { intervals: PlanScoreInterval[]; source: PlanScoreEvidenceSource; status: 'KNOWN' }
   | { status: 'UNKNOWN' };
 
+/**
+ * A coarse timing intent such as Morning, evaluated best-case: the item may begin
+ * anywhere from `earliestMinute` up to `latestMinute`, and only a day where no
+ * placement in that range works counts as a conflict. `latestMinute` is the
+ * latest permissible *start*, not the latest the visit may run to.
+ */
+export type PlanScoreStartWindow = {
+  earliestMinute: number;
+  latestMinute: number;
+  source: PlanScoreEvidenceSource;
+};
+
 export type PlanScoreDayItem = {
   /** Known visit duration. */
   duration: PlanScoreMinutes | null;
@@ -42,6 +54,8 @@ export type PlanScoreDayItem = {
   openingHours: PlanScoreOpeningHours;
   /** Planned start as minutes from local midnight. */
   start: PlanScoreMinutes | null;
+  /** Coarse daypart intent, used only when there is no exact `start`. */
+  startWindow: PlanScoreStartWindow | null;
 };
 
 export type PlanScoreFixedCommitment = {
@@ -172,6 +186,94 @@ function overlaps(left: PlanScoreInterval, right: PlanScoreInterval) {
   return left.startMinute < right.endMinute && right.startMinute < left.endMinute;
 }
 
+/**
+ * An item is only anchored in time when the user gave it an exact start. A
+ * daypart is an intent, not a commitment, so a windowed item is never treated as
+ * fixed even when it carries a reservation: that reservation's real time reaches
+ * the evaluator through `commitments` instead.
+ */
+function isAnchored(item: PlanScoreDayItem) {
+  return item.fixed && item.start !== null;
+}
+
+/** Earliest the visit can begin: an exact start, or the front of its window. */
+function earliestStart(item: PlanScoreDayItem): number | null {
+  if (item.start) return assertMinutes(item.start.minutes);
+  if (item.startWindow) return assertMinutes(item.startWindow.earliestMinute);
+
+  return null;
+}
+
+/** Latest the visit can begin: an exact start, or the back of its window. */
+function latestStart(item: PlanScoreDayItem): number | null {
+  if (item.start) return assertMinutes(item.start.minutes);
+  if (item.startWindow) return assertMinutes(item.startWindow.latestMinute);
+
+  return null;
+}
+
+/**
+ * Best-case slack between two consecutive items: the previous one leaves as
+ * early as it can, the next one starts as late as it may. For two exact starts
+ * this is the plain difference the evaluators always used.
+ */
+function transitionBuffer(previous: PlanScoreDayItem, next: PlanScoreDayItem): number | null {
+  const departs = earliestStart(previous);
+  const arrives = latestStart(next);
+  if (departs === null || arrives === null || !previous.duration || !next.inboundTravel) {
+    return null;
+  }
+
+  return (
+    arrives -
+    (departs + assertMinutes(previous.duration.minutes) + assertMinutes(next.inboundTravel.minutes))
+  );
+}
+
+/**
+ * The most open minutes any start inside `window` can achieve.
+ *
+ * Coverage as a function of start time is piecewise linear, changing slope only
+ * where an interval opens or where the visit would end exactly as one closes, so
+ * the maximum is always attained at one of those breakpoints. Checking that
+ * finite candidate set is exact and avoids scanning the window minute by minute.
+ */
+function bestOpeningCoverage(
+  intervals: PlanScoreInterval[],
+  window: PlanScoreInterval,
+  durationMinutes: number | null,
+): number {
+  const visit = durationMinutes === null ? 0 : durationMinutes;
+  const candidates = new Set<number>([window.startMinute]);
+
+  for (const interval of intervals) {
+    candidates.add(interval.startMinute);
+    candidates.add(interval.endMinute - visit);
+  }
+
+  let best = 0;
+
+  for (const candidate of candidates) {
+    const start = Math.min(Math.max(candidate, window.startMinute), window.endMinute);
+    if (start < window.startMinute || start > window.endMinute) continue;
+
+    let open = 0;
+    for (const interval of intervals) {
+      if (visit === 0) {
+        if (interval.startMinute <= start && start < interval.endMinute) open = 1;
+        continue;
+      }
+      open += Math.max(
+        0,
+        Math.min(start + visit, interval.endMinute) - Math.max(start, interval.startMinute),
+      );
+    }
+    best = Math.max(best, open);
+  }
+
+  return best;
+}
+
 function openingHoursSeverity(
   intervals: PlanScoreInterval[],
   startMinute: number,
@@ -203,11 +305,59 @@ function openingHoursSeverity(
   return openMinutes < durationMinutes ? 'MATERIAL' : null;
 }
 
-function transitionSeverity(fixed: boolean, bufferMinutes: number) {
+/**
+ * Records whichever timing the item actually supplied. A daypart enters as
+ * `ESTIMATED`, so a day leaning on coarse timings reports lower confidence than
+ * one the traveller has given exact times (PRD section 29.2).
+ */
+function useTiming(
+  use: (ref: string, source: PlanScoreEvidenceSource) => void,
+  item: PlanScoreDayItem,
+) {
+  if (item.start) {
+    use(`start:${item.id}`, item.start.source);
+    return;
+  }
+  if (item.startWindow) use(`window:${item.id}`, item.startWindow.source);
+}
+
+/** The same banding as an exact start, applied to the best placement in a window. */
+function windowOpeningSeverity(
+  intervals: PlanScoreInterval[],
+  window: PlanScoreInterval,
+  durationMinutes: number | null,
+): PlanScoreConflictSeverity | null {
+  for (const interval of intervals) {
+    assertMinutes(interval.startMinute);
+    assertMinutes(interval.endMinute);
+  }
+
+  const coverage = bestOpeningCoverage(intervals, window, durationMinutes);
+
+  if (durationMinutes === null || durationMinutes <= 0) {
+    return coverage > 0 ? null : 'HARD';
+  }
+  if (coverage <= 0) return 'HARD';
+
+  return coverage < durationMinutes ? 'MATERIAL' : null;
+}
+
+function transitionSeverity(next: PlanScoreDayItem, bufferMinutes: number) {
   if (bufferMinutes < 0) {
-    if (!fixed) return null;
-    const severity = -bufferMinutes > LATE_ARRIVAL_HARD_MINUTES ? 'HARD' : 'MATERIAL';
-    return { kind: 'ARRIVES_AFTER_FIXED_START', severity } as const;
+    if (isAnchored(next)) {
+      const severity = -bufferMinutes > LATE_ARRIVAL_HARD_MINUTES ? 'HARD' : 'MATERIAL';
+      return { kind: 'ARRIVES_AFTER_FIXED_START', severity } as const;
+    }
+
+    // A negative best-case buffer means no placement in the daypart works, which
+    // is a real conflict. It stays MATERIAL however large the shortfall: HARD is
+    // reserved for constraints outside the traveller's control, like a
+    // reservation or a closed door, and a daypart is a preference they can move.
+    if (next.startWindow) {
+      return { kind: 'ARRIVES_AFTER_FIXED_START', severity: 'MATERIAL' } as const;
+    }
+
+    return null;
   }
 
   if (bufferMinutes < TIGHT_TRANSITION_MINUTES) {
@@ -277,17 +427,30 @@ export function evaluateFeasibility(
   }
 
   for (const item of input.items) {
-    if (item.openingHours.status !== 'KNOWN' || !item.start) continue;
+    if (item.openingHours.status !== 'KNOWN' || (!item.start && !item.startWindow)) continue;
 
-    use(`start:${item.id}`, item.start.source);
+    if (item.start) use(`start:${item.id}`, item.start.source);
+    if (!item.start && item.startWindow) use(`window:${item.id}`, item.startWindow.source);
     use(`hours:${item.id}`, item.openingHours.source);
     if (item.duration) use(`duration:${item.id}`, item.duration.source);
 
-    const severity = openingHoursSeverity(
-      item.openingHours.intervals,
-      assertMinutes(item.start.minutes),
-      item.duration ? assertMinutes(item.duration.minutes) : null,
-    );
+    const durationMinutes = item.duration ? assertMinutes(item.duration.minutes) : null;
+    const severity = item.start
+      ? openingHoursSeverity(
+          item.openingHours.intervals,
+          assertMinutes(item.start.minutes),
+          durationMinutes,
+        )
+      : // Best case across the whole daypart: only a window with no workable
+        // placement anywhere inside it counts against the day.
+        windowOpeningSeverity(
+          item.openingHours.intervals,
+          {
+            endMinute: assertMinutes(item.startWindow!.latestMinute),
+            startMinute: assertMinutes(item.startWindow!.earliestMinute),
+          },
+          durationMinutes,
+        );
     if (!severity) continue;
 
     record({
@@ -302,18 +465,17 @@ export function evaluateFeasibility(
   for (let index = 1; index < input.items.length; index += 1) {
     const previous = input.items[index - 1];
     const next = input.items[index];
-    if (!previous?.start || !previous.duration || !next?.start || !next.inboundTravel) continue;
+    if (!previous || !next) continue;
 
-    use(`start:${previous.id}`, previous.start.source);
-    use(`duration:${previous.id}`, previous.duration.source);
-    use(`start:${next.id}`, next.start.source);
-    use(`travel:${next.id}`, next.inboundTravel.source);
+    const buffer = transitionBuffer(previous, next);
+    if (buffer === null) continue;
 
-    const arrival =
-      assertMinutes(previous.start.minutes) +
-      assertMinutes(previous.duration.minutes) +
-      assertMinutes(next.inboundTravel.minutes);
-    const transition = transitionSeverity(next.fixed, assertMinutes(next.start.minutes) - arrival);
+    useTiming(use, previous);
+    use(`duration:${previous.id}`, previous.duration!.source);
+    useTiming(use, next);
+    use(`travel:${next.id}`, next.inboundTravel!.source);
+
+    const transition = transitionSeverity(next, buffer);
     if (!transition) continue;
 
     record({
@@ -385,25 +547,25 @@ export function evaluatePaceBuffer(input: PlanScorePaceInput): PlanScorePaceEval
     if (!evidence.has(ref)) evidence.set(ref, { ref, source });
   };
 
-  const timedItems = input.items.filter((item) => item.start !== null);
+  // A daypart counts as a timing here: it constrains the pair enough to measure
+  // best-case slack, which is better evidence than skipping the pair entirely.
+  const timedItems = input.items.filter((item) => item.start !== null || item.startWindow !== null);
   let smallestBufferMinutes: number | null = null;
 
   if (timedItems.length >= 2) {
     for (let index = 1; index < input.items.length; index += 1) {
       const previous = input.items[index - 1];
       const next = input.items[index];
-      if (!previous?.start || !previous.duration || !next?.start || !next.inboundTravel) continue;
+      if (!previous || !next) continue;
 
-      use(`start:${previous.id}`, previous.start.source);
-      use(`duration:${previous.id}`, previous.duration.source);
-      use(`start:${next.id}`, next.start.source);
-      use(`travel:${next.id}`, next.inboundTravel.source);
+      const buffer = transitionBuffer(previous, next);
+      if (buffer === null) continue;
 
-      const buffer =
-        assertMinutes(next.start.minutes) -
-        (assertMinutes(previous.start.minutes) +
-          assertMinutes(previous.duration.minutes) +
-          assertMinutes(next.inboundTravel.minutes));
+      useTiming(use, previous);
+      use(`duration:${previous.id}`, previous.duration!.source);
+      useTiming(use, next);
+      use(`travel:${next.id}`, next.inboundTravel!.source);
+
       smallestBufferMinutes = Math.min(smallestBufferMinutes ?? buffer, buffer);
     }
   }

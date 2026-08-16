@@ -327,6 +327,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
       distanceMeters: null,
       durationSeconds: null,
       knownSegmentCount: 0,
+      localSegmentCount: 0,
       scheduledPlaceCount: scheduledPoints.length,
       status: 'unavailable',
       totalSegmentCount: 0,

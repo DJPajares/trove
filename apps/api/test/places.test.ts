@@ -162,6 +162,73 @@ test('Google details concludes the session and returns live photo references wit
   ]);
 });
 
+async function detailsFrom(body: Record<string, unknown>) {
+  const provider = new GooglePlacesProvider({
+    apiKey: 'server-key',
+    fetcher: async () =>
+      Response.json({
+        displayName: { text: 'Trove Museum' },
+        id: 'ChIJmuseum',
+        ...body,
+      }),
+  });
+
+  return provider.getDetails({ externalPlaceId: 'ChIJmuseum' });
+}
+
+test('opening periods survive the zero values proto3 omits from the wire', async () => {
+  // Sunday is day 0, midnight is hour 0, and anything opening on the hour has
+  // minute 0. Requiring those fields to be present would discard the period.
+  const place = await detailsFrom({
+    regularOpeningHours: {
+      periods: [
+        { close: { day: 1, hour: 17 }, open: { day: 1, hour: 9 } },
+        { close: { hour: 18 }, open: {} },
+      ],
+    },
+    utcOffsetMinutes: 480,
+  });
+
+  assert.deepEqual(place.openingPeriods, [
+    { close: { day: 1, hour: 17, minute: 0 }, open: { day: 1, hour: 9, minute: 0 } },
+    { close: { day: 0, hour: 18, minute: 0 }, open: { day: 0, hour: 0, minute: 0 } },
+  ]);
+  assert.equal(place.utcOffsetMinutes, 480);
+});
+
+test('an open point with no close is kept as an always-open period', async () => {
+  const place = await detailsFrom({
+    regularOpeningHours: { periods: [{ open: { day: 0, hour: 0, minute: 0 } }] },
+  });
+
+  assert.deepEqual(place.openingPeriods, [{ close: null, open: { day: 0, hour: 0, minute: 0 } }]);
+});
+
+test('out-of-range and unopenable periods are dropped, not corrected', async () => {
+  const place = await detailsFrom({
+    regularOpeningHours: {
+      periods: [
+        { close: { day: 7, hour: 17, minute: 0 }, open: { day: 7, hour: 9, minute: 0 } },
+        { close: { day: 1, hour: 17, minute: 0 }, open: { day: 1, hour: 24, minute: 0 } },
+        { close: { day: 1, hour: 17, minute: 60 }, open: { day: 1, hour: 9, minute: 0 } },
+        { close: { day: 2, hour: 17, minute: 0 } },
+        { close: { day: 3, hour: 17, minute: 0 }, open: { day: 3, hour: 9, minute: 0 } },
+      ],
+    },
+  });
+
+  assert.deepEqual(place.openingPeriods, [
+    { close: { day: 3, hour: 17, minute: 0 }, open: { day: 3, hour: 9, minute: 0 } },
+  ]);
+});
+
+test('a place with no hours reports no periods and no offset', async () => {
+  const place = await detailsFrom({});
+
+  assert.deepEqual(place.openingPeriods, []);
+  assert.equal(place.utcOffsetMinutes, null);
+});
+
 test('Google photo resolution requests a current reference without caching the media', async () => {
   let capturedUrl = '';
   const provider = new GooglePlacesProvider({

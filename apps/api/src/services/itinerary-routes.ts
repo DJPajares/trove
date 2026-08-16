@@ -53,6 +53,8 @@ export type ItineraryDayRoutes = {
     distanceMeters: number | null;
     durationSeconds: number | null;
     knownSegmentCount: number;
+    /** Legs the totals describe. Zero alongside legs means the day only moves long distance. */
+    localSegmentCount: number;
     scheduledPlaceCount: number;
     status: RouteSummaryStatus;
     totalSegmentCount: number;
@@ -269,7 +271,7 @@ async function resolveSegment(
   };
 }
 
-function createSummary(
+export function createSummary(
   segments: ItineraryRouteSegment[],
   scheduledPlaceCount: number,
   hasIncompleteLocations: boolean,
@@ -300,6 +302,7 @@ function createSummary(
         ? available.reduce((total, segment) => total + (segment.durationSeconds ?? 0), 0)
         : null,
     knownSegmentCount: available.length,
+    localSegmentCount: local.length,
     scheduledPlaceCount,
     status,
     totalSegmentCount: segments.length,

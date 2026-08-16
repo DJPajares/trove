@@ -76,6 +76,7 @@ export type ProviderPlaceDetails = {
   location: PlaceCoordinates | null;
   name: string;
   nationalPhoneNumber: string | null;
+  openingPeriods: PlaceOpeningPeriod[];
   photos: PlacePhotoReference[];
   primaryType: string | null;
   provider: PlaceProviderName;
@@ -83,7 +84,19 @@ export type ProviderPlaceDetails = {
   rawTypes: string[];
   regularOpeningHours: string[];
   userRatingCount: number | null;
+  utcOffsetMinutes: number | null;
   websiteUri: string | null;
+};
+
+export type PlaceOpeningPoint = {
+  day: number;
+  hour: number;
+  minute: number;
+};
+
+export type PlaceOpeningPeriod = {
+  close: PlaceOpeningPoint | null;
+  open: PlaceOpeningPoint;
 };
 
 export type ResolvedPlacePhoto = {

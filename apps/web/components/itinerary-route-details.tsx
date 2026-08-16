@@ -80,6 +80,10 @@ export function ItineraryRouteSummary({
 
   const summary = data?.summary;
   const partial = summary?.status === 'partial';
+  // A day that only moves long distance has no local travel to total. Reporting
+  // "0 min, 0 km" would read as a failed estimate rather than an absent one.
+  const noLocalTravel =
+    summary !== undefined && summary.localSegmentCount === 0 && summary.totalSegmentCount > 0;
   const hasGoogleRoutes = data?.segments.some((segment) => segment.provider === 'google') ?? false;
   const hasWalkingRoute = data?.segments.some((segment) => segment.mode === 'walk') ?? false;
 
@@ -93,7 +97,9 @@ export function ItineraryRouteSummary({
           <Route aria-hidden="true" className="size-4 text-primary" />
           {t('stops', { count: summary?.scheduledPlaceCount ?? 0 })}
         </span>
-        {summary?.durationSeconds !== null && summary?.durationSeconds !== undefined ? (
+        {noLocalTravel ? (
+          <span className="text-muted-foreground">{t('noLocalTravel')}</span>
+        ) : summary?.durationSeconds !== null && summary?.durationSeconds !== undefined ? (
           <span className="tabular-nums text-muted-foreground">
             {t(partial ? 'knownDuration' : 'duration', {
               value: formatDuration(summary.durationSeconds, locale),
@@ -102,7 +108,9 @@ export function ItineraryRouteSummary({
         ) : (
           <span className="text-muted-foreground">{t('travelTimeUnavailable')}</span>
         )}
-        {summary?.distanceMeters !== null && summary?.distanceMeters !== undefined ? (
+        {!noLocalTravel &&
+        summary?.distanceMeters !== null &&
+        summary?.distanceMeters !== undefined ? (
           <span className="tabular-nums text-muted-foreground">
             {t(partial ? 'knownDistance' : 'distance', {
               unit: t(`units.${distanceUnit}`),

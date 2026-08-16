@@ -459,6 +459,7 @@ test('respects the item time zone when deriving local start times', () => {
           timeZone: 'UTC',
         },
       ],
+      hours: new Map(),
       mustGoTripPlaceIds: [],
       ratings: new Map(),
       routes: new Map(),

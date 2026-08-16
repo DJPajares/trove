@@ -1054,6 +1054,7 @@
       "distance": "{value} {unit}",
       "knownDistance": "{value} {unit} known",
       "travelTimeUnavailable": "Travel estimate unavailable",
+      "noLocalTravel": "No local travel on this day",
       "unavailable": "Route estimates are unavailable. Your itinerary remains usable.",
       "partial": "Some stops do not have enough location data. Totals include known routes only.",
       "cachedRoute": "Cached route from {date}. Check current conditions before relying on it.",
@@ -1762,16 +1763,16 @@
     },
     "verdict": {
       "day": {
-        "good": "This day looks good.",
-        "workable": "This day should work.",
-        "tight": "This day looks tight.",
-        "needsWork": "This day needs some work."
+        "good": "This day looks good",
+        "workable": "This day should work",
+        "tight": "This day looks tight",
+        "needsWork": "This day needs some work"
       },
       "trip": {
-        "good": "This trip looks well planned.",
-        "workable": "This trip should work.",
-        "tight": "This trip looks tight in places.",
-        "needsWork": "This trip needs some work."
+        "good": "This trip looks well planned",
+        "workable": "This trip should work",
+        "tight": "This trip looks tight in places",
+        "needsWork": "This trip needs some work"
       }
     },
     "improvementLead": "One thing worth a look:",

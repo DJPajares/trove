@@ -4,7 +4,8 @@ import { formatInstantInTimeZone, formatLocalTime } from './itinerary-rules.js';
 import { getItineraryDayRoutes, type ItineraryDayRoutes } from './itinerary-routes.js';
 import { ItineraryNotFoundError } from './itineraries.js';
 import { createPlacesService } from './places-runtime.js';
-import type { PlacesService } from './places.js';
+import type { PlaceOpeningPeriod, PlacesService } from './places.js';
+import { resolveOpeningHoursForDay } from './place-opening-hours.js';
 import {
   explainDay,
   explainTrip,
@@ -18,6 +19,7 @@ import {
   evaluateTravelEffort,
   type PlanScoreDayItem,
   type PlanScoreFixedCommitment,
+  type PlanScoreOpeningHours,
   type PlanScorePlace,
   type PlanScoreRouteSegment,
 } from './plan-score-factors.js';
@@ -36,11 +38,9 @@ import {
  * Plan Score for a trip, derived on demand from stored itinerary data and live
  * route/provider evidence (PRD section 29).
  *
- * Two factors stay unknown in this integration rather than being guessed:
- * opening hours, because the Places provider only returns human-readable
- * weekday text today, and route efficiency, because comparing alternative
- * orders needs a full pairwise duration matrix per day. Both lower completeness
- * honestly instead of inventing evidence.
+ * One factor stays unknown in this integration rather than being guessed: route
+ * efficiency, because comparing alternative orders needs a full pairwise duration
+ * matrix per day. It lowers completeness honestly instead of inventing evidence.
  */
 
 export type TripPlanScoreDay = PlanScoreDayPayload & {
@@ -86,6 +86,8 @@ export type PlanScoreDayRecord = {
 
 export type PlanScoreTripRecord = {
   days: PlanScoreDayRecord[];
+  /** Provider opening evidence keyed by Trip Place id; absent means no usable hours. */
+  hours: Map<string, { periods: PlaceOpeningPeriod[]; utcOffsetMinutes: number | null }>;
   mustGoTripPlaceIds: string[];
   /** Known public ratings keyed by Trip Place id; absent means no usable rating. */
   ratings: Map<string, number>;
@@ -137,10 +139,23 @@ function toRouteSegments(routes: ItineraryDayRoutes | undefined): PlanScoreRoute
   });
 }
 
-function toDayItems(day: PlanScoreDayRecord, routes: ItineraryDayRoutes | undefined) {
+function toDayItems(
+  day: PlanScoreDayRecord,
+  routes: ItineraryDayRoutes | undefined,
+  hours: Map<string, { periods: PlaceOpeningPeriod[]; utcOffsetMinutes: number | null }>,
+) {
   return day.items.map((item): PlanScoreDayItem => {
     const startMinutes = itemStartMinutes(item, day.timeZone);
     const travelMinutes = inboundTravelMinutes(routes, item.id);
+    const placeHours = item.tripPlaceId ? hours.get(item.tripPlaceId) : undefined;
+    const openingHours: PlanScoreOpeningHours = placeHours
+      ? resolveOpeningHoursForDay({
+          date: day.date,
+          dayTimeZone: day.timeZone,
+          periods: placeHours.periods,
+          utcOffsetMinutes: placeHours.utcOffsetMinutes,
+        })
+      : { status: 'UNKNOWN' };
 
     return {
       duration:
@@ -151,7 +166,7 @@ function toDayItems(day: PlanScoreDayRecord, routes: ItineraryDayRoutes | undefi
       id: item.id,
       inboundTravel:
         travelMinutes === null ? null : { minutes: travelMinutes, source: 'FRESH_PROVIDER' },
-      openingHours: { status: 'UNKNOWN' },
+      openingHours,
       start: startMinutes === null ? null : { minutes: startMinutes, source: 'USER_OWNED' },
     };
   });
@@ -192,7 +207,7 @@ type DayEvaluation = {
 
 function evaluateDayRecord(day: PlanScoreDayRecord, record: PlanScoreTripRecord): DayEvaluation {
   const routes = record.routes.get(day.id);
-  const items = toDayItems(day, routes);
+  const items = toDayItems(day, routes, record.hours);
   const segments = toRouteSegments(routes);
   const feasibility = evaluateFeasibility({ commitments: toCommitments(day), items });
   const travel = evaluateTravelEffort(segments);
@@ -299,12 +314,16 @@ function sameDayJourneyCommitment(reservation: {
   return { date: toLocalDate(departureDate), endMinute, id: reservation.id, startMinute };
 }
 
-async function loadRatings(
+async function loadPlaceEvidence(
   tripPlaces: Array<{ externalPlaceId: string | null; id: string }>,
   placesService: PlacesService | null,
 ) {
+  const hours = new Map<
+    string,
+    { periods: PlaceOpeningPeriod[]; utcOffsetMinutes: number | null }
+  >();
   const ratings = new Map<string, number>();
-  if (!placesService) return ratings;
+  if (!placesService) return { hours, ratings };
 
   const results = await Promise.all(
     tripPlaces.map(async (tripPlace) => {
@@ -312,16 +331,26 @@ async function loadRatings(
       const details = await placesService.getDetails({
         externalPlaceId: tripPlace.externalPlaceId,
       });
-      if (details.status !== 'ok' || details.place.rating === null) return null;
-      return { id: tripPlace.id, rating: details.place.rating };
+      if (details.status !== 'ok') return null;
+      return {
+        id: tripPlace.id,
+        openingPeriods: details.place.openingPeriods,
+        rating: details.place.rating,
+        utcOffsetMinutes: details.place.utcOffsetMinutes,
+      };
     }),
   );
 
   for (const result of results) {
-    if (result) ratings.set(result.id, result.rating);
+    if (!result) continue;
+    if (result.rating !== null) ratings.set(result.id, result.rating);
+    hours.set(result.id, {
+      periods: result.openingPeriods,
+      utcOffsetMinutes: result.utcOffsetMinutes,
+    });
   }
 
-  return ratings;
+  return { hours, ratings };
 }
 
 export async function getTripPlanScore(
@@ -365,14 +394,14 @@ export async function getTripPlanScore(
     return commitment ? [commitment] : [];
   });
 
-  const [routeResults, ratings] = await Promise.all([
+  const [routeResults, placeEvidence] = await Promise.all([
     Promise.all(
       trip.itineraryDays.map(async (day) => ({
         id: day.id,
         routes: await getItineraryDayRoutes(userId, tripId, day.id),
       })),
     ),
-    loadRatings(
+    loadPlaceEvidence(
       trip.tripPlaces.map((tripPlace) => ({
         externalPlaceId:
           tripPlace.place.providerRefs.find((reference) => reference.provider === 'GOOGLE')
@@ -403,10 +432,11 @@ export async function getTripPlanScore(
         timeZone: day.defaultTimeZone,
       };
     }),
+    hours: placeEvidence.hours,
     mustGoTripPlaceIds: trip.tripPlaces
       .filter((tripPlace) => tripPlace.priority === 'MUST_GO')
       .map((tripPlace) => tripPlace.id),
-    ratings,
+    ratings: placeEvidence.ratings,
     routes: new Map(routeResults.map(({ id, routes }) => [id, routes])),
   });
 }

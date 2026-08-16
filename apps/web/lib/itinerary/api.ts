@@ -110,6 +110,8 @@ export type ItineraryDayRoutes = {
     distanceMeters: number | null;
     durationSeconds: number | null;
     knownSegmentCount: number;
+    /** Legs the totals describe. Zero alongside legs means the day only moves long distance. */
+    localSegmentCount: number;
     scheduledPlaceCount: number;
     status: 'complete' | 'partial' | 'unavailable';
     totalSegmentCount: number;

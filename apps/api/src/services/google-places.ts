@@ -2,6 +2,8 @@ import { categorizePlaceTypes } from './place-categories.js';
 import {
   PlaceProviderError,
   type PlaceDetailsRequest,
+  type PlaceOpeningPeriod,
+  type PlaceOpeningPoint,
   type PlacePhotoAttribution,
   type PlacePhotoRequest,
   type PlacePhotoReference,
@@ -38,6 +40,7 @@ export const GOOGLE_PLACE_DETAILS_FIELD_MASK = [
   'rating',
   'regularOpeningHours',
   'userRatingCount',
+  'utcOffsetMinutes',
   'websiteUri',
 ].join(',');
 
@@ -87,11 +90,24 @@ type GooglePlaceDetails = {
   photos?: GooglePhoto[];
   primaryType?: string;
   rating?: number;
-  regularOpeningHours?: { weekdayDescriptions?: string[] };
+  regularOpeningHours?: {
+    periods?: GoogleOpeningPeriod[];
+    weekdayDescriptions?: string[];
+  };
   types?: string[];
   userRatingCount?: number;
+  utcOffsetMinutes?: number;
   websiteUri?: string;
 };
+
+/**
+ * Google states opening points as day/hour/minute in the place's local time.
+ * Every field is optional on the wire because proto3 JSON omits zero values,
+ * and zero is common here: Sunday is day 0, midnight is hour 0, and any place
+ * opening on the hour has minute 0.
+ */
+type GoogleOpeningPoint = { day?: number; hour?: number; minute?: number };
+type GoogleOpeningPeriod = { close?: GoogleOpeningPoint; open?: GoogleOpeningPoint };
 
 type GooglePhotoMedia = {
   name?: string;
@@ -182,6 +198,47 @@ function mapPhoto(photo: GooglePhoto): PlacePhotoReference | null {
     name,
     widthPx: Number.isInteger(photo.widthPx) ? (photo.widthPx ?? null) : null,
   };
+}
+
+/**
+ * An absent day/hour/minute means zero, not missing: proto3 JSON drops zero
+ * values, so requiring all three to be present would discard Sunday, midnight,
+ * and every place that opens on the hour. Only out-of-range values are
+ * rejected, and only the whole period, never a silently corrected point.
+ */
+function mapOpeningPoint(point: GoogleOpeningPoint | undefined): PlaceOpeningPoint | null {
+  if (!point) return null;
+
+  const day = point.day ?? 0;
+  const hour = point.hour ?? 0;
+  const minute = point.minute ?? 0;
+  const inRange =
+    Number.isInteger(day) &&
+    day >= 0 &&
+    day <= 6 &&
+    Number.isInteger(hour) &&
+    hour >= 0 &&
+    hour <= 23 &&
+    Number.isInteger(minute) &&
+    minute >= 0 &&
+    minute <= 59;
+
+  return inRange ? { day, hour, minute } : null;
+}
+
+function mapOpeningPeriods(periods: GoogleOpeningPeriod[] | undefined): PlaceOpeningPeriod[] {
+  return (periods ?? []).flatMap((period): PlaceOpeningPeriod[] => {
+    const open = mapOpeningPoint(period.open);
+    if (!open) return [];
+
+    // A period with an open point and no close is how Google reports a place
+    // that never shuts. A close that is present but malformed is dropped with
+    // the period rather than being reinterpreted as always open.
+    if (period.close === undefined) return [{ close: null, open }];
+
+    const close = mapOpeningPoint(period.close);
+    return close ? [{ close, open }] : [];
+  });
 }
 
 function createSuggestion(prediction: GooglePlacePrediction): PlaceSuggestion | null {
@@ -356,6 +413,8 @@ export class GooglePlacesProvider implements PlacesProvider {
     const longitude = response.location?.longitude;
     const hasLocation = typeof latitude === 'number' && typeof longitude === 'number';
 
+    const openingPeriods = mapOpeningPeriods(response.regularOpeningHours?.periods);
+
     return {
       category: categorizePlaceTypes(rawTypes, primaryType),
       externalPlaceId,
@@ -364,6 +423,7 @@ export class GooglePlacesProvider implements PlacesProvider {
       location: hasLocation ? { latitude, longitude } : null,
       name,
       nationalPhoneNumber: cleanString(response.nationalPhoneNumber),
+      openingPeriods,
       photos: (response.photos ?? [])
         .map(mapPhoto)
         .filter((photo): photo is PlacePhotoReference => photo !== null),
@@ -375,6 +435,8 @@ export class GooglePlacesProvider implements PlacesProvider {
       userRatingCount: Number.isInteger(response.userRatingCount)
         ? (response.userRatingCount ?? null)
         : null,
+      utcOffsetMinutes:
+        typeof response.utcOffsetMinutes === 'number' ? response.utcOffsetMinutes : null,
       websiteUri: cleanString(response.websiteUri),
     };
   }

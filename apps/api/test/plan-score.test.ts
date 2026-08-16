@@ -49,6 +49,7 @@ function dayRoutes(segments: ItineraryRouteSegment[]): ItineraryDayRoutes {
       distanceMeters: null,
       durationSeconds: null,
       knownSegmentCount: segments.length,
+      localSegmentCount: segments.filter((entry) => entry.scope === 'local').length,
       scheduledPlaceCount: segments.length,
       status: 'complete',
       totalSegmentCount: segments.length,
@@ -58,6 +59,32 @@ function dayRoutes(segments: ItineraryRouteSegment[]): ItineraryDayRoutes {
 
 function localTime(value: string) {
   return new Date(`1970-01-01T${value}:00.000Z`);
+}
+
+/** Minutes east of UTC for a zone right now, so the same-zone hours guard passes. */
+function currentOffsetMinutes(timeZone: string) {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-US', {
+    day: '2-digit',
+    hour: '2-digit',
+    hour12: false,
+    minute: '2-digit',
+    month: '2-digit',
+    second: '2-digit',
+    timeZone,
+    year: 'numeric',
+  }).formatToParts(now);
+  const field = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+  const asUtc = Date.UTC(
+    field('year'),
+    field('month') - 1,
+    field('day'),
+    field('hour') % 24,
+    field('minute'),
+    field('second'),
+  );
+
+  return Math.round((asUtc - Math.floor(now.getTime() / 1000) * 1000) / 60_000);
 }
 
 const plannedTrip: PlanScoreTripRecord = {
@@ -91,6 +118,7 @@ const plannedTrip: PlanScoreTripRecord = {
       timeZone: 'Asia/Singapore',
     },
   ],
+  hours: new Map(),
   mustGoTripPlaceIds: ['tp-1', 'tp-3'],
   ratings: new Map([['tp-1', 4.7]]),
   routes: new Map([
@@ -113,7 +141,7 @@ test('scores a planned day from stored timing and live route evidence', () => {
   assert.equal(result.score, 95);
 });
 
-test('leaves route efficiency and opening hours unknown instead of guessing them', () => {
+test('leaves route efficiency unknown instead of guessing it', () => {
   const day = buildTripPlanScore(plannedTrip).days[0];
 
   assert.deepEqual(day?.factors.ROUTE_EFFICIENCY, {
@@ -124,6 +152,51 @@ test('leaves route efficiency and opening hours unknown instead of guessing them
     day?.explanations.uncertainty.map((entry) => entry.messageKey),
     ['routeEfficiency.unknown'],
   );
+});
+
+test('a place shut on the day of the visit is a hard feasibility conflict', () => {
+  // 2026-09-01 is a Tuesday; the place only opens on Monday, so no placement works.
+  const shut = buildTripPlanScore({
+    ...plannedTrip,
+    hours: new Map([
+      [
+        'tp-1',
+        {
+          periods: [
+            { close: { day: 1, hour: 17, minute: 0 }, open: { day: 1, hour: 9, minute: 0 } },
+          ],
+          utcOffsetMinutes: currentOffsetMinutes('Asia/Singapore'),
+        },
+      ],
+    ]),
+  }).days[0];
+  const conflicts = shut?.explanations.worthImproving ?? [];
+
+  assert.deepEqual(
+    conflicts.map((entry) => entry.messageKey),
+    ['feasibility.outsideOpeningHours'],
+  );
+  assert.deepEqual(conflicts[0]?.references, ['item-a']);
+});
+
+test('known opening hours change the fingerprint', () => {
+  const withoutHours = buildTripPlanScore(plannedTrip).fingerprint;
+  const withHours = buildTripPlanScore({
+    ...plannedTrip,
+    hours: new Map([
+      [
+        'tp-1',
+        {
+          periods: [
+            { close: { day: 2, hour: 17, minute: 0 }, open: { day: 2, hour: 9, minute: 0 } },
+          ],
+          utcOffsetMinutes: currentOffsetMinutes('Asia/Singapore'),
+        },
+      ],
+    ]),
+  }).fingerprint;
+
+  assert.notEqual(withoutHours, withHours);
 });
 
 test('explains a planned day and its unscheduled Must Go places', () => {
@@ -166,6 +239,7 @@ test('withholds a day score when the day has no usable evidence', () => {
         timeZone: 'Asia/Singapore',
       },
     ],
+    hours: new Map(),
     mustGoTripPlaceIds: [],
     ratings: new Map(),
     routes: new Map(),

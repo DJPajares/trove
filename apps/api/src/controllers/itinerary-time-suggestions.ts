@@ -5,7 +5,13 @@ import { getItineraryDayTimeSuggestions } from '../services/itinerary-time-sugge
 import { ItineraryNotFoundError } from '../services/itineraries.js';
 
 const dayParamsSchema = z.object({ itineraryDayId: z.uuid(), tripId: z.uuid() }).strict();
-const querySchema = z.object({ itemId: z.uuid().optional() }).strict();
+const querySchema = z
+  .object({
+    itemId: z.uuid().optional(),
+    // The timing the caller is showing, which may not be what is stored yet.
+    schedule: z.enum(['afternoon', 'anytime', 'evening', 'exact', 'morning', 'none']).optional(),
+  })
+  .strict();
 
 function getUserId(request: FastifyRequest, reply: FastifyReply) {
   if (!request.authUserId) {
@@ -39,7 +45,7 @@ export function createItineraryTimeSuggestionControllers() {
             userId,
             params.data.tripId,
             params.data.itineraryDayId,
-            { itemId: query.data.itemId },
+            { itemId: query.data.itemId, schedule: query.data.schedule },
           ),
         );
       } catch (error) {

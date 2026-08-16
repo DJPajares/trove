@@ -43,11 +43,29 @@ function toLocalTime(minutes: number) {
   return `${String(hours).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 }
 
+/**
+ * The timing the caller is showing the traveller right now, which may not be
+ * what is stored: the editor asks for a suggestion while an unsaved daypart is
+ * on screen. Without this the answer could contradict the choice they are
+ * looking at — picking Morning and being handed an afternoon.
+ */
+export type RequestedSchedule = 'afternoon' | 'anytime' | 'evening' | 'exact' | 'morning' | 'none';
+
+const REQUESTED_DAY_PARTS: Record<RequestedSchedule, string | null> = {
+  afternoon: 'AFTERNOON',
+  // Anytime, an exact time and no time all leave the day unconstrained.
+  anytime: null,
+  evening: 'EVENING',
+  exact: null,
+  morning: 'MORNING',
+  none: null,
+};
+
 export async function getItineraryDayTimeSuggestions(
   userId: string,
   tripId: string,
   itineraryDayId: string,
-  options: { itemId?: string } = {},
+  options: { itemId?: string; schedule?: RequestedSchedule } = {},
   services: { placesService?: PlacesService | null } = {},
 ): Promise<ItineraryDayTimeSuggestions> {
   const prisma = getPrismaClient();
@@ -124,17 +142,26 @@ export async function getItineraryDayTimeSuggestions(
       commitments: [],
       date,
       id: day.id,
-      items: day.items.map((item) => ({
-        dayPart: item.dayPart,
-        durationMinutes: item.durationMinutes,
-        id: item.id,
-        localStartTime: item.localStartTime,
-        reservationCount: item._count.reservations,
-        startInstant: item.startInstant,
-        timeSemantics: item.timeSemantics,
-        timeZone: item.timeZone,
-        tripPlaceId: item.tripPlaceId,
-      })),
+      items: day.items.map((item) => {
+        // A caller-supplied schedule replaces what is stored for the target
+        // only. The stored start goes with it: an item being moved to Morning
+        // is no longer pinned to the time it used to hold, and leaving it would
+        // suppress the window. Other items keep their stored timing, since they
+        // are what the target has to fit around.
+        const overridden = options.schedule !== undefined && item.id === options.itemId;
+
+        return {
+          dayPart: overridden ? REQUESTED_DAY_PARTS[options.schedule!] : item.dayPart,
+          durationMinutes: item.durationMinutes,
+          id: item.id,
+          localStartTime: overridden ? null : item.localStartTime,
+          reservationCount: item._count.reservations,
+          startInstant: overridden ? null : item.startInstant,
+          timeSemantics: item.timeSemantics,
+          timeZone: item.timeZone,
+          tripPlaceId: item.tripPlaceId,
+        };
+      }),
       timeZone: day.defaultTimeZone,
     },
     routes,

@@ -20,11 +20,12 @@ import {
   Ellipsis,
   Search,
   Settings2,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { PageState } from '@/components/page-state';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
@@ -108,9 +109,11 @@ import {
   duplicateItineraryItem,
   fetchItinerary,
   fetchItineraryDayRoutes,
+  fetchItineraryDayTimeSuggestions,
   type Itinerary,
   type ItineraryDay,
   type ItineraryDayRoutes,
+  type ItineraryDayTimeSuggestion,
   type ItineraryItem,
   type ItineraryItemInput,
   type ItineraryRouteSegment,
@@ -123,6 +126,7 @@ import {
   updateItineraryItem,
   updateItineraryItemRouteMode,
 } from '@/lib/itinerary/api';
+import { useOnlineStatus } from '@/components/trip-sync-status';
 import { scheduledPlaceUse } from '@/lib/itinerary/places';
 import { buildItineraryMapPoints, type ItineraryMapPoint } from '@/lib/maps/itinerary-map';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
@@ -206,6 +210,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const searchParams = useSearchParams();
   const requestedDayId = searchParams.get('day');
   const { preferredCurrency, preferences } = usePreferences();
+  const online = useOnlineStatus();
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
@@ -229,6 +234,11 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const [placeSearchStatus, setPlaceSearchStatus] = useState<'idle' | 'loading' | 'unavailable'>(
     'idle',
   );
+  const [suggestedTime, setSuggestedTime] = useState<ItineraryDayTimeSuggestion | null>(null);
+  const [suggestedTimeStatus, setSuggestedTimeStatus] = useState<'error' | 'idle' | 'loading'>(
+    'idle',
+  );
+  const suggestedTimeRequest = useRef<AbortController | null>(null);
   const [selectingPlace, setSelectingPlace] = useState(false);
   const [organizingItemId, setOrganizingItemId] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<'list' | 'map'>('list');
@@ -527,6 +537,9 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     setForm(createFormState(null, preferredCurrency));
     setFormError(null);
     setPlaceQuery('');
+    suggestedTimeRequest.current?.abort();
+    setSuggestedTime(null);
+    setSuggestedTimeStatus('idle');
     setEditor({ dayId: day.id, item: null, mode: 'create' });
   }
 
@@ -534,6 +547,9 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     if (!item.itineraryDayId) return;
     setForm(createFormState(item));
     setFormError(null);
+    suggestedTimeRequest.current?.abort();
+    setSuggestedTime(null);
+    setSuggestedTimeStatus('idle');
     setEditor({ dayId: item.itineraryDayId, item, mode: 'edit' });
   }
 
@@ -541,12 +557,86 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     setEditor({ dayId: null, item: null, mode: 'closed' });
     setFormError(null);
     setPlaceQuery('');
+    suggestedTimeRequest.current?.abort();
+    setSuggestedTime(null);
+    setSuggestedTimeStatus('idle');
   }
 
   function updateForm<Key extends keyof FormState>(key: Key, value: FormState[Key]) {
     setForm((current) => ({ ...current, [key]: value }));
     setFormError(null);
   }
+
+  /**
+   * Fills the time field with Trove's proposal and nothing else. The value is
+   * form state until the user saves, so abandoning the editor discards it
+   * (PRD section 29.4).
+   */
+  async function requestSuggestedTime() {
+    if (editor.mode !== 'edit' || !editor.dayId) return;
+
+    suggestedTimeRequest.current?.abort();
+    const controller = new AbortController();
+    suggestedTimeRequest.current = controller;
+    setSuggestedTime(null);
+    setSuggestedTimeStatus('loading');
+
+    try {
+      const response = await fetchItineraryDayTimeSuggestions(tripId, editor.dayId, {
+        itemId: editor.item.id,
+        // The choice on screen, not the one on disk, so a daypart the user just
+        // picked shapes the answer instead of being contradicted by it.
+        schedule: form.schedule,
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+
+      const suggestion = response.suggestions[0] ?? null;
+      setSuggestedTime(suggestion);
+      setSuggestedTimeStatus('idle');
+
+      if (suggestion?.status === 'ok' && suggestion.localTime) {
+        updateForm('exactTime', suggestion.localTime);
+        // A daypart is what constrained the proposal, so accepting it means
+        // committing to the time the field now shows.
+        setForm((current) => ({ ...current, schedule: 'exact' }));
+      }
+    } catch {
+      if (!controller.signal.aborted) setSuggestedTimeStatus('error');
+    }
+  }
+
+  // Editing only: a new item has no id or position for the day to reason about.
+  // Offline only hides it, because the proposal needs live route and provider
+  // evidence and a queued read would help nobody.
+  const canSuggestTime = editor.mode === 'edit' && online;
+
+  const suggestedTimeMessage = useMemo(() => {
+    if (suggestedTimeStatus === 'loading') return t('suggestedTime.loading');
+    if (suggestedTimeStatus === 'error') return t('suggestedTime.unavailable');
+    if (!suggestedTime) return '';
+    if (suggestedTime.status === 'no_feasible_time') return t('suggestedTime.none');
+    if (suggestedTime.status === 'insufficient_evidence') {
+      // Section 29.4: say it cannot, without itemising what was missing.
+      return t('suggestedTime.unavailable');
+    }
+
+    // The last constraint that actually moved the clock explains the answer
+    // best. The day start is only a floor, and the following-item check
+    // validates the time rather than setting it.
+    const moved = suggestedTime.reasons.filter(
+      (reason) => reason.code !== 'DAY_START' && reason.code !== 'BEFORE_FIXED_ITEM',
+    );
+    const reason = moved.at(-1);
+    const caveat = suggestedTime.caveats[0];
+
+    return [
+      reason ? t(`suggestedTime.reason.${reason.code}`) : t('suggestedTime.applied'),
+      caveat ? t(`suggestedTime.caveat.${caveat}`) : null,
+    ]
+      .filter(Boolean)
+      .join(' ');
+  }, [suggestedTime, suggestedTimeStatus, t]);
 
   const matchingTripPlaces = useMemo(() => {
     const query = placeQuery.trim().toLocaleLowerCase();
@@ -1614,6 +1704,34 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                         ))}
                       </SelectContent>
                     </Select>
+                    {/* Sits with the selector rather than the time field, which only
+                        renders for an exact time — the case that most wants a
+                        proposal is a daypart, and it would never see the button. */}
+                    {canSuggestTime ? (
+                      <>
+                        <Button
+                          aria-busy={suggestedTimeStatus === 'loading'}
+                          aria-describedby="itinerary-suggested-time-status"
+                          className="self-start"
+                          disabled={suggestedTimeStatus === 'loading'}
+                          onClick={() => void requestSuggestedTime()}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          <Sparkles aria-hidden="true" />
+                          {t('suggestedTime.action')}
+                        </Button>
+                        <p
+                          aria-live="polite"
+                          className="text-sm text-muted-foreground"
+                          id="itinerary-suggested-time-status"
+                          role="status"
+                        >
+                          {suggestedTimeMessage}
+                        </p>
+                      </>
+                    ) : null}
                   </Field>
 
                   {form.schedule === 'exact' ? (

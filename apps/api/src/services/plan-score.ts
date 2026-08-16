@@ -1,5 +1,6 @@
 import { getPrismaClient } from '@trove/db';
 
+import { dayPartWindow } from './day-part-windows.js';
 import { formatInstantInTimeZone, formatLocalTime } from './itinerary-rules.js';
 import { getItineraryDayRoutes, type ItineraryDayRoutes } from './itinerary-routes.js';
 import { ItineraryNotFoundError } from './itineraries.js';
@@ -60,6 +61,7 @@ export type TripPlanScore = {
 };
 
 type PlanScoreItemRecord = {
+  dayPart: string | null;
   durationMinutes: number | null;
   id: string;
   localStartTime: Date | null;
@@ -147,6 +149,7 @@ function toDayItems(
   return day.items.map((item): PlanScoreDayItem => {
     const startMinutes = itemStartMinutes(item, day.timeZone);
     const travelMinutes = inboundTravelMinutes(routes, item.id);
+    const window = dayPartWindow(item.dayPart);
     const placeHours = item.tripPlaceId ? hours.get(item.tripPlaceId) : undefined;
     const openingHours: PlanScoreOpeningHours = placeHours
       ? resolveOpeningHoursForDay({
@@ -168,6 +171,16 @@ function toDayItems(
         travelMinutes === null ? null : { minutes: travelMinutes, source: 'FRESH_PROVIDER' },
       openingHours,
       start: startMinutes === null ? null : { minutes: startMinutes, source: 'USER_OWNED' },
+      // Exact and coarse timings are mutually exclusive: an exact start is what
+      // the traveller actually committed to, so it always wins.
+      startWindow:
+        startMinutes !== null || !window
+          ? null
+          : {
+              earliestMinute: window.startMinute,
+              latestMinute: window.endMinute,
+              source: 'ESTIMATED',
+            },
     };
   });
 }
@@ -420,6 +433,7 @@ export async function getTripPlanScore(
         date,
         id: day.id,
         items: day.items.map((item) => ({
+          dayPart: item.dayPart,
           durationMinutes: item.durationMinutes,
           id: item.id,
           localStartTime: item.localStartTime,

@@ -34,6 +34,7 @@ function item(overrides: Partial<PlanScoreDayItem> & { id: string }): PlanScoreD
     inboundTravel: null,
     openingHours: { status: 'UNKNOWN' },
     start: null,
+    startWindow: null,
     ...overrides,
   };
 }
@@ -664,4 +665,168 @@ test('keeps alternatives out of the weighted score', () => {
     'ROUTE_EFFICIENCY',
     'TRAVEL_EFFORT',
   ]);
+});
+
+const MORNING = { earliestMinute: 0, latestMinute: 720, source: 'ESTIMATED' } as const;
+const EVENING = { earliestMinute: 1020, latestMinute: 1440, source: 'ESTIMATED' } as const;
+
+function knownHours(startMinute: number, endMinute: number): PlanScoreOpeningHours {
+  return { intervals: [{ endMinute, startMinute }], source: 'FRESH_PROVIDER', status: 'KNOWN' };
+}
+
+test('a daypart that cannot fit inside opening hours at all is a hard conflict', () => {
+  const result = evaluateFeasibility({
+    commitments: [],
+    items: [
+      item({
+        duration: at(60),
+        id: 'gallery',
+        openingHours: knownHours(540, 1020),
+        startWindow: EVENING,
+      }),
+    ],
+  });
+
+  assert.equal(result.conflicts[0]?.severity, 'HARD');
+  assert.equal(result.conflicts[0]?.kind, 'OUTSIDE_OPENING_HOURS');
+});
+
+test('a daypart with one workable placement is not a conflict at all', () => {
+  const result = evaluateFeasibility({
+    commitments: [],
+    items: [
+      item({
+        duration: at(60),
+        id: 'gallery',
+        openingHours: knownHours(600, 840),
+        startWindow: MORNING,
+      }),
+    ],
+  });
+
+  assert.deepEqual(result.conflicts, []);
+  // The daypart is what made the check possible, so it is recorded as the
+  // estimated evidence it is rather than passing for a user-owned time.
+  const refs = result.factor.state === 'EVALUATED' ? result.factor.evidence : [];
+  assert.deepEqual(
+    refs.find((entry) => entry.ref === 'window:gallery'),
+    { ref: 'window:gallery', source: 'ESTIMATED' },
+  );
+});
+
+test('a daypart that only ever partly fits the opening hours is material', () => {
+  const result = evaluateFeasibility({
+    commitments: [],
+    items: [
+      item({
+        duration: at(60),
+        id: 'gallery',
+        openingHours: knownHours(660, 690),
+        startWindow: MORNING,
+      }),
+    ],
+  });
+
+  assert.equal(result.conflicts[0]?.severity, 'MATERIAL');
+});
+
+test('an unreachable daypart is material, never hard', () => {
+  // Arrival is five and a half hours past the last minute the window allows, but
+  // a daypart is a preference the traveller can move, so it never reaches HARD.
+  const result = evaluateFeasibility({
+    commitments: [],
+    items: [
+      item({ duration: at(60), id: 'park', start: at(900) }),
+      item({
+        id: 'market',
+        inboundTravel: at(90, 'FRESH_PROVIDER'),
+        startWindow: MORNING,
+      }),
+    ],
+  });
+
+  assert.equal(result.conflicts[0]?.kind, 'ARRIVES_AFTER_FIXED_START');
+  assert.equal(result.conflicts[0]?.severity, 'MATERIAL');
+  assert.equal(result.factor.state === 'EVALUATED' && result.factor.score, 75);
+});
+
+test('a reachable but tight daypart is only a soft transition', () => {
+  const result = evaluateFeasibility({
+    commitments: [],
+    items: [
+      item({ duration: at(60), id: 'park', start: at(600) }),
+      item({ id: 'market', inboundTravel: at(50, 'FRESH_PROVIDER'), startWindow: MORNING }),
+    ],
+  });
+
+  assert.equal(result.conflicts[0]?.severity, 'SOFT');
+  assert.equal(result.conflicts[0]?.kind, 'TIGHT_TRANSITION');
+});
+
+test('a daypart predecessor departs as early as it may', () => {
+  // Using the back of the window instead would put arrival long after the fixed
+  // start and invent a conflict the traveller could trivially avoid.
+  const result = evaluateFeasibility({
+    commitments: [],
+    items: [
+      item({ duration: at(60), id: 'market', startWindow: MORNING }),
+      item({
+        fixed: true,
+        id: 'tour',
+        inboundTravel: at(30, 'FRESH_PROVIDER'),
+        start: at(300),
+      }),
+    ],
+  });
+
+  assert.deepEqual(result.conflicts, []);
+});
+
+test('a daypart never counts as fixed, even when the item carries a reservation', () => {
+  const result = evaluateFeasibility({
+    commitments: [],
+    items: [
+      item({ duration: at(60), id: 'park', start: at(900) }),
+      item({
+        duration: at(60),
+        fixed: true,
+        id: 'market',
+        inboundTravel: at(90, 'FRESH_PROVIDER'),
+        startWindow: MORNING,
+      }),
+    ],
+  });
+
+  // Would be HARD if the window were treated as an anchored start.
+  assert.equal(result.conflicts[0]?.severity, 'MATERIAL');
+  assert.equal(
+    result.conflicts.some((conflict) => conflict.kind === 'OVERLAPPING_COMMITMENTS'),
+    false,
+  );
+});
+
+test('dayparts alone prove nothing, so the day stays unknown', () => {
+  // Guards the conditional evidence registration: registering a window
+  // unconditionally would score these days 100 on no evidence at all.
+  const result = evaluateFeasibility({
+    commitments: [],
+    items: [item({ id: 'a', startWindow: MORNING }), item({ id: 'b', startWindow: EVENING })],
+  });
+
+  assert.deepEqual(result.factor, { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' });
+});
+
+test('pace measures a pair that a daypart makes comparable', () => {
+  const items = [
+    item({ duration: at(60), id: 'park', start: at(600) }),
+    item({ id: 'market', inboundTravel: at(50, 'FRESH_PROVIDER'), startWindow: MORNING }),
+  ];
+  const withWindow = evaluatePaceBuffer({ items, segments: [local(30)] });
+  const withoutWindow = evaluatePaceBuffer({
+    items: [items[0]!, { ...items[1]!, startWindow: null }],
+    segments: [local(30)],
+  });
+
+  assert.equal(withWindow.smallestBufferMinutes, 10);
+  assert.equal(withoutWindow.smallestBufferMinutes, null);
 });

@@ -1,5 +1,6 @@
 import { getPrismaClient, type Prisma } from '@trove/db';
 
+import { DAY_PART_ORDER, dayPartIndexForHour } from './day-part-windows.js';
 import { floatingLocalTimeToInstant, formatInstantInTimeZone } from './itinerary-rules.js';
 import { getItineraryDayRoutes } from './itinerary-routes.js';
 import {
@@ -30,10 +31,12 @@ export class TripModeContextValidationError extends Error {
   }
 }
 
+// Derived from the shared window definitions so Trip Mode's sense of "now" and
+// Plan Score's daypart evidence cannot drift apart.
 const dayPartOrder = {
-  AFTERNOON: 1,
-  EVENING: 2,
-  MORNING: 0,
+  AFTERNOON: DAY_PART_ORDER.indexOf('AFTERNOON'),
+  EVENING: DAY_PART_ORDER.indexOf('EVENING'),
+  MORNING: DAY_PART_ORDER.indexOf('MORNING'),
 } as const;
 
 function mapTravelStatus(value: ItineraryTravelStatus) {
@@ -45,11 +48,7 @@ function mapTravelStatus(value: ItineraryTravelStatus) {
   return values[value];
 }
 
-function getCurrentDayPart(hour: number) {
-  if (hour < 12) return 0;
-  if (hour < 17) return 1;
-  return 2;
-}
+const getCurrentDayPart = dayPartIndexForHour;
 
 function compareLocalDate(localDate: string, itemDate: string) {
   if (localDate < itemDate) return 'future' as const;

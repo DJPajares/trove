@@ -95,6 +95,7 @@ const plannedTrip: PlanScoreTripRecord = {
       id: 'day-1',
       items: [
         {
+          dayPart: null,
           durationMinutes: 60,
           id: 'item-a',
           localStartTime: localTime('09:00'),
@@ -105,6 +106,7 @@ const plannedTrip: PlanScoreTripRecord = {
           tripPlaceId: 'tp-1',
         },
         {
+          dayPart: null,
           durationMinutes: 60,
           id: 'item-b',
           localStartTime: localTime('11:00'),
@@ -226,6 +228,7 @@ test('withholds a day score when the day has no usable evidence', () => {
         id: 'day-2',
         items: [
           {
+            dayPart: null,
             durationMinutes: null,
             id: 'item-c',
             localStartTime: null,
@@ -352,4 +355,82 @@ test('a day whose only movement is a flight drops travel effort from the weight 
   // of costing completeness. The day is still withheld here, but on the honest
   // grounds that nothing else about it is known -- not because of the flight.
   assert.deepEqual(flightOnly?.factors.TRAVEL_EFFORT, { state: 'NOT_APPLICABLE' });
+});
+
+test('a coarse daypart is scored rather than ignored', () => {
+  // Both items keep their durations and routes but trade exact times for
+  // dayparts, so the day still has enough to say something about.
+  const vague = buildTripPlanScore({
+    ...plannedTrip,
+    days: [
+      {
+        ...plannedTrip.days[0]!,
+        items: plannedTrip.days[0]!.items.map((item, index) => ({
+          ...item,
+          dayPart: index === 0 ? 'MORNING' : 'AFTERNOON',
+          localStartTime: null,
+          timeSemantics: null,
+        })),
+      },
+    ],
+  }).days[0];
+
+  assert.equal(vague?.factors.PACE_BUFFER.state, 'EVALUATED');
+  assert.equal(typeof vague?.score, 'number');
+});
+
+test('a daypart lowers confidence below what an exact time earns', () => {
+  const vague = buildTripPlanScore({
+    ...plannedTrip,
+    days: [
+      {
+        ...plannedTrip.days[0]!,
+        items: plannedTrip.days[0]!.items.map((item, index) => ({
+          ...item,
+          dayPart: index === 0 ? 'MORNING' : 'AFTERNOON',
+          localStartTime: null,
+          timeSemantics: null,
+        })),
+      },
+    ],
+  }).days[0];
+  const exact = buildTripPlanScore(plannedTrip).days[0];
+
+  // Reliability 50 for coarse daypart evidence, per PRD section 29.2.
+  assert.ok((vague?.confidence ?? 0) < (exact?.confidence ?? 0));
+});
+
+test('anytime is treated as no timing at all', () => {
+  const withAnytime = (dayPart: string | null) =>
+    buildTripPlanScore({
+      ...plannedTrip,
+      days: [
+        {
+          ...plannedTrip.days[0]!,
+          items: plannedTrip.days[0]!.items.map((item) => ({
+            ...item,
+            dayPart,
+            localStartTime: null,
+            timeSemantics: null,
+          })),
+        },
+      ],
+    }).days[0];
+
+  assert.deepEqual(withAnytime('ANYTIME')?.factors, withAnytime(null)?.factors);
+});
+
+test('an exact time wins over a daypart left on the same item', () => {
+  const both = buildTripPlanScore({
+    ...plannedTrip,
+    days: [
+      {
+        ...plannedTrip.days[0]!,
+        items: plannedTrip.days[0]!.items.map((item) => ({ ...item, dayPart: 'EVENING' })),
+      },
+    ],
+  }).days[0];
+  const exactOnly = buildTripPlanScore(plannedTrip).days[0];
+
+  assert.deepEqual(both?.factors, exactOnly?.factors);
 });

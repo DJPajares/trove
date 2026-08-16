@@ -46,6 +46,7 @@ function item(overrides: Partial<PlanScoreDayItem> & { id: string }): PlanScoreD
     inboundTravel: null,
     openingHours: { status: 'UNKNOWN' },
     start: null,
+    startWindow: null,
     ...overrides,
   };
 }
@@ -446,6 +447,7 @@ test('respects the item time zone when deriving local start times', () => {
           id: 'day-1',
           items: [
             {
+              dayPart: null,
               durationMinutes: 60,
               id: 'item-a',
               localStartTime: null,

@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { primaryTripDestinations, supportingTripDestinations } from '../lib/trips/navigation.ts';
+import {
+  primaryTripDestinations,
+  supportingTripDestinations,
+  tripSectionLabelKey,
+  type TripSection,
+} from '../lib/trips/navigation.ts';
 
 const TRIP = 'trip-japan';
 const START = '2026-09-05';
@@ -83,4 +88,26 @@ test('supporting tools stay complete and out of the primary set', () => {
   assert.ok(supporting.every((entry) => entry.section !== 'places'));
   // Trip Info's route and its label have never matched; the mapping must survive.
   assert.equal(supporting.at(-1)?.labelKey, 'tripInfo');
+});
+
+test('every section can say its own name, including the ones no menu lists', () => {
+  const sections: TripSection[] = [
+    'expenses',
+    'info',
+    'itinerary',
+    'memories',
+    'mode',
+    'places',
+    'reservations',
+    'tasks',
+  ];
+
+  for (const section of sections) {
+    assert.ok(tripSectionLabelKey(section), `${section} has no label`);
+  }
+
+  // Places is in neither set, and it is exactly the screen that would otherwise be
+  // left describing itself as "More".
+  assert.equal(tripSectionLabelKey('places'), 'places');
+  assert.equal(tripSectionLabelKey('info'), 'tripInfo');
 });

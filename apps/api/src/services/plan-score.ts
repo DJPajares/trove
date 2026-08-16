@@ -1,12 +1,16 @@
 import { getPrismaClient } from '@trove/db';
 
-import { dayPartWindow } from './day-part-windows.js';
-import { formatInstantInTimeZone, formatLocalTime } from './itinerary-rules.js';
+import {
+  sameDayJourneyCommitment,
+  toDayEvidenceItems,
+  toLocalDate,
+  type ItineraryDayRecord,
+  type PlaceHoursEvidence,
+} from './itinerary-day-evidence.js';
 import { getItineraryDayRoutes, type ItineraryDayRoutes } from './itinerary-routes.js';
 import { ItineraryNotFoundError } from './itineraries.js';
 import { createPlacesService } from './places-runtime.js';
-import type { PlaceOpeningPeriod, PlacesService } from './places.js';
-import { resolveOpeningHoursForDay } from './place-opening-hours.js';
+import type { PlacesService } from './places.js';
 import {
   explainDay,
   explainTrip,
@@ -18,9 +22,7 @@ import {
   evaluatePaceBuffer,
   evaluatePlaceQuality,
   evaluateTravelEffort,
-  type PlanScoreDayItem,
   type PlanScoreFixedCommitment,
-  type PlanScoreOpeningHours,
   type PlanScorePlace,
   type PlanScoreRouteSegment,
 } from './plan-score-factors.js';
@@ -60,68 +62,18 @@ export type TripPlanScore = {
   withheldReasons: PlanScoreTripWithheldReason[];
 };
 
-type PlanScoreItemRecord = {
-  dayPart: string | null;
-  durationMinutes: number | null;
-  id: string;
-  localStartTime: Date | null;
-  reservationCount: number;
-  startInstant: Date | null;
-  timeSemantics: string | null;
-  timeZone: string | null;
-  tripPlaceId: string | null;
-};
-
-type PlanScoreCommitmentRecord = {
-  endMinute: number;
-  id: string;
-  startMinute: number;
-};
-
-export type PlanScoreDayRecord = {
-  commitments: PlanScoreCommitmentRecord[];
-  date: string;
-  id: string;
-  items: PlanScoreItemRecord[];
-  timeZone: string;
-};
+/** The day shape is shared with the time suggester; see itinerary-day-evidence. */
+export type PlanScoreDayRecord = ItineraryDayRecord;
 
 export type PlanScoreTripRecord = {
   days: PlanScoreDayRecord[];
   /** Provider opening evidence keyed by Trip Place id; absent means no usable hours. */
-  hours: Map<string, { periods: PlaceOpeningPeriod[]; utcOffsetMinutes: number | null }>;
+  hours: PlaceHoursEvidence;
   mustGoTripPlaceIds: string[];
   /** Known public ratings keyed by Trip Place id; absent means no usable rating. */
   ratings: Map<string, number>;
   routes: Map<string, ItineraryDayRoutes>;
 };
-
-function parseMinutes(value: string) {
-  const [hours, minutes] = value.split(':');
-  if (hours === undefined || minutes === undefined) return null;
-
-  const total = Number(hours) * 60 + Number(minutes);
-  return Number.isFinite(total) ? total : null;
-}
-
-function itemStartMinutes(item: PlanScoreItemRecord, dayTimeZone: string) {
-  const local = formatLocalTime(item.localStartTime);
-  if (local) return parseMinutes(local);
-  if (!item.startInstant) return null;
-
-  return parseMinutes(
-    formatInstantInTimeZone(item.startInstant, item.timeZone ?? dayTimeZone).time,
-  );
-}
-
-function inboundTravelMinutes(routes: ItineraryDayRoutes | undefined, itemId: string) {
-  const segment = routes?.segments.find(
-    (entry) => entry.destination.kind === 'itinerary_item' && entry.destination.id === itemId,
-  );
-  if (!segment || segment.durationSeconds === null) return null;
-
-  return segment.durationSeconds / 60;
-}
 
 function toRouteSegments(routes: ItineraryDayRoutes | undefined): PlanScoreRouteSegment[] {
   return (routes?.segments ?? []).map((segment) => {
@@ -138,50 +90,6 @@ function toRouteSegments(routes: ItineraryDayRoutes | undefined): PlanScoreRoute
           scope,
           status: 'KNOWN',
         };
-  });
-}
-
-function toDayItems(
-  day: PlanScoreDayRecord,
-  routes: ItineraryDayRoutes | undefined,
-  hours: Map<string, { periods: PlaceOpeningPeriod[]; utcOffsetMinutes: number | null }>,
-) {
-  return day.items.map((item): PlanScoreDayItem => {
-    const startMinutes = itemStartMinutes(item, day.timeZone);
-    const travelMinutes = inboundTravelMinutes(routes, item.id);
-    const window = dayPartWindow(item.dayPart);
-    const placeHours = item.tripPlaceId ? hours.get(item.tripPlaceId) : undefined;
-    const openingHours: PlanScoreOpeningHours = placeHours
-      ? resolveOpeningHoursForDay({
-          date: day.date,
-          dayTimeZone: day.timeZone,
-          periods: placeHours.periods,
-          utcOffsetMinutes: placeHours.utcOffsetMinutes,
-        })
-      : { status: 'UNKNOWN' };
-
-    return {
-      duration:
-        item.durationMinutes === null
-          ? null
-          : { minutes: item.durationMinutes, source: 'USER_OWNED' },
-      fixed: item.reservationCount > 0 || item.timeSemantics === 'AUTHORITATIVE_INSTANT',
-      id: item.id,
-      inboundTravel:
-        travelMinutes === null ? null : { minutes: travelMinutes, source: 'FRESH_PROVIDER' },
-      openingHours,
-      start: startMinutes === null ? null : { minutes: startMinutes, source: 'USER_OWNED' },
-      // Exact and coarse timings are mutually exclusive: an exact start is what
-      // the traveller actually committed to, so it always wins.
-      startWindow:
-        startMinutes !== null || !window
-          ? null
-          : {
-              earliestMinute: window.startMinute,
-              latestMinute: window.endMinute,
-              source: 'ESTIMATED',
-            },
-    };
   });
 }
 
@@ -220,7 +128,7 @@ type DayEvaluation = {
 
 function evaluateDayRecord(day: PlanScoreDayRecord, record: PlanScoreTripRecord): DayEvaluation {
   const routes = record.routes.get(day.id);
-  const items = toDayItems(day, routes, record.hours);
+  const items = toDayEvidenceItems(day, routes, record.hours);
   const segments = toRouteSegments(routes);
   const feasibility = evaluateFeasibility({ commitments: toCommitments(day), items });
   const travel = evaluateTravelEffort(segments);
@@ -302,39 +210,16 @@ export function buildTripPlanScore(record: PlanScoreTripRecord): TripPlanScore {
   };
 }
 
-function toLocalDate(value: Date) {
-  return value.toISOString().slice(0, 10);
-}
-
-function sameDayJourneyCommitment(reservation: {
-  flightArrivalLocalDate: Date | null;
-  flightArrivalLocalTime: Date | null;
-  flightDepartureLocalDate: Date | null;
-  flightDepartureLocalTime: Date | null;
-  id: string;
-}) {
-  const departureDate = reservation.flightDepartureLocalDate;
-  const arrivalDate = reservation.flightArrivalLocalDate;
-  const departure = formatLocalTime(reservation.flightDepartureLocalTime);
-  const arrival = formatLocalTime(reservation.flightArrivalLocalTime);
-  if (!departureDate || !arrivalDate || !departure || !arrival) return null;
-  if (toLocalDate(departureDate) !== toLocalDate(arrivalDate)) return null;
-
-  const startMinute = parseMinutes(departure);
-  const endMinute = parseMinutes(arrival);
-  if (startMinute === null || endMinute === null || endMinute <= startMinute) return null;
-
-  return { date: toLocalDate(departureDate), endMinute, id: reservation.id, startMinute };
-}
-
-async function loadPlaceEvidence(
+/**
+ * One `getDetails` per Trip Place, yielding both factors that read provider data.
+ * Callers scoped to a single day should narrow `tripPlaces` first, since this
+ * fans out one request per entry.
+ */
+export async function loadPlaceEvidence(
   tripPlaces: Array<{ externalPlaceId: string | null; id: string }>,
   placesService: PlacesService | null,
 ) {
-  const hours = new Map<
-    string,
-    { periods: PlaceOpeningPeriod[]; utcOffsetMinutes: number | null }
-  >();
+  const hours: PlaceHoursEvidence = new Map();
   const ratings = new Map<string, number>();
   if (!placesService) return { hours, ratings };
 

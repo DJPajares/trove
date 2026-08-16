@@ -2,12 +2,14 @@ import type { FastifyInstance } from 'fastify';
 
 import { createItineraryControllers } from '../controllers/itineraries.js';
 import { createItineraryRouteControllers } from '../controllers/itinerary-routes.js';
+import { createItineraryTimeSuggestionControllers } from '../controllers/itinerary-time-suggestions.js';
 import { createTripModeContextControllers } from '../controllers/trip-mode-context.js';
 import { requireAuthenticatedUser } from '../services/request-auth.js';
 
 export function registerItineraryRoutes(app: FastifyInstance) {
   const controllers = createItineraryControllers();
   const routeControllers = createItineraryRouteControllers();
+  const timeSuggestionControllers = createItineraryTimeSuggestionControllers();
   const tripModeContextControllers = createTripModeContextControllers();
   const authenticated = { preHandler: requireAuthenticatedUser };
 
@@ -17,6 +19,11 @@ export function registerItineraryRoutes(app: FastifyInstance) {
     '/trips/:tripId/itinerary/days/:itineraryDayId/routes',
     authenticated,
     routeControllers.getDayRoutes,
+  );
+  app.get(
+    '/trips/:tripId/itinerary/days/:itineraryDayId/time-suggestions',
+    authenticated,
+    timeSuggestionControllers.getDayTimeSuggestions,
   );
   app.post('/trips/:tripId/itinerary/items', authenticated, controllers.createItem);
   app.post(

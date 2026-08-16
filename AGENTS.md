@@ -155,7 +155,6 @@ During early Trove development:
 - Do not prioritize broad unit-test coverage before the core product flows are stable.
 - Do not add E2E tests unless explicitly requested.
 - Still run appropriate linting, type-checking, build checks, and focused validation for each task.
-- Authenticated visual checks must attach to the user's explicitly remote-debugging Chrome session via `scripts/playwright-current-chrome.sh`; an isolated Playwright profile is not evidence for private screens.
 
 ## Human Control
 

@@ -21,6 +21,7 @@ The approved product requirements live in `PRD.md` once generated. Linear is the
 - Follow Trove's shared motion language and respect reduced-motion preferences. Verify unfamiliar shadcn/Base UI composition against current official guidance before implementation.
 - Use current stable dependency versions where practical.
 - Use pnpm.
+- Supabase owns `auth.users`, so `prisma.config.ts` recreates it via `initShadowDb` for the shadow database. Any migration referencing a Supabase-owned object needs the same treatment, or a `pg_namespace` guard as the storage policies use.
 
 ## Tech Direction
 

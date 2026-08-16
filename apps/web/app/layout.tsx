@@ -11,6 +11,7 @@ import { PwaProvider } from '@/components/pwa-provider';
 import { PreferencesProvider } from '@/components/preferences-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import { TroveMotionProvider } from '@/components/trove-motion-provider';
+import { getAuthUserId } from '@/lib/auth/session';
 
 const geistSans = Geist({
   subsets: ['latin'],
@@ -49,7 +50,7 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
-  const locale = await getLocale();
+  const [locale, authUserId] = await Promise.all([getLocale(), getAuthUserId()]);
 
   return (
     <html
@@ -64,7 +65,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               <PwaProvider>
                 <PreferencesProvider locale={locale}>
                   <OnboardingGate />
-                  <AppShell>{children}</AppShell>
+                  <AppShell isSignedIn={authUserId !== null}>{children}</AppShell>
                 </PreferencesProvider>
               </PwaProvider>
             </NextIntlClientProvider>

@@ -1417,7 +1417,44 @@
       "other": "Other"
     }
   },
+  "landing": {
+    "heroTitle": "Plan it. Live it. Remember it.",
+    "heroDescription": "Trove is a personal travel companion for the whole of a trip. Collect the places you might want to visit, shape them into a day-by-day plan, follow that plan while you are actually there, and keep what the trip was like once you are home.",
+    "heroPrimary": "Create your account",
+    "heroSecondary": "Sign in",
+    "experiencesTitle": "Three ways to be in a trip",
+    "experiencesDescription": "Every trip in Trove has the same three places to stand, whatever stage it is at.",
+    "experiences": {
+      "plan": {
+        "eyebrow": "Plan it",
+        "title": "Itinerary",
+        "description": "Build a trip day by day. Add a place, a time, or just a name, and fill in the rest whenever you know it. Reorder days freely, keep the things you have not scheduled yet in one place, and see the travel time between stops as the day takes shape."
+      },
+      "live": {
+        "eyebrow": "Live it",
+        "title": "Trip Mode",
+        "description": "A separate view for the days you are travelling. It opens on what is happening now and what comes next, with the map, the day, and the whole trip one tap away. You can preview it before you leave to see how a day will actually feel."
+      },
+      "remember": {
+        "eyebrow": "Remember it",
+        "title": "Memories",
+        "description": "Add a photo or a note as you go, or once you are back. A finished trip becomes something you can read through rather than a list of entries, still tied to the days and places it came from."
+      }
+    },
+    "alsoTitle": "And the parts around the edges",
+    "also": {
+      "saved": "Save places you may want to visit and reuse them across future trips, not just the one you are planning now.",
+      "routes": "See routes and travel times between the stops in a day, on a map alongside the itinerary.",
+      "logistics": "Keep tasks and reservations with the trip they belong to.",
+      "expenses": "Track what a trip costs across more than one currency.",
+      "offline": "Prepare a trip for offline so the plan is still there when the connection is not."
+    },
+    "closingTitle": "Start with one trip",
+    "closingDescription": "An account keeps your plans private and available on every device you use.",
+    "closingAction": "Create your account"
+  },
   "auth": {
+    "eyebrow": "Plan it. Live it. Remember it.",
     "signInTitle": "Sign in to Trove",
     "signInDescription": "Sign in to keep your travel plans private and available across devices.",
     "signUpTitle": "Create your Trove account",

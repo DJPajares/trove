@@ -128,6 +128,10 @@ The Fastify API should remain reusable by web and future native clients.
 - Trove establishes and manages its own application session even when the underlying Supabase Auth user is shared with another app.
 - Trove application/domain data must remain isolated from unrelated application data.
 - A prepared trip may remain usable offline for the last authenticated Trove user without requiring a network re-authentication solely because connectivity is unavailable. Server-authorized operations resume when connectivity and a valid session are available.
+- An unauthenticated visitor to the application root is served the signed-out landing experience. The root is never a protected path, so arriving without a session is a normal state rather than a redirect or an error.
+- The same root serves Home once the visitor is authenticated. Only the signed-out branch differs.
+- An authenticated visitor who reaches the sign-in or sign-up routes is sent on rather than shown a form they no longer need.
+- A deep link into a protected path continues to return the visitor to that path after they sign in. The redirect target is validated as an application-relative path.
 
 ---
 
@@ -187,6 +191,8 @@ Desktop/tablet should use additional space intelligently, including split itiner
 
 ## 4.5 Navigation
 
+Global navigation is a signed-in surface. Its destinations all require a session, so a signed-out visitor is offered the product itself, its appearance control, and the two ways in — never a set of destinations that lead back to sign-in.
+
 Global navigation:
 
 - Home
@@ -232,6 +238,24 @@ Important workflows must support:
 - usable zoom/text resizing,
 - reduced-motion preferences,
 - screen-reader-perceivable validation, error, and important dynamic states.
+
+## 4.7 Signed-Out Experience
+
+Trove is judged before anyone signs in, so the signed-out surface is part of the product rather than a gate in front of it.
+
+The landing experience is built on **Plan it. Live it. Remember it.** and the three experiences it names — Itinerary, Trip Mode, Memories — presented in the same stable order they hold inside a trip.
+
+Content rules:
+
+- Describe only what Trove actually does.
+- No testimonials, user counts, social proof, or fabricated screenshots.
+- No claim the product does not deliver.
+
+Sign-in and sign-up share the landing experience's framing, type, and spacing, and keep the existing email flow and its redirect behavior intact.
+
+Mobile is the primary design reference, as it is everywhere else in Trove.
+
+Out of scope: marketing sub-pages, pricing, analytics, and a CMS.
 
 ---
 

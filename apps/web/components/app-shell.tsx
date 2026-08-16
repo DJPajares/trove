@@ -9,9 +9,22 @@ import { GlobalSearch } from '@/components/global-search';
 import { NotificationCenter } from '@/components/notification-center';
 import { PageTransition } from '@/components/page-transition';
 import { PrimaryNavigation } from '@/components/primary-navigation';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
-export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
+type AppShellProps = {
+  children: ReactNode;
+  isSignedIn: boolean;
+};
+
+/**
+ * Signed out, the global destinations and the account tools all lead back to
+ * sign-in, so the shell offers only what a visitor can actually use: the
+ * product, its appearance, and the two ways in.
+ */
+export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
   const app = useTranslations('app');
+  const auth = useTranslations('auth');
   const navigation = useTranslations('navigation');
 
   return (
@@ -38,26 +51,63 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
             {app('name')}
           </Link>
 
-          <PrimaryNavigation variant="desktop" />
+          {/* Holds the centre column open on desktop so the mark and the auth
+              actions keep the same edges they have signed in. */}
+          {isSignedIn ? (
+            <PrimaryNavigation variant="desktop" />
+          ) : (
+            <span className="hidden md:block" />
+          )}
 
           <div className="flex items-center justify-self-end gap-1">
-            <GlobalSearch />
-            <NotificationCenter />
-            <AppearanceMenu />
-            <AccountMenu />
+            {isSignedIn ? (
+              <>
+                <GlobalSearch />
+                <NotificationCenter />
+                <AppearanceMenu />
+                <AccountMenu />
+              </>
+            ) : (
+              <>
+                <AppearanceMenu />
+                {/* On the narrowest screens the wordmark and the primary action
+                    need the room. Sign in stays one tap away from the landing
+                    hero and from the sign-up page's own link. */}
+                <Button
+                  className="ml-1 hidden sm:inline-flex"
+                  nativeButton={false}
+                  render={<Link href="/sign-in" />}
+                  size="sm"
+                  variant="ghost"
+                >
+                  {auth('signIn')}
+                </Button>
+                <Button
+                  nativeButton={false}
+                  render={<Link href="/sign-up" />}
+                  size="sm"
+                  variant="default"
+                >
+                  {auth('createAccount')}
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>
 
       <main
-        className="mx-auto w-full max-w-[1400px] scroll-mt-20 px-[var(--layout-gutter)] py-8 pb-28 outline-none md:py-12 md:pb-12"
+        className={cn(
+          'mx-auto w-full max-w-[1400px] scroll-mt-20 px-[var(--layout-gutter)] py-8 outline-none md:py-12',
+          isSignedIn && 'pb-28 md:pb-12',
+        )}
         id="main-content"
         tabIndex={-1}
       >
         <PageTransition>{children}</PageTransition>
       </main>
 
-      <PrimaryNavigation variant="mobile" />
+      {isSignedIn ? <PrimaryNavigation variant="mobile" /> : null}
     </div>
   );
 }

@@ -304,3 +304,28 @@ test('the last minute inside a daypart window is still usable', () => {
 
   assert.equal(result.status === 'ok' && result.startMinute, 715);
 });
+
+test('a window the day has already run past says so, rather than blaming opening hours', () => {
+  // The previous stop ends mid-afternoon, so Morning is unreachable. Reporting
+  // OPENING_HOURS here would send the traveller to check a schedule that is fine.
+  const result = suggest([
+    item({ duration: at(120), id: 'museum', start: at(840) }),
+    item({
+      duration: at(60),
+      id: 'target',
+      inboundTravel: travel(20),
+      startWindow: MORNING,
+    }),
+  ]);
+
+  assert.deepEqual(result, { blockedBy: ['DAY_PART_WINDOW'], status: 'no_feasible_time' });
+});
+
+test('a commitment that pushes the visit past closing blames the hours', () => {
+  const result = suggest(
+    [item({ duration: at(60), id: 'target', openingHours: open([540, 700]) })],
+    { commitments: [{ endMinute: 690, id: 'ferry', source: 'USER_OWNED', startMinute: 540 }] },
+  );
+
+  assert.deepEqual(result, { blockedBy: ['OPENING_HOURS'], status: 'no_feasible_time' });
+});

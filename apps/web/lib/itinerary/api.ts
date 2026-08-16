@@ -118,6 +118,44 @@ export type ItineraryDayRoutes = {
   };
 };
 
+export type SuggestedTimeReasonCode =
+  | 'AFTER_PREVIOUS_ITEM'
+  | 'BEFORE_FIXED_ITEM'
+  | 'CLEARS_COMMITMENT'
+  | 'DAY_PART_WINDOW'
+  | 'DAY_START'
+  | 'OPENING_HOURS';
+
+export type SuggestedTimeCaveat = 'DURATION_UNKNOWN' | 'OPENING_HOURS_UNKNOWN' | 'TRAVEL_UNKNOWN';
+
+/** Mirrors the editor's schedule choices, including ones still unsaved. */
+export type RequestedSchedule = 'afternoon' | 'anytime' | 'evening' | 'exact' | 'morning' | 'none';
+
+/**
+ * The server sends codes and item ids only; the client owns the wording, the
+ * same convention Plan Score explanations follow.
+ */
+export type ItineraryDayTimeSuggestion = {
+  itemId: string;
+  /** Day-local `HH:MM`, ready for the exact-time field. Null unless status is ok. */
+  localTime: string | null;
+} & (
+  | { caveats: SuggestedTimeCaveat[]; reasons: SuggestedTimeReason[]; status: 'ok' }
+  | { blockedBy: SuggestedTimeReasonCode[]; status: 'no_feasible_time' }
+  | { missing: SuggestedTimeCaveat[]; status: 'insufficient_evidence' }
+);
+
+export type SuggestedTimeReason = {
+  code: SuggestedTimeReasonCode;
+  references: string[];
+};
+
+export type ItineraryDayTimeSuggestions = {
+  generatedAt: string;
+  itineraryDayId: string;
+  suggestions: ItineraryDayTimeSuggestion[];
+};
+
 export type Itinerary = {
   days: ItineraryDay[];
   trip: {
@@ -477,6 +515,35 @@ export async function fetchItineraryDayRoutes(
     }
     throw error;
   }
+}
+
+/**
+ * Suggested start times for a day.
+ *
+ * Deliberately has no offline path. The suggestion is derived from live route
+ * and provider evidence, so a cached answer would be a stale proposal presented
+ * as a current one — the same reason Plan Score never reads the offline
+ * snapshot. Callers hide the affordance while offline rather than queueing it;
+ * this is a read, and nothing is lost by waiting.
+ */
+export async function fetchItineraryDayTimeSuggestions(
+  tripId: string,
+  itineraryDayId: string,
+  options: { itemId?: string; schedule?: RequestedSchedule; signal?: AbortSignal } = {},
+) {
+  const query = new URLSearchParams();
+  if (options.itemId) query.set('itemId', options.itemId);
+  // Sent so the answer reflects the timing on screen rather than the timing on
+  // disk; the editor can ask while a daypart change is still unsaved.
+  if (options.schedule) query.set('schedule', options.schedule);
+  const suffix = query.size ? `?${query.toString()}` : '';
+  const auth = await getAuthContext();
+
+  return itineraryRequest<ItineraryDayTimeSuggestions>(
+    `/trips/${tripId}/itinerary/days/${itineraryDayId}/time-suggestions${suffix}`,
+    { signal: options.signal },
+    auth,
+  );
 }
 
 function createMutation(

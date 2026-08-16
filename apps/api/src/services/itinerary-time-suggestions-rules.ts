@@ -113,7 +113,7 @@ function clearBlockers(input: {
   latest: number;
   roundingMinutes: number;
   visitMinutes: number;
-}): { cleared: string[]; startMinute: number | null } {
+}): { blockedBy: SuggestedTimeReasonCode | null; cleared: string[]; startMinute: number | null } {
   let start = input.earliest;
   const cleared: string[] = [];
 
@@ -121,19 +121,25 @@ function clearBlockers(input: {
     const clash = input.blockers.find(
       (blocker) => start < blocker.endMinute && blocker.startMinute < start + input.visitMinutes,
     );
-    if (!clash) return { cleared, startMinute: start >= input.latest ? null : start };
+    if (!clash) {
+      // Running past the window and running out of opening hours are different
+      // answers to "why not", so they are reported as different reasons.
+      return start >= input.latest
+        ? { blockedBy: 'DAY_PART_WINDOW', cleared, startMinute: null }
+        : { blockedBy: null, cleared, startMinute: start };
+    }
 
     cleared.push(clash.id);
     start = roundUp(clash.endMinute, input.roundingMinutes);
 
     if (input.intervals) {
       const reopened = firstFittingStart(input.intervals, start, input.latest, input.visitMinutes);
-      if (reopened === null) return { cleared, startMinute: null };
+      if (reopened === null) return { blockedBy: 'OPENING_HOURS', cleared, startMinute: null };
       start = reopened;
     }
   }
 
-  return { cleared, startMinute: null };
+  return { blockedBy: 'CLEARS_COMMITMENT', cleared, startMinute: null };
 }
 
 /**
@@ -266,10 +272,7 @@ export function suggestItemStart(input: SuggestItemStartInput): SuggestedTimeRes
     reasons.push({ code: 'CLEARS_COMMITMENT', references: displaced.cleared });
   }
   if (displaced.startMinute === null) {
-    return {
-      blockedBy: displaced.cleared.length > 0 ? ['CLEARS_COMMITMENT'] : ['OPENING_HOURS'],
-      status: 'no_feasible_time',
-    };
+    return { blockedBy: [displaced.blockedBy ?? 'OPENING_HOURS'], status: 'no_feasible_time' };
   }
   earliest = displaced.startMinute;
 

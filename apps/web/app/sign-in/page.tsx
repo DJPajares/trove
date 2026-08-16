@@ -1,4 +1,4 @@
-import { LogIn } from 'lucide-react';
+import { MapPinned } from 'lucide-react';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 
@@ -16,20 +16,21 @@ export default async function SignInPage({ searchParams }: Readonly<SignInPagePr
   return (
     <section
       aria-labelledby="sign-in-heading"
-      className="grid min-h-[calc(100dvh-10rem)] place-items-center"
+      className="grid min-h-[calc(100dvh-12rem)] place-items-center"
     >
       <Card className="w-full max-w-md sm:[--card-spacing:--spacing(6)]">
         <CardHeader>
-          <div className="mb-3 flex size-12 items-center justify-center rounded-[var(--radius-lg)] bg-brand/10 text-brand">
-            <LogIn aria-hidden="true" className="size-6" />
+          <div className="mb-4 flex size-11 items-center justify-center rounded-[var(--radius-md)] bg-brand text-primary-foreground shadow-[var(--shadow-control)]">
+            <MapPinned aria-hidden="true" className="size-5" />
           </div>
+          <p className="text-sm font-medium tracking-[0.01em] text-brand">{t('eyebrow')}</p>
           <h1
-            className="text-3xl leading-tight font-semibold tracking-tight text-pretty text-foreground"
+            className="mt-2 text-[clamp(1.75rem,5vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-pretty text-foreground"
             id="sign-in-heading"
           >
             {t('signInTitle')}
           </h1>
-          <p className="mt-1 text-base leading-7 text-pretty text-muted-foreground">
+          <p className="mt-2 text-base leading-7 text-pretty text-muted-foreground">
             {t('signInDescription')}
           </p>
         </CardHeader>

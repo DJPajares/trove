@@ -1,14 +1,37 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { getSafeRedirectPath } from '@/lib/auth/redirect';
 import { getSupabaseEnvironment } from '@/lib/supabase/environment';
 
 const protectedPathnames = ['/profile', '/saved', '/tools', '/trips'];
+const authPathnames = ['/sign-in', '/sign-up'];
 
 function isProtectedPath(pathname: string) {
   return protectedPathnames.some(
     (protectedPath) => pathname === protectedPath || pathname.startsWith(`${protectedPath}/`),
   );
+}
+
+function isAuthPath(pathname: string) {
+  return authPathnames.includes(pathname);
+}
+
+/**
+ * Signing in is done, so the auth routes have nothing left to offer. Send the
+ * visitor wherever they were originally headed, or to Home.
+ */
+function redirectFromAuthPath(request: NextRequest, response: NextResponse) {
+  const target = new URL(
+    getSafeRedirectPath(request.nextUrl.searchParams.get('next')),
+    request.nextUrl.origin,
+  );
+
+  const redirectResponse = NextResponse.redirect(target);
+
+  response.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
+
+  return redirectResponse;
 }
 
 function redirectToSignIn(request: NextRequest, response: NextResponse) {
@@ -58,5 +81,5 @@ export async function updateSupabaseSession(request: NextRequest) {
       : response;
   }
 
-  return response;
+  return isAuthPath(request.nextUrl.pathname) ? redirectFromAuthPath(request, response) : response;
 }

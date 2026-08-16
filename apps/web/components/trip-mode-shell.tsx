@@ -351,8 +351,10 @@ export function TripModeShell({ children, tripId }: Readonly<TripModeShellProps>
                 worthImproving: [],
               }
             }
+            factors={previewDayScore?.factors}
             onRetry={planScore.retry}
             score={previewDayScore?.score ?? null}
+            scope="day"
             status={planScore.status}
             title={planScoreTranslations('dayTitle')}
           />

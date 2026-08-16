@@ -1714,15 +1714,49 @@
     "title": "Plan Score",
     "dayTitle": "Plan Score for this day",
     "outOf": "out of 100",
-    "notEnoughInformation": "Not enough information yet.",
-    "loading": "Checking this plan…",
-    "unavailable": "We could not check this plan just now.",
+    "notEnoughInformation": {
+      "day": "There is not enough here yet to say how this day looks.",
+      "trip": "There is not enough here yet to say how this trip looks."
+    },
+    "verdict": {
+      "day": {
+        "good": "This day looks good.",
+        "workable": "This day should work.",
+        "tight": "This day looks tight.",
+        "needsWork": "This day needs some work."
+      },
+      "trip": {
+        "good": "This trip looks well planned.",
+        "workable": "This trip should work.",
+        "tight": "This trip looks tight in places.",
+        "needsWork": "This trip needs some work."
+      }
+    },
+    "improvementLead": "One thing worth a look:",
+    "showDetails": "Show the details",
+    "hideDetails": "Hide the details",
+    "scoreBadgeLabel": "Score {score} out of 100",
+    "loading": "Taking a look at this plan…",
+    "unavailable": "We could not look at this plan just now.",
     "retry": "Try again",
     "confidence": "Confidence",
     "completeness": "Completeness",
-    "whatWorks": "What works",
-    "worthImproving": "Worth improving",
-    "uncertainty": "Still uncertain",
+    "whatWorks": "What is working",
+    "worthImproving": "Also worth a look",
+    "uncertainty": "Not enough to say yet",
+    "factorLabels": {
+      "FEASIBILITY": "Feasibility",
+      "TRAVEL_EFFORT": "Travel effort",
+      "PACE_BUFFER": "Pace",
+      "ROUTE_EFFICIENCY": "Route efficiency",
+      "PLACE_QUALITY": "Place quality"
+    },
+    "factorStatus": {
+      "groupLabel": "Factor status",
+      "working": "Working",
+      "worthImproving": "Worth improving",
+      "unknown": "Unknown"
+    },
     "actions": {
       "ADD_BUFFER": "Add buffer",
       "ADJUST_TIME": "Adjust the time",
@@ -1732,35 +1766,36 @@
       "SCHEDULE_MUST_GO": "Schedule it"
     },
     "feasibility": {
-      "noConflicts": "The timings you have set fit together.",
+      "noConflicts": "Your timings fit together.",
       "overlappingCommitments": "Two booked commitments overlap here.",
       "outsideOpeningHours": "{severity, select, HARD {This visit falls outside the opening hours we know about.} other {Part of this visit falls outside the opening hours we know about.}}",
-      "arrivesAfterFixedStart": "{severity, select, HARD {Travel time lands you well after this fixed start.} other {Travel time lands you a little after this fixed start.}}",
+      "arrivesAfterFixedStart": "{severity, select, HARD {The travel time lands you well after this fixed start.} other {The travel time lands you a little after this fixed start.}}",
       "tightTransition": "There is very little room between these two stops.",
-      "unknown": "We do not have enough timing detail to check this day yet.",
+      "unknown": "We cannot tell how the timings fit yet.",
       "stale": "{count, plural, one {One timing detail we used may be out of date.} other {# timing details we used may be out of date.}}"
     },
     "travelEffort": {
-      "light": "Local travel stays light, around {minutes} minutes.",
-      "heavy": "This day includes around {minutes} minutes of local travel.",
+      "light": "Getting around stays light, about {minutes} minutes.",
+      "heavy": "You are getting around for about {minutes} minutes on this day.",
       "unknown": "We do not know every route for this day yet.",
       "stale": "{count, plural, one {One route estimate we used may be out of date.} other {# route estimates we used may be out of date.}}"
     },
     "pace": {
       "comfortable": "The day has room to breathe.",
-      "tight": "The day is packed, with about {bufferMinutes} minutes spare between stops.",
-      "unknown": "We do not have enough duration detail to judge the pace yet.",
+      "tight": "The day is packed, with only about {bufferMinutes} minutes spare between stops.",
+      "overlapping": "The day is overbooked, with stops running into each other by about {overlapMinutes} minutes.",
+      "unknown": "We cannot judge the pace yet.",
       "stale": "{count, plural, one {One duration estimate we used may be out of date.} other {# duration estimates we used may be out of date.}}"
     },
     "routeEfficiency": {
-      "direct": "The order of stops keeps travel direct.",
-      "backtracking": "A different order could bring travel from about {plannedMinutes} to {bestMinutes} minutes.",
+      "direct": "The order of your stops keeps travel direct.",
+      "backtracking": "Reordering the stops could cut travel from about {plannedMinutes} to {bestMinutes} minutes.",
       "unknown": "We do not know enough routes to compare the order yet.",
       "stale": "{count, plural, one {One route estimate we used may be out of date.} other {# route estimates we used may be out of date.}}"
     },
     "mustGo": {
-      "allScheduled": "Every Must Go place is on the plan.",
-      "unscheduled": "{count, plural, one {One Must Go place is not scheduled yet.} other {# Must Go places are not scheduled yet.}}",
+      "allScheduled": "Every Must Go place has a spot on the plan.",
+      "unscheduled": "{count, plural, one {One Must Go place still has no spot on the plan.} other {# Must Go places still have no spot on the plan.}}",
       "unknown": "We cannot tell which Must Go places are scheduled yet.",
       "stale": "{count, plural, one {One Must Go detail we used may be out of date.} other {# Must Go details we used may be out of date.}}"
     },
@@ -1770,8 +1805,8 @@
       "stale": "{count, plural, one {One place rating we used may be out of date.} other {# place ratings we used may be out of date.}}"
     },
     "alternative": {
-      "replace": "A nearby place is rated {candidateRating} compared with {currentRating} here.",
-      "add": "A nearby place rated {candidateRating} could fit this day."
+      "replace": "A place nearby is rated {candidateRating}, against {currentRating} for the one you have.",
+      "add": "A place nearby rated {candidateRating} could fit this day."
     }
   },
   "memories": {

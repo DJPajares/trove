@@ -1594,6 +1594,12 @@ Explanations should show concise **What works** and **Worth improving** guidance
 5. Must Go fit,
 6. supporting Place quality.
 
+Presentation follows a progressive-disclosure model. By default Trove answers only two questions: does this look good, and what should I change. That is a short plain-language verdict derived from the numeric score — shown together with a compact score badge — plus the single highest-priority entry from the ordering above, with its suggested action. The full "N out of 100" score text, the confidence and completeness meters, and the remaining explanations appear only when the user explicitly asks for the detail.
+
+Qualitative verdict wording is display-only. It is derived from the canonical numeric score and never feeds back into calculation, consistent with Section 29.3.
+
+Where the numeric score is withheld under Section 29.2, Trove says so in one line and stops. It does not enumerate what it could not determine.
+
 Better-alternative suggestions must preserve the user's original itinerary until the user explicitly confirms an action. Every suggestion must declare its action type:
 
 - **Replace** — on confirmation, replace the targeted Place reference on the existing itinerary item while preserving compatible item metadata (date/time/daypart/duration/notes/priority); incompatible linked data must be reviewed rather than silently discarded.

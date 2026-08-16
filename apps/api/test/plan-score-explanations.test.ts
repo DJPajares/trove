@@ -361,6 +361,35 @@ test('exposes only traveller-facing values and localized message keys', () => {
   }
 });
 
+test('rounds fractional minute values before they reach explanation prose', () => {
+  const result = explainDay(
+    dayInput({
+      day: scoreDay({ dayId: 'fractional', factors: { TRAVEL_EFFORT: factor(20) } }),
+      travel: { totalMinutes: 23.033333333333335 },
+    }),
+  );
+
+  const heavy = result.worthImproving.find((entry) => entry.messageKey === 'travelEffort.heavy');
+  assert.equal(heavy?.values.minutes, 23);
+});
+
+test('reframes a negative pace buffer as overlapping stops instead of negative spare minutes', () => {
+  const result = explainDay(
+    dayInput({
+      day: scoreDay({ dayId: 'overlapping', factors: { PACE_BUFFER: factor(20) } }),
+      pace: { activeMinutes: 700, smallestBufferMinutes: -383.0333333333333 },
+    }),
+  );
+
+  const overlap = result.worthImproving.find((entry) => entry.messageKey === 'pace.overlapping');
+  assert.deepEqual(overlap?.values, { activeMinutes: 700, overlapMinutes: 383 });
+  assert.equal(
+    result.worthImproving.some((entry) => entry.messageKey === 'pace.tight'),
+    false,
+  );
+  assert.equal(messageExists('pace.overlapping'), true);
+});
+
 test('produces identical explanations for identical evidence', () => {
   const input = dayInput({
     alternatives: [alternative],

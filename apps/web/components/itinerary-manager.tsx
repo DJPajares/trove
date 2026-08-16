@@ -4,6 +4,7 @@ import {
   ArrowDown,
   ArrowUp,
   CalendarClock,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
@@ -242,6 +243,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const [routeStatus, setRouteStatus] = useState<'error' | 'idle' | 'loading'>('loading');
   const [savingRouteOwner, setSavingRouteOwner] = useState<string | null>(null);
   const [placesDrawerOpen, setPlacesDrawerOpen] = useState(false);
+  const [showAdvancedDaySettings, setShowAdvancedDaySettings] = useState(false);
   const desktopMapLayout = useDesktopMapLayout();
 
   const refresh = useCallback(async () => {
@@ -817,6 +819,12 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   return (
     <section className="mx-auto w-full max-w-5xl space-y-7">
       <TripSectionHeader
+        actions={
+          <Button onClick={() => setPlacesDrawerOpen(true)} variant="outline">
+            <MapPinned aria-hidden="true" data-icon="inline-start" />
+            {tripPlacesTranslations('openPlaces')}
+          </Button>
+        }
         currentSection="itinerary"
         description={t('description')}
         tripId={tripId}
@@ -936,10 +944,6 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                 ) : null}
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
-                <Button onClick={() => setPlacesDrawerOpen(true)} variant="outline">
-                  <MapPinned aria-hidden="true" data-icon="inline-start" />
-                  {tripPlacesTranslations('openPlaces')}
-                </Button>
                 <Button onClick={() => openCreate(selectedDay)}>
                   <Plus aria-hidden="true" data-icon="inline-start" />
                   {t('addItem')}
@@ -979,35 +983,56 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                       ) : null}
                     </div>
 
-                    <div className="space-y-1.5">
-                      <p className="text-xs font-medium text-muted-foreground">{t('dailyBase')}</p>
-                      <Select
-                        onValueChange={(value) =>
-                          void handleDailyBase(selectedDay, value === 'none' ? null : value)
-                        }
-                        value={selectedDay.dailyBaseTripPlaceId ?? 'none'}
-                      >
-                        <SelectTrigger aria-label={t('dailyBase')} className="w-full" size="sm">
-                          <SelectValue>
-                            {selectedDay.dailyBaseTripPlaceId
-                              ? placeName(
-                                  itinerary.tripPlaces.find(
-                                    (place) => place.id === selectedDay.dailyBaseTripPlaceId,
-                                  ) ?? null,
-                                )
-                              : t('noDailyBase')}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent align="end">
-                          <SelectItem value="none">{t('noDailyBase')}</SelectItem>
-                          {itinerary.tripPlaces.map((place) => (
-                            <SelectItem key={place.id} value={place.id}>
-                              {placeName(place)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <button
+                      className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-0 py-1.5 text-left text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+                      onClick={() => setShowAdvancedDaySettings(!showAdvancedDaySettings)}
+                      type="button"
+                    >
+                      <ChevronDown
+                        aria-hidden="true"
+                        className={cn(
+                          'size-3 transition-transform duration-[var(--motion-standard)]',
+                          {
+                            'rotate-180': showAdvancedDaySettings,
+                          },
+                        )}
+                      />
+                      {t('advancedOptions')}
+                    </button>
+
+                    {showAdvancedDaySettings ? (
+                      <div className="space-y-1.5 border-t border-border pt-3">
+                        <p className="text-xs font-medium text-muted-foreground">
+                          {t('dailyBase')}
+                        </p>
+                        <Select
+                          onValueChange={(value) =>
+                            void handleDailyBase(selectedDay, value === 'none' ? null : value)
+                          }
+                          value={selectedDay.dailyBaseTripPlaceId ?? 'none'}
+                        >
+                          <SelectTrigger aria-label={t('dailyBase')} className="w-full" size="sm">
+                            <SelectValue>
+                              {selectedDay.dailyBaseTripPlaceId
+                                ? placeName(
+                                    itinerary.tripPlaces.find(
+                                      (place) => place.id === selectedDay.dailyBaseTripPlaceId,
+                                    ) ?? null,
+                                  )
+                                : t('noDailyBase')}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent align="end">
+                            <SelectItem value="none">{t('noDailyBase')}</SelectItem>
+                            {itinerary.tripPlaces.map((place) => (
+                              <SelectItem key={place.id} value={place.id}>
+                                {placeName(place)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : null}
 
                     <Button
                       className="w-full"

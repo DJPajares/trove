@@ -64,9 +64,10 @@ export function primaryTripDestinations(
 export function supportingTripDestinations(tripId: string): TripDestination[] {
   const base = `/trips/${tripId}`;
 
+  // Places is not here: the itinerary opens the collection directly, so listing it
+  // again would be a second door to the same room. The route still works.
   return (
     [
-      ['places', 'places'],
       ['tasks', 'tasks'],
       ['reservations', 'reservations'],
       ['expenses', 'expenses'],

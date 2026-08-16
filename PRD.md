@@ -715,7 +715,7 @@ Sources:
 
 ### Empty Search
 
-Show all Global Saved Places first.
+Show all Global Saved Places first, ordered alphabetically by the name currently known. A provider-backed Place has no name in Trove until it resolves, so the order settles as names arrive rather than withholding the list.
 
 Do not immediately load provider search results.
 
@@ -728,9 +728,9 @@ Order:
 
 Selecting a Saved Place creates/reuses the Trip Place relationship.
 
-Custom Place creation remains available without requiring provider search.
+Custom Place creation remains available without requiring provider search. It is offered alongside the results in the same field rather than behind a separate mode, so the user is never asked what kind of Place they want before knowing whether it already exists. When a search is in progress, the custom option carries what was typed.
 
-Trip Places are curated from within the itinerary as well as from their own page. The itinerary offers the collection in a contextual workspace beside the day being planned, where a Place can be reviewed, prioritised, annotated, removed, or added to the open day without leaving the itinerary. The same collection appears in both places; neither is a separate copy.
+Trip Places are a trip-level collection, not a property of a day. The itinerary opens them in an on-demand workspace beside the day being planned, entered from the trip level rather than from the day, where a Place can be added to the trip, reviewed, prioritised, annotated, removed, or added to the open day without leaving the itinerary. The same collection appears wherever it is shown; neither surface is a separate copy.
 
 ## 16.2 Adding to an Itinerary Day
 
@@ -809,6 +809,7 @@ The itinerary is the primary planning workspace and should stay readable before 
 - Day configuration — resolved timezone, accommodation base, and Daily Base — is available on request rather than displayed permanently. It describes how the day resolves, not what is planned in it.
 - A day note is optional content, shown quietly when written and never presented as a field the day is waiting on.
 - Item actions are grouped in a single per-item menu rather than rendered as a permanent row of controls. The menu behaves identically on every form factor, so no action depends on hover.
+- The day map frames the day's own locations. Other trip Places stay visible as markers because knowing what is nearby is useful, but they must not drag the viewport away from where the traveller is actually going. A day with nothing located yet frames everything instead of framing nothing.
 
 ## 17.3 Optional Item Data
 

@@ -12,7 +12,11 @@ import {
   hasGoogleMapsConfiguration,
   loadGoogleMaps,
 } from '@/lib/maps/google-maps';
-import { decodeGooglePolyline, type ItineraryMapPoint } from '@/lib/maps/itinerary-map';
+import {
+  decodeGooglePolyline,
+  type ItineraryMapPoint,
+  viewportPoints,
+} from '@/lib/maps/itinerary-map';
 import { cn } from '@/lib/utils';
 
 type ItineraryPlanningMapProps = {
@@ -148,6 +152,8 @@ export function ItineraryPlanningMap({
         polylineRefs.current = [];
 
         const bounds = new core.LatLngBounds();
+        // Every point gets a marker; only the day's own decide the frame.
+        const framing = new Set(viewportPoints(points).map((point) => point.id));
         points.forEach((point) => {
           const content = markerContent(point);
           const advancedMarker = new marker.AdvancedMarkerElement({
@@ -166,7 +172,7 @@ export function ItineraryPlanningMap({
           advancedMarker.append(content);
           advancedMarker.addEventListener('gmp-click', () => onSelectPointRef.current(point));
           markerRefs.current.set(point.id, advancedMarker);
-          bounds.extend({ lat: point.latitude, lng: point.longitude });
+          if (framing.has(point.id)) bounds.extend({ lat: point.latitude, lng: point.longitude });
         });
 
         const routePaths = routePolylines
@@ -203,7 +209,7 @@ export function ItineraryPlanningMap({
           bounds.extend({ lat: currentLocation.latitude, lng: currentLocation.longitude });
         }
 
-        const locationCount = points.length + (currentLocation ? 1 : 0);
+        const locationCount = framing.size + (currentLocation ? 1 : 0);
         if (locationCount === 1 && routePaths.length === 0) {
           mapRef.current.setCenter(bounds.getCenter());
           mapRef.current.setZoom(14);

@@ -1510,15 +1510,17 @@ Must Go priority fit is always `not applicable` to day scores. For travel-heavy 
 
 ### Initial Factor-Score Rubrics
 
-These are the authoritative initial MVP calibration rules. A factor is evaluable only when at least one required evidence point for its rubric exists. Missing inputs remain `unknown`; they are not scored as zero. All calculated factor scores are clamped to **0–100**.
+These are the authoritative initial MVP calibration rules. A factor is evaluable only when at least one required evidence point for its rubric exists. A coarse daypart counts as such an evidence point only where it actually constrains the rule being evaluated; a whole-day range such as Anytime constrains nothing and is not evidence. Missing inputs remain `unknown`; they are not scored as zero. All calculated factor scores are clamped to **0–100**.
 
 **Feasibility** starts at 100. Each distinct known conflict applies only its single highest applicable deduction:
 
 - 50 points: a hard conflict, including overlapping fixed commitments, a planned visit entirely outside known opening hours, or a required route that arrives more than 30 minutes after a fixed start;
-- 25 points: a material conflict, including arrival 1–30 minutes after a fixed start or a planned visit partially outside known opening hours;
+- 25 points: a material conflict, including arrival 1–30 minutes after a fixed start, a planned visit partially outside known opening hours, or a coarse daypart that no placement within it can satisfy after required travel;
 - 10 points: a tight but still possible transition with less than 15 minutes of positive buffer after required travel.
 
 The same underlying conflict must not be deducted more than once merely because it is detected from multiple evidence sources.
+
+A coarse daypart is evaluated at its best case: a conflict is recorded only when no placement anywhere inside it works. An unsatisfiable daypart stays material however large the shortfall, because the traveller can move a stated preference; the 50-point band is reserved for constraints they cannot move, such as a fixed start or a closed door. A daypart whose every placement falls outside known opening hours is still a hard conflict on those grounds, since the closure is what makes it impossible.
 
 **Travel effort** uses total known local/base-to-item/inter-item route time for the day. Structured long-distance flight/train/ferry journey duration is evaluated as logistics/feasibility rather than local travel effort.
 
@@ -1534,7 +1536,7 @@ A zero-minute total is evaluable only when all required local/base/inter-item se
 
 **Pace / buffer** uses the lower score produced by the applicable rules below:
 
-- For two or more fixed-time items, use the smallest positive buffer remaining after activity duration and required travel: at least 30 minutes = 100; 15–29 = 80; 5–14 = 60; 0–4 = 40; negative buffer = 20.
+- For two or more items with a known or daypart-constrained start, use the smallest positive buffer remaining after activity duration and required travel, measuring a daypart at its best case: at least 30 minutes = 100; 15–29 = 80; 5–14 = 60; 0–4 = 40; negative buffer = 20.
 - When known activity durations plus local travel describe most of the day: up to 8 hours = 100; more than 8–10 hours = 75; more than 10–12 hours = 50; more than 12 hours = 25.
 - If neither timing/duration rule can be evaluated, the factor is `unknown`.
 
@@ -1634,6 +1636,8 @@ Better-alternative suggestions must preserve the user's original itinerary until
 - **Add** — on confirmation, create a new itinerary item in the suggested day/position or Unscheduled location shown to the user.
 
 No alternative may silently add, replace, remove, or reorder itinerary items.
+
+Trove may prefill an editable field with a deterministic proposal the user explicitly asked for, such as a suggested start time. A prefilled value changes nothing until the user saves, and abandoning the edit discards it. Trove proposes a value only when it has evidence to derive one from, and says it cannot rather than offering a default dressed as a suggestion.
 
 ## 29.5 Recalculation and Boundaries
 

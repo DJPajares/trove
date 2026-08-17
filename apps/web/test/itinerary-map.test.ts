@@ -180,12 +180,23 @@ test('one base serves a day that starts and ends in the same place', () => {
 });
 
 test('the base the day leaves from is its first stop, and the stops after it move down', () => {
+  const bases = { arrivalTripPlaceId: 'ryokan', departureTripPlaceId: null };
+
+  assert.deepEqual(dayStopNumbers({ bases, itemCount: 3 }), {
+    arrival: 1,
+    departure: null,
+    itemOffset: 1,
+  });
+});
+
+test('a day that returns to the same base it left counts the return as its own stop', () => {
+  // Leaving in the morning and returning at night are two different moments in
+  // the day, not one stop repeated — the same base is stop one and stop five.
   const bases = { arrivalTripPlaceId: 'ryokan', departureTripPlaceId: 'ryokan' };
 
   assert.deepEqual(dayStopNumbers({ bases, itemCount: 3 }), {
     arrival: 1,
-    // A day that comes home ends on a stop it has already counted.
-    departure: null,
+    departure: 5,
     itemOffset: 1,
   });
 });

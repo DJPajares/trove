@@ -160,9 +160,7 @@ Examples:
 
 ## Testing
 
-During early Trove development:
-
-- Do not prioritize broad unit-test coverage before the core product flows are stable.
+- Test screens, behaviour, or anything that is manually testable using the platform's built-in browser.
 - Only add unit tests for important components or services (business rules, scoring, authorization, data integrity) rather than incidental code.
 - Do not add E2E tests unless explicitly requested.
 - Still run appropriate linting, type-checking, build checks, and focused validation for each task.

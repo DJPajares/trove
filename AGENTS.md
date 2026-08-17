@@ -50,9 +50,17 @@ The approved product requirements live in `PRD.md` once generated. Linear is the
 
 Linear is the implementation source of truth.
 
+Every change follows this workflow, including work that arrives outside Linear.
+If a request comes from chat, a screenshot, or a bug found while using the app,
+create the Linear issue first, then implement against it.
+
+Never commit to `main`. Before the first edit, confirm the current branch is not
+`main` and create a task branch if it is. Every change reaches `main` only through
+a Pull Request a human has reviewed and merged.
+
 For each task:
 
-1. Read the current Linear issue.
+1. Read the current Linear issue, creating it first if the task did not come from Linear.
 2. Check `Blocked by` dependencies before implementation.
 3. Move the issue to `In Progress`.
 4. Read only the relevant PRD sections and code.
@@ -111,6 +119,7 @@ Example:
 
 ## GitHub Rules
 
+- Never commit or push to `main`. Check the branch before the first edit, not after the commit.
 - Create a PR for implementation tasks unless the task clearly does not modify code.
 - Include a concise summary and a simple list of things to manually see the changes.
 - Never auto-merge.

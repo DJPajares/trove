@@ -964,6 +964,8 @@
     "dayOption": "Day {number}, {date}",
     "dayItemCount": "{count, plural, =0 {No items} one {# item} other {# items}}",
     "stopNumber": "Stop {number}",
+    "dayBaseStartDescription": "Daily base · where this day starts",
+    "dayBaseEndDescription": "Daily base · where this day ends",
     "chooseDay": "Choose a day",
     "previousDay": "Previous day",
     "nextDay": "Next day",

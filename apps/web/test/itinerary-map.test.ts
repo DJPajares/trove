@@ -7,6 +7,7 @@ import type {
   ItineraryRouteSegment,
   ItineraryTripPlace,
 } from '../lib/itinerary/api.ts';
+import { dayStopNumbers, resolveDailyBases } from '../lib/itinerary/day-sequence.ts';
 import {
   buildItineraryMapPoints,
   dailyBasePoints,
@@ -95,15 +96,20 @@ function baseSegment(
 
 function basePointsFor(input: {
   day: Partial<ItineraryDay>;
+  itemCount?: number;
   routeSegments?: ItineraryRouteSegment[];
   scheduled?: string[];
   tripPlaces: string[];
 }) {
-  return dailyBasePoints({
+  const bases = resolveDailyBases({
     day: day({ items: [], ...input.day }),
+    routeSegments: input.routeSegments,
+  });
+  return dailyBasePoints({
+    bases,
+    numbers: dayStopNumbers({ bases, itemCount: input.itemCount ?? 0 }),
     resolvePlaceLocation: (place) => place.place.location,
     resolvePlaceName: (place) => place.id,
-    routeSegments: input.routeSegments,
     scheduledTripPlaceIds: new Set(input.scheduled ?? []),
     tripPlaces: input.tripPlaces.map(tripPlace),
   });
@@ -168,22 +174,82 @@ test('one base serves a day that starts and ends in the same place', () => {
   });
 
   assert.deepEqual(
-    points.map((entry) => [entry.id, entry.baseRole, entry.kind]),
-    [['base:both:ryokan', 'both', 'base']],
+    points.map((entry) => [entry.id, entry.baseRole, entry.kind, entry.order]),
+    [['base:both:ryokan', 'both', 'base', 1]],
   );
 });
 
-test('a day that moves on gets a marker at each end', () => {
+test('the base the day leaves from is its first stop, and the stops after it move down', () => {
+  const bases = { arrivalTripPlaceId: 'ryokan', departureTripPlaceId: 'ryokan' };
+
+  assert.deepEqual(dayStopNumbers({ bases, itemCount: 3 }), {
+    arrival: 1,
+    // A day that comes home ends on a stop it has already counted.
+    departure: null,
+    itemOffset: 1,
+  });
+});
+
+test('a day that ends somewhere new counts that base as its last stop', () => {
+  const bases = { arrivalTripPlaceId: 'ryokan', departureTripPlaceId: 'hostel' };
+
+  assert.deepEqual(dayStopNumbers({ bases, itemCount: 3 }), {
+    arrival: 1,
+    departure: 5,
+    itemOffset: 1,
+  });
+});
+
+test('a day with no base to leave from starts counting at its first item', () => {
+  const bases = { arrivalTripPlaceId: null, departureTripPlaceId: null };
+
+  assert.deepEqual(dayStopNumbers({ bases, itemCount: 3 }), {
+    arrival: null,
+    departure: null,
+    itemOffset: 0,
+  });
+});
+
+test('a day that only has somewhere to end still numbers its items from one', () => {
+  const bases = { arrivalTripPlaceId: null, departureTripPlaceId: 'hostel' };
+
+  assert.deepEqual(dayStopNumbers({ bases, itemCount: 2 }), {
+    arrival: null,
+    departure: 3,
+    itemOffset: 0,
+  });
+});
+
+test('items on a day with a base are numbered after it on the map too', () => {
+  const points = buildItineraryMapPoints({
+    itinerary: { tripPlaces: [], unscheduledItems: [] },
+    orderOffset: 1,
+    resolveItemName: (entry) => entry.id,
+    resolvePlaceName: (place) => place.id,
+    selectedDay: { items: [item('first', 'shrine'), item('second', 'market')] },
+  });
+
+  assert.deepEqual(
+    points.map((entry) => [entry.tripPlaceId, entry.order]),
+    [
+      ['shrine', 2],
+      ['market', 3],
+    ],
+  );
+});
+
+test('a day that moves on gets a marker at each end, numbered first and last', () => {
   const points = basePointsFor({
     day: { dailyBaseDepartureTripPlaceId: 'hostel', dailyBaseTripPlaceId: 'ryokan' },
+    itemCount: 2,
     tripPlaces: ['ryokan', 'hostel'],
   });
 
   assert.deepEqual(
-    points.map((entry) => [entry.baseRole, entry.tripPlaceId]),
+    points.map((entry) => [entry.baseRole, entry.tripPlaceId, entry.order]),
     [
-      ['arrival', 'ryokan'],
-      ['departure', 'hostel'],
+      ['arrival', 'ryokan', 1],
+      ['departure', 'hostel', 4],
     ],
   );
 });

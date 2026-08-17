@@ -29,7 +29,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { PageState } from '@/components/page-state';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import {
-  ItineraryDayBaseRow,
   ItineraryRouteSegmentRow,
   ItineraryRouteSummary,
 } from '@/components/itinerary-route-details';
@@ -127,6 +126,7 @@ import {
   updateItineraryItemRouteMode,
 } from '@/lib/itinerary/api';
 import { useOnlineStatus } from '@/components/trip-sync-status';
+import { dayStopNumbers, resolveDailyBases } from '@/lib/itinerary/day-sequence';
 import { scheduledPlaceUse } from '@/lib/itinerary/places';
 import { itineraryDayRouteRevision, itineraryRouteRevision } from '@/lib/itinerary/routes';
 import {
@@ -476,10 +476,28 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     return tripPlace.place.location ?? providerDetails[tripPlace.place.id]?.location ?? null;
   }
 
+  // One reading of where the day starts and ends, and one counting of its stops,
+  // shared by the list and the map so a row and a circle can never disagree.
+  const dailyBases = useMemo(
+    () => resolveDailyBases({ day: selectedDay, routeSegments: routes?.segments }),
+    [routes, selectedDay],
+  );
+  const stopNumbers = useMemo(
+    () => dayStopNumbers({ bases: dailyBases, itemCount: selectedDay?.items.length ?? 0 }),
+    [dailyBases, selectedDay],
+  );
+  const tripPlaceById = (tripPlaceId: string | null) =>
+    tripPlaceId
+      ? (itinerary?.tripPlaces.find((tripPlace) => tripPlace.id === tripPlaceId) ?? null)
+      : null;
+  const arrivalBase = tripPlaceById(dailyBases.arrivalTripPlaceId);
+  const departureBase = tripPlaceById(dailyBases.departureTripPlaceId);
+
   const mapPoints = useMemo(() => {
     if (!itinerary || !selectedDay) return [];
     const points = buildItineraryMapPoints({
       itinerary,
+      orderOffset: stopNumbers.itemOffset,
       placeUse,
       resolveItemName: itemName,
       resolvePlaceLocation: placeLocation,
@@ -488,10 +506,10 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
       selectedDayNumber: selectedIndex + 1,
     });
     const bases = dailyBasePoints({
-      day: selectedDay,
+      bases: dailyBases,
+      numbers: stopNumbers,
       resolvePlaceLocation: placeLocation,
       resolvePlaceName: (tripPlace) => placeName(tripPlace) ?? t('providerPlace'),
-      routeSegments: routes?.segments,
       scheduledTripPlaceIds: new Set(
         points.filter((point) => point.kind === 'scheduled').map((point) => point.tripPlaceId),
       ),
@@ -506,25 +524,85 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
       ),
       ...bases,
     ];
-  }, [itinerary, placeUse, providerDetails, routes, selectedDay, selectedIndex, t]);
+  }, [
+    dailyBases,
+    itinerary,
+    placeUse,
+    providerDetails,
+    selectedDay,
+    selectedIndex,
+    stopNumbers,
+    t,
+  ]);
 
-  // A routed base already announces itself through its travel leg. These stand in
-  // when no leg was estimated for it, so the day never silently drops a base the
-  // traveller set.
-  const arrivalBaseTripPlaceId = selectedDay?.dailyBaseTripPlaceId ?? null;
-  const departureBaseTripPlaceId =
-    selectedDay?.dailyBaseDepartureTripPlaceId ?? selectedDay?.dailyBaseTripPlaceId ?? null;
-  const unroutedArrivalBase =
-    arrivalBaseTripPlaceId &&
-    !routes?.segments.some((segment) => segment.origin.kind === 'daily_base')
-      ? (itinerary?.tripPlaces.find((tripPlace) => tripPlace.id === arrivalBaseTripPlaceId) ?? null)
-      : null;
-  const unroutedDepartureBase =
-    departureBaseTripPlaceId &&
-    !routes?.segments.some((segment) => segment.destination.kind === 'daily_base')
-      ? (itinerary?.tripPlaces.find((tripPlace) => tripPlace.id === departureBaseTripPlaceId) ??
-        null)
-      : null;
+  /**
+   * A base is a stop of the day, so it reads like one: numbered in travel order,
+   * named, and selectable on the map when it has a location. What it does not get
+   * is an actions menu — where a day starts and ends is changed in day settings,
+   * not by editing a stop.
+   */
+  function baseStopRow(
+    tripPlace: ItineraryTripPlace,
+    role: 'arrival' | 'departure',
+    order: number,
+  ) {
+    const name = placeName(tripPlace) ?? t('providerPlace');
+    const point = mapPoints.find(
+      (candidate) => candidate.kind === 'base' && candidate.tripPlaceId === tripPlace.id,
+    );
+    const isMapSelected = Boolean(point && selectedMapPointId === point.id);
+    return (
+      <Item
+        className={cn('px-3 py-3', isMapSelected && 'bg-secondary/70')}
+        key={`base-${role}`}
+        role="listitem"
+      >
+        {/* Squared off and outlined, the way the map draws a base, so the two
+            readings of the same stop look like the same stop. */}
+        <ItemMedia
+          className={cn(
+            'size-10 rounded-[var(--radius-md)] border-2 text-sm font-semibold tabular-nums',
+            point
+              ? 'border-primary bg-card text-primary'
+              : 'border-border bg-muted text-muted-foreground',
+          )}
+        >
+          <span className="sr-only">{t('stopNumber', { number: order })}</span>
+          <span aria-hidden="true">{order}</span>
+        </ItemMedia>
+        <ItemContent className="min-w-0">
+          <ItemTitle className="text-base">
+            {point ? (
+              <button
+                aria-label={t('map.showItem', { name })}
+                aria-pressed={isMapSelected}
+                className="rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+                onClick={() => selectBaseOnMap(tripPlace.id)}
+                type="button"
+              >
+                {name}
+              </button>
+            ) : (
+              name
+            )}
+          </ItemTitle>
+          <ItemDescription className="line-clamp-none">
+            {role === 'arrival' ? t('dayBaseStartDescription') : t('dayBaseEndDescription')}
+          </ItemDescription>
+        </ItemContent>
+      </Item>
+    );
+  }
+
+  function selectBaseOnMap(tripPlaceId: string) {
+    const point = mapPoints.find(
+      (candidate) => candidate.kind === 'base' && candidate.tripPlaceId === tripPlaceId,
+    );
+    if (!point) return;
+    setSelectedMapPointId(point.id);
+    setSelectedMapItemId(null);
+    if (!desktopMapLayout) setMobileView('map');
+  }
 
   useEffect(() => {
     if (selectedMapPointId && !mapPoints.some((point) => point.id === selectedMapPointId)) {
@@ -1268,12 +1346,9 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
               <div className={cn('p-4 sm:p-6', mobileView === 'map' && 'hidden lg:block')}>
                 {selectedDay.items.length ? (
                   <ItemGroup aria-label={t('itemListLabel')} variant="list">
-                    {unroutedArrivalBase ? (
-                      <ItineraryDayBaseRow
-                        name={placeName(unroutedArrivalBase) ?? t('providerPlace')}
-                        role="arrival"
-                      />
-                    ) : null}
+                    {arrivalBase && stopNumbers.arrival
+                      ? baseStopRow(arrivalBase, 'arrival', stopNumbers.arrival)
+                      : null}
                     {selectedDay.items.map((item, itemIndex) => {
                       const name = itemName(item);
                       const mapsHref = item.tripPlace ? googleMapsHref(item.tripPlace) : null;
@@ -1322,9 +1397,9 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                             )}
                           >
                             <span className="sr-only">
-                              {t('stopNumber', { number: itemIndex + 1 })}
+                              {t('stopNumber', { number: itemIndex + 1 + stopNumbers.itemOffset })}
                             </span>
-                            <span aria-hidden="true">{itemIndex + 1}</span>
+                            <span aria-hidden="true">{itemIndex + 1 + stopNumbers.itemOffset}</span>
                           </ItemMedia>
                           <ItemContent className="min-w-0">
                             <ItemTitle className="text-base">
@@ -1497,12 +1572,9 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                           stale={routes?.stale ?? false}
                         />
                       ))}
-                    {unroutedDepartureBase ? (
-                      <ItineraryDayBaseRow
-                        name={placeName(unroutedDepartureBase) ?? t('providerPlace')}
-                        role="departure"
-                      />
-                    ) : null}
+                    {departureBase && stopNumbers.departure
+                      ? baseStopRow(departureBase, 'departure', stopNumbers.departure)
+                      : null}
                   </ItemGroup>
                 ) : (
                   <PageState

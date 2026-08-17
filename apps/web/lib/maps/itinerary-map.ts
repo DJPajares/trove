@@ -2,9 +2,9 @@ import type {
   Itinerary,
   ItineraryDay,
   ItineraryItem,
-  ItineraryRouteSegment,
   ItineraryTripPlace,
 } from '@/lib/itinerary/api';
+import type { DailyBaseIds, DayStopNumbers } from '@/lib/itinerary/day-sequence';
 import type { ScheduledPlaceUse } from '@/lib/itinerary/places';
 
 export type ItineraryMapPoint = {
@@ -72,6 +72,8 @@ export function viewportPoints(points: ItineraryMapPoint[]) {
 
 export function buildItineraryMapPoints(input: {
   itinerary: Pick<Itinerary, 'tripPlaces' | 'unscheduledItems'>;
+  /** Stops the day's base already took, so item numbers continue rather than restart. */
+  orderOffset?: number;
   /**
    * Where the trip's Places already sit in the plan, so a Place that is not on
    * this day can still say which day does have it. Omitted by surfaces that have
@@ -101,7 +103,7 @@ export function buildItineraryMapPoints(input: {
       latitude: location.latitude,
       longitude: location.longitude,
       name: input.resolveItemName(item),
-      order: index + 1,
+      order: index + 1 + (input.orderOffset ?? 0),
       tripPlaceId: tripPlace.id,
     });
   });
@@ -136,40 +138,24 @@ export function buildItineraryMapPoints(input: {
  * measured against them — so leaving them off the map hides the two locations the
  * day's shape actually depends on.
  *
- * The day's own fields are the truth when set. When they are not, the API may
- * still have inferred a base from that day's accommodation reservations; the only
- * place that inference surfaces on the client is the route segments, so they are
- * the fallback rather than a second guess at the same rule.
- *
- * A base that is already a stop on the day needs no second marker: it is on the
- * map, numbered, where the traveller expects it.
+ * They are stops of the day, numbered with the rest of it, and a base that is
+ * already a scheduled stop needs no second marker: it is on the map, numbered,
+ * where the traveller expects it.
  */
 export function dailyBasePoints(input: {
-  day: Pick<ItineraryDay, 'dailyBaseDepartureTripPlaceId' | 'dailyBaseTripPlaceId'> | null;
+  bases: DailyBaseIds;
+  numbers: Pick<DayStopNumbers, 'arrival' | 'departure'>;
   resolvePlaceLocation: (tripPlace: ItineraryTripPlace) => ItineraryMapLocation | null;
   resolvePlaceName: (tripPlace: ItineraryTripPlace) => string;
-  routeSegments?: ItineraryRouteSegment[];
   scheduledTripPlaceIds: Set<string>;
   tripPlaces: ItineraryTripPlace[];
 }): ItineraryMapPoint[] {
-  if (!input.day) return [];
-
-  const segments = input.routeSegments ?? [];
-  const arrivalId =
-    input.day.dailyBaseTripPlaceId ??
-    segments.find(
-      (segment) => segment.modeOwner.kind === 'day_start' && segment.origin.kind === 'daily_base',
-    )?.origin.id ??
-    null;
-  const departureId =
-    input.day.dailyBaseDepartureTripPlaceId ??
-    input.day.dailyBaseTripPlaceId ??
-    segments.find((segment) => segment.destination.kind === 'daily_base')?.destination.id ??
-    null;
+  const { arrivalTripPlaceId: arrivalId, departureTripPlaceId: departureId } = input.bases;
 
   const point = (
     tripPlaceId: string,
     role: ItineraryMapPoint['baseRole'],
+    order: number | null,
   ): ItineraryMapPoint | null => {
     if (input.scheduledTripPlaceIds.has(tripPlaceId)) return null;
     const tripPlace = input.tripPlaces.find((candidate) => candidate.id === tripPlaceId);
@@ -183,18 +169,18 @@ export function dailyBasePoints(input: {
       latitude: location.latitude,
       longitude: location.longitude,
       name: input.resolvePlaceName(tripPlace),
-      order: null,
+      order,
       tripPlaceId: tripPlace.id,
     } satisfies ItineraryMapPoint;
   };
 
   if (arrivalId && arrivalId === departureId) {
-    const both = point(arrivalId, 'both');
+    const both = point(arrivalId, 'both', input.numbers.arrival);
     return both ? [both] : [];
   }
 
   return [
-    arrivalId ? point(arrivalId, 'arrival') : null,
-    departureId ? point(departureId, 'departure') : null,
+    arrivalId ? point(arrivalId, 'arrival', input.numbers.arrival) : null,
+    departureId ? point(departureId, 'departure', input.numbers.departure) : null,
   ].filter((basePoint): basePoint is ItineraryMapPoint => basePoint !== null);
 }

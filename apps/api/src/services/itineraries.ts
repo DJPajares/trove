@@ -396,6 +396,7 @@ export async function listItinerary(userId: string, tripId: string) {
       defaultTimeZone: day.defaultTimeZone,
       defaultTimeZoneSource: mapDayTimeZoneSource(day.defaultTimeZoneSource),
       defaultTimeZoneSourceTripPlaceId: day.defaultTimeZoneSourceTripPlaceId,
+      dailyBaseDepartureTripPlaceId: day.dailyBaseDepartureTripPlaceId,
       dailyBaseTripPlaceId: day.dailyBaseTripPlaceId,
       experienceNote: day.experienceNote,
       experienceRating: day.experienceRating,
@@ -522,15 +523,24 @@ export async function setItineraryDayBase(
   tripId: string,
   itineraryDayId: string,
   tripPlaceId: string | null,
+  departureTripPlaceId?: string | null,
 ) {
   const prisma = getPrismaClient();
   await prisma.$transaction(async (transaction) => {
     await findOwnedTrip(transaction, userId, tripId);
     await findDay(transaction, tripId, itineraryDayId);
     await findTripPlace(transaction, tripId, tripPlaceId);
+    if (departureTripPlaceId !== undefined) {
+      await findTripPlace(transaction, tripId, departureTripPlaceId);
+    }
     await transaction.itineraryDay.update({
       where: { id: itineraryDayId },
-      data: { dailyBaseTripPlaceId: tripPlaceId },
+      data: {
+        dailyBaseTripPlaceId: tripPlaceId,
+        ...(departureTripPlaceId !== undefined
+          ? { dailyBaseDepartureTripPlaceId: departureTripPlaceId }
+          : {}),
+      },
     });
     await refreshDayDefaultTimeZone(transaction, tripId, itineraryDayId);
   });

@@ -62,6 +62,7 @@ export type ItineraryItem = {
 };
 
 export type ItineraryDay = {
+  dailyBaseDepartureTripPlaceId: string | null;
   dailyBaseTripPlaceId: string | null;
   date: string;
   defaultTimeZone: string;
@@ -719,9 +720,13 @@ export function setItineraryDayBase(
   tripId: string,
   itineraryDayId: string,
   tripPlaceId: string | null,
+  departureTripPlaceId?: string | null,
 ) {
   return itineraryRequest<void>(`/trips/${tripId}/itinerary/days/${itineraryDayId}/base`, {
-    body: JSON.stringify({ tripPlaceId }),
+    body: JSON.stringify({
+      tripPlaceId,
+      ...(departureTripPlaceId !== undefined ? { departureTripPlaceId } : {}),
+    }),
     method: 'PATCH',
   });
 }

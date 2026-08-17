@@ -235,6 +235,7 @@ export async function removeTripPlace(userId: string, tripId: string, tripPlaceI
         tripId,
         OR: [
           { dailyBaseTripPlaceId: tripPlaceId },
+          { dailyBaseDepartureTripPlaceId: tripPlaceId },
           { defaultTimeZoneSourceTripPlaceId: tripPlaceId },
         ],
       },
@@ -243,6 +244,10 @@ export async function removeTripPlace(userId: string, tripId: string, tripPlaceI
     await transaction.itineraryDay.updateMany({
       where: { tripId, dailyBaseTripPlaceId: tripPlaceId },
       data: { dailyBaseTripPlaceId: null },
+    });
+    await transaction.itineraryDay.updateMany({
+      where: { tripId, dailyBaseDepartureTripPlaceId: tripPlaceId },
+      data: { dailyBaseDepartureTripPlaceId: null },
     });
     await transaction.itineraryDay.updateMany({
       where: { tripId, defaultTimeZoneSourceTripPlaceId: tripPlaceId },

@@ -425,6 +425,7 @@ function hasPlaceContext(itinerary: Itinerary) {
   const references = [
     ...itinerary.days.flatMap((day) => [
       ...(day.dailyBaseTripPlaceId ? [day.dailyBaseTripPlaceId] : []),
+      ...(day.dailyBaseDepartureTripPlaceId ? [day.dailyBaseDepartureTripPlaceId] : []),
       ...day.items.flatMap((item) => (item.tripPlace ? [item.tripPlace.id] : [])),
     ]),
     ...itinerary.unscheduledItems.flatMap((item) => (item.tripPlace ? [item.tripPlace.id] : [])),

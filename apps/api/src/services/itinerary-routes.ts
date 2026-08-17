@@ -12,9 +12,9 @@ import {
 } from './routes.js';
 import { ItineraryNotFoundError } from './itineraries.js';
 
-type RoutePointKind = 'daily_base' | 'itinerary_item' | 'starting_location';
+export type RoutePointKind = 'daily_base' | 'itinerary_item' | 'starting_location';
 
-type RoutePoint = {
+export type RoutePoint = {
   coordinates: RouteCoordinates;
   id: string;
   kind: RoutePointKind;
@@ -136,6 +136,60 @@ function createPlaceResolver(placesService: PlacesService | null, languageCode?:
   };
 }
 
+export type AccommodationTripPlace = Prisma.TripPlaceGetPayload<{
+  include: typeof tripPlaceInclude;
+}>;
+
+/**
+ * A day's base is normally symmetric: one place the day's travel is measured
+ * from and back to. On a transition day — checking out of one accommodation
+ * and into another — that's wrong, so when exactly two accommodations apply
+ * and their check-out/check-in dates cleanly identify which is which, resolve
+ * them asymmetrically. Anything more ambiguous falls back to no inferred base
+ * on that side rather than guessing (PRD 18.4).
+ */
+export function inferAccommodationBases(
+  accommodationReservations: Array<{
+    reservation: {
+      checkInDate: Date | null;
+      checkOutDate: Date | null;
+      tripPlace: AccommodationTripPlace | null;
+    };
+  }>,
+  dayDate: Date,
+): { arrival: AccommodationTripPlace | null; departure: AccommodationTripPlace | null } {
+  const accommodations = [
+    ...new Map(
+      accommodationReservations
+        .map(({ reservation }) => reservation)
+        .filter(
+          (
+            reservation,
+          ): reservation is typeof reservation & { tripPlace: AccommodationTripPlace } =>
+            reservation.tripPlace !== null,
+        )
+        .map((reservation) => [reservation.tripPlace.id, reservation]),
+    ).values(),
+  ];
+
+  const [onlyAccommodation] = accommodations;
+  if (accommodations.length === 1 && onlyAccommodation) {
+    const tripPlace = onlyAccommodation.tripPlace;
+    return { arrival: tripPlace, departure: tripPlace };
+  }
+
+  if (accommodations.length === 2) {
+    const dayTime = dayDate.getTime();
+    const checkingOut = accommodations.find((entry) => entry.checkOutDate?.getTime() === dayTime);
+    const checkingIn = accommodations.find((entry) => entry.checkInDate?.getTime() === dayTime);
+    if (checkingOut && checkingIn && checkingOut.tripPlace.id !== checkingIn.tripPlace.id) {
+      return { arrival: checkingOut.tripPlace, departure: checkingIn.tripPlace };
+    }
+  }
+
+  return { arrival: null, departure: null };
+}
+
 type SegmentPlan = {
   destination: RoutePoint;
   mode: RouteTravelMode;
@@ -143,16 +197,17 @@ type SegmentPlan = {
   origin: RoutePoint;
 };
 
-function buildItineraryRoutePlan(input: {
-  base: RoutePoint | null;
+export function buildItineraryRoutePlan(input: {
+  arrivalBase: RoutePoint | null;
   dayId: string;
   dayStartMode: RouteTravelMode;
+  departureBase: RoutePoint | null;
   items: Array<{ mode: RouteTravelMode; point: RoutePoint }>;
   startingLocation: RoutePoint | null;
 }) {
   const plans: SegmentPlan[] = [];
   const first = input.items[0];
-  const dayOrigin = input.base ?? input.startingLocation;
+  const dayOrigin = input.arrivalBase ?? input.startingLocation;
 
   if (dayOrigin && first) {
     plans.push({
@@ -176,9 +231,9 @@ function buildItineraryRoutePlan(input: {
   }
 
   const last = input.items.at(-1);
-  if (input.base && last) {
+  if (input.departureBase && last) {
     plans.push({
-      destination: input.base,
+      destination: input.departureBase,
       mode: last.mode,
       modeOwner: { id: last.point.id, kind: 'item_departure' },
       origin: last.point,
@@ -329,6 +384,7 @@ export async function getItineraryDayRoutes(
               reservation: { include: { tripPlace: { include: tripPlaceInclude } } },
             },
           },
+          dailyBaseDepartureTripPlace: { include: tripPlaceInclude },
           dailyBaseTripPlace: { include: tripPlaceInclude },
           items: {
             where: options.itemIds ? { id: { in: options.itemIds } } : undefined,
@@ -366,31 +422,32 @@ export async function getItineraryDayRoutes(
     .filter((entry): entry is typeof entry & { point: RoutePoint } => entry.point !== null)
     .map(({ item, point }) => ({ mode: mapMode(item.travelModeToNext), point }));
 
-  const accommodationTripPlaces = [
-    ...new Map(
-      day.accommodationReservations
-        .map(({ reservation }) => reservation.tripPlace)
-        .filter((tripPlace) => tripPlace !== null)
-        .map((tripPlace) => [tripPlace.id, tripPlace]),
-    ).values(),
-  ];
-  const inferredAccommodation =
-    accommodationTripPlaces.length === 1 ? accommodationTripPlaces[0] : null;
-  const baseTripPlace = day.dailyBaseTripPlace ?? inferredAccommodation;
-  const base = baseTripPlace
-    ? await resolvePlace(baseTripPlace.place, 'daily_base', baseTripPlace.id)
+  const { arrival: inferredArrival, departure: inferredDeparture } = inferAccommodationBases(
+    day.accommodationReservations,
+    day.date,
+  );
+  const arrivalBaseTripPlace = day.dailyBaseTripPlace ?? inferredArrival;
+  const departureBaseTripPlace =
+    day.dailyBaseDepartureTripPlace ?? day.dailyBaseTripPlace ?? inferredDeparture;
+  const arrivalBase = arrivalBaseTripPlace
+    ? await resolvePlace(arrivalBaseTripPlace.place, 'daily_base', arrivalBaseTripPlace.id)
+    : null;
+  const departureBase = departureBaseTripPlace
+    ? await resolvePlace(departureBaseTripPlace.place, 'daily_base', departureBaseTripPlace.id)
     : null;
   const isFirstDay = day.date.getTime() === trip.startDate.getTime();
-  const startingLocationExpected = !baseTripPlace && isFirstDay && trip.startingPlace !== null;
+  const startingLocationExpected =
+    !arrivalBaseTripPlace && isFirstDay && trip.startingPlace !== null;
   const startingLocation =
     startingLocationExpected && trip.startingPlace
       ? await resolvePlace(trip.startingPlace, 'starting_location', trip.startingPlace.id)
       : null;
 
   const plans = buildItineraryRoutePlan({
-    base,
+    arrivalBase,
     dayId: day.id,
     dayStartMode: mapMode(day.routeStartTravelMode),
+    departureBase,
     items: locatedItems,
     startingLocation,
   });
@@ -407,7 +464,8 @@ export async function getItineraryDayRoutes(
       segments,
       placedItems.length,
       itemPoints.some(({ point }) => point === null) ||
-        (baseTripPlace !== null && base === null) ||
+        (arrivalBaseTripPlace !== null && arrivalBase === null) ||
+        (departureBaseTripPlace !== null && departureBase === null) ||
         (startingLocationExpected && startingLocation === null),
     ),
   };

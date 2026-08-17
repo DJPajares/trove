@@ -22,7 +22,12 @@ const dayParamsSchema = z.object({ itineraryDayId: z.uuid(), tripId: z.uuid() })
 const organizeItemSchema = z
   .object({ itineraryDayId: z.uuid().nullable(), position: z.number().int().min(0) })
   .strict();
-const dayBaseSchema = z.object({ tripPlaceId: z.uuid().nullable() }).strict();
+const dayBaseSchema = z
+  .object({
+    departureTripPlaceId: z.uuid().nullable().optional(),
+    tripPlaceId: z.uuid().nullable(),
+  })
+  .strict();
 const dayNoteSchema = z.object({ note: z.string().trim().max(5_000).nullable() }).strict();
 const dayExperienceRatingSchema = z
   .object({
@@ -212,6 +217,7 @@ export function createItineraryControllers() {
           params.data.tripId,
           params.data.itineraryDayId,
           body.data.tripPlaceId,
+          body.data.departureTripPlaceId,
         );
         return reply.code(204).send();
       } catch (error) {

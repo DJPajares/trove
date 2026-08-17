@@ -1,6 +1,6 @@
 'use client';
 
-import { Eye, MapPinned, Navigation } from 'lucide-react';
+import { CalendarPlus, Eye, MapPinned, Navigation } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -26,6 +26,11 @@ type ItineraryPlanningMapProps = {
     latitude: number;
     longitude: number;
   } | null;
+  /**
+   * Puts a Place that is not yet on the selected day onto it. Omitted by surfaces
+   * with no day of their own to add to, which hides the action entirely.
+   */
+  onAddToDay?: (point: ItineraryMapPoint) => Promise<boolean>;
   onOpenPlace: (tripPlaceId: string) => void;
   onSelectPoint: (point: ItineraryMapPoint) => void;
   onViewItem: (itemId: string) => void;
@@ -70,6 +75,7 @@ function currentLocationContent() {
 export function ItineraryPlanningMap({
   ariaLabel,
   currentLocation = null,
+  onAddToDay,
   onOpenPlace,
   onSelectPoint,
   onViewItem,
@@ -89,6 +95,10 @@ export function ItineraryPlanningMap({
   const [status, setStatus] = useState<'error' | 'loading' | 'ready'>(
     hasGoogleMapsConfiguration() ? 'loading' : 'error',
   );
+  const [addingPointId, setAddingPointId] = useState<string | null>(null);
+  const [addFeedback, setAddFeedback] = useState<string | null>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef(false);
   const hasPoints = points.length > 0;
   const selectedPoint = useMemo(
     () => points.find((point) => point.id === selectedPointId) ?? null,
@@ -98,6 +108,30 @@ export function ItineraryPlanningMap({
   useEffect(() => {
     onSelectPointRef.current = onSelectPoint;
   }, [onSelectPoint]);
+
+  // A result belongs to the Place it was about, not to whatever is tapped next.
+  useEffect(() => {
+    setAddFeedback(null);
+  }, [selectedPointId]);
+
+  // Adding succeeds by making the button disappear — the point becomes `scheduled`
+  // and the card offers "View item" in its place. Without this, a keyboard user is
+  // dropped to the top of the document by their own successful action.
+  useEffect(() => {
+    if (!restoreFocusRef.current) return;
+    restoreFocusRef.current = false;
+    actionsRef.current?.querySelector('button')?.focus();
+  }, [selectedPoint?.kind]);
+
+  async function addToDay(point: ItineraryMapPoint) {
+    if (!onAddToDay) return;
+    setAddingPointId(point.id);
+    setAddFeedback(null);
+    const added = await onAddToDay(point);
+    setAddFeedback(added ? t('addedToDay', { name: point.name }) : t('addToDayError'));
+    setAddingPointId(null);
+    restoreFocusRef.current = added;
+  }
 
   useEffect(() => {
     const initialPoint = points[0] ?? currentLocation;
@@ -291,7 +325,19 @@ export function ItineraryPlanningMap({
                 ? t('baseSelection')
                 : t('consideredSelection')}
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2" ref={actionsRef}>
+            {/* Only a Place that is not on this day yet can be added to it. Once it
+                is, the point becomes `scheduled` and this gives way to "View item". */}
+            {onAddToDay && selectedPoint.kind === 'considered' ? (
+              <Button
+                disabled={addingPointId === selectedPoint.id}
+                onClick={() => void addToDay(selectedPoint)}
+                size="sm"
+              >
+                <CalendarPlus aria-hidden="true" data-icon="inline-start" />
+                {t('addToDay')}
+              </Button>
+            ) : null}
             {selectedPoint.itemId ? (
               <Button onClick={() => onViewItem(selectedPoint.itemId!)} size="sm" variant="outline">
                 <Eye aria-hidden="true" data-icon="inline-start" />
@@ -322,6 +368,15 @@ export function ItineraryPlanningMap({
               {t('directions')}
             </Button>
           </div>
+          {/* Always mounted so the result is announced, but it takes no room until
+              there is something to say. */}
+          <p
+            aria-live="polite"
+            className={cn('text-xs text-muted-foreground', addFeedback && 'mt-2')}
+            role="status"
+          >
+            {addFeedback}
+          </p>
         </div>
       ) : null}
     </div>

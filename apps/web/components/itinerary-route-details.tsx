@@ -150,12 +150,15 @@ export function ItineraryRouteSegmentRow({
   onModeChange,
   saving,
   segment,
+  stale = false,
 }: Readonly<{
   distanceUnit: 'km' | 'mi';
   locale: string;
   onModeChange: (segment: ItineraryRouteSegment, mode: RouteTravelMode) => void;
   saving: boolean;
   segment: ItineraryRouteSegment;
+  /** The whole day's legs came from the offline cache rather than a live estimate. */
+  stale?: boolean;
 }>) {
   const t = useTranslations('itinerary.routes');
   const originLabel = segment.origin.label ?? t(`point.${segment.origin.kind}`);
@@ -170,10 +173,13 @@ export function ItineraryRouteSegmentRow({
         : null;
   const isAvailable =
     segment.status === 'ok' && segment.durationSeconds !== null && segment.distanceMeters !== null;
-  // A flight is not estimated by design, which is a different thing to say than a
-  // routing attempt that failed.
+  // Three things worth telling apart: a flight is not estimated by design, a
+  // routing attempt that failed, and a cached estimate. A cached leg is still the
+  // right leg — the cache is only reused when it was computed for this exact
+  // ordering — but its numbers are as old as the day's last successful lookup, so
+  // they are never dressed up as current ones.
   const metricsLabel = isAvailable
-    ? t('segmentEstimateMetrics', {
+    ? t(stale ? 'segmentCachedMetrics' : 'segmentEstimateMetrics', {
         distance: formatDistance(segment.distanceMeters!, distanceUnit, locale),
         duration: formatDuration(segment.durationSeconds!, locale),
         unit: t(`units.${distanceUnit}`),
@@ -194,7 +200,7 @@ export function ItineraryRouteSegmentRow({
         <span
           className={cn(
             'shrink-0 whitespace-nowrap tabular-nums',
-            isAvailable && 'font-medium text-foreground',
+            isAvailable && !stale && 'font-medium text-foreground',
           )}
         >
           {metricsLabel}

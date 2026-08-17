@@ -156,3 +156,33 @@ test('no base and no starting location leaves only between-item legs', () => {
   assert.equal(plans.length, 1);
   assert.equal(plans[0]?.modeOwner.kind, 'item_departure');
 });
+
+test('the leg chain follows item order, so reordering a day rewrites which stop each leg comes from', () => {
+  const day = (items: string[]) =>
+    buildItineraryRoutePlan({
+      arrivalBase: point('hotel', 'daily_base'),
+      dayId: 'day-1',
+      dayStartMode: 'drive',
+      departureBase: point('hotel', 'daily_base'),
+      items: items.map((id) => ({ mode: 'drive' as const, point: point(id) })),
+      startingLocation: null,
+    });
+
+  const chain = (plans: ReturnType<typeof day>) =>
+    plans.map((plan) => [plan.origin.id, plan.destination.id]);
+
+  assert.deepEqual(chain(day(['hobbiton', 'redwoods', 'blue-spring'])), [
+    ['hotel', 'hobbiton'],
+    ['hobbiton', 'redwoods'],
+    ['redwoods', 'blue-spring'],
+    ['blue-spring', 'hotel'],
+  ]);
+
+  // The same three stops, one moved: every leg it touches names a new origin.
+  assert.deepEqual(chain(day(['hobbiton', 'blue-spring', 'redwoods'])), [
+    ['hotel', 'hobbiton'],
+    ['hobbiton', 'blue-spring'],
+    ['blue-spring', 'redwoods'],
+    ['redwoods', 'hotel'],
+  ]);
+});

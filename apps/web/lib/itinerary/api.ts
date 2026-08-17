@@ -484,10 +484,26 @@ export async function fetchTripModeContext(
   }
 }
 
+/**
+ * A day's travel legs.
+ *
+ * `revision` is the signature of the ordering the caller is currently showing
+ * (see `itineraryDayRouteRevision`). A cached payload is only served back when
+ * it was computed for that same ordering — legs are a chain between adjacent
+ * stops, so replaying an older chain would confidently name origins that no
+ * longer come before their destination. When the cache does not match, this
+ * behaves as if there were no cache at all rather than answering with a leg
+ * chain for a day that no longer exists.
+ */
 export async function fetchItineraryDayRoutes(
   tripId: string,
   itineraryDayId: string,
-  options: { includePolyline?: boolean; languageCode?: string; signal?: AbortSignal } = {},
+  options: {
+    includePolyline?: boolean;
+    languageCode?: string;
+    revision: string;
+    signal?: AbortSignal;
+  },
 ) {
   const query = new URLSearchParams();
   if (options.includePolyline) query.set('includePolyline', 'true');
@@ -495,8 +511,12 @@ export async function fetchItineraryDayRoutes(
   const suffix = query.size ? `?${query.toString()}` : '';
   const auth = await getAuthContext();
   const snapshot = await readTripSnapshot(auth.userId, tripId).catch(() => undefined);
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+  const usableCache = () => {
     const cached = snapshot?.routes?.[itineraryDayId];
+    return cached?.revision === options.revision ? cached.data : null;
+  };
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    const cached = usableCache();
     if (cached) return { ...cached, source: 'cache' as const, stale: true };
     throw new ItineraryApiError('offline_route_not_available', 503);
   }
@@ -509,11 +529,11 @@ export async function fetchItineraryDayRoutes(
     const data = { ...response, source: 'live' as const, stale: false };
     await saveSupportingSnapshot(auth.userId, tripId, 'routes', {
       ...snapshot?.routes,
-      [itineraryDayId]: data,
+      [itineraryDayId]: { data, revision: options.revision },
     });
     return data;
   } catch (error) {
-    const cached = snapshot?.routes?.[itineraryDayId];
+    const cached = usableCache();
     if (canUseOfflineFallback(error) && cached) {
       return { ...cached, source: 'cache' as const, stale: true };
     }

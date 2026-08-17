@@ -127,6 +127,7 @@ import {
 } from '@/lib/itinerary/api';
 import { useOnlineStatus } from '@/components/trip-sync-status';
 import { scheduledPlaceUse } from '@/lib/itinerary/places';
+import { itineraryDayRouteRevision, itineraryRouteRevision } from '@/lib/itinerary/routes';
 import { buildItineraryMapPoints, type ItineraryMapPoint } from '@/lib/maps/itinerary-map';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import {
@@ -344,21 +345,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     () => itinerary?.days.find((day) => day.id === selectedDayId) ?? null,
     [itinerary, selectedDayId],
   );
-  const routeRevision = selectedDay
-    ? [
-        selectedDay.id,
-        selectedDay.dailyBaseTripPlaceId,
-        selectedDay.dailyBaseDepartureTripPlaceId,
-        selectedDay.routeStartTravelMode,
-        ...selectedDay.items.flatMap((item) => [
-          item.id,
-          item.position,
-          item.tripPlace?.id ?? '',
-          item.travelModeToNext,
-          item.updatedAt,
-        ]),
-      ].join(':')
-    : '';
+  const routeRevision = itineraryDayRouteRevision(selectedDay);
   const includeRoutePolylines = desktopMapLayout === true || mobileView === 'map';
   const routes = routeSnapshot?.revision === routeRevision ? routeSnapshot.data : null;
   const routePolylines = useMemo(
@@ -389,6 +376,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     void fetchItineraryDayRoutes(tripId, selectedDay.id, {
       includePolyline: includeRoutePolylines,
       languageCode: locale,
+      revision: routeRevision,
       signal: controller.signal,
     })
       .then((result) => {
@@ -414,25 +402,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     selectedDay,
     tripId,
   ]);
-  const planScoreRevision = useMemo(
-    () =>
-      (itinerary?.days ?? [])
-        .flatMap((day) => [
-          day.id,
-          day.dailyBaseTripPlaceId ?? '',
-          day.dailyBaseDepartureTripPlaceId ?? '',
-          day.routeStartTravelMode,
-          ...day.items.flatMap((item) => [
-            item.id,
-            String(item.position),
-            item.tripPlace?.id ?? '',
-            item.travelModeToNext ?? '',
-            item.updatedAt,
-          ]),
-        ])
-        .join(':'),
-    [itinerary],
-  );
+  const planScoreRevision = useMemo(() => itineraryRouteRevision(itinerary), [itinerary]);
   const planScore = useTripPlanScore(itinerary ? tripId : null, planScoreRevision);
   const planScoreDay = planScore.data?.days.find((day) => day.dayId === selectedDayId) ?? null;
   const focusItineraryItem = useCallback((reference: string) => {
@@ -814,23 +784,28 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   /**
-   * Adds a Place from the drawer straight onto the open day, unscheduled within it.
-   * Timing is the traveller's to decide afterwards; getting it onto the day is the
-   * point of having the collection beside the plan.
+   * Adds a Place straight onto the open day, unscheduled within it. Timing is the
+   * traveller's to decide afterwards; getting it onto the day is the point of
+   * having the collection beside the plan. Reached from the Places drawer and
+   * from a map marker for a Place that is not on this day yet.
    */
-  async function addPlaceToSelectedDay(tripPlace: TripPlace) {
+  async function addTripPlaceToSelectedDay(tripPlaceId: string) {
     if (!selectedDay) return false;
     try {
       await createItineraryItem(tripId, {
         itineraryDayId: selectedDay.id,
         schedule: { kind: 'none' },
-        tripPlaceId: tripPlace.id,
+        tripPlaceId,
       });
       await refresh();
       return true;
     } catch {
       return false;
     }
+  }
+
+  function addPlaceToSelectedDay(tripPlace: TripPlace) {
+    return addTripPlaceToSelectedDay(tripPlace.id);
   }
 
   async function handleDailyBase(
@@ -1246,6 +1221,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                               `${incomingRoute.modeOwner.kind}:${incomingRoute.modeOwner.id}`
                             }
                             segment={incomingRoute}
+                            stale={routes?.stale ?? false}
                           />
                         ) : null,
                         <Item
@@ -1429,6 +1405,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                             savingRouteOwner === `${segment.modeOwner.kind}:${segment.modeOwner.id}`
                           }
                           segment={segment}
+                          stale={routes?.stale ?? false}
                         />
                       ))}
                   </ItemGroup>
@@ -1479,6 +1456,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
               >
                 {desktopMapLayout || mobileView === 'map' ? (
                   <ItineraryPlanningMap
+                    onAddToDay={(point) => addTripPlaceToSelectedDay(point.tripPlaceId)}
                     onOpenPlace={setDetailTripPlaceId}
                     onSelectPoint={handleMapPointSelection}
                     onViewItem={viewMapItem}

@@ -189,6 +189,19 @@ export type OfflineMutation = {
   userId: string;
 };
 
+/**
+ * A day's travel legs together with the day ordering they were computed for.
+ *
+ * The legs are only meaningful for that exact ordering: they are a chain from
+ * one stop to the next, so replaying them against a reordered day would name
+ * origins that no longer precede their destination. Keeping the revision with
+ * the payload is what lets a reader tell the difference.
+ */
+export type OfflineCachedDayRoutes = {
+  data: ItineraryDayRoutes;
+  revision: string;
+};
+
 export type OfflineTripSnapshot = {
   expenses: ExpensesResponse | null;
   itinerary: Itinerary | null;
@@ -198,7 +211,7 @@ export type OfflineTripSnapshot = {
   preparationError: string | null;
   preparedAt: string | null;
   reservations: ReservationsResponse | null;
-  routes: Record<string, ItineraryDayRoutes>;
+  routes: Record<string, OfflineCachedDayRoutes>;
   savedAt: string;
   tasks: TasksResponse | null;
   trip: Trip | null;

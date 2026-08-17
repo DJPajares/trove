@@ -36,6 +36,7 @@ import {
   type ItineraryTripPlace,
   type TripModeContext,
 } from '@/lib/itinerary/api';
+import { itineraryDayRouteRevision } from '@/lib/itinerary/routes';
 import {
   buildItineraryMapPoints,
   type ItineraryMapLocation,
@@ -150,6 +151,10 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
     );
   }, [state]);
 
+  // Keyed on the day's ordering, not just its identity, so a reorder made in the
+  // planner invalidates the legs this view is showing.
+  const routeRevision = itineraryDayRouteRevision(day);
+
   useEffect(() => {
     if (!day || !online) {
       setRouteState({ data: null, status: 'idle' });
@@ -160,6 +165,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
     void fetchItineraryDayRoutes(tripId, day.id, {
       includePolyline: true,
       languageCode: locale,
+      revision: routeRevision,
       signal: controller.signal,
     })
       .then((data) => setRouteState({ data, status: 'idle' }))
@@ -169,7 +175,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
         }
       });
     return () => controller.abort();
-  }, [day, locale, online, tripId]);
+  }, [day, locale, online, routeRevision, tripId]);
 
   useEffect(() => {
     if (state.status !== 'ready' || !online) return;

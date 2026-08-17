@@ -144,6 +144,36 @@ export function ItineraryRouteSummary({
   );
 }
 
+/**
+ * The day's base when no leg could be estimated against it — a base with no
+ * location of its own, or a day whose routes are unreachable. Choosing a base is
+ * how the traveller says where the day begins and ends, so the day still opens
+ * and closes there; only the travel estimate is missing, not the decision.
+ */
+export function ItineraryDayBaseRow({
+  name,
+  role,
+}: Readonly<{ name: string; role: 'arrival' | 'departure' }>) {
+  const t = useTranslations('itinerary.routes');
+
+  return (
+    <div
+      className="flex min-h-14 items-center gap-2 border-y border-border/60 bg-muted/15 px-3 py-1.5 text-xs text-muted-foreground sm:min-h-10"
+      role="listitem"
+    >
+      <span aria-hidden="true" className="ml-3 h-5 w-px bg-border-strong" />
+      <span className="flex min-w-0 flex-1 flex-col items-start sm:flex-row sm:items-center sm:gap-1.5">
+        <span className="shrink-0 whitespace-nowrap">{t('segmentNotEstimatedMetrics')}</span>
+        <span className="min-w-0 max-w-full truncate">
+          {role === 'arrival'
+            ? `${t('dayStartLabel')} · ${t('segmentOrigin', { origin: name })}`
+            : `${t('returnToBaseLabel')} · ${name}`}
+        </span>
+      </span>
+    </div>
+  );
+}
+
 export function ItineraryRouteSegmentRow({
   distanceUnit,
   locale,

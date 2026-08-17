@@ -29,6 +29,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { PageState } from '@/components/page-state';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import {
+  ItineraryDayBaseRow,
   ItineraryRouteSegmentRow,
   ItineraryRouteSummary,
 } from '@/components/itinerary-route-details';
@@ -506,6 +507,24 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
       ...bases,
     ];
   }, [itinerary, placeUse, providerDetails, routes, selectedDay, selectedIndex, t]);
+
+  // A routed base already announces itself through its travel leg. These stand in
+  // when no leg was estimated for it, so the day never silently drops a base the
+  // traveller set.
+  const arrivalBaseTripPlaceId = selectedDay?.dailyBaseTripPlaceId ?? null;
+  const departureBaseTripPlaceId =
+    selectedDay?.dailyBaseDepartureTripPlaceId ?? selectedDay?.dailyBaseTripPlaceId ?? null;
+  const unroutedArrivalBase =
+    arrivalBaseTripPlaceId &&
+    !routes?.segments.some((segment) => segment.origin.kind === 'daily_base')
+      ? (itinerary?.tripPlaces.find((tripPlace) => tripPlace.id === arrivalBaseTripPlaceId) ?? null)
+      : null;
+  const unroutedDepartureBase =
+    departureBaseTripPlaceId &&
+    !routes?.segments.some((segment) => segment.destination.kind === 'daily_base')
+      ? (itinerary?.tripPlaces.find((tripPlace) => tripPlace.id === departureBaseTripPlaceId) ??
+        null)
+      : null;
 
   useEffect(() => {
     if (selectedMapPointId && !mapPoints.some((point) => point.id === selectedMapPointId)) {
@@ -1249,6 +1268,12 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
               <div className={cn('p-4 sm:p-6', mobileView === 'map' && 'hidden lg:block')}>
                 {selectedDay.items.length ? (
                   <ItemGroup aria-label={t('itemListLabel')} variant="list">
+                    {unroutedArrivalBase ? (
+                      <ItineraryDayBaseRow
+                        name={placeName(unroutedArrivalBase) ?? t('providerPlace')}
+                        role="arrival"
+                      />
+                    ) : null}
                     {selectedDay.items.map((item, itemIndex) => {
                       const name = itemName(item);
                       const mapsHref = item.tripPlace ? googleMapsHref(item.tripPlace) : null;
@@ -1472,6 +1497,12 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                           stale={routes?.stale ?? false}
                         />
                       ))}
+                    {unroutedDepartureBase ? (
+                      <ItineraryDayBaseRow
+                        name={placeName(unroutedDepartureBase) ?? t('providerPlace')}
+                        role="departure"
+                      />
+                    ) : null}
                   </ItemGroup>
                 ) : (
                   <PageState

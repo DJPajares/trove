@@ -62,6 +62,23 @@ function markerContent(point: ItineraryMapPoint) {
   return element;
 }
 
+/**
+ * A day can start from one place and end at another, so a base marker says which
+ * end it is. Surfaces with a single unroled base keep the plain wording.
+ */
+function baseMarkerLabelKey(role: ItineraryMapPoint['baseRole']) {
+  if (role === 'arrival') return 'baseArrivalMarkerLabel' as const;
+  if (role === 'departure') return 'baseDepartureMarkerLabel' as const;
+  return 'baseMarkerLabel' as const;
+}
+
+function baseSelectionKey(role: ItineraryMapPoint['baseRole']) {
+  if (role === 'arrival') return 'baseArrivalSelection' as const;
+  if (role === 'departure') return 'baseDepartureSelection' as const;
+  if (role === 'both') return 'baseRoundTripSelection' as const;
+  return 'baseSelection' as const;
+}
+
 function currentLocationContent() {
   const element = document.createElement('span');
   element.className =
@@ -198,7 +215,7 @@ export function ItineraryPlanningMap({
               point.kind === 'scheduled'
                 ? t('scheduledMarkerLabel', { name: point.name, order: point.order ?? 0 })
                 : point.kind === 'base'
-                  ? t('baseMarkerLabel', { name: point.name })
+                  ? t(baseMarkerLabelKey(point.baseRole), { name: point.name })
                   : t('consideredMarkerLabel', { name: point.name }),
             zIndex:
               point.kind === 'scheduled' ? 10 + (point.order ?? 0) : point.kind === 'base' ? 8 : 1,
@@ -322,9 +339,19 @@ export function ItineraryPlanningMap({
             {selectedPoint.kind === 'scheduled'
               ? t('scheduledSelection', { order: selectedPoint.order ?? 0 })
               : selectedPoint.kind === 'base'
-                ? t('baseSelection')
+                ? t(baseSelectionKey(selectedPoint.baseRole))
                 : t('consideredSelection')}
           </p>
+          {/* A Place off this day may still be spoken for. Saying which day it is on
+              is what stops the same Place being planned twice by accident. */}
+          {selectedPoint.otherDayNumbers?.length ? (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {t('alsoOnDays', {
+                count: selectedPoint.otherDayNumbers.length,
+                days: selectedPoint.otherDayNumbers.join(', '),
+              })}
+            </p>
+          ) : null}
           <div className="mt-3 flex flex-wrap gap-2" ref={actionsRef}>
             {/* Only a Place that is not on this day yet can be added to it. Once it
                 is, the point becomes `scheduled` and this gives way to "View item". */}

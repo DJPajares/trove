@@ -23,7 +23,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { PageState } from '@/components/page-state';
@@ -128,7 +128,11 @@ import {
 import { useOnlineStatus } from '@/components/trip-sync-status';
 import { scheduledPlaceUse } from '@/lib/itinerary/places';
 import { itineraryDayRouteRevision, itineraryRouteRevision } from '@/lib/itinerary/routes';
-import { buildItineraryMapPoints, type ItineraryMapPoint } from '@/lib/maps/itinerary-map';
+import {
+  buildItineraryMapPoints,
+  dailyBasePoints,
+  type ItineraryMapPoint,
+} from '@/lib/maps/itinerary-map';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import {
   cacheProviderPlaceDetails,
@@ -207,6 +211,8 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const planScoreTranslations = useTranslations('planScore');
   const tripPlacesTranslations = useTranslations('tripPlaces');
   const locale = useLocale();
+  const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const requestedDayId = searchParams.get('day');
   const { preferredCurrency, preferences } = usePreferences();
@@ -255,27 +261,39 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const [placesDrawerOpen, setPlacesDrawerOpen] = useState(false);
   const desktopMapLayout = useDesktopMapLayout();
 
+  // The URL seeds the first selection and then follows it. Reading it on every
+  // refresh instead would undo a manual day switch on the next mutation.
+  const initialDayIdRef = useRef(requestedDayId);
+
   const refresh = useCallback(async () => {
     setError(null);
     try {
       const next = await fetchItinerary(tripId);
       setItinerary(next);
-      setSelectedDayId((current) =>
-        next.days.some((day) => day.id === requestedDayId)
-          ? requestedDayId
-          : current && next.days.some((day) => day.id === current)
-            ? current
-            : (next.days[0]?.id ?? null),
-      );
+      setSelectedDayId((current) => {
+        const preferred = current ?? initialDayIdRef.current;
+        return preferred && next.days.some((day) => day.id === preferred)
+          ? preferred
+          : (next.days[0]?.id ?? null);
+      });
       setStatus('idle');
     } catch {
       setStatus('error');
     }
-  }, [requestedDayId, tripId]);
+  }, [tripId]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Which day you are planning is part of where you are, so a reload, a shared
+  // link, and the back button all land on the same day you left.
+  useEffect(() => {
+    if (!selectedDayId || requestedDayId === selectedDayId) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('day', selectedDayId);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }, [pathname, requestedDayId, router, searchParams, selectedDayId]);
 
   useEffect(() => {
     if (!itinerary) return;
@@ -459,14 +477,35 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
 
   const mapPoints = useMemo(() => {
     if (!itinerary || !selectedDay) return [];
-    return buildItineraryMapPoints({
+    const points = buildItineraryMapPoints({
       itinerary,
+      placeUse,
       resolveItemName: itemName,
       resolvePlaceLocation: placeLocation,
       resolvePlaceName: (tripPlace) => placeName(tripPlace) ?? t('providerPlace'),
       selectedDay,
+      selectedDayNumber: selectedIndex + 1,
     });
-  }, [itinerary, providerDetails, selectedDay, t]);
+    const bases = dailyBasePoints({
+      day: selectedDay,
+      resolvePlaceLocation: placeLocation,
+      resolvePlaceName: (tripPlace) => placeName(tripPlace) ?? t('providerPlace'),
+      routeSegments: routes?.segments,
+      scheduledTripPlaceIds: new Set(
+        points.filter((point) => point.kind === 'scheduled').map((point) => point.tripPlaceId),
+      ),
+      tripPlaces: itinerary.tripPlaces,
+    });
+    // The base is the same pin either way, and being the day's base is the more
+    // useful thing to say about it than being one of the trip's other Places.
+    const basePlaceIds = new Set(bases.map((base) => base.tripPlaceId));
+    return [
+      ...points.filter(
+        (point) => point.kind !== 'considered' || !basePlaceIds.has(point.tripPlaceId),
+      ),
+      ...bases,
+    ];
+  }, [itinerary, placeUse, providerDetails, routes, selectedDay, selectedIndex, t]);
 
   useEffect(() => {
     if (selectedMapPointId && !mapPoints.some((point) => point.id === selectedMapPointId)) {
@@ -951,7 +990,14 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
           <SelectContent align="start">
             {itinerary.days.map((day, index) => (
               <SelectItem key={day.id} value={day.id}>
-                {t('dayOption', { date: formatDate(day.date), number: index + 1 })}
+                {/* How full a day is decides which day you want next, so the
+                    dropdown carries the count the desktop rail already shows. */}
+                <span className="flex w-full items-center justify-between gap-3">
+                  <span>{t('dayOption', { date: formatDate(day.date), number: index + 1 })}</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {t('dayItemCount', { count: day.items.length })}
+                  </span>
+                </span>
               </SelectItem>
             ))}
           </SelectContent>
@@ -968,39 +1014,47 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
       </div>
 
       <div className="overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card shadow-[var(--shadow-surface)] md:grid md:min-h-[34rem] md:grid-cols-[15rem_minmax(0,1fr)]">
-        <nav aria-label={t('dayNavigation')} className="hidden border-r border-border md:block">
-          <div className="border-b border-border px-4 py-3">
-            <p className="text-sm font-semibold">{t('days')}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {t('dayCount', { count: itinerary.days.length })}
-            </p>
-          </div>
-          <div className="max-h-[calc(100dvh-18rem)] overflow-y-auto p-2">
-            {itinerary.days.map((day, index) => {
-              const active = day.id === selectedDayId;
-              return (
-                <button
-                  aria-current={active ? 'date' : undefined}
-                  className={cn(
-                    'flex min-h-14 w-full items-center justify-between gap-3 rounded-[var(--radius-md)] px-3 py-2 text-left transition-colors duration-[var(--motion-standard)] outline-none focus-visible:ring-3 focus-visible:ring-ring/40',
-                    active ? 'bg-secondary text-secondary-foreground' : 'hover:bg-surface-hover',
-                  )}
-                  key={day.id}
-                  onClick={() => setSelectedDayId(day.id)}
-                  type="button"
-                >
-                  <span>
-                    <span className="block text-xs text-muted-foreground">
-                      {t('dayNumber', { number: index + 1 })}
+        <nav
+          aria-label={t('dayNavigation')}
+          className="relative hidden border-r border-border md:block"
+        >
+          {/* Filled rather than stretched: absolute content adds nothing to the grid
+              row, so a long trip's day list scrolls inside the panel instead of
+              making the rail taller than the day being planned beside it. */}
+          <div className="flex flex-col md:absolute md:inset-0">
+            <div className="border-b border-border px-4 py-3">
+              <p className="text-sm font-semibold">{t('days')}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {t('dayCount', { count: itinerary.days.length })}
+              </p>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-2">
+              {itinerary.days.map((day, index) => {
+                const active = day.id === selectedDayId;
+                return (
+                  <button
+                    aria-current={active ? 'date' : undefined}
+                    className={cn(
+                      'flex min-h-14 w-full items-center justify-between gap-3 rounded-[var(--radius-md)] px-3 py-2 text-left transition-colors duration-[var(--motion-standard)] outline-none focus-visible:ring-3 focus-visible:ring-ring/40',
+                      active ? 'bg-secondary text-secondary-foreground' : 'hover:bg-surface-hover',
+                    )}
+                    key={day.id}
+                    onClick={() => setSelectedDayId(day.id)}
+                    type="button"
+                  >
+                    <span>
+                      <span className="block text-xs text-muted-foreground">
+                        {t('dayNumber', { number: index + 1 })}
+                      </span>
+                      <span className="block text-sm font-medium">{formatDate(day.date)}</span>
                     </span>
-                    <span className="block text-sm font-medium">{formatDate(day.date)}</span>
-                  </span>
-                  <span className="text-xs tabular-nums text-muted-foreground">
-                    {day.items.length}
-                  </span>
-                </button>
-              );
-            })}
+                    <span className="text-xs tabular-nums text-muted-foreground">
+                      {day.items.length}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </nav>
 
@@ -1231,11 +1285,21 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                           role="listitem"
                           tabIndex={-1}
                         >
+                          {/* The same number the map draws in its circle, so a pin and
+                              a row can be matched at a glance. An item with no location
+                              has no pin to match, and says so by not looking like one. */}
                           <ItemMedia
-                            className="size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
-                            variant="icon"
+                            className={cn(
+                              'size-10 rounded-full text-sm font-semibold tabular-nums',
+                              hasMapLocation
+                                ? 'bg-primary text-primary-foreground'
+                                : 'border border-border bg-muted text-muted-foreground',
+                            )}
                           >
-                            <Clock3 aria-hidden="true" />
+                            <span className="sr-only">
+                              {t('stopNumber', { number: itemIndex + 1 })}
+                            </span>
+                            <span aria-hidden="true">{itemIndex + 1}</span>
                           </ItemMedia>
                           <ItemContent className="min-w-0">
                             <ItemTitle className="text-base">

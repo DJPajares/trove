@@ -401,7 +401,12 @@ export class GooglePlacesProvider implements PlacesProvider {
       method: 'GET',
     });
     const externalPlaceId = cleanString(response.id);
-    const name = cleanString(response.displayName?.text);
+    // A named venue always gets a displayName, but a plain geocoded address
+    // (a friend's house, a street corner) often doesn't — its formatted
+    // address is the only identifying text Google returns for it, and is a
+    // perfectly usable name rather than a reason to treat the place as
+    // unresolvable.
+    const name = cleanString(response.displayName?.text) ?? cleanString(response.formattedAddress);
 
     if (!externalPlaceId || !name) {
       throw new PlaceProviderError('provider_unavailable');

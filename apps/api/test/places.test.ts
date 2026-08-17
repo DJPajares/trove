@@ -162,6 +162,36 @@ test('Google details concludes the session and returns live photo references wit
   ]);
 });
 
+test('a geocoded address with no displayName falls back to its formatted address as the name', async () => {
+  const provider = new GooglePlacesProvider({
+    apiKey: 'server-key',
+    fetcher: async () =>
+      Response.json({
+        formattedAddress: '5 Quiet Lane, Wellington 6021',
+        id: 'ChIJaddress',
+        location: { latitude: -41.29, longitude: 174.78 },
+        types: ['street_address'],
+      }),
+  });
+
+  const place = await provider.getDetails({ externalPlaceId: 'ChIJaddress' });
+
+  assert.equal(place.name, '5 Quiet Lane, Wellington 6021');
+  assert.equal(place.formattedAddress, '5 Quiet Lane, Wellington 6021');
+});
+
+test('a place with neither a displayName nor a formatted address is unresolvable', async () => {
+  const provider = new GooglePlacesProvider({
+    apiKey: 'server-key',
+    fetcher: async () => Response.json({ id: 'ChIJbare' }),
+  });
+
+  await assert.rejects(
+    provider.getDetails({ externalPlaceId: 'ChIJbare' }),
+    new PlaceProviderError('provider_unavailable'),
+  );
+});
+
 async function detailsFrom(body: Record<string, unknown>) {
   const provider = new GooglePlacesProvider({
     apiKey: 'server-key',

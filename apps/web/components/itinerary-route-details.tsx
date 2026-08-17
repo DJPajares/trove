@@ -144,6 +144,30 @@ export function ItineraryRouteSummary({
   );
 }
 
+/**
+ * The day closes back where it opened. That stop already has its number from the
+ * start of the day, so this does not repeat it as a second stop — it only
+ * confirms, the way a routed leg would, that the day comes back there rather than
+ * simply stopping after its last item. Shown only when no routed leg already says
+ * so, which happens whenever the base has no location to route from or routing
+ * itself is unavailable.
+ */
+export function ItineraryDayReturnRow({ name }: Readonly<{ name: string }>) {
+  const t = useTranslations('itinerary.routes');
+
+  return (
+    <div
+      className="flex min-h-14 items-center gap-2 border-y border-border/60 bg-muted/15 px-3 py-1.5 text-xs text-muted-foreground sm:min-h-10"
+      role="listitem"
+    >
+      <span aria-hidden="true" className="ml-3 h-5 w-px bg-border-strong" />
+      <span className="min-w-0 max-w-full truncate">
+        {t('returnToBaseLabel')} · {name}
+      </span>
+    </div>
+  );
+}
+
 export function ItineraryRouteSegmentRow({
   distanceUnit,
   locale,

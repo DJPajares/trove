@@ -29,6 +29,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { PageState } from '@/components/page-state';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import {
+  ItineraryDayReturnRow,
   ItineraryRouteSegmentRow,
   ItineraryRouteSummary,
 } from '@/components/itinerary-route-details';
@@ -492,6 +493,14 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
       : null;
   const arrivalBase = tripPlaceById(dailyBases.arrivalTripPlaceId);
   const departureBase = tripPlaceById(dailyBases.departureTripPlaceId);
+  // A day that comes home closes on the stop it already opened with, so that stop
+  // keeps its one number — but the day still needs to say it closes there when no
+  // routed leg already carries that message.
+  const returnsToArrivalBase =
+    dailyBases.departureTripPlaceId !== null &&
+    dailyBases.departureTripPlaceId === dailyBases.arrivalTripPlaceId;
+  const hasRoutedReturnLeg =
+    routes?.segments.some((segment) => segment.destination.kind === 'daily_base') ?? false;
 
   const mapPoints = useMemo(() => {
     if (!itinerary || !selectedDay) return [];
@@ -1572,9 +1581,14 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                           stale={routes?.stale ?? false}
                         />
                       ))}
-                    {departureBase && stopNumbers.departure
-                      ? baseStopRow(departureBase, 'departure', stopNumbers.departure)
-                      : null}
+                    {departureBase && stopNumbers.departure ? (
+                      baseStopRow(departureBase, 'departure', stopNumbers.departure)
+                    ) : returnsToArrivalBase && arrivalBase && !hasRoutedReturnLeg ? (
+                      <ItineraryDayReturnRow
+                        key="base-return"
+                        name={placeName(arrivalBase) ?? t('providerPlace')}
+                      />
+                    ) : null}
                   </ItemGroup>
                 ) : (
                   <PageState

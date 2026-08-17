@@ -420,6 +420,28 @@ export async function listItinerary(userId: string, tripId: string) {
   };
 }
 
+/**
+ * The writes that land `orderedIds` on positions 0..n-1, in an order no unique
+ * index can reject.
+ *
+ * Position is uniquely indexed per day (`itinerary_items_scheduled_position_key`,
+ * and its unscheduled counterpart), so a row cannot be written straight to its
+ * final slot while the row currently sitting there has yet to move — inserting
+ * into the middle of a day collides on the very first write. Every row is
+ * therefore parked clear of the occupied range first, which empties 0..n-1 for
+ * the final pass. Parking runs above the current maximum rather than below zero
+ * because a check constraint keeps positions non-negative.
+ */
+export function planReorderWrites(orderedIds: string[], above: number) {
+  // Parking has to clear the final range too, or the second pass would collide
+  // with rows still parked — which is the same bug one step later.
+  const parkFrom = Math.max(above, orderedIds.length);
+  return [
+    ...orderedIds.map((id, index) => ({ id, position: parkFrom + index })),
+    ...orderedIds.map((id, index) => ({ id, position: index })),
+  ];
+}
+
 export async function organizeItineraryItem(
   userId: string,
   tripId: string,
@@ -452,11 +474,23 @@ export async function organizeItineraryItem(
     });
     const position = Math.min(Math.max(input.position, 0), siblings.length);
     siblings.splice(position, 0, { id: itemId });
-    await Promise.all(
-      siblings.map((item, index) =>
-        transaction.itineraryItem.update({ where: { id: item.id }, data: { position: index } }),
-      ),
+    const highestPosition = await transaction.itineraryItem.aggregate({
+      where: { itineraryDayId: input.itineraryDayId, tripId },
+      _max: { position: true },
+    });
+    const writes = planReorderWrites(
+      siblings.map((item) => item.id),
+      (highestPosition._max.position ?? -1) + 1,
     );
+    for (const write of writes) {
+      await transaction.itineraryItem.update({
+        where: { id: write.id },
+        // Setting the day on every write is what moves the item being reordered onto
+        // the target day, and it frees its old slot on the parking pass rather than
+        // on the final one.
+        data: { itineraryDayId: input.itineraryDayId, position: write.position },
+      });
+    }
 
     const movingDay = current.itineraryDayId !== input.itineraryDayId;
     const targetTripPlace = movingDay

@@ -4,7 +4,6 @@ import {
   ArrowDown,
   ArrowUp,
   CalendarClock,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
@@ -253,7 +252,6 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const [routeStatus, setRouteStatus] = useState<'error' | 'idle' | 'loading'>('loading');
   const [savingRouteOwner, setSavingRouteOwner] = useState<string | null>(null);
   const [placesDrawerOpen, setPlacesDrawerOpen] = useState(false);
-  const [showAdvancedDaySettings, setShowAdvancedDaySettings] = useState(false);
   const desktopMapLayout = useDesktopMapLayout();
 
   const refresh = useCallback(async () => {
@@ -350,6 +348,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     ? [
         selectedDay.id,
         selectedDay.dailyBaseTripPlaceId,
+        selectedDay.dailyBaseDepartureTripPlaceId,
         selectedDay.routeStartTravelMode,
         ...selectedDay.items.flatMap((item) => [
           item.id,
@@ -421,6 +420,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
         .flatMap((day) => [
           day.id,
           day.dailyBaseTripPlaceId ?? '',
+          day.dailyBaseDepartureTripPlaceId ?? '',
           day.routeStartTravelMode,
           ...day.items.flatMap((item) => [
             item.id,
@@ -826,10 +826,14 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     }
   }
 
-  async function handleDailyBase(day: ItineraryDay, tripPlaceId: string | null) {
+  async function handleDailyBase(
+    day: ItineraryDay,
+    tripPlaceId: string | null,
+    departureTripPlaceId?: string | null,
+  ) {
     setError(null);
     try {
-      await setItineraryDayBase(tripId, day.id, tripPlaceId);
+      await setItineraryDayBase(tripId, day.id, tripPlaceId, departureTripPlaceId);
       await refresh();
     } catch {
       setError(t('dailyBaseError'));
@@ -1073,35 +1077,28 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                       ) : null}
                     </div>
 
-                    <button
-                      className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-0 py-1.5 text-left text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
-                      onClick={() => setShowAdvancedDaySettings(!showAdvancedDaySettings)}
-                      type="button"
-                    >
-                      <ChevronDown
-                        aria-hidden="true"
-                        className={cn(
-                          'size-3 transition-transform duration-[var(--motion-standard)]',
-                          {
-                            'rotate-180': showAdvancedDaySettings,
-                          },
-                        )}
-                      />
-                      {t('advancedOptions')}
-                    </button>
-
-                    {showAdvancedDaySettings ? (
-                      <div className="space-y-1.5 border-t border-border pt-3">
+                    <div className="space-y-2 border-t border-border pt-3">
+                      <div>
                         <p className="text-xs font-medium text-muted-foreground">
                           {t('dailyBase')}
                         </p>
+                        <p className="mt-0.5 text-xs leading-5 text-muted-foreground/80">
+                          {t('dailyBaseHelp')}
+                        </p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-xs text-muted-foreground">{t('dailyBaseArrival')}</p>
                         <Select
                           onValueChange={(value) =>
                             void handleDailyBase(selectedDay, value === 'none' ? null : value)
                           }
                           value={selectedDay.dailyBaseTripPlaceId ?? 'none'}
                         >
-                          <SelectTrigger aria-label={t('dailyBase')} className="w-full" size="sm">
+                          <SelectTrigger
+                            aria-label={t('dailyBaseArrival')}
+                            className="w-full"
+                            size="sm"
+                          >
                             <SelectValue>
                               {selectedDay.dailyBaseTripPlaceId
                                 ? placeName(
@@ -1122,7 +1119,45 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                           </SelectContent>
                         </Select>
                       </div>
-                    ) : null}
+                      <div className="space-y-1.5">
+                        <p className="text-xs text-muted-foreground">{t('dailyBaseDeparture')}</p>
+                        <Select
+                          onValueChange={(value) =>
+                            void handleDailyBase(
+                              selectedDay,
+                              selectedDay.dailyBaseTripPlaceId,
+                              value === 'same' ? null : value,
+                            )
+                          }
+                          value={selectedDay.dailyBaseDepartureTripPlaceId ?? 'same'}
+                        >
+                          <SelectTrigger
+                            aria-label={t('dailyBaseDeparture')}
+                            className="w-full"
+                            size="sm"
+                          >
+                            <SelectValue>
+                              {selectedDay.dailyBaseDepartureTripPlaceId
+                                ? placeName(
+                                    itinerary.tripPlaces.find(
+                                      (place) =>
+                                        place.id === selectedDay.dailyBaseDepartureTripPlaceId,
+                                    ) ?? null,
+                                  )
+                                : t('dailyBaseSameAsArrival')}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent align="end">
+                            <SelectItem value="same">{t('dailyBaseSameAsArrival')}</SelectItem>
+                            {itinerary.tripPlaces.map((place) => (
+                              <SelectItem key={place.id} value={place.id}>
+                                {placeName(place)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
 
                     <Button
                       className="w-full"

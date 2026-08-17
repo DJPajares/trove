@@ -159,6 +159,15 @@ export function ItineraryRouteSegmentRow({
 }>) {
   const t = useTranslations('itinerary.routes');
   const originLabel = segment.origin.label ?? t(`point.${segment.origin.kind}`);
+  // Between-item legs need no extra context — the two stops on either side
+  // already say why the leg exists. Boundary legs (day start / return to the
+  // daily base) don't have that, so they're called out explicitly.
+  const legRoleLabel =
+    segment.modeOwner.kind === 'day_start'
+      ? t('dayStartLabel')
+      : segment.destination.kind === 'daily_base'
+        ? t('returnToBaseLabel')
+        : null;
   const isAvailable =
     segment.status === 'ok' && segment.durationSeconds !== null && segment.distanceMeters !== null;
   // A flight is not estimated by design, which is a different thing to say than a
@@ -191,6 +200,7 @@ export function ItineraryRouteSegmentRow({
           {metricsLabel}
         </span>
         <span className="min-w-0 max-w-full truncate">
+          {legRoleLabel ? `${legRoleLabel} · ` : ''}
           {t('segmentOrigin', { origin: originLabel })}
         </span>
       </span>

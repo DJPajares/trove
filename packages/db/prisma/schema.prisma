@@ -523,14 +523,15 @@ model TripPlace {
   createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  trip                  Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  place                 Place           @relation(fields: [placeId], references: [id], onDelete: Restrict)
-  itineraryItems        ItineraryItem[]
-  dailyBaseForDays      ItineraryDay[]  @relation("ItineraryDayDailyBase")
-  timeZoneSourceForDays ItineraryDay[]  @relation("ItineraryDayTimeZoneSource")
-  reservations          Reservation[]
-  expenses              Expense[]
-  memories              Memory[]
+  trip                      Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  place                     Place           @relation(fields: [placeId], references: [id], onDelete: Restrict)
+  itineraryItems            ItineraryItem[]
+  dailyBaseForDays          ItineraryDay[]  @relation("ItineraryDayDailyBase")
+  dailyBaseDepartureForDays ItineraryDay[]  @relation("ItineraryDayDailyBaseDeparture")
+  timeZoneSourceForDays     ItineraryDay[]  @relation("ItineraryDayTimeZoneSource")
+  reservations              Reservation[]
+  expenses                  Expense[]
+  memories                  Memory[]
 
   @@unique([tripId, placeId])
   @@unique([id, tripId])
@@ -544,6 +545,7 @@ model ItineraryDay {
   tripId                           String            @map("trip_id") @db.Uuid
   date                             DateTime          @db.Date
   dailyBaseTripPlaceId             String?           @map("daily_base_trip_place_id") @db.Uuid
+  dailyBaseDepartureTripPlaceId    String?           @map("daily_base_departure_trip_place_id") @db.Uuid
   notes                            String?           @db.Text
   experienceRating                 Int?              @map("experience_rating")
   experienceNote                   String?           @map("experience_note") @db.Text
@@ -556,19 +558,21 @@ model ItineraryDay {
   createdAt                        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  trip                      Trip                          @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  dailyBaseTripPlace        TripPlace?                    @relation("ItineraryDayDailyBase", fields: [dailyBaseTripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
-  timeZoneSourceTripPlace   TripPlace?                    @relation("ItineraryDayTimeZoneSource", fields: [defaultTimeZoneSourceTripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
-  timeZoneSourceItem        ItineraryItem?                @relation("ItineraryDayTimeZoneSourceItem", fields: [defaultTimeZoneSourceItemId, tripId], references: [id, tripId], onDelete: NoAction)
-  items                     ItineraryItem[]               @relation("ItineraryDayItems")
-  memories                  Memory[]
-  tasks                     Task[]                        @relation("TaskItineraryDay")
-  expenses                  Expense[]                     @relation("ExpenseItineraryDay")
-  accommodationReservations ReservationAccommodationDay[]
+  trip                        Trip                          @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  dailyBaseTripPlace          TripPlace?                    @relation("ItineraryDayDailyBase", fields: [dailyBaseTripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
+  dailyBaseDepartureTripPlace TripPlace?                    @relation("ItineraryDayDailyBaseDeparture", fields: [dailyBaseDepartureTripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
+  timeZoneSourceTripPlace     TripPlace?                    @relation("ItineraryDayTimeZoneSource", fields: [defaultTimeZoneSourceTripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)
+  timeZoneSourceItem          ItineraryItem?                @relation("ItineraryDayTimeZoneSourceItem", fields: [defaultTimeZoneSourceItemId, tripId], references: [id, tripId], onDelete: NoAction)
+  items                       ItineraryItem[]               @relation("ItineraryDayItems")
+  memories                    Memory[]
+  tasks                       Task[]                        @relation("TaskItineraryDay")
+  expenses                    Expense[]                     @relation("ExpenseItineraryDay")
+  accommodationReservations   ReservationAccommodationDay[]
 
   @@unique([tripId, date])
   @@unique([id, tripId])
   @@index([dailyBaseTripPlaceId, tripId])
+  @@index([dailyBaseDepartureTripPlaceId, tripId])
   @@index([defaultTimeZoneSourceTripPlaceId, tripId])
   @@index([defaultTimeZoneSourceItemId, tripId])
   @@map("itinerary_days")

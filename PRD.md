@@ -950,6 +950,34 @@ Daily Base may affect:
 - day start/end,
 - Trip Mode.
 
+### 18.4.1 Departure Base
+
+A day's base is normally symmetric: the same place governs both the
+morning-origin leg and the evening-return leg. A day may instead set a
+separate **Departure Base** to override the return leg only, for the case
+where the traveller leaves from one place and returns to a different one
+(most commonly, a day spent checking out of one accommodation and into
+another).
+
+- Setting a Departure Base is optional. When unset, the day's base (explicit
+  or inferred) governs both ends, unchanged from the single-base behavior
+  above.
+- When set, the Departure Base overrides only the end-of-day return leg; the
+  day's base (explicit or inferred) continues to govern the start-of-day leg.
+- Accommodation inference may resolve Departure Base independently of the
+  start-of-day base on a **transition day**: if exactly two Accommodations
+  apply to the day, and their check-out/check-in dates unambiguously
+  identify which is ending and which is beginning that day, Trove infers the
+  ending Accommodation as the day's base and the beginning Accommodation as
+  its Departure Base. Anything more ambiguous (more than two applicable
+  Accommodations, or dates that do not cleanly disambiguate) must not guess,
+  per the rule above.
+- Departure Base does not affect day timezone resolution (Section 32.1);
+  timezone continues to resolve from the day's base only.
+- Route rows must visually distinguish a start-of-day or return-to-base leg
+  from an ordinary between-item leg, so the traveller can tell why the leg
+  exists without needing to already know about Daily Base.
+
 ---
 
 # 19. Reservations & Travel Logistics

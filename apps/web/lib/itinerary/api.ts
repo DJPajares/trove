@@ -33,6 +33,8 @@ export type ItineraryTripPlace = {
     location: { latitude: number; longitude: number; timeZone: string | null } | null;
     name: string | null;
     note: string | null;
+    providerAddress: string | null;
+    providerLabel: string | null;
     providerRefs: Array<{ externalPlaceId: string; provider: 'google'; resolvedAt?: string }>;
     timeZone: string | null;
   };

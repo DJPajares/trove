@@ -77,13 +77,18 @@ export function PlaceDetailSheet({
     };
   }, [details?.photos, open]);
 
+  // The name the provider gave, falling back to the label captured when the Place
+  // was first added so an unreachable provider does not make it anonymous.
+  const providerName = place?.kind === 'provider' ? (details?.name ?? place.providerLabel) : null;
   const name =
     context.customName?.trim() ||
-    (place?.kind === 'custom' ? (place.name ?? t('customPlace')) : (details?.name ?? t('place')));
+    (place?.kind === 'custom' ? (place.name ?? t('customPlace')) : (providerName ?? t('place')));
   const description =
     place?.kind === 'custom'
       ? (place.note ?? t('customDescription'))
-      : (details?.formattedAddress ?? t('unavailableDescription'));
+      : (details?.formattedAddress ?? place?.providerAddress ?? t('unavailableDescription'));
+  /** Shown under the title only when the traveller's own name has taken it. */
+  const officialName = context.customName?.trim() ? providerName : null;
 
   return (
     <Sheet onOpenChange={onOpenChange} open={open}>
@@ -94,6 +99,9 @@ export function PlaceDetailSheet({
       >
         <SheetHeader className="border-b">
           <SheetTitle>{name}</SheetTitle>
+          {officialName ? (
+            <p className="text-sm font-medium text-foreground">{officialName}</p>
+          ) : null}
           <SheetDescription>{description}</SheetDescription>
         </SheetHeader>
         <div className="space-y-6 overflow-y-auto p-5">

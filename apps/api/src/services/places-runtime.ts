@@ -1,8 +1,11 @@
 import { getPlacesEnvironment } from '../environment.js';
 import { GooglePlacesProvider } from './google-places.js';
-import { PlacesService } from './places.js';
+import { PlacesService, type PlacesLogger } from './places.js';
 
-export function createPlacesService(environment: Record<string, string | undefined> = process.env) {
+export function createPlacesService(
+  environment: Record<string, string | undefined> = process.env,
+  logger?: PlacesLogger,
+) {
   const placesEnvironment = getPlacesEnvironment(environment);
 
   if (!placesEnvironment) {
@@ -11,5 +14,7 @@ export function createPlacesService(environment: Record<string, string | undefin
 
   return new PlacesService(
     new GooglePlacesProvider({ apiKey: placesEnvironment.googlePlacesApiKey }),
+    () => new Date(),
+    logger,
   );
 }

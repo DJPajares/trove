@@ -27,7 +27,11 @@ import {
 } from '@/components/ui/item';
 import type { ScheduledPlaceUse } from '@/lib/itinerary/places';
 import type { TripPlace, TripPlacePriority } from '@/lib/trip-places/api';
-import { resolveTripPlaceName } from '@/lib/trip-places/place-name';
+import {
+  resolveProviderPlaceName,
+  resolveTripPlaceAddress,
+  resolveTripPlaceName,
+} from '@/lib/trip-places/place-name';
 import type { TripPlaceDetails } from '@/lib/trip-places/use-trip-places';
 
 const priorities = ['none', 'must_go', 'interested', 'maybe'] as const;
@@ -76,9 +80,14 @@ export function TripPlacesPanel({
     });
 
   const placeDescription = (tripPlace: TripPlace) =>
-    tripPlace.place.kind === 'custom'
-      ? (tripPlace.place.note ?? t('customPlaceDescription'))
-      : (providerDetails[tripPlace.place.id]?.formattedAddress ?? t('providerDetailsUnavailable'));
+    resolveTripPlaceAddress(tripPlace, providerDetails, {
+      custom: t('customPlaceDescription'),
+      provider: t('providerDetailsUnavailable'),
+    });
+
+  /** Only worth its own line once the traveller's name has taken the title. */
+  const officialName = (tripPlace: TripPlace) =>
+    tripPlace.customName?.trim() ? resolveProviderPlaceName(tripPlace, providerDetails) : null;
 
   /** Where this Place already sits in the plan, so nothing gets added twice unnoticed. */
   const usageLabel = (tripPlace: TripPlace) => {
@@ -94,6 +103,7 @@ export function TripPlacesPanel({
     <ItemGroup aria-label={t('listLabel')} className="gap-2" variant="list">
       {tripPlaces.map((tripPlace) => {
         const name = placeName(tripPlace);
+        const official = officialName(tripPlace);
         const usage = usageLabel(tripPlace);
 
         return (
@@ -120,6 +130,10 @@ export function TripPlacesPanel({
                   </span>
                 ) : null}
               </ItemTitle>
+              {/* A renamed Place still says which one it actually is. */}
+              {official ? (
+                <p className="line-clamp-1 text-sm font-medium text-foreground">{official}</p>
+              ) : null}
               <ItemDescription className="line-clamp-1">
                 {placeDescription(tripPlace)}
               </ItemDescription>

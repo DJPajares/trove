@@ -153,6 +153,8 @@ function serializeTripPlace(tripPlace: NonNullable<ItineraryItemRecord['tripPlac
             },
       name: place.customName,
       note: place.customNote,
+      providerAddress: place.providerAddress,
+      providerLabel: place.providerLabel,
       providerRefs: place.providerRefs.map((reference) => ({
         externalPlaceId: reference.externalPlaceId,
         provider: 'google' as const,

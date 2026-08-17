@@ -9,6 +9,7 @@ const USER_ID = 'owner-user-id';
 type RecordedUpdate = { customName?: string | null; note?: string | null };
 
 const updates: RecordedUpdate[] = [];
+const upserts: Array<{ create: RecordedUpdate; update: RecordedUpdate }> = [];
 
 /** The row `updateTripPlace` re-reads after writing, shaped as `tripPlaceInclude` asks for it. */
 const storedTripPlace = {
@@ -37,11 +38,18 @@ const storedTripPlace = {
  */
 function createRecordingPrismaClient() {
   return {
+    place: {
+      findFirst: () => Promise.resolve({ id: storedTripPlace.place.id }),
+    },
     tripPlace: {
       findFirst: () => Promise.resolve(storedTripPlace),
       updateMany: (args: { data: RecordedUpdate }) => {
         updates.push(args.data);
         return Promise.resolve({ count: 1 });
+      },
+      upsert: (args: { create: RecordedUpdate; update: RecordedUpdate }) => {
+        upserts.push({ create: args.create, update: args.update });
+        return Promise.resolve(storedTripPlace);
       },
     },
     trip: {
@@ -131,4 +139,18 @@ test('an empty body and an unknown field are both refused', async () => {
 
   assert.equal((await patch(app, {})).statusCode, 400);
   assert.equal((await patch(app, { displayName: 'Airport lounge' })).statusCode, 400);
+});
+
+test('a Place can be named as it is added, and re-adding never erases that name', async () => {
+  const { addTripPlace } = await import('../src/services/trip-places.js');
+  upserts.length = 0;
+
+  await addTripPlace(USER_ID, TRIP_ID, storedTripPlace.place.id, { customName: "  Mum's place  " });
+  assert.deepEqual(upserts.at(-1)?.create.customName, "Mum's place");
+  assert.deepEqual(upserts.at(-1)?.update.customName, "Mum's place");
+
+  // Adding with no name is still idempotent: it must not blank an existing one.
+  await addTripPlace(USER_ID, TRIP_ID, storedTripPlace.place.id);
+  assert.equal(upserts.at(-1)?.create.customName, null);
+  assert.deepEqual(upserts.at(-1)?.update, {});
 });

@@ -675,6 +675,8 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                         location: tripPlace.place.location,
                         name: tripPlace.place.name,
                         note: tripPlace.place.note,
+                        providerAddress: tripPlace.place.providerAddress,
+                        providerLabel: tripPlace.place.providerLabel,
                         providerRefs: tripPlace.place.providerRefs,
                         timeZone: tripPlace.place.location?.timeZone ?? null,
                       },

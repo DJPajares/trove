@@ -8,6 +8,10 @@ export type CanonicalPlace = {
   location: { latitude: number; longitude: number; timeZone: string | null } | null;
   name: string | null;
   note: string | null;
+  /** The address the provider gave when this Place was first resolved. */
+  providerAddress: string | null;
+  /** The name the provider gave then, used only when live details are out of reach. */
+  providerLabel: string | null;
   providerRefs: Array<{ externalPlaceId: string; provider: 'google' }>;
 };
 
@@ -207,11 +211,31 @@ export function searchProviderPlaces(input: string, signal?: AbortSignal) {
   });
 }
 
-export function getProviderPlaceDetails(externalPlaceId: string) {
-  return savedRequest<{
-    place?: ProviderPlaceDetails;
-    status: 'empty' | 'ok' | 'unavailable';
-  }>(`/places/${encodeURIComponent(externalPlaceId)}`);
+export type ProviderPlaceDetailsResult =
+  | { code?: string; status: 'unavailable' }
+  | { place?: ProviderPlaceDetails; status: 'empty' | 'ok' };
+
+/**
+ * The API answers a Place it cannot resolve with 404 and one it cannot reach with
+ * 5xx, both of which `savedRequest` throws. They are caught here and handed back as
+ * the statuses the caller already expects, so "Google has nothing for this Place"
+ * stays distinguishable from "we could not ask" instead of collapsing into a throw.
+ */
+export async function getProviderPlaceDetails(
+  externalPlaceId: string,
+): Promise<ProviderPlaceDetailsResult> {
+  try {
+    return await savedRequest<ProviderPlaceDetailsResult>(
+      `/places/${encodeURIComponent(externalPlaceId)}`,
+    );
+  } catch (cause) {
+    if (cause instanceof SavedApiError) {
+      return cause.status === 404
+        ? { status: 'empty' }
+        : { code: cause.code, status: 'unavailable' };
+    }
+    throw cause;
+  }
 }
 
 export function resolveProviderPlacePhoto(name: string) {
@@ -221,9 +245,16 @@ export function resolveProviderPlacePhoto(name: string) {
   );
 }
 
-export function resolveProviderPlace(externalPlaceId: string) {
+/**
+ * The label is what the traveller saw when they picked this Place. It is kept only
+ * so the Place still has a name on a day the provider cannot be reached.
+ */
+export function resolveProviderPlace(
+  externalPlaceId: string,
+  label?: { address?: string | null; name?: string | null },
+) {
   return savedRequest<{ place: CanonicalPlace }>('/places/resolve', {
-    body: JSON.stringify({ externalPlaceId, provider: 'google' }),
+    body: JSON.stringify({ externalPlaceId, label, provider: 'google' }),
     method: 'POST',
   });
 }

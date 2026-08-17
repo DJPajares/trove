@@ -46,6 +46,10 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
       provider: t('providerPlace'),
     });
 
+  const detailsUnavailable = Object.values(places.detailFailures).some(
+    (failure) => failure === 'unavailable',
+  );
+
   async function removePlace() {
     if (!removingPlace) return;
     setRemoving(true);
@@ -74,6 +78,19 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
         <Alert role="alert" variant="destructive">
           <CircleAlert aria-hidden="true" />
           <AlertDescription>{t(places.error.key, places.error.values)}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {/* A name that could not be refreshed is a thing to try again, not a dead end. */}
+      {detailsUnavailable ? (
+        <Alert role="status" variant="warning">
+          <CircleAlert aria-hidden="true" />
+          <AlertDescription className="flex flex-wrap items-center gap-2">
+            {t('detailsUnavailable')}
+            <Button onClick={places.retryProviderDetails} size="sm" variant="outline">
+              {t('retryDetails')}
+            </Button>
+          </AlertDescription>
         </Alert>
       ) : null}
 

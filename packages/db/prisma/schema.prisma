@@ -296,6 +296,10 @@ model Place {
   customLongitude Decimal?  @map("custom_longitude") @db.Decimal(9, 6)
   customTimeZone  String?   @map("custom_time_zone")
   customNote      String?   @map("custom_note") @db.Text
+  /// The name and address the provider gave when this Place was first resolved.
+  /// A last-resort label so a Place is never nameless; live details always win.
+  providerLabel   String?   @map("provider_label") @db.Text
+  providerAddress String?   @map("provider_address") @db.Text
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 

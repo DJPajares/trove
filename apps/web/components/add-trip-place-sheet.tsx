@@ -1,6 +1,6 @@
 'use client';
 
-import { Bookmark, CircleAlert, MapPinned, NotebookPen, Plus } from 'lucide-react';
+import { Bookmark, CircleAlert, MapPinned, NotebookPen, Pencil, Plus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 
@@ -76,6 +76,9 @@ export function AddTripPlaceSheet({
     'idle',
   );
   const [busyId, setBusyId] = useState<string | null>(null);
+  /** Which row has its name field open — only ever one, like `busyId`. */
+  const [namingId, setNamingId] = useState<string | null>(null);
+  const [nameValue, setNameValue] = useState('');
   const [error, setError] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
   const [customName, setCustomName] = useState('');
@@ -226,12 +229,18 @@ export function AddTripPlaceSheet({
   const alreadyOnTrip = (placeId: string) =>
     tripPlaces.some((tripPlace) => tripPlace.place.id === placeId);
 
-  async function add(placeId: string, busyKey: string) {
+  function closeNaming() {
+    setNamingId(null);
+    setNameValue('');
+  }
+
+  async function add(placeId: string, busyKey: string, customName?: string | null) {
     setBusyId(busyKey);
     setError(false);
     try {
-      const { tripPlace } = await addTripPlace(tripId, placeId);
+      const { tripPlace } = await addTripPlace(tripId, placeId, { customName });
       onAdded(tripPlace);
+      closeNaming();
       return true;
     } catch {
       setError(true);
@@ -241,19 +250,71 @@ export function AddTripPlaceSheet({
     }
   }
 
-  async function addProvider(suggestion: ProviderSuggestion) {
+  async function addProvider(suggestion: ProviderSuggestion, customName?: string | null) {
     setBusyId(suggestion.externalPlaceId);
     setError(false);
     try {
-      const { place } = await resolveProviderPlace(suggestion.externalPlaceId);
-      const { tripPlace } = await addTripPlace(tripId, place.id);
+      // The text the traveller just read is worth keeping: it is what names this
+      // Place on a day Google cannot be reached.
+      const { place } = await resolveProviderPlace(suggestion.externalPlaceId, {
+        address: suggestion.description,
+        name: suggestion.name,
+      });
+      const { tripPlace } = await addTripPlace(tripId, place.id, { customName });
       onAdded(tripPlace);
+      closeNaming();
     } catch {
       setError(true);
     } finally {
       setBusyId(null);
     }
   }
+
+  /**
+   * The name field a row reveals. Adding stays one click by default; this is only
+   * for when the traveller already knows what they want to call the place.
+   */
+  const namingField = (key: string, onSubmit: (customName: string) => void) =>
+    namingId === key ? (
+      <form
+        className="mt-3 flex flex-wrap items-center gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (nameValue.trim()) onSubmit(nameValue.trim());
+        }}
+      >
+        <Input
+          aria-label={t('nameItLabel')}
+          autoFocus
+          className="min-w-0 flex-1"
+          maxLength={200}
+          onChange={(event) => setNameValue(event.target.value)}
+          placeholder={t('nameItPlaceholder')}
+          value={nameValue}
+        />
+        <Button onClick={closeNaming} size="sm" type="button" variant="ghost">
+          {t('cancel')}
+        </Button>
+        <Button disabled={busyId === key || !nameValue.trim()} size="sm" type="submit">
+          {busyId === key ? t('adding') : t('add')}
+        </Button>
+      </form>
+    ) : null;
+
+  const nameItButton = (key: string, seedName: string, label: string) => (
+    <Button
+      aria-label={t('nameItAction', { name: label })}
+      onClick={() => {
+        setNamingId(key);
+        setNameValue(seedName);
+      }}
+      size="icon-sm"
+      type="button"
+      variant="ghost"
+    >
+      <Pencil aria-hidden="true" />
+    </Button>
+  );
 
   async function createCustom(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -337,8 +398,20 @@ export function AddTripPlaceSheet({
                           </span>
                         </ItemTitle>
                         <ItemDescription>{savedDescription(savedPlace)}</ItemDescription>
+                        {namingField(
+                          savedPlace.place.id,
+                          (customName) =>
+                            void add(savedPlace.place.id, savedPlace.place.id, customName),
+                        )}
                       </ItemContent>
                       <ItemActions className="shrink-0">
+                        {existing || namingId === savedPlace.place.id
+                          ? null
+                          : nameItButton(
+                              savedPlace.place.id,
+                              savedName(savedPlace),
+                              savedName(savedPlace),
+                            )}
                         <Button
                           disabled={existing || busyId === savedPlace.place.id}
                           onClick={() => void add(savedPlace.place.id, savedPlace.place.id)}
@@ -373,8 +446,19 @@ export function AddTripPlaceSheet({
                       <ItemDescription>
                         {suggestion.description ?? t('providerPlace')}
                       </ItemDescription>
+                      {namingField(
+                        suggestion.externalPlaceId,
+                        (customName) => void addProvider(suggestion, customName),
+                      )}
                     </ItemContent>
                     <ItemActions className="shrink-0">
+                      {namingId === suggestion.externalPlaceId
+                        ? null
+                        : nameItButton(
+                            suggestion.externalPlaceId,
+                            suggestion.name,
+                            suggestion.name,
+                          )}
                       <Button
                         disabled={busyId === suggestion.externalPlaceId}
                         onClick={() => void addProvider(suggestion)}

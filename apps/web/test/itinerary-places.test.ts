@@ -15,6 +15,8 @@ function tripPlace(id: string) {
       location: null,
       name: id,
       note: null,
+      providerAddress: null,
+      providerLabel: null,
       providerRefs: [],
       timeZone: null,
     },

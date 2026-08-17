@@ -7,7 +7,9 @@ import { requireAuthenticatedUser } from '../services/request-auth.js';
 
 export function registerPlacesRoutes(app: FastifyInstance) {
   const controllers = createPlacesControllers(
-    createPlacesService(),
+    // The provider answering with nothing is the one failure travellers actually
+    // see, so it is logged rather than only turned into a status.
+    createPlacesService(process.env, app.log),
     createCanonicalPlacesService(),
   );
 

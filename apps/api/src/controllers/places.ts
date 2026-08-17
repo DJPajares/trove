@@ -70,6 +70,15 @@ const placePhotoSchema = z
 const providerPlaceResolutionSchema = z
   .object({
     externalPlaceId: z.string().trim().min(1).max(512),
+    // What the caller saw when it picked this Place, kept only as a fallback for
+    // when the provider cannot be reached later.
+    label: z
+      .object({
+        address: z.string().trim().max(500).nullable().optional(),
+        name: z.string().trim().max(200).nullable().optional(),
+      })
+      .strict()
+      .optional(),
     provider: z.enum(PLACE_PROVIDERS),
   })
   .strict();
@@ -201,6 +210,7 @@ export function createPlacesControllers(
       const place = await canonicalPlacesService.resolveProviderPlace(
         parsed.data.provider,
         parsed.data.externalPlaceId,
+        parsed.data.label,
       );
       return reply.send({ place });
     },

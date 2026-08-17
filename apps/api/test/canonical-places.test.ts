@@ -10,6 +10,7 @@ import {
   CanonicalPlacesService,
   type CustomPlaceCreate,
   type CustomPlaceUpdate,
+  type ProviderPlaceLabel,
   ProviderReferenceConflictError,
 } from '../src/services/canonical-places.js';
 import type { PlaceProviderName } from '../src/services/places.js';
@@ -33,7 +34,11 @@ class MemoryCanonicalPlaceRepository implements CanonicalPlaceRepository {
     return this.providerPlaces.get(`${provider}:${externalPlaceId}`) ?? null;
   }
 
-  async createProviderPlace(provider: PlaceProviderName, externalPlaceId: string) {
+  async createProviderPlace(
+    provider: PlaceProviderName,
+    externalPlaceId: string,
+    label?: ProviderPlaceLabel,
+  ) {
     this.createProviderAttempts += 1;
     await new Promise<void>((resolve) => setImmediate(resolve));
 
@@ -51,11 +56,32 @@ class MemoryCanonicalPlaceRepository implements CanonicalPlaceRepository {
       id: this.createId(),
       kind: 'PROVIDER',
       ownerId: null,
+      providerAddress: label?.address?.trim() || null,
+      providerLabel: label?.name?.trim() || null,
       providerRefs: [{ externalPlaceId, provider: 'GOOGLE' }],
     };
     this.providerPlaces.set(key, place);
     this.providerPlaceCount += 1;
     return place;
+  }
+
+  backfillAttempts = 0;
+
+  async backfillProviderLabel(placeId: string, label: ProviderPlaceLabel) {
+    this.backfillAttempts += 1;
+    await Promise.resolve();
+
+    for (const [key, place] of this.providerPlaces) {
+      if (place.id !== placeId) continue;
+      const updated: CanonicalPlaceRecord = {
+        ...place,
+        ...(label.address?.trim() ? { providerAddress: label.address.trim() } : {}),
+        ...(label.name?.trim() ? { providerLabel: label.name.trim() } : {}),
+      };
+      this.providerPlaces.set(key, updated);
+      return updated;
+    }
+    throw new Error('place_not_found');
   }
 
   async createCustomPlace(userId: string, input: CustomPlaceCreate) {
@@ -68,6 +94,8 @@ class MemoryCanonicalPlaceRepository implements CanonicalPlaceRepository {
       id: this.createId(),
       kind: 'CUSTOM',
       ownerId: userId,
+      providerAddress: null,
+      providerLabel: null,
       providerRefs: [],
     };
     this.customPlaces.set(place.id, place);
@@ -115,6 +143,8 @@ test('provider resolution creates identity only on use and reuses it across conc
     location: null,
     name: null,
     note: null,
+    providerAddress: null,
+    providerLabel: null,
     providerRefs: [{ externalPlaceId: 'ChIJcanonical', provider: 'google' }],
   });
 
@@ -134,6 +164,8 @@ test('custom Places support name-only creation and remain owner-scoped on edit',
     location: null,
     name: 'Quiet lookout',
     note: null,
+    providerAddress: null,
+    providerLabel: null,
     providerRefs: [],
   });
 
@@ -204,4 +236,51 @@ test('canonical Place controllers return one API shape for provider-backed and c
   assert.equal(updateResponse.json().place.note, 'Near the west entrance');
 
   await app.close();
+});
+
+test('the label a Place was first seen by is kept, backfilled once, and never rewritten', async () => {
+  const repository = new MemoryCanonicalPlaceRepository();
+  const service = new CanonicalPlacesService(repository);
+
+  // Captured on the way in, so the Place has a name of its own from the start.
+  const created = await service.resolveProviderPlace('google', 'Ej-clonbern', {
+    address: '  Remuera, Auckland 1050, New Zealand  ',
+    name: '  2/42 Clonbern Road  ',
+  });
+  assert.equal(created.providerLabel, '2/42 Clonbern Road');
+  assert.equal(created.providerAddress, 'Remuera, Auckland 1050, New Zealand');
+  assert.equal(repository.backfillAttempts, 0);
+
+  // A second traveller wording it differently does not get to rename it.
+  const reresolved = await service.resolveProviderPlace('google', 'Ej-clonbern', {
+    address: 'Somewhere else entirely',
+    name: 'A different wording',
+  });
+  assert.equal(reresolved.providerLabel, '2/42 Clonbern Road');
+  assert.equal(reresolved.providerAddress, 'Remuera, Auckland 1050, New Zealand');
+  assert.equal(repository.backfillAttempts, 0, 'an existing label must not be written again');
+
+  // A Place resolved before labels existed borrows the next one offered.
+  const unlabelled = await service.resolveProviderPlace('google', 'ChIJlegacy');
+  assert.equal(unlabelled.providerLabel, null);
+
+  const backfilled = await service.resolveProviderPlace('google', 'ChIJlegacy', {
+    address: 'Matamata 3472, New Zealand',
+    name: 'Hobbiton Movie Set Tours',
+  });
+  assert.equal(backfilled.providerLabel, 'Hobbiton Movie Set Tours');
+  assert.equal(backfilled.providerAddress, 'Matamata 3472, New Zealand');
+  assert.equal(repository.backfillAttempts, 1);
+});
+
+test('resolving without a label still succeeds and writes nothing', async () => {
+  const repository = new MemoryCanonicalPlaceRepository();
+  const service = new CanonicalPlacesService(repository);
+
+  const place = await service.resolveProviderPlace('google', 'ChIJnolabel');
+
+  assert.equal(place.providerLabel, null);
+  assert.equal(place.providerAddress, null);
+  assert.equal(repository.backfillAttempts, 0);
+  assert.equal(repository.providerPlaceCount, 1);
 });

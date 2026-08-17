@@ -112,6 +112,17 @@ export function ItineraryPlacesDrawer({
               </Alert>
             ) : null}
 
+            {Object.values(places.detailFailures).some((failure) => failure === 'unavailable') ? (
+              <Alert role="status" variant="warning">
+                <AlertDescription className="flex flex-wrap items-center gap-2">
+                  {t('detailsUnavailable')}
+                  <Button onClick={places.retryProviderDetails} size="sm" variant="outline">
+                    {t('retryDetails')}
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
             {places.status === 'loading' ? <PageState kind="loading" title={t('loading')} /> : null}
 
             {places.status === 'idle' && !places.sorted.length ? (

@@ -68,9 +68,13 @@ export function fetchTripPlaces(tripId: string) {
   );
 }
 
-export function addTripPlace(tripId: string, placeId: string) {
+export function addTripPlace(
+  tripId: string,
+  placeId: string,
+  input: { customName?: string | null } = {},
+) {
   return tripPlaceRequest<{ tripPlace: TripPlace }>(`/trips/${tripId}/places`, {
-    body: JSON.stringify({ placeId }),
+    body: JSON.stringify({ customName: input.customName || undefined, placeId }),
     method: 'POST',
   });
 }

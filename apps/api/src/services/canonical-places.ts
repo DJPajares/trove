@@ -20,6 +20,16 @@ export type CustomPlaceUpdate = {
   note?: string | null;
 };
 
+/**
+ * What the provider called a Place when it was first resolved. Kept as a last
+ * resort so a Place is never nameless when the provider cannot be reached, and
+ * never preferred over the details resolved live.
+ */
+export type ProviderPlaceLabel = {
+  address?: string | null;
+  name?: string | null;
+};
+
 export type CanonicalPlace = {
   id: string;
   kind: 'custom' | 'provider';
@@ -30,6 +40,8 @@ export type CanonicalPlace = {
   } | null;
   name: string | null;
   note: string | null;
+  providerAddress: string | null;
+  providerLabel: string | null;
   providerRefs: {
     externalPlaceId: string;
     provider: PlaceProviderName;
@@ -45,6 +57,8 @@ export type CanonicalPlaceRecord = {
   id: string;
   kind: 'CUSTOM' | 'PROVIDER';
   ownerId: string | null;
+  providerAddress: string | null;
+  providerLabel: string | null;
   providerRefs: {
     externalPlaceId: string;
     provider: 'GOOGLE';
@@ -52,10 +66,12 @@ export type CanonicalPlaceRecord = {
 };
 
 export interface CanonicalPlaceRepository {
+  backfillProviderLabel(placeId: string, label: ProviderPlaceLabel): Promise<CanonicalPlaceRecord>;
   createCustomPlace(userId: string, input: CustomPlaceCreate): Promise<CanonicalPlaceRecord>;
   createProviderPlace(
     provider: PlaceProviderName,
     externalPlaceId: string,
+    label?: ProviderPlaceLabel,
   ): Promise<CanonicalPlaceRecord>;
   findByProviderRef(
     provider: PlaceProviderName,
@@ -96,6 +112,13 @@ function normalizeNote(note: string | null | undefined) {
   return note?.trim() || null;
 }
 
+function normalizeLabel(label: ProviderPlaceLabel | undefined) {
+  return {
+    providerAddress: label?.address?.trim() || null,
+    providerLabel: label?.name?.trim() || null,
+  };
+}
+
 function serializePlace(place: CanonicalPlaceRecord): CanonicalPlace {
   return {
     id: place.id,
@@ -110,6 +133,8 @@ function serializePlace(place: CanonicalPlaceRecord): CanonicalPlace {
           },
     name: place.customName,
     note: place.customNote,
+    providerAddress: place.providerAddress,
+    providerLabel: place.providerLabel,
     providerRefs: place.providerRefs.map((reference) => ({
       externalPlaceId: reference.externalPlaceId,
       provider: fromDatabaseProvider(reference.provider),
@@ -126,6 +151,8 @@ function toPlaceRecord(place: {
   id: string;
   kind: 'CUSTOM' | 'PROVIDER';
   ownerId: string | null;
+  providerAddress: string | null;
+  providerLabel: string | null;
   providerRefs: { externalPlaceId: string; provider: 'GOOGLE' }[];
 }): CanonicalPlaceRecord {
   return {
@@ -150,13 +177,17 @@ class PrismaCanonicalPlaceRepository implements CanonicalPlaceRepository {
     return reference ? toPlaceRecord(reference.place) : null;
   }
 
-  async createProviderPlace(provider: PlaceProviderName, externalPlaceId: string) {
+  async createProviderPlace(
+    provider: PlaceProviderName,
+    externalPlaceId: string,
+    label?: ProviderPlaceLabel,
+  ) {
     try {
       const reference = await getPrismaClient().placeProviderRef.create({
         data: {
           externalPlaceId,
           provider: toDatabaseProvider(provider),
-          place: { create: { kind: 'PROVIDER' } },
+          place: { create: { kind: 'PROVIDER', ...normalizeLabel(label) } },
         },
         include: { place: { include: { providerRefs: true } } },
       });
@@ -168,6 +199,24 @@ class PrismaCanonicalPlaceRepository implements CanonicalPlaceRepository {
       }
       throw error;
     }
+  }
+
+  /**
+   * Fills in a label a Place resolved before this was captured. Only ever writes
+   * over a null, so the first text a Place was known by is the text it keeps.
+   */
+  async backfillProviderLabel(placeId: string, label: ProviderPlaceLabel) {
+    const { providerAddress, providerLabel } = normalizeLabel(label);
+    const place = await getPrismaClient().place.update({
+      where: { id: placeId },
+      data: {
+        ...(providerAddress ? { providerAddress } : {}),
+        ...(providerLabel ? { providerLabel } : {}),
+      },
+      include: { providerRefs: true },
+    });
+
+    return toPlaceRecord(place);
   }
 
   async createCustomPlace(userId: string, input: CustomPlaceCreate) {
@@ -229,18 +278,23 @@ class PrismaCanonicalPlaceRepository implements CanonicalPlaceRepository {
 export class CanonicalPlacesService {
   constructor(private readonly repository: CanonicalPlaceRepository) {}
 
-  async resolveProviderPlace(provider: PlaceProviderName, externalPlaceId: string) {
+  async resolveProviderPlace(
+    provider: PlaceProviderName,
+    externalPlaceId: string,
+    label?: ProviderPlaceLabel,
+  ) {
     const normalizedExternalPlaceId = externalPlaceId.trim();
     const existing = await this.repository.findByProviderRef(provider, normalizedExternalPlaceId);
 
     if (existing) {
-      return serializePlace(existing);
+      return serializePlace(await this.withLabel(existing, label));
     }
 
     try {
       const created = await this.repository.createProviderPlace(
         provider,
         normalizedExternalPlaceId,
+        label,
       );
       return serializePlace(created);
     } catch (error) {
@@ -255,8 +309,27 @@ export class CanonicalPlacesService {
       if (!concurrentlyCreated) {
         throw error;
       }
-      return serializePlace(concurrentlyCreated);
+      return serializePlace(await this.withLabel(concurrentlyCreated, label));
     }
+  }
+
+  /**
+   * A Place resolved before labels were captured has nothing to fall back on, so
+   * the next traveller to reach it through search lends it theirs. A Place that
+   * already has one is left alone rather than drifting with each search wording.
+   */
+  private async withLabel(place: CanonicalPlaceRecord, label: ProviderPlaceLabel | undefined) {
+    const missing =
+      (!place.providerLabel && label?.name?.trim()) ||
+      (!place.providerAddress && label?.address?.trim());
+    if (!missing) {
+      return place;
+    }
+
+    return this.repository.backfillProviderLabel(place.id, {
+      address: place.providerAddress ? null : label?.address,
+      name: place.providerLabel ? null : label?.name,
+    });
   }
 
   async createCustomPlace(userId: string, input: CustomPlaceCreate) {

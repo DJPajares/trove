@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   cacheProviderPlaceDetails,
@@ -20,6 +20,13 @@ import {
 
 export type TripPlaceDetails = Record<string, ProviderPlaceDetails | null | undefined>;
 
+/**
+ * Which Places the provider could not answer for. Kept apart from the details
+ * themselves so a failure is a thing that can be tried again rather than an
+ * answer, and so the UI can offer to retry rather than silently showing nothing.
+ */
+export type TripPlaceDetailFailures = Record<string, 'empty' | 'unavailable' | undefined>;
+
 export type TripPlacesStatus = 'error' | 'idle' | 'loading';
 
 /** Carries its own values so the caller can render it without knowing the key. */
@@ -38,8 +45,24 @@ export function useTripPlaces(tripId: string) {
   const [tripName, setTripName] = useState('');
   const [places, setPlaces] = useState<TripPlace[]>([]);
   const [providerDetails, setProviderDetails] = useState<TripPlaceDetails>({});
+  const [detailFailures, setDetailFailures] = useState<TripPlaceDetailFailures>({});
   const [status, setStatus] = useState<TripPlacesStatus>('loading');
   const [error, setError] = useState<TripPlacesError | null>(null);
+
+  /**
+   * Which Places have already been asked about. Held in a ref rather than inferred
+   * from `providerDetails`, because inferring it made a single failed lookup
+   * permanent: the entry stopped being undefined, so it was never asked again.
+   */
+  const attempted = useRef(new Set<string>());
+
+  const retryProviderDetails = useCallback(() => {
+    attempted.current.clear();
+    setDetailFailures({});
+    setProviderDetails((current) =>
+      Object.fromEntries(Object.entries(current).filter(([, details]) => details)),
+    );
+  }, []);
 
   const refresh = useCallback(async () => {
     setStatus('loading');
@@ -48,10 +71,12 @@ export function useTripPlaces(tripId: string) {
       setTripName(result.trip.name);
       setPlaces(result.tripPlaces);
       setStatus('idle');
+      // Pulling the collection again is also a fresh chance at the names.
+      retryProviderDetails();
     } catch {
       setStatus('error');
     }
-  }, [tripId]);
+  }, [retryProviderDetails, tripId]);
 
   useEffect(() => {
     void refresh();
@@ -63,25 +88,31 @@ export function useTripPlaces(tripId: string) {
     const pending = places.filter(
       (entry) =>
         entry.place.kind === 'provider' &&
-        providerDetails[entry.place.id] === undefined &&
+        !attempted.current.has(entry.place.id) &&
         entry.place.providerRefs[0],
     );
     if (!pending.length) return;
 
+    for (const entry of pending) attempted.current.add(entry.place.id);
+
     let active = true;
     void Promise.all(
       pending.map(async (entry) => {
+        const id = entry.place.id;
         const providerId = entry.place.providerRefs[0]?.externalPlaceId;
-        if (!providerId) return { details: null, id: entry.place.id };
-        const cached = getCachedProviderPlaceDetails(entry.place.id);
-        if (cached) return { details: cached, id: entry.place.id };
+        if (!providerId) return { details: null, failure: 'empty' as const, id };
+
+        const cached = getCachedProviderPlaceDetails(id);
+        if (cached) return { details: cached, failure: undefined, id };
+
         try {
           const result = await getProviderPlaceDetails(providerId);
-          const details = result.status === 'ok' ? (result.place ?? null) : null;
-          if (details) cacheProviderPlaceDetails(entry.place.id, details);
-          return { details, id: entry.place.id };
+          if (result.status !== 'ok') return { details: null, failure: result.status, id };
+          const details = result.place ?? null;
+          if (details) cacheProviderPlaceDetails(id, details);
+          return { details, failure: details ? undefined : ('empty' as const), id };
         } catch {
-          return { details: null, id: entry.place.id };
+          return { details: null, failure: 'unavailable' as const, id };
         }
       }),
     ).then((results) => {
@@ -90,12 +121,16 @@ export function useTripPlaces(tripId: string) {
         ...current,
         ...Object.fromEntries(results.map((result) => [result.id, result.details])),
       }));
+      setDetailFailures((current) => ({
+        ...current,
+        ...Object.fromEntries(results.map((result) => [result.id, result.failure])),
+      }));
     });
 
     return () => {
       active = false;
     };
-  }, [places, providerDetails]);
+  }, [places]);
 
   const replace = useCallback((tripPlace: TripPlace) => {
     setPlaces((current) => current.map((entry) => (entry.id === tripPlace.id ? tripPlace : entry)));
@@ -169,10 +204,12 @@ export function useTripPlaces(tripId: string) {
 
   return {
     clearError: useCallback(() => setError(null), []),
+    detailFailures,
     error,
     places,
     providerDetails,
     refresh,
+    retryProviderDetails,
     remove,
     savePlace,
     setPlaces,

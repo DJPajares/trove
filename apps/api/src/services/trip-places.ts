@@ -65,6 +65,8 @@ function serializePlace(place: {
   customTimeZone: string | null;
   id: string;
   kind: 'CUSTOM' | 'PROVIDER';
+  providerAddress: string | null;
+  providerLabel: string | null;
   providerRefs: Array<{ externalPlaceId: string; provider: 'GOOGLE' }>;
 }): CanonicalPlace {
   return {
@@ -80,6 +82,8 @@ function serializePlace(place: {
           },
     name: place.customName,
     note: place.customNote,
+    providerAddress: place.providerAddress,
+    providerLabel: place.providerLabel,
     providerRefs: place.providerRefs.map((reference) => ({
       externalPlaceId: reference.externalPlaceId,
       provider: 'google' as const,
@@ -146,7 +150,12 @@ export async function listTripPlaces(userId: string, tripId: string) {
   return { trip, tripPlaces: tripPlaces.map(serializeTripPlace) };
 }
 
-export async function addTripPlace(userId: string, tripId: string, placeId: string) {
+export async function addTripPlace(
+  userId: string,
+  tripId: string,
+  placeId: string,
+  input: { customName?: string | null } = {},
+) {
   await assertOwnedTrip(userId, tripId);
   const prisma = getPrismaClient();
   const place = await prisma.place.findFirst({
@@ -155,10 +164,14 @@ export async function addTripPlace(userId: string, tripId: string, placeId: stri
   });
   if (!place) throw new TripPlaceSourceNotFoundError();
 
+  const customName = input.customName?.trim() || null;
+
   const tripPlace = await prisma.tripPlace.upsert({
     where: { tripId_placeId: { placeId: place.id, tripId } },
-    create: { placeId: place.id, tripId },
-    update: {},
+    create: { customName, placeId: place.id, tripId },
+    // Adding a Place already on the trip stays idempotent, but a name offered
+    // this time is still worth keeping.
+    update: customName ? { customName } : {},
     include: {
       ...tripPlaceInclude,
       place: {

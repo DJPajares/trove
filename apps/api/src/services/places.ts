@@ -189,6 +189,11 @@ function createFreshness(clock: () => Date): PlaceFreshness {
   return { fetchedAt: clock().toISOString(), source: 'live' };
 }
 
+/** The slice of the Fastify logger this service needs, so tests can pass a stub. */
+export type PlacesLogger = {
+  warn: (details: Record<string, unknown>, message: string) => void;
+};
+
 function getProviderError(error: unknown): PlaceProviderError {
   return error instanceof PlaceProviderError
     ? error
@@ -203,7 +208,26 @@ export class PlacesService {
   constructor(
     private readonly provider: PlacesProvider,
     private readonly clock: () => Date = () => new Date(),
+    private readonly logger?: PlacesLogger,
   ) {}
+
+  /**
+   * A provider failure reaches the traveller as a Place with no name, and every
+   * cause — quota, a bad key, a timeout, nothing found — looks identical by the
+   * time it gets there. The cause is recorded here so it is answerable later.
+   */
+  private warn(operation: string, error: PlaceProviderError, externalPlaceId?: string) {
+    this.logger?.warn(
+      {
+        cause: error.cause,
+        code: error.code,
+        externalPlaceId,
+        operation,
+        provider: this.provider.name,
+      },
+      'places provider request failed',
+    );
+  }
 
   async search(
     request: Omit<PlaceSearchRequest, 'sessionToken'> & { sessionToken?: string },
@@ -222,6 +246,7 @@ export class PlacesService {
       };
     } catch (error) {
       const providerError = getProviderError(error);
+      this.warn('search', providerError);
 
       return {
         code: getUnavailableCode(providerError),
@@ -244,6 +269,7 @@ export class PlacesService {
       };
     } catch (error) {
       const providerError = getProviderError(error);
+      this.warn('getDetails', providerError, request.externalPlaceId);
 
       if (providerError.code === 'not_found') {
         return { provider: this.provider.name, status: 'empty' };

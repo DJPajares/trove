@@ -14,7 +14,13 @@ import {
 
 const tripParamsSchema = z.object({ tripId: z.uuid() }).strict();
 const tripPlaceParamsSchema = z.object({ tripId: z.uuid(), tripPlaceId: z.uuid() }).strict();
-const addTripPlaceSchema = z.object({ placeId: z.uuid() }).strict();
+const addTripPlaceSchema = z
+  .object({
+    // Naming a Place while adding it saves a second trip through Edit place.
+    customName: z.string().trim().min(1).max(200).nullable().optional(),
+    placeId: z.uuid(),
+  })
+  .strict();
 const updateTripPlaceSchema = z
   .object({
     // Null clears the rename, so the Place goes back to the name its provider gives it.
@@ -59,9 +65,11 @@ export function createTripPlacesControllers() {
       if (!params.success || !body.success)
         return reply.code(400).send({ code: 'invalid_trip_place' });
       try {
-        return reply
-          .code(201)
-          .send({ tripPlace: await addTripPlace(userId, params.data.tripId, body.data.placeId) });
+        return reply.code(201).send({
+          tripPlace: await addTripPlace(userId, params.data.tripId, body.data.placeId, {
+            customName: body.data.customName,
+          }),
+        });
       } catch (error) {
         return handleError(reply, error);
       }

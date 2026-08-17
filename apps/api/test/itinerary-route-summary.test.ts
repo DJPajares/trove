@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 
 import { createSummary, type ItineraryRouteSegment } from '../src/services/itinerary-routes.js';
 

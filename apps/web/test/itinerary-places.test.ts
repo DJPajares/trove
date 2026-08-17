@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 
 import type { Itinerary, ItineraryDay, ItineraryItem } from '../lib/itinerary/api.ts';
 import { scheduledPlaceUse } from '../lib/itinerary/places.ts';

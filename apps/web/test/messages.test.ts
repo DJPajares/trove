@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { test } from 'vitest';
 
 const messagesDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'messages');
 const messageFiles = readdirSync(messagesDir).filter((name) => name.endsWith('.json'));

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
 import Fastify from 'fastify';
+import { test } from 'vitest';
 
 import { createPlacesControllers } from '../src/controllers/places.js';
 import {

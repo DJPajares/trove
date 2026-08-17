@@ -6,6 +6,7 @@ import { scheduledPlaceUse } from '../lib/itinerary/places.ts';
 
 function tripPlace(id: string) {
   return {
+    customName: null,
     id,
     note: null,
     place: {

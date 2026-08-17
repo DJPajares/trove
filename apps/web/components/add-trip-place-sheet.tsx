@@ -70,7 +70,6 @@ export function AddTripPlaceSheet({
   const t = useTranslations('tripPlaces');
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
   const [details, setDetails] = useState<Details>({});
-  const [savedStatus, setSavedStatus] = useState<'error' | 'idle' | 'loading'>('loading');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ProviderSuggestion[]>([]);
   const [searchStatus, setSearchStatus] = useState<'empty' | 'idle' | 'loading' | 'unavailable'>(
@@ -83,6 +82,8 @@ export function AddTripPlaceSheet({
   const [customNote, setCustomNote] = useState('');
   const [creating, setCreating] = useState(false);
 
+  // Saved Places are fetched once so they can answer the search locally. Failing to
+  // load them costs the traveller nothing they can see: the provider search still works.
   useEffect(() => {
     let active = true;
     void fetchSavedPlaces()
@@ -97,9 +98,8 @@ export function AddTripPlaceSheet({
             }),
           ),
         );
-        setSavedStatus('idle');
       })
-      .catch(() => active && setSavedStatus('error'));
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -193,32 +193,35 @@ export function AddTripPlaceSheet({
       ? (savedPlace.place.note ?? t('customPlaceDescription'))
       : (details[savedPlace.place.id]?.formattedAddress ?? t('providerDetailsUnavailable'));
 
+  // Saved Places answer the query from what Trove already knows, so they are matched
+  // here rather than asked of the provider. Nothing is listed before there is a query.
   const matchingSaved = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
-    const ordered = savedPlaces.toSorted((left, right) =>
-      savedName(left).localeCompare(savedName(right)),
-    );
-    if (!needle) return ordered;
-    return ordered.filter((savedPlace) =>
-      [savedName(savedPlace), savedDescription(savedPlace)].some((value) =>
-        value.toLocaleLowerCase().includes(needle),
-      ),
-    );
+    if (!needle) return [];
+    return savedPlaces
+      .toSorted((left, right) => savedName(left).localeCompare(savedName(right)))
+      .filter((savedPlace) =>
+        [savedName(savedPlace), savedDescription(savedPlace)].some((value) =>
+          value.toLocaleLowerCase().includes(needle),
+        ),
+      );
     // savedName depends on details, which is why it is listed rather than the function.
   }, [details, query, savedPlaces]);
 
-  const providerResults = useMemo(
-    () =>
-      results.filter(
-        (suggestion) =>
-          !tripPlaces.some((tripPlace) =>
-            tripPlace.place.providerRefs.some(
-              (reference) => reference.externalPlaceId === suggestion.externalPlaceId,
-            ),
-          ),
-      ),
-    [results, tripPlaces],
-  );
+  /**
+   * One list, so the question is "what can I add?" rather than "which section is it in?".
+   * A suggestion already on the trip, or already answered by a Saved Place above it,
+   * would only be the same Place a second time.
+   */
+  const providerResults = useMemo(() => {
+    const known = new Set(
+      [
+        ...tripPlaces.flatMap((tripPlace) => tripPlace.place.providerRefs),
+        ...matchingSaved.flatMap((savedPlace) => savedPlace.place.providerRefs),
+      ].map((reference) => reference.externalPlaceId),
+    );
+    return results.filter((suggestion) => !known.has(suggestion.externalPlaceId));
+  }, [matchingSaved, results, tripPlaces]);
 
   const alreadyOnTrip = (placeId: string) =>
     tripPlaces.some((tripPlace) => tripPlace.place.id === placeId);
@@ -299,16 +302,17 @@ export function AddTripPlaceSheet({
             </Alert>
           ) : null}
 
-          {savedStatus === 'loading' ? (
-            <p aria-live="polite" className="text-sm text-muted-foreground" role="status">
-              {t('loadingSaved')}
-            </p>
-          ) : null}
-
-          {matchingSaved.length ? (
+          {!query.trim() ? (
+            <p className="text-sm leading-6 text-muted-foreground">{t('searchHint')}</p>
+          ) : searchStatus === 'unavailable' && !matchingSaved.length ? (
+            <Alert role="alert" variant="warning">
+              <CircleAlert aria-hidden="true" />
+              <AlertDescription>{t('searchUnavailable')}</AlertDescription>
+            </Alert>
+          ) : matchingSaved.length || providerResults.length ? (
             <div className="space-y-2">
-              <h2 className="text-sm font-medium">{t('savedPlaces')}</h2>
-              <ItemGroup aria-label={t('savedPlaces')} className="gap-2">
+              <h2 className="text-sm font-medium">{t('resultsHeading')}</h2>
+              <ItemGroup aria-label={t('resultsHeading')} className="gap-2">
                 {matchingSaved.map((savedPlace) => {
                   const existing = alreadyOnTrip(savedPlace.place.id);
                   return (
@@ -324,7 +328,14 @@ export function AddTripPlaceSheet({
                         )}
                       </ItemMedia>
                       <ItemContent className="min-w-0">
-                        <ItemTitle>{savedName(savedPlace)}</ItemTitle>
+                        <ItemTitle className="flex min-w-0 items-center gap-2">
+                          <span className="min-w-0 truncate">{savedName(savedPlace)}</span>
+                          {/* Without the section heading, the badge is what says where
+                              this result came from. */}
+                          <span className="shrink-0 rounded-full bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand">
+                            {t('savedBadge')}
+                          </span>
+                        </ItemTitle>
                         <ItemDescription>{savedDescription(savedPlace)}</ItemDescription>
                       </ItemContent>
                       <ItemActions className="shrink-0">
@@ -344,27 +355,7 @@ export function AddTripPlaceSheet({
                     </Item>
                   );
                 })}
-              </ItemGroup>
-            </div>
-          ) : savedStatus === 'idle' && !query.trim() ? (
-            <p className="text-sm leading-6 text-muted-foreground">{t('noSavedPlaces')}</p>
-          ) : null}
 
-          {!query.trim() ? (
-            <p className="text-sm leading-6 text-muted-foreground">{t('searchHint')}</p>
-          ) : searchStatus === 'loading' ? (
-            <p aria-live="polite" className="text-sm text-muted-foreground" role="status">
-              {t('searching')}
-            </p>
-          ) : searchStatus === 'unavailable' ? (
-            <Alert role="alert" variant="warning">
-              <CircleAlert aria-hidden="true" />
-              <AlertDescription>{t('searchUnavailable')}</AlertDescription>
-            </Alert>
-          ) : providerResults.length ? (
-            <div className="space-y-2">
-              <h2 className="text-sm font-medium">{t('searchResults')}</h2>
-              <ItemGroup aria-label={t('searchResults')} className="gap-2">
                 {providerResults.map((suggestion) => (
                   <Item
                     className="gap-3 px-3 py-3"
@@ -397,6 +388,10 @@ export function AddTripPlaceSheet({
                 ))}
               </ItemGroup>
             </div>
+          ) : searchStatus === 'loading' ? (
+            <p aria-live="polite" className="text-sm text-muted-foreground" role="status">
+              {t('searching')}
+            </p>
           ) : searchStatus === 'empty' || searchStatus === 'idle' ? (
             <p className="text-sm leading-6 text-muted-foreground">{t('noSearchResults')}</p>
           ) : null}

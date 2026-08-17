@@ -21,7 +21,13 @@ import {
 } from '@/lib/saved/api';
 
 type PlaceDetailSheetProps = {
-  context: { isSaved?: boolean; note?: string | null; tripName?: string | null };
+  context: {
+    /** What the traveller renamed this Place to on the trip they opened it from. */
+    customName?: string | null;
+    isSaved?: boolean;
+    note?: string | null;
+    tripName?: string | null;
+  };
   onOpenChange: (open: boolean) => void;
   open: boolean;
   place: CanonicalPlace | null;
@@ -72,7 +78,8 @@ export function PlaceDetailSheet({
   }, [details?.photos, open]);
 
   const name =
-    place?.kind === 'custom' ? (place.name ?? t('customPlace')) : (details?.name ?? t('place'));
+    context.customName?.trim() ||
+    (place?.kind === 'custom' ? (place.name ?? t('customPlace')) : (details?.name ?? t('place')));
   const description =
     place?.kind === 'custom'
       ? (place.note ?? t('customDescription'))

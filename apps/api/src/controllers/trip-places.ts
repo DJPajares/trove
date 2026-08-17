@@ -17,11 +17,16 @@ const tripPlaceParamsSchema = z.object({ tripId: z.uuid(), tripPlaceId: z.uuid()
 const addTripPlaceSchema = z.object({ placeId: z.uuid() }).strict();
 const updateTripPlaceSchema = z
   .object({
+    // Null clears the rename, so the Place goes back to the name its provider gives it.
+    customName: z.string().trim().min(1).max(200).nullable().optional(),
     note: z.string().trim().max(5_000).nullable().optional(),
     priority: z.enum(['must_go', 'interested', 'maybe']).nullable().optional(),
   })
   .strict()
-  .refine((value) => value.note !== undefined || value.priority !== undefined);
+  .refine(
+    (value) =>
+      value.customName !== undefined || value.note !== undefined || value.priority !== undefined,
+  );
 
 function getUserId(request: FastifyRequest, reply: FastifyReply) {
   if (!request.authUserId) {

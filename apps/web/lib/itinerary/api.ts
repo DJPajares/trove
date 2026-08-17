@@ -24,6 +24,7 @@ export type ItineraryScheduleInput =
   | { kind: 'exact'; localTime: string };
 
 export type ItineraryTripPlace = {
+  customName: string | null;
   id: string;
   note: string | null;
   place: {

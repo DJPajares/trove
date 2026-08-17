@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { AddTripPlaceSheet } from '@/components/add-trip-place-sheet';
+import { EditTripPlaceDialog } from '@/components/edit-trip-place-dialog';
 import { PageState } from '@/components/page-state';
 import { PlaceDetailSheet } from '@/components/place-detail-sheet';
 import { TripPlacesPanel } from '@/components/trip-places-panel';
@@ -21,22 +22,15 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { Textarea } from '@/components/ui/textarea';
 import type { ScheduledPlaceUse } from '@/lib/itinerary/places';
 import type { TripPlace } from '@/lib/trip-places/api';
+import { resolveTripPlaceName } from '@/lib/trip-places/place-name';
 import { useTripPlaces } from '@/lib/trip-places/use-trip-places';
 
 type ItineraryPlacesDrawerProps = {
@@ -62,9 +56,7 @@ export function ItineraryPlacesDrawer({
   const t = useTranslations('tripPlaces');
   const places = useTripPlaces(tripId);
   const [detailPlace, setDetailPlace] = useState<TripPlace | null>(null);
-  const [notePlace, setNotePlace] = useState<TripPlace | null>(null);
-  const [noteValue, setNoteValue] = useState('');
-  const [savingNote, setSavingNote] = useState(false);
+  const [editPlace, setEditPlace] = useState<TripPlace | null>(null);
   const [removingPlace, setRemovingPlace] = useState<TripPlace | null>(null);
   const [removing, setRemoving] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
@@ -72,9 +64,10 @@ export function ItineraryPlacesDrawer({
   const [addOpen, setAddOpen] = useState(false);
 
   const placeName = (tripPlace: TripPlace) =>
-    tripPlace.place.kind === 'custom'
-      ? (tripPlace.place.name ?? t('customPlace'))
-      : (places.providerDetails[tripPlace.place.id]?.name ?? t('providerPlace'));
+    resolveTripPlaceName(tripPlace, places.providerDetails, {
+      custom: t('customPlace'),
+      provider: t('providerPlace'),
+    });
 
   async function addToDay(tripPlace: TripPlace) {
     setAddingId(tripPlace.id);
@@ -82,13 +75,6 @@ export function ItineraryPlacesDrawer({
     const added = await onAddToDay(tripPlace);
     setFeedback(added ? t('addedToDay', { number: dayNumber }) : t('addToDayError'));
     setAddingId(null);
-  }
-
-  async function saveNote() {
-    if (!notePlace) return;
-    setSavingNote(true);
-    if (await places.saveNote(notePlace, noteValue)) setNotePlace(null);
-    setSavingNote(false);
   }
 
   async function removePlace() {
@@ -143,10 +129,7 @@ export function ItineraryPlacesDrawer({
                 addToDayLabel={t('addToDay', { number: dayNumber })}
                 busyPlaceId={addingId}
                 onAddToDay={(tripPlace) => void addToDay(tripPlace)}
-                onEditNote={(tripPlace) => {
-                  setNotePlace(tripPlace);
-                  setNoteValue(tripPlace.note ?? '');
-                }}
+                onEditPlace={setEditPlace}
                 onPriorityChange={(tripPlace, priority) =>
                   void places.setPriority(tripPlace, priority)
                 }
@@ -178,6 +161,7 @@ export function ItineraryPlacesDrawer({
 
       <PlaceDetailSheet
         context={{
+          customName: detailPlace?.customName,
           isSaved: detailPlace?.isSaved,
           note: detailPlace?.note,
           tripName: places.tripName,
@@ -187,29 +171,13 @@ export function ItineraryPlacesDrawer({
         place={detailPlace?.place ?? null}
       />
 
-      <Dialog onOpenChange={(open) => !open && setNotePlace(null)} open={Boolean(notePlace)}>
-        <DialogContent className="sm:max-w-md" closeLabel={t('cancel')}>
-          <DialogHeader>
-            <DialogTitle>{t('noteTitle')}</DialogTitle>
-          </DialogHeader>
-          <Textarea
-            aria-label={t('note')}
-            maxLength={2000}
-            onChange={(event) => setNoteValue(event.target.value)}
-            placeholder={t('notePlaceholder')}
-            rows={4}
-            value={noteValue}
-          />
-          <DialogFooter>
-            <Button onClick={() => setNotePlace(null)} variant="ghost">
-              {t('cancel')}
-            </Button>
-            <Button disabled={savingNote} onClick={() => void saveNote()}>
-              {savingNote ? t('saving') : t('save')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EditTripPlaceDialog
+        onOpenChange={(open) => !open && setEditPlace(null)}
+        onRefresh={places.refresh}
+        onSave={places.savePlace}
+        providerDetails={places.providerDetails}
+        tripPlace={editPlace}
+      />
 
       <AlertDialog
         onOpenChange={(open) => !open && setRemovingPlace(null)}

@@ -7,6 +7,8 @@ export type TripPlacePriority = 'interested' | 'maybe' | 'must_go';
 
 export type TripPlace = {
   createdAt: string;
+  /** What the traveller calls this Place on this trip, if they renamed it. */
+  customName: string | null;
   id: string;
   isSaved: boolean;
   note: string | null;
@@ -98,6 +100,7 @@ const tripPlaceInclude = {
 function serializeTripPlace(tripPlace: {
   _count: { itineraryItems: number };
   createdAt: Date;
+  customName: string | null;
   id: string;
   note: string | null;
   place: Parameters<typeof serializePlace>[0] & { savedPlaces: Array<{ id: string }> };
@@ -105,6 +108,7 @@ function serializeTripPlace(tripPlace: {
 }): TripPlace {
   return {
     createdAt: tripPlace.createdAt.toISOString(),
+    customName: tripPlace.customName,
     id: tripPlace.id,
     isSaved: tripPlace.place.savedPlaces.length > 0,
     note: tripPlace.note,
@@ -172,12 +176,14 @@ export async function updateTripPlace(
   userId: string,
   tripId: string,
   tripPlaceId: string,
-  input: { note?: string | null; priority?: TripPlacePriority | null },
+  input: { customName?: string | null; note?: string | null; priority?: TripPlacePriority | null },
 ) {
   await assertOwnedTrip(userId, tripId);
   const result = await getPrismaClient().tripPlace.updateMany({
     where: { id: tripPlaceId, tripId },
     data: {
+      // An empty name is how the traveller gives the Place back its provider name.
+      ...(input.customName !== undefined ? { customName: input.customName?.trim() || null } : {}),
       ...(input.note !== undefined ? { note: input.note?.trim() || null } : {}),
       ...(input.priority !== undefined ? { priority: mapPriorityInput(input.priority) } : {}),
     },

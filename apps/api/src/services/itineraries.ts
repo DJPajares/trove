@@ -137,6 +137,7 @@ function mapItemTimeZoneSource(value: string | null) {
 function serializeTripPlace(tripPlace: NonNullable<ItineraryItemRecord['tripPlace']>) {
   const place = tripPlace.place;
   return {
+    customName: tripPlace.customName,
     id: tripPlace.id,
     note: tripPlace.note,
     place: {

@@ -113,11 +113,15 @@ export function useTripPlaces(tripId: string) {
     [replace, tripId],
   );
 
-  const saveNote = useCallback(
-    async (tripPlace: TripPlace, note: string) => {
+  /**
+   * The name the traveller gave this Place on the trip and the note they kept with
+   * it are edited together, so they travel to the server together as one change.
+   */
+  const savePlace = useCallback(
+    async (tripPlace: TripPlace, input: { customName?: string | null; note?: string | null }) => {
       setError(null);
       try {
-        replace((await updateTripPlace(tripId, tripPlace.id, { note: note || null })).tripPlace);
+        replace((await updateTripPlace(tripId, tripPlace.id, input)).tripPlace);
         return true;
       } catch {
         setError({ key: 'actionError' });
@@ -170,7 +174,7 @@ export function useTripPlaces(tripId: string) {
     providerDetails,
     refresh,
     remove,
-    saveNote,
+    savePlace,
     setPlaces,
     setPriority,
     sorted,

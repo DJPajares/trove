@@ -468,6 +468,10 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
 
   function placeName(tripPlace: ItineraryTripPlace | null) {
     if (!tripPlace) return null;
+    // The traveller's own name for the Place needs no resolving, so it short-circuits
+    // the loading state a provider Place would otherwise show.
+    const custom = tripPlace.customName?.trim();
+    if (custom) return custom;
     if (tripPlace.place.kind === 'custom') return tripPlace.place.name ?? t('customPlace');
     const details = providerDetails[tripPlace.place.id];
     return details === undefined
@@ -662,6 +666,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                 : [
                     ...current.tripPlaces,
                     {
+                      customName: tripPlace.customName,
                       id: tripPlace.id,
                       note: tripPlace.note,
                       place: {

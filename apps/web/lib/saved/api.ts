@@ -234,3 +234,14 @@ export function createCustomPlace(input: { name: string; note?: string | null })
     method: 'POST',
   });
 }
+
+/**
+ * A custom Place belongs to the traveller who made it, so renaming it changes the
+ * Place itself rather than only what one trip calls it.
+ */
+export function updateCustomPlace(placeId: string, input: { name?: string; note?: string | null }) {
+  return savedRequest<{ place: CanonicalPlace }>(`/places/custom/${placeId}`, {
+    body: JSON.stringify(input),
+    method: 'PATCH',
+  });
+}

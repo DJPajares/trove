@@ -5,6 +5,8 @@ export type TripPlacePriority = 'interested' | 'maybe' | 'must_go';
 
 export type TripPlace = {
   createdAt: string;
+  /** What the traveller calls this Place on this trip, if they renamed it. */
+  customName: string | null;
   id: string;
   isSaved: boolean;
   note: string | null;
@@ -76,7 +78,7 @@ export function addTripPlace(tripId: string, placeId: string) {
 export function updateTripPlace(
   tripId: string,
   tripPlaceId: string,
-  input: { note?: string | null; priority?: TripPlacePriority | null },
+  input: { customName?: string | null; note?: string | null; priority?: TripPlacePriority | null },
 ) {
   return tripPlaceRequest<{ tripPlace: TripPlace }>(`/trips/${tripId}/places/${tripPlaceId}`, {
     body: JSON.stringify(input),

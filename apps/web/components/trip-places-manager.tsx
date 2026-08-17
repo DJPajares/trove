@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { AddTripPlaceSheet } from '@/components/add-trip-place-sheet';
+import { EditTripPlaceDialog } from '@/components/edit-trip-place-dialog';
 import { PageState } from '@/components/page-state';
 import { PlaceDetailSheet } from '@/components/place-detail-sheet';
 import { TripPlacesPanel } from '@/components/trip-places-panel';
@@ -21,17 +22,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import type { TripPlace } from '@/lib/trip-places/api';
+import { resolveTripPlaceName } from '@/lib/trip-places/place-name';
 import { useTripPlaces } from '@/lib/trip-places/use-trip-places';
 
 /**
@@ -44,23 +36,15 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
   const places = useTripPlaces(tripId);
   const [addOpen, setAddOpen] = useState(false);
   const [detailPlace, setDetailPlace] = useState<TripPlace | null>(null);
-  const [notePlace, setNotePlace] = useState<TripPlace | null>(null);
-  const [noteValue, setNoteValue] = useState('');
-  const [savingNote, setSavingNote] = useState(false);
+  const [editPlace, setEditPlace] = useState<TripPlace | null>(null);
   const [removingPlace, setRemovingPlace] = useState<TripPlace | null>(null);
   const [removing, setRemoving] = useState(false);
 
   const placeName = (tripPlace: TripPlace) =>
-    tripPlace.place.kind === 'custom'
-      ? (tripPlace.place.name ?? t('customPlace'))
-      : (places.providerDetails[tripPlace.place.id]?.name ?? t('providerPlace'));
-
-  async function saveNote() {
-    if (!notePlace) return;
-    setSavingNote(true);
-    if (await places.saveNote(notePlace, noteValue)) setNotePlace(null);
-    setSavingNote(false);
-  }
+    resolveTripPlaceName(tripPlace, places.providerDetails, {
+      custom: t('customPlace'),
+      provider: t('providerPlace'),
+    });
 
   async function removePlace() {
     if (!removingPlace) return;
@@ -115,10 +99,7 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
         />
       ) : (
         <TripPlacesPanel
-          onEditNote={(tripPlace) => {
-            setNotePlace(tripPlace);
-            setNoteValue(tripPlace.note ?? '');
-          }}
+          onEditPlace={setEditPlace}
           onPriorityChange={(tripPlace, priority) => void places.setPriority(tripPlace, priority)}
           onRemove={setRemovingPlace}
           onViewDetails={setDetailPlace}
@@ -129,6 +110,7 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
 
       <PlaceDetailSheet
         context={{
+          customName: detailPlace?.customName,
           isSaved: detailPlace?.isSaved,
           note: detailPlace?.note,
           tripName: places.tripName,
@@ -151,33 +133,13 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
         />
       ) : null}
 
-      <Dialog onOpenChange={(open) => !open && setNotePlace(null)} open={Boolean(notePlace)}>
-        <DialogContent closeLabel={t('close')}>
-          <DialogHeader>
-            <DialogTitle>{t('noteTitle')}</DialogTitle>
-            <DialogDescription>
-              {t('noteDescription', { name: notePlace ? placeName(notePlace) : '' })}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="trip-place-note-editor">{t('note')}</Label>
-            <Textarea
-              id="trip-place-note-editor"
-              onChange={(event) => setNoteValue(event.target.value)}
-              placeholder={t('notePlaceholder')}
-              value={noteValue}
-            />
-          </div>
-          <DialogFooter>
-            <Button disabled={savingNote} onClick={() => setNotePlace(null)} variant="outline">
-              {t('cancel')}
-            </Button>
-            <Button disabled={savingNote} onClick={() => void saveNote()}>
-              {savingNote ? t('saving') : t('save')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EditTripPlaceDialog
+        onOpenChange={(open) => !open && setEditPlace(null)}
+        onRefresh={places.refresh}
+        onSave={places.savePlace}
+        providerDetails={places.providerDetails}
+        tripPlace={editPlace}
+      />
 
       <AlertDialog
         onOpenChange={(open) => !open && setRemovingPlace(null)}

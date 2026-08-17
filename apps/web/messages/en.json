@@ -151,11 +151,6 @@
     "editTripLabel": "Edit {name}",
     "dateRange": "{startDate} to {endDate}",
     "destinationOpen": "Destination open",
-    "lifecycle": {
-      "planning": "Planning",
-      "active": "Active",
-      "completed": "Completed"
-    },
     "createTitle": "Create a trip",
     "createDescription": "Only a name and dates are required.",
     "editTitle": "Edit trip",
@@ -980,7 +975,6 @@
       "openPlace": "Open in Google Maps",
       "delete": "Delete"
     },
-    "moveToDay": "Move to",
     "dayTimeZone": "Local timezone: {timeZone}",
     "accommodationBase": "Using accommodation as the day base: {name}",
     "accommodationBaseUnnamed": "accommodation",

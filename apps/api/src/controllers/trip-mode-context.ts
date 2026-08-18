@@ -14,6 +14,7 @@ const contextQuerySchema = z
   .object({
     at: z.string().datetime({ offset: true }).optional(),
     date: z.string().date().optional(),
+    languageCode: z.string().trim().min(2).max(35).optional(),
     time: z
       .string()
       .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/)
@@ -69,6 +70,7 @@ export function createTripModeContextControllers() {
         return reply.send(
           await resolveTripModeContext(userId, params.data.tripId, {
             at: query.data.at ? new Date(query.data.at) : undefined,
+            languageCode: query.data.languageCode,
             preview:
               query.data.date && query.data.time
                 ? { date: query.data.date, time: query.data.time }

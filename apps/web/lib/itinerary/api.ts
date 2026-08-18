@@ -211,9 +211,9 @@ export type TripModeContext = {
 };
 
 export type TripModeContextRequestOptions =
-  | { at: string; date?: never; signal?: AbortSignal; time?: never }
-  | { at?: never; date: string; signal?: AbortSignal; time: string }
-  | { at?: never; date?: never; signal?: AbortSignal; time?: never };
+  | { at: string; date?: never; languageCode?: string; signal?: AbortSignal; time?: never }
+  | { at?: never; date: string; languageCode?: string; signal?: AbortSignal; time: string }
+  | { at?: never; date?: never; languageCode?: string; signal?: AbortSignal; time?: never };
 
 export type ItineraryItemInput = {
   customLabel?: string | null;
@@ -470,6 +470,7 @@ export async function fetchTripModeContext(
   if (options.at) query.set('at', options.at);
   if (options.date) query.set('date', options.date);
   if (options.time) query.set('time', options.time);
+  if (options.languageCode) query.set('languageCode', options.languageCode);
   const suffix = query.size ? `?${query.toString()}` : '';
   try {
     return await itineraryRequest<TripModeContext>(`/trips/${tripId}/trip-mode/context${suffix}`, {

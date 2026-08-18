@@ -129,9 +129,9 @@ export function TripModeShell({ children, tripId }: Readonly<TripModeShellProps>
   const contextOptions = useCallback<TripModePreviewContextValue['contextOptions']>(
     (signal) =>
       previewSelection
-        ? { date: previewSelection.date, signal, time: previewSelection.time }
-        : { signal },
-    [previewSelection],
+        ? { date: previewSelection.date, languageCode: locale, signal, time: previewSelection.time }
+        : { languageCode: locale, signal },
+    [locale, previewSelection],
   );
   const withPreviewHref = useCallback<TripModePreviewContextValue['withPreviewHref']>(
     (href) =>

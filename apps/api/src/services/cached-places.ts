@@ -17,13 +17,13 @@ import {
 export const PLACE_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
 
 /**
- * A `full` answer cannot be persisted because it carries ratings and opening
- * hours, but the same trip place is often asked for several times inside one
- * burst of work. Short enough that nobody acts on stale hours, long enough to
- * absorb a Plan Score recomputation.
+ * An `evidence` answer cannot be persisted because it carries ratings and
+ * opening hours, but the same trip place is often asked for several times
+ * inside one burst of work. Short enough that nobody acts on stale hours, long
+ * enough to absorb a Plan Score recomputation.
  */
-const FULL_DETAILS_MEMO_TTL_MS = 5 * 60 * 1_000;
-const FULL_DETAILS_MEMO_LIMIT = 500;
+const EVIDENCE_MEMO_TTL_MS = 5 * 60 * 1_000;
+const EVIDENCE_MEMO_LIMIT = 500;
 
 type MemoEntry = { expiresAt: number; result: PlaceDetailsResult };
 
@@ -33,17 +33,17 @@ type MemoEntry = { expiresAt: number; result: PlaceDetailsResult };
  * read a second time. Keeping the memo here means that construction pattern
  * stops mattering instead of becoming a trap for the next caller.
  */
-const fullDetailsMemo = new Map<string, MemoEntry>();
+const evidenceMemo = new Map<string, MemoEntry>();
 
 /** Test seam: the memo outlives any one service instance by design. */
 export function resetCachedPlacesMemo() {
-  fullDetailsMemo.clear();
+  evidenceMemo.clear();
 }
 
 function memoKey(request: PlaceDetailsRequest) {
   return [
     request.externalPlaceId,
-    request.detail ?? 'full',
+    request.detail,
     normalizePlaceLanguageCode(request.languageCode),
     request.regionCode ?? '',
   ].join(' ');
@@ -96,11 +96,11 @@ export class CachedPlacesService extends PlacesService {
 
   private readMemo(request: PlaceDetailsRequest): PlaceDetailsResult | null {
     const key = memoKey(request);
-    const entry = fullDetailsMemo.get(key);
+    const entry = evidenceMemo.get(key);
     if (!entry) return null;
 
     if (entry.expiresAt <= this.now().getTime()) {
-      fullDetailsMemo.delete(key);
+      evidenceMemo.delete(key);
       return null;
     }
 
@@ -108,14 +108,14 @@ export class CachedPlacesService extends PlacesService {
   }
 
   private writeMemo(request: PlaceDetailsRequest, result: PlaceDetailsResult) {
-    if (fullDetailsMemo.size >= FULL_DETAILS_MEMO_LIMIT) {
+    if (evidenceMemo.size >= EVIDENCE_MEMO_LIMIT) {
       // Insertion-ordered, so the first key is the oldest.
-      const oldest = fullDetailsMemo.keys().next();
-      if (!oldest.done) fullDetailsMemo.delete(oldest.value);
+      const oldest = evidenceMemo.keys().next();
+      if (!oldest.done) evidenceMemo.delete(oldest.value);
     }
 
-    fullDetailsMemo.set(memoKey(request), {
-      expiresAt: this.now().getTime() + FULL_DETAILS_MEMO_TTL_MS,
+    evidenceMemo.set(memoKey(request), {
+      expiresAt: this.now().getTime() + EVIDENCE_MEMO_TTL_MS,
       result,
     });
   }
@@ -165,19 +165,14 @@ export class CachedPlacesService extends PlacesService {
           longitude: reference.cachedLongitude.toNumber(),
         },
         name: reference.cachedName,
-        // Everything below is mutable provider data. A `location` request never
+        // Mutable provider data is never stored, and a `location` request never
         // asks the provider for it either, so a hit and a miss agree.
-        nationalPhoneNumber: null,
         openingPeriods: [],
-        photos: [],
         primaryType: reference.cachedPrimaryType,
         provider: this.providerName,
         rating: null,
         rawTypes,
-        regularOpeningHours: [],
-        userRatingCount: null,
         utcOffsetMinutes: reference.cachedUtcOffsetMinutes,
-        websiteUri: null,
       },
       provider: this.providerName,
       status: 'ok',

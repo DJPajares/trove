@@ -17,7 +17,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { updateCustomPlace } from '@/lib/saved/api';
 import type { TripPlace } from '@/lib/trip-places/api';
-import type { TripPlaceDetails } from '@/lib/trip-places/use-trip-places';
 
 type EditTripPlaceDialogProps = {
   onOpenChange: (open: boolean) => void;
@@ -27,7 +26,6 @@ type EditTripPlaceDialogProps = {
     tripPlace: TripPlace,
     input: { customName?: string | null; note?: string | null },
   ) => Promise<boolean>;
-  providerDetails: TripPlaceDetails;
   tripPlace: TripPlace | null;
 };
 
@@ -43,7 +41,6 @@ export function EditTripPlaceDialog({
   onOpenChange,
   onRefresh,
   onSave,
-  providerDetails,
   tripPlace,
 }: Readonly<EditTripPlaceDialogProps>) {
   const t = useTranslations('tripPlaces');
@@ -53,7 +50,7 @@ export function EditTripPlaceDialog({
   const [failed, setFailed] = useState(false);
 
   const isCustom = tripPlace?.place.kind === 'custom';
-  const providerName = tripPlace ? providerDetails[tripPlace.place.id]?.name : undefined;
+  const providerName = tripPlace?.place.snapshot?.name ?? tripPlace?.place.providerLabel;
 
   useEffect(() => {
     if (!tripPlace) return;

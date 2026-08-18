@@ -68,12 +68,7 @@ import {
   updateItineraryItem,
   updateItineraryItemTravelStatus,
 } from '@/lib/itinerary/api';
-import {
-  cacheProviderPlaceDetails,
-  getCachedProviderPlaceDetails,
-  getProviderPlaceDetails,
-  type ProviderPlaceDetails,
-} from '@/lib/saved/api';
+import {} from '@/lib/saved/api';
 import { fetchReservations, type Reservation } from '@/lib/reservations/api';
 import { fetchTasks, type Task } from '@/lib/tasks/api';
 import { cn } from '@/lib/utils';
@@ -145,9 +140,6 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   const [schedule, setSchedule] = useState<TripModeSchedule>('none');
   const [exactTime, setExactTime] = useState('');
   const [scheduleError, setScheduleError] = useState<string | null>(null);
-  const [providerDetails, setProviderDetails] = useState<
-    Record<string, ProviderPlaceDetails | null | undefined>
-  >({});
   const [supporting, setSupporting] = useState<SupportingContext>({ reservations: [], tasks: [] });
 
   const refresh = useCallback(async () => {
@@ -215,42 +207,6 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   }, [supporting.tasks]);
 
   useEffect(() => {
-    if (!day || !online) return;
-    const pending = day.items.filter(
-      (item) =>
-        item.tripPlace?.place.kind === 'provider' &&
-        providerDetails[item.tripPlace.place.id] === undefined &&
-        providerId(item),
-    );
-    if (!pending.length) return;
-    let active = true;
-    void Promise.all(
-      pending.map(async (item) => {
-        const placeId = item.tripPlace!.place.id;
-        const cached = getCachedProviderPlaceDetails(placeId);
-        if (cached) return { details: cached, placeId };
-        try {
-          const result = await getProviderPlaceDetails(providerId(item)!, locale);
-          const details = result.status === 'ok' ? (result.place ?? null) : null;
-          if (details) cacheProviderPlaceDetails(placeId, details);
-          return { details, placeId };
-        } catch {
-          return { details: null, placeId };
-        }
-      }),
-    ).then((results) => {
-      if (!active) return;
-      setProviderDetails((current) => ({
-        ...current,
-        ...Object.fromEntries(results.map((result) => [result.placeId, result.details])),
-      }));
-    });
-    return () => {
-      active = false;
-    };
-  }, [day, locale, online, providerDetails]);
-
-  useEffect(() => {
     if (!day || !window.location.hash.startsWith('#trip-mode-item-')) return;
     window.requestAnimationFrame(() => {
       const element = document.getElementById(window.location.hash.slice(1));
@@ -280,12 +236,20 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   const date = new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeZone: 'UTC' }).format(
     new Date(`${context.selectedDate}T00:00:00.000Z`),
   );
-  const detailsFor = (item: ItineraryItem) =>
-    online && item.tripPlace ? (providerDetails[item.tripPlace.place.id] ?? null) : null;
+  // The snapshot travels with the itinerary, including the copy held offline, so
+  // these no longer depend on being online to name a Place or show its address.
+  const snapshotFor = (item: ItineraryItem) => item.tripPlace?.place.snapshot ?? null;
   const itemName = (item: ItineraryItem) =>
-    item.customLabel ?? item.tripPlace?.place.name ?? detailsFor(item)?.name ?? t('itemFallback');
+    item.customLabel ??
+    item.tripPlace?.place.name ??
+    snapshotFor(item)?.name ??
+    item.tripPlace?.place.providerLabel ??
+    t('itemFallback');
   const itemLocation = (item: ItineraryItem) =>
-    item.customLocation?.label ?? detailsFor(item)?.formattedAddress ?? null;
+    item.customLocation?.label ??
+    snapshotFor(item)?.address ??
+    item.tripPlace?.place.providerAddress ??
+    null;
   const formatTime = (value: string) => {
     const [hour, minute] = value.split(':').map(Number);
     return new Intl.DateTimeFormat(locale, {

@@ -8,16 +8,21 @@ import {
   hydratePlaceSnapshots,
   isSnapshotFresh,
   MAX_INLINE_PLACE_HYDRATIONS,
+  resetFailedPlaceHydrations,
   toPlaceSnapshot,
 } from '../src/services/place-data.js';
 import { areGoogleProvidersDisabled, getPlacesEnvironment } from '../src/environment.js';
 import {
-  GOOGLE_PLACE_DETAILS_FIELD_MASK,
   GOOGLE_PLACE_EVIDENCE_FIELD_MASK,
   GOOGLE_PLACE_LOCATION_FIELD_MASK,
   GooglePlacesProvider,
+  PLACE_DETAIL_FIELD_MASKS,
 } from '../src/services/google-places.js';
-import type { PlacesProvider, ProviderPlaceDetails } from '../src/services/places.js';
+import {
+  PlaceProviderError,
+  type PlacesProvider,
+  type ProviderPlaceDetails,
+} from '../src/services/places.js';
 import { getTripPlanScore } from '../src/services/plan-score.js';
 import {
   getProviderCallCounts,
@@ -191,7 +196,6 @@ function detailRequestsProvider() {
       recordProviderCall({ endpoint: '/v1/places', operation: 'getDetails', provider: 'google' });
       return detailsFor(request.externalPlaceId);
     },
-    resolvePhoto: async () => ({ name: 'photo', uri: 'https://example.test/photo' }),
     search: async () => [],
   };
 
@@ -223,17 +227,12 @@ function detailsFor(externalPlaceId: string): ProviderPlaceDetails {
     googleMapsUri: 'https://maps.google.com/?cid=1',
     location: { latitude: 1.2966, longitude: 103.8485 },
     name: 'National Museum',
-    nationalPhoneNumber: null,
     openingPeriods: [],
-    photos: [],
     primaryType: 'museum',
     provider: 'google',
     rating: 4.5,
     rawTypes: ['museum'],
-    regularOpeningHours: [],
-    userRatingCount: 100,
     utcOffsetMinutes: 480,
-    websiteUri: null,
   };
 }
 
@@ -246,7 +245,6 @@ function countingPlacesProvider() {
       recordProviderCall({ endpoint: '/v1/places', operation: 'getDetails', provider: 'google' });
       return detailsFor(request.externalPlaceId);
     },
-    resolvePhoto: async () => ({ name: 'photo', uri: 'https://example.test/photo' }),
     search: async () => [],
   };
 
@@ -276,6 +274,7 @@ beforeEach(() => {
   tripFixture = null;
   dayFixture = null;
   resetCachedPlacesMemo();
+  resetFailedPlaceHydrations();
   resetProviderCallCounts();
   installStubPrisma();
 });
@@ -400,16 +399,18 @@ test('a location request asks for coordinates only, not the billable detail', as
   });
 
   await provider.getDetails({ detail: 'location', externalPlaceId: 'ChIJmuseum' });
-  await provider.getDetails({ externalPlaceId: 'ChIJmuseum' });
   await provider.getDetails({ detail: 'evidence', externalPlaceId: 'ChIJmuseum' });
 
   assert.equal(masks[0], GOOGLE_PLACE_LOCATION_FIELD_MASK);
-  assert.equal(masks[1], GOOGLE_PLACE_DETAILS_FIELD_MASK);
-  assert.equal(masks[2], GOOGLE_PLACE_EVIDENCE_FIELD_MASK);
-  // The expensive fields are exactly what separates the three.
-  for (const field of ['rating', 'userRatingCount', 'regularOpeningHours', 'websiteUri']) {
+  assert.equal(masks[1], GOOGLE_PLACE_EVIDENCE_FIELD_MASK);
+
+  // There is no third, more expensive level to reach for by accident. There
+  // used to be, and an omitted `detail` fell back to it.
+  assert.deepEqual(Object.keys(PLACE_DETAIL_FIELD_MASKS).toSorted(), ['evidence', 'location']);
+
+  // The expensive fields are exactly what separates the two.
+  for (const field of ['rating', 'regularOpeningHours']) {
     assert.equal(GOOGLE_PLACE_LOCATION_FIELD_MASK.includes(field), false, field);
-    assert.equal(GOOGLE_PLACE_DETAILS_FIELD_MASK.includes(field), true, field);
   }
   // Evidence asks for the mutable fields Plan Score reads, but not the ones
   // that only a place's own sheet renders.
@@ -519,7 +520,7 @@ test("Trip Mode reuses the Itinerary screen's cached snapshot when it forwards t
   );
 });
 
-test('a full request never reads the snapshot, which cannot carry ratings or hours', async () => {
+test('an evidence request never reads the snapshot, which cannot carry ratings or hours', async () => {
   const now = new Date('2026-08-18T00:00:00.000Z');
   seedProviderRef('ChIJmuseum', {
     cachedAt: now,
@@ -530,7 +531,7 @@ test('a full request never reads the snapshot, which cannot carry ratings or hou
   const { provider, calls } = countingPlacesProvider();
   const service = new CachedPlacesService(provider, () => now);
 
-  const result = await service.getDetails({ externalPlaceId: 'ChIJmuseum' });
+  const result = await service.getDetails({ detail: 'evidence', externalPlaceId: 'ChIJmuseum' });
 
   assert.equal(calls(), 1);
   assert.equal(result.status === 'ok' && result.place.rating, 4.5);
@@ -541,7 +542,7 @@ test('the mutable half of a place is never written to the database', async () =>
   seedProviderRef('ChIJmuseum');
   const service = new CachedPlacesService(countingPlacesProvider().provider);
 
-  await service.getDetails({ externalPlaceId: 'ChIJmuseum' });
+  await service.getDetails({ detail: 'evidence', externalPlaceId: 'ChIJmuseum' });
 
   const stored = JSON.stringify(providerRefs.get('ChIJmuseum'));
   for (const forbidden of ['4.5', 'rating', 'openingPeriods', 'userRatingCount']) {
@@ -604,7 +605,9 @@ test('a different travel mode over the same leg is its own estimate', async () =
 test('one resolver shared across days resolves a repeated place once', async () => {
   const { provider, calls } = countingPlacesProvider();
   const service = new CachedPlacesService(provider);
-  // Nothing is seeded, so the database cache cannot mask the memo being tested.
+  // The reference exists but has never been resolved, so the first day has
+  // something real to pay for and the rest have something to reuse.
+  seedProviderRef('ChIJhotel');
   const hotel = {
     customLatitude: null,
     customLongitude: null,
@@ -628,37 +631,25 @@ test('one resolver shared across days resolves a repeated place once', async () 
   );
 });
 
-test('a full request and an evidence request for the same place do not share a memo entry', async () => {
-  const { provider, calls } = countingPlacesProvider();
-  const service = new CachedPlacesService(provider);
-  // Nothing is seeded, so the database cache cannot mask the memo being tested.
-
-  await service.getDetails({ detail: 'evidence', externalPlaceId: 'ChIJmuseum' });
-  await service.getDetails({ externalPlaceId: 'ChIJmuseum' });
-
-  assert.equal(calls(), 2, 'an evidence hit must not answer a full request from its memo entry');
-});
-
-test('a resolver built per day pays for the same place every day', async () => {
-  const { provider, calls } = countingPlacesProvider();
-  const service = new CachedPlacesService(provider);
+test('a day is routed from stored coordinates, even with no provider at all', async () => {
+  const now = new Date('2026-08-18T00:00:00.000Z');
+  seedFreshRef('ChIJhotel', now);
   const hotel = {
     customLatitude: null,
     customLongitude: null,
     customName: null,
     id: 'place-hotel',
-    providerRefs: [{ externalPlaceId: 'ChIJhotel', provider: 'GOOGLE' }],
+    providerRefs: [{ ...providerRefs.get('ChIJhotel'), provider: 'GOOGLE' }],
   } as unknown as Parameters<ReturnType<typeof createPlaceResolver>>[0];
 
-  // What Plan Score used to do. Kept as a test so the saving above is not
-  // mistaken for something the memo would give away for free.
-  await Promise.all(
-    ['day-1', 'day-2', 'day-3'].map((day) =>
-      createPlaceResolver(service)(hotel, 'daily_base', `${day}-base`),
-    ),
-  );
+  // `null` is the kill switch and a missing key. Routing used to give up here
+  // and report a day it could not measure, even though Trove held the exact
+  // coordinates the leg needed.
+  const point = await createPlaceResolver(null)(hotel, 'daily_base', 'day-1-base');
 
-  assert.equal(calls(), 3);
+  assert.equal(point?.coordinates.latitude, 1.2966);
+  assert.equal(point?.label, 'National Museum');
+  assert.equal(getProviderCallCounts()['google:getDetails'], undefined);
 });
 
 /**
@@ -886,7 +877,6 @@ test('an evidence request never writes the location snapshot', async () => {
       ...detailsFor(request.externalPlaceId),
       location: request.detail === 'evidence' ? null : { latitude: 1.2966, longitude: 103.8485 },
     }),
-    resolvePhoto: async () => ({ name: 'photo', uri: 'https://example.test/photo' }),
     search: async () => [],
   };
   const service = new CachedPlacesService(provider, () => now);
@@ -896,4 +886,37 @@ test('an evidence request never writes the location snapshot', async () => {
   assert.equal(providerRefs.get('ChIJmuseum')?.cachedName, null);
   assert.equal(providerRefs.get('ChIJmuseum')?.cachedAt, null);
   assert.equal(isSnapshotFresh(providerRefs.get('ChIJmuseum')!, { now }), false);
+});
+
+test('a Place the provider cannot answer for is not re-asked on every screen', async () => {
+  const now = new Date('2026-08-18T00:00:00.000Z');
+  // A geocoded-address reference is the real case: it exists, it is on a trip,
+  // and Google will not return details for it however many times we ask.
+  seedProviderRef('ChIJunresolvable');
+
+  let calls = 0;
+  const provider: PlacesProvider = {
+    name: 'google',
+    getDetails: async () => {
+      calls += 1;
+      recordProviderCall({ endpoint: '/v1/places', operation: 'getDetails', provider: 'google' });
+      throw new PlaceProviderError('not_found');
+    },
+    search: async () => [],
+  };
+  const service = new CachedPlacesService(provider, () => now);
+
+  // Opening a screen, then another, then another.
+  for (let visit = 0; visit < 5; visit += 1) {
+    await hydratePlaceSnapshots(['ChIJunresolvable'], { now, placesService: service });
+  }
+
+  assert.equal(calls, 1, 'one stubborn Place must not become a bill per screen load');
+
+  // It is a backoff, not a blocklist: a real outage heals on its own.
+  await hydratePlaceSnapshots(['ChIJunresolvable'], {
+    now: new Date(now.getTime() + 11 * 60 * 1_000),
+    placesService: service,
+  });
+  assert.equal(calls, 2);
 });

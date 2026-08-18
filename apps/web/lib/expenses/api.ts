@@ -1,3 +1,4 @@
+import type { PlaceSnapshot } from '@/lib/saved/api';
 import {
   canUseSupportingOfflineFallback,
   queueSupportingMutation,
@@ -21,6 +22,7 @@ export type ExpensePlace = {
   name: string | null;
   placeId: string;
   providerRefs: Array<{ externalPlaceId: string; provider: 'google' }>;
+  snapshot?: PlaceSnapshot | null;
 };
 
 export type Expense = {

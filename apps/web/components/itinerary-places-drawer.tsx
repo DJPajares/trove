@@ -62,7 +62,7 @@ export function ItineraryPlacesDrawer({
   const [addOpen, setAddOpen] = useState(false);
 
   const placeName = (tripPlace: TripPlace) =>
-    resolveTripPlaceName(tripPlace, places.providerDetails, {
+    resolveTripPlaceName(tripPlace, {
       custom: t('customPlace'),
       provider: t('providerPlace'),
     });
@@ -110,17 +110,6 @@ export function ItineraryPlacesDrawer({
               </Alert>
             ) : null}
 
-            {Object.values(places.detailFailures).some((failure) => failure === 'unavailable') ? (
-              <Alert role="status" variant="warning">
-                <AlertDescription className="flex flex-wrap items-center gap-2">
-                  {t('detailsUnavailable')}
-                  <Button onClick={places.retryProviderDetails} size="sm" variant="outline">
-                    {t('retryDetails')}
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            ) : null}
-
             {places.status === 'loading' ? <PageState kind="loading" title={t('loading')} /> : null}
 
             {places.status === 'idle' && !places.sorted.length ? (
@@ -144,7 +133,6 @@ export function ItineraryPlacesDrawer({
                 }
                 onRemove={setRemovingPlace}
                 placeUse={placeUse}
-                providerDetails={places.providerDetails}
                 tripPlaces={places.sorted}
               />
             ) : null}
@@ -171,7 +159,6 @@ export function ItineraryPlacesDrawer({
         onOpenChange={(open) => !open && setEditPlace(null)}
         onRefresh={places.refresh}
         onSave={places.savePlace}
-        providerDetails={places.providerDetails}
         tripPlace={editPlace}
       />
 

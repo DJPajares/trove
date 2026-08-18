@@ -258,6 +258,102 @@ test('withholds a day score when the day has no usable evidence', () => {
   assert.deepEqual(result.withheldReasons, ['NO_SCORABLE_DAY']);
 });
 
+test('a normally scheduled item with no reservation and no visit duration still counts as feasibility evidence', () => {
+  // This is the ordinary case: a traveller drags a place into a day and picks
+  // a start time. No reservation, no explicit visit length — exactly what
+  // real itineraries look like, and previously left Feasibility permanently
+  // unevaluable because only reservation-linked items counted as "fixed".
+  const day = buildTripPlanScore({
+    days: [
+      {
+        commitments: [],
+        date: '2026-09-06',
+        id: 'day-2',
+        items: [
+          {
+            dayPart: null,
+            durationMinutes: null,
+            id: 'item-x',
+            localStartTime: localTime('09:00'),
+            reservationCount: 0,
+            startInstant: null,
+            timeSemantics: 'FLOATING_LOCAL',
+            timeZone: null,
+            tripPlaceId: 'tp-x',
+          },
+          {
+            dayPart: null,
+            durationMinutes: null,
+            id: 'item-y',
+            localStartTime: localTime('12:00'),
+            reservationCount: 0,
+            startInstant: null,
+            timeSemantics: 'FLOATING_LOCAL',
+            timeZone: null,
+            tripPlaceId: 'tp-y',
+          },
+        ],
+        timeZone: 'Pacific/Auckland',
+      },
+    ],
+    hours: new Map(),
+    mustGoTripPlaceIds: [],
+    ratings: new Map(),
+    routes: new Map([['day-2', dayRoutes([segment('seg-x-y', 'item-y', 600)])]]),
+  }).days[0];
+
+  assert.deepEqual(day?.factors.FEASIBILITY, { confidence: 100, score: 100, state: 'EVALUATED' });
+  assert.notEqual(day?.score, null);
+});
+
+test("an item with no visit duration is still caught when it lands inside another item's known interval", () => {
+  const day = buildTripPlanScore({
+    days: [
+      {
+        commitments: [],
+        date: '2026-09-06',
+        id: 'day-2',
+        items: [
+          {
+            dayPart: null,
+            durationMinutes: 60,
+            id: 'item-long',
+            localStartTime: localTime('09:00'),
+            reservationCount: 0,
+            startInstant: null,
+            timeSemantics: 'FLOATING_LOCAL',
+            timeZone: null,
+            tripPlaceId: 'tp-long',
+          },
+          {
+            dayPart: null,
+            durationMinutes: null,
+            id: 'item-instant',
+            localStartTime: localTime('09:30'),
+            reservationCount: 0,
+            startInstant: null,
+            timeSemantics: 'FLOATING_LOCAL',
+            timeZone: null,
+            tripPlaceId: 'tp-instant',
+          },
+        ],
+        timeZone: 'Pacific/Auckland',
+      },
+    ],
+    hours: new Map(),
+    mustGoTripPlaceIds: [],
+    ratings: new Map(),
+    routes: new Map(),
+  }).days[0];
+  const conflicts = day?.explanations.worthImproving ?? [];
+
+  assert.deepEqual(
+    conflicts.map((entry) => entry.messageKey),
+    ['feasibility.overlappingCommitments'],
+  );
+  assert.deepEqual(conflicts[0]?.references, ['item-instant', 'item-long']);
+});
+
 test('detects a timing conflict against a structured journey commitment', () => {
   const result = buildTripPlanScore({
     ...plannedTrip,

@@ -129,7 +129,14 @@ export function toDayEvidenceItems(
         item.durationMinutes === null
           ? null
           : { minutes: item.durationMinutes, source: 'USER_OWNED' },
-      fixed: item.reservationCount > 0 || item.timeSemantics === 'AUTHORITATIVE_INSTANT',
+      // FLOATING_LOCAL is the exact-clock-time case (see `scheduleData`'s
+      // `local_time` branch): the traveller picked a real start, not just a
+      // daypart, so it is as much a commitment as a reservation or an
+      // AUTHORITATIVE_INSTANT would be — and nothing ever writes the latter.
+      fixed:
+        item.reservationCount > 0 ||
+        item.timeSemantics === 'AUTHORITATIVE_INSTANT' ||
+        item.timeSemantics === 'FLOATING_LOCAL',
       id: item.id,
       inboundTravel:
         travelMinutes === null ? null : { minutes: travelMinutes, source: 'FRESH_PROVIDER' },

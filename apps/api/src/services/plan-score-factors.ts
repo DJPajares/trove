@@ -398,12 +398,16 @@ export function evaluateFeasibility(
   }
 
   for (const item of input.items) {
-    if (!item.fixed || !item.start || !item.duration) continue;
+    if (!item.fixed || !item.start) continue;
 
     use(`start:${item.id}`, item.start.source);
-    use(`duration:${item.id}`, item.duration.source);
+    // An item with no known visit length still committed to a start instant.
+    // Treating it as zero-length keeps it able to conflict with a real
+    // interval it falls inside, without inventing a duration nobody gave it.
+    if (item.duration) use(`duration:${item.id}`, item.duration.source);
+    const durationMinutes = item.duration ? assertMinutes(item.duration.minutes) : 0;
     intervals.push({
-      endMinute: assertMinutes(item.start.minutes) + assertMinutes(item.duration.minutes),
+      endMinute: assertMinutes(item.start.minutes) + durationMinutes,
       id: item.id,
       startMinute: item.start.minutes,
     });

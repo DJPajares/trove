@@ -1597,29 +1597,28 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                     title={t('emptyTitle')}
                   />
                 )}
-                <div className="h-px" ref={planScoreSentinelRef}>
-                  {planScoreDay || planScore.status === 'error' ? (
-                    <PlanScorePanel
-                      className="mt-4"
-                      completeness={planScoreDay?.completeness ?? null}
-                      confidence={planScoreDay?.confidence ?? null}
-                      explanations={
-                        planScoreDay?.explanations ?? {
-                          uncertainty: [],
-                          whatWorks: [],
-                          worthImproving: [],
-                        }
+                <div aria-hidden="true" className="h-px" ref={planScoreSentinelRef} />
+                {planScoreDay || planScore.status === 'error' ? (
+                  <PlanScorePanel
+                    className="mt-4"
+                    completeness={planScoreDay?.completeness ?? null}
+                    confidence={planScoreDay?.confidence ?? null}
+                    explanations={
+                      planScoreDay?.explanations ?? {
+                        uncertainty: [],
+                        whatWorks: [],
+                        worthImproving: [],
                       }
-                      factors={planScoreDay?.factors}
-                      onRetry={planScore.retry}
-                      onSelectReference={focusItineraryItem}
-                      score={planScoreDay?.score ?? null}
-                      scope="day"
-                      status={planScore.status}
-                      title={planScoreTranslations('dayTitle')}
-                    />
-                  ) : null}
-                </div>
+                    }
+                    factors={planScoreDay?.factors}
+                    onRetry={planScore.retry}
+                    onSelectReference={focusItineraryItem}
+                    score={planScoreDay?.score ?? null}
+                    scope="day"
+                    status={planScore.status}
+                    title={planScoreTranslations('dayTitle')}
+                  />
+                ) : null}
               </div>
 
               <aside

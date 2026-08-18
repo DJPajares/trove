@@ -192,7 +192,7 @@ export function SavedPlacesManager() {
         if (cached) return { placeId: savedPlace.place.id, details: cached };
 
         try {
-          const result = await getProviderPlaceDetails(externalPlaceId);
+          const result = await getProviderPlaceDetails(externalPlaceId, locale);
           const details = result.status === 'ok' ? (result.place ?? null) : null;
           if (details) cacheProviderPlaceDetails(savedPlace.place.id, details);
           return {
@@ -214,7 +214,7 @@ export function SavedPlacesManager() {
     return () => {
       active = false;
     };
-  }, [providerDetails, savedPlaces]);
+  }, [locale, providerDetails, savedPlaces]);
 
   useEffect(() => {
     const input = searchQuery.trim();

@@ -2,7 +2,7 @@
 
 import { Bookmark, CircleAlert, MapPinned, NotebookPen, Pencil, Plus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { SearchField } from '@/components/search-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -68,6 +68,7 @@ export function AddTripPlaceSheet({
   tripPlaces,
 }: Readonly<AddTripPlaceSheetProps>) {
   const t = useTranslations('tripPlaces');
+  const locale = useLocale();
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
   const [details, setDetails] = useState<Details>({});
   const [query, setQuery] = useState('');
@@ -125,7 +126,7 @@ export function AddTripPlaceSheet({
         const providerId = savedPlace.place.providerRefs[0]?.externalPlaceId;
         if (!providerId) return { details: null, id: savedPlace.place.id };
         try {
-          const result = await getProviderPlaceDetails(providerId);
+          const result = await getProviderPlaceDetails(providerId, locale);
           const resolved = result.status === 'ok' ? (result.place ?? null) : null;
           if (resolved) cacheProviderPlaceDetails(savedPlace.place.id, resolved);
           return { details: resolved, id: savedPlace.place.id };
@@ -143,7 +144,7 @@ export function AddTripPlaceSheet({
     return () => {
       active = false;
     };
-  }, [details, savedPlaces]);
+  }, [details, locale, savedPlaces]);
 
   // Nothing typed means nothing to ask the provider about.
   useEffect(() => {

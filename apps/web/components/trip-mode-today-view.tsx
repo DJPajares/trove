@@ -230,7 +230,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
         const cached = getCachedProviderPlaceDetails(placeId);
         if (cached) return { details: cached, placeId };
         try {
-          const result = await getProviderPlaceDetails(providerId(item)!);
+          const result = await getProviderPlaceDetails(providerId(item)!, locale);
           const details = result.status === 'ok' ? (result.place ?? null) : null;
           if (details) cacheProviderPlaceDetails(placeId, details);
           return { details, placeId };
@@ -248,7 +248,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     return () => {
       active = false;
     };
-  }, [day, online, providerDetails]);
+  }, [day, locale, online, providerDetails]);
 
   useEffect(() => {
     if (!day || !window.location.hash.startsWith('#trip-mode-item-')) return;

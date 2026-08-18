@@ -1,7 +1,7 @@
 'use client';
 
 import { MapPin, Plus, Search } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
 import { SearchField } from '@/components/search-field';
@@ -56,6 +56,7 @@ export function TripModeAddItemDialog({
   tripPlaces: ItineraryTripPlace[];
 }>) {
   const t = useTranslations('tripMode.views.today.add');
+  const locale = useLocale();
   const [query, setQuery] = useState('');
   const [customLabel, setCustomLabel] = useState('');
   const [schedule, setSchedule] = useState<TripModeSchedule>('none');
@@ -97,7 +98,7 @@ export function TripModeAddItemDialog({
         const externalPlaceId = tripPlace.place.providerRefs[0]?.externalPlaceId;
         if (!externalPlaceId) return { details: null, placeId: tripPlace.place.id };
         try {
-          const result = await getProviderPlaceDetails(externalPlaceId);
+          const result = await getProviderPlaceDetails(externalPlaceId, locale);
           const details = result.status === 'ok' ? (result.place ?? null) : null;
           if (details) cacheProviderPlaceDetails(tripPlace.place.id, details);
           return { details, placeId: tripPlace.place.id };
@@ -115,7 +116,7 @@ export function TripModeAddItemDialog({
     return () => {
       active = false;
     };
-  }, [open, providerDetails, tripPlaces]);
+  }, [locale, open, providerDetails, tripPlaces]);
 
   useEffect(() => {
     const search = query.trim();

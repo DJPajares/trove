@@ -1,5 +1,6 @@
 'use client';
 
+import { useLocale } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -42,6 +43,7 @@ function priorityRank(priority: TripPlacePriority | null) {
  * the same collection the other is looking at rather than a second copy of it.
  */
 export function useTripPlaces(tripId: string) {
+  const locale = useLocale();
   const [tripName, setTripName] = useState('');
   const [places, setPlaces] = useState<TripPlace[]>([]);
   const [providerDetails, setProviderDetails] = useState<TripPlaceDetails>({});
@@ -106,7 +108,7 @@ export function useTripPlaces(tripId: string) {
         if (cached) return { details: cached, failure: undefined, id };
 
         try {
-          const result = await getProviderPlaceDetails(providerId);
+          const result = await getProviderPlaceDetails(providerId, locale);
           if (result.status !== 'ok') return { details: null, failure: result.status, id };
           const details = result.place ?? null;
           if (details) cacheProviderPlaceDetails(id, details);
@@ -130,7 +132,7 @@ export function useTripPlaces(tripId: string) {
     return () => {
       active = false;
     };
-  }, [places]);
+  }, [locale, places]);
 
   const replace = useCallback((tripPlace: TripPlace) => {
     setPlaces((current) => current.map((entry) => (entry.id === tripPlace.id ? tripPlace : entry)));

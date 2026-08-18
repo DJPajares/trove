@@ -192,7 +192,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
         const cached = getCachedProviderPlaceDetails(placeId);
         if (cached) return { details: cached, placeId };
         try {
-          const result = await getProviderPlaceDetails(providerId(tripPlace)!);
+          const result = await getProviderPlaceDetails(providerId(tripPlace)!, locale);
           const details = result.status === 'ok' ? (result.place ?? null) : null;
           if (details) cacheProviderPlaceDetails(placeId, details);
           return { details, placeId };
@@ -210,7 +210,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
     return () => {
       active = false;
     };
-  }, [online, providerDetails, state]);
+  }, [locale, online, providerDetails, state]);
 
   if (state.status === 'loading') return <MapSkeleton label={t('loading')} />;
 

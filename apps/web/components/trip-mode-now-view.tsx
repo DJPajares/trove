@@ -164,7 +164,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
         setDetails((current) => ({ ...current, [id]: cached }));
         continue;
       }
-      void getProviderPlaceDetails(id)
+      void getProviderPlaceDetails(id, locale)
         .then((result) => {
           if (!active || result.status !== 'ok' || !result.place) return;
           cacheProviderPlaceDetails(id, result.place);
@@ -175,7 +175,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
     return () => {
       active = false;
     };
-  }, [currentItem, nextItem, online]);
+  }, [currentItem, locale, nextItem, online]);
 
   const getDetails = useCallback(
     (item: ItineraryItem | null) => {

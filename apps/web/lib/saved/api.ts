@@ -250,10 +250,13 @@ export type ProviderPlaceDetailsResult =
  */
 export async function getProviderPlaceDetails(
   externalPlaceId: string,
+  languageCode?: string,
 ): Promise<ProviderPlaceDetailsResult> {
   try {
+    const query = new URLSearchParams({ detail: 'location' });
+    if (languageCode) query.set('languageCode', languageCode);
     return await savedRequest<ProviderPlaceDetailsResult>(
-      `/places/${encodeURIComponent(externalPlaceId)}?detail=location`,
+      `/places/${encodeURIComponent(externalPlaceId)}?${query.toString()}`,
     );
   } catch (cause) {
     if (cause instanceof SavedApiError) {

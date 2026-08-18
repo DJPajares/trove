@@ -1,7 +1,9 @@
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 
 import { getWebOrigins } from './environment.js';
+import { setProviderUsageSink } from './services/provider-usage.js';
 import { registerAuthenticationRoutes } from './routes/auth.js';
 import { registerCurrencyRoutes } from './routes/currency.js';
 import { registerExpenseRoutes } from './routes/expenses.js';
@@ -97,24 +99,38 @@ export function buildApp() {
     },
   });
 
-  registerAuthenticationRoutes(app);
-  registerCurrencyRoutes(app);
-  registerWeatherRoutes(app);
-  registerPlacesRoutes(app);
-  registerProfileRoutes(app);
-  registerSavedPlacesRoutes(app);
-  registerItineraryRoutes(app);
-  registerNotificationRoutes(app);
-  registerReservationRoutes(app);
-  registerExpenseRoutes(app);
-  registerTasksRoutes(app);
-  registerTripInfoRoutes(app);
-  registerTripPlacesRoutes(app);
-  registerTripRoutes(app);
-  registerPlanScoreRoutes(app);
-  registerMemoryRoutes(app);
-  registerSearchRoutes(app);
-  registerHealthRoutes(app);
+  // Spend on Google is only attributable after the fact if every outbound call
+  // is logged with the operation that caused it.
+  setProviderUsageSink((call) => {
+    app.log.info(call, 'google provider request');
+  });
+
+  // A rate limiter only sees routes registered after it is loaded, so the routes
+  // it protects are registered inside a scope that awaits it rather than beside
+  // it. Limits are opt-in per route (`global: false`); only the provider-backed
+  // ones declare a `rateLimit` config.
+  void app.register(async (instance) => {
+    await instance.register(rateLimit, { global: false });
+
+    registerAuthenticationRoutes(instance);
+    registerCurrencyRoutes(instance);
+    registerWeatherRoutes(instance);
+    registerPlacesRoutes(instance);
+    registerProfileRoutes(instance);
+    registerSavedPlacesRoutes(instance);
+    registerItineraryRoutes(instance);
+    registerNotificationRoutes(instance);
+    registerReservationRoutes(instance);
+    registerExpenseRoutes(instance);
+    registerTasksRoutes(instance);
+    registerTripInfoRoutes(instance);
+    registerTripPlacesRoutes(instance);
+    registerTripRoutes(instance);
+    registerPlanScoreRoutes(instance);
+    registerMemoryRoutes(instance);
+    registerSearchRoutes(instance);
+    registerHealthRoutes(instance);
+  });
 
   return app;
 }

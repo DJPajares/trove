@@ -1,4 +1,5 @@
 import { categorizePlaceTypes } from './place-categories.js';
+import { recordProviderCall } from './provider-usage.js';
 import {
   PlaceProviderError,
   type PlaceDetailsRequest,
@@ -27,6 +28,25 @@ export const GOOGLE_AUTOCOMPLETE_FIELD_MASK = [
   'suggestions.placePrediction.types',
 ].join(',');
 
+/**
+ * Identity and location: everything routing and list rendering read, and
+ * nothing else. The fields left out — rating, review count, opening hours,
+ * website, phone, photos — are precisely the ones that move a Place Details
+ * call into the most expensive billing tier, so asking for them on a call that
+ * only needs a latitude is the single most wasteful thing this client can do.
+ */
+export const GOOGLE_PLACE_LOCATION_FIELD_MASK = [
+  'id',
+  'displayName',
+  'formattedAddress',
+  'location',
+  'types',
+  'primaryType',
+  'googleMapsUri',
+  'utcOffsetMinutes',
+].join(',');
+
+/** Everything above plus the mutable detail a place's own sheet displays. */
 export const GOOGLE_PLACE_DETAILS_FIELD_MASK = [
   'id',
   'displayName',
@@ -300,10 +320,14 @@ export class GooglePlacesProvider implements PlacesProvider {
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
-  private async requestJson<T>(url: URL, init: RequestInit): Promise<T> {
+  private async requestJson<T>(url: URL, init: RequestInit, operation: string): Promise<T> {
     if (!this.apiKey) {
       throw new PlaceProviderError('configuration_missing');
     }
+
+    // Counted here rather than in the callers so it records requests that are
+    // actually about to leave the process, not ones short-circuited above.
+    recordProviderCall({ endpoint: url.pathname, operation, provider: 'google' });
 
     let response: Response;
 
@@ -365,6 +389,7 @@ export class GooglePlacesProvider implements PlacesProvider {
         },
         method: 'POST',
       },
+      'search',
     );
 
     return (response.suggestions ?? [])
@@ -396,10 +421,15 @@ export class GooglePlacesProvider implements PlacesProvider {
       url.searchParams.set('sessionToken', request.sessionToken);
     }
 
-    const response = await this.requestJson<GooglePlaceDetails>(url, {
-      headers: { 'X-Goog-FieldMask': GOOGLE_PLACE_DETAILS_FIELD_MASK },
-      method: 'GET',
-    });
+    const fieldMask =
+      request.detail === 'location'
+        ? GOOGLE_PLACE_LOCATION_FIELD_MASK
+        : GOOGLE_PLACE_DETAILS_FIELD_MASK;
+    const response = await this.requestJson<GooglePlaceDetails>(
+      url,
+      { headers: { 'X-Goog-FieldMask': fieldMask }, method: 'GET' },
+      'getDetails',
+    );
     const externalPlaceId = cleanString(response.id);
     // A named venue always gets a displayName, but a plain geocoded address
     // (a friend's house, a street corner) often doesn't — its formatted
@@ -468,7 +498,11 @@ export class GooglePlacesProvider implements PlacesProvider {
 
     url.searchParams.set('skipHttpRedirect', 'true');
 
-    const response = await this.requestJson<GooglePhotoMedia>(url, { method: 'GET' });
+    const response = await this.requestJson<GooglePhotoMedia>(
+      url,
+      { method: 'GET' },
+      'resolvePhoto',
+    );
     const name = cleanString(response.name);
     const uri = cleanString(response.photoUri);
 

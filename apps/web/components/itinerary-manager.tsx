@@ -128,7 +128,7 @@ import {
 import { useOnlineStatus } from '@/components/trip-sync-status';
 import { dayStopNumbers, resolveDailyBases } from '@/lib/itinerary/day-sequence';
 import { scheduledPlaceUse } from '@/lib/itinerary/places';
-import { itineraryDayRouteRevision, itineraryRouteRevision } from '@/lib/itinerary/routes';
+import { itineraryDayRouteRevision, itineraryPlanScoreRevision } from '@/lib/itinerary/routes';
 import {
   buildItineraryMapPoints,
   dailyBasePoints,
@@ -421,7 +421,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     selectedDay,
     tripId,
   ]);
-  const planScoreRevision = useMemo(() => itineraryRouteRevision(itinerary), [itinerary]);
+  const planScoreRevision = useMemo(() => itineraryPlanScoreRevision(itinerary), [itinerary]);
   const planScore = useTripPlanScore(itinerary ? tripId : null, planScoreRevision);
   const planScoreDay = planScore.data?.days.find((day) => day.dayId === selectedDayId) ?? null;
   const focusItineraryItem = useCallback((reference: string) => {

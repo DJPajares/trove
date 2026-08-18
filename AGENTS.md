@@ -40,6 +40,8 @@ The approved product requirements live in `PRD.md` once generated. Linear is the
 - Trove owns application identity and user relationships; external providers enrich data.
 - Google Places data is resolved on demand. Do not pre-mine Google Places into Trove.
 - Mutable provider data such as ratings, hours, photos, and descriptions should not become permanent Trove-owned copies.
+- A Place a user has already reached for may keep a dated snapshot of its durable provider data — name, address, coordinates, types — for up to 30 days, refreshed once stale. Travel legs are cached the same way. This is not pre-mining: nothing is fetched that a user did not ask for. Ask for the cheap field mask (`detail: 'location'`) unless a surface genuinely renders the mutable half.
+- Provider requests cost real money per call. Before adding one to a code path, check what fans out around it: a per-day call inside a per-trip loop is how a development week became a $300 bill.
 - Saved Places and Trip Places are independent relationships to the same Place.
 - Removing a Saved Place must not remove it from Trip Places, and vice versa.
 - Future social/shared itineraries must preserve ownership, attribution, visibility, and source-trip relationships.

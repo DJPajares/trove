@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
 import type { ItineraryDay, ItineraryItem } from '../lib/itinerary/api.ts';
-import { itineraryDayRouteRevision } from '../lib/itinerary/routes.ts';
+import type { Itinerary } from '../lib/itinerary/api.ts';
+import { itineraryDayRouteRevision, itineraryPlanScoreRevision } from '../lib/itinerary/routes.ts';
 
 function item(id: string, position: number): ItineraryItem {
   return {
@@ -77,4 +78,46 @@ test('changing the day base changes the revision, since it moves the boundary le
 test('a day with no items still has a stable revision, and no day has none', () => {
   assert.equal(itineraryDayRouteRevision(null), '');
   assert.notEqual(itineraryDayRouteRevision(day([])), '');
+});
+
+function itinerary(items: ItineraryItem[]): Itinerary {
+  return { days: [day(items)] } as Itinerary;
+}
+
+/**
+ * Scoring a trip costs a provider request for every place on every day. Keying
+ * it on a whole item meant editing a note re-scored the entire trip, which is
+ * how a few minutes of ordinary editing turned into thousands of billed calls.
+ */
+test('editing a field the score cannot read does not re-score the trip', () => {
+  const before = itinerary([item('a', 0)]);
+  const edited = itinerary([
+    { ...item('a', 0), notes: 'bring cash', updatedAt: '2026-09-06T00:00:00.000Z' },
+  ]);
+
+  assert.equal(itineraryPlanScoreRevision(before), itineraryPlanScoreRevision(edited));
+});
+
+test('changing when or how long an item runs does re-score the trip', () => {
+  const before = itinerary([item('a', 0)]);
+
+  assert.notEqual(
+    itineraryPlanScoreRevision(before),
+    itineraryPlanScoreRevision(itinerary([{ ...item('a', 0), localStartTime: '09:00' }])),
+  );
+  assert.notEqual(
+    itineraryPlanScoreRevision(before),
+    itineraryPlanScoreRevision(itinerary([{ ...item('a', 0), durationMinutes: 90 }])),
+  );
+  assert.notEqual(
+    itineraryPlanScoreRevision(before),
+    itineraryPlanScoreRevision(itinerary([{ ...item('a', 0), dayPart: 'morning' }])),
+  );
+});
+
+test('reordering a day re-scores the trip, since the legs change', () => {
+  assert.notEqual(
+    itineraryPlanScoreRevision(itinerary([item('a', 0), item('b', 1)])),
+    itineraryPlanScoreRevision(itinerary([item('b', 0), item('a', 1)])),
+  );
 });

@@ -51,6 +51,9 @@ const placeDetailsParamsSchema = z
 
 const placeDetailsQuerySchema = z
   .object({
+    // Clients that only render a name and a marker should ask for `location`;
+    // the default stays `full` so an unversioned client keeps its detail sheet.
+    detail: z.enum(['full', 'location']).optional(),
     languageCode: languageCodeSchema.optional(),
     regionCode: regionCodeSchema.optional(),
     sessionToken: sessionTokenSchema.optional(),

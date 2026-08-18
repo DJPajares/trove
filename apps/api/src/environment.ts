@@ -44,9 +44,27 @@ export function getWebOrigins(environment: Record<string, string | undefined> = 
     .filter(Boolean);
 }
 
+/**
+ * A single switch that stops every outbound Google request. Both provider
+ * factories already return null when their key is absent and the app degrades
+ * to `configuration_missing` end to end, so this reuses a path that is already
+ * the everyday local one rather than introducing a new failure mode.
+ */
+export function areGoogleProvidersDisabled(
+  environment: Record<string, string | undefined> = process.env,
+) {
+  const value = environment.TROVE_GOOGLE_PROVIDERS_DISABLED?.trim().toLowerCase();
+
+  return value === '1' || value === 'true';
+}
+
 export function getPlacesEnvironment(
   environment: Record<string, string | undefined> = process.env,
 ): PlacesEnvironment | null {
+  if (areGoogleProvidersDisabled(environment)) {
+    return null;
+  }
+
   const googlePlacesApiKey = environment.GOOGLE_PLACES_API_KEY?.trim();
 
   return googlePlacesApiKey ? { googlePlacesApiKey } : null;
@@ -55,6 +73,10 @@ export function getPlacesEnvironment(
 export function getRoutesEnvironment(
   environment: Record<string, string | undefined> = process.env,
 ): RoutesEnvironment | null {
+  if (areGoogleProvidersDisabled(environment)) {
+    return null;
+  }
+
   const googleRoutesApiKey = environment.GOOGLE_ROUTES_API_KEY?.trim();
 
   return googleRoutesApiKey ? { googleRoutesApiKey } : null;

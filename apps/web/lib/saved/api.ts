@@ -92,8 +92,36 @@ function readProviderDetailsCache() {
   }
 }
 
-export function getCachedProviderPlaceDetails(placeId: string) {
-  const entry = readProviderDetailsCache()[placeId];
+/**
+ * `location` is a name, an address and coordinates: everything a list, a marker
+ * or a route label needs. `full` adds the mutable detail only a place's own
+ * sheet shows, and costs materially more to ask the provider for.
+ *
+ * The two are cached under separate keys because a `location` answer genuinely
+ * lacks the rest. Sharing one key would let a list view's cheap fetch silently
+ * strip the rating and opening hours off the next sheet that opened.
+ */
+export type ProviderDetailLevel = 'full' | 'location';
+
+function providerDetailsCacheKey(placeId: string, detail: ProviderDetailLevel) {
+  return detail === 'full' ? placeId : `${placeId}#location`;
+}
+
+function readCacheEntry(placeId: string, detail: ProviderDetailLevel) {
+  const cache = readProviderDetailsCache();
+  const full = cache[providerDetailsCacheKey(placeId, 'full')];
+
+  // A full answer contains everything a location answer does, so it satisfies
+  // either request. The reverse is not true.
+  if (detail === 'full') return full;
+  return full ?? cache[providerDetailsCacheKey(placeId, 'location')];
+}
+
+export function getCachedProviderPlaceDetails(
+  placeId: string,
+  detail: ProviderDetailLevel = 'location',
+) {
+  const entry = readCacheEntry(placeId, detail);
   if (
     !entry ||
     Date.now() - entry.cachedAt > PROVIDER_DETAILS_CACHE_TTL_MS ||
@@ -105,10 +133,14 @@ export function getCachedProviderPlaceDetails(placeId: string) {
   return details;
 }
 
-export function cacheProviderPlaceDetails(placeId: string, details: ProviderPlaceDetails) {
+export function cacheProviderPlaceDetails(
+  placeId: string,
+  details: ProviderPlaceDetails,
+  detail: ProviderDetailLevel = 'location',
+) {
   if (typeof window === 'undefined') return;
   const cache = readProviderDetailsCache();
-  cache[placeId] = { ...details, cachedAt: Date.now() };
+  cache[providerDetailsCacheKey(placeId, detail)] = { ...details, cachedAt: Date.now() };
   try {
     window.sessionStorage.setItem(PROVIDER_DETAILS_CACHE_KEY, JSON.stringify(cache));
   } catch {
@@ -223,10 +255,11 @@ export type ProviderPlaceDetailsResult =
  */
 export async function getProviderPlaceDetails(
   externalPlaceId: string,
+  detail: ProviderDetailLevel = 'location',
 ): Promise<ProviderPlaceDetailsResult> {
   try {
     return await savedRequest<ProviderPlaceDetailsResult>(
-      `/places/${encodeURIComponent(externalPlaceId)}`,
+      `/places/${encodeURIComponent(externalPlaceId)}?detail=${detail}`,
     );
   } catch (cause) {
     if (cause instanceof SavedApiError) {

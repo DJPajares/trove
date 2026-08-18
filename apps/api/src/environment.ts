@@ -58,6 +58,21 @@ export function areGoogleProvidersDisabled(
   return value === '1' || value === 'true';
 }
 
+/**
+ * Plan Score is the single widest fan-out over Google providers in the app - one
+ * request can issue a Places/Routes call per day and per trip place. This is a
+ * dedicated switch so it can be turned off without also breaking search,
+ * place-details, and day-route views, which `TROVE_GOOGLE_PROVIDERS_DISABLED`
+ * would.
+ */
+export function arePlanScoreProvidersDisabled(
+  environment: Record<string, string | undefined> = process.env,
+) {
+  const value = environment.TROVE_PLAN_SCORE_DISABLED?.trim().toLowerCase();
+
+  return value === '1' || value === 'true';
+}
+
 export function getPlacesEnvironment(
   environment: Record<string, string | undefined> = process.env,
 ): PlacesEnvironment | null {

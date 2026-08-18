@@ -1,5 +1,6 @@
 import { getPrismaClient } from '@trove/db';
 
+import { arePlanScoreProvidersDisabled } from '../environment.js';
 import {
   sameDayJourneyCommitment,
   toDayEvidenceItems,
@@ -294,19 +295,36 @@ export async function getTripPlanScore(
   });
   if (!trip) throw new ItineraryNotFoundError('trip_not_found');
 
-  const placesService =
-    services.placesService === undefined ? createPlacesService() : services.placesService;
+  // A dedicated kill switch, independent of the app-wide Google switch: Plan
+  // Score is the widest fan-out surface, so it can be turned off on its own
+  // without breaking search, place-details, or day-route views elsewhere.
+  const planScoreDisabled = arePlanScoreProvidersDisabled();
+  const placesService = planScoreDisabled
+    ? null
+    : services.placesService === undefined
+      ? createPlacesService()
+      : services.placesService;
   const commitments = trip.reservations.flatMap((reservation) => {
     const commitment = sameDayJourneyCommitment(reservation);
     return commitment ? [commitment] : [];
   });
 
-  const routesService = createRoutesService();
+  const routesService = planScoreDisabled ? null : createRoutesService();
   // One resolver for the whole trip. Days share places constantly - the same
   // hotel is the base every night - and a per-day resolver re-fetched each one.
   // Mirrors the guard inside getItineraryDayRoutes: with no routing there is
   // nothing to resolve coordinates for.
   const resolvePlace = createPlaceResolver(routesService ? placesService : null);
+
+  // Evidence (rating/hours) only ever feeds a day's factors, scoped to the trip
+  // places that are actually scheduled on some day - toDayPlaces/
+  // toDayEvidenceItems never look past that set. A trip place saved but never
+  // placed on a day would otherwise be fetched and immediately discarded.
+  const scheduledTripPlaceIds = new Set(
+    trip.itineraryDays.flatMap((day) =>
+      day.items.flatMap((item) => (item.tripPlaceId ? [item.tripPlaceId] : [])),
+    ),
+  );
 
   const [routeResults, placeEvidence] = await Promise.all([
     mapWithConcurrency(trip.itineraryDays, PROVIDER_CONCURRENCY_LIMIT, async (day) => ({
@@ -320,12 +338,14 @@ export async function getTripPlanScore(
       ),
     })),
     loadPlaceEvidence(
-      trip.tripPlaces.map((tripPlace) => ({
-        externalPlaceId:
-          tripPlace.place.providerRefs.find((reference) => reference.provider === 'GOOGLE')
-            ?.externalPlaceId ?? null,
-        id: tripPlace.id,
-      })),
+      trip.tripPlaces
+        .filter((tripPlace) => scheduledTripPlaceIds.has(tripPlace.id))
+        .map((tripPlace) => ({
+          externalPlaceId:
+            tripPlace.place.providerRefs.find((reference) => reference.provider === 'GOOGLE')
+              ?.externalPlaceId ?? null,
+          id: tripPlace.id,
+        })),
       placesService,
     ),
   ]);

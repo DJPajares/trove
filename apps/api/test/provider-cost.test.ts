@@ -12,6 +12,7 @@ import {
   GooglePlacesProvider,
 } from '../src/services/google-places.js';
 import type { PlacesProvider, ProviderPlaceDetails } from '../src/services/places.js';
+import { getTripPlanScore } from '../src/services/plan-score.js';
 import {
   getProviderCallCounts,
   recordProviderCall,
@@ -51,6 +52,7 @@ type LegRow = {
 
 const providerRefs = new Map<string, ProviderRefRow>();
 const legs = new Map<string, LegRow>();
+let tripFixture: unknown = null;
 
 function decimal(value: number) {
   return { toNumber: () => value };
@@ -92,7 +94,92 @@ function installStubPrisma() {
         return legs.get(key);
       },
     },
+    trip: {
+      // Plan Score's own query and the day-routes query it fans out to both call
+      // `trip.findFirst` with different `where`/`include` shapes; the fixture
+      // below carries every field either caller reads, so one stub answers both.
+      findFirst: async () => tripFixture,
+    },
   };
+}
+
+/**
+ * A trip with one scheduled Trip Place and one saved-but-unscheduled Trip Place,
+ * both pointing at real Google places. Exercises `getTripPlanScore`'s own
+ * provider fan-out end to end (not just the pure `buildTripPlanScore` scorer
+ * that `plan-score.test.ts` covers).
+ */
+function buildPlanScoreTripFixture() {
+  const place = (id: string, externalPlaceId: string) => ({
+    customLatitude: null,
+    customLongitude: null,
+    customName: null,
+    id,
+    providerRefs: [{ externalPlaceId, provider: 'GOOGLE' }],
+  });
+
+  const scheduledTripPlace = {
+    id: 'tp-scheduled',
+    place: place('place-scheduled', 'ChIJscheduled'),
+    priority: null,
+  };
+  const unscheduledTripPlace = {
+    id: 'tp-unscheduled',
+    place: place('place-unscheduled', 'ChIJunscheduled'),
+    priority: null,
+  };
+  const day = {
+    accommodationReservations: [],
+    dailyBaseDepartureTripPlace: null,
+    dailyBaseTripPlace: null,
+    date: new Date('2026-09-01T00:00:00.000Z'),
+    defaultTimeZone: 'UTC',
+    id: 'day-1',
+    items: [
+      {
+        _count: { reservations: 0 },
+        dayPart: null,
+        durationMinutes: 60,
+        id: 'item-1',
+        localStartTime: null,
+        position: 0,
+        startInstant: null,
+        timeSemantics: null,
+        timeZone: null,
+        travelModeToNext: 'WALK',
+        tripPlace: scheduledTripPlace,
+        tripPlaceId: 'tp-scheduled',
+      },
+    ],
+    routeStartTravelMode: 'WALK',
+  };
+
+  return {
+    id: 'trip-1',
+    itineraryDays: [day],
+    ownerId: 'user-1',
+    reservations: [],
+    startDate: new Date('2026-09-01T00:00:00.000Z'),
+    startingPlace: null,
+    tripPlaces: [scheduledTripPlace, unscheduledTripPlace],
+  };
+}
+
+/** Like `countingPlacesProvider`, but keeps what each call actually asked for. */
+function detailRequestsProvider() {
+  const requests: Array<{ detail: string | undefined; externalPlaceId: string }> = [];
+  const provider: PlacesProvider = {
+    name: 'google',
+    getDetails: async (request) => {
+      requests.push({ detail: request.detail, externalPlaceId: request.externalPlaceId });
+      recordProviderCall({ endpoint: '/v1/places', operation: 'getDetails', provider: 'google' });
+      return detailsFor(request.externalPlaceId);
+    },
+    resolvePhoto: async () => ({ name: 'photo', uri: 'https://example.test/photo' }),
+    search: async () => [],
+  };
+
+  return { provider, requests };
 }
 
 function seedProviderRef(externalPlaceId: string, overrides: Partial<ProviderRefRow> = {}) {
@@ -170,6 +257,7 @@ function countingRoutesProvider() {
 beforeEach(() => {
   providerRefs.clear();
   legs.clear();
+  tripFixture = null;
   resetCachedPlacesMemo();
   resetProviderCallCounts();
   installStubPrisma();
@@ -421,4 +509,53 @@ test('a resolver built per day pays for the same place every day', async () => {
   );
 
   assert.equal(calls(), 3);
+});
+
+test('Plan Score fetches evidence only for scheduled trip places, not every saved one', async () => {
+  tripFixture = buildPlanScoreTripFixture();
+  const { provider, requests } = detailRequestsProvider();
+  const placesService = new CachedPlacesService(provider);
+  // Real network calls for routing would need a real Routes API key; disabling
+  // the provider keeps this test's routes leg deterministic and offline while
+  // leaving the injected `placesService` - the thing under test - untouched.
+  process.env.TROVE_GOOGLE_PROVIDERS_DISABLED = '1';
+
+  try {
+    await getTripPlanScore('user-1', 'trip-1', { placesService });
+  } finally {
+    delete process.env.TROVE_GOOGLE_PROVIDERS_DISABLED;
+  }
+
+  const evidenceRequests = requests.filter((request) => request.detail === 'evidence');
+  assert.deepEqual(
+    evidenceRequests.map((request) => request.externalPlaceId),
+    ['ChIJscheduled'],
+    'the unscheduled trip place must never be asked for evidence',
+  );
+});
+
+test('TROVE_PLAN_SCORE_DISABLED stops every provider call, even with a working service supplied', async () => {
+  tripFixture = buildPlanScoreTripFixture();
+  const { provider, requests } = detailRequestsProvider();
+  const placesService = new CachedPlacesService(provider);
+  process.env.TROVE_GOOGLE_PROVIDERS_DISABLED = '1';
+
+  try {
+    await getTripPlanScore('user-1', 'trip-1', { placesService });
+    assert.ok(requests.length > 0, 'sanity check: the fixture normally does call the provider');
+
+    requests.length = 0;
+    resetCachedPlacesMemo();
+    process.env.TROVE_PLAN_SCORE_DISABLED = '1';
+    await getTripPlanScore('user-1', 'trip-1', { placesService });
+  } finally {
+    delete process.env.TROVE_GOOGLE_PROVIDERS_DISABLED;
+    delete process.env.TROVE_PLAN_SCORE_DISABLED;
+  }
+
+  assert.equal(
+    requests.length,
+    0,
+    'the injected placesService must never be called while Plan Score is disabled',
+  );
 });

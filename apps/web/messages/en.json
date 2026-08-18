@@ -1295,8 +1295,6 @@
     "emptyTitle": "Start with places worth considering.",
     "emptyDescription": "Add a saved place or create a private place for this trip. Scheduling comes later.",
     "listLabel": "Trip places",
-    "detailsUnavailable": "Some place names couldn't be refreshed just now.",
-    "retryDetails": "Retry",
     "alsoSaved": "Saved",
     "notSaved": "Not saved",
     "status": "Status",

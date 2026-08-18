@@ -9,8 +9,5 @@ const perMinute = (max: number) => ({ rateLimit: { max, timeWindow: '1 minute' }
 /** Debounced autocomplete: roughly one request per second while typing. */
 export const PROVIDER_SEARCH_RATE_LIMIT = perMinute(120);
 
-/** Place details and photos, fetched per place across a list. */
-export const PROVIDER_DETAILS_RATE_LIMIT = perMinute(120);
-
 /** Endpoints where one request becomes many provider calls. */
 export const PROVIDER_FANOUT_RATE_LIMIT = perMinute(30);

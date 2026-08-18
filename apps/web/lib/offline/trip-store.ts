@@ -1332,6 +1332,9 @@ function memoryFromOperation(
             externalPlaceId: reference.externalPlaceId,
             provider: reference.provider,
           })),
+          // Carried through so a Memory captured offline names its Place the
+          // same way one that synced does.
+          snapshot: tripPlace.place.snapshot,
         }
       : null,
     updatedAt: now.toISOString(),

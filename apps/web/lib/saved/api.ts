@@ -1,6 +1,25 @@
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
-import { hasProviderPlaceDetailsLocation } from './provider-details-cache';
+/**
+ * The provider's own durable answer for a Place, stored by Trove and served
+ * from its database. Optional so an itinerary cached in IndexedDB before this
+ * existed still renders — the fallbacks below it take over when it is absent.
+ */
+export type PlaceSnapshot = {
+  address: string | null;
+  category:
+    'destination' | 'food_and_drink' | 'other' | 'shopping' | 'stay' | 'things_to_do' | 'transport';
+  /** When the provider answered, so a surface can date what it shows. */
+  fetchedAt: string;
+  googleMapsUri: string | null;
+  languageCode: string;
+  name: string | null;
+  primaryType: string | null;
+  rawTypes: string[];
+  /** Past its permitted life and the refresh could not be made. */
+  stale: boolean;
+  utcOffsetMinutes: number | null;
+};
 
 export type CanonicalPlace = {
   id: string;
@@ -13,6 +32,7 @@ export type CanonicalPlace = {
   /** The name the provider gave then, used only when live details are out of reach. */
   providerLabel: string | null;
   providerRefs: Array<{ externalPlaceId: string; provider: 'google' }>;
+  snapshot?: PlaceSnapshot | null;
 };
 
 /**
@@ -47,7 +67,6 @@ export type SavedPlace = {
 export type SavedCollection = {
   id: string;
   name: string;
-  nationalPhoneNumber?: string | null;
   placeCount: number;
 };
 
@@ -58,30 +77,6 @@ export type ProviderSuggestion = {
   externalPlaceId: string;
   name: string;
   provider: 'google';
-};
-
-export type ProviderPlaceDetails = {
-  category: ProviderSuggestion['category'];
-  formattedAddress: string | null;
-  googleMapsUri?: string | null;
-  location: { latitude: number; longitude: number } | null;
-  name: string;
-  nationalPhoneNumber?: string | null;
-  photos?: Array<{
-    authorAttributions: Array<{ displayName: string; photoUri: string | null; uri: string | null }>;
-    heightPx: number | null;
-    name: string;
-    widthPx: number | null;
-  }>;
-  primaryType?: string | null;
-  rating?: number | null;
-  regularOpeningHours?: string[];
-  userRatingCount?: number | null;
-  websiteUri?: string | null;
-};
-
-type CachedProviderPlaceDetails = ProviderPlaceDetails & {
-  cachedAt: number;
 };
 
 type ProviderSearchResult =
@@ -97,51 +92,7 @@ export class SavedApiError extends Error {
 }
 
 const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
-const PROVIDER_DETAILS_CACHE_KEY = 'trove.provider-place-details';
-const PROVIDER_DETAILS_CACHE_TTL_MS = 60 * 60 * 1_000;
 export const GOOGLE_PLACES_SEARCH_DEBOUNCE_MS = 600;
-
-function readProviderDetailsCache() {
-  if (typeof window === 'undefined') return {} as Record<string, CachedProviderPlaceDetails>;
-  try {
-    return JSON.parse(window.sessionStorage.getItem(PROVIDER_DETAILS_CACHE_KEY) ?? '{}') as Record<
-      string,
-      CachedProviderPlaceDetails
-    >;
-  } catch {
-    return {} as Record<string, CachedProviderPlaceDetails>;
-  }
-}
-
-/**
- * The app only ever asks the provider for `location`: a name, an address and
- * coordinates, everything a list, a marker or a route label needs. There is
- * only one cache tier because there is only one detail level requested.
- */
-export function getCachedProviderPlaceDetails(placeId: string) {
-  const cache = readProviderDetailsCache();
-  const entry = cache[placeId];
-  if (
-    !entry ||
-    Date.now() - entry.cachedAt > PROVIDER_DETAILS_CACHE_TTL_MS ||
-    !hasProviderPlaceDetailsLocation(entry)
-  ) {
-    return null;
-  }
-  const { cachedAt: _cachedAt, ...details } = entry;
-  return details;
-}
-
-export function cacheProviderPlaceDetails(placeId: string, details: ProviderPlaceDetails) {
-  if (typeof window === 'undefined') return;
-  const cache = readProviderDetailsCache();
-  cache[placeId] = { ...details, cachedAt: Date.now() };
-  try {
-    window.sessionStorage.setItem(PROVIDER_DETAILS_CACHE_KEY, JSON.stringify(cache));
-  } catch {
-    // The UI can fall back to provider details when session storage is unavailable.
-  }
-}
 
 async function getAuthContext() {
   const supabase = createBrowserSupabaseClient();
@@ -238,46 +189,21 @@ export function searchProviderPlaces(input: string, signal?: AbortSignal) {
   });
 }
 
-export type ProviderPlaceDetailsResult =
-  | { code?: string; status: 'unavailable' }
-  | { place?: ProviderPlaceDetails; status: 'empty' | 'ok' };
-
 /**
- * The API answers a Place it cannot resolve with 404 and one it cannot reach with
- * 5xx, both of which `savedRequest` throws. They are caught here and handed back as
- * the statuses the caller already expects, so "Google has nothing for this Place"
- * stays distinguishable from "we could not ask" instead of collapsing into a throw.
- */
-export async function getProviderPlaceDetails(
-  externalPlaceId: string,
-  languageCode?: string,
-): Promise<ProviderPlaceDetailsResult> {
-  try {
-    const query = new URLSearchParams({ detail: 'location' });
-    if (languageCode) query.set('languageCode', languageCode);
-    return await savedRequest<ProviderPlaceDetailsResult>(
-      `/places/${encodeURIComponent(externalPlaceId)}?${query.toString()}`,
-    );
-  } catch (cause) {
-    if (cause instanceof SavedApiError) {
-      return cause.status === 404
-        ? { status: 'empty' }
-        : { code: cause.code, status: 'unavailable' };
-    }
-    throw cause;
-  }
-}
-
-/**
- * The label is what the traveller saw when they picked this Place. It is kept only
- * so the Place still has a name on a day the provider cannot be reached.
+ * Resolving is where a Place costs a provider request — once, here, and never
+ * again from a screen. The response already carries the snapshot every surface
+ * renders from afterwards.
+ *
+ * The label is what the traveller saw when they picked this Place. It is kept
+ * only so the Place still has a name on a day the provider cannot be reached.
  */
 export function resolveProviderPlace(
   externalPlaceId: string,
   label?: { address?: string | null; name?: string | null },
+  languageCode?: string,
 ) {
   return savedRequest<{ place: CanonicalPlace }>('/places/resolve', {
-    body: JSON.stringify({ externalPlaceId, label, provider: 'google' }),
+    body: JSON.stringify({ externalPlaceId, label, languageCode, provider: 'google' }),
     method: 'POST',
   });
 }

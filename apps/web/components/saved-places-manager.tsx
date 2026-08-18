@@ -67,13 +67,10 @@ import {
 } from '@/components/ui/sheet';
 import {
   addToCollection,
-  cacheProviderPlaceDetails,
-  getCachedProviderPlaceDetails,
   createCollection,
   createCustomPlace,
   fetchSavedPlaces,
   GOOGLE_PLACES_SEARCH_DEBOUNCE_MS,
-  getProviderPlaceDetails,
   googleMapsPlaceHref,
   removeCollection,
   removeFromCollection,
@@ -81,7 +78,6 @@ import {
   resolveProviderPlace,
   saveCanonicalPlace,
   SavedApiError,
-  type ProviderPlaceDetails,
   type ProviderSuggestion,
   type SavedCollection,
   type SavedPlace,
@@ -98,8 +94,6 @@ import { cn } from '@/lib/utils';
 type CollectionEditor =
   { collection: null; mode: 'closed' | 'create' } | { collection: SavedCollection; mode: 'rename' };
 type CategoryFilter = 'all' | ProviderSuggestion['category'];
-type ProviderDetailsByPlaceId = Record<string, ProviderPlaceDetails | null | undefined>;
-
 const categoryFilters: CategoryFilter[] = [
   'all',
   'food_and_drink',
@@ -117,7 +111,6 @@ export function SavedPlacesManager() {
   const locale = useLocale();
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
   const [collections, setCollections] = useState<SavedCollection[]>([]);
-  const [providerDetails, setProviderDetails] = useState<ProviderDetailsByPlaceId>({});
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
@@ -170,53 +163,6 @@ export function SavedPlacesManager() {
   }, [refresh]);
 
   useEffect(() => {
-    const unresolvedProviderPlaces = savedPlaces.filter(
-      (savedPlace) =>
-        savedPlace.place.kind === 'provider' &&
-        providerDetails[savedPlace.place.id] === undefined &&
-        savedPlace.place.providerRefs[0],
-    );
-    if (unresolvedProviderPlaces.length === 0) return;
-
-    let active = true;
-
-    void Promise.all(
-      unresolvedProviderPlaces.map(async (savedPlace) => {
-        const externalPlaceId = savedPlace.place.providerRefs[0]?.externalPlaceId;
-        if (!externalPlaceId) return { placeId: savedPlace.place.id, details: null };
-
-        // Every other surface checks the session cache before asking; this one
-        // did not, so simply revisiting Saved re-billed one Place Details call
-        // per saved place.
-        const cached = getCachedProviderPlaceDetails(savedPlace.place.id);
-        if (cached) return { placeId: savedPlace.place.id, details: cached };
-
-        try {
-          const result = await getProviderPlaceDetails(externalPlaceId, locale);
-          const details = result.status === 'ok' ? (result.place ?? null) : null;
-          if (details) cacheProviderPlaceDetails(savedPlace.place.id, details);
-          return {
-            placeId: savedPlace.place.id,
-            details,
-          };
-        } catch {
-          return { placeId: savedPlace.place.id, details: null };
-        }
-      }),
-    ).then((results) => {
-      if (!active) return;
-      setProviderDetails((current) => ({
-        ...current,
-        ...Object.fromEntries(results.map((result) => [result.placeId, result.details])),
-      }));
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [locale, providerDetails, savedPlaces]);
-
-  useEffect(() => {
     const input = searchQuery.trim();
     if (!input) {
       setSearchResults([]);
@@ -266,9 +212,9 @@ export function SavedPlacesManager() {
           savedPlace.collections.some((collection) => collection.id === activeCollectionId);
         if (!belongsToActiveCollection) return false;
         if (categoryFilter === 'all') return true;
-        return providerDetails[savedPlace.place.id]?.category === categoryFilter;
+        return savedPlace.place.snapshot?.category === categoryFilter;
       }),
-    [activeCollectionId, categoryFilter, providerDetails, savedPlaces],
+    [activeCollectionId, categoryFilter, savedPlaces],
   );
 
   const dateFormatter = useMemo(
@@ -285,7 +231,7 @@ export function SavedPlacesManager() {
     if (savedPlace.place.kind === 'custom') {
       return savedPlace.place.name ?? t('customPlace');
     }
-    return providerDetails[savedPlace.place.id]?.name ?? t('providerPlace');
+    return savedPlace.place.snapshot?.name ?? savedPlace.place.providerLabel ?? t('providerPlace');
   }
 
   function getPlaceDescription(savedPlace: SavedPlace) {
@@ -294,7 +240,9 @@ export function SavedPlacesManager() {
     }
 
     return (
-      providerDetails[savedPlace.place.id]?.formattedAddress ?? t('providerDetailsUnavailable')
+      savedPlace.place.snapshot?.address ??
+      savedPlace.place.providerAddress ??
+      t('providerDetailsUnavailable')
     );
   }
 
@@ -322,7 +270,7 @@ export function SavedPlacesManager() {
     setError(null);
 
     try {
-      const { place } = await resolveProviderPlace(suggestion.externalPlaceId);
+      const { place } = await resolveProviderPlace(suggestion.externalPlaceId, undefined, locale);
       const { savedPlace } = await saveCanonicalPlace(place.id);
       setSavedPlaces((current) => [
         savedPlace,
@@ -679,7 +627,7 @@ export function SavedPlacesManager() {
             ) : (
               <ItemGroup aria-label={t('listLabel')} variant="list">
                 {visibleSavedPlaces.map((savedPlace) => {
-                  const category = providerDetails[savedPlace.place.id]?.category;
+                  const category = savedPlace.place.snapshot?.category;
                   return (
                     <Item
                       className="min-h-20 flex-nowrap px-3 py-3 text-left hover:bg-muted/60"

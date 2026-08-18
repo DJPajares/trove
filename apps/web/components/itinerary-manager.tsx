@@ -136,12 +136,8 @@ import {
 import { useInViewOnce } from '@/lib/plan-score/use-in-view-once';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import {
-  cacheProviderPlaceDetails,
-  getCachedProviderPlaceDetails,
-  getProviderPlaceDetails,
   googleMapsPlaceHref,
   GOOGLE_PLACES_SEARCH_DEBOUNCE_MS,
-  type ProviderPlaceDetails,
   type ProviderSuggestion,
   resolveProviderPlace,
   searchProviderPlaces,
@@ -227,9 +223,6 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const [dayNoteValue, setDayNoteValue] = useState('');
   const [savingDayNote, setSavingDayNote] = useState(false);
   const [timeZoneConsequence, setTimeZoneConsequence] = useState(false);
-  const [providerDetails, setProviderDetails] = useState<
-    Record<string, ProviderPlaceDetails | null | undefined>
-  >({});
   const [placeQuery, setPlaceQuery] = useState('');
   const [providerResults, setProviderResults] = useState<ProviderSuggestion[]>([]);
   const [placeSearchStatus, setPlaceSearchStatus] = useState<'idle' | 'loading' | 'unavailable'>(
@@ -288,46 +281,6 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     params.set('day', selectedDayId);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }, [pathname, requestedDayId, router, searchParams, selectedDayId]);
-
-  useEffect(() => {
-    if (!itinerary) return;
-    const pending = itinerary.tripPlaces.filter(
-      (tripPlace) =>
-        tripPlace.place.kind === 'provider' &&
-        providerDetails[tripPlace.place.id] === undefined &&
-        tripPlace.place.providerRefs[0],
-    );
-    if (!pending.length) return;
-    let active = true;
-    void Promise.all(
-      pending.map(async (tripPlace) => {
-        const cached = getCachedProviderPlaceDetails(tripPlace.place.id);
-        if (cached) return { details: cached, placeId: tripPlace.place.id };
-        const providerId = tripPlace.place.providerRefs[0]?.externalPlaceId;
-        if (!providerId) return { details: null, placeId: tripPlace.place.id };
-        try {
-          const result = await getProviderPlaceDetails(providerId, locale);
-          const details = result.status === 'ok' ? (result.place ?? null) : null;
-          if (details) cacheProviderPlaceDetails(tripPlace.place.id, details);
-          return {
-            details,
-            placeId: tripPlace.place.id,
-          };
-        } catch {
-          return { details: null, placeId: tripPlace.place.id };
-        }
-      }),
-    ).then((results) => {
-      if (!active) return;
-      setProviderDetails((current) => ({
-        ...current,
-        ...Object.fromEntries(results.map((result) => [result.placeId, result.details])),
-      }));
-    });
-    return () => {
-      active = false;
-    };
-  }, [itinerary, locale, providerDetails]);
 
   useEffect(() => {
     const query = placeQuery.trim();
@@ -455,15 +408,12 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
 
   function placeName(tripPlace: ItineraryTripPlace | null) {
     if (!tripPlace) return null;
-    // The traveller's own name for the Place needs no resolving, so it short-circuits
-    // the loading state a provider Place would otherwise show.
+    // Every name is already here: the traveller's own, or the one Trove stored
+    // when the Place was added. Nothing is pending, so nothing shows as loading.
     const custom = tripPlace.customName?.trim();
     if (custom) return custom;
     if (tripPlace.place.kind === 'custom') return tripPlace.place.name ?? t('customPlace');
-    const details = providerDetails[tripPlace.place.id];
-    return details === undefined
-      ? t('providerPlaceLoading')
-      : (details?.name ?? t('providerPlace'));
+    return tripPlace.place.snapshot?.name ?? tripPlace.place.providerLabel ?? t('providerPlace');
   }
 
   function itemName(item: ItineraryItem) {
@@ -471,7 +421,9 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   function placeLocation(tripPlace: ItineraryTripPlace) {
-    return tripPlace.place.location ?? providerDetails[tripPlace.place.id]?.location ?? null;
+    // A provider Place's coordinates now arrive with it, so a pin is drawn on the
+    // first render rather than appearing once a lookup returns.
+    return tripPlace.place.location ?? null;
   }
 
   // One reading of where the day starts and ends, and one counting of its stops,
@@ -522,16 +474,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
       ),
       ...bases,
     ];
-  }, [
-    dailyBases,
-    itinerary,
-    placeUse,
-    providerDetails,
-    selectedDay,
-    selectedIndex,
-    stopNumbers,
-    t,
-  ]);
+  }, [dailyBases, itinerary, placeUse, selectedDay, selectedIndex, stopNumbers, t]);
 
   /**
    * A base is a stop of the day, so it reads like one: numbered in travel order,
@@ -750,11 +693,11 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     const query = placeQuery.trim().toLocaleLowerCase();
     if (!query) return itinerary?.tripPlaces ?? [];
     return (itinerary?.tripPlaces ?? []).filter((tripPlace) =>
-      [placeName(tripPlace), providerDetails[tripPlace.place.id]?.formattedAddress]
+      [placeName(tripPlace), tripPlace.place.snapshot?.address]
         .filter((value): value is string => Boolean(value))
         .some((value) => value.toLocaleLowerCase().includes(query)),
     );
-  }, [itinerary?.tripPlaces, placeQuery, providerDetails]);
+  }, [itinerary?.tripPlaces, placeQuery]);
 
   async function selectProviderPlace(suggestion: ProviderSuggestion) {
     setSelectingPlace(true);

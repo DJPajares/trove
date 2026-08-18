@@ -6,7 +6,7 @@ import { createPlacesControllers } from '../src/controllers/places.js';
 import { getPlacesEnvironment } from '../src/environment.js';
 import {
   GOOGLE_AUTOCOMPLETE_FIELD_MASK,
-  GOOGLE_PLACE_DETAILS_FIELD_MASK,
+  GOOGLE_PLACE_LOCATION_FIELD_MASK,
   GooglePlacesProvider,
 } from '../src/services/google-places.js';
 import { categorizePlaceTypes } from '../src/services/place-categories.js';
@@ -93,7 +93,7 @@ test('Google search uses location bias, a session token, and an explicit field m
   ]);
 });
 
-test('Google details concludes the session and returns live photo references with attribution', async () => {
+test('Google details concludes the session and asks only for what Trove stores', async () => {
   let capturedUrl = '';
   let capturedHeaders = new Headers();
   const provider = new GooglePlacesProvider({
@@ -108,20 +108,6 @@ test('Google details concludes the session and returns live photo references wit
         googleMapsUri: 'https://maps.google.com/?cid=123',
         id: 'ChIJhotel',
         location: { latitude: 1.3, longitude: 103.8 },
-        photos: [
-          {
-            authorAttributions: [
-              {
-                displayName: 'Example Contributor',
-                photoUri: 'https://example.com/photo',
-                uri: 'https://example.com/contributor',
-              },
-            ],
-            heightPx: 1_200,
-            name: 'places/ChIJhotel/photos/photo_reference',
-            widthPx: 1_600,
-          },
-        ],
         primaryType: 'hotel',
         types: ['hotel', 'lodging', 'establishment'],
       });
@@ -129,6 +115,7 @@ test('Google details concludes the session and returns live photo references wit
   });
 
   const place = await provider.getDetails({
+    detail: 'location',
     externalPlaceId: 'ChIJhotel',
     languageCode: 'en',
     regionCode: 'sg',
@@ -142,24 +129,12 @@ test('Google details concludes the session and returns live photo references wit
     regionCode: 'sg',
     sessionToken: 'session-token',
   });
-  assert.equal(capturedHeaders.get('X-Goog-FieldMask'), GOOGLE_PLACE_DETAILS_FIELD_MASK);
+  assert.equal(capturedHeaders.get('X-Goog-FieldMask'), GOOGLE_PLACE_LOCATION_FIELD_MASK);
   assert.equal(capturedHeaders.get('X-Goog-FieldMask')?.includes('*'), false);
   assert.equal(place.category, 'stay');
   assert.deepEqual(place.rawTypes, ['hotel', 'lodging', 'establishment']);
-  assert.deepEqual(place.photos, [
-    {
-      authorAttributions: [
-        {
-          displayName: 'Example Contributor',
-          photoUri: 'https://example.com/photo',
-          uri: 'https://example.com/contributor',
-        },
-      ],
-      heightPx: 1_200,
-      name: 'places/ChIJhotel/photos/photo_reference',
-      widthPx: 1_600,
-    },
-  ]);
+  assert.equal(place.name, 'Trove Hotel');
+  assert.deepEqual(place.location, { latitude: 1.3, longitude: 103.8 });
 });
 
 test('a geocoded address with no displayName falls back to its formatted address as the name', async () => {
@@ -174,7 +149,7 @@ test('a geocoded address with no displayName falls back to its formatted address
       }),
   });
 
-  const place = await provider.getDetails({ externalPlaceId: 'ChIJaddress' });
+  const place = await provider.getDetails({ detail: 'location', externalPlaceId: 'ChIJaddress' });
 
   assert.equal(place.name, '5 Quiet Lane, Wellington 6021');
   assert.equal(place.formattedAddress, '5 Quiet Lane, Wellington 6021');
@@ -187,7 +162,7 @@ test('a place with neither a displayName nor a formatted address is unresolvable
   });
 
   await assert.rejects(
-    provider.getDetails({ externalPlaceId: 'ChIJbare' }),
+    provider.getDetails({ detail: 'location', externalPlaceId: 'ChIJbare' }),
     new PlaceProviderError('provider_unavailable'),
   );
 });
@@ -203,7 +178,7 @@ async function detailsFrom(body: Record<string, unknown>) {
       }),
   });
 
-  return provider.getDetails({ externalPlaceId: 'ChIJmuseum' });
+  return provider.getDetails({ detail: 'location', externalPlaceId: 'ChIJmuseum' });
 }
 
 test('opening periods survive the zero values proto3 omits from the wire', async () => {
@@ -259,44 +234,11 @@ test('a place with no hours reports no periods and no offset', async () => {
   assert.equal(place.utcOffsetMinutes, null);
 });
 
-test('Google photo resolution requests a current reference without caching the media', async () => {
-  let capturedUrl = '';
-  const provider = new GooglePlacesProvider({
-    apiKey: 'server-key',
-    fetcher: async (input) => {
-      capturedUrl = String(input);
-      return Response.json({
-        name: 'places/ChIJhotel/photos/photo_reference/media',
-        photoUri: 'https://lh3.googleusercontent.com/example=s1200',
-      });
-    },
-  });
-
-  const photo = await provider.resolvePhoto({
-    maxWidthPx: 1_200,
-    name: 'places/ChIJhotel/photos/photo_reference',
-  });
-  const url = new URL(capturedUrl);
-
-  assert.equal(url.pathname, '/v1/places/ChIJhotel/photos/photo_reference/media');
-  assert.deepEqual(Object.fromEntries(url.searchParams), {
-    maxWidthPx: '1200',
-    skipHttpRedirect: 'true',
-  });
-  assert.deepEqual(photo, {
-    name: 'places/ChIJhotel/photos/photo_reference/media',
-    uri: 'https://lh3.googleusercontent.com/example=s1200',
-  });
-});
-
 test('PlacesService creates reusable session tokens and reports freshness for empty results', async () => {
   let capturedToken = '';
   const provider: PlacesProvider = {
     name: 'google',
     getDetails: async () => {
-      throw new PlaceProviderError('not_found');
-    },
-    resolvePhoto: async () => {
       throw new PlaceProviderError('not_found');
     },
     search: async (request) => {
@@ -307,7 +249,7 @@ test('PlacesService creates reusable session tokens and reports freshness for em
   const service = new PlacesService(provider, () => new Date('2026-08-11T08:00:00.000Z'));
 
   const search = await service.search({ input: 'No result' });
-  const details = await service.getDetails({ externalPlaceId: 'missing' });
+  const details = await service.getDetails({ detail: 'location', externalPlaceId: 'missing' });
 
   assert.match(
     capturedToken,
@@ -329,16 +271,13 @@ test('PlacesService translates provider quota failures into a graceful unavailab
     getDetails: async () => {
       throw new PlaceProviderError('quota_exceeded');
     },
-    resolvePhoto: async () => {
-      throw new PlaceProviderError('quota_exceeded');
-    },
     search: async () => {
       throw new PlaceProviderError('quota_exceeded');
     },
   };
   const service = new PlacesService(provider);
 
-  assert.deepEqual(await service.getDetails({ externalPlaceId: 'ChIJquota' }), {
+  assert.deepEqual(await service.getDetails({ detail: 'location', externalPlaceId: 'ChIJquota' }), {
     code: 'quota_exceeded',
     provider: 'google',
     status: 'unavailable',
@@ -368,9 +307,6 @@ test('Places controllers reject invalid input and degrade provider failures expl
   const provider: PlacesProvider = {
     name: 'google',
     getDetails: async () => {
-      throw new PlaceProviderError('provider_unavailable');
-    },
-    resolvePhoto: async () => {
       throw new PlaceProviderError('provider_unavailable');
     },
     search: async () => {

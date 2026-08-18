@@ -1,6 +1,14 @@
 import { getPrismaClient } from '@trove/db';
 
+import { hydratePlaceSnapshot, isSnapshotFresh, type PlaceSnapshotSource } from './place-data.js';
+import {
+  type CanonicalPlace,
+  placeProviderRefInclude,
+  serializeCanonicalPlace,
+} from './place-serializer.js';
 import type { PlaceProviderName } from './places.js';
+
+export type { CanonicalPlace } from './place-serializer.js';
 
 export type CustomPlaceLocation = {
   latitude: number;
@@ -30,24 +38,6 @@ export type ProviderPlaceLabel = {
   name?: string | null;
 };
 
-export type CanonicalPlace = {
-  id: string;
-  kind: 'custom' | 'provider';
-  location: {
-    latitude: number;
-    longitude: number;
-    timeZone: string | null;
-  } | null;
-  name: string | null;
-  note: string | null;
-  providerAddress: string | null;
-  providerLabel: string | null;
-  providerRefs: {
-    externalPlaceId: string;
-    provider: PlaceProviderName;
-  }[];
-};
-
 export type CanonicalPlaceRecord = {
   customLatitude: number | null;
   customLongitude: number | null;
@@ -59,10 +49,9 @@ export type CanonicalPlaceRecord = {
   ownerId: string | null;
   providerAddress: string | null;
   providerLabel: string | null;
-  providerRefs: {
-    externalPlaceId: string;
+  providerRefs: (PlaceSnapshotSource & {
     provider: 'GOOGLE';
-  }[];
+  })[];
 };
 
 export interface CanonicalPlaceRepository {
@@ -100,10 +89,6 @@ function toDatabaseProvider(provider: PlaceProviderName) {
   return provider === 'google' ? ('GOOGLE' as const) : (provider satisfies never);
 }
 
-function fromDatabaseProvider(provider: CanonicalPlaceRecord['providerRefs'][number]['provider']) {
-  return provider === 'GOOGLE' ? ('google' as const) : (provider satisfies never);
-}
-
 function isUniqueConstraintError(error: unknown) {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
 }
@@ -119,27 +104,13 @@ function normalizeLabel(label: ProviderPlaceLabel | undefined) {
   };
 }
 
-function serializePlace(place: CanonicalPlaceRecord): CanonicalPlace {
-  return {
-    id: place.id,
-    kind: place.kind === 'CUSTOM' ? 'custom' : 'provider',
-    location:
-      place.customLatitude === null || place.customLongitude === null
-        ? null
-        : {
-            latitude: place.customLatitude,
-            longitude: place.customLongitude,
-            timeZone: place.customTimeZone,
-          },
-    name: place.customName,
-    note: place.customNote,
-    providerAddress: place.providerAddress,
-    providerLabel: place.providerLabel,
-    providerRefs: place.providerRefs.map((reference) => ({
-      externalPlaceId: reference.externalPlaceId,
-      provider: fromDatabaseProvider(reference.provider),
-    })),
-  };
+function serializePlace(
+  place: CanonicalPlaceRecord,
+  snapshot?: PlaceSnapshotSource | null,
+): CanonicalPlace {
+  return serializeCanonicalPlace(place, {
+    snapshots: snapshot ? new Map([[snapshot.externalPlaceId, snapshot]]) : undefined,
+  });
 }
 
 function toPlaceRecord(place: {
@@ -153,7 +124,7 @@ function toPlaceRecord(place: {
   ownerId: string | null;
   providerAddress: string | null;
   providerLabel: string | null;
-  providerRefs: { externalPlaceId: string; provider: 'GOOGLE' }[];
+  providerRefs: (PlaceSnapshotSource & { provider: 'GOOGLE' })[];
 }): CanonicalPlaceRecord {
   return {
     ...place,
@@ -171,7 +142,7 @@ class PrismaCanonicalPlaceRepository implements CanonicalPlaceRepository {
           provider: toDatabaseProvider(provider),
         },
       },
-      include: { place: { include: { providerRefs: true } } },
+      include: { place: { include: placeProviderRefInclude } },
     });
 
     return reference ? toPlaceRecord(reference.place) : null;
@@ -189,7 +160,7 @@ class PrismaCanonicalPlaceRepository implements CanonicalPlaceRepository {
           provider: toDatabaseProvider(provider),
           place: { create: { kind: 'PROVIDER', ...normalizeLabel(label) } },
         },
-        include: { place: { include: { providerRefs: true } } },
+        include: { place: { include: placeProviderRefInclude } },
       });
 
       return toPlaceRecord(reference.place);
@@ -213,7 +184,7 @@ class PrismaCanonicalPlaceRepository implements CanonicalPlaceRepository {
         ...(providerAddress ? { providerAddress } : {}),
         ...(providerLabel ? { providerLabel } : {}),
       },
-      include: { providerRefs: true },
+      include: placeProviderRefInclude,
     });
 
     return toPlaceRecord(place);
@@ -237,7 +208,7 @@ class PrismaCanonicalPlaceRepository implements CanonicalPlaceRepository {
           kind: 'CUSTOM',
           ownerId: userId,
         },
-        include: { providerRefs: true },
+        include: placeProviderRefInclude,
       });
 
       return toPlaceRecord(place);
@@ -267,7 +238,7 @@ class PrismaCanonicalPlaceRepository implements CanonicalPlaceRepository {
 
       const place = await transaction.place.findFirst({
         where: { id: placeId, kind: 'CUSTOM', ownerId: userId },
-        include: { providerRefs: true },
+        include: placeProviderRefInclude,
       });
 
       return place ? toPlaceRecord(place) : null;
@@ -275,19 +246,33 @@ class PrismaCanonicalPlaceRepository implements CanonicalPlaceRepository {
   }
 }
 
+/** Injectable so a test can count what a resolution costs. */
+export type PlaceSnapshotHydrator = (
+  externalPlaceId: string,
+  options?: { languageCode?: string },
+) => Promise<PlaceSnapshotSource | null>;
+
 export class CanonicalPlacesService {
-  constructor(private readonly repository: CanonicalPlaceRepository) {}
+  constructor(
+    private readonly repository: CanonicalPlaceRepository,
+    private readonly hydrate: PlaceSnapshotHydrator = hydratePlaceSnapshot,
+  ) {}
 
   async resolveProviderPlace(
     provider: PlaceProviderName,
     externalPlaceId: string,
     label?: ProviderPlaceLabel,
+    options: { languageCode?: string } = {},
   ) {
     const normalizedExternalPlaceId = externalPlaceId.trim();
     const existing = await this.repository.findByProviderRef(provider, normalizedExternalPlaceId);
 
     if (existing) {
-      return serializePlace(await this.withLabel(existing, label));
+      const labelled = await this.withLabel(existing, label);
+      return serializePlace(
+        labelled,
+        await this.ensureSnapshot(labelled, normalizedExternalPlaceId, options),
+      );
     }
 
     try {
@@ -296,7 +281,10 @@ export class CanonicalPlacesService {
         normalizedExternalPlaceId,
         label,
       );
-      return serializePlace(created);
+      return serializePlace(
+        created,
+        await this.ensureSnapshot(created, normalizedExternalPlaceId, options),
+      );
     } catch (error) {
       if (!(error instanceof ProviderReferenceConflictError)) {
         throw error;
@@ -309,8 +297,37 @@ export class CanonicalPlacesService {
       if (!concurrentlyCreated) {
         throw error;
       }
-      return serializePlace(await this.withLabel(concurrentlyCreated, label));
+      const labelled = await this.withLabel(concurrentlyCreated, label);
+      return serializePlace(
+        labelled,
+        await this.ensureSnapshot(labelled, normalizedExternalPlaceId, options),
+      );
     }
+  }
+
+  /**
+   * The one provider request a Place ever costs, paid the moment a traveller
+   * picks it out of search. Every screen afterwards reads what this stored.
+   *
+   * It runs after the reference row exists, which is what makes it stick:
+   * the snapshot write matches on the reference, so fetching before the row
+   * was created bought an answer that was then silently discarded.
+   *
+   * A Place someone else already added — or the same Place being added to a
+   * second trip — finds a usable snapshot here and costs nothing.
+   */
+  private async ensureSnapshot(
+    place: CanonicalPlaceRecord,
+    externalPlaceId: string,
+    options: { languageCode?: string },
+  ) {
+    const reference = place.providerRefs.find(
+      (entry) => entry.externalPlaceId === externalPlaceId && entry.provider === 'GOOGLE',
+    );
+    if (!reference) return null;
+    if (isSnapshotFresh(reference, { languageCode: options.languageCode })) return null;
+
+    return this.hydrate(externalPlaceId, { languageCode: options.languageCode });
   }
 
   /**

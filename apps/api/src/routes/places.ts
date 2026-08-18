@@ -4,7 +4,7 @@ import { createPlacesControllers } from '../controllers/places.js';
 import { createCanonicalPlacesService } from '../services/canonical-places.js';
 import { createPlacesService } from '../services/places-runtime.js';
 import { requireAuthenticatedUser } from '../services/request-auth.js';
-import { PROVIDER_DETAILS_RATE_LIMIT, PROVIDER_SEARCH_RATE_LIMIT } from './rate-limits.js';
+import { PROVIDER_SEARCH_RATE_LIMIT } from './rate-limits.js';
 
 export function registerPlacesRoutes(app: FastifyInstance) {
   const controllers = createPlacesControllers(
@@ -19,6 +19,8 @@ export function registerPlacesRoutes(app: FastifyInstance) {
     { config: PROVIDER_SEARCH_RATE_LIMIT, preHandler: requireAuthenticatedUser },
     controllers.search,
   );
+  // Resolving is the only place data endpoint that reaches the provider, and it
+  // does so once per Place ever. Every screen afterwards reads the database.
   app.post(
     '/places/resolve',
     { preHandler: requireAuthenticatedUser },
@@ -33,10 +35,5 @@ export function registerPlacesRoutes(app: FastifyInstance) {
     '/places/custom/:placeId',
     { preHandler: requireAuthenticatedUser },
     controllers.updateCustomPlace,
-  );
-  app.get(
-    '/places/:providerPlaceId',
-    { config: PROVIDER_DETAILS_RATE_LIMIT, preHandler: requireAuthenticatedUser },
-    controllers.getDetails,
   );
 }

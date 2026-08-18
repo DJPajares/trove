@@ -34,7 +34,6 @@ import {
   type TripModeContext,
 } from '@/lib/itinerary/api';
 import { fetchSavedPlaces, type SavedPlace } from '@/lib/saved/api';
-import { useProviderPlaceNames } from '@/lib/saved/provider-names';
 import { fetchTrips, type Trip } from '@/lib/trips/api';
 
 type HomeData = {
@@ -158,12 +157,7 @@ export function HomeExperience() {
   const primary = useMemo(() => selectPrimaryTrip(data.trips), [data.trips]);
   const primaryTripId = primary?.kind === 'active' ? primary.trip.id : null;
 
-  // Only the three shown are worth resolving; a provider Place has no stored name,
-  // so without this every one of them reads as the same placeholder.
   const shownSavedPlaces = useMemo(() => data.savedPlaces.slice(0, 3), [data.savedPlaces]);
-  const providerNames = useProviderPlaceNames(
-    useMemo(() => shownSavedPlaces.map((savedPlace) => savedPlace.place), [shownSavedPlaces]),
-  );
 
   useEffect(() => {
     if (!primaryTripId) {
@@ -448,7 +442,8 @@ export function HomeExperience() {
                 <ItemContent className="min-w-0">
                   <ItemTitle className="truncate">
                     {savedPlace.place.name ??
-                      providerNames[savedPlace.place.id] ??
+                      savedPlace.place.snapshot?.name ??
+                      savedPlace.place.providerLabel ??
                       t('savedPlaceFallback')}
                   </ItemTitle>
                   <ItemDescription className="line-clamp-1">

@@ -7,6 +7,7 @@ import {
   deriveCapturedLocal,
   resolveMemoryTimeZone,
 } from './memories-rules.js';
+import { placeProviderRefInclude, serializePlaceReference } from './place-serializer.js';
 import { createAuthenticatedSupabaseClient } from './supabase-auth.js';
 import { formatDateOnly } from './trip-rules.js';
 
@@ -66,12 +67,14 @@ const memoryInclude = {
   tripPlace: {
     select: {
       id: true,
+      // The whole reference, not a narrowed pick: the snapshot columns are what
+      // let a Memory name its Place without a provider request.
       place: {
         select: {
           customName: true,
           id: true,
           kind: true,
-          providerRefs: { select: { externalPlaceId: true, provider: true } },
+          ...placeProviderRefInclude,
         },
       },
     },
@@ -225,21 +228,9 @@ async function serializeMemory(memory: MemoryRecord, supabase: SupabaseClient | 
     ),
     timeZone: memory.timeZone,
     timeZoneSource: mapTimeZoneSource(memory.timeZoneSource),
-    // Provider names stay provider-owned: only the reference travels, so a story
-    // can resolve the current name on demand rather than storing a stale copy.
-    tripPlace: memory.tripPlace
-      ? {
-          id: memory.tripPlace.id,
-          kind:
-            memory.tripPlace.place.kind === 'CUSTOM' ? ('custom' as const) : ('provider' as const),
-          name: memory.tripPlace.place.customName,
-          placeId: memory.tripPlace.place.id,
-          providerRefs: memory.tripPlace.place.providerRefs.map((reference) => ({
-            externalPlaceId: reference.externalPlaceId,
-            provider: 'google' as const,
-          })),
-        }
-      : null,
+    // Provider names stay provider-owned: the reference travels with the dated
+    // snapshot Trove is permitted to keep, rather than a copy treated as truth.
+    tripPlace: memory.tripPlace ? serializePlaceReference(memory.tripPlace) : null,
     updatedAt: memory.updatedAt.toISOString(),
   };
 }

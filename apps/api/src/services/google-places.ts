@@ -6,19 +6,14 @@ import {
   type PlaceDetailsRequest,
   type PlaceOpeningPeriod,
   type PlaceOpeningPoint,
-  type PlacePhotoAttribution,
-  type PlacePhotoRequest,
-  type PlacePhotoReference,
   type PlaceSearchRequest,
   type PlacesProvider,
   type PlaceSuggestion,
   type ProviderPlaceDetails,
-  type ResolvedPlacePhoto,
 } from './places.js';
 
 const DEFAULT_BASE_URL = 'https://places.googleapis.com';
 const DEFAULT_TIMEOUT_MS = 8_000;
-const PHOTO_NAME_PATTERN = /^places\/[A-Za-z0-9_-]+\/photos\/[A-Za-z0-9_-]+$/;
 const SESSION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{1,36}$/;
 
 export const GOOGLE_AUTOCOMPLETE_FIELD_MASK = [
@@ -47,29 +42,14 @@ export const GOOGLE_PLACE_LOCATION_FIELD_MASK = [
   'utcOffsetMinutes',
 ].join(',');
 
-/** Everything above plus the mutable detail a place's own sheet displays. */
-export const GOOGLE_PLACE_DETAILS_FIELD_MASK = [
-  'id',
-  'displayName',
-  'formattedAddress',
-  'location',
-  'nationalPhoneNumber',
-  'types',
-  'primaryType',
-  'googleMapsUri',
-  'photos',
-  'rating',
-  'regularOpeningHours',
-  'userRatingCount',
-  'utcOffsetMinutes',
-  'websiteUri',
-].join(',');
-
 /**
- * Rating and hours only — what Plan Score reads and nothing else. Rating and
- * hours already require the same "Atmosphere" billing tier as the full mask,
- * but photos/phone/website don't need to ride along for a call nobody renders
- * them from.
+ * Rating and hours only — what Plan Score reads and nothing else. These already
+ * require the expensive "Atmosphere" billing tier, so nothing that is never
+ * rendered gets to ride along with them.
+ *
+ * Note there is no `location` here, and that is load-bearing: the snapshot
+ * write refuses a place without coordinates, so an evidence answer can never
+ * reach the database. Rating and hours may not be stored at any TTL (PRD 11.4).
  */
 export const GOOGLE_PLACE_EVIDENCE_FIELD_MASK = [
   'id',
@@ -78,9 +58,8 @@ export const GOOGLE_PLACE_EVIDENCE_FIELD_MASK = [
   'utcOffsetMinutes',
 ].join(',');
 
-const PLACE_DETAIL_FIELD_MASKS: Record<PlaceDetailLevel, string> = {
+export const PLACE_DETAIL_FIELD_MASKS: Record<PlaceDetailLevel, string> = {
   evidence: GOOGLE_PLACE_EVIDENCE_FIELD_MASK,
-  full: GOOGLE_PLACE_DETAILS_FIELD_MASK,
   location: GOOGLE_PLACE_LOCATION_FIELD_MASK,
 };
 
@@ -104,19 +83,6 @@ type GoogleAutocompleteResponse = {
   suggestions?: Array<{ placePrediction?: GooglePlacePrediction }>;
 };
 
-type GoogleAuthorAttribution = {
-  displayName?: string;
-  photoUri?: string;
-  uri?: string;
-};
-
-type GooglePhoto = {
-  authorAttributions?: GoogleAuthorAttribution[];
-  heightPx?: number;
-  name?: string;
-  widthPx?: number;
-};
-
 type GooglePlaceDetails = {
   displayName?: GoogleText;
   formattedAddress?: string;
@@ -126,8 +92,6 @@ type GooglePlaceDetails = {
     latitude?: number;
     longitude?: number;
   };
-  nationalPhoneNumber?: string;
-  photos?: GooglePhoto[];
   primaryType?: string;
   rating?: number;
   regularOpeningHours?: {
@@ -135,9 +99,7 @@ type GooglePlaceDetails = {
     weekdayDescriptions?: string[];
   };
   types?: string[];
-  userRatingCount?: number;
   utcOffsetMinutes?: number;
-  websiteUri?: string;
 };
 
 /**
@@ -148,11 +110,6 @@ type GooglePlaceDetails = {
  */
 type GoogleOpeningPoint = { day?: number; hour?: number; minute?: number };
 type GoogleOpeningPeriod = { close?: GoogleOpeningPoint; open?: GoogleOpeningPoint };
-
-type GooglePhotoMedia = {
-  name?: string;
-  photoUri?: string;
-};
 
 type GoogleErrorResponse = {
   error?: {
@@ -207,37 +164,6 @@ function mapGoogleError(responseStatus: number, body: GoogleErrorResponse) {
   }
 
   return new PlaceProviderError('provider_unavailable');
-}
-
-function mapAttribution(attribution: GoogleAuthorAttribution): PlacePhotoAttribution | null {
-  const displayName = cleanString(attribution.displayName);
-
-  if (!displayName) {
-    return null;
-  }
-
-  return {
-    displayName,
-    photoUri: cleanString(attribution.photoUri),
-    uri: cleanString(attribution.uri),
-  };
-}
-
-function mapPhoto(photo: GooglePhoto): PlacePhotoReference | null {
-  const name = cleanString(photo.name);
-
-  if (!name || !PHOTO_NAME_PATTERN.test(name)) {
-    return null;
-  }
-
-  return {
-    authorAttributions: (photo.authorAttributions ?? [])
-      .map(mapAttribution)
-      .filter((attribution): attribution is PlacePhotoAttribution => attribution !== null),
-    heightPx: Number.isInteger(photo.heightPx) ? (photo.heightPx ?? null) : null,
-    name,
-    widthPx: Number.isInteger(photo.widthPx) ? (photo.widthPx ?? null) : null,
-  };
 }
 
 /**
@@ -304,10 +230,6 @@ function createSuggestion(prediction: GooglePlacePrediction): PlaceSuggestion | 
     provider: 'google',
     rawTypes,
   };
-}
-
-function isValidPhotoDimension(value: number | undefined) {
-  return value === undefined || (Number.isInteger(value) && value >= 1 && value <= 4_800);
 }
 
 function isValidLocationBias(request: PlaceSearchRequest) {
@@ -441,7 +363,7 @@ export class GooglePlacesProvider implements PlacesProvider {
       url.searchParams.set('sessionToken', request.sessionToken);
     }
 
-    const fieldMask = PLACE_DETAIL_FIELD_MASKS[request.detail ?? 'full'];
+    const fieldMask = PLACE_DETAIL_FIELD_MASKS[request.detail];
     const response = await this.requestJson<GooglePlaceDetails>(
       url,
       { headers: { 'X-Goog-FieldMask': fieldMask }, method: 'GET' },
@@ -474,69 +396,13 @@ export class GooglePlacesProvider implements PlacesProvider {
       googleMapsUri: cleanString(response.googleMapsUri),
       location: hasLocation ? { latitude, longitude } : null,
       name,
-      nationalPhoneNumber: cleanString(response.nationalPhoneNumber),
       openingPeriods,
-      photos: (response.photos ?? [])
-        .map(mapPhoto)
-        .filter((photo): photo is PlacePhotoReference => photo !== null),
       primaryType,
       provider: 'google',
       rating: typeof response.rating === 'number' ? response.rating : null,
       rawTypes,
-      regularOpeningHours: cleanStringList(response.regularOpeningHours?.weekdayDescriptions),
-      userRatingCount: Number.isInteger(response.userRatingCount)
-        ? (response.userRatingCount ?? null)
-        : null,
       utcOffsetMinutes:
         typeof response.utcOffsetMinutes === 'number' ? response.utcOffsetMinutes : null,
-      websiteUri: cleanString(response.websiteUri),
     };
-  }
-
-  async resolvePhoto(request: PlacePhotoRequest): Promise<ResolvedPlacePhoto> {
-    if (
-      !PHOTO_NAME_PATTERN.test(request.name) ||
-      (request.maxHeightPx === undefined && request.maxWidthPx === undefined) ||
-      !isValidPhotoDimension(request.maxHeightPx) ||
-      !isValidPhotoDimension(request.maxWidthPx)
-    ) {
-      throw new PlaceProviderError('invalid_request');
-    }
-
-    const url = new URL(`/v1/${request.name}/media`, this.baseUrl);
-
-    if (request.maxHeightPx) {
-      url.searchParams.set('maxHeightPx', String(request.maxHeightPx));
-    }
-
-    if (request.maxWidthPx) {
-      url.searchParams.set('maxWidthPx', String(request.maxWidthPx));
-    }
-
-    url.searchParams.set('skipHttpRedirect', 'true');
-
-    const response = await this.requestJson<GooglePhotoMedia>(
-      url,
-      { method: 'GET' },
-      'resolvePhoto',
-    );
-    const name = cleanString(response.name);
-    const uri = cleanString(response.photoUri);
-
-    if (!name || !uri) {
-      throw new PlaceProviderError('provider_unavailable');
-    }
-
-    try {
-      const photoUrl = new URL(uri);
-
-      if (photoUrl.protocol !== 'https:') {
-        throw new Error('Unexpected photo URL protocol');
-      }
-    } catch (error) {
-      throw new PlaceProviderError('provider_unavailable', { cause: error });
-    }
-
-    return { name, uri };
   }
 }

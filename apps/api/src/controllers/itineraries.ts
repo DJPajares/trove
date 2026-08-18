@@ -17,6 +17,9 @@ import {
 } from '../services/itineraries.js';
 
 const tripParamsSchema = z.object({ tripId: z.uuid() }).strict();
+const languageQuerySchema = z
+  .object({ languageCode: z.string().trim().min(2).max(35).optional() })
+  .strict();
 const itemParamsSchema = z.object({ itemId: z.uuid(), tripId: z.uuid() }).strict();
 const dayParamsSchema = z.object({ itineraryDayId: z.uuid(), tripId: z.uuid() }).strict();
 const organizeItemSchema = z
@@ -174,10 +177,13 @@ export function createItineraryControllers() {
     async getItinerary(request: FastifyRequest, reply: FastifyReply) {
       const userId = getUserId(request, reply);
       const params = tripParamsSchema.safeParse(request.params);
+      const query = languageQuerySchema.safeParse(request.query);
       if (!userId) return;
       if (!params.success) return reply.code(400).send({ code: 'invalid_trip_id' });
       try {
-        return reply.send(await listItinerary(userId, params.data.tripId));
+        return reply.send(
+          await listItinerary(userId, params.data.tripId, query.data?.languageCode),
+        );
       } catch (error) {
         return handleError(reply, error);
       }

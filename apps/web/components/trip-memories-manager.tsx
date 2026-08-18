@@ -45,7 +45,6 @@ import {
   type StoryCover,
 } from '@/lib/memories/api';
 import { buildTripStory, placeName, type StoryPlace, type TripStory } from '@/lib/memories/story';
-import { useProviderPlaceNames } from '@/lib/saved/provider-names';
 import { fetchTrip, updateTripExperienceRating, type Trip } from '@/lib/trips/api';
 import { cn } from '@/lib/utils';
 
@@ -284,20 +283,6 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
     [state.data],
   );
 
-  // Provider Place names are resolved on demand and never stored as Trove data.
-  const placeNames = useProviderPlaceNames(
-    useMemo(
-      () =>
-        (story?.places ?? []).map((place) => ({
-          id: place.tripPlace.placeId,
-          kind: place.tripPlace.kind,
-          name: place.tripPlace.name,
-          providerRefs: place.tripPlace.providerRefs,
-        })),
-      [story?.places],
-    ),
-  );
-
   async function moveHighlight(memoryId: string, direction: -1 | 1) {
     if (!story) return;
     const index = story.highlights.findIndex((memory) => memory.id === memoryId);
@@ -390,7 +375,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
     }).format(new Date(`1970-01-01T${hour}:${minute}:00.000Z`));
   };
   const resolvePlaceName = (tripPlace: MemoryTripPlace, itemLabel: string | null) =>
-    placeName(tripPlace, placeNames[tripPlace.placeId] ?? null, itemLabel) ?? t('unnamedPlace');
+    placeName(tripPlace, tripPlace.snapshot?.name ?? null, itemLabel) ?? t('unnamedPlace');
   const placeLabel = (place: StoryPlace) =>
     resolvePlaceName(
       place.tripPlace,

@@ -1,6 +1,10 @@
 import { getPrismaClient } from '@trove/db';
 
 import type { CanonicalPlace } from './canonical-places.js';
+import {
+  placeProviderRefInclude,
+  serializeCanonicalPlace as serializePlace,
+} from './place-serializer.js';
 import { removeOwnedSavedPlace } from './saved-place-removal.js';
 
 export type SavedPlace = {
@@ -43,40 +47,6 @@ function normalizeNote(note: string | null | undefined) {
   return note?.trim() || null;
 }
 
-function serializePlace(place: {
-  customLatitude: { toNumber(): number } | null;
-  customLongitude: { toNumber(): number } | null;
-  customName: string | null;
-  customNote: string | null;
-  customTimeZone: string | null;
-  id: string;
-  kind: 'CUSTOM' | 'PROVIDER';
-  providerAddress: string | null;
-  providerLabel: string | null;
-  providerRefs: Array<{ externalPlaceId: string; provider: 'GOOGLE' }>;
-}): CanonicalPlace {
-  return {
-    id: place.id,
-    kind: place.kind === 'CUSTOM' ? 'custom' : 'provider',
-    location:
-      place.customLatitude === null || place.customLongitude === null
-        ? null
-        : {
-            latitude: place.customLatitude.toNumber(),
-            longitude: place.customLongitude.toNumber(),
-            timeZone: place.customTimeZone,
-          },
-    name: place.customName,
-    note: place.customNote,
-    providerAddress: place.providerAddress,
-    providerLabel: place.providerLabel,
-    providerRefs: place.providerRefs.map((reference) => ({
-      externalPlaceId: reference.externalPlaceId,
-      provider: 'google' as const,
-    })),
-  };
-}
-
 function serializeSavedPlace(savedPlace: {
   collectionLinks: Array<{ collection: { id: string; name: string } }>;
   createdAt: Date;
@@ -105,7 +75,7 @@ async function ensureProfile(userId: string) {
 
 const savedPlaceInclude = {
   collectionLinks: { include: { collection: true } },
-  place: { include: { providerRefs: true } },
+  place: { include: placeProviderRefInclude },
 } as const;
 
 export async function listSavedPlaces(userId: string) {

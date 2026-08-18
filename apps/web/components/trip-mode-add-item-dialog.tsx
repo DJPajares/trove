@@ -23,13 +23,9 @@ import { Input } from '@/components/ui/input';
 import type { ItineraryScheduleInput, ItineraryTripPlace } from '@/lib/itinerary/api';
 import { createItineraryItem } from '@/lib/itinerary/api';
 import {
-  cacheProviderPlaceDetails,
-  getCachedProviderPlaceDetails,
-  getProviderPlaceDetails,
   GOOGLE_PLACES_SEARCH_DEBOUNCE_MS,
   resolveProviderPlace,
   searchProviderPlaces,
-  type ProviderPlaceDetails,
   type ProviderSuggestion,
 } from '@/lib/saved/api';
 import { addTripPlace } from '@/lib/trip-places/api';
@@ -62,9 +58,6 @@ export function TripModeAddItemDialog({
   const [schedule, setSchedule] = useState<TripModeSchedule>('none');
   const [exactTime, setExactTime] = useState('');
   const [providerResults, setProviderResults] = useState<ProviderSuggestion[]>([]);
-  const [providerDetails, setProviderDetails] = useState<
-    Record<string, ProviderPlaceDetails | null | undefined>
-  >({});
   const [searchStatus, setSearchStatus] = useState<'idle' | 'loading' | 'unavailable'>('idle');
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -80,43 +73,6 @@ export function TripModeAddItemDialog({
     setSavingId(null);
     setError(null);
   }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const pending = tripPlaces.filter(
-      (tripPlace) =>
-        tripPlace.place.kind === 'provider' &&
-        providerDetails[tripPlace.place.id] === undefined &&
-        tripPlace.place.providerRefs[0],
-    );
-    if (!pending.length) return;
-    let active = true;
-    void Promise.all(
-      pending.map(async (tripPlace) => {
-        const cached = getCachedProviderPlaceDetails(tripPlace.place.id);
-        if (cached) return { details: cached, placeId: tripPlace.place.id };
-        const externalPlaceId = tripPlace.place.providerRefs[0]?.externalPlaceId;
-        if (!externalPlaceId) return { details: null, placeId: tripPlace.place.id };
-        try {
-          const result = await getProviderPlaceDetails(externalPlaceId, locale);
-          const details = result.status === 'ok' ? (result.place ?? null) : null;
-          if (details) cacheProviderPlaceDetails(tripPlace.place.id, details);
-          return { details, placeId: tripPlace.place.id };
-        } catch {
-          return { details: null, placeId: tripPlace.place.id };
-        }
-      }),
-    ).then((results) => {
-      if (!active) return;
-      setProviderDetails((current) => ({
-        ...current,
-        ...Object.fromEntries(results.map((result) => [result.placeId, result.details])),
-      }));
-    });
-    return () => {
-      active = false;
-    };
-  }, [locale, open, providerDetails, tripPlaces]);
 
   useEffect(() => {
     const search = query.trim();
@@ -147,16 +103,16 @@ export function TripModeAddItemDialog({
     return tripPlaces
       .filter((tripPlace) => {
         if (!search) return true;
-        const details = providerDetails[tripPlace.place.id];
-        return [tripPlace.place.name, details?.name, details?.formattedAddress]
+        const snapshot = tripPlace.place.snapshot;
+        return [tripPlace.place.name, snapshot?.name, snapshot?.address]
           .filter((value): value is string => Boolean(value))
           .some((value) => value.toLocaleLowerCase().includes(search));
       })
       .slice(0, 8);
-  }, [providerDetails, query, tripPlaces]);
+  }, [query, tripPlaces]);
 
   const placeName = (tripPlace: ItineraryTripPlace) =>
-    tripPlace.place.name ?? providerDetails[tripPlace.place.id]?.name ?? t('placeFallback');
+    tripPlace.place.name ?? tripPlace.place.snapshot?.name ?? t('placeFallback');
 
   async function finishCreate(input: { customLabel?: string; tripPlaceId?: string }) {
     if (schedule === 'exact' && !exactTime) {
@@ -189,7 +145,7 @@ export function TripModeAddItemDialog({
     setSavingId(suggestion.externalPlaceId);
     setError(null);
     try {
-      const { place } = await resolveProviderPlace(suggestion.externalPlaceId);
+      const { place } = await resolveProviderPlace(suggestion.externalPlaceId, undefined, locale);
       const { tripPlace } = await addTripPlace(tripId, place.id);
       await finishCreate({ tripPlaceId: tripPlace.id });
     } catch {
@@ -253,7 +209,7 @@ export function TripModeAddItemDialog({
           />
           <div className="max-h-64 overflow-y-auto rounded-[var(--radius-lg)] border border-border">
             {filteredTripPlaces.map((tripPlace) => {
-              const details = providerDetails[tripPlace.place.id];
+              const address = tripPlace.place.snapshot?.address;
               return (
                 <div
                   className="flex min-h-16 items-center gap-3 border-b border-border px-3 py-2 last:border-b-0"
@@ -262,10 +218,8 @@ export function TripModeAddItemDialog({
                   <MapPin aria-hidden="true" className="size-4 shrink-0 text-brand" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium text-foreground">{placeName(tripPlace)}</p>
-                    {details?.formattedAddress ? (
-                      <p className="truncate text-xs text-muted-foreground">
-                        {details.formattedAddress}
-                      </p>
+                    {address ? (
+                      <p className="truncate text-xs text-muted-foreground">{address}</p>
                     ) : null}
                   </div>
                   <Button

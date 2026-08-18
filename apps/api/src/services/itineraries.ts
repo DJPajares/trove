@@ -8,6 +8,12 @@ import {
   resolveItemTimeZone,
 } from './itinerary-rules.js';
 import { unlinkItineraryItemReferences } from './itinerary-item-deletion.js';
+import { hydratePlaceSnapshots } from './place-data.js';
+import {
+  placeProviderRefInclude,
+  type PlaceSerializerOptions,
+  serializeCanonicalPlace,
+} from './place-serializer.js';
 import { formatDateOnly, isValidIanaTimeZone } from './trip-rules.js';
 
 export type ItineraryScheduleInput =
@@ -56,7 +62,7 @@ export const itineraryItemInclude = {
   itineraryDay: { select: { date: true, defaultTimeZone: true } },
   tripPlace: {
     include: {
-      place: { include: { providerRefs: true } },
+      place: { include: placeProviderRefInclude },
     },
   },
 } as const;
@@ -134,39 +140,28 @@ function mapItemTimeZoneSource(value: string | null) {
   return value ? (values[value] ?? null) : null;
 }
 
-function serializeTripPlace(tripPlace: NonNullable<ItineraryItemRecord['tripPlace']>) {
-  const place = tripPlace.place;
+function serializeTripPlace(
+  tripPlace: NonNullable<ItineraryItemRecord['tripPlace']>,
+  options: PlaceSerializerOptions = {},
+) {
   return {
     customName: tripPlace.customName,
     id: tripPlace.id,
     note: tripPlace.note,
     place: {
-      id: place.id,
-      kind: place.kind === 'CUSTOM' ? ('custom' as const) : ('provider' as const),
-      location:
-        place.customLatitude === null || place.customLongitude === null
-          ? null
-          : {
-              latitude: place.customLatitude.toNumber(),
-              longitude: place.customLongitude.toNumber(),
-              timeZone: place.customTimeZone,
-            },
-      name: place.customName,
-      note: place.customNote,
-      providerAddress: place.providerAddress,
-      providerLabel: place.providerLabel,
-      providerRefs: place.providerRefs.map((reference) => ({
-        externalPlaceId: reference.externalPlaceId,
-        provider: 'google' as const,
-        resolvedAt: reference.updatedAt.toISOString(),
-      })),
-      timeZone: place.customTimeZone,
+      ...serializeCanonicalPlace(tripPlace.place, options),
+      // The day's local-time maths needs an IANA zone, which only a Custom
+      // Place carries; a provider snapshot holds a UTC offset, not a zone.
+      timeZone: tripPlace.place.customTimeZone,
     },
     priority: mapPriority(tripPlace.priority),
   };
 }
 
-export function serializeItineraryItem(item: ItineraryItemRecord) {
+export function serializeItineraryItem(
+  item: ItineraryItemRecord,
+  options: PlaceSerializerOptions = {},
+) {
   return {
     createdAt: item.createdAt.toISOString(),
     customLabel: item.customLabel,
@@ -199,7 +194,7 @@ export function serializeItineraryItem(item: ItineraryItemRecord) {
     timeZoneSource: mapItemTimeZoneSource(item.timeZoneSource),
     travelModeToNext: mapTravelMode(item.travelModeToNext),
     travelStatus: mapTravelStatus(item.travelStatus),
-    tripPlace: item.tripPlace ? serializeTripPlace(item.tripPlace) : null,
+    tripPlace: item.tripPlace ? serializeTripPlace(item.tripPlace, options) : null,
     updatedAt: item.updatedAt.toISOString(),
   };
 }
@@ -363,7 +358,7 @@ export async function refreshDayDefaultTimeZone(
   }
 }
 
-export async function listItinerary(userId: string, tripId: string) {
+export async function listItinerary(userId: string, tripId: string, languageCode?: string) {
   const prisma = getPrismaClient();
   const trip = await prisma.trip.findFirst({
     where: { id: tripId, ownerId: userId },
@@ -386,12 +381,23 @@ export async function listItinerary(userId: string, tripId: string) {
         orderBy: { position: 'asc' },
       },
       tripPlaces: {
-        include: { place: { include: { providerRefs: true } } },
+        include: { place: { include: placeProviderRefInclude } },
         orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
       },
     },
   });
   if (!trip) throw new ItineraryNotFoundError('trip_not_found');
+
+  // Every Place the itinerary renders, resolved once from the database. This is
+  // also what Trip Mode reads, so moving between its tabs re-reads Trove's own
+  // data rather than re-asking Google for names it already stored.
+  const snapshots = await hydratePlaceSnapshots(
+    trip.tripPlaces.flatMap((tripPlace) =>
+      tripPlace.place.providerRefs.map((reference) => reference.externalPlaceId),
+    ),
+    { languageCode },
+  );
+  const options = { snapshots };
 
   return {
     days: trip.itineraryDays.map((day) => ({
@@ -404,7 +410,7 @@ export async function listItinerary(userId: string, tripId: string) {
       experienceNote: day.experienceNote,
       experienceRating: day.experienceRating,
       id: day.id,
-      items: day.items.map(serializeItineraryItem),
+      items: day.items.map((item) => serializeItineraryItem(item, options)),
       notes: day.notes,
       routeStartTravelMode: mapTravelMode(day.routeStartTravelMode),
     })),
@@ -415,8 +421,8 @@ export async function listItinerary(userId: string, tripId: string) {
       referenceTimeZone: trip.referenceTimeZone,
       startDate: formatDateOnly(trip.startDate),
     },
-    tripPlaces: trip.tripPlaces.map((tripPlace) => serializeTripPlace(tripPlace)),
-    unscheduledItems: trip.itineraryItems.map(serializeItineraryItem),
+    tripPlaces: trip.tripPlaces.map((tripPlace) => serializeTripPlace(tripPlace, options)),
+    unscheduledItems: trip.itineraryItems.map((item) => serializeItineraryItem(item, options)),
   };
 }
 

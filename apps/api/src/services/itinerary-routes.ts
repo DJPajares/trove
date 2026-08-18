@@ -1,6 +1,8 @@
 import { getPrismaClient, type Prisma } from '@trove/db';
 
 import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
+import { hydratePlaceSnapshot, isSnapshotFresh, toPlaceCoordinates } from './place-data.js';
+import { placeProviderRefInclude } from './place-serializer.js';
 import { createPlacesService } from './places-runtime.js';
 import type { PlacesService } from './places.js';
 import { createRoutesService } from './routes-runtime.js';
@@ -62,7 +64,7 @@ export type ItineraryDayRoutes = {
   };
 };
 
-const placeInclude = { providerRefs: true } as const;
+const placeInclude = placeProviderRefInclude;
 const tripPlaceInclude = { place: { include: placeInclude } } as const;
 
 type PlaceRecord = Prisma.PlaceGetPayload<{ include: typeof placeInclude }>;
@@ -111,21 +113,25 @@ async function resolvePlaceData(
   }
 
   const googleReference = place.providerRefs.find((reference) => reference.provider === 'GOOGLE');
-  if (!googleReference || !placesService) return null;
+  if (!googleReference) return null;
 
-  // Only the coordinates and a label are read below, so this must never ask for
-  // the mutable detail that makes a Place Details call expensive.
-  const result = await placesService.getDetails({
-    detail: 'location',
-    externalPlaceId: googleReference.externalPlaceId,
+  // Routing reads the same snapshot every screen renders from, so a leg between
+  // two known Places is computed without touching the provider at all. Going
+  // through `place-data` rather than the places service directly is what keeps
+  // one module in charge of when a Place Details call may happen.
+  if (isSnapshotFresh(googleReference, { languageCode })) {
+    const coordinates = toPlaceCoordinates(googleReference);
+    if (coordinates) return { coordinates, label: googleReference.cachedName };
+  }
+
+  const refreshed = await hydratePlaceSnapshot(googleReference.externalPlaceId, {
     languageCode,
+    placesService,
   });
-  if (result.status !== 'ok' || !result.place.location) return null;
+  const coordinates = toPlaceCoordinates(refreshed);
+  if (!coordinates) return null;
 
-  return {
-    coordinates: result.place.location,
-    label: result.place.name,
-  };
+  return { coordinates, label: refreshed?.cachedName ?? null };
 }
 
 export type PlaceResolver = (

@@ -68,7 +68,6 @@ import {
   getCurrencyRate,
   type CachedCurrencyRate,
 } from '@/lib/currency/api';
-import { useProviderPlaceNames } from '@/lib/saved/provider-names';
 
 type EditorState =
   | { kind: 'closed'; expense: null }
@@ -154,20 +153,6 @@ export function ExpensesManager({
   const homeCurrencyCode = preferredCurrency;
   const [homeRates, setHomeRates] = useState<Record<string, CachedCurrencyRate>>({});
   const quickAddHandled = useRef<string | null>(null);
-
-  // Provider Place names are resolved on demand and never stored as Trove data.
-  const providerNames = useProviderPlaceNames(
-    useMemo(
-      () =>
-        (data?.tripPlaces ?? []).map((place) => ({
-          id: place.placeId,
-          kind: place.kind,
-          name: place.name,
-          providerRefs: place.providerRefs,
-        })),
-      [data?.tripPlaces],
-    ),
-  );
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -415,7 +400,7 @@ export function ExpensesManager({
    * reads as "Unnamed place" and they become impossible to tell apart.
    */
   const placeLabel = (place: ExpensePlace | null, fallback: string) =>
-    place ? (place.name ?? providerNames[place.placeId] ?? fallback) : fallback;
+    place ? (place.name ?? place.snapshot?.name ?? fallback) : fallback;
 
   // An item named only by its Place has no label of its own to fall back on.
   const itemLabel = (item: { label: string | null; place: ExpensePlace | null }) =>

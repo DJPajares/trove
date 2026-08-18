@@ -1,3 +1,4 @@
+import type { PlaceSnapshot } from '@/lib/saved/api';
 import { canUseSupportingOfflineFallback } from '@/lib/offline/supporting-sync';
 import {
   listOfflineMemoryMedia,
@@ -66,6 +67,7 @@ export type MemoryTripPlace = {
   name: string | null;
   placeId: string;
   providerRefs: Array<{ externalPlaceId: string; provider: 'google' }>;
+  snapshot?: PlaceSnapshot | null;
 };
 
 export type StoryCover = { photoId: string; url: string | null };

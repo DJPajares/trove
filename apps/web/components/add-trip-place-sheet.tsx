@@ -27,13 +27,9 @@ import {
 } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  cacheProviderPlaceDetails,
   createCustomPlace,
   fetchSavedPlaces,
-  getCachedProviderPlaceDetails,
-  getProviderPlaceDetails,
   GOOGLE_PLACES_SEARCH_DEBOUNCE_MS,
-  type ProviderPlaceDetails,
   type ProviderSuggestion,
   resolveProviderPlace,
   type SavedPlace,
@@ -48,8 +44,6 @@ type AddTripPlaceSheetProps = {
   tripPlaces: TripPlace[];
   tripId: string;
 };
-
-type Details = Record<string, ProviderPlaceDetails | null | undefined>;
 
 /**
  * Adding a Place to a trip, in one field.
@@ -70,7 +64,6 @@ export function AddTripPlaceSheet({
   const t = useTranslations('tripPlaces');
   const locale = useLocale();
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
-  const [details, setDetails] = useState<Details>({});
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ProviderSuggestion[]>([]);
   const [searchStatus, setSearchStatus] = useState<'empty' | 'idle' | 'loading' | 'unavailable'>(
@@ -86,65 +79,22 @@ export function AddTripPlaceSheet({
   const [customNote, setCustomNote] = useState('');
   const [creating, setCreating] = useState(false);
 
-  // Saved Places are fetched once so they can answer the search locally. Failing to
-  // load them costs the traveller nothing they can see: the provider search still works.
+  // Saved Places are fetched once so they can answer the search locally, and they
+  // arrive already named — the API serves what Trove stored, so this costs nothing
+  // at the provider. Failing to load them costs the traveller nothing they can see:
+  // the provider search still works.
   useEffect(() => {
     let active = true;
     void fetchSavedPlaces()
       .then((result) => {
         if (!active) return;
         setSavedPlaces(result.savedPlaces);
-        setDetails(
-          Object.fromEntries(
-            result.savedPlaces.flatMap((savedPlace) => {
-              const cached = getCachedProviderPlaceDetails(savedPlace.place.id);
-              return cached ? [[savedPlace.place.id, cached]] : [];
-            }),
-          ),
-        );
       })
       .catch(() => {});
     return () => {
       active = false;
     };
   }, []);
-
-  // A provider Saved Place has no name until it resolves, so the list sorts on the
-  // best name known so far and settles as the rest arrive.
-  useEffect(() => {
-    const pending = savedPlaces.filter(
-      (savedPlace) =>
-        savedPlace.place.kind === 'provider' &&
-        details[savedPlace.place.id] === undefined &&
-        savedPlace.place.providerRefs[0],
-    );
-    if (!pending.length) return;
-
-    let active = true;
-    void Promise.all(
-      pending.map(async (savedPlace) => {
-        const providerId = savedPlace.place.providerRefs[0]?.externalPlaceId;
-        if (!providerId) return { details: null, id: savedPlace.place.id };
-        try {
-          const result = await getProviderPlaceDetails(providerId, locale);
-          const resolved = result.status === 'ok' ? (result.place ?? null) : null;
-          if (resolved) cacheProviderPlaceDetails(savedPlace.place.id, resolved);
-          return { details: resolved, id: savedPlace.place.id };
-        } catch {
-          return { details: null, id: savedPlace.place.id };
-        }
-      }),
-    ).then((resolvedList) => {
-      if (!active) return;
-      setDetails((current) => ({
-        ...current,
-        ...Object.fromEntries(resolvedList.map((entry) => [entry.id, entry.details])),
-      }));
-    });
-    return () => {
-      active = false;
-    };
-  }, [details, locale, savedPlaces]);
 
   // Nothing typed means nothing to ask the provider about.
   useEffect(() => {
@@ -190,12 +140,14 @@ export function AddTripPlaceSheet({
   const savedName = (savedPlace: SavedPlace) =>
     savedPlace.place.kind === 'custom'
       ? (savedPlace.place.name ?? t('customPlace'))
-      : (details[savedPlace.place.id]?.name ?? t('providerPlace'));
+      : (savedPlace.place.snapshot?.name ?? savedPlace.place.providerLabel ?? t('providerPlace'));
 
   const savedDescription = (savedPlace: SavedPlace) =>
     savedPlace.place.kind === 'custom'
       ? (savedPlace.place.note ?? t('customPlaceDescription'))
-      : (details[savedPlace.place.id]?.formattedAddress ?? t('providerDetailsUnavailable'));
+      : (savedPlace.place.snapshot?.address ??
+        savedPlace.place.providerAddress ??
+        t('providerDetailsUnavailable'));
 
   // Saved Places answer the query from what Trove already knows, so they are matched
   // here rather than asked of the provider. Nothing is listed before there is a query.
@@ -209,8 +161,9 @@ export function AddTripPlaceSheet({
           value.toLocaleLowerCase().includes(needle),
         ),
       );
-    // savedName depends on details, which is why it is listed rather than the function.
-  }, [details, query, savedPlaces]);
+    // savedName reads only from the Places themselves, so the list is complete
+    // the moment they load rather than settling as names arrive.
+  }, [query, savedPlaces]);
 
   /**
    * One list, so the question is "what can I add?" rather than "which section is it in?".
@@ -257,10 +210,11 @@ export function AddTripPlaceSheet({
     try {
       // The text the traveller just read is worth keeping: it is what names this
       // Place on a day Google cannot be reached.
-      const { place } = await resolveProviderPlace(suggestion.externalPlaceId, {
-        address: suggestion.description,
-        name: suggestion.name,
-      });
+      const { place } = await resolveProviderPlace(
+        suggestion.externalPlaceId,
+        { address: suggestion.description, name: suggestion.name },
+        locale,
+      );
       const { tripPlace } = await addTripPlace(tripId, place.id, { customName });
       onAdded(tripPlace);
       closeNaming();

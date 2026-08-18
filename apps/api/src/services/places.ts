@@ -33,27 +33,22 @@ export type PlaceSearchRequest = {
 };
 
 /**
- * `location` asks the provider only for identity and coordinates; `evidence`
- * adds just the mutable fields Plan Score reads (rating, hours); `full` also
- * asks for everything a place's own sheet shows (photos, phone, website).
- * Callers that render a marker or route a leg should always pass `location`,
- * and callers that only score a place should pass `evidence` — see the
- * `GOOGLE_PLACE_*_FIELD_MASK` constants for why it matters.
+ * `location` asks the provider only for identity and coordinates — everything
+ * Trove stores and every screen renders. `evidence` adds just the mutable
+ * fields Plan Score reads (rating, hours), which are never stored.
+ *
+ * Required, not optional: an omitted level used to fall back to the most
+ * expensive tier Google sells, so forgetting it was a silent bill rather than
+ * a compile error.
  */
-export type PlaceDetailLevel = 'evidence' | 'full' | 'location';
+export type PlaceDetailLevel = 'evidence' | 'location';
 
 export type PlaceDetailsRequest = {
-  detail?: PlaceDetailLevel;
+  detail: PlaceDetailLevel;
   externalPlaceId: string;
   languageCode?: string;
   regionCode?: string;
   sessionToken?: string;
-};
-
-export type PlacePhotoRequest = {
-  maxHeightPx?: number;
-  maxWidthPx?: number;
-  name: string;
 };
 
 export type PlaceSuggestion = {
@@ -66,19 +61,6 @@ export type PlaceSuggestion = {
   rawTypes: string[];
 };
 
-export type PlacePhotoAttribution = {
-  displayName: string;
-  photoUri: string | null;
-  uri: string | null;
-};
-
-export type PlacePhotoReference = {
-  authorAttributions: PlacePhotoAttribution[];
-  heightPx: number | null;
-  name: string;
-  widthPx: number | null;
-};
-
 export type ProviderPlaceDetails = {
   category: TrovePlaceCategory;
   externalPlaceId: string;
@@ -86,17 +68,12 @@ export type ProviderPlaceDetails = {
   googleMapsUri: string | null;
   location: PlaceCoordinates | null;
   name: string;
-  nationalPhoneNumber: string | null;
   openingPeriods: PlaceOpeningPeriod[];
-  photos: PlacePhotoReference[];
   primaryType: string | null;
   provider: PlaceProviderName;
   rating: number | null;
   rawTypes: string[];
-  regularOpeningHours: string[];
-  userRatingCount: number | null;
   utcOffsetMinutes: number | null;
-  websiteUri: string | null;
 };
 
 export type PlaceOpeningPoint = {
@@ -108,11 +85,6 @@ export type PlaceOpeningPoint = {
 export type PlaceOpeningPeriod = {
   close: PlaceOpeningPoint | null;
   open: PlaceOpeningPoint;
-};
-
-export type ResolvedPlacePhoto = {
-  name: string;
-  uri: string;
 };
 
 export type PlaceProviderErrorCode =
@@ -136,7 +108,6 @@ export class PlaceProviderError extends Error {
 export interface PlacesProvider {
   readonly name: PlaceProviderName;
   getDetails(request: PlaceDetailsRequest): Promise<ProviderPlaceDetails>;
-  resolvePhoto(request: PlacePhotoRequest): Promise<ResolvedPlacePhoto>;
   search(request: PlaceSearchRequest): Promise<PlaceSuggestion[]>;
 }
 
@@ -171,23 +142,6 @@ export type PlaceDetailsResult =
   | {
       freshness: PlaceFreshness;
       place: ProviderPlaceDetails;
-      provider: PlaceProviderName;
-      status: 'ok';
-    }
-  | {
-      provider: PlaceProviderName;
-      status: 'empty';
-    }
-  | {
-      code: PlacesUnavailableCode;
-      provider: PlaceProviderName;
-      status: 'unavailable';
-    };
-
-export type PlacePhotoResult =
-  | {
-      freshness: PlaceFreshness;
-      photo: ResolvedPlacePhoto;
       provider: PlaceProviderName;
       status: 'ok';
     }
@@ -286,31 +240,6 @@ export class PlacesService {
     } catch (error) {
       const providerError = getProviderError(error);
       this.warn('getDetails', providerError, request.externalPlaceId);
-
-      if (providerError.code === 'not_found') {
-        return { provider: this.provider.name, status: 'empty' };
-      }
-
-      return {
-        code: getUnavailableCode(providerError),
-        provider: this.provider.name,
-        status: 'unavailable',
-      };
-    }
-  }
-
-  async resolvePhoto(request: PlacePhotoRequest): Promise<PlacePhotoResult> {
-    try {
-      const photo = await this.provider.resolvePhoto(request);
-
-      return {
-        freshness: createFreshness(this.clock),
-        photo,
-        provider: this.provider.name,
-        status: 'ok',
-      };
-    } catch (error) {
-      const providerError = getProviderError(error);
 
       if (providerError.code === 'not_found') {
         return { provider: this.provider.name, status: 'empty' };

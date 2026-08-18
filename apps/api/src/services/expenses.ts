@@ -2,6 +2,7 @@ import { getPrismaClient, type Prisma } from '@trove/db';
 
 import { totalByCurrency, projectedCostTotals, resolveExpenseTimeZone } from './expenses-rules.js';
 import { formatLocalTime, parseLocalTime } from './itinerary-rules.js';
+import { placeProviderRefInclude, serializePlaceReference } from './place-serializer.js';
 import { formatDateOnly } from './trip-rules.js';
 
 export type ExpenseCategory = 'activities' | 'food' | 'other' | 'shopping' | 'stay' | 'transport';
@@ -54,10 +55,10 @@ const expenseInclude = {
       itineraryDayId: true,
       itineraryDay: { select: { defaultTimeZone: true } },
       timeZone: true,
-      tripPlace: { include: { place: { include: { providerRefs: true } } } },
+      tripPlace: { include: { place: { include: placeProviderRefInclude } } },
     },
   },
-  tripPlace: { include: { place: { include: { providerRefs: true } } } },
+  tripPlace: { include: { place: { include: placeProviderRefInclude } } },
 } as const;
 
 type ExpenseRecord = Prisma.ExpenseGetPayload<{ include: typeof expenseInclude }>;
@@ -112,21 +113,12 @@ function serializeTimeZoneSource(value: string | null) {
 }
 
 /**
- * A provider Place has no name of its own in Trove, so only the reference travels
- * and the client resolves the current name on demand. Sending the reference is what
- * lets an expense show a real Place instead of a placeholder.
+ * A provider Place carries no name of its own in Trove, so the snapshot the
+ * database already holds travels with the reference. That is what lets an
+ * expense show a real Place without the screen asking Google for its name.
  */
 function serializeExpensePlace(tripPlace: NonNullable<ExpenseRecord['tripPlace']>) {
-  return {
-    id: tripPlace.id,
-    kind: tripPlace.place.kind === 'CUSTOM' ? ('custom' as const) : ('provider' as const),
-    name: tripPlace.place.customName,
-    placeId: tripPlace.placeId,
-    providerRefs: tripPlace.place.providerRefs.map((reference) => ({
-      externalPlaceId: reference.externalPlaceId,
-      provider: 'google' as const,
-    })),
-  };
+  return serializePlaceReference(tripPlace);
 }
 
 function serializeOptionalExpensePlace(tripPlace: NonNullable<ExpenseRecord['tripPlace']> | null) {
@@ -332,7 +324,7 @@ export async function listExpenses(userId: string, tripId: string) {
           itineraryDayId: true,
           plannedCostAmount: true,
           plannedCostCurrencyCode: true,
-          tripPlace: { include: { place: { include: { providerRefs: true } } } },
+          tripPlace: { include: { place: { include: placeProviderRefInclude } } },
         },
       },
       reservations: {
@@ -344,7 +336,7 @@ export async function listExpenses(userId: string, tripId: string) {
         },
       },
       tripPlaces: {
-        include: { place: { include: { providerRefs: true } } },
+        include: { place: { include: placeProviderRefInclude } },
         orderBy: { createdAt: 'asc' },
       },
     },

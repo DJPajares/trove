@@ -24,6 +24,33 @@ import type {
 export const MAX_INLINE_PLACE_HYDRATIONS = 25;
 
 /**
+ * How long a Place the provider could not answer for is left alone.
+ *
+ * Some references can never resolve — a geocoded address id Google will not
+ * return details for, a Place that has since been removed. Without this, every
+ * screen load retries it forever, which is the per-navigation bill this whole
+ * approach exists to remove, just for one stubborn Place instead of all of
+ * them. Short enough that a real outage heals on its own.
+ */
+const FAILED_HYDRATION_TTL_MS = 10 * 60 * 1_000;
+
+/**
+ * Module level, like the evidence memo: the service is constructed per request
+ * in several paths, so instance state would never be read a second time.
+ */
+const failedHydrations = new Map<string, number>();
+const MAX_TRACKED_FAILURES = 500;
+
+/** Test seam: the backoff outlives any one request by design. */
+export function resetFailedPlaceHydrations() {
+  failedHydrations.clear();
+}
+
+function backoffKey(externalPlaceId: string, languageCode: string) {
+  return `${externalPlaceId} ${languageCode}`;
+}
+
+/**
  * The durable half of a provider's answer as the app renders it. Everything
  * here is what Google's terms permit storing for 30 days; the mutable half —
  * rating, review count, opening hours, photos, phone, website — is deliberately
@@ -203,7 +230,15 @@ export async function hydratePlaceSnapshots(
   // Only references that already exist are refreshed. A place with no reference
   // row has nowhere to be stored, so asking about it would buy an answer that
   // `writeSnapshot` would immediately discard.
-  const refreshing = expired.slice(0, MAX_INLINE_PLACE_HYDRATIONS);
+  const refreshing = expired
+    .filter((externalPlaceId) => {
+      const retryAfter = failedHydrations.get(backoffKey(externalPlaceId, languageCode));
+      if (retryAfter === undefined) return true;
+      if (retryAfter > now.getTime()) return false;
+      failedHydrations.delete(backoffKey(externalPlaceId, languageCode));
+      return true;
+    })
+    .slice(0, MAX_INLINE_PLACE_HYDRATIONS);
   if (!refreshing.length) return resolved;
 
   const placesService =
@@ -217,17 +252,35 @@ export async function hydratePlaceSnapshots(
         externalPlaceId,
         languageCode,
       });
-      if (result.status !== 'ok') return;
+
+      if (result.status !== 'ok' || !result.place.location) {
+        rememberFailure(externalPlaceId, languageCode, now);
+        return;
+      }
 
       // `CachedPlacesService` has already written this to the database; the
       // in-memory copy exists so the request that paid for it can serve it.
       resolved.set(externalPlaceId, toSnapshotSource(result.place, languageCode, now));
     } catch {
       // One unreachable place must never blank out an entire itinerary.
+      rememberFailure(externalPlaceId, languageCode, now);
     }
   });
 
   return resolved;
+}
+
+function rememberFailure(externalPlaceId: string, languageCode: string, now: Date) {
+  if (failedHydrations.size >= MAX_TRACKED_FAILURES) {
+    // Insertion-ordered, so the first key is the oldest.
+    const oldest = failedHydrations.keys().next();
+    if (!oldest.done) failedHydrations.delete(oldest.value);
+  }
+
+  failedHydrations.set(
+    backoffKey(externalPlaceId, languageCode),
+    now.getTime() + FAILED_HYDRATION_TTL_MS,
+  );
 }
 
 /** The single-place form, for the moment a Place is first added to Trove. */

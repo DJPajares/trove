@@ -34,7 +34,6 @@ import {
   resolveTripPlaceAddress,
   resolveTripPlaceName,
 } from '@/lib/trip-places/place-name';
-import type { TripPlaceDetails } from '@/lib/trip-places/use-trip-places';
 
 const priorities = ['none', 'must_go', 'interested', 'maybe'] as const;
 
@@ -47,7 +46,6 @@ type TripPlacesPanelProps = {
   onPriorityChange: (tripPlace: TripPlace, priority: TripPlacePriority | null) => void;
   onRemove: (tripPlace: TripPlace) => void;
   placeUse?: Record<string, ScheduledPlaceUse>;
-  providerDetails: TripPlaceDetails;
   tripPlaces: TripPlace[];
 };
 
@@ -68,26 +66,25 @@ export function TripPlacesPanel({
   onPriorityChange,
   onRemove,
   placeUse,
-  providerDetails,
   tripPlaces,
 }: Readonly<TripPlacesPanelProps>) {
   const t = useTranslations('tripPlaces');
 
   const placeName = (tripPlace: TripPlace) =>
-    resolveTripPlaceName(tripPlace, providerDetails, {
+    resolveTripPlaceName(tripPlace, {
       custom: t('customPlace'),
       provider: t('providerPlace'),
     });
 
   const placeDescription = (tripPlace: TripPlace) =>
-    resolveTripPlaceAddress(tripPlace, providerDetails, {
+    resolveTripPlaceAddress(tripPlace, {
       custom: t('customPlaceDescription'),
       provider: t('providerDetailsUnavailable'),
     });
 
   /** Only worth its own line once the traveller's name has taken the title. */
   const officialName = (tripPlace: TripPlace) =>
-    tripPlace.customName?.trim() ? resolveProviderPlaceName(tripPlace, providerDetails) : null;
+    tripPlace.customName?.trim() ? resolveProviderPlaceName(tripPlace) : null;
 
   /** Where this Place already sits in the plan, so nothing gets added twice unnoticed. */
   const usageLabel = (tripPlace: TripPlace) => {

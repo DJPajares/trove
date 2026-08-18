@@ -45,21 +45,6 @@ const placeSearchSchema = z
   })
   .strict();
 
-const placeDetailsParamsSchema = z
-  .object({ providerPlaceId: z.string().trim().min(1).max(512) })
-  .strict();
-
-const placeDetailsQuerySchema = z
-  .object({
-    // The in-app detail sheet is gone, so `full` is no longer a servable
-    // level: a request for it fails validation rather than paying for it.
-    detail: z.enum(['location']).optional(),
-    languageCode: languageCodeSchema.optional(),
-    regionCode: regionCodeSchema.optional(),
-    sessionToken: sessionTokenSchema.optional(),
-  })
-  .strict();
-
 const providerPlaceResolutionSchema = z
   .object({
     externalPlaceId: z.string().trim().min(1).max(512),
@@ -116,16 +101,12 @@ function sendConfigurationMissing(reply: FastifyReply) {
 
 function sendServiceResult(
   reply: FastifyReply,
-  result: Awaited<ReturnType<PlacesService['getDetails']> | ReturnType<PlacesService['search']>>,
+  result: Awaited<ReturnType<PlacesService['search']>>,
 ) {
   if (result.status === 'unavailable') {
     const statusCode =
       result.code === 'invalid_request' ? 400 : result.code === 'configuration_missing' ? 500 : 503;
     return reply.code(statusCode).send(result);
-  }
-
-  if (result.status === 'empty' && !('suggestions' in result)) {
-    return reply.code(404).send(result);
   }
 
   return reply.send(result);
@@ -156,26 +137,6 @@ export function createPlacesControllers(
 
       const place = await canonicalPlacesService.createCustomPlace(userId, parsed.data);
       return reply.code(201).send({ place });
-    },
-
-    async getDetails(request: FastifyRequest, reply: FastifyReply) {
-      const parsedParams = placeDetailsParamsSchema.safeParse(request.params);
-      const parsedQuery = placeDetailsQuerySchema.safeParse(request.query);
-
-      if (!parsedParams.success || !parsedQuery.success) {
-        return reply.code(400).send({ code: 'invalid_place_details_request' });
-      }
-
-      if (!placesService) {
-        return sendConfigurationMissing(reply);
-      }
-
-      const result = await placesService.getDetails({
-        externalPlaceId: parsedParams.data.providerPlaceId,
-        ...parsedQuery.data,
-      });
-
-      return sendServiceResult(reply, result);
     },
 
     async resolveProviderPlace(request: FastifyRequest, reply: FastifyReply) {

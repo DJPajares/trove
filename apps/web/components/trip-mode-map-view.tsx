@@ -41,13 +41,7 @@ import {
   type ItineraryMapLocation,
   type ItineraryMapPoint,
 } from '@/lib/maps/itinerary-map';
-import {
-  cacheProviderPlaceDetails,
-  getCachedProviderPlaceDetails,
-  getProviderPlaceDetails,
-  googleMapsPlaceHref,
-  type ProviderPlaceDetails,
-} from '@/lib/saved/api';
+import { googleMapsPlaceHref } from '@/lib/saved/api';
 import { cn } from '@/lib/utils';
 
 type LoadState =
@@ -64,10 +58,6 @@ type LocationStatus = 'denied' | 'idle' | 'loading' | 'ready' | 'unavailable' | 
 
 const NEARBY_PLACE_LIMIT = 8;
 const NEARBY_RADIUS_METERS = 25_000;
-
-function providerId(tripPlace: ItineraryTripPlace | null) {
-  return tripPlace?.place.providerRefs.find((ref) => ref.provider === 'google')?.externalPlaceId;
-}
 
 function distanceMeters(a: ItineraryMapLocation, b: ItineraryMapLocation) {
   const toRadians = (value: number) => (value * Math.PI) / 180;
@@ -109,9 +99,6 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
   const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
   const [routeState, setRouteState] = useState<RouteState>({ data: null, status: 'idle' });
   const [reloadKey, setReloadKey] = useState(0);
-  const [providerDetails, setProviderDetails] = useState<
-    Record<string, ProviderPlaceDetails | null | undefined>
-  >({});
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle');
   const [deviceLocation, setDeviceLocation] = useState<DeviceLocation | null>(null);
@@ -128,7 +115,6 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
   useEffect(() => {
     let active = true;
     setState({ data: null, status: 'loading' });
-    setProviderDetails({});
     void Promise.all([fetchTripModeContext(tripId, contextOptions()), fetchItinerary(tripId)])
       .then(([context, itinerary]) => {
         if (active) setState({ data: { context, itinerary }, status: 'ready' });
@@ -176,42 +162,6 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
     return () => controller.abort();
   }, [day, locale, online, routeRevision, tripId]);
 
-  useEffect(() => {
-    if (state.status !== 'ready' || !online) return;
-    const pending = state.data.itinerary.tripPlaces.filter(
-      (tripPlace) =>
-        tripPlace.place.kind === 'provider' &&
-        providerDetails[tripPlace.place.id] === undefined &&
-        providerId(tripPlace),
-    );
-    if (!pending.length) return;
-    let active = true;
-    void Promise.all(
-      pending.map(async (tripPlace) => {
-        const placeId = tripPlace.place.id;
-        const cached = getCachedProviderPlaceDetails(placeId);
-        if (cached) return { details: cached, placeId };
-        try {
-          const result = await getProviderPlaceDetails(providerId(tripPlace)!, locale);
-          const details = result.status === 'ok' ? (result.place ?? null) : null;
-          if (details) cacheProviderPlaceDetails(placeId, details);
-          return { details, placeId };
-        } catch {
-          return { details: null, placeId };
-        }
-      }),
-    ).then((results) => {
-      if (!active) return;
-      setProviderDetails((current) => ({
-        ...current,
-        ...Object.fromEntries(results.map((result) => [result.placeId, result.details])),
-      }));
-    });
-    return () => {
-      active = false;
-    };
-  }, [locale, online, providerDetails, state]);
-
   if (state.status === 'loading') return <MapSkeleton label={t('loading')} />;
 
   if (state.status === 'error') {
@@ -234,16 +184,21 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
     dateStyle: 'full',
     timeZone: 'UTC',
   }).format(new Date(`${context.selectedDate}T00:00:00.000Z`));
-  const detailsFor = (tripPlace: ItineraryTripPlace | null) =>
-    online && tripPlace ? (providerDetails[tripPlace.place.id] ?? null) : null;
+  // Names, addresses and pins all ride on the itinerary — including the copy
+  // held offline — so the map is drawn without asking whether we are online.
   const placeName = (tripPlace: ItineraryTripPlace) =>
-    tripPlace.place.name ?? detailsFor(tripPlace)?.name ?? t('placeFallback');
-  const placeLocation = (tripPlace: ItineraryTripPlace) =>
-    tripPlace.place.location ?? detailsFor(tripPlace)?.location ?? null;
+    tripPlace.place.name ??
+    tripPlace.place.snapshot?.name ??
+    tripPlace.place.providerLabel ??
+    t('placeFallback');
+  const placeLocation = (tripPlace: ItineraryTripPlace) => tripPlace.place.location ?? null;
   const itemName = (item: ItineraryItem) =>
     item.customLabel ?? (item.tripPlace ? placeName(item.tripPlace) : null) ?? t('itemFallback');
   const itemLocation = (item: ItineraryItem) =>
-    item.customLocation?.label ?? detailsFor(item.tripPlace)?.formattedAddress ?? null;
+    item.customLocation?.label ??
+    item.tripPlace?.place.snapshot?.address ??
+    item.tripPlace?.place.providerAddress ??
+    null;
   const formatSchedule = (item: ItineraryItem) => {
     if (item.localStartTime) {
       const [hour, minute] = item.localStartTime.split(':').map(Number);

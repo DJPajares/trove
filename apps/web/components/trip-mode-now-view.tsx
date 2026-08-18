@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
@@ -35,12 +35,7 @@ import {
   type RouteTravelMode,
   type TripModeContext,
 } from '@/lib/itinerary/api';
-import {
-  cacheProviderPlaceDetails,
-  getCachedProviderPlaceDetails,
-  getProviderPlaceDetails,
-  type ProviderPlaceDetails,
-} from '@/lib/saved/api';
+import {} from '@/lib/saved/api';
 import { fetchReservations, type Reservation } from '@/lib/reservations/api';
 import { fetchTasks, type Task } from '@/lib/tasks/api';
 
@@ -56,12 +51,23 @@ function providerId(item: ItineraryItem | null) {
     ?.externalPlaceId;
 }
 
-function itemName(item: ItineraryItem, details: ProviderPlaceDetails | null, fallback: string) {
-  return item.customLabel ?? item.tripPlace?.place.name ?? details?.name ?? fallback;
+function itemName(item: ItineraryItem, fallback: string) {
+  return (
+    item.customLabel ??
+    item.tripPlace?.place.name ??
+    item.tripPlace?.place.snapshot?.name ??
+    item.tripPlace?.place.providerLabel ??
+    fallback
+  );
 }
 
-function itemLocation(item: ItineraryItem, details: ProviderPlaceDetails | null) {
-  return item.customLocation?.label ?? details?.formattedAddress ?? null;
+function itemLocation(item: ItineraryItem) {
+  return (
+    item.customLocation?.label ??
+    item.tripPlace?.place.snapshot?.address ??
+    item.tripPlace?.place.providerAddress ??
+    null
+  );
 }
 
 function directionsHref(item: ItineraryItem, name: string) {
@@ -107,13 +113,11 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   const { contextOptions, isPreview, withPreviewHref } = useTripModePreview();
   const [reloadKey, setReloadKey] = useState(0);
   const [state, setState] = useState<LoadState>({ context: null, status: 'loading' });
-  const [details, setDetails] = useState<Record<string, ProviderPlaceDetails>>({});
   const [supporting, setSupporting] = useState<SupportingContext>({ reservations: [], tasks: [] });
 
   useEffect(() => {
     const controller = new AbortController();
     setState({ context: null, status: 'loading' });
-    setDetails({});
     void fetchTripModeContext(tripId, contextOptions(controller.signal))
       .then((context) => setState({ context, status: 'ready' }))
       .catch((error) => {
@@ -150,39 +154,6 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   const nextItem = useMemo(
     () => context?.day?.items.find((item) => item.id === context.nextItemId) ?? null,
     [context],
-  );
-
-  useEffect(() => {
-    if (!online) return;
-    let active = true;
-    const ids = [providerId(currentItem), providerId(nextItem)].filter((value): value is string =>
-      Boolean(value),
-    );
-    for (const id of new Set(ids)) {
-      const cached = getCachedProviderPlaceDetails(id);
-      if (cached) {
-        setDetails((current) => ({ ...current, [id]: cached }));
-        continue;
-      }
-      void getProviderPlaceDetails(id, locale)
-        .then((result) => {
-          if (!active || result.status !== 'ok' || !result.place) return;
-          cacheProviderPlaceDetails(id, result.place);
-          setDetails((current) => ({ ...current, [id]: result.place! }));
-        })
-        .catch(() => undefined);
-    }
-    return () => {
-      active = false;
-    };
-  }, [currentItem, locale, nextItem, online]);
-
-  const getDetails = useCallback(
-    (item: ItineraryItem | null) => {
-      const id = providerId(item);
-      return online && id ? (details[id] ?? null) : null;
-    },
-    [details, online],
   );
 
   if (state.status === 'loading') return <TripModeNowSkeleton label={t('loading')} />;
@@ -268,24 +239,18 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
     }).format(value);
     return t('distance', { unit: t(`unit.${preferences.distanceUnit}`), value: amount });
   };
-  const currentDetails = getDetails(currentItem);
-  const nextDetails = getDetails(nextItem);
-  const nextName = nextItem ? itemName(nextItem, nextDetails, t('placeFallback')) : null;
+  const nextName = nextItem ? itemName(nextItem, t('placeFallback')) : null;
   const weatherItem = nextItem ?? currentItem;
-  const weatherDetails = weatherItem ? getDetails(weatherItem) : null;
-  const weatherProviderId = providerId(weatherItem);
-  const cachedWeatherDetails = weatherProviderId
-    ? getCachedProviderPlaceDetails(weatherProviderId)
-    : null;
-  const persistedWeatherLocation = weatherItem?.tripPlace?.place.location;
-  const providerWeatherLocation = weatherDetails?.location ?? cachedWeatherDetails?.location;
-  const weatherCoordinates = persistedWeatherLocation ?? providerWeatherLocation;
+  // One source for where the weather is. A provider Place's coordinates arrive
+  // with the itinerary now, so this no longer reconciles a live lookup against a
+  // separately keyed session cache to work out where the traveller is standing.
+  const weatherCoordinates = weatherItem?.tripPlace?.place.location;
   const weatherLocation = weatherCoordinates
     ? {
         latitude: weatherCoordinates.latitude,
         longitude: weatherCoordinates.longitude,
         timeZone:
-          persistedWeatherLocation?.timeZone ??
+          weatherCoordinates.timeZone ??
           weatherItem?.timeZone ??
           readyContext.day?.defaultTimeZone ??
           readyContext.trip.referenceTimeZone,
@@ -396,12 +361,12 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
               className="mt-1 text-base font-semibold text-foreground"
               id="trip-mode-current-heading"
             >
-              {itemName(currentItem, currentDetails, t('placeFallback'))}
+              {itemName(currentItem, t('placeFallback'))}
             </h3>
             <p className="mt-1 text-sm text-muted-foreground">{formatSchedule(currentItem)}</p>
-            {itemLocation(currentItem, currentDetails) ? (
+            {itemLocation(currentItem) ? (
               <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                {itemLocation(currentItem, currentDetails)}
+                {itemLocation(currentItem)}
               </p>
             ) : null}
             <p className="mt-2 text-xs leading-5 text-text-subtle">{t('locationDisclaimer')}</p>
@@ -505,10 +470,10 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
                   <Clock3 aria-hidden="true" className="size-4" />
                   {formatSchedule(nextItem)}
                 </span>
-                {itemLocation(nextItem, nextDetails) ? (
+                {itemLocation(nextItem) ? (
                   <span className="inline-flex items-start gap-2">
                     <MapPin aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-                    {itemLocation(nextItem, nextDetails)}
+                    {itemLocation(nextItem)}
                   </span>
                 ) : null}
               </div>

@@ -39,14 +39,10 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
   const [removing, setRemoving] = useState(false);
 
   const placeName = (tripPlace: TripPlace) =>
-    resolveTripPlaceName(tripPlace, places.providerDetails, {
+    resolveTripPlaceName(tripPlace, {
       custom: t('customPlace'),
       provider: t('providerPlace'),
     });
-
-  const detailsUnavailable = Object.values(places.detailFailures).some(
-    (failure) => failure === 'unavailable',
-  );
 
   async function removePlace() {
     if (!removingPlace) return;
@@ -79,19 +75,6 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
         </Alert>
       ) : null}
 
-      {/* A name that could not be refreshed is a thing to try again, not a dead end. */}
-      {detailsUnavailable ? (
-        <Alert role="status" variant="warning">
-          <CircleAlert aria-hidden="true" />
-          <AlertDescription className="flex flex-wrap items-center gap-2">
-            {t('detailsUnavailable')}
-            <Button onClick={places.retryProviderDetails} size="sm" variant="outline">
-              {t('retryDetails')}
-            </Button>
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
       {places.status === 'loading' ? (
         <PageState headingLevel={2} kind="loading" title={t('loading')} />
       ) : places.status === 'error' ? (
@@ -117,7 +100,6 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
           onEditPlace={setEditPlace}
           onPriorityChange={(tripPlace, priority) => void places.setPriority(tripPlace, priority)}
           onRemove={setRemovingPlace}
-          providerDetails={places.providerDetails}
           tripPlaces={places.sorted}
         />
       )}
@@ -139,7 +121,6 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
         onOpenChange={(open) => !open && setEditPlace(null)}
         onRefresh={places.refresh}
         onSave={places.savePlace}
-        providerDetails={places.providerDetails}
         tripPlace={editPlace}
       />
 

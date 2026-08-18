@@ -229,10 +229,13 @@ export async function loadPlaceEvidence(
   const ratings = new Map<string, number>();
   if (!placesService) return { hours, ratings };
 
-  const results = await Promise.all(
-    tripPlaces.map(async (tripPlace) => {
+  const results = await mapWithConcurrency(
+    tripPlaces,
+    PROVIDER_CONCURRENCY_LIMIT,
+    async (tripPlace) => {
       if (!tripPlace.externalPlaceId) return null;
       const details = await placesService.getDetails({
+        detail: 'evidence',
         externalPlaceId: tripPlace.externalPlaceId,
       });
       if (details.status !== 'ok') return null;
@@ -242,7 +245,7 @@ export async function loadPlaceEvidence(
         rating: details.place.rating,
         utcOffsetMinutes: details.place.utcOffsetMinutes,
       };
-    }),
+    },
   );
 
   for (const result of results) {

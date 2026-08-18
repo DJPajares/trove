@@ -134,6 +134,7 @@ import {
   dailyBasePoints,
   type ItineraryMapPoint,
 } from '@/lib/maps/itinerary-map';
+import { useInViewOnce } from '@/lib/plan-score/use-in-view-once';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import {
   cacheProviderPlaceDetails,
@@ -422,7 +423,12 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     tripId,
   ]);
   const planScoreRevision = useMemo(() => itineraryPlanScoreRevision(itinerary), [itinerary]);
-  const planScore = useTripPlanScore(itinerary ? tripId : null, planScoreRevision);
+  const { hasBeenVisible: planScoreVisible, ref: planScoreSentinelRef } =
+    useInViewOnce<HTMLDivElement>();
+  const planScore = useTripPlanScore(
+    itinerary && planScoreVisible ? tripId : null,
+    planScoreRevision,
+  );
   const planScoreDay = planScore.data?.days.find((day) => day.dayId === selectedDayId) ?? null;
   const focusItineraryItem = useCallback((reference: string) => {
     setSelectedMapItemId(reference);
@@ -1591,6 +1597,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                     title={t('emptyTitle')}
                   />
                 )}
+                <div aria-hidden="true" className="h-px" ref={planScoreSentinelRef} />
                 {planScoreDay || planScore.status === 'error' ? (
                   <PlanScorePanel
                     className="mt-4"

@@ -7,6 +7,7 @@ import { createPlaceResolver } from '../src/services/itinerary-routes.js';
 import { areGoogleProvidersDisabled, getPlacesEnvironment } from '../src/environment.js';
 import {
   GOOGLE_PLACE_DETAILS_FIELD_MASK,
+  GOOGLE_PLACE_EVIDENCE_FIELD_MASK,
   GOOGLE_PLACE_LOCATION_FIELD_MASK,
   GooglePlacesProvider,
 } from '../src/services/google-places.js';
@@ -205,13 +206,23 @@ test('a location request asks for coordinates only, not the billable detail', as
 
   await provider.getDetails({ detail: 'location', externalPlaceId: 'ChIJmuseum' });
   await provider.getDetails({ externalPlaceId: 'ChIJmuseum' });
+  await provider.getDetails({ detail: 'evidence', externalPlaceId: 'ChIJmuseum' });
 
   assert.equal(masks[0], GOOGLE_PLACE_LOCATION_FIELD_MASK);
   assert.equal(masks[1], GOOGLE_PLACE_DETAILS_FIELD_MASK);
-  // The expensive fields are exactly what separates the two.
+  assert.equal(masks[2], GOOGLE_PLACE_EVIDENCE_FIELD_MASK);
+  // The expensive fields are exactly what separates the three.
   for (const field of ['rating', 'userRatingCount', 'regularOpeningHours', 'websiteUri']) {
     assert.equal(GOOGLE_PLACE_LOCATION_FIELD_MASK.includes(field), false, field);
     assert.equal(GOOGLE_PLACE_DETAILS_FIELD_MASK.includes(field), true, field);
+  }
+  // Evidence asks for the mutable fields Plan Score reads, but not the ones
+  // that only a place's own sheet renders.
+  for (const field of ['rating', 'regularOpeningHours']) {
+    assert.equal(GOOGLE_PLACE_EVIDENCE_FIELD_MASK.includes(field), true, field);
+  }
+  for (const field of ['photos', 'nationalPhoneNumber', 'websiteUri', 'userRatingCount']) {
+    assert.equal(GOOGLE_PLACE_EVIDENCE_FIELD_MASK.includes(field), false, field);
   }
 });
 
@@ -377,6 +388,17 @@ test('one resolver shared across days resolves a repeated place once', async () 
     points.map((point) => point?.id),
     ['day-1-base', 'day-2-base', 'day-3-base'],
   );
+});
+
+test('a full request and an evidence request for the same place do not share a memo entry', async () => {
+  const { provider, calls } = countingPlacesProvider();
+  const service = new CachedPlacesService(provider);
+  // Nothing is seeded, so the database cache cannot mask the memo being tested.
+
+  await service.getDetails({ detail: 'evidence', externalPlaceId: 'ChIJmuseum' });
+  await service.getDetails({ externalPlaceId: 'ChIJmuseum' });
+
+  assert.equal(calls(), 2, 'an evidence hit must not answer a full request from its memo entry');
 });
 
 test('a resolver built per day pays for the same place every day', async () => {

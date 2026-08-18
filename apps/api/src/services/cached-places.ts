@@ -40,7 +40,12 @@ export function resetCachedPlacesMemo() {
 }
 
 function memoKey(request: PlaceDetailsRequest) {
-  return [request.externalPlaceId, request.languageCode ?? '', request.regionCode ?? ''].join(' ');
+  return [
+    request.externalPlaceId,
+    request.detail ?? 'full',
+    request.languageCode ?? '',
+    request.regionCode ?? '',
+  ].join(' ');
 }
 
 /**

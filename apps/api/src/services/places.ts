@@ -33,12 +33,14 @@ export type PlaceSearchRequest = {
 };
 
 /**
- * `location` asks the provider only for identity and coordinates; `full` also
- * asks for the mutable detail a place's own sheet shows. Callers that render a
- * marker or route a leg should always pass `location` — see
- * `GOOGLE_PLACE_LOCATION_FIELD_MASK` for why it matters.
+ * `location` asks the provider only for identity and coordinates; `evidence`
+ * adds just the mutable fields Plan Score reads (rating, hours); `full` also
+ * asks for everything a place's own sheet shows (photos, phone, website).
+ * Callers that render a marker or route a leg should always pass `location`,
+ * and callers that only score a place should pass `evidence` — see the
+ * `GOOGLE_PLACE_*_FIELD_MASK` constants for why it matters.
  */
-export type PlaceDetailLevel = 'full' | 'location';
+export type PlaceDetailLevel = 'evidence' | 'full' | 'location';
 
 export type PlaceDetailsRequest = {
   detail?: PlaceDetailLevel;

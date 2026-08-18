@@ -2,6 +2,7 @@ import { categorizePlaceTypes } from './place-categories.js';
 import { recordProviderCall } from './provider-usage.js';
 import {
   PlaceProviderError,
+  type PlaceDetailLevel,
   type PlaceDetailsRequest,
   type PlaceOpeningPeriod,
   type PlaceOpeningPoint,
@@ -63,6 +64,25 @@ export const GOOGLE_PLACE_DETAILS_FIELD_MASK = [
   'utcOffsetMinutes',
   'websiteUri',
 ].join(',');
+
+/**
+ * Rating and hours only — what Plan Score reads and nothing else. Rating and
+ * hours already require the same "Atmosphere" billing tier as the full mask,
+ * but photos/phone/website don't need to ride along for a call nobody renders
+ * them from.
+ */
+export const GOOGLE_PLACE_EVIDENCE_FIELD_MASK = [
+  'id',
+  'rating',
+  'regularOpeningHours',
+  'utcOffsetMinutes',
+].join(',');
+
+const PLACE_DETAIL_FIELD_MASKS: Record<PlaceDetailLevel, string> = {
+  evidence: GOOGLE_PLACE_EVIDENCE_FIELD_MASK,
+  full: GOOGLE_PLACE_DETAILS_FIELD_MASK,
+  location: GOOGLE_PLACE_LOCATION_FIELD_MASK,
+};
 
 type Fetcher = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
@@ -421,10 +441,7 @@ export class GooglePlacesProvider implements PlacesProvider {
       url.searchParams.set('sessionToken', request.sessionToken);
     }
 
-    const fieldMask =
-      request.detail === 'location'
-        ? GOOGLE_PLACE_LOCATION_FIELD_MASK
-        : GOOGLE_PLACE_DETAILS_FIELD_MASK;
+    const fieldMask = PLACE_DETAIL_FIELD_MASKS[request.detail ?? 'full'];
     const response = await this.requestJson<GooglePlaceDetails>(
       url,
       { headers: { 'X-Goog-FieldMask': fieldMask }, method: 'GET' },

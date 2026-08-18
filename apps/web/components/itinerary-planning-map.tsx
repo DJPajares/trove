@@ -125,6 +125,19 @@ export function ItineraryPlanningMap({
   const initialPointRef = useRef(initialPoint);
   initialPointRef.current = initialPoint;
   const hasInitialPoint = Boolean(initialPoint);
+  /**
+   * Only ever the map's opening colour scheme, for the same reason as the point
+   * above. Google's `colorScheme` (and `mapId`) can only be set when a map is
+   * constructed — `setOptions` has no effect on either once the map exists — so
+   * there is no supported way to recolour a live map short of a fresh, billed
+   * `Map()` instance. Reacting to every appearance toggle bought one of those on
+   * an entirely routine click; capturing the theme once instead means a map
+   * already open keeps the scheme it opened with, and the next one opened (a
+   * fresh visit to this view, a reload) picks up whatever the setting now is.
+   */
+  const themeRef = useRef(resolvedTheme);
+  themeRef.current = resolvedTheme;
+  const hasResolvedTheme = Boolean(resolvedTheme);
   const selectedPoint = useMemo(
     () => points.find((point) => point.id === selectedPointId) ?? null,
     [points, selectedPointId],
@@ -160,7 +173,8 @@ export function ItineraryPlanningMap({
 
   useEffect(() => {
     const openingPoint = initialPointRef.current;
-    if (!containerRef.current || !openingPoint || !resolvedTheme || !hasGoogleMapsConfiguration())
+    const openingTheme = themeRef.current;
+    if (!containerRef.current || !openingPoint || !openingTheme || !hasGoogleMapsConfiguration())
       return;
     let active = true;
     setStatus('loading');
@@ -170,7 +184,7 @@ export function ItineraryPlanningMap({
         mapRef.current = new maps.Map(containerRef.current, {
           center: { lat: openingPoint.latitude, lng: openingPoint.longitude },
           clickableIcons: false,
-          colorScheme: resolvedTheme === 'dark' ? 'DARK' : 'LIGHT',
+          colorScheme: openingTheme === 'dark' ? 'DARK' : 'LIGHT',
           fullscreenControl: false,
           gestureHandling: 'cooperative',
           mapId: getGoogleMapsMapId()!,
@@ -193,7 +207,7 @@ export function ItineraryPlanningMap({
       polylineRefs.current = [];
       mapRef.current = null;
     };
-  }, [hasInitialPoint, locale, resolvedTheme]);
+  }, [hasInitialPoint, hasResolvedTheme, locale]);
 
   useEffect(() => {
     if (status !== 'ready' || !mapRef.current) return;

@@ -306,7 +306,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
         const providerId = tripPlace.place.providerRefs[0]?.externalPlaceId;
         if (!providerId) return { details: null, placeId: tripPlace.place.id };
         try {
-          const result = await getProviderPlaceDetails(providerId);
+          const result = await getProviderPlaceDetails(providerId, locale);
           const details = result.status === 'ok' ? (result.place ?? null) : null;
           if (details) cacheProviderPlaceDetails(tripPlace.place.id, details);
           return {
@@ -327,7 +327,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     return () => {
       active = false;
     };
-  }, [itinerary, providerDetails]);
+  }, [itinerary, locale, providerDetails]);
 
   useEffect(() => {
     const query = placeQuery.trim();

@@ -1,5 +1,6 @@
 'use client';
 
+import { useLocale } from 'next-intl';
 import { useEffect, useState } from 'react';
 
 import {
@@ -27,6 +28,7 @@ export type ResolvableProviderPlace = {
  * offline and unavailable cases rather than showing a half-filled list.
  */
 export function useProviderPlaceNames(places: ResolvableProviderPlace[]) {
+  const locale = useLocale();
   const [names, setNames] = useState<Record<string, string>>({});
 
   // A stable key keeps the effect from re-running on every parent render.
@@ -53,7 +55,7 @@ export function useProviderPlaceNames(places: ResolvableProviderPlace[]) {
       }
       if (typeof navigator !== 'undefined' && !navigator.onLine) continue;
 
-      void getProviderPlaceDetails(externalPlaceId)
+      void getProviderPlaceDetails(externalPlaceId, locale)
         .then((result) => {
           if (!active || result.status !== 'ok' || !result.place) return;
           cacheProviderPlaceDetails(placeId, result.place);
@@ -65,7 +67,7 @@ export function useProviderPlaceNames(places: ResolvableProviderPlace[]) {
     return () => {
       active = false;
     };
-  }, [pendingKey]);
+  }, [locale, pendingKey]);
 
   return names;
 }

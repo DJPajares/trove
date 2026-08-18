@@ -344,6 +344,7 @@ export function TripModeShell({ children, tripId }: Readonly<TripModeShellProps>
           <PlanScorePanel
             completeness={previewDayScore?.completeness ?? null}
             confidence={previewDayScore?.confidence ?? null}
+            disabled={previewDayScore?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')}
             explanations={
               previewDayScore?.explanations ?? {
                 uncertainty: [],

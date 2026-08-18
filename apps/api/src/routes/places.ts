@@ -39,9 +39,4 @@ export function registerPlacesRoutes(app: FastifyInstance) {
     { config: PROVIDER_DETAILS_RATE_LIMIT, preHandler: requireAuthenticatedUser },
     controllers.getDetails,
   );
-  app.post(
-    '/places/photos/resolve',
-    { config: PROVIDER_DETAILS_RATE_LIMIT, preHandler: requireAuthenticatedUser },
-    controllers.resolvePhoto,
-  );
 }

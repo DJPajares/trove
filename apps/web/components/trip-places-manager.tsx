@@ -7,7 +7,6 @@ import { useTranslations } from 'next-intl';
 import { AddTripPlaceSheet } from '@/components/add-trip-place-sheet';
 import { EditTripPlaceDialog } from '@/components/edit-trip-place-dialog';
 import { PageState } from '@/components/page-state';
-import { PlaceDetailSheet } from '@/components/place-detail-sheet';
 import { TripPlacesPanel } from '@/components/trip-places-panel';
 import { TripSectionHeader } from '@/components/trip-section-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -35,7 +34,6 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripPlaces');
   const places = useTripPlaces(tripId);
   const [addOpen, setAddOpen] = useState(false);
-  const [detailPlace, setDetailPlace] = useState<TripPlace | null>(null);
   const [editPlace, setEditPlace] = useState<TripPlace | null>(null);
   const [removingPlace, setRemovingPlace] = useState<TripPlace | null>(null);
   const [removing, setRemoving] = useState(false);
@@ -119,23 +117,10 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
           onEditPlace={setEditPlace}
           onPriorityChange={(tripPlace, priority) => void places.setPriority(tripPlace, priority)}
           onRemove={setRemovingPlace}
-          onViewDetails={setDetailPlace}
           providerDetails={places.providerDetails}
           tripPlaces={places.sorted}
         />
       )}
-
-      <PlaceDetailSheet
-        context={{
-          customName: detailPlace?.customName,
-          isSaved: detailPlace?.isSaved,
-          note: detailPlace?.note,
-          tripName: places.tripName,
-        }}
-        onOpenChange={(open) => !open && setDetailPlace(null)}
-        open={Boolean(detailPlace)}
-        place={detailPlace?.place ?? null}
-      />
 
       {addOpen ? (
         <AddTripPlaceSheet

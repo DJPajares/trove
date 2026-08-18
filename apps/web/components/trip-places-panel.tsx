@@ -8,6 +8,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLinkItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
@@ -26,6 +27,7 @@ import {
   ItemTitle,
 } from '@/components/ui/item';
 import type { ScheduledPlaceUse } from '@/lib/itinerary/places';
+import { googleMapsPlaceHref } from '@/lib/saved/api';
 import type { TripPlace, TripPlacePriority } from '@/lib/trip-places/api';
 import {
   resolveProviderPlaceName,
@@ -44,7 +46,6 @@ type TripPlacesPanelProps = {
   onEditPlace: (tripPlace: TripPlace) => void;
   onPriorityChange: (tripPlace: TripPlace, priority: TripPlacePriority | null) => void;
   onRemove: (tripPlace: TripPlace) => void;
-  onViewDetails: (tripPlace: TripPlace) => void;
   placeUse?: Record<string, ScheduledPlaceUse>;
   providerDetails: TripPlaceDetails;
   tripPlaces: TripPlace[];
@@ -66,7 +67,6 @@ export function TripPlacesPanel({
   onEditPlace,
   onPriorityChange,
   onRemove,
-  onViewDetails,
   placeUse,
   providerDetails,
   tripPlaces,
@@ -195,10 +195,20 @@ export function TripPlacesPanel({
 
                   <DropdownMenuSeparator />
 
-                  <DropdownMenuItem onClick={() => onViewDetails(tripPlace)}>
-                    <Eye aria-hidden="true" />
-                    {t('viewDetailsAction')}
-                  </DropdownMenuItem>
+                  {googleMapsPlaceHref(tripPlace.place) ? (
+                    <DropdownMenuLinkItem
+                      render={
+                        <a
+                          href={googleMapsPlaceHref(tripPlace.place)!}
+                          rel="noreferrer"
+                          target="_blank"
+                        />
+                      }
+                    >
+                      <Eye aria-hidden="true" />
+                      {t('viewDetailsAction')}
+                    </DropdownMenuLinkItem>
+                  ) : null}
                   <DropdownMenuItem onClick={() => onEditPlace(tripPlace)}>
                     <Pencil aria-hidden="true" />
                     {t('editPlaceAction')}

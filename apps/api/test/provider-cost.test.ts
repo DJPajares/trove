@@ -511,20 +511,48 @@ test('a resolver built per day pays for the same place every day', async () => {
   assert.equal(calls(), 3);
 });
 
+/**
+ * `getTripPlanScore` reads its kill switches straight from `process.env`
+ * (there is no injectable environment override, unlike `getPlacesEnvironment`),
+ * so a test cannot assume either var starts unset - a developer's own `.env`
+ * may have `TROVE_PLAN_SCORE_DISABLED` on locally. This snapshots and restores
+ * exactly the keys it touches rather than blindly deleting them.
+ */
+async function withEnvOverride<T>(
+  overrides: Record<string, string | undefined>,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const original = Object.fromEntries(Object.keys(overrides).map((key) => [key, process.env[key]]));
+
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+
+  try {
+    return await fn();
+  } finally {
+    for (const [key, value] of Object.entries(original)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
 test('Plan Score fetches evidence only for scheduled trip places, not every saved one', async () => {
   tripFixture = buildPlanScoreTripFixture();
   const { provider, requests } = detailRequestsProvider();
   const placesService = new CachedPlacesService(provider);
+
   // Real network calls for routing would need a real Routes API key; disabling
   // the provider keeps this test's routes leg deterministic and offline while
   // leaving the injected `placesService` - the thing under test - untouched.
-  process.env.TROVE_GOOGLE_PROVIDERS_DISABLED = '1';
-
-  try {
-    await getTripPlanScore('user-1', 'trip-1', { placesService });
-  } finally {
-    delete process.env.TROVE_GOOGLE_PROVIDERS_DISABLED;
-  }
+  // Plan Score itself must be explicitly enabled regardless of the ambient
+  // environment, since this test verifies its normal (not disabled) behaviour.
+  await withEnvOverride(
+    { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
+    () => getTripPlanScore('user-1', 'trip-1', { placesService }),
+  );
 
   const evidenceRequests = requests.filter((request) => request.detail === 'evidence');
   assert.deepEqual(
@@ -538,20 +566,19 @@ test('TROVE_PLAN_SCORE_DISABLED stops every provider call, even with a working s
   tripFixture = buildPlanScoreTripFixture();
   const { provider, requests } = detailRequestsProvider();
   const placesService = new CachedPlacesService(provider);
-  process.env.TROVE_GOOGLE_PROVIDERS_DISABLED = '1';
 
-  try {
-    await getTripPlanScore('user-1', 'trip-1', { placesService });
-    assert.ok(requests.length > 0, 'sanity check: the fixture normally does call the provider');
+  await withEnvOverride(
+    { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
+    () => getTripPlanScore('user-1', 'trip-1', { placesService }),
+  );
+  assert.ok(requests.length > 0, 'sanity check: the fixture normally does call the provider');
 
-    requests.length = 0;
-    resetCachedPlacesMemo();
-    process.env.TROVE_PLAN_SCORE_DISABLED = '1';
-    await getTripPlanScore('user-1', 'trip-1', { placesService });
-  } finally {
-    delete process.env.TROVE_GOOGLE_PROVIDERS_DISABLED;
-    delete process.env.TROVE_PLAN_SCORE_DISABLED;
-  }
+  requests.length = 0;
+  resetCachedPlacesMemo();
+  await withEnvOverride(
+    { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: '1' },
+    () => getTripPlanScore('user-1', 'trip-1', { placesService }),
+  );
 
   assert.equal(
     requests.length,

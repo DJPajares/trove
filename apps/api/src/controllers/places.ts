@@ -51,24 +51,14 @@ const placeDetailsParamsSchema = z
 
 const placeDetailsQuerySchema = z
   .object({
-    // Clients that only render a name and a marker should ask for `location`;
-    // the default stays `full` so an unversioned client keeps its detail sheet.
-    detail: z.enum(['full', 'location']).optional(),
+    // The in-app detail sheet is gone, so `full` is no longer a servable
+    // level: a request for it fails validation rather than paying for it.
+    detail: z.enum(['location']).optional(),
     languageCode: languageCodeSchema.optional(),
     regionCode: regionCodeSchema.optional(),
     sessionToken: sessionTokenSchema.optional(),
   })
   .strict();
-
-const photoNamePattern = /^places\/[A-Za-z0-9_-]+\/photos\/[A-Za-z0-9_-]+$/;
-const placePhotoSchema = z
-  .object({
-    maxHeightPx: z.number().int().min(1).max(4_800).optional(),
-    maxWidthPx: z.number().int().min(1).max(4_800).optional(),
-    name: z.string().trim().max(4_096).regex(photoNamePattern),
-  })
-  .strict()
-  .refine((value) => value.maxHeightPx !== undefined || value.maxWidthPx !== undefined);
 
 const providerPlaceResolutionSchema = z
   .object({
@@ -123,11 +113,7 @@ function sendConfigurationMissing(reply: FastifyReply) {
 
 function sendServiceResult(
   reply: FastifyReply,
-  result: Awaited<
-    | ReturnType<PlacesService['getDetails']>
-    | ReturnType<PlacesService['resolvePhoto']>
-    | ReturnType<PlacesService['search']>
-  >,
+  result: Awaited<ReturnType<PlacesService['getDetails']> | ReturnType<PlacesService['search']>>,
 ) {
   if (result.status === 'unavailable') {
     const statusCode =
@@ -186,21 +172,6 @@ export function createPlacesControllers(
         ...parsedQuery.data,
       });
 
-      return sendServiceResult(reply, result);
-    },
-
-    async resolvePhoto(request: FastifyRequest, reply: FastifyReply) {
-      const parsed = placePhotoSchema.safeParse(request.body);
-
-      if (!parsed.success) {
-        return reply.code(400).send({ code: 'invalid_place_photo_request' });
-      }
-
-      if (!placesService) {
-        return sendConfigurationMissing(reply);
-      }
-
-      const result = await placesService.resolvePhoto(parsed.data);
       return sendServiceResult(reply, result);
     },
 

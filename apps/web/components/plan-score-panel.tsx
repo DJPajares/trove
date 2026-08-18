@@ -20,6 +20,8 @@ type PlanScorePanelProps = Readonly<{
   className?: string;
   completeness?: number | null;
   confidence?: number | null;
+  /** Administratively disabled (not just lacking evidence): render nothing at all. */
+  disabled?: boolean;
   explanations: PlanScoreExplanationGroups;
   /** Per-factor breakdown for the day-scope chip row; absent at trip scope. */
   factors?: Record<PlanScoreFactorId, PlanScoreFactorOutcome>;
@@ -241,6 +243,7 @@ export function PlanScorePanel({
   className,
   completeness,
   confidence,
+  disabled,
   explanations,
   factors,
   onRetry,
@@ -255,6 +258,8 @@ export function PlanScorePanel({
   const detailsId = useId();
 
   const shell = cn('space-y-3 rounded-lg border border-border bg-card p-4', className);
+
+  if (disabled) return null;
 
   if (status === 'error') {
     return (

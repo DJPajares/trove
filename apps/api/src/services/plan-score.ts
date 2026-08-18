@@ -350,7 +350,7 @@ export async function getTripPlanScore(
     ),
   ]);
 
-  return buildTripPlanScore({
+  const result = buildTripPlanScore({
     days: trip.itineraryDays.map((day) => {
       const date = toLocalDate(day.date);
       return {
@@ -378,4 +378,20 @@ export async function getTripPlanScore(
     ratings: placeEvidence.ratings,
     routes: new Map(routeResults.map(({ id, routes }) => [id, routes])),
   });
+
+  // Administratively disabled is a distinct reason from genuinely thin
+  // evidence: the frontend uses it to not render the section at all, rather
+  // than showing an empty state that looks like every other unscored day.
+  if (planScoreDisabled) {
+    return {
+      ...result,
+      days: result.days.map((day) => ({
+        ...day,
+        withheldReasons: ['ADMINISTRATIVELY_DISABLED'],
+      })),
+      withheldReasons: ['ADMINISTRATIVELY_DISABLED'],
+    };
+  }
+
+  return result;
 }

@@ -15,6 +15,27 @@ export type CanonicalPlace = {
   providerRefs: Array<{ externalPlaceId: string; provider: 'google' }>;
 };
 
+/**
+ * Points straight at the provider's own listing for this exact Place, so it
+ * replaces the in-app detail sheet at zero provider cost. `null` for a Place
+ * with no Google reference (a custom Place) — callers hide the action then,
+ * rather than linking to an ambiguous coordinate search.
+ */
+export function googleMapsPlaceHref(place: { providerRefs: Array<{ externalPlaceId: string }> }) {
+  const providerId = place.providerRefs[0]?.externalPlaceId;
+  return providerId
+    ? `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(providerId)}`
+    : null;
+}
+
+/**
+ * For surfaces that only have coordinates in hand (a map pin), not a Place
+ * reference. Zero provider cost, same as `googleMapsPlaceHref`.
+ */
+export function googleMapsCoordinatesHref(location: { latitude: number; longitude: number }) {
+  return `https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`;
+}
+
 export type SavedPlace = {
   collections: Array<{ id: string; name: string }>;
   createdAt: string;
@@ -93,35 +114,13 @@ function readProviderDetailsCache() {
 }
 
 /**
- * `location` is a name, an address and coordinates: everything a list, a marker
- * or a route label needs. `full` adds the mutable detail only a place's own
- * sheet shows, and costs materially more to ask the provider for.
- *
- * The two are cached under separate keys because a `location` answer genuinely
- * lacks the rest. Sharing one key would let a list view's cheap fetch silently
- * strip the rating and opening hours off the next sheet that opened.
+ * The app only ever asks the provider for `location`: a name, an address and
+ * coordinates, everything a list, a marker or a route label needs. There is
+ * only one cache tier because there is only one detail level requested.
  */
-export type ProviderDetailLevel = 'full' | 'location';
-
-function providerDetailsCacheKey(placeId: string, detail: ProviderDetailLevel) {
-  return detail === 'full' ? placeId : `${placeId}#location`;
-}
-
-function readCacheEntry(placeId: string, detail: ProviderDetailLevel) {
+export function getCachedProviderPlaceDetails(placeId: string) {
   const cache = readProviderDetailsCache();
-  const full = cache[providerDetailsCacheKey(placeId, 'full')];
-
-  // A full answer contains everything a location answer does, so it satisfies
-  // either request. The reverse is not true.
-  if (detail === 'full') return full;
-  return full ?? cache[providerDetailsCacheKey(placeId, 'location')];
-}
-
-export function getCachedProviderPlaceDetails(
-  placeId: string,
-  detail: ProviderDetailLevel = 'location',
-) {
-  const entry = readCacheEntry(placeId, detail);
+  const entry = cache[placeId];
   if (
     !entry ||
     Date.now() - entry.cachedAt > PROVIDER_DETAILS_CACHE_TTL_MS ||
@@ -133,14 +132,10 @@ export function getCachedProviderPlaceDetails(
   return details;
 }
 
-export function cacheProviderPlaceDetails(
-  placeId: string,
-  details: ProviderPlaceDetails,
-  detail: ProviderDetailLevel = 'location',
-) {
+export function cacheProviderPlaceDetails(placeId: string, details: ProviderPlaceDetails) {
   if (typeof window === 'undefined') return;
   const cache = readProviderDetailsCache();
-  cache[providerDetailsCacheKey(placeId, detail)] = { ...details, cachedAt: Date.now() };
+  cache[placeId] = { ...details, cachedAt: Date.now() };
   try {
     window.sessionStorage.setItem(PROVIDER_DETAILS_CACHE_KEY, JSON.stringify(cache));
   } catch {
@@ -255,11 +250,10 @@ export type ProviderPlaceDetailsResult =
  */
 export async function getProviderPlaceDetails(
   externalPlaceId: string,
-  detail: ProviderDetailLevel = 'location',
 ): Promise<ProviderPlaceDetailsResult> {
   try {
     return await savedRequest<ProviderPlaceDetailsResult>(
-      `/places/${encodeURIComponent(externalPlaceId)}?detail=${detail}`,
+      `/places/${encodeURIComponent(externalPlaceId)}?detail=location`,
     );
   } catch (cause) {
     if (cause instanceof SavedApiError) {
@@ -269,13 +263,6 @@ export async function getProviderPlaceDetails(
     }
     throw cause;
   }
-}
-
-export function resolveProviderPlacePhoto(name: string) {
-  return savedRequest<{ photo?: { uri: string }; status: 'empty' | 'ok' | 'unavailable' }>(
-    '/places/photos/resolve',
-    { body: JSON.stringify({ maxWidthPx: 960, name }), method: 'POST' },
-  );
 }
 
 /**

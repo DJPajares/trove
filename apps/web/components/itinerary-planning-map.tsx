@@ -17,6 +17,7 @@ import {
   type ItineraryMapPoint,
   viewportPoints,
 } from '@/lib/maps/itinerary-map';
+import { googleMapsCoordinatesHref } from '@/lib/saved/api';
 import { cn } from '@/lib/utils';
 
 type ItineraryPlanningMapProps = {
@@ -31,7 +32,6 @@ type ItineraryPlanningMapProps = {
    * with no day of their own to add to, which hides the action entirely.
    */
   onAddToDay?: (point: ItineraryMapPoint) => Promise<boolean>;
-  onOpenPlace: (tripPlaceId: string) => void;
   onSelectPoint: (point: ItineraryMapPoint) => void;
   onViewItem: (itemId: string) => void;
   points: ItineraryMapPoint[];
@@ -93,7 +93,6 @@ export function ItineraryPlanningMap({
   ariaLabel,
   currentLocation = null,
   onAddToDay,
-  onOpenPlace,
   onSelectPoint,
   onViewItem,
   points,
@@ -381,7 +380,14 @@ export function ItineraryPlanningMap({
               </Button>
             ) : null}
             <Button
-              onClick={() => onOpenPlace(selectedPoint.tripPlaceId)}
+              nativeButton={false}
+              render={
+                <a
+                  href={googleMapsCoordinatesHref(selectedPoint)}
+                  rel="noreferrer"
+                  target="_blank"
+                />
+              }
               size="sm"
               variant="outline"
             >

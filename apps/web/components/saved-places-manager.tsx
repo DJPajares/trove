@@ -69,6 +69,7 @@ import {
 import {
   addToCollection,
   cacheProviderPlaceDetails,
+  getCachedProviderPlaceDetails,
   createCollection,
   createCustomPlace,
   fetchSavedPlaces,
@@ -184,6 +185,12 @@ export function SavedPlacesManager() {
       unresolvedProviderPlaces.map(async (savedPlace) => {
         const externalPlaceId = savedPlace.place.providerRefs[0]?.externalPlaceId;
         if (!externalPlaceId) return { placeId: savedPlace.place.id, details: null };
+
+        // Every other surface checks the session cache before asking; this one
+        // did not, so simply revisiting Saved re-billed one Place Details call
+        // per saved place.
+        const cached = getCachedProviderPlaceDetails(savedPlace.place.id);
+        if (cached) return { placeId: savedPlace.place.id, details: cached };
 
         try {
           const result = await getProviderPlaceDetails(externalPlaceId);

@@ -14,6 +14,8 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import {
+  cacheProviderPlaceDetails,
+  getCachedProviderPlaceDetails,
   getProviderPlaceDetails,
   resolveProviderPlacePhoto,
   type CanonicalPlace,
@@ -48,12 +50,24 @@ export function PlaceDetailSheet({
     if (!open || !place || place.kind === 'custom') return;
     const externalPlaceId = place.providerRefs[0]?.externalPlaceId;
     if (!externalPlaceId) return;
+    // This sheet is the one surface that needs the mutable detail, so it is the
+    // one place that pays for a full Place Details call. Reopening the same
+    // sheet within the session should not pay again.
+    const cached = getCachedProviderPlaceDetails(place.id, 'full');
+    if (cached) {
+      setDetails(cached as ProviderPlaceDetails);
+      setStatus('idle');
+      return;
+    }
+
     let active = true;
     setStatus('loading');
-    void getProviderPlaceDetails(externalPlaceId)
+    void getProviderPlaceDetails(externalPlaceId, 'full')
       .then((result) => {
         if (!active) return;
-        setDetails(result.status === 'ok' ? (result.place ?? null) : null);
+        const resolved = result.status === 'ok' ? (result.place ?? null) : null;
+        if (resolved) cacheProviderPlaceDetails(place.id, resolved, 'full');
+        setDetails(resolved);
         setStatus(result.status === 'ok' ? 'idle' : 'unavailable');
       })
       .catch(() => active && setStatus('unavailable'));

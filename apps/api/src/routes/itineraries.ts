@@ -5,6 +5,7 @@ import { createItineraryRouteControllers } from '../controllers/itinerary-routes
 import { createItineraryTimeSuggestionControllers } from '../controllers/itinerary-time-suggestions.js';
 import { createTripModeContextControllers } from '../controllers/trip-mode-context.js';
 import { requireAuthenticatedUser } from '../services/request-auth.js';
+import { PROVIDER_FANOUT_RATE_LIMIT } from './rate-limits.js';
 
 export function registerItineraryRoutes(app: FastifyInstance) {
   const controllers = createItineraryControllers();
@@ -12,17 +13,23 @@ export function registerItineraryRoutes(app: FastifyInstance) {
   const timeSuggestionControllers = createItineraryTimeSuggestionControllers();
   const tripModeContextControllers = createTripModeContextControllers();
   const authenticated = { preHandler: requireAuthenticatedUser };
+  // These three reach Google once per place and once per leg of the day.
+  const providerBacked = { config: PROVIDER_FANOUT_RATE_LIMIT, ...authenticated };
 
   app.get('/trips/:tripId/itinerary', authenticated, controllers.getItinerary);
-  app.get('/trips/:tripId/trip-mode/context', authenticated, tripModeContextControllers.getContext);
+  app.get(
+    '/trips/:tripId/trip-mode/context',
+    providerBacked,
+    tripModeContextControllers.getContext,
+  );
   app.get(
     '/trips/:tripId/itinerary/days/:itineraryDayId/routes',
-    authenticated,
+    providerBacked,
     routeControllers.getDayRoutes,
   );
   app.get(
     '/trips/:tripId/itinerary/days/:itineraryDayId/time-suggestions',
-    authenticated,
+    providerBacked,
     timeSuggestionControllers.getDayTimeSuggestions,
   );
   app.post('/trips/:tripId/itinerary/items', authenticated, controllers.createItem);

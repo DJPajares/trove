@@ -7,10 +7,16 @@ import {
   type ItineraryDayRecord,
   type PlaceHoursEvidence,
 } from './itinerary-day-evidence.js';
-import { getItineraryDayRoutes, type ItineraryDayRoutes } from './itinerary-routes.js';
+import {
+  createPlaceResolver,
+  getItineraryDayRoutes,
+  type ItineraryDayRoutes,
+} from './itinerary-routes.js';
 import { ItineraryNotFoundError } from './itineraries.js';
 import { createPlacesService } from './places-runtime.js';
 import type { PlacesService } from './places.js';
+import { createRoutesService } from './routes-runtime.js';
+import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
 import {
   explainDay,
   explainTrip,
@@ -292,13 +298,24 @@ export async function getTripPlanScore(
     return commitment ? [commitment] : [];
   });
 
+  const routesService = createRoutesService();
+  // One resolver for the whole trip. Days share places constantly - the same
+  // hotel is the base every night - and a per-day resolver re-fetched each one.
+  // Mirrors the guard inside getItineraryDayRoutes: with no routing there is
+  // nothing to resolve coordinates for.
+  const resolvePlace = createPlaceResolver(routesService ? placesService : null);
+
   const [routeResults, placeEvidence] = await Promise.all([
-    Promise.all(
-      trip.itineraryDays.map(async (day) => ({
-        id: day.id,
-        routes: await getItineraryDayRoutes(userId, tripId, day.id),
-      })),
-    ),
+    mapWithConcurrency(trip.itineraryDays, PROVIDER_CONCURRENCY_LIMIT, async (day) => ({
+      id: day.id,
+      routes: await getItineraryDayRoutes(
+        userId,
+        tripId,
+        day.id,
+        {},
+        { placesService, resolvePlace, routesService },
+      ),
+    })),
     loadPlaceEvidence(
       trip.tripPlaces.map((tripPlace) => ({
         externalPlaceId:

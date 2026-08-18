@@ -58,7 +58,7 @@ export interface RoutesProvider {
 export type RouteResult =
   | {
       estimate: RouteEstimate;
-      freshness: { fetchedAt: string; source: 'live' };
+      freshness: { fetchedAt: string; source: 'cache' | 'live' };
       provider: 'google';
       status: 'ok';
     }

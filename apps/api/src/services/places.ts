@@ -32,7 +32,16 @@ export type PlaceSearchRequest = {
   sessionToken: string;
 };
 
+/**
+ * `location` asks the provider only for identity and coordinates; `full` also
+ * asks for the mutable detail a place's own sheet shows. Callers that render a
+ * marker or route a leg should always pass `location` — see
+ * `GOOGLE_PLACE_LOCATION_FIELD_MASK` for why it matters.
+ */
+export type PlaceDetailLevel = 'full' | 'location';
+
 export type PlaceDetailsRequest = {
+  detail?: PlaceDetailLevel;
   externalPlaceId: string;
   languageCode?: string;
   regionCode?: string;
@@ -129,9 +138,14 @@ export interface PlacesProvider {
   search(request: PlaceSearchRequest): Promise<PlaceSuggestion[]>;
 }
 
-type PlaceFreshness = {
+/**
+ * `fetchedAt` is when the provider actually answered, not when Trove replied,
+ * so a cached snapshot reports its true age. PRD 11.7 requires provider-derived
+ * data to carry that context rather than pass as current.
+ */
+export type PlaceFreshness = {
   fetchedAt: string;
-  source: 'live';
+  source: 'cache' | 'live';
 };
 
 export type PlacesUnavailableCode = Exclude<PlaceProviderErrorCode, 'not_found'>;

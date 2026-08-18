@@ -110,7 +110,7 @@ export async function getItineraryDayTimeSuggestions(
   );
 
   const [routes, placeEvidence] = await Promise.all([
-    getItineraryDayRoutes(userId, tripId, day.id),
+    getItineraryDayRoutes(userId, tripId, day.id, {}, { placesService }),
     loadPlaceEvidence(
       trip.tripPlaces
         .filter((tripPlace) => dayTripPlaceIds.has(tripPlace.id))

@@ -4,6 +4,7 @@ import { createPlacesControllers } from '../controllers/places.js';
 import { createCanonicalPlacesService } from '../services/canonical-places.js';
 import { createPlacesService } from '../services/places-runtime.js';
 import { requireAuthenticatedUser } from '../services/request-auth.js';
+import { PROVIDER_DETAILS_RATE_LIMIT, PROVIDER_SEARCH_RATE_LIMIT } from './rate-limits.js';
 
 export function registerPlacesRoutes(app: FastifyInstance) {
   const controllers = createPlacesControllers(
@@ -13,7 +14,11 @@ export function registerPlacesRoutes(app: FastifyInstance) {
     createCanonicalPlacesService(),
   );
 
-  app.post('/places/search', { preHandler: requireAuthenticatedUser }, controllers.search);
+  app.post(
+    '/places/search',
+    { config: PROVIDER_SEARCH_RATE_LIMIT, preHandler: requireAuthenticatedUser },
+    controllers.search,
+  );
   app.post(
     '/places/resolve',
     { preHandler: requireAuthenticatedUser },
@@ -31,12 +36,12 @@ export function registerPlacesRoutes(app: FastifyInstance) {
   );
   app.get(
     '/places/:providerPlaceId',
-    { preHandler: requireAuthenticatedUser },
+    { config: PROVIDER_DETAILS_RATE_LIMIT, preHandler: requireAuthenticatedUser },
     controllers.getDetails,
   );
   app.post(
     '/places/photos/resolve',
-    { preHandler: requireAuthenticatedUser },
+    { config: PROVIDER_DETAILS_RATE_LIMIT, preHandler: requireAuthenticatedUser },
     controllers.resolvePhoto,
   );
 }

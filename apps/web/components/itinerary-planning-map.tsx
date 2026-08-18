@@ -116,7 +116,16 @@ export function ItineraryPlanningMap({
   const [addFeedback, setAddFeedback] = useState<string | null>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef(false);
-  const hasPoints = points.length > 0;
+  /**
+   * Only ever the map's opening centre. Held in a ref so that the device moving,
+   * or the prop object simply being rebuilt, does not re-enter the effect below:
+   * every re-entry tears down the map and constructs another, and each
+   * construction is a billed Dynamic Maps load.
+   */
+  const initialPoint = points[0] ?? currentLocation;
+  const initialPointRef = useRef(initialPoint);
+  initialPointRef.current = initialPoint;
+  const hasInitialPoint = Boolean(initialPoint);
   const selectedPoint = useMemo(
     () => points.find((point) => point.id === selectedPointId) ?? null,
     [points, selectedPointId],
@@ -151,8 +160,8 @@ export function ItineraryPlanningMap({
   }
 
   useEffect(() => {
-    const initialPoint = points[0] ?? currentLocation;
-    if (!containerRef.current || !initialPoint || !resolvedTheme || !hasGoogleMapsConfiguration())
+    const openingPoint = initialPointRef.current;
+    if (!containerRef.current || !openingPoint || !resolvedTheme || !hasGoogleMapsConfiguration())
       return;
     let active = true;
     setStatus('loading');
@@ -160,7 +169,7 @@ export function ItineraryPlanningMap({
       .then(({ maps }) => {
         if (!active || !containerRef.current) return;
         mapRef.current = new maps.Map(containerRef.current, {
-          center: { lat: initialPoint.latitude, lng: initialPoint.longitude },
+          center: { lat: openingPoint.latitude, lng: openingPoint.longitude },
           clickableIcons: false,
           colorScheme: resolvedTheme === 'dark' ? 'DARK' : 'LIGHT',
           fullscreenControl: false,
@@ -185,7 +194,7 @@ export function ItineraryPlanningMap({
       polylineRefs.current = [];
       mapRef.current = null;
     };
-  }, [currentLocation, hasPoints, locale, resolvedTheme]);
+  }, [hasInitialPoint, locale, resolvedTheme]);
 
   useEffect(() => {
     if (status !== 'ready' || !mapRef.current) return;

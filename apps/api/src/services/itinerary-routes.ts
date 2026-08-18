@@ -1,5 +1,6 @@
 import { getPrismaClient, type Prisma } from '@trove/db';
 
+import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
 import { createPlacesService } from './places-runtime.js';
 import type { PlacesService } from './places.js';
 import { createRoutesService } from './routes-runtime.js';
@@ -68,6 +69,8 @@ type PlaceRecord = Prisma.PlaceGetPayload<{ include: typeof placeInclude }>;
 
 type RouteServices = {
   placesService?: PlacesService | null;
+  /** Pass one shared resolver to dedupe places across several days. */
+  resolvePlace?: PlaceResolver;
   routesService?: RoutesService | null;
 };
 
@@ -110,7 +113,10 @@ async function resolvePlaceData(
   const googleReference = place.providerRefs.find((reference) => reference.provider === 'GOOGLE');
   if (!googleReference || !placesService) return null;
 
+  // Only the coordinates and a label are read below, so this must never ask for
+  // the mutable detail that makes a Place Details call expensive.
   const result = await placesService.getDetails({
+    detail: 'location',
     externalPlaceId: googleReference.externalPlaceId,
     languageCode,
   });
@@ -122,7 +128,23 @@ async function resolvePlaceData(
   };
 }
 
-function createPlaceResolver(placesService: PlacesService | null, languageCode?: string) {
+export type PlaceResolver = (
+  place: PlaceRecord,
+  kind: RoutePointKind,
+  id: string,
+) => Promise<RoutePoint | null>;
+
+/**
+ * Memoises by Place id, so one place resolves once however many times a day
+ * visits it. Exported because the memo is only worth as much as its lifetime:
+ * Plan Score builds a single resolver and shares it across every day of the
+ * trip, which is what stops a hotel that is the base on seven days from being
+ * fetched seven times.
+ */
+export function createPlaceResolver(
+  placesService: PlacesService | null,
+  languageCode?: string,
+): PlaceResolver {
   const resolutions = new Map<string, Promise<Pick<RoutePoint, 'coordinates' | 'label'> | null>>();
 
   return async (place: PlaceRecord, kind: RoutePointKind, id: string) => {
@@ -403,20 +425,21 @@ export async function getItineraryDayRoutes(
     services.placesService === undefined ? createPlacesService() : services.placesService;
   const routesService =
     services.routesService === undefined ? createRoutesService() : services.routesService;
-  const resolvePlace = createPlaceResolver(
-    routesService ? placesService : null,
-    options.languageCode,
-  );
+  const resolvePlace =
+    services.resolvePlace ??
+    createPlaceResolver(routesService ? placesService : null, options.languageCode);
   const placedItems = day.items.filter(
     (item): item is typeof item & { tripPlace: NonNullable<typeof item.tripPlace> } =>
       item.tripPlace !== null,
   );
 
-  const itemPoints = await Promise.all(
-    placedItems.map(async (item) => ({
+  const itemPoints = await mapWithConcurrency(
+    placedItems,
+    PROVIDER_CONCURRENCY_LIMIT,
+    async (item) => ({
       item,
       point: await resolvePlace(item.tripPlace.place, 'itinerary_item', item.id),
-    })),
+    }),
   );
   const locatedItems = itemPoints
     .filter((entry): entry is typeof entry & { point: RoutePoint } => entry.point !== null)
@@ -451,10 +474,8 @@ export async function getItineraryDayRoutes(
     items: locatedItems,
     startingLocation,
   });
-  const segments = await Promise.all(
-    plans.map((plan) =>
-      resolveSegment(plan, routesService, options.includePolyline ?? false, options.languageCode),
-    ),
+  const segments = await mapWithConcurrency(plans, PROVIDER_CONCURRENCY_LIMIT, (plan) =>
+    resolveSegment(plan, routesService, options.includePolyline ?? false, options.languageCode),
   );
 
   return {

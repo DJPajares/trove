@@ -1,3 +1,4 @@
+import { recordProviderCall } from './provider-usage.js';
 import {
   RouteProviderError,
   type RouteEstimate,
@@ -95,6 +96,12 @@ export class GoogleRoutesProvider implements RoutesProvider {
 
   async computeRoute(request: RouteRequest): Promise<RouteEstimate | null> {
     if (!this.apiKey) throw new RouteProviderError('configuration_missing');
+
+    recordProviderCall({
+      endpoint: '/directions/v2:computeRoutes',
+      operation: 'computeRoute',
+      provider: 'google',
+    });
 
     let response: Response;
 

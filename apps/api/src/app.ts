@@ -75,7 +75,11 @@ function describeError(error: unknown) {
 }
 
 export function buildApp() {
-  const app = Fastify({ logger: true });
+  // Google Place IDs for address-only results (no POI) run well past Fastify's
+  // default 100-char route param limit; `/places/:providerPlaceId` already
+  // validates up to 512 chars, so the router needs the same ceiling or those
+  // requests never reach the handler at all.
+  const app = Fastify({ logger: true, maxParamLength: 512 });
   const allowedOrigins = getWebOrigins();
 
   app.setErrorHandler((error: unknown, request, reply) => {

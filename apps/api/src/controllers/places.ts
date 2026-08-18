@@ -63,6 +63,9 @@ const placeDetailsQuerySchema = z
 const providerPlaceResolutionSchema = z
   .object({
     externalPlaceId: z.string().trim().min(1).max(512),
+    // The language the snapshot taken on this resolution is stored in, so the
+    // screens that render it afterwards read the same one back.
+    languageCode: languageCodeSchema.optional(),
     // What the caller saw when it picked this Place, kept only as a fallback for
     // when the provider cannot be reached later.
     label: z
@@ -185,6 +188,7 @@ export function createPlacesControllers(
         parsed.data.provider,
         parsed.data.externalPlaceId,
         parsed.data.label,
+        { languageCode: parsed.data.languageCode },
       );
       return reply.send({ place });
     },

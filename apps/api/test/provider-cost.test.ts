@@ -4,6 +4,12 @@ import { beforeEach, test } from 'vitest';
 import { CachedPlacesService, resetCachedPlacesMemo } from '../src/services/cached-places.js';
 import { CachedRoutesService } from '../src/services/cached-routes.js';
 import { createPlaceResolver } from '../src/services/itinerary-routes.js';
+import {
+  hydratePlaceSnapshots,
+  isSnapshotFresh,
+  MAX_INLINE_PLACE_HYDRATIONS,
+  toPlaceSnapshot,
+} from '../src/services/place-data.js';
 import { areGoogleProvidersDisabled, getPlacesEnvironment } from '../src/environment.js';
 import {
   GOOGLE_PLACE_DETAILS_FIELD_MASK,
@@ -70,6 +76,11 @@ function installStubPrisma() {
       findUnique: async (args: {
         where: { provider_externalPlaceId: { externalPlaceId: string } };
       }) => providerRefs.get(args.where.provider_externalPlaceId.externalPlaceId) ?? null,
+      findMany: async (args: { where: { externalPlaceId: { in: string[] } } }) =>
+        args.where.externalPlaceId.in.flatMap((externalPlaceId) => {
+          const row = providerRefs.get(externalPlaceId);
+          return row ? [row] : [];
+        }),
       updateMany: async (args: {
         data: Record<string, unknown>;
         where: { externalPlaceId: string };
@@ -724,4 +735,165 @@ test('TROVE_PLAN_SCORE_DISABLED stops every provider call, even with a working s
     0,
     'the injected placesService must never be called while Plan Score is disabled',
   );
+});
+
+/**
+ * The tests below are the ones that hold the DB-first architecture in place.
+ * They assert what *navigation* costs, which is the number that produced the
+ * bill this work exists to remove.
+ */
+
+function seedFreshRef(externalPlaceId: string, now: Date, languageCode = 'en') {
+  seedProviderRef(externalPlaceId, {
+    cachedAt: now,
+    cachedFormattedAddress: '93 Stamford Rd, Singapore',
+    cachedLanguageCode: languageCode,
+    cachedLatitude: decimal(1.2966),
+    cachedLongitude: decimal(103.8485),
+    cachedName: 'National Museum',
+    cachedPrimaryType: 'museum',
+    cachedTypes: ['museum'],
+  });
+}
+
+test('a screen rendered from snapshots the database already holds costs nothing', async () => {
+  const now = new Date('2026-08-18T00:00:00.000Z');
+  const ids = Array.from({ length: 30 }, (_, index) => `ChIJplace-${index}`);
+  for (const id of ids) seedFreshRef(id, now);
+
+  const { provider, calls } = countingPlacesProvider();
+  const resolved = await hydratePlaceSnapshots(ids, {
+    now,
+    placesService: new CachedPlacesService(provider, () => now),
+  });
+
+  assert.equal(calls(), 0);
+  assert.equal(resolved.size, 30);
+  assert.equal(toPlaceSnapshot(resolved.get('ChIJplace-0'), now)?.name, 'National Museum');
+});
+
+test('a place still renders when the provider is gone', async () => {
+  const now = new Date('2026-08-18T00:00:00.000Z');
+  // Well past the 30-day ceiling, so this would refresh if it could.
+  seedProviderRef('ChIJmuseum', {
+    cachedAt: new Date(now.getTime() - 90 * DAY_MS),
+    cachedLanguageCode: 'en',
+    cachedLatitude: decimal(1.2966),
+    cachedLongitude: decimal(103.8485),
+    cachedName: 'National Museum',
+  });
+
+  // `null` is what the kill switch and a missing key both produce.
+  const resolved = await hydratePlaceSnapshots(['ChIJmuseum'], { now, placesService: null });
+  const snapshot = toPlaceSnapshot(resolved.get('ChIJmuseum'), now);
+
+  assert.equal(getProviderCallCounts()['google:getDetails'], undefined);
+  assert.equal(snapshot?.name, 'National Museum');
+  assert.equal(snapshot?.stale, true, 'stale data must say so rather than pass as current');
+});
+
+test('a backlog of stale snapshots is bounded per request and drains over the next', async () => {
+  const now = new Date('2026-08-18T00:00:00.000Z');
+  const ids = Array.from({ length: 40 }, (_, index) => `ChIJstale-${index}`);
+  for (const id of ids) {
+    seedProviderRef(id, {
+      cachedAt: new Date(now.getTime() - 31 * DAY_MS),
+      cachedLanguageCode: 'en',
+      cachedLatitude: decimal(1.2966),
+      cachedLongitude: decimal(103.8485),
+      cachedName: 'National Museum',
+    });
+  }
+
+  const { provider, calls } = countingPlacesProvider();
+  const service = new CachedPlacesService(provider, () => now);
+
+  const first = await hydratePlaceSnapshots(ids, { now, placesService: service });
+  assert.equal(calls(), MAX_INLINE_PLACE_HYDRATIONS);
+  assert.equal(
+    [...first.values()].filter((reference) => !toPlaceSnapshot(reference, now)?.stale).length,
+    MAX_INLINE_PLACE_HYDRATIONS,
+  );
+
+  await hydratePlaceSnapshots(ids, { now, placesService: service });
+  assert.equal(calls(), 40, 'the remainder should refresh on the next request, not be dropped');
+
+  await hydratePlaceSnapshots(ids, { now, placesService: service });
+  assert.equal(calls(), 40, 'and then cost nothing at all');
+});
+
+test('a caller that names no language reads the snapshot one that named `en` wrote', async () => {
+  const now = new Date('2026-08-18T00:00:00.000Z');
+  seedProviderRef('ChIJmuseum');
+  const { provider, calls } = countingPlacesProvider();
+  const service = new CachedPlacesService(provider, () => now);
+
+  // The itinerary and Trip Mode forward the locale; Plan Score and time
+  // suggestions historically did not. Both must land on the same snapshot.
+  await service.getDetails({
+    detail: 'location',
+    externalPlaceId: 'ChIJmuseum',
+    languageCode: 'en',
+  });
+  await service.getDetails({ detail: 'location', externalPlaceId: 'ChIJmuseum' });
+  await service.getDetails({
+    detail: 'location',
+    externalPlaceId: 'ChIJmuseum',
+    languageCode: 'EN',
+  });
+
+  assert.equal(calls(), 1);
+});
+
+test('Plan Score and the day routes no longer take turns re-billing the same place', async () => {
+  const now = new Date('2026-08-18T00:00:00.000Z');
+  seedProviderRef('ChIJmuseum');
+  const { provider, calls } = countingPlacesProvider();
+  const service = new CachedPlacesService(provider, () => now);
+
+  // Plan Score builds its resolver without a language; the day-routes controller
+  // forwards one. Before the language chokepoint this cost two calls forever.
+  const planScoreResolver = createPlaceResolver(service);
+  const dayRoutesResolver = createPlaceResolver(service, 'en');
+  const place = {
+    customLatitude: null,
+    customLongitude: null,
+    customName: null,
+    id: 'place-1',
+    providerRefs: [{ externalPlaceId: 'ChIJmuseum', provider: 'GOOGLE' }],
+  } as unknown as Parameters<ReturnType<typeof createPlaceResolver>>[0];
+
+  await planScoreResolver(place, 'daily_base', 'day-1-base');
+  await dayRoutesResolver(place, 'daily_base', 'day-1-base');
+
+  assert.equal(calls(), 1);
+});
+
+test('an evidence request never writes the location snapshot', async () => {
+  const now = new Date('2026-08-18T00:00:00.000Z');
+  seedProviderRef('ChIJmuseum');
+
+  // Rating and opening hours are mutable provider data and may not be stored at
+  // any TTL (PRD 11.4). Two things keep them out of the database, and this pins
+  // both: the evidence field mask asks for no location, and the snapshot write
+  // refuses a place that has none. The provider here answers the way that mask
+  // actually makes Google answer.
+  assert.equal(GOOGLE_PLACE_EVIDENCE_FIELD_MASK.includes('location'), false);
+
+  const provider: PlacesProvider = {
+    name: 'google',
+    getDetails: async (request) => ({
+      ...detailsFor(request.externalPlaceId),
+      location: request.detail === 'evidence' ? null : { latitude: 1.2966, longitude: 103.8485 },
+    }),
+    resolvePhoto: async () => ({ name: 'photo', uri: 'https://example.test/photo' }),
+    search: async () => [],
+  };
+  const service = new CachedPlacesService(provider, () => now);
+
+  await service.getDetails({ detail: 'evidence', externalPlaceId: 'ChIJmuseum' });
+
+  assert.equal(providerRefs.get('ChIJmuseum')?.cachedName, null);
+  assert.equal(providerRefs.get('ChIJmuseum')?.cachedAt, null);
+  assert.equal(isSnapshotFresh(providerRefs.get('ChIJmuseum')!, { now }), false);
 });

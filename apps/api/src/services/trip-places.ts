@@ -2,6 +2,12 @@ import { getPrismaClient } from '@trove/db';
 
 import type { CanonicalPlace } from './canonical-places.js';
 import { refreshDayDefaultTimeZone } from './itineraries.js';
+import { hydratePlaceSnapshots } from './place-data.js';
+import {
+  placeProviderRefInclude,
+  type PlaceSerializerOptions,
+  serializeCanonicalPlace as serializePlace,
+} from './place-serializer.js';
 
 export type TripPlacePriority = 'interested' | 'maybe' | 'must_go';
 
@@ -57,40 +63,6 @@ function mapPriorityInput(priority: TripPlacePriority | null) {
   return null;
 }
 
-function serializePlace(place: {
-  customLatitude: { toNumber(): number } | null;
-  customLongitude: { toNumber(): number } | null;
-  customName: string | null;
-  customNote: string | null;
-  customTimeZone: string | null;
-  id: string;
-  kind: 'CUSTOM' | 'PROVIDER';
-  providerAddress: string | null;
-  providerLabel: string | null;
-  providerRefs: Array<{ externalPlaceId: string; provider: 'GOOGLE' }>;
-}): CanonicalPlace {
-  return {
-    id: place.id,
-    kind: place.kind === 'CUSTOM' ? 'custom' : 'provider',
-    location:
-      place.customLatitude === null || place.customLongitude === null
-        ? null
-        : {
-            latitude: place.customLatitude.toNumber(),
-            longitude: place.customLongitude.toNumber(),
-            timeZone: place.customTimeZone,
-          },
-    name: place.customName,
-    note: place.customNote,
-    providerAddress: place.providerAddress,
-    providerLabel: place.providerLabel,
-    providerRefs: place.providerRefs.map((reference) => ({
-      externalPlaceId: reference.externalPlaceId,
-      provider: 'google' as const,
-    })),
-  };
-}
-
 /**
  * Only scheduled itinerary items hold a Place in the trip. A Daily Base or a
  * day's timezone source is a day setting that re-resolves once the Place goes,
@@ -98,25 +70,28 @@ function serializePlace(place: {
  */
 const tripPlaceInclude = {
   _count: { select: { itineraryItems: true } },
-  place: { include: { providerRefs: true, savedPlaces: { select: { id: true } } } },
+  place: { include: { ...placeProviderRefInclude, savedPlaces: { select: { id: true } } } },
 } as const;
 
-function serializeTripPlace(tripPlace: {
-  _count: { itineraryItems: number };
-  createdAt: Date;
-  customName: string | null;
-  id: string;
-  note: string | null;
-  place: Parameters<typeof serializePlace>[0] & { savedPlaces: Array<{ id: string }> };
-  priority: 'INTERESTED' | 'MAYBE' | 'MUST_GO' | null;
-}): TripPlace {
+function serializeTripPlace(
+  tripPlace: {
+    _count: { itineraryItems: number };
+    createdAt: Date;
+    customName: string | null;
+    id: string;
+    note: string | null;
+    place: Parameters<typeof serializePlace>[0] & { savedPlaces: Array<{ id: string }> };
+    priority: 'INTERESTED' | 'MAYBE' | 'MUST_GO' | null;
+  },
+  options: PlaceSerializerOptions = {},
+): TripPlace {
   return {
     createdAt: tripPlace.createdAt.toISOString(),
     customName: tripPlace.customName,
     id: tripPlace.id,
     isSaved: tripPlace.place.savedPlaces.length > 0,
     note: tripPlace.note,
-    place: serializePlace(tripPlace.place),
+    place: serializePlace(tripPlace.place, options),
     priority: mapPriority(tripPlace.priority),
     referenceCount: tripPlace._count.itineraryItems,
   };
@@ -131,7 +106,7 @@ async function assertOwnedTrip(userId: string, tripId: string) {
   return trip;
 }
 
-export async function listTripPlaces(userId: string, tripId: string) {
+export async function listTripPlaces(userId: string, tripId: string, languageCode?: string) {
   const trip = await assertOwnedTrip(userId, tripId);
   const tripPlaces = await getPrismaClient().tripPlace.findMany({
     where: { tripId },
@@ -139,7 +114,7 @@ export async function listTripPlaces(userId: string, tripId: string) {
       ...tripPlaceInclude,
       place: {
         include: {
-          providerRefs: true,
+          ...placeProviderRefInclude,
           savedPlaces: { where: { ownerId: userId }, select: { id: true } },
         },
       },
@@ -147,7 +122,20 @@ export async function listTripPlaces(userId: string, tripId: string) {
     orderBy: [{ priority: 'asc' }, { createdAt: 'desc' }],
   });
 
-  return { trip, tripPlaces: tripPlaces.map(serializeTripPlace) };
+  // The collection is rendered from what the database holds. This only reaches
+  // the provider for Places it has never resolved or whose snapshot has aged
+  // out, and it is bounded, so opening this screen is not a per-place bill.
+  const snapshots = await hydratePlaceSnapshots(
+    tripPlaces.flatMap((tripPlace) =>
+      tripPlace.place.providerRefs.map((reference) => reference.externalPlaceId),
+    ),
+    { languageCode },
+  );
+
+  return {
+    trip,
+    tripPlaces: tripPlaces.map((tripPlace) => serializeTripPlace(tripPlace, { snapshots })),
+  };
 }
 
 export async function addTripPlace(

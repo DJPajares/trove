@@ -9,6 +9,7 @@ import {
   ItineraryNotFoundError,
   serializeItineraryItem,
 } from './itineraries.js';
+import { hydratePlaceSnapshots } from './place-data.js';
 import type { PlacesService } from './places.js';
 import type { RoutesService } from './routes.js';
 import { formatDateOnly, getLocalDate, parseDateOnly } from './trip-rules.js';
@@ -272,6 +273,16 @@ export async function resolveTripModeContext(
     userId,
   });
 
+  // Trip Mode renders the same Places the itinerary does, so it reads the same
+  // snapshots rather than re-resolving them on every tab.
+  const snapshots = await hydratePlaceSnapshots(
+    day.items.flatMap(
+      (item) =>
+        item.tripPlace?.place.providerRefs.map((reference) => reference.externalPlaceId) ?? [],
+    ),
+    { languageCode: options.languageCode },
+  );
+
   return {
     ...base,
     currentOrRelevant: currentOrRelevant
@@ -285,7 +296,7 @@ export async function resolveTripModeContext(
       date: dayDate,
       defaultTimeZone: day.defaultTimeZone,
       id: day.id,
-      items: day.items.map(serializeItineraryItem),
+      items: day.items.map((item) => serializeItineraryItem(item, { snapshots })),
     },
     leaveBy,
     nextItemId: nextItem?.id ?? null,

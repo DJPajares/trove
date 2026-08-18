@@ -1,3 +1,4 @@
+import type { PlaceSnapshot } from '@/lib/saved/api';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import {
   applyMutationToStoredItinerary,
@@ -35,7 +36,8 @@ export type ItineraryTripPlace = {
     note: string | null;
     providerAddress: string | null;
     providerLabel: string | null;
-    providerRefs: Array<{ externalPlaceId: string; provider: 'google'; resolvedAt?: string }>;
+    providerRefs: Array<{ externalPlaceId: string; provider: 'google' }>;
+    snapshot?: PlaceSnapshot | null;
     timeZone: string | null;
   };
   priority: ItineraryPriority | null;

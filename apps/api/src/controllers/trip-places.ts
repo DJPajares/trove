@@ -13,6 +13,9 @@ import {
 } from '../services/trip-places.js';
 
 const tripParamsSchema = z.object({ tripId: z.uuid() }).strict();
+const languageQuerySchema = z
+  .object({ languageCode: z.string().trim().min(2).max(35).optional() })
+  .strict();
 const tripPlaceParamsSchema = z.object({ tripId: z.uuid(), tripPlaceId: z.uuid() }).strict();
 const addTripPlaceSchema = z
   .object({
@@ -77,10 +80,13 @@ export function createTripPlacesControllers() {
     async getTripPlaces(request: FastifyRequest, reply: FastifyReply) {
       const userId = getUserId(request, reply);
       const params = tripParamsSchema.safeParse(request.params);
+      const query = languageQuerySchema.safeParse(request.query);
       if (!userId) return;
       if (!params.success) return reply.code(400).send({ code: 'invalid_trip_id' });
       try {
-        return reply.send(await listTripPlaces(userId, params.data.tripId));
+        return reply.send(
+          await listTripPlaces(userId, params.data.tripId, query.data?.languageCode),
+        );
       } catch (error) {
         return handleError(reply, error);
       }

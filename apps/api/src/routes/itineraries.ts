@@ -13,10 +13,10 @@ export function registerItineraryRoutes(app: FastifyInstance) {
   const timeSuggestionControllers = createItineraryTimeSuggestionControllers();
   const tripModeContextControllers = createTripModeContextControllers();
   const authenticated = { preHandler: requireAuthenticatedUser };
-  // These three reach Google once per place and once per leg of the day.
+  // These reach Google once per place and once per leg of the day.
   const providerBacked = { config: PROVIDER_FANOUT_RATE_LIMIT, ...authenticated };
 
-  app.get('/trips/:tripId/itinerary', authenticated, controllers.getItinerary);
+  app.get('/trips/:tripId/itinerary', providerBacked, controllers.getItinerary);
   app.get(
     '/trips/:tripId/trip-mode/context',
     providerBacked,

@@ -2,6 +2,27 @@ import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 import { hasProviderPlaceDetailsLocation } from './provider-details-cache';
 
+/**
+ * The provider's own durable answer for a Place, stored by Trove and served
+ * from its database. Optional so an itinerary cached in IndexedDB before this
+ * existed still renders — the fallbacks below it take over when it is absent.
+ */
+export type PlaceSnapshot = {
+  address: string | null;
+  category:
+    'destination' | 'food_and_drink' | 'other' | 'shopping' | 'stay' | 'things_to_do' | 'transport';
+  /** When the provider answered, so a surface can date what it shows. */
+  fetchedAt: string;
+  googleMapsUri: string | null;
+  languageCode: string;
+  name: string | null;
+  primaryType: string | null;
+  rawTypes: string[];
+  /** Past its permitted life and the refresh could not be made. */
+  stale: boolean;
+  utcOffsetMinutes: number | null;
+};
+
 export type CanonicalPlace = {
   id: string;
   kind: 'custom' | 'provider';
@@ -13,6 +34,7 @@ export type CanonicalPlace = {
   /** The name the provider gave then, used only when live details are out of reach. */
   providerLabel: string | null;
   providerRefs: Array<{ externalPlaceId: string; provider: 'google' }>;
+  snapshot?: PlaceSnapshot | null;
 };
 
 /**

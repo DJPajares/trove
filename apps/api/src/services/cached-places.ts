@@ -1,6 +1,7 @@
 import { getPrismaClient } from '@trove/db';
 
 import { categorizePlaceTypes } from './place-categories.js';
+import { normalizePlaceLanguageCode } from './place-language.js';
 import {
   PlacesService,
   type PlaceDetailsRequest,
@@ -13,7 +14,7 @@ import {
  * Google's terms allow place content to be cached for up to 30 consecutive
  * days, so that is the ceiling rather than a tuning knob.
  */
-const PLACE_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
+export const PLACE_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
 
 /**
  * A `full` answer cannot be persisted because it carries ratings and opening
@@ -43,7 +44,7 @@ function memoKey(request: PlaceDetailsRequest) {
   return [
     request.externalPlaceId,
     request.detail ?? 'full',
-    request.languageCode ?? '',
+    normalizePlaceLanguageCode(request.languageCode),
     request.regionCode ?? '',
   ].join(' ');
 }
@@ -52,9 +53,12 @@ function memoKey(request: PlaceDetailsRequest) {
  * A snapshot only answers a request asking for the same language: a display
  * name is language-specific, and serving an English name to a request that
  * asked for Japanese would be a silent wrong answer rather than a stale one.
+ *
+ * Both sides are normalised first, so a caller that named no language and one
+ * that asked for `en` read the same snapshot instead of invalidating it.
  */
 function matchesLanguage(cached: string | null, requested: string | undefined) {
-  return (cached ?? null) === (requested ?? null);
+  return normalizePlaceLanguageCode(cached) === normalizePlaceLanguageCode(requested);
 }
 
 export class CachedPlacesService extends PlacesService {
@@ -192,7 +196,7 @@ export class CachedPlacesService extends PlacesService {
           cachedAt: this.now(),
           cachedFormattedAddress: place.formattedAddress,
           cachedGoogleMapsUri: place.googleMapsUri,
-          cachedLanguageCode: languageCode ?? null,
+          cachedLanguageCode: normalizePlaceLanguageCode(languageCode),
           cachedLatitude: place.location.latitude,
           cachedLongitude: place.location.longitude,
           cachedName: place.name,

@@ -17,6 +17,37 @@ import type { PlaceProviderName } from '../src/services/places.js';
 
 const ownerId = '8926bbe8-abae-470c-ab90-f33af1a8d168';
 
+/**
+ * A reference Trove has created but never resolved: the shape a Place is in
+ * between being picked out of search and its one provider request landing.
+ */
+function unresolvedProviderRef(externalPlaceId: string) {
+  return {
+    cachedAt: null,
+    cachedFormattedAddress: null,
+    cachedGoogleMapsUri: null,
+    cachedLanguageCode: null,
+    cachedLatitude: null,
+    cachedLongitude: null,
+    cachedName: null,
+    cachedPrimaryType: null,
+    cachedTypes: [],
+    cachedUtcOffsetMinutes: null,
+    externalPlaceId,
+    provider: 'GOOGLE' as const,
+  };
+}
+
+/** Counts what resolving a Place costs, so a test can assert it is paid once. */
+function countingHydrator() {
+  const calls: string[] = [];
+  const hydrate = async (externalPlaceId: string) => {
+    calls.push(externalPlaceId);
+    return null;
+  };
+  return { calls, hydrate };
+}
+
 class MemoryCanonicalPlaceRepository implements CanonicalPlaceRepository {
   private customPlaces = new Map<string, CanonicalPlaceRecord>();
   private providerPlaces = new Map<string, CanonicalPlaceRecord>();
@@ -58,11 +89,27 @@ class MemoryCanonicalPlaceRepository implements CanonicalPlaceRepository {
       ownerId: null,
       providerAddress: label?.address?.trim() || null,
       providerLabel: label?.name?.trim() || null,
-      providerRefs: [{ externalPlaceId, provider: 'GOOGLE' }],
+      providerRefs: [unresolvedProviderRef(externalPlaceId)],
     };
     this.providerPlaces.set(key, place);
     this.providerPlaceCount += 1;
     return place;
+  }
+
+  /** Stands in for the snapshot write a real hydration would have made. */
+  resolveSnapshot(externalPlaceId: string, cachedAt = new Date()) {
+    for (const place of this.providerPlaces.values()) {
+      for (const reference of place.providerRefs) {
+        if (reference.externalPlaceId !== externalPlaceId) continue;
+        Object.assign(reference, {
+          cachedAt,
+          cachedLanguageCode: 'en',
+          cachedLatitude: 1.2966,
+          cachedLongitude: 103.8485,
+          cachedName: 'National Museum',
+        });
+      }
+    }
   }
 
   backfillAttempts = 0;
@@ -125,7 +172,7 @@ class MemoryCanonicalPlaceRepository implements CanonicalPlaceRepository {
 
 test('provider resolution creates identity only on use and reuses it across concurrent requests', async () => {
   const repository = new MemoryCanonicalPlaceRepository();
-  const service = new CanonicalPlacesService(repository);
+  const service = new CanonicalPlacesService(repository, countingHydrator().hydrate);
 
   assert.equal(repository.providerPlaceCount, 0);
 
@@ -146,6 +193,9 @@ test('provider resolution creates identity only on use and reuses it across conc
     providerAddress: null,
     providerLabel: null,
     providerRefs: [{ externalPlaceId: 'ChIJcanonical', provider: 'google' }],
+    // Nothing was fetched: the stub hydrator stands in for a provider request
+    // that has not landed, so the Place is identity-only until it does.
+    snapshot: null,
   });
 
   const repeated = await service.resolveProviderPlace('google', 'ChIJcanonical');
@@ -155,7 +205,7 @@ test('provider resolution creates identity only on use and reuses it across conc
 
 test('custom Places support name-only creation and remain owner-scoped on edit', async () => {
   const repository = new MemoryCanonicalPlaceRepository();
-  const service = new CanonicalPlacesService(repository);
+  const service = new CanonicalPlacesService(repository, countingHydrator().hydrate);
 
   const created = await service.createCustomPlace(ownerId, { name: '  Quiet lookout  ' });
   assert.deepEqual(created, {
@@ -167,6 +217,8 @@ test('custom Places support name-only creation and remain owner-scoped on edit',
     providerAddress: null,
     providerLabel: null,
     providerRefs: [],
+    // A Custom Place is Trove's own, so there is no provider answer to snapshot.
+    snapshot: null,
   });
 
   const updated = await service.updateCustomPlace(ownerId, created.id, {
@@ -193,7 +245,7 @@ test('custom Places support name-only creation and remain owner-scoped on edit',
 
 test('canonical Place controllers return one API shape for provider-backed and custom Places', async () => {
   const repository = new MemoryCanonicalPlaceRepository();
-  const service = new CanonicalPlacesService(repository);
+  const service = new CanonicalPlacesService(repository, countingHydrator().hydrate);
   const controllers = createPlacesControllers(null, service);
   const app = Fastify();
 
@@ -240,7 +292,7 @@ test('canonical Place controllers return one API shape for provider-backed and c
 
 test('the label a Place was first seen by is kept, backfilled once, and never rewritten', async () => {
   const repository = new MemoryCanonicalPlaceRepository();
-  const service = new CanonicalPlacesService(repository);
+  const service = new CanonicalPlacesService(repository, countingHydrator().hydrate);
 
   // Captured on the way in, so the Place has a name of its own from the start.
   const created = await service.resolveProviderPlace('google', 'Ej-clonbern', {
@@ -275,7 +327,7 @@ test('the label a Place was first seen by is kept, backfilled once, and never re
 
 test('resolving without a label still succeeds and writes nothing', async () => {
   const repository = new MemoryCanonicalPlaceRepository();
-  const service = new CanonicalPlacesService(repository);
+  const service = new CanonicalPlacesService(repository, countingHydrator().hydrate);
 
   const place = await service.resolveProviderPlace('google', 'ChIJnolabel');
 
@@ -283,4 +335,48 @@ test('resolving without a label still succeeds and writes nothing', async () => 
   assert.equal(place.providerAddress, null);
   assert.equal(repository.backfillAttempts, 0);
   assert.equal(repository.providerPlaceCount, 1);
+});
+
+test('a Place costs exactly one provider request, the first time anyone adds it', async () => {
+  const repository = new MemoryCanonicalPlaceRepository();
+  const { calls, hydrate } = countingHydrator();
+  const service = new CanonicalPlacesService(repository, hydrate);
+
+  await service.resolveProviderPlace('google', 'ChIJmuseum', undefined, { languageCode: 'en' });
+
+  // Paid once, at the only moment a user asked for it: picking it out of search.
+  assert.deepEqual(calls, ['ChIJmuseum']);
+});
+
+test('adding a Place the database already knows costs nothing', async () => {
+  const repository = new MemoryCanonicalPlaceRepository();
+  const { calls, hydrate } = countingHydrator();
+  const service = new CanonicalPlacesService(repository, hydrate);
+
+  const first = await service.resolveProviderPlace('google', 'ChIJmuseum');
+  repository.resolveSnapshot('ChIJmuseum');
+
+  // The same traveller adding it to a second trip, or a different traveller
+  // reaching it entirely — neither is a reason to ask Google again.
+  const second = await service.resolveProviderPlace('google', 'ChIJmuseum');
+  const third = await service.resolveProviderPlace('google', 'ChIJmuseum', {
+    name: 'National Museum',
+  });
+
+  assert.equal(second.id, first.id);
+  assert.equal(third.id, first.id);
+  assert.deepEqual(calls, ['ChIJmuseum'], 'only the very first resolution should reach a provider');
+});
+
+test('a snapshot that has aged out is refreshed the next time the Place is added', async () => {
+  const repository = new MemoryCanonicalPlaceRepository();
+  const { calls, hydrate } = countingHydrator();
+  const service = new CanonicalPlacesService(repository, hydrate);
+
+  await service.resolveProviderPlace('google', 'ChIJmuseum');
+  repository.resolveSnapshot('ChIJmuseum', new Date(Date.now() - 31 * 24 * 60 * 60 * 1_000));
+
+  await service.resolveProviderPlace('google', 'ChIJmuseum');
+
+  assert.deepEqual(calls, ['ChIJmuseum', 'ChIJmuseum']);
 });

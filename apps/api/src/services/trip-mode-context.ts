@@ -9,6 +9,8 @@ import {
   ItineraryNotFoundError,
   serializeItineraryItem,
 } from './itineraries.js';
+import type { PlacesService } from './places.js';
+import type { RoutesService } from './routes.js';
 import { formatDateOnly, getLocalDate, parseDateOnly } from './trip-rules.js';
 
 export type ItineraryTravelStatus = 'completed' | 'skipped' | 'upcoming';
@@ -21,8 +23,17 @@ type ItemPhase = 'current_day_part' | 'current_exact' | 'flexible' | 'future' | 
 
 export type TripModeContextOptions = {
   at?: Date;
+  languageCode?: string;
   preview?: { date: string; time: string };
   routeBufferSeconds?: number | null;
+};
+
+/** Test seam only: production callers never override these, so the real
+ * `createPlacesService`/`createRoutesService` factories inside
+ * `getItineraryDayRoutes` keep deciding what runs. */
+export type TripModeContextServices = {
+  placesService?: PlacesService | null;
+  routesService?: RoutesService | null;
 };
 
 export class TripModeContextValidationError extends Error {
@@ -124,7 +135,9 @@ async function resolveLeaveBy(input: {
   contextAt: Date;
   currentItem: ContextItemRecord | null;
   dayId: string;
+  languageCode?: string;
   nextItem: ContextItemRecord | null;
+  services: TripModeContextServices;
   tripId: string;
   userId: string;
 }) {
@@ -137,9 +150,16 @@ async function resolveLeaveBy(input: {
     return null;
   }
 
-  const routes = await getItineraryDayRoutes(input.userId, input.tripId, input.dayId, {
-    itemIds: [input.currentItem.id, input.nextItem.id],
-  });
+  const routes = await getItineraryDayRoutes(
+    input.userId,
+    input.tripId,
+    input.dayId,
+    {
+      itemIds: [input.currentItem.id, input.nextItem.id],
+      languageCode: input.languageCode,
+    },
+    input.services,
+  );
   const segment = routes.segments.find(
     (candidate) =>
       candidate.origin.kind === 'itinerary_item' &&
@@ -171,6 +191,7 @@ export async function resolveTripModeContext(
   userId: string,
   tripId: string,
   options: TripModeContextOptions = {},
+  services: TripModeContextServices = {},
 ) {
   const prisma = getPrismaClient();
   const trip = await prisma.trip.findFirst({
@@ -244,7 +265,9 @@ export async function resolveTripModeContext(
     contextAt: at,
     currentItem: currentOrRelevant?.item ?? null,
     dayId: day.id,
+    languageCode: options.languageCode,
     nextItem,
+    services,
     tripId: trip.id,
     userId,
   });

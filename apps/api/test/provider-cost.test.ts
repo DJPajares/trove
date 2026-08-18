@@ -19,6 +19,7 @@ import {
   resetProviderCallCounts,
 } from '../src/services/provider-usage.js';
 import type { RouteEstimate, RouteRequest, RoutesProvider } from '../src/services/routes.js';
+import { resolveTripModeContext } from '../src/services/trip-mode-context.js';
 
 /**
  * These tests exist because nothing else in the suite can fail when a code path
@@ -53,6 +54,7 @@ type LegRow = {
 const providerRefs = new Map<string, ProviderRefRow>();
 const legs = new Map<string, LegRow>();
 let tripFixture: unknown = null;
+let dayFixture: unknown = null;
 
 function decimal(value: number) {
   return { toNumber: () => value };
@@ -99,6 +101,9 @@ function installStubPrisma() {
       // `trip.findFirst` with different `where`/`include` shapes; the fixture
       // below carries every field either caller reads, so one stub answers both.
       findFirst: async () => tripFixture,
+    },
+    itineraryDay: {
+      findFirst: async () => dayFixture,
     },
   };
 }
@@ -258,10 +263,101 @@ beforeEach(() => {
   providerRefs.clear();
   legs.clear();
   tripFixture = null;
+  dayFixture = null;
   resetCachedPlacesMemo();
   resetProviderCallCounts();
   installStubPrisma();
 });
+
+/**
+ * A trip with two scheduled items back to back, both pointing at real Google
+ * places, so `resolveTripModeContext`'s `leaveBy` computation has a real
+ * "current item" and "next item" to route between.
+ */
+function buildTripModeContextFixture() {
+  const place = (id: string, externalPlaceId: string) => ({
+    customLatitude: null,
+    customLongitude: null,
+    customName: null,
+    customNote: null,
+    customTimeZone: null,
+    id,
+    kind: 'PROVIDER',
+    providerAddress: null,
+    providerLabel: null,
+    providerRefs: [
+      { externalPlaceId, provider: 'GOOGLE', updatedAt: new Date('2026-08-01T00:00:00.000Z') },
+    ],
+  });
+
+  const tripPlace = (id: string, placeId: string, externalPlaceId: string) => ({
+    customName: null,
+    id,
+    note: null,
+    place: place(placeId, externalPlaceId),
+    priority: null,
+  });
+
+  const currentTripPlace = tripPlace('tp-current', 'place-current', 'ChIJcurrent');
+  const nextTripPlace = tripPlace('tp-next', 'place-next', 'ChIJnext');
+  const dayDate = new Date('2026-09-01T00:00:00.000Z');
+
+  const item = (id: string, startInstant: Date, itemTripPlace: ReturnType<typeof tripPlace>) => ({
+    createdAt: dayDate,
+    customLabel: null,
+    customLocation: null,
+    customLocationTimeZone: null,
+    dayPart: null,
+    durationMinutes: 30,
+    id,
+    itineraryDayId: 'day-1',
+    localStartTime: null,
+    notes: null,
+    plannedCostAmount: null,
+    plannedCostCurrencyCode: null,
+    position: 0,
+    priority: null,
+    startInstant,
+    timeSemantics: null,
+    timeZone: null,
+    timeZoneSource: null,
+    travelModeToNext: 'WALK',
+    travelStatus: 'UPCOMING',
+    tripPlace: itemTripPlace,
+    tripPlaceId: itemTripPlace.id,
+    updatedAt: dayDate,
+  });
+
+  const currentItem = item('item-current', new Date('2026-09-01T09:00:00.000Z'), currentTripPlace);
+  const nextItem = item('item-next', new Date('2026-09-01T10:00:00.000Z'), nextTripPlace);
+
+  const day = {
+    accommodationReservations: [],
+    dailyBaseDepartureTripPlace: null,
+    dailyBaseTripPlace: null,
+    date: dayDate,
+    defaultTimeZone: 'UTC',
+    id: 'day-1',
+    items: [currentItem, nextItem],
+    routeStartTravelMode: 'WALK',
+  };
+
+  return {
+    currentPlace: currentTripPlace.place,
+    day,
+    nextPlace: nextTripPlace.place,
+    trip: {
+      endDate: new Date('2026-09-05T00:00:00.000Z'),
+      id: 'trip-1',
+      itineraryDays: [day],
+      name: 'Test Trip',
+      ownerId: 'user-1',
+      referenceTimeZone: 'UTC',
+      startDate: new Date('2026-08-25T00:00:00.000Z'),
+      startingPlace: null,
+    },
+  };
+}
 
 test('the kill switch stops the provider being configured at all', () => {
   const environment = { GOOGLE_PLACES_API_KEY: 'server-key' };
@@ -367,6 +463,49 @@ test('a snapshot never answers a request in another language', async () => {
   });
 
   assert.equal(calls(), 1);
+});
+
+test("Trip Mode reuses the Itinerary screen's cached snapshot when it forwards the same languageCode", async () => {
+  const fixture = buildTripModeContextFixture();
+  tripFixture = fixture.trip;
+  dayFixture = fixture.day;
+  // Both places are already known to Trove (a `PlaceProviderRef` row exists
+  // from being saved/scheduled) but have never been resolved yet, so there is
+  // nothing cached to reuse until the first resolution below writes into it.
+  seedProviderRef('ChIJcurrent');
+  seedProviderRef('ChIJnext');
+
+  const { provider: placesProvider, calls: placeCalls } = countingPlacesProvider();
+  const placesService = new CachedPlacesService(placesProvider);
+  const { provider: routesProvider } = countingRoutesProvider();
+  const routesService = new CachedRoutesService(routesProvider);
+
+  // The Itinerary screen resolves both places first, the way
+  // `getItineraryDayRoutes` does, caching them under `languageCode: 'en'`.
+  const resolveFromItinerary = createPlaceResolver(placesService, 'en');
+  await resolveFromItinerary(fixture.currentPlace as never, 'itinerary_item', 'seed-current');
+  await resolveFromItinerary(fixture.nextPlace as never, 'itinerary_item', 'seed-next');
+  assert.equal(placeCalls(), 2);
+
+  // Trip Mode's context request now forwards the same `languageCode` (the fix
+  // for the bug where it silently resolved as `undefined` and thrashed the
+  // 30-day snapshot cache against the Itinerary screen's `'en'` entries).
+  const context = await resolveTripModeContext(
+    'user-1',
+    'trip-1',
+    { at: new Date('2026-09-01T09:10:00.000Z'), languageCode: 'en' },
+    { placesService, routesService },
+  );
+
+  assert.equal(
+    placeCalls(),
+    2,
+    'Trip Mode must reuse the DB snapshot the Itinerary screen already cached, not re-fetch it',
+  );
+  assert.ok(
+    context.leaveBy,
+    'sanity check: leaveBy should have resolved a route between the items',
+  );
 });
 
 test('a full request never reads the snapshot, which cannot carry ratings or hours', async () => {

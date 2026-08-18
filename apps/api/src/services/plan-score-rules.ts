@@ -93,7 +93,8 @@ export type PlanScoreDayInput = {
   factors: Partial<Record<PlanScoreDayFactorId, PlanScoreFactorResult>>;
 };
 
-export type PlanScoreDayWithheldReason = 'INSUFFICIENT_COMPLETENESS' | 'NO_EVALUABLE_CORE_FACTOR';
+export type PlanScoreDayWithheldReason =
+  'ADMINISTRATIVELY_DISABLED' | 'INSUFFICIENT_COMPLETENESS' | 'NO_EVALUABLE_CORE_FACTOR';
 
 export type PlanScoreDayResult = {
   completeness: number;
@@ -112,7 +113,7 @@ export type PlanScoreTripInput = {
   mustGoPriorityFit: PlanScoreFactorResult;
 };
 
-export type PlanScoreTripWithheldReason = 'NO_SCORABLE_DAY';
+export type PlanScoreTripWithheldReason = 'ADMINISTRATIVELY_DISABLED' | 'NO_SCORABLE_DAY';
 
 export type PlanScoreTripResult = {
   days: PlanScoreDayResult[];

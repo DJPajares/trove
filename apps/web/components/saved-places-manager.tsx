@@ -18,7 +18,6 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/page-header';
-import { PlaceDetailSheet } from '@/components/place-detail-sheet';
 import { PageState } from '@/components/page-state';
 import { SearchField } from '@/components/search-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -75,6 +74,7 @@ import {
   fetchSavedPlaces,
   GOOGLE_PLACES_SEARCH_DEBOUNCE_MS,
   getProviderPlaceDetails,
+  googleMapsPlaceHref,
   removeCollection,
   removeFromCollection,
   renameCollection,
@@ -150,7 +150,6 @@ export function SavedPlacesManager() {
   const [savedPlaceToUnsave, setSavedPlaceToUnsave] = useState<SavedPlace | null>(null);
   const [unsaveError, setUnsaveError] = useState<string | null>(null);
   const [unsavingPlaceId, setUnsavingPlaceId] = useState<string | null>(null);
-  const [detailPlace, setDetailPlace] = useState<SavedPlace | null>(null);
 
   const refresh = useCallback(async () => {
     setStatus('loading');
@@ -733,15 +732,24 @@ export function SavedPlacesManager() {
                         </div>
                       </ItemContent>
                       <ItemActions className="shrink-0 self-start">
-                        <Button
-                          aria-label={t('viewDetails', { name: getPlaceName(savedPlace) })}
-                          onClick={() => setDetailPlace(savedPlace)}
-                          size="sm"
-                          variant="ghost"
-                        >
-                          <Eye aria-hidden="true" />
-                          <span className="hidden sm:inline">{t('viewDetailsAction')}</span>
-                        </Button>
+                        {googleMapsPlaceHref(savedPlace.place) ? (
+                          <Button
+                            aria-label={t('viewDetails', { name: getPlaceName(savedPlace) })}
+                            nativeButton={false}
+                            render={
+                              <a
+                                href={googleMapsPlaceHref(savedPlace.place)!}
+                                rel="noreferrer"
+                                target="_blank"
+                              />
+                            }
+                            size="sm"
+                            variant="ghost"
+                          >
+                            <Eye aria-hidden="true" />
+                            <span className="hidden sm:inline">{t('viewDetailsAction')}</span>
+                          </Button>
+                        ) : null}
                         <DropdownMenu>
                           <DropdownMenuTrigger
                             render={
@@ -795,12 +803,6 @@ export function SavedPlacesManager() {
         </div>
       )}
 
-      <PlaceDetailSheet
-        context={{ isSaved: true, note: detailPlace?.note }}
-        onOpenChange={(open) => !open && setDetailPlace(null)}
-        open={Boolean(detailPlace)}
-        place={detailPlace?.place ?? null}
-      />
       <Sheet
         onOpenChange={(open) => {
           setAddOpen(open);

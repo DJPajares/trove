@@ -35,7 +35,6 @@ import {
 import { CurrencyCombobox } from '@/components/currency-combobox';
 import { MoneyInput } from '@/components/money-input';
 import { ItineraryPlacesDrawer } from '@/components/itinerary-places-drawer';
-import { PlaceDetailSheet } from '@/components/place-detail-sheet';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { usePreferences } from '@/components/preferences-provider';
@@ -140,6 +139,7 @@ import {
   cacheProviderPlaceDetails,
   getCachedProviderPlaceDetails,
   getProviderPlaceDetails,
+  googleMapsPlaceHref,
   GOOGLE_PLACES_SEARCH_DEBOUNCE_MS,
   type ProviderPlaceDetails,
   type ProviderSuggestion,
@@ -185,13 +185,6 @@ function createFormState(
     schedule: item?.localStartTime ? 'exact' : (item?.dayPart ?? 'none'),
     tripPlaceId: item?.tripPlace?.id ?? '',
   };
-}
-
-function googleMapsHref(tripPlace: ItineraryTripPlace) {
-  const providerId = tripPlace.place.providerRefs[0]?.externalPlaceId;
-  return providerId
-    ? `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(providerId)}`
-    : null;
 }
 
 function useDesktopMapLayout() {
@@ -252,7 +245,6 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const [mobileView, setMobileView] = useState<'list' | 'map'>('list');
   const [selectedMapPointId, setSelectedMapPointId] = useState<string | null>(null);
   const [selectedMapItemId, setSelectedMapItemId] = useState<string | null>(null);
-  const [detailTripPlaceId, setDetailTripPlaceId] = useState<string | null>(null);
   const [routeSnapshot, setRouteSnapshot] = useState<{
     data: ItineraryDayRoutes;
     includesPolylines: boolean;
@@ -1357,7 +1349,9 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                       : null}
                     {selectedDay.items.map((item, itemIndex) => {
                       const name = itemName(item);
-                      const mapsHref = item.tripPlace ? googleMapsHref(item.tripPlace) : null;
+                      const mapsHref = item.tripPlace
+                        ? googleMapsPlaceHref(item.tripPlace.place)
+                        : null;
                       const hasMapLocation = Boolean(
                         item.tripPlace && placeLocation(item.tripPlace),
                       );
@@ -1603,6 +1597,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                     className="mt-4"
                     completeness={planScoreDay?.completeness ?? null}
                     confidence={planScoreDay?.confidence ?? null}
+                    disabled={planScoreDay?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')}
                     explanations={
                       planScoreDay?.explanations ?? {
                         uncertainty: [],
@@ -1631,7 +1626,6 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                 {desktopMapLayout || mobileView === 'map' ? (
                   <ItineraryPlanningMap
                     onAddToDay={(point) => addTripPlaceToSelectedDay(point.tripPlaceId)}
-                    onOpenPlace={setDetailTripPlaceId}
                     onSelectPoint={handleMapPointSelection}
                     onViewItem={viewMapItem}
                     points={mapPoints}
@@ -1737,16 +1731,6 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
           tripId={tripId}
         />
       ) : null}
-
-      <PlaceDetailSheet
-        context={{ tripName: itinerary.trip.name }}
-        onOpenChange={(open) => !open && setDetailTripPlaceId(null)}
-        open={Boolean(detailTripPlaceId)}
-        place={
-          itinerary.tripPlaces.find((tripPlace) => tripPlace.id === detailTripPlaceId)?.place ??
-          null
-        }
-      />
 
       <Sheet open={editor.mode !== 'closed'} onOpenChange={(open) => !open && closeEditor()}>
         <SheetContent

@@ -395,6 +395,7 @@ export function TripsManager() {
                   )
                 ) : (
                   <PlanScorePanel
+                    disabled={planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')}
                     explanations={
                       planScore.data?.explanations ?? {
                         uncertainty: [],

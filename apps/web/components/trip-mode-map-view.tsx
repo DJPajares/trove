@@ -19,7 +19,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
 import { PageState } from '@/components/page-state';
-import { PlaceDetailSheet } from '@/components/place-detail-sheet';
 import { usePreferences } from '@/components/preferences-provider';
 import { useTripModePreview } from '@/components/trip-mode-shell';
 import { useOfflineDataRefreshKey, useOnlineStatus } from '@/components/trip-sync-status';
@@ -46,6 +45,7 @@ import {
   cacheProviderPlaceDetails,
   getCachedProviderPlaceDetails,
   getProviderPlaceDetails,
+  googleMapsPlaceHref,
   type ProviderPlaceDetails,
 } from '@/lib/saved/api';
 import { cn } from '@/lib/utils';
@@ -113,7 +113,6 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
     Record<string, ProviderPlaceDetails | null | undefined>
   >({});
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
-  const [detailTripPlaceId, setDetailTripPlaceId] = useState<string | null>(null);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle');
   const [deviceLocation, setDeviceLocation] = useState<DeviceLocation | null>(null);
 
@@ -339,10 +338,6 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
       totalSegmentCount: 0,
     },
   };
-  const detailTripPlace = detailTripPlaceId
-    ? (itinerary.tripPlaces.find((tripPlace) => tripPlace.id === detailTripPlaceId) ?? null)
-    : null;
-
   function requestLocation() {
     if (!navigator.geolocation) {
       setLocationStatus('unsupported');
@@ -470,7 +465,6 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
             <ItineraryPlanningMap
               ariaLabel={t('interactiveMapLabel')}
               currentLocation={deviceLocation}
-              onOpenPlace={setDetailTripPlaceId}
               onSelectPoint={(point) => setSelectedPointId(point.id)}
               onViewItem={(itemId) =>
                 router.push(withPreviewHref(`/trips/${tripId}/mode/today#trip-mode-item-${itemId}`))
@@ -503,13 +497,18 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
                   <p className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
                     {t(day.dailyBaseTripPlaceId ? 'dayBase' : 'accommodationBase')}
                   </p>
-                  <button
-                    className="mt-1 rounded-[var(--radius-sm)] text-left text-sm font-semibold outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
-                    onClick={() => setDetailTripPlaceId(baseTripPlace.id)}
-                    type="button"
-                  >
-                    {placeName(baseTripPlace)}
-                  </button>
+                  {googleMapsPlaceHref(baseTripPlace.place) ? (
+                    <a
+                      className="mt-1 block rounded-[var(--radius-sm)] text-sm font-semibold outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+                      href={googleMapsPlaceHref(baseTripPlace.place)!}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      {placeName(baseTripPlace)}
+                    </a>
+                  ) : (
+                    <p className="mt-1 text-sm font-semibold">{placeName(baseTripPlace)}</p>
+                  )}
                 </div>
               </div>
             </section>
@@ -613,15 +612,6 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
           </p>
         </aside>
       </div>
-
-      <PlaceDetailSheet
-        context={{ tripName: itinerary.trip.name }}
-        onOpenChange={(open) => {
-          if (!open) setDetailTripPlaceId(null);
-        }}
-        open={Boolean(detailTripPlace)}
-        place={detailTripPlace?.place ?? null}
-      />
     </div>
   );
 }

@@ -250,7 +250,11 @@ class PrismaCanonicalPlaceRepository implements CanonicalPlaceRepository {
 /** Injectable so a test can count what a resolution costs. */
 export type PlaceSnapshotHydrator = (
   externalPlaceId: string,
-  options?: { languageCode?: string; source?: 'place-resolution' },
+  options?: {
+    languageCode?: string;
+    sessionToken?: string;
+    source?: 'place-resolution';
+  },
 ) => Promise<PlaceSnapshotSource | null>;
 
 export class CanonicalPlacesService {
@@ -263,7 +267,7 @@ export class CanonicalPlacesService {
     provider: PlaceProviderName,
     externalPlaceId: string,
     label?: ProviderPlaceLabel,
-    options: { languageCode?: string } = {},
+    options: { languageCode?: string; sessionToken?: string } = {},
   ) {
     const normalizedExternalPlaceId = externalPlaceId.trim();
     const existing = await this.repository.findByProviderRef(provider, normalizedExternalPlaceId);
@@ -320,7 +324,7 @@ export class CanonicalPlacesService {
   private async ensureSnapshot(
     place: CanonicalPlaceRecord,
     externalPlaceId: string,
-    options: { languageCode?: string },
+    options: { languageCode?: string; sessionToken?: string },
   ) {
     const reference = place.providerRefs.find(
       (entry) => entry.externalPlaceId === externalPlaceId && entry.provider === 'GOOGLE',
@@ -340,6 +344,7 @@ export class CanonicalPlacesService {
 
     return this.hydrate(externalPlaceId, {
       languageCode: options.languageCode,
+      sessionToken: options.sessionToken,
       source: 'place-resolution',
     });
   }

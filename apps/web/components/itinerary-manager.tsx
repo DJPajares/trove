@@ -21,6 +21,7 @@ import {
   Settings2,
   Sparkles,
   Trash2,
+  X,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -32,13 +33,10 @@ import {
   ItineraryRouteSegmentRow,
   ItineraryRouteSummary,
 } from '@/components/itinerary-route-details';
-import { CurrencyCombobox } from '@/components/currency-combobox';
-import { MoneyInput } from '@/components/money-input';
 import { ItineraryPlacesDrawer } from '@/components/itinerary-places-drawer';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { usePreferences } from '@/components/preferences-provider';
-import { SearchField } from '@/components/search-field';
 import { TimeInput } from '@/components/time-input';
 import { TripSectionHeader } from '@/components/trip-section-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -53,6 +51,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from '@/components/ui/combobox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -137,13 +143,23 @@ import { useInViewOnce } from '@/lib/plan-score/use-in-view-once';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import {
   googleMapsPlaceHref,
-  GOOGLE_PLACES_SEARCH_DEBOUNCE_MS,
   type ProviderSuggestion,
   resolveProviderPlace,
   searchProviderPlaces,
 } from '@/lib/saved/api';
 import { addTripPlace, type TripPlace } from '@/lib/trip-places/api';
 import { cn } from '@/lib/utils';
+import {
+  durationMinutesFromParts,
+  durationParts,
+  filterItineraryTripPlaces,
+  isDurationPreset,
+  itineraryIdentityChoice,
+  itineraryIdentityLegacyPatch,
+  itineraryProviderSuggestions,
+  ITINERARY_DURATION_PRESETS,
+  normalizeItineraryPlaceQuery,
+} from '@/lib/itinerary/item-editor';
 
 type EditorState =
   | { dayId: null; item: null; mode: 'closed' }
@@ -151,37 +167,35 @@ type EditorState =
   | { dayId: string; item: ItineraryItem; mode: 'edit' };
 
 type FormState = {
-  costAmount: string;
-  costCurrency: string;
   customLabel: string;
-  customLocation: string;
-  customLocationTimeZone: string;
   durationMinutes: string;
   exactTime: string;
   notes: string;
-  priority: '' | 'interested' | 'maybe' | 'must_go';
   schedule: 'afternoon' | 'anytime' | 'evening' | 'exact' | 'morning' | 'none';
   tripPlaceId: string;
 };
 
-function createFormState(
-  item: ItineraryItem | null,
-  preferredCurrency: string | null = null,
-): FormState {
+function createFormState(item: ItineraryItem | null): FormState {
   return {
-    costAmount: item?.plannedCost?.amount ?? '',
-    costCurrency: item?.plannedCost?.currencyCode ?? preferredCurrency ?? '',
     customLabel: item?.customLabel ?? '',
-    customLocation: item?.customLocation?.label ?? '',
-    customLocationTimeZone: item?.customLocation?.timeZone ?? '',
     durationMinutes: item?.durationMinutes?.toString() ?? '',
     exactTime: item?.localStartTime ?? '',
     notes: item?.notes ?? '',
-    priority: item?.priority ?? '',
     schedule: item?.localStartTime ? 'exact' : (item?.dayPart ?? 'none'),
     tripPlaceId: item?.tripPlace?.id ?? '',
   };
 }
+
+type ProviderSearchCacheEntry = {
+  sessionToken: string | null;
+  status: 'empty' | 'loading' | 'ok' | 'unavailable';
+  suggestions: ProviderSuggestion[];
+};
+
+type PlacePickerOption =
+  | { kind: 'custom_label'; label: string }
+  | { kind: 'provider'; suggestion: ProviderSuggestion }
+  | { kind: 'trip_place'; label: string; tripPlace: ItineraryTripPlace };
 
 function useDesktopMapLayout() {
   const [matches, setMatches] = useState<boolean | null>(null);
@@ -206,7 +220,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedDayId = searchParams.get('day');
-  const { preferredCurrency, preferences } = usePreferences();
+  const { preferences } = usePreferences();
   const online = useOnlineStatus();
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
@@ -225,14 +239,25 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   const [timeZoneConsequence, setTimeZoneConsequence] = useState(false);
   const [placeQuery, setPlaceQuery] = useState('');
   const [providerResults, setProviderResults] = useState<ProviderSuggestion[]>([]);
+  const [providerSessionToken, setProviderSessionToken] = useState<string | null>(null);
   const [placeSearchStatus, setPlaceSearchStatus] = useState<'idle' | 'loading' | 'unavailable'>(
     'idle',
   );
+  const [identityChanged, setIdentityChanged] = useState(false);
+  const [identityPickerOpen, setIdentityPickerOpen] = useState(false);
+  const [timingExpanded, setTimingExpanded] = useState(false);
+  const [customDurationOpen, setCustomDurationOpen] = useState(false);
+  const [customDurationHours, setCustomDurationHours] = useState('');
+  const [customDurationMinutes, setCustomDurationMinutes] = useState('');
   const [suggestedTime, setSuggestedTime] = useState<ItineraryDayTimeSuggestion | null>(null);
   const [suggestedTimeStatus, setSuggestedTimeStatus] = useState<'error' | 'idle' | 'loading'>(
     'idle',
   );
   const suggestedTimeRequest = useRef<AbortController | null>(null);
+  const providerSearchRequest = useRef<AbortController | null>(null);
+  const providerSearchRequestQuery = useRef<string | null>(null);
+  const providerSearchCache = useRef(new Map<string, ProviderSearchCacheEntry>());
+  const currentPlaceQuery = useRef('');
   const [selectingPlace, setSelectingPlace] = useState(false);
   const [organizingItemId, setOrganizingItemId] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<'list' | 'map'>('list');
@@ -281,30 +306,6 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     params.set('day', selectedDayId);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }, [pathname, requestedDayId, router, searchParams, selectedDayId]);
-
-  useEffect(() => {
-    const query = placeQuery.trim();
-    if (!query || editor.mode === 'closed') {
-      setProviderResults([]);
-      setPlaceSearchStatus('idle');
-      return;
-    }
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      setPlaceSearchStatus('loading');
-      void searchProviderPlaces(query, controller.signal)
-        .then((result) => {
-          if (controller.signal.aborted) return;
-          setProviderResults(result.status === 'ok' ? result.suggestions : []);
-          setPlaceSearchStatus(result.status === 'unavailable' ? 'unavailable' : 'idle');
-        })
-        .catch(() => !controller.signal.aborted && setPlaceSearchStatus('unavailable'));
-    }, GOOGLE_PLACES_SEARCH_DEBOUNCE_MS);
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [editor.mode, placeQuery]);
 
   const selectedDay = useMemo(
     () => itinerary?.days.find((day) => day.id === selectedDayId) ?? null,
@@ -585,9 +586,23 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   function openCreate(day: ItineraryDay) {
-    setForm(createFormState(null, preferredCurrency));
+    setForm(createFormState(null));
     setFormError(null);
     setPlaceQuery('');
+    currentPlaceQuery.current = '';
+    setProviderResults([]);
+    setProviderSessionToken(null);
+    setPlaceSearchStatus('idle');
+    setIdentityChanged(false);
+    setIdentityPickerOpen(true);
+    setTimingExpanded(false);
+    setCustomDurationOpen(false);
+    setCustomDurationHours('');
+    setCustomDurationMinutes('');
+    providerSearchRequest.current?.abort();
+    providerSearchRequest.current = null;
+    providerSearchRequestQuery.current = null;
+    providerSearchCache.current = new Map();
     suggestedTimeRequest.current?.abort();
     setSuggestedTime(null);
     setSuggestedTimeStatus('idle');
@@ -598,6 +613,24 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     if (!item.itineraryDayId) return;
     setForm(createFormState(item));
     setFormError(null);
+    setPlaceQuery('');
+    currentPlaceQuery.current = '';
+    setProviderResults([]);
+    setProviderSessionToken(null);
+    setPlaceSearchStatus('idle');
+    setIdentityChanged(false);
+    setIdentityPickerOpen(false);
+    setTimingExpanded(Boolean(item.localStartTime || item.dayPart));
+    setCustomDurationOpen(
+      Boolean(item.durationMinutes && !isDurationPreset(item.durationMinutes.toString())),
+    );
+    const parts = durationParts(item.durationMinutes?.toString() ?? '');
+    setCustomDurationHours(parts.hours);
+    setCustomDurationMinutes(parts.minutes);
+    providerSearchRequest.current?.abort();
+    providerSearchRequest.current = null;
+    providerSearchRequestQuery.current = null;
+    providerSearchCache.current = new Map();
     suggestedTimeRequest.current?.abort();
     setSuggestedTime(null);
     setSuggestedTimeStatus('idle');
@@ -608,6 +641,18 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     setEditor({ dayId: null, item: null, mode: 'closed' });
     setFormError(null);
     setPlaceQuery('');
+    currentPlaceQuery.current = '';
+    setProviderResults([]);
+    setProviderSessionToken(null);
+    setPlaceSearchStatus('idle');
+    setIdentityChanged(false);
+    setIdentityPickerOpen(false);
+    setTimingExpanded(false);
+    setCustomDurationOpen(false);
+    providerSearchRequest.current?.abort();
+    providerSearchRequest.current = null;
+    providerSearchRequestQuery.current = null;
+    providerSearchCache.current = new Map();
     suggestedTimeRequest.current?.abort();
     setSuggestedTime(null);
     setSuggestedTimeStatus('idle');
@@ -690,19 +735,174 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   }, [suggestedTime, suggestedTimeStatus, t]);
 
   const matchingTripPlaces = useMemo(() => {
-    const query = placeQuery.trim().toLocaleLowerCase();
-    if (!query) return itinerary?.tripPlaces ?? [];
-    return (itinerary?.tripPlaces ?? []).filter((tripPlace) =>
-      [placeName(tripPlace), tripPlace.place.snapshot?.address]
-        .filter((value): value is string => Boolean(value))
-        .some((value) => value.toLocaleLowerCase().includes(query)),
-    );
+    return filterItineraryTripPlaces(itinerary?.tripPlaces ?? [], placeQuery, (tripPlace) => [
+      placeName(tripPlace),
+      tripPlace.place.snapshot?.address,
+      tripPlace.place.providerAddress,
+    ]);
   }, [itinerary?.tripPlaces, placeQuery]);
+
+  const existingExternalPlaceIds = useMemo(
+    () =>
+      new Set(
+        (itinerary?.tripPlaces ?? []).flatMap((tripPlace) =>
+          tripPlace.place.providerRefs.map((reference) => reference.externalPlaceId),
+        ),
+      ),
+    [itinerary?.tripPlaces],
+  );
+
+  const visibleProviderResults = useMemo(
+    () => itineraryProviderSuggestions(providerResults, existingExternalPlaceIds),
+    [existingExternalPlaceIds, providerResults],
+  );
+
+  const placePickerOptions = useMemo<PlacePickerOption[]>(() => {
+    const customLabel = placeQuery.trim();
+    return [
+      ...matchingTripPlaces.map((tripPlace) => ({
+        kind: 'trip_place' as const,
+        label: placeName(tripPlace) ?? t('providerPlace'),
+        tripPlace,
+      })),
+      ...(customLabel ? [{ kind: 'custom_label' as const, label: customLabel }] : []),
+      ...visibleProviderResults.map((suggestion) => ({
+        kind: 'provider' as const,
+        suggestion,
+      })),
+    ];
+  }, [matchingTripPlaces, placeQuery, t, visibleProviderResults]);
+
+  function clearProviderResultState() {
+    setProviderResults([]);
+    setProviderSessionToken(null);
+    setPlaceSearchStatus('idle');
+  }
+
+  function handlePlaceQueryChange(value: string) {
+    currentPlaceQuery.current = value;
+    setPlaceQuery(value);
+    setFormError(null);
+    const queryKey = normalizeItineraryPlaceQuery(value);
+    const cached = providerSearchCache.current.get(queryKey);
+    if (!cached) {
+      clearProviderResultState();
+      return;
+    }
+    setProviderResults(cached.suggestions);
+    setProviderSessionToken(cached.sessionToken);
+    setPlaceSearchStatus(
+      cached.status === 'unavailable'
+        ? 'unavailable'
+        : cached.status === 'loading'
+          ? 'loading'
+          : 'idle',
+    );
+  }
+
+  async function searchGooglePlaces() {
+    const query = placeQuery.trim();
+    const queryKey = normalizeItineraryPlaceQuery(query);
+    if (!online || query.length < 3 || providerSearchCache.current.has(queryKey)) return;
+
+    if (providerSearchRequest.current && providerSearchRequestQuery.current) {
+      providerSearchRequest.current.abort();
+      providerSearchCache.current.set(providerSearchRequestQuery.current, {
+        sessionToken: null,
+        status: 'unavailable',
+        suggestions: [],
+      });
+    }
+    const controller = new AbortController();
+    providerSearchRequest.current = controller;
+    providerSearchRequestQuery.current = queryKey;
+    providerSearchCache.current.set(queryKey, {
+      sessionToken: null,
+      status: 'loading',
+      suggestions: [],
+    });
+    setPlaceSearchStatus('loading');
+    try {
+      const result = await searchProviderPlaces(query, controller.signal);
+      if (controller.signal.aborted) return;
+      const entry: ProviderSearchCacheEntry = {
+        sessionToken: result.sessionToken,
+        status:
+          result.status === 'ok' ? 'ok' : result.status === 'unavailable' ? 'unavailable' : 'empty',
+        suggestions: result.status === 'ok' ? result.suggestions : [],
+      };
+      providerSearchCache.current.set(queryKey, entry);
+      if (normalizeItineraryPlaceQuery(currentPlaceQuery.current) !== queryKey) return;
+      setProviderResults(entry.suggestions);
+      setProviderSessionToken(entry.sessionToken);
+      setPlaceSearchStatus(entry.status === 'unavailable' ? 'unavailable' : 'idle');
+    } catch {
+      if (controller.signal.aborted) return;
+      const entry: ProviderSearchCacheEntry = {
+        sessionToken: null,
+        status: 'unavailable',
+        suggestions: [],
+      };
+      providerSearchCache.current.set(queryKey, entry);
+      if (normalizeItineraryPlaceQuery(currentPlaceQuery.current) !== queryKey) return;
+      setProviderResults([]);
+      setProviderSessionToken(null);
+      setPlaceSearchStatus('unavailable');
+    } finally {
+      if (providerSearchRequest.current === controller) {
+        providerSearchRequest.current = null;
+        providerSearchRequestQuery.current = null;
+      }
+    }
+  }
+
+  function selectTripPlace(tripPlaceId: string) {
+    setForm((current) => ({
+      ...current,
+      ...itineraryIdentityChoice(current, { kind: 'trip_place', tripPlaceId }),
+    }));
+    setIdentityChanged(true);
+    setIdentityPickerOpen(false);
+    setPlaceQuery('');
+    currentPlaceQuery.current = '';
+    clearProviderResultState();
+    setFormError(null);
+  }
+
+  function selectCustomLabel(label: string) {
+    setForm((current) => ({
+      ...current,
+      ...itineraryIdentityChoice(current, { kind: 'custom_label', label }),
+    }));
+    setIdentityChanged(true);
+    setIdentityPickerOpen(false);
+    setPlaceQuery('');
+    currentPlaceQuery.current = '';
+    clearProviderResultState();
+    setFormError(null);
+  }
+
+  function clearIdentity() {
+    setForm((current) => ({
+      ...current,
+      ...itineraryIdentityChoice(current, { kind: 'clear' }),
+    }));
+    setIdentityChanged(true);
+    setIdentityPickerOpen(true);
+    setPlaceQuery('');
+    currentPlaceQuery.current = '';
+    clearProviderResultState();
+  }
 
   async function selectProviderPlace(suggestion: ProviderSuggestion) {
     setSelectingPlace(true);
     try {
-      const { place } = await resolveProviderPlace(suggestion.externalPlaceId);
+      const { place } = await resolveProviderPlace(
+        suggestion.externalPlaceId,
+        { address: suggestion.description, name: suggestion.name },
+        locale,
+        providerSessionToken ?? undefined,
+      );
       const { tripPlace } = await addTripPlace(tripId, place.id);
       setItinerary((current) =>
         current
@@ -733,13 +933,66 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
             }
           : current,
       );
-      updateForm('tripPlaceId', tripPlace.id);
-      setPlaceQuery('');
+      selectTripPlace(tripPlace.id);
     } catch {
       setFormError(t('placeSelectionError'));
     } finally {
       setSelectingPlace(false);
     }
+  }
+
+  function selectPlacePickerOption(option: PlacePickerOption | null) {
+    if (!option) return;
+    if (option.kind === 'trip_place') {
+      selectTripPlace(option.tripPlace.id);
+      return;
+    }
+    if (option.kind === 'custom_label') {
+      selectCustomLabel(option.label);
+      return;
+    }
+    void selectProviderPlace(option.suggestion);
+  }
+
+  const selectedTripPlace = form.tripPlaceId
+    ? (itinerary?.tripPlaces.find((tripPlace) => tripPlace.id === form.tripPlaceId) ?? null)
+    : null;
+  const hasItemIdentity = Boolean(form.customLabel.trim() || form.tripPlaceId);
+  const providerQueryKey = normalizeItineraryPlaceQuery(placeQuery);
+  const providerQueryCached = providerSearchCache.current.has(providerQueryKey);
+  const selectedPlaceName = selectedTripPlace ? placeName(selectedTripPlace) : null;
+
+  function chooseDurationPreset(minutes: number) {
+    updateForm('durationMinutes', minutes.toString());
+    setCustomDurationOpen(false);
+    const parts = durationParts(minutes.toString());
+    setCustomDurationHours(parts.hours);
+    setCustomDurationMinutes(parts.minutes);
+  }
+
+  function showCustomDuration() {
+    const parts = durationParts(form.durationMinutes);
+    setCustomDurationHours(parts.hours);
+    setCustomDurationMinutes(parts.minutes);
+    setCustomDurationOpen(true);
+  }
+
+  function updateCustomDuration(kind: 'hours' | 'minutes', value: string) {
+    const parts = {
+      hours: kind === 'hours' ? value : customDurationHours,
+      minutes: kind === 'minutes' ? value : customDurationMinutes,
+    };
+    setCustomDurationHours(parts.hours);
+    setCustomDurationMinutes(parts.minutes);
+    updateForm('durationMinutes', durationMinutesFromParts(parts));
+  }
+
+  function removeTiming() {
+    setForm((current) => ({ ...current, exactTime: '', schedule: 'none' }));
+    setTimingExpanded(false);
+    setSuggestedTime(null);
+    setSuggestedTimeStatus('idle');
+    setFormError(null);
   }
 
   function buildInput(): ItineraryItemInput | null {
@@ -753,34 +1006,21 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
       return null;
     }
     const duration = form.durationMinutes ? Number(form.durationMinutes) : null;
+    const customDurationHasInput = Boolean(
+      customDurationHours.trim() || customDurationMinutes.trim(),
+    );
     if (duration !== null && (!Number.isInteger(duration) || duration <= 0)) {
       setFormError(t('durationError'));
       return null;
     }
-    const costAmount = form.costAmount.trim();
-    const costCurrency = form.costCurrency.trim().toUpperCase();
-    if (costAmount && !/^[A-Z]{3}$/.test(costCurrency)) {
-      setFormError(t('plannedCostError'));
+    if (customDurationOpen && customDurationHasInput && duration === null) {
+      setFormError(t('durationError'));
       return null;
     }
-    const customLocation = form.customLocation.trim();
-    if (!customLocation && form.customLocationTimeZone.trim()) {
-      setFormError(t('customLocationError'));
-      return null;
-    }
-
-    return {
+    const input: ItineraryItemInput = {
       customLabel: customLabel || null,
-      customLocation: customLocation
-        ? {
-            label: customLocation,
-            timeZone: form.customLocationTimeZone.trim() || null,
-          }
-        : null,
       durationMinutes: duration,
       notes: form.notes.trim() || null,
-      plannedCost: costAmount ? { amount: costAmount, currencyCode: costCurrency } : null,
-      priority: form.priority || null,
       schedule:
         form.schedule === 'exact'
           ? { kind: 'exact', localTime: form.exactTime }
@@ -789,6 +1029,12 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
             : { dayPart: form.schedule, kind: 'day_part' },
       tripPlaceId: form.tripPlaceId || null,
     };
+
+    // Omitted legacy fields survive an ordinary edit. A new identity must not
+    // inherit an old custom location or item-level priority, though.
+    if (editor.mode === 'edit') Object.assign(input, itineraryIdentityLegacyPatch(identityChanged));
+
+    return input;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1697,275 +1943,383 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                     </Alert>
                   ) : null}
 
-                  <Field>
-                    <FieldLabel>{t('tripPlace')}</FieldLabel>
-                    <SearchField
-                      label={t('tripPlace')}
-                      onChange={(event) => setPlaceQuery(event.target.value)}
-                      placeholder={t('tripPlaceSearchPlaceholder')}
-                      value={placeQuery}
-                    />
-                    <FieldDescription>{t('tripPlaceHint')}</FieldDescription>
-                    {form.tripPlaceId ? (
-                      <Button
-                        className="mt-2"
-                        onClick={() => updateForm('tripPlaceId', '')}
-                        size="sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        {t('clearTripPlace')}
-                      </Button>
-                    ) : null}
-                    <ItemGroup aria-label={t('tripPlaceResults')} className="mt-3 gap-2">
-                      {matchingTripPlaces
-                        .map((tripPlace) => (
-                          <Item key={tripPlace.id} variant="outline">
-                            <ItemMedia variant="icon">
-                              <MapPinned aria-hidden="true" />
-                            </ItemMedia>
-                            <ItemContent>
-                              <ItemTitle>{placeName(tripPlace)}</ItemTitle>
-                            </ItemContent>
-                            <ItemActions>
-                              <Button
-                                disabled={selectingPlace}
-                                onClick={() => {
-                                  updateForm('tripPlaceId', tripPlace.id);
-                                  setPlaceQuery('');
-                                }}
-                                size="sm"
-                                type="button"
-                                variant={
-                                  form.tripPlaceId === tripPlace.id ? 'secondary' : 'outline'
-                                }
-                              >
-                                {form.tripPlaceId === tripPlace.id
-                                  ? t('selected')
-                                  : t('selectTripPlace')}
-                              </Button>
-                            </ItemActions>
-                          </Item>
-                        ))
-                        .slice(0, 8)}
-                      {placeQuery.trim()
-                        ? providerResults
-                            .filter(
-                              (suggestion) =>
-                                !itinerary.tripPlaces.some((tripPlace) =>
-                                  tripPlace.place.providerRefs.some(
-                                    (ref) => ref.externalPlaceId === suggestion.externalPlaceId,
-                                  ),
+                  {hasItemIdentity ? (
+                    <div className="rounded-[var(--radius-lg)] border bg-muted/30 p-3">
+                      <div className="flex items-start gap-3">
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-background text-muted-foreground shadow-xs">
+                          {form.tripPlaceId ? (
+                            <MapPinned aria-hidden="true" className="size-4" />
+                          ) : (
+                            <NotebookPen aria-hidden="true" className="size-4" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">
+                            {form.customLabel || selectedPlaceName}
+                          </p>
+                          {form.customLabel && selectedPlaceName ? (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {t('linkedPlace', { place: selectedPlaceName })}
+                            </p>
+                          ) : selectedTripPlace?.place.snapshot?.address ||
+                            selectedTripPlace?.place.providerAddress ? (
+                            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                              {selectedTripPlace.place.snapshot?.address ??
+                                selectedTripPlace.place.providerAddress}
+                            </p>
+                          ) : null}
+                          {selectedTripPlace?.priority ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {t('inheritedPriority', {
+                                priority: tripPlacesTranslations(
+                                  `priority.${selectedTripPlace.priority}`,
                                 ),
-                            )
-                            .map((suggestion) => (
-                              <Item key={suggestion.externalPlaceId} variant="outline">
-                                <ItemMedia variant="icon">
+                              })}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="flex shrink-0 gap-1">
+                          <Button
+                            aria-label={t('changeIdentity')}
+                            onClick={() => setIdentityPickerOpen(true)}
+                            size="sm"
+                            type="button"
+                            variant="ghost"
+                          >
+                            {t('change')}
+                          </Button>
+                          <Button
+                            aria-label={t('clearIdentity')}
+                            onClick={clearIdentity}
+                            size="icon-sm"
+                            type="button"
+                            variant="ghost"
+                          >
+                            <X aria-hidden="true" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {!hasItemIdentity || identityPickerOpen ? (
+                    <Field>
+                      <FieldLabel htmlFor="itinerary-place-or-plan">{t('placeOrPlan')}</FieldLabel>
+                      <Combobox<PlacePickerOption>
+                        disabled={selectingPlace}
+                        filteredItems={placePickerOptions}
+                        inputValue={placeQuery}
+                        items={placePickerOptions}
+                        itemToStringLabel={(option) =>
+                          !option
+                            ? ''
+                            : option.kind === 'provider'
+                              ? option.suggestion.name
+                              : option.label
+                        }
+                        onInputValueChange={(value) => handlePlaceQueryChange(value)}
+                        onValueChange={(option) => selectPlacePickerOption(option)}
+                      >
+                        <ComboboxInput
+                          autoComplete="off"
+                          autoFocus={!hasItemIdentity}
+                          className="h-11 w-full min-w-0 rounded-[var(--radius-md)] border border-input bg-background py-2 text-base shadow-[var(--shadow-control)] md:text-sm"
+                          id="itinerary-place-or-plan"
+                          placeholder={t('placeOrPlanPlaceholder')}
+                          showClear={Boolean(placeQuery)}
+                        />
+                        <ComboboxContent>
+                          <ComboboxEmpty>{t('placePickerEmpty')}</ComboboxEmpty>
+                          <ComboboxList>
+                            {(option) => (
+                              <ComboboxItem
+                                className={cn(
+                                  'min-h-12 gap-3 px-3 py-2 pr-9',
+                                  option.kind === 'provider' && 'bg-muted/25',
+                                )}
+                                key={
+                                  option.kind === 'trip_place'
+                                    ? option.tripPlace.id
+                                    : option.kind === 'provider'
+                                      ? option.suggestion.externalPlaceId
+                                      : `custom-${option.label}`
+                                }
+                                value={option}
+                              >
+                                {option.kind === 'trip_place' ? (
+                                  <MapPinned aria-hidden="true" className="text-muted-foreground" />
+                                ) : option.kind === 'custom_label' ? (
+                                  <NotebookPen
+                                    aria-hidden="true"
+                                    className="text-muted-foreground"
+                                  />
+                                ) : (
+                                  <Search aria-hidden="true" className="text-muted-foreground" />
+                                )}
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate font-medium">
+                                    {option.kind === 'custom_label'
+                                      ? t('useCustomPlan', { label: option.label })
+                                      : option.kind === 'provider'
+                                        ? option.suggestion.name
+                                        : option.label}
+                                  </span>
+                                  {option.kind === 'trip_place' &&
+                                  (option.tripPlace.place.snapshot?.address ||
+                                    option.tripPlace.place.providerAddress) ? (
+                                    <span className="block truncate text-xs text-muted-foreground">
+                                      {option.tripPlace.place.snapshot?.address ??
+                                        option.tripPlace.place.providerAddress}
+                                    </span>
+                                  ) : option.kind === 'provider' &&
+                                    option.suggestion.description ? (
+                                    <span className="block truncate text-xs text-muted-foreground">
+                                      {option.suggestion.description}
+                                    </span>
+                                  ) : null}
+                                </span>
+                              </ComboboxItem>
+                            )}
+                          </ComboboxList>
+                          {placeQuery.trim() ? (
+                            <div className="space-y-2 border-t p-2">
+                              {visibleProviderResults.length ? (
+                                <p className="px-1 text-right text-xs font-normal tracking-normal text-muted-foreground">
+                                  <span translate="no">{t('googleMapsAttribution')}</span>
+                                </p>
+                              ) : placeSearchStatus === 'loading' ? (
+                                <p className="px-1 text-xs text-muted-foreground" role="status">
+                                  {t('searchingPlaces')}
+                                </p>
+                              ) : placeSearchStatus === 'unavailable' ? (
+                                <p className="px-1 text-xs text-muted-foreground" role="status">
+                                  {t('providerSearchUnavailable')}
+                                </p>
+                              ) : providerQueryCached ? (
+                                <p className="px-1 text-xs text-muted-foreground" role="status">
+                                  {t('googleSearchEmpty')}
+                                </p>
+                              ) : !online ? (
+                                <p className="px-1 text-xs text-muted-foreground">
+                                  {t('googleSearchOffline')}
+                                </p>
+                              ) : placeQuery.trim().length < 3 ? (
+                                <p className="px-1 text-xs text-muted-foreground">
+                                  {t('googleSearchMinimum')}
+                                </p>
+                              ) : (
+                                <Button
+                                  className="w-full justify-start"
+                                  onClick={() => void searchGooglePlaces()}
+                                  size="sm"
+                                  type="button"
+                                  variant="ghost"
+                                >
                                   <Search aria-hidden="true" />
-                                </ItemMedia>
-                                <ItemContent>
-                                  <ItemTitle>{suggestion.name}</ItemTitle>
-                                  <ItemDescription>{suggestion.description}</ItemDescription>
-                                </ItemContent>
-                                <ItemActions>
-                                  <Button
-                                    disabled={selectingPlace}
-                                    onClick={() => void selectProviderPlace(suggestion)}
-                                    size="sm"
-                                    type="button"
-                                    variant="outline"
-                                  >
-                                    {selectingPlace ? t('selectingPlace') : t('addTripPlace')}
-                                  </Button>
-                                </ItemActions>
-                              </Item>
-                            ))
-                        : null}
-                    </ItemGroup>
-                    {placeSearchStatus === 'loading' ? (
-                      <p className="mt-2 text-sm text-muted-foreground">{t('searchingPlaces')}</p>
-                    ) : null}
-                    {placeSearchStatus === 'unavailable' ? (
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        {t('providerSearchUnavailable')}
-                      </p>
-                    ) : null}
-                  </Field>
-
-                  <Field>
-                    <FieldLabel htmlFor="itinerary-label">{t('customLabel')}</FieldLabel>
-                    <Input
-                      id="itinerary-label"
-                      maxLength={200}
-                      onChange={(event) => updateForm('customLabel', event.target.value)}
-                      placeholder={t('customLabelPlaceholder')}
-                      value={form.customLabel}
-                    />
-                    <FieldDescription>{t('minimumContentHint')}</FieldDescription>
-                  </Field>
-
-                  <Field>
-                    <FieldLabel htmlFor="itinerary-schedule">{t('scheduleLabel')}</FieldLabel>
-                    <Select
-                      onValueChange={(value) =>
-                        updateForm('schedule', value as FormState['schedule'])
-                      }
-                      value={form.schedule}
-                    >
-                      <SelectTrigger className="w-full" id="itinerary-schedule">
-                        <SelectValue>{t(`schedule.${form.schedule}`)}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent align="start">
-                        {(
-                          ['none', 'exact', 'morning', 'afternoon', 'evening', 'anytime'] as const
-                        ).map((value) => (
-                          <SelectItem key={value} value={value}>
-                            {t(`schedule.${value}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {/* Sits with the selector rather than the time field, which only
-                        renders for an exact time — the case that most wants a
-                        proposal is a daypart, and it would never see the button. */}
-                    {canSuggestTime ? (
-                      <>
+                                  {t('searchGoogle', { query: placeQuery.trim() })}
+                                </Button>
+                              )}
+                            </div>
+                          ) : null}
+                        </ComboboxContent>
+                      </Combobox>
+                      <FieldDescription>{t('placeOrPlanHint')}</FieldDescription>
+                      {hasItemIdentity ? (
                         <Button
-                          aria-busy={suggestedTimeStatus === 'loading'}
-                          aria-describedby="itinerary-suggested-time-status"
-                          className="self-start"
-                          disabled={suggestedTimeStatus === 'loading'}
-                          onClick={() => void requestSuggestedTime()}
+                          className="self-start px-0"
+                          onClick={() => {
+                            setIdentityPickerOpen(false);
+                            setPlaceQuery('');
+                            currentPlaceQuery.current = '';
+                            clearProviderResultState();
+                          }}
                           size="sm"
                           type="button"
-                          variant="outline"
+                          variant="link"
                         >
-                          <Sparkles aria-hidden="true" />
-                          {t('suggestedTime.action')}
+                          {t('keepCurrentIdentity')}
                         </Button>
-                        <p
-                          aria-live="polite"
-                          className="text-sm text-muted-foreground"
-                          id="itinerary-suggested-time-status"
-                          role="status"
-                        >
-                          {suggestedTimeMessage}
-                        </p>
-                      </>
-                    ) : null}
-                  </Field>
-
-                  {form.schedule === 'exact' ? (
-                    <Field>
-                      <FieldLabel htmlFor="itinerary-exact-time">{t('exactTime')}</FieldLabel>
-                      <TimeInput
-                        aria-describedby="itinerary-exact-time-hint"
-                        id="itinerary-exact-time"
-                        onValueChange={(value) => updateForm('exactTime', value)}
-                        required
-                        value={form.exactTime}
-                      />
-                      <FieldDescription id="itinerary-exact-time-hint">
-                        {t('floatingTimeHint')}
-                      </FieldDescription>
+                      ) : null}
                     </Field>
                   ) : null}
 
-                  <div className="grid gap-5 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel htmlFor="itinerary-duration">{t('duration')}</FieldLabel>
-                      <Input
-                        id="itinerary-duration"
-                        inputMode="numeric"
-                        min="1"
-                        onChange={(event) => updateForm('durationMinutes', event.target.value)}
-                        placeholder={t('durationPlaceholder')}
-                        type="number"
-                        value={form.durationMinutes}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="itinerary-priority">{t('priorityLabel')}</FieldLabel>
-                      <Select
-                        onValueChange={(value) =>
-                          updateForm(
-                            'priority',
-                            value === 'none' ? '' : (value as FormState['priority']),
-                          )
-                        }
-                        value={form.priority || 'none'}
-                      >
-                        <SelectTrigger className="w-full" id="itinerary-priority">
-                          <SelectValue>{t(`priority.${form.priority || 'none'}`)}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent align="start">
-                          {(['none', 'must_go', 'interested', 'maybe'] as const).map((value) => (
-                            <SelectItem key={value} value={value}>
-                              {t(`priority.${value}`)}
-                            </SelectItem>
+                  {hasItemIdentity ? (
+                    <>
+                      {!timingExpanded ? (
+                        <Button
+                          className="w-full justify-start"
+                          onClick={() => setTimingExpanded(true)}
+                          type="button"
+                          variant="outline"
+                        >
+                          <Clock3 aria-hidden="true" />
+                          {t('addTiming')}
+                        </Button>
+                      ) : (
+                        <Field className="rounded-[var(--radius-lg)] border p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <FieldLabel>{t('scheduleLabel')}</FieldLabel>
+                            <Button onClick={removeTiming} size="sm" type="button" variant="ghost">
+                              <X aria-hidden="true" />
+                              {t('removeTiming')}
+                            </Button>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {(['anytime', 'morning', 'afternoon', 'evening', 'exact'] as const).map(
+                              (value) => (
+                                <Button
+                                  aria-pressed={form.schedule === value}
+                                  key={value}
+                                  onClick={() => updateForm('schedule', value)}
+                                  size="sm"
+                                  type="button"
+                                  variant={form.schedule === value ? 'secondary' : 'outline'}
+                                >
+                                  {t(`schedule.${value}`)}
+                                </Button>
+                              ),
+                            )}
+                          </div>
+                          {form.schedule === 'exact' ? (
+                            <div className="space-y-2">
+                              <FieldLabel htmlFor="itinerary-exact-time">
+                                {t('exactTime')}
+                              </FieldLabel>
+                              <TimeInput
+                                aria-describedby="itinerary-exact-time-hint"
+                                id="itinerary-exact-time"
+                                onValueChange={(value) => updateForm('exactTime', value)}
+                                required
+                                value={form.exactTime}
+                              />
+                              <FieldDescription id="itinerary-exact-time-hint">
+                                {t('localTimeHint')}
+                              </FieldDescription>
+                            </div>
+                          ) : null}
+                          {canSuggestTime ? (
+                            <>
+                              <Button
+                                aria-busy={suggestedTimeStatus === 'loading'}
+                                aria-describedby="itinerary-suggested-time-status"
+                                className="self-start"
+                                disabled={suggestedTimeStatus === 'loading'}
+                                onClick={() => void requestSuggestedTime()}
+                                size="sm"
+                                type="button"
+                                variant="outline"
+                              >
+                                <Sparkles aria-hidden="true" />
+                                {t('suggestedTime.action')}
+                              </Button>
+                              <p
+                                aria-live="polite"
+                                className="text-sm text-muted-foreground"
+                                id="itinerary-suggested-time-status"
+                                role="status"
+                              >
+                                {suggestedTimeMessage}
+                              </p>
+                            </>
+                          ) : null}
+                        </Field>
+                      )}
+
+                      <Field>
+                        <FieldLabel>{t('durationQuestion')}</FieldLabel>
+                        <FieldDescription>{t('durationHint')}</FieldDescription>
+                        <div className="flex flex-wrap gap-2">
+                          {ITINERARY_DURATION_PRESETS.map((minutes) => (
+                            <Button
+                              aria-pressed={form.durationMinutes === minutes.toString()}
+                              key={minutes}
+                              onClick={() => chooseDurationPreset(minutes)}
+                              size="sm"
+                              type="button"
+                              variant={
+                                form.durationMinutes === minutes.toString()
+                                  ? 'secondary'
+                                  : 'outline'
+                              }
+                            >
+                              {t(`durationPreset.${minutes}`)}
+                            </Button>
                           ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  </div>
+                          <Button
+                            aria-pressed={customDurationOpen}
+                            onClick={showCustomDuration}
+                            size="sm"
+                            type="button"
+                            variant={customDurationOpen ? 'secondary' : 'outline'}
+                          >
+                            {t('customDuration')}
+                          </Button>
+                          {form.durationMinutes ? (
+                            <Button
+                              aria-label={t('clearDuration')}
+                              onClick={() => {
+                                updateForm('durationMinutes', '');
+                                setCustomDurationOpen(false);
+                                setCustomDurationHours('');
+                                setCustomDurationMinutes('');
+                              }}
+                              size="icon-sm"
+                              type="button"
+                              variant="ghost"
+                            >
+                              <X aria-hidden="true" />
+                            </Button>
+                          ) : null}
+                        </div>
+                        {customDurationOpen ? (
+                          <div className="grid grid-cols-2 gap-3 rounded-[var(--radius-lg)] bg-muted/40 p-3">
+                            <Field>
+                              <FieldLabel htmlFor="itinerary-duration-hours">
+                                {t('hours')}
+                              </FieldLabel>
+                              <Input
+                                id="itinerary-duration-hours"
+                                inputMode="numeric"
+                                min="0"
+                                onChange={(event) =>
+                                  updateCustomDuration('hours', event.target.value)
+                                }
+                                type="number"
+                                value={customDurationHours}
+                              />
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor="itinerary-duration-minutes">
+                                {t('minutes')}
+                              </FieldLabel>
+                              <Input
+                                id="itinerary-duration-minutes"
+                                inputMode="numeric"
+                                max="59"
+                                min="0"
+                                onChange={(event) =>
+                                  updateCustomDuration('minutes', event.target.value)
+                                }
+                                type="number"
+                                value={customDurationMinutes}
+                              />
+                            </Field>
+                          </div>
+                        ) : null}
+                      </Field>
 
-                  <Field>
-                    <FieldLabel htmlFor="itinerary-location">{t('customLocation')}</FieldLabel>
-                    <Input
-                      id="itinerary-location"
-                      maxLength={300}
-                      onChange={(event) => updateForm('customLocation', event.target.value)}
-                      placeholder={t('customLocationPlaceholder')}
-                      value={form.customLocation}
-                    />
-                  </Field>
-
-                  <Field>
-                    <FieldLabel htmlFor="itinerary-location-time-zone">
-                      {t('customLocationTimeZone')}
-                    </FieldLabel>
-                    <Input
-                      disabled={!form.customLocation.trim()}
-                      id="itinerary-location-time-zone"
-                      maxLength={100}
-                      onChange={(event) => updateForm('customLocationTimeZone', event.target.value)}
-                      placeholder={t('timeZonePlaceholder')}
-                      value={form.customLocationTimeZone}
-                    />
-                    <FieldDescription>{t('customLocationTimeZoneHint')}</FieldDescription>
-                  </Field>
-
-                  <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_8rem]">
-                    <Field>
-                      <FieldLabel htmlFor="itinerary-cost">{t('plannedCost')}</FieldLabel>
-                      <MoneyInput
-                        id="itinerary-cost"
-                        onValueChange={(value) => updateForm('costAmount', value)}
-                        placeholder={t('plannedCostPlaceholder')}
-                        value={form.costAmount}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="itinerary-currency">{t('currency')}</FieldLabel>
-                      <CurrencyCombobox
-                        aria-label={t('currency')}
-                        id="itinerary-currency"
-                        onValueChange={(value) => updateForm('costCurrency', value)}
-                        placeholder={t('currencyPlaceholder')}
-                        value={form.costCurrency}
-                      />
-                    </Field>
-                  </div>
-                  <Field>
-                    <FieldLabel htmlFor="itinerary-notes">{t('notes')}</FieldLabel>
-                    <Textarea
-                      id="itinerary-notes"
-                      maxLength={5_000}
-                      onChange={(event) => updateForm('notes', event.target.value)}
-                      placeholder={t('notesPlaceholder')}
-                      value={form.notes}
-                    />
-                  </Field>
+                      <Field>
+                        <FieldLabel htmlFor="itinerary-notes">{t('notes')}</FieldLabel>
+                        <Textarea
+                          id="itinerary-notes"
+                          maxLength={5_000}
+                          onChange={(event) => updateForm('notes', event.target.value)}
+                          placeholder={t('notesPlaceholder')}
+                          value={form.notes}
+                        />
+                      </Field>
+                    </>
+                  ) : null}
                 </FieldGroup>
               </div>
               <SheetFooter className="sm:flex-row sm:items-center sm:justify-between">
@@ -1985,7 +2339,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                   <Button disabled={saving} onClick={closeEditor} type="button" variant="outline">
                     {t('cancel')}
                   </Button>
-                  <Button disabled={saving} type="submit">
+                  <Button disabled={saving || selectingPlace || !hasItemIdentity} type="submit">
                     {saving ? t('saving') : editor.mode === 'edit' ? t('save') : t('addItem')}
                   </Button>
                 </div>

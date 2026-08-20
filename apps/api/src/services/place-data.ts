@@ -106,6 +106,8 @@ export type PlaceHydrationOptions = {
   now?: Date;
   /** Test seam. `null` stands for "no provider configured". */
   placesService?: PlacesService | null;
+  /** Autocomplete session that led to this explicit Place selection. */
+  sessionToken?: string;
   /** Feature that initiated this read or possible provider refresh. */
   source?: ProviderCallSource;
 };
@@ -284,6 +286,7 @@ export async function hydratePlaceSnapshots(
         detail: 'location',
         externalPlaceId,
         languageCode,
+        sessionToken: options.sessionToken,
       });
 
       if (result.status !== 'ok' || !result.place.location) {

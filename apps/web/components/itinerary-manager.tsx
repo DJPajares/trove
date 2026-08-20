@@ -2070,6 +2070,9 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                                 className={cn(
                                   'min-h-12 gap-3 px-3 py-2 pr-9',
                                   option.kind === 'provider' && 'bg-muted/25',
+                                  option.kind === 'trip_place' &&
+                                    option.usageLabel &&
+                                    'bg-brand/5 data-highlighted:bg-brand/10',
                                 )}
                                 key={
                                   option.kind === 'trip_place'
@@ -2091,12 +2094,20 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                                   <Search aria-hidden="true" className="text-muted-foreground" />
                                 )}
                                 <span className="min-w-0 flex-1">
-                                  <span className="block truncate font-medium">
-                                    {option.kind === 'custom_label'
-                                      ? t('useCustomPlan', { label: option.label })
-                                      : option.kind === 'provider'
-                                        ? option.suggestion.name
-                                        : option.label}
+                                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium">
+                                    <span className="min-w-0 truncate">
+                                      {option.kind === 'custom_label'
+                                        ? t('useCustomPlan', { label: option.label })
+                                        : option.kind === 'provider'
+                                          ? option.suggestion.name
+                                          : option.label}
+                                    </span>
+                                    {option.kind === 'trip_place' && option.usageLabel ? (
+                                      <span className="inline-flex max-w-44 shrink-0 items-center gap-1 rounded-full bg-brand/10 px-1.5 py-0.5 text-[11px] font-medium text-brand">
+                                        <CheckCircle2 aria-hidden="true" className="size-3" />
+                                        <span className="truncate">{option.usageLabel}</span>
+                                      </span>
+                                    ) : null}
                                   </span>
                                   {option.kind === 'trip_place' &&
                                   (option.tripPlace.place.snapshot?.address ||
@@ -2109,15 +2120,6 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                                     option.suggestion.description ? (
                                     <span className="block truncate text-xs text-muted-foreground">
                                       {option.suggestion.description}
-                                    </span>
-                                  ) : null}
-                                  {option.kind === 'trip_place' && option.usageLabel ? (
-                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                      <CheckCircle2
-                                        aria-hidden="true"
-                                        className="size-3 shrink-0"
-                                      />
-                                      <span className="truncate">{option.usageLabel}</span>
                                     </span>
                                   ) : null}
                                 </span>

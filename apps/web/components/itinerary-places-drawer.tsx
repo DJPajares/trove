@@ -27,10 +27,17 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import type { ScheduledPlaceUse } from '@/lib/itinerary/places';
 import type { TripPlace } from '@/lib/trip-places/api';
 import { resolveTripPlaceName } from '@/lib/trip-places/place-name';
-import { sortTripPlaces } from '@/lib/trip-places/sort';
+import { sortTripPlaces, tripPlaceSorts, type TripPlaceSort } from '@/lib/trip-places/sort';
 import { useTripPlaces } from '@/lib/trip-places/use-trip-places';
 
 type ItineraryPlacesDrawerProps = {
@@ -62,6 +69,7 @@ export function ItineraryPlacesDrawer({
   const [addingId, setAddingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [sort, setSort] = useState<TripPlaceSort>('name');
 
   const placeName = (tripPlace: TripPlace) =>
     resolveTripPlaceName(tripPlace, {
@@ -69,9 +77,9 @@ export function ItineraryPlacesDrawer({
       provider: t('providerPlace'),
     });
 
-  const alphabeticalPlaces = useMemo(
-    () => sortTripPlaces(places.places, 'name', placeName),
-    [places.places, t],
+  const sortedPlaces = useMemo(
+    () => sortTripPlaces(places.places, sort, placeName),
+    [places.places, sort, t],
   );
   const dateFormatter = useMemo(
     () => new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' }),
@@ -107,11 +115,29 @@ export function ItineraryPlacesDrawer({
             <SheetDescription>{t('placesDrawerDescription')}</SheetDescription>
           </SheetHeader>
 
-          <div className="px-5 pb-3">
+          <div className="space-y-3 px-5 pb-3">
             <Button className="w-full" onClick={() => setAddOpen(true)} variant="outline">
               <Plus aria-hidden="true" data-icon="inline-start" />
               {t('addPlace')}
             </Button>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-muted-foreground">{t('sortLabel')}</span>
+              <Select
+                onValueChange={(value) => value && setSort(value as TripPlaceSort)}
+                value={sort}
+              >
+                <SelectTrigger aria-label={t('sortBy')} size="sm">
+                  <SelectValue>{t(`sort.${sort}`)}</SelectValue>
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {tripPlaceSorts.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {t(`sort.${option}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-5">
@@ -137,7 +163,7 @@ export function ItineraryPlacesDrawer({
               />
             ) : null}
 
-            {alphabeticalPlaces.length ? (
+            {sortedPlaces.length ? (
               <TripPlacesPanel
                 addToDayLabel={t('addToDay', { number: dayNumber })}
                 busyPlaceId={addingId}
@@ -153,7 +179,7 @@ export function ItineraryPlacesDrawer({
                     dates.map((date) => dateFormatter.format(new Date(`${date}T00:00:00Z`))),
                   )
                 }
-                tripPlaces={alphabeticalPlaces}
+                tripPlaces={sortedPlaces}
               />
             ) : null}
           </div>

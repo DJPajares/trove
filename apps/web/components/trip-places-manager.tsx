@@ -112,21 +112,24 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
       ) : (
         <div className="space-y-4">
           <div className="flex justify-end">
-            <Select
-              onValueChange={(value) => value && setSort(value as TripPlaceSort)}
-              value={sort}
-            >
-              <SelectTrigger aria-label={t('sortBy')} size="sm">
-                <SelectValue>{t(`sort.${sort}`)}</SelectValue>
-              </SelectTrigger>
-              <SelectContent align="end">
-                {tripPlaceSorts.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {t(`sort.${option}`)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">{t('sortLabel')}</span>
+              <Select
+                onValueChange={(value) => value && setSort(value as TripPlaceSort)}
+                value={sort}
+              >
+                <SelectTrigger aria-label={t('sortBy')} size="sm">
+                  <SelectValue>{t(`sort.${sort}`)}</SelectValue>
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {tripPlaceSorts.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {t(`sort.${option}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <TripPlacesPanel

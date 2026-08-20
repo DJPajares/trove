@@ -1335,6 +1335,7 @@
     "viewDetailsAction": "View details",
     "editPlaceAction": "Edit place",
     "priorityMenuLabel": "Priority",
+    "sortLabel": "Sort",
     "sortBy": "Sort trip places",
     "sort": {
       "name": "Name A-Z",

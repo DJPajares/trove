@@ -78,6 +78,8 @@ export async function fetchTripPlanScore(tripId: string, signal?: AbortSignal) {
     signal,
   });
 
+  if (response.status === 204) return null;
+
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { code?: string };
     throw new PlanScoreApiError(

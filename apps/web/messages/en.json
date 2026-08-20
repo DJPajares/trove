@@ -1041,6 +1041,7 @@
       "baseArrivalSelection": "Day base, coming from here",
       "baseDepartureSelection": "Day base, returning here",
       "baseRoundTripSelection": "Day base, starting and ending here",
+      "dismissSelection": "Dismiss selected place",
       "addToDay": "Add to this day",
       "addedToDay": "{name} added to this day.",
       "addToDayError": "That place could not be added to this day.",

@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import {
   planScoreFingerprint,
@@ -33,7 +32,7 @@ const completeSightseeingDay = {
 };
 
 test('scores a fully evidenced sightseeing day with the authoritative base weights', () => {
-  assert.deepEqual(scoreDay(completeSightseeingDay), {
+  expect(scoreDay(completeSightseeingDay)).toStrictEqual({
     completeness: 100,
     confidence: 99,
     dayId: 'day-complete',
@@ -57,7 +56,7 @@ test('scores a fully evidenced sightseeing day with the authoritative base weigh
 });
 
 test('keeps Must Go priority fit out of day scoring entirely', () => {
-  assert.deepEqual(Object.keys(scoreDay(completeSightseeingDay).factors).toSorted(), [
+  expect(Object.keys(scoreDay(completeSightseeingDay).factors).toSorted()).toStrictEqual([
     'FEASIBILITY',
     'PACE_BUFFER',
     'PLACE_QUALITY',
@@ -76,10 +75,13 @@ test('renormalizes evaluable weights instead of scoring missing evidence as zero
   });
 
   // Zero-filling the three unknown factors would give 5000/90 = 56, not 5000/60 = 83.
-  assert.equal(result.score, 83);
-  assert.equal(result.completeness, 67);
-  assert.deepEqual(result.factors.PACE_BUFFER, { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' });
-  assert.deepEqual(result.withheldReasons, []);
+  expect(result.score).toBe(83);
+  expect(result.completeness).toBe(67);
+  expect(result.factors.PACE_BUFFER).toStrictEqual({
+    reason: 'MISSING_EVIDENCE',
+    state: 'UNKNOWN',
+  });
+  expect(result.withheldReasons).toStrictEqual([]);
 });
 
 test('withholds the number when completeness or a core factor is insufficient', () => {
@@ -88,9 +90,9 @@ test('withholds the number when completeness or a core factor is insufficient', 
     factors: { PLACE_QUALITY: evaluated(100, 'FRESH_PROVIDER') },
   });
 
-  assert.equal(result.score, null);
-  assert.equal(result.completeness, 6);
-  assert.deepEqual(result.withheldReasons, [
+  expect(result.score).toBe(null);
+  expect(result.completeness).toBe(6);
+  expect(result.withheldReasons).toStrictEqual([
     'INSUFFICIENT_COMPLETENESS',
     'NO_EVALUABLE_CORE_FACTOR',
   ]);
@@ -108,10 +110,10 @@ test('treats a travel-heavy day as complete after excluding non-applicable facto
     },
   });
 
-  assert.equal(result.completeness, 100);
-  assert.equal(result.confidence, 90);
-  assert.equal(result.score, 74);
-  assert.deepEqual(result.factors.ROUTE_EFFICIENCY, { state: 'NOT_APPLICABLE' });
+  expect(result.completeness).toBe(100);
+  expect(result.confidence).toBe(90);
+  expect(result.score).toBe(74);
+  expect(result.factors.ROUTE_EFFICIENCY).toStrictEqual({ state: 'NOT_APPLICABLE' });
 });
 
 test('moves confidence independently of the score for identical factor scores', () => {
@@ -128,10 +130,10 @@ test('moves confidence independently of the score for identical factor scores', 
     },
   });
 
-  assert.equal(stale.score, fresh.score);
-  assert.equal(stale.completeness, fresh.completeness);
-  assert.equal(stale.confidence, 25);
-  assert.equal(fresh.confidence, 100);
+  expect(stale.score).toBe(fresh.score);
+  expect(stale.completeness).toBe(fresh.completeness);
+  expect(stale.confidence).toBe(25);
+  expect(fresh.confidence).toBe(100);
 });
 
 test('clamps evaluable factor scores to 0-100', () => {
@@ -143,9 +145,17 @@ test('clamps evaluable factor scores to 0-100', () => {
     },
   });
 
-  assert.deepEqual(result.factors.FEASIBILITY, { confidence: 100, score: 100, state: 'EVALUATED' });
-  assert.deepEqual(result.factors.TRAVEL_EFFORT, { confidence: 100, score: 0, state: 'EVALUATED' });
-  assert.equal(result.score, 58);
+  expect(result.factors.FEASIBILITY).toStrictEqual({
+    confidence: 100,
+    score: 100,
+    state: 'EVALUATED',
+  });
+  expect(result.factors.TRAVEL_EFFORT).toStrictEqual({
+    confidence: 100,
+    score: 0,
+    state: 'EVALUATED',
+  });
+  expect(result.score).toBe(58);
 });
 
 const tripDays = [
@@ -170,10 +180,10 @@ test('weights trip days by completeness and blends trip-level Must Go priority f
     mustGoPriorityFit: { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' },
   });
 
-  assert.equal(withoutMustGo.score, 75);
-  assert.equal(withMustGo.score, 72);
-  assert.equal(unknownMustGo.score, withoutMustGo.score);
-  assert.deepEqual(withMustGo.mustGoPriorityFit, {
+  expect(withoutMustGo.score).toBe(75);
+  expect(withMustGo.score).toBe(72);
+  expect(unknownMustGo.score).toBe(withoutMustGo.score);
+  expect(withMustGo.mustGoPriorityFit).toStrictEqual({
     confidence: 100,
     score: 50,
     state: 'EVALUATED',
@@ -188,8 +198,8 @@ test('withholds the trip score when no day is scorable, even with Must Go eviden
     mustGoPriorityFit: evaluated(100, 'USER_OWNED'),
   });
 
-  assert.equal(result.score, null);
-  assert.deepEqual(result.withheldReasons, ['NO_SCORABLE_DAY']);
+  expect(result.score).toBe(null);
+  expect(result.withheldReasons).toStrictEqual(['NO_SCORABLE_DAY']);
 });
 
 test('produces identical results and fingerprints for identical evidence', () => {
@@ -206,22 +216,20 @@ test('produces identical results and fingerprints for identical evidence', () =>
     },
   };
 
-  assert.deepEqual(scoreTrip(input), scoreTrip(input));
-  assert.equal(planScoreFingerprint(input), planScoreFingerprint(input));
-  assert.equal(
+  expect(scoreTrip(input)).toStrictEqual(scoreTrip(input));
+  expect(planScoreFingerprint(input)).toBe(planScoreFingerprint(input));
+  expect(
     planScoreFingerprint({
       ...input,
       mustGoPriorityFit: evaluated(50, 'USER_OWNED', 'USER_OWNED'),
     }),
-    planScoreFingerprint(reordered),
-  );
+  ).toBe(planScoreFingerprint(reordered));
 });
 
 test('changes the fingerprint when evidence reliability changes', () => {
   const days = [{ dayId: 'day-a', factors: { FEASIBILITY: evaluated(100, 'USER_OWNED') } }];
 
-  assert.notEqual(
-    planScoreFingerprint({ days, mustGoPriorityFit: NOT_APPLICABLE }),
+  expect(planScoreFingerprint({ days, mustGoPriorityFit: NOT_APPLICABLE })).not.toBe(
     planScoreFingerprint({
       days: [{ dayId: 'day-a', factors: { FEASIBILITY: evaluated(100, 'STALE') } }],
       mustGoPriorityFit: NOT_APPLICABLE,
@@ -233,10 +241,10 @@ test('preserves the evidence snapshot and keeps it out of the user-facing payloa
   const result = scoreDay(completeSightseeingDay);
   const payload = toPlanScoreDayPayload(result);
 
-  assert.deepEqual(result.evidence.PLACE_QUALITY, [
+  expect(result.evidence.PLACE_QUALITY).toStrictEqual([
     { ref: 'evidence-0', source: 'CACHED_PROVIDER' },
   ]);
-  assert.deepEqual(Object.keys(payload).toSorted(), [
+  expect(Object.keys(payload).toSorted()).toStrictEqual([
     'completeness',
     'confidence',
     'dayId',
@@ -244,7 +252,7 @@ test('preserves the evidence snapshot and keeps it out of the user-facing payloa
     'score',
     'withheldReasons',
   ]);
-  assert.deepEqual(Object.keys(payload.factors.FEASIBILITY).toSorted(), [
+  expect(Object.keys(payload.factors.FEASIBILITY).toSorted()).toStrictEqual([
     'confidence',
     'score',
     'state',
@@ -255,18 +263,15 @@ test('keeps trip evidence snapshots out of the trip payload', () => {
   const result = scoreTrip({ days: tripDays, mustGoPriorityFit: evaluated(50, 'USER_OWNED') });
   const payload = toPlanScoreTripPayload(result);
 
-  assert.deepEqual(result.mustGoEvidence, [{ ref: 'evidence-0', source: 'USER_OWNED' }]);
-  assert.deepEqual(Object.keys(payload).toSorted(), [
+  expect(result.mustGoEvidence).toStrictEqual([{ ref: 'evidence-0', source: 'USER_OWNED' }]);
+  expect(Object.keys(payload).toSorted()).toStrictEqual([
     'days',
     'mustGoPriorityFit',
     'score',
     'withheldReasons',
   ]);
-  assert.equal(
-    payload.days.every((day) => !Object.hasOwn(day, 'evidence')),
-    true,
-  );
-  assert.equal(payload.score, result.score);
+  expect(payload.days.every((day) => !Object.hasOwn(day, 'evidence'))).toBe(true);
+  expect(payload.score).toBe(result.score);
 });
 
 test('derives day confidence from the frozen evidence reliability tiers', () => {
@@ -277,14 +282,14 @@ test('derives day confidence from the frozen evidence reliability tiers', () => 
     });
   const stale = dayFrom('STALE');
 
-  assert.equal(dayFrom('USER_OWNED').confidence, 100);
-  assert.equal(dayFrom('FRESH_PROVIDER').confidence, 100);
-  assert.equal(dayFrom('CACHED_PROVIDER').confidence, 75);
-  assert.equal(dayFrom('ESTIMATED').confidence, 50);
-  assert.deepEqual(
-    { confidence: stale.confidence, score: stale.score },
-    { confidence: 25, score: 100 },
-  );
+  expect(dayFrom('USER_OWNED').confidence).toBe(100);
+  expect(dayFrom('FRESH_PROVIDER').confidence).toBe(100);
+  expect(dayFrom('CACHED_PROVIDER').confidence).toBe(75);
+  expect(dayFrom('ESTIMATED').confidence).toBe(50);
+  expect({ confidence: stale.confidence, score: stale.score }).toStrictEqual({
+    confidence: 25,
+    score: 100,
+  });
 });
 
 const fullyEvidencedDay = {
@@ -308,15 +313,15 @@ test('moves completeness and confidence for a partially evidenced day without co
     },
   });
 
-  assert.equal(complete.score, partial.score);
-  assert.deepEqual(
-    { completeness: complete.completeness, confidence: complete.confidence },
-    { completeness: 100, confidence: 100 },
-  );
-  assert.deepEqual(
-    { completeness: partial.completeness, confidence: partial.confidence },
-    { completeness: 67, confidence: 79 },
-  );
+  expect(complete.score).toBe(partial.score);
+  expect({ completeness: complete.completeness, confidence: complete.confidence }).toStrictEqual({
+    completeness: 100,
+    confidence: 100,
+  });
+  expect({ completeness: partial.completeness, confidence: partial.confidence }).toStrictEqual({
+    completeness: 67,
+    confidence: 79,
+  });
 });
 
 test('stops a low-information day from pulling the trip score toward its own', () => {
@@ -335,25 +340,18 @@ test('stops a low-information day from pulling the trip score toward its own', (
   });
 
   // An unweighted mean of the two day scores would be 80.
-  assert.equal(trip.score, 84);
-  assert.deepEqual(
-    trip.days.map((day) => day.completeness),
-    [100, 67],
-  );
+  expect(trip.score).toBe(84);
+  expect(trip.days.map((day) => day.completeness)).toStrictEqual([100, 67]);
 });
 
 test('rejects evaluated factors without evidence or with an unusable score', () => {
-  assert.throws(
-    () =>
-      scoreDay({
-        dayId: 'day-a',
-        factors: { FEASIBILITY: { evidence: [], score: 100, state: 'EVALUATED' } },
-      }),
-    /missing_factor_evidence/,
-  );
-  assert.throws(
-    () =>
-      scoreDay({ dayId: 'day-a', factors: { FEASIBILITY: evaluated(Number.NaN, 'USER_OWNED') } }),
-    /invalid_factor_score/,
-  );
+  expect(() =>
+    scoreDay({
+      dayId: 'day-a',
+      factors: { FEASIBILITY: { evidence: [], score: 100, state: 'EVALUATED' } },
+    }),
+  ).toThrow(/missing_factor_evidence/);
+  expect(() =>
+    scoreDay({ dayId: 'day-a', factors: { FEASIBILITY: evaluated(Number.NaN, 'USER_OWNED') } }),
+  ).toThrow(/invalid_factor_score/);
 });

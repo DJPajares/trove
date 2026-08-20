@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import {
   evaluateFeasibility,
@@ -200,18 +199,18 @@ const closedPlaceDay: ScenarioInput = {
 test('scores a comfortable sightseeing day near the top of the range', () => {
   const result = scoreDay(buildDay('strong', strongDay));
 
-  assert.equal(result.score, 95);
-  assert.equal(result.completeness, 100);
-  assert.equal(result.confidence, 100);
-  assert.deepEqual(result.withheldReasons, []);
+  expect(result.score).toBe(95);
+  expect(result.completeness).toBe(100);
+  expect(result.confidence).toBe(100);
+  expect(result.withheldReasons).toStrictEqual([]);
 });
 
 test('scores a known timing failure materially worse than the same places planned well', () => {
   const strong = scoreDay(buildDay('strong', strongDay));
   const late = scoreDay(buildDay('late', lateForBookingDay));
 
-  assert.equal(late.score, 58);
-  assert.equal((strong.score ?? 0) - (late.score ?? 0) >= 30, true);
+  expect(late.score).toBe(58);
+  expect((strong.score ?? 0) - (late.score ?? 0) >= 30).toBe(true);
 });
 
 test('penalizes a visit planned outside known hours without punishing missing hours', () => {
@@ -235,14 +234,13 @@ test('penalizes a visit planned outside known hours without punishing missing ho
     }),
   );
 
-  assert.equal(closed.score, 76);
-  assert.equal(unknownHours.score, 95);
-  assert.equal(staleHours.score, closed.score);
-  assert.equal(
+  expect(closed.score).toBe(76);
+  expect(unknownHours.score).toBe(95);
+  expect(staleHours.score).toBe(closed.score);
+  expect(
     (staleHours.confidence ?? 0) < (closed.confidence ?? 0),
-    true,
     'stale hours must cost confidence, not score',
-  );
+  ).toBe(true);
 });
 
 test('scores an exhausting travel day well below a compact one', () => {
@@ -256,7 +254,7 @@ test('scores an exhausting travel day well below a compact one', () => {
     }),
   );
 
-  assert.equal(heavyTravel.score, 67);
+  expect(heavyTravel.score).toBe(67);
 });
 
 test('scores an overpacked day below the same places with breathing room', () => {
@@ -284,7 +282,7 @@ test('scores an overpacked day below the same places with breathing room', () =>
     }),
   );
 
-  assert.equal(overpacked.score, 79);
+  expect(overpacked.score).toBe(79);
 });
 
 test('notices backtracking without letting it dominate the day', () => {
@@ -293,8 +291,8 @@ test('notices backtracking without letting it dominate the day', () => {
     buildDay('backtracking', { ...strongDay, routeOrder: ['base', 'c', 'a', 'b'] }),
   );
 
-  assert.equal(backtracking.score, 86);
-  assert.equal((strong.score ?? 0) - (backtracking.score ?? 0) <= 10, true);
+  expect(backtracking.score).toBe(86);
+  expect((strong.score ?? 0) - (backtracking.score ?? 0) <= 10).toBe(true);
 });
 
 test('keeps a small rating advantage from rescuing an unworkable plan', () => {
@@ -303,7 +301,7 @@ test('keeps a small rating advantage from rescuing an unworkable plan', () => {
   );
   const workableButPlain = scoreDay(buildDay('plain', { ...strongDay, places: places(3.2, 3.1) }));
 
-  assert.equal((workableButPlain.score ?? 0) > (wellRatedButLate.score ?? 0), true);
+  expect((workableButPlain.score ?? 0) > (wellRatedButLate.score ?? 0)).toBe(true);
 });
 
 test('reports an incomplete day honestly instead of scoring it harshly', () => {
@@ -322,10 +320,13 @@ test('reports an incomplete day honestly instead of scoring it harshly', () => {
     }),
   );
 
-  assert.equal(result.score, 100);
-  assert.equal(result.completeness, 83);
-  assert.deepEqual(result.factors.PLACE_QUALITY, { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' });
-  assert.deepEqual(result.withheldReasons, []);
+  expect(result.score).toBe(100);
+  expect(result.completeness).toBe(83);
+  expect(result.factors.PLACE_QUALITY).toStrictEqual({
+    reason: 'MISSING_EVIDENCE',
+    state: 'UNKNOWN',
+  });
+  expect(result.withheldReasons).toStrictEqual([]);
 });
 
 test('judges a travel-heavy day without sightseeing assumptions', () => {
@@ -343,9 +344,9 @@ test('judges a travel-heavy day without sightseeing assumptions', () => {
     },
   });
 
-  assert.equal(result.completeness, 100);
-  assert.equal(result.score, 100);
-  assert.deepEqual(result.factors.PLACE_QUALITY, { state: 'NOT_APPLICABLE' });
+  expect(result.completeness).toBe(100);
+  expect(result.score).toBe(100);
+  expect(result.factors.PLACE_QUALITY).toStrictEqual({ state: 'NOT_APPLICABLE' });
 });
 
 test('excludes unrated places rather than treating them as poor quality', () => {
@@ -354,7 +355,7 @@ test('excludes unrated places rather than treating them as poor quality', () => 
     { rating: { rating: 4.6, source: 'FRESH_PROVIDER', status: 'KNOWN' }, tripPlaceId: 'place-1' },
   ]);
 
-  assert.deepEqual(unrated, {
+  expect(unrated).toStrictEqual({
     evidence: [{ ref: 'rating:place-1', source: 'FRESH_PROVIDER' }],
     score: 100,
     state: 'EVALUATED',
@@ -366,11 +367,11 @@ test('withholds travel effort when the day has no usable route evidence', () => 
     buildDay('routes-unavailable', { ...strongDay, segments: segments(null, null, null, null) }),
   );
 
-  assert.deepEqual(result.factors.TRAVEL_EFFORT, {
+  expect(result.factors.TRAVEL_EFFORT).toStrictEqual({
     reason: 'INSUFFICIENT_EVIDENCE',
     state: 'UNKNOWN',
   });
-  assert.notEqual(result.score, 0);
+  expect(result.score).not.toBe(0);
 });
 
 test('moves the trip score with Must Go fit under the frozen 90/10 rule', () => {
@@ -393,9 +394,9 @@ test('moves the trip score with Must Go fit under the frozen 90/10 rule', () => 
     }),
   }).score;
 
-  assert.equal(dayMean, 95);
-  assert.equal(allScheduled, 96);
-  assert.equal(oneScheduled, 88);
+  expect(dayMean).toBe(95);
+  expect(allScheduled).toBe(96);
+  expect(oneScheduled).toBe(88);
 });
 
 test('pins the frozen base weights through the influence of a single weak factor', () => {
@@ -410,16 +411,15 @@ test('pins the frozen base weights through the influence of a single weak factor
 
   // Each secondary factor is paired with both core factors, because a day scored
   // from secondary factors alone falls under the display gate and is withheld.
-  assert.equal(
+  expect(
     scoreDay({
       dayId: 'core-split',
       factors: { FEASIBILITY: evaluated(100), TRAVEL_EFFORT: evaluated(0) },
     }).score,
-    58,
-  );
-  assert.equal(withWeakFactor('PACE_BUFFER'), 80);
-  assert.equal(withWeakFactor('ROUTE_EFFICIENCY'), 86);
-  assert.equal(withWeakFactor('PLACE_QUALITY'), 92);
+  ).toBe(58);
+  expect(withWeakFactor('PACE_BUFFER')).toBe(80);
+  expect(withWeakFactor('ROUTE_EFFICIENCY')).toBe(86);
+  expect(withWeakFactor('PLACE_QUALITY')).toBe(92);
 });
 
 test('rounds a displayed score half-up from the unrounded calculation', () => {
@@ -434,7 +434,7 @@ test('rounds a displayed score half-up from the unrounded calculation', () => {
   });
 
   // The unrounded weighted mean is exactly 67.5.
-  assert.equal(result.score, 68);
+  expect(result.score).toBe(68);
 });
 
 test('respects the item time zone when deriving local start times', () => {
@@ -468,13 +468,12 @@ test('respects the item time zone when deriving local start times', () => {
     });
 
   // 16:00 UTC is 04:00 in Auckland, inside the transfer window, and 16:00 in UTC, outside it.
-  assert.deepEqual(
+  expect(
     withZone('Pacific/Auckland').days[0]?.explanations.worthImproving.map(
       (entry) => entry.messageKey,
     ),
-    ['feasibility.overlappingCommitments'],
-  );
-  assert.deepEqual(withZone('UTC').days[0]?.explanations.worthImproving, []);
+  ).toStrictEqual(['feasibility.overlappingCommitments']);
+  expect(withZone('UTC').days[0]?.explanations.worthImproving).toStrictEqual([]);
 });
 
 test('returns identical results for identical evidence', () => {
@@ -485,5 +484,7 @@ test('returns identical results for identical evidence', () => {
     source: 'USER_OWNED',
   });
 
-  assert.deepEqual(scoreTrip({ days, mustGoPriorityFit }), scoreTrip({ days, mustGoPriorityFit }));
+  expect(scoreTrip({ days, mustGoPriorityFit })).toStrictEqual(
+    scoreTrip({ days, mustGoPriorityFit }),
+  );
 });

@@ -1,52 +1,49 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import {
   deriveTripLifecycle,
   enumerateDateRange,
   getDateRangeChanges,
   isValidIanaTimeZone,
+  resolveCountryPrimaryTimeZone,
   resolveTripTimeZone,
 } from '../src/services/trip-rules.js';
 
 test('derives lifecycle from the persisted trip timezone with inclusive date boundaries', () => {
   const instant = new Date('2026-08-10T15:00:00.000Z');
 
-  assert.equal(deriveTripLifecycle('2026-08-11', '2026-08-12', 'Asia/Tokyo', instant), 'active');
-  assert.equal(
-    deriveTripLifecycle('2026-08-11', '2026-08-12', 'America/New_York', instant),
+  expect(deriveTripLifecycle('2026-08-11', '2026-08-12', 'Asia/Tokyo', instant)).toBe('active');
+  expect(deriveTripLifecycle('2026-08-11', '2026-08-12', 'America/New_York', instant)).toBe(
     'planning',
   );
-  assert.equal(
+  expect(
     deriveTripLifecycle(
       '2026-08-09',
       '2026-08-10',
       'Asia/Tokyo',
       new Date('2026-08-10T16:00:00.000Z'),
     ),
-    'completed',
-  );
+  ).toBe('completed');
 });
 
 test('enumerates every inclusive itinerary date and rejects inverted ranges', () => {
-  assert.deepEqual(enumerateDateRange('2026-08-10', '2026-08-12'), [
+  expect(enumerateDateRange('2026-08-10', '2026-08-12')).toStrictEqual([
     '2026-08-10',
     '2026-08-11',
     '2026-08-12',
   ]);
-  assert.throws(() => enumerateDateRange('2026-08-12', '2026-08-10'), /invalid_date_range/);
-  assert.throws(() => enumerateDateRange('2026-02-30', '2026-03-02'), /invalid_date/);
+  expect(() => enumerateDateRange('2026-08-12', '2026-08-10')).toThrow(/invalid_date_range/);
+  expect(() => enumerateDateRange('2026-02-30', '2026-03-02')).toThrow(/invalid_date/);
 });
 
 test('separates removed, retained, and newly expanded itinerary dates', () => {
-  assert.deepEqual(
+  expect(
     getDateRangeChanges(['2026-08-10', '2026-08-11', '2026-08-12'], '2026-08-11', '2026-08-14'),
-    {
-      missingDates: ['2026-08-13', '2026-08-14'],
-      removedDates: ['2026-08-10'],
-      retainedDates: ['2026-08-11', '2026-08-12'],
-    },
-  );
+  ).toStrictEqual({
+    missingDates: ['2026-08-13', '2026-08-14'],
+    removedDates: ['2026-08-10'],
+    retainedDates: ['2026-08-11', '2026-08-12'],
+  });
 });
 
 test('resolves reference timezone in the PRD fallback order', () => {
@@ -60,43 +57,81 @@ test('resolves reference timezone in the PRD fallback order', () => {
     startingLocation: { placeId: 'start', timeZone: 'Europe/Paris' },
   };
 
-  assert.deepEqual(resolveTripTimeZone({ ...common, explicitTimeZone: 'America/New_York' }), {
+  expect(resolveTripTimeZone({ ...common, explicitTimeZone: 'America/New_York' })).toStrictEqual({
     source: 'EXPLICIT',
     sourcePlaceId: null,
     timeZone: 'America/New_York',
   });
-  assert.deepEqual(resolveTripTimeZone(common), {
+  expect(resolveTripTimeZone(common)).toStrictEqual({
     source: 'DESTINATION',
     sourcePlaceId: 'destination-resolved',
     timeZone: 'Asia/Tokyo',
   });
-  assert.deepEqual(resolveTripTimeZone({ ...common, destinations: [] }), {
+  expect(resolveTripTimeZone({ ...common, destinations: [] })).toStrictEqual({
     source: 'STARTING_LOCATION',
     sourcePlaceId: 'start',
     timeZone: 'Europe/Paris',
   });
-  assert.deepEqual(resolveTripTimeZone({ ...common, destinations: [], startingLocation: null }), {
+  expect(
+    resolveTripTimeZone({ ...common, destinations: [], startingLocation: null }),
+  ).toStrictEqual({
     source: 'PROFILE_HOME',
     sourcePlaceId: 'home',
     timeZone: 'Australia/Sydney',
   });
-  assert.deepEqual(
+  expect(
     resolveTripTimeZone({
       ...common,
       destinations: [],
       profileHome: null,
       startingLocation: null,
     }),
-    {
-      source: 'DEVICE_FALLBACK',
-      sourcePlaceId: null,
-      timeZone: 'Asia/Singapore',
-    },
-  );
+  ).toStrictEqual({
+    source: 'DEVICE_FALLBACK',
+    sourcePlaceId: null,
+    timeZone: 'Asia/Singapore',
+  });
 });
 
 test('accepts IANA timezone identifiers and safely rejects invalid values', () => {
-  assert.equal(isValidIanaTimeZone('Asia/Singapore'), true);
-  assert.equal(isValidIanaTimeZone('UTC'), true);
-  assert.equal(isValidIanaTimeZone('not-a-timezone'), false);
+  expect(isValidIanaTimeZone('Asia/Singapore')).toBe(true);
+  expect(isValidIanaTimeZone('UTC')).toBe(true);
+  expect(isValidIanaTimeZone('not-a-timezone')).toBe(false);
+});
+
+test('uses a country primary timezone only for a country-only destination', () => {
+  expect(resolveCountryPrimaryTimeZone('New Zealand')).toBe('Pacific/Auckland');
+  expect(resolveCountryPrimaryTimeZone('  new   zealand  ')).toBe('Pacific/Auckland');
+  expect(resolveCountryPrimaryTimeZone('Auckland')).toBeNull();
+  expect(resolveCountryPrimaryTimeZone('Auckland, New Zealand')).toBeNull();
+});
+
+test('keeps explicit and Place-specific timezones ahead of country inference', () => {
+  const countryTimeZone = resolveCountryPrimaryTimeZone('New Zealand');
+
+  expect(
+    resolveTripTimeZone({
+      destinations: [{ placeId: 'new-zealand', timeZone: countryTimeZone }],
+      deviceTimeZone: 'Asia/Singapore',
+      explicitTimeZone: 'Pacific/Chatham',
+      profileHome: null,
+      startingLocation: null,
+    }),
+  ).toEqual({
+    source: 'EXPLICIT',
+    sourcePlaceId: null,
+    timeZone: 'Pacific/Chatham',
+  });
+  expect(
+    resolveTripTimeZone({
+      destinations: [{ placeId: 'new-zealand-place', timeZone: 'Pacific/Chatham' }],
+      deviceTimeZone: 'Asia/Singapore',
+      profileHome: null,
+      startingLocation: null,
+    }),
+  ).toEqual({
+    source: 'DESTINATION',
+    sourcePlaceId: 'new-zealand-place',
+    timeZone: 'Pacific/Chatham',
+  });
 });

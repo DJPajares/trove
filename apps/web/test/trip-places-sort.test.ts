@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import { sortTripPlaces } from '../lib/trip-places/sort.ts';
 
@@ -45,22 +44,28 @@ const places: SampleTripPlace[] = [
 const nameFor = (place: SampleTripPlace) => place.customName ?? place.providerName;
 
 test('sorts Trip Places by their resolved name, including custom-name and provider fallbacks', () => {
-  assert.deepEqual(
-    sortTripPlaces(places, 'name', nameFor).map((place) => place.id),
-    ['renamed', 'beach', 'museum', 'zoo'],
-  );
+  expect(sortTripPlaces(places, 'name', nameFor).map((place) => place.id)).toStrictEqual([
+    'renamed',
+    'beach',
+    'museum',
+    'zoo',
+  ]);
 });
 
 test('sorts priority as Must Go, Interested, Maybe, and no priority with name tie-breaking', () => {
-  assert.deepEqual(
-    sortTripPlaces(places, 'priority', nameFor).map((place) => place.id),
-    ['zoo', 'renamed', 'beach', 'museum'],
-  );
+  expect(sortTripPlaces(places, 'priority', nameFor).map((place) => place.id)).toStrictEqual([
+    'zoo',
+    'renamed',
+    'beach',
+    'museum',
+  ]);
 });
 
 test('sorts recently added first and uses the resolved name to break equal timestamps', () => {
-  assert.deepEqual(
-    sortTripPlaces(places, 'recent', nameFor).map((place) => place.id),
-    ['renamed', 'beach', 'zoo', 'museum'],
-  );
+  expect(sortTripPlaces(places, 'recent', nameFor).map((place) => place.id)).toStrictEqual([
+    'renamed',
+    'beach',
+    'zoo',
+    'museum',
+  ]);
 });

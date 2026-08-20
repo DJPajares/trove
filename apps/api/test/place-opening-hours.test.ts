@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import {
   openingIntervalsForWeekday,
@@ -50,7 +49,7 @@ const SINGAPORE = 'Asia/Singapore';
 
 test('maps every weekday from a local date, with Sunday as zero', () => {
   // 2026-08-16 is a Sunday.
-  assert.deepEqual(
+  expect(
     [
       '2026-08-16',
       '2026-08-17',
@@ -60,18 +59,17 @@ test('maps every weekday from a local date, with Sunday as zero', () => {
       '2026-08-21',
       '2026-08-22',
     ].map(weekdayForLocalDate),
-    [0, 1, 2, 3, 4, 5, 6],
-  );
+  ).toStrictEqual([0, 1, 2, 3, 4, 5, 6]);
 });
 
 test('reads a same-day period as plain minutes from midnight', () => {
-  assert.deepEqual(openingIntervalsForWeekday([period(1, 9, 1, 17)], 1), [
+  expect(openingIntervalsForWeekday([period(1, 9, 1, 17)], 1)).toStrictEqual([
     { endMinute: 1020, startMinute: 540 },
   ]);
 });
 
 test('a weekday with no period yields no intervals rather than throwing', () => {
-  assert.deepEqual(openingIntervalsForWeekday([period(1, 9, 1, 17)], 2), []);
+  expect(openingIntervalsForWeekday([period(1, 9, 1, 17)], 2)).toStrictEqual([]);
 });
 
 test('an open-ended period covers every weekday, not just the one it is filed under', () => {
@@ -79,29 +77,28 @@ test('an open-ended period covers every weekday, not just the one it is filed un
   const alwaysOpen: PlaceOpeningPeriod[] = [{ close: null, open: { day: 0, hour: 0, minute: 0 } }];
 
   for (let weekday = 0; weekday < 7; weekday += 1) {
-    assert.deepEqual(
+    expect(
       openingIntervalsForWeekday(alwaysOpen, weekday),
-      [{ endMinute: 1440, startMinute: 0 }],
       `weekday ${weekday} should be fully open`,
-    );
+    ).toStrictEqual([{ endMinute: 1440, startMinute: 0 }]);
   }
 });
 
 test('an overnight period runs past midnight on its opening day', () => {
   // Friday 20:00 to Saturday 02:00.
-  assert.deepEqual(openingIntervalsForWeekday([period(5, 20, 6, 2)], 5), [
+  expect(openingIntervalsForWeekday([period(5, 20, 6, 2)], 5)).toStrictEqual([
     { endMinute: 1560, startMinute: 1200 },
   ]);
 });
 
 test('an overnight period still has the next morning open', () => {
-  assert.deepEqual(openingIntervalsForWeekday([period(5, 20, 6, 2)], 6), [
+  expect(openingIntervalsForWeekday([period(5, 20, 6, 2)], 6)).toStrictEqual([
     { endMinute: 120, startMinute: 0 },
   ]);
 });
 
 test('spillover wraps from Saturday into Sunday', () => {
-  assert.deepEqual(openingIntervalsForWeekday([period(6, 22, 0, 1)], 0), [
+  expect(openingIntervalsForWeekday([period(6, 22, 0, 1)], 0)).toStrictEqual([
     { endMinute: 60, startMinute: 0 },
   ]);
 });
@@ -116,7 +113,7 @@ test('a closed weekday is known to be closed, not unknown', () => {
     utcOffsetMinutes: currentOffsetMinutes(SINGAPORE),
   });
 
-  assert.deepEqual(result, { intervals: [], source: 'FRESH_PROVIDER', status: 'KNOWN' });
+  expect(result).toStrictEqual({ intervals: [], source: 'FRESH_PROVIDER', status: 'KNOWN' });
 });
 
 test('an open weekday resolves to its intervals', () => {
@@ -127,7 +124,7 @@ test('an open weekday resolves to its intervals', () => {
     utcOffsetMinutes: currentOffsetMinutes(SINGAPORE),
   });
 
-  assert.deepEqual(result, {
+  expect(result).toStrictEqual({
     intervals: [{ endMinute: 1020, startMinute: 540 }],
     source: 'FRESH_PROVIDER',
     status: 'KNOWN',
@@ -135,39 +132,36 @@ test('an open weekday resolves to its intervals', () => {
 });
 
 test('no periods at all is unknown, since absence of a schedule proves nothing', () => {
-  assert.deepEqual(
+  expect(
     resolveOpeningHoursForDay({
       date: '2026-08-17',
       dayTimeZone: SINGAPORE,
       periods: [],
       utcOffsetMinutes: currentOffsetMinutes(SINGAPORE),
     }),
-    { status: 'UNKNOWN' },
-  );
+  ).toStrictEqual({ status: 'UNKNOWN' });
 });
 
 test('a missing provider offset is unknown rather than assumed to match', () => {
-  assert.deepEqual(
+  expect(
     resolveOpeningHoursForDay({
       date: '2026-08-17',
       dayTimeZone: SINGAPORE,
       periods: [period(1, 9, 1, 17)],
       utcOffsetMinutes: null,
     }),
-    { status: 'UNKNOWN' },
-  );
+  ).toStrictEqual({ status: 'UNKNOWN' });
 });
 
 test('a place outside the day timezone is unknown, since its hours are stated elsewhere', () => {
-  assert.deepEqual(
+  expect(
     resolveOpeningHoursForDay({
       date: '2026-08-17',
       dayTimeZone: SINGAPORE,
       periods: [period(1, 9, 1, 17)],
       utcOffsetMinutes: currentOffsetMinutes(SINGAPORE) + 60,
     }),
-    { status: 'UNKNOWN' },
-  );
+  ).toStrictEqual({ status: 'UNKNOWN' });
 });
 
 test('the same-zone guard holds across zones with different offsets', () => {
@@ -179,6 +173,6 @@ test('the same-zone guard holds across zones with different offsets', () => {
       utcOffsetMinutes: currentOffsetMinutes(timeZone),
     });
 
-    assert.equal(matched.status, 'KNOWN', `${timeZone} should match its own offset`);
+    expect(matched.status, `${timeZone} should match its own offset`).toBe('KNOWN');
   }
 });

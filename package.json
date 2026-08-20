@@ -16,6 +16,8 @@
     "lint": "turbo run lint",
     "prepare": "husky",
     "typecheck": "turbo run typecheck",
+    "test": "turbo test",
+    "test:watch": "turbo test:watch",
     "db:generate": "pnpm --filter @trove/db db:generate",
     "db:migrate": "pnpm --filter @trove/db db:migrate:dev",
     "db:migrate:deploy": "pnpm --filter @trove/db db:migrate:deploy",

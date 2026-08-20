@@ -1,8 +1,7 @@
-import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 const messagesDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'messages');
 const messageFiles = readdirSync(messagesDir).filter((name) => name.endsWith('.json'));
@@ -70,24 +69,23 @@ export function duplicateKeys(source: string): string[] {
 test('the detector finds a repeat and ignores the same key in a sibling object', () => {
   // Guards the guard. A detector that quietly returned nothing would let every
   // real duplicate through while the suite stayed green.
-  assert.deepEqual(duplicateKeys('{"a":{"x":1,"y":2,"x":3}}'), ['x (line 1)']);
-  assert.deepEqual(duplicateKeys('{"a":{"x":1},"b":{"x":2}}'), []);
+  expect(duplicateKeys('{"a":{"x":1,"y":2,"x":3}}')).toStrictEqual(['x (line 1)']);
+  expect(duplicateKeys('{"a":{"x":1},"b":{"x":2}}')).toStrictEqual([]);
 });
 
 test('the detector reads nesting and string values correctly', () => {
   // A repeat inside a nested object belongs to that object, not its parent.
-  assert.deepEqual(duplicateKeys('{"a":{"b":{"x":1,"x":2}},"x":3}'), ['x (line 1)']);
+  expect(duplicateKeys('{"a":{"b":{"x":1,"x":2}},"x":3}')).toStrictEqual(['x (line 1)']);
   // A value that merely looks like a key must not be counted as one.
-  assert.deepEqual(duplicateKeys('{"a":"x\\":","b":"c"}'), []);
-  assert.deepEqual(duplicateKeys('{\n  "a": 1,\n  "b": 2,\n  "a": 3\n}'), ['a (line 4)']);
+  expect(duplicateKeys('{"a":"x\\":","b":"c"}')).toStrictEqual([]);
+  expect(duplicateKeys('{\n  "a": 1,\n  "b": 2,\n  "a": 3\n}')).toStrictEqual(['a (line 4)']);
 });
 
 for (const name of messageFiles) {
   test(`${name} defines every key once`, () => {
-    assert.deepEqual(
+    expect(
       duplicateKeys(readFileSync(join(messagesDir, name), 'utf8')),
-      [],
       'a repeated key silently discards every copy but the last',
-    );
+    ).toStrictEqual([]);
   });
 }

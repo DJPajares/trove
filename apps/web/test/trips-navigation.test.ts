@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import {
   primaryTripDestinations,
@@ -21,26 +20,25 @@ function shape(lifecycle: 'active' | 'completed' | 'planning') {
 
 test('the three experiences keep a stable order whatever stage the trip is in', () => {
   for (const lifecycle of ['planning', 'active', 'completed'] as const) {
-    assert.deepEqual(
+    expect(
       primaryTripDestinations(TRIP, lifecycle, START).map((entry) => entry.section),
-      ['itinerary', 'mode', 'memories'],
       `order changed for ${lifecycle}`,
-    );
+    ).toStrictEqual(['itinerary', 'mode', 'memories']);
   }
 });
 
 test('emphasis follows the stage the traveller is actually in', () => {
-  assert.deepEqual(shape('planning'), [
+  expect(shape('planning')).toStrictEqual([
     { emphasis: 'leading', label: 'itinerary', section: 'itinerary' },
     { emphasis: 'standard', label: 'preview', section: 'mode' },
     { emphasis: 'quiet', label: 'memories', section: 'memories' },
   ]);
-  assert.deepEqual(shape('active'), [
+  expect(shape('active')).toStrictEqual([
     { emphasis: 'standard', label: 'itinerary', section: 'itinerary' },
     { emphasis: 'leading', label: 'tripMode', section: 'mode' },
     { emphasis: 'quiet', label: 'memories', section: 'memories' },
   ]);
-  assert.deepEqual(shape('completed'), [
+  expect(shape('completed')).toStrictEqual([
     { emphasis: 'standard', label: 'itinerary', section: 'itinerary' },
     { emphasis: 'quiet', label: 'tripMode', section: 'mode' },
     { emphasis: 'leading', label: 'memories', section: 'memories' },
@@ -50,44 +48,42 @@ test('emphasis follows the stage the traveller is actually in', () => {
 test('every destination is reachable at every stage, none are hidden', () => {
   for (const lifecycle of ['planning', 'active', 'completed'] as const) {
     const destinations = primaryTripDestinations(TRIP, lifecycle, START);
-    assert.equal(destinations.length, 3);
-    assert.ok(destinations.every((entry) => entry.href.startsWith(`/trips/${TRIP}/`)));
+    expect(destinations.length).toBe(3);
+    expect(destinations.every((entry) => entry.href.startsWith(`/trips/${TRIP}/`))).toBeTruthy();
   }
 });
 
 test('Trip Mode opens as a rehearsal before departure and directly afterwards', () => {
   const planning = primaryTripDestinations(TRIP, 'planning', START)[1];
-  assert.equal(planning?.href, `/trips/${TRIP}/mode?preview=1&date=2026-09-05&time=09%3A00`);
+  expect(planning?.href).toBe(`/trips/${TRIP}/mode?preview=1&date=2026-09-05&time=09%3A00`);
 
   for (const lifecycle of ['active', 'completed'] as const) {
-    assert.equal(
+    expect(
       primaryTripDestinations(TRIP, lifecycle, START)[1]?.href,
-      `/trips/${TRIP}/mode`,
       `${lifecycle} should not open Preview`,
-    );
+    ).toBe(`/trips/${TRIP}/mode`);
   }
 });
 
 test('supporting tools stay complete and out of the primary set', () => {
   const supporting = supportingTripDestinations(TRIP);
 
-  assert.deepEqual(
-    supporting.map((entry) => entry.section),
-    ['tasks', 'reservations', 'expenses', 'info'],
-  );
-  assert.deepEqual(
-    supporting.map((entry) => entry.href),
-    [
-      `/trips/${TRIP}/tasks`,
-      `/trips/${TRIP}/reservations`,
-      `/trips/${TRIP}/expenses`,
-      `/trips/${TRIP}/info`,
-    ],
-  );
+  expect(supporting.map((entry) => entry.section)).toStrictEqual([
+    'tasks',
+    'reservations',
+    'expenses',
+    'info',
+  ]);
+  expect(supporting.map((entry) => entry.href)).toStrictEqual([
+    `/trips/${TRIP}/tasks`,
+    `/trips/${TRIP}/reservations`,
+    `/trips/${TRIP}/expenses`,
+    `/trips/${TRIP}/info`,
+  ]);
   // The itinerary opens Places itself, so listing it here would be a second door.
-  assert.ok(supporting.every((entry) => entry.section !== 'places'));
+  expect(supporting.every((entry) => entry.section !== 'places')).toBeTruthy();
   // Trip Info's route and its label have never matched; the mapping must survive.
-  assert.equal(supporting.at(-1)?.labelKey, 'tripInfo');
+  expect(supporting.at(-1)?.labelKey).toBe('tripInfo');
 });
 
 test('every section can say its own name, including the ones no menu lists', () => {
@@ -103,11 +99,11 @@ test('every section can say its own name, including the ones no menu lists', () 
   ];
 
   for (const section of sections) {
-    assert.ok(tripSectionLabelKey(section), `${section} has no label`);
+    expect(tripSectionLabelKey(section), `${section} has no label`).toBeTruthy();
   }
 
   // Places is in neither set, and it is exactly the screen that would otherwise be
   // left describing itself as "More".
-  assert.equal(tripSectionLabelKey('places'), 'places');
-  assert.equal(tripSectionLabelKey('info'), 'tripInfo');
+  expect(tripSectionLabelKey('places')).toBe('places');
+  expect(tripSectionLabelKey('info')).toBe('tripInfo');
 });

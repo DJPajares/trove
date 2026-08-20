@@ -1,3 +1,5 @@
+import { getAllCountries } from 'countries-and-timezones';
+
 export type TripLifecycle = 'active' | 'completed' | 'planning';
 
 export type TimeZoneCandidate = {
@@ -12,6 +14,31 @@ export type TripTimeZoneResolution = {
 };
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function normalizeCountryName(value: string) {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase('en');
+}
+
+const countryPrimaryTimeZones = new Map(
+  Object.values(getAllCountries()).map((country) => [
+    normalizeCountryName(country.name),
+    country.timezones.find(isValidIanaTimeZone) ?? null,
+  ]),
+);
+
+/**
+ * Country-only destinations have no coordinate or Place result to resolve, so
+ * use the maintained dataset's primary IANA zone. Free-text cities and regions
+ * deliberately do not match and continue through the normal fallback order.
+ */
+export function resolveCountryPrimaryTimeZone(destination: string) {
+  return countryPrimaryTimeZones.get(normalizeCountryName(destination)) ?? null;
+}
 
 export function isValidIanaTimeZone(value: string) {
   try {

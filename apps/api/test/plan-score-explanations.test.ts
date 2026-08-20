@@ -1,6 +1,5 @@
-import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import type {
   PlanScoreAlternative,
@@ -81,16 +80,16 @@ test('explains a strong day entirely through what works', () => {
     }),
   );
 
-  assert.deepEqual(keys(result.whatWorks), [
+  expect(keys(result.whatWorks)).toStrictEqual([
     'feasibility.noConflicts',
     'travelEffort.light',
     'pace.comfortable',
     'routeEfficiency.direct',
     'placeQuality.strong',
   ]);
-  assert.deepEqual(result.worthImproving, []);
-  assert.deepEqual(result.uncertainty, []);
-  assert.deepEqual(result.whatWorks[1]?.values, { minutes: 30 });
+  expect(result.worthImproving).toStrictEqual([]);
+  expect(result.uncertainty).toStrictEqual([]);
+  expect(result.whatWorks[1]?.values).toStrictEqual({ minutes: 30 });
 });
 
 const conflicts: PlanScoreConflict[] = [
@@ -136,14 +135,14 @@ test('puts severe timing conflicts before minor quality suggestions', () => {
     }),
   );
 
-  assert.deepEqual(keys(result.worthImproving), [
+  expect(keys(result.worthImproving)).toStrictEqual([
     'feasibility.overlappingCommitments',
     'feasibility.tightTransition',
     'alternative.replace',
   ]);
-  assert.deepEqual(result.worthImproving[0]?.references, ['lunch', 'museum']);
-  assert.equal(result.worthImproving[0]?.action, 'ADJUST_TIME');
-  assert.equal(result.worthImproving[1]?.action, 'ADD_BUFFER');
+  expect(result.worthImproving[0]?.references).toStrictEqual(['lunch', 'museum']);
+  expect(result.worthImproving[0]?.action).toBe('ADJUST_TIME');
+  expect(result.worthImproving[1]?.action).toBe('ADD_BUFFER');
 });
 
 test('explains the benefit of an alternative without applying it', () => {
@@ -155,7 +154,7 @@ test('explains the benefit of an alternative without applying it', () => {
   );
   const suggestion = result.worthImproving.at(-1);
 
-  assert.deepEqual(suggestion, {
+  expect(suggestion).toStrictEqual({
     action: 'REVIEW_ALTERNATIVE',
     factor: 'PLACE_QUALITY',
     messageKey: 'alternative.replace',
@@ -175,7 +174,7 @@ test('offers a concrete action for a high-travel day', () => {
     }),
   );
 
-  assert.deepEqual(result.worthImproving, [
+  expect(result.worthImproving).toStrictEqual([
     {
       action: 'RECONSIDER_DETOUR',
       factor: 'TRAVEL_EFFORT',
@@ -197,7 +196,7 @@ test('suggests reordering manually when a better order exists', () => {
     }),
   );
 
-  assert.deepEqual(result.worthImproving, [
+  expect(result.worthImproving).toStrictEqual([
     {
       action: 'REORDER_MANUALLY',
       factor: 'ROUTE_EFFICIENCY',
@@ -225,15 +224,15 @@ test('describes missing and stale evidence as uncertainty rather than fact', () 
     }),
   );
 
-  assert.deepEqual(keys(result.uncertainty), [
+  expect(keys(result.uncertainty)).toStrictEqual([
     'feasibility.stale',
     'travelEffort.unknown',
     'pace.unknown',
     'routeEfficiency.unknown',
     'placeQuality.unknown',
   ]);
-  assert.deepEqual(result.uncertainty[0]?.references, ['hours:market']);
-  assert.deepEqual(keys(result.whatWorks), ['feasibility.noConflicts']);
+  expect(result.uncertainty[0]?.references).toStrictEqual(['hours:market']);
+  expect(keys(result.whatWorks)).toStrictEqual(['feasibility.noConflicts']);
 });
 
 test('skips factors that do not apply to the day', () => {
@@ -252,8 +251,8 @@ test('skips factors that do not apply to the day', () => {
     }),
   );
 
-  assert.deepEqual(keys(result.whatWorks), ['feasibility.noConflicts', 'travelEffort.light']);
-  assert.deepEqual(keys(result.uncertainty), ['pace.unknown']);
+  expect(keys(result.whatWorks)).toStrictEqual(['feasibility.noConflicts', 'travelEffort.light']);
+  expect(keys(result.uncertainty)).toStrictEqual(['pace.unknown']);
 });
 
 test('explains trip-level Must Go fit with an actionable target', () => {
@@ -270,7 +269,7 @@ test('explains trip-level Must Go fit with an actionable target', () => {
     unscheduledMustGoTripPlaceIds: [],
   });
 
-  assert.deepEqual(unscheduled.worthImproving, [
+  expect(unscheduled.worthImproving).toStrictEqual([
     {
       action: 'SCHEDULE_MUST_GO',
       factor: 'MUST_GO_PRIORITY_FIT',
@@ -279,8 +278,8 @@ test('explains trip-level Must Go fit with an actionable target', () => {
       values: { count: 2 },
     },
   ]);
-  assert.deepEqual(keys(complete.whatWorks), ['mustGo.allScheduled']);
-  assert.deepEqual(notApplicable, { uncertainty: [], whatWorks: [], worthImproving: [] });
+  expect(keys(complete.whatWorks)).toStrictEqual(['mustGo.allScheduled']);
+  expect(notApplicable).toStrictEqual({ uncertainty: [], whatWorks: [], worthImproving: [] });
 });
 
 test('plans a confirmed replacement without changing anything', () => {
@@ -290,7 +289,7 @@ test('plans a confirmed replacement without changing anything', () => {
   ];
   const snapshot = structuredClone({ alternative, linkedRecords });
 
-  assert.deepEqual(planReplacement({ linkedRecords, suggestion: alternative }), {
+  expect(planReplacement({ linkedRecords, suggestion: alternative })).toStrictEqual({
     candidateTripPlaceId: 'great',
     preservedFields: ['dayPart', 'durationMinutes', 'notes', 'priority', 'startDate', 'startTime'],
     requiresReview: [
@@ -299,11 +298,10 @@ test('plans a confirmed replacement without changing anything', () => {
     ],
     targetItemId: 'item-1',
   });
-  assert.deepEqual({ alternative, linkedRecords }, snapshot);
-  assert.throws(
-    () => planReplacement({ linkedRecords: [], suggestion: { ...alternative, action: 'ADD' } }),
-    /unsupported_alternative_action/,
-  );
+  expect({ alternative, linkedRecords }).toStrictEqual(snapshot);
+  expect(() =>
+    planReplacement({ linkedRecords: [], suggestion: { ...alternative, action: 'ADD' } }),
+  ).toThrow(/unsupported_alternative_action/);
 });
 
 test('exposes only traveller-facing values and localized message keys', () => {
@@ -344,8 +342,8 @@ test('exposes only traveller-facing values and localized message keys', () => {
   ]);
   const valueKeys = new Set(explanations.flatMap((entry) => Object.keys(entry.values)));
 
-  assert.equal(explanations.length > 0, true);
-  assert.deepEqual([...valueKeys].toSorted(), [
+  expect(explanations.length > 0).toBe(true);
+  expect([...valueKeys].toSorted()).toStrictEqual([
     'activeMinutes',
     'bestMinutes',
     'bufferMinutes',
@@ -357,7 +355,7 @@ test('exposes only traveller-facing values and localized message keys', () => {
     'severity',
   ]);
   for (const entry of explanations) {
-    assert.equal(messageExists(entry.messageKey), true, `missing message for ${entry.messageKey}`);
+    expect(messageExists(entry.messageKey), `missing message for ${entry.messageKey}`).toBe(true);
   }
 });
 
@@ -370,7 +368,7 @@ test('rounds fractional minute values before they reach explanation prose', () =
   );
 
   const heavy = result.worthImproving.find((entry) => entry.messageKey === 'travelEffort.heavy');
-  assert.equal(heavy?.values.minutes, 23);
+  expect(heavy?.values.minutes).toBe(23);
 });
 
 test('reframes a negative pace buffer as overlapping stops instead of negative spare minutes', () => {
@@ -382,12 +380,9 @@ test('reframes a negative pace buffer as overlapping stops instead of negative s
   );
 
   const overlap = result.worthImproving.find((entry) => entry.messageKey === 'pace.overlapping');
-  assert.deepEqual(overlap?.values, { activeMinutes: 700, overlapMinutes: 383 });
-  assert.equal(
-    result.worthImproving.some((entry) => entry.messageKey === 'pace.tight'),
-    false,
-  );
-  assert.equal(messageExists('pace.overlapping'), true);
+  expect(overlap?.values).toStrictEqual({ activeMinutes: 700, overlapMinutes: 383 });
+  expect(result.worthImproving.some((entry) => entry.messageKey === 'pace.tight')).toBe(false);
+  expect(messageExists('pace.overlapping')).toBe(true);
 });
 
 test('produces identical explanations for identical evidence', () => {
@@ -398,5 +393,5 @@ test('produces identical explanations for identical evidence', () => {
     travel: { totalMinutes: 30 },
   });
 
-  assert.deepEqual(explainDay(input), explainDay(input));
+  expect(explainDay(input)).toStrictEqual(explainDay(input));
 });

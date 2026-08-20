@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import { planReorderWrites } from '../src/services/itineraries.js';
 
@@ -33,7 +32,7 @@ test('moving an item into the middle of a full day never writes onto an occupied
   const starting = { a: 0, b: 1, c: 2, d: 3, e: 4 };
   const writes = planReorderWrites(['a', 'b', 'c', 'e', 'd'], 5);
 
-  assert.deepEqual(applyWrites(starting, writes), [
+  expect(applyWrites(starting, writes)).toStrictEqual([
     [0, 'a'],
     [1, 'b'],
     [2, 'c'],
@@ -50,11 +49,10 @@ test('every rotation of a day survives the same replay', () => {
     for (let to = 0; to < ids.length; to += 1) {
       const order = ids.filter((_, index) => index !== from);
       order.splice(to, 0, ids[from]!);
-      assert.deepEqual(
+      expect(
         applyWrites(starting, planReorderWrites(order, ids.length)).map(([, id]) => id),
-        order,
         `moving ${ids[from]} to ${to}`,
-      );
+      ).toStrictEqual(order);
     }
   }
 });
@@ -64,9 +62,10 @@ test('parking clears the final range even when the day has no room above it', ()
   // day with gaps can report a lower ceiling; parking must still clear 0..n-1.
   const writes = planReorderWrites(['a', 'b', 'c'], 0);
 
-  assert.ok(writes.slice(0, 3).every((write) => write.position >= 3));
-  assert.deepEqual(
-    applyWrites({ a: 0, b: 1, c: 2 }, writes).map(([, id]) => id),
-    ['a', 'b', 'c'],
-  );
+  expect(writes.slice(0, 3).every((write) => write.position >= 3)).toBeTruthy();
+  expect(applyWrites({ a: 0, b: 1, c: 2 }, writes).map(([, id]) => id)).toStrictEqual([
+    'a',
+    'b',
+    'c',
+  ]);
 });

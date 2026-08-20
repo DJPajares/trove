@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import {
   DEFAULT_DAY_START_MINUTE,
@@ -69,9 +68,9 @@ test('anchors to when the place opens', () => {
     item({ duration: at(60), id: 'target', openingHours: open([600, 1020]) }),
   ]);
 
-  assert.equal(result.status, 'ok');
-  assert.equal(result.status === 'ok' && result.startMinute, 600);
-  assert.deepEqual(result.status === 'ok' && result.reasons.map((reason) => reason.code), [
+  expect(result.status).toBe('ok');
+  expect(result.status === 'ok' && result.startMinute).toBe(600);
+  expect(result.status === 'ok' && result.reasons.map((reason) => reason.code)).toStrictEqual([
     'DAY_START',
     'OPENING_HOURS',
   ]);
@@ -89,8 +88,8 @@ test('follows the previous item once travel and duration are known', () => {
   ]);
 
   // 09:00 + 90 min + 20 min travel = 10:50.
-  assert.equal(result.status === 'ok' && result.startMinute, 650);
-  assert.deepEqual(result.status === 'ok' && result.reasons.map((reason) => reason.code), [
+  expect(result.status === 'ok' && result.startMinute).toBe(650);
+  expect(result.status === 'ok' && result.reasons.map((reason) => reason.code)).toStrictEqual([
     'DAY_START',
     'AFTER_PREVIOUS_ITEM',
   ]);
@@ -104,7 +103,7 @@ test('chains through an intermediate item with complete evidence', () => {
   ]);
 
   // 09:00 + 60 museum + 10 travel + 30 cafe + 15 travel = 10:55.
-  assert.equal(result.status === 'ok' && result.startMinute, 655);
+  expect(result.status === 'ok' && result.startMinute).toBe(655);
 });
 
 test('a broken travel chain degrades with a caveat instead of guessing across the gap', () => {
@@ -114,14 +113,13 @@ test('a broken travel chain degrades with a caveat instead of guessing across th
     item({ duration: at(60), id: 'target', openingHours: open([600, 1020]) }),
   ]);
 
-  assert.equal(result.status, 'ok');
-  assert.equal(result.status === 'ok' && result.startMinute, 600);
-  assert.deepEqual(result.status === 'ok' && result.caveats, ['TRAVEL_UNKNOWN']);
-  assert.equal(
+  expect(result.status).toBe('ok');
+  expect(result.status === 'ok' && result.startMinute).toBe(600);
+  expect(result.status === 'ok' && result.caveats).toStrictEqual(['TRAVEL_UNKNOWN']);
+  expect(
     result.status === 'ok' &&
       result.reasons.some((reason) => reason.code === 'AFTER_PREVIOUS_ITEM'),
-    false,
-  );
+  ).toBe(false);
 });
 
 test('clamps to the daypart the traveller chose', () => {
@@ -134,11 +132,10 @@ test('clamps to the daypart the traveller chose', () => {
     }),
   ]);
 
-  assert.equal(result.status === 'ok' && result.startMinute, 1020);
-  assert.equal(
+  expect(result.status === 'ok' && result.startMinute).toBe(1020);
+  expect(
     result.status === 'ok' && result.reasons.some((reason) => reason.code === 'DAY_PART_WINDOW'),
-    true,
-  );
+  ).toBe(true);
 });
 
 test('rounding never lands the visit past a tight closing time', () => {
@@ -148,8 +145,8 @@ test('rounding never lands the visit past a tight closing time', () => {
     item({ duration: at(55), id: 'target', openingHours: open([602, 660]) }),
   ]);
 
-  assert.equal(result.status === 'ok' && result.startMinute, 605);
-  assert.equal(result.status === 'ok' && result.startMinute + 55 <= 660, true);
+  expect(result.status === 'ok' && result.startMinute).toBe(605);
+  expect(result.status === 'ok' && result.startMinute + 55 <= 660).toBe(true);
 });
 
 test('rounding that no longer fits reports no feasible time rather than a bad one', () => {
@@ -159,13 +156,13 @@ test('rounding that no longer fits reports no feasible time rather than a bad on
     item({ duration: at(55), id: 'target', openingHours: open([602, 658]) }),
   ]);
 
-  assert.deepEqual(result, { blockedBy: ['OPENING_HOURS'], status: 'no_feasible_time' });
+  expect(result).toStrictEqual({ blockedBy: ['OPENING_HOURS'], status: 'no_feasible_time' });
 });
 
 test('a place shut all day blocks rather than passing as unknown', () => {
   const result = suggest([item({ duration: at(60), id: 'target', openingHours: CLOSED_ALL_DAY })]);
 
-  assert.deepEqual(result, { blockedBy: ['OPENING_HOURS'], status: 'no_feasible_time' });
+  expect(result).toStrictEqual({ blockedBy: ['OPENING_HOURS'], status: 'no_feasible_time' });
 });
 
 test('steps past a fixed commitment that occupies the slot', () => {
@@ -174,12 +171,11 @@ test('steps past a fixed commitment that occupies the slot', () => {
     { commitments: [{ endMinute: 700, id: 'ferry', source: 'USER_OWNED', startMinute: 540 }] },
   );
 
-  assert.equal(result.status === 'ok' && result.startMinute, 700);
-  assert.deepEqual(
+  expect(result.status === 'ok' && result.startMinute).toBe(700);
+  expect(
     result.status === 'ok' &&
       result.reasons.find((reason) => reason.code === 'CLEARS_COMMITMENT')?.references,
-    ['ferry'],
-  );
+  ).toStrictEqual(['ferry']);
 });
 
 test('steps past another item the traveller pinned in place', () => {
@@ -190,12 +186,11 @@ test('steps past another item the traveller pinned in place', () => {
     item({ duration: at(60), id: 'target', openingHours: open([600, 1200]) }),
   ]);
 
-  assert.equal(result.status === 'ok' && result.startMinute, 660);
-  assert.deepEqual(
+  expect(result.status === 'ok' && result.startMinute).toBe(660);
+  expect(
     result.status === 'ok' &&
       result.reasons.find((reason) => reason.code === 'CLEARS_COMMITMENT')?.references,
-    ['tour'],
-  );
+  ).toStrictEqual(['tour']);
 });
 
 test('a start that merely abuts a pinned item is not displaced by it', () => {
@@ -206,7 +201,7 @@ test('a start that merely abuts a pinned item is not displaced by it', () => {
     item({ duration: at(60), id: 'target', openingHours: open([0, 1440]) }),
   ]);
 
-  assert.equal(result.status, 'insufficient_evidence');
+  expect(result.status).toBe('insufficient_evidence');
 });
 
 test('an unreachable following anchor blocks, since the earliest start is already too late', () => {
@@ -215,7 +210,7 @@ test('an unreachable following anchor blocks, since the earliest start is alread
     item({ fixed: true, id: 'dinner', inboundTravel: travel(30), start: at(620) }),
   ]);
 
-  assert.deepEqual(result, { blockedBy: ['BEFORE_FIXED_ITEM'], status: 'no_feasible_time' });
+  expect(result).toStrictEqual({ blockedBy: ['BEFORE_FIXED_ITEM'], status: 'no_feasible_time' });
 });
 
 test('a reachable following anchor is recorded as a reason, not a block', () => {
@@ -224,26 +219,25 @@ test('a reachable following anchor is recorded as a reason, not a block', () => 
     item({ fixed: true, id: 'dinner', inboundTravel: travel(30), start: at(1080) }),
   ]);
 
-  assert.equal(result.status === 'ok' && result.startMinute, 600);
-  assert.deepEqual(
+  expect(result.status === 'ok' && result.startMinute).toBe(600);
+  expect(
     result.status === 'ok' &&
       result.reasons.find((reason) => reason.code === 'BEFORE_FIXED_ITEM')?.references,
-    ['dinner'],
-  );
+  ).toStrictEqual(['dinner']);
 });
 
 test('a day with nothing to reason from admits it rather than proposing a default', () => {
   // Only the fallback day start applies. 08:00 here would be invention.
   const result = suggest([item({ id: 'target' })]);
 
-  assert.equal(result.status, 'insufficient_evidence');
+  expect(result.status).toBe('insufficient_evidence');
 });
 
 test('an unknown duration qualifies the suggestion without blocking it', () => {
   const result = suggest([item({ id: 'target', openingHours: open([600, 1020]) })]);
 
-  assert.equal(result.status === 'ok' && result.startMinute, 600);
-  assert.deepEqual(result.status === 'ok' && result.caveats, ['DURATION_UNKNOWN']);
+  expect(result.status === 'ok' && result.startMinute).toBe(600);
+  expect(result.status === 'ok' && result.caveats).toStrictEqual(['DURATION_UNKNOWN']);
 });
 
 test('unknown opening hours are reported but do not stop a suggestion', () => {
@@ -252,14 +246,14 @@ test('unknown opening hours are reported but do not stop a suggestion', () => {
     item({ duration: at(60), id: 'target', inboundTravel: travel(30) }),
   ]);
 
-  assert.equal(result.status === 'ok' && result.startMinute, 630);
-  assert.deepEqual(result.status === 'ok' && result.caveats, ['OPENING_HOURS_UNKNOWN']);
+  expect(result.status === 'ok' && result.startMinute).toBe(630);
+  expect(result.status === 'ok' && result.caveats).toStrictEqual(['OPENING_HOURS_UNKNOWN']);
 });
 
 test('a missing target is insufficient evidence rather than a crash', () => {
   const result = suggest([item({ id: 'other' })], { targetItemId: 'nope' });
 
-  assert.equal(result.status, 'insufficient_evidence');
+  expect(result.status).toBe('insufficient_evidence');
 });
 
 test('the same day always produces the same answer', () => {
@@ -274,7 +268,7 @@ test('the same day always produces the same answer', () => {
     }),
   ];
 
-  assert.deepEqual(suggest(build()), suggest(build()));
+  expect(suggest(build())).toStrictEqual(suggest(build()));
 });
 
 test('a daypart window excludes its own end, since noon is not morning', () => {
@@ -289,7 +283,7 @@ test('a daypart window excludes its own end, since noon is not morning', () => {
     }),
   ]);
 
-  assert.equal(result.status, 'no_feasible_time');
+  expect(result.status).toBe('no_feasible_time');
 });
 
 test('the last minute inside a daypart window is still usable', () => {
@@ -302,7 +296,7 @@ test('the last minute inside a daypart window is still usable', () => {
     }),
   ]);
 
-  assert.equal(result.status === 'ok' && result.startMinute, 715);
+  expect(result.status === 'ok' && result.startMinute).toBe(715);
 });
 
 test('a window the day has already run past says so, rather than blaming opening hours', () => {
@@ -318,7 +312,7 @@ test('a window the day has already run past says so, rather than blaming opening
     }),
   ]);
 
-  assert.deepEqual(result, { blockedBy: ['DAY_PART_WINDOW'], status: 'no_feasible_time' });
+  expect(result).toStrictEqual({ blockedBy: ['DAY_PART_WINDOW'], status: 'no_feasible_time' });
 });
 
 test('a commitment that pushes the visit past closing blames the hours', () => {
@@ -327,5 +321,5 @@ test('a commitment that pushes the visit past closing blames the hours', () => {
     { commitments: [{ endMinute: 690, id: 'ferry', source: 'USER_OWNED', startMinute: 540 }] },
   );
 
-  assert.deepEqual(result, { blockedBy: ['OPENING_HOURS'], status: 'no_feasible_time' });
+  expect(result).toStrictEqual({ blockedBy: ['OPENING_HOURS'], status: 'no_feasible_time' });
 });

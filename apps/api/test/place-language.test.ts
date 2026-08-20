@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import {
   DEFAULT_PLACE_LANGUAGE_CODE,
@@ -13,7 +12,7 @@ import {
 
 test('the ways of not naming a language all mean the default', () => {
   for (const value of [undefined, null, '', '   ']) {
-    assert.equal(normalizePlaceLanguageCode(value), DEFAULT_PLACE_LANGUAGE_CODE);
+    expect(normalizePlaceLanguageCode(value)).toBe(DEFAULT_PLACE_LANGUAGE_CODE);
   }
 });
 
@@ -22,20 +21,20 @@ test('one language is one key however it is spelled', () => {
     [undefined, 'en', 'EN', ' en ', 'En'].map((value) => normalizePlaceLanguageCode(value)),
   );
 
-  assert.equal(keys.size, 1, 'Plan Score omitting the language must not fork the cache');
-  assert.equal([...keys][0], 'en');
+  expect(keys.size, 'Plan Score omitting the language must not fork the cache').toBe(1);
+  expect([...keys][0]).toBe('en');
 });
 
 test('a region-qualified tag keeps its region, canonically cased', () => {
-  assert.equal(normalizePlaceLanguageCode('en-us'), 'en-US');
-  assert.equal(normalizePlaceLanguageCode('EN-US'), 'en-US');
+  expect(normalizePlaceLanguageCode('en-us')).toBe('en-US');
+  expect(normalizePlaceLanguageCode('EN-US')).toBe('en-US');
 });
 
 test('a genuinely different language is a genuinely different key', () => {
-  assert.notEqual(normalizePlaceLanguageCode('ja'), normalizePlaceLanguageCode('en'));
-  assert.notEqual(normalizePlaceLanguageCode('en-US'), normalizePlaceLanguageCode('en'));
+  expect(normalizePlaceLanguageCode('ja')).not.toBe(normalizePlaceLanguageCode('en'));
+  expect(normalizePlaceLanguageCode('en-US')).not.toBe(normalizePlaceLanguageCode('en'));
 });
 
 test('a malformed tag falls back rather than becoming a junk key', () => {
-  assert.equal(normalizePlaceLanguageCode('not a language'), DEFAULT_PLACE_LANGUAGE_CODE);
+  expect(normalizePlaceLanguageCode('not a language')).toBe(DEFAULT_PLACE_LANGUAGE_CODE);
 });

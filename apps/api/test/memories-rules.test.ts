@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import {
   describeCapturedLocalChange,
@@ -20,40 +19,37 @@ function resolve(overrides: Partial<Parameters<typeof resolveMemoryTimeZone>[0]>
 }
 
 test('resolves memory timezone from item, then Place, then day, then trip reference', () => {
-  assert.deepEqual(
+  expect(
     resolve({
       itineraryDayTimeZone: 'Europe/Lisbon',
       itineraryItemTimeZone: 'Pacific/Auckland',
       tripPlaceTimeZone: 'Australia/Sydney',
     }),
-    { source: 'ITINERARY_ITEM', timeZone: 'Pacific/Auckland' },
-  );
-  assert.deepEqual(
+  ).toStrictEqual({ source: 'ITINERARY_ITEM', timeZone: 'Pacific/Auckland' });
+  expect(
     resolve({ itineraryDayTimeZone: 'Europe/Lisbon', tripPlaceTimeZone: 'Australia/Sydney' }),
-    { source: 'TRIP_PLACE', timeZone: 'Australia/Sydney' },
-  );
-  assert.deepEqual(resolve({ itineraryDayTimeZone: 'Europe/Lisbon' }), {
+  ).toStrictEqual({ source: 'TRIP_PLACE', timeZone: 'Australia/Sydney' });
+  expect(resolve({ itineraryDayTimeZone: 'Europe/Lisbon' })).toStrictEqual({
     source: 'ITINERARY_DAY',
     timeZone: 'Europe/Lisbon',
   });
-  assert.deepEqual(resolve({}), { source: 'TRIP_REFERENCE', timeZone: TRIP_TIME_ZONE });
+  expect(resolve({})).toStrictEqual({ source: 'TRIP_REFERENCE', timeZone: TRIP_TIME_ZONE });
 });
 
 test('skips unusable timezone identifiers rather than trusting them', () => {
-  assert.deepEqual(
+  expect(
     resolve({ itineraryDayTimeZone: 'Europe/Lisbon', itineraryItemTimeZone: 'Not/AZone' }),
-    { source: 'ITINERARY_DAY', timeZone: 'Europe/Lisbon' },
-  );
+  ).toStrictEqual({ source: 'ITINERARY_DAY', timeZone: 'Europe/Lisbon' });
 });
 
 test('derives the local representation from the authoritative captured instant', () => {
   const instant = new Date('2026-09-05T01:30:00.000Z');
 
-  assert.deepEqual(deriveCapturedLocal(instant, 'Asia/Singapore'), {
+  expect(deriveCapturedLocal(instant, 'Asia/Singapore')).toStrictEqual({
     date: '2026-09-05',
     time: '09:30',
   });
-  assert.deepEqual(deriveCapturedLocal(instant, 'America/New_York'), {
+  expect(deriveCapturedLocal(instant, 'America/New_York')).toStrictEqual({
     date: '2026-09-04',
     time: '21:30',
   });
@@ -72,11 +68,11 @@ test('surfaces when correcting the timezone moves a memory to another calendar d
     { timeZone: 'Asia/Tokyo' },
   );
 
-  assert.deepEqual(acrossMidnight, {
+  expect(acrossMidnight).toStrictEqual({
     after: { date: '2026-09-04', time: '21:30' },
     before: { date: '2026-09-05', time: '09:30' },
     localDateChanged: true,
   });
-  assert.equal(sameDay.localDateChanged, false);
-  assert.equal(sameDay.after.time, '10:30');
+  expect(sameDay.localDateChanged).toBe(false);
+  expect(sameDay.after.time).toBe('10:30');
 });

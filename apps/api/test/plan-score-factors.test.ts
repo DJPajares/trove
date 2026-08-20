@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import {
   buildReplacementAlternatives,
@@ -59,7 +58,7 @@ test('detects overlapping fixed commitments as a hard conflict', () => {
     ],
   });
 
-  assert.deepEqual(result.conflicts, [
+  expect(result.conflicts).toStrictEqual([
     {
       deduction: 50,
       id: 'overlap:lunch:museum',
@@ -68,7 +67,7 @@ test('detects overlapping fixed commitments as a hard conflict', () => {
       subjectIds: ['lunch', 'museum'],
     },
   ]);
-  assert.equal(result.factor.state === 'EVALUATED' && result.factor.score, 50);
+  expect(result.factor.state === 'EVALUATED' && result.factor.score).toBe(50);
 });
 
 test('deducts an overlapping reservation pair once rather than once per direction', () => {
@@ -80,8 +79,8 @@ test('deducts an overlapping reservation pair once rather than once per directio
     items: [],
   });
 
-  assert.equal(result.conflicts.length, 1);
-  assert.equal(result.factor.state === 'EVALUATED' && result.factor.score, 50);
+  expect(result.conflicts.length).toBe(1);
+  expect(result.factor.state === 'EVALUATED' && result.factor.score).toBe(50);
 });
 
 test('separates visits entirely and partially outside known opening hours', () => {
@@ -100,10 +99,10 @@ test('separates visits entirely and partially outside known opening hours', () =
     items: [item({ duration: at(120), id: 'gallery', openingHours: hours, start: at(960) })],
   });
 
-  assert.equal(outside.conflicts[0]?.severity, 'HARD');
-  assert.equal(outside.factor.state === 'EVALUATED' && outside.factor.score, 50);
-  assert.equal(partial.conflicts[0]?.severity, 'MATERIAL');
-  assert.equal(partial.factor.state === 'EVALUATED' && partial.factor.score, 75);
+  expect(outside.conflicts[0]?.severity).toBe('HARD');
+  expect(outside.factor.state === 'EVALUATED' && outside.factor.score).toBe(50);
+  expect(partial.conflicts[0]?.severity).toBe('MATERIAL');
+  expect(partial.factor.state === 'EVALUATED' && partial.factor.score).toBe(75);
 });
 
 const feasibleDayItems = (hoursSource: PlanScoreEvidenceSource | null): PlanScoreDayItem[] => {
@@ -147,10 +146,18 @@ test('lets stale or missing opening hours lower confidence without penalizing th
   });
   const missing = evaluateFeasibility({ commitments: [], items: feasibleDayItems(null) });
 
-  assert.deepEqual(fresh.factors.FEASIBILITY, { confidence: 100, score: 100, state: 'EVALUATED' });
-  assert.deepEqual(stale.factors.FEASIBILITY, { confidence: 79, score: 100, state: 'EVALUATED' });
-  assert.deepEqual(missing.conflicts, []);
-  assert.equal(missing.factor.state === 'EVALUATED' && missing.factor.score, 100);
+  expect(fresh.factors.FEASIBILITY).toStrictEqual({
+    confidence: 100,
+    score: 100,
+    state: 'EVALUATED',
+  });
+  expect(stale.factors.FEASIBILITY).toStrictEqual({
+    confidence: 79,
+    score: 100,
+    state: 'EVALUATED',
+  });
+  expect(missing.conflicts).toStrictEqual([]);
+  expect(missing.factor.state === 'EVALUATED' && missing.factor.score).toBe(100);
 });
 
 test('uses each evidence point once even when several rubric checks read it', () => {
@@ -160,7 +167,7 @@ test('uses each evidence point once even when several rubric checks read it', ()
   });
   const refs = factor.state === 'EVALUATED' ? factor.evidence.map((entry) => entry.ref) : [];
 
-  assert.deepEqual(refs.toSorted(), [
+  expect(refs.toSorted()).toStrictEqual([
     'duration:market',
     'duration:park',
     'hours:market',
@@ -187,16 +194,16 @@ function lateArrivalDay(fixedStartMinute: number, fixed = true) {
 }
 
 test('grades arrival against a fixed start using the 50/25/10 deduction contract', () => {
-  assert.equal(feasibilityScore(lateArrivalDay(620)), 50);
-  assert.equal(feasibilityScore(lateArrivalDay(650)), 75);
-  assert.equal(feasibilityScore(lateArrivalDay(670)), 90);
-  assert.equal(feasibilityScore(lateArrivalDay(700)), 100);
+  expect(feasibilityScore(lateArrivalDay(620))).toBe(50);
+  expect(feasibilityScore(lateArrivalDay(650))).toBe(75);
+  expect(feasibilityScore(lateArrivalDay(670))).toBe(90);
+  expect(feasibilityScore(lateArrivalDay(700))).toBe(100);
 });
 
 test('counts one late transition once instead of also charging it as tight', () => {
   const result = evaluateFeasibility(lateArrivalDay(620));
 
-  assert.deepEqual(result.conflicts, [
+  expect(result.conflicts).toStrictEqual([
     {
       deduction: 50,
       id: 'transition:tour',
@@ -208,7 +215,7 @@ test('counts one late transition once instead of also charging it as tight', () 
 });
 
 test('leaves a negative buffer before a movable item to pace rather than feasibility', () => {
-  assert.equal(feasibilityScore(lateArrivalDay(620, false)), 100);
+  expect(feasibilityScore(lateArrivalDay(620, false))).toBe(100);
 });
 
 test('keeps known evidence usable when another item has no time or location', () => {
@@ -217,15 +224,15 @@ test('keeps known evidence usable when another item has no time or location', ()
     items: [...lateArrivalDay(620).items, item({ id: 'unplanned' })],
   });
 
-  assert.equal(result.conflicts.length, 1);
-  assert.equal(result.factor.state === 'EVALUATED' && result.factor.score, 50);
+  expect(result.conflicts.length).toBe(1);
+  expect(result.factor.state === 'EVALUATED' && result.factor.score).toBe(50);
 });
 
 test('reports feasibility as unknown when the day has no usable evidence', () => {
   const result = evaluateFeasibility({ commitments: [], items: [item({ id: 'unplanned' })] });
 
-  assert.deepEqual(result.factor, { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' });
-  assert.deepEqual(result.conflicts, []);
+  expect(result.factor).toStrictEqual({ reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' });
+  expect(result.conflicts).toStrictEqual([]);
 });
 
 test('scores travel effort with the five known route-time bands', () => {
@@ -234,24 +241,24 @@ test('scores travel effort with the five known route-time bands', () => {
     return factor.state === 'EVALUATED' ? factor.score : null;
   };
 
-  assert.equal(score([local(45)]), 100);
-  assert.equal(score([local(60)]), 100);
-  assert.equal(score([local(61)]), 85);
-  assert.equal(score([local(30, 'a'), local(30, 'b'), local(30, 'c')]), 85);
-  assert.equal(score([local(150)]), 70);
-  assert.equal(score([local(200)]), 50);
-  assert.equal(score([local(300)]), 30);
+  expect(score([local(45)])).toBe(100);
+  expect(score([local(60)])).toBe(100);
+  expect(score([local(61)])).toBe(85);
+  expect(score([local(30, 'a'), local(30, 'b'), local(30, 'c')])).toBe(85);
+  expect(score([local(150)])).toBe(70);
+  expect(score([local(200)])).toBe(50);
+  expect(score([local(300)])).toBe(30);
 });
 
 test('treats incomplete local route coverage as unknown rather than zero or worst case', () => {
   const partial = evaluateTravelEffort([local(30, 'known'), local(null, 'unknown')]);
   const none = evaluateTravelEffort([]);
 
-  assert.deepEqual(partial, {
+  expect(partial).toStrictEqual({
     factor: { reason: 'INSUFFICIENT_EVIDENCE', state: 'UNKNOWN' },
     totalMinutes: null,
   });
-  assert.deepEqual(none, {
+  expect(none).toStrictEqual({
     factor: { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' },
     totalMinutes: null,
   });
@@ -260,8 +267,8 @@ test('treats incomplete local route coverage as unknown rather than zero or wors
 test('scores a zero-minute total only when every required local segment is known', () => {
   const result = evaluateTravelEffort([local(0, 'a'), local(0, 'b')]);
 
-  assert.equal(result.totalMinutes, 0);
-  assert.equal(result.factor.state === 'EVALUATED' && result.factor.score, 100);
+  expect(result.totalMinutes).toBe(0);
+  expect(result.factor.state === 'EVALUATED' && result.factor.score).toBe(100);
 });
 
 test('evaluates structured long-distance journeys as logistics, not local travel effort', () => {
@@ -274,21 +281,21 @@ test('evaluates structured long-distance journeys as logistics, not local travel
     { duration: at(300, 'USER_OWNED'), id: 'flight', scope: 'LONG_DISTANCE', status: 'KNOWN' },
   ]);
 
-  assert.equal(withJourney.totalMinutes, 30);
-  assert.equal(withJourney.factor.state === 'EVALUATED' && withJourney.factor.score, 100);
+  expect(withJourney.totalMinutes).toBe(30);
+  expect(withJourney.factor.state === 'EVALUATED' && withJourney.factor.score).toBe(100);
   // Deliberate recalibration: a day whose only movement is long-distance has no
   // local travel to weigh, so the factor drops out of the weight base instead of
   // costing completeness. Treating it as missing evidence withheld the score of
   // flight days for information Trove never intended to hold.
-  assert.deepEqual(journeyOnly.factor, { state: 'NOT_APPLICABLE' });
-  assert.equal(journeyOnly.totalMinutes, null);
+  expect(journeyOnly.factor).toStrictEqual({ state: 'NOT_APPLICABLE' });
+  expect(journeyOnly.totalMinutes).toBe(null);
 });
 
 test('a day with no segments at all is still missing evidence, not inapplicable', () => {
   const empty = evaluateTravelEffort([]);
 
-  assert.deepEqual(empty.factor, { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' });
-  assert.equal(empty.totalMinutes, null);
+  expect(empty.factor).toStrictEqual({ reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' });
+  expect(empty.totalMinutes).toBe(null);
 });
 
 test('feeds both factors into the day contract without changing the inputs', () => {
@@ -304,21 +311,19 @@ test('feeds both factors into the day contract without changing the inputs', () 
     },
   });
 
-  assert.equal(result.score, 65);
-  assert.equal(result.completeness, 67);
-  assert.deepEqual({ feasibilityInput, segments }, snapshot);
+  expect(result.score).toBe(65);
+  expect(result.completeness).toBe(67);
+  expect({ feasibilityInput, segments }).toStrictEqual(snapshot);
 });
 
 test('rejects impossible minute values instead of scoring them', () => {
-  assert.throws(() => evaluateTravelEffort([local(Number.NaN)]), /invalid_plan_score_minutes/);
-  assert.throws(
-    () =>
-      evaluateFeasibility({
-        commitments: [{ endMinute: 600, id: 'tour', source: 'USER_OWNED', startMinute: -1 }],
-        items: [],
-      }),
-    /invalid_plan_score_minutes/,
-  );
+  expect(() => evaluateTravelEffort([local(Number.NaN)])).toThrow(/invalid_plan_score_minutes/);
+  expect(() =>
+    evaluateFeasibility({
+      commitments: [{ endMinute: 600, id: 'tour', source: 'USER_OWNED', startMinute: -1 }],
+      items: [],
+    }),
+  ).toThrow(/invalid_plan_score_minutes/);
 });
 
 function paceScore(input: Parameters<typeof evaluatePaceBuffer>[0]) {
@@ -344,11 +349,11 @@ test('separates an overpacked timed day from the same places with breathing room
     segments: [local(30, 's1'), local(30, 's2')],
   });
 
-  assert.equal(overpacked.factor.state === 'EVALUATED' && overpacked.factor.score, 40);
-  assert.equal(overpacked.smallestBufferMinutes, 0);
-  assert.equal(overpacked.activeMinutes, 560);
-  assert.equal(spread.factor.state === 'EVALUATED' && spread.factor.score, 100);
-  assert.equal(spread.smallestBufferMinutes, 30);
+  expect(overpacked.factor.state === 'EVALUATED' && overpacked.factor.score).toBe(40);
+  expect(overpacked.smallestBufferMinutes).toBe(0);
+  expect(overpacked.activeMinutes).toBe(560);
+  expect(spread.factor.state === 'EVALUATED' && spread.factor.score).toBe(100);
+  expect(spread.smallestBufferMinutes).toBe(30);
 });
 
 function bufferDay(startMinute: number) {
@@ -362,11 +367,11 @@ function bufferDay(startMinute: number) {
 }
 
 test('grades the smallest transition buffer with the frozen pace bands', () => {
-  assert.equal(paceScore(bufferDay(660)), 100);
-  assert.equal(paceScore(bufferDay(650)), 80);
-  assert.equal(paceScore(bufferDay(640)), 60);
-  assert.equal(paceScore(bufferDay(632)), 40);
-  assert.equal(paceScore(bufferDay(620)), 20);
+  expect(paceScore(bufferDay(660))).toBe(100);
+  expect(paceScore(bufferDay(650))).toBe(80);
+  expect(paceScore(bufferDay(640))).toBe(60);
+  expect(paceScore(bufferDay(632))).toBe(40);
+  expect(paceScore(bufferDay(620))).toBe(20);
 });
 
 test('grades a fully described day by known activity and local travel minutes', () => {
@@ -375,10 +380,10 @@ test('grades a fully described day by known activity and local travel minutes', 
     segments: [],
   });
 
-  assert.equal(paceScore(day(480)), 100);
-  assert.equal(paceScore(day(540)), 75);
-  assert.equal(paceScore(day(660)), 50);
-  assert.equal(paceScore(day(800)), 25);
+  expect(paceScore(day(480))).toBe(100);
+  expect(paceScore(day(540))).toBe(75);
+  expect(paceScore(day(660))).toBe(50);
+  expect(paceScore(day(800))).toBe(25);
 });
 
 test('takes the lower pace rule when comfortable buffers still fill the whole day', () => {
@@ -395,9 +400,9 @@ test('takes the lower pace rule when comfortable buffers still fill the whole da
     segments: [local(30, 's1')],
   });
 
-  assert.equal(result.smallestBufferMinutes, 30);
-  assert.equal(result.activeMinutes, 830);
-  assert.equal(result.factor.state === 'EVALUATED' && result.factor.score, 25);
+  expect(result.smallestBufferMinutes).toBe(30);
+  expect(result.activeMinutes).toBe(830);
+  expect(result.factor.state === 'EVALUATED' && result.factor.score).toBe(25);
 });
 
 test('leaves pace unknown when neither timing nor full-day coverage is evaluable', () => {
@@ -407,8 +412,8 @@ test('leaves pace unknown when neither timing nor full-day coverage is evaluable
     segments: [local(30, 'known'), local(null, 'unknown')],
   });
 
-  assert.deepEqual(untimed.factor, { reason: 'INSUFFICIENT_EVIDENCE', state: 'UNKNOWN' });
-  assert.deepEqual(partialRoutes.factor, { reason: 'INSUFFICIENT_EVIDENCE', state: 'UNKNOWN' });
+  expect(untimed.factor).toStrictEqual({ reason: 'INSUFFICIENT_EVIDENCE', state: 'UNKNOWN' });
+  expect(partialRoutes.factor).toStrictEqual({ reason: 'INSUFFICIENT_EVIDENCE', state: 'UNKNOWN' });
 });
 
 const LINE_STOPS = [
@@ -446,13 +451,13 @@ test('identifies backtracking by comparing the planned order with the best avail
     stops: routeStops(['base', 'z', 'x', 'y']),
   });
 
-  assert.deepEqual(
-    { best: efficient.bestMinutes, planned: efficient.plannedMinutes },
-    { best: 30, planned: 30 },
-  );
-  assert.equal(efficient.factor.state === 'EVALUATED' && efficient.factor.score, 100);
-  assert.equal(detour.factor.state === 'EVALUATED' && detour.factor.score, 60);
-  assert.equal(backtracking.factor.state === 'EVALUATED' && backtracking.factor.score, 40);
+  expect({ best: efficient.bestMinutes, planned: efficient.plannedMinutes }).toStrictEqual({
+    best: 30,
+    planned: 30,
+  });
+  expect(efficient.factor.state === 'EVALUATED' && efficient.factor.score).toBe(100);
+  expect(detour.factor.state === 'EVALUATED' && detour.factor.score).toBe(60);
+  expect(backtracking.factor.state === 'EVALUATED' && backtracking.factor.score).toBe(40);
 });
 
 test('respects fixed-order commitments and never reorders the planned stops', () => {
@@ -460,12 +465,12 @@ test('respects fixed-order commitments and never reorders the planned stops', ()
   const snapshot = structuredClone(stops);
   const result = evaluateRouteEfficiency({ legs: lineLegs(), stops });
 
-  assert.deepEqual(
-    { best: result.bestMinutes, planned: result.plannedMinutes },
-    { best: 50, planned: 60 },
-  );
-  assert.equal(result.factor.state === 'EVALUATED' && result.factor.score, 80);
-  assert.deepEqual(stops, snapshot);
+  expect({ best: result.bestMinutes, planned: result.plannedMinutes }).toStrictEqual({
+    best: 50,
+    planned: 60,
+  });
+  expect(result.factor.state === 'EVALUATED' && result.factor.score).toBe(80);
+  expect(stops).toStrictEqual(snapshot);
 });
 
 test('withholds route efficiency without three stops or complete planned legs', () => {
@@ -490,10 +495,10 @@ test('withholds route efficiency without three stops or complete planned legs', 
     stops: manyStops,
   });
 
-  assert.deepEqual(tooFewStops.factor, { state: 'NOT_APPLICABLE' });
-  assert.deepEqual(missingLeg.factor, { reason: 'INSUFFICIENT_EVIDENCE', state: 'UNKNOWN' });
-  assert.deepEqual(oversized.factor, { reason: 'UNUSABLE_EVIDENCE', state: 'UNKNOWN' });
-  assert.equal(oversized.plannedMinutes, 90);
+  expect(tooFewStops.factor).toStrictEqual({ state: 'NOT_APPLICABLE' });
+  expect(missingLeg.factor).toStrictEqual({ reason: 'INSUFFICIENT_EVIDENCE', state: 'UNKNOWN' });
+  expect(oversized.factor).toStrictEqual({ reason: 'UNUSABLE_EVIDENCE', state: 'UNKNOWN' });
+  expect(oversized.plannedMinutes).toBe(90);
 });
 
 test('scores Must Go priority fit as the scheduled share of distinct priorities', () => {
@@ -513,10 +518,10 @@ test('scores Must Go priority fit as the scheduled share of distinct priorities'
     source: 'USER_OWNED',
   });
 
-  assert.equal(partial.state === 'EVALUATED' && partial.score, 75);
-  assert.equal(partial.state === 'EVALUATED' && partial.evidence.length, 4);
-  assert.equal(duplicated.state === 'EVALUATED' && duplicated.score, 50);
-  assert.deepEqual(none, { state: 'NOT_APPLICABLE' });
+  expect(partial.state === 'EVALUATED' && partial.score).toBe(75);
+  expect(partial.state === 'EVALUATED' && partial.evidence.length).toBe(4);
+  expect(duplicated.state === 'EVALUATED' && duplicated.score).toBe(50);
+  expect(none).toStrictEqual({ state: 'NOT_APPLICABLE' });
 });
 
 test('keeps Must Go priority fit at trip scope only', () => {
@@ -546,9 +551,9 @@ test('keeps Must Go priority fit at trip scope only', () => {
     mustGoPriorityFit,
   });
 
-  assert.deepEqual(trip.mustGoPriorityFit, { confidence: 100, score: 50, state: 'EVALUATED' });
-  assert.equal(trip.score, 95);
-  assert.equal(Object.keys(trip.days[0]?.factors ?? {}).includes('MUST_GO_PRIORITY_FIT'), false);
+  expect(trip.mustGoPriorityFit).toStrictEqual({ confidence: 100, score: 50, state: 'EVALUATED' });
+  expect(trip.score).toBe(95);
+  expect(Object.keys(trip.days[0]?.factors ?? {}).includes('MUST_GO_PRIORITY_FIT')).toBe(false);
 });
 
 function rated(
@@ -568,11 +573,11 @@ test('maps public ratings onto the frozen place-quality bands', () => {
     return factor.state === 'EVALUATED' ? factor.score : null;
   };
 
-  assert.equal(score(4.7), 100);
-  assert.equal(score(4.2), 85);
-  assert.equal(score(3.7), 70);
-  assert.equal(score(3.2), 55);
-  assert.equal(score(2.5), 40);
+  expect(score(4.7)).toBe(100);
+  expect(score(4.2)).toBe(85);
+  expect(score(3.7)).toBe(70);
+  expect(score(3.2)).toBe(55);
+  expect(score(2.5)).toBe(40);
 });
 
 test('excludes unrated Places and counts each Trip Place once', () => {
@@ -580,11 +585,11 @@ test('excludes unrated Places and counts each Trip Place once', () => {
   const repeated = evaluatePlaceQuality([rated('a', 4.7), rated('a', 4.7), rated('c', 3.2)]);
   const unrated = evaluatePlaceQuality([rated('a', null), rated('b', null)]);
 
-  assert.equal(mixed.state === 'EVALUATED' && mixed.score, 77.5);
-  assert.equal(mixed.state === 'EVALUATED' && mixed.evidence.length, 2);
-  assert.equal(repeated.state === 'EVALUATED' && repeated.score, 77.5);
-  assert.deepEqual(unrated, { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' });
-  assert.throws(() => evaluatePlaceQuality([rated('a', 5.4)]), /invalid_public_rating/);
+  expect(mixed.state === 'EVALUATED' && mixed.score).toBe(77.5);
+  expect(mixed.state === 'EVALUATED' && mixed.evidence.length).toBe(2);
+  expect(repeated.state === 'EVALUATED' && repeated.score).toBe(77.5);
+  expect(unrated).toStrictEqual({ reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' });
+  expect(() => evaluatePlaceQuality([rated('a', 5.4)])).toThrow(/invalid_public_rating/);
 });
 
 test('keeps place quality from outweighing feasibility and travel effort', () => {
@@ -610,8 +615,8 @@ test('keeps place quality from outweighing feasibility and travel effort', () =>
     },
   });
 
-  assert.equal(higherRated.score, 46);
-  assert.equal(moreFeasible.score, 95);
+  expect(higherRated.score).toBe(46);
+  expect(moreFeasible.score).toBe(95);
 });
 
 test('suggests a replacement only for a material, provider-backed improvement', () => {
@@ -627,7 +632,7 @@ test('suggests a replacement only for a material, provider-backed improvement', 
   ];
   const snapshot = structuredClone(candidates);
 
-  assert.deepEqual(buildReplacementAlternatives(candidates), [
+  expect(buildReplacementAlternatives(candidates)).toStrictEqual([
     {
       action: 'REPLACE',
       candidateRating: 4.7,
@@ -645,7 +650,7 @@ test('suggests a replacement only for a material, provider-backed improvement', 
       targetItemId: 'item-2',
     },
   ]);
-  assert.deepEqual(candidates, snapshot);
+  expect(candidates).toStrictEqual(snapshot);
 });
 
 test('keeps alternatives out of the weighted score', () => {
@@ -657,8 +662,8 @@ test('keeps alternatives out of the weighted score', () => {
     { candidate: rated('great', 4.7), current: places[0] ?? rated('poor', 3.2), targetItemId: 'i' },
   ]);
 
-  assert.deepEqual(scoreDay({ dayId: 'day', factors }), before);
-  assert.deepEqual(Object.keys(before.factors).toSorted(), [
+  expect(scoreDay({ dayId: 'day', factors })).toStrictEqual(before);
+  expect(Object.keys(before.factors).toSorted()).toStrictEqual([
     'FEASIBILITY',
     'PACE_BUFFER',
     'PLACE_QUALITY',
@@ -687,8 +692,8 @@ test('a daypart that cannot fit inside opening hours at all is a hard conflict',
     ],
   });
 
-  assert.equal(result.conflicts[0]?.severity, 'HARD');
-  assert.equal(result.conflicts[0]?.kind, 'OUTSIDE_OPENING_HOURS');
+  expect(result.conflicts[0]?.severity).toBe('HARD');
+  expect(result.conflicts[0]?.kind).toBe('OUTSIDE_OPENING_HOURS');
 });
 
 test('a daypart with one workable placement is not a conflict at all', () => {
@@ -704,14 +709,14 @@ test('a daypart with one workable placement is not a conflict at all', () => {
     ],
   });
 
-  assert.deepEqual(result.conflicts, []);
+  expect(result.conflicts).toStrictEqual([]);
   // The daypart is what made the check possible, so it is recorded as the
   // estimated evidence it is rather than passing for a user-owned time.
   const refs = result.factor.state === 'EVALUATED' ? result.factor.evidence : [];
-  assert.deepEqual(
-    refs.find((entry) => entry.ref === 'window:gallery'),
-    { ref: 'window:gallery', source: 'ESTIMATED' },
-  );
+  expect(refs.find((entry) => entry.ref === 'window:gallery')).toStrictEqual({
+    ref: 'window:gallery',
+    source: 'ESTIMATED',
+  });
 });
 
 test('a daypart that only ever partly fits the opening hours is material', () => {
@@ -727,7 +732,7 @@ test('a daypart that only ever partly fits the opening hours is material', () =>
     ],
   });
 
-  assert.equal(result.conflicts[0]?.severity, 'MATERIAL');
+  expect(result.conflicts[0]?.severity).toBe('MATERIAL');
 });
 
 test('an unreachable daypart is material, never hard', () => {
@@ -745,9 +750,9 @@ test('an unreachable daypart is material, never hard', () => {
     ],
   });
 
-  assert.equal(result.conflicts[0]?.kind, 'ARRIVES_AFTER_FIXED_START');
-  assert.equal(result.conflicts[0]?.severity, 'MATERIAL');
-  assert.equal(result.factor.state === 'EVALUATED' && result.factor.score, 75);
+  expect(result.conflicts[0]?.kind).toBe('ARRIVES_AFTER_FIXED_START');
+  expect(result.conflicts[0]?.severity).toBe('MATERIAL');
+  expect(result.factor.state === 'EVALUATED' && result.factor.score).toBe(75);
 });
 
 test('a reachable but tight daypart is only a soft transition', () => {
@@ -759,8 +764,8 @@ test('a reachable but tight daypart is only a soft transition', () => {
     ],
   });
 
-  assert.equal(result.conflicts[0]?.severity, 'SOFT');
-  assert.equal(result.conflicts[0]?.kind, 'TIGHT_TRANSITION');
+  expect(result.conflicts[0]?.severity).toBe('SOFT');
+  expect(result.conflicts[0]?.kind).toBe('TIGHT_TRANSITION');
 });
 
 test('a daypart predecessor departs as early as it may', () => {
@@ -779,7 +784,7 @@ test('a daypart predecessor departs as early as it may', () => {
     ],
   });
 
-  assert.deepEqual(result.conflicts, []);
+  expect(result.conflicts).toStrictEqual([]);
 });
 
 test('a daypart never counts as fixed, even when the item carries a reservation', () => {
@@ -798,9 +803,8 @@ test('a daypart never counts as fixed, even when the item carries a reservation'
   });
 
   // Would be HARD if the window were treated as an anchored start.
-  assert.equal(result.conflicts[0]?.severity, 'MATERIAL');
-  assert.equal(
-    result.conflicts.some((conflict) => conflict.kind === 'OVERLAPPING_COMMITMENTS'),
+  expect(result.conflicts[0]?.severity).toBe('MATERIAL');
+  expect(result.conflicts.some((conflict) => conflict.kind === 'OVERLAPPING_COMMITMENTS')).toBe(
     false,
   );
 });
@@ -813,7 +817,7 @@ test('dayparts alone prove nothing, so the day stays unknown', () => {
     items: [item({ id: 'a', startWindow: MORNING }), item({ id: 'b', startWindow: EVENING })],
   });
 
-  assert.deepEqual(result.factor, { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' });
+  expect(result.factor).toStrictEqual({ reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' });
 });
 
 test('pace measures a pair that a daypart makes comparable', () => {
@@ -827,6 +831,6 @@ test('pace measures a pair that a daypart makes comparable', () => {
     segments: [local(30)],
   });
 
-  assert.equal(withWindow.smallestBufferMinutes, 10);
-  assert.equal(withoutWindow.smallestBufferMinutes, null);
+  expect(withWindow.smallestBufferMinutes).toBe(10);
+  expect(withoutWindow.smallestBufferMinutes).toBe(null);
 });

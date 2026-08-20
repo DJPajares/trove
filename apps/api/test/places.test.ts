@@ -1,6 +1,5 @@
-import assert from 'node:assert/strict';
 import Fastify from 'fastify';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import { createPlacesControllers } from '../src/controllers/places.js';
 import { getPlacesEnvironment } from '../src/environment.js';
@@ -13,17 +12,17 @@ import { categorizePlaceTypes } from '../src/services/place-categories.js';
 import { PlaceProviderError, PlacesService, type PlacesProvider } from '../src/services/places.js';
 
 test('maps provider types into the stable Trove taxonomy', () => {
-  assert.equal(categorizePlaceTypes(['point_of_interest', 'museum']), 'things_to_do');
-  assert.equal(categorizePlaceTypes(['store'], 'coffee_shop'), 'food_and_drink');
-  assert.equal(categorizePlaceTypes(['airport', 'establishment']), 'transport');
-  assert.equal(categorizePlaceTypes(['establishment']), 'other');
+  expect(categorizePlaceTypes(['point_of_interest', 'museum'])).toBe('things_to_do');
+  expect(categorizePlaceTypes(['store'], 'coffee_shop')).toBe('food_and_drink');
+  expect(categorizePlaceTypes(['airport', 'establishment'])).toBe('transport');
+  expect(categorizePlaceTypes(['establishment'])).toBe('other');
 });
 
 test('reads the Google API key only from server environment', () => {
-  assert.deepEqual(getPlacesEnvironment({ GOOGLE_PLACES_API_KEY: ' secret ' }), {
+  expect(getPlacesEnvironment({ GOOGLE_PLACES_API_KEY: ' secret ' })).toStrictEqual({
     googlePlacesApiKey: 'secret',
   });
-  assert.equal(getPlacesEnvironment({}), null);
+  expect(getPlacesEnvironment({})).toBe(null);
 });
 
 test('Google search uses location bias, a session token, and an explicit field mask', async () => {
@@ -63,12 +62,12 @@ test('Google search uses location bias, a session token, and an explicit field m
   const headers = new Headers(capturedInit?.headers);
   const requestBody = JSON.parse(String(capturedInit?.body)) as Record<string, unknown>;
 
-  assert.equal(capturedUrl, 'https://places.googleapis.com/v1/places:autocomplete');
-  assert.equal(capturedInit?.method, 'POST');
-  assert.equal(headers.get('X-Goog-Api-Key'), 'server-key');
-  assert.equal(headers.get('X-Goog-FieldMask'), GOOGLE_AUTOCOMPLETE_FIELD_MASK);
-  assert.equal(headers.get('X-Goog-FieldMask')?.includes('*'), false);
-  assert.deepEqual(requestBody, {
+  expect(capturedUrl).toBe('https://places.googleapis.com/v1/places:autocomplete');
+  expect(capturedInit?.method).toBe('POST');
+  expect(headers.get('X-Goog-Api-Key')).toBe('server-key');
+  expect(headers.get('X-Goog-FieldMask')).toBe(GOOGLE_AUTOCOMPLETE_FIELD_MASK);
+  expect(headers.get('X-Goog-FieldMask')?.includes('*')).toBe(false);
+  expect(requestBody).toStrictEqual({
     input: 'National Museum',
     languageCode: 'en',
     locationBias: {
@@ -80,7 +79,7 @@ test('Google search uses location bias, a session token, and an explicit field m
     regionCode: 'sg',
     sessionToken: 'b6ffb9ec-3f34-4a2e-a37a-a416c54e99d0',
   });
-  assert.deepEqual(suggestions, [
+  expect(suggestions).toStrictEqual([
     {
       category: 'things_to_do',
       description: 'Singapore',
@@ -123,18 +122,18 @@ test('Google details concludes the session and asks only for what Trove stores',
   });
   const url = new URL(capturedUrl);
 
-  assert.equal(url.pathname, '/v1/places/ChIJhotel');
-  assert.deepEqual(Object.fromEntries(url.searchParams), {
+  expect(url.pathname).toBe('/v1/places/ChIJhotel');
+  expect(Object.fromEntries(url.searchParams)).toStrictEqual({
     languageCode: 'en',
     regionCode: 'sg',
     sessionToken: 'session-token',
   });
-  assert.equal(capturedHeaders.get('X-Goog-FieldMask'), GOOGLE_PLACE_LOCATION_FIELD_MASK);
-  assert.equal(capturedHeaders.get('X-Goog-FieldMask')?.includes('*'), false);
-  assert.equal(place.category, 'stay');
-  assert.deepEqual(place.rawTypes, ['hotel', 'lodging', 'establishment']);
-  assert.equal(place.name, 'Trove Hotel');
-  assert.deepEqual(place.location, { latitude: 1.3, longitude: 103.8 });
+  expect(capturedHeaders.get('X-Goog-FieldMask')).toBe(GOOGLE_PLACE_LOCATION_FIELD_MASK);
+  expect(capturedHeaders.get('X-Goog-FieldMask')?.includes('*')).toBe(false);
+  expect(place.category).toBe('stay');
+  expect(place.rawTypes).toStrictEqual(['hotel', 'lodging', 'establishment']);
+  expect(place.name).toBe('Trove Hotel');
+  expect(place.location).toStrictEqual({ latitude: 1.3, longitude: 103.8 });
 });
 
 test('a geocoded address with no displayName falls back to its formatted address as the name', async () => {
@@ -151,8 +150,8 @@ test('a geocoded address with no displayName falls back to its formatted address
 
   const place = await provider.getDetails({ detail: 'location', externalPlaceId: 'ChIJaddress' });
 
-  assert.equal(place.name, '5 Quiet Lane, Wellington 6021');
-  assert.equal(place.formattedAddress, '5 Quiet Lane, Wellington 6021');
+  expect(place.name).toBe('5 Quiet Lane, Wellington 6021');
+  expect(place.formattedAddress).toBe('5 Quiet Lane, Wellington 6021');
 });
 
 test('a place with neither a displayName nor a formatted address is unresolvable', async () => {
@@ -161,10 +160,9 @@ test('a place with neither a displayName nor a formatted address is unresolvable
     fetcher: async () => Response.json({ id: 'ChIJbare' }),
   });
 
-  await assert.rejects(
+  await expect(
     provider.getDetails({ detail: 'location', externalPlaceId: 'ChIJbare' }),
-    new PlaceProviderError('provider_unavailable'),
-  );
+  ).rejects.toThrow(new PlaceProviderError('provider_unavailable'));
 });
 
 async function detailsFrom(body: Record<string, unknown>) {
@@ -194,11 +192,11 @@ test('opening periods survive the zero values proto3 omits from the wire', async
     utcOffsetMinutes: 480,
   });
 
-  assert.deepEqual(place.openingPeriods, [
+  expect(place.openingPeriods).toStrictEqual([
     { close: { day: 1, hour: 17, minute: 0 }, open: { day: 1, hour: 9, minute: 0 } },
     { close: { day: 0, hour: 18, minute: 0 }, open: { day: 0, hour: 0, minute: 0 } },
   ]);
-  assert.equal(place.utcOffsetMinutes, 480);
+  expect(place.utcOffsetMinutes).toBe(480);
 });
 
 test('an open point with no close is kept as an always-open period', async () => {
@@ -206,7 +204,9 @@ test('an open point with no close is kept as an always-open period', async () =>
     regularOpeningHours: { periods: [{ open: { day: 0, hour: 0, minute: 0 } }] },
   });
 
-  assert.deepEqual(place.openingPeriods, [{ close: null, open: { day: 0, hour: 0, minute: 0 } }]);
+  expect(place.openingPeriods).toStrictEqual([
+    { close: null, open: { day: 0, hour: 0, minute: 0 } },
+  ]);
 });
 
 test('out-of-range and unopenable periods are dropped, not corrected', async () => {
@@ -222,7 +222,7 @@ test('out-of-range and unopenable periods are dropped, not corrected', async () 
     },
   });
 
-  assert.deepEqual(place.openingPeriods, [
+  expect(place.openingPeriods).toStrictEqual([
     { close: { day: 3, hour: 17, minute: 0 }, open: { day: 3, hour: 9, minute: 0 } },
   ]);
 });
@@ -230,8 +230,8 @@ test('out-of-range and unopenable periods are dropped, not corrected', async () 
 test('a place with no hours reports no periods and no offset', async () => {
   const place = await detailsFrom({});
 
-  assert.deepEqual(place.openingPeriods, []);
-  assert.equal(place.utcOffsetMinutes, null);
+  expect(place.openingPeriods).toStrictEqual([]);
+  expect(place.utcOffsetMinutes).toBe(null);
 });
 
 test('PlacesService creates reusable session tokens and reports freshness for empty results', async () => {
@@ -251,18 +251,17 @@ test('PlacesService creates reusable session tokens and reports freshness for em
   const search = await service.search({ input: 'No result' });
   const details = await service.getDetails({ detail: 'location', externalPlaceId: 'missing' });
 
-  assert.match(
-    capturedToken,
+  expect(capturedToken).toMatch(
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
   );
-  assert.deepEqual(search, {
+  expect(search).toStrictEqual({
     freshness: { fetchedAt: '2026-08-11T08:00:00.000Z', source: 'live' },
     provider: 'google',
     sessionToken: capturedToken,
     status: 'empty',
     suggestions: [],
   });
-  assert.deepEqual(details, { provider: 'google', reason: 'not_found', status: 'empty' });
+  expect(details).toStrictEqual({ provider: 'google', reason: 'not_found', status: 'empty' });
 });
 
 test('PlacesService translates provider quota failures into a graceful unavailable result', async () => {
@@ -277,7 +276,9 @@ test('PlacesService translates provider quota failures into a graceful unavailab
   };
   const service = new PlacesService(provider);
 
-  assert.deepEqual(await service.getDetails({ detail: 'location', externalPlaceId: 'ChIJquota' }), {
+  expect(
+    await service.getDetails({ detail: 'location', externalPlaceId: 'ChIJquota' }),
+  ).toStrictEqual({
     code: 'quota_exceeded',
     provider: 'google',
     status: 'unavailable',
@@ -294,8 +295,9 @@ test('Google error responses are categorized without leaking provider messages',
       ),
   });
 
-  await assert.rejects(
+  await expect(
     provider.search({ input: 'Museum', sessionToken: 'session-token' }),
+  ).rejects.toSatisfy(
     (error: unknown) =>
       error instanceof PlaceProviderError &&
       error.code === 'quota_exceeded' &&
@@ -328,10 +330,10 @@ test('Places controllers reject invalid input and degrade provider failures expl
     url: '/places/search',
   });
 
-  assert.equal(invalidResponse.statusCode, 400);
-  assert.deepEqual(invalidResponse.json(), { code: 'invalid_place_search_request' });
-  assert.equal(unavailableResponse.statusCode, 503);
-  assert.deepEqual(unavailableResponse.json(), {
+  expect(invalidResponse.statusCode).toBe(400);
+  expect(invalidResponse.json()).toStrictEqual({ code: 'invalid_place_search_request' });
+  expect(unavailableResponse.statusCode).toBe(503);
+  expect(unavailableResponse.json()).toStrictEqual({
     code: 'quota_exceeded',
     provider: 'google',
     sessionToken: 'session-token',

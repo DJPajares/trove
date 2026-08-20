@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import type { Memory, MemoryTripPlace } from '../lib/memories/api.ts';
 import { buildTripStory, placeName, providerPlaceId } from '../lib/memories/story.ts';
@@ -72,38 +71,37 @@ test('a story groups what the traveller captured into days and Places', () => {
     memory({ capturedLocalTime: '17:20', id: 'benches', tripPlace: YOYOGI }),
   ]);
 
-  assert.deepEqual(
+  expect(
     story.days.map((day) => ({
       date: day.date,
       memories: day.memories.map((entry) => entry.id),
       photoCount: day.photoCount,
     })),
-    [
-      { date: '2026-09-06', memories: ['dawn', 'lunch', 'benches'], photoCount: 2 },
-      { date: '2026-09-07', memories: ['lanterns'], photoCount: 0 },
-    ],
-  );
+  ).toStrictEqual([
+    { date: '2026-09-06', memories: ['dawn', 'lunch', 'benches'], photoCount: 2 },
+    { date: '2026-09-07', memories: ['lanterns'], photoCount: 0 },
+  ]);
 
   // Places are ordered by how much of the trip happened there.
-  assert.deepEqual(
+  expect(
     story.places.map((place) => ({
       memories: place.memories.map((entry) => entry.id),
       tripPlace: place.tripPlace.id,
     })),
-    [
-      { memories: ['dawn', 'benches'], tripPlace: YOYOGI.id },
-      { memories: ['lanterns'], tripPlace: KIYOSUMI.id },
-    ],
-  );
-  assert.deepEqual(
-    { memoryCount: story.memoryCount, photoCount: story.photoCount, unplaced: story.unplacedCount },
-    { memoryCount: 4, photoCount: 2, unplaced: 1 },
-  );
+  ).toStrictEqual([
+    { memories: ['dawn', 'benches'], tripPlace: YOYOGI.id },
+    { memories: ['lanterns'], tripPlace: KIYOSUMI.id },
+  ]);
+  expect({
+    memoryCount: story.memoryCount,
+    photoCount: story.photoCount,
+    unplaced: story.unplacedCount,
+  }).toStrictEqual({ memoryCount: 4, photoCount: 2, unplaced: 1 });
 });
 
 test('a sparse or empty trip stays a valid story with nothing invented', () => {
   const empty = buildTripStory([]);
-  assert.deepEqual(empty, {
+  expect(empty).toStrictEqual({
     days: [],
     highlights: [],
     memoryCount: 0,
@@ -113,19 +111,13 @@ test('a sparse or empty trip stays a valid story with nothing invented', () => {
   });
 
   const single = buildTripStory([memory({ id: 'only', note: 'One quiet evening' })]);
-  assert.deepEqual(
-    single.days.map((day) => day.date),
-    ['2026-09-06'],
-  );
-  assert.deepEqual(single.places, []);
-  assert.deepEqual(
-    {
-      highlights: single.highlights.length,
-      photos: single.photoCount,
-      unplaced: single.unplacedCount,
-    },
-    { highlights: 0, photos: 0, unplaced: 1 },
-  );
+  expect(single.days.map((day) => day.date)).toStrictEqual(['2026-09-06']);
+  expect(single.places).toStrictEqual([]);
+  expect({
+    highlights: single.highlights.length,
+    photos: single.photoCount,
+    unplaced: single.unplacedCount,
+  }).toStrictEqual({ highlights: 0, photos: 0, unplaced: 1 });
 });
 
 test('Days stays chronological while Highlights keeps its curated order', () => {
@@ -137,15 +129,20 @@ test('Days stays chronological while Highlights keeps its curated order', () => 
     memory({ capturedLocalTime: '22:00', id: 'ordinary' }),
   ]);
 
-  assert.deepEqual(
-    story.days[0]?.memories.map((entry) => entry.id),
-    ['first', 'second', 'third', 'fourth', 'ordinary'],
-  );
+  expect(story.days[0]?.memories.map((entry) => entry.id)).toStrictEqual([
+    'first',
+    'second',
+    'third',
+    'fourth',
+    'ordinary',
+  ]);
   // A freshly highlighted Memory has no position yet and waits at the end.
-  assert.deepEqual(
-    story.highlights.map((entry) => entry.id),
-    ['second', 'fourth', 'first', 'third'],
-  );
+  expect(story.highlights.map((entry) => entry.id)).toStrictEqual([
+    'second',
+    'fourth',
+    'first',
+    'third',
+  ]);
 });
 
 test('grouping follows the trip-local date stored with the Memory, not the reading device', () => {
@@ -173,14 +170,13 @@ test('grouping follows the trip-local date stored with the Memory, not the readi
     process.env.TZ = 'Pacific/Auckland';
     const abroad = buildTripStory([departure, arrival]);
 
-    assert.deepEqual(
+    expect(
       atHome.days.map((day) => ({ date: day.date, memories: day.memories.map((e) => e.id) })),
-      [
-        { date: '2026-09-05', memories: ['departure'] },
-        { date: '2026-09-06', memories: ['arrival'] },
-      ],
-    );
-    assert.deepEqual(abroad.days, atHome.days);
+    ).toStrictEqual([
+      { date: '2026-09-05', memories: ['departure'] },
+      { date: '2026-09-06', memories: ['arrival'] },
+    ]);
+    expect(abroad.days).toStrictEqual(atHome.days);
   } finally {
     process.env.TZ = original;
   }
@@ -196,46 +192,38 @@ test('correcting a Memory’s day and Place moves it through every grouping at o
   const other = memory({ id: 'other', tripPlace: YOYOGI });
 
   const before = buildTripStory([misfiled, other]);
-  assert.deepEqual(
-    before.days.map((day) => day.date),
-    ['2026-09-06'],
-  );
-  assert.deepEqual(
-    before.places[0]?.memories.map((entry) => entry.id),
-    ['misfiled', 'other'],
-  );
+  expect(before.days.map((day) => day.date)).toStrictEqual(['2026-09-06']);
+  expect(before.places[0]?.memories.map((entry) => entry.id)).toStrictEqual(['misfiled', 'other']);
 
   const corrected = buildTripStory([
     { ...misfiled, capturedLocalDate: '2026-09-07', tripPlace: KIYOSUMI },
     other,
   ]);
 
-  assert.deepEqual(
+  expect(
     corrected.days.map((day) => ({ date: day.date, memories: day.memories.map((e) => e.id) })),
-    [
-      { date: '2026-09-06', memories: ['other'] },
-      { date: '2026-09-07', memories: ['misfiled'] },
-    ],
-  );
-  assert.deepEqual(
+  ).toStrictEqual([
+    { date: '2026-09-06', memories: ['other'] },
+    { date: '2026-09-07', memories: ['misfiled'] },
+  ]);
+  expect(
     corrected.places.map((place) => ({
       memories: place.memories.map((entry) => entry.id),
       tripPlace: place.tripPlace.id,
     })),
-    [
-      { memories: ['other'], tripPlace: YOYOGI.id },
-      { memories: ['misfiled'], tripPlace: KIYOSUMI.id },
-    ],
-  );
-  assert.equal(corrected.memoryCount, 2);
+  ).toStrictEqual([
+    { memories: ['other'], tripPlace: YOYOGI.id },
+    { memories: ['misfiled'], tripPlace: KIYOSUMI.id },
+  ]);
+  expect(corrected.memoryCount).toBe(2);
 });
 
 test('a Place shows a Trove-owned name before one resolved from the provider', () => {
-  assert.equal(placeName(KIYOSUMI, 'Provider name', 'Item label'), 'Kiyosumi Garden');
-  assert.equal(placeName(YOYOGI, 'Yoyogi Park', 'Morning walk'), 'Yoyogi Park');
-  assert.equal(placeName(YOYOGI, null, 'Morning walk'), 'Morning walk');
-  assert.equal(placeName(YOYOGI, null, null), null);
+  expect(placeName(KIYOSUMI, 'Provider name', 'Item label')).toBe('Kiyosumi Garden');
+  expect(placeName(YOYOGI, 'Yoyogi Park', 'Morning walk')).toBe('Yoyogi Park');
+  expect(placeName(YOYOGI, null, 'Morning walk')).toBe('Morning walk');
+  expect(placeName(YOYOGI, null, null)).toBe(null);
 
-  assert.equal(providerPlaceId(YOYOGI), 'ChIJyoyogi');
-  assert.equal(providerPlaceId(KIYOSUMI), null);
+  expect(providerPlaceId(YOYOGI)).toBe('ChIJyoyogi');
+  expect(providerPlaceId(KIYOSUMI)).toBe(null);
 });

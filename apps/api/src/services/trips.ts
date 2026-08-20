@@ -10,6 +10,7 @@ import {
   getDateRangeChanges,
   isValidIanaTimeZone,
   parseDateOnly,
+  resolveCountryPrimaryTimeZone,
   resolveTripTimeZone,
 } from './trip-rules.js';
 
@@ -161,6 +162,7 @@ async function findOrCreateCustomPlace(
   transaction: Prisma.TransactionClient,
   userId: string,
   name: string,
+  inferredTimeZone: string | null = null,
 ) {
   const customName = name.trim();
   const existing = await transaction.place.findFirst({
@@ -171,12 +173,26 @@ async function findOrCreateCustomPlace(
     },
   });
 
-  return (
-    existing ??
-    (await transaction.place.create({
-      data: { customName, kind: 'CUSTOM', ownerId: userId },
-    }))
-  );
+  if (existing) {
+    // A saved custom Location or a previously resolved Place is more specific
+    // than a country default. Only fill an unresolved value; never overwrite it.
+    if (!existing.customTimeZone && inferredTimeZone) {
+      return transaction.place.update({
+        where: { id: existing.id },
+        data: { customTimeZone: inferredTimeZone },
+      });
+    }
+    return existing;
+  }
+
+  return transaction.place.create({
+    data: {
+      customName,
+      customTimeZone: inferredTimeZone,
+      kind: 'CUSTOM',
+      ownerId: userId,
+    },
+  });
 }
 
 function toTimeZoneCandidate(place: { customTimeZone: string | null; id: string } | null) {
@@ -215,7 +231,12 @@ export async function createTrip(userId: string, accessToken: string, input: Tri
     });
     const destinations = await Promise.all(
       (input.destinations ?? []).map((destination) =>
-        findOrCreateCustomPlace(transaction, userId, destination.name),
+        findOrCreateCustomPlace(
+          transaction,
+          userId,
+          destination.name,
+          resolveCountryPrimaryTimeZone(destination.name),
+        ),
       ),
     );
     const startingPlace = input.startingLocation?.trim()
@@ -298,7 +319,12 @@ export async function updateTrip(
     const destinations = input.destinations
       ? await Promise.all(
           input.destinations.map((destination) =>
-            findOrCreateCustomPlace(transaction, userId, destination.name),
+            findOrCreateCustomPlace(
+              transaction,
+              userId,
+              destination.name,
+              resolveCountryPrimaryTimeZone(destination.name),
+            ),
           ),
         )
       : current.destinations.map((destination) => destination.place);
@@ -411,6 +437,19 @@ export async function updateTrip(
           })),
         });
       }
+    }
+
+    if (shouldResolveTimeZone) {
+      // Existing day defaults that still inherit the trip reference must move
+      // before a later item creation snapshots that day default. Explicit daily
+      // bases and location-derived defaults intentionally remain untouched.
+      await transaction.itineraryDay.updateMany({
+        where: { defaultTimeZoneSource: 'TRIP_REFERENCE', tripId },
+        data: {
+          defaultTimeZone: timeZone.timeZone,
+          defaultTimeZoneResolvedAt: new Date(),
+        },
+      });
     }
 
     await transaction.trip.update({

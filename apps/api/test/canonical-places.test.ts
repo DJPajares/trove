@@ -1,6 +1,5 @@
-import assert from 'node:assert/strict';
 import Fastify from 'fastify';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import { createPlacesControllers } from '../src/controllers/places.js';
 import {
@@ -180,17 +179,17 @@ test('provider resolution creates identity only on use and reuses it across conc
   const repository = new MemoryCanonicalPlaceRepository();
   const service = new CanonicalPlacesService(repository, countingHydrator().hydrate);
 
-  assert.equal(repository.providerPlaceCount, 0);
+  expect(repository.providerPlaceCount).toBe(0);
 
   const [first, second] = await Promise.all([
     service.resolveProviderPlace('google', 'ChIJcanonical'),
     service.resolveProviderPlace('google', 'ChIJcanonical'),
   ]);
 
-  assert.equal(first.id, second.id);
-  assert.equal(repository.providerPlaceCount, 1);
-  assert.equal(repository.createProviderAttempts, 2);
-  assert.deepEqual(first, {
+  expect(first.id).toBe(second.id);
+  expect(repository.providerPlaceCount).toBe(1);
+  expect(repository.createProviderAttempts).toBe(2);
+  expect(first).toStrictEqual({
     id: first.id,
     kind: 'provider',
     location: null,
@@ -205,8 +204,8 @@ test('provider resolution creates identity only on use and reuses it across conc
   });
 
   const repeated = await service.resolveProviderPlace('google', 'ChIJcanonical');
-  assert.equal(repeated.id, first.id);
-  assert.equal(repository.createProviderAttempts, 2);
+  expect(repeated.id).toBe(first.id);
+  expect(repository.createProviderAttempts).toBe(2);
 });
 
 test('custom Places support name-only creation and remain owner-scoped on edit', async () => {
@@ -214,7 +213,7 @@ test('custom Places support name-only creation and remain owner-scoped on edit',
   const service = new CanonicalPlacesService(repository, countingHydrator().hydrate);
 
   const created = await service.createCustomPlace(ownerId, { name: '  Quiet lookout  ' });
-  assert.deepEqual(created, {
+  expect(created).toStrictEqual({
     id: created.id,
     kind: 'custom',
     location: null,
@@ -231,7 +230,7 @@ test('custom Places support name-only creation and remain owner-scoped on edit',
     location: { latitude: 1.3521, longitude: 103.8198, timeZone: 'Asia/Singapore' },
     note: '  Meet by the sheltered bench.  ',
   });
-  assert.deepEqual(updated, {
+  expect(updated).toStrictEqual({
     ...created,
     location: {
       latitude: 1.3521,
@@ -241,12 +240,11 @@ test('custom Places support name-only creation and remain owner-scoped on edit',
     note: 'Meet by the sheltered bench.',
   });
 
-  await assert.rejects(
+  await expect(
     service.updateCustomPlace('11111111-1111-4111-8111-111111111111', created.id, {
       name: 'Not allowed',
     }),
-    CanonicalPlaceNotFoundError,
-  );
+  ).rejects.toThrow(CanonicalPlaceNotFoundError);
 });
 
 test('canonical Place controllers return one API shape for provider-backed and custom Places', async () => {
@@ -278,15 +276,15 @@ test('canonical Place controllers return one API shape for provider-backed and c
     url: '/custom',
   });
 
-  assert.equal(providerResponse.statusCode, 200);
-  assert.equal(customResponse.statusCode, 201);
+  expect(providerResponse.statusCode).toBe(200);
+  expect(customResponse.statusCode).toBe(201);
 
   const providerPlace = providerResponse.json().place as Record<string, unknown>;
   const customPlace = customResponse.json().place as Record<string, unknown>;
-  assert.deepEqual(Object.keys(providerPlace).sort(), Object.keys(customPlace).sort());
-  assert.equal('rating' in providerPlace, false);
-  assert.equal('photos' in providerPlace, false);
-  assert.equal(calls[0]?.options?.sessionToken, 'b6ffb9ec-3f34-4a2e-a37a-a416c54e99d0');
+  expect(Object.keys(providerPlace).sort()).toStrictEqual(Object.keys(customPlace).sort());
+  expect('rating' in providerPlace).toBe(false);
+  expect('photos' in providerPlace).toBe(false);
+  expect(calls[0]?.options?.sessionToken).toBe('b6ffb9ec-3f34-4a2e-a37a-a416c54e99d0');
 
   const updateResponse = await app.inject({
     method: 'PATCH',
@@ -296,8 +294,8 @@ test('canonical Place controllers return one API shape for provider-backed and c
     },
     url: `/custom/${String(customPlace.id)}`,
   });
-  assert.equal(updateResponse.statusCode, 200);
-  assert.equal(updateResponse.json().place.note, 'Near the west entrance');
+  expect(updateResponse.statusCode).toBe(200);
+  expect(updateResponse.json().place.note).toBe('Near the west entrance');
 
   await app.close();
 });
@@ -311,30 +309,30 @@ test('the label a Place was first seen by is kept, backfilled once, and never re
     address: '  Remuera, Auckland 1050, New Zealand  ',
     name: '  2/42 Clonbern Road  ',
   });
-  assert.equal(created.providerLabel, '2/42 Clonbern Road');
-  assert.equal(created.providerAddress, 'Remuera, Auckland 1050, New Zealand');
-  assert.equal(repository.backfillAttempts, 0);
+  expect(created.providerLabel).toBe('2/42 Clonbern Road');
+  expect(created.providerAddress).toBe('Remuera, Auckland 1050, New Zealand');
+  expect(repository.backfillAttempts).toBe(0);
 
   // A second traveller wording it differently does not get to rename it.
   const reresolved = await service.resolveProviderPlace('google', 'Ej-clonbern', {
     address: 'Somewhere else entirely',
     name: 'A different wording',
   });
-  assert.equal(reresolved.providerLabel, '2/42 Clonbern Road');
-  assert.equal(reresolved.providerAddress, 'Remuera, Auckland 1050, New Zealand');
-  assert.equal(repository.backfillAttempts, 0, 'an existing label must not be written again');
+  expect(reresolved.providerLabel).toBe('2/42 Clonbern Road');
+  expect(reresolved.providerAddress).toBe('Remuera, Auckland 1050, New Zealand');
+  expect(repository.backfillAttempts, 'an existing label must not be written again').toBe(0);
 
   // A Place resolved before labels existed borrows the next one offered.
   const unlabelled = await service.resolveProviderPlace('google', 'ChIJlegacy');
-  assert.equal(unlabelled.providerLabel, null);
+  expect(unlabelled.providerLabel).toBe(null);
 
   const backfilled = await service.resolveProviderPlace('google', 'ChIJlegacy', {
     address: 'Matamata 3472, New Zealand',
     name: 'Hobbiton Movie Set Tours',
   });
-  assert.equal(backfilled.providerLabel, 'Hobbiton Movie Set Tours');
-  assert.equal(backfilled.providerAddress, 'Matamata 3472, New Zealand');
-  assert.equal(repository.backfillAttempts, 1);
+  expect(backfilled.providerLabel).toBe('Hobbiton Movie Set Tours');
+  expect(backfilled.providerAddress).toBe('Matamata 3472, New Zealand');
+  expect(repository.backfillAttempts).toBe(1);
 });
 
 test('resolving without a label still succeeds and writes nothing', async () => {
@@ -343,10 +341,10 @@ test('resolving without a label still succeeds and writes nothing', async () => 
 
   const place = await service.resolveProviderPlace('google', 'ChIJnolabel');
 
-  assert.equal(place.providerLabel, null);
-  assert.equal(place.providerAddress, null);
-  assert.equal(repository.backfillAttempts, 0);
-  assert.equal(repository.providerPlaceCount, 1);
+  expect(place.providerLabel).toBe(null);
+  expect(place.providerAddress).toBe(null);
+  expect(repository.backfillAttempts).toBe(0);
+  expect(repository.providerPlaceCount).toBe(1);
 });
 
 test('a Place costs exactly one provider request, the first time anyone adds it', async () => {
@@ -357,7 +355,7 @@ test('a Place costs exactly one provider request, the first time anyone adds it'
   await service.resolveProviderPlace('google', 'ChIJmuseum', undefined, { languageCode: 'en' });
 
   // Paid once, at the only moment a user asked for it: picking it out of search.
-  assert.deepEqual(calls, [
+  expect(calls).toStrictEqual([
     {
       externalPlaceId: 'ChIJmuseum',
       options: { languageCode: 'en', sessionToken: undefined, source: 'place-resolution' },
@@ -375,7 +373,7 @@ test('provider resolution carries the autocomplete session into Place Details hy
     sessionToken: 'b6ffb9ec-3f34-4a2e-a37a-a416c54e99d0',
   });
 
-  assert.deepEqual(calls, [
+  expect(calls).toStrictEqual([
     {
       externalPlaceId: 'ChIJmuseum',
       options: {
@@ -402,9 +400,9 @@ test('adding a Place the database already knows costs nothing', async () => {
     name: 'National Museum',
   });
 
-  assert.equal(second.id, first.id);
-  assert.equal(third.id, first.id);
-  assert.equal(calls.length, 1, 'only the very first resolution should reach a provider');
+  expect(second.id).toBe(first.id);
+  expect(third.id).toBe(first.id);
+  expect(calls.length, 'only the very first resolution should reach a provider').toBe(1);
 });
 
 test('a snapshot that has aged out is refreshed the next time the Place is added', async () => {
@@ -417,8 +415,5 @@ test('a snapshot that has aged out is refreshed the next time the Place is added
 
   await service.resolveProviderPlace('google', 'ChIJmuseum');
 
-  assert.deepEqual(
-    calls.map((call) => call.externalPlaceId),
-    ['ChIJmuseum', 'ChIJmuseum'],
-  );
+  expect(calls.map((call) => call.externalPlaceId)).toStrictEqual(['ChIJmuseum', 'ChIJmuseum']);
 });

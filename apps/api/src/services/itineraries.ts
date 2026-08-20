@@ -395,7 +395,7 @@ export async function listItinerary(userId: string, tripId: string, languageCode
     trip.tripPlaces.flatMap((tripPlace) =>
       tripPlace.place.providerRefs.map((reference) => reference.externalPlaceId),
     ),
-    { languageCode },
+    { languageCode, source: 'itinerary' },
   );
   const options = { snapshots };
 

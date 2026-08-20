@@ -1,4 +1,4 @@
-import { recordProviderCall } from './provider-usage.js';
+import { recordProviderCall, type ProviderCallSource } from './provider-usage.js';
 import {
   RouteProviderError,
   type RouteEstimate,
@@ -32,6 +32,7 @@ type GoogleRoutesProviderOptions = {
   baseUrl?: string;
   fetcher?: Fetcher;
   requestTimeoutMs?: number;
+  source?: ProviderCallSource;
 };
 
 function mapGoogleError(responseStatus: number, body: GoogleErrorResponse) {
@@ -86,21 +87,28 @@ export class GoogleRoutesProvider implements RoutesProvider {
   private readonly baseUrl: string;
   private readonly fetcher: Fetcher;
   private readonly requestTimeoutMs: number;
+  private readonly source: ProviderCallSource;
 
   constructor(options: GoogleRoutesProviderOptions) {
     this.apiKey = options.apiKey.trim();
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '');
     this.fetcher = options.fetcher ?? globalThis.fetch;
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.source = options.source ?? 'test';
   }
 
   async computeRoute(request: RouteRequest): Promise<RouteEstimate | null> {
     if (!this.apiKey) throw new RouteProviderError('configuration_missing');
 
     recordProviderCall({
+      cacheMissReason: request.cacheMissReason,
       endpoint: '/directions/v2:computeRoutes',
+      expectedSku: 'routes-compute-routes-essentials',
+      includePolyline: request.includePolyline ?? false,
       operation: 'computeRoute',
       provider: 'google',
+      routeMode: request.mode,
+      source: this.source,
     });
 
     let response: Response;

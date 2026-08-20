@@ -21,7 +21,7 @@ export async function searchController(request: FastifyRequest, reply: FastifyRe
   return reply.send(
     await searchTrove(request.authUserId, query.data.q, {
       includePlaces: query.data.places === '1',
-      placesService: createPlacesService(),
+      placesService: createPlacesService({ source: 'global-search' }),
     }),
   );
 }

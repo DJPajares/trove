@@ -350,6 +350,8 @@ model PlaceProviderRef {
   /// a snapshot may only answer a request asking for the same language.
   cachedLanguageCode     String?   @map("cached_language_code")
   cachedAt               DateTime? @map("cached_at") @db.Timestamptz(3)
+  detailsFailureCode     String?   @map("details_failure_code")
+  detailsFailedAt        DateTime? @map("details_failed_at") @db.Timestamptz(3)
 
   place Place @relation(fields: [placeId], references: [id], onDelete: Cascade)
 

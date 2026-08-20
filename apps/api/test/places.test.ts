@@ -262,7 +262,7 @@ test('PlacesService creates reusable session tokens and reports freshness for em
     status: 'empty',
     suggestions: [],
   });
-  assert.deepEqual(details, { provider: 'google', status: 'empty' });
+  assert.deepEqual(details, { provider: 'google', reason: 'not_found', status: 'empty' });
 });
 
 test('PlacesService translates provider quota failures into a graceful unavailable result', async () => {

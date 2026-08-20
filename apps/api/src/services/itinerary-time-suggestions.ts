@@ -102,7 +102,9 @@ export async function getItineraryDayTimeSuggestions(
 
   const date = toLocalDate(day.date);
   const placesService =
-    services.placesService === undefined ? createPlacesService() : services.placesService;
+    services.placesService === undefined
+      ? createPlacesService({ source: 'itinerary-time-suggestions' })
+      : services.placesService;
   // Only the places this day actually schedules: loadPlaceEvidence fans out one
   // provider request per entry, so a trip-wide list would bill for the whole trip.
   const dayTripPlaceIds = new Set(
@@ -110,7 +112,13 @@ export async function getItineraryDayTimeSuggestions(
   );
 
   const [routes, placeEvidence] = await Promise.all([
-    getItineraryDayRoutes(userId, tripId, day.id, {}, { placesService }),
+    getItineraryDayRoutes(
+      userId,
+      tripId,
+      day.id,
+      {},
+      { placesService, source: 'itinerary-time-suggestions' },
+    ),
     loadPlaceEvidence(
       trip.tripPlaces
         .filter((tripPlace) => dayTripPlaceIds.has(tripPlace.id))

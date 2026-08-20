@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
+import type { ProviderCacheMissReason } from './provider-usage.js';
+import { providerTargetFingerprint } from './provider-usage.js';
+
 export const PLACE_PROVIDERS = ['google'] as const;
 export type PlaceProviderName = (typeof PLACE_PROVIDERS)[number];
 
@@ -44,6 +47,8 @@ export type PlaceSearchRequest = {
 export type PlaceDetailLevel = 'evidence' | 'location';
 
 export type PlaceDetailsRequest = {
+  /** Internal attribution supplied by the cache when this becomes outbound. */
+  cacheMissReason?: ProviderCacheMissReason;
   detail: PlaceDetailLevel;
   externalPlaceId: string;
   languageCode?: string;
@@ -146,6 +151,7 @@ export type PlaceDetailsResult =
       status: 'ok';
     }
   | {
+      reason: 'not_found' | 'unusable_location';
       provider: PlaceProviderName;
       status: 'empty';
     }
@@ -184,14 +190,15 @@ export class PlacesService {
   /**
    * A provider failure reaches the traveller as a Place with no name, and every
    * cause — quota, a bad key, a timeout, nothing found — looks identical by the
-   * time it gets there. The cause is recorded here so it is answerable later.
+   * time it gets there. The safe failure class is recorded here so it is
+   * answerable later without leaking a provider URL through a nested error.
    */
   private warn(operation: string, error: PlaceProviderError, externalPlaceId?: string) {
     this.logger?.warn(
       {
-        cause: error.cause,
+        causeName: error.cause instanceof Error ? error.cause.name : undefined,
         code: error.code,
-        externalPlaceId,
+        placeFingerprint: externalPlaceId ? providerTargetFingerprint(externalPlaceId) : undefined,
         operation,
         provider: this.provider.name,
       },
@@ -242,7 +249,7 @@ export class PlacesService {
       this.warn('getDetails', providerError, request.externalPlaceId);
 
       if (providerError.code === 'not_found') {
-        return { provider: this.provider.name, status: 'empty' };
+        return { provider: this.provider.name, reason: 'not_found', status: 'empty' };
       }
 
       return {

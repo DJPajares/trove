@@ -1,6 +1,11 @@
 import { getPrismaClient } from '@trove/db';
 
 import {
+  recordProviderCacheEvent,
+  type ProviderCacheMissReason,
+  type ProviderCallSource,
+} from './provider-usage.js';
+import {
   RoutesService,
   type RoutableTravelMode,
   type RouteCoordinates,
@@ -51,24 +56,45 @@ function legKey(origin: RouteCoordinates, destination: RouteCoordinates, mode: R
 export class CachedRoutesService extends RoutesService {
   private readonly providerName: RoutesProvider['name'];
   private readonly now: () => Date;
+  private readonly source: ProviderCallSource;
 
-  constructor(provider: RoutesProvider, clock: () => Date = () => new Date()) {
+  constructor(
+    provider: RoutesProvider,
+    clock: () => Date = () => new Date(),
+    source: ProviderCallSource = 'test',
+  ) {
     super(provider, clock);
     this.providerName = provider.name;
     this.now = clock;
+    this.source = source;
   }
 
   override async computeRoute(request: RouteRequest): Promise<RouteResult> {
     const cached = await this.readLeg(request);
-    if (cached) return cached;
+    if (cached.kind === 'hit') {
+      recordProviderCacheEvent({
+        cache: 'route',
+        includePolyline: request.includePolyline ?? false,
+        kind: 'cache_hit',
+        operation: 'computeRoute',
+        provider: 'google',
+        routeMode: request.mode,
+        source: this.source,
+      });
+      return cached.result;
+    }
 
-    const result = await super.computeRoute(request);
+    const result = await super.computeRoute({ ...request, cacheMissReason: cached.reason });
     if (result.status === 'ok') await this.writeLeg(request, result.estimate);
 
     return result;
   }
 
-  private async readLeg(request: RouteRequest): Promise<RouteResult | null> {
+  private async readLeg(
+    request: RouteRequest,
+  ): Promise<
+    { kind: 'hit'; result: RouteResult } | { kind: 'miss'; reason: ProviderCacheMissReason }
+  > {
     let leg;
 
     try {
@@ -77,27 +103,33 @@ export class CachedRoutesService extends RoutesService {
       });
     } catch {
       // A cache that cannot be read is a slow path, never a failed request.
-      return null;
+      return { kind: 'miss', reason: 'cache_read_failed' };
     }
 
-    if (!leg || this.now().getTime() - leg.fetchedAt.getTime() > TRAVEL_LEG_CACHE_TTL_MS) {
-      return null;
+    if (!leg) return { kind: 'miss', reason: 'missing_leg' };
+    if (this.now().getTime() - leg.fetchedAt.getTime() > TRAVEL_LEG_CACHE_TTL_MS) {
+      return { kind: 'miss', reason: 'stale_leg' };
     }
 
     // A leg first computed for a list view has no polyline. Serving it to the
     // map would silently drop the drawn route, so that case re-asks and the
     // richer answer replaces the thinner one.
-    if (request.includePolyline && leg.encodedPolyline === null) return null;
+    if (request.includePolyline && leg.encodedPolyline === null) {
+      return { kind: 'miss', reason: 'polyline_missing' };
+    }
 
     return {
-      estimate: {
-        distanceMeters: leg.distanceMeters,
-        durationSeconds: leg.durationSeconds,
-        encodedPolyline: request.includePolyline ? leg.encodedPolyline : null,
+      kind: 'hit',
+      result: {
+        estimate: {
+          distanceMeters: leg.distanceMeters,
+          durationSeconds: leg.durationSeconds,
+          encodedPolyline: request.includePolyline ? leg.encodedPolyline : null,
+        },
+        freshness: { fetchedAt: leg.fetchedAt.toISOString(), source: 'cache' },
+        provider: this.providerName,
+        status: 'ok',
       },
-      freshness: { fetchedAt: leg.fetchedAt.toISOString(), source: 'cache' },
-      provider: this.providerName,
-      status: 'ok',
     };
   }
 

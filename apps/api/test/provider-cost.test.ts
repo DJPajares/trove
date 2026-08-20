@@ -18,6 +18,7 @@ import {
   GooglePlacesProvider,
   PLACE_DETAIL_FIELD_MASKS,
 } from '../src/services/google-places.js';
+import { GoogleRoutesProvider } from '../src/services/google-routes.js';
 import {
   PlaceProviderError,
   type PlacesProvider,
@@ -28,6 +29,8 @@ import {
   getProviderCallCounts,
   recordProviderCall,
   resetProviderCallCounts,
+  setProviderUsageSink,
+  type ProviderUsageEvent,
 } from '../src/services/provider-usage.js';
 import type { RouteEstimate, RouteRequest, RoutesProvider } from '../src/services/routes.js';
 import { resolveTripModeContext } from '../src/services/trip-mode-context.js';
@@ -51,6 +54,8 @@ type ProviderRefRow = {
   cachedPrimaryType: string | null;
   cachedTypes: string[];
   cachedUtcOffsetMinutes: number | null;
+  detailsFailedAt: Date | null;
+  detailsFailureCode: string | null;
   externalPlaceId: string;
 };
 
@@ -92,10 +97,13 @@ function installStubPrisma() {
       }) => {
         const existing = providerRefs.get(args.where.externalPlaceId);
         if (!existing) return { count: 0 };
-        Object.assign(existing, args.data, {
-          cachedLatitude: decimal(args.data.cachedLatitude as number),
-          cachedLongitude: decimal(args.data.cachedLongitude as number),
-        });
+        Object.assign(existing, args.data);
+        if (typeof args.data.cachedLatitude === 'number') {
+          existing.cachedLatitude = decimal(args.data.cachedLatitude);
+        }
+        if (typeof args.data.cachedLongitude === 'number') {
+          existing.cachedLongitude = decimal(args.data.cachedLongitude);
+        }
         return { count: 1 };
       },
     },
@@ -193,7 +201,15 @@ function detailRequestsProvider() {
     name: 'google',
     getDetails: async (request) => {
       requests.push({ detail: request.detail, externalPlaceId: request.externalPlaceId });
-      recordProviderCall({ endpoint: '/v1/places', operation: 'getDetails', provider: 'google' });
+      recordProviderCall({
+        detailLevel: request.detail,
+        endpoint: '/v1/places/:placeId',
+        expectedSku:
+          request.detail === 'location' ? 'place-details-pro' : 'place-details-enterprise',
+        operation: 'getDetails',
+        provider: 'google',
+        source: 'test',
+      });
       return detailsFor(request.externalPlaceId);
     },
     search: async () => [],
@@ -214,6 +230,8 @@ function seedProviderRef(externalPlaceId: string, overrides: Partial<ProviderRef
     cachedPrimaryType: null,
     cachedTypes: [],
     cachedUtcOffsetMinutes: null,
+    detailsFailedAt: null,
+    detailsFailureCode: null,
     externalPlaceId,
     ...overrides,
   });
@@ -242,7 +260,15 @@ function countingPlacesProvider() {
     name: 'google',
     getDetails: async (request) => {
       calls += 1;
-      recordProviderCall({ endpoint: '/v1/places', operation: 'getDetails', provider: 'google' });
+      recordProviderCall({
+        detailLevel: request.detail,
+        endpoint: '/v1/places/:placeId',
+        expectedSku:
+          request.detail === 'location' ? 'place-details-pro' : 'place-details-enterprise',
+        operation: 'getDetails',
+        provider: 'google',
+        source: 'test',
+      });
       return detailsFor(request.externalPlaceId);
     },
     search: async () => [],
@@ -276,6 +302,7 @@ beforeEach(() => {
   resetCachedPlacesMemo();
   resetFailedPlaceHydrations();
   resetProviderCallCounts();
+  setProviderUsageSink(null);
   installStubPrisma();
 });
 
@@ -436,6 +463,30 @@ test('a cached place costs nothing to resolve again', async () => {
   assert.equal(second.status === 'ok' && second.freshness.source, 'cache');
   assert.equal(second.status === 'ok' && second.place.location?.latitude, 1.2966);
   assert.equal(getProviderCallCounts()['google:getDetails'], 1);
+});
+
+test('a canonicalised Google response is cached against the Place id Trove requested', async () => {
+  seedProviderRef('address-only-id');
+  let calls = 0;
+  const provider: PlacesProvider = {
+    name: 'google',
+    getDetails: async () => {
+      calls += 1;
+      return detailsFor('canonical-response-id');
+    },
+    search: async () => [],
+  };
+  const service = new CachedPlacesService(provider);
+
+  await service.getDetails({ detail: 'location', externalPlaceId: 'address-only-id' });
+  const second = await new CachedPlacesService(provider).getDetails({
+    detail: 'location',
+    externalPlaceId: 'address-only-id',
+  });
+
+  assert.equal(calls, 1);
+  assert.equal(providerRefs.get('address-only-id')?.cachedName, 'National Museum');
+  assert.equal(second.status === 'ok' && second.freshness.source, 'cache');
 });
 
 test('a snapshot past its 30-day life is refetched exactly once', async () => {
@@ -888,35 +939,172 @@ test('an evidence request never writes the location snapshot', async () => {
   assert.equal(isSnapshotFresh(providerRefs.get('ChIJmuseum')!, { now }), false);
 });
 
-test('a Place the provider cannot answer for is not re-asked on every screen', async () => {
+test('a durable Place miss survives new service instances and retries after 30 days', async () => {
   const now = new Date('2026-08-18T00:00:00.000Z');
   // A geocoded-address reference is the real case: it exists, it is on a trip,
   // and Google will not return details for it however many times we ask.
   seedProviderRef('ChIJunresolvable');
 
   let calls = 0;
+  let succeeds = false;
   const provider: PlacesProvider = {
     name: 'google',
-    getDetails: async () => {
+    getDetails: async (request) => {
       calls += 1;
-      recordProviderCall({ endpoint: '/v1/places', operation: 'getDetails', provider: 'google' });
+      recordProviderCall({
+        detailLevel: request.detail,
+        endpoint: '/v1/places/:placeId',
+        expectedSku: 'place-details-pro',
+        operation: 'getDetails',
+        provider: 'google',
+        source: 'test',
+      });
+      if (succeeds) return detailsFor(request.externalPlaceId);
       throw new PlaceProviderError('not_found');
     },
     search: async () => [],
   };
-  const service = new CachedPlacesService(provider, () => now);
+  const firstService = new CachedPlacesService(provider, () => now);
 
-  // Opening a screen, then another, then another.
+  await hydratePlaceSnapshots(['ChIJunresolvable'], { now, placesService: firstService });
+  assert.equal(providerRefs.get('ChIJunresolvable')?.detailsFailureCode, 'NOT_FOUND');
+  assert.deepEqual(providerRefs.get('ChIJunresolvable')?.detailsFailedAt, now);
+
+  // A cold start creates a new service and has no process-local backoff state.
+  const newService = new CachedPlacesService(provider, () => now);
   for (let visit = 0; visit < 5; visit += 1) {
-    await hydratePlaceSnapshots(['ChIJunresolvable'], { now, placesService: service });
+    await hydratePlaceSnapshots(['ChIJunresolvable'], { now, placesService: newService });
   }
+  assert.equal(calls, 1, 'one stubborn Place must not become a bill per screen or cold start');
 
-  assert.equal(calls, 1, 'one stubborn Place must not become a bill per screen load');
-
-  // It is a backoff, not a blocklist: a real outage heals on its own.
+  // The retry is durable but bounded. A later successful location clears it.
+  succeeds = true;
+  const retryAt = new Date(now.getTime() + 30 * DAY_MS + 1);
   await hydratePlaceSnapshots(['ChIJunresolvable'], {
-    now: new Date(now.getTime() + 11 * 60 * 1_000),
-    placesService: service,
+    now: retryAt,
+    placesService: new CachedPlacesService(provider, () => retryAt),
   });
   assert.equal(calls, 2);
+  assert.equal(providerRefs.get('ChIJunresolvable')?.detailsFailureCode, null);
+  assert.equal(providerRefs.get('ChIJunresolvable')?.detailsFailedAt, null);
+});
+
+test('an unusable location is durably cached but transient provider failures are not', async () => {
+  const now = new Date('2026-08-18T00:00:00.000Z');
+  seedProviderRef('ChIJunusable');
+  seedProviderRef('ChIJtransient');
+
+  let unusableCalls = 0;
+  const unusable: PlacesProvider = {
+    name: 'google',
+    getDetails: async (request) => {
+      unusableCalls += 1;
+      return { ...detailsFor(request.externalPlaceId), location: null };
+    },
+    search: async () => [],
+  };
+  await new CachedPlacesService(unusable, () => now).getDetails({
+    detail: 'location',
+    externalPlaceId: 'ChIJunusable',
+  });
+  await new CachedPlacesService(unusable, () => now).getDetails({
+    detail: 'location',
+    externalPlaceId: 'ChIJunusable',
+  });
+  assert.equal(unusableCalls, 1);
+  assert.equal(providerRefs.get('ChIJunusable')?.detailsFailureCode, 'UNUSABLE_LOCATION');
+
+  let transientCalls = 0;
+  const transient: PlacesProvider = {
+    name: 'google',
+    getDetails: async () => {
+      transientCalls += 1;
+      throw new PlaceProviderError('provider_unavailable');
+    },
+    search: async () => [],
+  };
+  const transientService = new CachedPlacesService(transient, () => now);
+  await hydratePlaceSnapshots(['ChIJtransient'], { now, placesService: transientService });
+  await hydratePlaceSnapshots(['ChIJtransient'], { now, placesService: transientService });
+  assert.equal(transientCalls, 1, 'the short in-memory backoff absorbs repeated screen reads');
+  assert.equal(providerRefs.get('ChIJtransient')?.detailsFailureCode, null);
+
+  const afterBackoff = new Date(now.getTime() + 11 * 60 * 1_000);
+  await hydratePlaceSnapshots(['ChIJtransient'], {
+    now: afterBackoff,
+    placesService: new CachedPlacesService(transient, () => afterBackoff),
+  });
+  assert.equal(transientCalls, 2, 'temporary failures recover after the short backoff');
+});
+
+test('structured telemetry separates cache outcomes, Places calls, and Routes calls', async () => {
+  const events: ProviderUsageEvent[] = [];
+  setProviderUsageSink((event) => events.push(event));
+  seedProviderRef('ChIJtelemetry');
+
+  const places = new CachedPlacesService(
+    new GooglePlacesProvider({
+      apiKey: 'server-key',
+      fetcher: async () =>
+        Response.json({
+          displayName: { text: 'Telemetry Place' },
+          id: 'ChIJtelemetry',
+          location: { latitude: 1.2966, longitude: 103.8485 },
+        }),
+      source: 'screen-hydration',
+    }),
+    () => new Date('2026-08-18T00:00:00.000Z'),
+    undefined,
+    'screen-hydration',
+  );
+  await places.getDetails({ detail: 'location', externalPlaceId: 'ChIJtelemetry' });
+  await places.getDetails({ detail: 'location', externalPlaceId: 'ChIJtelemetry' });
+
+  const routes = new CachedRoutesService(
+    new GoogleRoutesProvider({
+      apiKey: 'routes-key',
+      fetcher: async () =>
+        Response.json({
+          routes: [
+            { distanceMeters: 1200, duration: '600s', polyline: { encodedPolyline: 'abc' } },
+          ],
+        }),
+      source: 'itinerary-routes',
+    }),
+    () => new Date('2026-08-18T00:00:00.000Z'),
+    'itinerary-routes',
+  );
+  await routes.computeRoute({
+    destination: { latitude: 1.3039, longitude: 103.8318 },
+    includePolyline: true,
+    mode: 'walk',
+    origin: { latitude: 1.2966, longitude: 103.8485 },
+  });
+
+  const placeCall = events.find(
+    (event) => event.kind === 'outbound' && event.operation === 'getDetails',
+  );
+  assert.deepEqual(placeCall, {
+    cacheMissReason: 'missing_snapshot',
+    detailLevel: 'location',
+    endpoint: '/v1/places/:placeId',
+    expectedSku: 'place-details-pro',
+    kind: 'outbound',
+    operation: 'getDetails',
+    placeFingerprint: placeCall?.placeFingerprint,
+    provider: 'google',
+    source: 'screen-hydration',
+  });
+  assert.equal(placeCall?.placeFingerprint?.includes('ChIJ'), false);
+  assert.ok(events.some((event) => event.kind === 'cache_hit' && event.cache === 'place-details'));
+  assert.ok(
+    events.some(
+      (event) =>
+        event.kind === 'outbound' &&
+        event.endpoint === '/directions/v2:computeRoutes' &&
+        event.source === 'itinerary-routes' &&
+        event.includePolyline === true &&
+        event.routeMode === 'walk',
+    ),
+  );
 });

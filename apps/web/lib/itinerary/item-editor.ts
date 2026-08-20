@@ -1,7 +1,7 @@
 import type { ProviderSuggestion } from '@/lib/saved/api';
+import { PROVIDER_SEARCH_RESULT_LIMIT } from '../saved/search-results';
 
 export const ITINERARY_DURATION_PRESETS = [30, 60, 90, 120] as const;
-export const ITINERARY_PROVIDER_RESULT_LIMIT = 3;
 
 export type DurationParts = {
   hours: string;
@@ -56,7 +56,7 @@ export function itineraryProviderSuggestions(
 ) {
   return suggestions
     .filter((suggestion) => !existingExternalPlaceIds.has(suggestion.externalPlaceId))
-    .slice(0, ITINERARY_PROVIDER_RESULT_LIMIT);
+    .slice(0, PROVIDER_SEARCH_RESULT_LIMIT);
 }
 
 export function durationParts(value: string): DurationParts {

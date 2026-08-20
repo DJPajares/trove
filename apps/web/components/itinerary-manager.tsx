@@ -199,6 +199,18 @@ type PlacePickerOption =
   | { kind: 'provider'; suggestion: ProviderSuggestion }
   | { kind: 'trip_place'; label: string; tripPlace: ItineraryTripPlace; usageLabel: string | null };
 
+/** The Places drawer responds with its richer collection shape; the itinerary only
+ * needs the compatible subset it normally receives from its own endpoint. */
+function itineraryTripPlaceFromTripPlace(tripPlace: TripPlace): ItineraryTripPlace {
+  return {
+    customName: tripPlace.customName,
+    id: tripPlace.id,
+    note: tripPlace.note,
+    place: { ...tripPlace.place, timeZone: tripPlace.place.location?.timeZone ?? null },
+    priority: tripPlace.priority,
+  };
+}
+
 function useDesktopMapLayout() {
   const [matches, setMatches] = useState<boolean | null>(null);
 
@@ -453,6 +465,15 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
       : null;
   const arrivalBase = tripPlaceById(dailyBases.arrivalTripPlaceId);
   const departureBase = tripPlaceById(dailyBases.departureTripPlaceId);
+  const alphabeticalTripPlaces = useMemo(
+    () =>
+      sortTripPlaces(
+        itinerary?.tripPlaces ?? [],
+        'name',
+        (tripPlace) => placeName(tripPlace) ?? t('providerPlace'),
+      ),
+    [itinerary?.tripPlaces, t],
+  );
 
   const mapPoints = useMemo(() => {
     if (!itinerary || !selectedDay) return [];
@@ -1465,7 +1486,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                           </SelectTrigger>
                           <SelectContent align="end">
                             <SelectItem value="none">{t('noDailyBase')}</SelectItem>
-                            {itinerary.tripPlaces.map((place) => (
+                            {alphabeticalTripPlaces.map((place) => (
                               <SelectItem key={place.id} value={place.id}>
                                 {placeName(place)}
                               </SelectItem>
@@ -1503,7 +1524,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                           </SelectTrigger>
                           <SelectContent align="end">
                             <SelectItem value="same">{t('dailyBaseSameAsArrival')}</SelectItem>
-                            {itinerary.tripPlaces.map((place) => (
+                            {alphabeticalTripPlaces.map((place) => (
                               <SelectItem key={place.id} value={place.id}>
                                 {placeName(place)}
                               </SelectItem>
@@ -1949,6 +1970,16 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
         <ItineraryPlacesDrawer
           dayNumber={selectedIndex + 1}
           onAddToDay={addPlaceToSelectedDay}
+          onTripPlaceAdded={(tripPlace) =>
+            setItinerary((current) =>
+              current && !current.tripPlaces.some((place) => place.id === tripPlace.id)
+                ? {
+                    ...current,
+                    tripPlaces: [...current.tripPlaces, itineraryTripPlaceFromTripPlace(tripPlace)],
+                  }
+                : current,
+            )
+          }
           onOpenChange={setPlacesDrawerOpen}
           placeUse={placeUse}
           tripId={tripId}

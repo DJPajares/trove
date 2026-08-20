@@ -85,6 +85,7 @@ import {
   unsavePlace,
   updateSavedPlaceNote,
 } from '@/lib/saved/api';
+import { PROVIDER_SEARCH_RESULT_LIMIT } from '@/lib/saved/search-results';
 import {
   removeSavedPlaceState,
   updateCollectionMembershipState,
@@ -181,7 +182,7 @@ export function SavedPlacesManager() {
             setSearchStatus('unavailable');
             return;
           }
-          setSearchResults(result.suggestions ?? []);
+          setSearchResults((result.suggestions ?? []).slice(0, PROVIDER_SEARCH_RESULT_LIMIT));
           setSearchStatus(result.status === 'empty' ? 'empty' : 'idle');
         })
         .catch((cause: unknown) => {

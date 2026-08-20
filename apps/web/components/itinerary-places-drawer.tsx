@@ -44,6 +44,7 @@ type ItineraryPlacesDrawerProps = {
   /** 1-based number of the day currently being planned. */
   dayNumber: number;
   onAddToDay: (tripPlace: TripPlace) => Promise<boolean>;
+  onTripPlaceAdded: (tripPlace: TripPlace) => void;
   onOpenChange: (open: boolean) => void;
   placeUse: Record<string, ScheduledPlaceUse>;
   tripId: string;
@@ -57,6 +58,7 @@ export function ItineraryPlacesDrawer({
   dayNumber,
   onAddToDay,
   onOpenChange,
+  onTripPlaceAdded,
   placeUse,
   tripId,
 }: Readonly<ItineraryPlacesDrawerProps>) {
@@ -194,6 +196,7 @@ export function ItineraryPlacesDrawer({
                 ? current
                 : [...current, tripPlace],
             );
+            onTripPlaceAdded(tripPlace);
           }}
           onOpenChange={setAddOpen}
           tripId={tripId}

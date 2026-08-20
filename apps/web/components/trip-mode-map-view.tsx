@@ -14,7 +14,7 @@ import {
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
@@ -102,6 +102,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle');
   const [deviceLocation, setDeviceLocation] = useState<DeviceLocation | null>(null);
+  const clearMapSelection = useCallback(() => setSelectedPointId(null), []);
 
   useEffect(() => {
     if (isPreview) {
@@ -420,6 +421,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
             <ItineraryPlanningMap
               ariaLabel={t('interactiveMapLabel')}
               currentLocation={deviceLocation}
+              onClearSelection={clearMapSelection}
               onSelectPoint={(point) => setSelectedPointId(point.id)}
               onViewItem={(itemId) =>
                 router.push(withPreviewHref(`/trips/${tripId}/mode/today#trip-mode-item-${itemId}`))

@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarPlus, Eye, MapPinned, Navigation } from 'lucide-react';
+import { CalendarPlus, Eye, MapPinned, Navigation, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -32,6 +32,7 @@ type ItineraryPlanningMapProps = {
    * with no day of their own to add to, which hides the action entirely.
    */
   onAddToDay?: (point: ItineraryMapPoint) => Promise<boolean>;
+  onClearSelection: () => void;
   onSelectPoint: (point: ItineraryMapPoint) => void;
   onViewItem: (itemId: string) => void;
   points: ItineraryMapPoint[];
@@ -93,6 +94,7 @@ export function ItineraryPlanningMap({
   ariaLabel,
   currentLocation = null,
   onAddToDay,
+  onClearSelection,
   onSelectPoint,
   onViewItem,
   points,
@@ -107,7 +109,10 @@ export function ItineraryPlanningMap({
   const markerRefs = useRef(new Map<string, GoogleAdvancedMarkerInstance>());
   const currentLocationMarkerRef = useRef<GoogleAdvancedMarkerInstance | null>(null);
   const polylineRefs = useRef<GooglePolylineInstance[]>([]);
+  const onClearSelectionRef = useRef(onClearSelection);
   const onSelectPointRef = useRef(onSelectPoint);
+  const selectedPointIdRef = useRef(selectedPointId);
+  selectedPointIdRef.current = selectedPointId;
   const [status, setStatus] = useState<'error' | 'loading' | 'ready'>(
     hasGoogleMapsConfiguration() ? 'loading' : 'error',
   );
@@ -142,6 +147,10 @@ export function ItineraryPlanningMap({
     () => points.find((point) => point.id === selectedPointId) ?? null,
     [points, selectedPointId],
   );
+
+  useEffect(() => {
+    onClearSelectionRef.current = onClearSelection;
+  }, [onClearSelection]);
 
   useEffect(() => {
     onSelectPointRef.current = onSelectPoint;
@@ -181,7 +190,7 @@ export function ItineraryPlanningMap({
     void loadGoogleMaps(locale)
       .then(({ maps }) => {
         if (!active || !containerRef.current) return;
-        mapRef.current = new maps.Map(containerRef.current, {
+        const map = new maps.Map(containerRef.current, {
           center: { lat: openingPoint.latitude, lng: openingPoint.longitude },
           clickableIcons: false,
           colorScheme: openingTheme === 'dark' ? 'DARK' : 'LIGHT',
@@ -192,6 +201,8 @@ export function ItineraryPlanningMap({
           streetViewControl: false,
           zoom: 13,
         });
+        map.addListener('click', () => onClearSelectionRef.current());
+        mapRef.current = map;
         setStatus('ready');
       })
       .catch(() => active && setStatus('error'));
@@ -243,7 +254,10 @@ export function ItineraryPlanningMap({
               point.kind === 'scheduled' ? 10 + (point.order ?? 0) : point.kind === 'base' ? 8 : 1,
           });
           advancedMarker.append(content);
-          advancedMarker.addEventListener('gmp-click', () => onSelectPointRef.current(point));
+          advancedMarker.addEventListener('gmp-click', () => {
+            if (selectedPointIdRef.current === point.id) onClearSelectionRef.current();
+            else onSelectPointRef.current(point);
+          });
           markerRefs.current.set(point.id, advancedMarker);
           if (framing.has(point.id)) bounds.extend({ lat: point.latitude, lng: point.longitude });
         });
@@ -356,7 +370,18 @@ export function ItineraryPlanningMap({
       ) : null}
       {selectedPoint && status === 'ready' ? (
         <div className="absolute inset-x-3 bottom-3 z-[1] rounded-[var(--radius-lg)] border border-border bg-card/95 p-3 shadow-[var(--shadow-overlay)] backdrop-blur-sm">
-          <p className="truncate text-sm font-semibold">{selectedPoint.name}</p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="truncate text-sm font-semibold">{selectedPoint.name}</p>
+            <Button
+              aria-label={t('dismissSelection')}
+              className="-mr-1 -mt-1"
+              onClick={onClearSelection}
+              size="icon-xs"
+              variant="ghost"
+            >
+              <X aria-hidden="true" />
+            </Button>
+          </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {selectedPoint.kind === 'scheduled'
               ? t('scheduledSelection', { order: selectedPoint.order ?? 0 })

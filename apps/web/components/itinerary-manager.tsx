@@ -633,6 +633,11 @@ export function ItineraryManager({
     setSelectedMapItemId(null);
   }, [selectedDayId]);
 
+  const clearMapSelection = useCallback(() => {
+    setSelectedMapPointId(null);
+    setSelectedMapItemId(null);
+  }, []);
+
   function scrollToItem(itemId: string, focus = false) {
     window.requestAnimationFrame(() => {
       const element = document.getElementById(`itinerary-item-${itemId}`);
@@ -1899,6 +1904,7 @@ export function ItineraryManager({
                 {desktopMapLayout || mobileView === 'map' ? (
                   <ItineraryPlanningMap
                     onAddToDay={(point) => addTripPlaceToSelectedDay(point.tripPlaceId)}
+                    onClearSelection={clearMapSelection}
                     onSelectPoint={handleMapPointSelection}
                     onViewItem={viewMapItem}
                     points={mapPoints}

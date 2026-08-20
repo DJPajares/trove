@@ -28,6 +28,7 @@ import {
   searchProviderPlaces,
   type ProviderSuggestion,
 } from '@/lib/saved/api';
+import { PROVIDER_SEARCH_RESULT_LIMIT } from '@/lib/saved/search-results';
 import { addTripPlace } from '@/lib/trip-places/api';
 
 function scheduleInput(schedule: TripModeSchedule, exactTime: string): ItineraryScheduleInput {
@@ -244,6 +245,7 @@ export function TripModeAddItemDialog({
                         ),
                       ),
                   )
+                  .slice(0, PROVIDER_SEARCH_RESULT_LIMIT)
                   .map((suggestion) => (
                     <div
                       className="flex min-h-16 items-center gap-3 border-b border-border px-3 py-2 last:border-b-0"

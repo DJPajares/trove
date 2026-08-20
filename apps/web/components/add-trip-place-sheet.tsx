@@ -35,6 +35,7 @@ import {
   type SavedPlace,
   searchProviderPlaces,
 } from '@/lib/saved/api';
+import { PROVIDER_SEARCH_RESULT_LIMIT } from '@/lib/saved/search-results';
 import { addTripPlace, type TripPlace } from '@/lib/trip-places/api';
 
 type AddTripPlaceSheetProps = {
@@ -177,7 +178,9 @@ export function AddTripPlaceSheet({
         ...matchingSaved.flatMap((savedPlace) => savedPlace.place.providerRefs),
       ].map((reference) => reference.externalPlaceId),
     );
-    return results.filter((suggestion) => !known.has(suggestion.externalPlaceId));
+    return results
+      .filter((suggestion) => !known.has(suggestion.externalPlaceId))
+      .slice(0, PROVIDER_SEARCH_RESULT_LIMIT);
   }, [matchingSaved, results, tripPlaces]);
 
   const alreadyOnTrip = (placeId: string) =>

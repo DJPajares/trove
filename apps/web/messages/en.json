@@ -1170,7 +1170,7 @@
       }
     },
     "durationQuestion": "How long?",
-    "durationHint": "Duration helps Trove estimate gaps and suggest timings.",
+    "durationHint": "Optional. Helps Trove estimate gaps and suggest timings.",
     "durationPreset": {
       "30": "30 min",
       "60": "1 hr",
@@ -1203,7 +1203,7 @@
     "currencyPlaceholder": "NZD",
     "plannedCostError": "Enter both an amount and a three-letter currency code.",
     "notes": "Notes",
-    "notesPlaceholder": "Context that will help on the day",
+    "notesPlaceholder": "Booking reference, what to order, or who you’re meeting",
     "save": "Save changes",
     "saving": "Saving…",
     "saveError": "We couldn't save this itinerary item. Check the details and try again.",
@@ -1335,6 +1335,12 @@
     "viewDetailsAction": "View details",
     "editPlaceAction": "Edit place",
     "priorityMenuLabel": "Priority",
+    "sortBy": "Sort trip places",
+    "sort": {
+      "name": "Name A-Z",
+      "priority": "Priority",
+      "recent": "Recently added"
+    },
     "removeAction": "Remove from trip",
     "customPlace": "Custom place",
     "customPlaceDescription": "Your personal place",
@@ -1348,6 +1354,7 @@
     },
     "scheduledReference": "On your itinerary {count, plural, one {once} other {# times}}",
     "onDays": "{count, plural, one {On day {days}} other {On days {days}}}",
+    "onDates": "Added on {dates}",
     "inUnscheduled": "Kept in Unscheduled",
     "addToDay": "Add to day {number}",
     "openPlaces": "Places",

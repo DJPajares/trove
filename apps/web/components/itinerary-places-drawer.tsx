@@ -1,8 +1,8 @@
 'use client';
 
 import { MapPinned, Plus } from 'lucide-react';
-import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useMemo, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { AddTripPlaceSheet } from '@/components/add-trip-place-sheet';
 import { EditTripPlaceDialog } from '@/components/edit-trip-place-dialog';
@@ -30,6 +30,7 @@ import {
 import type { ScheduledPlaceUse } from '@/lib/itinerary/places';
 import type { TripPlace } from '@/lib/trip-places/api';
 import { resolveTripPlaceName } from '@/lib/trip-places/place-name';
+import { sortTripPlaces } from '@/lib/trip-places/sort';
 import { useTripPlaces } from '@/lib/trip-places/use-trip-places';
 
 type ItineraryPlacesDrawerProps = {
@@ -52,6 +53,7 @@ export function ItineraryPlacesDrawer({
   placeUse,
   tripId,
 }: Readonly<ItineraryPlacesDrawerProps>) {
+  const locale = useLocale();
   const t = useTranslations('tripPlaces');
   const places = useTripPlaces(tripId);
   const [editPlace, setEditPlace] = useState<TripPlace | null>(null);
@@ -66,6 +68,19 @@ export function ItineraryPlacesDrawer({
       custom: t('customPlace'),
       provider: t('providerPlace'),
     });
+
+  const alphabeticalPlaces = useMemo(
+    () => sortTripPlaces(places.places, 'name', placeName),
+    [places.places, t],
+  );
+  const dateFormatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' }),
+    [locale],
+  );
+  const listFormatter = useMemo(
+    () => new Intl.ListFormat(locale, { style: 'short', type: 'conjunction' }),
+    [locale],
+  );
 
   async function addToDay(tripPlace: TripPlace) {
     setAddingId(tripPlace.id);
@@ -112,7 +127,7 @@ export function ItineraryPlacesDrawer({
 
             {places.status === 'loading' ? <PageState kind="loading" title={t('loading')} /> : null}
 
-            {places.status === 'idle' && !places.sorted.length ? (
+            {places.status === 'idle' && !places.places.length ? (
               <PageState
                 description={t('emptyDescription')}
                 headingLevel={2}
@@ -122,7 +137,7 @@ export function ItineraryPlacesDrawer({
               />
             ) : null}
 
-            {places.sorted.length ? (
+            {alphabeticalPlaces.length ? (
               <TripPlacesPanel
                 addToDayLabel={t('addToDay', { number: dayNumber })}
                 busyPlaceId={addingId}
@@ -133,7 +148,12 @@ export function ItineraryPlacesDrawer({
                 }
                 onRemove={setRemovingPlace}
                 placeUse={placeUse}
-                tripPlaces={places.sorted}
+                formatUsageDates={(dates) =>
+                  listFormatter.format(
+                    dates.map((date) => dateFormatter.format(new Date(`${date}T00:00:00Z`))),
+                  )
+                }
+                tripPlaces={alphabeticalPlaces}
               />
             ) : null}
           </div>

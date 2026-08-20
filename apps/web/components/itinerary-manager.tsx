@@ -4,6 +4,7 @@ import {
   ArrowDown,
   ArrowUp,
   CalendarClock,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
@@ -148,6 +149,7 @@ import {
   searchProviderPlaces,
 } from '@/lib/saved/api';
 import { addTripPlace, type TripPlace } from '@/lib/trip-places/api';
+import { sortTripPlaces } from '@/lib/trip-places/sort';
 import { cn } from '@/lib/utils';
 import {
   durationMinutesFromParts,
@@ -195,7 +197,7 @@ type ProviderSearchCacheEntry = {
 type PlacePickerOption =
   | { kind: 'custom_label'; label: string }
   | { kind: 'provider'; suggestion: ProviderSuggestion }
-  | { kind: 'trip_place'; label: string; tripPlace: ItineraryTripPlace };
+  | { kind: 'trip_place'; label: string; tripPlace: ItineraryTripPlace; usageLabel: string | null };
 
 function useDesktopMapLayout() {
   const [matches, setMatches] = useState<boolean | null>(null);
@@ -402,6 +404,14 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
         weekday: 'long',
         year: 'numeric',
       }),
+    [locale],
+  );
+  const placeUseDateFormatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' }),
+    [locale],
+  );
+  const placeUseListFormatter = useMemo(
+    () => new Intl.ListFormat(locale, { style: 'short', type: 'conjunction' }),
     [locale],
   );
   const formatDate = (date: string, long = false) =>
@@ -735,12 +745,26 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   }, [suggestedTime, suggestedTimeStatus, t]);
 
   const matchingTripPlaces = useMemo(() => {
-    return filterItineraryTripPlaces(itinerary?.tripPlaces ?? [], placeQuery, (tripPlace) => [
-      placeName(tripPlace),
-      tripPlace.place.snapshot?.address,
-      tripPlace.place.providerAddress,
-    ]);
-  }, [itinerary?.tripPlaces, placeQuery]);
+    return sortTripPlaces(
+      filterItineraryTripPlaces(itinerary?.tripPlaces ?? [], placeQuery, (tripPlace) => [
+        placeName(tripPlace),
+        tripPlace.place.snapshot?.address,
+        tripPlace.place.providerAddress,
+      ]),
+      'name',
+      (tripPlace) => placeName(tripPlace) ?? t('providerPlace'),
+    );
+  }, [itinerary?.tripPlaces, placeQuery, t]);
+
+  const usageLabel = (tripPlace: ItineraryTripPlace) => {
+    const dates = placeUse[tripPlace.id]?.dayDates ?? [];
+    if (!dates.length) return null;
+    return tripPlacesTranslations('onDates', {
+      dates: placeUseListFormatter.format(
+        dates.map((date) => placeUseDateFormatter.format(new Date(`${date}T00:00:00Z`))),
+      ),
+    });
+  };
 
   const existingExternalPlaceIds = useMemo(
     () =>
@@ -764,6 +788,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
         kind: 'trip_place' as const,
         label: placeName(tripPlace) ?? t('providerPlace'),
         tripPlace,
+        usageLabel: usageLabel(tripPlace),
       })),
       ...(customLabel ? [{ kind: 'custom_label' as const, label: customLabel }] : []),
       ...visibleProviderResults.map((suggestion) => ({
@@ -771,7 +796,16 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
         suggestion,
       })),
     ];
-  }, [matchingTripPlaces, placeQuery, t, visibleProviderResults]);
+  }, [
+    matchingTripPlaces,
+    placeQuery,
+    placeUse,
+    placeUseDateFormatter,
+    placeUseListFormatter,
+    t,
+    tripPlacesTranslations,
+    visibleProviderResults,
+  ]);
 
   function clearProviderResultState() {
     setProviderResults([]);
@@ -2075,6 +2109,15 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                                     option.suggestion.description ? (
                                     <span className="block truncate text-xs text-muted-foreground">
                                       {option.suggestion.description}
+                                    </span>
+                                  ) : null}
+                                  {option.kind === 'trip_place' && option.usageLabel ? (
+                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                      <CheckCircle2
+                                        aria-hidden="true"
+                                        className="size-3 shrink-0"
+                                      />
+                                      <span className="truncate">{option.usageLabel}</span>
                                     </span>
                                   ) : null}
                                 </span>

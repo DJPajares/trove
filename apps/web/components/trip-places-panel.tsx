@@ -1,6 +1,15 @@
 'use client';
 
-import { Bookmark, CalendarPlus, Ellipsis, Eye, MapPinned, Pencil, Trash2 } from 'lucide-react';
+import {
+  Bookmark,
+  CalendarPlus,
+  CheckCircle2,
+  Ellipsis,
+  Eye,
+  MapPinned,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
@@ -45,6 +54,7 @@ type TripPlacesPanelProps = {
   onEditPlace: (tripPlace: TripPlace) => void;
   onPriorityChange: (tripPlace: TripPlace, priority: TripPlacePriority | null) => void;
   onRemove: (tripPlace: TripPlace) => void;
+  formatUsageDates?: (dates: string[]) => string;
   placeUse?: Record<string, ScheduledPlaceUse>;
   tripPlaces: TripPlace[];
 };
@@ -65,6 +75,7 @@ export function TripPlacesPanel({
   onEditPlace,
   onPriorityChange,
   onRemove,
+  formatUsageDates,
   placeUse,
   tripPlaces,
 }: Readonly<TripPlacesPanelProps>) {
@@ -86,14 +97,17 @@ export function TripPlacesPanel({
   const officialName = (tripPlace: TripPlace) =>
     tripPlace.customName?.trim() ? resolveProviderPlaceName(tripPlace) : null;
 
-  /** Where this Place already sits in the plan, so nothing gets added twice unnoticed. */
-  const usageLabel = (tripPlace: TripPlace) => {
+  /** A quiet reminder of planned and unscheduled usage; repeat visits stay available. */
+  const usageLabels = (tripPlace: TripPlace) => {
     const use = placeUse?.[tripPlace.id];
-    if (!use) return null;
-    if (use.dayNumbers.length) {
-      return t('onDays', { days: use.dayNumbers.join(', '), count: use.dayNumbers.length });
-    }
-    return use.unscheduledCount ? t('inUnscheduled') : null;
+    if (!use) return [];
+
+    return [
+      use.dayDates.length && formatUsageDates
+        ? t('onDates', { dates: formatUsageDates(use.dayDates) })
+        : null,
+      use.unscheduledCount ? t('inUnscheduled') : null,
+    ].filter((label): label is string => Boolean(label));
   };
 
   return (
@@ -101,7 +115,8 @@ export function TripPlacesPanel({
       {tripPlaces.map((tripPlace) => {
         const name = placeName(tripPlace);
         const official = officialName(tripPlace);
-        const usage = usageLabel(tripPlace);
+        const usage = usageLabels(tripPlace);
+        const hasScheduledDay = Boolean(placeUse?.[tripPlace.id]?.dayDates.length);
 
         return (
           <Item className="gap-3 px-3 py-2.5" key={tripPlace.id} variant="outline">
@@ -119,6 +134,12 @@ export function TripPlacesPanel({
             <ItemContent className="min-w-0 gap-0.5">
               <ItemTitle className="flex min-w-0 items-center gap-2">
                 <span className="min-w-0 truncate">{name}</span>
+                {hasScheduledDay ? (
+                  <CheckCircle2
+                    aria-hidden="true"
+                    className="size-3.5 shrink-0 text-muted-foreground"
+                  />
+                ) : null}
                 {/* Saved Places and Trip Places are independent relationships to the
                     same Place, so whether this one is also saved is worth showing. */}
                 {tripPlace.isSaved ? (
@@ -134,7 +155,11 @@ export function TripPlacesPanel({
               <ItemDescription className="line-clamp-1">
                 {placeDescription(tripPlace)}
               </ItemDescription>
-              {usage ? <p className="text-xs text-muted-foreground">{usage}</p> : null}
+              {usage.map((label) => (
+                <p className="text-xs text-muted-foreground" key={label}>
+                  {label}
+                </p>
+              ))}
             </ItemContent>
 
             <ItemActions className="shrink-0">

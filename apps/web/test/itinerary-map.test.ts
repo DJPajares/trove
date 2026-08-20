@@ -318,8 +318,13 @@ test('a Place off this day says which days already have it', () => {
   const points = buildItineraryMapPoints({
     itinerary: { tripPlaces: [tripPlace('shrine'), tripPlace('market')], unscheduledItems: [] },
     placeUse: {
-      market: { dayNumbers: [2], itemCount: 1, unscheduledCount: 0 },
-      shrine: { dayNumbers: [1, 3], itemCount: 2, unscheduledCount: 0 },
+      market: { dayDates: ['2026-09-06'], dayNumbers: [2], itemCount: 1, unscheduledCount: 0 },
+      shrine: {
+        dayDates: ['2026-09-05', '2026-09-07'],
+        dayNumbers: [1, 3],
+        itemCount: 2,
+        unscheduledCount: 0,
+      },
     },
     resolveItemName: (entry) => entry.id,
     resolvePlaceName: (place) => place.id,
@@ -340,7 +345,14 @@ test('a Place off this day says which days already have it', () => {
 test('a scheduled stop keeps its number and carries no cross-day note', () => {
   const points = buildItineraryMapPoints({
     itinerary: { tripPlaces: [tripPlace('shrine')], unscheduledItems: [] },
-    placeUse: { shrine: { dayNumbers: [1, 2], itemCount: 2, unscheduledCount: 0 } },
+    placeUse: {
+      shrine: {
+        dayDates: ['2026-09-05', '2026-09-06'],
+        dayNumbers: [1, 2],
+        itemCount: 2,
+        unscheduledCount: 0,
+      },
+    },
     resolveItemName: (entry) => entry.id,
     resolvePlaceName: (place) => place.id,
     selectedDay: { items: [item('visit', 'shrine')] },

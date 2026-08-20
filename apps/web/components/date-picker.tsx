@@ -8,11 +8,13 @@ import type { Matcher } from 'react-day-picker';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { activityDensityForItemCount } from '@/lib/activity-density';
 import { cn } from '@/lib/utils';
 
 const DATE_VALUE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 type DatePickerProps = {
+  activityCounts?: Readonly<Record<string, number>>;
   'aria-describedby'?: string;
   'aria-invalid'?: boolean;
   className?: string;
@@ -50,6 +52,7 @@ function toDateValue(date: Date) {
 }
 
 function DatePicker({
+  activityCounts,
   'aria-describedby': ariaDescribedBy,
   'aria-invalid': ariaInvalid,
   className,
@@ -82,6 +85,29 @@ function DatePicker({
     if (maxDate) matchers.push({ after: maxDate });
     return matchers.length ? matchers : undefined;
   }, [maxDate, minDate]);
+  const activityModifiers = useMemo(() => {
+    if (!activityCounts) return undefined;
+
+    const light: Date[] = [];
+    const medium: Date[] = [];
+    const packed: Date[] = [];
+
+    for (const [value, itemCount] of Object.entries(activityCounts)) {
+      const date = parseDateValue(value);
+      if (!date || (minDate && date < minDate) || (maxDate && date > maxDate)) continue;
+
+      const density = activityDensityForItemCount(itemCount);
+      if (density === 'light') light.push(date);
+      if (density === 'medium') medium.push(date);
+      if (density === 'packed') packed.push(date);
+    }
+
+    return {
+      activityLight: light,
+      activityMedium: medium,
+      activityPacked: packed,
+    };
+  }, [activityCounts, maxDate, minDate]);
   const todayDisabled = Boolean((minDate && today < minDate) || (maxDate && today > maxDate));
   const displayDate = selectedDate ? dateFormatter.format(selectedDate) : null;
 
@@ -140,6 +166,16 @@ function DatePicker({
             labelPrevious: () => t('previousMonth'),
           }}
           mode="single"
+          modifiers={activityModifiers}
+          modifiersClassNames={
+            activityModifiers
+              ? {
+                  activityLight: 'bg-primary/10 dark:bg-primary/15',
+                  activityMedium: 'bg-primary/20 dark:bg-primary/25',
+                  activityPacked: 'bg-primary/30 dark:bg-primary/35',
+                }
+              : undefined
+          }
           onSelect={selectDate}
           selected={selectedDate}
         />

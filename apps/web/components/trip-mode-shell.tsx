@@ -15,7 +15,11 @@ import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripSyncStatus } from '@/components/trip-sync-status';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
-import { fetchItinerary, type TripModeContextRequestOptions } from '@/lib/itinerary/api';
+import {
+  fetchItinerary,
+  type Itinerary,
+  type TripModeContextRequestOptions,
+} from '@/lib/itinerary/api';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import { fetchTrip, type Trip } from '@/lib/trips/api';
 import { cn } from '@/lib/utils';
@@ -56,9 +60,9 @@ type TripModeShellProps = {
 };
 
 type LoadState =
-  | { status: 'error'; trip: null }
-  | { status: 'idle'; trip: Trip }
-  | { status: 'loading'; trip: null };
+  | { itinerary: null; status: 'error'; trip: null }
+  | { itinerary: Itinerary; status: 'idle'; trip: Trip }
+  | { itinerary: null; status: 'loading'; trip: null };
 
 const tripModeViews = [
   { icon: Clock3, key: 'now', path: '' },
@@ -134,18 +138,18 @@ export function TripModeShell({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [reloadKey, setReloadKey] = useState(0);
-  const [state, setState] = useState<LoadState>({ status: 'loading', trip: null });
+  const [state, setState] = useState<LoadState>({ itinerary: null, status: 'loading', trip: null });
 
   useEffect(() => {
     let active = true;
-    setState({ status: 'loading', trip: null });
+    setState({ itinerary: null, status: 'loading', trip: null });
 
     void Promise.all([fetchTrip(tripId), fetchItinerary(tripId)])
-      .then(([{ trip }]) => {
-        if (active) setState({ status: 'idle', trip });
+      .then(([{ trip }, itinerary]) => {
+        if (active) setState({ itinerary, status: 'idle', trip });
       })
       .catch(() => {
-        if (active) setState({ status: 'error', trip: null });
+        if (active) setState({ itinerary: null, status: 'error', trip: null });
       });
 
     return () => {
@@ -237,7 +241,10 @@ export function TripModeShell({
     );
   }
 
-  const { trip } = state;
+  const { itinerary, trip } = state;
+  const activityCounts = Object.fromEntries(
+    itinerary.days.map((day) => [day.date, day.items.length]),
+  );
   const dateFormatter = new Intl.DateTimeFormat(locale, {
     day: 'numeric',
     month: 'short',
@@ -354,6 +361,7 @@ export function TripModeShell({
               <Field>
                 <FieldLabel htmlFor="trip-mode-preview-date">{t('preview.date')}</FieldLabel>
                 <DatePicker
+                  activityCounts={activityCounts}
                   id="trip-mode-preview-date"
                   label={t('preview.date')}
                   max={trip.endDate}

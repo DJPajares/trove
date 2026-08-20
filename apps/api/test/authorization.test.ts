@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 type RecordedQuery = { args: Record<string, unknown>; method: string; model: string };
 
@@ -66,20 +65,19 @@ function isScopedToUser(value: unknown, userId: string): boolean {
 async function assertDeniesCrossUserAccess(label: string, call: () => Promise<unknown>) {
   recorded.length = 0;
 
-  await assert.rejects(
+  await expect(
     call,
-    (error: unknown) => error instanceof Error,
     `${label} must reject when the trip belongs to another user`,
-  );
+  ).rejects.toSatisfy((error: unknown) => error instanceof Error);
 
   const [firstQuery] = recorded;
-  assert.ok(firstQuery, `${label} must consult the database before answering`);
-  assert.ok(
-    isScopedToUser(firstQuery.args.where, INTRUDER_ID),
+  expect(firstQuery, `${label} must consult the database before answering`).toBeTruthy();
+  expect(
+    isScopedToUser(firstQuery!.args.where, INTRUDER_ID),
     `${label} must scope its first query to the requesting user, got ${JSON.stringify(
-      firstQuery.args.where,
+      firstQuery!.args.where,
     )}`,
-  );
+  ).toBeTruthy();
 }
 
 test('trip-scoped reads reject another user and never query without an ownership filter', async () => {
@@ -140,11 +138,10 @@ test('trip-scoped mutations reject another user before writing', async () => {
     'updateMany',
     'upsert',
   ]);
-  assert.deepEqual(
+  expect(
     recorded.filter((query) => writeMethods.has(query.method)),
-    [],
     'a rejected cross-user mutation must not reach a write',
-  );
+  ).toStrictEqual([]);
 });
 
 test('global search only reads rows owned by the searching user', async () => {
@@ -153,13 +150,12 @@ test('global search only reads rows owned by the searching user', async () => {
   recorded.length = 0;
   const results = await searchTrove(INTRUDER_ID, 'tokyo');
 
-  assert.deepEqual(results.groups, [], 'no owned rows means no results');
-  assert.ok(recorded.length > 0, 'search must query the database');
+  expect(results.groups, 'no owned rows means no results').toStrictEqual([]);
+  expect(recorded.length > 0, 'search must query the database').toBeTruthy();
 
   const unscoped = recorded.filter((query) => !isScopedToUser(query.args.where, INTRUDER_ID));
-  assert.deepEqual(
+  expect(
     unscoped.map((query) => `${query.model}.${query.method}`),
-    [],
     'every search query must be scoped to the searching user',
-  );
+  ).toStrictEqual([]);
 });

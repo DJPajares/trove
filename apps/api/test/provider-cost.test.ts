@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { beforeEach, test } from 'vitest';
+import { expect, beforeEach, test } from 'vitest';
 
 import { CachedPlacesService, resetCachedPlacesMemo } from '../src/services/cached-places.js';
 import { CachedRoutesService } from '../src/services/cached-routes.js';
@@ -404,16 +403,12 @@ function buildTripModeContextFixture() {
 test('the kill switch stops the provider being configured at all', () => {
   const environment = { GOOGLE_PLACES_API_KEY: 'server-key' };
 
-  assert.notEqual(getPlacesEnvironment(environment), null);
-  assert.equal(
-    getPlacesEnvironment({ ...environment, TROVE_GOOGLE_PROVIDERS_DISABLED: '1' }),
+  expect(getPlacesEnvironment(environment)).not.toBe(null);
+  expect(getPlacesEnvironment({ ...environment, TROVE_GOOGLE_PROVIDERS_DISABLED: '1' })).toBe(null);
+  expect(getPlacesEnvironment({ ...environment, TROVE_GOOGLE_PROVIDERS_DISABLED: 'true' })).toBe(
     null,
   );
-  assert.equal(
-    getPlacesEnvironment({ ...environment, TROVE_GOOGLE_PROVIDERS_DISABLED: 'true' }),
-    null,
-  );
-  assert.equal(areGoogleProvidersDisabled({ TROVE_GOOGLE_PROVIDERS_DISABLED: 'no' }), false);
+  expect(areGoogleProvidersDisabled({ TROVE_GOOGLE_PROVIDERS_DISABLED: 'no' })).toBe(false);
 });
 
 test('a location request asks for coordinates only, not the billable detail', async () => {
@@ -433,24 +428,24 @@ test('a location request asks for coordinates only, not the billable detail', as
   await provider.getDetails({ detail: 'location', externalPlaceId: 'ChIJmuseum' });
   await provider.getDetails({ detail: 'evidence', externalPlaceId: 'ChIJmuseum' });
 
-  assert.equal(masks[0], GOOGLE_PLACE_LOCATION_FIELD_MASK);
-  assert.equal(masks[1], GOOGLE_PLACE_EVIDENCE_FIELD_MASK);
+  expect(masks[0]).toBe(GOOGLE_PLACE_LOCATION_FIELD_MASK);
+  expect(masks[1]).toBe(GOOGLE_PLACE_EVIDENCE_FIELD_MASK);
 
   // There is no third, more expensive level to reach for by accident. There
   // used to be, and an omitted `detail` fell back to it.
-  assert.deepEqual(Object.keys(PLACE_DETAIL_FIELD_MASKS).toSorted(), ['evidence', 'location']);
+  expect(Object.keys(PLACE_DETAIL_FIELD_MASKS).toSorted()).toStrictEqual(['evidence', 'location']);
 
   // The expensive fields are exactly what separates the two.
   for (const field of ['rating', 'regularOpeningHours']) {
-    assert.equal(GOOGLE_PLACE_LOCATION_FIELD_MASK.includes(field), false, field);
+    expect(GOOGLE_PLACE_LOCATION_FIELD_MASK.includes(field), field).toBe(false);
   }
   // Evidence asks for the mutable fields Plan Score reads, but not the ones
   // that only a place's own sheet renders.
   for (const field of ['rating', 'regularOpeningHours']) {
-    assert.equal(GOOGLE_PLACE_EVIDENCE_FIELD_MASK.includes(field), true, field);
+    expect(GOOGLE_PLACE_EVIDENCE_FIELD_MASK.includes(field), field).toBe(true);
   }
   for (const field of ['photos', 'nationalPhoneNumber', 'websiteUri', 'userRatingCount']) {
-    assert.equal(GOOGLE_PLACE_EVIDENCE_FIELD_MASK.includes(field), false, field);
+    expect(GOOGLE_PLACE_EVIDENCE_FIELD_MASK.includes(field), field).toBe(false);
   }
 });
 
@@ -462,12 +457,12 @@ test('a cached place costs nothing to resolve again', async () => {
   const first = await service.getDetails({ detail: 'location', externalPlaceId: 'ChIJmuseum' });
   const second = await service.getDetails({ detail: 'location', externalPlaceId: 'ChIJmuseum' });
 
-  assert.equal(calls(), 1);
-  assert.equal(first.status, 'ok');
-  assert.equal(second.status, 'ok');
-  assert.equal(second.status === 'ok' && second.freshness.source, 'cache');
-  assert.equal(second.status === 'ok' && second.place.location?.latitude, 1.2966);
-  assert.equal(getProviderCallCounts()['google:getDetails'], 1);
+  expect(calls()).toBe(1);
+  expect(first.status).toBe('ok');
+  expect(second.status).toBe('ok');
+  expect(second.status === 'ok' && second.freshness.source).toBe('cache');
+  expect(second.status === 'ok' && second.place.location?.latitude).toBe(1.2966);
+  expect(getProviderCallCounts()['google:getDetails']).toBe(1);
 });
 
 test('a canonicalised Google response is cached against the Place id Trove requested', async () => {
@@ -489,9 +484,9 @@ test('a canonicalised Google response is cached against the Place id Trove reque
     externalPlaceId: 'address-only-id',
   });
 
-  assert.equal(calls, 1);
-  assert.equal(providerRefs.get('address-only-id')?.cachedName, 'National Museum');
-  assert.equal(second.status === 'ok' && second.freshness.source, 'cache');
+  expect(calls).toBe(1);
+  expect(providerRefs.get('address-only-id')?.cachedName).toBe('National Museum');
+  expect(second.status === 'ok' && second.freshness.source).toBe('cache');
 });
 
 test('a snapshot past its 30-day life is refetched exactly once', async () => {
@@ -506,10 +501,10 @@ test('a snapshot past its 30-day life is refetched exactly once', async () => {
   const service = new CachedPlacesService(provider, () => now);
 
   await service.getDetails({ detail: 'location', externalPlaceId: 'ChIJmuseum' });
-  assert.equal(calls(), 1);
+  expect(calls()).toBe(1);
 
   await service.getDetails({ detail: 'location', externalPlaceId: 'ChIJmuseum' });
-  assert.equal(calls(), 1, 'the refetch should have refreshed the snapshot');
+  expect(calls(), 'the refetch should have refreshed the snapshot').toBe(1);
 });
 
 test('a snapshot never answers a request in another language', async () => {
@@ -530,7 +525,7 @@ test('a snapshot never answers a request in another language', async () => {
     languageCode: 'ja',
   });
 
-  assert.equal(calls(), 1);
+  expect(calls()).toBe(1);
 });
 
 test("Trip Mode reuses the Itinerary screen's cached snapshot when it forwards the same languageCode", async () => {
@@ -553,7 +548,7 @@ test("Trip Mode reuses the Itinerary screen's cached snapshot when it forwards t
   const resolveFromItinerary = createPlaceResolver(placesService, 'en');
   await resolveFromItinerary(fixture.currentPlace as never, 'itinerary_item', 'seed-current');
   await resolveFromItinerary(fixture.nextPlace as never, 'itinerary_item', 'seed-next');
-  assert.equal(placeCalls(), 2);
+  expect(placeCalls()).toBe(2);
 
   // Trip Mode's context request now forwards the same `languageCode` (the fix
   // for the bug where it silently resolved as `undefined` and thrashed the
@@ -565,15 +560,14 @@ test("Trip Mode reuses the Itinerary screen's cached snapshot when it forwards t
     { placesService, routesService },
   );
 
-  assert.equal(
+  expect(
     placeCalls(),
-    2,
     'Trip Mode must reuse the DB snapshot the Itinerary screen already cached, not re-fetch it',
-  );
-  assert.ok(
+  ).toBe(2);
+  expect(
     context.leaveBy,
     'sanity check: leaveBy should have resolved a route between the items',
-  );
+  ).toBeTruthy();
 });
 
 test('an evidence request never reads the snapshot, which cannot carry ratings or hours', async () => {
@@ -589,9 +583,9 @@ test('an evidence request never reads the snapshot, which cannot carry ratings o
 
   const result = await service.getDetails({ detail: 'evidence', externalPlaceId: 'ChIJmuseum' });
 
-  assert.equal(calls(), 1);
-  assert.equal(result.status === 'ok' && result.place.rating, 4.5);
-  assert.equal(result.status === 'ok' && result.freshness.source, 'live');
+  expect(calls()).toBe(1);
+  expect(result.status === 'ok' && result.place.rating).toBe(4.5);
+  expect(result.status === 'ok' && result.freshness.source).toBe('live');
 });
 
 test('the mutable half of a place is never written to the database', async () => {
@@ -602,7 +596,7 @@ test('the mutable half of a place is never written to the database', async () =>
 
   const stored = JSON.stringify(providerRefs.get('ChIJmuseum'));
   for (const forbidden of ['4.5', 'rating', 'openingPeriods', 'userRatingCount']) {
-    assert.equal(stored.includes(forbidden), false, forbidden);
+    expect(stored.includes(forbidden), forbidden).toBe(false);
   }
 });
 
@@ -618,10 +612,10 @@ test('a leg already computed is not computed again', async () => {
   const first = await service.computeRoute(request);
   const second = await service.computeRoute(request);
 
-  assert.equal(calls(), 1);
-  assert.equal(first.status, 'ok');
-  assert.equal(second.status === 'ok' && second.freshness.source, 'cache');
-  assert.equal(second.status === 'ok' && second.estimate.durationSeconds, 600);
+  expect(calls()).toBe(1);
+  expect(first.status).toBe('ok');
+  expect(second.status === 'ok' && second.freshness.source).toBe('cache');
+  expect(second.status === 'ok' && second.estimate.durationSeconds).toBe(600);
 });
 
 test('a leg cached without a polyline is recomputed when the map needs one', async () => {
@@ -636,12 +630,12 @@ test('a leg cached without a polyline is recomputed when the map needs one', asy
   await service.computeRoute(leg);
   const withPolyline = await service.computeRoute({ ...leg, includePolyline: true });
 
-  assert.equal(calls(), 2);
-  assert.equal(withPolyline.status === 'ok' && withPolyline.estimate.encodedPolyline, 'abc');
+  expect(calls()).toBe(2);
+  expect(withPolyline.status === 'ok' && withPolyline.estimate.encodedPolyline).toBe('abc');
 
   const again = await service.computeRoute({ ...leg, includePolyline: true });
-  assert.equal(calls(), 2, 'the richer answer should have replaced the thinner one');
-  assert.equal(again.status === 'ok' && again.estimate.encodedPolyline, 'abc');
+  expect(calls(), 'the richer answer should have replaced the thinner one').toBe(2);
+  expect(again.status === 'ok' && again.estimate.encodedPolyline).toBe('abc');
 });
 
 test('a different travel mode over the same leg is its own estimate', async () => {
@@ -655,7 +649,7 @@ test('a different travel mode over the same leg is its own estimate', async () =
   await service.computeRoute({ ...leg, mode: 'walk' });
   await service.computeRoute({ ...leg, mode: 'drive' });
 
-  assert.equal(calls(), 2);
+  expect(calls()).toBe(2);
 });
 
 test('one resolver shared across days resolves a repeated place once', async () => {
@@ -680,11 +674,12 @@ test('one resolver shared across days resolves a repeated place once', async () 
     resolvePlace(hotel, 'daily_base', 'day-3-base'),
   ]);
 
-  assert.equal(calls(), 1);
-  assert.deepEqual(
-    points.map((point) => point?.id),
-    ['day-1-base', 'day-2-base', 'day-3-base'],
-  );
+  expect(calls()).toBe(1);
+  expect(points.map((point) => point?.id)).toStrictEqual([
+    'day-1-base',
+    'day-2-base',
+    'day-3-base',
+  ]);
 });
 
 test('a day is routed from stored coordinates, even with no provider at all', async () => {
@@ -703,9 +698,9 @@ test('a day is routed from stored coordinates, even with no provider at all', as
   // coordinates the leg needed.
   const point = await createPlaceResolver(null)(hotel, 'daily_base', 'day-1-base');
 
-  assert.equal(point?.coordinates.latitude, 1.2966);
-  assert.equal(point?.label, 'National Museum');
-  assert.equal(getProviderCallCounts()['google:getDetails'], undefined);
+  expect(point?.coordinates.latitude).toBe(1.2966);
+  expect(point?.label).toBe('National Museum');
+  expect(getProviderCallCounts()['google:getDetails']).toBe(undefined);
 });
 
 /**
@@ -752,11 +747,10 @@ test('Plan Score fetches evidence only for scheduled trip places, not every save
   );
 
   const evidenceRequests = requests.filter((request) => request.detail === 'evidence');
-  assert.deepEqual(
+  expect(
     evidenceRequests.map((request) => request.externalPlaceId),
-    ['ChIJscheduled'],
     'the unscheduled trip place must never be asked for evidence',
-  );
+  ).toStrictEqual(['ChIJscheduled']);
 });
 
 test('TROVE_PLAN_SCORE_DISABLED stops every provider call, even with a working service supplied', async () => {
@@ -768,7 +762,10 @@ test('TROVE_PLAN_SCORE_DISABLED stops every provider call, even with a working s
     { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
     () => getTripPlanScore('user-1', 'trip-1', { placesService }),
   );
-  assert.ok(requests.length > 0, 'sanity check: the fixture normally does call the provider');
+  expect(
+    requests.length > 0,
+    'sanity check: the fixture normally does call the provider',
+  ).toBeTruthy();
 
   requests.length = 0;
   resetCachedPlacesMemo();
@@ -778,17 +775,14 @@ test('TROVE_PLAN_SCORE_DISABLED stops every provider call, even with a working s
     () => getTripPlanScore('user-1', 'trip-1', { placesService }),
   );
 
-  assert.equal(disabled, null, 'the kill switch must stop before trip lookup or scoring');
-  assert.equal(
-    tripFindFirstCalls,
+  expect(disabled, 'the kill switch must stop before trip lookup or scoring').toBe(null);
+  expect(tripFindFirstCalls, 'the kill switch must stop before the trip query').toBe(
     tripFindFirstCallsBeforeDisabled,
-    'the kill switch must stop before the trip query',
   );
-  assert.equal(
+  expect(
     requests.length,
-    0,
     'the injected placesService must never be called while Plan Score is disabled',
-  );
+  ).toBe(0);
 });
 
 /**
@@ -821,9 +815,9 @@ test('a screen rendered from snapshots the database already holds costs nothing'
     placesService: new CachedPlacesService(provider, () => now),
   });
 
-  assert.equal(calls(), 0);
-  assert.equal(resolved.size, 30);
-  assert.equal(toPlaceSnapshot(resolved.get('ChIJplace-0'), now)?.name, 'National Museum');
+  expect(calls()).toBe(0);
+  expect(resolved.size).toBe(30);
+  expect(toPlaceSnapshot(resolved.get('ChIJplace-0'), now)?.name).toBe('National Museum');
 });
 
 test('a place still renders when the provider is gone', async () => {
@@ -841,9 +835,9 @@ test('a place still renders when the provider is gone', async () => {
   const resolved = await hydratePlaceSnapshots(['ChIJmuseum'], { now, placesService: null });
   const snapshot = toPlaceSnapshot(resolved.get('ChIJmuseum'), now);
 
-  assert.equal(getProviderCallCounts()['google:getDetails'], undefined);
-  assert.equal(snapshot?.name, 'National Museum');
-  assert.equal(snapshot?.stale, true, 'stale data must say so rather than pass as current');
+  expect(getProviderCallCounts()['google:getDetails']).toBe(undefined);
+  expect(snapshot?.name).toBe('National Museum');
+  expect(snapshot?.stale, 'stale data must say so rather than pass as current').toBe(true);
 });
 
 test('a backlog of stale snapshots is bounded per request and drains over the next', async () => {
@@ -863,17 +857,16 @@ test('a backlog of stale snapshots is bounded per request and drains over the ne
   const service = new CachedPlacesService(provider, () => now);
 
   const first = await hydratePlaceSnapshots(ids, { now, placesService: service });
-  assert.equal(calls(), MAX_INLINE_PLACE_HYDRATIONS);
-  assert.equal(
+  expect(calls()).toBe(MAX_INLINE_PLACE_HYDRATIONS);
+  expect(
     [...first.values()].filter((reference) => !toPlaceSnapshot(reference, now)?.stale).length,
-    MAX_INLINE_PLACE_HYDRATIONS,
-  );
+  ).toBe(MAX_INLINE_PLACE_HYDRATIONS);
 
   await hydratePlaceSnapshots(ids, { now, placesService: service });
-  assert.equal(calls(), 40, 'the remainder should refresh on the next request, not be dropped');
+  expect(calls(), 'the remainder should refresh on the next request, not be dropped').toBe(40);
 
   await hydratePlaceSnapshots(ids, { now, placesService: service });
-  assert.equal(calls(), 40, 'and then cost nothing at all');
+  expect(calls(), 'and then cost nothing at all').toBe(40);
 });
 
 test('a caller that names no language reads the snapshot one that named `en` wrote', async () => {
@@ -896,7 +889,7 @@ test('a caller that names no language reads the snapshot one that named `en` wro
     languageCode: 'EN',
   });
 
-  assert.equal(calls(), 1);
+  expect(calls()).toBe(1);
 });
 
 test('Plan Score and the day routes no longer take turns re-billing the same place', async () => {
@@ -920,7 +913,7 @@ test('Plan Score and the day routes no longer take turns re-billing the same pla
   await planScoreResolver(place, 'daily_base', 'day-1-base');
   await dayRoutesResolver(place, 'daily_base', 'day-1-base');
 
-  assert.equal(calls(), 1);
+  expect(calls()).toBe(1);
 });
 
 test('an evidence request never writes the location snapshot', async () => {
@@ -932,7 +925,7 @@ test('an evidence request never writes the location snapshot', async () => {
   // both: the evidence field mask asks for no location, and the snapshot write
   // refuses a place that has none. The provider here answers the way that mask
   // actually makes Google answer.
-  assert.equal(GOOGLE_PLACE_EVIDENCE_FIELD_MASK.includes('location'), false);
+  expect(GOOGLE_PLACE_EVIDENCE_FIELD_MASK.includes('location')).toBe(false);
 
   const provider: PlacesProvider = {
     name: 'google',
@@ -946,9 +939,9 @@ test('an evidence request never writes the location snapshot', async () => {
 
   await service.getDetails({ detail: 'evidence', externalPlaceId: 'ChIJmuseum' });
 
-  assert.equal(providerRefs.get('ChIJmuseum')?.cachedName, null);
-  assert.equal(providerRefs.get('ChIJmuseum')?.cachedAt, null);
-  assert.equal(isSnapshotFresh(providerRefs.get('ChIJmuseum')!, { now }), false);
+  expect(providerRefs.get('ChIJmuseum')?.cachedName).toBe(null);
+  expect(providerRefs.get('ChIJmuseum')?.cachedAt).toBe(null);
+  expect(isSnapshotFresh(providerRefs.get('ChIJmuseum')!, { now })).toBe(false);
 });
 
 test('a durable Place miss survives new service instances and retries after 30 days', async () => {
@@ -979,15 +972,15 @@ test('a durable Place miss survives new service instances and retries after 30 d
   const firstService = new CachedPlacesService(provider, () => now);
 
   await hydratePlaceSnapshots(['ChIJunresolvable'], { now, placesService: firstService });
-  assert.equal(providerRefs.get('ChIJunresolvable')?.detailsFailureCode, 'NOT_FOUND');
-  assert.deepEqual(providerRefs.get('ChIJunresolvable')?.detailsFailedAt, now);
+  expect(providerRefs.get('ChIJunresolvable')?.detailsFailureCode).toBe('NOT_FOUND');
+  expect(providerRefs.get('ChIJunresolvable')?.detailsFailedAt).toStrictEqual(now);
 
   // A cold start creates a new service and has no process-local backoff state.
   const newService = new CachedPlacesService(provider, () => now);
   for (let visit = 0; visit < 5; visit += 1) {
     await hydratePlaceSnapshots(['ChIJunresolvable'], { now, placesService: newService });
   }
-  assert.equal(calls, 1, 'one stubborn Place must not become a bill per screen or cold start');
+  expect(calls, 'one stubborn Place must not become a bill per screen or cold start').toBe(1);
 
   // The retry is durable but bounded. A later successful location clears it.
   succeeds = true;
@@ -996,9 +989,9 @@ test('a durable Place miss survives new service instances and retries after 30 d
     now: retryAt,
     placesService: new CachedPlacesService(provider, () => retryAt),
   });
-  assert.equal(calls, 2);
-  assert.equal(providerRefs.get('ChIJunresolvable')?.detailsFailureCode, null);
-  assert.equal(providerRefs.get('ChIJunresolvable')?.detailsFailedAt, null);
+  expect(calls).toBe(2);
+  expect(providerRefs.get('ChIJunresolvable')?.detailsFailureCode).toBe(null);
+  expect(providerRefs.get('ChIJunresolvable')?.detailsFailedAt).toBe(null);
 });
 
 test('an unusable location is durably cached but transient provider failures are not', async () => {
@@ -1023,8 +1016,8 @@ test('an unusable location is durably cached but transient provider failures are
     detail: 'location',
     externalPlaceId: 'ChIJunusable',
   });
-  assert.equal(unusableCalls, 1);
-  assert.equal(providerRefs.get('ChIJunusable')?.detailsFailureCode, 'UNUSABLE_LOCATION');
+  expect(unusableCalls).toBe(1);
+  expect(providerRefs.get('ChIJunusable')?.detailsFailureCode).toBe('UNUSABLE_LOCATION');
 
   let transientCalls = 0;
   const transient: PlacesProvider = {
@@ -1038,15 +1031,15 @@ test('an unusable location is durably cached but transient provider failures are
   const transientService = new CachedPlacesService(transient, () => now);
   await hydratePlaceSnapshots(['ChIJtransient'], { now, placesService: transientService });
   await hydratePlaceSnapshots(['ChIJtransient'], { now, placesService: transientService });
-  assert.equal(transientCalls, 1, 'the short in-memory backoff absorbs repeated screen reads');
-  assert.equal(providerRefs.get('ChIJtransient')?.detailsFailureCode, null);
+  expect(transientCalls, 'the short in-memory backoff absorbs repeated screen reads').toBe(1);
+  expect(providerRefs.get('ChIJtransient')?.detailsFailureCode).toBe(null);
 
   const afterBackoff = new Date(now.getTime() + 11 * 60 * 1_000);
   await hydratePlaceSnapshots(['ChIJtransient'], {
     now: afterBackoff,
     placesService: new CachedPlacesService(transient, () => afterBackoff),
   });
-  assert.equal(transientCalls, 2, 'temporary failures recover after the short backoff');
+  expect(transientCalls, 'temporary failures recover after the short backoff').toBe(2);
 });
 
 test('structured telemetry separates cache outcomes, Places calls, and Routes calls', async () => {
@@ -1096,7 +1089,7 @@ test('structured telemetry separates cache outcomes, Places calls, and Routes ca
   const placeCall = events.find(
     (event) => event.kind === 'outbound' && event.operation === 'getDetails',
   );
-  assert.deepEqual(placeCall, {
+  expect(placeCall).toStrictEqual({
     cacheMissReason: 'missing_snapshot',
     detailLevel: 'location',
     endpoint: '/v1/places/:placeId',
@@ -1107,9 +1100,11 @@ test('structured telemetry separates cache outcomes, Places calls, and Routes ca
     provider: 'google',
     source: 'screen-hydration',
   });
-  assert.equal(placeCall?.placeFingerprint?.includes('ChIJ'), false);
-  assert.ok(events.some((event) => event.kind === 'cache_hit' && event.cache === 'place-details'));
-  assert.ok(
+  expect(placeCall?.placeFingerprint?.includes('ChIJ')).toBe(false);
+  expect(
+    events.some((event) => event.kind === 'cache_hit' && event.cache === 'place-details'),
+  ).toBeTruthy();
+  expect(
     events.some(
       (event) =>
         event.kind === 'outbound' &&
@@ -1118,5 +1113,5 @@ test('structured telemetry separates cache outcomes, Places calls, and Routes ca
         event.includePolyline === true &&
         event.routeMode === 'walk',
     ),
-  );
+  ).toBeTruthy();
 });

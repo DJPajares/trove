@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import type {
   ItineraryDay,
@@ -135,10 +134,7 @@ test('a considered Place far from the day never stretches the frame', () => {
     point('rotorua', 'considered'),
   ];
 
-  assert.deepEqual(
-    viewportPoints(points).map((entry) => entry.id),
-    ['senso-ji', 'shinjuku'],
-  );
+  expect(viewportPoints(points).map((entry) => entry.id)).toStrictEqual(['senso-ji', 'shinjuku']);
 });
 
 test('the day base frames the day alongside its scheduled stops', () => {
@@ -148,23 +144,17 @@ test('the day base frames the day alongside its scheduled stops', () => {
     point('far', 'considered'),
   ];
 
-  assert.deepEqual(
-    viewportPoints(points).map((entry) => entry.id),
-    ['ryokan', 'museum'],
-  );
+  expect(viewportPoints(points).map((entry) => entry.id)).toStrictEqual(['ryokan', 'museum']);
 });
 
 test('a day with nothing located falls back to every point rather than framing nothing', () => {
   const points = [point('one', 'considered'), point('two', 'considered')];
 
-  assert.deepEqual(
-    viewportPoints(points).map((entry) => entry.id),
-    ['one', 'two'],
-  );
+  expect(viewportPoints(points).map((entry) => entry.id)).toStrictEqual(['one', 'two']);
 });
 
 test('an empty map has nothing to frame', () => {
-  assert.deepEqual(viewportPoints([]), []);
+  expect(viewportPoints([])).toStrictEqual([]);
 });
 
 test('one base serves a day that starts and ends in the same place', () => {
@@ -173,16 +163,15 @@ test('one base serves a day that starts and ends in the same place', () => {
     tripPlaces: ['ryokan', 'museum'],
   });
 
-  assert.deepEqual(
-    points.map((entry) => [entry.id, entry.baseRole, entry.kind, entry.order]),
-    [['base:both:ryokan', 'both', 'base', 1]],
-  );
+  expect(points.map((entry) => [entry.id, entry.baseRole, entry.kind, entry.order])).toStrictEqual([
+    ['base:both:ryokan', 'both', 'base', 1],
+  ]);
 });
 
 test('the base the day leaves from is its first stop, and the stops after it move down', () => {
   const bases = { arrivalTripPlaceId: 'ryokan', departureTripPlaceId: null };
 
-  assert.deepEqual(dayStopNumbers({ bases, itemCount: 3 }), {
+  expect(dayStopNumbers({ bases, itemCount: 3 })).toStrictEqual({
     arrival: 1,
     departure: null,
     itemOffset: 1,
@@ -194,7 +183,7 @@ test('a day that returns to the same base it left counts the return as its own s
   // the day, not one stop repeated — the same base is stop one and stop five.
   const bases = { arrivalTripPlaceId: 'ryokan', departureTripPlaceId: 'ryokan' };
 
-  assert.deepEqual(dayStopNumbers({ bases, itemCount: 3 }), {
+  expect(dayStopNumbers({ bases, itemCount: 3 })).toStrictEqual({
     arrival: 1,
     departure: 5,
     itemOffset: 1,
@@ -204,7 +193,7 @@ test('a day that returns to the same base it left counts the return as its own s
 test('a day that ends somewhere new counts that base as its last stop', () => {
   const bases = { arrivalTripPlaceId: 'ryokan', departureTripPlaceId: 'hostel' };
 
-  assert.deepEqual(dayStopNumbers({ bases, itemCount: 3 }), {
+  expect(dayStopNumbers({ bases, itemCount: 3 })).toStrictEqual({
     arrival: 1,
     departure: 5,
     itemOffset: 1,
@@ -214,7 +203,7 @@ test('a day that ends somewhere new counts that base as its last stop', () => {
 test('a day with no base to leave from starts counting at its first item', () => {
   const bases = { arrivalTripPlaceId: null, departureTripPlaceId: null };
 
-  assert.deepEqual(dayStopNumbers({ bases, itemCount: 3 }), {
+  expect(dayStopNumbers({ bases, itemCount: 3 })).toStrictEqual({
     arrival: null,
     departure: null,
     itemOffset: 0,
@@ -224,7 +213,7 @@ test('a day with no base to leave from starts counting at its first item', () =>
 test('a day that only has somewhere to end still numbers its items from one', () => {
   const bases = { arrivalTripPlaceId: null, departureTripPlaceId: 'hostel' };
 
-  assert.deepEqual(dayStopNumbers({ bases, itemCount: 2 }), {
+  expect(dayStopNumbers({ bases, itemCount: 2 })).toStrictEqual({
     arrival: null,
     departure: 3,
     itemOffset: 0,
@@ -240,13 +229,10 @@ test('items on a day with a base are numbered after it on the map too', () => {
     selectedDay: { items: [item('first', 'shrine'), item('second', 'market')] },
   });
 
-  assert.deepEqual(
-    points.map((entry) => [entry.tripPlaceId, entry.order]),
-    [
-      ['shrine', 2],
-      ['market', 3],
-    ],
-  );
+  expect(points.map((entry) => [entry.tripPlaceId, entry.order])).toStrictEqual([
+    ['shrine', 2],
+    ['market', 3],
+  ]);
 });
 
 test('a day that moves on gets a marker at each end, numbered first and last', () => {
@@ -256,13 +242,10 @@ test('a day that moves on gets a marker at each end, numbered first and last', (
     tripPlaces: ['ryokan', 'hostel'],
   });
 
-  assert.deepEqual(
-    points.map((entry) => [entry.baseRole, entry.tripPlaceId, entry.order]),
-    [
-      ['arrival', 'ryokan', 1],
-      ['departure', 'hostel', 4],
-    ],
-  );
+  expect(points.map((entry) => [entry.baseRole, entry.tripPlaceId, entry.order])).toStrictEqual([
+    ['arrival', 'ryokan', 1],
+    ['departure', 'hostel', 4],
+  ]);
 });
 
 test('a base that is already a stop on the day needs no second marker', () => {
@@ -272,7 +255,7 @@ test('a base that is already a stop on the day needs no second marker', () => {
     tripPlaces: ['ryokan'],
   });
 
-  assert.deepEqual(points, []);
+  expect(points).toStrictEqual([]);
 });
 
 test('a base inferred from the day route still reaches the map', () => {
@@ -293,10 +276,9 @@ test('a base inferred from the day route still reaches the map', () => {
     tripPlaces: ['ryokan'],
   });
 
-  assert.deepEqual(
-    points.map((entry) => [entry.baseRole, entry.tripPlaceId]),
-    [['both', 'ryokan']],
-  );
+  expect(points.map((entry) => [entry.baseRole, entry.tripPlaceId])).toStrictEqual([
+    ['both', 'ryokan'],
+  ]);
 });
 
 test('a starting location is not mistaken for a daily base', () => {
@@ -311,7 +293,7 @@ test('a starting location is not mistaken for a daily base', () => {
     tripPlaces: ['home'],
   });
 
-  assert.deepEqual(points, []);
+  expect(points).toStrictEqual([]);
 });
 
 test('a Place off this day says which days already have it', () => {
@@ -332,14 +314,11 @@ test('a Place off this day says which days already have it', () => {
     selectedDayNumber: 2,
   });
 
-  assert.deepEqual(
-    points.map((entry) => [entry.tripPlaceId, entry.otherDayNumbers]),
-    [
-      ['shrine', [1, 3]],
-      // Its own day is where you already are, so it goes unsaid.
-      ['market', undefined],
-    ],
-  );
+  expect(points.map((entry) => [entry.tripPlaceId, entry.otherDayNumbers])).toStrictEqual([
+    ['shrine', [1, 3]],
+    // Its own day is where you already are, so it goes unsaid.
+    ['market', undefined],
+  ]);
 });
 
 test('a scheduled stop keeps its number and carries no cross-day note', () => {
@@ -359,8 +338,7 @@ test('a scheduled stop keeps its number and carries no cross-day note', () => {
     selectedDayNumber: 2,
   });
 
-  assert.deepEqual(
-    points.map((entry) => [entry.kind, entry.order, entry.otherDayNumbers]),
-    [['scheduled', 1, undefined]],
-  );
+  expect(points.map((entry) => [entry.kind, entry.order, entry.otherDayNumbers])).toStrictEqual([
+    ['scheduled', 1, undefined],
+  ]);
 });

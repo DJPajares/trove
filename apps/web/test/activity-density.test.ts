@@ -1,13 +1,12 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import { activityDensityForItemCount } from '../lib/activity-density.ts';
 
 test('maps itinerary item counts to activity-density thresholds', () => {
-  assert.equal(activityDensityForItemCount(0), null);
-  assert.equal(activityDensityForItemCount(1), 'light');
-  assert.equal(activityDensityForItemCount(2), 'light');
-  assert.equal(activityDensityForItemCount(3), 'medium');
-  assert.equal(activityDensityForItemCount(4), 'medium');
-  assert.equal(activityDensityForItemCount(5), 'packed');
+  expect(activityDensityForItemCount(0)).toBe(null);
+  expect(activityDensityForItemCount(1)).toBe('light');
+  expect(activityDensityForItemCount(2)).toBe('light');
+  expect(activityDensityForItemCount(3)).toBe('medium');
+  expect(activityDensityForItemCount(4)).toBe('medium');
+  expect(activityDensityForItemCount(5)).toBe('packed');
 });

@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import { installFakePrismaClient, resetStore, store } from './support/fake-prisma.js';
 
@@ -93,20 +92,16 @@ test('removing a Trip Place keeps the records the traveller built around it', as
 
   await removeTripPlace(OWNER, TRIP, MARKET);
 
-  assert.equal(store.tripPlace.length, 1);
+  expect(store.tripPlace.length).toBe(1);
   // Every record survives, holding no reference the database would refuse.
-  assert.deepEqual(
-    {
-      expense: store.expense[0]?.tripPlaceId,
-      memory: store.memory[0]?.tripPlaceId,
-      reservation: store.reservation[0]?.tripPlaceId,
-    },
-    { expense: null, memory: null, reservation: null },
-  );
-  assert.deepEqual(
-    [store.expense.length, store.reservation.length, store.memory.length],
-    [1, 1, 1],
-  );
+  expect({
+    expense: store.expense[0]?.tripPlaceId,
+    memory: store.memory[0]?.tripPlaceId,
+    reservation: store.reservation[0]?.tripPlaceId,
+  }).toStrictEqual({ expense: null, memory: null, reservation: null });
+  expect([store.expense.length, store.reservation.length, store.memory.length]).toStrictEqual([
+    1, 1, 1,
+  ]);
 });
 
 test('removing a Trip Place a day leaned on re-resolves that day rather than refusing', async () => {
@@ -115,20 +110,17 @@ test('removing a Trip Place a day leaned on re-resolves that day rather than ref
   await removeTripPlace(OWNER, TRIP, RYOKAN);
 
   const day = store.itineraryDay.find((candidate) => candidate.id === FIRST_DAY);
-  assert.deepEqual(
-    {
-      dailyBase: day?.dailyBaseTripPlaceId,
-      source: day?.defaultTimeZoneSource,
-      sourceTripPlace: day?.defaultTimeZoneSourceTripPlaceId,
-      timeZone: day?.defaultTimeZone,
-    },
-    {
-      dailyBase: null,
-      source: 'TRIP_REFERENCE',
-      sourceTripPlace: null,
-      timeZone: 'Asia/Tokyo',
-    },
-  );
+  expect({
+    dailyBase: day?.dailyBaseTripPlaceId,
+    source: day?.defaultTimeZoneSource,
+    sourceTripPlace: day?.defaultTimeZoneSourceTripPlaceId,
+    timeZone: day?.defaultTimeZone,
+  }).toStrictEqual({
+    dailyBase: null,
+    source: 'TRIP_REFERENCE',
+    sourceTripPlace: null,
+    timeZone: 'Asia/Tokyo',
+  });
 });
 
 test('a Trip Place the itinerary still schedules is refused, and nothing is detached', async () => {
@@ -143,12 +135,11 @@ test('a Trip Place the itinerary still schedules is refused, and nothing is deta
   });
   store.expense.push({ id: 'expense-breakfast', tripId: TRIP, tripPlaceId: MARKET });
 
-  await assert.rejects(
-    removeTripPlace(OWNER, TRIP, MARKET),
+  await expect(removeTripPlace(OWNER, TRIP, MARKET)).rejects.toSatisfy(
     (error: unknown) => error instanceof TripPlaceReferencedError && error.referenceCount === 1,
   );
-  assert.equal(store.tripPlace.length, 2);
-  assert.equal(store.expense[0]?.tripPlaceId, MARKET);
+  expect(store.tripPlace.length).toBe(2);
+  expect(store.expense[0]?.tripPlaceId).toBe(MARKET);
 });
 
 test('shortening a trip keeps the tasks, expenses, and Memories filed on a dropped day', async () => {
@@ -163,16 +154,35 @@ test('shortening a trip keeps the tasks, expenses, and Memories filed on a dropp
     startDate: '2026-09-01',
   });
 
-  assert.deepEqual(
-    store.itineraryDay.map((day) => day.id),
-    [FIRST_DAY],
-  );
-  assert.deepEqual(
+  expect(store.itineraryDay.map((day) => day.id)).toStrictEqual([FIRST_DAY]);
+  expect({
+    expense: store.expense[0]?.itineraryDayId,
+    memory: store.memory[0]?.itineraryDayId,
+    task: store.task[0]?.itineraryDayId,
+  }).toStrictEqual({ expense: null, memory: null, task: null });
+});
+
+test('updating the trip timezone refreshes inherited day defaults before later item creation', async () => {
+  seed();
+
+  await updateTrip(OWNER, '', TRIP, { referenceTimeZone: 'Pacific/Auckland' });
+
+  expect(
+    store.itineraryDay.map((day) => ({
+      id: day.id,
+      source: day.defaultTimeZoneSource,
+      timeZone: day.defaultTimeZone,
+    })),
+  ).toStrictEqual([
     {
-      expense: store.expense[0]?.itineraryDayId,
-      memory: store.memory[0]?.itineraryDayId,
-      task: store.task[0]?.itineraryDayId,
+      id: FIRST_DAY,
+      source: 'EXPLICIT_DAILY_BASE',
+      timeZone: 'Asia/Tokyo',
     },
-    { expense: null, memory: null, task: null },
-  );
+    {
+      id: LAST_DAY,
+      source: 'TRIP_REFERENCE',
+      timeZone: 'Pacific/Auckland',
+    },
+  ]);
 });

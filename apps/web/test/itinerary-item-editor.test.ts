@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import {
   durationMinutesFromParts,
@@ -17,14 +16,12 @@ test('local Trip Place filtering has no arbitrary result cap', () => {
     name: `Place ${index + 1}`,
   }));
 
-  assert.equal(
-    filterItineraryTripPlaces(places, '', (place) => [place.name, place.address]).length,
+  expect(filterItineraryTripPlaces(places, '', (place) => [place.name, place.address]).length).toBe(
     12,
   );
-  assert.equal(
+  expect(
     filterItineraryTripPlaces(places, 'rotorua', (place) => [place.name, place.address]).length,
-    6,
-  );
+  ).toBe(6);
 });
 
 test('provider suggestions exclude existing Trip Places and stop at three', () => {
@@ -36,42 +33,39 @@ test('provider suggestions exclude existing Trip Places and stop at three', () =
     provider: 'google' as const,
   })) satisfies ProviderSuggestion[];
 
-  assert.deepEqual(
+  expect(
     itineraryProviderSuggestions(suggestions, new Set(['google-1'])).map(
       (suggestion) => suggestion.externalPlaceId,
     ),
-    ['google-2', 'google-3', 'google-4'],
-  );
+  ).toStrictEqual(['google-2', 'google-3', 'google-4']);
 });
 
 test('a new identity is mutually exclusive while a legacy identity is preserved until changed', () => {
   const legacy = { customLabel: 'Lunch with Maya', tripPlaceId: 'trip-place-1' };
 
-  assert.equal(itineraryIdentityChoice(legacy, { kind: 'preserve' }), legacy);
-  assert.deepEqual(
+  expect(itineraryIdentityChoice(legacy, { kind: 'preserve' })).toBe(legacy);
+  expect(
     itineraryIdentityChoice(legacy, { kind: 'trip_place', tripPlaceId: 'trip-place-2' }),
-    { customLabel: '', tripPlaceId: 'trip-place-2' },
-  );
-  assert.deepEqual(
+  ).toStrictEqual({ customLabel: '', tripPlaceId: 'trip-place-2' });
+  expect(
     itineraryIdentityChoice(legacy, { kind: 'custom_label', label: '  Sunset walk  ' }),
-    { customLabel: 'Sunset walk', tripPlaceId: '' },
-  );
+  ).toStrictEqual({ customLabel: 'Sunset walk', tripPlaceId: '' });
 });
 
 test('ordinary edits preserve hidden legacy fields while identity changes clear only overrides', () => {
-  assert.deepEqual(itineraryIdentityLegacyPatch(false), {});
-  assert.deepEqual(itineraryIdentityLegacyPatch(true), {
+  expect(itineraryIdentityLegacyPatch(false)).toStrictEqual({});
+  expect(itineraryIdentityLegacyPatch(true)).toStrictEqual({
     customLocation: null,
     priority: null,
   });
-  assert.equal('plannedCost' in itineraryIdentityLegacyPatch(true), false);
+  expect('plannedCost' in itineraryIdentityLegacyPatch(true)).toBe(false);
 });
 
 test('duration conversion supports presets and custom hours and minutes', () => {
-  assert.deepEqual(durationParts('90'), { hours: '1', minutes: '30' });
-  assert.deepEqual(durationParts(''), { hours: '', minutes: '' });
-  assert.equal(durationMinutesFromParts({ hours: '2', minutes: '15' }), '135');
-  assert.equal(durationMinutesFromParts({ hours: '', minutes: '45' }), '45');
-  assert.equal(durationMinutesFromParts({ hours: '1', minutes: '60' }), '');
-  assert.equal(durationMinutesFromParts({ hours: '0', minutes: '0' }), '');
+  expect(durationParts('90')).toStrictEqual({ hours: '1', minutes: '30' });
+  expect(durationParts('')).toStrictEqual({ hours: '', minutes: '' });
+  expect(durationMinutesFromParts({ hours: '2', minutes: '15' })).toBe('135');
+  expect(durationMinutesFromParts({ hours: '', minutes: '45' })).toBe('45');
+  expect(durationMinutesFromParts({ hours: '1', minutes: '60' })).toBe('');
+  expect(durationMinutesFromParts({ hours: '0', minutes: '0' })).toBe('');
 });

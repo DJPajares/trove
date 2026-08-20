@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import {
   buildItineraryRoutePlan,
@@ -35,8 +34,8 @@ test('a single applicable accommodation is the base for both ends of the day', (
     new Date('2026-09-01'),
   );
 
-  assert.equal(arrival?.id, 'hotel-a');
-  assert.equal(departure?.id, 'hotel-a');
+  expect(arrival?.id).toBe('hotel-a');
+  expect(departure?.id).toBe('hotel-a');
 });
 
 test('a transition day infers the checkout accommodation as arrival and the checkin one as departure', () => {
@@ -49,8 +48,8 @@ test('a transition day infers the checkout accommodation as arrival and the chec
     dayDate,
   );
 
-  assert.equal(arrival?.id, 'hotel-a');
-  assert.equal(departure?.id, 'hotel-b');
+  expect(arrival?.id).toBe('hotel-a');
+  expect(departure?.id).toBe('hotel-b');
 });
 
 test('two accommodations that do not cleanly disambiguate infer no base rather than guessing', () => {
@@ -63,8 +62,8 @@ test('two accommodations that do not cleanly disambiguate infer no base rather t
     dayDate,
   );
 
-  assert.equal(arrival, null);
-  assert.equal(departure, null);
+  expect(arrival).toBe(null);
+  expect(departure).toBe(null);
 });
 
 test('more than two applicable accommodations infer no base', () => {
@@ -78,15 +77,15 @@ test('more than two applicable accommodations infer no base', () => {
     dayDate,
   );
 
-  assert.equal(arrival, null);
-  assert.equal(departure, null);
+  expect(arrival).toBe(null);
+  expect(departure).toBe(null);
 });
 
 test('no applicable accommodation infers no base', () => {
   const { arrival, departure } = inferAccommodationBases([], new Date('2026-09-03'));
 
-  assert.equal(arrival, null);
-  assert.equal(departure, null);
+  expect(arrival).toBe(null);
+  expect(departure).toBe(null);
 });
 
 test('symmetric base adds a day-start leg and a return-to-base leg around the items', () => {
@@ -100,15 +99,17 @@ test('symmetric base adds a day-start leg and a return-to-base leg around the it
     startingLocation: null,
   });
 
-  assert.equal(plans.length, 2);
-  assert.deepEqual(
-    [plans[0]?.modeOwner.kind, plans[0]?.origin.id, plans[0]?.destination.id],
-    ['day_start', 'hotel', 'museum'],
-  );
-  assert.deepEqual(
-    [plans[1]?.modeOwner.kind, plans[1]?.origin.id, plans[1]?.destination.id],
-    ['item_departure', 'museum', 'hotel'],
-  );
+  expect(plans.length).toBe(2);
+  expect([plans[0]?.modeOwner.kind, plans[0]?.origin.id, plans[0]?.destination.id]).toStrictEqual([
+    'day_start',
+    'hotel',
+    'museum',
+  ]);
+  expect([plans[1]?.modeOwner.kind, plans[1]?.origin.id, plans[1]?.destination.id]).toStrictEqual([
+    'item_departure',
+    'museum',
+    'hotel',
+  ]);
 });
 
 test('an asymmetric base routes the day-start leg from arrival and the return leg to departure', () => {
@@ -121,9 +122,9 @@ test('an asymmetric base routes the day-start leg from arrival and the return le
     startingLocation: null,
   });
 
-  assert.equal(plans.length, 2);
-  assert.equal(plans[0]?.origin.id, 'hotel-a');
-  assert.equal(plans[1]?.destination.id, 'hotel-b');
+  expect(plans.length).toBe(2);
+  expect(plans[0]?.origin.id).toBe('hotel-a');
+  expect(plans[1]?.destination.id).toBe('hotel-b');
 });
 
 test('an arrival base with no departure base adds no return leg', () => {
@@ -136,8 +137,8 @@ test('an arrival base with no departure base adds no return leg', () => {
     startingLocation: null,
   });
 
-  assert.equal(plans.length, 1);
-  assert.equal(plans[0]?.modeOwner.kind, 'day_start');
+  expect(plans.length).toBe(1);
+  expect(plans[0]?.modeOwner.kind).toBe('day_start');
 });
 
 test('no base and no starting location leaves only between-item legs', () => {
@@ -153,8 +154,8 @@ test('no base and no starting location leaves only between-item legs', () => {
     startingLocation: null,
   });
 
-  assert.equal(plans.length, 1);
-  assert.equal(plans[0]?.modeOwner.kind, 'item_departure');
+  expect(plans.length).toBe(1);
+  expect(plans[0]?.modeOwner.kind).toBe('item_departure');
 });
 
 test('the leg chain follows item order, so reordering a day rewrites which stop each leg comes from', () => {
@@ -171,7 +172,7 @@ test('the leg chain follows item order, so reordering a day rewrites which stop 
   const chain = (plans: ReturnType<typeof day>) =>
     plans.map((plan) => [plan.origin.id, plan.destination.id]);
 
-  assert.deepEqual(chain(day(['hobbiton', 'redwoods', 'blue-spring'])), [
+  expect(chain(day(['hobbiton', 'redwoods', 'blue-spring']))).toStrictEqual([
     ['hotel', 'hobbiton'],
     ['hobbiton', 'redwoods'],
     ['redwoods', 'blue-spring'],
@@ -179,7 +180,7 @@ test('the leg chain follows item order, so reordering a day rewrites which stop 
   ]);
 
   // The same three stops, one moved: every leg it touches names a new origin.
-  assert.deepEqual(chain(day(['hobbiton', 'blue-spring', 'redwoods'])), [
+  expect(chain(day(['hobbiton', 'blue-spring', 'redwoods']))).toStrictEqual([
     ['hotel', 'hobbiton'],
     ['hobbiton', 'blue-spring'],
     ['blue-spring', 'redwoods'],

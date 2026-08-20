@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import { installFakePrismaClient, resetStore, store } from './support/fake-prisma.js';
 
@@ -160,15 +159,21 @@ test('another authenticated user cannot reach a private Memory or its media', as
   );
 
   const denied = isNotFound('trip_not_found');
-  await assert.rejects(listMemories(INTRUDER, TRIP, null), denied);
-  await assert.rejects(updateMemory(INTRUDER, TRIP, memory.id, { note: 'mine now' }, null), denied);
-  await assert.rejects(deleteMemory(INTRUDER, TRIP, memory.id, null), denied);
-  await assert.rejects(deleteMemoryPhoto(INTRUDER, TRIP, memory.id, photo.id, null), denied);
-  await assert.rejects(reorderHighlights(INTRUDER, TRIP, [memory.id], null), denied);
-  await assert.rejects(reorderMemoryPhotos(INTRUDER, TRIP, memory.id, [photo.id], null), denied);
-  await assert.rejects(setStoryCoverPhoto(INTRUDER, TRIP, photo.id, null), denied);
+  await expect(listMemories(INTRUDER, TRIP, null)).rejects.toSatisfy(denied);
+  await expect(
+    updateMemory(INTRUDER, TRIP, memory.id, { note: 'mine now' }, null),
+  ).rejects.toSatisfy(denied);
+  await expect(deleteMemory(INTRUDER, TRIP, memory.id, null)).rejects.toSatisfy(denied);
+  await expect(deleteMemoryPhoto(INTRUDER, TRIP, memory.id, photo.id, null)).rejects.toSatisfy(
+    denied,
+  );
+  await expect(reorderHighlights(INTRUDER, TRIP, [memory.id], null)).rejects.toSatisfy(denied);
+  await expect(reorderMemoryPhotos(INTRUDER, TRIP, memory.id, [photo.id], null)).rejects.toSatisfy(
+    denied,
+  );
+  await expect(setStoryCoverPhoto(INTRUDER, TRIP, photo.id, null)).rejects.toSatisfy(denied);
   // Even a path the intruder is allowed to write to in Storage is refused here.
-  await assert.rejects(
+  await expect(
     addMemoryPhoto(
       INTRUDER,
       TRIP,
@@ -176,16 +181,12 @@ test('another authenticated user cannot reach a private Memory or its media', as
       { ...photoInput(memory.id, 'bay.jpg'), path: `${INTRUDER}/${TRIP}/${memory.id}/bay.jpg` },
       null,
     ),
-    denied,
-  );
+  ).rejects.toSatisfy(denied);
 
   const owned = await listMemories(OWNER, TRIP, null);
-  assert.equal(owned.memories.length, 1);
-  assert.equal(owned.memories[0]?.note, 'Sunrise over the bay');
-  assert.deepEqual(
-    owned.memories[0]?.photos.map((entry) => entry.fileName),
-    ['bay.jpg'],
-  );
+  expect(owned.memories.length).toBe(1);
+  expect(owned.memories[0]?.note).toBe('Sunrise over the bay');
+  expect(owned.memories[0]?.photos.map((entry) => entry.fileName)).toStrictEqual(['bay.jpg']);
 });
 
 test('only files the traveller uploaded to their own folder become Memory media', async () => {
@@ -213,11 +214,11 @@ test('only files the traveller uploaded to their own folder become Memory media'
   ];
 
   for (const input of rejected) {
-    await assert.rejects(addMemoryPhoto(OWNER, TRIP, memory.id, input, null), invalid);
+    await expect(addMemoryPhoto(OWNER, TRIP, memory.id, input, null)).rejects.toSatisfy(invalid);
   }
 
   const listed = await listMemories(OWNER, TRIP, null);
-  assert.deepEqual(listed.memories[0]?.photos, []);
+  expect(listed.memories[0]?.photos).toStrictEqual([]);
 });
 
 test('a retried offline capture resolves to the Memory and photo it already created', async () => {
@@ -238,8 +239,8 @@ test('a retried offline capture resolves to the Memory and photo it already crea
     clientMemoryId,
   );
 
-  assert.equal(replay.id, first.id);
-  assert.equal(replay.note, 'Queued while offline');
+  expect(replay.id).toBe(first.id);
+  expect(replay.note).toBe('Queued while offline');
 
   const photo = await addMemoryPhoto(
     OWNER,
@@ -256,15 +257,12 @@ test('a retried offline capture resolves to the Memory and photo it already crea
     null,
   );
 
-  assert.equal(photoReplay.id, photo.id);
-  assert.equal(photoReplay.position, 0);
+  expect(photoReplay.id).toBe(photo.id);
+  expect(photoReplay.position).toBe(0);
 
   const listed = await listMemories(OWNER, TRIP, null);
-  assert.equal(listed.memories.length, 1);
-  assert.deepEqual(
-    listed.memories[0]?.photos.map((entry) => entry.fileName),
-    ['queued.jpg'],
-  );
+  expect(listed.memories.length).toBe(1);
+  expect(listed.memories[0]?.photos.map((entry) => entry.fileName)).toStrictEqual(['queued.jpg']);
 });
 
 test('correcting a Memory moves it deliberately; an ordinary edit leaves its capture alone', async () => {
@@ -276,60 +274,51 @@ test('correcting a Memory moves it deliberately; an ordinary edit leaves its cap
     null,
   );
 
-  assert.deepEqual(
-    {
-      date: captured.capturedLocalDate,
-      source: captured.timeZoneSource,
-      time: captured.capturedLocalTime,
-      timeZone: captured.timeZone,
-    },
-    {
-      date: '2026-09-05',
-      source: 'itinerary_day',
-      time: '11:30',
-      timeZone: 'America/New_York',
-    },
-  );
+  expect({
+    date: captured.capturedLocalDate,
+    source: captured.timeZoneSource,
+    time: captured.capturedLocalTime,
+    timeZone: captured.timeZone,
+  }).toStrictEqual({
+    date: '2026-09-05',
+    source: 'itinerary_day',
+    time: '11:30',
+    timeZone: 'America/New_York',
+  });
 
   // Correcting the Place re-resolves the timezone and says so, rather than moving
   // the Memory to another story day quietly.
   const corrected = await updateMemory(OWNER, TRIP, captured.id, { tripPlaceId: YOYOGI }, null);
-  assert.equal(corrected.localDateChanged, true);
-  assert.deepEqual(
-    {
-      date: corrected.memory.capturedLocalDate,
-      instant: corrected.memory.capturedAt,
-      source: corrected.memory.timeZoneSource,
-      time: corrected.memory.capturedLocalTime,
-      timeZone: corrected.memory.timeZone,
-    },
-    {
-      date: '2026-09-06',
-      instant: captured.capturedAt,
-      source: 'trip_place',
-      time: '00:30',
-      timeZone: 'Asia/Tokyo',
-    },
-  );
+  expect(corrected.localDateChanged).toBe(true);
+  expect({
+    date: corrected.memory.capturedLocalDate,
+    instant: corrected.memory.capturedAt,
+    source: corrected.memory.timeZoneSource,
+    time: corrected.memory.capturedLocalTime,
+    timeZone: corrected.memory.timeZone,
+  }).toStrictEqual({
+    date: '2026-09-06',
+    instant: captured.capturedAt,
+    source: 'trip_place',
+    time: '00:30',
+    timeZone: 'Asia/Tokyo',
+  });
 
   const edited = await updateMemory(OWNER, TRIP, captured.id, { note: 'Landed at last' }, null);
-  assert.equal(edited.localDateChanged, false);
-  assert.deepEqual(
-    {
-      date: edited.memory.capturedLocalDate,
-      instant: edited.memory.capturedAt,
-      note: edited.memory.note,
-      time: edited.memory.capturedLocalTime,
-      timeZone: edited.memory.timeZone,
-    },
-    {
-      date: '2026-09-06',
-      instant: captured.capturedAt,
-      note: 'Landed at last',
-      time: '00:30',
-      timeZone: 'Asia/Tokyo',
-    },
-  );
+  expect(edited.localDateChanged).toBe(false);
+  expect({
+    date: edited.memory.capturedLocalDate,
+    instant: edited.memory.capturedAt,
+    note: edited.memory.note,
+    time: edited.memory.capturedLocalTime,
+    timeZone: edited.memory.timeZone,
+  }).toStrictEqual({
+    date: '2026-09-06',
+    instant: captured.capturedAt,
+    note: 'Landed at last',
+    time: '00:30',
+    timeZone: 'Asia/Tokyo',
+  });
 });
 
 test('reading a Memory from a device in another timezone reports the same trip-local capture', async () => {
@@ -347,18 +336,15 @@ test('reading a Memory from a device in another timezone reports the same trip-l
     process.env.TZ = 'Pacific/Auckland';
     const reread = await listMemories(OWNER, TRIP, null);
 
-    assert.deepEqual(
-      {
-        date: reread.memories[0]?.capturedLocalDate,
-        time: reread.memories[0]?.capturedLocalTime,
-        timeZone: reread.memories[0]?.timeZone,
-      },
-      {
-        date: captured.capturedLocalDate,
-        time: captured.capturedLocalTime,
-        timeZone: 'Asia/Tokyo',
-      },
-    );
+    expect({
+      date: reread.memories[0]?.capturedLocalDate,
+      time: reread.memories[0]?.capturedLocalTime,
+      timeZone: reread.memories[0]?.timeZone,
+    }).toStrictEqual({
+      date: captured.capturedLocalDate,
+      time: captured.capturedLocalTime,
+      timeZone: 'Asia/Tokyo',
+    });
   } finally {
     process.env.TZ = originalTimeZone;
   }
@@ -381,23 +367,18 @@ test('removing one photo or one Memory leaves every other record intact', async 
 
   await deleteMemoryPhoto(OWNER, TRIP, ramen.id, cover.id, null);
   const afterPhoto = await listMemories(OWNER, TRIP, null);
-  assert.deepEqual(
+  expect(
     afterPhoto.memories.map((memory) => memory.photos.map((entry) => entry.fileName)),
-    [['counter.jpg'], ['train.jpg']],
-  );
+  ).toStrictEqual([['counter.jpg'], ['train.jpg']]);
   // The story cover pointed at that photo, so it clears; nothing else does.
-  assert.equal(afterPhoto.storyCover, null);
+  expect(afterPhoto.storyCover).toBe(null);
 
   await deleteMemory(OWNER, TRIP, ramen.id, null);
   const afterMemory = await listMemories(OWNER, TRIP, null);
-  assert.deepEqual(
-    afterMemory.memories.map((memory) => memory.note),
-    ['Night train'],
-  );
-  assert.deepEqual(
+  expect(afterMemory.memories.map((memory) => memory.note)).toStrictEqual(['Night train']);
+  expect(
     afterMemory.memories.map((memory) => memory.photos.map((entry) => entry.fileName)),
-    [['train.jpg']],
-  );
+  ).toStrictEqual([['train.jpg']]);
 
   // The trip's day and Place survive their Memory and can still be captured against.
   const replacement = await createMemory(
@@ -406,8 +387,8 @@ test('removing one photo or one Memory leaves every other record intact', async 
     { itineraryDayId: ARRIVAL_DAY, note: 'Added afterwards', tripPlaceId: YOYOGI },
     null,
   );
-  assert.equal(replacement.tripPlace?.id, YOYOGI);
-  assert.equal(replacement.itineraryDay?.id, ARRIVAL_DAY);
+  expect(replacement.tripPlace?.id).toBe(YOYOGI);
+  expect(replacement.itineraryDay?.id).toBe(ARRIVAL_DAY);
 });
 
 test('a Trip Story cover can only be one of the traveller’s own Memory photos', async () => {
@@ -421,21 +402,17 @@ test('a Trip Story cover can only be one of the traveller’s own Memory photos'
     null,
   );
 
-  await assert.rejects(
-    setStoryCoverPhoto(OWNER, TRIP, 'a-photo-from-nowhere', null),
+  await expect(setStoryCoverPhoto(OWNER, TRIP, 'a-photo-from-nowhere', null)).rejects.toSatisfy(
     isNotFound('memory_photo_not_found'),
   );
 
   const chosen = await setStoryCoverPhoto(OWNER, TRIP, photo.id, null);
-  assert.equal(chosen?.photoId, photo.id);
+  expect(chosen?.photoId).toBe(photo.id);
 
   const cleared = await setStoryCoverPhoto(OWNER, TRIP, null, null);
-  assert.equal(cleared, null);
+  expect(cleared).toBe(null);
   const listed = await listMemories(OWNER, TRIP, null);
-  assert.deepEqual(
-    listed.memories[0]?.photos.map((entry) => entry.fileName),
-    ['lantern.jpg'],
-  );
+  expect(listed.memories[0]?.photos.map((entry) => entry.fileName)).toStrictEqual(['lantern.jpg']);
 });
 
 test('removing a Trip Place keeps the Memory captured there and its resolved timezone', async () => {
@@ -446,26 +423,22 @@ test('removing a Trip Place keeps the Memory captured there and its resolved tim
     { note: 'Under the ginkgo', tripPlaceId: KIYOSUMI },
     null,
   );
-  assert.equal(memory.timeZone, 'Asia/Tokyo');
+  expect(memory.timeZone).toBe('Asia/Tokyo');
 
   // A Place the itinerary still schedules stays protected.
-  await assert.rejects(
-    removeTripPlace(OWNER, TRIP, YOYOGI),
+  await expect(removeTripPlace(OWNER, TRIP, YOYOGI)).rejects.toSatisfy(
     (error: unknown) => error instanceof TripPlaceReferencedError,
   );
 
   await removeTripPlace(OWNER, TRIP, KIYOSUMI);
 
   const listed = await listMemories(OWNER, TRIP, null);
-  assert.equal(listed.memories.length, 1);
-  assert.deepEqual(
-    {
-      note: listed.memories[0]?.note,
-      timeZone: listed.memories[0]?.timeZone,
-      tripPlace: listed.memories[0]?.tripPlace,
-    },
-    { note: 'Under the ginkgo', timeZone: 'Asia/Tokyo', tripPlace: null },
-  );
+  expect(listed.memories.length).toBe(1);
+  expect({
+    note: listed.memories[0]?.note,
+    timeZone: listed.memories[0]?.timeZone,
+    tripPlace: listed.memories[0]?.tripPlace,
+  }).toStrictEqual({ note: 'Under the ginkgo', timeZone: 'Asia/Tokyo', tripPlace: null });
 });
 
 test('deleting a trip takes its Memories and their private media with it', async () => {
@@ -492,12 +465,15 @@ test('deleting a trip takes its Memories and their private media with it', async
     globalThis.fetch = realFetch;
   }
 
-  assert.deepEqual(store.memory, []);
-  assert.deepEqual(store.memoryPhoto, []);
+  expect(store.memory).toStrictEqual([]);
+  expect(store.memoryPhoto).toStrictEqual([]);
   // The traveller's photos must not outlive the trip in private Storage.
   const removal = storageRequests.find((request) => request.url.includes('memory-photos'));
-  assert.ok(removal, `expected a memory-photos removal, got ${JSON.stringify(storageRequests)}`);
-  assert.ok(removal.body.includes(photo.id) || removal.body.includes('last-night.jpg'));
+  expect(
+    removal,
+    `expected a memory-photos removal, got ${JSON.stringify(storageRequests)}`,
+  ).toBeTruthy();
+  expect(removal!.body.includes(photo.id) || removal!.body.includes('last-night.jpg')).toBeTruthy();
 });
 
 test('Experience Rating is entered per target and never averaged or inferred', async () => {
@@ -506,26 +482,20 @@ test('Experience Rating is entered per target and never averaged or inferred', a
   await updateItineraryDayExperienceRating(OWNER, TRIP, ARRIVAL_DAY, 1, null);
 
   const beforeOverall = await getTrip(OWNER, '', TRIP);
-  assert.equal(beforeOverall.experienceRating, null);
-  assert.equal(beforeOverall.experienceNote, null);
+  expect(beforeOverall.experienceRating).toBe(null);
+  expect(beforeOverall.experienceNote).toBe(null);
 
   // Not the 3 an average of the day ratings would produce.
   const rated = await updateTripExperienceRating(OWNER, '', TRIP, 4, 'Worth every hour');
-  assert.equal(rated.experienceRating, 4);
-  assert.deepEqual(
-    store.itineraryDay.map((day) => day.experienceRating),
-    [5, 1],
-  );
+  expect(rated.experienceRating).toBe(4);
+  expect(store.itineraryDay.map((day) => day.experienceRating)).toStrictEqual([5, 1]);
 
   const cleared = await updateTripExperienceRating(OWNER, '', TRIP, null, null);
-  assert.equal(cleared.experienceRating, null);
-  assert.deepEqual(
-    store.itineraryDay.map((day) => day.experienceRating),
-    [5, 1],
-  );
+  expect(cleared.experienceRating).toBe(null);
+  expect(store.itineraryDay.map((day) => day.experienceRating)).toStrictEqual([5, 1]);
 
   // Capture asks for no rating, and a Memory carries none of its own.
   const memory = await createMemory(OWNER, TRIP, { note: 'No rating asked for' }, null);
-  assert.equal('experienceRating' in memory, false);
-  assert.equal('experienceNote' in memory, false);
+  expect('experienceRating' in memory).toBe(false);
+  expect('experienceNote' in memory).toBe(false);
 });

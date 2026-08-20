@@ -20,6 +20,9 @@ export function useSignOut(userId?: string) {
     try {
       await signOutFromTrove();
       setShowUnsyncedWarning(false);
+      // A full navigation makes server-rendered protected surfaces re-read the
+      // cleared auth cookie immediately instead of waiting for a client refresh.
+      window.location.replace('/sign-in');
       return true;
     } catch {
       setHasSignOutError(true);

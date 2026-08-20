@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import { createSummary, type ItineraryRouteSegment } from '../src/services/itinerary-routes.js';
 
@@ -40,11 +39,11 @@ function flightSegment(id: string): ItineraryRouteSegment {
 test('totals cover every local leg when all of them are known', () => {
   const summary = createSummary([localSegment('a', 600), localSegment('b', 1200)], 3, false);
 
-  assert.equal(summary.status, 'complete');
-  assert.equal(summary.durationSeconds, 1800);
-  assert.equal(summary.distanceMeters, 2000);
-  assert.equal(summary.localSegmentCount, 2);
-  assert.equal(summary.knownSegmentCount, 2);
+  expect(summary.status).toBe('complete');
+  expect(summary.durationSeconds).toBe(1800);
+  expect(summary.distanceMeters).toBe(2000);
+  expect(summary.localSegmentCount).toBe(2);
+  expect(summary.knownSegmentCount).toBe(2);
 });
 
 test('a flight alongside local legs leaves the day complete, not partial', () => {
@@ -57,19 +56,19 @@ test('a flight alongside local legs leaves the day complete, not partial', () =>
     false,
   );
 
-  assert.equal(withFlight.status, 'complete');
-  assert.equal(withFailedRoute.status, 'partial');
+  expect(withFlight.status).toBe('complete');
+  expect(withFailedRoute.status).toBe('partial');
 });
 
 test('a flight contributes nothing to the totals', () => {
   const withFlight = createSummary([localSegment('a', 600), flightSegment('f')], 3, false);
   const localOnly = createSummary([localSegment('a', 600)], 3, false);
 
-  assert.equal(withFlight.durationSeconds, localOnly.durationSeconds);
-  assert.equal(withFlight.distanceMeters, localOnly.distanceMeters);
-  assert.equal(withFlight.localSegmentCount, 1);
+  expect(withFlight.durationSeconds).toBe(localOnly.durationSeconds);
+  expect(withFlight.distanceMeters).toBe(localOnly.distanceMeters);
+  expect(withFlight.localSegmentCount).toBe(1);
   // Every leg is still counted, so the day knows it has movement to show.
-  assert.equal(withFlight.totalSegmentCount, 2);
+  expect(withFlight.totalSegmentCount).toBe(2);
 });
 
 test('a day whose only movement is a flight reports no local legs', () => {
@@ -77,19 +76,19 @@ test('a day whose only movement is a flight reports no local legs', () => {
 
   // localSegmentCount 0 against a non-zero total is what lets the UI say "no
   // local travel" rather than presenting 0 min / 0 km as a real estimate.
-  assert.equal(summary.localSegmentCount, 0);
-  assert.equal(summary.totalSegmentCount, 1);
+  expect(summary.localSegmentCount).toBe(0);
+  expect(summary.totalSegmentCount).toBe(1);
 });
 
 test('a day with nothing scheduled is not mistaken for a long-distance day', () => {
   const summary = createSummary([], 0, false);
 
-  assert.equal(summary.localSegmentCount, 0);
-  assert.equal(summary.totalSegmentCount, 0);
+  expect(summary.localSegmentCount).toBe(0);
+  expect(summary.totalSegmentCount).toBe(0);
 });
 
 test('missing coordinates keep the day partial even when every known leg resolved', () => {
   const summary = createSummary([localSegment('a', 600)], 3, true);
 
-  assert.equal(summary.status, 'partial');
+  expect(summary.status).toBe('partial');
 });

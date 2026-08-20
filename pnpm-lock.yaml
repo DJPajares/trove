@@ -44,6 +44,9 @@ importers:
       '@trove/db':
         specifier: workspace:*
         version: link:../../packages/db
+      countries-and-timezones:
+        specifier: ^3.10.0
+        version: 3.10.0
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -2180,6 +2183,10 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  countries-and-timezones@3.10.0:
+    resolution: {integrity: sha512-HQ1GtXWNZy0r5MnZMLF9xmBmFNmtDVBeKQgX/5DY+RVmcZTODA+EPN/JLPCYRNP86nHG0QQrb1yJwGzXeqCCXw==}
+    engines: {node: '>=8.x', npm: '>=5.x'}
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -5684,6 +5691,8 @@ snapshots:
       parse-json: 5.2.0
     optionalDependencies:
       typescript: 7.0.2
+
+  countries-and-timezones@3.10.0: {}
 
   cross-spawn@7.0.6:
     dependencies:

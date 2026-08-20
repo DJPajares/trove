@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import type { ItineraryDay, ItineraryItem } from '../lib/itinerary/api.ts';
 import type { Itinerary } from '../lib/itinerary/api.ts';
@@ -56,12 +55,11 @@ test('reordering a day changes its route revision', () => {
   const before = itineraryDayRouteRevision(day([item('a', 0), item('b', 1), item('c', 2)]));
   const after = itineraryDayRouteRevision(day([item('a', 0), item('c', 1), item('b', 2)]));
 
-  assert.notEqual(before, after);
+  expect(before).not.toBe(after);
 });
 
 test('the same day in the same order has the same route revision', () => {
-  assert.equal(
-    itineraryDayRouteRevision(day([item('a', 0), item('b', 1)])),
+  expect(itineraryDayRouteRevision(day([item('a', 0), item('b', 1)]))).toBe(
     itineraryDayRouteRevision(day([item('a', 0), item('b', 1)])),
   );
 });
@@ -69,15 +67,14 @@ test('the same day in the same order has the same route revision', () => {
 test('changing the day base changes the revision, since it moves the boundary legs', () => {
   const base = day([item('a', 0)]);
 
-  assert.notEqual(
-    itineraryDayRouteRevision(base),
+  expect(itineraryDayRouteRevision(base)).not.toBe(
     itineraryDayRouteRevision({ ...base, dailyBaseTripPlaceId: 'hotel-a' }),
   );
 });
 
 test('a day with no items still has a stable revision, and no day has none', () => {
-  assert.equal(itineraryDayRouteRevision(null), '');
-  assert.notEqual(itineraryDayRouteRevision(day([])), '');
+  expect(itineraryDayRouteRevision(null)).toBe('');
+  expect(itineraryDayRouteRevision(day([]))).not.toBe('');
 });
 
 function itinerary(items: ItineraryItem[]): Itinerary {
@@ -95,29 +92,25 @@ test('editing a field the score cannot read does not re-score the trip', () => {
     { ...item('a', 0), notes: 'bring cash', updatedAt: '2026-09-06T00:00:00.000Z' },
   ]);
 
-  assert.equal(itineraryPlanScoreRevision(before), itineraryPlanScoreRevision(edited));
+  expect(itineraryPlanScoreRevision(before)).toBe(itineraryPlanScoreRevision(edited));
 });
 
 test('changing when or how long an item runs does re-score the trip', () => {
   const before = itinerary([item('a', 0)]);
 
-  assert.notEqual(
-    itineraryPlanScoreRevision(before),
+  expect(itineraryPlanScoreRevision(before)).not.toBe(
     itineraryPlanScoreRevision(itinerary([{ ...item('a', 0), localStartTime: '09:00' }])),
   );
-  assert.notEqual(
-    itineraryPlanScoreRevision(before),
+  expect(itineraryPlanScoreRevision(before)).not.toBe(
     itineraryPlanScoreRevision(itinerary([{ ...item('a', 0), durationMinutes: 90 }])),
   );
-  assert.notEqual(
-    itineraryPlanScoreRevision(before),
+  expect(itineraryPlanScoreRevision(before)).not.toBe(
     itineraryPlanScoreRevision(itinerary([{ ...item('a', 0), dayPart: 'morning' }])),
   );
 });
 
 test('reordering a day re-scores the trip, since the legs change', () => {
-  assert.notEqual(
-    itineraryPlanScoreRevision(itinerary([item('a', 0), item('b', 1)])),
+  expect(itineraryPlanScoreRevision(itinerary([item('a', 0), item('b', 1)]))).not.toBe(
     itineraryPlanScoreRevision(itinerary([item('b', 0), item('a', 1)])),
   );
 });

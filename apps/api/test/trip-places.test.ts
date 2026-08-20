@@ -1,6 +1,5 @@
-import assert from 'node:assert/strict';
 import Fastify from 'fastify';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 const TRIP_ID = '00000000-0000-4000-8000-000000000001';
 const TRIP_PLACE_ID = '00000000-0000-4000-8000-000000000002';
@@ -88,8 +87,8 @@ test('a trip-level rename round-trips and is trimmed on the way in', async () =>
     customName: "  Ben's hotel  ",
   });
 
-  assert.deepEqual(updates, [{ customName: "Ben's hotel" }]);
-  assert.equal(tripPlace.customName, "Ben's hotel");
+  expect(updates).toStrictEqual([{ customName: "Ben's hotel" }]);
+  expect(tripPlace.customName).toBe("Ben's hotel");
 });
 
 test('clearing the name hands the Place back to its provider', async () => {
@@ -98,7 +97,9 @@ test('clearing the name hands the Place back to its provider', async () => {
   for (const customName of [null, '', '   ']) {
     updates.length = 0;
     await updateTripPlace(USER_ID, TRIP_ID, TRIP_PLACE_ID, { customName });
-    assert.deepEqual(updates, [{ customName: null }], `${JSON.stringify(customName)} must clear`);
+    expect(updates, `${JSON.stringify(customName)} must clear`).toStrictEqual([
+      { customName: null },
+    ]);
   }
 });
 
@@ -108,8 +109,8 @@ test('editing only the note leaves an existing rename alone', async () => {
 
   await updateTripPlace(USER_ID, TRIP_ID, TRIP_PLACE_ID, { note: 'Ask for a room upstairs' });
 
-  assert.deepEqual(updates, [{ note: 'Ask for a room upstairs' }]);
-  assert.equal('customName' in updates[0]!, false, 'an untouched name must not be written');
+  expect(updates).toStrictEqual([{ note: 'Ask for a room upstairs' }]);
+  expect('customName' in updates[0]!, 'an untouched name must not be written').toBe(false);
 });
 
 test('a request carrying only a rename is a complete request', async () => {
@@ -117,11 +118,10 @@ test('a request carrying only a rename is a complete request', async () => {
 
   const response = await patch(app, { customName: 'Airport lounge' });
 
-  assert.equal(response.statusCode, 200);
-  assert.equal(
+  expect(response.statusCode).toBe(200);
+  expect(
     (response.json() as { tripPlace: { customName: string | null } }).tripPlace.customName,
-    "Ben's hotel",
-  );
+  ).toBe("Ben's hotel");
 });
 
 test('an empty or oversized name is refused rather than stored', async () => {
@@ -129,16 +129,16 @@ test('an empty or oversized name is refused rather than stored', async () => {
 
   for (const customName of ['', '   ', 'x'.repeat(201)]) {
     const response = await patch(app, { customName });
-    assert.equal(response.statusCode, 400, `${JSON.stringify(customName)} must be refused`);
-    assert.equal((response.json() as { code: string }).code, 'invalid_trip_place');
+    expect(response.statusCode, `${JSON.stringify(customName)} must be refused`).toBe(400);
+    expect((response.json() as { code: string }).code).toBe('invalid_trip_place');
   }
 });
 
 test('an empty body and an unknown field are both refused', async () => {
   const app = await buildApp();
 
-  assert.equal((await patch(app, {})).statusCode, 400);
-  assert.equal((await patch(app, { displayName: 'Airport lounge' })).statusCode, 400);
+  expect((await patch(app, {})).statusCode).toBe(400);
+  expect((await patch(app, { displayName: 'Airport lounge' })).statusCode).toBe(400);
 });
 
 test('a Place can be named as it is added, and re-adding never erases that name', async () => {
@@ -146,11 +146,11 @@ test('a Place can be named as it is added, and re-adding never erases that name'
   upserts.length = 0;
 
   await addTripPlace(USER_ID, TRIP_ID, storedTripPlace.place.id, { customName: "  Mum's place  " });
-  assert.deepEqual(upserts.at(-1)?.create.customName, "Mum's place");
-  assert.deepEqual(upserts.at(-1)?.update.customName, "Mum's place");
+  expect(upserts.at(-1)?.create.customName).toStrictEqual("Mum's place");
+  expect(upserts.at(-1)?.update.customName).toStrictEqual("Mum's place");
 
   // Adding with no name is still idempotent: it must not blank an existing one.
   await addTripPlace(USER_ID, TRIP_ID, storedTripPlace.place.id);
-  assert.equal(upserts.at(-1)?.create.customName, null);
-  assert.deepEqual(upserts.at(-1)?.update, {});
+  expect(upserts.at(-1)?.create.customName).toBe(null);
+  expect(upserts.at(-1)?.update).toStrictEqual({});
 });

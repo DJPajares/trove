@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import type {
   ItineraryDayRoutes,
@@ -135,25 +134,28 @@ test('scores a planned day from stored timing and live route evidence', () => {
   const result = buildTripPlanScore(plannedTrip);
   const day = result.days[0];
 
-  assert.equal(day?.score, 100);
-  assert.equal(day?.completeness, 89);
-  assert.equal(day?.confidence, 100);
-  assert.equal(day?.date, '2026-09-01');
-  assert.deepEqual(day?.factors.TRAVEL_EFFORT, { confidence: 100, score: 100, state: 'EVALUATED' });
-  assert.equal(result.score, 95);
+  expect(day?.score).toBe(100);
+  expect(day?.completeness).toBe(89);
+  expect(day?.confidence).toBe(100);
+  expect(day?.date).toBe('2026-09-01');
+  expect(day?.factors.TRAVEL_EFFORT).toStrictEqual({
+    confidence: 100,
+    score: 100,
+    state: 'EVALUATED',
+  });
+  expect(result.score).toBe(95);
 });
 
 test('leaves route efficiency unknown instead of guessing it', () => {
   const day = buildTripPlanScore(plannedTrip).days[0];
 
-  assert.deepEqual(day?.factors.ROUTE_EFFICIENCY, {
+  expect(day?.factors.ROUTE_EFFICIENCY).toStrictEqual({
     reason: 'MISSING_EVIDENCE',
     state: 'UNKNOWN',
   });
-  assert.deepEqual(
-    day?.explanations.uncertainty.map((entry) => entry.messageKey),
-    ['routeEfficiency.unknown'],
-  );
+  expect(day?.explanations.uncertainty.map((entry) => entry.messageKey)).toStrictEqual([
+    'routeEfficiency.unknown',
+  ]);
 });
 
 test('a place shut on the day of the visit is a hard feasibility conflict', () => {
@@ -174,11 +176,10 @@ test('a place shut on the day of the visit is a hard feasibility conflict', () =
   }).days[0];
   const conflicts = shut?.explanations.worthImproving ?? [];
 
-  assert.deepEqual(
-    conflicts.map((entry) => entry.messageKey),
-    ['feasibility.outsideOpeningHours'],
-  );
-  assert.deepEqual(conflicts[0]?.references, ['item-a']);
+  expect(conflicts.map((entry) => entry.messageKey)).toStrictEqual([
+    'feasibility.outsideOpeningHours',
+  ]);
+  expect(conflicts[0]?.references).toStrictEqual(['item-a']);
 });
 
 test('known opening hours change the fingerprint', () => {
@@ -198,17 +199,19 @@ test('known opening hours change the fingerprint', () => {
     ]),
   }).fingerprint;
 
-  assert.notEqual(withoutHours, withHours);
+  expect(withoutHours).not.toBe(withHours);
 });
 
 test('explains a planned day and its unscheduled Must Go places', () => {
   const result = buildTripPlanScore(plannedTrip);
 
-  assert.deepEqual(
-    result.days[0]?.explanations.whatWorks.map((entry) => entry.messageKey),
-    ['feasibility.noConflicts', 'travelEffort.light', 'pace.comfortable', 'placeQuality.strong'],
-  );
-  assert.deepEqual(result.explanations.worthImproving, [
+  expect(result.days[0]?.explanations.whatWorks.map((entry) => entry.messageKey)).toStrictEqual([
+    'feasibility.noConflicts',
+    'travelEffort.light',
+    'pace.comfortable',
+    'placeQuality.strong',
+  ]);
+  expect(result.explanations.worthImproving).toStrictEqual([
     {
       action: 'SCHEDULE_MUST_GO',
       factor: 'MUST_GO_PRIORITY_FIT',
@@ -248,14 +251,14 @@ test('withholds a day score when the day has no usable evidence', () => {
     routes: new Map(),
   });
 
-  assert.equal(result.days[0]?.score, null);
-  assert.equal(result.days[0]?.completeness, 0);
-  assert.deepEqual(result.days[0]?.withheldReasons, [
+  expect(result.days[0]?.score).toBe(null);
+  expect(result.days[0]?.completeness).toBe(0);
+  expect(result.days[0]?.withheldReasons).toStrictEqual([
     'INSUFFICIENT_COMPLETENESS',
     'NO_EVALUABLE_CORE_FACTOR',
   ]);
-  assert.equal(result.score, null);
-  assert.deepEqual(result.withheldReasons, ['NO_SCORABLE_DAY']);
+  expect(result.score).toBe(null);
+  expect(result.withheldReasons).toStrictEqual(['NO_SCORABLE_DAY']);
 });
 
 test('a normally scheduled item with no reservation and no visit duration still counts as feasibility evidence', () => {
@@ -302,8 +305,12 @@ test('a normally scheduled item with no reservation and no visit duration still 
     routes: new Map([['day-2', dayRoutes([segment('seg-x-y', 'item-y', 600)])]]),
   }).days[0];
 
-  assert.deepEqual(day?.factors.FEASIBILITY, { confidence: 100, score: 100, state: 'EVALUATED' });
-  assert.notEqual(day?.score, null);
+  expect(day?.factors.FEASIBILITY).toStrictEqual({
+    confidence: 100,
+    score: 100,
+    state: 'EVALUATED',
+  });
+  expect(day?.score).not.toBe(null);
 });
 
 test("an item with no visit duration is still caught when it lands inside another item's known interval", () => {
@@ -347,11 +354,10 @@ test("an item with no visit duration is still caught when it lands inside anothe
   }).days[0];
   const conflicts = day?.explanations.worthImproving ?? [];
 
-  assert.deepEqual(
-    conflicts.map((entry) => entry.messageKey),
-    ['feasibility.overlappingCommitments'],
-  );
-  assert.deepEqual(conflicts[0]?.references, ['item-instant', 'item-long']);
+  expect(conflicts.map((entry) => entry.messageKey)).toStrictEqual([
+    'feasibility.overlappingCommitments',
+  ]);
+  expect(conflicts[0]?.references).toStrictEqual(['item-instant', 'item-long']);
 });
 
 test('detects a timing conflict against a structured journey commitment', () => {
@@ -373,20 +379,18 @@ test('detects a timing conflict against a structured journey commitment', () => 
   });
   const conflicts = result.days[0]?.explanations.worthImproving ?? [];
 
-  assert.deepEqual(
-    conflicts.map((entry) => entry.messageKey),
-    ['feasibility.overlappingCommitments'],
-  );
-  assert.deepEqual(conflicts[0]?.references, ['flight-1', 'item-a']);
+  expect(conflicts.map((entry) => entry.messageKey)).toStrictEqual([
+    'feasibility.overlappingCommitments',
+  ]);
+  expect(conflicts[0]?.references).toStrictEqual(['flight-1', 'item-a']);
 });
 
 test('produces a stable fingerprint for unchanged evidence', () => {
   const first = buildTripPlanScore(plannedTrip);
   const second = buildTripPlanScore(plannedTrip);
 
-  assert.equal(first.fingerprint, second.fingerprint);
-  assert.notEqual(
-    first.fingerprint,
+  expect(first.fingerprint).toBe(second.fingerprint);
+  expect(first.fingerprint).not.toBe(
     buildTripPlanScore({ ...plannedTrip, ratings: new Map([['tp-1', 3.2]]) }).fingerprint,
   );
 });
@@ -394,7 +398,7 @@ test('produces a stable fingerprint for unchanged evidence', () => {
 test('keeps the internal weighting out of the payload', () => {
   const day = buildTripPlanScore(plannedTrip).days[0];
 
-  assert.deepEqual(Object.keys(day ?? {}).toSorted(), [
+  expect(Object.keys(day ?? {}).toSorted()).toStrictEqual([
     'completeness',
     'confidence',
     'date',
@@ -419,16 +423,16 @@ test('a flight leg leaves travel effort evaluable where a failed route does not'
 
   // The defect this fixes: routing a long-distance hop as a drive returns nothing,
   // which dragged the whole day's travel effort into unknown and cost completeness.
-  assert.deepEqual(failedRoute?.factors.TRAVEL_EFFORT, {
+  expect(failedRoute?.factors.TRAVEL_EFFORT).toStrictEqual({
     reason: 'INSUFFICIENT_EVIDENCE',
     state: 'UNKNOWN',
   });
-  assert.deepEqual(flight?.factors.TRAVEL_EFFORT, {
+  expect(flight?.factors.TRAVEL_EFFORT).toStrictEqual({
     confidence: 100,
     score: 100,
     state: 'EVALUATED',
   });
-  assert.ok((flight?.completeness ?? 0) > (failedRoute?.completeness ?? 0));
+  expect((flight?.completeness ?? 0) > (failedRoute?.completeness ?? 0)).toBeTruthy();
 });
 
 test('a flight leg contributes no travel minutes alongside local legs', () => {
@@ -438,7 +442,7 @@ test('a flight leg contributes no travel minutes alongside local legs', () => {
     routes: new Map([['day-1', dayRoutes([segment('seg-base-a', 'item-a', 600)])]]),
   }).days[0];
 
-  assert.deepEqual(mixed?.factors.TRAVEL_EFFORT, localOnly?.factors.TRAVEL_EFFORT);
+  expect(mixed?.factors.TRAVEL_EFFORT).toStrictEqual(localOnly?.factors.TRAVEL_EFFORT);
 });
 
 test('a day whose only movement is a flight drops travel effort from the weight base', () => {
@@ -450,7 +454,7 @@ test('a day whose only movement is a flight drops travel effort from the weight 
   // Not applicable rather than unknown, so the factor is renormalized away instead
   // of costing completeness. The day is still withheld here, but on the honest
   // grounds that nothing else about it is known -- not because of the flight.
-  assert.deepEqual(flightOnly?.factors.TRAVEL_EFFORT, { state: 'NOT_APPLICABLE' });
+  expect(flightOnly?.factors.TRAVEL_EFFORT).toStrictEqual({ state: 'NOT_APPLICABLE' });
 });
 
 test('a coarse daypart is scored rather than ignored', () => {
@@ -471,8 +475,8 @@ test('a coarse daypart is scored rather than ignored', () => {
     ],
   }).days[0];
 
-  assert.equal(vague?.factors.PACE_BUFFER.state, 'EVALUATED');
-  assert.equal(typeof vague?.score, 'number');
+  expect(vague?.factors.PACE_BUFFER.state).toBe('EVALUATED');
+  expect(typeof vague?.score).toBe('number');
 });
 
 test('a daypart lowers confidence below what an exact time earns', () => {
@@ -493,7 +497,7 @@ test('a daypart lowers confidence below what an exact time earns', () => {
   const exact = buildTripPlanScore(plannedTrip).days[0];
 
   // Reliability 50 for coarse daypart evidence, per PRD section 29.2.
-  assert.ok((vague?.confidence ?? 0) < (exact?.confidence ?? 0));
+  expect((vague?.confidence ?? 0) < (exact?.confidence ?? 0)).toBeTruthy();
 });
 
 test('anytime is treated as no timing at all', () => {
@@ -513,7 +517,7 @@ test('anytime is treated as no timing at all', () => {
       ],
     }).days[0];
 
-  assert.deepEqual(withAnytime('ANYTIME')?.factors, withAnytime(null)?.factors);
+  expect(withAnytime('ANYTIME')?.factors).toStrictEqual(withAnytime(null)?.factors);
 });
 
 test('an exact time wins over a daypart left on the same item', () => {
@@ -528,5 +532,5 @@ test('an exact time wins over a daypart left on the same item', () => {
   }).days[0];
   const exactOnly = buildTripPlanScore(plannedTrip).days[0];
 
-  assert.deepEqual(both?.factors, exactOnly?.factors);
+  expect(both?.factors).toStrictEqual(exactOnly?.factors);
 });

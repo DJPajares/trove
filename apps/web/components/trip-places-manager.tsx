@@ -1,7 +1,7 @@
 'use client';
 
 import { CircleAlert, MapPinned, Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { AddTripPlaceSheet } from '@/components/add-trip-place-sheet';
@@ -21,8 +21,16 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import type { TripPlace } from '@/lib/trip-places/api';
 import { resolveTripPlaceName } from '@/lib/trip-places/place-name';
+import { sortTripPlaces, tripPlaceSorts, type TripPlaceSort } from '@/lib/trip-places/sort';
 import { useTripPlaces } from '@/lib/trip-places/use-trip-places';
 
 /**
@@ -33,6 +41,7 @@ import { useTripPlaces } from '@/lib/trip-places/use-trip-places';
 export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripPlaces');
   const places = useTripPlaces(tripId);
+  const [sort, setSort] = useState<TripPlaceSort>('name');
   const [addOpen, setAddOpen] = useState(false);
   const [editPlace, setEditPlace] = useState<TripPlace | null>(null);
   const [removingPlace, setRemovingPlace] = useState<TripPlace | null>(null);
@@ -43,6 +52,11 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
       custom: t('customPlace'),
       provider: t('providerPlace'),
     });
+
+  const sortedPlaces = useMemo(
+    () => sortTripPlaces(places.places, sort, placeName),
+    [places.places, sort, t],
+  );
 
   async function removePlace() {
     if (!removingPlace) return;
@@ -86,7 +100,7 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
           kind="error"
           title={t('loadError')}
         />
-      ) : places.sorted.length === 0 ? (
+      ) : places.places.length === 0 ? (
         <PageState
           actions={addButton(t('addFirstPlace'))}
           description={t('emptyDescription')}
@@ -96,12 +110,35 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
           title={t('emptyTitle')}
         />
       ) : (
-        <TripPlacesPanel
-          onEditPlace={setEditPlace}
-          onPriorityChange={(tripPlace, priority) => void places.setPriority(tripPlace, priority)}
-          onRemove={setRemovingPlace}
-          tripPlaces={places.sorted}
-        />
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">{t('sortLabel')}</span>
+              <Select
+                onValueChange={(value) => value && setSort(value as TripPlaceSort)}
+                value={sort}
+              >
+                <SelectTrigger aria-label={t('sortBy')} size="sm">
+                  <SelectValue>{t(`sort.${sort}`)}</SelectValue>
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {tripPlaceSorts.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {t(`sort.${option}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <TripPlacesPanel
+            onEditPlace={setEditPlace}
+            onPriorityChange={(tripPlace, priority) => void places.setPriority(tripPlace, priority)}
+            onRemove={setRemovingPlace}
+            tripPlaces={sortedPlaces}
+          />
+        </div>
       )}
 
       {addOpen ? (

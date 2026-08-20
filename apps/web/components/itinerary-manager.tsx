@@ -4,6 +4,7 @@ import {
   ArrowDown,
   ArrowUp,
   CalendarClock,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
@@ -148,6 +149,7 @@ import {
   searchProviderPlaces,
 } from '@/lib/saved/api';
 import { addTripPlace, type TripPlace } from '@/lib/trip-places/api';
+import { sortTripPlaces } from '@/lib/trip-places/sort';
 import { cn } from '@/lib/utils';
 import {
   durationMinutesFromParts,
@@ -195,7 +197,7 @@ type ProviderSearchCacheEntry = {
 type PlacePickerOption =
   | { kind: 'custom_label'; label: string }
   | { kind: 'provider'; suggestion: ProviderSuggestion }
-  | { kind: 'trip_place'; label: string; tripPlace: ItineraryTripPlace };
+  | { kind: 'trip_place'; label: string; tripPlace: ItineraryTripPlace; usageLabel: string | null };
 
 function useDesktopMapLayout() {
   const [matches, setMatches] = useState<boolean | null>(null);
@@ -402,6 +404,14 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
         weekday: 'long',
         year: 'numeric',
       }),
+    [locale],
+  );
+  const placeUseDateFormatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' }),
+    [locale],
+  );
+  const placeUseListFormatter = useMemo(
+    () => new Intl.ListFormat(locale, { style: 'short', type: 'conjunction' }),
     [locale],
   );
   const formatDate = (date: string, long = false) =>
@@ -735,12 +745,26 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
   }, [suggestedTime, suggestedTimeStatus, t]);
 
   const matchingTripPlaces = useMemo(() => {
-    return filterItineraryTripPlaces(itinerary?.tripPlaces ?? [], placeQuery, (tripPlace) => [
-      placeName(tripPlace),
-      tripPlace.place.snapshot?.address,
-      tripPlace.place.providerAddress,
-    ]);
-  }, [itinerary?.tripPlaces, placeQuery]);
+    return sortTripPlaces(
+      filterItineraryTripPlaces(itinerary?.tripPlaces ?? [], placeQuery, (tripPlace) => [
+        placeName(tripPlace),
+        tripPlace.place.snapshot?.address,
+        tripPlace.place.providerAddress,
+      ]),
+      'name',
+      (tripPlace) => placeName(tripPlace) ?? t('providerPlace'),
+    );
+  }, [itinerary?.tripPlaces, placeQuery, t]);
+
+  const usageLabel = (tripPlace: ItineraryTripPlace) => {
+    const dates = placeUse[tripPlace.id]?.dayDates ?? [];
+    if (!dates.length) return null;
+    return tripPlacesTranslations('onDates', {
+      dates: placeUseListFormatter.format(
+        dates.map((date) => placeUseDateFormatter.format(new Date(`${date}T00:00:00Z`))),
+      ),
+    });
+  };
 
   const existingExternalPlaceIds = useMemo(
     () =>
@@ -764,6 +788,7 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
         kind: 'trip_place' as const,
         label: placeName(tripPlace) ?? t('providerPlace'),
         tripPlace,
+        usageLabel: usageLabel(tripPlace),
       })),
       ...(customLabel ? [{ kind: 'custom_label' as const, label: customLabel }] : []),
       ...visibleProviderResults.map((suggestion) => ({
@@ -771,7 +796,16 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
         suggestion,
       })),
     ];
-  }, [matchingTripPlaces, placeQuery, t, visibleProviderResults]);
+  }, [
+    matchingTripPlaces,
+    placeQuery,
+    placeUse,
+    placeUseDateFormatter,
+    placeUseListFormatter,
+    t,
+    tripPlacesTranslations,
+    visibleProviderResults,
+  ]);
 
   function clearProviderResultState() {
     setProviderResults([]);
@@ -2036,6 +2070,9 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                                 className={cn(
                                   'min-h-12 gap-3 px-3 py-2 pr-9',
                                   option.kind === 'provider' && 'bg-muted/25',
+                                  option.kind === 'trip_place' &&
+                                    option.usageLabel &&
+                                    'bg-brand/5 data-highlighted:bg-brand/10',
                                 )}
                                 key={
                                   option.kind === 'trip_place'
@@ -2057,12 +2094,20 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                                   <Search aria-hidden="true" className="text-muted-foreground" />
                                 )}
                                 <span className="min-w-0 flex-1">
-                                  <span className="block truncate font-medium">
-                                    {option.kind === 'custom_label'
-                                      ? t('useCustomPlan', { label: option.label })
-                                      : option.kind === 'provider'
-                                        ? option.suggestion.name
-                                        : option.label}
+                                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium">
+                                    <span className="min-w-0 truncate">
+                                      {option.kind === 'custom_label'
+                                        ? t('useCustomPlan', { label: option.label })
+                                        : option.kind === 'provider'
+                                          ? option.suggestion.name
+                                          : option.label}
+                                    </span>
+                                    {option.kind === 'trip_place' && option.usageLabel ? (
+                                      <span className="inline-flex max-w-44 shrink-0 items-center gap-1 rounded-full bg-brand/10 px-1.5 py-0.5 text-[11px] font-medium text-brand">
+                                        <CheckCircle2 aria-hidden="true" className="size-3" />
+                                        <span className="truncate">{option.usageLabel}</span>
+                                      </span>
+                                    ) : null}
                                   </span>
                                   {option.kind === 'trip_place' &&
                                   (option.tripPlace.place.snapshot?.address ||

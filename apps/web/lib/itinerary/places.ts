@@ -1,6 +1,8 @@
 import type { Itinerary } from './api';
 
 export type ScheduledPlaceUse = {
+  /** ISO dates, in itinerary order, where this Place appears. */
+  dayDates: string[];
   /** Day numbers, 1-based and in itinerary order, this Place already appears on. */
   dayNumbers: number[];
   itemCount: number;
@@ -16,7 +18,7 @@ export function scheduledPlaceUse(itinerary: Itinerary): Record<string, Schedule
   const uses: Record<string, ScheduledPlaceUse> = {};
 
   const entry = (tripPlaceId: string) => {
-    uses[tripPlaceId] ??= { dayNumbers: [], itemCount: 0, unscheduledCount: 0 };
+    uses[tripPlaceId] ??= { dayDates: [], dayNumbers: [], itemCount: 0, unscheduledCount: 0 };
     return uses[tripPlaceId];
   };
 
@@ -26,7 +28,10 @@ export function scheduledPlaceUse(itinerary: Itinerary): Record<string, Schedule
       const use = entry(item.tripPlace.id);
       use.itemCount += 1;
       // A Place visited twice in one day is still one day on the plan.
-      if (!use.dayNumbers.includes(index + 1)) use.dayNumbers.push(index + 1);
+      if (!use.dayNumbers.includes(index + 1)) {
+        use.dayNumbers.push(index + 1);
+        use.dayDates.push(day.date);
+      }
     }
   }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import {
   fetchTripPlaces,
@@ -15,10 +15,6 @@ export type TripPlacesStatus = 'error' | 'idle' | 'loading';
 
 /** Carries its own values so the caller can render it without knowing the key. */
 export type TripPlacesError = { key: string; values?: Record<string, number> };
-
-function priorityRank(priority: TripPlacePriority | null) {
-  return priority === 'must_go' ? 0 : priority === 'interested' ? 1 : priority === 'maybe' ? 2 : 3;
-}
 
 /**
  * The trip's Place collection and the three ways it changes. Both the Places page
@@ -110,16 +106,6 @@ export function useTripPlaces(tripId: string) {
     [tripId],
   );
 
-  const sorted = useMemo(
-    () =>
-      places.toSorted(
-        (left, right) =>
-          priorityRank(left.priority) - priorityRank(right.priority) ||
-          left.createdAt.localeCompare(right.createdAt),
-      ),
-    [places],
-  );
-
   return {
     clearError: useCallback(() => setError(null), []),
     error,
@@ -129,7 +115,6 @@ export function useTripPlaces(tripId: string) {
     savePlace,
     setPlaces,
     setPriority,
-    sorted,
     status,
     tripName,
   };

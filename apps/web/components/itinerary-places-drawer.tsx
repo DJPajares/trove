@@ -1,8 +1,8 @@
 'use client';
 
 import { MapPinned, Plus } from 'lucide-react';
-import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useMemo, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { AddTripPlaceSheet } from '@/components/add-trip-place-sheet';
 import { EditTripPlaceDialog } from '@/components/edit-trip-place-dialog';
@@ -27,9 +27,17 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import type { ScheduledPlaceUse } from '@/lib/itinerary/places';
 import type { TripPlace } from '@/lib/trip-places/api';
 import { resolveTripPlaceName } from '@/lib/trip-places/place-name';
+import { sortTripPlaces, tripPlaceSorts, type TripPlaceSort } from '@/lib/trip-places/sort';
 import { useTripPlaces } from '@/lib/trip-places/use-trip-places';
 
 type ItineraryPlacesDrawerProps = {
@@ -52,6 +60,7 @@ export function ItineraryPlacesDrawer({
   placeUse,
   tripId,
 }: Readonly<ItineraryPlacesDrawerProps>) {
+  const locale = useLocale();
   const t = useTranslations('tripPlaces');
   const places = useTripPlaces(tripId);
   const [editPlace, setEditPlace] = useState<TripPlace | null>(null);
@@ -60,12 +69,26 @@ export function ItineraryPlacesDrawer({
   const [addingId, setAddingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [sort, setSort] = useState<TripPlaceSort>('name');
 
   const placeName = (tripPlace: TripPlace) =>
     resolveTripPlaceName(tripPlace, {
       custom: t('customPlace'),
       provider: t('providerPlace'),
     });
+
+  const sortedPlaces = useMemo(
+    () => sortTripPlaces(places.places, sort, placeName),
+    [places.places, sort, t],
+  );
+  const dateFormatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' }),
+    [locale],
+  );
+  const listFormatter = useMemo(
+    () => new Intl.ListFormat(locale, { style: 'short', type: 'conjunction' }),
+    [locale],
+  );
 
   async function addToDay(tripPlace: TripPlace) {
     setAddingId(tripPlace.id);
@@ -92,11 +115,29 @@ export function ItineraryPlacesDrawer({
             <SheetDescription>{t('placesDrawerDescription')}</SheetDescription>
           </SheetHeader>
 
-          <div className="px-5 pb-3">
+          <div className="space-y-3 px-5 pb-3">
             <Button className="w-full" onClick={() => setAddOpen(true)} variant="outline">
               <Plus aria-hidden="true" data-icon="inline-start" />
               {t('addPlace')}
             </Button>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-muted-foreground">{t('sortLabel')}</span>
+              <Select
+                onValueChange={(value) => value && setSort(value as TripPlaceSort)}
+                value={sort}
+              >
+                <SelectTrigger aria-label={t('sortBy')} size="sm">
+                  <SelectValue>{t(`sort.${sort}`)}</SelectValue>
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {tripPlaceSorts.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {t(`sort.${option}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-5">
@@ -112,7 +153,7 @@ export function ItineraryPlacesDrawer({
 
             {places.status === 'loading' ? <PageState kind="loading" title={t('loading')} /> : null}
 
-            {places.status === 'idle' && !places.sorted.length ? (
+            {places.status === 'idle' && !places.places.length ? (
               <PageState
                 description={t('emptyDescription')}
                 headingLevel={2}
@@ -122,7 +163,7 @@ export function ItineraryPlacesDrawer({
               />
             ) : null}
 
-            {places.sorted.length ? (
+            {sortedPlaces.length ? (
               <TripPlacesPanel
                 addToDayLabel={t('addToDay', { number: dayNumber })}
                 busyPlaceId={addingId}
@@ -133,7 +174,12 @@ export function ItineraryPlacesDrawer({
                 }
                 onRemove={setRemovingPlace}
                 placeUse={placeUse}
-                tripPlaces={places.sorted}
+                formatUsageDates={(dates) =>
+                  listFormatter.format(
+                    dates.map((date) => dateFormatter.format(new Date(`${date}T00:00:00Z`))),
+                  )
+                }
+                tripPlaces={sortedPlaces}
               />
             ) : null}
           </div>

@@ -84,7 +84,12 @@ test('a Place visited twice in one day counts once against that day', () => {
     itinerary([day('2026-09-05', [item('morning', 'market'), item('evening', 'market')])]),
   );
 
-  assert.deepEqual(uses.market, { dayNumbers: [1], itemCount: 2, unscheduledCount: 0 });
+  assert.deepEqual(uses.market, {
+    dayDates: ['2026-09-05'],
+    dayNumbers: [1],
+    itemCount: 2,
+    unscheduledCount: 0,
+  });
 });
 
 test('a Place spread across days reports every day it lands on, in order', () => {
@@ -96,14 +101,29 @@ test('a Place spread across days reports every day it lands on, in order', () =>
     ]),
   );
 
-  assert.deepEqual(uses.park, { dayNumbers: [1, 3], itemCount: 2, unscheduledCount: 0 });
-  assert.deepEqual(uses.shrine, { dayNumbers: [2], itemCount: 1, unscheduledCount: 0 });
+  assert.deepEqual(uses.park, {
+    dayDates: ['2026-09-05', '2026-09-07'],
+    dayNumbers: [1, 3],
+    itemCount: 2,
+    unscheduledCount: 0,
+  });
+  assert.deepEqual(uses.shrine, {
+    dayDates: ['2026-09-06'],
+    dayNumbers: [2],
+    itemCount: 1,
+    unscheduledCount: 0,
+  });
 });
 
 test('a Place only parked in Unscheduled is accounted for but on no day', () => {
   const uses = scheduledPlaceUse(itinerary([day('2026-09-05', [])], [item('someday', 'museum')]));
 
-  assert.deepEqual(uses.museum, { dayNumbers: [], itemCount: 1, unscheduledCount: 1 });
+  assert.deepEqual(uses.museum, {
+    dayDates: [],
+    dayNumbers: [],
+    itemCount: 1,
+    unscheduledCount: 1,
+  });
 });
 
 test('a Place both scheduled and parked reports both without double counting the day', () => {
@@ -111,7 +131,12 @@ test('a Place both scheduled and parked reports both without double counting the
     itinerary([day('2026-09-05', [item('booked', 'garden')])], [item('maybe', 'garden')]),
   );
 
-  assert.deepEqual(uses.garden, { dayNumbers: [1], itemCount: 2, unscheduledCount: 1 });
+  assert.deepEqual(uses.garden, {
+    dayDates: ['2026-09-05'],
+    dayNumbers: [1],
+    itemCount: 2,
+    unscheduledCount: 1,
+  });
 });
 
 test('Places with nothing scheduled against them are simply absent', () => {

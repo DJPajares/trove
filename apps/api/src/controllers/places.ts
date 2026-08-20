@@ -61,6 +61,7 @@ const providerPlaceResolutionSchema = z
       .strict()
       .optional(),
     provider: z.enum(PLACE_PROVIDERS),
+    sessionToken: sessionTokenSchema.optional(),
   })
   .strict();
 
@@ -149,7 +150,10 @@ export function createPlacesControllers(
         parsed.data.provider,
         parsed.data.externalPlaceId,
         parsed.data.label,
-        { languageCode: parsed.data.languageCode },
+        {
+          languageCode: parsed.data.languageCode,
+          sessionToken: parsed.data.sessionToken,
+        },
       );
       return reply.send({ place });
     },

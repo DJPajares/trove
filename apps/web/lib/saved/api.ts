@@ -79,8 +79,13 @@ export type ProviderSuggestion = {
   provider: 'google';
 };
 
-type ProviderSearchResult =
-  { status: 'empty' | 'ok'; suggestions: ProviderSuggestion[] } | { status: 'unavailable' };
+export type ProviderSearchResult =
+  | {
+      sessionToken: string;
+      status: 'empty' | 'ok';
+      suggestions: ProviderSuggestion[];
+    }
+  | { sessionToken: string; status: 'unavailable' };
 
 export class SavedApiError extends Error {
   constructor(
@@ -201,9 +206,16 @@ export function resolveProviderPlace(
   externalPlaceId: string,
   label?: { address?: string | null; name?: string | null },
   languageCode?: string,
+  sessionToken?: string,
 ) {
   return savedRequest<{ place: CanonicalPlace }>('/places/resolve', {
-    body: JSON.stringify({ externalPlaceId, label, languageCode, provider: 'google' }),
+    body: JSON.stringify({
+      externalPlaceId,
+      label,
+      languageCode,
+      provider: 'google',
+      sessionToken,
+    }),
     method: 'POST',
   });
 }

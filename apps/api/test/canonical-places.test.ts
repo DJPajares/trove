@@ -40,9 +40,15 @@ function unresolvedProviderRef(externalPlaceId: string) {
 
 /** Counts what resolving a Place costs, so a test can assert it is paid once. */
 function countingHydrator() {
-  const calls: string[] = [];
-  const hydrate = async (externalPlaceId: string) => {
-    calls.push(externalPlaceId);
+  const calls: Array<{
+    externalPlaceId: string;
+    options?: { languageCode?: string; sessionToken?: string; source?: 'place-resolution' };
+  }> = [];
+  const hydrate = async (
+    externalPlaceId: string,
+    options?: { languageCode?: string; sessionToken?: string; source?: 'place-resolution' },
+  ) => {
+    calls.push({ externalPlaceId, options });
     return null;
   };
   return { calls, hydrate };
@@ -245,7 +251,8 @@ test('custom Places support name-only creation and remain owner-scoped on edit',
 
 test('canonical Place controllers return one API shape for provider-backed and custom Places', async () => {
   const repository = new MemoryCanonicalPlaceRepository();
-  const service = new CanonicalPlacesService(repository, countingHydrator().hydrate);
+  const { calls, hydrate } = countingHydrator();
+  const service = new CanonicalPlacesService(repository, hydrate);
   const controllers = createPlacesControllers(null, service);
   const app = Fastify();
 
@@ -258,7 +265,11 @@ test('canonical Place controllers return one API shape for provider-backed and c
 
   const providerResponse = await app.inject({
     method: 'POST',
-    payload: { externalPlaceId: 'ChIJmuseum', provider: 'google' },
+    payload: {
+      externalPlaceId: 'ChIJmuseum',
+      provider: 'google',
+      sessionToken: 'b6ffb9ec-3f34-4a2e-a37a-a416c54e99d0',
+    },
     url: '/resolve',
   });
   const customResponse = await app.inject({
@@ -275,6 +286,7 @@ test('canonical Place controllers return one API shape for provider-backed and c
   assert.deepEqual(Object.keys(providerPlace).sort(), Object.keys(customPlace).sort());
   assert.equal('rating' in providerPlace, false);
   assert.equal('photos' in providerPlace, false);
+  assert.equal(calls[0]?.options?.sessionToken, 'b6ffb9ec-3f34-4a2e-a37a-a416c54e99d0');
 
   const updateResponse = await app.inject({
     method: 'PATCH',
@@ -345,7 +357,34 @@ test('a Place costs exactly one provider request, the first time anyone adds it'
   await service.resolveProviderPlace('google', 'ChIJmuseum', undefined, { languageCode: 'en' });
 
   // Paid once, at the only moment a user asked for it: picking it out of search.
-  assert.deepEqual(calls, ['ChIJmuseum']);
+  assert.deepEqual(calls, [
+    {
+      externalPlaceId: 'ChIJmuseum',
+      options: { languageCode: 'en', sessionToken: undefined, source: 'place-resolution' },
+    },
+  ]);
+});
+
+test('provider resolution carries the autocomplete session into Place Details hydration', async () => {
+  const repository = new MemoryCanonicalPlaceRepository();
+  const { calls, hydrate } = countingHydrator();
+  const service = new CanonicalPlacesService(repository, hydrate);
+
+  await service.resolveProviderPlace('google', 'ChIJmuseum', undefined, {
+    languageCode: 'en',
+    sessionToken: 'b6ffb9ec-3f34-4a2e-a37a-a416c54e99d0',
+  });
+
+  assert.deepEqual(calls, [
+    {
+      externalPlaceId: 'ChIJmuseum',
+      options: {
+        languageCode: 'en',
+        sessionToken: 'b6ffb9ec-3f34-4a2e-a37a-a416c54e99d0',
+        source: 'place-resolution',
+      },
+    },
+  ]);
 });
 
 test('adding a Place the database already knows costs nothing', async () => {
@@ -365,7 +404,7 @@ test('adding a Place the database already knows costs nothing', async () => {
 
   assert.equal(second.id, first.id);
   assert.equal(third.id, first.id);
-  assert.deepEqual(calls, ['ChIJmuseum'], 'only the very first resolution should reach a provider');
+  assert.equal(calls.length, 1, 'only the very first resolution should reach a provider');
 });
 
 test('a snapshot that has aged out is refreshed the next time the Place is added', async () => {
@@ -378,5 +417,8 @@ test('a snapshot that has aged out is refreshed the next time the Place is added
 
   await service.resolveProviderPlace('google', 'ChIJmuseum');
 
-  assert.deepEqual(calls, ['ChIJmuseum', 'ChIJmuseum']);
+  assert.deepEqual(
+    calls.map((call) => call.externalPlaceId),
+    ['ChIJmuseum', 'ChIJmuseum'],
+  );
 });

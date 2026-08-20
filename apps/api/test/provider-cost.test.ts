@@ -71,6 +71,7 @@ const providerRefs = new Map<string, ProviderRefRow>();
 const legs = new Map<string, LegRow>();
 let tripFixture: unknown = null;
 let dayFixture: unknown = null;
+let tripFindFirstCalls = 0;
 
 function decimal(value: number) {
   return { toNumber: () => value };
@@ -124,7 +125,10 @@ function installStubPrisma() {
       // Plan Score's own query and the day-routes query it fans out to both call
       // `trip.findFirst` with different `where`/`include` shapes; the fixture
       // below carries every field either caller reads, so one stub answers both.
-      findFirst: async () => tripFixture,
+      findFirst: async () => {
+        tripFindFirstCalls += 1;
+        return tripFixture;
+      },
     },
     itineraryDay: {
       findFirst: async () => dayFixture,
@@ -299,6 +303,7 @@ beforeEach(() => {
   legs.clear();
   tripFixture = null;
   dayFixture = null;
+  tripFindFirstCalls = 0;
   resetCachedPlacesMemo();
   resetFailedPlaceHydrations();
   resetProviderCallCounts();
@@ -767,11 +772,18 @@ test('TROVE_PLAN_SCORE_DISABLED stops every provider call, even with a working s
 
   requests.length = 0;
   resetCachedPlacesMemo();
-  await withEnvOverride(
+  const tripFindFirstCallsBeforeDisabled = tripFindFirstCalls;
+  const disabled = await withEnvOverride(
     { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: '1' },
     () => getTripPlanScore('user-1', 'trip-1', { placesService }),
   );
 
+  assert.equal(disabled, null, 'the kill switch must stop before trip lookup or scoring');
+  assert.equal(
+    tripFindFirstCalls,
+    tripFindFirstCallsBeforeDisabled,
+    'the kill switch must stop before the trip query',
+  );
   assert.equal(
     requests.length,
     0,

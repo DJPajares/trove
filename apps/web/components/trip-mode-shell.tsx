@@ -51,6 +51,7 @@ export function useTripModePreview() {
 
 type TripModeShellProps = {
   children: ReactNode;
+  planScoreEnabled: boolean;
   tripId: string;
 };
 
@@ -83,9 +84,51 @@ function addPreviewParams(href: string, date: string, time: string) {
   return `${path}?${params.toString()}${hash ? `#${hash}` : ''}`;
 }
 
-export function TripModeShell({ children, tripId }: Readonly<TripModeShellProps>) {
-  const t = useTranslations('tripMode');
+function TripModePreviewPlanScore({
+  date,
+  revision,
+  tripId,
+}: Readonly<{ date: string; revision: string; tripId: string }>) {
   const planScoreTranslations = useTranslations('planScore');
+  const planScore = useTripPlanScore(tripId, revision);
+  const previewDayScore = planScore.data?.days.find((day) => day.date === date) ?? null;
+  const planScoreHidden =
+    planScore.status === 'disabled' ||
+    Boolean(
+      planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED') ||
+      previewDayScore?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED'),
+    );
+
+  if (planScoreHidden || (!previewDayScore && planScore.status !== 'error')) return null;
+
+  return (
+    <PlanScorePanel
+      completeness={previewDayScore?.completeness ?? null}
+      confidence={previewDayScore?.confidence ?? null}
+      disabled={previewDayScore?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')}
+      explanations={
+        previewDayScore?.explanations ?? {
+          uncertainty: [],
+          whatWorks: [],
+          worthImproving: [],
+        }
+      }
+      factors={previewDayScore?.factors}
+      onRetry={planScore.retry}
+      score={previewDayScore?.score ?? null}
+      scope="day"
+      status={planScore.status}
+      title={planScoreTranslations('dayTitle')}
+    />
+  );
+}
+
+export function TripModeShell({
+  children,
+  planScoreEnabled,
+  tripId,
+}: Readonly<TripModeShellProps>) {
+  const t = useTranslations('tripMode');
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
@@ -140,12 +183,6 @@ export function TripModeShell({ children, tripId }: Readonly<TripModeShellProps>
         : href,
     [previewSelection],
   );
-  const planScore = useTripPlanScore(
-    previewSelection && state.trip ? state.trip.id : null,
-    state.trip?.updatedAt ?? '',
-  );
-  const previewDayScore =
-    planScore.data?.days.find((day) => day.date === previewSelection?.date) ?? null;
   const previewContext = useMemo<TripModePreviewContextValue>(
     () => ({
       contextOptions,
@@ -340,24 +377,11 @@ export function TripModeShell({ children, tripId }: Readonly<TripModeShellProps>
           </section>
         ) : null}
 
-        {previewSelection ? (
-          <PlanScorePanel
-            completeness={previewDayScore?.completeness ?? null}
-            confidence={previewDayScore?.confidence ?? null}
-            disabled={previewDayScore?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')}
-            explanations={
-              previewDayScore?.explanations ?? {
-                uncertainty: [],
-                whatWorks: [],
-                worthImproving: [],
-              }
-            }
-            factors={previewDayScore?.factors}
-            onRetry={planScore.retry}
-            score={previewDayScore?.score ?? null}
-            scope="day"
-            status={planScore.status}
-            title={planScoreTranslations('dayTitle')}
+        {planScoreEnabled && previewSelection && state.trip ? (
+          <TripModePreviewPlanScore
+            date={previewSelection.date}
+            revision={state.trip.updatedAt}
+            tripId={state.trip.id}
           />
         ) : null}
 

@@ -265,7 +265,11 @@ export async function getTripPlanScore(
   userId: string,
   tripId: string,
   services: { placesService?: PlacesService | null } = {},
-): Promise<TripPlanScore> {
+): Promise<TripPlanScore | null> {
+  // Do this before opening Prisma: stale clients may still reach the endpoint,
+  // but an administrative kill switch must make that request cost-free too.
+  if (arePlanScoreProvidersDisabled()) return null;
+
   const prisma = getPrismaClient();
   const trip = await prisma.trip.findFirst({
     where: { id: tripId, ownerId: userId },
@@ -295,13 +299,8 @@ export async function getTripPlanScore(
   });
   if (!trip) throw new ItineraryNotFoundError('trip_not_found');
 
-  // A dedicated kill switch, independent of the app-wide Google switch: Plan
-  // Score is the widest fan-out surface, so it can be turned off on its own
-  // without breaking search, place-details, or day-route views elsewhere.
-  const planScoreDisabled = arePlanScoreProvidersDisabled();
-  const placesService = planScoreDisabled
-    ? null
-    : services.placesService === undefined
+  const placesService =
+    services.placesService === undefined
       ? createPlacesService({ source: 'plan-score' })
       : services.placesService;
   const commitments = trip.reservations.flatMap((reservation) => {
@@ -309,7 +308,7 @@ export async function getTripPlanScore(
     return commitment ? [commitment] : [];
   });
 
-  const routesService = planScoreDisabled ? null : createRoutesService({ source: 'plan-score' });
+  const routesService = createRoutesService({ source: 'plan-score' });
   // One resolver for the whole trip. Days share places constantly - the same
   // hotel is the base every night - and a per-day resolver re-fetched each one.
   // Mirrors the guard inside getItineraryDayRoutes: with no routing there is
@@ -382,20 +381,6 @@ export async function getTripPlanScore(
     ratings: placeEvidence.ratings,
     routes: new Map(routeResults.map(({ id, routes }) => [id, routes])),
   });
-
-  // Administratively disabled is a distinct reason from genuinely thin
-  // evidence: the frontend uses it to not render the section at all, rather
-  // than showing an empty state that looks like every other unscored day.
-  if (planScoreDisabled) {
-    return {
-      ...result,
-      days: result.days.map((day) => ({
-        ...day,
-        withheldReasons: ['ADMINISTRATIVELY_DISABLED'],
-      })),
-      withheldReasons: ['ADMINISTRATIVELY_DISABLED'],
-    };
-  }
 
   return result;
 }

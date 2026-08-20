@@ -73,9 +73,39 @@ const overviewTools = [
   { href: 'info', icon: Info, label: 'tripInfo' },
 ] as const;
 
-export function TripsManager() {
-  const t = useTranslations('trips');
+function TripOverviewPlanScore({
+  revision,
+  tripId,
+}: Readonly<{ revision: string; tripId: string }>) {
   const planScoreTranslations = useTranslations('planScore');
+  const planScore = useTripPlanScore(tripId, revision);
+  const planScoreHidden =
+    planScore.status === 'disabled' ||
+    Boolean(planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED'));
+
+  if (planScoreHidden || (!planScore.data && planScore.status !== 'error')) return null;
+
+  return (
+    <PlanScorePanel
+      disabled={planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')}
+      explanations={
+        planScore.data?.explanations ?? {
+          uncertainty: [],
+          whatWorks: [],
+          worthImproving: [],
+        }
+      }
+      onRetry={planScore.retry}
+      score={planScore.data?.score ?? null}
+      scope="trip"
+      status={planScore.status}
+      title={planScoreTranslations('title')}
+    />
+  );
+}
+
+export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: boolean }>) {
+  const t = useTranslations('trips');
   const experienceRatingTranslations = useTranslations('experienceRating');
   const locale = useLocale();
   const pathname = usePathname();
@@ -120,11 +150,6 @@ export function TripsManager() {
   }, []);
 
   const overviewTripId = overviewTrip?.id;
-  const planScore = useTripPlanScore(
-    overviewTrip && overviewTrip.lifecycle !== 'completed' ? overviewTrip.id : null,
-    overviewTrip?.updatedAt ?? '',
-  );
-
   useEffect(() => {
     if (!overviewTripId) {
       setOverviewTripInfo([]);
@@ -393,23 +418,12 @@ export function TripsManager() {
                       rating={overviewTrip.experienceRating}
                     />
                   )
-                ) : (
-                  <PlanScorePanel
-                    disabled={planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')}
-                    explanations={
-                      planScore.data?.explanations ?? {
-                        uncertainty: [],
-                        whatWorks: [],
-                        worthImproving: [],
-                      }
-                    }
-                    onRetry={planScore.retry}
-                    score={planScore.data?.score ?? null}
-                    scope="trip"
-                    status={planScore.status}
-                    title={planScoreTranslations('title')}
+                ) : planScoreEnabled ? (
+                  <TripOverviewPlanScore
+                    revision={overviewTrip.updatedAt}
+                    tripId={overviewTrip.id}
                   />
-                )}
+                ) : null}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <p className="text-sm font-medium">{t('destinations')}</p>

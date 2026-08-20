@@ -19,7 +19,8 @@ export function createPlanScoreControllers() {
       }
 
       try {
-        return reply.send(await getTripPlanScore(request.authUserId, params.data.tripId));
+        const planScore = await getTripPlanScore(request.authUserId, params.data.tripId);
+        return planScore ? reply.send(planScore) : reply.code(204).send();
       } catch (error) {
         if (error instanceof ItineraryNotFoundError) {
           return reply.code(404).send({ code: error.message });

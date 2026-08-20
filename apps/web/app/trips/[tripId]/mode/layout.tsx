@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 
 import { PageState } from '@/components/page-state';
 import { TripModeShell } from '@/components/trip-mode-shell';
+import { isPlanScoreEnabled } from '@/lib/plan-score/config.server';
 
 export default async function TripModeLayout({
   children,
@@ -19,7 +20,9 @@ export default async function TripModeLayout({
         </section>
       }
     >
-      <TripModeShell tripId={tripId}>{children}</TripModeShell>
+      <TripModeShell planScoreEnabled={isPlanScoreEnabled()} tripId={tripId}>
+        {children}
+      </TripModeShell>
     </Suspense>
   );
 }

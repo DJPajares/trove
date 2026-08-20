@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { fetchTripPlanScore, type TripPlanScore } from '@/lib/plan-score/api';
 
-export type PlanScoreLoadStatus = 'error' | 'idle' | 'loading';
+export type PlanScoreLoadStatus = 'disabled' | 'error' | 'idle' | 'loading';
 
 /**
  * Plan Score is advisory and derived, so a failure never blocks planning: the
@@ -33,6 +33,11 @@ export function useTripPlanScore(tripId: string | null, revision: string) {
     fetchTripPlanScore(tripId, controller.signal)
       .then((result) => {
         if (controller.signal.aborted) return;
+        if (result === null) {
+          setData(null);
+          setStatus('disabled');
+          return;
+        }
         setData(result);
         setStatus('idle');
       })

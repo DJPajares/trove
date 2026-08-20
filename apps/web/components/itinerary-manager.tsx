@@ -225,9 +225,60 @@ function useDesktopMapLayout() {
   return matches;
 }
 
-export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
-  const t = useTranslations('itinerary');
+function ItineraryPlanScore({
+  onSelectReference,
+  revision,
+  selectedDayId,
+  tripId,
+}: Readonly<{
+  onSelectReference: (reference: string) => void;
+  revision: string;
+  selectedDayId: string | null;
+  tripId: string;
+}>) {
   const planScoreTranslations = useTranslations('planScore');
+  const { hasBeenVisible: planScoreVisible, ref: planScoreSentinelRef } =
+    useInViewOnce<HTMLDivElement>();
+  const planScore = useTripPlanScore(planScoreVisible ? tripId : null, revision);
+  const planScoreDay = planScore.data?.days.find((day) => day.dayId === selectedDayId) ?? null;
+  const planScoreHidden =
+    planScore.status === 'disabled' ||
+    Boolean(planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED'));
+
+  return (
+    <>
+      <div aria-hidden="true" className="h-px" ref={planScoreSentinelRef} />
+      {!planScoreHidden && (planScoreDay || planScore.status === 'error') ? (
+        <PlanScorePanel
+          className="mt-4"
+          completeness={planScoreDay?.completeness ?? null}
+          confidence={planScoreDay?.confidence ?? null}
+          disabled={planScoreDay?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')}
+          explanations={
+            planScoreDay?.explanations ?? {
+              uncertainty: [],
+              whatWorks: [],
+              worthImproving: [],
+            }
+          }
+          factors={planScoreDay?.factors}
+          onRetry={planScore.retry}
+          onSelectReference={onSelectReference}
+          score={planScoreDay?.score ?? null}
+          scope="day"
+          status={planScore.status}
+          title={planScoreTranslations('dayTitle')}
+        />
+      ) : null}
+    </>
+  );
+}
+
+export function ItineraryManager({
+  planScoreEnabled,
+  tripId,
+}: Readonly<{ planScoreEnabled: boolean; tripId: string }>) {
+  const t = useTranslations('itinerary');
   const tripPlacesTranslations = useTranslations('tripPlaces');
   const locale = useLocale();
   const pathname = usePathname();
@@ -383,13 +434,6 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
     tripId,
   ]);
   const planScoreRevision = useMemo(() => itineraryPlanScoreRevision(itinerary), [itinerary]);
-  const { hasBeenVisible: planScoreVisible, ref: planScoreSentinelRef } =
-    useInViewOnce<HTMLDivElement>();
-  const planScore = useTripPlanScore(
-    itinerary && planScoreVisible ? tripId : null,
-    planScoreRevision,
-  );
-  const planScoreDay = planScore.data?.days.find((day) => day.dayId === selectedDayId) ?? null;
   const focusItineraryItem = useCallback((reference: string) => {
     setSelectedMapItemId(reference);
     document.getElementById(`itinerary-item-${reference}`)?.focus();
@@ -1835,27 +1879,12 @@ export function ItineraryManager({ tripId }: Readonly<{ tripId: string }>) {
                     title={t('emptyTitle')}
                   />
                 )}
-                <div aria-hidden="true" className="h-px" ref={planScoreSentinelRef} />
-                {planScoreDay || planScore.status === 'error' ? (
-                  <PlanScorePanel
-                    className="mt-4"
-                    completeness={planScoreDay?.completeness ?? null}
-                    confidence={planScoreDay?.confidence ?? null}
-                    disabled={planScoreDay?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')}
-                    explanations={
-                      planScoreDay?.explanations ?? {
-                        uncertainty: [],
-                        whatWorks: [],
-                        worthImproving: [],
-                      }
-                    }
-                    factors={planScoreDay?.factors}
-                    onRetry={planScore.retry}
+                {planScoreEnabled ? (
+                  <ItineraryPlanScore
                     onSelectReference={focusItineraryItem}
-                    score={planScoreDay?.score ?? null}
-                    scope="day"
-                    status={planScore.status}
-                    title={planScoreTranslations('dayTitle')}
+                    revision={planScoreRevision}
+                    selectedDayId={selectedDayId}
+                    tripId={tripId}
                   />
                 ) : null}
               </div>

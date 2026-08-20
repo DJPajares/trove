@@ -7,6 +7,7 @@ import {
   serializeCanonicalPlace,
 } from './place-serializer.js';
 import type { PlaceProviderName } from './places.js';
+import { providerTargetFingerprint, recordProviderCacheEvent } from './provider-usage.js';
 
 export type { CanonicalPlace } from './place-serializer.js';
 
@@ -249,7 +250,7 @@ class PrismaCanonicalPlaceRepository implements CanonicalPlaceRepository {
 /** Injectable so a test can count what a resolution costs. */
 export type PlaceSnapshotHydrator = (
   externalPlaceId: string,
-  options?: { languageCode?: string },
+  options?: { languageCode?: string; source?: 'place-resolution' },
 ) => Promise<PlaceSnapshotSource | null>;
 
 export class CanonicalPlacesService {
@@ -325,9 +326,22 @@ export class CanonicalPlacesService {
       (entry) => entry.externalPlaceId === externalPlaceId && entry.provider === 'GOOGLE',
     );
     if (!reference) return null;
-    if (isSnapshotFresh(reference, { languageCode: options.languageCode })) return null;
+    if (isSnapshotFresh(reference, { languageCode: options.languageCode })) {
+      recordProviderCacheEvent({
+        cache: 'place-details',
+        kind: 'cache_hit',
+        operation: 'getDetails',
+        placeFingerprint: providerTargetFingerprint(externalPlaceId),
+        provider: 'google',
+        source: 'place-resolution',
+      });
+      return null;
+    }
 
-    return this.hydrate(externalPlaceId, { languageCode: options.languageCode });
+    return this.hydrate(externalPlaceId, {
+      languageCode: options.languageCode,
+      source: 'place-resolution',
+    });
   }
 
   /**

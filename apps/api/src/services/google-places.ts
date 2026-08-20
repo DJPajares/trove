@@ -1,5 +1,10 @@
 import { categorizePlaceTypes } from './place-categories.js';
-import { recordProviderCall } from './provider-usage.js';
+import {
+  providerTargetFingerprint,
+  recordProviderCall,
+  type ProviderCall,
+  type ProviderCallSource,
+} from './provider-usage.js';
 import {
   PlaceProviderError,
   type PlaceDetailLevel,
@@ -26,10 +31,9 @@ export const GOOGLE_AUTOCOMPLETE_FIELD_MASK = [
 
 /**
  * Identity and location: everything routing and list rendering read, and
- * nothing else. The fields left out — rating, review count, opening hours,
- * website, phone, photos — are precisely the ones that move a Place Details
- * call into the most expensive billing tier, so asking for them on a call that
- * only needs a latitude is the single most wasteful thing this client can do.
+ * nothing else. This mask reaches Place Details Pro. The fields left out —
+ * rating, opening hours, website, phone and photos — are mutable and can move a
+ * request into Place Details Enterprise or Enterprise + Atmosphere.
  */
 export const GOOGLE_PLACE_LOCATION_FIELD_MASK = [
   'id',
@@ -44,8 +48,8 @@ export const GOOGLE_PLACE_LOCATION_FIELD_MASK = [
 
 /**
  * Rating and hours only — what Plan Score reads and nothing else. These already
- * require the expensive "Atmosphere" billing tier, so nothing that is never
- * rendered gets to ride along with them.
+ * require Place Details Enterprise, not Enterprise + Atmosphere, so nothing
+ * that is never rendered gets to ride along with them.
  *
  * Note there is no `location` here, and that is load-bearing: the snapshot
  * write refuses a place without coordinates, so an evidence answer can never
@@ -122,6 +126,7 @@ type GooglePlacesProviderOptions = {
   baseUrl?: string;
   fetcher?: Fetcher;
   requestTimeoutMs?: number;
+  source?: ProviderCallSource;
 };
 
 function cleanString(value: unknown) {
@@ -254,22 +259,28 @@ export class GooglePlacesProvider implements PlacesProvider {
   private readonly baseUrl: string;
   private readonly fetcher: Fetcher;
   private readonly requestTimeoutMs: number;
+  private readonly source: ProviderCallSource;
 
   constructor(options: GooglePlacesProviderOptions) {
     this.apiKey = options.apiKey.trim();
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '');
     this.fetcher = options.fetcher ?? globalThis.fetch;
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.source = options.source ?? 'test';
   }
 
-  private async requestJson<T>(url: URL, init: RequestInit, operation: string): Promise<T> {
+  private async requestJson<T>(
+    url: URL,
+    init: RequestInit,
+    call: Omit<ProviderCall, 'kind' | 'provider' | 'source'>,
+  ): Promise<T> {
     if (!this.apiKey) {
       throw new PlaceProviderError('configuration_missing');
     }
 
     // Counted here rather than in the callers so it records requests that are
     // actually about to leave the process, not ones short-circuited above.
-    recordProviderCall({ endpoint: url.pathname, operation, provider: 'google' });
+    recordProviderCall({ ...call, provider: 'google', source: this.source });
 
     let response: Response;
 
@@ -331,7 +342,11 @@ export class GooglePlacesProvider implements PlacesProvider {
         },
         method: 'POST',
       },
-      'search',
+      {
+        endpoint: '/v1/places:autocomplete',
+        expectedSku: 'places-autocomplete-requests',
+        operation: 'search',
+      },
     );
 
     return (response.suggestions ?? [])
@@ -367,7 +382,15 @@ export class GooglePlacesProvider implements PlacesProvider {
     const response = await this.requestJson<GooglePlaceDetails>(
       url,
       { headers: { 'X-Goog-FieldMask': fieldMask }, method: 'GET' },
-      'getDetails',
+      {
+        cacheMissReason: request.cacheMissReason,
+        detailLevel: request.detail,
+        endpoint: '/v1/places/:placeId',
+        expectedSku:
+          request.detail === 'location' ? 'place-details-pro' : 'place-details-enterprise',
+        operation: 'getDetails',
+        placeFingerprint: providerTargetFingerprint(request.externalPlaceId),
+      },
     );
     const externalPlaceId = cleanString(response.id);
     // A named venue always gets a displayName, but a plain geocoded address

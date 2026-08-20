@@ -3,8 +3,14 @@ import { getPrismaClient } from '@trove/db';
 import { PLACE_CACHE_TTL_MS } from './cached-places.js';
 import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
 import { categorizePlaceTypes } from './place-categories.js';
+import { getActivePlaceDetailsFailure } from './place-details-failures.js';
 import { normalizePlaceLanguageCode } from './place-language.js';
 import { createPlacesService } from './places-runtime.js';
+import {
+  providerTargetFingerprint,
+  recordProviderCacheEvent,
+  type ProviderCallSource,
+} from './provider-usage.js';
 import type {
   PlaceCoordinates,
   PlacesService,
@@ -87,6 +93,8 @@ export type PlaceSnapshotSource = {
   cachedPrimaryType?: string | null;
   cachedTypes?: string[];
   cachedUtcOffsetMinutes?: number | null;
+  detailsFailedAt?: Date | null;
+  detailsFailureCode?: string | null;
   externalPlaceId: string;
 };
 
@@ -98,6 +106,8 @@ export type PlaceHydrationOptions = {
   now?: Date;
   /** Test seam. `null` stands for "no provider configured". */
   placesService?: PlacesService | null;
+  /** Feature that initiated this read or possible provider refresh. */
+  source?: ProviderCallSource;
 };
 
 function toNumber(value: DecimalLike | null | undefined): number | null {
@@ -207,6 +217,7 @@ export async function hydratePlaceSnapshots(
 
   const languageCode = normalizePlaceLanguageCode(options.languageCode);
   const now = options.now ?? new Date();
+  const source = options.source ?? 'screen-hydration';
 
   let references: PlaceSnapshotSource[];
   try {
@@ -222,9 +233,31 @@ export async function hydratePlaceSnapshots(
   const expired: string[] = [];
   for (const reference of references) {
     resolved.set(reference.externalPlaceId, reference);
-    if (!isSnapshotFresh(reference, { languageCode, now })) {
-      expired.push(reference.externalPlaceId);
+    if (isSnapshotFresh(reference, { languageCode, now })) {
+      recordProviderCacheEvent({
+        cache: 'place-details',
+        kind: 'cache_hit',
+        operation: 'getDetails',
+        placeFingerprint: providerTargetFingerprint(reference.externalPlaceId),
+        provider: 'google',
+        source,
+      });
+      continue;
     }
+    const failureCode = getActivePlaceDetailsFailure(reference, now);
+    if (failureCode) {
+      recordProviderCacheEvent({
+        cache: 'place-details',
+        failureCode,
+        kind: 'negative_cache_hit',
+        operation: 'getDetails',
+        placeFingerprint: providerTargetFingerprint(reference.externalPlaceId),
+        provider: 'google',
+        source,
+      });
+      continue;
+    }
+    expired.push(reference.externalPlaceId);
   }
 
   // Only references that already exist are refreshed. A place with no reference
@@ -242,7 +275,7 @@ export async function hydratePlaceSnapshots(
   if (!refreshing.length) return resolved;
 
   const placesService =
-    options.placesService === undefined ? createPlacesService() : options.placesService;
+    options.placesService === undefined ? createPlacesService({ source }) : options.placesService;
   if (!placesService) return resolved;
 
   await mapWithConcurrency(refreshing, PROVIDER_CONCURRENCY_LIMIT, async (externalPlaceId) => {

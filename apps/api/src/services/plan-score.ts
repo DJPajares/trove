@@ -302,19 +302,23 @@ export async function getTripPlanScore(
   const placesService = planScoreDisabled
     ? null
     : services.placesService === undefined
-      ? createPlacesService()
+      ? createPlacesService({ source: 'plan-score' })
       : services.placesService;
   const commitments = trip.reservations.flatMap((reservation) => {
     const commitment = sameDayJourneyCommitment(reservation);
     return commitment ? [commitment] : [];
   });
 
-  const routesService = planScoreDisabled ? null : createRoutesService();
+  const routesService = planScoreDisabled ? null : createRoutesService({ source: 'plan-score' });
   // One resolver for the whole trip. Days share places constantly - the same
   // hotel is the base every night - and a per-day resolver re-fetched each one.
   // Mirrors the guard inside getItineraryDayRoutes: with no routing there is
   // nothing to resolve coordinates for.
-  const resolvePlace = createPlaceResolver(routesService ? placesService : null);
+  const resolvePlace = createPlaceResolver(
+    routesService ? placesService : null,
+    undefined,
+    'plan-score',
+  );
 
   // Evidence (rating/hours) only ever feeds a day's factors, scoped to the trip
   // places that are actually scheduled on some day - toDayPlaces/
@@ -334,7 +338,7 @@ export async function getTripPlanScore(
         tripId,
         day.id,
         {},
-        { placesService, resolvePlace, routesService },
+        { placesService, resolvePlace, routesService, source: 'plan-score' },
       ),
     })),
     loadPlaceEvidence(

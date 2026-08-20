@@ -1,3 +1,5 @@
+import type { ProviderCacheMissReason } from './provider-usage.js';
+
 export const ROUTE_TRAVEL_MODES = ['drive', 'flight', 'transit', 'walk'] as const;
 export type RouteTravelMode = (typeof ROUTE_TRAVEL_MODES)[number];
 
@@ -20,6 +22,8 @@ export type RouteCoordinates = {
 };
 
 export type RouteRequest = {
+  /** Internal attribution supplied by the cache when this becomes outbound. */
+  cacheMissReason?: ProviderCacheMissReason;
   destination: RouteCoordinates;
   includePolyline?: boolean;
   languageCode?: string;

@@ -105,8 +105,17 @@ export function buildApp() {
 
   // Spend on Google is only attributable after the fact if every outbound call
   // is logged with the operation that caused it.
-  setProviderUsageSink((call) => {
-    app.log.info(call, 'google provider request');
+  setProviderUsageSink((event) => {
+    if (event.kind === 'cache_hit') {
+      app.log.debug(event, 'google provider cache hit');
+      return;
+    }
+    app.log.info(
+      event,
+      event.kind === 'negative_cache_hit'
+        ? 'google provider negative cache hit'
+        : 'google provider request',
+    );
   });
 
   // A rate limiter only sees routes registered after it is loaded, so the routes

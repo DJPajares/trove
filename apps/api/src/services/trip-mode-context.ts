@@ -159,7 +159,7 @@ async function resolveLeaveBy(input: {
       itemIds: [input.currentItem.id, input.nextItem.id],
       languageCode: input.languageCode,
     },
-    input.services,
+    { ...input.services, source: 'trip-mode-context' },
   );
   const segment = routes.segments.find(
     (candidate) =>
@@ -280,7 +280,7 @@ export async function resolveTripModeContext(
       (item) =>
         item.tripPlace?.place.providerRefs.map((reference) => reference.externalPlaceId) ?? [],
     ),
-    { languageCode: options.languageCode },
+    { languageCode: options.languageCode, source: 'trip-mode-context' },
   );
 
   return {

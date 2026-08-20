@@ -129,7 +129,7 @@ export async function listTripPlaces(userId: string, tripId: string, languageCod
     tripPlaces.flatMap((tripPlace) =>
       tripPlace.place.providerRefs.map((reference) => reference.externalPlaceId),
     ),
-    { languageCode },
+    { languageCode, source: 'trip-places' },
   );
 
   return {

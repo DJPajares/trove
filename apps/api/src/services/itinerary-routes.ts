@@ -5,6 +5,11 @@ import { hydratePlaceSnapshot, isSnapshotFresh, toPlaceCoordinates } from './pla
 import { placeProviderRefInclude } from './place-serializer.js';
 import { createPlacesService } from './places-runtime.js';
 import type { PlacesService } from './places.js';
+import {
+  providerTargetFingerprint,
+  recordProviderCacheEvent,
+  type ProviderCallSource,
+} from './provider-usage.js';
 import { createRoutesService } from './routes-runtime.js';
 import {
   isRoutableTravelMode,
@@ -74,6 +79,7 @@ type RouteServices = {
   /** Pass one shared resolver to dedupe places across several days. */
   resolvePlace?: PlaceResolver;
   routesService?: RoutesService | null;
+  source?: ProviderCallSource;
 };
 
 function mapMode(value: string): RouteTravelMode {
@@ -101,6 +107,7 @@ async function resolvePlaceData(
   place: PlaceRecord,
   placesService: PlacesService | null,
   languageCode?: string,
+  source: ProviderCallSource = 'itinerary-routes',
 ): Promise<Pick<RoutePoint, 'coordinates' | 'label'> | null> {
   if (place.customLatitude !== null && place.customLongitude !== null) {
     return {
@@ -121,12 +128,23 @@ async function resolvePlaceData(
   // one module in charge of when a Place Details call may happen.
   if (isSnapshotFresh(googleReference, { languageCode })) {
     const coordinates = toPlaceCoordinates(googleReference);
-    if (coordinates) return { coordinates, label: googleReference.cachedName };
+    if (coordinates) {
+      recordProviderCacheEvent({
+        cache: 'place-details',
+        kind: 'cache_hit',
+        operation: 'getDetails',
+        placeFingerprint: providerTargetFingerprint(googleReference.externalPlaceId),
+        provider: 'google',
+        source,
+      });
+      return { coordinates, label: googleReference.cachedName };
+    }
   }
 
   const refreshed = await hydratePlaceSnapshot(googleReference.externalPlaceId, {
     languageCode,
     placesService,
+    source,
   });
   const coordinates = toPlaceCoordinates(refreshed);
   if (!coordinates) return null;
@@ -150,13 +168,14 @@ export type PlaceResolver = (
 export function createPlaceResolver(
   placesService: PlacesService | null,
   languageCode?: string,
+  source: ProviderCallSource = 'itinerary-routes',
 ): PlaceResolver {
   const resolutions = new Map<string, Promise<Pick<RoutePoint, 'coordinates' | 'label'> | null>>();
 
   return async (place: PlaceRecord, kind: RoutePointKind, id: string) => {
     let resolution = resolutions.get(place.id);
     if (!resolution) {
-      resolution = resolvePlaceData(place, placesService, languageCode);
+      resolution = resolvePlaceData(place, placesService, languageCode, source);
       resolutions.set(place.id, resolution);
     }
     const data = await resolution;
@@ -426,14 +445,15 @@ export async function getItineraryDayRoutes(
   if (!trip) throw new ItineraryNotFoundError('trip_not_found');
   const day = trip.itineraryDays[0];
   if (!day) throw new ItineraryNotFoundError('itinerary_day_not_found');
+  const source = services.source ?? 'itinerary-routes';
 
   const placesService =
-    services.placesService === undefined ? createPlacesService() : services.placesService;
+    services.placesService === undefined ? createPlacesService({ source }) : services.placesService;
   const routesService =
-    services.routesService === undefined ? createRoutesService() : services.routesService;
+    services.routesService === undefined ? createRoutesService({ source }) : services.routesService;
   const resolvePlace =
     services.resolvePlace ??
-    createPlaceResolver(routesService ? placesService : null, options.languageCode);
+    createPlaceResolver(routesService ? placesService : null, options.languageCode, source);
   const placedItems = day.items.filter(
     (item): item is typeof item & { tripPlace: NonNullable<typeof item.tripPlace> } =>
       item.tripPlace !== null,

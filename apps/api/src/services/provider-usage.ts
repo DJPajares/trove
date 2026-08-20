@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 /**
  * Every outbound Google request passes through here.
  *
@@ -7,19 +9,75 @@
  * second, a regression that reintroduces a fan-out is invisible until the bill
  * arrives.
  */
-export type ProviderCall = {
-  /** The provider endpoint, without query parameters or ids. */
-  endpoint: string;
-  operation: string;
+export const PROVIDER_CALL_SOURCES = [
+  'global-search',
+  'itinerary',
+  'itinerary-routes',
+  'itinerary-time-suggestions',
+  'place-resolution',
+  'places-autocomplete',
+  'plan-score',
+  'screen-hydration',
+  'trip-mode-context',
+  'trip-places',
+  'test',
+] as const;
+
+export type ProviderCallSource = (typeof PROVIDER_CALL_SOURCES)[number];
+
+export type ProviderCacheMissReason =
+  | 'cache_read_failed'
+  | 'evidence_memo_expired'
+  | 'evidence_not_memoized'
+  | 'incomplete_snapshot'
+  | 'language_mismatch'
+  | 'missing_leg'
+  | 'missing_snapshot'
+  | 'negative_cache_expired'
+  | 'polyline_missing'
+  | 'stale_leg'
+  | 'stale_snapshot';
+
+export type ProviderExpectedSku =
+  | 'places-autocomplete-requests'
+  | 'place-details-pro'
+  | 'place-details-enterprise'
+  | 'routes-compute-routes-essentials';
+
+type ProviderEventBase = {
+  operation: 'computeRoute' | 'getDetails' | 'search';
   provider: 'google';
+  source: ProviderCallSource;
 };
 
-export type ProviderUsageSink = (call: ProviderCall) => void;
+export type ProviderCall = ProviderEventBase & {
+  cacheMissReason?: ProviderCacheMissReason;
+  detailLevel?: 'evidence' | 'location';
+  /** The provider endpoint, normalised so it contains no provider ids. */
+  endpoint: '/directions/v2:computeRoutes' | '/v1/places/:placeId' | '/v1/places:autocomplete';
+  expectedSku: ProviderExpectedSku;
+  includePolyline?: boolean;
+  kind: 'outbound';
+  placeFingerprint?: string;
+  routeMode?: 'drive' | 'transit' | 'walk';
+};
+
+export type ProviderCacheEvent = ProviderEventBase & {
+  cache: 'place-details' | 'place-evidence' | 'route';
+  failureCode?: 'NOT_FOUND' | 'UNUSABLE_LOCATION';
+  includePolyline?: boolean;
+  kind: 'cache_hit' | 'negative_cache_hit';
+  placeFingerprint?: string;
+  routeMode?: 'drive' | 'transit' | 'walk';
+};
+
+export type ProviderUsageEvent = ProviderCall | ProviderCacheEvent;
+export type ProviderUsageSink = (event: ProviderUsageEvent) => void;
 
 const counts = new Map<string, number>();
 let sink: ProviderUsageSink | null = null;
 
-function countKey(call: ProviderCall) {
+function countKey(call: Pick<ProviderCall, 'operation' | 'provider'>) {
   return `${call.provider}:${call.operation}`;
 }
 
@@ -27,9 +85,17 @@ export function setProviderUsageSink(next: ProviderUsageSink | null) {
   sink = next;
 }
 
-export function recordProviderCall(call: ProviderCall) {
+export function providerTargetFingerprint(providerId: string) {
+  return createHash('sha256').update(providerId).digest('hex').slice(0, 12);
+}
+
+export function recordProviderCall(call: Omit<ProviderCall, 'kind'>) {
   counts.set(countKey(call), (counts.get(countKey(call)) ?? 0) + 1);
-  sink?.(call);
+  sink?.({ ...call, kind: 'outbound' });
+}
+
+export function recordProviderCacheEvent(event: ProviderCacheEvent) {
+  sink?.(event);
 }
 
 export function getProviderCallCounts(): Record<string, number> {

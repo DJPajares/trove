@@ -982,7 +982,7 @@
       "appendDescription": "Keep the {count, plural, one {existing item} other {# existing items}} first, then add this day’s plan.",
       "swap": "Swap the two day plans",
       "swapDescription": "Move the destination’s {count, plural, one {item} other {# items}} back to this date.",
-      "settingsStay": "Day notes, bases, ratings, and other date-specific details stay on their current dates.",
+      "settingsStay": "Daily bases move with the plan. Day notes, ratings, and other date-specific details stay on their current dates.",
       "confirm": "Move plan",
       "moving": "Moving…",
       "saveError": "We couldn't move that day plan. Try again.",

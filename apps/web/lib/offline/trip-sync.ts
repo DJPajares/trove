@@ -467,17 +467,33 @@ async function replayItineraryMutation(
     const targetIds = target?.items.map(({ id }) => id) ?? [];
     const matches = (actual: string[], expected: string[]) =>
       actual.length === expected.length && actual.every((id, index) => id === expected[index]);
+    const matchesBase = (
+      day: typeof source | undefined,
+      expected: typeof operation.input.expectedSourceBase,
+    ) =>
+      Boolean(
+        day &&
+        day.dailyBaseTripPlaceId === expected.dailyBaseTripPlaceId &&
+        day.dailyBaseDepartureTripPlaceId === expected.dailyBaseDepartureTripPlaceId,
+      );
     const finalSourceIds =
       operation.input.strategy === 'swap' ? operation.input.expectedTargetItemIds : [];
     const finalTargetIds =
       operation.input.strategy === 'swap'
         ? operation.input.expectedSourceItemIds
         : [...operation.input.expectedTargetItemIds, ...operation.input.expectedSourceItemIds];
+    const finalSourceBase =
+      operation.input.strategy === 'swap'
+        ? operation.input.expectedTargetBase
+        : { dailyBaseDepartureTripPlaceId: null, dailyBaseTripPlaceId: null };
+    const finalTargetBase = operation.input.expectedSourceBase;
     if (
       source &&
       target &&
       matches(sourceIds, finalSourceIds) &&
-      matches(targetIds, finalTargetIds)
+      matches(targetIds, finalTargetIds) &&
+      matchesBase(source, finalSourceBase) &&
+      matchesBase(target, finalTargetBase)
     ) {
       await removeOfflineMutation(mutation.id);
       return;
@@ -487,7 +503,9 @@ async function replayItineraryMutation(
       !target ||
       (!force &&
         (!matches(sourceIds, operation.input.expectedSourceItemIds) ||
-          !matches(targetIds, operation.input.expectedTargetItemIds)))
+          !matches(targetIds, operation.input.expectedTargetItemIds) ||
+          !matchesBase(source, operation.input.expectedSourceBase) ||
+          !matchesBase(target, operation.input.expectedTargetBase)))
     ) {
       await updateMutationState(
         mutation,
@@ -501,7 +519,15 @@ async function replayItineraryMutation(
           ...operation,
           input: {
             ...operation.input,
+            expectedSourceBase: {
+              dailyBaseDepartureTripPlaceId: source?.dailyBaseDepartureTripPlaceId ?? null,
+              dailyBaseTripPlaceId: source?.dailyBaseTripPlaceId ?? null,
+            },
             expectedSourceItemIds: sourceIds,
+            expectedTargetBase: {
+              dailyBaseDepartureTripPlaceId: target?.dailyBaseDepartureTripPlaceId ?? null,
+              dailyBaseTripPlaceId: target?.dailyBaseTripPlaceId ?? null,
+            },
             expectedTargetItemIds: targetIds,
           },
         }

@@ -35,10 +35,17 @@ export type ItineraryItemInput = {
 };
 
 export type ItineraryDayMoveInput = {
+  expectedSourceBase: ItineraryDayBase;
   expectedSourceItemIds: string[];
+  expectedTargetBase: ItineraryDayBase;
   expectedTargetItemIds: string[];
   strategy: 'append' | 'swap';
   targetItineraryDayId: string;
+};
+
+export type ItineraryDayBase = {
+  dailyBaseDepartureTripPlaceId: string | null;
+  dailyBaseTripPlaceId: string | null;
 };
 
 export class ItineraryConflictError extends Error {
@@ -235,7 +242,13 @@ async function findDay(
 ) {
   const day = await transaction.itineraryDay.findFirst({
     where: { id: itineraryDayId, tripId },
-    select: { date: true, defaultTimeZone: true, id: true },
+    select: {
+      dailyBaseDepartureTripPlaceId: true,
+      dailyBaseTripPlaceId: true,
+      date: true,
+      defaultTimeZone: true,
+      id: true,
+    },
   });
   if (!day) throw new ItineraryNotFoundError('itinerary_day_not_found');
   return day;
@@ -504,6 +517,20 @@ function sameIds(actual: Array<{ id: string }>, expected: string[]) {
   );
 }
 
+function dayBase(day: ItineraryDayBase): ItineraryDayBase {
+  return {
+    dailyBaseDepartureTripPlaceId: day.dailyBaseDepartureTripPlaceId,
+    dailyBaseTripPlaceId: day.dailyBaseTripPlaceId,
+  };
+}
+
+function sameDayBase(day: ItineraryDayBase, expected: ItineraryDayBase) {
+  return (
+    day.dailyBaseTripPlaceId === expected.dailyBaseTripPlaceId &&
+    day.dailyBaseDepartureTripPlaceId === expected.dailyBaseDepartureTripPlaceId
+  );
+}
+
 export async function moveItineraryDayPlan(
   userId: string,
   tripId: string,
@@ -537,6 +564,8 @@ export async function moveItineraryDayPlan(
         ]);
         if (
           !sourceItems.length ||
+          !sameDayBase(sourceDay, input.expectedSourceBase) ||
+          !sameDayBase(targetDay, input.expectedTargetBase) ||
           !sameIds(sourceItems, input.expectedSourceItemIds) ||
           !sameIds(targetItems, input.expectedTargetItemIds)
         ) {
@@ -550,6 +579,25 @@ export async function moveItineraryDayPlan(
           targetItems.map(({ id }) => id),
           input.strategy,
         );
+        const sourceBase = dayBase(sourceDay);
+        const targetBase = dayBase(targetDay);
+        await transaction.itineraryDay.update({
+          where: { id: sourceDay.id },
+          data:
+            input.strategy === 'swap'
+              ? targetBase
+              : { dailyBaseDepartureTripPlaceId: null, dailyBaseTripPlaceId: null },
+        });
+        await transaction.itineraryDay.update({
+          where: { id: targetDay.id },
+          data: sourceBase,
+        });
+        await refreshDayDefaultTimeZone(transaction, tripId, sourceDay.id);
+        await refreshDayDefaultTimeZone(transaction, tripId, targetDay.id);
+        const [refreshedSourceDay, refreshedTargetDay] = await Promise.all([
+          findDay(transaction, tripId, sourceDay.id),
+          findDay(transaction, tripId, targetDay.id),
+        ]);
         for (const write of writes.parking) {
           await transaction.itineraryItem.update({
             where: { id: write.id },
@@ -559,8 +607,8 @@ export async function moveItineraryDayPlan(
 
         const itemsById = new Map([...sourceItems, ...targetItems].map((item) => [item.id, item]));
         const daysById = new Map([
-          [sourceDay.id, sourceDay],
-          [targetDay.id, targetDay],
+          [refreshedSourceDay.id, refreshedSourceDay],
+          [refreshedTargetDay.id, refreshedTargetDay],
         ]);
         for (const write of writes.final) {
           const item = itemsById.get(write.id);

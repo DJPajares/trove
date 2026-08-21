@@ -27,10 +27,14 @@ function item(id: string, itineraryDayId: string, position: number): ItineraryIt
   };
 }
 
-function day(id: string, date: string, ids: string[]): ItineraryDay {
+function day(
+  id: string,
+  date: string,
+  ids: string[],
+  base: Pick<ItineraryDay, 'dailyBaseDepartureTripPlaceId' | 'dailyBaseTripPlaceId'>,
+): ItineraryDay {
   return {
-    dailyBaseDepartureTripPlaceId: null,
-    dailyBaseTripPlaceId: null,
+    ...base,
     date,
     defaultTimeZone: 'Pacific/Auckland',
     defaultTimeZoneSource: 'trip_reference',
@@ -46,7 +50,16 @@ function day(id: string, date: string, ids: string[]): ItineraryDay {
 
 function itinerary(): Itinerary {
   return {
-    days: [day('source', '2026-09-05', ['s1', 's2']), day('target', '2026-09-06', ['t1'])],
+    days: [
+      day('source', '2026-09-05', ['s1', 's2'], {
+        dailyBaseDepartureTripPlaceId: 'source-departure',
+        dailyBaseTripPlaceId: 'source-arrival',
+      }),
+      day('target', '2026-09-06', ['t1'], {
+        dailyBaseDepartureTripPlaceId: 'target-departure',
+        dailyBaseTripPlaceId: 'target-arrival',
+      }),
+    ],
     trip: {
       endDate: '2026-09-06',
       id: 'trip',
@@ -59,9 +72,17 @@ function itinerary(): Itinerary {
   };
 }
 
-test('offline append moves items after the destination and leaves day settings in place', () => {
+test('offline append moves the daily base with the items', () => {
   const result = applyItineraryDayMove(itinerary(), 'source', {
+    expectedSourceBase: {
+      dailyBaseDepartureTripPlaceId: 'source-departure',
+      dailyBaseTripPlaceId: 'source-arrival',
+    },
     expectedSourceItemIds: ['s1', 's2'],
+    expectedTargetBase: {
+      dailyBaseDepartureTripPlaceId: 'target-departure',
+      dailyBaseTripPlaceId: 'target-arrival',
+    },
     expectedTargetItemIds: ['t1'],
     strategy: 'append',
     targetItineraryDayId: 'target',
@@ -79,12 +100,28 @@ test('offline append moves items after the destination and leaves day settings i
     { id: 's1', itineraryDayId: 'target', position: 1 },
     { id: 's2', itineraryDayId: 'target', position: 2 },
   ]);
+  expect(result.days[0]).toMatchObject({
+    dailyBaseDepartureTripPlaceId: null,
+    dailyBaseTripPlaceId: null,
+  });
+  expect(result.days[1]).toMatchObject({
+    dailyBaseDepartureTripPlaceId: 'source-departure',
+    dailyBaseTripPlaceId: 'source-arrival',
+  });
   expect(result.days.map(({ notes }) => notes)).toStrictEqual(['source note', 'target note']);
 });
 
 test('offline swap exchanges the ordered item lists and is idempotent', () => {
   const operation = {
+    expectedSourceBase: {
+      dailyBaseDepartureTripPlaceId: 'source-departure',
+      dailyBaseTripPlaceId: 'source-arrival',
+    },
     expectedSourceItemIds: ['s1', 's2'],
+    expectedTargetBase: {
+      dailyBaseDepartureTripPlaceId: 'target-departure',
+      dailyBaseTripPlaceId: 'target-arrival',
+    },
     expectedTargetItemIds: ['t1'],
     strategy: 'swap' as const,
     targetItineraryDayId: 'target',
@@ -94,6 +131,14 @@ test('offline swap exchanges the ordered item lists and is idempotent', () => {
 
   expect(replayed.days[0]?.items.map(({ id }) => id)).toStrictEqual(['t1']);
   expect(replayed.days[1]?.items.map(({ id }) => id)).toStrictEqual(['s1', 's2']);
+  expect(replayed.days[0]).toMatchObject({
+    dailyBaseDepartureTripPlaceId: 'target-departure',
+    dailyBaseTripPlaceId: 'target-arrival',
+  });
+  expect(replayed.days[1]).toMatchObject({
+    dailyBaseDepartureTripPlaceId: 'source-departure',
+    dailyBaseTripPlaceId: 'source-arrival',
+  });
 });
 
 test('offline move leaves a diverged snapshot unchanged for conflict resolution', () => {
@@ -101,7 +146,15 @@ test('offline move leaves a diverged snapshot unchanged for conflict resolution'
   current.days[1]?.items.push(item('new', 'target', 1));
 
   const result = applyItineraryDayMove(current, 'source', {
+    expectedSourceBase: {
+      dailyBaseDepartureTripPlaceId: 'source-departure',
+      dailyBaseTripPlaceId: 'source-arrival',
+    },
     expectedSourceItemIds: ['s1', 's2'],
+    expectedTargetBase: {
+      dailyBaseDepartureTripPlaceId: 'target-departure',
+      dailyBaseTripPlaceId: 'target-arrival',
+    },
     expectedTargetItemIds: ['t1'],
     strategy: 'append',
     targetItineraryDayId: 'target',

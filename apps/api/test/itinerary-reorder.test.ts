@@ -162,7 +162,7 @@ test('swapping day plans preserves each list order without collisions', () => {
   ]);
 });
 
-test('the atomic service moves exact-time items and leaves day settings on their dates', async () => {
+test('the atomic service moves exact-time items and the daily base', async () => {
   const userId = 'user';
   const tripId = 'trip';
   const sourceDayId = 'source';
@@ -177,7 +177,8 @@ test('the atomic service moves exact-time items and leaves day settings on their
   });
   store.itineraryDay.push(
     {
-      dailyBaseTripPlaceId: null,
+      dailyBaseDepartureTripPlaceId: null,
+      dailyBaseTripPlaceId: 'source-base',
       date: new Date('2026-09-05T00:00:00.000Z'),
       defaultTimeZone: 'Asia/Singapore',
       defaultTimeZoneSource: 'TRIP_REFERENCE',
@@ -188,7 +189,8 @@ test('the atomic service moves exact-time items and leaves day settings on their
       tripId,
     },
     {
-      dailyBaseTripPlaceId: null,
+      dailyBaseDepartureTripPlaceId: 'target-departure',
+      dailyBaseTripPlaceId: 'target-base',
       date: new Date('2026-09-06T00:00:00.000Z'),
       defaultTimeZone: 'Pacific/Auckland',
       defaultTimeZoneSource: 'TRIP_REFERENCE',
@@ -198,6 +200,16 @@ test('the atomic service moves exact-time items and leaves day settings on their
       notes: 'Target note',
       tripId,
     },
+  );
+  store.place.push(
+    { customTimeZone: 'Pacific/Auckland', id: 'source-place' },
+    { customTimeZone: 'Asia/Singapore', id: 'target-place' },
+    { customTimeZone: 'Asia/Singapore', id: 'target-departure-place' },
+  );
+  store.tripPlace.push(
+    { id: 'source-base', placeId: 'source-place', tripId },
+    { id: 'target-base', placeId: 'target-place', tripId },
+    { id: 'target-departure', placeId: 'target-departure-place', tripId },
   );
   store.itineraryItem.push({
     customLocationTimeZone: null,
@@ -214,7 +226,15 @@ test('the atomic service moves exact-time items and leaves day settings on their
   });
 
   await moveItineraryDayPlan(userId, tripId, sourceDayId, {
+    expectedSourceBase: {
+      dailyBaseDepartureTripPlaceId: null,
+      dailyBaseTripPlaceId: 'source-base',
+    },
     expectedSourceItemIds: ['source-item'],
+    expectedTargetBase: {
+      dailyBaseDepartureTripPlaceId: 'target-departure',
+      dailyBaseTripPlaceId: 'target-base',
+    },
     expectedTargetItemIds: [],
     strategy: 'append',
     targetItineraryDayId: targetDayId,
@@ -230,6 +250,10 @@ test('the atomic service moves exact-time items and leaves day settings on their
     'Source note',
     'Target note',
   ]);
+  expect(store.itineraryDay).toMatchObject([
+    { dailyBaseDepartureTripPlaceId: null, dailyBaseTripPlaceId: null },
+    { dailyBaseDepartureTripPlaceId: null, dailyBaseTripPlaceId: 'source-base' },
+  ]);
 });
 
 test('a stale day move fails before either list changes', async () => {
@@ -239,8 +263,20 @@ test('a stale day move fails before either list changes', async () => {
     referenceTimeZone: 'Pacific/Auckland',
   });
   store.itineraryDay.push(
-    { date: new Date('2026-09-05T00:00:00.000Z'), id: 'source', tripId: 'trip' },
-    { date: new Date('2026-09-06T00:00:00.000Z'), id: 'target', tripId: 'trip' },
+    {
+      dailyBaseDepartureTripPlaceId: null,
+      dailyBaseTripPlaceId: null,
+      date: new Date('2026-09-05T00:00:00.000Z'),
+      id: 'source',
+      tripId: 'trip',
+    },
+    {
+      dailyBaseDepartureTripPlaceId: null,
+      dailyBaseTripPlaceId: null,
+      date: new Date('2026-09-06T00:00:00.000Z'),
+      id: 'target',
+      tripId: 'trip',
+    },
   );
   store.itineraryItem.push({
     id: 'new-item',
@@ -251,7 +287,15 @@ test('a stale day move fails before either list changes', async () => {
 
   await expect(
     moveItineraryDayPlan('user', 'trip', 'source', {
+      expectedSourceBase: {
+        dailyBaseDepartureTripPlaceId: null,
+        dailyBaseTripPlaceId: null,
+      },
       expectedSourceItemIds: ['old-item'],
+      expectedTargetBase: {
+        dailyBaseDepartureTripPlaceId: null,
+        dailyBaseTripPlaceId: null,
+      },
       expectedTargetItemIds: [],
       strategy: 'append',
       targetItineraryDayId: 'target',

@@ -1330,7 +1330,15 @@ export function ItineraryManager({
     const targetId = dayMoveTarget.id;
     try {
       await moveItineraryDayPlan(tripId, dayMoveSource.id, {
+        expectedSourceBase: {
+          dailyBaseDepartureTripPlaceId: dayMoveSource.dailyBaseDepartureTripPlaceId,
+          dailyBaseTripPlaceId: dayMoveSource.dailyBaseTripPlaceId,
+        },
         expectedSourceItemIds: dayMoveSource.items.map(({ id }) => id),
+        expectedTargetBase: {
+          dailyBaseDepartureTripPlaceId: dayMoveTarget.dailyBaseDepartureTripPlaceId,
+          dailyBaseTripPlaceId: dayMoveTarget.dailyBaseTripPlaceId,
+        },
         expectedTargetItemIds: dayMoveTarget.items.map(({ id }) => id),
         strategy: dayMoveTarget.items.length ? dayMoveStrategy : 'append',
         targetItineraryDayId: targetId,

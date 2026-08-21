@@ -176,7 +176,9 @@ export type Itinerary = {
 };
 
 export type ItineraryDayMoveInput = {
+  expectedSourceBase: Pick<ItineraryDay, 'dailyBaseDepartureTripPlaceId' | 'dailyBaseTripPlaceId'>;
   expectedSourceItemIds: string[];
+  expectedTargetBase: Pick<ItineraryDay, 'dailyBaseDepartureTripPlaceId' | 'dailyBaseTripPlaceId'>;
   expectedTargetItemIds: string[];
   strategy: 'append' | 'swap';
   targetItineraryDayId: string;

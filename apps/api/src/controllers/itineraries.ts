@@ -25,7 +25,19 @@ const itemParamsSchema = z.object({ itemId: z.uuid(), tripId: z.uuid() }).strict
 const dayParamsSchema = z.object({ itineraryDayId: z.uuid(), tripId: z.uuid() }).strict();
 const moveDaySchema = z
   .object({
+    expectedSourceBase: z
+      .object({
+        dailyBaseDepartureTripPlaceId: z.uuid().nullable(),
+        dailyBaseTripPlaceId: z.uuid().nullable(),
+      })
+      .strict(),
     expectedSourceItemIds: z.array(z.uuid()),
+    expectedTargetBase: z
+      .object({
+        dailyBaseDepartureTripPlaceId: z.uuid().nullable(),
+        dailyBaseTripPlaceId: z.uuid().nullable(),
+      })
+      .strict(),
     expectedTargetItemIds: z.array(z.uuid()),
     strategy: z.enum(['append', 'swap']),
     targetItineraryDayId: z.uuid(),

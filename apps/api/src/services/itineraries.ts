@@ -34,9 +34,25 @@ export type ItineraryItemInput = {
   tripPlaceId?: string | null;
 };
 
+export type ItineraryDayMoveInput = {
+  expectedSourceBase: ItineraryDayBase;
+  expectedSourceItemIds: string[];
+  expectedTargetBase: ItineraryDayBase;
+  expectedTargetItemIds: string[];
+  strategy: 'append' | 'swap';
+  targetItineraryDayId: string;
+};
+
+export type ItineraryDayBase = {
+  dailyBaseDepartureTripPlaceId: string | null;
+  dailyBaseTripPlaceId: string | null;
+};
+
 export class ItineraryConflictError extends Error {
-  constructor() {
-    super('itinerary_item_conflict');
+  constructor(
+    code: 'itinerary_day_conflict' | 'itinerary_item_conflict' = 'itinerary_item_conflict',
+  ) {
+    super(code);
   }
 }
 
@@ -50,6 +66,7 @@ export class ItineraryValidationError extends Error {
   constructor(
     public readonly code:
       | 'invalid_itinerary_item'
+      | 'invalid_itinerary_day_move'
       | 'invalid_local_time'
       | 'invalid_time_zone'
       | 'trip_place_not_found',
@@ -225,7 +242,13 @@ async function findDay(
 ) {
   const day = await transaction.itineraryDay.findFirst({
     where: { id: itineraryDayId, tripId },
-    select: { date: true, defaultTimeZone: true, id: true },
+    select: {
+      dailyBaseDepartureTripPlaceId: true,
+      dailyBaseTripPlaceId: true,
+      date: true,
+      defaultTimeZone: true,
+      id: true,
+    },
   });
   if (!day) throw new ItineraryNotFoundError('itinerary_day_not_found');
   return day;
@@ -446,6 +469,201 @@ export function planReorderWrites(orderedIds: string[], above: number) {
     ...orderedIds.map((id, index) => ({ id, position: parkFrom + index })),
     ...orderedIds.map((id, index) => ({ id, position: index })),
   ];
+}
+
+export type ItineraryDayMoveWrite = {
+  id: string;
+  itineraryDayId: string;
+  position: number;
+};
+
+/**
+ * Parks both day lists above every final slot before assigning either list.
+ * This keeps each statement clear of the partial unique index on
+ * (`itinerary_day_id`, `position`) for both append and swap operations.
+ */
+export function planItineraryDayMoveWrites(
+  sourceDayId: string,
+  sourceItemIds: string[],
+  targetDayId: string,
+  targetItemIds: string[],
+  strategy: ItineraryDayMoveInput['strategy'],
+) {
+  const parkFrom = sourceItemIds.length + targetItemIds.length;
+  const parking: ItineraryDayMoveWrite[] = [
+    ...sourceItemIds.map((id, index) => ({
+      id,
+      itineraryDayId: sourceDayId,
+      position: parkFrom + index,
+    })),
+    ...targetItemIds.map((id, index) => ({
+      id,
+      itineraryDayId: targetDayId,
+      position: parkFrom + index,
+    })),
+  ];
+  const sourceFinalIds = strategy === 'swap' ? targetItemIds : [];
+  const targetFinalIds = strategy === 'swap' ? sourceItemIds : [...targetItemIds, ...sourceItemIds];
+  const final: ItineraryDayMoveWrite[] = [
+    ...sourceFinalIds.map((id, position) => ({ id, itineraryDayId: sourceDayId, position })),
+    ...targetFinalIds.map((id, position) => ({ id, itineraryDayId: targetDayId, position })),
+  ];
+  return { final, parking };
+}
+
+function sameIds(actual: Array<{ id: string }>, expected: string[]) {
+  return (
+    actual.length === expected.length && actual.every((item, index) => item.id === expected[index])
+  );
+}
+
+function dayBase(day: ItineraryDayBase): ItineraryDayBase {
+  return {
+    dailyBaseDepartureTripPlaceId: day.dailyBaseDepartureTripPlaceId,
+    dailyBaseTripPlaceId: day.dailyBaseTripPlaceId,
+  };
+}
+
+function sameDayBase(day: ItineraryDayBase, expected: ItineraryDayBase) {
+  return (
+    day.dailyBaseTripPlaceId === expected.dailyBaseTripPlaceId &&
+    day.dailyBaseDepartureTripPlaceId === expected.dailyBaseDepartureTripPlaceId
+  );
+}
+
+export async function moveItineraryDayPlan(
+  userId: string,
+  tripId: string,
+  sourceDayId: string,
+  input: ItineraryDayMoveInput,
+) {
+  if (sourceDayId === input.targetItineraryDayId) {
+    throw new ItineraryValidationError('invalid_itinerary_day_move');
+  }
+  const prisma = getPrismaClient();
+  try {
+    await prisma.$transaction(
+      async (transaction) => {
+        await findOwnedTrip(transaction, userId, tripId);
+        const [sourceDay, targetDay] = await Promise.all([
+          findDay(transaction, tripId, sourceDayId),
+          findDay(transaction, tripId, input.targetItineraryDayId),
+        ]);
+        const itemInclude = { tripPlace: { include: { place: true } } } as const;
+        const [sourceItems, targetItems] = await Promise.all([
+          transaction.itineraryItem.findMany({
+            where: { itineraryDayId: sourceDay.id, tripId },
+            include: itemInclude,
+            orderBy: { position: 'asc' },
+          }),
+          transaction.itineraryItem.findMany({
+            where: { itineraryDayId: targetDay.id, tripId },
+            include: itemInclude,
+            orderBy: { position: 'asc' },
+          }),
+        ]);
+        if (
+          !sourceItems.length ||
+          !sameDayBase(sourceDay, input.expectedSourceBase) ||
+          !sameDayBase(targetDay, input.expectedTargetBase) ||
+          !sameIds(sourceItems, input.expectedSourceItemIds) ||
+          !sameIds(targetItems, input.expectedTargetItemIds)
+        ) {
+          throw new ItineraryConflictError('itinerary_day_conflict');
+        }
+
+        const writes = planItineraryDayMoveWrites(
+          sourceDay.id,
+          sourceItems.map(({ id }) => id),
+          targetDay.id,
+          targetItems.map(({ id }) => id),
+          input.strategy,
+        );
+        const sourceBase = dayBase(sourceDay);
+        const targetBase = dayBase(targetDay);
+        await transaction.itineraryDay.update({
+          where: { id: sourceDay.id },
+          data:
+            input.strategy === 'swap'
+              ? targetBase
+              : { dailyBaseDepartureTripPlaceId: null, dailyBaseTripPlaceId: null },
+        });
+        await transaction.itineraryDay.update({
+          where: { id: targetDay.id },
+          data: sourceBase,
+        });
+        await refreshDayDefaultTimeZone(transaction, tripId, sourceDay.id);
+        await refreshDayDefaultTimeZone(transaction, tripId, targetDay.id);
+        const [refreshedSourceDay, refreshedTargetDay] = await Promise.all([
+          findDay(transaction, tripId, sourceDay.id),
+          findDay(transaction, tripId, targetDay.id),
+        ]);
+        for (const write of writes.parking) {
+          await transaction.itineraryItem.update({
+            where: { id: write.id },
+            data: { itineraryDayId: write.itineraryDayId, position: write.position },
+          });
+        }
+
+        const itemsById = new Map([...sourceItems, ...targetItems].map((item) => [item.id, item]));
+        const daysById = new Map([
+          [refreshedSourceDay.id, refreshedSourceDay],
+          [refreshedTargetDay.id, refreshedTargetDay],
+        ]);
+        for (const write of writes.final) {
+          const item = itemsById.get(write.id);
+          const day = daysById.get(write.itineraryDayId);
+          if (!item || !day) throw new ItineraryConflictError('itinerary_day_conflict');
+          const movingDay = item.itineraryDayId !== day.id;
+          const timeZone = movingDay
+            ? resolveItemTimeZone({
+                customLocationTimeZone: item.customLocationTimeZone,
+                dayTimeZone: day.defaultTimeZone,
+                tripPlaceTimeZone: item.tripPlace?.place.customTimeZone ?? null,
+              })
+            : null;
+          const schedule =
+            timeZone && item.localStartTime && item.timeSemantics === 'FLOATING_LOCAL'
+              ? scheduleData(
+                  { kind: 'exact', localTime: formatLocalTime(item.localStartTime) ?? '' },
+                  formatDateOnly(day.date),
+                  timeZone.timeZone,
+                )
+              : null;
+          await transaction.itineraryItem.update({
+            where: { id: write.id },
+            data: {
+              itineraryDayId: day.id,
+              position: write.position,
+              ...(timeZone
+                ? {
+                    startInstant: schedule?.startInstant ?? item.startInstant,
+                    timeZone: timeZone.timeZone,
+                    timeZoneResolvedAt: new Date(),
+                    timeZoneSource: timeZone.source,
+                  }
+                : {}),
+            },
+          });
+        }
+        await refreshDayDefaultTimeZone(transaction, tripId, sourceDay.id);
+        await refreshDayDefaultTimeZone(transaction, tripId, targetDay.id);
+      },
+      { isolationLevel: 'Serializable' },
+    );
+  } catch (error) {
+    if (
+      error instanceof ItineraryConflictError ||
+      error instanceof ItineraryNotFoundError ||
+      error instanceof ItineraryValidationError
+    ) {
+      throw error;
+    }
+    if (typeof error === 'object' && error && 'code' in error && error.code === 'P2034') {
+      throw new ItineraryConflictError('itinerary_day_conflict');
+    }
+    throw error;
+  }
 }
 
 export async function organizeItineraryItem(

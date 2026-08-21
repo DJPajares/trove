@@ -116,6 +116,7 @@ import {
   fetchItineraryDayRoutes,
   fetchItineraryDayTimeSuggestions,
   type Itinerary,
+  ItineraryApiError,
   type ItineraryDay,
   type ItineraryDayRoutes,
   type ItineraryDayTimeSuggestion,
@@ -125,6 +126,7 @@ import {
   type ItineraryTripPlace,
   type RouteTravelMode,
   organizeItineraryItem,
+  moveItineraryDayPlan,
   setItineraryDayBase,
   updateItineraryDayNote,
   updateItineraryDayRouteMode,
@@ -299,8 +301,14 @@ export function ItineraryManager({
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [dayNoteEditor, setDayNoteEditor] = useState<ItineraryDay | null>(null);
+  const [daySettingsOpen, setDaySettingsOpen] = useState(false);
   const [dayNoteValue, setDayNoteValue] = useState('');
   const [savingDayNote, setSavingDayNote] = useState(false);
+  const [dayMoveSourceId, setDayMoveSourceId] = useState<string | null>(null);
+  const [dayMoveTargetId, setDayMoveTargetId] = useState('');
+  const [dayMoveStrategy, setDayMoveStrategy] = useState<'append' | 'swap'>('append');
+  const [dayMoveError, setDayMoveError] = useState<string | null>(null);
+  const [movingDay, setMovingDay] = useState(false);
   const [timeZoneConsequence, setTimeZoneConsequence] = useState(false);
   const [placeQuery, setPlaceQuery] = useState('');
   const [providerResults, setProviderResults] = useState<ProviderSuggestion[]>([]);
@@ -375,6 +383,14 @@ export function ItineraryManager({
   const selectedDay = useMemo(
     () => itinerary?.days.find((day) => day.id === selectedDayId) ?? null,
     [itinerary, selectedDayId],
+  );
+  const dayMoveSource = useMemo(
+    () => itinerary?.days.find((day) => day.id === dayMoveSourceId) ?? null,
+    [dayMoveSourceId, itinerary],
+  );
+  const dayMoveTarget = useMemo(
+    () => itinerary?.days.find((day) => day.id === dayMoveTargetId) ?? null,
+    [dayMoveTargetId, itinerary],
   );
   const routeRevision = itineraryDayRouteRevision(selectedDay);
   const includeRoutePolylines = desktopMapLayout === true || mobileView === 'map';
@@ -1298,6 +1314,50 @@ export function ItineraryManager({
     }
   }
 
+  function openDayMove(day: ItineraryDay) {
+    setDaySettingsOpen(false);
+    setDayMoveSourceId(day.id);
+    setDayMoveTargetId('');
+    setDayMoveStrategy('append');
+    setDayMoveError(null);
+  }
+
+  async function handleDayMove(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!dayMoveSource || !dayMoveTarget) return;
+    setMovingDay(true);
+    setDayMoveError(null);
+    const targetId = dayMoveTarget.id;
+    try {
+      await moveItineraryDayPlan(tripId, dayMoveSource.id, {
+        expectedSourceBase: {
+          dailyBaseDepartureTripPlaceId: dayMoveSource.dailyBaseDepartureTripPlaceId,
+          dailyBaseTripPlaceId: dayMoveSource.dailyBaseTripPlaceId,
+        },
+        expectedSourceItemIds: dayMoveSource.items.map(({ id }) => id),
+        expectedTargetBase: {
+          dailyBaseDepartureTripPlaceId: dayMoveTarget.dailyBaseDepartureTripPlaceId,
+          dailyBaseTripPlaceId: dayMoveTarget.dailyBaseTripPlaceId,
+        },
+        expectedTargetItemIds: dayMoveTarget.items.map(({ id }) => id),
+        strategy: dayMoveTarget.items.length ? dayMoveStrategy : 'append',
+        targetItineraryDayId: targetId,
+      });
+      setDayMoveSourceId(null);
+      setSelectedDayId(targetId);
+      await refresh();
+    } catch (error) {
+      if (error instanceof ItineraryApiError && error.code === 'itinerary_day_conflict') {
+        await refresh();
+        setDayMoveError(t('dayMove.conflictError'));
+      } else {
+        setDayMoveError(t('dayMove.saveError'));
+      }
+    } finally {
+      setMovingDay(false);
+    }
+  }
+
   function selectAdjacentDay(offset: number) {
     const day = itinerary?.days[selectedIndex + offset];
     if (day) setSelectedDayId(day.id);
@@ -1466,7 +1526,7 @@ export function ItineraryManager({
                   <Plus aria-hidden="true" data-icon="inline-start" />
                   {t('addItem')}
                 </Button>
-                <Popover>
+                <Popover onOpenChange={setDaySettingsOpen} open={daySettingsOpen}>
                   <PopoverTrigger
                     render={
                       <Button
@@ -1586,6 +1646,7 @@ export function ItineraryManager({
                     <Button
                       className="w-full"
                       onClick={() => {
+                        setDaySettingsOpen(false);
                         setDayNoteEditor(selectedDay);
                         setDayNoteValue(selectedDay.notes ?? '');
                       }}
@@ -1594,6 +1655,16 @@ export function ItineraryManager({
                       <NotebookPen aria-hidden="true" data-icon="inline-start" />
                       {selectedDay.notes ? t('editDayNote') : t('addDayNote')}
                     </Button>
+                    {selectedDay.items.length ? (
+                      <Button
+                        className="w-full"
+                        onClick={() => openDayMove(selectedDay)}
+                        variant="outline"
+                      >
+                        <CalendarClock aria-hidden="true" data-icon="inline-start" />
+                        {t('dayMove.action')}
+                      </Button>
+                    ) : null}
                   </PopoverContent>
                 </Popover>
               </div>
@@ -2459,6 +2530,132 @@ export function ItineraryManager({
           ) : null}
         </SheetContent>
       </Sheet>
+
+      <Dialog
+        open={Boolean(dayMoveSource)}
+        onOpenChange={(open) => {
+          if (!open && !movingDay) {
+            setDayMoveSourceId(null);
+            setDayMoveError(null);
+          }
+        }}
+      >
+        <DialogContent closeLabel={t('close')}>
+          {dayMoveSource ? (
+            <form className="space-y-6" onSubmit={handleDayMove}>
+              <DialogHeader>
+                <DialogTitle>{t('dayMove.title')}</DialogTitle>
+                <DialogDescription>
+                  {t('dayMove.description', {
+                    count: dayMoveSource.items.length,
+                    date: formatDate(dayMoveSource.date, true),
+                  })}
+                </DialogDescription>
+              </DialogHeader>
+
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="itinerary-day-move-target">
+                    {t('dayMove.targetLabel')}
+                  </FieldLabel>
+                  <Select
+                    onValueChange={(value) => {
+                      setDayMoveTargetId(value ?? '');
+                      setDayMoveStrategy('append');
+                      setDayMoveError(null);
+                    }}
+                    value={dayMoveTargetId}
+                  >
+                    <SelectTrigger id="itinerary-day-move-target" className="w-full">
+                      <SelectValue>
+                        {dayMoveTarget
+                          ? t('dayMove.targetOption', {
+                              count: dayMoveTarget.items.length,
+                              date: formatDate(dayMoveTarget.date),
+                              number:
+                                itinerary.days.findIndex(({ id }) => id === dayMoveTarget.id) + 1,
+                            })
+                          : t('dayMove.targetPlaceholder')}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {itinerary.days.map((day, index) =>
+                        day.id === dayMoveSource.id ? null : (
+                          <SelectItem key={day.id} value={day.id}>
+                            {t('dayMove.targetOption', {
+                              count: day.items.length,
+                              date: formatDate(day.date),
+                              number: index + 1,
+                            })}
+                          </SelectItem>
+                        ),
+                      )}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                {dayMoveTarget?.items.length ? (
+                  <Field>
+                    <FieldLabel htmlFor="itinerary-day-move-strategy">
+                      {t('dayMove.strategyLabel')}
+                    </FieldLabel>
+                    <Select
+                      onValueChange={(value) =>
+                        setDayMoveStrategy(value === 'swap' ? 'swap' : 'append')
+                      }
+                      value={dayMoveStrategy}
+                    >
+                      <SelectTrigger id="itinerary-day-move-strategy" className="w-full">
+                        <SelectValue>
+                          {t(dayMoveStrategy === 'swap' ? 'dayMove.swap' : 'dayMove.append')}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="append">{t('dayMove.append')}</SelectItem>
+                        <SelectItem value="swap">{t('dayMove.swap')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FieldDescription>
+                      {dayMoveStrategy === 'swap'
+                        ? t('dayMove.swapDescription', {
+                            count: dayMoveTarget.items.length,
+                          })
+                        : t('dayMove.appendDescription', {
+                            count: dayMoveTarget.items.length,
+                          })}
+                    </FieldDescription>
+                  </Field>
+                ) : null}
+              </FieldGroup>
+
+              <p className="rounded-[var(--radius-md)] bg-muted px-3 py-2.5 text-sm leading-5 text-muted-foreground">
+                {t('dayMove.settingsStay')}
+              </p>
+
+              {dayMoveError ? (
+                <Alert role="alert" variant="destructive">
+                  <CircleAlert aria-hidden="true" />
+                  <AlertDescription>{dayMoveError}</AlertDescription>
+                </Alert>
+              ) : null}
+
+              <DialogFooter>
+                <Button
+                  disabled={movingDay}
+                  onClick={() => setDayMoveSourceId(null)}
+                  type="button"
+                  variant="outline"
+                >
+                  {t('cancel')}
+                </Button>
+                <Button disabled={movingDay || !dayMoveTarget} type="submit">
+                  {movingDay ? t('dayMove.moving') : t('dayMove.confirm')}
+                </Button>
+              </DialogFooter>
+            </form>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={Boolean(dayNoteEditor)}

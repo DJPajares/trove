@@ -1,5 +1,6 @@
 import type {
   Itinerary,
+  ItineraryDayMoveInput,
   ItineraryDayRoutes,
   ItineraryItem,
   ItineraryItemInput,
@@ -12,6 +13,7 @@ import type { ReservationsResponse } from '@/lib/reservations/api';
 import type { Task, TaskInput, TasksResponse } from '@/lib/tasks/api';
 import type { TripInfoEntry, TripInfoInput, TripInfoResponse } from '@/lib/trip-info/api';
 import type { Trip } from '@/lib/trips/api';
+import { applyItineraryDayMove } from '@/lib/itinerary/day-move';
 
 const DATABASE_NAME = 'trove-offline';
 const DATABASE_VERSION = 3;
@@ -59,6 +61,11 @@ export function getRememberedOfflineUser() {
 export type OfflineMutationState = 'conflict' | 'failed' | 'pending';
 
 export type OfflineMutationOperation =
+  | {
+      input: ItineraryDayMoveInput;
+      kind: 'itinerary_day_move';
+      sourceItineraryDayId: string;
+    }
   | {
       clientItemId: string;
       input: ItineraryItemInput & { itineraryDayId: string };
@@ -992,6 +999,10 @@ export function applyOfflineMutation(
     const day = next.days.find((candidate) => candidate.id === mutation.itineraryDayId);
     if (day) day.notes = mutation.note?.trim() || null;
     return next;
+  }
+
+  if (mutation.kind === 'itinerary_day_move') {
+    return applyItineraryDayMove(next, mutation.sourceItineraryDayId, mutation.input);
   }
 
   if (mutation.kind === 'itinerary_item_create') {

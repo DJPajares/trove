@@ -68,7 +68,10 @@ function scheduleFields(item: ItineraryItem) {
 }
 
 function itineraryOperationAlreadyApplied(
-  operation: Exclude<OfflineItineraryMutationOperation, { kind: 'itinerary_day_note' }>,
+  operation: Exclude<
+    OfflineItineraryMutationOperation,
+    { kind: 'itinerary_day_move' | 'itinerary_day_note' }
+  >,
   current: ItineraryItem | null,
 ) {
   if (operation.kind === 'itinerary_item_create') return Boolean(current);
@@ -114,7 +117,10 @@ function itineraryOperationAlreadyApplied(
 }
 
 function itineraryOperationConflicts(
-  operation: Exclude<OfflineItineraryMutationOperation, { kind: 'itinerary_day_note' }>,
+  operation: Exclude<
+    OfflineItineraryMutationOperation,
+    { kind: 'itinerary_day_move' | 'itinerary_day_note' }
+  >,
   current: ItineraryItem | null,
 ) {
   if (operation.kind === 'itinerary_item_create') return false;
@@ -169,6 +175,14 @@ function requestFor(
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (expectedUpdatedAt) headers['X-Trove-Expected-Updated-At'] = expectedUpdatedAt;
 
+  if (operation.kind === 'itinerary_day_move') {
+    return {
+      body: JSON.stringify(operation.input),
+      headers,
+      method: 'POST',
+      path: `/trips/${tripId}/itinerary/days/${operation.sourceItineraryDayId}/move`,
+    };
+  }
   if (operation.kind === 'itinerary_item_create') {
     return {
       body: JSON.stringify({ ...operation.input, clientItemId: operation.clientItemId }),
@@ -442,6 +456,95 @@ async function replayItineraryMutation(
   force: boolean,
 ) {
   const serverItinerary = await fetchServerItinerary(accessToken, mutation.tripId);
+  if (operation.kind === 'itinerary_day_move') {
+    const source = serverItinerary.days.find(
+      (candidate) => candidate.id === operation.sourceItineraryDayId,
+    );
+    const target = serverItinerary.days.find(
+      (candidate) => candidate.id === operation.input.targetItineraryDayId,
+    );
+    const sourceIds = source?.items.map(({ id }) => id) ?? [];
+    const targetIds = target?.items.map(({ id }) => id) ?? [];
+    const matches = (actual: string[], expected: string[]) =>
+      actual.length === expected.length && actual.every((id, index) => id === expected[index]);
+    const matchesBase = (
+      day: typeof source | undefined,
+      expected: typeof operation.input.expectedSourceBase,
+    ) =>
+      Boolean(
+        day &&
+        day.dailyBaseTripPlaceId === expected.dailyBaseTripPlaceId &&
+        day.dailyBaseDepartureTripPlaceId === expected.dailyBaseDepartureTripPlaceId,
+      );
+    const finalSourceIds =
+      operation.input.strategy === 'swap' ? operation.input.expectedTargetItemIds : [];
+    const finalTargetIds =
+      operation.input.strategy === 'swap'
+        ? operation.input.expectedSourceItemIds
+        : [...operation.input.expectedTargetItemIds, ...operation.input.expectedSourceItemIds];
+    const finalSourceBase =
+      operation.input.strategy === 'swap'
+        ? operation.input.expectedTargetBase
+        : { dailyBaseDepartureTripPlaceId: null, dailyBaseTripPlaceId: null };
+    const finalTargetBase = operation.input.expectedSourceBase;
+    if (
+      source &&
+      target &&
+      matches(sourceIds, finalSourceIds) &&
+      matches(targetIds, finalTargetIds) &&
+      matchesBase(source, finalSourceBase) &&
+      matchesBase(target, finalTargetBase)
+    ) {
+      await removeOfflineMutation(mutation.id);
+      return;
+    }
+    if (
+      !source ||
+      !target ||
+      (!force &&
+        (!matches(sourceIds, operation.input.expectedSourceItemIds) ||
+          !matches(targetIds, operation.input.expectedTargetItemIds) ||
+          !matchesBase(source, operation.input.expectedSourceBase) ||
+          !matchesBase(target, operation.input.expectedTargetBase)))
+    ) {
+      await updateMutationState(
+        mutation,
+        'conflict',
+        source && target ? 'itinerary_day_conflict' : 'day_missing',
+      );
+      return;
+    }
+    const replayOperation = force
+      ? {
+          ...operation,
+          input: {
+            ...operation.input,
+            expectedSourceBase: {
+              dailyBaseDepartureTripPlaceId: source?.dailyBaseDepartureTripPlaceId ?? null,
+              dailyBaseTripPlaceId: source?.dailyBaseTripPlaceId ?? null,
+            },
+            expectedSourceItemIds: sourceIds,
+            expectedTargetBase: {
+              dailyBaseDepartureTripPlaceId: target?.dailyBaseDepartureTripPlaceId ?? null,
+              dailyBaseTripPlaceId: target?.dailyBaseTripPlaceId ?? null,
+            },
+            expectedTargetItemIds: targetIds,
+          },
+        }
+      : operation;
+    const response = await apiRequest(accessToken, requestFor(replayOperation, mutation.tripId));
+    if (response.ok) {
+      await removeOfflineMutation(mutation.id);
+      return;
+    }
+    const body = (await response.json().catch(() => ({}))) as { code?: string };
+    await updateMutationState(
+      mutation,
+      response.status === 409 ? 'conflict' : 'failed',
+      body.code ?? `itinerary_request_failed_${response.status}`,
+    );
+    return;
+  }
   if (operation.kind === 'itinerary_day_note') {
     const day = serverItinerary.days.find((candidate) => candidate.id === operation.itineraryDayId);
     if (day?.notes === operation.note) {

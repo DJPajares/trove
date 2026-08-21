@@ -34,6 +34,11 @@ export function registerItineraryRoutes(app: FastifyInstance) {
   );
   app.post('/trips/:tripId/itinerary/items', authenticated, controllers.createItem);
   app.post(
+    '/trips/:tripId/itinerary/days/:itineraryDayId/move',
+    authenticated,
+    controllers.moveDayPlan,
+  );
+  app.post(
     '/trips/:tripId/itinerary/items/:itemId/duplicate',
     authenticated,
     controllers.duplicateItem,

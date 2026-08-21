@@ -1,6 +1,14 @@
-import { expect, test } from 'vitest';
+import { beforeEach, expect, test } from 'vitest';
 
-import { planReorderWrites } from '../src/services/itineraries.js';
+import {
+  moveItineraryDayPlan,
+  planItineraryDayMoveWrites,
+  planReorderWrites,
+} from '../src/services/itineraries.js';
+import { installFakePrismaClient, resetStore, store } from './support/fake-prisma.js';
+
+installFakePrismaClient();
+beforeEach(resetStore);
 
 /**
  * Replays the writes against the slots rows actually occupy, the way Postgres
@@ -68,4 +76,186 @@ test('parking clears the final range even when the day has no room above it', ()
     'b',
     'c',
   ]);
+});
+
+function applyDayWrites(
+  starting: Record<string, { dayId: string; position: number }>,
+  writes: ReturnType<typeof planItineraryDayMoveWrites>,
+) {
+  const rows = new Map(Object.entries(starting));
+  const apply = (write: (typeof writes.parking)[number]) => {
+    const collision = [...rows.entries()].find(
+      ([id, value]) =>
+        id !== write.id &&
+        value.dayId === write.itineraryDayId &&
+        value.position === write.position,
+    );
+    if (collision) throw new Error(`${write.itineraryDayId}:${write.position} is occupied`);
+    rows.set(write.id, { dayId: write.itineraryDayId, position: write.position });
+  };
+  writes.parking.forEach(apply);
+  writes.final.forEach(apply);
+  return [...rows.entries()]
+    .sort(([, left], [, right]) =>
+      left.dayId === right.dayId
+        ? left.position - right.position
+        : left.dayId.localeCompare(right.dayId),
+    )
+    .map(([id, value]) => ({ id, ...value }));
+}
+
+test('appending a day parks both lists before combining them', () => {
+  const writes = planItineraryDayMoveWrites(
+    'source',
+    ['s1', 's2'],
+    'target',
+    ['t1', 't2', 't3'],
+    'append',
+  );
+
+  expect(
+    applyDayWrites(
+      {
+        s1: { dayId: 'source', position: 0 },
+        s2: { dayId: 'source', position: 1 },
+        t1: { dayId: 'target', position: 0 },
+        t2: { dayId: 'target', position: 1 },
+        t3: { dayId: 'target', position: 2 },
+      },
+      writes,
+    ),
+  ).toStrictEqual([
+    { dayId: 'target', id: 't1', position: 0 },
+    { dayId: 'target', id: 't2', position: 1 },
+    { dayId: 'target', id: 't3', position: 2 },
+    { dayId: 'target', id: 's1', position: 3 },
+    { dayId: 'target', id: 's2', position: 4 },
+  ]);
+});
+
+test('swapping day plans preserves each list order without collisions', () => {
+  const writes = planItineraryDayMoveWrites(
+    'source',
+    ['s1', 's2'],
+    'target',
+    ['t1', 't2', 't3'],
+    'swap',
+  );
+
+  expect(
+    applyDayWrites(
+      {
+        s1: { dayId: 'source', position: 0 },
+        s2: { dayId: 'source', position: 1 },
+        t1: { dayId: 'target', position: 0 },
+        t2: { dayId: 'target', position: 1 },
+        t3: { dayId: 'target', position: 2 },
+      },
+      writes,
+    ),
+  ).toStrictEqual([
+    { dayId: 'source', id: 't1', position: 0 },
+    { dayId: 'source', id: 't2', position: 1 },
+    { dayId: 'source', id: 't3', position: 2 },
+    { dayId: 'target', id: 's1', position: 0 },
+    { dayId: 'target', id: 's2', position: 1 },
+  ]);
+});
+
+test('the atomic service moves exact-time items and leaves day settings on their dates', async () => {
+  const userId = 'user';
+  const tripId = 'trip';
+  const sourceDayId = 'source';
+  const targetDayId = 'target';
+  store.trip.push({
+    endDate: new Date('2026-09-06T00:00:00.000Z'),
+    id: tripId,
+    name: 'Trip',
+    ownerId: userId,
+    referenceTimeZone: 'Pacific/Auckland',
+    startDate: new Date('2026-09-05T00:00:00.000Z'),
+  });
+  store.itineraryDay.push(
+    {
+      dailyBaseTripPlaceId: null,
+      date: new Date('2026-09-05T00:00:00.000Z'),
+      defaultTimeZone: 'Asia/Singapore',
+      defaultTimeZoneSource: 'TRIP_REFERENCE',
+      defaultTimeZoneSourceItemId: null,
+      defaultTimeZoneSourceTripPlaceId: null,
+      id: sourceDayId,
+      notes: 'Source note',
+      tripId,
+    },
+    {
+      dailyBaseTripPlaceId: null,
+      date: new Date('2026-09-06T00:00:00.000Z'),
+      defaultTimeZone: 'Pacific/Auckland',
+      defaultTimeZoneSource: 'TRIP_REFERENCE',
+      defaultTimeZoneSourceItemId: null,
+      defaultTimeZoneSourceTripPlaceId: null,
+      id: targetDayId,
+      notes: 'Target note',
+      tripId,
+    },
+  );
+  store.itineraryItem.push({
+    customLocationTimeZone: null,
+    id: 'source-item',
+    itineraryDayId: sourceDayId,
+    localStartTime: new Date('1970-01-01T08:30:00.000Z'),
+    position: 0,
+    startInstant: new Date('2026-09-05T00:30:00.000Z'),
+    timeSemantics: 'FLOATING_LOCAL',
+    timeZone: 'Asia/Singapore',
+    timeZoneSource: 'DAY_DEFAULT',
+    tripId,
+    tripPlaceId: null,
+  });
+
+  await moveItineraryDayPlan(userId, tripId, sourceDayId, {
+    expectedSourceItemIds: ['source-item'],
+    expectedTargetItemIds: [],
+    strategy: 'append',
+    targetItineraryDayId: targetDayId,
+  });
+
+  expect(store.itineraryItem[0]).toMatchObject({
+    itineraryDayId: targetDayId,
+    position: 0,
+    startInstant: new Date('2026-09-05T20:30:00.000Z'),
+    timeZone: 'Pacific/Auckland',
+  });
+  expect(store.itineraryDay.map(({ notes }) => notes)).toStrictEqual([
+    'Source note',
+    'Target note',
+  ]);
+});
+
+test('a stale day move fails before either list changes', async () => {
+  store.trip.push({
+    id: 'trip',
+    ownerId: 'user',
+    referenceTimeZone: 'Pacific/Auckland',
+  });
+  store.itineraryDay.push(
+    { date: new Date('2026-09-05T00:00:00.000Z'), id: 'source', tripId: 'trip' },
+    { date: new Date('2026-09-06T00:00:00.000Z'), id: 'target', tripId: 'trip' },
+  );
+  store.itineraryItem.push({
+    id: 'new-item',
+    itineraryDayId: 'source',
+    position: 0,
+    tripId: 'trip',
+  });
+
+  await expect(
+    moveItineraryDayPlan('user', 'trip', 'source', {
+      expectedSourceItemIds: ['old-item'],
+      expectedTargetItemIds: [],
+      strategy: 'append',
+      targetItineraryDayId: 'target',
+    }),
+  ).rejects.toThrow('itinerary_day_conflict');
+  expect(store.itineraryItem[0]).toMatchObject({ itineraryDayId: 'source', position: 0 });
 });

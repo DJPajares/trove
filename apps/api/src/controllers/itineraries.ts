@@ -9,6 +9,7 @@ import {
   ItineraryNotFoundError,
   ItineraryValidationError,
   listItinerary,
+  moveItineraryDayPlan,
   organizeItineraryItem,
   setItineraryDayBase,
   updateItineraryDayExperienceRating,
@@ -22,6 +23,14 @@ const languageQuerySchema = z
   .strict();
 const itemParamsSchema = z.object({ itemId: z.uuid(), tripId: z.uuid() }).strict();
 const dayParamsSchema = z.object({ itineraryDayId: z.uuid(), tripId: z.uuid() }).strict();
+const moveDaySchema = z
+  .object({
+    expectedSourceItemIds: z.array(z.uuid()),
+    expectedTargetItemIds: z.array(z.uuid()),
+    strategy: z.enum(['append', 'swap']),
+    targetItineraryDayId: z.uuid(),
+  })
+  .strict();
 const organizeItemSchema = z
   .object({ itineraryDayId: z.uuid().nullable(), position: z.number().int().min(0) })
   .strict();
@@ -127,6 +136,27 @@ function handleError(reply: FastifyReply, error: unknown) {
 
 export function createItineraryControllers() {
   return {
+    async moveDayPlan(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = dayParamsSchema.safeParse(request.params);
+      const body = moveDaySchema.safeParse(request.body);
+      if (!userId) return;
+      if (!params.success || !body.success) {
+        return reply.code(400).send({ code: 'invalid_itinerary_day_move' });
+      }
+      try {
+        await moveItineraryDayPlan(
+          userId,
+          params.data.tripId,
+          params.data.itineraryDayId,
+          body.data,
+        );
+        return reply.code(204).send();
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
+
     async duplicateItem(request: FastifyRequest, reply: FastifyReply) {
       const userId = getUserId(request, reply);
       const params = itemParamsSchema.safeParse(request.params);

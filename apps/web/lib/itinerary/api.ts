@@ -175,6 +175,13 @@ export type Itinerary = {
   unscheduledItems: ItineraryItem[];
 };
 
+export type ItineraryDayMoveInput = {
+  expectedSourceItemIds: string[];
+  expectedTargetItemIds: string[];
+  strategy: 'append' | 'swap';
+  targetItineraryDayId: string;
+};
+
 export type TripModeContext = {
   contextAt: string;
   contextSource: 'live' | 'preview';
@@ -732,6 +739,30 @@ export async function organizeItineraryItem(
     return result;
   } catch (error) {
     if (!operation) throw error;
+    await queueOrThrow(error, auth.userId, tripId, operation);
+  }
+}
+
+export async function moveItineraryDayPlan(
+  tripId: string,
+  sourceItineraryDayId: string,
+  input: ItineraryDayMoveInput,
+) {
+  const auth = await getAuthContext();
+  const operation: OfflineMutationOperation = {
+    input,
+    kind: 'itinerary_day_move',
+    sourceItineraryDayId,
+  };
+  try {
+    const result = await itineraryRequest<void>(
+      `/trips/${tripId}/itinerary/days/${sourceItineraryDayId}/move`,
+      { body: JSON.stringify(input), method: 'POST' },
+      auth,
+    );
+    await applyOnlineMutation(auth.userId, tripId, operation);
+    return result;
+  } catch (error) {
     await queueOrThrow(error, auth.userId, tripId, operation);
   }
 }

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Instrument_Sans } from 'next/font/google';
 import type { ReactNode } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -13,13 +13,11 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { TroveMotionProvider } from '@/components/trove-motion-provider';
 import { getAuthUserId } from '@/lib/auth/session';
 
-const geistSans = Geist({
+const instrumentSans = Instrument_Sans({
+  display: 'swap',
   subsets: ['latin'],
-  variable: '--font-geist-sans',
-});
-const geistMono = Geist_Mono({
-  subsets: ['latin'],
-  variable: '--font-geist-mono',
+  variable: '--font-instrument-sans',
+  weight: 'variable',
 });
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -53,11 +51,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const [locale, authUserId] = await Promise.all([getLocale(), getAuthUserId()]);
 
   return (
-    <html
-      lang={locale}
-      className={`${geistSans.variable} ${geistMono.variable}`}
-      suppressHydrationWarning
-    >
+    <html lang={locale} className={instrumentSans.variable} suppressHydrationWarning>
       <body>
         <ThemeProvider>
           <TroveMotionProvider>

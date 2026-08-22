@@ -22,6 +22,7 @@
   --accent-foreground: oklch(0.27 0.025 55);
   --destructive: oklch(0.55 0.193 28);
   --border: oklch(0.867 0.019 85);
+  --border-subtle: oklch(0.9 0.015 85);
   --border-strong: oklch(0.79 0.026 85);
   --input: oklch(0.867 0.019 85);
   --ring: oklch(0.51 0.086 153);
@@ -29,6 +30,9 @@
   --surface-raised: oklch(0.993 0.007 85);
   --surface-sunken: oklch(0.938 0.014 85);
   --surface-hover: oklch(0.952 0.02 85);
+  --surface-tint: oklch(0.955 0.025 92);
+  --surface-media: oklch(0.335 0.062 153);
+  --surface-overlay: oklch(0.18 0.025 62 / 0.72);
   --text-subtle: oklch(0.497 0.025 65);
   --brand: oklch(0.374 0.072 153);
   --brand-strong: oklch(0.298 0.061 153);
@@ -45,15 +49,26 @@
   --space-4: 1rem;
   --space-6: 1.5rem;
   --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
   --layout-gutter: clamp(1rem, 2vw, 2rem);
+  --layout-reading: 65ch;
+  --layout-app: 87.5rem;
+  --section-gap: clamp(2rem, 4vw, 4rem);
+  --text-immersive-title: clamp(2.5rem, 5vw, 4.75rem);
+  --text-page-title: clamp(1.875rem, 4vw, 2.75rem);
+  --text-section-title: clamp(1.25rem, 2vw, 1.75rem);
+  --text-supporting: 0.875rem;
+  --text-metadata: 0.8125rem;
   --motion-fast: 150ms;
   --motion-standard: 200ms;
   --motion-slow: 320ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --shadow-surface:
-    0 1px 2px oklch(0.274 0.021 62 / 0.04), 0 12px 32px oklch(0.274 0.021 62 / 0.06);
-  --shadow-overlay: 0 20px 60px oklch(0.274 0.021 62 / 0.16);
-  --shadow-control: 0 1px 2px oklch(0.274 0.021 62 / 0.12);
+    0 1px 2px oklch(0.274 0.021 62 / 0.035), 0 14px 36px oklch(0.374 0.072 153 / 0.07);
+  --shadow-overlay: 0 24px 72px oklch(0.274 0.021 62 / 0.18);
+  --shadow-control: 0 1px 2px oklch(0.274 0.021 62 / 0.09);
   --layer-sticky: 40;
   --layer-overlay: 50;
 }
@@ -76,6 +91,7 @@
   --accent-foreground: oklch(0.229 0.027 53);
   --destructive: oklch(0.75 0.151 29);
   --border: oklch(0.388 0.027 154);
+  --border-subtle: oklch(0.335 0.026 154);
   --border-strong: oklch(0.47 0.032 154);
   --input: oklch(0.388 0.027 154);
   --ring: oklch(0.72 0.083 151);
@@ -83,6 +99,9 @@
   --surface-raised: oklch(0.243 0.032 154);
   --surface-sunken: oklch(0.166 0.023 154);
   --surface-hover: oklch(0.294 0.032 154);
+  --surface-tint: oklch(0.226 0.034 151);
+  --surface-media: oklch(0.274 0.051 153);
+  --surface-overlay: oklch(0.1 0.018 154 / 0.78);
   --text-subtle: oklch(0.718 0.021 85);
   --brand: oklch(0.77 0.09 151);
   --brand-strong: oklch(0.824 0.074 151);
@@ -97,8 +116,8 @@
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback', ui-monospace, monospace;
+  --font-sans: var(--font-instrument-sans), 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -115,6 +134,7 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
   --color-border-strong: var(--border-strong);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -122,6 +142,9 @@
   --color-surface-raised: var(--surface-raised);
   --color-surface-sunken: var(--surface-sunken);
   --color-surface-hover: var(--surface-hover);
+  --color-surface-tint: var(--surface-tint);
+  --color-surface-media: var(--surface-media);
+  --color-surface-overlay: var(--surface-overlay);
   --color-text-subtle: var(--text-subtle);
   --color-brand: var(--brand);
   --color-brand-strong: var(--brand-strong);
@@ -150,7 +173,9 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), 'Geist', ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-instrument-sans), 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.65;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }

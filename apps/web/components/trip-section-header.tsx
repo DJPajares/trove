@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
+import type { HeaderDensity } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -31,12 +32,15 @@ export type { TripSection };
 type TripSectionHeaderProps = {
   actions?: ReactNode;
   currentSection: TripSection;
+  density?: HeaderDensity;
   description?: string;
+  media?: ReactNode;
+  meta?: ReactNode;
   tripId: string;
 };
 
 function emphasisClasses(destination: TripDestination, active: boolean) {
-  if (active) return 'bg-secondary text-secondary-foreground';
+  if (active) return 'text-foreground';
   if (destination.emphasis === 'leading') {
     return 'text-foreground hover:bg-surface-hover';
   }
@@ -55,7 +59,10 @@ function emphasisClasses(destination: TripDestination, active: boolean) {
 export function TripSectionHeader({
   actions,
   currentSection,
+  density = 'default',
   description,
+  media,
+  meta,
   tripId,
 }: Readonly<TripSectionHeaderProps>) {
   const t = useTranslations('trips');
@@ -98,7 +105,7 @@ export function TripSectionHeader({
     );
 
   return (
-    <header className="space-y-5" data-slot="trip-section-header">
+    <header className="space-y-5" data-density={density} data-slot="trip-section-header">
       <Link
         className="inline-flex min-h-9 items-center gap-2 rounded-[var(--radius-md)] px-2 text-sm font-medium text-muted-foreground outline-none transition-colors duration-[var(--motion-standard)] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
         href="/trips"
@@ -107,13 +114,24 @@ export function TripSectionHeader({
         {t('title')}
       </Link>
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0 max-w-3xl">
-          <h1 className="text-[clamp(1.875rem,5vw,2.5rem)] leading-[1.12] font-semibold tracking-[-0.025em] text-pretty text-foreground">
+      <div
+        className={cn(
+          'grid items-end gap-4 sm:grid-cols-[minmax(0,1fr)_auto]',
+          density === 'immersive' && 'md:grid-cols-[minmax(0,1fr)_minmax(16rem,0.6fr)] md:gap-10',
+        )}
+      >
+        <div className="min-w-0 max-w-[var(--layout-reading)]">
+          <h1
+            className={cn(
+              'text-[length:var(--text-page-title)] leading-[1.08] font-semibold tracking-[-0.035em] text-pretty text-foreground',
+              density === 'immersive' &&
+                'md:text-[length:var(--text-immersive-title)] md:leading-[1.02]',
+            )}
+          >
             {trip?.name ?? t('titleLoading')}
           </h1>
           {trip ? (
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            <p className="mt-2 text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
               {t('dateRange', {
                 endDate: formatDate(trip.endDate),
                 startDate: formatDate(trip.startDate),
@@ -122,13 +140,35 @@ export function TripSectionHeader({
               {t(`lifecycle.${trip.lifecycle}`)}
             </p>
           ) : null}
+          {meta ? (
+            <div className="mt-2 text-[length:var(--text-metadata)] leading-5 font-medium text-text-subtle tabular-nums">
+              {meta}
+            </div>
+          ) : null}
+          {density === 'compact' && actions && !media ? (
+            <div className="mt-4 flex flex-wrap items-center gap-2 sm:hidden">{actions}</div>
+          ) : null}
         </div>
-        {actions ? (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
+        {media ? (
+          <div className="min-w-0">
+            {media}
+            {actions ? (
+              <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>
+            ) : null}
+          </div>
+        ) : actions ? (
+          <div
+            className={cn(
+              'flex shrink-0 flex-wrap items-center gap-2',
+              density === 'compact' && 'hidden sm:flex',
+            )}
+          >
+            {actions}
+          </div>
         ) : null}
       </div>
 
-      <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
+      <div className="flex items-center justify-between gap-2 border-b border-border-subtle">
         <nav aria-label={t('tripNavigation')} className="min-w-0">
           <ul className="flex items-center gap-1 overflow-x-auto">
             {primary.map((destination) => {
@@ -138,7 +178,8 @@ export function TripSectionHeader({
                   <Link
                     aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'inline-flex min-h-10 items-center whitespace-nowrap rounded-[var(--radius-md)] px-3 text-sm font-medium outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40',
+                      'relative inline-flex min-h-11 items-center whitespace-nowrap px-3 text-sm font-medium outline-none transition-colors duration-[var(--motion-standard)] after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:bg-transparent focus-visible:ring-3 focus-visible:ring-ring/40',
+                      active && 'after:bg-brand',
                       emphasisClasses(destination, active),
                     )}
                     href={destination.href}
@@ -198,7 +239,7 @@ export function TripSectionHeader({
       </div>
 
       {description ? (
-        <p className="max-w-[62ch] text-sm leading-6 text-pretty text-muted-foreground">
+        <p className="max-w-[var(--layout-reading)] text-sm leading-[1.55] text-pretty text-muted-foreground">
           {description}
         </p>
       ) : null}

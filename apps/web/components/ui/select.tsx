@@ -68,7 +68,7 @@ function SelectContent({
       >
         <SelectPrimitive.Popup
           className={cn(
-            'w-(--anchor-width) min-w-40 max-h-[min(var(--available-height),20rem)] origin-(--transform-origin) overflow-y-auto rounded-[var(--radius-md)] border border-border bg-popover p-1 text-popover-foreground shadow-[var(--shadow-overlay)] outline-none transition-[opacity,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)] data-[side=bottom]:slide-in-from-top-1 data-[side=top]:slide-in-from-bottom-1 data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95',
+            'w-(--anchor-width) min-w-40 max-h-[min(var(--available-height),20rem)] origin-(--transform-origin) overflow-y-auto rounded-[var(--radius-xl)] border border-border-subtle bg-popover p-1.5 text-popover-foreground shadow-[var(--shadow-overlay)] outline-none transition-[opacity,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)] data-[side=bottom]:slide-in-from-top-1 data-[side=top]:slide-in-from-bottom-1 data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95',
             className,
           )}
           data-slot="select-content"
@@ -85,7 +85,7 @@ function SelectItem({ children, className, ...props }: SelectPrimitive.Item.Prop
   return (
     <SelectPrimitive.Item
       className={cn(
-        'relative flex min-h-10 w-full cursor-default items-center gap-3 rounded-[var(--radius-sm)] py-2 pr-9 pl-3 text-sm outline-none select-none focus:bg-secondary focus:text-secondary-foreground data-disabled:pointer-events-none data-disabled:opacity-50',
+        'relative flex min-h-10 w-full cursor-default items-center gap-3 rounded-[var(--radius-md)] py-2 pr-9 pl-3 text-sm outline-none select-none focus:bg-surface-hover focus:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50',
         className,
       )}
       data-slot="select-item"

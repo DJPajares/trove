@@ -55,7 +55,7 @@ function PopoverContent({
         <PopoverPrimitive.Popup
           data-slot="popover-content"
           className={cn(
-            'z-[var(--layer-overlay)] flex w-72 origin-(--transform-origin) flex-col gap-3 rounded-[var(--radius-lg)] border border-border bg-popover p-3 text-sm text-popover-foreground shadow-[var(--shadow-overlay)] outline-hidden duration-[var(--motion-standard)] data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+            'z-[var(--layer-overlay)] flex w-72 origin-(--transform-origin) flex-col gap-4 rounded-[var(--radius-xl)] border border-border-subtle bg-popover p-4 text-sm text-popover-foreground shadow-[var(--shadow-overlay)] outline-hidden duration-[var(--motion-standard)] data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
             className,
           )}
           {...props}
@@ -79,7 +79,7 @@ function PopoverTitle({ className, ...props }: PopoverPrimitive.Title.Props) {
   return (
     <PopoverPrimitive.Title
       data-slot="popover-title"
-      className={cn('font-medium', className)}
+      className={cn('text-base font-semibold tracking-[-0.015em]', className)}
       {...props}
     />
   );

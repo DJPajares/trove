@@ -1364,7 +1364,14 @@ export function ItineraryManager({
   }
 
   if (status === 'loading') {
-    return <PageState className="mx-auto max-w-5xl" kind="loading" title={t('loading')} />;
+    return (
+      <PageState
+        className="mx-auto max-w-5xl"
+        kind="loading"
+        loadingShape="timeline"
+        title={t('loading')}
+      />
+    );
   }
   if (status === 'error' || !itinerary) {
     return (

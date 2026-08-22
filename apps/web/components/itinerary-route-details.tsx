@@ -4,6 +4,7 @@ import { CarFront, Footprints, Plane, Route, TramFront } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
+import { RouteTimelineRow } from '@/components/timeline-row';
 import {
   Select,
   SelectContent,
@@ -16,6 +17,7 @@ import type {
   ItineraryRouteSegment,
   RouteTravelMode,
 } from '@/lib/itinerary/api';
+import { routePresentationState } from '@/lib/itinerary/route-presentation';
 import { cn } from '@/lib/utils';
 
 type RouteLoadStatus = 'error' | 'idle' | 'loading';
@@ -162,6 +164,7 @@ export function ItineraryRouteSegmentRow({
 }>) {
   const t = useTranslations('itinerary.routes');
   const originLabel = segment.origin.label ?? t(`point.${segment.origin.kind}`);
+  const destinationLabel = segment.destination.label ?? t(`point.${segment.destination.kind}`);
   // Between-item legs need no extra context — the two stops on either side
   // already say why the leg exists. Boundary legs (day start / return to the
   // daily base) don't have that, so they're called out explicitly.
@@ -187,63 +190,51 @@ export function ItineraryRouteSegmentRow({
     : segment.status === 'not_estimated'
       ? t('segmentNotEstimatedMetrics')
       : t('segmentUnavailableMetrics');
+  const presentationState = routePresentationState(segment.status, stale);
+  const stateLabel = t(`state.${presentationState}`);
+  const originDisplay = legRoleLabel ? `${legRoleLabel}: ${originLabel}` : originLabel;
 
   return (
-    <div
-      className="flex min-h-14 items-center gap-2 border-y border-border/60 bg-muted/15 px-3 py-1.5 text-xs text-muted-foreground sm:min-h-10"
-      role="listitem"
-    >
-      <span aria-hidden="true" className="ml-3 h-5 w-px bg-border-strong" />
-      {/* Metrics and origin are separate spans so the travel estimate — the reason
-          this row exists — can never be the part that ellipses on a narrow screen. */}
-      <span className="flex min-w-0 flex-1 flex-col items-start sm:flex-row sm:items-center sm:gap-1.5">
-        <span
-          className={cn(
-            'shrink-0 whitespace-nowrap tabular-nums',
-            isAvailable && !stale && 'font-medium text-foreground',
-          )}
+    <RouteTimelineRow
+      actions={
+        <Select
+          disabled={saving}
+          onValueChange={(value) => onModeChange(segment, value as RouteTravelMode)}
+          value={segment.mode}
         >
-          {metricsLabel}
-        </span>
-        <span className="min-w-0 max-w-full truncate">
-          {legRoleLabel ? `${legRoleLabel} · ` : ''}
-          {t('segmentOrigin', { origin: originLabel })}
-        </span>
-      </span>
-      <Select
-        disabled={saving}
-        onValueChange={(value) => onModeChange(segment, value as RouteTravelMode)}
-        value={segment.mode}
-      >
-        <SelectTrigger
-          aria-label={t('changeMode', { origin: originLabel })}
-          className={cn(
-            'h-11 w-auto min-w-0 bg-background px-2 sm:h-8 sm:min-w-28',
-            saving && 'opacity-70',
-          )}
-          size="sm"
-        >
-          <SelectValue>
-            {/* Icon-only below sm to give the estimate its space back. `sr-only` rather
-                than `hidden` keeps the selected mode in the accessibility tree, since
-                the trigger's aria-label names the origin but not the current mode. */}
-            <span className="inline-flex items-center gap-1.5">
-              {modeIcon(segment.mode)}
-              <span className="sr-only sm:not-sr-only">{t(`mode.${segment.mode}`)}</span>
-            </span>
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent align="end">
-          {(['drive', 'transit', 'walk', 'flight'] as const).map((mode) => (
-            <SelectItem key={mode} value={mode}>
-              <span className="inline-flex items-center gap-2">
-                {modeIcon(mode)}
-                {t(`mode.${mode}`)}
+          <SelectTrigger
+            aria-label={t('changeMode', { origin: originLabel })}
+            className={cn(
+              'h-9 w-9 bg-background px-2 sm:w-auto sm:min-w-28',
+              saving && 'opacity-70',
+            )}
+            size="sm"
+          >
+            <SelectValue>
+              <span className="inline-flex items-center gap-1.5">
+                {modeIcon(segment.mode)}
+                <span className="sr-only sm:not-sr-only">{t(`mode.${segment.mode}`)}</span>
               </span>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent align="end">
+            {(['drive', 'transit', 'walk', 'flight'] as const).map((mode) => (
+              <SelectItem key={mode} value={mode}>
+                <span className="inline-flex items-center gap-2">
+                  {modeIcon(mode)}
+                  {t(`mode.${mode}`)}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      }
+      destination={destinationLabel}
+      metrics={metricsLabel}
+      mode={modeIcon(segment.mode)}
+      origin={originDisplay}
+      state={presentationState}
+      stateLabel={stateLabel}
+    />
   );
 }

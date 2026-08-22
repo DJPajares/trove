@@ -37,10 +37,10 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
       </a>
 
       <header
-        className="sticky top-0 z-[var(--layer-sticky)] border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85"
+        className="sticky top-0 z-[var(--layer-sticky)] border-b border-border-subtle bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/88"
         data-translucent-surface
       >
-        <div className="mx-auto grid h-16 w-full max-w-[1400px] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-[var(--layout-gutter)] md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+        <div className="mx-auto grid h-16 w-full max-w-[var(--layout-app)] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-[var(--layout-gutter)] md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
           <Link
             className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground"
             href="/"
@@ -98,7 +98,7 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
 
       <main
         className={cn(
-          'mx-auto w-full max-w-[1400px] scroll-mt-20 px-[var(--layout-gutter)] py-8 outline-none md:py-12',
+          'mx-auto w-full max-w-[var(--layout-app)] scroll-mt-20 px-[var(--layout-gutter)] py-8 outline-none md:py-12',
           isSignedIn && 'pb-28 md:pb-12',
         )}
         id="main-content"

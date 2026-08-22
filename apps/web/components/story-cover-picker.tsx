@@ -1,10 +1,11 @@
 'use client';
 
-import { Check, ImageOff } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { TripMedia } from '@/components/trip-media';
 import {
   Sheet,
   SheetContent,
@@ -70,18 +71,13 @@ export function StoryCoverPicker({
                     onClick={() => void choose(photo.id)}
                     type="button"
                   >
-                    {photo.url ? (
-                      <img
-                        alt={memory.note ?? t('photoAlt')}
-                        className="size-full object-cover"
-                        loading="lazy"
-                        src={photo.url}
-                      />
-                    ) : (
-                      <span className="flex size-full items-center justify-center bg-muted/40 text-muted-foreground">
-                        <ImageOff aria-hidden="true" className="size-5" />
-                      </span>
-                    )}
+                    <TripMedia
+                      alt={memory.note ?? t('photoAlt')}
+                      className="size-full rounded-none"
+                      sizes="140px"
+                      source={photo.url ? { kind: 'memory', url: photo.url } : { kind: 'fallback' }}
+                      variant="thumbnail"
+                    />
                   </button>
                   {storyCover?.photoId === photo.id ? (
                     <span className="absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded-full bg-brand text-primary-foreground">

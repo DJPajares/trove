@@ -1,8 +1,8 @@
 import { cva } from 'class-variance-authority';
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 
+import { ContentSkeleton, type LoadingShape } from '@/components/content-skeleton';
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia } from '@/components/ui/empty';
-import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 type PageStateKind = 'empty' | 'error' | 'loading' | 'offline';
@@ -17,8 +17,21 @@ type PageStateProps = {
   headingId?: string;
   icon?: ReactNode;
   kind?: PageStateKind;
+  loadingShape?: LoadingShape;
+  scope?: 'inline' | 'page' | 'section';
   title: string;
 };
+
+const scopeVariants = cva('', {
+  variants: {
+    scope: {
+      inline: 'py-2',
+      page: 'py-10',
+      section: 'py-6',
+    },
+  },
+  defaultVariants: { scope: 'section' },
+});
 
 const stateMediaVariants = cva(
   'mb-3 flex size-12 items-center justify-center rounded-[var(--radius-lg)] [&_svg]:size-6',
@@ -45,34 +58,37 @@ export function PageState({
   headingId,
   icon,
   kind = 'empty',
+  loadingShape = 'text',
+  scope = 'section',
   title,
 }: Readonly<PageStateProps>) {
   const Heading = headingLevel === 1 ? 'h1' : 'h2';
+  const generatedHeadingId = useId();
+  const resolvedHeadingId = headingId ?? generatedHeadingId;
 
   if (kind === 'loading') {
     return (
       <div
         aria-busy="true"
         aria-live="polite"
-        className={cn('w-full max-w-2xl space-y-5', className)}
+        className={cn('w-full', scopeVariants({ scope }), className)}
         data-slot="page-state"
         role="status"
       >
         <span className="sr-only">{title}</span>
-        <Skeleton className="size-12" />
-        <div className="space-y-3">
-          <Skeleton className="h-9 w-2/3 max-w-md" />
-          <Skeleton className="h-5 w-full max-w-xl" />
-          <Skeleton className="h-5 w-4/5 max-w-lg" />
-        </div>
+        <ContentSkeleton shape={loadingShape} />
       </div>
     );
   }
 
   return (
     <Empty
-      aria-labelledby={headingId}
-      className={cn('items-start border-0 p-0 text-left text-pretty', className)}
+      aria-labelledby={resolvedHeadingId}
+      className={cn(
+        'items-start border-0 p-0 text-left text-pretty',
+        scopeVariants({ scope }),
+        className,
+      )}
       data-state={kind}
       role={kind === 'error' ? 'alert' : undefined}
     >
@@ -88,8 +104,8 @@ export function PageState({
           </p>
         ) : null}
         <Heading
-          className="text-[clamp(1.875rem,5vw,2.5rem)] leading-[1.12] font-semibold tracking-[-0.025em] text-pretty text-foreground"
-          id={headingId}
+          className="text-[length:var(--text-page-title)] leading-[1.08] font-semibold tracking-[-0.035em] text-pretty text-foreground"
+          id={resolvedHeadingId}
         >
           {title}
         </Heading>

@@ -189,7 +189,7 @@ export function HomeExperience() {
   );
 
   if (status === 'loading') {
-    return <PageState kind="loading" title={t('loading')} />;
+    return <PageState kind="loading" loadingShape="media" title={t('loading')} />;
   }
 
   if (status === 'error') {

@@ -24,6 +24,7 @@ import { MemoryEditorDialog } from '@/components/memory-editor-dialog';
 import { PageState } from '@/components/page-state';
 import { StoryCoverPicker } from '@/components/story-cover-picker';
 import { TripSectionHeader } from '@/components/trip-section-header';
+import { TripMedia } from '@/components/trip-media';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -533,10 +534,12 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
    */
   const storyHead = storyCover?.url ? (
     <div className="relative -mx-[var(--layout-gutter)] overflow-hidden md:mx-0 md:rounded-[var(--radius-xl)]">
-      <img
+      <TripMedia
         alt=""
-        className="aspect-[4/5] w-full object-cover sm:aspect-[2/1]"
-        src={storyCover.url}
+        className="w-full"
+        sizes="(max-width: 640px) 100vw, 1024px"
+        source={{ kind: 'memory', url: storyCover.url }}
+        variant="hero"
       />
       <div
         aria-hidden="true"

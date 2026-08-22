@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
 import { AccountMenu } from '@/components/account-menu';
+import { AppHeader } from '@/components/app-header';
 import { AppearanceMenu } from '@/components/appearance-menu';
 import { GlobalSearch } from '@/components/global-search';
 import { NotificationCenter } from '@/components/notification-center';
@@ -30,17 +31,16 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
   return (
     <div className="min-h-dvh bg-surface text-foreground">
       <a
-        className="fixed top-3 left-3 z-[calc(var(--layer-overlay)+1)] -translate-y-20 rounded-[var(--radius-md)] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-[var(--shadow-overlay)] transition-transform duration-[var(--motion-standard)] focus:translate-y-0 focus:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        // Parks itself a full height above its own resting offset, so it stays
+        // hidden however deep the top inset is rather than peeking under a notch.
+        className="fixed top-[calc(0.75rem+var(--safe-top))] left-[calc(0.75rem+var(--safe-left))] z-[calc(var(--layer-overlay)+1)] -translate-y-[calc(100%+0.75rem+var(--safe-top))] rounded-[var(--radius-md)] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-[var(--shadow-overlay)] transition-transform duration-[var(--motion-standard)] focus:translate-y-0 focus:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         href="#main-content"
       >
         {navigation('skipToContent')}
       </a>
 
-      <header
-        className="sticky top-0 z-[var(--layer-sticky)] border-b border-border-subtle bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/88"
-        data-translucent-surface
-      >
-        <div className="mx-auto grid h-16 w-full max-w-[var(--layout-app)] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-[var(--layout-gutter)] md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+      <AppHeader>
+        <div className="mx-auto grid h-[var(--header-height)] w-full max-w-[var(--layout-app)] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 pl-[var(--gutter-inline-start)] pr-[var(--gutter-inline-end)] md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
           <Link
             className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground"
             href="/"
@@ -94,12 +94,12 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
             )}
           </div>
         </div>
-      </header>
+      </AppHeader>
 
       <main
         className={cn(
-          'mx-auto w-full max-w-[var(--layout-app)] scroll-mt-20 px-[var(--layout-gutter)] py-8 outline-none md:py-12',
-          isSignedIn && 'pb-28 md:pb-12',
+          'mx-auto w-full max-w-[var(--layout-app)] scroll-mt-[calc(var(--safe-top)+var(--header-height)+1rem)] py-8 pl-[var(--gutter-inline-start)] pr-[var(--gutter-inline-end)] outline-none md:py-12',
+          isSignedIn && 'pb-[calc(var(--bottom-bar-height)+var(--safe-bottom)+1.5rem)] md:pb-12',
         )}
         id="main-content"
         tabIndex={-1}

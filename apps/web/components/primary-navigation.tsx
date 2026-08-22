@@ -1,6 +1,6 @@
 'use client';
 
-import { Bookmark, House, MapPinned, Wrench } from 'lucide-react';
+import { Bookmark, House, MapPinned, Plus, Wrench } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -11,6 +11,13 @@ import { cn } from '@/lib/utils';
 import { navigationTransition } from '@/lib/motion';
 
 type NavigationItem = {
+  /**
+   * Which cell this destination takes in the mobile bar's five-column grid.
+   * Static strings rather than an index, because Tailwind cannot generate a
+   * class from a value it only sees at runtime. Column three is left empty for
+   * the create action. Ignored by the desktop variant.
+   */
+  column: string;
   href: string;
   icon: ComponentType<{ className?: string }>;
   label: string;
@@ -28,10 +35,10 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
   const pathname = usePathname();
   const t = useTranslations('navigation');
   const items: NavigationItem[] = [
-    { href: '/', icon: House, label: t('home') },
-    { href: '/trips', icon: MapPinned, label: t('trips') },
-    { href: '/saved', icon: Bookmark, label: t('saved') },
-    { href: '/tools', icon: Wrench, label: t('tools') },
+    { column: 'col-start-1', href: '/', icon: House, label: t('home') },
+    { column: 'col-start-2', href: '/trips', icon: MapPinned, label: t('trips') },
+    { column: 'col-start-4', href: '/saved', icon: Bookmark, label: t('saved') },
+    { column: 'col-start-5', href: '/tools', icon: Wrench, label: t('tools') },
   ];
 
   if (variant === 'desktop') {
@@ -67,40 +74,56 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
   }
 
   return (
-    <nav
-      aria-label={t('mobile')}
-      className="fixed inset-x-0 bottom-0 z-[var(--layer-sticky)] border-t border-border bg-background/95 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/85 md:hidden"
+    <div
+      className="fixed inset-x-0 bottom-0 z-[var(--layer-sticky)] border-t border-border bg-background/95 pt-2 pr-[max(0.5rem,var(--safe-right))] pb-[max(0.5rem,var(--safe-bottom))] pl-[max(0.5rem,var(--safe-left))] backdrop-blur supports-[backdrop-filter]:bg-background/85 md:hidden"
       data-translucent-surface
     >
-      <ul className="mx-auto grid max-w-xl grid-cols-4 gap-1">
-        {items.map(({ href, icon: Icon, label }) => {
-          const active = isActivePath(pathname, href);
+      <div className="relative mx-auto max-w-xl">
+        <nav aria-label={t('mobile')}>
+          <ul className="grid grid-cols-5 gap-1">
+            {items.map(({ column, href, icon: Icon, label }) => {
+              const active = isActivePath(pathname, href);
 
-          return (
-            <li key={href}>
-              <Link
-                aria-current={active ? 'page' : undefined}
-                className={cn(
-                  'relative isolate flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-1 py-1.5 text-xs font-medium transition-colors duration-[var(--motion-standard)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-                  active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-                )}
-                href={href}
-              >
-                {active ? (
-                  <motion.span
-                    aria-hidden="true"
-                    className="absolute inset-0 -z-10 rounded-[var(--radius-xl)] bg-secondary"
-                    layoutId="primary-navigation-mobile"
-                    transition={navigationTransition}
-                  />
-                ) : null}
-                <Icon aria-hidden="true" className="relative size-4" />
-                <span className="relative max-w-full truncate">{label}</span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+              return (
+                <li className={column} key={href}>
+                  <Link
+                    aria-current={active ? 'page' : undefined}
+                    className={cn(
+                      'relative isolate flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-1 py-1.5 text-xs font-medium transition-colors duration-[var(--motion-standard)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                      active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+                    )}
+                    href={href}
+                  >
+                    {active ? (
+                      <motion.span
+                        aria-hidden="true"
+                        className="absolute inset-0 -z-10 rounded-[var(--radius-xl)] bg-secondary"
+                        layoutId="primary-navigation-mobile"
+                        transition={navigationTransition}
+                      />
+                    ) : null}
+                    <Icon aria-hidden="true" className="relative size-4" />
+                    <span className="relative max-w-full truncate">{label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        {/* Starting a trip is the one thing a traveller does from anywhere, so it
+            sits in the middle of the bar rather than behind a destination. It is
+            a link because it goes somewhere; /trips already reads and clears the
+            create parameter, so nothing new happens here. It stays outside the
+            nav landmark because it is an action, not a fifth destination. */}
+        <Link
+          aria-label={t('createTrip')}
+          className="absolute -top-6 left-1/2 flex size-14 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-surface)] ring-4 ring-background transition-[background-color,translate] duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:bg-brand-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:translate-y-px"
+          href="/trips?create=1"
+        >
+          <Plus aria-hidden="true" className="size-6" />
+        </Link>
+      </div>
+    </div>
   );
 }

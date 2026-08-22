@@ -11,7 +11,8 @@
     "trips": "Trips",
     "saved": "Saved",
     "tools": "Tools",
-    "profile": "Profile"
+    "profile": "Profile",
+    "createTrip": "Create a trip"
   },
   "appearance": {
     "button": "Change appearance",

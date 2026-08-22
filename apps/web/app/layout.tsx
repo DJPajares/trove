@@ -45,6 +45,9 @@ export const viewport: Viewport = {
     { color: '#f8f6ed', media: '(prefers-color-scheme: light)' },
     { color: '#19382b', media: '(prefers-color-scheme: dark)' },
   ],
+  // Lets Trove paint to the edges of a notched display. It is also what makes
+  // every env(safe-area-inset-*) in the shell resolve to a real value.
+  viewportFit: 'cover',
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

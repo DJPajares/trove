@@ -391,7 +391,7 @@ export function TripModeShell({
 
         <nav
           aria-label={t('navigation')}
-          className="sticky top-[4.75rem] z-[calc(var(--layer-sticky)-1)] -mx-1 rounded-[var(--radius-lg)] border border-border bg-background/95 p-1 shadow-[var(--shadow-control)] backdrop-blur supports-[backdrop-filter]:bg-background/88"
+          className="sticky top-[calc(var(--safe-top)+var(--header-offset)+0.75rem)] z-[calc(var(--layer-sticky)-1)] -mx-1 rounded-[var(--radius-lg)] border border-border bg-background/95 p-1 shadow-[var(--shadow-control)] backdrop-blur supports-[backdrop-filter]:bg-background/88"
           data-translucent-surface
         >
           <ul className="grid grid-cols-4 gap-1">

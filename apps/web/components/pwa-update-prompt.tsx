@@ -52,7 +52,7 @@ export function PwaUpdatePrompt() {
   if (!updateReady || dismissed) return null;
 
   return (
-    <div className="fixed inset-x-3 bottom-3 z-[var(--layer-overlay)] mx-auto max-w-md sm:inset-x-auto sm:right-4 sm:bottom-4">
+    <div className="fixed inset-x-3 bottom-[calc(var(--bottom-bar-height)+var(--safe-bottom)+0.75rem)] z-[var(--layer-overlay)] mx-auto max-w-md sm:inset-x-auto sm:right-4 md:bottom-[calc(1rem+var(--safe-bottom))]">
       <Alert aria-live="polite" className="bg-popover shadow-[var(--shadow-overlay)]">
         <RefreshCw aria-hidden="true" />
         <AlertTitle>{t('title')}</AlertTitle>

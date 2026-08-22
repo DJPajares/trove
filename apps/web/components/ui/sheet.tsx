@@ -11,11 +11,11 @@ type SheetSide = 'top' | 'right' | 'bottom' | 'left';
 
 const mobileSideClasses: Record<SheetSide, string> = {
   bottom:
-    'inset-x-0 bottom-0 h-auto max-h-[90dvh] w-full rounded-t-[var(--radius-xl)] border-t data-ending-style:translate-y-[2.5rem] data-starting-style:translate-y-[2.5rem]',
-  left: 'inset-y-0 left-0 h-full w-[min(28rem,calc(100%-2rem))] border-r data-ending-style:translate-x-[-2.5rem] data-starting-style:translate-x-[-2.5rem]',
+    'inset-x-0 bottom-0 h-auto max-h-[90dvh] w-full rounded-t-[var(--radius-xl)] border-t pb-[var(--safe-bottom)] data-ending-style:translate-y-[2.5rem] data-starting-style:translate-y-[2.5rem]',
+  left: 'inset-y-0 left-0 h-full w-[min(28rem,calc(100%-2rem))] border-r pl-[var(--safe-left)] data-ending-style:translate-x-[-2.5rem] data-starting-style:translate-x-[-2.5rem]',
   right:
-    'inset-y-0 right-0 h-full w-[min(28rem,calc(100%-2rem))] border-l data-ending-style:translate-x-[2.5rem] data-starting-style:translate-x-[2.5rem]',
-  top: 'inset-x-0 top-0 h-auto max-h-[90dvh] w-full rounded-b-[var(--radius-xl)] border-b data-ending-style:translate-y-[-2.5rem] data-starting-style:translate-y-[-2.5rem]',
+    'inset-y-0 right-0 h-full w-[min(28rem,calc(100%-2rem))] border-l pr-[var(--safe-right)] data-ending-style:translate-x-[2.5rem] data-starting-style:translate-x-[2.5rem]',
+  top: 'inset-x-0 top-0 h-auto max-h-[90dvh] w-full rounded-b-[var(--radius-xl)] border-b pt-[var(--safe-top)] data-ending-style:translate-y-[-2.5rem] data-starting-style:translate-y-[-2.5rem]',
 };
 
 const desktopSideClasses: Record<SheetSide, string> = {

@@ -1094,6 +1094,12 @@
       "segmentUnavailableMetrics": "No route",
       "segmentNotEstimatedMetrics": "No estimate",
       "segmentOrigin": "from {origin}",
+      "state": {
+        "cached": "Cached estimate",
+        "estimated": "Current estimate",
+        "not-estimated": "Not estimated",
+        "unavailable": "Route unavailable"
+      },
       "dayStartLabel": "Start of day",
       "returnToBaseLabel": "Return to base",
       "changeMode": "Change travel mode from {origin}",

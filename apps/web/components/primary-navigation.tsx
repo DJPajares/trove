@@ -45,9 +45,7 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
               aria-current={active ? 'page' : undefined}
               className={cn(
                 'relative isolate rounded-[var(--radius-md)] px-3 py-2 text-sm font-medium transition-colors duration-[var(--motion-standard)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-                active
-                  ? 'text-secondary-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
+                active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
               )}
               href={href}
               key={href}
@@ -55,7 +53,7 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
               {active ? (
                 <motion.span
                   aria-hidden="true"
-                  className="absolute inset-0 -z-10 rounded-[var(--radius-md)] bg-secondary"
+                  className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-brand"
                   layoutId="primary-navigation-desktop"
                   transition={navigationTransition}
                 />
@@ -84,16 +82,14 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
                 aria-current={active ? 'page' : undefined}
                 className={cn(
                   'relative isolate flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-1 py-1.5 text-xs font-medium transition-colors duration-[var(--motion-standard)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-                  active
-                    ? 'text-secondary-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
+                  active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
                 )}
                 href={href}
               >
                 {active ? (
                   <motion.span
                     aria-hidden="true"
-                    className="absolute inset-0 -z-10 rounded-[var(--radius-md)] bg-secondary"
+                    className="absolute inset-0 -z-10 rounded-[var(--radius-xl)] bg-secondary"
                     layoutId="primary-navigation-mobile"
                     transition={navigationTransition}
                   />

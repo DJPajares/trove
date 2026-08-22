@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -24,10 +23,12 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
 import { ExperienceRatingSummary } from '@/components/experience-rating-field';
+import { EditorialSection } from '@/components/editorial-section';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripForm } from '@/components/trip-form';
+import { TripMedia } from '@/components/trip-media';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -58,6 +59,7 @@ import {
 } from '@/components/ui/sheet';
 import { deleteTrip, fetchTrips, type Trip } from '@/lib/trips/api';
 import { fetchTripInfo, type TripInfoEntry } from '@/lib/trip-info/api';
+import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import { cn } from '@/lib/utils';
 
 type EditorState =
@@ -229,26 +231,20 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
         }
         variant="default"
       >
-        <ItemMedia
-          className="size-14 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground sm:size-16"
-          variant={trip.coverPhotoUrl ? 'image' : 'icon'}
-        >
-          {trip.coverPhotoUrl ? (
-            <Image
-              alt=""
-              className="size-full object-cover"
-              height={64}
-              src={trip.coverPhotoUrl}
-              unoptimized
-              width={64}
-            />
-          ) : (
-            <MapPinned aria-hidden="true" className="size-5" />
-          )}
+        <ItemMedia className="size-14 rounded-[var(--radius-md)] sm:size-16" variant="default">
+          <TripMedia
+            alt=""
+            className="size-full"
+            sizes="64px"
+            source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl })}
+            variant="thumbnail"
+          />
         </ItemMedia>
         <ItemContent className="min-w-0 gap-1.5">
-          <div className="flex min-w-0 items-baseline justify-between gap-3">
-            <ItemTitle className="truncate text-base">{trip.name}</ItemTitle>
+          <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+            <ItemTitle className="line-clamp-2 max-w-full text-base sm:line-clamp-1">
+              {trip.name}
+            </ItemTitle>
             <span
               className={cn(
                 'shrink-0 text-xs font-medium',
@@ -258,7 +254,7 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
               {t(`lifecycle.${trip.lifecycle}`)}
             </span>
           </div>
-          <ItemDescription className="line-clamp-1">
+          <ItemDescription className="line-clamp-2 sm:line-clamp-1">
             <CalendarDays aria-hidden="true" className="mr-1.5 inline size-3.5" />
             {t('dateRange', {
               endDate: formatDate(trip.endDate),
@@ -297,7 +293,13 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
       ) : null}
 
       {status === 'loading' ? (
-        <PageState headingLevel={2} kind="loading" title={t('loading')} />
+        <PageState
+          headingLevel={2}
+          kind="loading"
+          loadingShape="list"
+          scope="section"
+          title={t('loading')}
+        />
       ) : status === 'error' ? (
         <PageState
           actions={<Button onClick={() => window.location.reload()}>{t('tryAgain')}</Button>}
@@ -325,14 +327,16 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
         <div className="space-y-8">
           {(['active', 'planning', 'completed'] as const).map((lifecycle) =>
             groupedTrips[lifecycle].length ? (
-              <section key={lifecycle} className="space-y-3">
-                <h2 className="text-sm font-medium text-muted-foreground">
-                  {t(`sections.${lifecycle}`)}
-                </h2>
+              <EditorialSection
+                density="compact"
+                key={lifecycle}
+                title={t(`sections.${lifecycle}`)}
+                treatment={lifecycle === 'active' ? 'tinted' : 'ruled'}
+              >
                 <ItemGroup aria-label={t(`sections.${lifecycle}`)} variant="list">
                   {groupedTrips[lifecycle].map(renderTrip)}
                 </ItemGroup>
-              </section>
+              </EditorialSection>
             ) : null,
           )}
         </div>

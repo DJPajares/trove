@@ -52,7 +52,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          'fixed top-1/2 left-1/2 z-[var(--layer-overlay)] grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-5 overflow-y-auto rounded-[var(--radius-xl)] border border-border bg-popover p-5 text-sm text-popover-foreground shadow-[var(--shadow-overlay)] duration-[var(--motion-standard)] outline-none sm:max-w-lg sm:p-6 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+          'fixed top-1/2 left-1/2 z-[var(--layer-overlay)] grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 overflow-y-auto rounded-[var(--radius-2xl)] border border-border-subtle bg-popover p-6 text-sm text-popover-foreground shadow-[var(--shadow-overlay)] duration-[var(--motion-standard)] outline-none sm:max-w-lg sm:p-8 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
           className,
         )}
         {...props}
@@ -83,7 +83,7 @@ function DialogFooter({ className, children, ...props }: React.ComponentProps<'d
     <div
       data-slot="dialog-footer"
       className={cn(
-        '-mx-5 -mb-5 flex flex-col-reverse gap-2 rounded-b-[var(--radius-xl)] border-t bg-muted/50 p-5 sm:-mx-6 sm:-mb-6 sm:flex-row sm:justify-end sm:p-6',
+        '-mx-6 -mb-6 flex flex-col-reverse gap-2 border-t border-border-subtle bg-transparent p-6 sm:-mx-8 sm:-mb-8 sm:flex-row sm:justify-end sm:p-8',
         className,
       )}
       {...props}
@@ -97,7 +97,10 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('pr-10 text-lg leading-6 font-semibold tracking-tight', className)}
+      className={cn(
+        'pr-10 text-[var(--text-section-title)] leading-tight font-semibold tracking-[-0.025em]',
+        className,
+      )}
       {...props}
     />
   );

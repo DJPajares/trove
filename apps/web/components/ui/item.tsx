@@ -12,7 +12,7 @@ const itemGroupVariants = cva(
     variants: {
       variant: {
         default: 'gap-4',
-        list: 'gap-0 overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card shadow-[var(--shadow-surface)] [&>[data-slot=item]+[data-slot=item]]:border-t',
+        list: 'gap-0 border-y border-border-subtle [&>[data-slot=item]+[data-slot=item]]:border-t [&>[data-slot=item]+[data-slot=item]]:border-border-subtle',
       },
     },
     defaultVariants: { variant: 'default' },

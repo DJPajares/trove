@@ -1,7 +1,6 @@
 'use client';
 
 import { ArrowLeft, CalendarDays, Clock3, Compass, Eye, Map, MapPinned } from 'lucide-react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -13,6 +12,7 @@ import { PageState } from '@/components/page-state';
 import { TimeInput } from '@/components/time-input';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripSyncStatus } from '@/components/trip-sync-status';
+import { TripMedia } from '@/components/trip-media';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import {
@@ -21,6 +21,7 @@ import {
   type TripModeContextRequestOptions,
 } from '@/lib/itinerary/api';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
+import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import { fetchTrip, type Trip } from '@/lib/trips/api';
 import { cn } from '@/lib/utils';
 
@@ -215,7 +216,7 @@ export function TripModeShell({
   if (state.status === 'loading') {
     return (
       <section className="mx-auto w-full max-w-6xl">
-        <PageState kind="loading" title={t('loading')} />
+        <PageState kind="loading" loadingShape="timeline" title={t('loading')} />
       </section>
     );
   }
@@ -302,20 +303,13 @@ export function TripModeShell({
           </Button>
 
           <div className="flex items-start gap-4 sm:items-center">
-            <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-lg)] bg-secondary text-secondary-foreground shadow-[var(--shadow-control)] sm:size-16">
-              {trip.coverPhotoUrl ? (
-                <Image
-                  alt=""
-                  className="size-full object-cover"
-                  height={64}
-                  src={trip.coverPhotoUrl}
-                  unoptimized
-                  width={64}
-                />
-              ) : (
-                <MapPinned aria-hidden="true" className="size-6" />
-              )}
-            </div>
+            <TripMedia
+              alt=""
+              className="size-14 shrink-0 shadow-[var(--shadow-control)] sm:size-16"
+              sizes="64px"
+              source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl })}
+              variant="thumbnail"
+            />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-brand">
                 {previewSelection ? t('preview.label') : t('label')}

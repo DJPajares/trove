@@ -12,9 +12,9 @@ type SheetSide = 'top' | 'right' | 'bottom' | 'left';
 const mobileSideClasses: Record<SheetSide, string> = {
   bottom:
     'inset-x-0 bottom-0 h-auto max-h-[90dvh] w-full rounded-t-[var(--radius-xl)] border-t data-ending-style:translate-y-[2.5rem] data-starting-style:translate-y-[2.5rem]',
-  left: 'inset-y-0 left-0 h-full w-[min(24rem,calc(100%-2rem))] border-r data-ending-style:translate-x-[-2.5rem] data-starting-style:translate-x-[-2.5rem]',
+  left: 'inset-y-0 left-0 h-full w-[min(28rem,calc(100%-2rem))] border-r data-ending-style:translate-x-[-2.5rem] data-starting-style:translate-x-[-2.5rem]',
   right:
-    'inset-y-0 right-0 h-full w-[min(24rem,calc(100%-2rem))] border-l data-ending-style:translate-x-[2.5rem] data-starting-style:translate-x-[2.5rem]',
+    'inset-y-0 right-0 h-full w-[min(28rem,calc(100%-2rem))] border-l data-ending-style:translate-x-[2.5rem] data-starting-style:translate-x-[2.5rem]',
   top: 'inset-x-0 top-0 h-auto max-h-[90dvh] w-full rounded-b-[var(--radius-xl)] border-b data-ending-style:translate-y-[-2.5rem] data-starting-style:translate-y-[-2.5rem]',
 };
 
@@ -104,7 +104,7 @@ function SheetHeader({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="sheet-header"
-      className={cn('flex flex-col gap-1.5 p-5 pr-16', className)}
+      className={cn('flex flex-col gap-2 border-b border-border-subtle p-6 pr-16', className)}
       {...props}
     />
   );
@@ -114,7 +114,7 @@ function SheetFooter({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="sheet-footer"
-      className={cn('mt-auto flex flex-col gap-2 border-t p-5', className)}
+      className={cn('mt-auto flex flex-col gap-2 border-t border-border-subtle p-6', className)}
       {...props}
     />
   );
@@ -124,7 +124,10 @@ function SheetTitle({ className, ...props }: SheetPrimitive.Title.Props) {
   return (
     <SheetPrimitive.Title
       data-slot="sheet-title"
-      className={cn('text-lg leading-6 font-semibold tracking-tight text-foreground', className)}
+      className={cn(
+        'text-[var(--text-section-title)] leading-tight font-semibold tracking-[-0.025em] text-foreground',
+        className,
+      )}
       {...props}
     />
   );

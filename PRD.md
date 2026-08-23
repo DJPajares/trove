@@ -259,6 +259,23 @@ Mobile is the primary design reference, as it is everywhere else in Trove.
 
 Out of scope: marketing sub-pages, pricing, analytics, and a CMS.
 
+## 4.8 Editorial Imagery
+
+Trove is a visual product, but the only photographs a traveller supplies are an optional trip cover and their Memories, and both arrive late. Editorial imagery fills that gap so a trip looks like a place from the moment it is created.
+
+Editorial imagery is a **separate media track** from provider data. It is decorative, never functional: it stands in for a destination or a place, and it never claims to depict that exact building, room, or dish. Google Places photos remain excluded as a decorative source under 11.5, and this does not change that.
+
+Rules:
+
+- Sourced from a free editorial photography provider, resolved on demand for a destination name, or a place name and its category.
+- Resolution is deterministic. The same subject resolves the same photograph across sessions and across travellers; a photograph that changed per render would read as instability rather than variety.
+- Only the **reference** is stored: source URLs, attribution, intrinsic dimensions, and a dominant colour used as a loading placeholder. Image bytes are never copied into Trove Storage, which stays user-owned media only.
+- A stored reference is dated and re-resolved once stale, in the same spirit as 11.7.
+- **Attribution is a product requirement.** The photographer and the provider are credited wherever an editorial photograph is shown, and the service never returns an image URL without the means to credit it.
+- A global kill switch disables the service. Every surface degrades to the branded fallback, and so does an unreachable provider, an exhausted rate limit, or a subject with no photograph.
+
+The branded fallback stays load-bearing rather than becoming a stopgap: hotlinked photography cannot be bundled into an offline trip copy, so an offline traveller sees it by design. It is specific to the place's category, using the taxonomy in section 13, so a hotel, a restaurant, and a museum never render the same placeholder. A place with no resolvable category — including every Custom Place — falls back to `other`.
+
 ---
 
 # 5. Core Product Architecture
@@ -587,6 +604,8 @@ Use the current provider photo URL/reference obtained through current provider d
 Do not permanently copy provider photos into Trove Storage.
 
 User-uploaded trip/Memory photos are separate user-owned content and may be stored privately by Trove.
+
+Decorative photography is not provider data and does not come from here. It comes from the editorial image service in 4.8, which is a separate track with its own sourcing, caching, and attribution rules.
 
 ## 11.6 Duplicate Protection
 

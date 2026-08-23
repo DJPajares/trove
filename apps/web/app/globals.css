@@ -32,6 +32,27 @@
   --surface-hover: oklch(0.952 0.02 85);
   --surface-tint: oklch(0.955 0.025 92);
   --surface-media: oklch(0.335 0.062 153);
+  /* The branded media fallback, one tint per place category. Every pair stays
+     dark in both themes, so its ink is the same ivory in both themes too -
+     --primary-foreground could not do that job, because it flips to a dark green
+     in dark mode and would leave the icon invisible on these tints. The
+     single-gradient version this replaced had the mirror-image problem: it
+     inverted in dark mode, where --brand-strong is lighter than --surface-media. */
+  --media-fallback-foreground: oklch(0.982 0.012 85);
+  --media-fallback-destination-from: oklch(0.298 0.061 153);
+  --media-fallback-destination-to: oklch(0.335 0.062 153);
+  --media-fallback-things-to-do-from: oklch(0.302 0.055 62);
+  --media-fallback-things-to-do-to: oklch(0.339 0.058 62);
+  --media-fallback-food-and-drink-from: oklch(0.305 0.062 35);
+  --media-fallback-food-and-drink-to: oklch(0.342 0.065 35);
+  --media-fallback-stay-from: oklch(0.296 0.048 185);
+  --media-fallback-stay-to: oklch(0.333 0.05 185);
+  --media-fallback-shopping-from: oklch(0.3 0.052 330);
+  --media-fallback-shopping-to: oklch(0.337 0.055 330);
+  --media-fallback-transport-from: oklch(0.298 0.05 240);
+  --media-fallback-transport-to: oklch(0.335 0.052 240);
+  --media-fallback-other-from: oklch(0.3 0.02 100);
+  --media-fallback-other-to: oklch(0.337 0.022 100);
   --surface-overlay: oklch(0.18 0.025 62 / 0.72);
   --text-subtle: oklch(0.497 0.025 65);
   --brand: oklch(0.374 0.072 153);
@@ -116,6 +137,23 @@
   --surface-hover: oklch(0.294 0.032 154);
   --surface-tint: oklch(0.226 0.034 151);
   --surface-media: oklch(0.274 0.051 153);
+  /* Deliberately the same value as in :root. The tints below it are dark in
+     both themes, so their ink does not flip with the theme. */
+  --media-fallback-foreground: oklch(0.982 0.012 85);
+  --media-fallback-destination-from: oklch(0.243 0.049 153);
+  --media-fallback-destination-to: oklch(0.274 0.051 153);
+  --media-fallback-things-to-do-from: oklch(0.247 0.045 62);
+  --media-fallback-things-to-do-to: oklch(0.278 0.047 62);
+  --media-fallback-food-and-drink-from: oklch(0.25 0.05 35);
+  --media-fallback-food-and-drink-to: oklch(0.281 0.052 35);
+  --media-fallback-stay-from: oklch(0.241 0.04 185);
+  --media-fallback-stay-to: oklch(0.272 0.042 185);
+  --media-fallback-shopping-from: oklch(0.245 0.042 330);
+  --media-fallback-shopping-to: oklch(0.276 0.044 330);
+  --media-fallback-transport-from: oklch(0.243 0.041 240);
+  --media-fallback-transport-to: oklch(0.274 0.043 240);
+  --media-fallback-other-from: oklch(0.245 0.017 100);
+  --media-fallback-other-to: oklch(0.276 0.019 100);
   --surface-overlay: oklch(0.1 0.018 154 / 0.78);
   --text-subtle: oklch(0.718 0.021 85);
   --brand: oklch(0.77 0.09 151);
@@ -159,6 +197,7 @@
   --color-surface-hover: var(--surface-hover);
   --color-surface-tint: var(--surface-tint);
   --color-surface-media: var(--surface-media);
+  --color-media-fallback-foreground: var(--media-fallback-foreground);
   --color-surface-overlay: var(--surface-overlay);
   --color-text-subtle: var(--text-subtle);
   --color-brand: var(--brand);

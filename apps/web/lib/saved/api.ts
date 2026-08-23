@@ -1,3 +1,4 @@
+import type { TrovePlaceCategory } from '@/lib/place-categories';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 /**
@@ -7,8 +8,7 @@ import { createBrowserSupabaseClient } from '@/lib/supabase/client';
  */
 export type PlaceSnapshot = {
   address: string | null;
-  category:
-    'destination' | 'food_and_drink' | 'other' | 'shopping' | 'stay' | 'things_to_do' | 'transport';
+  category: TrovePlaceCategory;
   /** When the provider answered, so a surface can date what it shows. */
   fetchedAt: string;
   googleMapsUri: string | null;
@@ -71,8 +71,7 @@ export type SavedCollection = {
 };
 
 export type ProviderSuggestion = {
-  category:
-    'destination' | 'food_and_drink' | 'other' | 'shopping' | 'stay' | 'things_to_do' | 'transport';
+  category: TrovePlaceCategory;
   description: string | null;
   externalPlaceId: string;
   name: string;

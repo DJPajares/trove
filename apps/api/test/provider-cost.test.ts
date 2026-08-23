@@ -1,7 +1,10 @@
 import { expect, beforeEach, test } from 'vitest';
 
 import { CachedPlacesService, resetCachedPlacesMemo } from '../src/services/cached-places.js';
+import { CachedEditorialImagesService } from '../src/services/cached-editorial-images.js';
 import { CachedRoutesService } from '../src/services/cached-routes.js';
+import { resetEditorialImageBudget } from '../src/services/editorial-image-budget.js';
+import { PexelsEditorialImageProvider } from '../src/services/pexels-editorial-images.js';
 import { createPlaceResolver } from '../src/services/itinerary-routes.js';
 import {
   hydratePlaceSnapshots,
@@ -68,6 +71,10 @@ type LegRow = {
 
 const providerRefs = new Map<string, ProviderRefRow>();
 const legs = new Map<string, LegRow>();
+const editorialImages = new Map<
+  string,
+  { cachedAt: Date | null; id: string; subjectKey: string }
+>();
 let tripFixture: unknown = null;
 let dayFixture: unknown = null;
 let tripFindFirstCalls = 0;
@@ -119,6 +126,21 @@ function installStubPrisma() {
         legs.set(key, { ...(args.create as unknown as LegRow), key });
         return legs.get(key);
       },
+    },
+    editorialImage: {
+      findMany: async (args: { where: { subjectKey: { in: string[] } } }) =>
+        args.where.subjectKey.in.flatMap((subjectKey) => {
+          const row = editorialImages.get(subjectKey);
+          return row ? [row] : [];
+        }),
+      upsert: async (args: { update: Record<string, unknown>; where: { subjectKey: string } }) => {
+        const row = { ...args.update, id: 'image-1', subjectKey: args.where.subjectKey };
+        editorialImages.set(args.where.subjectKey, row as never);
+        return { id: 'image-1' };
+      },
+    },
+    place: {
+      updateMany: async () => ({ count: 0 }),
     },
     trip: {
       // Plan Score's own query and the day-routes query it fans out to both call
@@ -300,6 +322,8 @@ function countingRoutesProvider() {
 beforeEach(() => {
   providerRefs.clear();
   legs.clear();
+  editorialImages.clear();
+  resetEditorialImageBudget();
   tripFixture = null;
   dayFixture = null;
   tripFindFirstCalls = 0;
@@ -1114,4 +1138,101 @@ test('structured telemetry separates cache outcomes, Places calls, and Routes ca
         event.routeMode === 'walk',
     ),
   ).toBeTruthy();
+});
+
+/**
+ * A photograph on every card is the newest way this app could start costing a
+ * request per row. Editorial imagery is free, but its provider caps requests per
+ * hour, so the failure mode is the same shape as a bill: a list that asks once
+ * per row works in development and stops working at the size real people have.
+ */
+function editorialProvider() {
+  let fetches = 0;
+
+  const provider = new PexelsEditorialImageProvider({
+    apiKey: 'server-key',
+    fetcher: async () => {
+      fetches += 1;
+      return Response.json({
+        photos: [
+          {
+            id: fetches,
+            photographer: 'Ada Rivera',
+            photographer_url: 'https://www.pexels.com/@ada',
+            src: {
+              large: 'https://images.example/large.jpg',
+              large2x: 'https://images.example/large2x.jpg',
+              medium: 'https://images.example/medium.jpg',
+              original: 'https://images.example/original.jpg',
+            },
+            url: `https://www.pexels.com/photo/${fetches}/`,
+          },
+        ],
+      });
+    },
+    hourlyBudget: 150,
+    source: 'editorial-images',
+  });
+
+  return { fetches: () => fetches, provider };
+}
+
+test('a Trips list costs one editorial image call per distinct destination, then none', async () => {
+  const { fetches, provider } = editorialProvider();
+  const service = new CachedEditorialImagesService(
+    provider,
+    () => new Date(),
+    undefined,
+    'editorial-images',
+  );
+  const trips = ['Tokyo', 'Kyoto', 'Tokyo', 'Osaka', 'kyoto', 'Tokyo'];
+
+  await service.resolveMany(
+    trips.map((name, index) => ({ subject: { name }, tripId: `trip-${index}` })),
+    { ownerId: 'owner-1' },
+  );
+
+  expect(fetches(), 'six trips, three distinct destinations').toBe(3);
+  expect(getProviderCallCounts()['pexels:search']).toBe(3);
+
+  await service.resolveMany(
+    trips.map((name, index) => ({ subject: { name }, tripId: `trip-${index}` })),
+    { ownerId: 'owner-1' },
+  );
+
+  expect(fetches(), 'the second render of the same list is free').toBe(3);
+});
+
+test('a place list with no resolvable photos asks once per subject, not once per render', async () => {
+  let fetches = 0;
+  const provider = new PexelsEditorialImageProvider({
+    apiKey: 'server-key',
+    fetcher: async () => {
+      fetches += 1;
+      return Response.json({ photos: [] });
+    },
+    hourlyBudget: 150,
+    source: 'editorial-images',
+  });
+  const service = new CachedEditorialImagesService(
+    provider,
+    () => new Date(),
+    undefined,
+    'editorial-images',
+  );
+  const places = [
+    { category: 'food_and_drink' as const, name: 'Unknown Cafe' },
+    { category: 'stay' as const, name: 'Unknown Inn' },
+  ];
+
+  await service.resolveMany(
+    places.map((subject) => ({ subject })),
+    { ownerId: 'owner-1' },
+  );
+  await service.resolveMany(
+    places.map((subject) => ({ subject })),
+    { ownerId: 'owner-1' },
+  );
+
+  expect(fetches, 'an empty answer is remembered too').toBe(2);
 });

@@ -1004,6 +1004,8 @@
     "previousDay": "Previous day",
     "nextDay": "Next day",
     "daySettings": "Day settings",
+    "compactList": "Compact list",
+    "compactListHelp": "Show places only, hiding travel legs and the day\u2019s travel totals.",
     "dayMove": {
       "action": "Move day plan",
       "title": "Move this day plan",

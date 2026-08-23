@@ -89,6 +89,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import {
   createItineraryItem,
@@ -116,6 +117,7 @@ import {
   updateItineraryItemRouteMode,
 } from '@/lib/itinerary/api';
 import { useOnlineStatus } from '@/components/trip-sync-status';
+import { useCompactItinerary } from '@/hooks/use-compact-itinerary';
 import { buildDaySequence, dayStopNumbers, resolveDailyBases } from '@/lib/itinerary/day-sequence';
 import { scheduledPlaceUse } from '@/lib/itinerary/places';
 import { itineraryDayRouteRevision, itineraryPlanScoreRevision } from '@/lib/itinerary/routes';
@@ -284,6 +286,7 @@ export function ItineraryManager({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [dayNoteEditor, setDayNoteEditor] = useState<ItineraryDay | null>(null);
   const [daySettingsOpen, setDaySettingsOpen] = useState(false);
+  const { compact, setCompactItinerary } = useCompactItinerary();
   const [dayNoteValue, setDayNoteValue] = useState('');
   const [savingDayNote, setSavingDayNote] = useState(false);
   const [dayMoveSourceId, setDayMoveSourceId] = useState<string | null>(null);
@@ -511,6 +514,13 @@ export function ItineraryManager({
         routeSegments: routes?.segments,
       }),
     [dailyBases, routes, selectedDay],
+  );
+  // Compact hides the legs from the list, not from the day: the sequence itself
+  // is still the full one, so the map keeps drawing the same route and stops
+  // keep the numbers the map labels them with.
+  const shownSequence = useMemo(
+    () => (compact ? daySequence.filter((entry) => entry.kind !== 'leg') : daySequence),
+    [compact, daySequence],
   );
   const tripPlaceById = (tripPlaceId: string | null) =>
     tripPlaceId
@@ -1501,6 +1511,25 @@ export function ItineraryManager({
                       ) : null}
                     </div>
 
+                    <div className="flex items-start justify-between gap-3 border-t border-border pt-3">
+                      <div className="min-w-0">
+                        <label
+                          className="text-xs font-medium text-muted-foreground"
+                          htmlFor="itinerary-compact-list"
+                        >
+                          {t('compactList')}
+                        </label>
+                        <p className="mt-0.5 text-xs leading-5 text-muted-foreground/80">
+                          {t('compactListHelp')}
+                        </p>
+                      </div>
+                      <Switch
+                        checked={compact}
+                        id="itinerary-compact-list"
+                        onCheckedChange={setCompactItinerary}
+                      />
+                    </div>
+
                     <div className="space-y-2 border-t border-border pt-3">
                       <div>
                         <p className="text-xs font-medium text-muted-foreground">
@@ -1610,12 +1639,14 @@ export function ItineraryManager({
               </div>
             </div>
 
-            <ItineraryRouteSummary
-              data={routes}
-              distanceUnit={preferences.distanceUnit}
-              locale={locale}
-              status={routeStatus}
-            />
+            {compact ? null : (
+              <ItineraryRouteSummary
+                data={routes}
+                distanceUnit={preferences.distanceUnit}
+                locale={locale}
+                status={routeStatus}
+              />
+            )}
 
             <Tabs
               onValueChange={(value) => setMobileView(value as 'list' | 'map')}
@@ -1666,7 +1697,7 @@ export function ItineraryManager({
                     }))}
                     defaultTimeZone={selectedDay.defaultTimeZone}
                     distanceUnit={preferences.distanceUnit}
-                    entries={daySequence}
+                    entries={shownSequence}
                     itemCount={selectedDay.items.length}
                     label={t('itemListLabel')}
                     locale={locale}

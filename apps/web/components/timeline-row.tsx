@@ -24,8 +24,11 @@ const markerVariants = cva(
         /** A base with nothing to point at on the map. */
         'base-unlocated':
           'size-10 rounded-[var(--radius-md)] border-2 border-border bg-muted text-sm text-muted-foreground',
-        /** The connector's own punctuation: smaller than a stop, because it is not one. */
-        leg: 'size-7 rounded-full border border-border-strong bg-background text-brand shadow-[var(--shadow-control)]',
+        /** The connector's own punctuation: a mark on the spine, not a badge on
+            it. A leg used to wear the same circle a stop does, holding a copy of
+            the mode icon its own control was already showing one column over —
+            two drawings of one fact on the quietest row of the day. */
+        leg: 'size-2 rounded-full bg-border-strong',
         /** A stop with a pin to match. */
         stop: 'size-10 rounded-full bg-primary text-sm text-primary-foreground',
         /** A stop with no location has no pin to match, and says so by not looking like one. */
@@ -43,11 +46,11 @@ export function TimelineMarker({
   children,
   label,
   variant,
-}: Readonly<{ children: ReactNode; label?: string; variant: TimelineMarkerVariant }>) {
+}: Readonly<{ children?: ReactNode; label?: string; variant: TimelineMarkerVariant }>) {
   return (
     <span className={markerVariants({ variant })}>
       {label ? <span className="sr-only">{label}</span> : null}
-      <span aria-hidden="true">{children}</span>
+      {children ? <span aria-hidden="true">{children}</span> : null}
     </span>
   );
 }
@@ -170,7 +173,6 @@ type RouteTimelineRowProps = {
   /** Why this leg exists, when that is not already obvious from the stops around it. */
   context?: ReactNode;
   metrics: string;
-  mode: ReactNode;
   modeLabel: string;
   state: RoutePresentationState;
   /** Only when the estimate is stale or missing — "current" is what silence means. */
@@ -198,7 +200,6 @@ export function RouteTimelineRow({
   connector,
   context,
   metrics,
-  mode,
   modeLabel,
   state,
   stateLabel,
@@ -209,7 +210,7 @@ export function RouteTimelineRow({
       className={cn('bg-surface-tint/40', className)}
       connector={connector}
       description={context}
-      marker={<TimelineMarker variant="leg">{mode}</TimelineMarker>}
+      marker={<TimelineMarker variant="leg" />}
       meta={stateLabel}
       state={state}
       title={

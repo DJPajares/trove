@@ -1515,18 +1515,18 @@ export function ItineraryManager({
                       <div className="min-w-0">
                         <label
                           className="text-xs font-medium text-muted-foreground"
-                          htmlFor="itinerary-compact-list"
+                          htmlFor="itinerary-travel-details"
                         >
-                          {t('compactList')}
+                          {t('travelDetails')}
                         </label>
                         <p className="mt-0.5 text-xs leading-5 text-muted-foreground/80">
-                          {t('compactListHelp')}
+                          {t('travelDetailsHelp')}
                         </p>
                       </div>
                       <Switch
-                        checked={compact}
-                        id="itinerary-compact-list"
-                        onCheckedChange={setCompactItinerary}
+                        checked={!compact}
+                        id="itinerary-travel-details"
+                        onCheckedChange={(checked) => setCompactItinerary(!checked)}
                       />
                     </div>
 

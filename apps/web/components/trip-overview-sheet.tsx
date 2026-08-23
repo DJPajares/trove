@@ -1,24 +1,23 @@
 'use client';
 
 import {
-  CalendarClock,
   ChevronRight,
   ClipboardCheck,
-  Compass,
-  Eye,
   Info,
   Pencil,
   ReceiptText,
-  Sparkles,
   Users,
   WalletCards,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 
+import { EditorialSection } from '@/components/editorial-section';
 import { ExperienceRatingSummary } from '@/components/experience-rating-field';
 import { PlanScorePanel } from '@/components/plan-score-panel';
+import { TripDestinationActions } from '@/components/trip-destination-actions';
+import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
 import { Button } from '@/components/ui/button';
 import { Item, ItemContent, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item';
 import {
@@ -32,16 +31,18 @@ import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import { fetchTripInfo, type TripInfoEntry } from '@/lib/trip-info/api';
 import type { Trip } from '@/lib/trips/api';
 import { formatTripDate } from '@/lib/trips/format';
+import { primaryTripDestinations, supportingTripDestinations } from '@/lib/trips/navigation';
 
-// Tools only. Memories is one of the three experiences the trip is built around and
-// belongs with them, and the itinerary opens the Places collection itself — listing
-// either here would make a core experience look like a utility.
-const overviewTools = [
-  { href: 'reservations', icon: ReceiptText, label: 'reservations' },
-  { href: 'tasks', icon: ClipboardCheck, label: 'tasks' },
-  { href: 'expenses', icon: WalletCards, label: 'expenses' },
-  { href: 'info', icon: Info, label: 'tripInfo' },
-] as const;
+/** The tools' icons. Which tools there are, and their order, is the navigation contract's. */
+const supportingIcons: Record<
+  'expenses' | 'info' | 'reservations' | 'tasks',
+  ComponentType<{ className?: string }>
+> = {
+  expenses: WalletCards,
+  info: Info,
+  reservations: ReceiptText,
+  tasks: ClipboardCheck,
+};
 
 function TripOverviewPlanScore({
   revision,
@@ -71,6 +72,16 @@ function TripOverviewPlanScore({
       status={planScore.status}
       title={planScoreTranslations('title')}
     />
+  );
+}
+
+/** One fact about a trip. Local to this file: it has exactly one consumer. */
+function OverviewFact({ label, value }: Readonly<{ label: string; value: ReactNode }>) {
+  return (
+    <div>
+      <p className="text-[length:var(--text-metadata)] font-medium text-text-subtle">{label}</p>
+      <p className="mt-1 text-sm break-words text-foreground">{value}</p>
+    </div>
   );
 }
 
@@ -121,42 +132,30 @@ export function TripOverviewContent({
 
   return (
     <div className="space-y-6 overflow-y-auto p-5">
-      <div className="flex flex-wrap gap-2">
-        {trip.lifecycle === 'active' ? (
-          <Button nativeButton={false} render={<Link href={`/trips/${trip.id}/mode`} />}>
-            <Compass aria-hidden="true" data-icon="inline-start" />
-            {t('openTripMode')}
-          </Button>
-        ) : null}
-        {trip.lifecycle === 'planning' ? (
-          <Button
-            nativeButton={false}
-            render={
-              <Link href={`/trips/${trip.id}/mode?preview=1&date=${trip.startDate}&time=09%3A00`} />
-            }
-          >
-            <Eye aria-hidden="true" data-icon="inline-start" />
-            {t('previewTripMode')}
-          </Button>
-        ) : null}
-        {trip.lifecycle === 'completed' ? (
-          <Button nativeButton={false} render={<Link href={`/trips/${trip.id}/memories`} />}>
-            <Sparkles aria-hidden="true" data-icon="inline-start" />
-            {t(trip.memoryCount ? 'viewMemories' : 'addMemories')}
-          </Button>
-        ) : null}
-        <Button
-          nativeButton={false}
-          render={<Link href={`/trips/${trip.id}/itinerary`} />}
-          variant="outline"
-        >
-          <CalendarClock aria-hidden="true" data-icon="inline-start" />
-          {t('continuePlanning')}
-        </Button>
-        <Button onClick={() => onEdit(trip)} variant="ghost">
-          <Pencil aria-hidden="true" data-icon="inline-start" />
-          {t('editTrip')}
-        </Button>
+      <div className="space-y-3">
+        <TripLifecycleBadge lifecycle={trip.lifecycle} />
+        {/*
+          Which actions a stage offers, in what order, and which one leads is the
+          navigation contract's answer rather than this sheet's - the same one
+          the trip's own screens use.
+        */}
+        <TripDestinationActions
+          destinations={primaryTripDestinations(trip.id, trip.lifecycle, trip.startDate)}
+          extra={
+            <Button onClick={() => onEdit(trip)} variant="ghost">
+              <Pencil aria-hidden="true" data-icon="inline-start" />
+              {t('editTrip')}
+            </Button>
+          }
+          labelOverrides={
+            trip.lifecycle === 'completed'
+              ? { memories: t(trip.memoryCount ? 'viewMemories' : 'addMemories') }
+              : {
+                  itinerary: t('continuePlanning'),
+                  mode: t(trip.lifecycle === 'active' ? 'openTripMode' : 'previewTripMode'),
+                }
+          }
+        />
       </div>
       {/*
         Plan Score judges the plan and only applies while there is still
@@ -173,55 +172,59 @@ export function TripOverviewContent({
       ) : planScoreEnabled ? (
         <TripOverviewPlanScore revision={trip.updatedAt} tripId={trip.id} />
       ) : null}
+      {/* Reference, not headline: the actions and the score above are what the
+          traveller came for, so these read quieter than they used to. */}
       <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <p className="text-sm font-medium">{t('destinations')}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {trip.destinations.length
+        <OverviewFact
+          label={t('destinations')}
+          value={
+            trip.destinations.length
               ? trip.destinations.map((destination) => destination.name).join(', ')
-              : t('destinationOpen')}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm font-medium">{t('travellers')}</p>
-          <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
-            <Users aria-hidden="true" className="size-4" />
-            {t('travellerCount', { count: trip.partySize })}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm font-medium">{t('planningReadiness')}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t(`readinessState.${trip.planningReadiness}`)}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm font-medium">{t('startingLocation')}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {trip.startingLocation?.name ?? t('startingLocationUnavailable')}
-          </p>
-        </div>
+              : t('destinationOpen')
+          }
+        />
+        <OverviewFact
+          label={t('travellers')}
+          value={
+            <span className="flex items-center gap-1.5">
+              <Users aria-hidden="true" className="size-4" />
+              {t('travellerCount', { count: trip.partySize })}
+            </span>
+          }
+        />
+        <OverviewFact
+          label={t('planningReadiness')}
+          value={t(`readinessState.${trip.planningReadiness}`)}
+        />
+        <OverviewFact
+          label={t('startingLocation')}
+          value={trip.startingLocation?.name ?? t('startingLocationUnavailable')}
+        />
       </div>
       {trip.notes ? (
-        <div>
-          <p className="text-sm font-medium">{t('notes')}</p>
-          <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{trip.notes}</p>
-        </div>
+        <OverviewFact
+          label={t('notes')}
+          value={<span className="whitespace-pre-wrap">{trip.notes}</span>}
+        />
       ) : null}
       <nav aria-label={t('tripTools')} className="border-t pt-5">
         <h2 className="text-base font-semibold">{t('tripTools')}</h2>
         <ItemGroup className="mt-3" variant="list">
-          {overviewTools.map(({ href, icon: Icon, label }) => (
-            <Item key={href} render={<Link href={`/trips/${trip.id}/${href}`} />} size="sm">
-              <ItemMedia variant="icon">
-                <Icon aria-hidden="true" className="text-brand" />
-              </ItemMedia>
-              <ItemContent>
-                <ItemTitle>{t(label)}</ItemTitle>
-              </ItemContent>
-              <ChevronRight aria-hidden="true" className="size-4 text-text-subtle" />
-            </Item>
-          ))}
+          {supportingTripDestinations(trip.id).map((destination) => {
+            const Icon = supportingIcons[destination.section as keyof typeof supportingIcons];
+
+            return (
+              <Item key={destination.section} render={<Link href={destination.href} />} size="sm">
+                <ItemMedia variant="icon">
+                  <Icon aria-hidden="true" className="text-brand" />
+                </ItemMedia>
+                <ItemContent>
+                  <ItemTitle>{t(destination.labelKey)}</ItemTitle>
+                </ItemContent>
+                <ChevronRight aria-hidden="true" className="size-4 text-text-subtle" />
+              </Item>
+            );
+          })}
         </ItemGroup>
       </nav>
       {tripInfoStatus === 'loading' ? (
@@ -237,12 +240,8 @@ export function TripOverviewContent({
         </section>
       ) : null}
       {tripInfoStatus === 'idle' && tripInfo.length ? (
-        <section className="space-y-3 border-t pt-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-base font-semibold">{t('tripInfo')}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{t('pinnedTripInfo')}</p>
-            </div>
+        <EditorialSection
+          actions={
             <Button
               nativeButton={false}
               render={<Link href={`/trips/${trip.id}/info`} />}
@@ -251,18 +250,18 @@ export function TripOverviewContent({
             >
               {t('viewTripInfo')}
             </Button>
-          </div>
+          }
+          density="compact"
+          description={t('pinnedTripInfo')}
+          title={t('tripInfo')}
+          treatment="ruled"
+        >
           <div className="space-y-3">
             {tripInfo.map((entry) => (
-              <div className="space-y-1" key={entry.id}>
-                <p className="text-sm font-medium">{entry.label}</p>
-                <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
-                  {entry.value}
-                </p>
-              </div>
+              <OverviewFact key={entry.id} label={entry.label} value={entry.value} />
             ))}
           </div>
-        </section>
+        </EditorialSection>
       ) : null}
     </div>
   );

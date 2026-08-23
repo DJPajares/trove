@@ -8,6 +8,15 @@ import type { Trip } from './api';
 const RECENTLY_COMPLETED_DAYS = 30;
 
 /**
+ * How much of the archive the library shows before offering the rest.
+ *
+ * Four rows is one comfortable section: enough that a traveller sees the trips
+ * they most recently took, few enough that where they have been never
+ * out-weighs where they are going.
+ */
+export const PAST_TRIPS_PREVIEW_COUNT = 4;
+
+/**
  * The calendar date in a given zone, as `YYYY-MM-DD`.
  *
  * This deliberately mirrors `getLocalDate` in

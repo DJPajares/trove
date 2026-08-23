@@ -1,17 +1,10 @@
 'use client';
 
-import {
-  Bookmark,
-  CalendarPlus,
-  CheckCircle2,
-  Ellipsis,
-  Eye,
-  MapPinned,
-  Pencil,
-  Trash2,
-} from 'lucide-react';
+import { CalendarPlus, CheckCircle2, Ellipsis, Eye, MapPinned, Pencil, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import { MediaAttribution } from '@/components/media-attribution';
+import { PlaceMedia } from '@/components/place-media';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -36,7 +29,10 @@ import {
   ItemMedia,
   ItemTitle,
 } from '@/components/ui/item';
+import { useEditorialImages } from '@/hooks/use-editorial-images';
 import type { ScheduledPlaceUse } from '@/lib/itinerary/places';
+import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
+import { resolvePlaceMediaSource } from '@/lib/media/trip-media';
 import { googleMapsPlaceHref } from '@/lib/saved/api';
 import type { TripPlace, TripPlacePriority } from '@/lib/trip-places/api';
 import {
@@ -81,6 +77,7 @@ export function TripPlacesPanel({
   tripPlaces,
 }: Readonly<TripPlacesPanelProps>) {
   const t = useTranslations('tripPlaces');
+  const mediaTranslations = useTranslations('media');
 
   const placeName = (tripPlace: TripPlace) =>
     resolveTripPlaceName(tripPlace, {
@@ -111,26 +108,67 @@ export function TripPlacesPanel({
     ].filter((label): label is string => Boolean(label));
   };
 
+  /**
+   * A place asks for a photograph under the provider's name for it, never the
+   * traveller's nickname: "Mum's favourite bakery" is a photograph of nothing.
+   * Custom places do not ask at all, for the same reason.
+   */
+  const editorialSubjects: EditorialSubject[] = tripPlaces
+    .filter((tripPlace) => tripPlace.place.kind === 'provider')
+    .flatMap((tripPlace) => {
+      const providerName = resolveProviderPlaceName(tripPlace);
+      if (!providerName) return [];
+      return [
+        {
+          category: tripPlace.place.snapshot?.category,
+          name: providerName,
+          placeId: tripPlace.place.id,
+        },
+      ];
+    });
+  const editorialImages = useEditorialImages(editorialSubjects);
+
   return (
     <ItemGroup aria-label={t('listLabel')} className="gap-2" variant="list">
       {tripPlaces.map((tripPlace) => {
         const name = placeName(tripPlace);
+        const providerName = resolveProviderPlaceName(tripPlace);
+        const category = tripPlace.place.snapshot?.category;
+        const editorial = providerName
+          ? editorialImages.get(editorialSubjectKey({ category, name: providerName }))
+          : null;
         const official = officialName(tripPlace);
         const usage = usageLabels(tripPlace);
         const hasScheduledDay = Boolean(placeUse?.[tripPlace.id]?.dayDates.length);
 
         return (
           <Item className="gap-3 px-3 py-2.5" key={tripPlace.id} variant="outline">
-            <ItemMedia
-              className="size-8 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
-              variant="icon"
-            >
-              {tripPlace.place.kind === 'custom' ? (
+            {tripPlace.place.kind === 'custom' ? (
+              <ItemMedia
+                className="size-8 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
+                variant="icon"
+              >
                 <MapPinned aria-hidden="true" className="size-4" />
-              ) : (
-                <Bookmark aria-hidden="true" className="size-4" />
-              )}
-            </ItemMedia>
+              </ItemMedia>
+            ) : (
+              <ItemMedia className="size-8 rounded-[var(--radius-md)]" variant="default">
+                <PlaceMedia
+                  alt={
+                    editorial && providerName
+                      ? mediaTranslations('alt.placeEditorial', { name: providerName })
+                      : ''
+                  }
+                  category={category}
+                  className="size-full"
+                  // A thumbnail this size cannot carry a legible credit, so the
+                  // row renders it below instead.
+                  credit="inline"
+                  sizes="32px"
+                  source={resolvePlaceMediaSource({ editorial })}
+                  variant="thumbnail"
+                />
+              </ItemMedia>
+            )}
 
             <ItemContent className="min-w-0 gap-0.5">
               <ItemTitle className="flex min-w-0 items-center gap-2">
@@ -157,6 +195,9 @@ export function TripPlacesPanel({
                   {label}
                 </p>
               ))}
+              {editorial ? (
+                <MediaAttribution attribution={editorial.attribution} variant="inline" />
+              ) : null}
             </ItemContent>
 
             <ItemActions className="shrink-0">

@@ -17,8 +17,10 @@ import {
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { MediaAttribution } from '@/components/media-attribution';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
+import { PlaceMedia } from '@/components/place-media';
 import { SearchField } from '@/components/search-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -87,11 +89,13 @@ import {
   updateSavedPlaceNote,
 } from '@/lib/saved/api';
 import { PROVIDER_SEARCH_RESULT_LIMIT } from '@/lib/saved/search-results';
+import { useEditorialImages } from '@/hooks/use-editorial-images';
+import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
+import { resolvePlaceMediaSource } from '@/lib/media/trip-media';
 import {
   removeSavedPlaceState,
   updateCollectionMembershipState,
 } from '@/lib/saved/collection-membership';
-import { cn } from '@/lib/utils';
 
 type CollectionEditor =
   { collection: null; mode: 'closed' | 'create' } | { collection: SavedCollection; mode: 'rename' };
@@ -112,6 +116,7 @@ function sortCollections(collections: SavedCollection[]) {
 
 export function SavedPlacesManager() {
   const t = useTranslations('saved');
+  const mediaTranslations = useTranslations('media');
   const locale = useLocale();
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
   const [collections, setCollections] = useState<SavedCollection[]>([]);
@@ -237,6 +242,20 @@ export function SavedPlacesManager() {
     }
     return savedPlace.place.snapshot?.name ?? savedPlace.place.providerLabel ?? t('providerPlace');
   }
+
+  /**
+   * Only provider places ask for a photograph. A custom place is somewhere the
+   * traveller invented - a friend's flat, a meeting point - and stock travel
+   * photography of its name would be a picture of somewhere else.
+   */
+  const editorialSubjects: EditorialSubject[] = visibleSavedPlaces
+    .filter((savedPlace) => savedPlace.place.kind === 'provider')
+    .map((savedPlace) => ({
+      category: savedPlace.place.snapshot?.category,
+      name: getPlaceName(savedPlace),
+      placeId: savedPlace.place.id,
+    }));
+  const editorialImages = useEditorialImages(editorialSubjects);
 
   function getPlaceDescription(savedPlace: SavedPlace) {
     if (savedPlace.place.kind === 'custom') {
@@ -619,27 +638,49 @@ export function SavedPlacesManager() {
               <ItemGroup aria-label={t('listLabel')} variant="list">
                 {visibleSavedPlaces.map((savedPlace) => {
                   const category = savedPlace.place.snapshot?.category;
+                  const editorial =
+                    savedPlace.place.kind === 'provider'
+                      ? editorialImages.get(
+                          editorialSubjectKey({ category, name: getPlaceName(savedPlace) }),
+                        )
+                      : null;
                   return (
                     <Item
                       className="min-h-20 flex-nowrap px-3 py-3 text-left hover:bg-muted/60"
                       key={savedPlace.id}
                       variant="default"
                     >
-                      <ItemMedia
-                        className={cn(
-                          'size-11 rounded-[var(--radius-md)] sm:size-12',
-                          savedPlace.place.kind === 'custom'
-                            ? 'bg-secondary text-secondary-foreground'
-                            : 'bg-brand/10 text-brand',
-                        )}
-                        variant="icon"
-                      >
-                        {savedPlace.place.kind === 'custom' ? (
+                      {savedPlace.place.kind === 'custom' ? (
+                        <ItemMedia
+                          className="size-11 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground sm:size-12"
+                          variant="icon"
+                        >
                           <NotebookPen aria-hidden="true" className="size-5" />
-                        ) : (
-                          <MapPinned aria-hidden="true" className="size-5" />
-                        )}
-                      </ItemMedia>
+                        </ItemMedia>
+                      ) : (
+                        <ItemMedia
+                          className="size-11 rounded-[var(--radius-md)] sm:size-12"
+                          variant="default"
+                        >
+                          <PlaceMedia
+                            alt={
+                              editorial
+                                ? mediaTranslations('alt.placeEditorial', {
+                                    name: getPlaceName(savedPlace),
+                                  })
+                                : ''
+                            }
+                            category={category}
+                            className="size-full"
+                            // A thumbnail this size cannot carry a legible
+                            // credit, so the row renders it below instead.
+                            credit="inline"
+                            sizes="48px"
+                            source={resolvePlaceMediaSource({ editorial })}
+                            variant="thumbnail"
+                          />
+                        </ItemMedia>
+                      )}
                       <ItemContent className="min-w-0 gap-1.5">
                         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
                           <ItemTitle className="max-w-full text-base">
@@ -668,6 +709,12 @@ export function SavedPlacesManager() {
                             </span>
                           ) : null}
                           {savedPlace.note ? <span>{savedPlace.note}</span> : null}
+                          {editorial ? (
+                            <MediaAttribution
+                              attribution={editorial.attribution}
+                              variant="inline"
+                            />
+                          ) : null}
                         </div>
                       </ItemContent>
                       <ItemActions className="shrink-0 self-start">

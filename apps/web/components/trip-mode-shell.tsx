@@ -1,6 +1,15 @@
 'use client';
 
-import { ArrowLeft, CalendarDays, Clock3, Compass, Eye, Map, MapPinned } from 'lucide-react';
+import {
+  ArrowLeft,
+  CalendarDays,
+  ChevronDown,
+  Clock3,
+  Compass,
+  Eye,
+  Map,
+  MapPinned,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -9,12 +18,20 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 
 import { DatePicker } from '@/components/date-picker';
 import { PageState } from '@/components/page-state';
+import { usePreferences } from '@/components/preferences-provider';
 import { TimeInput } from '@/components/time-input';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripSyncStatus } from '@/components/trip-sync-status';
 import { TripMedia } from '@/components/trip-media';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import {
   fetchItinerary,
   type Itinerary,
@@ -87,6 +104,185 @@ function addPreviewParams(href: string, date: string, time: string) {
   params.set('date', date);
   params.set('time', time);
   return `${path}?${params.toString()}${hash ? `#${hash}` : ''}`;
+}
+
+/**
+ * Whether the preview controls belong in a sheet rather than inline.
+ *
+ * The same breakpoint `TimeInput` already uses to make the same choice, so a
+ * phone never gets two different answers about what an overlay is for.
+ */
+function useSheetDisclosure() {
+  const [mobile, setMobile] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 767px)');
+    const update = () => setMobile(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
+  return mobile;
+}
+
+type PreviewControlsProps = {
+  activityCounts: Readonly<Record<string, number>>;
+  endDate: string;
+  idPrefix: string;
+  onChange: (next: { date?: string; time?: string }) => void;
+  selection: PreviewSelection;
+  startDate: string;
+};
+
+/** The two controls a preview actually has, wherever they are disclosed. */
+function TripModePreviewControls({
+  activityCounts,
+  endDate,
+  idPrefix,
+  onChange,
+  selection,
+  startDate,
+}: Readonly<PreviewControlsProps>) {
+  const t = useTranslations('tripMode');
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <Field>
+        <FieldLabel htmlFor={`${idPrefix}-date`}>{t('preview.date')}</FieldLabel>
+        <DatePicker
+          activityCounts={activityCounts}
+          id={`${idPrefix}-date`}
+          label={t('preview.date')}
+          max={endDate}
+          min={startDate}
+          onChange={(date) => date && onChange({ date })}
+          required
+          value={selection.date}
+        />
+      </Field>
+      <Field>
+        <FieldLabel htmlFor={`${idPrefix}-time`}>{t('preview.time')}</FieldLabel>
+        <TimeInput
+          id={`${idPrefix}-time`}
+          onValueChange={(time) => time && onChange({ time })}
+          required
+          value={selection.time}
+        />
+        <FieldDescription>{t('preview.timeDescription')}</FieldDescription>
+      </Field>
+    </div>
+  );
+}
+
+/**
+ * Where and when the preview is standing, in one line.
+ *
+ * Those are two facts, and they used to cost a bordered block holding two
+ * labelled controls and two paragraphs of explanation — roughly a quarter of a
+ * phone's first viewport, spent before the itinerary had said anything at all.
+ * They are now simply stated, and the controls that change them are one
+ * interaction away: a sheet on a phone, an inline disclosure everywhere else,
+ * so a wide screen never loses its place to an overlay it did not need.
+ */
+function TripModePreviewSummary({
+  activityCounts,
+  endDate,
+  onChange,
+  selection,
+  startDate,
+}: Readonly<Omit<PreviewControlsProps, 'idPrefix'>>) {
+  const t = useTranslations('tripMode');
+  const locale = useLocale();
+  const { preferences } = usePreferences();
+  const sheetDisclosure = useSheetDisclosure();
+  const [open, setOpen] = useState(false);
+
+  const dateLabel = new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+    weekday: 'short',
+  }).format(new Date(`${selection.date}T00:00:00.000Z`));
+  const [hour, minute] = selection.time.split(':').map(Number);
+  const timeLabel = new Intl.DateTimeFormat(locale, {
+    hour: 'numeric',
+    hour12: preferences.timeFormat === '12h',
+    minute: '2-digit',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(2000, 0, 1, hour ?? 9, minute ?? 0)));
+  const summary = t('preview.summary', { date: dateLabel, time: timeLabel });
+
+  return (
+    <div className="border-y border-status-info/35 bg-status-info/8">
+      <div className="flex items-center gap-2.5 px-3 py-2.5 sm:gap-3 sm:px-4">
+        <Eye aria-hidden="true" className="size-4 shrink-0 text-status-info" />
+        <p className="min-w-0 flex-1 text-sm leading-5 font-medium text-pretty text-foreground">
+          {summary}
+        </p>
+        <Button
+          aria-controls={sheetDisclosure ? undefined : 'trip-mode-preview-controls'}
+          aria-expanded={sheetDisclosure ? undefined : open}
+          className="shrink-0"
+          onClick={() => setOpen((current) => !current)}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          {t('preview.edit')}
+          {sheetDisclosure ? null : (
+            <ChevronDown
+              aria-hidden="true"
+              className={cn(
+                'transition-transform duration-[var(--motion-standard)] motion-reduce:transition-none',
+                open && 'rotate-180',
+              )}
+              data-icon="inline-end"
+            />
+          )}
+        </Button>
+      </div>
+
+      {sheetDisclosure ? (
+        <Sheet onOpenChange={setOpen} open={open}>
+          <SheetContent closeLabel={t('preview.close')} mobileSide="bottom">
+            <SheetHeader>
+              <SheetTitle>{t('preview.title')}</SheetTitle>
+              <SheetDescription>{t('preview.description')}</SheetDescription>
+            </SheetHeader>
+            <div className="min-h-0 overflow-y-auto px-6 pb-6">
+              <TripModePreviewControls
+                activityCounts={activityCounts}
+                endDate={endDate}
+                idPrefix="trip-mode-preview-sheet"
+                onChange={onChange}
+                selection={selection}
+                startDate={startDate}
+              />
+            </div>
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <div
+          className="border-t border-status-info/25 px-4 py-4"
+          hidden={!open}
+          id="trip-mode-preview-controls"
+        >
+          <p className="mb-4 max-w-[var(--layout-reading)] text-sm leading-[1.55] text-pretty text-muted-foreground">
+            {t('preview.description')}
+          </p>
+          <TripModePreviewControls
+            activityCounts={activityCounts}
+            endDate={endDate}
+            idPrefix="trip-mode-preview-panel"
+            onChange={onChange}
+            selection={selection}
+            startDate={startDate}
+          />
+        </div>
+      )}
+    </div>
+  );
 }
 
 function TripModePreviewPlanScore({
@@ -289,8 +485,11 @@ export function TripModeShell({
 
   return (
     <TripModePreviewProvider value={previewContext}>
-      <section className="mx-auto w-full max-w-6xl space-y-6" data-slot="trip-mode-shell">
-        <header className="space-y-5">
+      <section
+        className="mx-auto w-full max-w-6xl space-y-5 sm:space-y-6"
+        data-slot="trip-mode-shell"
+      >
+        <header className="space-y-3 sm:space-y-5">
           <Button
             className="-ml-2 text-muted-foreground hover:text-foreground"
             nativeButton={false}
@@ -302,22 +501,25 @@ export function TripModeShell({
             {t('exit')}
           </Button>
 
-          <div className="flex items-start gap-4 sm:items-center">
+          {/* On a phone the trip's name is orientation, not the headline: the
+              traveller came for what is happening now, and a 390x844 viewport
+              only has so many rows before the itinerary has to appear. */}
+          <div className="flex items-center gap-3 sm:gap-4">
             <TripMedia
               alt=""
-              className="size-14 shrink-0 shadow-[var(--shadow-control)] sm:size-16"
+              className="size-11 shrink-0 shadow-[var(--shadow-control)] sm:size-16"
               sizes="64px"
               source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl })}
               variant="thumbnail"
             />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-brand">
+              <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
                 {previewSelection ? t('preview.label') : t('label')}
               </p>
-              <h1 className="mt-1 break-words text-2xl leading-tight font-semibold tracking-[-0.02em] text-foreground sm:text-3xl">
+              <h1 className="mt-0.5 break-words text-[length:var(--text-section-title)] leading-[1.15] font-semibold tracking-[-0.025em] text-foreground sm:text-[length:var(--text-page-title)] sm:leading-[1.08]">
                 {trip.name}
               </h1>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              <p className="mt-0.5 text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
                 {t('dateRange', {
                   endDate: formatDate(trip.endDate),
                   startDate: formatDate(trip.startDate),
@@ -325,7 +527,7 @@ export function TripModeShell({
               </p>
             </div>
             <Button
-              className="hidden sm:inline-flex"
+              className="hidden shrink-0 sm:inline-flex"
               nativeButton={false}
               render={<Link href={`/trips/${trip.id}/itinerary`} />}
               variant="outline"
@@ -336,54 +538,12 @@ export function TripModeShell({
         </header>
 
         {previewSelection ? (
-          <section
-            aria-labelledby="trip-mode-preview-heading"
-            className="grid gap-5 border-y border-status-info/35 bg-status-info/8 px-4 py-5 sm:px-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end"
-          >
-            <div className="flex items-start gap-3">
-              <Eye aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-status-info" />
-              <div>
-                <h2 className="font-semibold text-foreground" id="trip-mode-preview-heading">
-                  {t('preview.title')}
-                </h2>
-                <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-                  {t('preview.description')}
-                </p>
-              </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-[minmax(12rem,1fr)_minmax(10rem,auto)]">
-              <Field>
-                <FieldLabel htmlFor="trip-mode-preview-date">{t('preview.date')}</FieldLabel>
-                <DatePicker
-                  activityCounts={activityCounts}
-                  id="trip-mode-preview-date"
-                  label={t('preview.date')}
-                  max={trip.endDate}
-                  min={trip.startDate}
-                  onChange={(date) => date && updatePreview({ date })}
-                  required
-                  value={previewSelection.date}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="trip-mode-preview-time">{t('preview.time')}</FieldLabel>
-                <TimeInput
-                  id="trip-mode-preview-time"
-                  onValueChange={(time) => time && updatePreview({ time })}
-                  required
-                  value={previewSelection.time}
-                />
-                <FieldDescription>{t('preview.timeDescription')}</FieldDescription>
-              </Field>
-            </div>
-          </section>
-        ) : null}
-
-        {planScoreEnabled && previewSelection && state.trip ? (
-          <TripModePreviewPlanScore
-            date={previewSelection.date}
-            revision={state.trip.updatedAt}
-            tripId={state.trip.id}
+          <TripModePreviewSummary
+            activityCounts={activityCounts}
+            endDate={trip.endDate}
+            onChange={updatePreview}
+            selection={previewSelection}
+            startDate={trip.startDate}
           />
         ) : null}
 
@@ -404,7 +564,7 @@ export function TripModeShell({
                   <Link
                     aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'flex min-h-12 items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-2 py-2 text-xs font-medium outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 sm:text-sm',
+                      'flex min-h-11 items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-2 py-1.5 text-xs font-medium outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 sm:text-sm',
                       active
                         ? 'bg-secondary text-secondary-foreground'
                         : 'text-muted-foreground hover:bg-surface-hover hover:text-foreground',
@@ -420,7 +580,20 @@ export function TripModeShell({
           </ul>
         </nav>
 
-        <div className="min-h-[min(32rem,55dvh)] border-t border-border pt-8">{children}</div>
+        <div className="min-h-[min(32rem,55dvh)] border-t border-border pt-6 sm:pt-8">
+          {children}
+        </div>
+
+        {/* Day quality is a review of the plan, not an answer to "what do I need
+            now". Above the view it was the largest single thing between a phone
+            and its own itinerary. */}
+        {planScoreEnabled && previewSelection ? (
+          <TripModePreviewPlanScore
+            date={previewSelection.date}
+            revision={trip.updatedAt}
+            tripId={trip.id}
+          />
+        ) : null}
       </section>
     </TripModePreviewProvider>
   );

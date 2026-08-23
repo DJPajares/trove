@@ -35,6 +35,7 @@ import {
   type ItineraryTripPlace,
   type TripModeContext,
 } from '@/lib/itinerary/api';
+import { dayStopNumbers, resolveDailyBases } from '@/lib/itinerary/day-sequence';
 import { itineraryDayRouteRevision } from '@/lib/itinerary/routes';
 import {
   buildItineraryMapPoints,
@@ -233,8 +234,17 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
     );
   }
 
+  // The circles on the map and the rows in Today are numbered by the same
+  // function from the same inputs, so a pin and a stop can never disagree about
+  // which stop they are. Without the offset the map restarted at 1 on any day
+  // whose base had already taken first place.
+  const stopNumbers = dayStopNumbers({
+    bases: resolveDailyBases({ day }),
+    itemCount: day.items.length,
+  });
   const allMapPoints = buildItineraryMapPoints({
     itinerary,
+    orderOffset: stopNumbers.itemOffset,
     resolveItemName: itemName,
     resolvePlaceLocation: placeLocation,
     resolvePlaceName: placeName,
@@ -321,13 +331,15 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-3xl font-semibold tracking-[-0.025em] text-foreground sm:text-4xl">
-            {t('title')}
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">{date}</p>
-          <p className="max-w-2xl text-xs leading-5 text-text-subtle">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="sr-only">{t('title')}</h2>
+          <p className="text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
+            {date}
+          </p>
+          {/* Which of these two sentences shows is the whole distinction between
+              a planned map and a live one, so it stays visible either way. */}
+          <p className="mt-0.5 max-w-[var(--layout-reading)] text-[length:var(--text-metadata)] leading-5 text-pretty text-text-subtle">
             {t(isPreview ? 'previewDescription' : 'description')}
           </p>
         </div>
@@ -499,8 +511,11 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
                       key={item.id}
                     >
                       <div className="flex items-start gap-3">
-                        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-                          {index + 1}
+                        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground tabular-nums">
+                          <span className="sr-only">
+                            {t('stopNumber', { number: stopNumbers.itemOffset + index + 1 })}
+                          </span>
+                          <span aria-hidden="true">{stopNumbers.itemOffset + index + 1}</span>
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-medium text-brand tabular-nums">

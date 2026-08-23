@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import {
   ArrowDown,
   ArrowUp,
@@ -11,11 +10,23 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 
+import { TripMedia } from '@/components/trip-media';
+import { TripOptionalDetails } from '@/components/trip-optional-details';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useEditorialImages } from '@/hooks/use-editorial-images';
+import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
+import { resolveTripMediaSource } from '@/lib/media/trip-media';
+import {
+  EDITORIAL_PREVIEW_DEBOUNCE_MS,
+  editorialCoverSubjectName,
+  hasOptionalTripDetails,
+  isValidPartySize,
+} from '@/lib/trips/form';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,16 +40,7 @@ import {
 import { DatePicker } from '@/components/date-picker';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { SheetFooter } from '@/components/ui/sheet';
-import { Textarea } from '@/components/ui/textarea';
 import {
   createTrip,
   removeTripCover,
@@ -106,18 +108,13 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
   const [coverPreview, setCoverPreview] = useState<string | null>(trip?.coverPhotoUrl ?? null);
   const [error, setError] = useState<string | null>(null);
   const [dateError, setDateError] = useState<string | null>(null);
-  const [locationDetailsOpen, setLocationDetailsOpen] = useState(false);
+  // A trip that already carries optional detail opens showing it: a traveller
+  // must never have to go looking for their own notes.
+  const [detailsOpen, setDetailsOpen] = useState(() => hasOptionalTripDetails(trip));
+  const [pendingDetailsFocus, setPendingDetailsFocus] = useState(false);
   const [status, setStatus] = useState<'idle' | 'saving'>('idle');
   const [pendingShrink, setPendingShrink] = useState<PendingShrink | null>(null);
   const deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  const timeZones = useMemo(() => {
-    const supportedValuesOf = (
-      Intl as typeof Intl & { supportedValuesOf?: (key: 'timeZone') => string[] }
-    ).supportedValuesOf;
-    return supportedValuesOf
-      ? ['UTC', ...supportedValuesOf('timeZone').filter((timeZone) => timeZone !== 'UTC')]
-      : [deviceTimeZone];
-  }, [deviceTimeZone]);
 
   useEffect(() => {
     return () => {
@@ -125,10 +122,50 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
     };
   }, [coverPreview]);
 
+  // The panel's fields are unmounted while it is closed, so focus has to wait
+  // for the open to land rather than following the click that caused it.
+  useEffect(() => {
+    if (!pendingDetailsFocus || !detailsOpen) return;
+    document.getElementById('trip-party-size')?.focus();
+    setPendingDetailsFocus(false);
+  }, [detailsOpen, pendingDetailsFocus]);
+
+  // What the cover should show while the trip is still being described. The
+  // draft settles before it is asked about, so typing a city name costs one
+  // request rather than one per keystroke.
+  const draftSubjectName = editorialCoverSubjectName(form.destinations, form.name);
+  const [coverSubjectName, setCoverSubjectName] = useState(draftSubjectName);
+
+  useEffect(() => {
+    if (!draftSubjectName) {
+      setCoverSubjectName('');
+      return;
+    }
+    const timer = setTimeout(
+      () => setCoverSubjectName(draftSubjectName),
+      EDITORIAL_PREVIEW_DEBOUNCE_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [draftSubjectName]);
+
+  const coverSubject: EditorialSubject | null = coverSubjectName
+    ? { category: 'destination', name: coverSubjectName, tripId: trip?.id }
+    : null;
+  const editorialImages = useEditorialImages(coverSubject ? [coverSubject] : []);
+  const coverEditorial = coverSubject
+    ? (editorialImages.get(editorialSubjectKey(coverSubject)) ?? null)
+    : null;
+
   function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [field]: value }));
     setError(null);
     if (field === 'startDate' || field === 'endDate') setDateError(null);
+  }
+
+  /** The same thing for a group of fields the form does not own the markup of. */
+  function updateFields(changes: Partial<FormState>) {
+    setForm((current) => ({ ...current, ...changes }));
+    setError(null);
   }
 
   function updateDestination(index: number, value: string) {
@@ -178,7 +215,7 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
       setDateError(t('dateRangeError'));
       return null;
     }
-    if (!Number.isInteger(partySize) || partySize < 1 || partySize > 99) {
+    if (!isValidPartySize(form.partySize)) {
       setError(t('partySizeError'));
       return null;
     }
@@ -217,7 +254,15 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
     setError(null);
     setDateError(null);
     let input = buildInput(form.coverPhotoPath);
-    if (!input) return;
+    if (!input) {
+      // A rule that fires inside a closed panel is a silent one: open it and
+      // put the traveller on the field that stopped the save.
+      if (!isValidPartySize(form.partySize)) {
+        setDetailsOpen(true);
+        setPendingDetailsFocus(true);
+      }
+      return;
+    }
 
     setStatus('saving');
 
@@ -425,125 +470,6 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
             )}
           </section>
 
-          <section aria-labelledby="trip-details-heading" className="space-y-5 border-t pt-7">
-            <div>
-              <h3 className="font-medium" id="trip-details-heading">
-                {t('detailsTitle')}
-              </h3>
-              <p className="mt-1 text-sm text-muted-foreground">{t('detailsDescription')}</p>
-            </div>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="trip-party-size">{t('partySize')}</FieldLabel>
-                <Input
-                  id="trip-party-size"
-                  inputMode="numeric"
-                  max={99}
-                  min={1}
-                  onChange={(event) => updateField('partySize', event.target.value)}
-                  type="number"
-                  value={form.partySize}
-                />
-                <FieldDescription>{t('partySizeHint')}</FieldDescription>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="trip-readiness">{t('readiness')}</FieldLabel>
-                <Select
-                  onValueChange={(value) => {
-                    if (!value) return;
-                    updateField('planningReadiness', value as FormState['planningReadiness']);
-                  }}
-                  value={form.planningReadiness}
-                >
-                  <SelectTrigger className="w-full" id="trip-readiness">
-                    <SelectValue>
-                      {(value) => (value === 'ready' ? t('ready') : t('inProgress'))}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="in_progress">{t('inProgress')}</SelectItem>
-                    <SelectItem value="ready">{t('ready')}</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FieldDescription>{t('readinessHint')}</FieldDescription>
-              </Field>
-            </div>
-            <details
-              className="group border-y border-border py-4"
-              onToggle={(event) => setLocationDetailsOpen(event.currentTarget.open)}
-            >
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-[var(--radius-sm)] font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/40">
-                <span>
-                  {t('locationAndTimeZone')}
-                  <span className="mt-1 block text-sm font-normal text-muted-foreground">
-                    {t('locationAndTimeZoneHint')}
-                  </span>
-                </span>
-                <ChevronDown
-                  aria-hidden="true"
-                  className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
-                />
-              </summary>
-              {locationDetailsOpen ? (
-                <div className="space-y-5 pt-5">
-                  <Field>
-                    <FieldLabel htmlFor="trip-starting-location">
-                      {t('startingLocation')}
-                    </FieldLabel>
-                    <Input
-                      id="trip-starting-location"
-                      maxLength={200}
-                      onChange={(event) => updateField('startingLocation', event.target.value)}
-                      placeholder={
-                        trip?.startingLocation?.isOverride
-                          ? undefined
-                          : t('startingLocationPlaceholder')
-                      }
-                      value={form.startingLocation}
-                    />
-                    <FieldDescription>
-                      {trip?.startingLocation && !trip.startingLocation.isOverride
-                        ? t('startingLocationHome', { location: trip.startingLocation.name })
-                        : t('startingLocationHint')}
-                    </FieldDescription>
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="trip-time-zone">{t('timeZone')}</FieldLabel>
-                    <NativeSelect
-                      className="w-full"
-                      id="trip-time-zone"
-                      onChange={(event) => updateField('referenceTimeZone', event.target.value)}
-                      value={form.referenceTimeZone}
-                    >
-                      <NativeSelectOption value="">
-                        {t('timeZoneAutomatic', {
-                          timeZone: trip?.referenceTimeZone ?? deviceTimeZone,
-                        })}
-                      </NativeSelectOption>
-                      {timeZones.map((timeZone) => (
-                        <NativeSelectOption key={timeZone} value={timeZone}>
-                          {timeZone.replaceAll('_', ' ')}
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
-                    <FieldDescription>{t('timeZoneHint')}</FieldDescription>
-                  </Field>
-                </div>
-              ) : null}
-            </details>
-            <Field>
-              <FieldLabel htmlFor="trip-notes">{t('notes')}</FieldLabel>
-              <Textarea
-                id="trip-notes"
-                maxLength={5_000}
-                onChange={(event) => updateField('notes', event.target.value)}
-                placeholder={t('notesPlaceholder')}
-                rows={4}
-                value={form.notes}
-              />
-            </Field>
-          </section>
-
           <section aria-labelledby="trip-cover-heading" className="space-y-4 border-t pt-7">
             <div>
               <h3 className="font-medium" id="trip-cover-heading">
@@ -551,17 +477,20 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
               </h3>
               <p className="mt-1 text-sm text-muted-foreground">{t('coverHint')}</p>
             </div>
-            {coverPreview ? (
-              <div className="relative aspect-[16/9] overflow-hidden rounded-[var(--radius-lg)] bg-muted">
-                <Image
-                  alt={t('coverAlt')}
-                  className="object-cover"
-                  fill
-                  sizes="(max-width: 640px) 100vw, 640px"
-                  src={coverPreview}
-                  unoptimized
-                />
-              </div>
+            {/* One frame for both answers. The shared ladder puts an upload
+                above the suggestion, so removing an upload simply reveals the
+                photograph underneath it again. */}
+            <TripMedia
+              alt={t('coverAlt')}
+              className="aspect-[16/9] w-full"
+              sizes="(max-width: 640px) 100vw, 640px"
+              source={resolveTripMediaSource({ coverUrl: coverPreview, editorial: coverEditorial })}
+              variant="card"
+            />
+            {coverEditorial && !coverPreview ? (
+              <p className="text-sm text-muted-foreground">
+                {t('coverEditorialHint', { name: coverSubjectName })}
+              </p>
             ) : null}
             <div className="flex flex-wrap gap-2">
               <label className={cn(buttonVariants({ variant: 'outline' }), 'cursor-pointer')}>
@@ -588,6 +517,37 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
                 </Button>
               ) : null}
             </div>
+          </section>
+
+          <section className="border-t pt-7">
+            <Collapsible onOpenChange={setDetailsOpen} open={detailsOpen}>
+              <CollapsibleTrigger className="group w-full justify-between text-left">
+                <span>
+                  <span className="block font-medium text-foreground">{t('moreDetails')}</span>
+                  <span className="mt-1 block text-sm font-normal text-muted-foreground">
+                    {t('moreDetailsHint')}
+                  </span>
+                </span>
+                <ChevronDown
+                  aria-hidden="true"
+                  className="shrink-0 transition-transform duration-[var(--motion-standard)] group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
+                />
+              </CollapsibleTrigger>
+              <CollapsiblePanel>
+                <TripOptionalDetails
+                  deviceTimeZone={deviceTimeZone}
+                  onChange={updateFields}
+                  trip={trip}
+                  values={{
+                    notes: form.notes,
+                    partySize: form.partySize,
+                    planningReadiness: form.planningReadiness,
+                    referenceTimeZone: form.referenceTimeZone,
+                    startingLocation: form.startingLocation,
+                  }}
+                />
+              </CollapsiblePanel>
+            </Collapsible>
           </section>
         </div>
 

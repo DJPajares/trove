@@ -2,7 +2,12 @@ import { expect, test } from 'vitest';
 
 import { MAX_EDITORIAL_IMAGE_SUBJECTS } from '../lib/media/editorial-images.ts';
 import type { Trip, TripDestination } from '../lib/trips/api.ts';
-import { tripDestinationSummary, tripEditorialSubject } from '../lib/trips/summary.ts';
+import { groupTripsForLibrary } from '../lib/trips/lifecycle.ts';
+import {
+  libraryEditorialSubjects,
+  tripDestinationSummary,
+  tripEditorialSubject,
+} from '../lib/trips/summary.ts';
 
 function destination(name: string, position = 0): TripDestination {
   return { id: `d-${position}`, name, placeId: `p-${position}`, position, timeZone: null };
@@ -75,18 +80,67 @@ test('a nameless trip asks for nothing rather than for an empty query', () => {
   expect(tripEditorialSubject(trip({ id: 'a', name: '  ' }))).toBeNull();
 });
 
+test('an empty library asks for nothing at all', () => {
+  // An empty subject list makes the hook return before it reaches the network.
+  expect(libraryEditorialSubjects(groupTripsForLibrary([]))).toStrictEqual([]);
+});
+
+test('the library asks for the trip it leads with first and the archive last', () => {
+  const trips = [
+    trip({
+      destinations: [destination('Lisbon')],
+      endDate: '2025-04-02',
+      id: 'past',
+      lifecycle: 'completed',
+    }),
+    trip({ destinations: [destination('Kyoto')], id: 'featured', lifecycle: 'active' }),
+    trip({
+      destinations: [destination('Oslo')],
+      id: 'upcoming',
+      lifecycle: 'planning',
+      startDate: '2026-11-01',
+    }),
+  ];
+
+  expect(
+    libraryEditorialSubjects(groupTripsForLibrary(trips)).map((subject) => subject.name),
+  ).toStrictEqual(['Kyoto', 'Oslo', 'Lisbon']);
+});
+
+test('a trip with its own cover contributes nothing to the batch', () => {
+  const trips = [
+    trip({
+      coverPhotoUrl: 'https://storage.example/cover.jpg',
+      destinations: [destination('Kyoto')],
+      id: 'covered',
+      lifecycle: 'active',
+    }),
+    trip({ destinations: [destination('Oslo')], id: 'bare', lifecycle: 'planning' }),
+  ];
+
+  expect(
+    libraryEditorialSubjects(groupTripsForLibrary(trips)).map((subject) => subject.name),
+  ).toStrictEqual(['Oslo']);
+});
+
 test('a long library still resolves as a single request', () => {
   // The service chunks anything above its ceiling into parallel requests, so a
   // caller that does not cap its subjects quietly costs two.
-  const many = Array.from({ length: 40 }, (_, index) =>
-    trip({ destinations: [destination(`City ${index}`, index)], id: `trip-${index}` }),
-  );
+  const trips = [
+    trip({ destinations: [destination('Kyoto')], id: 'featured', lifecycle: 'active' }),
+    ...Array.from({ length: 40 }, (_, index) =>
+      trip({
+        destinations: [destination(`City ${index}`, index)],
+        endDate: `2025-04-${String((index % 28) + 1).padStart(2, '0')}`,
+        id: `past-${index}`,
+        lifecycle: 'completed',
+      }),
+    ),
+  ];
 
-  const subjects = many
-    .map(tripEditorialSubject)
-    .filter((subject) => subject !== null)
-    .slice(0, MAX_EDITORIAL_IMAGE_SUBJECTS);
+  const subjects = libraryEditorialSubjects(groupTripsForLibrary(trips));
 
   expect(subjects).toHaveLength(MAX_EDITORIAL_IMAGE_SUBJECTS);
-  expect(subjects.at(0)?.name).toBe('City 0');
+  // The trip on screen keeps its photograph however deep the archive runs.
+  expect(subjects.at(0)?.name).toBe('Kyoto');
 });

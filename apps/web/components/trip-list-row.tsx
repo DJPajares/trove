@@ -1,4 +1,5 @@
 import { CalendarDays } from 'lucide-react';
+import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { MediaAttribution } from '@/components/media-attribution';
@@ -18,12 +19,11 @@ export type TripListRowProps = {
    * turn a list of trips back into a list of requests.
    */
   editorial: EditorialImageReference | null;
-  onSelect: (trip: Trip) => void;
   trip: Trip;
 };
 
-/** One trip in the library, as a single target that opens its overview. */
-export function TripListRow({ editorial, onSelect, trip }: Readonly<TripListRowProps>) {
+/** One trip in the library, as a single link to the trip's own screen. */
+export function TripListRow({ editorial, trip }: Readonly<TripListRowProps>) {
   const t = useTranslations('trips');
   const mediaTranslations = useTranslations('media');
   const locale = useLocale();
@@ -33,11 +33,7 @@ export function TripListRow({ editorial, onSelect, trip }: Readonly<TripListRowP
     <Item
       className="group min-h-20 flex-nowrap px-3 py-3 text-left hover:bg-muted/60"
       render={
-        <button
-          aria-label={t('viewTripLabel', { name: trip.name })}
-          onClick={() => onSelect(trip)}
-          type="button"
-        />
+        <Link aria-label={t('viewTripLabel', { name: trip.name })} href={`/trips/${trip.id}`} />
       }
       variant="default"
     >
@@ -71,7 +67,7 @@ export function TripListRow({ editorial, onSelect, trip }: Readonly<TripListRowP
         {editorial ? (
           <MediaAttribution
             attribution={editorial.attribution}
-            // The row is a button, so the credit cannot be a link here.
+            // The row is itself a link, so the credit cannot nest one here.
             className="truncate"
             linked={false}
             variant="inline"

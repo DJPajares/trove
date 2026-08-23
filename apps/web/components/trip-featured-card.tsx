@@ -1,4 +1,5 @@
 import { Info } from 'lucide-react';
+import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { TripDestinationActions } from '@/components/trip-destination-actions';
@@ -15,8 +16,6 @@ import { tripDestinationSummary } from '@/lib/trips/summary';
 export type TripFeaturedCardProps = {
   /** Resolved by the library's single batch. This card never fetches. */
   editorial: EditorialImageReference | null;
-  /** The overview is a sheet rather than a route, so it cannot be a destination. */
-  onOpenOverview: (trip: Trip) => void;
   trip: Trip;
 };
 
@@ -25,14 +24,10 @@ export type TripFeaturedCardProps = {
  * being planned.
  *
  * A focal block offers its actions; only a row is a single target. So this is a
- * section containing real links and one button, never a button containing
- * links - which would be invalid markup and a keyboard trap besides.
+ * section containing real links, never a link containing links - which would be
+ * invalid markup and a keyboard trap besides.
  */
-export function TripFeaturedCard({
-  editorial,
-  onOpenOverview,
-  trip,
-}: Readonly<TripFeaturedCardProps>) {
+export function TripFeaturedCard({ editorial, trip }: Readonly<TripFeaturedCardProps>) {
   const t = useTranslations('trips');
   const mediaTranslations = useTranslations('media');
   const locale = useLocale();
@@ -65,7 +60,11 @@ export function TripFeaturedCard({
             className="pt-1"
             destinations={primaryTripDestinations(trip.id, trip.lifecycle, trip.startDate)}
             extra={
-              <Button onClick={() => onOpenOverview(trip)} variant="ghost">
+              <Button
+                nativeButton={false}
+                render={<Link href={`/trips/${trip.id}`} />}
+                variant="ghost"
+              >
                 <Info aria-hidden="true" data-icon="inline-start" />
                 {t('overview')}
               </Button>

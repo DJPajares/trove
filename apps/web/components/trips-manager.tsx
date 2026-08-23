@@ -1,16 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import {
-  CalendarClock,
-  ChevronDown,
-  CircleAlert,
-  ClipboardCheck,
-  MapPinned,
-  Plus,
-  WalletCards,
-} from 'lucide-react';
+import { ChevronDown, CircleAlert, MapPinned, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -20,23 +11,11 @@ import { PageState } from '@/components/page-state';
 import { TripFeaturedCard } from '@/components/trip-featured-card';
 import { TripForm } from '@/components/trip-form';
 import { TripListRow } from '@/components/trip-list-row';
-import { TripOverviewSheet } from '@/components/trip-overview-sheet';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { editorialSubjectKey } from '@/lib/media/editorial-images';
 import { groupTripsForLibrary, PAST_TRIPS_PREVIEW_COUNT } from '@/lib/trips/lifecycle';
 import { libraryEditorialSubjects, tripEditorialSubject } from '@/lib/trips/summary';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { ItemGroup } from '@/components/ui/item';
 import {
@@ -46,24 +25,21 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { deleteTrip, fetchTrips, type Trip } from '@/lib/trips/api';
+import { fetchTrips, type Trip } from '@/lib/trips/api';
 
-type EditorState =
-  { mode: 'closed'; trip: null } | { mode: 'create'; trip: null } | { mode: 'edit'; trip: Trip };
-
-export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: boolean }>) {
+/**
+ * The library creates trips; editing and deleting a trip belong to the trip's
+ * own route, where the traveller can see what they are changing.
+ */
+export function TripsManager() {
   const t = useTranslations('trips');
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const shouldCreateTrip = searchParams.get('create') === '1';
   const [trips, setTrips] = useState<Trip[]>([]);
-  const [editor, setEditor] = useState<EditorState>({ mode: 'closed', trip: null });
-  const [overviewTrip, setOverviewTrip] = useState<Trip | null>(null);
-  const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
-  const [deleting, setDeleting] = useState(false);
 
   const groupedTrips = useMemo(() => groupTripsForLibrary(trips), [trips]);
 
@@ -77,7 +53,7 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
 
   useEffect(() => {
     if (!shouldCreateTrip) return;
-    setEditor((current) => (current.mode === 'closed' ? { mode: 'create', trip: null } : current));
+    setCreating(true);
     router.replace(pathname, { scroll: false });
   }, [pathname, router, shouldCreateTrip]);
 
@@ -101,37 +77,17 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
   }, []);
 
   function handleSaved(trip: Trip) {
-    setTrips((current) => {
-      const next = current.some((item) => item.id === trip.id)
-        ? current.map((item) => (item.id === trip.id ? trip : item))
-        : [...current, trip];
-      return next.toSorted((left, right) => left.startDate.localeCompare(right.startDate));
-    });
-    setEditor({ mode: 'closed', trip: null });
-  }
-
-  async function handleDelete() {
-    if (!tripToDelete) return;
-    setDeleting(true);
-    setError(null);
-
-    try {
-      await deleteTrip(tripToDelete.id);
-      setTrips((current) => current.filter((trip) => trip.id !== tripToDelete.id));
-      setTripToDelete(null);
-      setEditor({ mode: 'closed', trip: null });
-    } catch {
-      setError(t('deleteError'));
-    } finally {
-      setDeleting(false);
-    }
+    setTrips((current) =>
+      [...current, trip].toSorted((left, right) => left.startDate.localeCompare(right.startDate)),
+    );
+    setCreating(false);
   }
 
   return (
     <section className="mx-auto w-full max-w-5xl space-y-8">
       <PageHeader
         actions={
-          <Button onClick={() => setEditor({ mode: 'create', trip: null })}>
+          <Button onClick={() => setCreating(true)}>
             <Plus aria-hidden="true" data-icon="inline-start" />
             {t('newTrip')}
           </Button>
@@ -139,13 +95,6 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
         description={t('description')}
         title={t('title')}
       />
-
-      {error ? (
-        <Alert role="alert" variant="destructive">
-          <CircleAlert aria-hidden="true" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : null}
 
       {status === 'loading' ? (
         <PageState
@@ -167,7 +116,7 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
       ) : trips.length === 0 ? (
         <PageState
           actions={
-            <Button onClick={() => setEditor({ mode: 'create', trip: null })}>
+            <Button onClick={() => setCreating(true)}>
               <Plus aria-hidden="true" data-icon="inline-start" />
               {t('createFirstTrip')}
             </Button>
@@ -183,7 +132,6 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
           {groupedTrips.featured ? (
             <TripFeaturedCard
               editorial={editorialFor(groupedTrips.featured)}
-              onOpenOverview={setOverviewTrip}
               trip={groupedTrips.featured}
             />
           ) : null}
@@ -192,12 +140,7 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
             <EditorialSection density="compact" title={t('sections.planning')} treatment="ruled">
               <ItemGroup aria-label={t('sections.planning')} variant="list">
                 {groupedTrips.upcoming.map((trip) => (
-                  <TripListRow
-                    editorial={editorialFor(trip)}
-                    key={trip.id}
-                    onSelect={setOverviewTrip}
-                    trip={trip}
-                  />
+                  <TripListRow editorial={editorialFor(trip)} key={trip.id} trip={trip} />
                 ))}
               </ItemGroup>
             </EditorialSection>
@@ -207,12 +150,7 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
             <EditorialSection density="compact" title={t('sections.completed')} treatment="ruled">
               <ItemGroup aria-label={t('sections.completed')} variant="list">
                 {groupedTrips.past.slice(0, PAST_TRIPS_PREVIEW_COUNT).map((trip) => (
-                  <TripListRow
-                    editorial={editorialFor(trip)}
-                    key={trip.id}
-                    onSelect={setOverviewTrip}
-                    trip={trip}
-                  />
+                  <TripListRow editorial={editorialFor(trip)} key={trip.id} trip={trip} />
                 ))}
               </ItemGroup>
               {groupedTrips.past.length > PAST_TRIPS_PREVIEW_COUNT ? (
@@ -222,12 +160,7 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
                         under the first one's bottom rule. */}
                     <ItemGroup className="border-t-0" variant="list">
                       {groupedTrips.past.slice(PAST_TRIPS_PREVIEW_COUNT).map((trip) => (
-                        <TripListRow
-                          editorial={editorialFor(trip)}
-                          key={trip.id}
-                          onSelect={setOverviewTrip}
-                          trip={trip}
-                        />
+                        <TripListRow editorial={editorialFor(trip)} key={trip.id} trip={trip} />
                       ))}
                     </ItemGroup>
                   </CollapsiblePanel>
@@ -250,99 +183,20 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
         </div>
       )}
 
-      <TripOverviewSheet
-        onEdit={(trip) => {
-          setOverviewTrip(null);
-          setEditor({ mode: 'edit', trip });
-        }}
-        onOpenChange={(open) => !open && setOverviewTrip(null)}
-        planScoreEnabled={planScoreEnabled}
-        trip={overviewTrip}
-      />
-
-      <Sheet
-        open={editor.mode !== 'closed'}
-        onOpenChange={(open) => !open && setEditor({ mode: 'closed', trip: null })}
-      >
+      <Sheet onOpenChange={(open) => !open && setCreating(false)} open={creating}>
         <SheetContent
           className="w-full md:data-[side=right]:w-[min(44rem,calc(100%-0.5rem))]"
           closeLabel={t('close')}
         >
           <SheetHeader className="border-b">
-            <SheetTitle>{editor.mode === 'edit' ? t('editTitle') : t('createTitle')}</SheetTitle>
-            <SheetDescription>
-              {editor.mode === 'edit' ? t('editDescription') : t('createDescription')}
-            </SheetDescription>
-            {editor.mode === 'edit' ? (
-              <nav aria-label={t('tripNavigation')} className="mt-3 flex flex-wrap gap-1">
-                <Button
-                  className="text-muted-foreground hover:text-foreground"
-                  nativeButton={false}
-                  render={<Link href={`/trips/${editor.trip.id}/itinerary`} />}
-                  size="sm"
-                  variant="ghost"
-                >
-                  <CalendarClock aria-hidden="true" data-icon="inline-start" />
-                  {t('itinerary')}
-                </Button>
-                <Button
-                  className="text-muted-foreground hover:text-foreground"
-                  nativeButton={false}
-                  render={<Link href={`/trips/${editor.trip.id}/tasks`} />}
-                  size="sm"
-                  variant="ghost"
-                >
-                  <ClipboardCheck aria-hidden="true" data-icon="inline-start" />
-                  {t('tasks')}
-                </Button>
-                <Button
-                  className="text-muted-foreground hover:text-foreground"
-                  nativeButton={false}
-                  render={<Link href={`/trips/${editor.trip.id}/expenses`} />}
-                  size="sm"
-                  variant="ghost"
-                >
-                  <WalletCards aria-hidden="true" data-icon="inline-start" />
-                  {t('expenses')}
-                </Button>
-              </nav>
-            ) : null}
+            <SheetTitle>{t('createTitle')}</SheetTitle>
+            <SheetDescription>{t('createDescription')}</SheetDescription>
           </SheetHeader>
-          {editor.mode !== 'closed' ? (
-            <TripForm
-              key={editor.trip?.id ?? 'new'}
-              onCancel={() => setEditor({ mode: 'closed', trip: null })}
-              onDelete={editor.mode === 'edit' ? () => setTripToDelete(editor.trip) : undefined}
-              onSaved={handleSaved}
-              trip={editor.trip}
-            />
+          {creating ? (
+            <TripForm onCancel={() => setCreating(false)} onSaved={handleSaved} trip={null} />
           ) : null}
         </SheetContent>
       </Sheet>
-
-      <AlertDialog
-        open={Boolean(tripToDelete)}
-        onOpenChange={(open) => !open && setTripToDelete(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('deleteTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('deleteDescription', { name: tripToDelete?.name ?? '' })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>{t('cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={deleting}
-              onClick={() => void handleDelete()}
-              variant="destructive"
-            >
-              {deleting ? t('deleting') : t('deleteTrip')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </section>
   );
 }

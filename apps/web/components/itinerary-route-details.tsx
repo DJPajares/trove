@@ -121,32 +121,37 @@ export function ItineraryRouteSummary({
           </span>
         ) : null}
       </div>
-      {status === 'error' || summary?.status === 'unavailable' ? (
-        <p className="mt-1 text-xs text-muted-foreground">{t('unavailable')}</p>
-      ) : partial ? (
-        <p className="mt-1 text-xs text-muted-foreground">{t('partial')}</p>
-      ) : null}
-      {data?.source === 'cache' ? (
-        <p className="mt-1 text-xs text-status-warning">
-          {t('cachedRoute', {
-            date: new Intl.DateTimeFormat(locale, {
-              dateStyle: 'medium',
-              timeStyle: 'short',
-            }).format(new Date(data.generatedAt)),
-          })}
-        </p>
-      ) : null}
-      {hasWalkingRoute ? (
-        <p className="mt-1 text-xs text-muted-foreground">{t('walkingBeta')}</p>
-      ) : null}
-      {hasGoogleRoutes ? (
-        <p className="mt-1 text-[0.6875rem] text-muted-foreground">{t('googleAttribution')}</p>
-      ) : null}
+      {/* One wrapped line rather than a stack of paragraphs. Every note still
+          renders — the Google attribution is an obligation, not a nicety — but
+          on a phone they cost one row instead of four, which is four rows of
+          the day the traveller gets to see instead. */}
+      <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
+        {status === 'error' || summary?.status === 'unavailable' ? (
+          <span className="text-muted-foreground">{t('unavailable')}</span>
+        ) : partial ? (
+          <span className="text-muted-foreground">{t('partial')}</span>
+        ) : null}
+        {data?.source === 'cache' ? (
+          <span className="text-status-warning">
+            {t('cachedRoute', {
+              date: new Intl.DateTimeFormat(locale, {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+              }).format(new Date(data.generatedAt)),
+            })}
+          </span>
+        ) : null}
+        {hasWalkingRoute ? <span className="text-muted-foreground">{t('walkingBeta')}</span> : null}
+        {hasGoogleRoutes ? (
+          <span className="text-[0.6875rem] text-muted-foreground">{t('googleAttribution')}</span>
+        ) : null}
+      </div>
     </section>
   );
 }
 
 export function ItineraryRouteSegmentRow({
+  connector,
   distanceUnit,
   locale,
   onModeChange,
@@ -154,6 +159,7 @@ export function ItineraryRouteSegmentRow({
   segment,
   stale = false,
 }: Readonly<{
+  connector?: 'after' | 'before' | 'both' | 'none';
   distanceUnit: 'km' | 'mi';
   locale: string;
   onModeChange: (segment: ItineraryRouteSegment, mode: RouteTravelMode) => void;
@@ -167,13 +173,21 @@ export function ItineraryRouteSegmentRow({
   const destinationLabel = segment.destination.label ?? t(`point.${segment.destination.kind}`);
   // Between-item legs need no extra context — the two stops on either side
   // already say why the leg exists. Boundary legs (day start / return to the
-  // daily base) don't have that, so they're called out explicitly.
-  const legRoleLabel =
-    segment.modeOwner.kind === 'day_start'
-      ? t('dayStartLabel')
+  // daily base) don't have that, so they're called out explicitly. That absence
+  // is the distinction PRD 18.4.1 asks for: the legs that speak are exactly the
+  // ones whose reason is not already on screen.
+  const context = [
+    ...(segment.modeOwner.kind === 'day_start'
+      ? [t('dayStartLabel'), t('segmentOrigin', { origin: originLabel })]
       : segment.destination.kind === 'daily_base'
-        ? t('returnToBaseLabel')
-        : null;
+        ? [t('returnToBaseLabel'), t('segmentDestination', { destination: destinationLabel })]
+        : segment.origin.kind === 'starting_location'
+          ? [t('segmentOrigin', { origin: originLabel })]
+          : []),
+    // A flight is not a failed lookup. Saying so is the difference between an
+    // estimate Trove could not get and one it was never going to attempt.
+    ...(segment.scope === 'long_distance' ? [t('segmentLongDistance')] : []),
+  ].join(' · ');
   const isAvailable =
     segment.status === 'ok' && segment.durationSeconds !== null && segment.distanceMeters !== null;
   // Three things worth telling apart: a flight is not estimated by design, a
@@ -191,8 +205,6 @@ export function ItineraryRouteSegmentRow({
       ? t('segmentNotEstimatedMetrics')
       : t('segmentUnavailableMetrics');
   const presentationState = routePresentationState(segment.status, stale);
-  const stateLabel = t(`state.${presentationState}`);
-  const originDisplay = legRoleLabel ? `${legRoleLabel}: ${originLabel}` : originLabel;
 
   return (
     <RouteTimelineRow
@@ -202,18 +214,19 @@ export function ItineraryRouteSegmentRow({
           onValueChange={(value) => onModeChange(segment, value as RouteTravelMode)}
           value={segment.mode}
         >
+          {/* Icon-only at every width now. The mode is spelled out one column
+              over as the row's own primary label, so the trigger no longer has
+              to carry the word — and no longer takes the width that used to
+              come out of the leg's origin and destination. */}
           <SelectTrigger
             aria-label={t('changeMode', { origin: originLabel })}
-            className={cn(
-              'h-9 w-9 bg-background px-2 sm:w-auto sm:min-w-28',
-              saving && 'opacity-70',
-            )}
+            className={cn('size-8 bg-background px-1.5', saving && 'opacity-70')}
             size="sm"
           >
             <SelectValue>
-              <span className="inline-flex items-center gap-1.5">
+              <span className="inline-flex items-center">
                 {modeIcon(segment.mode)}
-                <span className="sr-only sm:not-sr-only">{t(`mode.${segment.mode}`)}</span>
+                <span className="sr-only">{t(`mode.${segment.mode}`)}</span>
               </span>
             </SelectValue>
           </SelectTrigger>
@@ -229,12 +242,16 @@ export function ItineraryRouteSegmentRow({
           </SelectContent>
         </Select>
       }
-      destination={destinationLabel}
+      connector={connector}
+      context={context || undefined}
       metrics={metricsLabel}
       mode={modeIcon(segment.mode)}
-      origin={originDisplay}
+      modeLabel={t(`mode.${segment.mode}`)}
       state={presentationState}
-      stateLabel={stateLabel}
+      // Only a stale estimate needs saying. "Current estimate" on every healthy
+      // leg was a line of noise per row; silence is what current looks like, and
+      // an absent or failed estimate already says so in the metrics.
+      stateLabel={presentationState === 'cached' ? t('state.cached') : undefined}
     />
   );
 }

@@ -1,8 +1,6 @@
 'use client';
 
 import {
-  ArrowDown,
-  ArrowUp,
   CalendarClock,
   CheckCircle2,
   ChevronLeft,
@@ -10,14 +8,11 @@ import {
   CircleAlert,
   Clock3,
   Copy,
-  ExternalLink,
   List,
   Map as MapIcon,
   MapPinned,
   NotebookPen,
-  Pencil,
   Plus,
-  Ellipsis,
   Search,
   Settings2,
   Sparkles,
@@ -29,11 +24,9 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { PageState } from '@/components/page-state';
+import { ItineraryDayTimeline } from '@/components/itinerary-day-timeline';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
-import {
-  ItineraryRouteSegmentRow,
-  ItineraryRouteSummary,
-} from '@/components/itinerary-route-details';
+import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
 import { ItineraryPlacesDrawer } from '@/components/itinerary-places-drawer';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -62,19 +55,6 @@ import {
   ComboboxItem,
   ComboboxList,
 } from '@/components/ui/combobox';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLinkItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -136,7 +116,7 @@ import {
   updateItineraryItemRouteMode,
 } from '@/lib/itinerary/api';
 import { useOnlineStatus } from '@/components/trip-sync-status';
-import { dayStopNumbers, resolveDailyBases } from '@/lib/itinerary/day-sequence';
+import { buildDaySequence, dayStopNumbers, resolveDailyBases } from '@/lib/itinerary/day-sequence';
 import { scheduledPlaceUse } from '@/lib/itinerary/places';
 import { itineraryDayRouteRevision, itineraryPlanScoreRevision } from '@/lib/itinerary/routes';
 import {
@@ -521,12 +501,21 @@ export function ItineraryManager({
     () => dayStopNumbers({ bases: dailyBases, itemCount: selectedDay?.items.length ?? 0 }),
     [dailyBases, selectedDay],
   );
+  // The day in the order it is travelled, decided once rather than assembled
+  // out of two loops at render time.
+  const daySequence = useMemo(
+    () =>
+      buildDaySequence({
+        bases: dailyBases,
+        items: selectedDay?.items ?? [],
+        routeSegments: routes?.segments,
+      }),
+    [dailyBases, routes, selectedDay],
+  );
   const tripPlaceById = (tripPlaceId: string | null) =>
     tripPlaceId
       ? (itinerary?.tripPlaces.find((tripPlace) => tripPlace.id === tripPlaceId) ?? null)
       : null;
-  const arrivalBase = tripPlaceById(dailyBases.arrivalTripPlaceId);
-  const departureBase = tripPlaceById(dailyBases.departureTripPlaceId);
   const alphabeticalTripPlaces = useMemo(
     () =>
       sortTripPlaces(
@@ -576,59 +565,6 @@ export function ItineraryManager({
    * is an actions menu — where a day starts and ends is changed in day settings,
    * not by editing a stop.
    */
-  function baseStopRow(
-    tripPlace: ItineraryTripPlace,
-    role: 'arrival' | 'departure',
-    order: number,
-  ) {
-    const name = placeName(tripPlace) ?? t('providerPlace');
-    const point = mapPoints.find(
-      (candidate) => candidate.kind === 'base' && candidate.tripPlaceId === tripPlace.id,
-    );
-    const isMapSelected = Boolean(point && selectedMapPointId === point.id);
-    return (
-      <Item
-        className={cn('px-3 py-3', isMapSelected && 'bg-secondary/70')}
-        key={`base-${role}`}
-        role="listitem"
-      >
-        {/* Squared off and outlined, the way the map draws a base, so the two
-            readings of the same stop look like the same stop. */}
-        <ItemMedia
-          className={cn(
-            'size-10 rounded-[var(--radius-md)] border-2 text-sm font-semibold tabular-nums',
-            point
-              ? 'border-primary bg-card text-primary'
-              : 'border-border bg-muted text-muted-foreground',
-          )}
-        >
-          <span className="sr-only">{t('stopNumber', { number: order })}</span>
-          <span aria-hidden="true">{order}</span>
-        </ItemMedia>
-        <ItemContent className="min-w-0">
-          <ItemTitle className="text-base">
-            {point ? (
-              <button
-                aria-label={t('map.showItem', { name })}
-                aria-pressed={isMapSelected}
-                className="rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
-                onClick={() => selectBaseOnMap(tripPlace.id)}
-                type="button"
-              >
-                {name}
-              </button>
-            ) : (
-              name
-            )}
-          </ItemTitle>
-          <ItemDescription className="line-clamp-none">
-            {role === 'arrival' ? t('dayBaseStartDescription') : t('dayBaseEndDescription')}
-          </ItemDescription>
-        </ItemContent>
-      </Item>
-    );
-  }
-
   function selectBaseOnMap(tripPlaceId: string) {
     const point = mapPoints.find(
       (candidate) => candidate.kind === 'base' && candidate.tripPlaceId === tripPlaceId,
@@ -1398,6 +1334,7 @@ export function ItineraryManager({
           </Button>
         }
         currentSection="itinerary"
+        density="compact"
         description={t('description')}
         tripId={tripId}
       />
@@ -1414,15 +1351,6 @@ export function ItineraryManager({
           <AlertDescription>{t('timeZoneConsequence')}</AlertDescription>
         </Alert>
       ) : null}
-      {itinerary.unscheduledItems.length ? (
-        <Alert variant="default">
-          <CalendarClock aria-hidden="true" />
-          <AlertDescription>
-            {t('unscheduledSummary', { count: itinerary.unscheduledItems.length })}
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
       <div className="flex items-center gap-2 md:hidden">
         <Button
           aria-label={t('previousDay')}
@@ -1517,11 +1445,14 @@ export function ItineraryManager({
 
         {selectedDay ? (
           <div className="min-w-0">
-            <div className="flex flex-col gap-4 border-b border-border px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-              <div className="min-w-0">
+            {/* The heading and the day's actions share a row from the start
+                rather than stacking on a phone: the date is one line long, so a
+                band of its own cost a row of the plan for nothing. */}
+            <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-3 border-b border-border px-4 py-3 sm:flex-nowrap sm:gap-4 sm:px-6 sm:py-4">
+              <div className="min-w-0 flex-1">
                 {/* The day picker above already carries the date; this is the heading
                     for the day being planned, not a second copy of it. */}
-                <h2 className="text-lg font-semibold tracking-tight">
+                <h2 className="text-base font-semibold tracking-tight sm:text-lg">
                   {formatDate(selectedDay.date, true)}
                 </h2>
                 {selectedDay.notes ? (
@@ -1725,239 +1656,54 @@ export function ItineraryManager({
                 tabIndex={mobileView === 'list' ? 0 : -1}
               >
                 {selectedDay.items.length ? (
-                  <ItemGroup aria-label={t('itemListLabel')} variant="list">
-                    {arrivalBase && stopNumbers.arrival
-                      ? baseStopRow(arrivalBase, 'arrival', stopNumbers.arrival)
-                      : null}
-                    {selectedDay.items.map((item, itemIndex) => {
-                      const name = itemName(item);
-                      const mapsHref = item.tripPlace
-                        ? googleMapsPlaceHref(item.tripPlace.place)
-                        : null;
-                      const hasMapLocation = Boolean(
-                        item.tripPlace && placeLocation(item.tripPlace),
+                  <ItineraryDayTimeline
+                    dayOptions={itinerary.days.map((day, dayIndex) => ({
+                      id: day.id,
+                      label: t('dayOption', {
+                        date: formatDate(day.date),
+                        number: dayIndex + 1,
+                      }),
+                    }))}
+                    defaultTimeZone={selectedDay.defaultTimeZone}
+                    distanceUnit={preferences.distanceUnit}
+                    entries={daySequence}
+                    itemCount={selectedDay.items.length}
+                    label={t('itemListLabel')}
+                    locale={locale}
+                    onDeleteItem={setItemToDelete}
+                    onDuplicateItem={(item) => void handleDuplicate(item)}
+                    onEditItem={openEdit}
+                    onModeChange={(segment, mode) => void handleRouteModeChange(segment, mode)}
+                    onMoveItem={(item, dayId, position) =>
+                      void handleOrganize(item, dayId, position)
+                    }
+                    onSelectBase={selectBaseOnMap}
+                    onSelectItem={selectItemOnMap}
+                    organizingItemId={organizingItemId}
+                    resolveBase={(tripPlaceId) => {
+                      const tripPlace = tripPlaceById(tripPlaceId);
+                      if (!tripPlace) return null;
+                      const point = mapPoints.find(
+                        (candidate) =>
+                          candidate.kind === 'base' && candidate.tripPlaceId === tripPlace.id,
                       );
-                      const isMapSelected = selectedMapItemId === item.id;
-                      const incomingRoute = routes?.segments.find(
-                        (segment) =>
-                          segment.destination.kind === 'itinerary_item' &&
-                          segment.destination.id === item.id,
-                      );
-                      return [
-                        incomingRoute ? (
-                          <ItineraryRouteSegmentRow
-                            distanceUnit={preferences.distanceUnit}
-                            key={`route-${incomingRoute.id}`}
-                            locale={locale}
-                            onModeChange={(segment, mode) =>
-                              void handleRouteModeChange(segment, mode)
-                            }
-                            saving={
-                              savingRouteOwner ===
-                              `${incomingRoute.modeOwner.kind}:${incomingRoute.modeOwner.id}`
-                            }
-                            segment={incomingRoute}
-                            stale={routes?.stale ?? false}
-                          />
-                        ) : null,
-                        <Item
-                          className={cn('px-3 py-3', isMapSelected && 'bg-secondary/70')}
-                          id={`itinerary-item-${item.id}`}
-                          key={item.id}
-                          role="listitem"
-                          tabIndex={-1}
-                        >
-                          {/* The same number the map draws in its circle, so a pin and
-                              a row can be matched at a glance. An item with no location
-                              has no pin to match, and says so by not looking like one. */}
-                          <ItemMedia
-                            className={cn(
-                              'size-10 rounded-full text-sm font-semibold tabular-nums',
-                              hasMapLocation
-                                ? 'bg-primary text-primary-foreground'
-                                : 'border border-border bg-muted text-muted-foreground',
-                            )}
-                          >
-                            <span className="sr-only">
-                              {t('stopNumber', { number: itemIndex + 1 + stopNumbers.itemOffset })}
-                            </span>
-                            <span aria-hidden="true">{itemIndex + 1 + stopNumbers.itemOffset}</span>
-                          </ItemMedia>
-                          <ItemContent className="min-w-0">
-                            <ItemTitle className="text-base">
-                              {hasMapLocation ? (
-                                <button
-                                  aria-label={t('map.showItem', { name })}
-                                  aria-pressed={isMapSelected}
-                                  className="rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
-                                  onClick={() => selectItemOnMap(item)}
-                                  type="button"
-                                >
-                                  {name}
-                                </button>
-                              ) : (
-                                name
-                              )}
-                            </ItemTitle>
-                            <ItemDescription className="line-clamp-none">
-                              <span className="flex flex-wrap gap-x-2 gap-y-1">
-                                <span>
-                                  {item.localStartTime
-                                    ? item.timeZone && item.timeZone !== selectedDay.defaultTimeZone
-                                      ? t('exactTimeWithTimeZone', {
-                                          time: item.localStartTime,
-                                          timeZone: item.timeZone,
-                                        })
-                                      : t('exactTimeValue', { time: item.localStartTime })
-                                    : item.dayPart
-                                      ? t(`schedule.${item.dayPart}`)
-                                      : t('schedule.none')}
-                                </span>
-                                {item.durationMinutes ? (
-                                  <span>
-                                    {t('durationValue', { minutes: item.durationMinutes })}
-                                  </span>
-                                ) : null}
-                                {item.plannedCost ? (
-                                  <span>
-                                    {t('costValue', {
-                                      amount: item.plannedCost.amount,
-                                      currency: item.plannedCost.currencyCode,
-                                    })}
-                                  </span>
-                                ) : null}
-                                {item.customLocation ? (
-                                  <span>{item.customLocation.label}</span>
-                                ) : null}
-                              </span>
-                              {item.notes ? (
-                                <span className="mt-1 block line-clamp-2">{item.notes}</span>
-                              ) : null}
-                            </ItemDescription>
-                          </ItemContent>
-                          <ItemActions className="ml-auto shrink-0">
-                            {/* One menu instead of seven controls: the row is content,
-                                not a toolbar, and this behaves the same without hover. */}
-                            <DropdownMenu>
-                              <DropdownMenuTrigger
-                                render={
-                                  <Button
-                                    aria-label={t('itemActions', { name })}
-                                    disabled={organizingItemId === item.id}
-                                    size="icon-sm"
-                                    type="button"
-                                    variant="ghost"
-                                  />
-                                }
-                              >
-                                <Ellipsis aria-hidden="true" />
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="min-w-48">
-                                <DropdownMenuItem
-                                  disabled={itemIndex === 0}
-                                  onClick={() =>
-                                    void handleOrganize(item, selectedDay.id, itemIndex - 1)
-                                  }
-                                >
-                                  <ArrowUp aria-hidden="true" />
-                                  {t('itemMenu.moveEarlier')}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  disabled={itemIndex === selectedDay.items.length - 1}
-                                  onClick={() =>
-                                    void handleOrganize(item, selectedDay.id, itemIndex + 1)
-                                  }
-                                >
-                                  <ArrowDown aria-hidden="true" />
-                                  {t('itemMenu.moveLater')}
-                                </DropdownMenuItem>
-
-                                <DropdownMenuSub>
-                                  <DropdownMenuSubTrigger>
-                                    <CalendarClock aria-hidden="true" />
-                                    {t('moveToDay')}
-                                  </DropdownMenuSubTrigger>
-                                  <DropdownMenuSubContent className="max-h-80 overflow-y-auto">
-                                    <DropdownMenuRadioGroup
-                                      onValueChange={(value) =>
-                                        void handleOrganize(
-                                          item,
-                                          value === 'unscheduled' ? null : value,
-                                          999,
-                                        )
-                                      }
-                                      value={selectedDay.id}
-                                    >
-                                      {itinerary.days.map((day, dayIndex) => (
-                                        <DropdownMenuRadioItem key={day.id} value={day.id}>
-                                          {t('dayOption', {
-                                            date: formatDate(day.date),
-                                            number: dayIndex + 1,
-                                          })}
-                                        </DropdownMenuRadioItem>
-                                      ))}
-                                      <DropdownMenuRadioItem value="unscheduled">
-                                        {t('unscheduled')}
-                                      </DropdownMenuRadioItem>
-                                    </DropdownMenuRadioGroup>
-                                  </DropdownMenuSubContent>
-                                </DropdownMenuSub>
-
-                                <DropdownMenuSeparator />
-
-                                <DropdownMenuItem onClick={() => openEdit(item)}>
-                                  <Pencil aria-hidden="true" />
-                                  {t('itemMenu.edit')}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => void handleDuplicate(item)}>
-                                  <Copy aria-hidden="true" />
-                                  {t('itemMenu.duplicate')}
-                                </DropdownMenuItem>
-                                {mapsHref ? (
-                                  <DropdownMenuLinkItem
-                                    render={<a href={mapsHref} rel="noreferrer" target="_blank" />}
-                                  >
-                                    <ExternalLink aria-hidden="true" />
-                                    {t('itemMenu.openPlace')}
-                                  </DropdownMenuLinkItem>
-                                ) : null}
-
-                                <DropdownMenuSeparator />
-
-                                <DropdownMenuItem
-                                  onClick={() => setItemToDelete(item)}
-                                  variant="destructive"
-                                >
-                                  <Trash2 aria-hidden="true" />
-                                  {t('itemMenu.delete')}
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </ItemActions>
-                        </Item>,
-                      ];
+                      return {
+                        located: Boolean(point),
+                        name: placeName(tripPlace) ?? t('providerPlace'),
+                        selected: Boolean(point && selectedMapPointId === point.id),
+                      };
+                    }}
+                    resolveItem={(item) => ({
+                      located: Boolean(item.tripPlace && placeLocation(item.tripPlace)),
+                      mapsHref: item.tripPlace ? googleMapsPlaceHref(item.tripPlace.place) : null,
+                      name: itemName(item),
+                      selected: selectedMapItemId === item.id,
                     })}
-                    {routes?.segments
-                      .filter((segment) => segment.destination.kind === 'daily_base')
-                      .map((segment) => (
-                        <ItineraryRouteSegmentRow
-                          distanceUnit={preferences.distanceUnit}
-                          key={segment.id}
-                          locale={locale}
-                          onModeChange={(routeSegment, mode) =>
-                            void handleRouteModeChange(routeSegment, mode)
-                          }
-                          saving={
-                            savingRouteOwner === `${segment.modeOwner.kind}:${segment.modeOwner.id}`
-                          }
-                          segment={segment}
-                          stale={routes?.stale ?? false}
-                        />
-                      ))}
-                    {departureBase && stopNumbers.departure
-                      ? baseStopRow(departureBase, 'departure', stopNumbers.departure)
-                      : null}
-                  </ItemGroup>
+                    routesStale={routes?.stale ?? false}
+                    savingRouteOwner={savingRouteOwner}
+                    selectedDayId={selectedDay.id}
+                    unscheduledLabel={t('unscheduled')}
+                  />
                 ) : (
                   <PageState
                     actions={
@@ -2015,7 +1761,9 @@ export function ItineraryManager({
       {itinerary.unscheduledItems.length ? (
         <section className="space-y-3">
           <div>
-            <h2 className="text-lg font-semibold">{t('unscheduled')}</h2>
+            <h2 className="text-lg font-semibold">
+              {t('unscheduledSummary', { count: itinerary.unscheduledItems.length })}
+            </h2>
             <p className="text-sm text-muted-foreground">{t('unscheduledDescription')}</p>
           </div>
           <ItemGroup aria-label={t('unscheduled')} variant="list">

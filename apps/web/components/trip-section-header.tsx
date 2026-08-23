@@ -105,7 +105,11 @@ export function TripSectionHeader({
     );
 
   return (
-    <header className="space-y-5" data-density={density} data-slot="trip-section-header">
+    <header
+      className={cn('space-y-5', density === 'compact' && 'space-y-3 sm:space-y-5')}
+      data-density={density}
+      data-slot="trip-section-header"
+    >
       <Link
         className="inline-flex min-h-9 items-center gap-2 rounded-[var(--radius-md)] px-2 text-sm font-medium text-muted-foreground outline-none transition-colors duration-[var(--motion-standard)] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
         href="/trips"
@@ -126,6 +130,11 @@ export function TripSectionHeader({
               'text-[length:var(--text-page-title)] leading-[1.08] font-semibold tracking-[-0.035em] text-pretty text-foreground',
               density === 'immersive' &&
                 'md:text-[length:var(--text-immersive-title)] md:leading-[1.02]',
+              // On a working screen the trip's name is orientation, not the
+              // headline: the traveller came for what is inside the trip, and a
+              // phone only has so many rows to give.
+              density === 'compact' &&
+                'text-[length:var(--text-section-title)] leading-[1.15] sm:text-[length:var(--text-page-title)] sm:leading-[1.08]',
             )}
           >
             {trip?.name ?? t('titleLoading')}
@@ -239,7 +248,15 @@ export function TripSectionHeader({
       </div>
 
       {description ? (
-        <p className="max-w-[var(--layout-reading)] text-sm leading-[1.55] text-pretty text-muted-foreground">
+        <p
+          className={cn(
+            'max-w-[var(--layout-reading)] text-sm leading-[1.55] text-pretty text-muted-foreground',
+            // Standing guidance is worth its rows on a wide screen and worth
+            // fewer than none on a phone, where it sits between the traveller
+            // and their own plan.
+            density === 'compact' && 'hidden sm:block',
+          )}
+        >
           {description}
         </p>
       ) : null}

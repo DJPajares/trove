@@ -1119,6 +1119,8 @@
       "segmentUnavailableMetrics": "No route",
       "segmentNotEstimatedMetrics": "No estimate",
       "segmentOrigin": "from {origin}",
+      "segmentDestination": "to {destination}",
+      "segmentLongDistance": "long distance, not routed",
       "state": {
         "cached": "Cached estimate",
         "estimated": "Current estimate",

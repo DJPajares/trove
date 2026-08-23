@@ -262,7 +262,10 @@
       "description": "Choose a trip day and local time. This uses your real itinerary, and any edits you make update the actual trip.",
       "date": "Trip day",
       "time": "Local time",
-      "timeDescription": "Uses the selected day's timezone. Route times are estimates, not future traffic."
+      "timeDescription": "Uses the selected day's timezone. Route times are estimates, not future traffic.",
+      "summary": "Preview · {date} · {time}",
+      "edit": "Edit",
+      "close": "Close"
     },
     "navigation": "Trip Mode navigation",
     "exit": "Exit Trip Mode",
@@ -384,8 +387,7 @@
       "now": {
         "label": "Now",
         "title": "Now",
-        "eyebrow": "Your trip right now",
-        "previewEyebrow": "Your trip at the preview time",
+        "timeZone": "Times shown in {timeZone}",
         "loading": "Checking your trip…",
         "loadError": "We couldn't load your current trip context",
         "loadErrorDescription": "Check your connection and try again.",
@@ -483,7 +485,13 @@
         "moreReservations": "+{count} more",
         "linkedTasks": "{count, plural, one {# open task} other {# open tasks}}",
         "listLabel": "Today's itinerary items",
+        "stopNumber": "Stop {number}",
+        "dayBaseStart": "Daily base · where this day starts",
+        "dayBaseEnd": "Daily base · where this day ends",
         "current": "Relevant now",
+        "statusCompleted": "Completed",
+        "statusSkipped": "Skipped",
+        "completeItem": "Mark {name} complete",
         "itemFallback": "Itinerary item",
         "complete": "Complete",
         "skip": "Skip",
@@ -577,6 +585,7 @@
         "offlineMapDescription": "Use the itinerary beside this space for planned stops, times, and day-base context.",
         "mapSectionLabel": "Today's route map",
         "interactiveMapLabel": "Interactive map for today's route and places",
+        "stopNumber": "Stop {number}",
         "legendLabel": "Map marker guide",
         "legend": {
           "planned": "Planned stops",

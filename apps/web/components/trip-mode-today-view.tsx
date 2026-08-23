@@ -8,10 +8,9 @@ import {
   CheckCircle2,
   CircleAlert,
   ClipboardCheck,
-  Clock3,
+  Ellipsis,
   ExternalLink,
   MapPin,
-  MoreHorizontal,
   Pencil,
   Plus,
   RotateCcw,
@@ -25,6 +24,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
+import { TimelineGroup, TimelineMarker, TimelineRow } from '@/components/timeline-row';
 import { useTripModePreview } from '@/components/trip-mode-shell';
 import { useOfflineDataRefreshKey, useOnlineStatus } from '@/components/trip-sync-status';
 import { TripModeAddItemDialog } from '@/components/trip-mode-add-item-dialog';
@@ -68,6 +68,7 @@ import {
   updateItineraryItem,
   updateItineraryItemTravelStatus,
 } from '@/lib/itinerary/api';
+import { buildDaySequence, resolveDailyBases } from '@/lib/itinerary/day-sequence';
 import {} from '@/lib/saved/api';
 import { fetchReservations, type Reservation } from '@/lib/reservations/api';
 import { fetchTasks, type Task } from '@/lib/tasks/api';
@@ -110,10 +111,10 @@ function TodaySkeleton({ label }: Readonly<{ label: string }>) {
         <Skeleton className="h-9 w-40" />
         <Skeleton className="h-5 w-64" />
       </div>
-      <div className="space-y-0 rounded-[var(--radius-xl)] border border-border">
-        <Skeleton className="h-28 rounded-none border-b border-border" />
-        <Skeleton className="h-28 rounded-none border-b border-border" />
-        <Skeleton className="h-28 rounded-none" />
+      <div className="space-y-0 border-y border-border-subtle">
+        <Skeleton className="h-20 rounded-none" />
+        <Skeleton className="mt-px h-20 rounded-none" />
+        <Skeleton className="mt-px h-20 rounded-none" />
       </div>
     </div>
   );
@@ -460,32 +461,43 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     );
   }
 
+  // The same running order, numbering and base rows the planning day uses, so
+  // a stop is the same stop whichever screen the traveller is standing on.
+  // Legs are left out here: Trip Mode never asked the API for route segments,
+  // and a day list is not worth a new round of them.
+  const entries = buildDaySequence({ bases: resolveDailyBases({ day }), items: day.items });
+  const resolveBase = (tripPlaceId: string) => {
+    const tripPlace = itinerary.tripPlaces.find((candidate) => candidate.id === tripPlaceId);
+    if (!tripPlace) return null;
+
+    return {
+      located: Boolean(tripPlace.place.location),
+      name:
+        tripPlace.place.name ??
+        tripPlace.place.snapshot?.name ??
+        tripPlace.place.providerLabel ??
+        t('itemFallback'),
+    };
+  };
+
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-3xl font-semibold tracking-[-0.025em] text-foreground sm:text-4xl">
-            {t('title')}
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">{date}</p>
-          <p className="text-xs leading-5 text-text-subtle">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="sr-only">{t('title')}</h2>
+          <p className="text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
+            {date}
+          </p>
+          <p className="mt-0.5 text-[length:var(--text-metadata)] leading-5 text-text-subtle">
             {t('timeZone', { timeZone: day.defaultTimeZone })}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button nativeButton={false} render={<Link href={expenseHref()} />} variant="outline">
-            <Plus aria-hidden="true" data-icon="inline-start" />
-            {t('expense')}
-          </Button>
-          <Button onClick={() => setMemoryOpen(true)} variant="outline">
-            <Plus aria-hidden="true" data-icon="inline-start" />
-            {memoryTranslations('quickAction')}
-          </Button>
-          <Button onClick={() => setAddOpen(true)}>
-            <Plus aria-hidden="true" data-icon="inline-start" />
-            {t('addItem')}
-          </Button>
-        </div>
+        {/* Adding to the day is the one action worth a control of its own here;
+            the rest of what a day collects lives under the row it belongs to. */}
+        <Button onClick={() => setAddOpen(true)} size="sm">
+          <Plus aria-hidden="true" data-icon="inline-start" />
+          {t('addItem')}
+        </Button>
       </header>
 
       {day.notes ? (
@@ -528,97 +540,201 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
       </div>
 
       {day.items.length ? (
-        <ol
-          aria-label={t('listLabel')}
-          className="overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card"
-        >
-          {day.items.map((item) => {
+        <TimelineGroup label={t('listLabel')}>
+          {entries.map((entry, index) => {
+            const connector =
+              entries.length === 1
+                ? 'none'
+                : index === 0
+                  ? 'after'
+                  : index === entries.length - 1
+                    ? 'before'
+                    : 'both';
+
+            if (entry.kind === 'base') {
+              const base = resolveBase(entry.tripPlaceId);
+              if (!base) return null;
+
+              return (
+                <TimelineRow
+                  connector={connector}
+                  description={entry.role === 'arrival' ? t('dayBaseStart') : t('dayBaseEnd')}
+                  key={`base-${entry.role}`}
+                  marker={
+                    <TimelineMarker
+                      label={t('stopNumber', { number: entry.stopNumber })}
+                      variant={base.located ? 'base' : 'base-unlocated'}
+                    >
+                      {entry.stopNumber}
+                    </TimelineMarker>
+                  }
+                  title={base.name}
+                />
+              );
+            }
+
+            if (entry.kind === 'leg') return null;
+
+            const { item } = entry;
             const name = itemName(item);
             const location = itemLocation(item);
             const directions = directionsHref(item);
             const isCurrent = context.currentOrRelevant?.itemId === item.id;
             const busy = mutatingItemId === item.id;
+            const upcoming = item.travelStatus === 'upcoming';
             const upcomingIndex = upcomingItems.findIndex((candidate) => candidate.id === item.id);
             const linkedReservations = reservationsByItem.get(item.id) ?? [];
             const linkedTasks = openTasksByItem.get(item.id) ?? [];
+            const undoLabel = item.travelStatus === 'completed' ? t('undoComplete') : t('undoSkip');
+
             return (
-              <li
-                className={cn(
-                  'grid gap-4 border-b border-border p-4 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-5',
-                  isCurrent && 'bg-secondary/45',
-                  item.travelStatus !== 'upcoming' && 'bg-muted/20',
-                )}
-                id={`trip-mode-item-${item.id}`}
-                key={item.id}
-                tabIndex={-1}
-              >
-                <div className="flex min-w-0 items-start gap-3">
-                  <div
-                    className={cn(
-                      'mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-md)]',
-                      item.travelStatus === 'completed'
-                        ? 'bg-brand/10 text-brand'
-                        : item.travelStatus === 'skipped'
-                          ? 'bg-muted text-muted-foreground'
-                          : 'bg-secondary text-secondary-foreground',
-                    )}
-                  >
-                    {item.travelStatus === 'completed' ? (
-                      <Check aria-hidden="true" />
-                    ) : item.travelStatus === 'skipped' ? (
-                      <SkipForward aria-hidden="true" />
-                    ) : (
-                      <Clock3 aria-hidden="true" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <p className="text-sm font-medium text-brand tabular-nums">
-                        {itemSchedule(item)}
-                      </p>
-                      {isCurrent ? (
-                        <span className="text-xs text-muted-foreground">{t('current')}</span>
-                      ) : null}
-                    </div>
-                    <h3
-                      className={cn(
-                        'mt-1 text-lg leading-6 font-semibold text-foreground',
-                        item.travelStatus !== 'upcoming' && 'text-muted-foreground line-through',
-                      )}
+              <TimelineRow
+                actions={
+                  <div className="flex items-center gap-1">
+                    {/* The affirmative action of the whole view, one tap away.
+                        Everything else the row can do is labelled in the menu,
+                        which is what keeps the title readable at 390px. */}
+                    <Button
+                      aria-label={upcoming ? t('completeItem', { name }) : undoLabel}
+                      disabled={busy}
+                      onClick={() => void changeStatus(item, upcoming ? 'completed' : 'upcoming')}
+                      size="icon-sm"
+                      variant={upcoming ? 'secondary' : 'ghost'}
                     >
-                      {name}
-                    </h3>
-                    {location ? (
-                      <p className="mt-1 flex items-start gap-1.5 text-sm leading-5 text-muted-foreground">
-                        <MapPin aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-                        <span>{location}</span>
-                      </p>
-                    ) : null}
+                      {upcoming ? <Check aria-hidden="true" /> : <RotateCcw aria-hidden="true" />}
+                    </Button>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        aria-label={t('moreActions', { name })}
+                        disabled={busy}
+                        render={<Button size="icon-sm" type="button" variant="ghost" />}
+                      >
+                        <Ellipsis aria-hidden="true" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-52">
+                        {upcoming ? (
+                          <DropdownMenuItem onClick={() => void changeStatus(item, 'skipped')}>
+                            <SkipForward aria-hidden="true" />
+                            {t('skip')}
+                          </DropdownMenuItem>
+                        ) : null}
+                        <DropdownMenuItem onClick={() => openSchedule(item)}>
+                          <Pencil aria-hidden="true" />
+                          {t('editTime')}
+                        </DropdownMenuItem>
+                        <DropdownMenuLinkItem render={<Link href={expenseHref(item.id)} />}>
+                          <WalletCards aria-hidden="true" />
+                          {t('addExpense')}
+                        </DropdownMenuLinkItem>
+                        {upcoming ? (
+                          <>
+                            <DropdownMenuItem
+                              disabled={upcomingIndex <= 0}
+                              onClick={() => void reorder(item, 'earlier')}
+                            >
+                              <ArrowUp aria-hidden="true" />
+                              {t('moveEarlier')}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={upcomingIndex >= upcomingItems.length - 1}
+                              onClick={() => void reorder(item, 'later')}
+                            >
+                              <ArrowDown aria-hidden="true" />
+                              {t('moveLater')}
+                            </DropdownMenuItem>
+                          </>
+                        ) : null}
+                        {itinerary.days.length > 1 ? (
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger>
+                              <CalendarDays aria-hidden="true" />
+                              {t('moveToDay')}
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent className="max-h-80 overflow-y-auto">
+                              {itinerary.days
+                                .filter((candidate) => candidate.id !== day.id)
+                                .map((candidate) => (
+                                  <DropdownMenuItem
+                                    key={candidate.id}
+                                    onClick={() => void moveToDay(item, candidate.id)}
+                                  >
+                                    {t('dayOption', {
+                                      date: new Intl.DateTimeFormat(locale, {
+                                        day: 'numeric',
+                                        month: 'short',
+                                        timeZone: 'UTC',
+                                      }).format(new Date(`${candidate.date}T00:00:00.000Z`)),
+                                      number: itinerary.days.indexOf(candidate) + 1,
+                                    })}
+                                  </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+                        ) : null}
+                        {directions ? (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLinkItem
+                              render={
+                                <a
+                                  aria-label={t('directionsExternal', { name })}
+                                  href={directions}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                />
+                              }
+                            >
+                              <ExternalLink aria-hidden="true" />
+                              {t('directions')}
+                            </DropdownMenuLinkItem>
+                          </>
+                        ) : null}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                }
+                connector={connector}
+                description={
+                  <>
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="font-medium text-brand tabular-nums">
+                        {itemSchedule(item)}
+                      </span>
+                      {location ? (
+                        <span className="inline-flex min-w-0 items-start gap-1.5">
+                          <MapPin aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                          <span className="min-w-0">{location}</span>
+                        </span>
+                      ) : null}
+                    </span>
                     {item.notes || (item.tripPlace?.note && item.tripPlace.note !== item.notes) ? (
-                      <div className="mt-2 flex items-start gap-2 text-sm leading-5 text-text-subtle">
+                      <span className="mt-1 flex items-start gap-1.5 text-text-subtle">
                         <StickyNote aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-                        <div className="min-w-0 space-y-1">
-                          {item.notes ? <p className="line-clamp-2">{item.notes}</p> : null}
-                          {item.tripPlace?.note && item.tripPlace.note !== item.notes ? (
-                            <p className="line-clamp-2">{item.tripPlace.note}</p>
+                        <span className="min-w-0 space-y-0.5">
+                          {item.notes ? (
+                            <span className="block line-clamp-2">{item.notes}</span>
                           ) : null}
-                        </div>
-                      </div>
+                          {item.tripPlace?.note && item.tripPlace.note !== item.notes ? (
+                            <span className="block line-clamp-2">{item.tripPlace.note}</span>
+                          ) : null}
+                        </span>
+                      </span>
                     ) : null}
                     {linkedReservations.length || linkedTasks.length ? (
-                      <div className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
+                      <span className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
                         {linkedReservations.length ? (
                           <Link
-                            className="flex min-h-8 items-center gap-2 rounded-[var(--radius-sm)] text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+                            className="inline-flex min-h-8 items-center gap-1.5 rounded-[var(--radius-sm)] outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
                             href={`/trips/${tripId}/reservations`}
                           >
                             <ClipboardCheck
                               aria-hidden="true"
-                              className="size-4 shrink-0 text-brand"
+                              className="size-3.5 shrink-0 text-brand"
                             />
                             <span className="min-w-0 truncate">{linkedReservations[0]!.title}</span>
                             {linkedReservations.length > 1 ? (
-                              <span className="shrink-0 text-xs text-text-subtle">
+                              <span className="shrink-0 text-text-subtle">
                                 {t('moreReservations', { count: linkedReservations.length - 1 })}
                               </span>
                             ) : null}
@@ -626,141 +742,54 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                         ) : null}
                         {linkedTasks.length ? (
                           <Link
-                            className="flex min-h-8 items-center gap-2 rounded-[var(--radius-sm)] text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+                            className="inline-flex min-h-8 items-center gap-1.5 rounded-[var(--radius-sm)] outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
                             href={`/trips/${tripId}/tasks`}
                           >
                             <CheckCircle2
                               aria-hidden="true"
-                              className="size-4 shrink-0 text-brand"
+                              className="size-3.5 shrink-0 text-brand"
                             />
-                            <span>{t('linkedTasks', { count: linkedTasks.length })}</span>
+                            {t('linkedTasks', { count: linkedTasks.length })}
                           </Link>
                         ) : null}
-                      </div>
+                      </span>
                     ) : null}
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                  {item.travelStatus === 'upcoming' ? (
-                    <>
-                      <Button
-                        disabled={busy}
-                        onClick={() => void changeStatus(item, 'completed')}
-                        size="sm"
-                        variant="secondary"
-                      >
-                        <Check aria-hidden="true" data-icon="inline-start" />
-                        {t('complete')}
-                      </Button>
-                      <Button
-                        disabled={busy}
-                        onClick={() => void changeStatus(item, 'skipped')}
-                        size="sm"
-                        variant="ghost"
-                      >
-                        {t('skip')}
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      disabled={busy}
-                      onClick={() => void changeStatus(item, 'upcoming')}
-                      size="sm"
-                      variant="outline"
-                    >
-                      <RotateCcw aria-hidden="true" data-icon="inline-start" />
-                      {item.travelStatus === 'completed' ? t('undoComplete') : t('undoSkip')}
-                    </Button>
-                  )}
-
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      aria-label={t('moreActions', { name })}
-                      disabled={busy}
-                      render={<Button size="icon" variant="ghost" />}
-                    >
-                      <MoreHorizontal aria-hidden="true" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="min-w-52">
-                      <DropdownMenuItem onClick={() => openSchedule(item)}>
-                        <Pencil aria-hidden="true" />
-                        {t('editTime')}
-                      </DropdownMenuItem>
-                      <DropdownMenuLinkItem render={<Link href={expenseHref(item.id)} />}>
-                        <WalletCards aria-hidden="true" />
-                        {t('addExpense')}
-                      </DropdownMenuLinkItem>
-                      {item.travelStatus === 'upcoming' ? (
-                        <>
-                          <DropdownMenuItem
-                            disabled={upcomingIndex <= 0}
-                            onClick={() => void reorder(item, 'earlier')}
-                          >
-                            <ArrowUp aria-hidden="true" />
-                            {t('moveEarlier')}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={upcomingIndex >= upcomingItems.length - 1}
-                            onClick={() => void reorder(item, 'later')}
-                          >
-                            <ArrowDown aria-hidden="true" />
-                            {t('moveLater')}
-                          </DropdownMenuItem>
-                        </>
-                      ) : null}
-                      {itinerary.days.length > 1 ? (
-                        <DropdownMenuSub>
-                          <DropdownMenuSubTrigger>
-                            <CalendarDays aria-hidden="true" />
-                            {t('moveToDay')}
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuSubContent>
-                            {itinerary.days
-                              .filter((candidate) => candidate.id !== day.id)
-                              .map((candidate) => (
-                                <DropdownMenuItem
-                                  key={candidate.id}
-                                  onClick={() => void moveToDay(item, candidate.id)}
-                                >
-                                  {t('dayOption', {
-                                    date: new Intl.DateTimeFormat(locale, {
-                                      day: 'numeric',
-                                      month: 'short',
-                                      timeZone: 'UTC',
-                                    }).format(new Date(`${candidate.date}T00:00:00.000Z`)),
-                                    number: itinerary.days.indexOf(candidate) + 1,
-                                  })}
-                                </DropdownMenuItem>
-                              ))}
-                          </DropdownMenuSubContent>
-                        </DropdownMenuSub>
-                      ) : null}
-                      {directions ? (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuLinkItem
-                            render={
-                              <a
-                                aria-label={t('directionsExternal', { name })}
-                                href={directions}
-                                rel="noreferrer"
-                                target="_blank"
-                              />
-                            }
-                          >
-                            <ExternalLink aria-hidden="true" />
-                            {t('directions')}
-                          </DropdownMenuLinkItem>
-                        </>
-                      ) : null}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </li>
+                  </>
+                }
+                id={`trip-mode-item-${item.id}`}
+                key={item.id}
+                marker={
+                  <TimelineMarker
+                    label={t('stopNumber', { number: entry.stopNumber })}
+                    variant={item.tripPlace?.place.location ? 'stop' : 'stop-unlocated'}
+                  >
+                    {entry.stopNumber}
+                  </TimelineMarker>
+                }
+                meta={
+                  isCurrent || !upcoming ? (
+                    <span className="font-medium text-foreground">
+                      {isCurrent
+                        ? t('current')
+                        : item.travelStatus === 'completed'
+                          ? t('statusCompleted')
+                          : t('statusSkipped')}
+                    </span>
+                  ) : null
+                }
+                selected={isCurrent}
+                tabIndex={-1}
+                title={
+                  <span
+                    className={cn(!upcoming && 'text-muted-foreground line-through decoration-1')}
+                  >
+                    {name}
+                  </span>
+                }
+              />
             );
           })}
-        </ol>
+        </TimelineGroup>
       ) : (
         <PageState
           actions={
@@ -776,6 +805,22 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
           title={t('emptyTitle')}
         />
       )}
+
+      <div className="flex flex-wrap gap-2 border-t border-border-subtle pt-4">
+        <Button
+          nativeButton={false}
+          render={<Link href={expenseHref()} />}
+          size="sm"
+          variant="outline"
+        >
+          <Plus aria-hidden="true" data-icon="inline-start" />
+          {t('expense')}
+        </Button>
+        <Button onClick={() => setMemoryOpen(true)} size="sm" variant="outline">
+          <Plus aria-hidden="true" data-icon="inline-start" />
+          {memoryTranslations('quickAction')}
+        </Button>
+      </div>
 
       <TripModePendingMemories key={pendingMemoriesKey} tripId={tripId} />
 

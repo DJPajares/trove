@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
+import { EditorialSection } from '@/components/editorial-section';
 import { PageState } from '@/components/page-state';
 import { OfflineReadyStatus } from '@/components/offline-ready-status';
 import { TripNotificationControl } from '@/components/trip-notification-control';
@@ -259,18 +260,18 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
 
   return (
     <div className="space-y-8 pb-2 sm:space-y-10">
-      <header className="max-w-2xl">
-        <h2 className="text-3xl font-semibold tracking-[-0.025em] text-foreground sm:text-4xl">
-          {t('title')}
-        </h2>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">{t('description')}</p>
+      <header className="max-w-[var(--layout-reading)]">
+        <h2 className="sr-only">{t('title')}</h2>
+        <p className="text-sm leading-[1.55] text-pretty text-muted-foreground">
+          {t('description')}
+        </p>
       </header>
 
       <section aria-labelledby="trip-mode-summary-heading">
         <h3 className="sr-only" id="trip-mode-summary-heading">
           {t('summary')}
         </h3>
-        <dl className="grid gap-x-6 gap-y-5 border-y border-border py-5 sm:grid-cols-3">
+        <dl className="grid gap-x-6 gap-y-5 border-y border-border-subtle py-5 sm:grid-cols-3">
           <div>
             <dt className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
               {t('dates')}
@@ -305,19 +306,8 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
       </section>
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-        <section aria-labelledby="trip-mode-upcoming-days-heading">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h3
-                className="text-xl font-semibold tracking-[-0.015em]"
-                id="trip-mode-upcoming-days-heading"
-              >
-                {t('upcomingDays')}
-              </h3>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                {t('upcomingDaysDescription')}
-              </p>
-            </div>
+        <EditorialSection
+          actions={
             <Button
               nativeButton={false}
               render={<Link href={`/trips/${tripId}/itinerary`} />}
@@ -326,11 +316,15 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
             >
               {t('openItinerary')}
             </Button>
-          </div>
-
+          }
+          description={t('upcomingDaysDescription')}
+          headingId="trip-mode-upcoming-days-heading"
+          headingLevel={3}
+          title={t('upcomingDays')}
+        >
           {visibleDays.length ? (
             <>
-              <ItemGroup className="mt-4" variant="list">
+              <ItemGroup variant="list">
                 {visibleDays.map((day, index) => (
                   <Item
                     key={day.id}
@@ -363,7 +357,7 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
               ) : null}
             </>
           ) : (
-            <div className="mt-5 border-y border-border py-6">
+            <div className="border-y border-border-subtle py-6">
               <CalendarDays aria-hidden="true" className="size-5 text-brand" />
               <p className="mt-3 text-sm font-semibold text-foreground">{t('noUpcomingDays')}</p>
               <p className="mt-1 text-sm leading-6 text-muted-foreground">
@@ -371,7 +365,7 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
               </p>
             </div>
           )}
-        </section>
+        </EditorialSection>
 
         <div className="space-y-8">
           <OfflineReadyStatus tripId={tripId} />
@@ -379,7 +373,7 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
 
           {dailyBase ? (
             <section aria-labelledby="trip-mode-base-heading">
-              <div className="flex items-start gap-3 border-y border-border py-4">
+              <div className="flex items-start gap-3 border-y border-border-subtle py-4">
                 <BedDouble aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand" />
                 <div className="min-w-0 flex-1">
                   <h3 className="text-sm font-semibold text-foreground" id="trip-mode-base-heading">
@@ -402,11 +396,8 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
           ) : null}
 
           {pinnedInfo.length ? (
-            <section aria-labelledby="trip-mode-pinned-info-heading">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-base font-semibold" id="trip-mode-pinned-info-heading">
-                  {t('pinnedInfo')}
-                </h3>
+            <EditorialSection
+              actions={
                 <Button
                   nativeButton={false}
                   render={<Link href={`/trips/${tripId}/info`} />}
@@ -415,8 +406,13 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
                 >
                   {t('viewAllInfo')}
                 </Button>
-              </div>
-              <dl className="mt-3 space-y-3 border-y border-border py-3">
+              }
+              density="compact"
+              headingId="trip-mode-pinned-info-heading"
+              headingLevel={3}
+              title={t('pinnedInfo')}
+            >
+              <dl className="space-y-3 border-y border-border-subtle py-3">
                 {pinnedInfo.map((entry) => (
                   <div key={entry.id}>
                     <dt className="text-xs font-medium text-muted-foreground">{entry.label}</dt>
@@ -426,15 +422,12 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
                   </div>
                 ))}
               </dl>
-            </section>
+            </EditorialSection>
           ) : null}
 
           {notes.length ? (
-            <section aria-labelledby="trip-mode-notes-heading">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-base font-semibold" id="trip-mode-notes-heading">
-                  {t('notes')}
-                </h3>
+            <EditorialSection
+              actions={
                 <Button
                   nativeButton={false}
                   render={<Link href={itineraryHref} />}
@@ -443,8 +436,13 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
                 >
                   {t('viewNotes')}
                 </Button>
-              </div>
-              <dl className="mt-3 space-y-3 border-y border-border py-3">
+              }
+              density="compact"
+              headingId="trip-mode-notes-heading"
+              headingLevel={3}
+              title={t('notes')}
+            >
+              <dl className="space-y-3 border-y border-border-subtle py-3">
                 {notes.slice(0, 3).map((note) => (
                   <div key={`${note.label}-${note.value}`}>
                     <dt className="text-xs font-medium text-muted-foreground">{note.label}</dt>
@@ -454,17 +452,17 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
                   </div>
                 ))}
               </dl>
-            </section>
+            </EditorialSection>
           ) : null}
 
-          <section aria-labelledby="trip-mode-tools-heading">
-            <h3 className="text-base font-semibold" id="trip-mode-tools-heading">
-              {t('tripTools')}
-            </h3>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              {t('tripToolsDescription')}
-            </p>
-            <ItemGroup className="mt-3" variant="list">
+          <EditorialSection
+            density="compact"
+            description={t('tripToolsDescription')}
+            headingId="trip-mode-tools-heading"
+            headingLevel={3}
+            title={t('tripTools')}
+          >
+            <ItemGroup variant="list">
               {tools.map(({ descriptionKey, href, icon: Icon, key }) => (
                 <Item key={key} render={<Link href={href} />} size="sm">
                   <ItemMedia variant="icon">
@@ -492,7 +490,7 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
                 </Item>
               ))}
             </ItemGroup>
-          </section>
+          </EditorialSection>
         </div>
       </div>
     </div>

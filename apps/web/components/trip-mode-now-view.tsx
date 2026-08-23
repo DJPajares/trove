@@ -240,6 +240,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
     return t('distance', { unit: t(`unit.${preferences.distanceUnit}`), value: amount });
   };
   const nextName = nextItem ? itemName(nextItem, t('placeFallback')) : null;
+  const hasNext = Boolean(nextItem && nextName);
   const weatherItem = nextItem ?? currentItem;
   // One source for where the weather is. A provider Place's coordinates arrive
   // with the itinerary now, so this no longer reconciles a live lookup against a
@@ -302,34 +303,20 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
     null;
 
   return (
-    <div className="space-y-7">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm font-medium text-brand">
-            {t(isPreview ? 'previewEyebrow' : 'eyebrow')}
-          </p>
-          <h2 className="mt-1 text-3xl font-semibold tracking-[-0.025em] text-foreground sm:text-4xl">
-            {t('title')}
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">{date}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {readyContext.day ? (
-            <Button onClick={() => setMemoryOpen(true)} variant="outline">
-              <Sparkles aria-hidden="true" data-icon="inline-start" />
-              {memoryTranslations('quickAction')}
-            </Button>
-          ) : null}
-          <Button
-            nativeButton={false}
-            render={<Link href={withPreviewHref(`/trips/${tripId}/mode/today`)} />}
-            variant="outline"
-          >
-            <CalendarDays aria-hidden="true" data-icon="inline-start" />
-            {t('openToday')}
-          </Button>
-        </div>
-      </header>
+    <div className="space-y-6">
+      <div>
+        <h2 className="sr-only">{t('title')}</h2>
+        <p className="text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
+          {date}
+        </p>
+        {/* Naming the zone is what keeps a planned clock from reading as the
+            phone's own. It costs one line, and it is the line that says so. */}
+        <p className="mt-0.5 text-[length:var(--text-metadata)] leading-5 text-text-subtle">
+          {t('timeZone', {
+            timeZone: readyContext.day?.defaultTimeZone ?? readyContext.trip.referenceTimeZone,
+          })}
+        </p>
+      </div>
 
       {readyContext.day ? (
         <TripModeMemoryDialog
@@ -345,32 +332,35 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
         />
       ) : null}
 
+      {/* What is happening now leads. Everything below it answers "and then
+          what" — the order the traveller asks the questions in. */}
       {currentItem && readyContext.currentOrRelevant ? (
         <section
           aria-labelledby="trip-mode-current-heading"
-          className="flex items-start gap-3 border-y border-border py-4"
+          className="border-y border-border py-4"
         >
-          <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-secondary text-secondary-foreground">
-            <MapPin aria-hidden="true" className="size-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-              {t(`currentKind.${readyContext.currentOrRelevant.kind}`)}
-            </p>
-            <h3
-              className="mt-1 text-base font-semibold text-foreground"
-              id="trip-mode-current-heading"
-            >
-              {itemName(currentItem, t('placeFallback'))}
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">{formatSchedule(currentItem)}</p>
+          <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
+            {t(`currentKind.${readyContext.currentOrRelevant.kind}`)}
+          </p>
+          <h3
+            className="mt-1.5 text-[length:var(--text-section-title)] leading-[1.18] font-semibold tracking-[-0.022em] text-pretty text-foreground"
+            id="trip-mode-current-heading"
+          >
+            {itemName(currentItem, t('placeFallback'))}
+          </h3>
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5 text-sm leading-6 text-muted-foreground">
+            <span className="inline-flex items-center gap-2">
+              <Clock3 aria-hidden="true" className="size-4 shrink-0" />
+              {formatSchedule(currentItem)}
+            </span>
             {itemLocation(currentItem) ? (
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                {itemLocation(currentItem)}
-              </p>
+              <span className="inline-flex min-w-0 items-start gap-2">
+                <MapPin aria-hidden="true" className="mt-1 size-4 shrink-0" />
+                <span className="min-w-0">{itemLocation(currentItem)}</span>
+              </span>
             ) : null}
-            <p className="mt-2 text-xs leading-5 text-text-subtle">{t('locationDisclaimer')}</p>
           </div>
+          <p className="mt-2 text-xs leading-5 text-text-subtle">{t('locationDisclaimer')}</p>
         </section>
       ) : null}
 
@@ -385,6 +375,125 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
           </div>
         </div>
       ) : null}
+
+      {nextItem && nextName ? (
+        <section
+          aria-labelledby="trip-mode-next-heading"
+          className="rounded-[var(--radius-xl)] border border-border bg-card p-4 shadow-[var(--shadow-surface)] sm:p-6"
+        >
+          <div className="flex items-center gap-2 text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
+            <ArrowRight aria-hidden="true" className="size-4" />
+            {t('nextLabel')}
+          </div>
+          <div className="mt-3 grid gap-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+            <div className="min-w-0">
+              <h3
+                className="text-[length:var(--text-section-title)] leading-[1.18] font-semibold tracking-[-0.022em] text-pretty text-foreground"
+                id="trip-mode-next-heading"
+              >
+                {nextName}
+              </h3>
+              <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5 text-sm leading-6 text-muted-foreground">
+                <span className="inline-flex items-center gap-2">
+                  <Clock3 aria-hidden="true" className="size-4 shrink-0" />
+                  {formatSchedule(nextItem)}
+                </span>
+                {itemLocation(nextItem) ? (
+                  <span className="inline-flex min-w-0 items-start gap-2">
+                    <MapPin aria-hidden="true" className="mt-1 size-4 shrink-0" />
+                    <span className="min-w-0">{itemLocation(nextItem)}</span>
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
+            {route ? (
+              <div className="md:min-w-44 md:border-l md:border-border md:pl-6">
+                <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+                  {t('leaveByLabel')}
+                </p>
+                <p className="mt-1 text-2xl leading-tight font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+                  {timeFormat(
+                    route.at,
+                    nextItem.timeZone ??
+                      readyContext.day?.defaultTimeZone ??
+                      readyContext.trip.referenceTimeZone,
+                  )}
+                </p>
+              </div>
+            ) : null}
+          </div>
+
+          {/* A leg that was never going to be estimated, an estimate that has
+              not arrived, and an item with no fixed start are three different
+              things, and each of them says which one it is. */}
+          {route ? (
+            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border pt-4 text-sm text-muted-foreground">
+              <span className="inline-flex items-center gap-2">
+                <span className="[&_svg]:size-4">{travelIcon(route.mode)}</span>
+                {t('travelEstimate', {
+                  duration: formatDuration(route.routeDurationSeconds),
+                  mode: t(`travelMode.${route.mode}`),
+                })}
+              </span>
+              {route.distanceMeters !== null ? (
+                <span>{formatDistance(route.distanceMeters)}</span>
+              ) : null}
+              {route.provider === 'google' ? (
+                <span className="w-full text-xs text-text-subtle">{t('googleAttribution')}</span>
+              ) : null}
+            </div>
+          ) : (
+            <p className="mt-4 border-t border-border pt-4 text-sm leading-6 text-muted-foreground">
+              {nextLegIsFlight
+                ? t('routeFlight')
+                : nextItem.startInstant
+                  ? t('routeUnavailable')
+                  : t('timingFlexible')}
+            </p>
+          )}
+
+          {directions ? (
+            <div className="mt-4">
+              <Button
+                nativeButton={false}
+                render={
+                  <a
+                    aria-label={t('directionsExternal')}
+                    href={directions}
+                    rel="noreferrer"
+                    target="_blank"
+                  />
+                }
+              >
+                <Route aria-hidden="true" data-icon="inline-start" />
+                {t('directions')}
+                <ExternalLink aria-hidden="true" data-icon="inline-end" />
+              </Button>
+            </div>
+          ) : null}
+        </section>
+      ) : (
+        <PageState
+          actions={
+            <Button
+              nativeButton={false}
+              render={<Link href={withPreviewHref(`/trips/${tripId}/mode/today`)} />}
+            >
+              {t('openToday')}
+            </Button>
+          }
+          className="py-4"
+          description={
+            readyContext.state === 'no_day'
+              ? t('noDayDescription', { date })
+              : t('noNextDescription')
+          }
+          headingLevel={2}
+          icon={<Clock3 aria-hidden="true" />}
+          title={readyContext.state === 'no_day' ? t('noDayTitle') : t('noNextTitle')}
+        />
+      )}
 
       <TripWeatherContext
         isPreview={isPreview}
@@ -448,130 +557,29 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
         </section>
       ) : null}
 
-      {nextItem && nextName ? (
-        <section
-          aria-labelledby="trip-mode-next-heading"
-          className="rounded-[var(--radius-xl)] border border-border bg-card p-5 shadow-[var(--shadow-surface)] sm:p-7"
-        >
-          <div className="flex items-center gap-2 text-sm font-semibold text-brand">
-            <ArrowRight aria-hidden="true" className="size-4" />
-            {t('nextLabel')}
-          </div>
-          <div className="mt-4 grid gap-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
-            <div className="min-w-0">
-              <h3
-                className="text-2xl leading-tight font-semibold tracking-[-0.02em] text-foreground sm:text-3xl"
-                id="trip-mode-next-heading"
-              >
-                {nextName}
-              </h3>
-              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                <span className="inline-flex items-center gap-2">
-                  <Clock3 aria-hidden="true" className="size-4" />
-                  {formatSchedule(nextItem)}
-                </span>
-                {itemLocation(nextItem) ? (
-                  <span className="inline-flex items-start gap-2">
-                    <MapPin aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-                    {itemLocation(nextItem)}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-
-            {route ? (
-              <div className="md:min-w-48 md:border-l md:border-border md:pl-6">
-                <p className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-                  {t('leaveByLabel')}
-                </p>
-                <p className="mt-1 text-2xl font-semibold tracking-[-0.02em] text-foreground tabular-nums">
-                  {timeFormat(
-                    route.at,
-                    nextItem.timeZone ??
-                      readyContext.day?.defaultTimeZone ??
-                      readyContext.trip.referenceTimeZone,
-                  )}
-                </p>
-              </div>
-            ) : null}
-          </div>
-
-          {route ? (
-            <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border pt-4 text-sm text-muted-foreground">
-              <span className="inline-flex items-center gap-2">
-                <span className="[&_svg]:size-4">{travelIcon(route.mode)}</span>
-                {t('travelEstimate', {
-                  duration: formatDuration(route.routeDurationSeconds),
-                  mode: t(`travelMode.${route.mode}`),
-                })}
-              </span>
-              {route.distanceMeters !== null ? (
-                <span>{formatDistance(route.distanceMeters)}</span>
-              ) : null}
-              {route.provider === 'google' ? (
-                <span className="w-full text-xs text-text-subtle">{t('googleAttribution')}</span>
-              ) : null}
-            </div>
-          ) : (
-            <p className="mt-6 border-t border-border pt-4 text-sm leading-6 text-muted-foreground">
-              {nextLegIsFlight
-                ? t('routeFlight')
-                : nextItem.startInstant
-                  ? t('routeUnavailable')
-                  : t('timingFlexible')}
-            </p>
-          )}
-
-          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
+      {/* What the day offers doing, after the day has been described. When
+          there is nothing next, the empty state has already offered Today and
+          this row does not offer it a second time. */}
+      {hasNext || readyContext.day ? (
+        <div className="flex flex-wrap gap-2 border-t border-border-subtle pt-4">
+          {hasNext ? (
             <Button
-              className="sm:w-auto"
               nativeButton={false}
               render={<Link href={withPreviewHref(`/trips/${tripId}/mode/today`)} />}
               variant="outline"
             >
+              <CalendarDays aria-hidden="true" data-icon="inline-start" />
               {t('openToday')}
             </Button>
-            {directions ? (
-              <Button
-                className="sm:w-auto"
-                nativeButton={false}
-                render={
-                  <a
-                    aria-label={t('directionsExternal')}
-                    href={directions}
-                    rel="noreferrer"
-                    target="_blank"
-                  />
-                }
-              >
-                <Route aria-hidden="true" data-icon="inline-start" />
-                {t('directions')}
-                <ExternalLink aria-hidden="true" data-icon="inline-end" />
-              </Button>
-            ) : null}
-          </div>
-        </section>
-      ) : (
-        <PageState
-          actions={
-            <Button
-              nativeButton={false}
-              render={<Link href={withPreviewHref(`/trips/${tripId}/mode/today`)} />}
-            >
-              {t('openToday')}
+          ) : null}
+          {readyContext.day ? (
+            <Button onClick={() => setMemoryOpen(true)} variant="outline">
+              <Sparkles aria-hidden="true" data-icon="inline-start" />
+              {memoryTranslations('quickAction')}
             </Button>
-          }
-          className="py-4"
-          description={
-            readyContext.state === 'no_day'
-              ? t('noDayDescription', { date })
-              : t('noNextDescription')
-          }
-          headingLevel={2}
-          icon={<Clock3 aria-hidden="true" />}
-          title={readyContext.state === 'no_day' ? t('noDayTitle') : t('noNextTitle')}
-        />
-      )}
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

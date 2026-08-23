@@ -365,7 +365,9 @@
       "cancel": "Cancel",
       "removeConfirm": "Remove local copy",
       "removing": "Removing…",
-      "actionError": "Trove could not update this offline copy. Try again when you are connected."
+      "actionError": "Trove could not update this offline copy. Try again when you are connected.",
+      "showDetails": "Show offline details",
+      "hideDetails": "Hide offline details"
     },
     "views": {
       "now": {

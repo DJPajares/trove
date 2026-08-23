@@ -58,6 +58,36 @@ export function primaryTripDestinations(
 }
 
 /**
+ * How much visual weight a destination's control carries. The mapping lives
+ * beside the emphasis it reads so a surface never invents its own answer, and
+ * so the whole lifecycle rule stays testable without rendering anything.
+ */
+export function tripDestinationEmphasisVariant(emphasis: TripDestination['emphasis']) {
+  if (emphasis === 'leading') return 'default' as const;
+  if (emphasis === 'quiet') return 'ghost' as const;
+
+  return 'outline' as const;
+}
+
+const emphasisRank: Record<TripDestination['emphasis'], number> = {
+  quiet: 0,
+  standard: 1,
+  leading: 2,
+};
+
+/**
+ * Whether a destination is prominent enough for a surface that shows only some
+ * of them. A focal card offers the stage's own actions; the full set belongs to
+ * navigation, which never hides anything.
+ */
+export function isEmphasisAtLeast(
+  emphasis: TripDestination['emphasis'],
+  minimum: 'quiet' | 'standard',
+) {
+  return emphasisRank[emphasis] >= emphasisRank[minimum];
+}
+
+/**
  * What every section is called, including the ones that appear in neither the primary
  * set nor the menu. A screen the traveller can reach must still be able to say its
  * name, so nothing is left having to describe itself as "More".

@@ -1,8 +1,10 @@
 import { expect, test } from 'vitest';
 
 import {
+  isEmphasisAtLeast,
   primaryTripDestinations,
   supportingTripDestinations,
+  tripDestinationEmphasisVariant,
   tripSectionLabelKey,
   type TripSection,
 } from '../lib/trips/navigation.ts';
@@ -84,6 +86,61 @@ test('supporting tools stay complete and out of the primary set', () => {
   expect(supporting.every((entry) => entry.section !== 'places')).toBeTruthy();
   // Trip Info's route and its label have never matched; the mapping must survive.
   expect(supporting.at(-1)?.labelKey).toBe('tripInfo');
+});
+
+test('emphasis maps to weight, so no surface invents its own', () => {
+  expect(tripDestinationEmphasisVariant('leading')).toBe('default');
+  expect(tripDestinationEmphasisVariant('standard')).toBe('outline');
+  expect(tripDestinationEmphasisVariant('quiet')).toBe('ghost');
+});
+
+test('emphasis ranks so a focal surface can offer only the prominent actions', () => {
+  expect(isEmphasisAtLeast('leading', 'standard')).toBe(true);
+  expect(isEmphasisAtLeast('standard', 'standard')).toBe(true);
+  expect(isEmphasisAtLeast('quiet', 'standard')).toBe(false);
+
+  // Nothing is below `quiet`, so the permissive threshold hides nothing.
+  for (const emphasis of ['leading', 'standard', 'quiet'] as const) {
+    expect(isEmphasisAtLeast(emphasis, 'quiet')).toBe(true);
+  }
+});
+
+test('a focal surface offers exactly the two actions the stage calls for', () => {
+  // This is the regression guard for the trip overview rewrite: the sheet used
+  // to hard-code its action row, and these are the sections and hrefs it showed.
+  const offered = (lifecycle: 'active' | 'completed' | 'planning') =>
+    primaryTripDestinations(TRIP, lifecycle, START).filter((destination) =>
+      isEmphasisAtLeast(destination.emphasis, 'standard'),
+    );
+
+  expect(offered('planning').map((entry) => entry.section)).toStrictEqual(['itinerary', 'mode']);
+  expect(offered('active').map((entry) => entry.section)).toStrictEqual(['itinerary', 'mode']);
+  expect(offered('completed').map((entry) => entry.section)).toStrictEqual([
+    'itinerary',
+    'memories',
+  ]);
+
+  expect(offered('planning').map((entry) => entry.href)).toStrictEqual([
+    `/trips/${TRIP}/itinerary`,
+    `/trips/${TRIP}/mode?preview=1&date=2026-09-05&time=09%3A00`,
+  ]);
+  expect(offered('active').map((entry) => entry.href)).toStrictEqual([
+    `/trips/${TRIP}/itinerary`,
+    `/trips/${TRIP}/mode`,
+  ]);
+  expect(offered('completed').map((entry) => entry.href)).toStrictEqual([
+    `/trips/${TRIP}/itinerary`,
+    `/trips/${TRIP}/memories`,
+  ]);
+});
+
+test('every stage leads with exactly one action', () => {
+  for (const lifecycle of ['planning', 'active', 'completed'] as const) {
+    const leading = primaryTripDestinations(TRIP, lifecycle, START).filter(
+      (entry) => entry.emphasis === 'leading',
+    );
+    expect(leading, `${lifecycle} must lead with one action`).toHaveLength(1);
+  }
 });
 
 test('every section can say its own name, including the ones no menu lists', () => {

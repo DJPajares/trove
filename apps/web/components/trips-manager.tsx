@@ -4,26 +4,29 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   CalendarClock,
-  CalendarDays,
+  ChevronDown,
   CircleAlert,
   ClipboardCheck,
   MapPinned,
   Plus,
   WalletCards,
 } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { useEffect, useMemo, useState } from 'react';
 
 import { EditorialSection } from '@/components/editorial-section';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
-import { MediaAttribution } from '@/components/media-attribution';
+import { TripFeaturedCard } from '@/components/trip-featured-card';
 import { TripForm } from '@/components/trip-form';
-import { TripMedia } from '@/components/trip-media';
+import { TripListRow } from '@/components/trip-list-row';
 import { TripOverviewSheet } from '@/components/trip-overview-sheet';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
-import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
+import { editorialSubjectKey } from '@/lib/media/editorial-images';
+import { groupTripsForLibrary, PAST_TRIPS_PREVIEW_COUNT } from '@/lib/trips/lifecycle';
+import { libraryEditorialSubjects, tripEditorialSubject } from '@/lib/trips/summary';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,14 +38,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Item,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemMedia,
-  ItemTitle,
-} from '@/components/ui/item';
+import { ItemGroup } from '@/components/ui/item';
 import {
   Sheet,
   SheetContent,
@@ -51,16 +47,12 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { deleteTrip, fetchTrips, type Trip } from '@/lib/trips/api';
-import { resolveTripMediaSource } from '@/lib/media/trip-media';
-import { cn } from '@/lib/utils';
 
 type EditorState =
   { mode: 'closed'; trip: null } | { mode: 'create'; trip: null } | { mode: 'edit'; trip: Trip };
 
 export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: boolean }>) {
   const t = useTranslations('trips');
-  const mediaTranslations = useTranslations('media');
-  const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -73,17 +65,15 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
   const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
   const [deleting, setDeleting] = useState(false);
 
-  // Only trips without a cover of their own ask for a photograph, and each asks
-  // by destination rather than by trip name, so "Spring in Kyoto" resolves to
-  // Kyoto and two travellers naming the same city share one cached answer.
-  const editorialSubjects: EditorialSubject[] = trips
-    .filter((trip) => !trip.coverPhotoUrl)
-    .map((trip) => ({
-      category: 'destination' as const,
-      name: trip.destinations[0]?.name ?? trip.name,
-      tripId: trip.id,
-    }));
-  const editorialImages = useEditorialImages(editorialSubjects);
+  const groupedTrips = useMemo(() => groupTripsForLibrary(trips), [trips]);
+
+  // One request for the whole library, in priority order and capped, however
+  // many trips a traveller has. Rows read from the answer; none of them ask.
+  const editorialImages = useEditorialImages(libraryEditorialSubjects(groupedTrips));
+  const editorialFor = (trip: Trip) => {
+    const subject = tripEditorialSubject(trip);
+    return subject ? (editorialImages.get(editorialSubjectKey(subject)) ?? null) : null;
+  };
 
   useEffect(() => {
     if (!shouldCreateTrip) return;
@@ -135,101 +125,6 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
     } finally {
       setDeleting(false);
     }
-  }
-
-  const dateFormatter = new Intl.DateTimeFormat(locale, {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-    year: 'numeric',
-  });
-  const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00.000Z`));
-  const groupedTrips = {
-    active: trips.filter((trip) => trip.lifecycle === 'active'),
-    planning: trips.filter((trip) => trip.lifecycle === 'planning'),
-    completed: trips.filter((trip) => trip.lifecycle === 'completed'),
-  };
-
-  function renderTrip(trip: Trip) {
-    const editorial = trip.coverPhotoUrl
-      ? null
-      : editorialImages.get(
-          editorialSubjectKey({
-            category: 'destination',
-            name: trip.destinations[0]?.name ?? trip.name,
-          }),
-        );
-
-    return (
-      <Item
-        className="group min-h-20 flex-nowrap px-3 py-3 text-left hover:bg-muted/60"
-        key={trip.id}
-        render={
-          <button
-            aria-label={t('viewTripLabel', { name: trip.name })}
-            onClick={() => setOverviewTrip(trip)}
-            type="button"
-          />
-        }
-        variant="default"
-      >
-        <ItemMedia className="size-14 rounded-[var(--radius-md)] sm:size-16" variant="default">
-          <TripMedia
-            alt={
-              editorial
-                ? mediaTranslations('alt.tripEditorial', {
-                    name: trip.destinations[0]?.name ?? trip.name,
-                  })
-                : ''
-            }
-            className="size-full"
-            // A thumbnail this size cannot carry a legible credit, so the row
-            // renders it below instead.
-            credit="inline"
-            sizes="64px"
-            source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
-            variant="thumbnail"
-          />
-        </ItemMedia>
-        <ItemContent className="min-w-0 gap-1.5">
-          <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
-            <ItemTitle className="line-clamp-2 max-w-full text-base sm:line-clamp-1">
-              {trip.name}
-            </ItemTitle>
-            <span
-              className={cn(
-                'shrink-0 text-xs font-medium',
-                trip.lifecycle === 'active' ? 'text-status-success' : 'text-muted-foreground',
-              )}
-            >
-              {t(`lifecycle.${trip.lifecycle}`)}
-            </span>
-          </div>
-          <ItemDescription className="line-clamp-2 sm:line-clamp-1">
-            <CalendarDays aria-hidden="true" className="mr-1.5 inline size-3.5" />
-            {t('dateRange', {
-              endDate: formatDate(trip.endDate),
-              startDate: formatDate(trip.startDate),
-            })}
-          </ItemDescription>
-          <p className="truncate text-xs text-muted-foreground">
-            {trip.destinations.length
-              ? trip.destinations.map((destination) => destination.name).join(', ')
-              : t('destinationOpen')}
-            {trip.planningReadiness === 'ready' ? ` · ${t('ready')}` : ''}
-          </p>
-          {editorial ? (
-            <MediaAttribution
-              attribution={editorial.attribution}
-              // The row is a button, so the credit cannot be a link here.
-              className="truncate"
-              linked={false}
-              variant="inline"
-            />
-          ) : null}
-        </ItemContent>
-      </Item>
-    );
   }
 
   return (
@@ -285,20 +180,73 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
         />
       ) : (
         <div className="space-y-8">
-          {(['active', 'planning', 'completed'] as const).map((lifecycle) =>
-            groupedTrips[lifecycle].length ? (
-              <EditorialSection
-                density="compact"
-                key={lifecycle}
-                title={t(`sections.${lifecycle}`)}
-                treatment={lifecycle === 'active' ? 'tinted' : 'ruled'}
-              >
-                <ItemGroup aria-label={t(`sections.${lifecycle}`)} variant="list">
-                  {groupedTrips[lifecycle].map(renderTrip)}
-                </ItemGroup>
-              </EditorialSection>
-            ) : null,
-          )}
+          {groupedTrips.featured ? (
+            <TripFeaturedCard
+              editorial={editorialFor(groupedTrips.featured)}
+              onOpenOverview={setOverviewTrip}
+              trip={groupedTrips.featured}
+            />
+          ) : null}
+
+          {groupedTrips.upcoming.length ? (
+            <EditorialSection density="compact" title={t('sections.planning')} treatment="ruled">
+              <ItemGroup aria-label={t('sections.planning')} variant="list">
+                {groupedTrips.upcoming.map((trip) => (
+                  <TripListRow
+                    editorial={editorialFor(trip)}
+                    key={trip.id}
+                    onSelect={setOverviewTrip}
+                    trip={trip}
+                  />
+                ))}
+              </ItemGroup>
+            </EditorialSection>
+          ) : null}
+
+          {groupedTrips.past.length ? (
+            <EditorialSection density="compact" title={t('sections.completed')} treatment="ruled">
+              <ItemGroup aria-label={t('sections.completed')} variant="list">
+                {groupedTrips.past.slice(0, PAST_TRIPS_PREVIEW_COUNT).map((trip) => (
+                  <TripListRow
+                    editorial={editorialFor(trip)}
+                    key={trip.id}
+                    onSelect={setOverviewTrip}
+                    trip={trip}
+                  />
+                ))}
+              </ItemGroup>
+              {groupedTrips.past.length > PAST_TRIPS_PREVIEW_COUNT ? (
+                <Collapsible>
+                  <CollapsiblePanel>
+                    {/* A second list group would draw its own top rule directly
+                        under the first one's bottom rule. */}
+                    <ItemGroup className="border-t-0" variant="list">
+                      {groupedTrips.past.slice(PAST_TRIPS_PREVIEW_COUNT).map((trip) => (
+                        <TripListRow
+                          editorial={editorialFor(trip)}
+                          key={trip.id}
+                          onSelect={setOverviewTrip}
+                          trip={trip}
+                        />
+                      ))}
+                    </ItemGroup>
+                  </CollapsiblePanel>
+                  <CollapsibleTrigger className="group mt-3">
+                    <ChevronDown
+                      aria-hidden="true"
+                      className="transition-transform duration-[var(--motion-standard)] group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
+                    />
+                    <span className="group-data-[panel-open]:hidden">
+                      {t('showAllPast', { count: groupedTrips.past.length })}
+                    </span>
+                    <span className="hidden group-data-[panel-open]:inline">
+                      {t('showFewerPast')}
+                    </span>
+                  </CollapsibleTrigger>
+                </Collapsible>
+              ) : null}
+            </EditorialSection>
+          ) : null}
         </div>
       )}
 

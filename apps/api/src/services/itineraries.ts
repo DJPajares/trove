@@ -1,5 +1,6 @@
 import { getPrismaClient, type Prisma } from '@trove/db';
 
+import { DAY_PART_WINDOWS } from './day-part-windows.js';
 import {
   floatingLocalTimeToInstant,
   formatLocalTime,
@@ -471,6 +472,88 @@ export function planReorderWrites(orderedIds: string[], above: number) {
   ];
 }
 
+/** A schedule expressed as minutes from local midnight, or null when it implies no time. */
+export type ItemSchedulePosition = {
+  dayPart: string | null;
+  localStartTime: Date | null;
+};
+
+/**
+ * Minutes from local midnight the schedule implies, or null when it implies none.
+ *
+ * An exact time speaks for itself. A daypart only narrows the day to a window, so
+ * it sorts at that window's start — read from the shared `DAY_PART_WINDOWS` rather
+ * than restated here, so Trip Mode, Plan Score and this ordering can never disagree
+ * about when Morning ends. `ANYTIME` constrains nothing and is therefore untimed.
+ */
+export function itemSortMinute(item: ItemSchedulePosition): number | null {
+  if (item.localStartTime) {
+    const value = formatLocalTime(item.localStartTime);
+    if (!value) return null;
+    const [hour = 0, minute = 0] = value.split(':').map(Number);
+    return hour * 60 + minute;
+  }
+
+  const window = DAY_PART_WINDOWS[item.dayPart as keyof typeof DAY_PART_WINDOWS];
+  return window?.startMinute ?? null;
+}
+
+/**
+ * Where a timed item belongs among siblings already in position order.
+ *
+ * Untimed siblings are transparent: they are anchors the traveller placed
+ * deliberately, so they keep whichever side of the new item they already sat on.
+ * Only timed siblings decide the boundary, which is the index of the first one
+ * starting strictly later — so equal times keep the incumbent first and the
+ * arrival lands after it.
+ */
+export function timedInsertIndex(siblings: ItemSchedulePosition[], key: number) {
+  const index = siblings.findIndex((sibling) => {
+    const minute = itemSortMinute(sibling);
+    return minute !== null && minute > key;
+  });
+
+  return index === -1 ? siblings.length : index;
+}
+
+/**
+ * Moves `itemId` to where its own clock says it belongs within its day.
+ *
+ * A no-op for an untimed item, and for a timed one already in the right slot, so
+ * callers can invoke it unconditionally after a write. The reorder goes through
+ * `planReorderWrites` because position is uniquely indexed per day.
+ */
+async function reslotItemByTime(
+  transaction: Prisma.TransactionClient,
+  tripId: string,
+  itineraryDayId: string,
+  itemId: string,
+  schedule: ItemSchedulePosition,
+) {
+  const key = itemSortMinute(schedule);
+  if (key === null) return;
+
+  // One read serves all three needs: the siblings that decide the boundary, the
+  // order to compare against, and the highest position to park above.
+  const day = await transaction.itineraryItem.findMany({
+    where: { itineraryDayId, tripId },
+    orderBy: { position: 'asc' },
+    select: { dayPart: true, id: true, localStartTime: true, position: true },
+  });
+  const siblings = day.filter((candidate) => candidate.id !== itemId);
+  const orderedIds = siblings.map((sibling) => sibling.id);
+  orderedIds.splice(timedInsertIndex(siblings, key), 0, itemId);
+  if (sameIds(day, orderedIds)) return;
+
+  const above = (day.at(-1)?.position ?? -1) + 1;
+  for (const write of planReorderWrites(orderedIds, above)) {
+    await transaction.itineraryItem.update({
+      where: { id: write.id },
+      data: { position: write.position },
+    });
+  }
+}
+
 export type ItineraryDayMoveWrite = {
   id: string;
   itineraryDayId: string;
@@ -916,6 +999,7 @@ export async function createItineraryItem(
         tripPlaceId: tripPlace?.id ?? null,
       },
     });
+    await reslotItemByTime(transaction, tripId, day.id, item.id, schedule);
     await refreshDayDefaultTimeZone(transaction, tripId, day.id);
     return item.id;
   });
@@ -1029,6 +1113,11 @@ export async function updateItineraryItem(
       },
       include: itineraryItemInclude,
     });
+    // Retiming an item should move it, but only when the clock actually changed —
+    // an unrelated edit must never disturb an order the traveller arranged.
+    if (itemSortMinute(current) !== itemSortMinute(updated)) {
+      await reslotItemByTime(transaction, tripId, current.itineraryDayId, itemId, updated);
+    }
     await refreshDayDefaultTimeZone(transaction, tripId, current.itineraryDayId);
 
     const previousInstant = current.startInstant?.toISOString() ?? null;

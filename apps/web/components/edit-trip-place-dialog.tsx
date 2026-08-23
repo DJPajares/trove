@@ -74,8 +74,12 @@ export function EditTripPlaceDialog({
         await updateCustomPlace(tripPlace.place.id, { name: trimmed });
         const saved = await onSave(tripPlace, { note });
         await onRefresh();
-        if (!saved) return;
+        if (!saved) {
+          setFailed(true);
+          return;
+        }
       } else if (!(await onSave(tripPlace, { customName: trimmed || null, note }))) {
+        setFailed(true);
         return;
       }
       onOpenChange(false);

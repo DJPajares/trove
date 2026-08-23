@@ -61,9 +61,12 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
   async function removePlace() {
     if (!removingPlace) return;
     setRemoving(true);
-    await places.remove(removingPlace);
-    setRemovingPlace(null);
+    const result = await places.remove(removingPlace);
     setRemoving(false);
+    // A refusal (the Place is still scheduled somewhere) is not a completed
+    // removal: closing the dialog on it would read as success. It stays open
+    // with the reason inline instead, same as Saved's own unsave confirmation.
+    if (result.ok) setRemovingPlace(null);
   }
 
   const addButton = (label: string) => (
@@ -82,7 +85,7 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
         tripId={tripId}
       />
 
-      {places.error ? (
+      {places.error && !removingPlace ? (
         <Alert role="alert" variant="destructive">
           <CircleAlert aria-hidden="true" />
           <AlertDescription>{t(places.error.key, places.error.values)}</AlertDescription>
@@ -162,7 +165,12 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
       />
 
       <AlertDialog
-        onOpenChange={(open) => !open && setRemovingPlace(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRemovingPlace(null);
+            places.clearError();
+          }
+        }}
         open={Boolean(removingPlace)}
       >
         <AlertDialogContent>
@@ -172,6 +180,12 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
               {t('removeDescription', { name: removingPlace ? placeName(removingPlace) : '' })}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {places.error ? (
+            <Alert role="alert" variant="destructive">
+              <CircleAlert aria-hidden="true" />
+              <AlertDescription>{t(places.error.key, places.error.values)}</AlertDescription>
+            </Alert>
+          ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={removing}>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction

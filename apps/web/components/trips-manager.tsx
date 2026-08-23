@@ -5,34 +5,24 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   CalendarClock,
   CalendarDays,
-  ChevronRight,
-  ClipboardCheck,
   CircleAlert,
-  Compass,
-  Eye,
-  Info,
+  ClipboardCheck,
   MapPinned,
-  Pencil,
   Plus,
-  ReceiptText,
-  Sparkles,
-  Users,
   WalletCards,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
-import { ExperienceRatingSummary } from '@/components/experience-rating-field';
 import { EditorialSection } from '@/components/editorial-section';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
-import { PlanScorePanel } from '@/components/plan-score-panel';
 import { MediaAttribution } from '@/components/media-attribution';
 import { TripForm } from '@/components/trip-form';
 import { TripMedia } from '@/components/trip-media';
+import { TripOverviewSheet } from '@/components/trip-overview-sheet';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
-import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -61,57 +51,14 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { deleteTrip, fetchTrips, type Trip } from '@/lib/trips/api';
-import { fetchTripInfo, type TripInfoEntry } from '@/lib/trip-info/api';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import { cn } from '@/lib/utils';
 
 type EditorState =
   { mode: 'closed'; trip: null } | { mode: 'create'; trip: null } | { mode: 'edit'; trip: Trip };
 
-// Tools only. Memories is one of the three experiences the trip is built around and
-// belongs with them, and the itinerary opens the Places collection itself — listing
-// either here would make a core experience look like a utility.
-const overviewTools = [
-  { href: 'reservations', icon: ReceiptText, label: 'reservations' },
-  { href: 'tasks', icon: ClipboardCheck, label: 'tasks' },
-  { href: 'expenses', icon: WalletCards, label: 'expenses' },
-  { href: 'info', icon: Info, label: 'tripInfo' },
-] as const;
-
-function TripOverviewPlanScore({
-  revision,
-  tripId,
-}: Readonly<{ revision: string; tripId: string }>) {
-  const planScoreTranslations = useTranslations('planScore');
-  const planScore = useTripPlanScore(tripId, revision);
-  const planScoreHidden =
-    planScore.status === 'disabled' ||
-    Boolean(planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED'));
-
-  if (planScoreHidden || (!planScore.data && planScore.status !== 'error')) return null;
-
-  return (
-    <PlanScorePanel
-      disabled={planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')}
-      explanations={
-        planScore.data?.explanations ?? {
-          uncertainty: [],
-          whatWorks: [],
-          worthImproving: [],
-        }
-      }
-      onRetry={planScore.retry}
-      score={planScore.data?.score ?? null}
-      scope="trip"
-      status={planScore.status}
-      title={planScoreTranslations('title')}
-    />
-  );
-}
-
 export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: boolean }>) {
   const t = useTranslations('trips');
-  const experienceRatingTranslations = useTranslations('experienceRating');
   const mediaTranslations = useTranslations('media');
   const locale = useLocale();
   const pathname = usePathname();
@@ -121,10 +68,6 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
   const [trips, setTrips] = useState<Trip[]>([]);
   const [editor, setEditor] = useState<EditorState>({ mode: 'closed', trip: null });
   const [overviewTrip, setOverviewTrip] = useState<Trip | null>(null);
-  const [overviewTripInfo, setOverviewTripInfo] = useState<TripInfoEntry[]>([]);
-  const [overviewTripInfoStatus, setOverviewTripInfoStatus] = useState<
-    'error' | 'idle' | 'loading'
-  >('idle');
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
@@ -166,32 +109,6 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
       active = false;
     };
   }, []);
-
-  const overviewTripId = overviewTrip?.id;
-  useEffect(() => {
-    if (!overviewTripId) {
-      setOverviewTripInfo([]);
-      setOverviewTripInfoStatus('idle');
-      return;
-    }
-
-    let active = true;
-    setOverviewTripInfoStatus('loading');
-    void fetchTripInfo(overviewTripId)
-      .then(({ entries }) => {
-        if (!active) return;
-        setOverviewTripInfo(entries.filter((entry) => entry.isPinned));
-        setOverviewTripInfoStatus('idle');
-      })
-      .catch(() => {
-        if (!active) return;
-        setOverviewTripInfoStatus('error');
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [overviewTripId]);
 
   function handleSaved(trip: Trip) {
     setTrips((current) => {
@@ -385,196 +302,15 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
         </div>
       )}
 
-      <Sheet onOpenChange={(open) => !open && setOverviewTrip(null)} open={Boolean(overviewTrip)}>
-        <SheetContent
-          className="w-full md:data-[side=right]:w-[min(42rem,calc(100%-0.5rem))]"
-          closeLabel={t('close')}
-        >
-          {overviewTrip ? (
-            <>
-              <SheetHeader className="border-b">
-                <SheetTitle>{overviewTrip.name}</SheetTitle>
-                <SheetDescription>
-                  {t('dateRange', {
-                    endDate: formatDate(overviewTrip.endDate),
-                    startDate: formatDate(overviewTrip.startDate),
-                  })}
-                </SheetDescription>
-              </SheetHeader>
-              <div className="space-y-6 overflow-y-auto p-5">
-                <div className="flex flex-wrap gap-2">
-                  {overviewTrip.lifecycle === 'active' ? (
-                    <Button
-                      nativeButton={false}
-                      render={<Link href={`/trips/${overviewTrip.id}/mode`} />}
-                    >
-                      <Compass aria-hidden="true" data-icon="inline-start" />
-                      {t('openTripMode')}
-                    </Button>
-                  ) : null}
-                  {overviewTrip.lifecycle === 'planning' ? (
-                    <Button
-                      nativeButton={false}
-                      render={
-                        <Link
-                          href={`/trips/${overviewTrip.id}/mode?preview=1&date=${overviewTrip.startDate}&time=09%3A00`}
-                        />
-                      }
-                    >
-                      <Eye aria-hidden="true" data-icon="inline-start" />
-                      {t('previewTripMode')}
-                    </Button>
-                  ) : null}
-                  {overviewTrip.lifecycle === 'completed' ? (
-                    <Button
-                      nativeButton={false}
-                      render={<Link href={`/trips/${overviewTrip.id}/memories`} />}
-                    >
-                      <Sparkles aria-hidden="true" data-icon="inline-start" />
-                      {t(overviewTrip.memoryCount ? 'viewMemories' : 'addMemories')}
-                    </Button>
-                  ) : null}
-                  <Button
-                    nativeButton={false}
-                    render={<Link href={`/trips/${overviewTrip.id}/itinerary`} />}
-                    variant="outline"
-                  >
-                    <CalendarClock aria-hidden="true" data-icon="inline-start" />
-                    {t('continuePlanning')}
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setOverviewTrip(null);
-                      setEditor({ mode: 'edit', trip: overviewTrip });
-                    }}
-                    variant="ghost"
-                  >
-                    <Pencil aria-hidden="true" data-icon="inline-start" />
-                    {t('editTrip')}
-                  </Button>
-                </div>
-                {/*
-                  Plan Score judges the plan and only applies while there is still
-                  planning to do; Experience Rating is the traveller's own reflection
-                  afterwards. They never occupy this slot at the same time.
-                */}
-                {overviewTrip.lifecycle === 'completed' ? (
-                  overviewTrip.experienceRating === null ? null : (
-                    <ExperienceRatingSummary
-                      label={experienceRatingTranslations('summaryLabel')}
-                      rating={overviewTrip.experienceRating}
-                    />
-                  )
-                ) : planScoreEnabled ? (
-                  <TripOverviewPlanScore
-                    revision={overviewTrip.updatedAt}
-                    tripId={overviewTrip.id}
-                  />
-                ) : null}
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <p className="text-sm font-medium">{t('destinations')}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {overviewTrip.destinations.length
-                        ? overviewTrip.destinations
-                            .map((destination) => destination.name)
-                            .join(', ')
-                        : t('destinationOpen')}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">{t('travellers')}</p>
-                    <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <Users aria-hidden="true" className="size-4" />
-                      {t('travellerCount', { count: overviewTrip.partySize })}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">{t('planningReadiness')}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {t(`readinessState.${overviewTrip.planningReadiness}`)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">{t('startingLocation')}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {overviewTrip.startingLocation?.name ?? t('startingLocationUnavailable')}
-                    </p>
-                  </div>
-                </div>
-                {overviewTrip.notes ? (
-                  <div>
-                    <p className="text-sm font-medium">{t('notes')}</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
-                      {overviewTrip.notes}
-                    </p>
-                  </div>
-                ) : null}
-                <nav aria-label={t('tripTools')} className="border-t pt-5">
-                  <h2 className="text-base font-semibold">{t('tripTools')}</h2>
-                  <ItemGroup className="mt-3" variant="list">
-                    {overviewTools.map(({ href, icon: Icon, label }) => (
-                      <Item
-                        key={href}
-                        render={<Link href={`/trips/${overviewTrip.id}/${href}`} />}
-                        size="sm"
-                      >
-                        <ItemMedia variant="icon">
-                          <Icon aria-hidden="true" className="text-brand" />
-                        </ItemMedia>
-                        <ItemContent>
-                          <ItemTitle>{t(label)}</ItemTitle>
-                        </ItemContent>
-                        <ChevronRight aria-hidden="true" className="size-4 text-text-subtle" />
-                      </Item>
-                    ))}
-                  </ItemGroup>
-                </nav>
-                {overviewTripInfoStatus === 'loading' ? (
-                  <section aria-busy="true" aria-live="polite" className="space-y-2 border-t pt-5">
-                    <h2 className="text-base font-semibold">{t('tripInfo')}</h2>
-                    <p className="text-sm text-muted-foreground">{t('tripInfoLoading')}</p>
-                  </section>
-                ) : null}
-                {overviewTripInfoStatus === 'error' ? (
-                  <section className="border-t pt-5">
-                    <h2 className="text-base font-semibold">{t('tripInfo')}</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">{t('tripInfoUnavailable')}</p>
-                  </section>
-                ) : null}
-                {overviewTripInfoStatus === 'idle' && overviewTripInfo.length ? (
-                  <section className="space-y-3 border-t pt-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <h2 className="text-base font-semibold">{t('tripInfo')}</h2>
-                        <p className="mt-1 text-sm text-muted-foreground">{t('pinnedTripInfo')}</p>
-                      </div>
-                      <Button
-                        nativeButton={false}
-                        render={<Link href={`/trips/${overviewTrip.id}/info`} />}
-                        size="sm"
-                        variant="ghost"
-                      >
-                        {t('viewTripInfo')}
-                      </Button>
-                    </div>
-                    <div className="space-y-3">
-                      {overviewTripInfo.map((entry) => (
-                        <div className="space-y-1" key={entry.id}>
-                          <p className="text-sm font-medium">{entry.label}</p>
-                          <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
-                            {entry.value}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-              </div>
-            </>
-          ) : null}
-        </SheetContent>
-      </Sheet>
+      <TripOverviewSheet
+        onEdit={(trip) => {
+          setOverviewTrip(null);
+          setEditor({ mode: 'edit', trip });
+        }}
+        onOpenChange={(open) => !open && setOverviewTrip(null)}
+        planScoreEnabled={planScoreEnabled}
+        trip={overviewTrip}
+      />
 
       <Sheet
         open={editor.mode !== 'closed'}

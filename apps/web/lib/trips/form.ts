@@ -42,11 +42,16 @@ export function isValidPartySize(value: string) {
 /**
  * What a half-typed form should ask a photograph for, or nothing yet.
  *
- * The precedence matches `tripEditorialSubject`, so the cover a traveller is
- * shown while creating a trip is the cover the library will show afterwards.
+ * Only a destination is asked about. A trip's name is whatever the traveller
+ * felt like calling it - "Mum's 60th", "Round two" - and a photography search
+ * answers those literally: naming a trip after anything but a place produces a
+ * picture of that thing, offered under a caption promising a travel photograph
+ * of it. The library may still fall back to a trip's name for a thumbnail, but
+ * a form that says "a travel photograph of {name}" has made a specific claim,
+ * and it should only make it about somewhere.
  */
-export function editorialCoverSubjectName(destinations: readonly string[], name: string) {
-  const candidate = destinations.map((entry) => entry.trim()).find(Boolean) ?? name.trim();
+export function editorialCoverSubjectName(destinations: readonly string[]) {
+  const candidate = destinations.map((entry) => entry.trim()).find(Boolean) ?? '';
 
   return candidate.length >= MIN_EDITORIAL_SUBJECT_LENGTH ? candidate : '';
 }

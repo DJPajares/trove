@@ -140,12 +140,6 @@ export function HomeFocalTrip({
               </Button>
             </div>
           ) : null}
-
-          {/* Getting ready is when a local copy matters, and it stays below the
-              action rather than above it. */}
-          {trip.lifecycle === 'planning' ? (
-            <OfflineReadyStatus tripId={trip.id} variant="compact" />
-          ) : null}
         </div>
 
         <TripMedia
@@ -161,6 +155,14 @@ export function HomeFocalTrip({
           variant="card"
         />
       </div>
+
+      {/* Below the whole card rather than inside its text column: getting ready
+          is a footnote to the trip, and on a phone - where the card is one
+          column - keeping it here is what stops it pushing the photograph off
+          the end of the screen. */}
+      {trip.lifecycle === 'planning' ? (
+        <OfflineReadyStatus tripId={trip.id} variant="compact" />
+      ) : null}
     </EditorialSection>
   );
 }

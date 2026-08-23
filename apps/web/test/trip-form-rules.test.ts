@@ -61,16 +61,22 @@ test('a travel party is a whole number of people, at least one', () => {
   expect(isValidPartySize('abc')).toBe(false);
 });
 
-test('the cover preview asks about the first destination, falling back to the trip', () => {
-  expect(editorialCoverSubjectName(['Kyoto', 'Osaka'], 'Spring in Japan')).toBe('Kyoto');
-  expect(editorialCoverSubjectName(['  ', 'Osaka'], 'Spring in Japan')).toBe('Osaka');
-  expect(editorialCoverSubjectName([], 'Spring in Japan')).toBe('Spring in Japan');
-  expect(editorialCoverSubjectName(['  Kyoto  '], 'Spring in Japan')).toBe('Kyoto');
+test('the cover preview asks about the first destination', () => {
+  expect(editorialCoverSubjectName(['Kyoto', 'Osaka'])).toBe('Kyoto');
+  expect(editorialCoverSubjectName(['  ', 'Osaka'])).toBe('Osaka');
+  expect(editorialCoverSubjectName(['  Kyoto  '])).toBe('Kyoto');
 });
 
-test('a half-typed name asks for nothing', () => {
+test('a trip with no destination is not pictured by its name', () => {
+  // A trip called "Validation probe" resolved a photograph of an ultrasound
+  // machine, captioned as a travel photograph of it. A name is whatever the
+  // traveller felt like; only a place should be searched for.
+  expect(editorialCoverSubjectName([])).toBe('');
+});
+
+test('a half-typed destination asks for nothing', () => {
   // Otherwise every keystroke on the way to "Kyoto" is its own question.
-  expect(editorialCoverSubjectName(['Ky'], '')).toBe('');
-  expect(editorialCoverSubjectName([], '  ')).toBe('');
-  expect(editorialCoverSubjectName(['Kyo'], '')).toBe('Kyo');
+  expect(editorialCoverSubjectName(['Ky'])).toBe('');
+  expect(editorialCoverSubjectName(['  '])).toBe('');
+  expect(editorialCoverSubjectName(['Kyo'])).toBe('Kyo');
 });

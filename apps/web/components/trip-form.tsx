@@ -133,7 +133,7 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
   // What the cover should show while the trip is still being described. The
   // draft settles before it is asked about, so typing a city name costs one
   // request rather than one per keystroke.
-  const draftSubjectName = editorialCoverSubjectName(form.destinations, form.name);
+  const draftSubjectName = editorialCoverSubjectName(form.destinations);
   const [coverSubjectName, setCoverSubjectName] = useState(draftSubjectName);
 
   useEffect(() => {

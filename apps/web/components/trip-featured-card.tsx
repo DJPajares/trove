@@ -83,6 +83,9 @@ export function TripFeaturedCard({
         <TripMedia
           alt={editorial ? mediaTranslations('alt.tripEditorial', { name: subjectName }) : ''}
           className="h-40 w-full sm:h-full sm:min-h-[11rem]"
+          // The library's largest image, and in practice its Largest Contentful
+          // Paint - Next reports it as such if this is left to load lazily.
+          preload
           sizes="(max-width: 639px) 100vw, (max-width: 1023px) 40vw, 340px"
           source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
           variant="card"

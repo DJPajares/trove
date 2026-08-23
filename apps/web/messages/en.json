@@ -931,6 +931,17 @@
     "sameCurrency": "This is the same currency, so no reference conversion is needed.",
     "currencyListCached": "Currency names are from your last saved list."
   },
+  "media": {
+    "alt": {
+      "tripEditorial": "Travel photography representing {name}",
+      "placeEditorial": "Travel photography representing {name}"
+    },
+    "attribution": {
+      "credit": "Photo by <photographer>{photographerName}</photographer> on <provider>{providerName}</provider>",
+      "photographerLabel": "See more photos by {photographer}",
+      "providerLabel": "See this photo on {provider}"
+    }
+  },
   "placeDetail": {
     "close": "Close place details",
     "customDescription": "A private Trove place.",

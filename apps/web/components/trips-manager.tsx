@@ -27,8 +27,11 @@ import { EditorialSection } from '@/components/editorial-section';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
 import { PlanScorePanel } from '@/components/plan-score-panel';
+import { MediaAttribution } from '@/components/media-attribution';
 import { TripForm } from '@/components/trip-form';
 import { TripMedia } from '@/components/trip-media';
+import { useEditorialImages } from '@/hooks/use-editorial-images';
+import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -109,6 +112,7 @@ function TripOverviewPlanScore({
 export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: boolean }>) {
   const t = useTranslations('trips');
   const experienceRatingTranslations = useTranslations('experienceRating');
+  const mediaTranslations = useTranslations('media');
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
@@ -125,6 +129,18 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
   const [deleting, setDeleting] = useState(false);
+
+  // Only trips without a cover of their own ask for a photograph, and each asks
+  // by destination rather than by trip name, so "Spring in Kyoto" resolves to
+  // Kyoto and two travellers naming the same city share one cached answer.
+  const editorialSubjects: EditorialSubject[] = trips
+    .filter((trip) => !trip.coverPhotoUrl)
+    .map((trip) => ({
+      category: 'destination' as const,
+      name: trip.destinations[0]?.name ?? trip.name,
+      tripId: trip.id,
+    }));
+  const editorialImages = useEditorialImages(editorialSubjects);
 
   useEffect(() => {
     if (!shouldCreateTrip) return;
@@ -218,6 +234,15 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
   };
 
   function renderTrip(trip: Trip) {
+    const editorial = trip.coverPhotoUrl
+      ? null
+      : editorialImages.get(
+          editorialSubjectKey({
+            category: 'destination',
+            name: trip.destinations[0]?.name ?? trip.name,
+          }),
+        );
+
     return (
       <Item
         className="group min-h-20 flex-nowrap px-3 py-3 text-left hover:bg-muted/60"
@@ -233,10 +258,19 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
       >
         <ItemMedia className="size-14 rounded-[var(--radius-md)] sm:size-16" variant="default">
           <TripMedia
-            alt=""
+            alt={
+              editorial
+                ? mediaTranslations('alt.tripEditorial', {
+                    name: trip.destinations[0]?.name ?? trip.name,
+                  })
+                : ''
+            }
             className="size-full"
+            // A thumbnail this size cannot carry a legible credit, so the row
+            // renders it below instead.
+            credit="inline"
             sizes="64px"
-            source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl })}
+            source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
             variant="thumbnail"
           />
         </ItemMedia>
@@ -267,6 +301,15 @@ export function TripsManager({ planScoreEnabled }: Readonly<{ planScoreEnabled: 
               : t('destinationOpen')}
             {trip.planningReadiness === 'ready' ? ` · ${t('ready')}` : ''}
           </p>
+          {editorial ? (
+            <MediaAttribution
+              attribution={editorial.attribution}
+              // The row is a button, so the credit cannot be a link here.
+              className="truncate"
+              linked={false}
+              variant="inline"
+            />
+          ) : null}
         </ItemContent>
       </Item>
     );

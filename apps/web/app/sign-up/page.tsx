@@ -2,6 +2,7 @@ import { MapPinned } from 'lucide-react';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 
+import { AuthShell } from '@/components/auth-shell';
 import { EmailAuthForm } from '@/components/email-auth-form';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { getSafeRedirectPath } from '@/lib/auth/redirect';
@@ -14,10 +15,7 @@ export default async function SignUpPage({ searchParams }: Readonly<SignUpPagePr
   const [{ next }, t] = await Promise.all([searchParams, getTranslations('auth')]);
 
   return (
-    <section
-      aria-labelledby="sign-up-heading"
-      className="grid min-h-[calc(100dvh-12rem)] place-items-center"
-    >
+    <AuthShell headingId="sign-up-heading">
       <Card className="w-full max-w-md sm:[--card-spacing:--spacing(6)]">
         <CardHeader>
           <div className="mb-4 flex size-11 items-center justify-center rounded-[var(--radius-md)] bg-brand text-primary-foreground shadow-[var(--shadow-control)]">
@@ -47,6 +45,6 @@ export default async function SignUpPage({ searchParams }: Readonly<SignUpPagePr
           </p>
         </CardContent>
       </Card>
-    </section>
+    </AuthShell>
   );
 }

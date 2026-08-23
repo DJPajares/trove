@@ -22,6 +22,8 @@ type EditorialSectionProps = React.ComponentProps<'section'> &
   VariantProps<typeof sectionVariants> & {
     actions?: ReactNode;
     description?: string;
+    /** A short kicker above the title, in the same brand-uppercase treatment `PageHeader` uses. */
+    eyebrow?: string;
     headingId?: string;
     headingLevel?: 2 | 3;
     title: string;
@@ -33,6 +35,7 @@ export function EditorialSection({
   className,
   density,
   description,
+  eyebrow,
   headingId,
   headingLevel = 2,
   title,
@@ -54,6 +57,11 @@ export function EditorialSection({
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="max-w-[var(--layout-reading)]">
+          {eyebrow ? (
+            <p className="mb-2 text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
+              {eyebrow}
+            </p>
+          ) : null}
           <Heading
             className="text-[length:var(--text-section-title)] leading-[1.18] font-semibold tracking-[-0.022em] text-pretty"
             id={resolvedHeadingId}

@@ -1,23 +1,38 @@
-import { CalendarDays, Compass, Sparkles } from 'lucide-react';
+'use client';
+
+import { motion, useReducedMotion } from 'motion/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import type { ComponentType } from 'react';
+import type { ReactNode } from 'react';
 
+import { EditorialSection } from '@/components/editorial-section';
+import { LandingHero } from '@/components/landing-hero';
+import { MediaFrame } from '@/components/media-frame';
 import { Button } from '@/components/ui/button';
-
-type ExperienceKey = 'plan' | 'live' | 'remember';
-
-/**
- * The three experiences in the stable order PRD section 4.5 fixes for them, with
- * the icons the rest of the product already uses for each.
- */
-const EXPERIENCES: { icon: ComponentType<{ className?: string }>; key: ExperienceKey }[] = [
-  { icon: CalendarDays, key: 'plan' },
-  { icon: Compass, key: 'live' },
-  { icon: Sparkles, key: 'remember' },
-];
+import { landingLiveItImage } from '@/lib/media/landing-images';
+import { motionDuration, motionEase } from '@/lib/motion';
 
 const SUPPORTING_KEYS = ['saved', 'routes', 'logistics', 'expenses', 'offline'] as const;
+
+/** A restrained, one-shot reveal as a section first enters the viewport. */
+function Reveal({ children }: Readonly<{ children: ReactNode }>) {
+  const shouldReduceMotion = useReducedMotion();
+
+  return (
+    <motion.div
+      initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
+      transition={
+        shouldReduceMotion
+          ? { duration: 0 }
+          : { duration: motionDuration.standard, ease: motionEase }
+      }
+      viewport={{ margin: '-80px', once: true }}
+      whileInView={{ opacity: 1, y: 0 }}
+    >
+      {children}
+    </motion.div>
+  );
+}
 
 /**
  * What someone sees at `/` before they have an account. Everything here
@@ -30,121 +45,106 @@ export function LandingExperience() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-16 md:space-y-24">
-      <section
-        aria-labelledby="landing-heading"
-        className="relative isolate overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-surface-raised px-5 py-12 sm:px-10 md:py-20"
-      >
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(75%_120%_at_10%_0%,color-mix(in_oklch,var(--brand),transparent_88%),transparent_62%),radial-gradient(55%_100%_at_100%_5%,color-mix(in_oklch,var(--accent),transparent_88%),transparent_65%)]"
-        />
+      <LandingHero />
 
-        <h1
-          className="max-w-[18ch] text-[clamp(2.125rem,7vw,3.75rem)] leading-[1.08] font-semibold tracking-[-0.03em] text-balance text-foreground"
-          id="landing-heading"
-        >
-          {t('heroTitle')}
-        </h1>
-        <p className="mt-5 max-w-[62ch] text-base leading-7 text-pretty text-muted-foreground md:text-lg md:leading-8">
-          {t('heroDescription')}
+      <section aria-labelledby="landing-experiences-heading" className="space-y-8">
+        <Reveal>
+          <h2
+            className="text-[clamp(1.5rem,4vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-pretty text-foreground"
+            id="landing-experiences-heading"
+          >
+            {t('experiencesTitle')}
+          </h2>
+        </Reveal>
+        <p className="-mt-4 max-w-[62ch] text-base leading-7 text-pretty text-muted-foreground">
+          {t('experiencesDescription')}
         </p>
 
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <Reveal>
+          <EditorialSection
+            density="compact"
+            description={t('experiences.plan.description')}
+            eyebrow={t('experiences.plan.eyebrow')}
+            headingId="landing-plan-heading"
+            headingLevel={3}
+            title={t('experiences.plan.title')}
+            treatment="ruled"
+          />
+        </Reveal>
+
+        <Reveal>
+          <EditorialSection
+            description={t('experiences.live.description')}
+            eyebrow={t('experiences.live.eyebrow')}
+            headingId="landing-live-heading"
+            headingLevel={3}
+            title={t('experiences.live.title')}
+            treatment="tinted"
+          >
+            <MediaFrame
+              alt={t('liveImageAlt')}
+              className="mt-4 h-40 w-full max-w-sm sm:h-48"
+              credit="overlay"
+              dataSlot="landing-live-media"
+              sizes="(max-width: 639px) 100vw, 24rem"
+              source={{ kind: 'editorial', reference: landingLiveItImage }}
+              variant="card"
+            />
+          </EditorialSection>
+        </Reveal>
+
+        <Reveal>
+          <EditorialSection
+            description={t('experiences.remember.description')}
+            eyebrow={t('experiences.remember.eyebrow')}
+            headingId="landing-remember-heading"
+            headingLevel={3}
+            title={t('experiences.remember.title')}
+            treatment="plain"
+          />
+        </Reveal>
+      </section>
+
+      <Reveal>
+        <EditorialSection
+          density="compact"
+          headingId="landing-supporting-heading"
+          title={t('alsoTitle')}
+          treatment="ruled"
+        >
+          <ul className="mt-6 grid gap-x-8 gap-y-4 md:grid-cols-2">
+            {SUPPORTING_KEYS.map((key) => (
+              <li className="flex gap-3 border-t border-border pt-4" key={key}>
+                <span
+                  aria-hidden="true"
+                  className="mt-2 size-1.5 shrink-0 rounded-full bg-accent"
+                />
+                <p className="text-sm leading-6 text-pretty text-muted-foreground">
+                  {t(`also.${key}`)}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </EditorialSection>
+      </Reveal>
+
+      <Reveal>
+        <EditorialSection
+          description={t('closingDescription')}
+          headingId="landing-closing-heading"
+          title={t('closingTitle')}
+          treatment="tinted"
+        >
           <Button
-            className="w-full sm:w-auto"
+            className="mt-2 w-full sm:w-auto"
             nativeButton={false}
             render={<Link href="/sign-up" />}
             size="lg"
           >
-            {t('heroPrimary')}
+            {t('closingAction')}
           </Button>
-          <Button
-            className="w-full sm:w-auto"
-            nativeButton={false}
-            render={<Link href="/sign-in" />}
-            size="lg"
-            variant="outline"
-          >
-            {t('heroSecondary')}
-          </Button>
-        </div>
-      </section>
-
-      <section aria-labelledby="landing-experiences-heading">
-        <h2
-          className="text-[clamp(1.5rem,4vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-pretty text-foreground"
-          id="landing-experiences-heading"
-        >
-          {t('experiencesTitle')}
-        </h2>
-        <p className="mt-3 max-w-[62ch] text-base leading-7 text-pretty text-muted-foreground">
-          {t('experiencesDescription')}
-        </p>
-
-        <ul className="mt-8 grid gap-4 md:grid-cols-3">
-          {EXPERIENCES.map(({ icon: Icon, key }) => (
-            <li
-              className="rounded-[var(--radius-lg)] border border-border bg-card p-5 shadow-[var(--shadow-control)] sm:p-6"
-              key={key}
-            >
-              <span className="flex size-11 items-center justify-center rounded-[var(--radius-md)] bg-brand/10 text-brand">
-                <Icon aria-hidden="true" className="size-5" />
-              </span>
-              <p className="mt-4 text-sm font-medium tracking-[0.01em] text-brand">
-                {t(`experiences.${key}.eyebrow`)}
-              </p>
-              <h3 className="mt-1 text-xl font-semibold tracking-[-0.02em] text-foreground">
-                {t(`experiences.${key}.title`)}
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-pretty text-muted-foreground">
-                {t(`experiences.${key}.description`)}
-              </p>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section aria-labelledby="landing-supporting-heading">
-        <h2
-          className="text-[clamp(1.5rem,4vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-pretty text-foreground"
-          id="landing-supporting-heading"
-        >
-          {t('alsoTitle')}
-        </h2>
-        <ul className="mt-6 grid gap-x-8 gap-y-4 md:grid-cols-2">
-          {SUPPORTING_KEYS.map((key) => (
-            <li className="flex gap-3 border-t border-border pt-4" key={key}>
-              <span aria-hidden="true" className="mt-2 size-1.5 shrink-0 rounded-full bg-accent" />
-              <p className="text-sm leading-6 text-pretty text-muted-foreground">
-                {t(`also.${key}`)}
-              </p>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section
-        aria-labelledby="landing-closing-heading"
-        className="rounded-[var(--radius-lg)] border border-border bg-card p-6 shadow-[var(--shadow-control)] sm:p-8"
-      >
-        <h2
-          className="text-2xl font-semibold tracking-[-0.02em] text-pretty text-foreground"
-          id="landing-closing-heading"
-        >
-          {t('closingTitle')}
-        </h2>
-        <p className="mt-2 max-w-[58ch] text-sm leading-6 text-pretty text-muted-foreground">
-          {t('closingDescription')}
-        </p>
-        <Button
-          className="mt-6 w-full sm:w-auto"
-          nativeButton={false}
-          render={<Link href="/sign-up" />}
-          size="lg"
-        >
-          {t('closingAction')}
-        </Button>
-      </section>
+        </EditorialSection>
+      </Reveal>
     </div>
   );
 }

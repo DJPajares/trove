@@ -1539,6 +1539,8 @@
     "heroDescription": "Trove is a personal travel companion for the whole of a trip. Collect the places you might want to visit, shape them into a day-by-day plan, follow that plan while you are actually there, and keep what the trip was like once you are home.",
     "heroPrimary": "Create your account",
     "heroSecondary": "Sign in",
+    "heroImageAlt": "A coastal cliff road above the ocean at sunset.",
+    "liveImageAlt": "A traveler walking through a narrow old town alleyway.",
     "experiencesTitle": "Three ways to be in a trip",
     "experiencesDescription": "Every trip in Trove has the same three places to stand, whatever stage it is at.",
     "experiences": {

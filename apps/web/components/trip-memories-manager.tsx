@@ -25,6 +25,7 @@ import { PageState } from '@/components/page-state';
 import { StoryCoverPicker } from '@/components/story-cover-picker';
 import { TripSectionHeader } from '@/components/trip-section-header';
 import { TripMedia } from '@/components/trip-media';
+import { Chip, ChipGroup } from '@/components/ui/chip';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -72,6 +73,8 @@ type RatingEditor = { itineraryDayId: string; kind: 'day' } | { kind: 'trip' } |
 type Lens = string | null;
 
 type LensOption = { count: number; id: Lens; label: string; marked?: boolean };
+/** A ChipGroup value has to be a string; no real lens id is ever this literal. */
+const ALL_LENS_VALUE = '__all__';
 
 function StoryPhoto({
   alt,
@@ -651,30 +654,29 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
 
       {/* Highlights and Places are ways into the story, not second copies of it. */}
       {lensOptions.length > 1 ? (
-        <div aria-label={t('lensLabel')} className="flex flex-wrap gap-2" role="group">
-          {lensOptions.map((option) => {
-            const active = lens === option.id;
-            return (
-              <button
-                aria-label={`${option.label}, ${t('memoryCount', { count: option.count })}`}
-                aria-pressed={active}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40',
-                  active
-                    ? 'border-transparent bg-brand/15 text-brand'
-                    : 'border-border text-muted-foreground hover:bg-surface-hover hover:text-foreground',
-                )}
-                key={option.id ?? 'all'}
-                onClick={() => selectLens(option)}
-                type="button"
-              >
-                {option.marked ? <Sparkles aria-hidden="true" className="size-3" /> : null}
-                <span className="max-w-40 truncate">{option.label}</span>
-                <span className="tabular-nums opacity-60">{option.count}</span>
-              </button>
+        <ChipGroup
+          aria-label={t('lensLabel')}
+          multiple={false}
+          onValueChange={([value]) => {
+            const option = lensOptions.find(
+              (candidate) => (candidate.id ?? ALL_LENS_VALUE) === value,
             );
-          })}
-        </div>
+            if (option) selectLens(option);
+          }}
+          value={[lens ?? ALL_LENS_VALUE]}
+        >
+          {lensOptions.map((option) => (
+            <Chip
+              aria-label={`${option.label}, ${t('memoryCount', { count: option.count })}`}
+              count={option.count}
+              icon={option.marked ? <Sparkles aria-hidden="true" /> : undefined}
+              key={option.id ?? ALL_LENS_VALUE}
+              value={option.id ?? ALL_LENS_VALUE}
+            >
+              {option.label}
+            </Chip>
+          ))}
+        </ChipGroup>
       ) : null}
 
       <div className="space-y-10">

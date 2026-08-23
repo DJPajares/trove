@@ -32,6 +32,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Chip, ChipGroup } from '@/components/ui/chip';
 import {
   Dialog,
   DialogContent,
@@ -102,6 +103,8 @@ const categoryFilters: CategoryFilter[] = [
   'stay',
   'shopping',
 ];
+/** A ChipGroup value has to be a string; a saved collection's own id never collides with this. */
+const ALL_COLLECTIONS_VALUE = '__all__';
 
 function sortCollections(collections: SavedCollection[]) {
   return collections.toSorted((left, right) => left.name.localeCompare(right.name));
@@ -530,36 +533,25 @@ export function SavedPlacesManager() {
                 <FolderPlus aria-hidden="true" />
               </Button>
             </div>
-            <div
+            <ChipGroup
               aria-label={t('collectionsTitle')}
-              className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0"
+              className="-mx-1 flex-nowrap overflow-x-auto px-1 pb-1 lg:mx-0 lg:flex-col lg:flex-wrap lg:overflow-visible lg:px-0"
+              multiple={false}
+              onValueChange={([value]) =>
+                setActiveCollectionId(
+                  value === undefined || value === ALL_COLLECTIONS_VALUE ? null : value,
+                )
+              }
+              value={[activeCollectionId ?? ALL_COLLECTIONS_VALUE]}
             >
-              <Button
-                aria-pressed={!activeCollectionId}
-                className="justify-start"
-                onClick={() => setActiveCollectionId(null)}
-                size="sm"
-                variant={activeCollectionId ? 'ghost' : 'secondary'}
-              >
+              <Chip count={savedPlaces.length} value={ALL_COLLECTIONS_VALUE}>
                 {t('allSaved')}
-                <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-                  {savedPlaces.length}
-                </span>
-              </Button>
+              </Chip>
               {collections.map((collection) => (
                 <div className="flex min-w-max items-center gap-0.5 lg:min-w-0" key={collection.id}>
-                  <Button
-                    aria-pressed={activeCollectionId === collection.id}
-                    className="min-w-0 flex-1 justify-start"
-                    onClick={() => setActiveCollectionId(collection.id)}
-                    size="sm"
-                    variant={activeCollectionId === collection.id ? 'secondary' : 'ghost'}
-                  >
-                    <span className="truncate">{collection.name}</span>
-                    <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-                      {collection.placeCount}
-                    </span>
-                  </Button>
+                  <Chip count={collection.placeCount} value={collection.id}>
+                    {collection.name}
+                  </Chip>
                   <Button
                     aria-label={t('editCollection', { name: collection.name })}
                     onClick={() => openCollectionEditor('rename', collection)}
@@ -570,7 +562,7 @@ export function SavedPlacesManager() {
                   </Button>
                 </div>
               ))}
-            </div>
+            </ChipGroup>
           </aside>
 
           <div className="min-w-0 space-y-5">
@@ -583,20 +575,18 @@ export function SavedPlacesManager() {
                   {t('placeCount', { count: visibleSavedPlaces.length })}
                 </p>
               </div>
-              <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 sm:mx-0 sm:max-w-[32rem] sm:px-0">
+              <ChipGroup
+                className="-mx-1 flex-nowrap overflow-x-auto px-1 pb-1 sm:mx-0 sm:max-w-[32rem] sm:px-0"
+                multiple={false}
+                onValueChange={([value]) => setCategoryFilter((value ?? 'all') as CategoryFilter)}
+                value={[categoryFilter]}
+              >
                 {categoryFilters.map((filter) => (
-                  <Button
-                    aria-pressed={categoryFilter === filter}
-                    className="min-w-max"
-                    key={filter}
-                    onClick={() => setCategoryFilter(filter)}
-                    size="sm"
-                    variant={categoryFilter === filter ? 'secondary' : 'ghost'}
-                  >
+                  <Chip key={filter} value={filter}>
                     {t(`categories.${filter}`)}
-                  </Button>
+                  </Chip>
                 ))}
-              </div>
+              </ChipGroup>
             </div>
 
             {savedPlaces.length === 0 ? (

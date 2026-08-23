@@ -217,10 +217,12 @@ export function ItineraryRouteSegmentRow({
           {/* Icon-only at every width now. The mode is spelled out one column
               over as the row's own primary label, so the trigger no longer has
               to carry the word — and no longer takes the width that used to
-              come out of the leg's origin and destination. */}
+              come out of the leg's origin and destination. This is also the only
+              place the mode is drawn: the timeline marker used to repeat it, so
+              a row of connective tissue carried the same fact twice. */}
           <SelectTrigger
             aria-label={t('changeMode', { origin: originLabel })}
-            className={cn('size-8 bg-background px-1.5', saving && 'opacity-70')}
+            className={cn('w-auto gap-1 bg-background', saving && 'opacity-70')}
             size="sm"
           >
             <SelectValue>
@@ -230,7 +232,15 @@ export function ItineraryRouteSegmentRow({
               </span>
             </SelectValue>
           </SelectTrigger>
-          <SelectContent align="end">
+          {/* `alignItemWithTrigger` is Base UI's default: the popup overlays the
+              trigger and grows around the selected item, and `side`/`align` are
+              ignored while it is on. Against a ~36px icon trigger and a 10rem
+              popup that put the menu on top of the leg row it belongs to. Off,
+              the popup takes its place below the trigger with the usual
+              collision handling — which is the only behaviour that fits at
+              375px. The shared default stays as it is: it is the right one for
+              the full-width selects in Day settings. */}
+          <SelectContent align="end" alignItemWithTrigger={false}>
             {(['drive', 'transit', 'walk', 'flight'] as const).map((mode) => (
               <SelectItem key={mode} value={mode}>
                 <span className="inline-flex items-center gap-2">
@@ -245,7 +255,6 @@ export function ItineraryRouteSegmentRow({
       connector={connector}
       context={context || undefined}
       metrics={metricsLabel}
-      mode={modeIcon(segment.mode)}
       modeLabel={t(`mode.${segment.mode}`)}
       state={presentationState}
       // Only a stale estimate needs saying. "Current estimate" on every healthy

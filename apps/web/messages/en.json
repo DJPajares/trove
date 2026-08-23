@@ -1004,6 +1004,8 @@
     "previousDay": "Previous day",
     "nextDay": "Next day",
     "daySettings": "Day settings",
+    "travelDetails": "Travel details",
+    "travelDetailsHelp": "Show travel legs and the day\u2019s distance and time between places.",
     "dayMove": {
       "action": "Move day plan",
       "title": "Move this day plan",

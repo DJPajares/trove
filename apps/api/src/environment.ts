@@ -18,6 +18,11 @@ type RoutesEnvironment = {
   googleRoutesApiKey: string;
 };
 
+type EditorialImagesEnvironment = {
+  hourlyBudget: number | null;
+  pexelsApiKey: string;
+};
+
 export function getAuthenticationEnvironment(
   environment: Record<string, string | undefined> = process.env,
 ): AuthenticationEnvironment | null {
@@ -94,4 +99,38 @@ export function getRoutesEnvironment(
   const googleRoutesApiKey = environment.GOOGLE_ROUTES_API_KEY?.trim();
 
   return googleRoutesApiKey ? { googleRoutesApiKey } : null;
+}
+
+/**
+ * Editorial imagery is decorative, so nothing in the product breaks when it is
+ * off - every surface already has a branded fallback it must be able to reach.
+ * That makes a single global switch enough, and it is deliberately separate from
+ * the Google one: the two media tracks have different costs and different rules,
+ * and turning off travel photography should never turn off place search.
+ */
+export function areEditorialImagesDisabled(
+  environment: Record<string, string | undefined> = process.env,
+) {
+  const value = environment.TROVE_EDITORIAL_IMAGES_DISABLED?.trim().toLowerCase();
+
+  return value === '1' || value === 'true';
+}
+
+export function getEditorialImagesEnvironment(
+  environment: Record<string, string | undefined> = process.env,
+): EditorialImagesEnvironment | null {
+  if (areEditorialImagesDisabled(environment)) {
+    return null;
+  }
+
+  const pexelsApiKey = environment.PEXELS_API_KEY?.trim();
+
+  if (!pexelsApiKey) {
+    return null;
+  }
+
+  const parsedBudget = Number(environment.TROVE_EDITORIAL_IMAGE_HOURLY_BUDGET?.trim());
+  const hourlyBudget = Number.isInteger(parsedBudget) && parsedBudget > 0 ? parsedBudget : null;
+
+  return { hourlyBudget, pexelsApiKey };
 }

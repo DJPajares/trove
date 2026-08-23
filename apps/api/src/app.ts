@@ -6,6 +6,7 @@ import { getWebOrigins } from './environment.js';
 import { setProviderUsageSink } from './services/provider-usage.js';
 import { registerAuthenticationRoutes } from './routes/auth.js';
 import { registerCurrencyRoutes } from './routes/currency.js';
+import { registerEditorialImageRoutes } from './routes/editorial-images.js';
 import { registerExpenseRoutes } from './routes/expenses.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerItineraryRoutes } from './routes/itineraries.js';
@@ -129,6 +130,7 @@ export function buildApp() {
     registerCurrencyRoutes(instance);
     registerWeatherRoutes(instance);
     registerPlacesRoutes(instance);
+    registerEditorialImageRoutes(instance);
     registerProfileRoutes(instance);
     registerSavedPlacesRoutes(instance);
     registerItineraryRoutes(instance);

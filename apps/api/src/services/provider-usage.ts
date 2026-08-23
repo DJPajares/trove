@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 /**
- * Every outbound Google request passes through here.
+ * Every outbound request to a metered provider passes through here.
  *
  * Two jobs, both learned from the incident this module exists because of: the
  * log line makes spend attributable to a caller after the fact, and the counters
@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
  * arrives.
  */
 export const PROVIDER_CALL_SOURCES = [
+  'editorial-images',
   'global-search',
   'itinerary',
   'itinerary-routes',
@@ -31,14 +32,22 @@ export type ProviderCacheMissReason =
   | 'evidence_not_memoized'
   | 'incomplete_snapshot'
   | 'language_mismatch'
+  | 'missing_editorial_image'
   | 'missing_leg'
   | 'missing_snapshot'
   | 'negative_cache_expired'
   | 'polyline_missing'
+  | 'stale_editorial_image'
   | 'stale_leg'
   | 'stale_snapshot';
 
 export type ProviderExpectedSku =
+  /**
+   * Pexels bills nothing; it caps requests per hour and per month instead. It is
+   * counted here anyway so an editorial fan-out is caught by the same tests that
+   * catch a Places one, rather than only surfacing as a throttled provider.
+   */
+  | 'editorial-images-free'
   | 'places-autocomplete-requests'
   | 'place-details-pro'
   | 'place-details-enterprise'
@@ -46,7 +55,7 @@ export type ProviderExpectedSku =
 
 type ProviderEventBase = {
   operation: 'computeRoute' | 'getDetails' | 'search';
-  provider: 'google';
+  provider: 'google' | 'pexels';
   source: ProviderCallSource;
 };
 
@@ -54,7 +63,11 @@ export type ProviderCall = ProviderEventBase & {
   cacheMissReason?: ProviderCacheMissReason;
   detailLevel?: 'evidence' | 'location';
   /** The provider endpoint, normalised so it contains no provider ids. */
-  endpoint: '/directions/v2:computeRoutes' | '/v1/places/:placeId' | '/v1/places:autocomplete';
+  endpoint:
+    | '/directions/v2:computeRoutes'
+    | '/v1/places/:placeId'
+    | '/v1/places:autocomplete'
+    | '/v1/search';
   expectedSku: ProviderExpectedSku;
   includePolyline?: boolean;
   kind: 'outbound';
@@ -63,7 +76,7 @@ export type ProviderCall = ProviderEventBase & {
 };
 
 export type ProviderCacheEvent = ProviderEventBase & {
-  cache: 'place-details' | 'place-evidence' | 'route';
+  cache: 'editorial-image' | 'place-details' | 'place-evidence' | 'route';
   failureCode?: 'NOT_FOUND' | 'UNUSABLE_LOCATION';
   includePolyline?: boolean;
   kind: 'cache_hit' | 'negative_cache_hit';

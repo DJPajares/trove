@@ -316,13 +316,13 @@ function findItem(itinerary: Itinerary, itemId: string) {
   return itinerary.unscheduledItems.find((candidate) => candidate.id === itemId) ?? null;
 }
 
-function localDateInTimeZone(timeZone: string) {
+export function localDateInTimeZone(timeZone: string, at: Date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     day: '2-digit',
     month: '2-digit',
     timeZone,
     year: 'numeric',
-  }).formatToParts(new Date());
+  }).formatToParts(at);
   const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${value.year}-${value.month}-${value.day}`;
 }
@@ -338,7 +338,7 @@ function localTimeInTimeZone(at: Date, timeZone: string) {
   return `${value.hour}:${value.minute}`;
 }
 
-function localPreviewInstant(date: string, time: string, timeZone: string) {
+export function localPreviewInstant(date: string, time: string, timeZone: string) {
   const [year = 1970, month = 1, day = 1] = date.split('-').map(Number);
   const [hour = 0, minute = 0] = time.split(':').map(Number);
   const desired = Date.UTC(year, month - 1, day, hour, minute);

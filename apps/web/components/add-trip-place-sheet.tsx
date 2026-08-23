@@ -6,7 +6,6 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { SearchField } from '@/components/search-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -330,104 +329,115 @@ export function AddTripPlaceSheet({
               <AlertDescription>{t('searchUnavailable')}</AlertDescription>
             </Alert>
           ) : matchingSaved.length || providerResults.length ? (
-            <div className="space-y-2">
-              <h2 className="text-sm font-medium">{t('resultsHeading')}</h2>
-              <ItemGroup aria-label={t('resultsHeading')} className="gap-2">
-                {matchingSaved.map((savedPlace) => {
-                  const existing = alreadyOnTrip(savedPlace.place.id);
-                  return (
-                    <Item className="gap-3 px-3 py-3" key={savedPlace.id} variant="outline">
-                      <ItemMedia
-                        className="size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
-                        variant="icon"
-                      >
-                        {savedPlace.place.kind === 'custom' ? (
-                          <NotebookPen aria-hidden="true" />
-                        ) : (
-                          <Bookmark aria-hidden="true" />
-                        )}
-                      </ItemMedia>
-                      <ItemContent className="min-w-0">
-                        <ItemTitle className="flex min-w-0 items-center gap-2">
-                          <span className="min-w-0 truncate">{savedName(savedPlace)}</span>
-                          {/* Without the section heading, the badge is what says where
-                              this result came from. */}
-                          <Badge>{t('savedBadge')}</Badge>
-                        </ItemTitle>
-                        <ItemDescription>{savedDescription(savedPlace)}</ItemDescription>
-                        {namingField(
-                          savedPlace.place.id,
-                          (customName) =>
-                            void add(savedPlace.place.id, savedPlace.place.id, customName),
-                        )}
-                      </ItemContent>
-                      <ItemActions className="shrink-0">
-                        {existing || namingId === savedPlace.place.id
-                          ? null
-                          : nameItButton(
-                              savedPlace.place.id,
-                              savedName(savedPlace),
-                              savedName(savedPlace),
+            <div className="space-y-5">
+              {/* Two headed groups rather than one flat list with a badge per row:
+                  which places are already the traveller's own is worth knowing
+                  before reading a single result. */}
+              {matchingSaved.length ? (
+                <div className="space-y-2">
+                  <h2 className="text-sm font-medium">{t('savedResultsHeading')}</h2>
+                  <ItemGroup aria-label={t('savedResultsHeading')} className="gap-2">
+                    {matchingSaved.map((savedPlace) => {
+                      const existing = alreadyOnTrip(savedPlace.place.id);
+                      return (
+                        <Item className="gap-3 px-3 py-3" key={savedPlace.id} variant="outline">
+                          <ItemMedia
+                            className="size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
+                            variant="icon"
+                          >
+                            {savedPlace.place.kind === 'custom' ? (
+                              <NotebookPen aria-hidden="true" />
+                            ) : (
+                              <Bookmark aria-hidden="true" />
                             )}
-                        <Button
-                          disabled={existing || busyId === savedPlace.place.id}
-                          onClick={() => void add(savedPlace.place.id, savedPlace.place.id)}
-                          size="sm"
-                          variant={existing ? 'secondary' : 'outline'}
-                        >
-                          {existing
-                            ? t('added')
-                            : busyId === savedPlace.place.id
-                              ? t('adding')
-                              : t('add')}
-                        </Button>
-                      </ItemActions>
-                    </Item>
-                  );
-                })}
+                          </ItemMedia>
+                          <ItemContent className="min-w-0">
+                            <ItemTitle className="min-w-0 truncate">
+                              {savedName(savedPlace)}
+                            </ItemTitle>
+                            <ItemDescription>{savedDescription(savedPlace)}</ItemDescription>
+                            {namingField(
+                              savedPlace.place.id,
+                              (customName) =>
+                                void add(savedPlace.place.id, savedPlace.place.id, customName),
+                            )}
+                          </ItemContent>
+                          <ItemActions className="shrink-0">
+                            {existing || namingId === savedPlace.place.id
+                              ? null
+                              : nameItButton(
+                                  savedPlace.place.id,
+                                  savedName(savedPlace),
+                                  savedName(savedPlace),
+                                )}
+                            <Button
+                              disabled={existing || busyId === savedPlace.place.id}
+                              onClick={() => void add(savedPlace.place.id, savedPlace.place.id)}
+                              size="sm"
+                              variant={existing ? 'secondary' : 'outline'}
+                            >
+                              {existing
+                                ? t('added')
+                                : busyId === savedPlace.place.id
+                                  ? t('adding')
+                                  : t('add')}
+                            </Button>
+                          </ItemActions>
+                        </Item>
+                      );
+                    })}
+                  </ItemGroup>
+                </div>
+              ) : null}
 
-                {providerResults.map((suggestion) => (
-                  <Item
-                    className="gap-3 px-3 py-3"
-                    key={suggestion.externalPlaceId}
-                    variant="outline"
-                  >
-                    <ItemMedia
-                      className="size-10 rounded-[var(--radius-md)] bg-brand/10 text-brand"
-                      variant="icon"
-                    >
-                      <MapPinned aria-hidden="true" />
-                    </ItemMedia>
-                    <ItemContent className="min-w-0">
-                      <ItemTitle>{suggestion.name}</ItemTitle>
-                      <ItemDescription>
-                        {suggestion.description ?? t('providerPlace')}
-                      </ItemDescription>
-                      {namingField(
-                        suggestion.externalPlaceId,
-                        (customName) => void addProvider(suggestion, customName),
-                      )}
-                    </ItemContent>
-                    <ItemActions className="shrink-0">
-                      {namingId === suggestion.externalPlaceId
-                        ? null
-                        : nameItButton(
-                            suggestion.externalPlaceId,
-                            suggestion.name,
-                            suggestion.name,
-                          )}
-                      <Button
-                        disabled={busyId === suggestion.externalPlaceId}
-                        onClick={() => void addProvider(suggestion)}
-                        size="sm"
+              {providerResults.length ? (
+                <div className="space-y-2">
+                  <h2 className="text-sm font-medium">{t('resultsHeading')}</h2>
+                  <ItemGroup aria-label={t('resultsHeading')} className="gap-2">
+                    {providerResults.map((suggestion) => (
+                      <Item
+                        className="gap-3 px-3 py-3"
+                        key={suggestion.externalPlaceId}
                         variant="outline"
                       >
-                        {busyId === suggestion.externalPlaceId ? t('adding') : t('add')}
-                      </Button>
-                    </ItemActions>
-                  </Item>
-                ))}
-              </ItemGroup>
+                        <ItemMedia
+                          className="size-10 rounded-[var(--radius-md)] bg-brand/10 text-brand"
+                          variant="icon"
+                        >
+                          <MapPinned aria-hidden="true" />
+                        </ItemMedia>
+                        <ItemContent className="min-w-0">
+                          <ItemTitle>{suggestion.name}</ItemTitle>
+                          <ItemDescription>
+                            {suggestion.description ?? t('providerPlace')}
+                          </ItemDescription>
+                          {namingField(
+                            suggestion.externalPlaceId,
+                            (customName) => void addProvider(suggestion, customName),
+                          )}
+                        </ItemContent>
+                        <ItemActions className="shrink-0">
+                          {namingId === suggestion.externalPlaceId
+                            ? null
+                            : nameItButton(
+                                suggestion.externalPlaceId,
+                                suggestion.name,
+                                suggestion.name,
+                              )}
+                          <Button
+                            disabled={busyId === suggestion.externalPlaceId}
+                            onClick={() => void addProvider(suggestion)}
+                            size="sm"
+                            variant="outline"
+                          >
+                            {busyId === suggestion.externalPlaceId ? t('adding') : t('add')}
+                          </Button>
+                        </ItemActions>
+                      </Item>
+                    ))}
+                  </ItemGroup>
+                </div>
+              ) : null}
             </div>
           ) : searchStatus === 'loading' ? (
             <p aria-live="polite" className="text-sm text-muted-foreground" role="status">

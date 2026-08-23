@@ -1,6 +1,15 @@
 'use client';
 
-import { CalendarPlus, CheckCircle2, Ellipsis, Eye, MapPinned, Pencil, Trash2 } from 'lucide-react';
+import {
+  CalendarPlus,
+  CheckCircle2,
+  Ellipsis,
+  Eye,
+  MapPinned,
+  MapPinOff,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { MediaAttribution } from '@/components/media-attribution';
@@ -145,13 +154,13 @@ export function TripPlacesPanel({
           <Item className="gap-3 px-3 py-2.5" key={tripPlace.id} variant="outline">
             {tripPlace.place.kind === 'custom' ? (
               <ItemMedia
-                className="size-8 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
+                className="size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
                 variant="icon"
               >
                 <MapPinned aria-hidden="true" className="size-4" />
               </ItemMedia>
             ) : (
-              <ItemMedia className="size-8 rounded-[var(--radius-md)]" variant="default">
+              <ItemMedia className="size-10 rounded-[var(--radius-md)]" variant="default">
                 <PlaceMedia
                   alt={
                     editorial && providerName
@@ -163,7 +172,7 @@ export function TripPlacesPanel({
                   // A thumbnail this size cannot carry a legible credit, so the
                   // row renders it below instead.
                   credit="inline"
-                  sizes="32px"
+                  sizes="40px"
                   source={resolvePlaceMediaSource({ editorial })}
                   variant="thumbnail"
                 />
@@ -190,6 +199,14 @@ export function TripPlacesPanel({
               <ItemDescription className="line-clamp-1">
                 {placeDescription(tripPlace)}
               </ItemDescription>
+              {/* A locationless place is still fully usable everywhere else — it
+                  just cannot be mapped or routed until it has one (PRD 12). */}
+              {!tripPlace.place.location ? (
+                <p className="inline-flex items-center gap-1.5 text-xs text-text-subtle">
+                  <MapPinOff aria-hidden="true" className="size-3.5 shrink-0" />
+                  {t('noLocation')}
+                </p>
+              ) : null}
               {usage.map((label) => (
                 <p className="text-xs text-muted-foreground" key={label}>
                   {label}

@@ -12,11 +12,13 @@ import {
   Pencil,
   Plus,
   Search,
+  StickyNote,
   Trash2,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { EditorialSection } from '@/components/editorial-section';
 import { MediaAttribution } from '@/components/media-attribution';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
@@ -33,6 +35,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import {
@@ -102,10 +105,13 @@ type CollectionEditor =
 type CategoryFilter = 'all' | ProviderSuggestion['category'];
 const categoryFilters: CategoryFilter[] = [
   'all',
-  'food_and_drink',
+  'destination',
   'things_to_do',
+  'food_and_drink',
   'stay',
   'shopping',
+  'transport',
+  'other',
 ];
 /** A ChipGroup value has to be a string; a saved collection's own id never collides with this. */
 const ALL_COLLECTIONS_VALUE = '__all__';
@@ -538,6 +544,22 @@ export function SavedPlacesManager() {
           kind="error"
           title={t('loadError')}
         />
+      ) : savedPlaces.length === 0 ? (
+        // Collections and category filters are inert with nothing to filter yet,
+        // so the first screen offers exactly one thing to do: save a place.
+        <PageState
+          actions={
+            <Button onClick={() => setAddOpen(true)}>
+              <Plus aria-hidden="true" data-icon="inline-start" />
+              {t('addFirstPlace')}
+            </Button>
+          }
+          description={t('emptyDescription')}
+          headingLevel={2}
+          icon={<Bookmark aria-hidden="true" />}
+          kind="empty"
+          title={t('emptyTitle')}
+        />
       ) : (
         <div className="grid gap-8 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-12">
           <aside className="min-w-0 lg:border-r lg:border-border lg:pr-6">
@@ -584,16 +606,8 @@ export function SavedPlacesManager() {
             </ChipGroup>
           </aside>
 
-          <div className="min-w-0 space-y-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-xl font-semibold tracking-tight text-foreground">
-                  {activeCollection?.name ?? t('allSaved')}
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {t('placeCount', { count: visibleSavedPlaces.length })}
-                </p>
-              </div>
+          <EditorialSection
+            actions={
               <ChipGroup
                 className="-mx-1 flex-nowrap overflow-x-auto px-1 pb-1 sm:mx-0 sm:max-w-[32rem] sm:px-0"
                 multiple={false}
@@ -606,23 +620,12 @@ export function SavedPlacesManager() {
                   </Chip>
                 ))}
               </ChipGroup>
-            </div>
-
-            {savedPlaces.length === 0 ? (
-              <PageState
-                actions={
-                  <Button onClick={() => setAddOpen(true)}>
-                    <Plus aria-hidden="true" data-icon="inline-start" />
-                    {t('addFirstPlace')}
-                  </Button>
-                }
-                description={t('emptyDescription')}
-                headingLevel={2}
-                icon={<Bookmark aria-hidden="true" />}
-                kind="empty"
-                title={t('emptyTitle')}
-              />
-            ) : visibleSavedPlaces.length === 0 ? (
+            }
+            className="min-w-0"
+            description={t('placeCount', { count: visibleSavedPlaces.length })}
+            title={activeCollection?.name ?? t('allSaved')}
+          >
+            {visibleSavedPlaces.length === 0 ? (
               <PageState
                 description={
                   activeCollection
@@ -652,14 +655,14 @@ export function SavedPlacesManager() {
                     >
                       {savedPlace.place.kind === 'custom' ? (
                         <ItemMedia
-                          className="size-11 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground sm:size-12"
+                          className="size-14 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground sm:size-16"
                           variant="icon"
                         >
                           <NotebookPen aria-hidden="true" className="size-5" />
                         </ItemMedia>
                       ) : (
                         <ItemMedia
-                          className="size-11 rounded-[var(--radius-md)] sm:size-12"
+                          className="size-14 rounded-[var(--radius-md)] sm:size-16"
                           variant="default"
                         >
                           <PlaceMedia
@@ -675,47 +678,52 @@ export function SavedPlacesManager() {
                             // A thumbnail this size cannot carry a legible
                             // credit, so the row renders it below instead.
                             credit="inline"
-                            sizes="48px"
+                            sizes="64px"
                             source={resolvePlaceMediaSource({ editorial })}
                             variant="thumbnail"
                           />
                         </ItemMedia>
                       )}
                       <ItemContent className="min-w-0 gap-1.5">
-                        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
                           <ItemTitle className="max-w-full text-base">
                             {getPlaceName(savedPlace)}
                           </ItemTitle>
                           {category ? (
-                            <span className="text-xs font-medium text-text-subtle">
+                            <Badge size="sm" variant="muted">
                               {t(`categories.${category}`)}
-                            </span>
+                            </Badge>
                           ) : null}
                         </div>
                         <ItemDescription className="line-clamp-1">
                           {getPlaceDescription(savedPlace)}
                         </ItemDescription>
-                        <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs leading-5 text-text-subtle">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-subtle">
                           <span>
                             {t('savedOn', {
                               date: dateFormatter.format(new Date(savedPlace.createdAt)),
                             })}
                           </span>
                           {savedPlace.collections.length ? (
-                            <span>
-                              {savedPlace.collections
-                                .map((collection) => collection.name)
-                                .join(', ')}
+                            <span className="inline-flex min-w-0 items-center gap-1">
+                              <FolderPlus aria-hidden="true" className="size-3 shrink-0" />
+                              <span className="truncate">
+                                {savedPlace.collections
+                                  .map((collection) => collection.name)
+                                  .join(', ')}
+                              </span>
                             </span>
                           ) : null}
-                          {savedPlace.note ? <span>{savedPlace.note}</span> : null}
-                          {editorial ? (
-                            <MediaAttribution
-                              attribution={editorial.attribution}
-                              variant="inline"
-                            />
-                          ) : null}
                         </div>
+                        {savedPlace.note ? (
+                          <p className="flex items-start gap-1.5 text-xs leading-5 text-text-subtle">
+                            <StickyNote aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                            <span className="line-clamp-2">{savedPlace.note}</span>
+                          </p>
+                        ) : null}
+                        {editorial ? (
+                          <MediaAttribution attribution={editorial.attribution} variant="inline" />
+                        ) : null}
                       </ItemContent>
                       <ItemActions className="shrink-0 self-start">
                         {googleMapsPlaceHref(savedPlace.place) ? (
@@ -785,7 +793,7 @@ export function SavedPlacesManager() {
                 })}
               </ItemGroup>
             )}
-          </div>
+          </EditorialSection>
         </div>
       )}
 

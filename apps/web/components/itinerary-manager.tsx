@@ -40,6 +40,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { usePreferences } from '@/components/preferences-provider';
 import { TimeInput } from '@/components/time-input';
 import { TripSectionHeader } from '@/components/trip-section-header';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsIndicator, TabsList, TabsTab } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -1684,35 +1686,44 @@ export function ItineraryManager({
               status={routeStatus}
             />
 
-            <div
-              aria-label={t('map.viewNavigation')}
-              className="grid grid-cols-2 gap-1 border-b border-border bg-muted/30 p-1 lg:hidden"
-              role="tablist"
+            <Tabs
+              onValueChange={(value) => setMobileView(value as 'list' | 'map')}
+              value={mobileView}
             >
-              <Button
-                aria-selected={mobileView === 'list'}
-                onClick={() => setMobileView('list')}
-                role="tab"
-                size="sm"
-                variant={mobileView === 'list' ? 'secondary' : 'ghost'}
+              <TabsList
+                aria-label={t('map.viewNavigation')}
+                className="grid w-full grid-cols-2 lg:hidden"
               >
-                <List aria-hidden="true" data-icon="inline-start" />
-                {t('map.listView')}
-              </Button>
-              <Button
-                aria-selected={mobileView === 'map'}
-                onClick={() => setMobileView('map')}
-                role="tab"
-                size="sm"
-                variant={mobileView === 'map' ? 'secondary' : 'ghost'}
-              >
-                <MapIcon aria-hidden="true" data-icon="inline-start" />
-                {t('map.mapView')}
-              </Button>
-            </div>
+                <TabsTab
+                  aria-controls="itinerary-list-panel"
+                  className="gap-2"
+                  id="itinerary-list-tab"
+                  value="list"
+                >
+                  <List aria-hidden="true" data-icon="inline-start" />
+                  {t('map.listView')}
+                </TabsTab>
+                <TabsTab
+                  aria-controls="itinerary-map-panel"
+                  className="gap-2"
+                  id="itinerary-map-tab"
+                  value="map"
+                >
+                  <MapIcon aria-hidden="true" data-icon="inline-start" />
+                  {t('map.mapView')}
+                </TabsTab>
+                <TabsIndicator />
+              </TabsList>
+            </Tabs>
 
             <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.9fr)]">
-              <div className={cn('p-4 sm:p-6', mobileView === 'map' && 'hidden lg:block')}>
+              <div
+                aria-labelledby="itinerary-list-tab"
+                className={cn('p-4 sm:p-6', mobileView === 'map' && 'hidden lg:block')}
+                id="itinerary-list-panel"
+                role="tabpanel"
+                tabIndex={mobileView === 'list' ? 0 : -1}
+              >
                 {selectedDay.items.length ? (
                   <ItemGroup aria-label={t('itemListLabel')} variant="list">
                     {arrivalBase && stopNumbers.arrival
@@ -1978,6 +1989,9 @@ export function ItineraryManager({
                   'min-w-0 border-border lg:block lg:border-l',
                   mobileView === 'list' && 'hidden',
                 )}
+                id="itinerary-map-panel"
+                role="tabpanel"
+                tabIndex={mobileView === 'map' ? 0 : -1}
               >
                 {desktopMapLayout || mobileView === 'map' ? (
                   <ItineraryPlanningMap
@@ -2247,10 +2261,10 @@ export function ItineraryManager({
                                           : option.label}
                                     </span>
                                     {option.kind === 'trip_place' && option.usageLabel ? (
-                                      <span className="inline-flex max-w-44 shrink-0 items-center gap-1 rounded-full bg-brand/10 px-1.5 py-0.5 text-[11px] font-medium text-brand">
+                                      <Badge className="max-w-44" size="sm">
                                         <CheckCircle2 aria-hidden="true" className="size-3" />
                                         <span className="truncate">{option.usageLabel}</span>
-                                      </span>
+                                      </Badge>
                                     ) : null}
                                   </span>
                                   {option.kind === 'trip_place' &&

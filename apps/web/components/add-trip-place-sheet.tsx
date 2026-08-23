@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { SearchField } from '@/components/search-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -351,9 +352,7 @@ export function AddTripPlaceSheet({
                           <span className="min-w-0 truncate">{savedName(savedPlace)}</span>
                           {/* Without the section heading, the badge is what says where
                               this result came from. */}
-                          <span className="shrink-0 rounded-full bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand">
-                            {t('savedBadge')}
-                          </span>
+                          <Badge>{t('savedBadge')}</Badge>
                         </ItemTitle>
                         <ItemDescription>{savedDescription(savedPlace)}</ItemDescription>
                         {namingField(

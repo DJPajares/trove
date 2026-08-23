@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -142,11 +143,7 @@ export function TripPlacesPanel({
                 ) : null}
                 {/* Saved Places and Trip Places are independent relationships to the
                     same Place, so whether this one is also saved is worth showing. */}
-                {tripPlace.isSaved ? (
-                  <span className="shrink-0 rounded-full bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand">
-                    {t('alsoSaved')}
-                  </span>
-                ) : null}
+                {tripPlace.isSaved ? <Badge>{t('alsoSaved')}</Badge> : null}
               </ItemTitle>
               {/* A renamed Place still says which one it actually is. */}
               {official ? (

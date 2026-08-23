@@ -1,9 +1,11 @@
 'use client';
 
 import { ChevronDown, CircleAlert, Sparkles } from 'lucide-react';
+import type { VariantProps } from 'class-variance-authority';
 import { useTranslations } from 'next-intl';
 import { useId, useState } from 'react';
 
+import { Badge, type badgeVariants } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type {
   PlanScoreExplanation,
@@ -119,11 +121,12 @@ const FACTOR_CHIP_ORDER: PlanScoreFactorId[] = [
   'PLACE_QUALITY',
 ];
 
-const CHIP_TONE_CLASS: Record<FactorChipTone, string> = {
-  unknown: 'bg-muted text-muted-foreground',
-  working: 'bg-status-success/10 text-status-success',
-  worthImproving: 'bg-status-warning/10 text-status-warning',
-};
+const FACTOR_BADGE_VARIANT: Record<FactorChipTone, VariantProps<typeof badgeVariants>['variant']> =
+  {
+    unknown: 'muted',
+    working: 'success',
+    worthImproving: 'warning',
+  };
 
 function factorChipTone(outcome: PlanScoreFactorOutcome): FactorChipTone | null {
   if (outcome.state === 'NOT_APPLICABLE') return null;
@@ -143,12 +146,9 @@ function FactorStatusRow({
         if (tone === null) return [];
 
         return [
-          <li
-            className={cn('rounded-full px-2 py-0.5 text-xs font-medium', CHIP_TONE_CLASS[tone])}
-            key={id}
-          >
+          <Badge key={id} render={<li />} variant={FACTOR_BADGE_VARIANT[tone]}>
             {t(`factorLabels.${id}`)} · {t(`factorStatus.${tone}`)}
-          </li>,
+          </Badge>,
         ];
       })}
     </ul>

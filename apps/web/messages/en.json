@@ -1030,9 +1030,11 @@
       "moveLater": "Move later",
       "edit": "Edit",
       "duplicate": "Duplicate",
+      "showOnMap": "Show on map",
       "openPlace": "Open in Google Maps",
       "delete": "Delete"
     },
+    "viewDetailsFor": "View details for {name}",
     "dayTimeZone": "Local timezone: {timeZone}",
     "accommodationBase": "Using accommodation as the day base: {name}",
     "accommodationBaseUnnamed": "accommodation",
@@ -1081,7 +1083,6 @@
       "viewNavigation": "Choose itinerary or map view",
       "listView": "Itinerary",
       "mapView": "Map",
-      "showItem": "Show {name} on the map",
       "scheduledMarkerLabel": "{name}, scheduled stop {order}",
       "consideredMarkerLabel": "{name}, considered place",
       "baseMarkerLabel": "{name}, day base",
@@ -1602,7 +1603,8 @@
     },
     "closingTitle": "Start with one trip",
     "closingDescription": "An account keeps your plans private and available on every device you use.",
-    "closingAction": "Create your account"
+    "closingAction": "Create your account",
+    "photographyTitle": "Photography"
   },
   "auth": {
     "eyebrow": "Plan it. Live it. Remember it.",

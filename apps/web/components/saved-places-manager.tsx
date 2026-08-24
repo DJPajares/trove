@@ -707,10 +707,6 @@ export function SavedPlacesManager() {
                             }
                             category={category}
                             className="size-full"
-                            // A thumbnail this size cannot carry a legible
-                            // credit; the details sheet opens the photograph
-                            // and credits it there.
-                            credit="none"
                             sizes="64px"
                             source={resolvePlaceMediaSource({ editorial })}
                             variant="thumbnail"

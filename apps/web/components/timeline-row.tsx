@@ -86,7 +86,10 @@ const stateVariants = cva('', {
 });
 
 const rowVariants = cva(
-  'group/timeline-row grid grid-cols-[2.5rem_minmax(0,1fr)_auto] gap-x-3 px-3',
+  // `relative` so a row whose title claims the whole row - the stops and bases
+  // of a day, which open their place when clicked - has something for that
+  // claim to resolve against. Nothing else here is positioned.
+  'group/timeline-row relative grid grid-cols-[2.5rem_minmax(0,1fr)_auto] gap-x-3 px-3',
   {
     variants: {
       tone: {
@@ -161,7 +164,11 @@ export function TimelineRow({
         ) : null}
         {meta ? <div className={cn('mt-1 text-xs', stateVariants({ state }))}>{meta}</div> : null}
       </div>
-      {actions ? <div className="flex items-center self-center py-2">{actions}</div> : null}
+      {/* Above any hit area the title has stretched over the row, or the row's
+          own controls would be unreachable. */}
+      {actions ? (
+        <div className="relative z-10 flex items-center self-center py-2">{actions}</div>
+      ) : null}
     </div>
   );
 }

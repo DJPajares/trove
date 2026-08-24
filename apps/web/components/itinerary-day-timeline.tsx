@@ -7,6 +7,7 @@ import {
   Copy,
   Ellipsis,
   ExternalLink,
+  MapPin,
   Pencil,
   Trash2,
 } from 'lucide-react';
@@ -31,6 +32,19 @@ import {
 import type { ItineraryItem, ItineraryRouteSegment, RouteTravelMode } from '@/lib/itinerary/api';
 import type { DayTimelineEntry } from '@/lib/itinerary/day-sequence';
 
+/**
+ * A stop's name, and the whole row along with it.
+ *
+ * The name opens the place, but the row is what a traveller aims at - a time, a
+ * duration and a note are the same stop, and a tap that landed on one of them
+ * used to do nothing at all. The row cannot be the button, because it already
+ * holds one, so the name stretches its hit area over the row instead and the
+ * actions menu sits above that. Hovering anywhere on the row underlines the
+ * name, which is what says the row is a way in.
+ */
+const stopTitleClassName =
+  'rounded-[var(--radius-sm)] text-left outline-none after:absolute after:inset-0 hover:underline focus-visible:ring-3 focus-visible:ring-ring/40';
+
 /** What a stop needs in order to render, resolved by the manager that owns the day. */
 export type TimelineStopView = {
   located: boolean;
@@ -53,7 +67,10 @@ export type ItineraryDayTimelineProps = {
   onModeChange: (segment: ItineraryRouteSegment, mode: RouteTravelMode) => void;
   onMoveItem: (item: ItineraryItem, dayId: string | null, position: number) => void;
   onSelectBase: (tripPlaceId: string) => void;
+  /** Shows the stop's pin on the map - what clicking the row used to do. */
   onSelectItem: (item: ItineraryItem) => void;
+  onViewBaseDetails: (tripPlaceId: string) => void;
+  onViewItemDetails: (item: ItineraryItem) => void;
   organizingItemId: string | null;
   resolveBase: (tripPlaceId: string) => Omit<TimelineStopView, 'mapsHref'> | null;
   resolveItem: (item: ItineraryItem) => TimelineStopView;
@@ -88,6 +105,8 @@ export function ItineraryDayTimeline({
   onMoveItem,
   onSelectBase,
   onSelectItem,
+  onViewBaseDetails,
+  onViewItemDetails,
   organizingItemId,
   resolveBase,
   resolveItem,
@@ -134,6 +153,34 @@ export function ItineraryDayTimeline({
 
           return (
             <TimelineRow
+              actions={
+                // The one thing a base's menu carries. Where a day starts and
+                // ends is still changed in day settings rather than here, so
+                // this stays a way of looking at the stop, not of editing it -
+                // and it is the same gesture the numbered stops offer.
+                base.located ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          aria-label={t('itemActions', { name: base.name })}
+                          size="icon-sm"
+                          type="button"
+                          variant="ghost"
+                        />
+                      }
+                    >
+                      <Ellipsis aria-hidden="true" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-48">
+                      <DropdownMenuItem onClick={() => onSelectBase(entry.tripPlaceId)}>
+                        <MapPin aria-hidden="true" />
+                        {t('itemMenu.showOnMap')}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : undefined
+              }
               connector={connector}
               description={
                 entry.role === 'arrival' ? t('dayBaseStartDescription') : t('dayBaseEndDescription')
@@ -151,10 +198,9 @@ export function ItineraryDayTimeline({
               title={
                 base.located ? (
                   <button
-                    aria-label={t('map.showItem', { name: base.name })}
-                    aria-pressed={base.selected}
-                    className="rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
-                    onClick={() => onSelectBase(entry.tripPlaceId)}
+                    aria-label={t('viewDetailsFor', { name: base.name })}
+                    className={stopTitleClassName}
+                    onClick={() => onViewBaseDetails(entry.tripPlaceId)}
                     type="button"
                   >
                     {base.name}
@@ -241,6 +287,15 @@ export function ItineraryDayTimeline({
                     <Copy aria-hidden="true" />
                     {t('itemMenu.duplicate')}
                   </DropdownMenuItem>
+                  {/* What clicking the row used to do. The row now opens the
+                      place, so the map lives here - one deliberate step away
+                      rather than the thing every stray tap triggered. */}
+                  {view.located ? (
+                    <DropdownMenuItem onClick={() => onSelectItem(item)}>
+                      <MapPin aria-hidden="true" />
+                      {t('itemMenu.showOnMap')}
+                    </DropdownMenuItem>
+                  ) : null}
                   {view.mapsHref ? (
                     <DropdownMenuLinkItem
                       render={<a href={view.mapsHref} rel="noreferrer" target="_blank" />}
@@ -310,10 +365,9 @@ export function ItineraryDayTimeline({
             title={
               view.located ? (
                 <button
-                  aria-label={t('map.showItem', { name: view.name })}
-                  aria-pressed={view.selected}
-                  className="rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
-                  onClick={() => onSelectItem(item)}
+                  aria-label={t('viewDetailsFor', { name: view.name })}
+                  className={stopTitleClassName}
+                  onClick={() => onViewItemDetails(item)}
                   type="button"
                 >
                   {view.name}

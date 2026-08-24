@@ -35,6 +35,12 @@ type ItineraryPlanningMapProps = {
   onClearSelection: () => void;
   onSelectPoint: (point: ItineraryMapPoint) => void;
   onViewItem: (itemId: string) => void;
+  /**
+   * Opens what Trove knows about the Place behind this pin. Omitted by surfaces
+   * that cannot resolve a pin back to its Place, which fall back to the
+   * provider's own listing for the coordinates.
+   */
+  onViewPlaceDetails?: (point: ItineraryMapPoint) => void;
   points: ItineraryMapPoint[];
   routePolylines: string[];
   selectedPointId: string | null;
@@ -97,6 +103,7 @@ export function ItineraryPlanningMap({
   onClearSelection,
   onSelectPoint,
   onViewItem,
+  onViewPlaceDetails,
   points,
   routePolylines,
   selectedPointId,
@@ -420,21 +427,28 @@ export function ItineraryPlanningMap({
                 {t('viewItem')}
               </Button>
             ) : null}
-            <Button
-              nativeButton={false}
-              render={
-                <a
-                  href={googleMapsCoordinatesHref(selectedPoint)}
-                  rel="noreferrer"
-                  target="_blank"
-                />
-              }
-              size="sm"
-              variant="outline"
-            >
-              <MapPinned aria-hidden="true" data-icon="inline-start" />
-              {t('viewPlace')}
-            </Button>
+            {onViewPlaceDetails ? (
+              <Button onClick={() => onViewPlaceDetails(selectedPoint)} size="sm" variant="outline">
+                <MapPinned aria-hidden="true" data-icon="inline-start" />
+                {t('viewPlace')}
+              </Button>
+            ) : (
+              <Button
+                nativeButton={false}
+                render={
+                  <a
+                    href={googleMapsCoordinatesHref(selectedPoint)}
+                    rel="noreferrer"
+                    target="_blank"
+                  />
+                }
+                size="sm"
+                variant="outline"
+              >
+                <MapPinned aria-hidden="true" data-icon="inline-start" />
+                {t('viewPlace')}
+              </Button>
+            )}
             <Button
               nativeButton={false}
               render={

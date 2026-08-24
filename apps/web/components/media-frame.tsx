@@ -4,7 +4,6 @@ import { cva } from 'class-variance-authority';
 import Image from 'next/image';
 import { useState } from 'react';
 
-import { MediaAttribution } from '@/components/media-attribution';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { pexelsImageLoader } from '@/lib/media/pexels-loader';
 import { resolvePlaceCategoryFallback } from '@/lib/media/place-category-fallback';
@@ -37,17 +36,6 @@ export type MediaFrameProps = {
    */
   category?: TrovePlaceCategory;
   className?: string;
-  /**
-   * Where the editorial credit goes. `overlay` is the default because the
-   * obligation belongs to the frame, not to each caller remembering it.
-   *
-   * `none` is for frames too small to carry text - a 40px row thumbnail - where
-   * a credit under every row turns a list of places into a list of
-   * photographers. It is not a way out of crediting: it commits the caller to a
-   * surface that opens the photograph large enough to credit it properly, which
-   * is what `PlaceDetailsSheet` is for.
-   */
-  credit?: 'none' | 'overlay';
   dataSlot: string;
   preload?: boolean;
   sizes?: string;
@@ -137,14 +125,15 @@ function EditorialImage({
  * The one frame every Trove media surface renders through.
  *
  * `TripMedia` and `PlaceMedia` differ only in the ladder that produced their
- * source, so the frame vocabulary, the branded fallback and the credit live
- * here once rather than twice.
+ * source, so the frame vocabulary and the branded fallback live here once
+ * rather than twice. The credit does not: a photograph is credited by the
+ * surface that owns it, never by a chip painted over the photograph itself.
+ * See `MediaAttribution`.
  */
 export function MediaFrame({
   alt,
   category = 'destination',
   className,
-  credit = 'overlay',
   dataSlot,
   preload = false,
   sizes,
@@ -182,9 +171,6 @@ export function MediaFrame({
           reference={resolved.reference}
           sizes={sizes}
         />
-        {credit === 'overlay' ? (
-          <MediaAttribution attribution={resolved.reference.attribution} />
-        ) : null}
       </span>
     );
   }

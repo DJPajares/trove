@@ -1,6 +1,7 @@
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
+import { MediaAttribution } from '@/components/media-attribution';
 import { MediaFrame } from '@/components/media-frame';
 import { landingHeroImage } from '@/lib/media/landing-images';
 
@@ -28,7 +29,9 @@ export function AuthShell({ children, headingId }: Readonly<AuthShellProps>) {
       aria-labelledby={headingId}
       className="grid min-h-[calc(100dvh-12rem)] items-center gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]"
     >
-      <div className="hidden lg:block">
+      {/* The credit sits with the photograph rather than over it, and is hidden
+          with it on the viewports where the photograph is not shown at all. */}
+      <div className="hidden flex-col gap-2 lg:flex">
         <MediaFrame
           alt={t('heroImageAlt')}
           className="h-full min-h-[28rem] w-full rounded-[var(--radius-2xl)]"
@@ -37,6 +40,7 @@ export function AuthShell({ children, headingId }: Readonly<AuthShellProps>) {
           source={{ kind: 'editorial', reference: landingHeroImage }}
           variant="card"
         />
+        <MediaAttribution attribution={landingHeroImage.attribution} />
       </div>
       <div className="mx-auto w-full max-w-md">{children}</div>
     </section>

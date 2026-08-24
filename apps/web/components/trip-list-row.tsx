@@ -2,7 +2,6 @@ import { CalendarDays, ChevronRight, MapPin } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 
-import { MediaAttribution } from '@/components/media-attribution';
 import { TripItineraryCoverage } from '@/components/trip-itinerary-coverage';
 import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
 import { TripMedia } from '@/components/trip-media';
@@ -68,13 +67,6 @@ export function TripListRow({ editorial, trip, variant = 'card' }: Readonly<Trip
         </p>
         {!isArchive && trip.lifecycle !== 'completed' && trip.itineraryCoverage ? (
           <TripItineraryCoverage className="pt-1" coverage={trip.itineraryCoverage} />
-        ) : null}
-        {editorial ? (
-          <MediaAttribution
-            attribution={editorial.attribution}
-            className="block truncate text-[0.65rem]"
-            linked={false}
-          />
         ) : null}
       </div>
 

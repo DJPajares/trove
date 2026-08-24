@@ -19,7 +19,7 @@ import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 
 import { EditorialSection } from '@/components/editorial-section';
 import { ExperienceRatingSummary } from '@/components/experience-rating-field';
-import { MediaAttribution } from '@/components/media-attribution';
+import { OfflineReadyStatus } from '@/components/offline-ready-status';
 import { PageState } from '@/components/page-state';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripDestinationActions } from '@/components/trip-destination-actions';
@@ -298,13 +298,6 @@ export function TripDetail({
             </p>
           </div>
         </section>
-        {/* This is the screen that owns the trip's photograph, so this is where
-            it is credited - under the frame rather than painted over it, and
-            outside it, where the scrim cannot reach. Every smaller frame showing
-            the same photograph leans on this one. */}
-        {editorial ? (
-          <MediaAttribution attribution={editorial.attribution} className="mt-2 block" />
-        ) : null}
       </div>
 
       {deleteError ? (
@@ -387,6 +380,8 @@ export function TripDetail({
           value={trip.startingLocation?.name ?? t('startingLocationUnavailable')}
         />
       </div>
+
+      {trip.lifecycle !== 'completed' ? <OfflineReadyStatus tripId={trip.id} /> : null}
 
       {trip.notes ? (
         <TripFact

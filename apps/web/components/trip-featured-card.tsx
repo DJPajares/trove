@@ -2,7 +2,6 @@ import { Info } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 
-import { MediaAttribution } from '@/components/media-attribution';
 import { TripDestinationActions } from '@/components/trip-destination-actions';
 import { TripItineraryCoverage } from '@/components/trip-itinerary-coverage';
 import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
@@ -41,12 +40,6 @@ export function TripFeaturedCard({ editorial, trip }: Readonly<TripFeaturedCardP
             source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
             variant="card"
           />
-          {editorial ? (
-            <MediaAttribution
-              attribution={editorial.attribution}
-              className="block px-4 py-2 md:hidden"
-            />
-          ) : null}
         </div>
 
         <div className="flex min-w-0 flex-col justify-center gap-4 p-5 sm:p-6 lg:p-8">
@@ -99,10 +92,6 @@ export function TripFeaturedCard({ editorial, trip }: Readonly<TripFeaturedCardP
                   }
             }
           />
-
-          {editorial ? (
-            <MediaAttribution attribution={editorial.attribution} className="hidden md:inline" />
-          ) : null}
         </div>
       </div>
     </section>

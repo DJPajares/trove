@@ -129,8 +129,7 @@ export type OfflineReadyStatusProps = {
   /**
    * `detailed` is the full account, for a surface whose subject is the trip's
    * local copy. `compact` leads with the state and the one action and puts the
-   * rest behind a disclosure, for a surface where offline readiness is a
-   * supporting fact rather than the point.
+   * rest behind a disclosure.
    */
   variant?: 'compact' | 'detailed';
 };
@@ -232,6 +231,7 @@ export function OfflineReadyStatus({
   const lastPreparedLabel = state.readiness.lastPreparedAt
     ? t('lastPrepared', { date: dateFormatter.format(new Date(state.readiness.lastPreparedAt)) })
     : t('notPrepared');
+
   const isCompact = variant === 'compact';
 
   const prepareButton = (

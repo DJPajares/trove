@@ -40,10 +40,6 @@ export function TripListRow({ editorial, trip }: Readonly<TripListRowProps>) {
         <TripMedia
           alt={editorial ? mediaTranslations('alt.tripEditorial', { name: subjectName }) : ''}
           className="size-full"
-          // A thumbnail this size cannot carry a legible credit, and a credit
-          // under every row reads as a list of photographers. The trip's own
-          // screen shows this photograph large, and credits it there.
-          credit="none"
           sizes="64px"
           source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
           variant="thumbnail"

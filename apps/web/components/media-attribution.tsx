@@ -1,6 +1,5 @@
 'use client';
 
-import { cva } from 'class-variance-authority';
 import { useTranslations } from 'next-intl';
 
 import type { EditorialImageAttribution } from '@/lib/media/editorial-images';
@@ -12,24 +11,6 @@ import { cn } from '@/lib/utils';
  */
 const PROVIDER_LABELS: Record<string, string> = { pexels: 'Pexels' };
 
-const attributionVariants = cva('text-[length:var(--text-metadata)] leading-tight', {
-  variants: {
-    variant: {
-      /**
-       * Bottom-left inside the frame, in the corner a landscape photograph is
-       * least likely to put its subject. The chip carries its own surface so
-       * the credit reads over any photograph without a scrim dulling the whole
-       * image, and it inherits the theme rather than assuming a dark one.
-       */
-      overlay:
-        'absolute bottom-2 left-2 z-10 max-w-[calc(100%-1rem)] truncate rounded-[var(--radius-sm)] bg-background/75 px-2 py-1 text-muted-foreground shadow-[var(--shadow-control)] backdrop-blur-sm',
-      /** For frames too small to carry text, credited on the row instead. */
-      inline: 'text-muted-foreground',
-    },
-  },
-  defaultVariants: { variant: 'overlay' },
-});
-
 type MediaAttributionProps = {
   attribution: EditorialImageAttribution;
   className?: string;
@@ -39,11 +20,16 @@ type MediaAttributionProps = {
    * be plain text to stay valid and keyboard-sane.
    */
   linked?: boolean;
-  variant?: 'inline' | 'overlay';
 };
 
 /**
- * The credit that has to accompany every editorial photograph Trove renders.
+ * The credit that accompanies an editorial photograph.
+ *
+ * It never sits inside the photograph's own frame. A credit painted over every
+ * image is a chip the reader learns to ignore and a layer every overlay above
+ * it has to work around; instead each photograph is credited on the surface
+ * that owns it - a place in its details view, a trip cover on the trip's own
+ * screen, the landing photography in the page footer.
  *
  * The photographer and the provider are real links wherever an anchor is
  * allowed, so the obligation is met by something a keyboard can reach rather
@@ -54,7 +40,6 @@ export function MediaAttribution({
   attribution,
   className,
   linked = true,
-  variant = 'overlay',
 }: Readonly<MediaAttributionProps>) {
   const t = useTranslations('media');
   const providerName = PROVIDER_LABELS[attribution.providerName] ?? attribution.providerName;
@@ -76,9 +61,11 @@ export function MediaAttribution({
 
   return (
     <span
-      className={cn(attributionVariants({ variant }), className)}
+      className={cn(
+        'text-[length:var(--text-metadata)] leading-tight text-muted-foreground',
+        className,
+      )}
       data-slot="media-attribution"
-      data-translucent-surface={variant === 'overlay' ? true : undefined}
     >
       {t.rich('attribution.credit', {
         photographer: link(

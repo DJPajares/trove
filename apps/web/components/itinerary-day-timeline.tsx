@@ -7,6 +7,7 @@ import {
   Copy,
   Ellipsis,
   ExternalLink,
+  MapPin,
   Pencil,
   Trash2,
 } from 'lucide-react';
@@ -53,7 +54,9 @@ export type ItineraryDayTimelineProps = {
   onModeChange: (segment: ItineraryRouteSegment, mode: RouteTravelMode) => void;
   onMoveItem: (item: ItineraryItem, dayId: string | null, position: number) => void;
   onSelectBase: (tripPlaceId: string) => void;
+  /** Shows the stop's pin on the map - what clicking the row used to do. */
   onSelectItem: (item: ItineraryItem) => void;
+  onViewItemDetails: (item: ItineraryItem) => void;
   organizingItemId: string | null;
   resolveBase: (tripPlaceId: string) => Omit<TimelineStopView, 'mapsHref'> | null;
   resolveItem: (item: ItineraryItem) => TimelineStopView;
@@ -88,6 +91,7 @@ export function ItineraryDayTimeline({
   onMoveItem,
   onSelectBase,
   onSelectItem,
+  onViewItemDetails,
   organizingItemId,
   resolveBase,
   resolveItem,
@@ -241,6 +245,15 @@ export function ItineraryDayTimeline({
                     <Copy aria-hidden="true" />
                     {t('itemMenu.duplicate')}
                   </DropdownMenuItem>
+                  {/* What clicking the row used to do. The row now opens the
+                      place, so the map lives here - one deliberate step away
+                      rather than the thing every stray tap triggered. */}
+                  {view.located ? (
+                    <DropdownMenuItem onClick={() => onSelectItem(item)}>
+                      <MapPin aria-hidden="true" />
+                      {t('itemMenu.showOnMap')}
+                    </DropdownMenuItem>
+                  ) : null}
                   {view.mapsHref ? (
                     <DropdownMenuLinkItem
                       render={<a href={view.mapsHref} rel="noreferrer" target="_blank" />}
@@ -310,10 +323,9 @@ export function ItineraryDayTimeline({
             title={
               view.located ? (
                 <button
-                  aria-label={t('map.showItem', { name: view.name })}
-                  aria-pressed={view.selected}
+                  aria-label={t('viewDetailsFor', { name: view.name })}
                   className="rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
-                  onClick={() => onSelectItem(item)}
+                  onClick={() => onViewItemDetails(item)}
                   type="button"
                 >
                   {view.name}

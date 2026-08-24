@@ -19,6 +19,7 @@ import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 
 import { EditorialSection } from '@/components/editorial-section';
 import { ExperienceRatingSummary } from '@/components/experience-rating-field';
+import { MediaAttribution } from '@/components/media-attribution';
 import { PageState } from '@/components/page-state';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripDestinationActions } from '@/components/trip-destination-actions';
@@ -267,38 +268,44 @@ export function TripDetail({
           this is the one screen where the cover is the subject. The scrim is a
           fixed dark wash in both themes, because what it has to stay legible
           against is a photograph, not the page. */}
-      <section aria-labelledby="trip-detail-heading" className="relative isolate">
-        <TripMedia
-          alt={
-            editorial
-              ? mediaTranslations('alt.tripEditorial', { name: destinations ?? trip.name })
-              : ''
-          }
-          className="w-full"
-          // The page's Largest Contentful Paint by a distance.
-          preload
-          sizes="(max-width: 1023px) 100vw, 1024px"
-          source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
-          variant="hero"
-        />
-        {/* Bottom padding clears the credit chip the frame draws in the same
-            corner. `pointer-events-none` keeps that credit clickable through
-            this layer. */}
-        <div className="pointer-events-none absolute inset-0 flex flex-col justify-end gap-2 rounded-[var(--radius-2xl)] bg-gradient-to-t from-surface-overlay from-25% via-surface-overlay/70 to-transparent p-5 pb-12 sm:p-8 sm:pb-14">
-          <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-media-fallback-foreground/85 uppercase">
-            {destinations ?? t('destinationOpen')}
-          </p>
-          <h1
-            className="text-[length:var(--text-page-title)] leading-[1.08] font-semibold tracking-[-0.035em] text-pretty text-media-fallback-foreground md:text-[length:var(--text-immersive-title)] md:leading-[1.02]"
-            id="trip-detail-heading"
-          >
-            {trip.name}
-          </h1>
-          <p className="text-[length:var(--text-metadata)] font-medium text-media-fallback-foreground/85 tabular-nums">
-            {formatTripDateRange(trip.startDate, trip.endDate, locale)}
-          </p>
-        </div>
-      </section>
+      <div>
+        <section aria-labelledby="trip-detail-heading" className="relative isolate">
+          <TripMedia
+            alt={
+              editorial
+                ? mediaTranslations('alt.tripEditorial', { name: destinations ?? trip.name })
+                : ''
+            }
+            className="w-full"
+            // The page's Largest Contentful Paint by a distance.
+            preload
+            sizes="(max-width: 1023px) 100vw, 1024px"
+            source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
+            variant="hero"
+          />
+          <div className="pointer-events-none absolute inset-0 flex flex-col justify-end gap-2 rounded-[var(--radius-2xl)] bg-gradient-to-t from-surface-overlay from-25% via-surface-overlay/70 to-transparent p-5 sm:p-8">
+            <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-media-fallback-foreground/85 uppercase">
+              {destinations ?? t('destinationOpen')}
+            </p>
+            <h1
+              className="text-[length:var(--text-page-title)] leading-[1.08] font-semibold tracking-[-0.035em] text-pretty text-media-fallback-foreground md:text-[length:var(--text-immersive-title)] md:leading-[1.02]"
+              id="trip-detail-heading"
+            >
+              {trip.name}
+            </h1>
+            <p className="text-[length:var(--text-metadata)] font-medium text-media-fallback-foreground/85 tabular-nums">
+              {formatTripDateRange(trip.startDate, trip.endDate, locale)}
+            </p>
+          </div>
+        </section>
+        {/* This is the screen that owns the trip's photograph, so this is where
+            it is credited - under the frame rather than painted over it, and
+            outside it, where the scrim cannot reach. Every smaller frame showing
+            the same photograph leans on this one. */}
+        {editorial ? (
+          <MediaAttribution attribution={editorial.attribution} className="mt-2 block" />
+        ) : null}
+      </div>
 
       {deleteError ? (
         <Alert role="alert" variant="destructive">

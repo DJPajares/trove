@@ -120,9 +120,6 @@ export function PlaceDetailsSheet({
           <PlaceMedia
             alt={editorial ? mediaTranslations('alt.placeEditorial', { name }) : ''}
             category={category}
-            // The credit belongs to the section below, where it reads as a
-            // credit rather than as a chip over the photograph.
-            credit="none"
             sizes="(max-width: 768px) 100vw, 30rem"
             source={resolvePlaceMediaSource({ editorial })}
             variant="card"
@@ -149,7 +146,7 @@ export function PlaceDetailsSheet({
               it would only say the same word twice. */}
           {editorial ? (
             <div className="border-t border-border-subtle pt-4">
-              <MediaAttribution attribution={editorial.attribution} variant="inline" />
+              <MediaAttribution attribution={editorial.attribution} />
             </div>
           ) : null}
         </div>

@@ -178,7 +178,11 @@ export function TripPlacesPanel({
           const hasScheduledDay = Boolean(placeUse?.[tripPlace.id]?.dayDates.length);
 
           return (
-            <Item className="gap-3 px-3 py-2.5" key={tripPlace.id} variant="outline">
+            <Item
+              className="relative gap-3 px-3 py-2.5 hover:bg-surface-hover"
+              key={tripPlace.id}
+              variant="outline"
+            >
               {tripPlace.place.kind === 'custom' ? (
                 <ItemMedia
                   className="size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
@@ -196,9 +200,6 @@ export function TripPlacesPanel({
                     }
                     category={category}
                     className="size-full"
-                    // A thumbnail this size cannot carry a legible credit; the
-                    // details sheet opens the photograph and credits it there.
-                    credit="none"
                     sizes="40px"
                     source={resolvePlaceMediaSource({ editorial })}
                     variant="thumbnail"
@@ -208,7 +209,19 @@ export function TripPlacesPanel({
 
               <ItemContent className="min-w-0 gap-0.5">
                 <ItemTitle className="flex min-w-0 items-center gap-2">
-                  <span className="min-w-0 truncate">{name}</span>
+                  {/* The row opens the place, but the row cannot be a button:
+                      it already contains one. The name is the button, and it
+                      stretches its own hit area over the whole row - so a tap
+                      anywhere opens the details, while the menu stays above it
+                      and a keyboard reaches exactly two stops per row. */}
+                  <button
+                    aria-label={t('viewDetails', { name })}
+                    className="min-w-0 truncate rounded-[var(--radius-sm)] text-left outline-none after:absolute after:inset-0 after:rounded-[inherit] focus-visible:after:ring-3 focus-visible:after:ring-ring/40"
+                    onClick={() => setDetailsPlace(tripPlace)}
+                    type="button"
+                  >
+                    {name}
+                  </button>
                   {hasScheduledDay ? (
                     <CheckCircle2
                       aria-hidden="true"
@@ -241,7 +254,9 @@ export function TripPlacesPanel({
                 ))}
               </ItemContent>
 
-              <ItemActions className="shrink-0">
+              {/* Above the name's stretched hit area, or the menu would be
+                  unreachable. */}
+              <ItemActions className="relative z-10 shrink-0">
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={

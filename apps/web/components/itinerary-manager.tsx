@@ -28,6 +28,7 @@ import { ItineraryDayTimeline } from '@/components/itinerary-day-timeline';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
 import { ItineraryPlacesDrawer } from '@/components/itinerary-places-drawer';
+import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { usePreferences } from '@/components/preferences-provider';
@@ -118,6 +119,7 @@ import {
 } from '@/lib/itinerary/api';
 import { useOnlineStatus } from '@/components/trip-sync-status';
 import { useCompactItinerary } from '@/hooks/use-compact-itinerary';
+import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { buildDaySequence, dayStopNumbers, resolveDailyBases } from '@/lib/itinerary/day-sequence';
 import { scheduledPlaceUse } from '@/lib/itinerary/places';
 import { itineraryDayRouteRevision, itineraryPlanScoreRevision } from '@/lib/itinerary/routes';
@@ -126,6 +128,7 @@ import {
   dailyBasePoints,
   type ItineraryMapPoint,
 } from '@/lib/maps/itinerary-map';
+import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
 import { useInViewOnce } from '@/lib/plan-score/use-in-view-once';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import {
@@ -492,6 +495,45 @@ export function ItineraryManager({
     // A provider Place's coordinates now arrive with it, so a pin is drawn on the
     // first render rather than appearing once a lookup returns.
     return tripPlace.place.location ?? null;
+  }
+
+  /**
+   * The place whose details are open, and the one photograph that goes with it.
+   *
+   * The itinerary asks for no photography of its own - its rows are numbered
+   * markers, not thumbnails - so the subject list is empty until someone opens a
+   * place, and `useEditorialImages` sends nothing for an empty list. Opening one
+   * place asks for one subject, under the provider's name for it rather than the
+   * traveller's nickname, exactly as the Places list does.
+   */
+  const [detailsPlace, setDetailsPlace] = useState<ItineraryTripPlace | null>(null);
+  const detailsProviderName =
+    detailsPlace && detailsPlace.place.kind === 'provider'
+      ? (detailsPlace.place.snapshot?.name ?? detailsPlace.place.providerLabel)
+      : null;
+  const detailsSubjects: EditorialSubject[] =
+    detailsPlace && detailsProviderName
+      ? [
+          {
+            category: detailsPlace.place.snapshot?.category,
+            name: detailsProviderName,
+            placeId: detailsPlace.place.id,
+          },
+        ]
+      : [];
+  const detailsImages = useEditorialImages(detailsSubjects);
+  const detailsEditorial = detailsSubjects[0]
+    ? (detailsImages.get(editorialSubjectKey(detailsSubjects[0])) ?? null)
+    : null;
+
+  /** What the shared sheet cannot know: this place's standing on this trip. */
+  function detailsMeta(tripPlace: ItineraryTripPlace): PlaceDetailsRow[] {
+    return [
+      tripPlace.priority
+        ? { label: t('priorityLabel'), value: t(`priority.${tripPlace.priority}`) }
+        : null,
+      tripPlace.note ? { label: t('notes'), value: tripPlace.note } : null,
+    ].filter((row): row is PlaceDetailsRow => row !== null);
   }
 
   // One reading of where the day starts and ends, and one counting of its stops,
@@ -1715,6 +1757,7 @@ export function ItineraryManager({
                     }
                     onSelectBase={selectBaseOnMap}
                     onSelectItem={selectItemOnMap}
+                    onViewItemDetails={(item) => setDetailsPlace(item.tripPlace)}
                     organizingItemId={organizingItemId}
                     resolveBase={(tripPlaceId) => {
                       const tripPlace = tripPlaceById(tripPlaceId);
@@ -1781,6 +1824,10 @@ export function ItineraryManager({
                     onClearSelection={clearMapSelection}
                     onSelectPoint={handleMapPointSelection}
                     onViewItem={viewMapItem}
+                    onViewPlaceDetails={(point) => {
+                      const tripPlace = tripPlaceById(point.tripPlaceId);
+                      if (tripPlace) setDetailsPlace(tripPlace);
+                    }}
                     points={mapPoints}
                     routePolylines={routePolylines}
                     selectedPointId={selectedMapPointId}
@@ -1821,10 +1868,9 @@ export function ItineraryManager({
                     <ItemTitle>
                       {hasMapLocation ? (
                         <button
-                          aria-label={t('map.showItem', { name })}
-                          aria-pressed={isMapSelected}
+                          aria-label={t('viewDetailsFor', { name })}
                           className="rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
-                          onClick={() => selectItemOnMap(item)}
+                          onClick={() => setDetailsPlace(item.tripPlace)}
                           type="button"
                         >
                           {name}
@@ -2542,6 +2588,17 @@ export function ItineraryManager({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {detailsPlace ? (
+        <PlaceDetailsSheet
+          editorial={detailsEditorial}
+          meta={detailsMeta(detailsPlace)}
+          name={placeName(detailsPlace) ?? t('providerPlace')}
+          officialName={detailsPlace.customName?.trim() ? detailsProviderName : null}
+          onOpenChange={(open) => !open && setDetailsPlace(null)}
+          place={detailsPlace.place}
+        />
+      ) : null}
     </section>
   );
 }

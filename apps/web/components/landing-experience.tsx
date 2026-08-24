@@ -7,9 +7,10 @@ import type { ReactNode } from 'react';
 
 import { EditorialSection } from '@/components/editorial-section';
 import { LandingHero } from '@/components/landing-hero';
+import { MediaAttribution } from '@/components/media-attribution';
 import { MediaFrame } from '@/components/media-frame';
 import { Button } from '@/components/ui/button';
-import { landingLiveItImage } from '@/lib/media/landing-images';
+import { landingHeroImage, landingLiveItImage } from '@/lib/media/landing-images';
 import { motionDuration, motionEase } from '@/lib/motion';
 
 const SUPPORTING_KEYS = ['saved', 'routes', 'logistics', 'expenses', 'offline'] as const;
@@ -84,7 +85,6 @@ export function LandingExperience() {
             <MediaFrame
               alt={t('liveImageAlt')}
               className="mt-4 h-40 w-full max-w-sm sm:h-48"
-              credit="overlay"
               dataSlot="landing-live-media"
               sizes="(max-width: 639px) 100vw, 24rem"
               source={{ kind: 'editorial', reference: landingLiveItImage }}
@@ -145,6 +145,21 @@ export function LandingExperience() {
           </Button>
         </EditorialSection>
       </Reveal>
+
+      {/* The page's photography, credited once at its foot rather than as a chip
+          over each photograph. Both references are pinned, so this list is as
+          fixed as the images it credits. */}
+      <footer className="flex flex-col gap-1 border-t border-border pt-6 pb-2">
+        <h2 className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-text-subtle uppercase">
+          {t('photographyTitle')}
+        </h2>
+        {[landingHeroImage, landingLiveItImage].map((reference) => (
+          <MediaAttribution
+            attribution={reference.attribution}
+            key={reference.attribution.providerPageUrl}
+          />
+        ))}
+      </footer>
     </div>
   );
 }

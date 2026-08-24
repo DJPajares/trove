@@ -16,6 +16,8 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { ContentSkeleton } from '@/components/content-skeleton';
+import { PageState } from '@/components/page-state';
 import { SearchField } from '@/components/search-field';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,7 +36,6 @@ import {
   ItemMedia,
   ItemTitle,
 } from '@/components/ui/item';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   searchTrove,
   type SearchResponse,
@@ -82,22 +83,6 @@ function ResultRow({
         {description ? <ItemDescription>{description}</ItemDescription> : null}
       </ItemContent>
     </Item>
-  );
-}
-
-function SearchLoading() {
-  return (
-    <div aria-hidden="true" className="space-y-3 p-5 sm:p-6">
-      {Array.from({ length: 3 }, (_, index) => (
-        <div className="flex items-center gap-3" key={index}>
-          <Skeleton className="size-9 shrink-0 motion-reduce:animate-none" />
-          <div className="flex-1 space-y-2">
-            <Skeleton className="h-4 w-2/5 motion-reduce:animate-none" />
-            <Skeleton className="h-3 w-3/5 motion-reduce:animate-none" />
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -220,24 +205,25 @@ export function GlobalSearch() {
                     ? t('errorTitle')
                     : ''}
           </p>
-          {status === 'loading' ? <SearchLoading /> : null}
+          {status === 'loading' ? <ContentSkeleton className="p-5 sm:p-6" shape="list" /> : null}
           {status === 'error' ? (
-            <div className="flex min-h-48 flex-col items-center justify-center gap-3 px-6 text-center">
-              <CircleAlert aria-hidden="true" className="size-5 text-destructive" />
-              <div className="space-y-1">
-                <p className="font-medium">{t('errorTitle')}</p>
-                <p className="text-sm text-muted-foreground">{t('errorDescription')}</p>
-              </div>
-            </div>
+            <PageState
+              className="min-h-48 justify-center px-6"
+              description={t('errorDescription')}
+              headingLevel={2}
+              icon={<CircleAlert aria-hidden="true" />}
+              kind="error"
+              title={t('errorTitle')}
+            />
           ) : null}
           {status === 'idle' ? (
-            <div className="flex min-h-48 flex-col items-center justify-center gap-2 px-6 text-center">
-              <Search aria-hidden="true" className="size-5 text-muted-foreground" />
-              <p className="font-medium">{t('startTitle')}</p>
-              <p className="max-w-sm text-sm text-muted-foreground">
-                {trimmedQuery.length === 1 ? t('minChars') : t('startDescription')}
-              </p>
-            </div>
+            <PageState
+              className="min-h-48 justify-center px-6"
+              description={trimmedQuery.length === 1 ? t('minChars') : t('startDescription')}
+              headingLevel={2}
+              icon={<Search aria-hidden="true" />}
+              title={t('startTitle')}
+            />
           ) : null}
           {status !== 'idle' && status !== 'error' && status !== 'loading' && response ? (
             <div className="space-y-6 p-5 sm:p-6">
@@ -266,10 +252,12 @@ export function GlobalSearch() {
                   </section>
                 ))
               ) : (
-                <div className="py-8 text-center">
-                  <p className="font-medium">{t('noResultsTitle')}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{t('noResultsDescription')}</p>
-                </div>
+                <PageState
+                  description={t('noResultsDescription')}
+                  headingLevel={2}
+                  scope="inline"
+                  title={t('noResultsTitle')}
+                />
               )}
 
               {response.external.status === 'ok' ? (

@@ -5,6 +5,7 @@ import { CircleAlert, LogOut, ShieldCheck, UserRound } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
+import { EditorialSection } from '@/components/editorial-section';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -27,22 +28,13 @@ export function PrivacySecuritySettings() {
 
   return (
     <Card className="gap-0 py-0" id="privacy-security">
-      <section aria-labelledby="privacy-security-heading" className="p-5 sm:p-6">
-        <div className="flex items-start gap-3">
-          <ShieldCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand" />
-          <div className="min-w-0">
-            <h2
-              className="text-lg leading-6 font-semibold tracking-tight"
-              id="privacy-security-heading"
-            >
-              {t('title')}
-            </h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-              {t('description')}
-            </p>
-          </div>
-        </div>
-
+      <EditorialSection
+        className="p-5 sm:p-6"
+        description={t('description')}
+        headingId="privacy-security-heading"
+        icon={<ShieldCheck aria-hidden="true" />}
+        title={t('title')}
+      >
         <div className="mt-6 space-y-3 border-y border-border py-4">
           <p className="text-sm font-medium text-foreground">{t('privateByDefaultTitle')}</p>
           <ul className="space-y-1.5 text-sm leading-6 text-muted-foreground">
@@ -53,7 +45,7 @@ export function PrivacySecuritySettings() {
         </div>
 
         <p className="mt-4 text-xs leading-5 text-text-subtle">{t('futureSharingNote')}</p>
-      </section>
+      </EditorialSection>
     </Card>
   );
 }
@@ -110,22 +102,13 @@ export function AccountSettings() {
 
   return (
     <Card className="gap-0 py-0" id="account">
-      <section aria-labelledby="account-settings-heading" className="p-5 sm:p-6">
-        <div className="flex items-start gap-3">
-          <UserRound aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand" />
-          <div className="min-w-0">
-            <h2
-              className="text-lg leading-6 font-semibold tracking-tight"
-              id="account-settings-heading"
-            >
-              {t('title')}
-            </h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-              {t('description')}
-            </p>
-          </div>
-        </div>
-
+      <EditorialSection
+        className="p-5 sm:p-6"
+        description={t('description')}
+        headingId="account-settings-heading"
+        icon={<UserRound aria-hidden="true" />}
+        title={t('title')}
+      >
         {hasSignOutError ? (
           <Alert className="mt-5" role="alert" variant="destructive">
             <CircleAlert aria-hidden="true" />
@@ -158,7 +141,7 @@ export function AccountSettings() {
         </div>
 
         <p className="mt-4 text-xs leading-5 text-text-subtle">{t('signOutNote')}</p>
-      </section>
+      </EditorialSection>
 
       <AlertDialog onOpenChange={setShowUnsyncedWarning} open={showUnsyncedWarning}>
         <AlertDialogContent>

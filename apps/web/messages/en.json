@@ -967,20 +967,18 @@
     }
   },
   "placeDetail": {
+    "address": "Address",
     "close": "Close place details",
+    "coordinates": "Coordinates",
     "customDescription": "A private Trove place.",
-    "customPlace": "Custom place",
-    "freshness": "Google data refreshed when this view opened. Check before making a time-sensitive plan.",
-    "googleMaps": "Google Maps",
-    "googleRating": "Google rating from {count} reviews",
-    "openingHours": "Typical opening hours",
+    "googleMaps": "Open in Google Maps",
+    "note": "Note",
     "place": "Place",
-    "refreshing": "Refreshing Google details...",
-    "saved": "Saved in Trove",
-    "tripContext": "Considering for {trip}",
-    "unavailable": "Google details are unavailable right now. Your saved and trip context is still available.",
-    "unavailableDescription": "Current provider details are unavailable.",
-    "website": "Website"
+    "snapshotDated": "From Google on {date}",
+    "snapshotStale": "From Google on {date}. Due a refresh.",
+    "source": "Details",
+    "timeZone": "Time zone",
+    "unavailableDescription": "Current provider details are unavailable."
   },
   "itinerary": {
     "title": "Itinerary for {trip}",
@@ -1520,6 +1518,8 @@
     "providerPlace": "Google place",
     "providerDetailsUnavailable": "Current place details are unavailable.",
     "savedOn": "Saved {date}",
+    "savedOnLabel": "Saved",
+    "collectionsLabel": "Collections",
     "manageCollections": "Manage collections for {name}",
     "manageCollectionsAction": "Manage collections",
     "manageCollectionsTitle": "Manage collections",

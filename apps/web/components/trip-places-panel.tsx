@@ -11,8 +11,9 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { useState } from 'react';
 
-import { MediaAttribution } from '@/components/media-attribution';
+import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
 import { PlaceMedia } from '@/components/place-media';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,7 +21,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLinkItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
@@ -46,7 +46,6 @@ import {
   type EditorialSubject,
 } from '@/lib/media/editorial-images';
 import { resolvePlaceMediaSource } from '@/lib/media/trip-media';
-import { googleMapsPlaceHref } from '@/lib/saved/api';
 import type { TripPlace, TripPlacePriority } from '@/lib/trip-places/api';
 import {
   resolveProviderPlaceName,
@@ -144,170 +143,191 @@ export function TripPlacesPanel({
     })
     .slice(0, MAX_EDITORIAL_IMAGE_SUBJECTS);
   const editorialImages = useEditorialImages(editorialSubjects);
+  const [detailsPlace, setDetailsPlace] = useState<TripPlace | null>(null);
+
+  /** The photograph resolved for a place by the one batch above, or none. */
+  const editorialFor = (tripPlace: TripPlace) => {
+    const providerName = resolveProviderPlaceName(tripPlace);
+    if (!providerName) return null;
+    return (
+      editorialImages.get(
+        editorialSubjectKey({ category: tripPlace.place.snapshot?.category, name: providerName }),
+      ) ?? null
+    );
+  };
+
+  /** What the details sheet cannot know: this place's standing on this trip. */
+  const detailsMeta = (tripPlace: TripPlace): PlaceDetailsRow[] =>
+    [
+      tripPlace.priority
+        ? { label: t('priorityLabel'), value: t(`priority.${tripPlace.priority}`) }
+        : null,
+      tripPlace.note ? { label: t('note'), value: tripPlace.note } : null,
+    ].filter((row): row is PlaceDetailsRow => row !== null);
 
   return (
-    <ItemGroup aria-label={t('listLabel')} className="gap-2" variant="list">
-      {tripPlaces.map((tripPlace) => {
-        const name = placeName(tripPlace);
-        const providerName = resolveProviderPlaceName(tripPlace);
-        const category = tripPlace.place.snapshot?.category;
-        const editorial = providerName
-          ? editorialImages.get(editorialSubjectKey({ category, name: providerName }))
-          : null;
-        const official = officialName(tripPlace);
-        const usage = usageLabels(tripPlace);
-        const hasScheduledDay = Boolean(placeUse?.[tripPlace.id]?.dayDates.length);
+    <>
+      <ItemGroup aria-label={t('listLabel')} className="gap-2" variant="list">
+        {tripPlaces.map((tripPlace) => {
+          const name = placeName(tripPlace);
+          const providerName = resolveProviderPlaceName(tripPlace);
+          const category = tripPlace.place.snapshot?.category;
+          const editorial = editorialFor(tripPlace);
+          const official = officialName(tripPlace);
+          const usage = usageLabels(tripPlace);
+          const hasScheduledDay = Boolean(placeUse?.[tripPlace.id]?.dayDates.length);
 
-        return (
-          <Item className="gap-3 px-3 py-2.5" key={tripPlace.id} variant="outline">
-            {tripPlace.place.kind === 'custom' ? (
-              <ItemMedia
-                className="size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
-                variant="icon"
-              >
-                <MapPinned aria-hidden="true" className="size-4" />
-              </ItemMedia>
-            ) : (
-              <ItemMedia className="size-10 rounded-[var(--radius-md)]" variant="default">
-                <PlaceMedia
-                  alt={
-                    editorial && providerName
-                      ? mediaTranslations('alt.placeEditorial', { name: providerName })
-                      : ''
-                  }
-                  category={category}
-                  className="size-full"
-                  // A thumbnail this size cannot carry a legible credit, so the
-                  // row renders it below instead.
-                  credit="inline"
-                  sizes="40px"
-                  source={resolvePlaceMediaSource({ editorial })}
-                  variant="thumbnail"
-                />
-              </ItemMedia>
-            )}
-
-            <ItemContent className="min-w-0 gap-0.5">
-              <ItemTitle className="flex min-w-0 items-center gap-2">
-                <span className="min-w-0 truncate">{name}</span>
-                {hasScheduledDay ? (
-                  <CheckCircle2
-                    aria-hidden="true"
-                    className="size-3.5 shrink-0 text-muted-foreground"
-                  />
-                ) : null}
-                {/* Saved Places and Trip Places are independent relationships to the
-                    same Place, so whether this one is also saved is worth showing. */}
-                {tripPlace.isSaved ? <Badge>{t('alsoSaved')}</Badge> : null}
-              </ItemTitle>
-              {/* A renamed Place still says which one it actually is. */}
-              {official ? (
-                <p className="line-clamp-1 text-sm font-medium text-foreground">{official}</p>
-              ) : null}
-              <ItemDescription className="line-clamp-1">
-                {placeDescription(tripPlace)}
-              </ItemDescription>
-              {/* A locationless place is still fully usable everywhere else — it
-                  just cannot be mapped or routed until it has one (PRD 12). */}
-              {!tripPlace.place.location ? (
-                <p className="inline-flex items-center gap-1.5 text-xs text-text-subtle">
-                  <MapPinOff aria-hidden="true" className="size-3.5 shrink-0" />
-                  {t('noLocation')}
-                </p>
-              ) : null}
-              {usage.map((label) => (
-                <p className="text-xs text-muted-foreground" key={label}>
-                  {label}
-                </p>
-              ))}
-              {editorial ? (
-                <MediaAttribution attribution={editorial.attribution} variant="inline" />
-              ) : null}
-            </ItemContent>
-
-            <ItemActions className="shrink-0">
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      aria-label={t('actionsFor', { name })}
-                      size="icon-sm"
-                      type="button"
-                      variant="ghost"
-                    />
-                  }
+          return (
+            <Item className="gap-3 px-3 py-2.5" key={tripPlace.id} variant="outline">
+              {tripPlace.place.kind === 'custom' ? (
+                <ItemMedia
+                  className="size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
+                  variant="icon"
                 >
-                  <Ellipsis aria-hidden="true" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-48">
-                  {/* Only the itinerary has a day in context to add to. */}
-                  {onAddToDay && addToDayLabel ? (
-                    <DropdownMenuItem
-                      disabled={busyPlaceId === tripPlace.id}
-                      onClick={() => onAddToDay(tripPlace)}
-                    >
-                      <CalendarPlus aria-hidden="true" />
-                      {addToDayLabel}
-                    </DropdownMenuItem>
+                  <MapPinned aria-hidden="true" className="size-4" />
+                </ItemMedia>
+              ) : (
+                <ItemMedia className="size-10 rounded-[var(--radius-md)]" variant="default">
+                  <PlaceMedia
+                    alt={
+                      editorial && providerName
+                        ? mediaTranslations('alt.placeEditorial', { name: providerName })
+                        : ''
+                    }
+                    category={category}
+                    className="size-full"
+                    // A thumbnail this size cannot carry a legible credit; the
+                    // details sheet opens the photograph and credits it there.
+                    credit="none"
+                    sizes="40px"
+                    source={resolvePlaceMediaSource({ editorial })}
+                    variant="thumbnail"
+                  />
+                </ItemMedia>
+              )}
+
+              <ItemContent className="min-w-0 gap-0.5">
+                <ItemTitle className="flex min-w-0 items-center gap-2">
+                  <span className="min-w-0 truncate">{name}</span>
+                  {hasScheduledDay ? (
+                    <CheckCircle2
+                      aria-hidden="true"
+                      className="size-3.5 shrink-0 text-muted-foreground"
+                    />
                   ) : null}
+                  {/* Saved Places and Trip Places are independent relationships to the
+                    same Place, so whether this one is also saved is worth showing. */}
+                  {tripPlace.isSaved ? <Badge>{t('alsoSaved')}</Badge> : null}
+                </ItemTitle>
+                {/* A renamed Place still says which one it actually is. */}
+                {official ? (
+                  <p className="line-clamp-1 text-sm font-medium text-foreground">{official}</p>
+                ) : null}
+                <ItemDescription className="line-clamp-1">
+                  {placeDescription(tripPlace)}
+                </ItemDescription>
+                {/* A locationless place is still fully usable everywhere else — it
+                  just cannot be mapped or routed until it has one (PRD 12). */}
+                {!tripPlace.place.location ? (
+                  <p className="inline-flex items-center gap-1.5 text-xs text-text-subtle">
+                    <MapPinOff aria-hidden="true" className="size-3.5 shrink-0" />
+                    {t('noLocation')}
+                  </p>
+                ) : null}
+                {usage.map((label) => (
+                  <p className="text-xs text-muted-foreground" key={label}>
+                    {label}
+                  </p>
+                ))}
+              </ItemContent>
 
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger>
-                      {t('priorityMenuLabel')}
-                      {/* The current priority stays readable without opening the submenu. */}
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        {t(`priority.${tripPlace.priority ?? 'none'}`)}
-                      </span>
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent>
-                      <DropdownMenuRadioGroup
-                        onValueChange={(value) =>
-                          onPriorityChange(
-                            tripPlace,
-                            value === 'none' ? null : (value as TripPlacePriority),
-                          )
-                        }
-                        value={tripPlace.priority ?? 'none'}
+              <ItemActions className="shrink-0">
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        aria-label={t('actionsFor', { name })}
+                        size="icon-sm"
+                        type="button"
+                        variant="ghost"
+                      />
+                    }
+                  >
+                    <Ellipsis aria-hidden="true" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-48">
+                    {/* Only the itinerary has a day in context to add to. */}
+                    {onAddToDay && addToDayLabel ? (
+                      <DropdownMenuItem
+                        disabled={busyPlaceId === tripPlace.id}
+                        onClick={() => onAddToDay(tripPlace)}
                       >
-                        {priorities.map((priority) => (
-                          <DropdownMenuRadioItem key={priority} value={priority}>
-                            {t(`priority.${priority}`)}
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
+                        <CalendarPlus aria-hidden="true" />
+                        {addToDayLabel}
+                      </DropdownMenuItem>
+                    ) : null}
 
-                  <DropdownMenuSeparator />
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>
+                        {t('priorityMenuLabel')}
+                        {/* The current priority stays readable without opening the submenu. */}
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {t(`priority.${tripPlace.priority ?? 'none'}`)}
+                        </span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        <DropdownMenuRadioGroup
+                          onValueChange={(value) =>
+                            onPriorityChange(
+                              tripPlace,
+                              value === 'none' ? null : (value as TripPlacePriority),
+                            )
+                          }
+                          value={tripPlace.priority ?? 'none'}
+                        >
+                          {priorities.map((priority) => (
+                            <DropdownMenuRadioItem key={priority} value={priority}>
+                              {t(`priority.${priority}`)}
+                            </DropdownMenuRadioItem>
+                          ))}
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
 
-                  {googleMapsPlaceHref(tripPlace.place) ? (
-                    <DropdownMenuLinkItem
-                      render={
-                        <a
-                          href={googleMapsPlaceHref(tripPlace.place)!}
-                          rel="noreferrer"
-                          target="_blank"
-                        />
-                      }
-                    >
+                    <DropdownMenuSeparator />
+
+                    {/* A Custom Place has details worth showing too, so this is no
+                      longer conditional on having a Google listing to link out to. */}
+                    <DropdownMenuItem onClick={() => setDetailsPlace(tripPlace)}>
                       <Eye aria-hidden="true" />
                       {t('viewDetailsAction')}
-                    </DropdownMenuLinkItem>
-                  ) : null}
-                  <DropdownMenuItem onClick={() => onEditPlace(tripPlace)}>
-                    <Pencil aria-hidden="true" />
-                    {t('editPlaceAction')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onRemove(tripPlace)} variant="destructive">
-                    <Trash2 aria-hidden="true" />
-                    {t('removeAction')}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </ItemActions>
-          </Item>
-        );
-      })}
-    </ItemGroup>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onEditPlace(tripPlace)}>
+                      <Pencil aria-hidden="true" />
+                      {t('editPlaceAction')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onRemove(tripPlace)} variant="destructive">
+                      <Trash2 aria-hidden="true" />
+                      {t('removeAction')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </ItemActions>
+            </Item>
+          );
+        })}
+      </ItemGroup>
+
+      {detailsPlace ? (
+        <PlaceDetailsSheet
+          editorial={editorialFor(detailsPlace)}
+          meta={detailsMeta(detailsPlace)}
+          name={placeName(detailsPlace)}
+          officialName={officialName(detailsPlace)}
+          onOpenChange={(open) => !open && setDetailsPlace(null)}
+          place={detailsPlace.place}
+        />
+      ) : null}
+    </>
   );
 }

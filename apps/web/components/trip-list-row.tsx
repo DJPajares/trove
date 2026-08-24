@@ -2,7 +2,6 @@ import { CalendarDays } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 
-import { MediaAttribution } from '@/components/media-attribution';
 import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
 import { TripMedia } from '@/components/trip-media';
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
@@ -41,9 +40,10 @@ export function TripListRow({ editorial, trip }: Readonly<TripListRowProps>) {
         <TripMedia
           alt={editorial ? mediaTranslations('alt.tripEditorial', { name: subjectName }) : ''}
           className="size-full"
-          // A thumbnail this size cannot carry a legible credit, so the row
-          // renders it below instead.
-          credit="inline"
+          // A thumbnail this size cannot carry a legible credit, and a credit
+          // under every row reads as a list of photographers. The trip's own
+          // screen shows this photograph large, and credits it there.
+          credit="none"
           sizes="64px"
           source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
           variant="thumbnail"
@@ -64,15 +64,6 @@ export function TripListRow({ editorial, trip }: Readonly<TripListRowProps>) {
           {tripDestinationSummary(trip) ?? t('destinationOpen')}
           {trip.planningReadiness === 'ready' ? ` · ${t('ready')}` : ''}
         </p>
-        {editorial ? (
-          <MediaAttribution
-            attribution={editorial.attribution}
-            // The row is itself a link, so the credit cannot nest one here.
-            className="truncate"
-            linked={false}
-            variant="inline"
-          />
-        ) : null}
       </ItemContent>
     </Item>
   );

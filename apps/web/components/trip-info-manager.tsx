@@ -14,6 +14,7 @@ import {
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
 
+import { EditorialSection } from '@/components/editorial-section';
 import { PageState } from '@/components/page-state';
 import { TripSectionHeader } from '@/components/trip-section-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -260,7 +261,14 @@ export function TripInfoManager({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   if (status === 'loading') {
-    return <PageState className="mx-auto max-w-5xl" kind="loading" title={t('loading')} />;
+    return (
+      <PageState
+        className="mx-auto max-w-5xl"
+        kind="loading"
+        loadingShape="list"
+        title={t('loading')}
+      />
+    );
   }
   if (status === 'error' || !data) {
     return (
@@ -319,26 +327,24 @@ export function TripInfoManager({ tripId }: Readonly<{ tripId: string }>) {
       ) : (
         <div className="space-y-7">
           {pinnedEntries.length ? (
-            <section className="space-y-3">
-              <div>
-                <h2 className="text-lg font-semibold">{t('pinned')}</h2>
-                <p className="text-sm text-muted-foreground">{t('pinnedDescription')}</p>
-              </div>
+            <EditorialSection
+              description={t('pinnedDescription', { count: pinnedEntries.length })}
+              title={t('pinned')}
+            >
               <ItemGroup aria-label={t('pinned')} variant="list">
                 {pinnedEntries.map(renderEntry)}
               </ItemGroup>
-            </section>
+            </EditorialSection>
           ) : null}
           {otherEntries.length ? (
-            <section className="space-y-3">
-              <div>
-                <h2 className="text-lg font-semibold">{t('allEntries')}</h2>
-                <p className="text-sm text-muted-foreground">{t('allEntriesDescription')}</p>
-              </div>
+            <EditorialSection
+              description={t('allEntriesDescription', { count: otherEntries.length })}
+              title={t('allEntries')}
+            >
               <ItemGroup aria-label={t('allEntries')} variant="list">
                 {otherEntries.map(renderEntry)}
               </ItemGroup>
-            </section>
+            </EditorialSection>
           ) : null}
         </div>
       )}

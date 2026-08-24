@@ -1995,9 +1995,11 @@ export function ItineraryManager({
                           autoComplete="off"
                           autoFocus={!hasItemIdentity}
                           className="h-11 w-full min-w-0 rounded-[var(--radius-md)] border border-input bg-background py-2 text-base shadow-[var(--shadow-control)] md:text-sm"
+                          clearLabel={t('clearPlaceQuery')}
                           id="itinerary-place-or-plan"
                           placeholder={t('placeOrPlanPlaceholder')}
                           showClear={Boolean(placeQuery)}
+                          triggerLabel={t('openPlacePicker')}
                         />
                         <ComboboxContent>
                           <ComboboxEmpty>{t('placePickerEmpty')}</ComboboxEmpty>

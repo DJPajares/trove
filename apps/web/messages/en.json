@@ -98,6 +98,7 @@
     "currency": {
       "loading": "Loading currencies…",
       "open": "Open {label}",
+      "clear": "Clear {label}",
       "search": "Search currencies",
       "empty": "No currencies match this search."
     },
@@ -1177,6 +1178,8 @@
     "editDescription": "Change the plan, timing, or notes that will help.",
     "placeOrPlan": "Place or plan",
     "placeOrPlanPlaceholder": "Search trip places or type a plan",
+    "openPlacePicker": "Show trip places",
+    "clearPlaceQuery": "Clear the place search",
     "placeOrPlanHint": "Choose from this trip, create a flexible plan, or search Google when needed.",
     "placePickerEmpty": "No trip places yet. Type a plan to continue.",
     "useCustomPlan": "Use “{label}” as a plan",

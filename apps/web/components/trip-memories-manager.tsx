@@ -577,20 +577,22 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
         source={headSource}
         variant="hero"
       />
+      {/* Both layers sit over the credit chip the frame draws in the bottom
+          corner, so both stay `pointer-events-none` to keep it clickable; the
+          bottom padding below clears it visually. Only the rating takes events
+          back, because it is the one control in here. */}
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent"
       />
       <div
         className={cn(
-          'absolute inset-x-0 bottom-0 flex flex-wrap items-center gap-x-2 gap-y-1 p-4 sm:p-6',
-          // Clears the credit chip the frame draws in the same corner when the
-          // photograph is editorial rather than the traveller's own.
+          'pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-center gap-x-2 gap-y-1 p-4 sm:p-6',
           headSource.kind === 'editorial' && 'pb-10 sm:pb-12',
         )}
       >
         <p className="text-sm font-medium text-white/90">{dateRange}</p>
-        {tripRating}
+        <span className="pointer-events-auto">{tripRating}</span>
       </div>
     </div>
   ) : (

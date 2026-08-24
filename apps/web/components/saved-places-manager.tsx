@@ -19,9 +19,9 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { EditorialSection } from '@/components/editorial-section';
-import { MediaAttribution } from '@/components/media-attribution';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
+import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
 import { PlaceMedia } from '@/components/place-media';
 import { SearchField } from '@/components/search-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -77,7 +77,6 @@ import {
   createCustomPlace,
   fetchSavedPlaces,
   GOOGLE_PLACES_SEARCH_DEBOUNCE_MS,
-  googleMapsPlaceHref,
   removeCollection,
   removeFromCollection,
   renameCollection,
@@ -162,6 +161,7 @@ export function SavedPlacesManager() {
   const [savedPlaceToUnsave, setSavedPlaceToUnsave] = useState<SavedPlace | null>(null);
   const [unsaveError, setUnsaveError] = useState<string | null>(null);
   const [unsavingPlaceId, setUnsavingPlaceId] = useState<string | null>(null);
+  const [detailsPlace, setDetailsPlace] = useState<SavedPlace | null>(null);
 
   const refresh = useCallback(async () => {
     setStatus('loading');
@@ -272,6 +272,33 @@ export function SavedPlacesManager() {
     }))
     .slice(0, MAX_EDITORIAL_IMAGE_SUBJECTS);
   const editorialImages = useEditorialImages(editorialSubjects);
+
+  /** The photograph resolved for a place by the one batch above, or none. */
+  function getEditorialImage(savedPlace: SavedPlace) {
+    if (savedPlace.place.kind !== 'provider') return null;
+    return (
+      editorialImages.get(
+        editorialSubjectKey({
+          category: savedPlace.place.snapshot?.category,
+          name: getPlaceName(savedPlace),
+        }),
+      ) ?? null
+    );
+  }
+
+  /** What the details sheet cannot know: how this place sits in the library. */
+  function getDetailsMeta(savedPlace: SavedPlace): PlaceDetailsRow[] {
+    return [
+      { label: t('savedOnLabel'), value: dateFormatter.format(new Date(savedPlace.createdAt)) },
+      savedPlace.collections.length
+        ? {
+            label: t('collectionsLabel'),
+            value: savedPlace.collections.map((collection) => collection.name).join(', '),
+          }
+        : null,
+      savedPlace.note ? { label: t('personalNote'), value: savedPlace.note } : null,
+    ].filter((row): row is PlaceDetailsRow => row !== null);
+  }
 
   function getPlaceDescription(savedPlace: SavedPlace) {
     if (savedPlace.place.kind === 'custom') {
@@ -651,12 +678,7 @@ export function SavedPlacesManager() {
               <ItemGroup aria-label={t('listLabel')} variant="list">
                 {visibleSavedPlaces.map((savedPlace) => {
                   const category = savedPlace.place.snapshot?.category;
-                  const editorial =
-                    savedPlace.place.kind === 'provider'
-                      ? editorialImages.get(
-                          editorialSubjectKey({ category, name: getPlaceName(savedPlace) }),
-                        )
-                      : null;
+                  const editorial = getEditorialImage(savedPlace);
                   return (
                     <Item
                       className="min-h-20 flex-nowrap px-3 py-3 text-left hover:bg-muted/60"
@@ -686,8 +708,9 @@ export function SavedPlacesManager() {
                             category={category}
                             className="size-full"
                             // A thumbnail this size cannot carry a legible
-                            // credit, so the row renders it below instead.
-                            credit="inline"
+                            // credit; the details sheet opens the photograph
+                            // and credits it there.
+                            credit="none"
                             sizes="64px"
                             source={resolvePlaceMediaSource({ editorial })}
                             variant="thumbnail"
@@ -731,29 +754,19 @@ export function SavedPlacesManager() {
                             <span className="line-clamp-2">{savedPlace.note}</span>
                           </p>
                         ) : null}
-                        {editorial ? (
-                          <MediaAttribution attribution={editorial.attribution} variant="inline" />
-                        ) : null}
                       </ItemContent>
                       <ItemActions className="shrink-0 self-start">
-                        {googleMapsPlaceHref(savedPlace.place) ? (
-                          <Button
-                            aria-label={t('viewDetails', { name: getPlaceName(savedPlace) })}
-                            nativeButton={false}
-                            render={
-                              <a
-                                href={googleMapsPlaceHref(savedPlace.place)!}
-                                rel="noreferrer"
-                                target="_blank"
-                              />
-                            }
-                            size="sm"
-                            variant="ghost"
-                          >
-                            <Eye aria-hidden="true" />
-                            <span className="hidden sm:inline">{t('viewDetailsAction')}</span>
-                          </Button>
-                        ) : null}
+                        {/* A Custom Place has details worth showing too, so this
+                            is no longer conditional on a Google listing. */}
+                        <Button
+                          aria-label={t('viewDetails', { name: getPlaceName(savedPlace) })}
+                          onClick={() => setDetailsPlace(savedPlace)}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          <Eye aria-hidden="true" />
+                          <span className="hidden sm:inline">{t('viewDetailsAction')}</span>
+                        </Button>
                         <DropdownMenu>
                           <DropdownMenuTrigger
                             render={
@@ -1142,6 +1155,16 @@ export function SavedPlacesManager() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {detailsPlace ? (
+        <PlaceDetailsSheet
+          editorial={getEditorialImage(detailsPlace)}
+          meta={getDetailsMeta(detailsPlace)}
+          name={getPlaceName(detailsPlace)}
+          onOpenChange={(open) => !open && setDetailsPlace(null)}
+          place={detailsPlace.place}
+        />
+      ) : null}
     </section>
   );
 }

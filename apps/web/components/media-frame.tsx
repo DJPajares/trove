@@ -39,11 +39,15 @@ export type MediaFrameProps = {
   className?: string;
   /**
    * Where the editorial credit goes. `overlay` is the default because the
-   * obligation belongs to the frame, not to each caller remembering it;
-   * `inline` is for frames too small to carry text, and commits the caller to
-   * rendering `MediaAttribution` itself somewhere the credit is still readable.
+   * obligation belongs to the frame, not to each caller remembering it.
+   *
+   * `none` is for frames too small to carry text - a 40px row thumbnail - where
+   * a credit under every row turns a list of places into a list of
+   * photographers. It is not a way out of crediting: it commits the caller to a
+   * surface that opens the photograph large enough to credit it properly, which
+   * is what `PlaceDetailsSheet` is for.
    */
-  credit?: 'inline' | 'overlay';
+  credit?: 'none' | 'overlay';
   dataSlot: string;
   preload?: boolean;
   sizes?: string;

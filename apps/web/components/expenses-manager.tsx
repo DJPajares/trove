@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { DatePicker } from '@/components/date-picker';
 import { CurrencyCombobox } from '@/components/currency-combobox';
+import { EditorialSection } from '@/components/editorial-section';
 import { MoneyInput } from '@/components/money-input';
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
@@ -359,7 +360,14 @@ export function ExpensesManager({
   );
 
   if (status === 'loading') {
-    return <PageState className="mx-auto max-w-5xl" kind="loading" title={t('loading')} />;
+    return (
+      <PageState
+        className="mx-auto max-w-5xl"
+        kind="loading"
+        loadingShape="list"
+        title={t('loading')}
+      />
+    );
   }
   if (status === 'error' || !data) {
     return (
@@ -389,6 +397,11 @@ export function ExpensesManager({
   const daySections = data.days
     .map((day) => ({ ...day, expenses: expensesByDay.get(day.id) ?? [] }))
     .filter((day) => day.expenses.length > 0 || day.projectedCost.length > 0);
+
+  const dateOnly = (value: string) =>
+    new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeZone: 'UTC' }).format(
+      new Date(`${value}T00:00:00.000Z`),
+    );
 
   const totals = (values: CurrencyTotal[], empty: string) =>
     values.length ? values.map(currencyFormatter).join(', ') : empty;
@@ -429,7 +442,7 @@ export function ExpensesManager({
         <ItemContent className="min-w-0 gap-1">
           <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
             <ItemTitle className="min-w-0 truncate text-base">{expenseTitle(expense)}</ItemTitle>
-            <span className="shrink-0 text-sm font-semibold">
+            <span className="shrink-0 text-base font-semibold tabular-nums">
               {currencyFormatter({ amount: expense.amount, currencyCode: expense.currencyCode })}
             </span>
           </div>
@@ -500,21 +513,21 @@ export function ExpensesManager({
                 {data.budget ? t('editBudget') : t('setBudget')}
               </Button>
             </div>
-            <dd className="text-lg font-semibold tracking-tight">
+            <dd className="text-lg font-semibold tracking-tight tabular-nums">
               {data.budget ? currencyFormatter(data.budget) : t('budgetNotSet')}
             </dd>
             <p className="text-sm text-muted-foreground">{t('budgetDescription')}</p>
           </div>
           <div className="space-y-1 sm:px-5">
             <dt className="text-sm font-medium">{t('projectedCost')}</dt>
-            <dd className="text-lg font-semibold tracking-tight">
+            <dd className="text-lg font-semibold tracking-tight tabular-nums">
               {totals(data.projectedCost, t('noProjectedCost'))}
             </dd>
             <p className="text-sm text-muted-foreground">{t('projectedCostDescription')}</p>
           </div>
           <div className="space-y-1 sm:px-5 sm:last:pr-0">
             <dt className="text-sm font-medium">{t('actualSpend')}</dt>
-            <dd className="text-lg font-semibold tracking-tight">
+            <dd className="text-lg font-semibold tracking-tight tabular-nums">
               {totals(data.actualSpend, t('noActualSpend'))}
             </dd>
             <p className="text-sm text-muted-foreground">{t('actualSpendDescription')}</p>
@@ -539,13 +552,8 @@ export function ExpensesManager({
       ) : (
         <div className="space-y-7">
           {daySections.map((day) => (
-            <section
-              aria-label={t('dayActualSpend', { date: day.date })}
-              className="space-y-3"
-              key={day.id}
-            >
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <h2 className="text-lg font-semibold tracking-tight">{day.date}</h2>
+            <EditorialSection
+              actions={
                 <div className="flex flex-wrap justify-end gap-x-3 gap-y-1 text-sm font-medium text-muted-foreground">
                   <p>
                     {t('dayActualSummary', { total: totals(day.actualSpend, t('noActualSpend')) })}
@@ -556,26 +564,26 @@ export function ExpensesManager({
                     })}
                   </p>
                 </div>
-              </div>
+              }
+              key={day.id}
+              title={dateOnly(day.date)}
+            >
               {day.expenses.length ? (
                 <ItemGroup aria-label={t('expenseList')} variant="list">
                   {day.expenses.map(renderExpense)}
                 </ItemGroup>
               ) : null}
-            </section>
+            </EditorialSection>
           ))}
           {unassignedExpenses.length ? (
-            <section aria-label={t('tripLevelExpenses')} className="space-y-3">
-              <div>
-                <h2 className="text-lg font-semibold tracking-tight">{t('tripLevelExpenses')}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {t('tripLevelExpensesDescription')}
-                </p>
-              </div>
+            <EditorialSection
+              description={t('tripLevelExpensesDescription')}
+              title={t('tripLevelExpenses')}
+            >
               <ItemGroup aria-label={t('tripLevelExpenses')} variant="list">
                 {unassignedExpenses.map(renderExpense)}
               </ItemGroup>
-            </section>
+            </EditorialSection>
           ) : null}
         </div>
       )}

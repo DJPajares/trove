@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 
 import { DatePicker } from '@/components/date-picker';
+import { EditorialSection } from '@/components/editorial-section';
 import { PageState } from '@/components/page-state';
 import { TimeInput } from '@/components/time-input';
 import { TripSectionHeader } from '@/components/trip-section-header';
@@ -20,6 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -237,6 +239,26 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
 
   function renderTask(task: Task) {
     const completed = task.completed;
+    // Calendar-date comparison, matching how a due date is already treated
+    // everywhere else in this file (a date the traveller picked, not a zoned
+    // instant) — not a new timezone concept.
+    const isOverdue =
+      !completed && task.dueDate !== null && task.dueDate < new Date().toISOString().slice(0, 10);
+    const dueDateText = task.dueDate
+      ? task.dueLocalTime
+        ? t('dueDateTime', { date: formatDate(task.dueDate), time: task.dueLocalTime })
+        : t('dueDate', { date: formatDate(task.dueDate) })
+      : null;
+    const dueDateLabel = dueDateText ? (
+      isOverdue ? (
+        <Badge size="sm" variant="warning">
+          {dueDateText}
+        </Badge>
+      ) : (
+        <span className="font-medium text-foreground">{dueDateText}</span>
+      )
+    ) : null;
+
     return (
       <Item className="min-h-16 flex-nowrap px-3 py-3" key={task.id} variant="default">
         <ItemMedia className="size-9" variant="icon">
@@ -254,15 +276,9 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
             {task.label}
           </ItemTitle>
           <ItemDescription className="line-clamp-none">
-            <span className="flex flex-wrap gap-x-2 gap-y-1">
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span>{contextLabel(task.context)}</span>
-              {task.dueDate ? (
-                <span>
-                  {task.dueLocalTime
-                    ? t('dueDateTime', { date: formatDate(task.dueDate), time: task.dueLocalTime })
-                    : t('dueDate', { date: formatDate(task.dueDate) })}
-                </span>
-              ) : null}
+              {dueDateLabel}
             </span>
             {task.note ? <span className="mt-1 block line-clamp-2">{task.note}</span> : null}
           </ItemDescription>
@@ -282,7 +298,14 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   if (status === 'loading') {
-    return <PageState className="mx-auto max-w-5xl" kind="loading" title={t('loading')} />;
+    return (
+      <PageState
+        className="mx-auto max-w-5xl"
+        kind="loading"
+        loadingShape="list"
+        title={t('loading')}
+      />
+    );
   }
   if (status === 'error' || !data) {
     return (
@@ -325,18 +348,14 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
       ) : null}
 
       {openTasks.length ? (
-        <section className="space-y-3">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold">{t('open')}</h2>
-              <p className="text-sm text-muted-foreground">{t('openDescription')}</p>
-            </div>
-            <span className="text-sm tabular-nums text-muted-foreground">{openTasks.length}</span>
-          </div>
+        <EditorialSection
+          description={t('openDescription', { count: openTasks.length })}
+          title={t('open')}
+        >
           <ItemGroup aria-label={t('open')} variant="list">
             {openTasks.map(renderTask)}
           </ItemGroup>
-        </section>
+        </EditorialSection>
       ) : (
         <PageState
           actions={
@@ -354,20 +373,14 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
       )}
 
       {completedTasks.length ? (
-        <section className="space-y-3">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold">{t('completed')}</h2>
-              <p className="text-sm text-muted-foreground">{t('completedDescription')}</p>
-            </div>
-            <span className="text-sm tabular-nums text-muted-foreground">
-              {completedTasks.length}
-            </span>
-          </div>
+        <EditorialSection
+          description={t('completedDescription', { count: completedTasks.length })}
+          title={t('completed')}
+        >
           <ItemGroup aria-label={t('completed')} variant="list">
             {completedTasks.map(renderTask)}
           </ItemGroup>
-        </section>
+        </EditorialSection>
       ) : null}
 
       <Sheet onOpenChange={(open) => !open && closeEditor()} open={editor.mode !== 'closed'}>

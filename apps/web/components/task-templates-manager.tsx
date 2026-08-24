@@ -4,6 +4,7 @@ import { CircleAlert, ClipboardCheck, CopyPlus, Pencil, Plus, Trash2 } from 'luc
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
+import { EditorialSection } from '@/components/editorial-section';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -186,6 +187,7 @@ export function TaskTemplatesManager({ embedded = false }: Readonly<{ embedded?:
       <PageState
         className={embedded ? undefined : 'mx-auto max-w-5xl'}
         kind="loading"
+        loadingShape="list"
         title={t('loading')}
       />
     );
@@ -206,16 +208,17 @@ export function TaskTemplatesManager({ embedded = false }: Readonly<{ embedded?:
   return (
     <section className={embedded ? 'space-y-5' : 'mx-auto w-full max-w-5xl space-y-7'}>
       {embedded ? (
-        <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div className="max-w-3xl">
-            <h2 className="text-xl font-semibold tracking-tight text-foreground">{t('title')}</h2>
-            <p className="mt-2 text-base leading-7 text-muted-foreground">{t('description')}</p>
-          </div>
-          <Button onClick={openCreate}>
-            <Plus aria-hidden="true" data-icon="inline-start" />
-            {t('newTemplate')}
-          </Button>
-        </header>
+        <EditorialSection
+          actions={
+            <Button onClick={openCreate}>
+              <Plus aria-hidden="true" data-icon="inline-start" />
+              {t('newTemplate')}
+            </Button>
+          }
+          description={t('description')}
+          headingLevel={2}
+          title={t('title')}
+        />
       ) : (
         <PageHeader
           actions={

@@ -12,8 +12,8 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
-import { useTranslations } from 'next-intl';
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { DatePicker } from '@/components/date-picker';
 import { CurrencyCombobox } from '@/components/currency-combobox';
@@ -178,7 +178,13 @@ function hasInvalidFlightEndpoint(input: { date: string; time: string; timeZone:
 
 export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('reservations');
+  const locale = useLocale();
   const { preferredCurrency } = usePreferences();
+  const dateFormatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' }),
+    [locale],
+  );
+  const formatDate = (value: string) => dateFormatter.format(new Date(`${value}T00:00:00.000Z`));
   const formatFileSize = (bytes: number) =>
     bytes < 1024 * 1024
       ? t('documentKilobytes', { value: Math.ceil(bytes / 1024) })
@@ -419,7 +425,14 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   if (status === 'loading') {
-    return <PageState className="mx-auto max-w-5xl" kind="loading" title={t('loading')} />;
+    return (
+      <PageState
+        className="mx-auto max-w-5xl"
+        kind="loading"
+        loadingShape="list"
+        title={t('loading')}
+      />
+    );
   }
   if (status === 'error' || !data) {
     return (
@@ -493,9 +506,17 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
                 <ItemTitle>{reservation.title}</ItemTitle>
                 <ItemDescription className="line-clamp-none">
                   <span className="flex flex-wrap gap-x-2 gap-y-1">
+                    {reservation.localDate ? (
+                      <span className="font-medium text-foreground">
+                        {reservation.localTime
+                          ? t('dateTime', {
+                              date: formatDate(reservation.localDate),
+                              time: reservation.localTime,
+                            })
+                          : formatDate(reservation.localDate)}
+                      </span>
+                    ) : null}
                     {reservation.type ? <span>{t(`types.${reservation.type}`)}</span> : null}
-                    {reservation.localDate ? <span>{reservation.localDate}</span> : null}
-                    {reservation.localTime ? <span>{reservation.localTime}</span> : null}
                     {reservation.tripPlace?.name ? <span>{reservation.tripPlace.name}</span> : null}
                   </span>
                   {reservation.type === 'accommodation' && reservation.applicableDays.length ? (

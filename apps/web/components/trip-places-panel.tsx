@@ -40,7 +40,11 @@ import {
 } from '@/components/ui/item';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import type { ScheduledPlaceUse } from '@/lib/itinerary/places';
-import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
+import {
+  editorialSubjectKey,
+  MAX_EDITORIAL_IMAGE_SUBJECTS,
+  type EditorialSubject,
+} from '@/lib/media/editorial-images';
 import { resolvePlaceMediaSource } from '@/lib/media/trip-media';
 import { googleMapsPlaceHref } from '@/lib/saved/api';
 import type { TripPlace, TripPlacePriority } from '@/lib/trip-places/api';
@@ -121,6 +125,9 @@ export function TripPlacesPanel({
    * A place asks for a photograph under the provider's name for it, never the
    * traveller's nickname: "Mum's favourite bakery" is a photograph of nothing.
    * Custom places do not ask at all, for the same reason.
+   *
+   * Capped like the trips library, so a long list of places stays one request.
+   * Past the cap the branded fallback takes over.
    */
   const editorialSubjects: EditorialSubject[] = tripPlaces
     .filter((tripPlace) => tripPlace.place.kind === 'provider')
@@ -134,7 +141,8 @@ export function TripPlacesPanel({
           placeId: tripPlace.place.id,
         },
       ];
-    });
+    })
+    .slice(0, MAX_EDITORIAL_IMAGE_SUBJECTS);
   const editorialImages = useEditorialImages(editorialSubjects);
 
   return (

@@ -106,6 +106,9 @@
   --shadow-overlay: 0 24px 72px oklch(0.274 0.021 62 / 0.18);
   --shadow-control: 0 1px 2px oklch(0.274 0.021 62 / 0.09);
   --layer-sticky: 40;
+  /* Non-modal notices: above sticky chrome so they are never buried by it,
+     below overlays so a dialog is never argued with by a toast. */
+  --layer-notice: 45;
   --layer-overlay: 50;
 }
 

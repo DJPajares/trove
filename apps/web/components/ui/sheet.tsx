@@ -9,22 +9,29 @@ import { XIcon } from 'lucide-react';
 
 type SheetSide = 'top' | 'right' | 'bottom' | 'left';
 
+/**
+ * A sheet is flush against the edges it is anchored to, so it is the layer that
+ * has to hold its own content clear of a notch or a home indicator: a
+ * full-height side sheet guards top, bottom and its own side, and an edge sheet
+ * guards its own edge and both sides. Landscape is the case that bites — the
+ * insets move to left and right, and a side sheet is exactly what sits there.
+ */
 const mobileSideClasses: Record<SheetSide, string> = {
   bottom:
-    'inset-x-0 bottom-0 h-auto max-h-[90dvh] w-full rounded-t-[var(--radius-xl)] border-t pb-[var(--safe-bottom)] data-ending-style:translate-y-[2.5rem] data-starting-style:translate-y-[2.5rem]',
-  left: 'inset-y-0 left-0 h-full w-[min(28rem,calc(100%-2rem))] border-r pl-[var(--safe-left)] data-ending-style:translate-x-[-2.5rem] data-starting-style:translate-x-[-2.5rem]',
+    'inset-x-0 bottom-0 h-auto max-h-[90dvh] w-full rounded-t-[var(--radius-xl)] border-t pb-[var(--safe-bottom)] pl-[var(--safe-left)] pr-[var(--safe-right)] data-ending-style:translate-y-[2.5rem] data-starting-style:translate-y-[2.5rem]',
+  left: 'inset-y-0 left-0 h-full w-[min(28rem,calc(100%-2rem))] border-r pt-[var(--safe-top)] pb-[var(--safe-bottom)] pl-[var(--safe-left)] data-ending-style:translate-x-[-2.5rem] data-starting-style:translate-x-[-2.5rem]',
   right:
-    'inset-y-0 right-0 h-full w-[min(28rem,calc(100%-2rem))] border-l pr-[var(--safe-right)] data-ending-style:translate-x-[2.5rem] data-starting-style:translate-x-[2.5rem]',
-  top: 'inset-x-0 top-0 h-auto max-h-[90dvh] w-full rounded-b-[var(--radius-xl)] border-b pt-[var(--safe-top)] data-ending-style:translate-y-[-2.5rem] data-starting-style:translate-y-[-2.5rem]',
+    'inset-y-0 right-0 h-full w-[min(28rem,calc(100%-2rem))] border-l pt-[var(--safe-top)] pr-[var(--safe-right)] pb-[var(--safe-bottom)] data-ending-style:translate-x-[2.5rem] data-starting-style:translate-x-[2.5rem]',
+  top: 'inset-x-0 top-0 h-auto max-h-[90dvh] w-full rounded-b-[var(--radius-xl)] border-b pt-[var(--safe-top)] pl-[var(--safe-left)] pr-[var(--safe-right)] data-ending-style:translate-y-[-2.5rem] data-starting-style:translate-y-[-2.5rem]',
 };
 
 const desktopSideClasses: Record<SheetSide, string> = {
   bottom:
-    'md:inset-x-0 md:top-auto md:bottom-0 md:h-auto md:max-h-[90dvh] md:w-full md:rounded-t-[var(--radius-xl)] md:rounded-b-none md:border md:border-x-0 md:border-b-0 md:data-ending-style:translate-x-0 md:data-ending-style:translate-y-[2.5rem] md:data-starting-style:translate-x-0 md:data-starting-style:translate-y-[2.5rem]',
-  left: 'md:inset-y-0 md:top-0 md:right-auto md:bottom-0 md:left-0 md:h-full md:max-h-[100dvh] md:w-[min(24rem,calc(100%-2rem))] md:rounded-none md:border md:border-y-0 md:border-l-0 md:border-r md:data-ending-style:translate-x-[-2.5rem] md:data-ending-style:translate-y-0 md:data-starting-style:translate-x-[-2.5rem] md:data-starting-style:translate-y-0',
+    'md:inset-x-0 md:top-auto md:bottom-0 md:h-auto md:max-h-[90dvh] md:w-full md:rounded-t-[var(--radius-xl)] md:rounded-b-none md:border md:border-x-0 md:border-b-0 md:pb-[var(--safe-bottom)] md:data-ending-style:translate-x-0 md:data-ending-style:translate-y-[2.5rem] md:data-starting-style:translate-x-0 md:data-starting-style:translate-y-[2.5rem]',
+  left: 'md:inset-y-0 md:top-0 md:right-auto md:bottom-0 md:left-0 md:h-full md:max-h-[100dvh] md:w-[min(24rem,calc(100%-2rem))] md:rounded-none md:border md:border-y-0 md:border-l-0 md:border-r md:pt-[var(--safe-top)] md:pb-[var(--safe-bottom)] md:pl-[var(--safe-left)] md:data-ending-style:translate-x-[-2.5rem] md:data-ending-style:translate-y-0 md:data-starting-style:translate-x-[-2.5rem] md:data-starting-style:translate-y-0',
   right:
-    'md:inset-y-0 md:top-0 md:right-0 md:bottom-0 md:left-auto md:h-full md:max-h-[100dvh] md:w-[min(24rem,calc(100%-2rem))] md:rounded-none md:border md:border-y-0 md:border-r-0 md:border-l md:data-ending-style:translate-x-[2.5rem] md:data-ending-style:translate-y-0 md:data-starting-style:translate-x-[2.5rem] md:data-starting-style:translate-y-0',
-  top: 'md:inset-x-0 md:top-0 md:bottom-auto md:h-auto md:max-h-[90dvh] md:w-full md:rounded-t-none md:rounded-b-[var(--radius-xl)] md:border md:border-x-0 md:border-t-0 md:border-b md:data-ending-style:translate-x-0 md:data-ending-style:translate-y-[-2.5rem] md:data-starting-style:translate-x-0 md:data-starting-style:translate-y-[-2.5rem]',
+    'md:inset-y-0 md:top-0 md:right-0 md:bottom-0 md:left-auto md:h-full md:max-h-[100dvh] md:w-[min(24rem,calc(100%-2rem))] md:rounded-none md:border md:border-y-0 md:border-r-0 md:border-l md:pt-[var(--safe-top)] md:pr-[var(--safe-right)] md:pb-[var(--safe-bottom)] md:data-ending-style:translate-x-[2.5rem] md:data-ending-style:translate-y-0 md:data-starting-style:translate-x-[2.5rem] md:data-starting-style:translate-y-0',
+  top: 'md:inset-x-0 md:top-0 md:bottom-auto md:h-auto md:max-h-[90dvh] md:w-full md:rounded-t-none md:rounded-b-[var(--radius-xl)] md:border md:border-x-0 md:border-t-0 md:border-b md:pt-[var(--safe-top)] md:data-ending-style:translate-x-0 md:data-ending-style:translate-y-[-2.5rem] md:data-starting-style:translate-x-0 md:data-starting-style:translate-y-[-2.5rem]',
 };
 
 function Sheet({ ...props }: SheetPrimitive.Root.Props) {
@@ -89,7 +96,18 @@ function SheetContent({
         {showCloseButton && (
           <SheetPrimitive.Close
             data-slot="sheet-close"
-            render={<Button variant="ghost" className="absolute top-3 right-3" size="icon-sm" />}
+            render={
+              <Button
+                variant="ghost"
+                // An absolute offset resolves against the padding box, so the
+                // popup's own safe padding never reaches this button: it has to
+                // clear the insets itself. `max()` collapses to the plain offset
+                // on any device where the insets are zero. The two sides a sheet
+                // is not flush against are reset back.
+                className="absolute top-[max(0.75rem,var(--safe-top))] right-[max(0.75rem,var(--safe-right))] in-data-[mobile-side=bottom]:top-3 in-data-[mobile-side=left]:right-3 md:in-data-[side=bottom]:top-3 md:in-data-[side=left]:right-3"
+                size="icon-sm"
+              />
+            }
           >
             <XIcon />
             <span className="sr-only">{closeLabel}</span>

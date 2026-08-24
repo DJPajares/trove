@@ -32,6 +32,19 @@ import {
 import type { ItineraryItem, ItineraryRouteSegment, RouteTravelMode } from '@/lib/itinerary/api';
 import type { DayTimelineEntry } from '@/lib/itinerary/day-sequence';
 
+/**
+ * A stop's name, and the whole row along with it.
+ *
+ * The name opens the place, but the row is what a traveller aims at - a time, a
+ * duration and a note are the same stop, and a tap that landed on one of them
+ * used to do nothing at all. The row cannot be the button, because it already
+ * holds one, so the name stretches its hit area over the row instead and the
+ * actions menu sits above that. Hovering anywhere on the row underlines the
+ * name, which is what says the row is a way in.
+ */
+const stopTitleClassName =
+  'rounded-[var(--radius-sm)] text-left outline-none after:absolute after:inset-0 hover:underline focus-visible:ring-3 focus-visible:ring-ring/40';
+
 /** What a stop needs in order to render, resolved by the manager that owns the day. */
 export type TimelineStopView = {
   located: boolean;
@@ -186,7 +199,7 @@ export function ItineraryDayTimeline({
                 base.located ? (
                   <button
                     aria-label={t('viewDetailsFor', { name: base.name })}
-                    className="rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+                    className={stopTitleClassName}
                     onClick={() => onViewBaseDetails(entry.tripPlaceId)}
                     type="button"
                   >
@@ -353,7 +366,7 @@ export function ItineraryDayTimeline({
               view.located ? (
                 <button
                   aria-label={t('viewDetailsFor', { name: view.name })}
-                  className="rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+                  className={stopTitleClassName}
                   onClick={() => onViewItemDetails(item)}
                   type="button"
                 >

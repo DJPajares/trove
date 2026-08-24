@@ -1859,7 +1859,7 @@ export function ItineraryManager({
               const isMapSelected = selectedMapItemId === item.id;
               return (
                 <Item
-                  className={cn('px-3 py-3', isMapSelected && 'bg-secondary/70')}
+                  className={cn('relative px-3 py-3', isMapSelected && 'bg-secondary/70')}
                   id={`itinerary-item-${item.id}`}
                   key={item.id}
                   tabIndex={-1}
@@ -1872,7 +1872,9 @@ export function ItineraryManager({
                       {hasMapLocation ? (
                         <button
                           aria-label={t('viewDetailsFor', { name })}
-                          className="rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+                          // The whole row opens the place, the same as a
+                          // scheduled stop; the controls sit above the claim.
+                          className="rounded-[var(--radius-sm)] text-left outline-none after:absolute after:inset-0 hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
                           onClick={() => setDetailsPlace(item.tripPlace)}
                           type="button"
                         >
@@ -1884,7 +1886,7 @@ export function ItineraryManager({
                     </ItemTitle>
                     <ItemDescription>{item.notes}</ItemDescription>
                   </ItemContent>
-                  <ItemActions>
+                  <ItemActions className="relative z-10">
                     <Select
                       onValueChange={(value) =>
                         void handleOrganize(item, (value ?? null) as string | null, 999)

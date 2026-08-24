@@ -3,7 +3,6 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { ExperienceRatingSummary } from '@/components/experience-rating-field';
 import { HomeWeatherInset } from '@/components/home-weather-inset';
-import { MediaAttribution } from '@/components/media-attribution';
 import { OfflineReadyStatus } from '@/components/offline-ready-status';
 import { TripDestinationActions } from '@/components/trip-destination-actions';
 import { TripItineraryCoverage } from '@/components/trip-itinerary-coverage';
@@ -171,9 +170,8 @@ export function HomeFocalTrip({
         </div>
       </section>
 
-      {editorial ? <MediaAttribution attribution={editorial.attribution} /> : null}
       {trip.lifecycle === 'planning' ? (
-        <OfflineReadyStatus tripId={trip.id} variant="compact" />
+        <OfflineReadyStatus tripId={trip.id} variant="summary" />
       ) : null}
     </div>
   );

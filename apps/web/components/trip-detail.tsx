@@ -20,6 +20,7 @@ import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import { EditorialSection } from '@/components/editorial-section';
 import { ExperienceRatingSummary } from '@/components/experience-rating-field';
 import { MediaAttribution } from '@/components/media-attribution';
+import { OfflineReadyStatus } from '@/components/offline-ready-status';
 import { PageState } from '@/components/page-state';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripDestinationActions } from '@/components/trip-destination-actions';
@@ -387,6 +388,8 @@ export function TripDetail({
           value={trip.startingLocation?.name ?? t('startingLocationUnavailable')}
         />
       </div>
+
+      {trip.lifecycle !== 'completed' ? <OfflineReadyStatus tripId={trip.id} /> : null}
 
       {trip.notes ? (
         <TripFact

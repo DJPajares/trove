@@ -129,10 +129,11 @@ export type OfflineReadyStatusProps = {
   /**
    * `detailed` is the full account, for a surface whose subject is the trip's
    * local copy. `compact` leads with the state and the one action and puts the
-   * rest behind a disclosure, for a surface where offline readiness is a
-   * supporting fact rather than the point.
+   * rest behind a disclosure. `summary` keeps only the current state and when
+   * it was prepared, for a surface where offline readiness is supporting
+   * context rather than an action.
    */
-  variant?: 'compact' | 'detailed';
+  variant?: 'compact' | 'detailed' | 'summary';
 };
 
 export function OfflineReadyStatus({
@@ -232,6 +233,28 @@ export function OfflineReadyStatus({
   const lastPreparedLabel = state.readiness.lastPreparedAt
     ? t('lastPrepared', { date: dateFormatter.format(new Date(state.readiness.lastPreparedAt)) })
     : t('notPrepared');
+
+  if (variant === 'summary') {
+    return (
+      <section aria-labelledby="offline-ready-heading" className="border-t border-border pt-4">
+        <h3 className="sr-only" id="offline-ready-heading">
+          {t('title')}
+        </h3>
+        <p
+          aria-live="polite"
+          className="flex flex-wrap items-center gap-x-2 text-sm font-medium text-foreground"
+        >
+          <StatusIcon aria-hidden="true" className={`size-4 shrink-0 ${statusTone}`} />
+          {t('title')}
+          <span className="font-normal text-muted-foreground">
+            {t(`states.${state.readiness.state}`)}
+          </span>
+        </p>
+        <p className="mt-1 text-xs leading-5 text-text-subtle">{lastPreparedLabel}</p>
+      </section>
+    );
+  }
+
   const isCompact = variant === 'compact';
 
   const prepareButton = (

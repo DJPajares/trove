@@ -344,7 +344,9 @@ export function ItineraryPlanningMap({
   }
 
   return (
-    <div className="relative min-h-[28rem] overflow-hidden bg-muted/40 lg:min-h-[34rem]">
+    // `isolate` keeps the overlays below in this box's own stacking context, so
+    // their z-index is a local decision rather than a global one.
+    <div className="relative isolate min-h-[28rem] overflow-hidden bg-muted/40 lg:min-h-[34rem]">
       <div
         aria-label={ariaLabel ?? t('label')}
         className="absolute inset-0"

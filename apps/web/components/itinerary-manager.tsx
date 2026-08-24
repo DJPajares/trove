@@ -605,7 +605,12 @@ export function ItineraryManager({
   function scrollToItem(itemId: string, focus = false) {
     window.requestAnimationFrame(() => {
       const element = document.getElementById(`itinerary-item-${itemId}`);
-      element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // An explicit behavior overrides the global reduced-motion rule, so the
+      // preference has to be read here rather than left to the stylesheet.
+      element?.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'center',
+      });
       if (focus) element?.focus({ preventScroll: true });
     });
   }
@@ -1995,9 +2000,11 @@ export function ItineraryManager({
                           autoComplete="off"
                           autoFocus={!hasItemIdentity}
                           className="h-11 w-full min-w-0 rounded-[var(--radius-md)] border border-input bg-background py-2 text-base shadow-[var(--shadow-control)] md:text-sm"
+                          clearLabel={t('clearPlaceQuery')}
                           id="itinerary-place-or-plan"
                           placeholder={t('placeOrPlanPlaceholder')}
                           showClear={Boolean(placeQuery)}
+                          triggerLabel={t('openPlacePicker')}
                         />
                         <ComboboxContent>
                           <ComboboxEmpty>{t('placePickerEmpty')}</ComboboxEmpty>

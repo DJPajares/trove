@@ -77,14 +77,6 @@ export function resetEditorialImageCache() {
   resolvedImages.clear();
 }
 
-function chunk<T>(items: T[], size: number) {
-  const batches: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    batches.push(items.slice(index, index + size));
-  }
-  return batches;
-}
-
 async function getAccessToken() {
   const supabase = createBrowserSupabaseClient();
   if (!supabase) return null;
@@ -120,6 +112,10 @@ async function requestEditorialImages(subjects: EditorialSubject[], accessToken:
  * limited, provider outage, kill switch - is answered with an absence rather
  * than an error. A caller receives the subjects that resolved and nothing else,
  * and the media frame turns the missing ones into the branded fallback.
+ *
+ * A resolve costs at most one request, whatever it is handed. Callers should
+ * still ask only for what a screen shows, but no call site can turn a long
+ * list into a fan-out by forgetting to.
  */
 export async function resolveEditorialImages(subjects: EditorialSubject[]) {
   const resolved = new Map<string, EditorialImageReference>();
@@ -143,12 +139,13 @@ export async function resolveEditorialImages(subjects: EditorialSubject[]) {
     const accessToken = await getAccessToken();
     if (!accessToken) return resolved;
 
-    const batches = chunk([...pending.values()], MAX_EDITORIAL_IMAGE_SUBJECTS);
-    const responses = await Promise.all(
-      batches.map((batch) => requestEditorialImages(batch, accessToken)),
-    );
+    // One resolve is one request, always. Splitting the overflow into parallel
+    // requests would turn a screen that asked for too much into several times
+    // the cost, silently - so the cap is enforced here rather than trusted to
+    // every call site, and the subjects past it render the branded fallback.
+    const batch = [...pending.values()].slice(0, MAX_EDITORIAL_IMAGE_SUBJECTS);
 
-    for (const image of responses.flat()) {
+    for (const image of await requestEditorialImages(batch, accessToken)) {
       if (image.status === 'ok') {
         resolvedImages.set(image.subjectKey, image.image);
         resolved.set(image.subjectKey, image.image);

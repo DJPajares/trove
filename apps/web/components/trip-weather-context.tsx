@@ -86,7 +86,12 @@ export function TripWeatherContext({
 
   if (state.status === 'loading') {
     return (
-      <section aria-busy="true" aria-label={t('loading')} className="border-y border-border py-4">
+      <section
+        aria-busy="true"
+        aria-label={t('loading')}
+        className="border-y border-border py-4"
+        role="status"
+      >
         <div className="flex items-center gap-3">
           <Skeleton className="size-10 rounded-[var(--radius-md)]" />
           <div className="space-y-2">

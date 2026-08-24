@@ -93,7 +93,7 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
       ) : null}
 
       {places.status === 'loading' ? (
-        <PageState headingLevel={2} kind="loading" title={t('loading')} />
+        <PageState headingLevel={2} kind="loading" loadingShape="list" title={t('loading')} />
       ) : places.status === 'error' ? (
         <PageState
           actions={<Button onClick={() => void places.refresh()}>{t('tryAgain')}</Button>}

@@ -28,6 +28,15 @@ test('an existing width is replaced rather than appended', () => {
   expect(resized.searchParams.getAll('w')).toStrictEqual(['320']);
 });
 
+/**
+ * A dense display asks for a width no slot in the app can use, and the provider
+ * would happily serve a near-original of a photograph that is decoration.
+ */
+test('a width past what any layout can use is capped', () => {
+  const resized = new URL(pexelsImageLoader({ src: source, width: 3840 }));
+  expect(resized.searchParams.get('w')).toBe('2048');
+});
+
 test('anything that is not a provider photograph passes through untouched', () => {
   const supabaseCover = 'https://project.supabase.co/storage/v1/object/cover.jpg';
   expect(pexelsImageLoader({ src: supabaseCover, width: 640 })).toBe(supabaseCover);

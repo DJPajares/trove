@@ -156,7 +156,9 @@ export function ItineraryPlacesDrawer({
               </Alert>
             ) : null}
 
-            {places.status === 'loading' ? <PageState kind="loading" title={t('loading')} /> : null}
+            {places.status === 'loading' ? (
+              <PageState kind="loading" loadingShape="list" title={t('loading')} />
+            ) : null}
 
             {places.status === 'idle' && !places.places.length ? (
               <PageState

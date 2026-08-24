@@ -179,7 +179,11 @@ export function TripSectionHeader({
 
       <div className="flex items-center justify-between gap-2 border-b border-border-subtle">
         <nav aria-label={t('tripNavigation')} className="min-w-0">
-          <ul className="flex items-center gap-1 overflow-x-auto">
+          {/* `overflow-x-auto` also clips vertically, which would cut the tabs'
+              focus ring. The negative margin buys it room without moving the
+              margin box, so each tab's active underline stays welded to the
+              section border below. */}
+          <ul className="-m-1 flex items-center gap-1 overflow-x-auto p-1">
             {primary.map((destination) => {
               const active = destination.section === currentSection;
               return (

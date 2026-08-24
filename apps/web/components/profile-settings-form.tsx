@@ -246,9 +246,12 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
               )}
             </div>
             <div className="space-y-2">
+              {/* The input this wraps is `sr-only`, so it is focusable but has
+                  no ring of its own to show; the label wears it instead. */}
               <label
                 className={cn(
                   buttonVariants({ size: 'default' }),
+                  'focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/40',
                   photoBusy ? 'pointer-events-none opacity-50' : 'cursor-pointer',
                 )}
               >

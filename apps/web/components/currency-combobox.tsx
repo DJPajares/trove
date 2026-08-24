@@ -123,10 +123,12 @@ export function CurrencyCombobox({
         aria-label={ariaLabel}
         aria-required={required}
         className="h-11 w-full min-w-0 rounded-[var(--radius-md)] border border-input bg-background py-2 text-base shadow-[var(--shadow-control)] transition-[color,background-color,border-color,box-shadow] duration-[var(--motion-standard)] outline-none placeholder:text-muted-foreground hover:border-border-strong focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/20"
+        clearLabel={t('clear', { label: ariaLabel ?? placeholder ?? '' })}
         id={id}
         placeholder={status === 'loading' ? t('loading') : placeholder}
         required={required}
         showClear
+        triggerLabel={t('open', { label: ariaLabel ?? placeholder ?? '' })}
       />
       <ComboboxContent>
         <ComboboxEmpty>{t('empty')}</ComboboxEmpty>

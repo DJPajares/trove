@@ -93,7 +93,11 @@ import {
 } from '@/lib/saved/api';
 import { PROVIDER_SEARCH_RESULT_LIMIT } from '@/lib/saved/search-results';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
-import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
+import {
+  editorialSubjectKey,
+  MAX_EDITORIAL_IMAGE_SUBJECTS,
+  type EditorialSubject,
+} from '@/lib/media/editorial-images';
 import { resolvePlaceMediaSource } from '@/lib/media/trip-media';
 import {
   removeSavedPlaceState,
@@ -253,6 +257,11 @@ export function SavedPlacesManager() {
    * Only provider places ask for a photograph. A custom place is somewhere the
    * traveller invented - a friend's flat, a meeting point - and stock travel
    * photography of its name would be a picture of somewhere else.
+   *
+   * Capped like the trips library: a saved library has no pagination, so the
+   * cap is what keeps one screen to one request. Past it the branded fallback
+   * takes over, and narrowing to a collection or category re-asks for whatever
+   * is in the first cap of that view.
    */
   const editorialSubjects: EditorialSubject[] = visibleSavedPlaces
     .filter((savedPlace) => savedPlace.place.kind === 'provider')
@@ -260,7 +269,8 @@ export function SavedPlacesManager() {
       category: savedPlace.place.snapshot?.category,
       name: getPlaceName(savedPlace),
       placeId: savedPlace.place.id,
-    }));
+    }))
+    .slice(0, MAX_EDITORIAL_IMAGE_SUBJECTS);
   const editorialImages = useEditorialImages(editorialSubjects);
 
   function getPlaceDescription(savedPlace: SavedPlace) {
@@ -534,7 +544,7 @@ export function SavedPlacesManager() {
       ) : null}
 
       {status === 'loading' ? (
-        <PageState headingLevel={2} kind="loading" title={t('loading')} />
+        <PageState headingLevel={2} kind="loading" loadingShape="list" title={t('loading')} />
       ) : status === 'error' ? (
         <PageState
           actions={<Button onClick={() => void refresh()}>{t('tryAgain')}</Button>}

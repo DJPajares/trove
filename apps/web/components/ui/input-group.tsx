@@ -63,12 +63,18 @@ function InputGroupAddon({
   );
 }
 
+/**
+ * These override the button's own sizes, so they carry the same floor: 24px is
+ * the bare AA minimum and leaves nothing for a near miss, and the shared button
+ * settled on 28. A 28px button needs the group to be `h-11` for the addon's own
+ * padding to fit around it, which is what both consumers use today.
+ */
 const inputGroupButtonVariants = cva('flex items-center gap-2 text-sm shadow-none', {
   variants: {
     size: {
-      xs: "h-6 gap-1 rounded-[calc(var(--radius)-3px)] px-1.5 [&>svg:not([class*='size-'])]:size-3.5",
+      xs: "h-7 gap-1 rounded-[calc(var(--radius)-3px)] px-1.5 [&>svg:not([class*='size-'])]:size-3.5",
       sm: '',
-      'icon-xs': 'size-6 rounded-[calc(var(--radius)-3px)] p-0 has-[>svg]:p-0',
+      'icon-xs': 'size-7 rounded-[calc(var(--radius)-3px)] p-0 has-[>svg]:p-0',
       'icon-sm': 'size-8 p-0 has-[>svg]:p-0',
     },
   },

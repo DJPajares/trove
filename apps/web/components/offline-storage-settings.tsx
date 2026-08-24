@@ -167,13 +167,18 @@ export function OfflineStorageSettings() {
 
         <div aria-live="polite" className="mt-6 border-y border-border py-1">
           {status === 'loading' ? (
-            <div className="space-y-3 py-4">
+            // The skeleton is shaped like the rows it stands in for rather than
+            // the shared list shape, which draws larger media than these rows
+            // carry. It still owes a screen reader the same status the shared
+            // loading state gives, which is what the label and roles are for.
+            <div aria-busy="true" className="space-y-3 py-4" role="status">
+              <span className="sr-only">{t('loading')}</span>
               {Array.from({ length: 2 }, (_, index) => (
-                <div className="flex items-center gap-3" key={index}>
-                  <Skeleton className="size-9 shrink-0 motion-reduce:animate-none" />
+                <div aria-hidden="true" className="flex items-center gap-3" key={index}>
+                  <Skeleton className="size-9 shrink-0" />
                   <div className="flex-1 space-y-2">
-                    <Skeleton className="h-4 w-2/5 motion-reduce:animate-none" />
-                    <Skeleton className="h-3 w-3/5 motion-reduce:animate-none" />
+                    <Skeleton className="h-4 w-2/5" />
+                    <Skeleton className="h-3 w-3/5" />
                   </div>
                 </div>
               ))}

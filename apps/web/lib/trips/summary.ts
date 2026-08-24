@@ -34,9 +34,9 @@ export function tripEditorialSubject(trip: Trip): EditorialSubject | null {
  * The order is what the ceiling bites into: the trip the library leads with and
  * the trips already on screen are answered before the tail of an archive the
  * traveller may never scroll to, and everything past the cap simply renders the
- * branded fallback - which is what the fallback is for. Above the service's own
- * ceiling the resolver splits into parallel requests, so a library of forty
- * uncovered trips would otherwise quietly cost two.
+ * branded fallback - which is what the fallback is for. The resolver enforces
+ * the same ceiling, so the slice here is about which trips get a photograph
+ * rather than about how many requests the screen costs.
  *
  * Subjects come from every trip rather than from the rows currently mounted:
  * the archive's tail is behind a disclosure, and asking again when it opens

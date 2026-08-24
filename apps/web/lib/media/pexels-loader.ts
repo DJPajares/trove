@@ -3,6 +3,13 @@ import type { ImageLoaderProps } from 'next/image';
 const PEXELS_IMAGE_HOST = 'images.pexels.com';
 
 /**
+ * Past this a decorative photograph costs megabytes for pixels no layout in the
+ * app can use. `deviceSizes` in `next.config.ts` stops at the same number, so
+ * this is the guard that survives someone widening that list again.
+ */
+const MAX_HOTLINK_WIDTH = 2048;
+
+/**
  * Sizes an editorial photograph at the provider, not through Next's optimizer.
  *
  * Editorial imagery is hotlinked by contract: Trove never stores a copy, so
@@ -25,7 +32,7 @@ export function pexelsImageLoader({ src, width }: ImageLoaderProps) {
 
   if (url.hostname !== PEXELS_IMAGE_HOST) return src;
 
-  url.searchParams.set('w', String(width));
+  url.searchParams.set('w', String(Math.min(width, MAX_HOTLINK_WIDTH)));
   // A height alongside the width would crop rather than scale, and the frame
   // already owns the aspect ratio. The provider's own `dpr` would multiply the
   // width a second time on top of the density Next has already asked for.

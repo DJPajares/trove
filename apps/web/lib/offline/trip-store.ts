@@ -96,6 +96,12 @@ export type OfflineMutationOperation =
       travelStatus: ItineraryTravelStatus;
     }
   | {
+      baseName: string | null;
+      itineraryDayId: string;
+      kind: 'itinerary_day_name';
+      name: string | null;
+    }
+  | {
       baseNote: string | null;
       itineraryDayId: string;
       kind: 'itinerary_day_note';
@@ -999,6 +1005,12 @@ export function applyOfflineMutation(
   if (mutation.kind === 'itinerary_day_note') {
     const day = next.days.find((candidate) => candidate.id === mutation.itineraryDayId);
     if (day) day.notes = mutation.note?.trim() || null;
+    return next;
+  }
+
+  if (mutation.kind === 'itinerary_day_name') {
+    const day = next.days.find((candidate) => candidate.id === mutation.itineraryDayId);
+    if (day) day.name = mutation.name?.trim() || null;
     return next;
   }
 

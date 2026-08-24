@@ -78,6 +78,7 @@ export type ItineraryDay = {
   experienceRating: number | null;
   id: string;
   items: ItineraryItem[];
+  name: string | null;
   notes: string | null;
   routeStartTravelMode: RouteTravelMode;
 };
@@ -197,6 +198,8 @@ export type TripModeContext = {
     defaultTimeZone: string;
     id: string;
     items: ItineraryItem[];
+    name: string | null;
+    number: number;
   } | null;
   leaveBy: {
     at: string;
@@ -437,6 +440,8 @@ function offlineTripModeContext(
           defaultTimeZone: day.defaultTimeZone,
           id: day.id,
           items: day.items,
+          name: day.name,
+          number: itinerary.days.findIndex((candidate) => candidate.id === day.id) + 1,
         }
       : null,
     leaveBy: null,
@@ -813,6 +818,32 @@ export async function updateItineraryDayNote(
     if (!operation) throw error;
     await queueOrThrow(error, auth.userId, tripId, operation);
     return { id: itineraryDayId, notes: note?.trim() || null };
+  }
+}
+
+export async function updateItineraryDayName(
+  tripId: string,
+  itineraryDayId: string,
+  name: string | null,
+) {
+  const auth = await getAuthContext();
+  const snapshot = await readTripSnapshot(auth.userId, tripId).catch(() => undefined);
+  const day = snapshot?.itinerary?.days.find((candidate) => candidate.id === itineraryDayId);
+  const operation: OfflineItineraryMutationOperation | null = day
+    ? { baseName: day.name, itineraryDayId, kind: 'itinerary_day_name', name }
+    : null;
+  try {
+    const result = await itineraryRequest<{ id: string; name: string | null }>(
+      `/trips/${tripId}/itinerary/days/${itineraryDayId}/name`,
+      { body: JSON.stringify({ name }), method: 'PATCH' },
+      auth,
+    );
+    if (operation) await applyOnlineMutation(auth.userId, tripId, operation);
+    return result;
+  } catch (error) {
+    if (!operation) throw error;
+    await queueOrThrow(error, auth.userId, tripId, operation);
+    return { id: itineraryDayId, name: name?.trim() || null };
   }
 }
 

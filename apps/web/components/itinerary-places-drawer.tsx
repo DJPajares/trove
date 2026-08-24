@@ -41,6 +41,8 @@ import { sortTripPlaces, tripPlaceSorts, type TripPlaceSort } from '@/lib/trip-p
 import { useTripPlaces } from '@/lib/trip-places/use-trip-places';
 
 type ItineraryPlacesDrawerProps = {
+  /** Optional custom name for the day currently being planned. */
+  dayName: string | null;
   /** 1-based number of the day currently being planned. */
   dayNumber: number;
   onAddToDay: (tripPlace: TripPlace) => Promise<boolean>;
@@ -55,6 +57,7 @@ type ItineraryPlacesDrawerProps = {
  * only while open, so the itinerary does not pay for a collection nobody asked to see.
  */
 export function ItineraryPlacesDrawer({
+  dayName,
   dayNumber,
   onAddToDay,
   onOpenChange,
@@ -96,7 +99,13 @@ export function ItineraryPlacesDrawer({
     setAddingId(tripPlace.id);
     setFeedback(null);
     const added = await onAddToDay(tripPlace);
-    setFeedback(added ? t('addedToDay', { number: dayNumber }) : t('addToDayError'));
+    setFeedback(
+      added
+        ? dayName
+          ? t('addedToNamedDay', { name: dayName, number: dayNumber })
+          : t('addedToDay', { number: dayNumber })
+        : t('addToDayError'),
+    );
     setAddingId(null);
   }
 
@@ -172,7 +181,11 @@ export function ItineraryPlacesDrawer({
 
             {sortedPlaces.length ? (
               <TripPlacesPanel
-                addToDayLabel={t('addToDay', { number: dayNumber })}
+                addToDayLabel={
+                  dayName
+                    ? t('addToNamedDay', { name: dayName, number: dayNumber })
+                    : t('addToDay', { number: dayNumber })
+                }
                 busyPlaceId={addingId}
                 onAddToDay={(tripPlace) => void addToDay(tripPlace)}
                 onEditPlace={setEditPlace}

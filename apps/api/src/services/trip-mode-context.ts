@@ -297,6 +297,8 @@ export async function resolveTripModeContext(
       defaultTimeZone: day.defaultTimeZone,
       id: day.id,
       items: day.items.map((item) => serializeItineraryItem(item, { snapshots })),
+      name: day.name,
+      number: Math.round((day.date.getTime() - trip.startDate.getTime()) / 86_400_000) + 1,
     },
     leaveBy,
     nextItemId: nextItem?.id ?? null,

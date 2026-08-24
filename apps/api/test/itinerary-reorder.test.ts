@@ -185,6 +185,7 @@ test('the atomic service moves exact-time items and the daily base', async () =>
       defaultTimeZoneSourceItemId: null,
       defaultTimeZoneSourceTripPlaceId: null,
       id: sourceDayId,
+      name: 'First light',
       notes: 'Source note',
       tripId,
     },
@@ -197,6 +198,7 @@ test('the atomic service moves exact-time items and the daily base', async () =>
       defaultTimeZoneSourceItemId: null,
       defaultTimeZoneSourceTripPlaceId: null,
       id: targetDayId,
+      name: 'City arrival',
       notes: 'Target note',
       tripId,
     },
@@ -250,6 +252,7 @@ test('the atomic service moves exact-time items and the daily base', async () =>
     'Source note',
     'Target note',
   ]);
+  expect(store.itineraryDay.map(({ name }) => name)).toStrictEqual(['First light', 'City arrival']);
   expect(store.itineraryDay).toMatchObject([
     { dailyBaseDepartureTripPlaceId: null, dailyBaseTripPlaceId: null },
     { dailyBaseDepartureTripPlaceId: null, dailyBaseTripPlaceId: 'source-base' },

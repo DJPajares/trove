@@ -91,6 +91,7 @@ function MapSkeleton({ label }: Readonly<{ label: string }>) {
 
 export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripMode.views.map');
+  const itineraryT = useTranslations('itinerary');
   const locale = useLocale();
   const router = useRouter();
   const { preferences } = usePreferences();
@@ -333,9 +334,13 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="sr-only">{t('title')}</h2>
+          {day.name ? (
+            <h2 className="text-base font-semibold tracking-tight sm:text-lg">{day.name}</h2>
+          ) : (
+            <h2 className="sr-only">{t('title')}</h2>
+          )}
           <p className="text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
-            {date}
+            {day.name ? itineraryT('dayOption', { date, number: context.day?.number ?? 1 }) : date}
           </p>
           {/* Which of these two sentences shows is the whole distinction between
               a planned map and a live one, so it stays visible either way. */}

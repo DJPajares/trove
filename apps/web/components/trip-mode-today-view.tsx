@@ -122,6 +122,7 @@ function TodaySkeleton({ label }: Readonly<{ label: string }>) {
 
 export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripMode.views.today');
+  const itineraryT = useTranslations('itinerary');
   const memoryTranslations = useTranslations('memories.capture');
   const locale = useLocale();
   const { preferences } = usePreferences();
@@ -484,9 +485,13 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="sr-only">{t('title')}</h2>
+          {day.name ? (
+            <h2 className="text-base font-semibold tracking-tight sm:text-lg">{day.name}</h2>
+          ) : (
+            <h2 className="sr-only">{t('title')}</h2>
+          )}
           <p className="text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
-            {date}
+            {day.name ? itineraryT('dayOption', { date, number: context.day?.number ?? 1 }) : date}
           </p>
           <p className="mt-0.5 text-[length:var(--text-metadata)] leading-5 text-text-subtle">
             {t('timeZone', { timeZone: day.defaultTimeZone })}
@@ -659,14 +664,24 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                                     key={candidate.id}
                                     onClick={() => void moveToDay(item, candidate.id)}
                                   >
-                                    {t('dayOption', {
-                                      date: new Intl.DateTimeFormat(locale, {
-                                        day: 'numeric',
-                                        month: 'short',
-                                        timeZone: 'UTC',
-                                      }).format(new Date(`${candidate.date}T00:00:00.000Z`)),
-                                      number: itinerary.days.indexOf(candidate) + 1,
-                                    })}
+                                    {candidate.name
+                                      ? itineraryT('dayOptionNamed', {
+                                          date: new Intl.DateTimeFormat(locale, {
+                                            day: 'numeric',
+                                            month: 'short',
+                                            timeZone: 'UTC',
+                                          }).format(new Date(`${candidate.date}T00:00:00.000Z`)),
+                                          name: candidate.name,
+                                          number: itinerary.days.indexOf(candidate) + 1,
+                                        })
+                                      : t('dayOption', {
+                                          date: new Intl.DateTimeFormat(locale, {
+                                            day: 'numeric',
+                                            month: 'short',
+                                            timeZone: 'UTC',
+                                          }).format(new Date(`${candidate.date}T00:00:00.000Z`)),
+                                          number: itinerary.days.indexOf(candidate) + 1,
+                                        })}
                                   </DropdownMenuItem>
                                 ))}
                             </DropdownMenuSubContent>

@@ -2,8 +2,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPrismaClient, type Prisma } from '@trove/db';
 
 import { MEMORY_PHOTOS_BUCKET } from './memories.js';
+import { placeProviderRefInclude, serializeCanonicalPlace } from './place-serializer.js';
 import { createAuthenticatedSupabaseClient } from './supabase-auth.js';
 import {
+  calculateItineraryCoverage,
   deriveTripLifecycle,
   enumerateDateRange,
   formatDateOnly,
@@ -11,6 +13,7 @@ import {
   isValidIanaTimeZone,
   parseDateOnly,
   resolveCountryPrimaryTimeZone,
+  resolveTripWeatherLocation,
   resolveTripTimeZone,
 } from './trip-rules.js';
 
@@ -55,7 +58,14 @@ export class TripDateShrinkConfirmationError extends Error {
 const tripInclude = {
   // Lets completed-trip surfaces offer Memories only when there are some to open.
   _count: { select: { memories: true } },
-  destinations: { include: { place: true }, orderBy: { position: 'asc' as const } },
+  destinations: {
+    include: { place: { include: placeProviderRefInclude } },
+    orderBy: { position: 'asc' as const },
+  },
+  itineraryDays: {
+    orderBy: { date: 'asc' as const },
+    select: { _count: { select: { items: true } }, date: true },
+  },
   owner: { include: { homePlace: true } },
   startingPlace: true,
 } as const;
@@ -96,6 +106,24 @@ async function serializeTrip(
   const startDate = formatDateOnly(trip.startDate);
   const endDate = formatDateOnly(trip.endDate);
   const effectiveStartingPlace = trip.startingPlace ?? trip.owner.homePlace;
+  const itineraryCoverage = calculateItineraryCoverage(
+    startDate,
+    endDate,
+    (trip.itineraryDays ?? []).map((day) => ({
+      date: day.date,
+      scheduledItemCount: day._count.items,
+    })),
+  );
+  const weatherLocation = resolveTripWeatherLocation(
+    trip.destinations.map((destination) => ({
+      location: serializeCanonicalPlace({
+        ...destination.place,
+        providerRefs: destination.place.providerRefs ?? [],
+      }).location,
+      timeZone: destination.timeZone,
+    })),
+    trip.referenceTimeZone,
+  );
 
   return {
     coverPhotoPath: trip.coverPhotoPath,
@@ -112,6 +140,7 @@ async function serializeTrip(
     experienceNote: trip.experienceNote,
     experienceRating: trip.experienceRating,
     id: trip.id,
+    itineraryCoverage,
     lifecycle: deriveTripLifecycle(startDate, endDate, trip.referenceTimeZone, now),
     memoryCount: trip._count.memories,
     name: trip.name,
@@ -130,6 +159,7 @@ async function serializeTrip(
       : null,
     startingLocationOverride: trip.startingPlace?.customName ?? null,
     updatedAt: trip.updatedAt.toISOString(),
+    weatherLocation,
   };
 }
 

@@ -13,6 +13,18 @@ export type TripTimeZoneResolution = {
   timeZone: string;
 };
 
+export type ItineraryCoverage = {
+  percentage: number;
+  plannedDays: number;
+  totalDays: number;
+};
+
+export type TripWeatherLocation = {
+  latitude: number;
+  longitude: number;
+  timeZone: string;
+};
+
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function normalizeCountryName(value: string) {
@@ -93,6 +105,51 @@ export function getDateRangeChanges(existingDates: string[], startDate: string, 
     missingDates: requestedDates.filter((date) => !existing.has(date)),
     removedDates: existingDates.filter((date) => !requested.has(date)),
     retainedDates: existingDates.filter((date) => requested.has(date)),
+  };
+}
+
+/**
+ * Itinerary coverage is deliberately a day-presence measure, not a score.
+ * Callers pass only items assigned to itinerary days, so unscheduled items,
+ * daily bases, tasks, and reservations cannot affect the result.
+ */
+export function calculateItineraryCoverage(
+  startDate: string,
+  endDate: string,
+  days: readonly { date: Date | string; scheduledItemCount: number }[],
+): ItineraryCoverage {
+  const tripDates = enumerateDateRange(startDate, endDate);
+  const tripDateSet = new Set(tripDates);
+  const plannedDates = new Set(
+    days
+      .filter((day) => day.scheduledItemCount > 0)
+      .map((day) => (typeof day.date === 'string' ? day.date : formatDateOnly(day.date)))
+      .filter((date) => tripDateSet.has(date)),
+  );
+  const totalDays = tripDates.length;
+  const plannedDays = plannedDates.size;
+
+  return {
+    percentage: totalDays === 0 ? 0 : Math.round((plannedDays / totalDays) * 100),
+    plannedDays,
+    totalDays,
+  };
+}
+
+export function resolveTripWeatherLocation(
+  destinations: readonly {
+    location: { latitude: number; longitude: number; timeZone: string | null } | null;
+    timeZone: string | null;
+  }[],
+  referenceTimeZone: string,
+): TripWeatherLocation | null {
+  const located = destinations.find((destination) => destination.location !== null);
+  if (!located?.location) return null;
+
+  return {
+    latitude: located.location.latitude,
+    longitude: located.location.longitude,
+    timeZone: located.timeZone ?? located.location.timeZone ?? referenceTimeZone,
   };
 }
 

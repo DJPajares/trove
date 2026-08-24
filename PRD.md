@@ -461,6 +461,22 @@ Prioritize:
 
 Do not introduce a separate generic "planning progress" score or status unless it is explicitly defined as a future product concept.
 
+### Itinerary coverage
+
+Home and Trips may show **itinerary coverage** as a compact informational
+measure for planning and active trips. It answers how many trip days have at
+least one scheduled itinerary item; it does not judge the quality of the plan.
+
+- `plannedDays`: trip days containing at least one itinerary item assigned to
+  that day.
+- `totalDays`: every itinerary day in the inclusive trip date range.
+- `percentage`: `round(plannedDays / totalDays * 100)`.
+- Unscheduled itinerary items, daily bases, tasks, and reservations do not
+  count toward coverage.
+- Coverage is independent from trip lifecycle, manual readiness, and Plan
+  Score. It must never change any of them.
+- Completed-trip surfaces omit coverage.
+
 ## 9.3 Active Trip
 
 Prioritize:

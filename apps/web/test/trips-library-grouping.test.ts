@@ -12,6 +12,7 @@ function trip(overrides: Partial<Trip> & Pick<Trip, 'id' | 'lifecycle'>): Trip {
     endDate: '2026-09-21',
     experienceNote: null,
     experienceRating: null,
+    itineraryCoverage: { percentage: 29, plannedDays: 2, totalDays: 7 },
     memoryCount: 0,
     name: 'A trip',
     notes: null,
@@ -23,6 +24,7 @@ function trip(overrides: Partial<Trip> & Pick<Trip, 'id' | 'lifecycle'>): Trip {
     startingLocation: null,
     startingLocationOverride: null,
     updatedAt: '2026-01-01T00:00:00.000Z',
+    weatherLocation: null,
     ...overrides,
   };
 }

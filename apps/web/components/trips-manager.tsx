@@ -5,7 +5,6 @@ import { ChevronDown, CircleAlert, MapPinned, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
-import { EditorialSection } from '@/components/editorial-section';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
 import { TripFeaturedCard } from '@/components/trip-featured-card';
@@ -17,7 +16,6 @@ import { groupTripsForLibrary, PAST_TRIPS_PREVIEW_COUNT } from '@/lib/trips/life
 import { libraryEditorialSubjects, tripEditorialSubject } from '@/lib/trips/summary';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
-import { ItemGroup } from '@/components/ui/item';
 import {
   Sheet,
   SheetContent,
@@ -137,32 +135,52 @@ export function TripsManager() {
           ) : null}
 
           {groupedTrips.upcoming.length ? (
-            <EditorialSection density="compact" title={t('sections.planning')} treatment="ruled">
-              <ItemGroup aria-label={t('sections.planning')} variant="list">
+            <section aria-labelledby="upcoming-trips-heading" className="space-y-4">
+              <h2
+                className="text-[length:var(--text-section-title)] font-semibold tracking-[-0.02em] text-foreground"
+                id="upcoming-trips-heading"
+              >
+                {t('sections.planning')}
+              </h2>
+              <div className="grid gap-4 md:grid-cols-2">
                 {groupedTrips.upcoming.map((trip) => (
                   <TripListRow editorial={editorialFor(trip)} key={trip.id} trip={trip} />
                 ))}
-              </ItemGroup>
-            </EditorialSection>
+              </div>
+            </section>
           ) : null}
 
           {groupedTrips.past.length ? (
-            <EditorialSection density="compact" title={t('sections.completed')} treatment="ruled">
-              <ItemGroup aria-label={t('sections.completed')} variant="list">
+            <section aria-labelledby="past-trips-heading" className="space-y-4">
+              <h2
+                className="text-[length:var(--text-section-title)] font-semibold tracking-[-0.02em] text-foreground"
+                id="past-trips-heading"
+              >
+                {t('sections.completed')}
+              </h2>
+              <div className="grid gap-3">
                 {groupedTrips.past.slice(0, PAST_TRIPS_PREVIEW_COUNT).map((trip) => (
-                  <TripListRow editorial={editorialFor(trip)} key={trip.id} trip={trip} />
+                  <TripListRow
+                    editorial={editorialFor(trip)}
+                    key={trip.id}
+                    trip={trip}
+                    variant="archive"
+                  />
                 ))}
-              </ItemGroup>
+              </div>
               {groupedTrips.past.length > PAST_TRIPS_PREVIEW_COUNT ? (
                 <Collapsible>
                   <CollapsiblePanel>
-                    {/* A second list group would draw its own top rule directly
-                        under the first one's bottom rule. */}
-                    <ItemGroup className="border-t-0" variant="list">
+                    <div className="mt-3 grid gap-3">
                       {groupedTrips.past.slice(PAST_TRIPS_PREVIEW_COUNT).map((trip) => (
-                        <TripListRow editorial={editorialFor(trip)} key={trip.id} trip={trip} />
+                        <TripListRow
+                          editorial={editorialFor(trip)}
+                          key={trip.id}
+                          trip={trip}
+                          variant="archive"
+                        />
                       ))}
-                    </ItemGroup>
+                    </div>
                   </CollapsiblePanel>
                   <CollapsibleTrigger className="group mt-3">
                     <ChevronDown
@@ -178,7 +196,7 @@ export function TripsManager() {
                   </CollapsibleTrigger>
                 </Collapsible>
               ) : null}
-            </EditorialSection>
+            </section>
           ) : null}
         </div>
       )}

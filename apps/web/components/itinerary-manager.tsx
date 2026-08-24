@@ -613,9 +613,9 @@ export function ItineraryManager({
 
   /**
    * A base is a stop of the day, so it reads like one: numbered in travel order,
-   * named, and selectable on the map when it has a location. What it does not get
-   * is an actions menu — where a day starts and ends is changed in day settings,
-   * not by editing a stop.
+   * named, opening its place when clicked, and findable on the map from its own
+   * menu. What that menu does not carry is a way to change it — where a day
+   * starts and ends is set in day settings, not by editing a stop.
    */
   function selectBaseOnMap(tripPlaceId: string) {
     const point = mapPoints.find(
@@ -1757,6 +1757,9 @@ export function ItineraryManager({
                     }
                     onSelectBase={selectBaseOnMap}
                     onSelectItem={selectItemOnMap}
+                    onViewBaseDetails={(tripPlaceId) =>
+                      setDetailsPlace(tripPlaceById(tripPlaceId) ?? null)
+                    }
                     onViewItemDetails={(item) => setDetailsPlace(item.tripPlace)}
                     organizingItemId={organizingItemId}
                     resolveBase={(tripPlaceId) => {

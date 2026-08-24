@@ -56,6 +56,7 @@ export type ItineraryDayTimelineProps = {
   onSelectBase: (tripPlaceId: string) => void;
   /** Shows the stop's pin on the map - what clicking the row used to do. */
   onSelectItem: (item: ItineraryItem) => void;
+  onViewBaseDetails: (tripPlaceId: string) => void;
   onViewItemDetails: (item: ItineraryItem) => void;
   organizingItemId: string | null;
   resolveBase: (tripPlaceId: string) => Omit<TimelineStopView, 'mapsHref'> | null;
@@ -91,6 +92,7 @@ export function ItineraryDayTimeline({
   onMoveItem,
   onSelectBase,
   onSelectItem,
+  onViewBaseDetails,
   onViewItemDetails,
   organizingItemId,
   resolveBase,
@@ -138,6 +140,34 @@ export function ItineraryDayTimeline({
 
           return (
             <TimelineRow
+              actions={
+                // The one thing a base's menu carries. Where a day starts and
+                // ends is still changed in day settings rather than here, so
+                // this stays a way of looking at the stop, not of editing it -
+                // and it is the same gesture the numbered stops offer.
+                base.located ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          aria-label={t('itemActions', { name: base.name })}
+                          size="icon-sm"
+                          type="button"
+                          variant="ghost"
+                        />
+                      }
+                    >
+                      <Ellipsis aria-hidden="true" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-48">
+                      <DropdownMenuItem onClick={() => onSelectBase(entry.tripPlaceId)}>
+                        <MapPin aria-hidden="true" />
+                        {t('itemMenu.showOnMap')}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : undefined
+              }
               connector={connector}
               description={
                 entry.role === 'arrival' ? t('dayBaseStartDescription') : t('dayBaseEndDescription')
@@ -155,10 +185,9 @@ export function ItineraryDayTimeline({
               title={
                 base.located ? (
                   <button
-                    aria-label={t('map.showItem', { name: base.name })}
-                    aria-pressed={base.selected}
+                    aria-label={t('viewDetailsFor', { name: base.name })}
                     className="rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
-                    onClick={() => onSelectBase(entry.tripPlaceId)}
+                    onClick={() => onViewBaseDetails(entry.tripPlaceId)}
                     type="button"
                   >
                     {base.name}

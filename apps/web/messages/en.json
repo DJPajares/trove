@@ -1083,7 +1083,6 @@
       "viewNavigation": "Choose itinerary or map view",
       "listView": "Itinerary",
       "mapView": "Map",
-      "showItem": "Show {name} on the map",
       "scheduledMarkerLabel": "{name}, scheduled stop {order}",
       "consideredMarkerLabel": "{name}, considered place",
       "baseMarkerLabel": "{name}, day base",

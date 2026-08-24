@@ -46,7 +46,7 @@ export function TripsManager() {
   const editorialImages = useEditorialImages(libraryEditorialSubjects(groupedTrips));
   const editorialFor = (trip: Trip) => {
     const subject = tripEditorialSubject(trip);
-    return subject ? (editorialImages.get(editorialSubjectKey(subject)) ?? null) : null;
+    return subject ? (editorialImages.get(editorialSubjectKey(subject))?.[0] ?? null) : null;
   };
 
   useEffect(() => {

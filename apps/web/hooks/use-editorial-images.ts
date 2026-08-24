@@ -9,7 +9,7 @@ import {
   type EditorialSubject,
 } from '@/lib/media/editorial-images';
 
-const EMPTY_IMAGES: ReadonlyMap<string, EditorialImageReference> = new Map();
+const EMPTY_IMAGES: ReadonlyMap<string, EditorialImageReference[]> = new Map();
 
 /**
  * Resolves a surface's editorial photography, keyed by subject.

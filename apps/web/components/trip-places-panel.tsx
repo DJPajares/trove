@@ -145,16 +145,17 @@ export function TripPlacesPanel({
   const editorialImages = useEditorialImages(editorialSubjects);
   const [detailsPlace, setDetailsPlace] = useState<TripPlace | null>(null);
 
-  /** The photograph resolved for a place by the one batch above, or none. */
-  const editorialFor = (tripPlace: TripPlace) => {
+  /** The ordered collection resolved for a place by the one batch above. */
+  const editorialImagesFor = (tripPlace: TripPlace) => {
     const providerName = resolveProviderPlaceName(tripPlace);
-    if (!providerName) return null;
+    if (!providerName) return [];
     return (
       editorialImages.get(
         editorialSubjectKey({ category: tripPlace.place.snapshot?.category, name: providerName }),
-      ) ?? null
+      ) ?? []
     );
   };
+  const editorialFor = (tripPlace: TripPlace) => editorialImagesFor(tripPlace)[0] ?? null;
 
   /** What the details sheet cannot know: this place's standing on this trip. */
   const detailsMeta = (tripPlace: TripPlace): PlaceDetailsRow[] =>
@@ -335,7 +336,7 @@ export function TripPlacesPanel({
 
       {detailsPlace ? (
         <PlaceDetailsSheet
-          editorial={editorialFor(detailsPlace)}
+          editorialImages={editorialImagesFor(detailsPlace)}
           meta={detailsMeta(detailsPlace)}
           name={placeName(detailsPlace)}
           officialName={officialName(detailsPlace)}

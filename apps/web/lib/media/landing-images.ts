@@ -24,15 +24,9 @@ export const landingHeroImage: EditorialImageReference = {
     providerPageUrl: 'https://www.pexels.com/photo/cars-on-road-near-body-of-water-8146248/',
   },
   dominantColor: '#716648',
+  externalPhotoId: '8146248',
   height: 5956,
-  sources: {
-    large:
-      'https://images.pexels.com/photos/8146248/pexels-photo-8146248.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940',
-    medium:
-      'https://images.pexels.com/photos/8146248/pexels-photo-8146248.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
-    small:
-      'https://images.pexels.com/photos/8146248/pexels-photo-8146248.jpeg?auto=compress&cs=tinysrgb&h=350',
-  },
+  sourceUrl: 'https://images.pexels.com/photos/8146248/pexels-photo-8146248.jpeg',
   width: 7944,
 };
 
@@ -47,14 +41,8 @@ export const landingLiveItImage: EditorialImageReference = {
       'https://www.pexels.com/photo/traveler-walking-through-narrow-brick-alleyway-31075085/',
   },
   dominantColor: '#9A724E',
+  externalPhotoId: '31075085',
   height: 4480,
-  sources: {
-    large:
-      'https://images.pexels.com/photos/31075085/pexels-photo-31075085.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940',
-    medium:
-      'https://images.pexels.com/photos/31075085/pexels-photo-31075085.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
-    small:
-      'https://images.pexels.com/photos/31075085/pexels-photo-31075085.jpeg?auto=compress&cs=tinysrgb&h=350',
-  },
+  sourceUrl: 'https://images.pexels.com/photos/31075085/pexels-photo-31075085.jpeg',
   width: 6720,
 };

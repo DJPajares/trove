@@ -179,7 +179,9 @@ export function TripDetail({
   // given the trip a cover of its own.
   const subject = trip ? tripEditorialSubject(trip) : null;
   const editorialImages = useEditorialImages(subject ? [subject] : []);
-  const editorial = subject ? (editorialImages.get(editorialSubjectKey(subject)) ?? null) : null;
+  const editorial = subject
+    ? (editorialImages.get(editorialSubjectKey(subject))?.[0] ?? null)
+    : null;
 
   const backToTrips = (
     <Link

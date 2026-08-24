@@ -9,6 +9,7 @@ vi.mock('@/lib/supabase/client', () => ({
 const {
   editorialSubjectKey,
   MAX_EDITORIAL_IMAGE_SUBJECTS,
+  primaryEditorialImage,
   resetEditorialImageCache,
   resolveEditorialImages,
 } = await import('../lib/media/editorial-images.ts');
@@ -20,16 +21,20 @@ const attribution = {
   providerPageUrl: 'https://provider.example/photo/1',
 };
 
-function image(subjectKey: string) {
+function image(subjectKey: string, count = 1) {
   return {
-    image: {
-      altText: null,
-      attribution,
-      dominantColor: '#2f4858',
-      height: 800,
-      sources: { large: 'large.jpg', medium: 'medium.jpg', small: 'small.jpg' },
-      width: 1200,
-    },
+    images: Array.from({ length: count }, (_, index) => {
+      const externalPhotoId = String(index + 1);
+      return {
+        altText: null,
+        attribution,
+        dominantColor: '#2f4858',
+        externalPhotoId,
+        height: 800,
+        sourceUrl: `https://images.example/${externalPhotoId}/original.jpg`,
+        width: 1200,
+      };
+    }),
     status: 'ok' as const,
     subjectKey,
   };
@@ -64,6 +69,14 @@ test('the subject key normalises the ways one destination gets spelled', () => {
   );
 });
 
+test('the first collection image is the stable representative for non-gallery surfaces', () => {
+  const first = image('destination:lisbon').images[0]!;
+  const second = { ...first, externalPhotoId: '2' };
+
+  expect(primaryEditorialImage([first, second])).toBe(first);
+  expect(primaryEditorialImage([])).toBeNull();
+});
+
 test('a screen asks for each distinct subject once', async () => {
   const fetchMock = vi.fn(async (..._call: FetchCall) => respond([image('destination:lisbon')]));
   vi.stubGlobal('fetch', fetchMock);
@@ -76,18 +89,22 @@ test('a screen asks for each distinct subject once', async () => {
 
   expect(fetchMock).toHaveBeenCalledTimes(1);
   expect(sentSubjects(fetchMock.mock.calls)[0]).toHaveLength(1);
-  expect(resolved.get('destination:lisbon')?.attribution).toStrictEqual(attribution);
+  expect(resolved.get('destination:lisbon')?.[0]?.attribution).toStrictEqual(attribution);
 });
 
-test('an answer already given this session is never asked for again', async () => {
-  const fetchMock = vi.fn(async () => respond([image('destination:lisbon')]));
+test('an ordered collection already given this session is never asked for again', async () => {
+  const fetchMock = vi.fn(async () => respond([image('destination:lisbon', 3)]));
   vi.stubGlobal('fetch', fetchMock);
 
   await resolveEditorialImages([{ name: 'Lisbon' }]);
   const resolved = await resolveEditorialImages([{ name: 'Lisbon' }]);
 
   expect(fetchMock).toHaveBeenCalledTimes(1);
-  expect(resolved.has('destination:lisbon')).toBe(true);
+  expect(resolved.get('destination:lisbon')?.map((item) => item.externalPhotoId)).toStrictEqual([
+    '1',
+    '2',
+    '3',
+  ]);
 });
 
 test('a screen asking for too much is capped, never split into a fan-out', async () => {

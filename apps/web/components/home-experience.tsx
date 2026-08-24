@@ -130,11 +130,11 @@ export function HomeExperience() {
   const editorialImages = useEditorialImages(editorialSubjects);
   const focalSubject = primary ? tripEditorialSubject(primary) : null;
   const focalEditorial = focalSubject
-    ? (editorialImages.get(editorialSubjectKey(focalSubject)) ?? null)
+    ? (editorialImages.get(editorialSubjectKey(focalSubject))?.[0] ?? null)
     : null;
   const editorialFor = (trip: Trip) => {
     const subject = tripEditorialSubject(trip);
-    return subject ? (editorialImages.get(editorialSubjectKey(subject)) ?? null) : null;
+    return subject ? (editorialImages.get(editorialSubjectKey(subject))?.[0] ?? null) : null;
   };
 
   useEffect(() => {

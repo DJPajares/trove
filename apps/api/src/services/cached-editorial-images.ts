@@ -14,59 +14,44 @@ import {
   type ProviderCallSource,
 } from './provider-usage.js';
 
-/**
- * How long a resolved photograph stands before Trove looks again.
- *
- * Longer than the 30-day place snapshot on purpose. That rule exists because a
- * name, an address or a set of types can change under Trove's feet in a way a
- * traveller would act on. A representative photograph of Kyoto cannot go wrong
- * in that sense - it can only become a less good choice - so the window is set
- * by how often the provider's library is worth revisiting, and long enough that
- * steady-state traffic is effectively zero.
- */
+/** A representative editorial collection is stable for ninety days. */
 export const EDITORIAL_IMAGE_CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1_000;
 
-/**
- * A subject the provider has nothing for is remembered too, or every render of
- * an obscure custom place would re-ask. Shorter than a hit, because the library
- * gaining a photograph is the outcome worth noticing.
- */
+/** A definitive empty result is retried after seven days. */
 export const EDITORIAL_IMAGE_MISS_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
 
 const NO_RESULTS = 'NO_RESULTS';
+const MAX_IMAGES_PER_SUBJECT = 3;
 
 type CachedEditorialImageRow = {
   altText: string | null;
-  cachedAt: Date | null;
   dominantColor: string | null;
-  externalPhotoId: string | null;
+  externalPhotoId: string;
   height: number | null;
   id: string;
-  largeUrl: string | null;
-  mediumUrl: string | null;
-  missedAt: Date | null;
-  photographerName: string | null;
-  photographerUrl: string | null;
-  providerPageUrl: string | null;
-  smallUrl: string | null;
-  subjectKey: string;
+  photographerName: string;
+  photographerUrl: string;
+  position: number;
+  providerPageUrl: string;
+  sourceUrl: string;
   width: number | null;
 };
 
-/**
- * A row only counts as a photograph when it carries everything needed to render
- * *and* credit one. A half-written row degrades to a fallback rather than to an
- * uncredited image.
- */
+type CachedEditorialImageSetRow = {
+  cachedAt: Date | null;
+  id: string;
+  images: CachedEditorialImageRow[];
+  missedAt: Date | null;
+  subjectKey: string;
+};
+
 function toReference(row: CachedEditorialImageRow): EditorialImageReference | null {
   if (
     !row.externalPhotoId ||
     !row.photographerName ||
     !row.photographerUrl ||
     !row.providerPageUrl ||
-    !row.smallUrl ||
-    !row.mediumUrl ||
-    !row.largeUrl
+    !row.sourceUrl
   ) {
     return null;
   }
@@ -82,19 +67,22 @@ function toReference(row: CachedEditorialImageRow): EditorialImageReference | nu
     dominantColor: row.dominantColor,
     externalPhotoId: row.externalPhotoId,
     height: row.height,
-    sources: { large: row.largeUrl, medium: row.mediumUrl, small: row.smallUrl },
+    sourceUrl: row.sourceUrl,
     width: row.width,
   };
 }
 
+function toReferences(row: CachedEditorialImageSetRow) {
+  return row.images
+    .toSorted((left, right) => left.position - right.position)
+    .map(toReference)
+    .filter((image): image is EditorialImageReference => image !== null)
+    .slice(0, MAX_IMAGES_PER_SUBJECT);
+}
+
 /**
- * Resolves through the `editorial_images` table first, and only reaches the
- * provider for a subject that has no fresh answer.
- *
- * Every read is one query for the whole batch, so a Trips list costs a single
- * round trip whatever its length, and cached subjects cost no provider call at
- * all. The uncached remainder is the only thing that fans out, bounded by the
- * shared provider concurrency limit in the base class.
+ * Resolves a screen batch from PostgreSQL first. Only missing or stale subjects
+ * reach Pexels, and each distinct subject still costs at most one search call.
  */
 export class CachedEditorialImagesService extends EditorialImagesService {
   private readonly now: () => Date;
@@ -133,7 +121,7 @@ export class CachedEditorialImagesService extends EditorialImagesService {
           source: this.source,
         });
         results.set(request.subjectKey, {
-          image: cached.image,
+          images: cached.images,
           status: 'ok',
           subjectKey: request.subjectKey,
         });
@@ -161,7 +149,6 @@ export class CachedEditorialImagesService extends EditorialImagesService {
     await Promise.all(
       resolved.map(async (result, index) => {
         const request = pending[index] as UniqueEditorialImageRequest;
-
         results.set(
           request.subjectKey,
           await this.persist(request, result, rows.get(request.subjectKey), context, pins),
@@ -182,35 +169,41 @@ export class CachedEditorialImagesService extends EditorialImagesService {
 
   private async readRows(subjectKeys: string[]) {
     try {
-      const rows = await getPrismaClient().editorialImage.findMany({
+      const rows = await getPrismaClient().editorialImageSet.findMany({
+        include: { images: { orderBy: { position: 'asc' }, take: MAX_IMAGES_PER_SUBJECT } },
         where: { subjectKey: { in: subjectKeys } },
       });
 
-      return new Map(rows.map((row) => [row.subjectKey, row as CachedEditorialImageRow]));
+      return new Map(rows.map((row) => [row.subjectKey, row as CachedEditorialImageSetRow]));
     } catch {
-      // A cache that cannot be read is a slow path, never a failed request.
-      return new Map<string, CachedEditorialImageRow>();
+      return new Map<string, CachedEditorialImageSetRow>();
     }
   }
 
   private readCache(
-    row: CachedEditorialImageRow | undefined,
+    row: CachedEditorialImageSetRow | undefined,
   ):
-    | { image: EditorialImageReference; kind: 'hit' }
+    | { images: EditorialImageReference[]; kind: 'hit' }
     | { kind: 'negative' }
     | { kind: 'miss'; reason: ProviderCacheMissReason } {
-    if (!row) {
-      return { kind: 'miss', reason: 'missing_editorial_image' };
-    }
+    if (!row) return { kind: 'miss', reason: 'missing_editorial_image' };
 
     const now = this.now().getTime();
-    const reference = toReference(row);
+    const images = toReferences(row);
 
-    if (reference && row.cachedAt && now - row.cachedAt.getTime() <= EDITORIAL_IMAGE_CACHE_TTL_MS) {
-      return { image: reference, kind: 'hit' };
+    if (
+      images.length > 0 &&
+      row.cachedAt &&
+      now - row.cachedAt.getTime() <= EDITORIAL_IMAGE_CACHE_TTL_MS
+    ) {
+      return { images, kind: 'hit' };
     }
 
-    if (!reference && row.missedAt && now - row.missedAt.getTime() <= EDITORIAL_IMAGE_MISS_TTL_MS) {
+    if (
+      images.length === 0 &&
+      row.missedAt &&
+      now - row.missedAt.getTime() <= EDITORIAL_IMAGE_MISS_TTL_MS
+    ) {
       return { kind: 'negative' };
     }
 
@@ -220,109 +213,94 @@ export class CachedEditorialImagesService extends EditorialImagesService {
     };
   }
 
-  /**
-   * Writes the provider's answer, and decides what a non-answer means.
-   *
-   * A photograph already on the row outlives a later empty or unavailable one:
-   * the traveller keeps the image they have seen before, which is both the
-   * better picture and the stabler one. An empty answer still refreshes the
-   * dating so the next render does not re-ask.
-   */
+  /** Preserve an existing collection whenever a refresh is empty or unavailable. */
   private async persist(
     request: UniqueEditorialImageRequest,
     result: EditorialImageResult,
-    row: CachedEditorialImageRow | undefined,
+    row: CachedEditorialImageSetRow | undefined,
     context: EditorialImageResolveContext,
     pins: Promise<void>[],
   ): Promise<EditorialImageResult> {
-    const existing = row ? toReference(row) : null;
+    const existing = row ? toReferences(row) : [];
 
     if (result.status === 'unavailable') {
-      if (!existing) {
-        return result;
-      }
-
+      if (existing.length === 0) return result;
       pins.push(this.pin(request, row?.id, context));
-
-      return { image: existing, status: 'ok', subjectKey: request.subjectKey };
+      return { images: existing, status: 'ok', subjectKey: request.subjectKey };
     }
 
     const now = this.now();
-    const image = result.status === 'ok' ? result.image : existing;
+    const images = (result.status === 'ok' ? result.images : existing).slice(
+      0,
+      MAX_IMAGES_PER_SUBJECT,
+    );
+    const setData =
+      images.length > 0
+        ? { cachedAt: now, missCode: null, missedAt: null }
+        : { cachedAt: null, missCode: NO_RESULTS, missedAt: now };
+    const imageRows = images.slice(0, MAX_IMAGES_PER_SUBJECT).map((image, position) => ({
+      altText: image.altText,
+      dominantColor: image.dominantColor,
+      externalPhotoId: image.externalPhotoId,
+      height: image.height,
+      photographerName: image.attribution.photographerName,
+      photographerUrl: image.attribution.photographerUrl,
+      position,
+      provider: 'PEXELS' as const,
+      providerPageUrl: image.attribution.providerPageUrl,
+      sourceUrl: image.sourceUrl,
+      width: image.width,
+    }));
 
-    const data = image
-      ? {
-          altText: image.altText,
-          cachedAt: now,
-          dominantColor: image.dominantColor,
-          externalPhotoId: image.externalPhotoId,
-          height: image.height,
-          largeUrl: image.sources.large,
-          mediumUrl: image.sources.medium,
-          missCode: null,
-          missedAt: null,
-          photographerName: image.attribution.photographerName,
-          photographerUrl: image.attribution.photographerUrl,
-          provider: 'PEXELS' as const,
-          providerPageUrl: image.attribution.providerPageUrl,
-          smallUrl: image.sources.small,
-          width: image.width,
-        }
-      : { cachedAt: null, missCode: NO_RESULTS, missedAt: now };
-
-    let imageId = row?.id;
+    let imageSetId = row?.id;
 
     try {
-      const saved = await getPrismaClient().editorialImage.upsert({
-        create: { subjectKey: request.subjectKey, ...data },
+      const saved = await getPrismaClient().editorialImageSet.upsert({
+        create: {
+          subjectKey: request.subjectKey,
+          ...setData,
+          images: imageRows.length > 0 ? { create: imageRows } : undefined,
+        },
         select: { id: true },
-        update: data,
+        update: {
+          ...setData,
+          images: { deleteMany: {}, ...(imageRows.length > 0 ? { create: imageRows } : {}) },
+        },
         where: { subjectKey: request.subjectKey },
       });
 
-      imageId = saved.id;
+      imageSetId = saved.id;
     } catch {
-      // A cache that cannot be written still answers this request.
+      // A cache that cannot be written still answers the current request.
     }
 
-    if (!image) {
-      return { status: 'empty', subjectKey: request.subjectKey };
-    }
+    if (images.length === 0) return { status: 'empty', subjectKey: request.subjectKey };
 
-    pins.push(this.pin(request, imageId, context));
-
-    return { image, status: 'ok', subjectKey: request.subjectKey };
+    pins.push(this.pin(request, imageSetId, context));
+    return { images, status: 'ok', subjectKey: request.subjectKey };
   }
 
-  /**
-   * Points the rows that asked at the photograph they got.
-   *
-   * Both updates are scoped so a request can only pin rows its caller may write:
-   * their own trips, and places that are either shared provider places or their
-   * own custom ones.
-   */
+  /** Pin only rows the authenticated caller may update. */
   private async pin(
     request: UniqueEditorialImageRequest,
-    editorialImageId: string | undefined,
+    editorialImageSetId: string | undefined,
     context: EditorialImageResolveContext,
   ) {
-    if (!editorialImageId) {
-      return;
-    }
+    if (!editorialImageSetId) return;
 
     const prisma = getPrismaClient();
 
     try {
       if (request.tripIds.length > 0) {
         await prisma.trip.updateMany({
-          data: { editorialImageId },
+          data: { editorialImageSetId },
           where: { id: { in: request.tripIds }, ownerId: context.ownerId },
         });
       }
 
       if (request.placeIds.length > 0) {
         await prisma.place.updateMany({
-          data: { editorialImageId },
+          data: { editorialImageSetId },
           where: {
             id: { in: request.placeIds },
             OR: [{ ownerId: null }, { ownerId: context.ownerId }],
@@ -330,7 +308,7 @@ export class CachedEditorialImagesService extends EditorialImagesService {
         });
       }
     } catch {
-      // Pinning is an optimisation for the next render, never this one.
+      // Pinning is an optimization for the next render, never this one.
     }
   }
 }

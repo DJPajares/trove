@@ -153,7 +153,7 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
     : null;
   const editorialImages = useEditorialImages(coverSubject ? [coverSubject] : []);
   const coverEditorial = coverSubject
-    ? (editorialImages.get(editorialSubjectKey(coverSubject)) ?? null)
+    ? (editorialImages.get(editorialSubjectKey(coverSubject))?.[0] ?? null)
     : null;
 
   function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {

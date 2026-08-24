@@ -14,16 +14,17 @@ export type EditorialImageAttribution = {
 };
 
 /**
- * A reference to a photograph, never the photograph. `sources` are hotlinked
- * provider URLs, `dominantColor` is what a frame paints while one loads, and
+ * A reference to a photograph, never the photograph. `sourceUrl` is the
+ * provider's unsized hotlink, `dominantColor` is what a frame paints while one loads, and
  * `width`/`height` let a frame reserve the space before any byte arrives.
  */
 export type EditorialImageReference = {
   altText: string | null;
   attribution: EditorialImageAttribution;
   dominantColor: string | null;
+  externalPhotoId: string;
   height: number | null;
-  sources: { large: string; medium: string; small: string };
+  sourceUrl: string;
   width: number | null;
 };
 
@@ -40,7 +41,7 @@ export type EditorialSubject = {
 };
 
 type EditorialImageResult =
-  | { image: EditorialImageReference; status: 'ok'; subjectKey: string }
+  | { images: EditorialImageReference[]; status: 'ok'; subjectKey: string }
   | { status: 'empty'; subjectKey: string }
   | { code: string; status: 'unavailable'; subjectKey: string };
 
@@ -70,11 +71,16 @@ export function editorialSubjectKey(subject: { category?: TrovePlaceCategory; na
  * deterministic for a subject and changes on a 90-day cadence, so re-rendering
  * a list or returning to a route must not ask again.
  */
-const resolvedImages = new Map<string, EditorialImageReference | null>();
+const resolvedImages = new Map<string, EditorialImageReference[] | null>();
 
 /** Test seam, and the only way this module's memory is ever discarded. */
 export function resetEditorialImageCache() {
   resolvedImages.clear();
+}
+
+/** The stable representative image used by every non-gallery surface. */
+export function primaryEditorialImage(images: readonly EditorialImageReference[] | undefined) {
+  return images?.[0] ?? null;
 }
 
 async function getAccessToken() {
@@ -118,7 +124,7 @@ async function requestEditorialImages(subjects: EditorialSubject[], accessToken:
  * list into a fan-out by forgetting to.
  */
 export async function resolveEditorialImages(subjects: EditorialSubject[]) {
-  const resolved = new Map<string, EditorialImageReference>();
+  const resolved = new Map<string, EditorialImageReference[]>();
 
   const pending = new Map<string, EditorialSubject>();
   for (const subject of subjects) {
@@ -147,8 +153,8 @@ export async function resolveEditorialImages(subjects: EditorialSubject[]) {
 
     for (const image of await requestEditorialImages(batch, accessToken)) {
       if (image.status === 'ok') {
-        resolvedImages.set(image.subjectKey, image.image);
-        resolved.set(image.subjectKey, image.image);
+        resolvedImages.set(image.subjectKey, image.images);
+        resolved.set(image.subjectKey, image.images);
         continue;
       }
 

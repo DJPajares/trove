@@ -305,7 +305,9 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   // a cover of its own — the same shape every other trip surface asks for.
   const subject = state.data ? tripEditorialSubject(state.data.trip) : null;
   const editorialImages = useEditorialImages(subject ? [subject] : []);
-  const editorial = subject ? (editorialImages.get(editorialSubjectKey(subject)) ?? null) : null;
+  const editorial = subject
+    ? (editorialImages.get(editorialSubjectKey(subject))?.[0] ?? null)
+    : null;
 
   async function moveHighlight(memoryId: string, direction: -1 | 1) {
     if (!story) return;

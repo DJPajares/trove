@@ -32,6 +32,8 @@ export function pexelsImageLoader({ src, width }: ImageLoaderProps) {
 
   if (url.hostname !== PEXELS_IMAGE_HOST) return src;
 
+  url.searchParams.set('auto', 'compress');
+  url.searchParams.set('cs', 'tinysrgb');
   url.searchParams.set('w', String(Math.min(width, MAX_HOTLINK_WIDTH)));
   // A height alongside the width would crop rather than scale, and the frame
   // already owns the aspect ratio. The provider's own `dpr` would multiply the

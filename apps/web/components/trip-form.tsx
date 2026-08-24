@@ -493,7 +493,14 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
               </p>
             ) : null}
             <div className="flex flex-wrap gap-2">
-              <label className={cn(buttonVariants({ variant: 'outline' }), 'cursor-pointer')}>
+              {/* The input this wraps is `sr-only`, so it is focusable but has
+                  no ring of its own to show; the label wears it instead. */}
+              <label
+                className={cn(
+                  buttonVariants({ variant: 'outline' }),
+                  'cursor-pointer focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/40',
+                )}
+              >
                 <ImagePlus aria-hidden="true" data-icon="inline-start" />
                 {coverPreview ? t('changeCover') : t('chooseCover')}
                 <Input

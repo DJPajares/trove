@@ -605,7 +605,12 @@ export function ItineraryManager({
   function scrollToItem(itemId: string, focus = false) {
     window.requestAnimationFrame(() => {
       const element = document.getElementById(`itinerary-item-${itemId}`);
-      element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // An explicit behavior overrides the global reduced-motion rule, so the
+      // preference has to be read here rather than left to the stylesheet.
+      element?.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'center',
+      });
       if (focus) element?.focus({ preventScroll: true });
     });
   }

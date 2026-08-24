@@ -1,8 +1,8 @@
 'use client';
 
-import { Bookmark, CalendarDays, ChevronRight, CircleAlert, MapPinned, Plus } from 'lucide-react';
+import { Bookmark, ChevronRight, CircleAlert, MapPinned, Plus } from 'lucide-react';
 import Link from 'next/link';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
 import { EditorialSection } from '@/components/editorial-section';
@@ -10,6 +10,7 @@ import { ExperienceRatingSummary } from '@/components/experience-rating-field';
 import { HomeFocalTrip } from '@/components/home-focal-trip';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
+import { TripListRow } from '@/components/trip-list-row';
 import { Button } from '@/components/ui/button';
 import {
   Item,
@@ -21,6 +22,7 @@ import {
 } from '@/components/ui/item';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { selectCompletedPrompt } from '@/lib/home/completed-prompt';
+import { resolveHomeWeatherTarget } from '@/lib/home/weather';
 import {
   fetchTripModeContext,
   type ItineraryItem,
@@ -29,7 +31,6 @@ import {
 import { editorialSubjectKey } from '@/lib/media/editorial-images';
 import { fetchSavedPlaces, type SavedPlace } from '@/lib/saved/api';
 import { fetchTrips, type Trip } from '@/lib/trips/api';
-import { formatTripDateRange } from '@/lib/trips/format';
 import { selectPrimaryTrip } from '@/lib/trips/lifecycle';
 import { tripEditorialSubject } from '@/lib/trips/summary';
 
@@ -63,10 +64,12 @@ function itemLabel(item: ItineraryItem) {
 
 export function HomeExperience() {
   const t = useTranslations('home');
-  const locale = useLocale();
   const [data, setData] = useState<HomeData>({ savedPlaces: [], trips: [] });
   const [status, setStatus] = useState<HomeStatus>('loading');
   const [tripModeContext, setTripModeContext] = useState<TripModeContext | null>(null);
+  const [tripModeContextStatus, setTripModeContextStatus] = useState<'idle' | 'loading' | 'ready'>(
+    'idle',
+  );
   const [dismissedPrompts, setDismissedPrompts] = useState<string[]>([]);
 
   useEffect(() => {
@@ -110,26 +113,48 @@ export function HomeExperience() {
 
   const shownSavedPlaces = useMemo(() => data.savedPlaces.slice(0, 3), [data.savedPlaces]);
 
-  // Home leads with one trip and paints one photograph. Asking for more would be
-  // a second row of decoration bought with a provider round-trip.
+  const otherTrips = useMemo(
+    () => (primary ? data.trips.filter((trip) => trip.id !== primary.id).slice(0, 3) : []),
+    [data.trips, primary],
+  );
+  const shownTrips = useMemo(
+    () => (primary ? [primary, ...otherTrips] : otherTrips),
+    [otherTrips, primary],
+  );
+  // One capped request resolves every photograph Home may render. Cards only
+  // read this map and never ask the editorial service themselves.
+  const editorialSubjects = useMemo(
+    () => shownTrips.flatMap((trip) => tripEditorialSubject(trip) ?? []),
+    [shownTrips],
+  );
+  const editorialImages = useEditorialImages(editorialSubjects);
   const focalSubject = primary ? tripEditorialSubject(primary) : null;
-  const editorialImages = useEditorialImages(focalSubject ? [focalSubject] : []);
   const focalEditorial = focalSubject
     ? (editorialImages.get(editorialSubjectKey(focalSubject)) ?? null)
     : null;
+  const editorialFor = (trip: Trip) => {
+    const subject = tripEditorialSubject(trip);
+    return subject ? (editorialImages.get(editorialSubjectKey(subject)) ?? null) : null;
+  };
 
   useEffect(() => {
     if (!primaryTripId) {
       setTripModeContext(null);
+      setTripModeContextStatus('idle');
       return;
     }
     let active = true;
+    setTripModeContextStatus('loading');
     void fetchTripModeContext(primaryTripId)
       .then((context) => {
-        if (active) setTripModeContext(context);
+        if (!active) return;
+        setTripModeContext(context);
+        setTripModeContextStatus('ready');
       })
       .catch(() => {
-        if (active) setTripModeContext(null);
+        if (!active) return;
+        setTripModeContext(null);
+        setTripModeContextStatus('ready');
       });
     return () => {
       active = false;
@@ -152,7 +177,6 @@ export function HomeExperience() {
     );
   }
 
-  const otherTrips = primary ? data.trips.filter((trip) => trip.id !== primary.id).slice(0, 3) : [];
   const recentCompleted = data.trips
     .filter((trip) => trip.lifecycle === 'completed')
     .toSorted((left, right) => right.endDate.localeCompare(left.endDate))[0];
@@ -163,18 +187,20 @@ export function HomeExperience() {
     ? { label: nextItemName, upcoming: Boolean(tripModeContext?.nextItemId) }
     : null;
   const stage = primary?.lifecycle ?? 'empty';
+  const weatherTarget =
+    primary && !(primary.lifecycle === 'active' && tripModeContextStatus !== 'ready')
+      ? resolveHomeWeatherTarget(primary, tripModeContext)
+      : null;
 
   return (
-    <section aria-labelledby="home-heading" className="mx-auto w-full max-w-5xl space-y-9">
-      {/* The header carries no media and no actions: with media, PageHeader puts
-          its actions under the image and collapses to one column on a phone,
-          which would push the trip's own next action below a photograph. Both
-          belong to the focal card instead. */}
-      <PageHeader
-        description={t(`states.${stage}.description`)}
-        headingId="home-heading"
-        title={t(`states.${stage}.title`)}
-      />
+    <div className="mx-auto w-full max-w-5xl space-y-9">
+      {!primary ? (
+        <PageHeader
+          description={t(`states.${stage}.description`)}
+          headingId="home-heading"
+          title={t(`states.${stage}.title`)}
+        />
+      ) : null}
 
       {primary ? (
         <HomeFocalTrip
@@ -183,6 +209,7 @@ export function HomeExperience() {
           onDismissPrompt={dismissCompletedPrompt}
           promptKey={selectCompletedPrompt(primary, dismissedPrompts)}
           trip={primary}
+          weatherTarget={weatherTarget}
         />
       ) : (
         <PageState
@@ -207,9 +234,6 @@ export function HomeExperience() {
         />
       )}
 
-      {/* Everything below is a way back to something, not something to browse:
-          they stay text so the one photograph above keeps its weight, and so
-          Home never pays for a second batch of provider imagery. */}
       {data.savedPlaces.length ? (
         <EditorialSection
           actions={
@@ -247,39 +271,25 @@ export function HomeExperience() {
       ) : null}
 
       {otherTrips.length ? (
-        <EditorialSection
-          actions={
+        <section aria-labelledby="other-trips-heading" className="space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <h2
+              className="text-[length:var(--text-section-title)] font-semibold tracking-[-0.02em] text-foreground"
+              id="other-trips-heading"
+            >
+              {t('otherTripsTitle')}
+            </h2>
             <Button nativeButton={false} render={<Link href="/trips" />} size="sm" variant="ghost">
               {t('viewTrips')}
               <ChevronRight aria-hidden="true" data-icon="inline-end" />
             </Button>
-          }
-          density="compact"
-          title={t('otherTripsTitle')}
-          treatment="ruled"
-        >
-          <ItemGroup aria-label={t('otherTripsTitle')} variant="list">
+          </div>
+          <div className="grid gap-3">
             {otherTrips.map((trip) => (
-              <Item
-                className="min-h-16 px-3 py-3 hover:bg-muted/60"
-                key={trip.id}
-                render={<Link href={`/trips/${trip.id}/itinerary`} />}
-                variant="default"
-              >
-                <ItemMedia className="bg-secondary text-secondary-foreground" variant="icon">
-                  <CalendarDays aria-hidden="true" className="size-4" />
-                </ItemMedia>
-                <ItemContent className="min-w-0">
-                  <ItemTitle className="truncate">{trip.name}</ItemTitle>
-                  <ItemDescription className="line-clamp-1">
-                    {formatTripDateRange(trip.startDate, trip.endDate, locale)}
-                  </ItemDescription>
-                </ItemContent>
-                <ChevronRight aria-hidden="true" className="size-4 text-muted-foreground" />
-              </Item>
+              <TripListRow editorial={editorialFor(trip)} key={trip.id} trip={trip} />
             ))}
-          </ItemGroup>
-        </EditorialSection>
+          </div>
+        </section>
       ) : null}
 
       {!primary && recentCompleted ? (
@@ -310,7 +320,7 @@ export function HomeExperience() {
           </Button>
         </EditorialSection>
       ) : null}
-    </section>
+    </div>
   );
 }
 

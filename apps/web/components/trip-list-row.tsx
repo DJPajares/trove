@@ -1,66 +1,87 @@
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, ChevronRight, MapPin } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 
+import { MediaAttribution } from '@/components/media-attribution';
+import { TripItineraryCoverage } from '@/components/trip-itinerary-coverage';
 import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
 import { TripMedia } from '@/components/trip-media';
-import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import type { Trip } from '@/lib/trips/api';
-import { formatTripDateRange } from '@/lib/trips/format';
+import { formatTripDate } from '@/lib/trips/format';
 import { tripDestinationSummary } from '@/lib/trips/summary';
+import { cn } from '@/lib/utils';
 
 export type TripListRowProps = {
-  /**
-   * Resolved by the library's single batch, never fetched here. One request per
-   * screen is a hard invariant: a row that asked for its own photograph would
-   * turn a list of trips back into a list of requests.
-   */
   editorial: EditorialImageReference | null;
   trip: Trip;
+  variant?: 'archive' | 'card';
 };
 
-/** One trip in the library, as a single link to the trip's own screen. */
-export function TripListRow({ editorial, trip }: Readonly<TripListRowProps>) {
+export function TripListRow({ editorial, trip, variant = 'card' }: Readonly<TripListRowProps>) {
   const t = useTranslations('trips');
   const mediaTranslations = useTranslations('media');
   const locale = useLocale();
   const subjectName = trip.destinations[0]?.name ?? trip.name;
+  const isArchive = variant === 'archive';
 
   return (
-    <Item
-      className="group min-h-20 flex-nowrap px-3 py-3 text-left hover:bg-muted/60"
-      render={
-        <Link aria-label={t('viewTripLabel', { name: trip.name })} href={`/trips/${trip.id}`} />
-      }
-      variant="default"
+    <Link
+      aria-label={t('viewTripLabel', { name: trip.name })}
+      className={cn(
+        'group grid min-w-0 grid-cols-[4.75rem_minmax(0,1fr)_auto] items-center gap-3 rounded-[var(--radius-xl)] border border-border-subtle bg-card p-3 text-left shadow-[var(--shadow-card)] transition-[border-color,background-color,box-shadow,transform] duration-[var(--motion-standard)] hover:-translate-y-0.5 hover:border-border-strong hover:shadow-[var(--shadow-elevated)] focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none motion-reduce:transform-none motion-reduce:transition-none',
+        isArchive && 'grid-cols-[3.5rem_minmax(0,1fr)_auto] rounded-[var(--radius-lg)] shadow-none',
+      )}
+      href={`/trips/${trip.id}`}
     >
-      <ItemMedia className="size-14 rounded-[var(--radius-md)] sm:size-16" variant="default">
-        <TripMedia
-          alt={editorial ? mediaTranslations('alt.tripEditorial', { name: subjectName }) : ''}
-          className="size-full"
-          sizes="64px"
-          source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
-          variant="thumbnail"
-        />
-      </ItemMedia>
-      <ItemContent className="min-w-0 gap-1.5">
-        <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
-          <ItemTitle className="line-clamp-2 max-w-full text-base sm:line-clamp-1">
+      <TripMedia
+        alt={editorial ? mediaTranslations('alt.tripEditorial', { name: subjectName }) : ''}
+        className={cn('size-[4.75rem]', isArchive && 'size-14')}
+        sizes={isArchive ? '56px' : '76px'}
+        source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
+        variant="thumbnail"
+      />
+
+      <div className="min-w-0 space-y-1.5">
+        <div className="flex min-w-0 items-start justify-between gap-2">
+          <h3 className="line-clamp-1 font-semibold tracking-[-0.01em] text-foreground">
             {trip.name}
-          </ItemTitle>
-          <TripLifecycleBadge className="shrink-0" lifecycle={trip.lifecycle} />
+          </h3>
+          {!isArchive ? (
+            <TripLifecycleBadge
+              className="hidden shrink-0 sm:inline-flex"
+              lifecycle={trip.lifecycle}
+            />
+          ) : null}
         </div>
-        <ItemDescription className="line-clamp-2 sm:line-clamp-1">
-          <CalendarDays aria-hidden="true" className="mr-1.5 inline size-3.5" />
-          {formatTripDateRange(trip.startDate, trip.endDate, locale)}
-        </ItemDescription>
-        <p className="truncate text-xs text-muted-foreground">
+        <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+          <MapPin aria-hidden="true" className="size-3.5 shrink-0" />
           {tripDestinationSummary(trip) ?? t('destinationOpen')}
-          {trip.planningReadiness === 'ready' ? ` · ${t('ready')}` : ''}
         </p>
-      </ItemContent>
-    </Item>
+        <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground tabular-nums">
+          <CalendarDays aria-hidden="true" className="size-3.5 shrink-0" />
+          {t('dateRange', {
+            endDate: formatTripDate(trip.endDate, locale),
+            startDate: formatTripDate(trip.startDate, locale),
+          })}
+        </p>
+        {!isArchive && trip.lifecycle !== 'completed' && trip.itineraryCoverage ? (
+          <TripItineraryCoverage className="pt-1" coverage={trip.itineraryCoverage} />
+        ) : null}
+        {editorial ? (
+          <MediaAttribution
+            attribution={editorial.attribution}
+            className="block truncate text-[0.65rem]"
+            linked={false}
+          />
+        ) : null}
+      </div>
+
+      <ChevronRight
+        aria-hidden="true"
+        className="size-4 text-muted-foreground transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
+      />
+    </Link>
   );
 }

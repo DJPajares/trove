@@ -1,13 +1,82 @@
 import { expect, test } from 'vitest';
 
 import {
+  calculateItineraryCoverage,
   deriveTripLifecycle,
   enumerateDateRange,
   getDateRangeChanges,
   isValidIanaTimeZone,
   resolveCountryPrimaryTimeZone,
+  resolveTripWeatherLocation,
   resolveTripTimeZone,
 } from '../src/services/trip-rules.js';
+
+test('calculates itinerary coverage at zero, partial, and full day presence', () => {
+  expect(calculateItineraryCoverage('2026-08-10', '2026-08-12', [])).toStrictEqual({
+    percentage: 0,
+    plannedDays: 0,
+    totalDays: 3,
+  });
+  expect(
+    calculateItineraryCoverage('2026-08-10', '2026-08-12', [
+      { date: '2026-08-10', scheduledItemCount: 2 },
+      { date: '2026-08-11', scheduledItemCount: 0 },
+    ]),
+  ).toStrictEqual({ percentage: 33, plannedDays: 1, totalDays: 3 });
+  expect(
+    calculateItineraryCoverage('2026-08-10', '2026-08-12', [
+      { date: '2026-08-10', scheduledItemCount: 1 },
+      { date: '2026-08-11', scheduledItemCount: 3 },
+      { date: '2026-08-12', scheduledItemCount: 1 },
+    ]),
+  ).toStrictEqual({ percentage: 100, plannedDays: 3, totalDays: 3 });
+});
+
+test('excludes unscheduled items and records outside the trip range from coverage', () => {
+  const unscheduledItems = [{ itineraryDayId: null }, { itineraryDayId: null }];
+  const scheduledDayCounts = [
+    { date: new Date('2026-08-10T00:00:00.000Z'), scheduledItemCount: 1 },
+    { date: '2026-08-13', scheduledItemCount: 4 },
+  ];
+
+  expect(unscheduledItems.every((item) => item.itineraryDayId === null)).toBe(true);
+  expect(calculateItineraryCoverage('2026-08-10', '2026-08-12', scheduledDayCounts)).toStrictEqual({
+    percentage: 33,
+    plannedDays: 1,
+    totalDays: 3,
+  });
+});
+
+test('uses the first located destination for weather and keeps its timezone', () => {
+  expect(
+    resolveTripWeatherLocation(
+      [
+        { location: null, timeZone: null },
+        {
+          location: { latitude: 35.68, longitude: 139.76, timeZone: null },
+          timeZone: 'Asia/Tokyo',
+        },
+        {
+          location: { latitude: 34.69, longitude: 135.5, timeZone: 'Asia/Tokyo' },
+          timeZone: null,
+        },
+      ],
+      'UTC',
+    ),
+  ).toStrictEqual({ latitude: 35.68, longitude: 139.76, timeZone: 'Asia/Tokyo' });
+});
+
+test('omits trip weather when no destination has cached coordinates', () => {
+  expect(
+    resolveTripWeatherLocation(
+      [
+        { location: null, timeZone: 'Europe/Paris' },
+        { location: null, timeZone: null },
+      ],
+      'UTC',
+    ),
+  ).toBeNull();
+});
 
 test('derives lifecycle from the persisted trip timezone with inclusive date boundaries', () => {
   const instant = new Date('2026-08-10T15:00:00.000Z');

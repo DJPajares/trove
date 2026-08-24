@@ -31,6 +31,7 @@ const sectionIcons: Record<
 type TripDestinationActionsProps = {
   className?: string;
   destinations: TripDestination[];
+  inverse?: boolean;
   /**
    * Actions that are not destinations - editing a trip opens a sheet rather
    * than a route, so it cannot come from the navigation contract.
@@ -62,6 +63,7 @@ export function TripDestinationActions({
   className,
   destinations,
   extra,
+  inverse = false,
   labelOverrides,
   minEmphasis = 'standard',
   size = 'default',
@@ -78,6 +80,13 @@ export function TripDestinationActions({
 
         return (
           <Button
+            className={
+              inverse
+                ? destination.emphasis === 'leading'
+                  ? 'border-white/20 shadow-lg shadow-black/15'
+                  : 'border-white/30 bg-white/12 text-white shadow-none backdrop-blur-md hover:border-white/45 hover:bg-white/20 hover:text-white dark:bg-white/12 dark:hover:bg-white/20'
+                : undefined
+            }
             key={destination.section}
             nativeButton={false}
             render={<Link href={destination.href} />}

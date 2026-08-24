@@ -24,6 +24,8 @@ export type Trip = {
   experienceNote: string | null;
   experienceRating: number | null;
   id: string;
+  /** Optional so snapshots written before WDL-190 remain readable offline. */
+  itineraryCoverage?: { percentage: number; plannedDays: number; totalDays: number };
   lifecycle: 'active' | 'completed' | 'planning';
   memoryCount: number;
   name: string;
@@ -37,6 +39,8 @@ export type Trip = {
   startingLocation: { isOverride: boolean; name: string; placeId: string } | null;
   startingLocationOverride: string | null;
   updatedAt: string;
+  /** Optional so older offline snapshots omit weather instead of failing. */
+  weatherLocation?: { latitude: number; longitude: number; timeZone: string } | null;
 };
 
 export type TripInput = {

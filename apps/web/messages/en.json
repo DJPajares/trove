@@ -1672,6 +1672,16 @@
     "currentItem": "Right now: {name}.",
     "noNextItem": "Your schedule is clear for now.",
     "countdown": "{count, plural, =0 {Starts today} one {Starts in # day} other {Starts in # days}}",
+    "weather": {
+      "cached": "Saved weather",
+      "current": "Current weather",
+      "forecast": "Forecast for {date}",
+      "loading": "Loading weather",
+      "outOfRange": "A forecast will appear closer to departure.",
+      "stale": "Saved weather may be out of date",
+      "tryAgain": "Try weather again",
+      "unavailable": "Weather is unavailable right now."
+    },
     "readiness": {
       "in_progress": "Planning is in progress",
       "ready": "Plan marked Ready"
@@ -1689,6 +1699,11 @@
     "viewTrips": "View all trips",
     "pastTripTitle": "A past trip",
     "pastTripDescription": "Revisit {name} whenever you want to look back at the plan."
+  },
+  "itineraryCoverage": {
+    "announcement": "{plannedDays} of {totalDays} trip days planned, {percentage} percent itinerary coverage",
+    "days": "{plannedDays} of {totalDays} days",
+    "label": "Itinerary coverage"
   },
   "notifications": {
     "centerButton": "Notifications, {count, plural, =0 {none new} one {one new} other {# new}}",

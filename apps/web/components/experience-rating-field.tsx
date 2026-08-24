@@ -68,13 +68,23 @@ export function ExperienceRatingSummary({
   className,
   label,
   rating,
-}: Readonly<{ className?: string; label: string; rating: number }>) {
+  tone = 'default',
+}: Readonly<{
+  className?: string;
+  label: string;
+  rating: number;
+  tone?: 'default' | 'onImage';
+}>) {
   const t = useTranslations('experienceRating');
 
   return (
     <p className={cn('flex items-center gap-2 text-sm text-muted-foreground', className)}>
       <span>{label}</span>
-      <ExperienceRatingStars aria-label={t('starLabel', { value: rating })} rating={rating} />
+      <ExperienceRatingStars
+        aria-label={t('starLabel', { value: rating })}
+        rating={rating}
+        tone={tone}
+      />
     </p>
   );
 }

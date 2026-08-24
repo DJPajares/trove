@@ -115,7 +115,7 @@ function EditorialImage({
         onLoad={() => setLoaded(true)}
         preload={preload}
         sizes={sizes}
-        src={reference.sources.large}
+        src={reference.sourceUrl}
       />
     </>
   );
@@ -125,10 +125,9 @@ function EditorialImage({
  * The one frame every Trove media surface renders through.
  *
  * `TripMedia` and `PlaceMedia` differ only in the ladder that produced their
- * source, so the frame vocabulary and the branded fallback live here once
- * rather than twice. The credit does not: a photograph is credited by the
- * surface that owns it, never by a chip painted over the photograph itself.
- * See `MediaAttribution`.
+ * source, so the frame vocabulary and branded fallback live here once rather
+ * than twice. Attribution metadata remains on the editorial reference even
+ * when an authenticated surface intentionally omits visible photo credits.
  */
 export function MediaFrame({
   alt,

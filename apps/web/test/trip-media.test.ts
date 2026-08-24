@@ -12,12 +12,9 @@ const editorial: EditorialImageReference = {
     providerPageUrl: 'https://provider.example/photo/1',
   },
   dominantColor: '#2f4858',
+  externalPhotoId: '1',
   height: 800,
-  sources: {
-    large: 'https://images.pexels.com/photos/1/photo.jpeg?w=1200',
-    medium: 'https://images.pexels.com/photos/1/photo.jpeg?w=640',
-    small: 'https://images.pexels.com/photos/1/photo.jpeg?w=320',
-  },
+  sourceUrl: 'https://images.pexels.com/photos/1/photo.jpeg',
   width: 1200,
 };
 

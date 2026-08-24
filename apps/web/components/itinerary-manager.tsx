@@ -522,9 +522,9 @@ export function ItineraryManager({
         ]
       : [];
   const detailsImages = useEditorialImages(detailsSubjects);
-  const detailsEditorial = detailsSubjects[0]
-    ? (detailsImages.get(editorialSubjectKey(detailsSubjects[0])) ?? null)
-    : null;
+  const detailsEditorialImages = detailsSubjects[0]
+    ? (detailsImages.get(editorialSubjectKey(detailsSubjects[0])) ?? [])
+    : [];
 
   /** What the shared sheet cannot know: this place's standing on this trip. */
   function detailsMeta(tripPlace: ItineraryTripPlace): PlaceDetailsRow[] {
@@ -2596,7 +2596,7 @@ export function ItineraryManager({
 
       {detailsPlace ? (
         <PlaceDetailsSheet
-          editorial={detailsEditorial}
+          editorialImages={detailsEditorialImages}
           meta={detailsMeta(detailsPlace)}
           name={placeName(detailsPlace) ?? t('providerPlace')}
           officialName={detailsPlace.customName?.trim() ? detailsProviderName : null}

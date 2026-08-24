@@ -17,13 +17,13 @@ const DEFAULT_BASE_URL = 'https://api.pexels.com';
 const DEFAULT_TIMEOUT_MS = 8_000;
 
 /**
- * One result, landscape, large. Asking for exactly one photograph is both the
- * cheapest request and the reason resolution is repeatable: there is no ranking
- * inside the answer for Trove to choose differently between two renders.
+ * One request returns the first three landscape results in provider order. The
+ * order is cached with the subject, so the representative first photo and the
+ * place-detail collection remain stable until the cache becomes stale.
  */
 export const PEXELS_SEARCH_PARAMETERS = {
   orientation: 'landscape',
-  per_page: '1',
+  per_page: '3',
   size: 'large',
 } as const;
 
@@ -121,20 +121,9 @@ function mapPexelsPhoto(photo: PexelsPhoto): EditorialImageReference | null {
   const photographerName = cleanString(photo.photographer);
   const photographerUrl = cleanString(photo.photographer_url);
   const providerPageUrl = cleanString(photo.url);
-  const original = cleanString(photo.src?.original);
-  const small = cleanString(photo.src?.medium) ?? original;
-  const medium = cleanString(photo.src?.large) ?? original;
-  const large = cleanString(photo.src?.large2x) ?? medium;
+  const sourceUrl = cleanString(photo.src?.original);
 
-  if (
-    !externalPhotoId ||
-    !photographerName ||
-    !photographerUrl ||
-    !providerPageUrl ||
-    !small ||
-    !medium ||
-    !large
-  ) {
+  if (!externalPhotoId || !photographerName || !photographerUrl || !providerPageUrl || !sourceUrl) {
     return null;
   }
 
@@ -149,7 +138,7 @@ function mapPexelsPhoto(photo: PexelsPhoto): EditorialImageReference | null {
     dominantColor: cleanString(photo.avg_color),
     externalPhotoId,
     height: photo.height ?? null,
-    sources: { large, medium, small },
+    sourceUrl,
     width: photo.width ?? null,
   };
 }
@@ -184,9 +173,24 @@ export class PexelsEditorialImageProvider implements EditorialImageProvider {
     }
 
     const body = await this.requestJson<PexelsSearchResponse>(url);
-    const [photo] = body.photos ?? [];
+    const seenIds = new Set<string>();
+    const seenUrls = new Set<string>();
 
-    return photo ? mapPexelsPhoto(photo) : null;
+    return (body.photos ?? [])
+      .flatMap((photo) => {
+        const reference = mapPexelsPhoto(photo);
+        if (
+          !reference ||
+          seenIds.has(reference.externalPhotoId) ||
+          seenUrls.has(reference.sourceUrl)
+        ) {
+          return [];
+        }
+        seenIds.add(reference.externalPhotoId);
+        seenUrls.add(reference.sourceUrl);
+        return [reference];
+      })
+      .slice(0, 3);
   }
 
   /**

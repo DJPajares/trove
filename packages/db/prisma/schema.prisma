@@ -295,26 +295,26 @@ model Profile {
 }
 
 model Place {
-  id               String    @id @default(uuid(7)) @db.Uuid
-  kind             PlaceKind
-  ownerId          String?   @map("owner_id") @db.Uuid
-  customName       String?   @map("custom_name")
-  customLatitude   Decimal?  @map("custom_latitude") @db.Decimal(9, 6)
-  customLongitude  Decimal?  @map("custom_longitude") @db.Decimal(9, 6)
-  customTimeZone   String?   @map("custom_time_zone")
-  customNote       String?   @map("custom_note") @db.Text
+  id                  String    @id @default(uuid(7)) @db.Uuid
+  kind                PlaceKind
+  ownerId             String?   @map("owner_id") @db.Uuid
+  customName          String?   @map("custom_name")
+  customLatitude      Decimal?  @map("custom_latitude") @db.Decimal(9, 6)
+  customLongitude     Decimal?  @map("custom_longitude") @db.Decimal(9, 6)
+  customTimeZone      String?   @map("custom_time_zone")
+  customNote          String?   @map("custom_note") @db.Text
   /// The name and address the provider gave when this Place was first resolved.
   /// A last-resort label so a Place is never nameless; live details always win.
-  providerLabel    String?   @map("provider_label") @db.Text
-  providerAddress  String?   @map("provider_address") @db.Text
-  /// The editorial photograph representing this Place. Decorative only, and
+  providerLabel       String?   @map("provider_label") @db.Text
+  providerAddress     String?   @map("provider_address") @db.Text
+  /// The editorial collection representing this Place. Decorative only, and
   /// unrelated to the provider data above.
-  editorialImageId String?   @map("editorial_image_id") @db.Uuid
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  editorialImageSetId String?   @map("editorial_image_set_id") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   owner                    Profile?           @relation("PlaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  editorialImage           EditorialImage?    @relation("PlaceEditorialImage", fields: [editorialImageId], references: [id], onDelete: SetNull)
+  editorialImageSet        EditorialImageSet? @relation("PlaceEditorialImageSet", fields: [editorialImageSetId], references: [id], onDelete: SetNull)
   homeForProfiles          Profile[]          @relation("ProfileHomePlace")
   providerRefs             PlaceProviderRef[]
   savedPlaces              SavedPlace[]
@@ -323,7 +323,7 @@ model Place {
   startingLocationForTrips Trip[]             @relation("TripStartingPlace")
   timeZoneSourceForTrips   Trip[]             @relation("TripTimeZoneSourcePlace")
 
-  @@index([editorialImageId])
+  @@index([editorialImageSetId])
   @@index([ownerId])
   @@map("places")
   @@schema("trove")
@@ -400,53 +400,65 @@ model TravelLegCache {
   @@schema("trove")
 }
 
-/// One editorial photograph, resolved for one subject and cached by reference.
+/// One editorial subject cache, containing an ordered collection of photographs.
 ///
 /// Editorial imagery is Trove's second, deliberately separate media track: it is
 /// decorative, free, hotlinked, and always attributed. It is not provider data
 /// about a place, and it never comes from Google Places photos, which stay
 /// forbidden as a decorative source (PRD 11.5).
 ///
-/// `subjectKey` is the normalised resolution key — a destination name for a
-/// trip, a place name plus category for a place — and it is what makes
-/// resolution deterministic: once a subject has an answer, every session and
-/// every user gets that same photograph regardless of how the provider ranks
-/// results today. `cachedAt` dates the answer and it is re-resolved once stale,
-/// the same freshness contract PlaceProviderRef uses.
+/// `subjectKey` is the normalised resolution key for a destination or Place.
+/// Once it has an answer, every session and user receives the same ordered
+/// collection until `cachedAt` becomes stale.
 ///
-/// Only the reference is stored: source URLs by size, attribution, intrinsic
-/// dimensions, and a dominant colour to place under a loading image. Image bytes
-/// are never stored — Supabase Storage stays user-uploaded media only.
+/// Each child stores one unsized source URL plus its metadata. Image bytes are
+/// never stored; Supabase Storage stays user-uploaded media only.
 ///
 /// A subject the provider cannot answer is recorded on the same row through
 /// `missCode`/`missedAt`, mirroring PlaceProviderRef's failure columns, so an
 /// empty answer is negatively cached rather than re-asked on every render.
-model EditorialImage {
+model EditorialImageSet {
   id         String   @id @default(uuid(7)) @db.Uuid
   subjectKey String   @unique @map("subject_key")
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  provider         EditorialImageProvider?
-  externalPhotoId  String?                 @map("external_photo_id")
-  providerPageUrl  String?                 @map("provider_page_url") @db.Text
-  photographerName String?                 @map("photographer_name") @db.Text
-  photographerUrl  String?                 @map("photographer_url") @db.Text
-  smallUrl         String?                 @map("small_url") @db.Text
-  mediumUrl        String?                 @map("medium_url") @db.Text
-  largeUrl         String?                 @map("large_url") @db.Text
-  width            Int?
-  height           Int?
-  dominantColor    String?                 @map("dominant_color")
-  altText          String?                 @map("alt_text") @db.Text
-  cachedAt         DateTime?               @map("cached_at") @db.Timestamptz(3)
-  missCode         String?                 @map("miss_code")
-  missedAt         DateTime?               @map("missed_at") @db.Timestamptz(3)
+  cachedAt DateTime? @map("cached_at") @db.Timestamptz(3)
+  missCode String?   @map("miss_code")
+  missedAt DateTime? @map("missed_at") @db.Timestamptz(3)
 
-  editorialCoverForTrips  Trip[]  @relation("TripEditorialCover")
-  editorialImageForPlaces Place[] @relation("PlaceEditorialImage")
+  images                  EditorialImage[]
+  editorialCoverForTrips  Trip[]           @relation("TripEditorialImageSet")
+  editorialImageForPlaces Place[]          @relation("PlaceEditorialImageSet")
 
   @@index([cachedAt])
+  @@map("editorial_image_sets")
+  @@schema("trove")
+}
+
+/// One photograph in an editorial subject's deterministic collection.
+model EditorialImage {
+  id                  String                 @id @default(uuid(7)) @db.Uuid
+  editorialImageSetId String                 @map("editorial_image_set_id") @db.Uuid
+  position            Int
+  provider            EditorialImageProvider
+  externalPhotoId     String                 @map("external_photo_id")
+  providerPageUrl     String                 @map("provider_page_url") @db.Text
+  photographerName    String                 @map("photographer_name") @db.Text
+  photographerUrl     String                 @map("photographer_url") @db.Text
+  sourceUrl           String                 @map("source_url") @db.Text
+  width               Int?
+  height              Int?
+  dominantColor       String?                @map("dominant_color")
+  altText             String?                @map("alt_text") @db.Text
+  createdAt           DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  editorialImageSet EditorialImageSet @relation(fields: [editorialImageSetId], references: [id], onDelete: Cascade)
+
+  @@unique([editorialImageSetId, position])
+  @@unique([editorialImageSetId, provider, externalPhotoId])
+  @@index([editorialImageSetId])
   @@map("editorial_images")
   @@schema("trove")
 }
@@ -462,10 +474,10 @@ model Trip {
   startingPlaceId                String?               @map("starting_place_id") @db.Uuid
   notes                          String?               @db.Text
   coverPhotoPath                 String?               @map("cover_photo_path")
-  /// The editorial photograph standing in for this trip's destination. Separate
+  /// The editorial collection standing in for this trip's destination. Separate
   /// from `coverPhotoPath`, which is the traveller's own uploaded cover and
   /// always wins over it.
-  editorialImageId               String?               @map("editorial_image_id") @db.Uuid
+  editorialImageSetId            String?               @map("editorial_image_set_id") @db.Uuid
   planningReadiness              TripPlanningReadiness @default(IN_PROGRESS) @map("planning_readiness")
   budgetAmount                   Decimal?              @map("budget_amount") @db.Decimal(12, 2)
   budgetCurrencyCode             String?               @map("budget_currency_code") @db.Char(3)
@@ -489,7 +501,7 @@ model Trip {
   sourceTrip                   Trip?                        @relation("TripSource", fields: [sourceTripId], references: [id], onDelete: SetNull)
   derivedTrips                 Trip[]                       @relation("TripSource")
   storyCoverPhoto              MemoryPhoto?                 @relation("TripStoryCoverPhoto", fields: [storyCoverMemoryPhotoId], references: [id], onDelete: SetNull)
-  editorialImage               EditorialImage?              @relation("TripEditorialCover", fields: [editorialImageId], references: [id], onDelete: SetNull)
+  editorialImageSet            EditorialImageSet?           @relation("TripEditorialImageSet", fields: [editorialImageSetId], references: [id], onDelete: SetNull)
   destinations                 TripDestination[]
   userRelationships            TripUserRelationship[]
   tripPlaces                   TripPlace[]
@@ -510,7 +522,7 @@ model Trip {
   @@index([referenceTimeZoneSourcePlaceId])
   @@index([sourceTripId])
   @@index([storyCoverMemoryPhotoId])
-  @@index([editorialImageId])
+  @@index([editorialImageSetId])
   @@map("trips")
   @@schema("trove")
 }

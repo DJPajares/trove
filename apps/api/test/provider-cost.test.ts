@@ -73,7 +73,7 @@ const providerRefs = new Map<string, ProviderRefRow>();
 const legs = new Map<string, LegRow>();
 const editorialImages = new Map<
   string,
-  { cachedAt: Date | null; id: string; subjectKey: string }
+  { cachedAt: Date | null; id: string; images: unknown[]; subjectKey: string }
 >();
 let tripFixture: unknown = null;
 let dayFixture: unknown = null;
@@ -127,16 +127,30 @@ function installStubPrisma() {
         return legs.get(key);
       },
     },
-    editorialImage: {
+    editorialImageSet: {
       findMany: async (args: { where: { subjectKey: { in: string[] } } }) =>
         args.where.subjectKey.in.flatMap((subjectKey) => {
           const row = editorialImages.get(subjectKey);
           return row ? [row] : [];
         }),
-      upsert: async (args: { update: Record<string, unknown>; where: { subjectKey: string } }) => {
-        const row = { ...args.update, id: 'image-1', subjectKey: args.where.subjectKey };
+      upsert: async (args: {
+        create: Record<string, unknown>;
+        update: Record<string, unknown>;
+        where: { subjectKey: string };
+      }) => {
+        const data = editorialImages.has(args.where.subjectKey) ? args.update : args.create;
+        const nested = data.images as
+          { create?: Record<string, unknown>[]; deleteMany?: Record<string, never> } | undefined;
+        const current = editorialImages.get(args.where.subjectKey);
+        const row = {
+          ...current,
+          ...data,
+          id: current?.id ?? `image-set-${editorialImages.size + 1}`,
+          images: nested?.create ?? current?.images ?? [],
+          subjectKey: args.where.subjectKey,
+        };
         editorialImages.set(args.where.subjectKey, row as never);
-        return { id: 'image-1' };
+        return { id: row.id };
       },
     },
     place: {

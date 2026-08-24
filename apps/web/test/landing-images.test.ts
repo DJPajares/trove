@@ -22,14 +22,13 @@ for (const [name, reference] of Object.entries(pinnedImages)) {
     expect(reference.dominantColor).toMatch(/^#/);
   });
 
-  test(`${name} hotlinks all three source sizes from the Pexels CDN`, () => {
-    for (const url of Object.values(reference.sources)) {
-      expect(url).toMatch(/^https:\/\/images\.pexels\.com\//);
-    }
+  test(`${name} stores one unsized source URL from the Pexels CDN`, () => {
+    expect(reference.sourceUrl).toMatch(/^https:\/\/images\.pexels\.com\//);
+    expect(new URL(reference.sourceUrl).searchParams.has('w')).toBe(false);
   });
 
-  test(`${name} does not leak the API-only externalPhotoId field`, () => {
-    expect(reference).not.toHaveProperty('externalPhotoId');
+  test(`${name} keeps the provider identifier needed for stable collection keys`, () => {
+    expect(reference.externalPhotoId).not.toBe('');
   });
 }
 

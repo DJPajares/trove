@@ -3,8 +3,7 @@
 import { ExternalLink } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
-import { MediaAttribution } from '@/components/media-attribution';
-import { PlaceMedia } from '@/components/place-media';
+import { PlacePhotoCarousel } from '@/components/place-photo-carousel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,7 +15,6 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
-import { resolvePlaceMediaSource } from '@/lib/media/trip-media';
 import { googleMapsPlaceHref, type CanonicalPlace } from '@/lib/saved/api';
 
 /** A row only the surface that opened this sheet can supply: a note, a priority, a collection. */
@@ -28,7 +26,7 @@ type PlaceDetailsSheetProps = {
    * rather than resolved here: a sheet that asked for its own would turn one
    * request per screen into one per opening.
    */
-  editorial: EditorialImageReference | null;
+  editorialImages: EditorialImageReference[];
   meta?: PlaceDetailsRow[];
   name: string;
   /** The provider's name for the place, when the traveller has renamed it. */
@@ -52,7 +50,7 @@ type PlaceDetailsSheetProps = {
  * one surface that shows the photograph at a size worth reading.
  */
 export function PlaceDetailsSheet({
-  editorial,
+  editorialImages,
   meta = [],
   name,
   officialName,
@@ -60,7 +58,6 @@ export function PlaceDetailsSheet({
   place,
 }: Readonly<PlaceDetailsSheetProps>) {
   const t = useTranslations('placeDetail');
-  const mediaTranslations = useTranslations('media');
   // The one canonical set of category labels lives with the Saved Places page,
   // and a place's category means the same thing on every surface.
   const categoryTranslations = useTranslations('saved');
@@ -117,13 +114,7 @@ export function PlaceDetailsSheet({
         </SheetHeader>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 pb-6">
-          <PlaceMedia
-            alt={editorial ? mediaTranslations('alt.placeEditorial', { name }) : ''}
-            category={category}
-            sizes="(max-width: 768px) 100vw, 30rem"
-            source={resolvePlaceMediaSource({ editorial })}
-            variant="card"
-          />
+          <PlacePhotoCarousel category={category} images={editorialImages} name={name} />
 
           {category ? (
             <Badge size="sm" variant="muted">
@@ -140,14 +131,6 @@ export function PlaceDetailsSheet({
                 </div>
               ))}
             </dl>
-          ) : null}
-
-          {/* The credit names itself - "Photo by ..." - so a "Photo" label above
-              it would only say the same word twice. */}
-          {editorial ? (
-            <div className="border-t border-border-subtle pt-4">
-              <MediaAttribution attribution={editorial.attribution} />
-            </div>
           ) : null}
         </div>
 

@@ -28,8 +28,9 @@ export type EditorialImageAttribution = {
 };
 
 /**
- * A reference to a photograph, never the photograph. `sources` are hotlinked
- * provider URLs and `dominantColor` is what a surface paints while one loads.
+ * A reference to a photograph, never the photograph. `sourceUrl` is the
+ * provider's unsized hotlink; surfaces derive the width they need at render
+ * time. `dominantColor` is what a surface paints while one loads.
  */
 export type EditorialImageReference = {
   altText: string | null;
@@ -37,11 +38,7 @@ export type EditorialImageReference = {
   dominantColor: string | null;
   externalPhotoId: string;
   height: number | null;
-  sources: {
-    large: string;
-    medium: string;
-    small: string;
-  };
+  sourceUrl: string;
   width: number | null;
 };
 
@@ -64,13 +61,13 @@ export class EditorialImageProviderError extends Error {
 
 export interface EditorialImageProvider {
   readonly name: EditorialImageProviderName;
-  /** Resolves the single representative photograph, or null when there is none. */
-  search(subject: EditorialImageSubject): Promise<EditorialImageReference | null>;
+  /** Resolves an ordered collection of up to three representative photographs. */
+  search(subject: EditorialImageSubject): Promise<EditorialImageReference[]>;
 }
 
 export type EditorialImageResult =
   | {
-      image: EditorialImageReference;
+      images: EditorialImageReference[];
       status: 'ok';
       subjectKey: string;
     }
@@ -209,9 +206,11 @@ export class EditorialImagesService {
     const subjectKey = editorialSubjectKey(subject);
 
     try {
-      const image = await this.provider.search(subject);
+      const images = await this.provider.search(subject);
 
-      return image ? { image, status: 'ok', subjectKey } : { status: 'empty', subjectKey };
+      return images.length > 0
+        ? { images, status: 'ok', subjectKey }
+        : { status: 'empty', subjectKey };
     } catch (error) {
       const providerError = getEditorialImageProviderError(error);
 

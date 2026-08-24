@@ -273,18 +273,20 @@ export function SavedPlacesManager() {
     .slice(0, MAX_EDITORIAL_IMAGE_SUBJECTS);
   const editorialImages = useEditorialImages(editorialSubjects);
 
-  /** The photograph resolved for a place by the one batch above, or none. */
-  function getEditorialImage(savedPlace: SavedPlace) {
-    if (savedPlace.place.kind !== 'provider') return null;
+  /** The ordered collection resolved for a place by the one batch above. */
+  function getEditorialImages(savedPlace: SavedPlace) {
+    if (savedPlace.place.kind !== 'provider') return [];
     return (
       editorialImages.get(
         editorialSubjectKey({
           category: savedPlace.place.snapshot?.category,
           name: getPlaceName(savedPlace),
         }),
-      ) ?? null
+      ) ?? []
     );
   }
+
+  const getEditorialImage = (savedPlace: SavedPlace) => getEditorialImages(savedPlace)[0] ?? null;
 
   /** What the details sheet cannot know: how this place sits in the library. */
   function getDetailsMeta(savedPlace: SavedPlace): PlaceDetailsRow[] {
@@ -1154,7 +1156,7 @@ export function SavedPlacesManager() {
 
       {detailsPlace ? (
         <PlaceDetailsSheet
-          editorial={getEditorialImage(detailsPlace)}
+          editorialImages={getEditorialImages(detailsPlace)}
           meta={getDetailsMeta(detailsPlace)}
           name={getPlaceName(detailsPlace)}
           onOpenChange={(open) => !open && setDetailsPlace(null)}

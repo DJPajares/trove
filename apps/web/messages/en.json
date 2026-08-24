@@ -2041,6 +2041,7 @@
       "tryAgain": "Try again",
       "emptyTitle": "No memories yet",
       "emptyDescription": "Moments you capture while travelling collect here, and this page becomes the story of the trip.",
+      "addFirstMemory": "Add your first memory",
       "dateRange": "{start} – {end}",
       "memoryCount": "{count, plural, one {# memory} other {# memories}}",
       "highlights": "Highlights",

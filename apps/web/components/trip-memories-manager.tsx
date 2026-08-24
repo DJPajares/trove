@@ -33,11 +33,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useEditorialImages } from '@/hooks/use-editorial-images';
 import {
   fetchItinerary,
   updateItineraryDayExperienceRating,
   type Itinerary,
 } from '@/lib/itinerary/api';
+import { editorialSubjectKey } from '@/lib/media/editorial-images';
+import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import {
   fetchMemories,
   reorderHighlights,
@@ -46,8 +49,10 @@ import {
   type MemoryTripPlace,
   type StoryCover,
 } from '@/lib/memories/api';
+import { selectPhotoLayout } from '@/lib/memories/photo-layout';
 import { buildTripStory, placeName, type StoryPlace, type TripStory } from '@/lib/memories/story';
 import { fetchTrip, updateTripExperienceRating, type Trip } from '@/lib/trips/api';
+import { tripDestinationSummary, tripEditorialSubject } from '@/lib/trips/summary';
 import { cn } from '@/lib/utils';
 
 type LoadState =
@@ -87,6 +92,7 @@ function StoryPhoto({
     <img
       alt={alt}
       className={cn('w-full rounded-[var(--radius-lg)] bg-muted/40 object-cover', aspect)}
+      decoding="async"
       loading="lazy"
       src={photo.url}
     />
@@ -105,7 +111,10 @@ function StoryPhoto({
 /**
  * Photographs lead. One is given room, a pair reads as a pair, and beyond that a
  * lead image carries the moment while the rest follow beneath it — so no number
- * of photos ever looks like an accident of the grid.
+ * of photos ever looks like an accident of the grid. Which shape a Memory gets
+ * within its count is chosen once, deterministically, from the Memory's own id,
+ * so two Memories with the same photo count don't read as the same template
+ * repeated down the page.
  */
 function MemoryPhotos({ memory, photoAlt }: Readonly<{ memory: Memory; photoAlt: string }>) {
   const [lead, ...rest] = memory.photos;
@@ -114,17 +123,21 @@ function MemoryPhotos({ memory, photoAlt }: Readonly<{ memory: Memory; photoAlt:
   // The lead photo answers to the note. Repeating that sentence on every frame
   // would only make a screen reader say the same thing four times over.
   const leadAlt = memory.note ?? photoAlt;
+  const template = selectPhotoLayout(memory.id, memory.photos.length);
+  if (!template) return null;
 
-  if (!rest.length) return <StoryPhoto alt={leadAlt} aspect="aspect-[4/3]" photo={lead} />;
+  if (template.kind === 'single') {
+    return <StoryPhoto alt={leadAlt} aspect={template.aspect} photo={lead} />;
+  }
 
-  if (rest.length === 1) {
+  if (template.kind === 'pair') {
     return (
       <ul className="grid grid-cols-2 gap-2">
         {memory.photos.map((photo, index) => (
           <li key={photo.id}>
             <StoryPhoto
               alt={index === 0 ? leadAlt : photoAlt}
-              aspect="aspect-[4/5]"
+              aspect={template.aspect}
               photo={photo}
             />
           </li>
@@ -135,13 +148,13 @@ function MemoryPhotos({ memory, photoAlt }: Readonly<{ memory: Memory; photoAlt:
 
   return (
     <div className="space-y-2">
-      <StoryPhoto alt={leadAlt} aspect="aspect-[4/3]" photo={lead} />
+      <StoryPhoto alt={leadAlt} aspect={template.leadAspect} photo={lead} />
       {/* The strip fills its row rather than leaving a gap where a third
           photograph would have gone. */}
       <ul className={cn('grid gap-2', rest.length === 2 ? 'grid-cols-2' : 'grid-cols-3')}>
         {rest.map((photo) => (
           <li key={photo.id}>
-            <StoryPhoto alt={photoAlt} aspect="aspect-square" photo={photo} />
+            <StoryPhoto alt={photoAlt} aspect={template.stripAspect} photo={photo} />
           </li>
         ))}
       </ul>
@@ -240,6 +253,7 @@ function MemoryEntry({
 
 export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('memories.story');
+  const mediaTranslations = useTranslations('media');
   const locale = useLocale();
   const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
@@ -286,6 +300,12 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
     () => (state.data ? buildTripStory(state.data.memories) : null),
     [state.data],
   );
+
+  // One subject for the whole screen, and none at all once the trip already has
+  // a cover of its own — the same shape every other trip surface asks for.
+  const subject = state.data ? tripEditorialSubject(state.data.trip) : null;
+  const editorialImages = useEditorialImages(subject ? [subject] : []);
+  const editorial = subject ? (editorialImages.get(editorialSubjectKey(subject)) ?? null) : null;
 
   async function moveHighlight(memoryId: string, direction: -1 | 1) {
     if (!story) return;
@@ -360,6 +380,13 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   const { storyCover, trip } = state.data;
+  const headSource = resolveTripMediaSource({
+    coverUrl: trip.coverPhotoUrl,
+    editorial,
+    memoryUrl: storyCover?.url,
+  });
+  const hasPhoto = headSource.kind !== 'fallback';
+  const destinations = tripDestinationSummary(trip);
   const dateOnly = (value: string) =>
     new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeZone: 'UTC' }).format(
       new Date(`${value}T00:00:00.000Z`),
@@ -527,28 +554,41 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
     t('rateTrip'),
     trip.experienceRating,
     () => setRatingEditor({ kind: 'trip' }),
-    storyCover?.url ? 'onImage' : 'default',
+    hasPhoto ? 'onImage' : 'default',
   );
 
   /**
-   * With a cover, the traveller's own photograph opens the story and carries the
-   * dates over it. Without one, the same line stands on its own — an empty frame
-   * would be a decoration standing in for something that isn't there.
+   * With a photograph — the trip's own cover, a chosen Memory, or, absent both,
+   * an editorial stand-in for the destination — it opens the story and carries
+   * the dates over it. Without one, the same line stands on its own: an empty
+   * frame would be a decoration standing in for something that isn't there.
    */
-  const storyHead = storyCover?.url ? (
+  const storyHead = hasPhoto ? (
     <div className="relative -mx-[var(--layout-gutter)] overflow-hidden md:mx-0 md:rounded-[var(--radius-xl)]">
       <TripMedia
-        alt=""
+        alt={
+          headSource.kind === 'editorial'
+            ? mediaTranslations('alt.tripEditorial', { name: destinations ?? trip.name })
+            : ''
+        }
         className="w-full"
+        preload
         sizes="(max-width: 640px) 100vw, 1024px"
-        source={{ kind: 'memory', url: storyCover.url }}
+        source={headSource}
         variant="hero"
       />
       <div
         aria-hidden="true"
         className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent"
       />
-      <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-center gap-x-2 gap-y-1 p-4 sm:p-6">
+      <div
+        className={cn(
+          'absolute inset-x-0 bottom-0 flex flex-wrap items-center gap-x-2 gap-y-1 p-4 sm:p-6',
+          // Clears the credit chip the frame draws in the same corner when the
+          // photograph is editorial rather than the traveller's own.
+          headSource.kind === 'editorial' && 'pb-10 sm:pb-12',
+        )}
+      >
         <p className="text-sm font-medium text-white/90">{dateRange}</p>
         {tripRating}
       </div>
@@ -635,6 +675,12 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
         {liveRegion}
         {storyHead}
         <PageState
+          actions={
+            <Button onClick={() => setEditor({ memory: null, mode: 'create' })}>
+              <Plus aria-hidden="true" data-icon="inline-start" />
+              {t('addFirstMemory')}
+            </Button>
+          }
           className="min-h-64 justify-center"
           description={t('emptyDescription')}
           headingLevel={2}

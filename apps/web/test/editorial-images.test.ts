@@ -90,7 +90,7 @@ test('an answer already given this session is never asked for again', async () =
   expect(resolved.has('destination:lisbon')).toBe(true);
 });
 
-test('more subjects than the service accepts are split across requests', async () => {
+test('a screen asking for too much is capped, never split into a fan-out', async () => {
   const fetchMock = vi.fn(async (..._call: FetchCall) => respond([]));
   vi.stubGlobal('fetch', fetchMock);
 
@@ -100,10 +100,9 @@ test('more subjects than the service accepts are split across requests', async (
     })),
   );
 
-  expect(fetchMock).toHaveBeenCalledTimes(2);
-  const [first, second] = sentSubjects(fetchMock.mock.calls);
-  expect(first).toHaveLength(MAX_EDITORIAL_IMAGE_SUBJECTS);
-  expect(second).toHaveLength(3);
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  const [only] = sentSubjects(fetchMock.mock.calls);
+  expect(only).toHaveLength(MAX_EDITORIAL_IMAGE_SUBJECTS);
 });
 
 test('the kill switch reads as an absence of photography, not as an error', async () => {

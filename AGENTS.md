@@ -53,17 +53,19 @@ The approved product requirements live in `PRD.md` once generated. Linear is the
 
 Linear is the implementation source of truth.
 
-Every change follows this workflow, including work that arrives outside Linear.
-If a request comes from chat, a screenshot, or a bug found while using the app,
-create the Linear issue first, then implement against it.
+When a request comes from a prompt, first evaluate its size and risk. Small,
+self-contained, low-risk changes with clear scope may be processed immediately
+without a Linear issue. Larger, cross-cutting, ambiguous, or otherwise
+meaningful implementation work must have a Linear issue created before work
+begins. Requests that already come from Linear should use the existing issue.
 
 Never commit to `main`. Before the first edit, confirm the current branch is not
 `main` and create a task branch if it is. Every change reaches `main` only through
 a Pull Request a human has reviewed and merged.
 
-For each task:
+For each Linear-backed task:
 
-1. Read the current Linear issue, creating it first if the task did not come from Linear.
+1. Read the current Linear issue, creating it first when a prompt-originated task does not qualify for immediate processing.
 2. Check `Blocked by` dependencies before implementation.
 3. Move the issue to `In Progress`.
 4. Read only the relevant PRD sections and code.
@@ -78,6 +80,11 @@ For each task:
 13. Identify the next unblocked suggested task.
 14. Move the next suggested task to `Todo`.
 15. Stop for human review.
+
+For a small prompt-originated task that qualifies for immediate processing,
+skip the Linear-specific steps, but still confirm the branch, implement only
+the requested scope, run focused validation, self-review, and follow the
+applicable GitHub and human-review rules.
 
 Do not auto-merge PRs. A user must manually review and approve.
 

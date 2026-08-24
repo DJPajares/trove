@@ -14,6 +14,7 @@ import type { Task, TaskInput, TasksResponse } from '@/lib/tasks/api';
 import type { TripInfoEntry, TripInfoInput, TripInfoResponse } from '@/lib/trip-info/api';
 import type { Trip } from '@/lib/trips/api';
 import { applyItineraryDayMove } from '@/lib/itinerary/day-move';
+import { itemSortMinute, reslotItemByTime } from '@/lib/itinerary/item-order';
 
 const DATABASE_NAME = 'trove-offline';
 const DATABASE_VERSION = 3;
@@ -1042,6 +1043,8 @@ export function applyOfflineMutation(
     };
     applyInput(item, mutation.input, next);
     day.items.push(item);
+    reslotItemByTime(day.items, item.id);
+    normalizePositions(day.items);
     return next;
   }
 
@@ -1060,7 +1063,17 @@ export function applyOfflineMutation(
   }
 
   if (mutation.kind === 'itinerary_item_update') {
+    const before = itemSortMinute(item);
     applyInput(item, mutation.input, next);
+    if (itemSortMinute(item) !== before) {
+      const day = next.days.find((candidate) =>
+        candidate.items.some((candidateItem) => candidateItem.id === item.id),
+      );
+      if (day) {
+        reslotItemByTime(day.items, item.id);
+        normalizePositions(day.items);
+      }
+    }
     return next;
   }
 

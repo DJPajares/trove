@@ -34,7 +34,7 @@ export function resetStore() {
   for (const name of MODELS) store[name] = [];
 }
 
-/** The filter shapes the services actually use: equality, `in`, `OR`, and one relation hop. */
+/** The filter shapes the services actually use: equality, `in`, `not`, `OR`, and relation hops. */
 function matches(row: Row, where: Where): boolean {
   if (!where) return true;
   return Object.entries(where).every(([key, value]) => {
@@ -45,8 +45,17 @@ function matches(row: Row, where: Where): boolean {
       const owner = store.memory.find((candidate) => candidate.id === row.memoryId);
       return owner ? matches(owner, value as Where) : false;
     }
+    if (key === 'trip') {
+      const owner = store.trip.find((candidate) => candidate.id === row.tripId);
+      return owner ? matches(owner, value as Where) : false;
+    }
     if (value && typeof value === 'object' && 'in' in value) {
       return (value as { in: unknown[] }).in.includes(row[key]);
+    }
+    // `not` excludes one row from a set, which is how a reorder reads the
+    // siblings of the item being placed.
+    if (value && typeof value === 'object' && 'not' in value) {
+      return row[key] !== (value as { not: unknown }).not;
     }
     return row[key] === value;
   });
@@ -71,6 +80,9 @@ function hydrateTripPlace(row: Row | undefined) {
 function hydrateItem(row: Row) {
   return {
     ...row,
+    // `itineraryItemInclude` selects the day's date and zone, which the update
+    // path reads to re-resolve a schedule.
+    itineraryDay: store.itineraryDay.find((day) => day.id === row.itineraryDayId) ?? null,
     tripPlace: hydrateTripPlace(store.tripPlace.find((place) => place.id === row.tripPlaceId)),
   };
 }

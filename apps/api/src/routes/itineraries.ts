@@ -59,6 +59,11 @@ export function registerItineraryRoutes(app: FastifyInstance) {
     controllers.updateDayNote,
   );
   app.patch(
+    '/trips/:tripId/itinerary/days/:itineraryDayId/name',
+    authenticated,
+    controllers.updateDayName,
+  );
+  app.patch(
     '/trips/:tripId/itinerary/days/:itineraryDayId/experience-rating',
     authenticated,
     controllers.updateDayExperienceRating,

@@ -70,7 +70,7 @@ function scheduleFields(item: ItineraryItem) {
 function itineraryOperationAlreadyApplied(
   operation: Exclude<
     OfflineItineraryMutationOperation,
-    { kind: 'itinerary_day_move' | 'itinerary_day_note' }
+    { kind: 'itinerary_day_move' | 'itinerary_day_name' | 'itinerary_day_note' }
   >,
   current: ItineraryItem | null,
 ) {
@@ -119,7 +119,7 @@ function itineraryOperationAlreadyApplied(
 function itineraryOperationConflicts(
   operation: Exclude<
     OfflineItineraryMutationOperation,
-    { kind: 'itinerary_day_move' | 'itinerary_day_note' }
+    { kind: 'itinerary_day_move' | 'itinerary_day_name' | 'itinerary_day_note' }
   >,
   current: ItineraryItem | null,
 ) {
@@ -220,6 +220,14 @@ function requestFor(
       headers,
       method: 'PATCH',
       path: `/trips/${tripId}/itinerary/days/${operation.itineraryDayId}/note`,
+    };
+  }
+  if (operation.kind === 'itinerary_day_name') {
+    return {
+      body: JSON.stringify({ name: operation.name }),
+      headers,
+      method: 'PATCH',
+      path: `/trips/${tripId}/itinerary/days/${operation.itineraryDayId}/name`,
     };
   }
   if (operation.kind === 'task_create') {
@@ -552,6 +560,36 @@ async function replayItineraryMutation(
       return;
     }
     if (!force && (!day || day.notes !== operation.baseNote)) {
+      await updateMutationState(
+        mutation,
+        'conflict',
+        day ? 'itinerary_day_conflict' : 'day_missing',
+      );
+      return;
+    }
+    const response = await apiRequest(
+      accessToken,
+      requestFor(operation, mutation.tripId, undefined),
+    );
+    if (response.ok) {
+      await removeOfflineMutation(mutation.id);
+      return;
+    }
+    const body = (await response.json().catch(() => ({}))) as { code?: string };
+    await updateMutationState(
+      mutation,
+      response.status === 409 ? 'conflict' : 'failed',
+      body.code ?? `itinerary_request_failed_${response.status}`,
+    );
+    return;
+  }
+  if (operation.kind === 'itinerary_day_name') {
+    const day = serverItinerary.days.find((candidate) => candidate.id === operation.itineraryDayId);
+    if (day?.name === operation.name) {
+      await removeOfflineMutation(mutation.id);
+      return;
+    }
+    if (!force && (!day || day.name !== operation.baseName)) {
       await updateMutationState(
         mutation,
         'conflict',

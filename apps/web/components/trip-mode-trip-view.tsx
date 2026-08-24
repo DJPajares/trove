@@ -93,6 +93,7 @@ function TripViewSkeleton({ label }: Readonly<{ label: string }>) {
 
 export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripMode.views.trip');
+  const itineraryT = useTranslations('itinerary');
   const locale = useLocale();
   const { contextOptions } = useTripModePreview();
   const offlineDataRefreshKey = useOfflineDataRefreshKey();
@@ -337,13 +338,21 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
                     </ItemMedia>
                     <ItemContent>
                       <ItemTitle>
-                        {dateFormatter.format(new Date(`${day.date}T00:00:00.000Z`))}
+                        {day.name ?? dateFormatter.format(new Date(`${day.date}T00:00:00.000Z`))}
                       </ItemTitle>
                       <ItemDescription>
-                        {t('daySummary', {
-                          count: day.items.length,
-                          number: selectedDayIndex + index + 1,
-                        })}
+                        {day.name
+                          ? t('daySummaryNamed', {
+                              count: day.items.length,
+                              day: itineraryT('dayOption', {
+                                date: dateFormatter.format(new Date(`${day.date}T00:00:00.000Z`)),
+                                number: selectedDayIndex + index + 1,
+                              }),
+                            })
+                          : t('daySummary', {
+                              count: day.items.length,
+                              number: selectedDayIndex + index + 1,
+                            })}
                       </ItemDescription>
                     </ItemContent>
                     <ChevronRight aria-hidden="true" className="size-4 text-muted-foreground" />

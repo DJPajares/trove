@@ -108,7 +108,8 @@ test('trip-scoped mutations reject another user before writing', async () => {
   const { addTripPlace, removeTripPlace, updateTripPlace } =
     await import('../src/services/trip-places.js');
   const { createTripInfo } = await import('../src/services/trip-info.js');
-  const { updateItineraryDayNote } = await import('../src/services/itineraries.js');
+  const { updateItineraryDayName, updateItineraryDayNote } =
+    await import('../src/services/itineraries.js');
 
   await assertDeniesCrossUserAccess('addTripPlace', () =>
     addTripPlace(INTRUDER_ID, OWNER_TRIP_ID, 'place-id'),
@@ -128,6 +129,9 @@ test('trip-scoped mutations reject another user before writing', async () => {
   );
   await assertDeniesCrossUserAccess('updateItineraryDayNote', () =>
     updateItineraryDayNote(INTRUDER_ID, OWNER_TRIP_ID, 'day-id', 'note'),
+  );
+  await assertDeniesCrossUserAccess('updateItineraryDayName', () =>
+    updateItineraryDayName(INTRUDER_ID, OWNER_TRIP_ID, 'day-id', 'named day'),
   );
 
   const writeMethods = new Set([

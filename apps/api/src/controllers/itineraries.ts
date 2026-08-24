@@ -13,6 +13,7 @@ import {
   organizeItineraryItem,
   setItineraryDayBase,
   updateItineraryDayExperienceRating,
+  updateItineraryDayName,
   updateItineraryDayNote,
   updateItineraryItem,
 } from '../services/itineraries.js';
@@ -53,6 +54,7 @@ const dayBaseSchema = z
   })
   .strict();
 const dayNoteSchema = z.object({ note: z.string().trim().max(5_000).nullable() }).strict();
+const dayNameSchema = z.object({ name: z.string().trim().min(1).max(120).nullable() }).strict();
 const dayExperienceRatingSchema = z
   .object({
     note: z.string().trim().max(2_000).nullable().optional(),
@@ -287,6 +289,27 @@ export function createItineraryControllers() {
             params.data.tripId,
             params.data.itineraryDayId,
             body.data.note,
+          ),
+        );
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
+
+    async updateDayName(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = dayParamsSchema.safeParse(request.params);
+      const body = dayNameSchema.safeParse(request.body);
+      if (!userId) return;
+      if (!params.success || !body.success)
+        return reply.code(400).send({ code: 'invalid_itinerary_day' });
+      try {
+        return reply.send(
+          await updateItineraryDayName(
+            userId,
+            params.data.tripId,
+            params.data.itineraryDayId,
+            body.data.name,
           ),
         );
       } catch (error) {

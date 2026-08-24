@@ -12,6 +12,7 @@ import {
   Map as MapIcon,
   MapPinned,
   NotebookPen,
+  Pencil,
   Plus,
   Search,
   Settings2,
@@ -113,6 +114,7 @@ import {
   moveItineraryDayPlan,
   setItineraryDayBase,
   updateItineraryDayNote,
+  updateItineraryDayName,
   updateItineraryDayRouteMode,
   updateItineraryItem,
   updateItineraryItemRouteMode,
@@ -288,10 +290,14 @@ export function ItineraryManager({
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [dayNoteEditor, setDayNoteEditor] = useState<ItineraryDay | null>(null);
+  const [dayNameEditor, setDayNameEditor] = useState<ItineraryDay | null>(null);
   const [daySettingsOpen, setDaySettingsOpen] = useState(false);
   const { compact, setCompactItinerary } = useCompactItinerary();
   const [dayNoteValue, setDayNoteValue] = useState('');
+  const [dayNameValue, setDayNameValue] = useState('');
   const [savingDayNote, setSavingDayNote] = useState(false);
+  const [savingDayName, setSavingDayName] = useState(false);
+  const [dayNameError, setDayNameError] = useState<string | null>(null);
   const [dayMoveSourceId, setDayMoveSourceId] = useState<string | null>(null);
   const [dayMoveTargetId, setDayMoveTargetId] = useState('');
   const [dayMoveStrategy, setDayMoveStrategy] = useState<'append' | 'swap'>('append');
@@ -476,6 +482,11 @@ export function ItineraryManager({
   );
   const formatDate = (date: string, long = false) =>
     (long ? longDateFormatter : dateFormatter).format(new Date(`${date}T00:00:00.000Z`));
+
+  const dayOption = (day: ItineraryDay, index: number) =>
+    day.name
+      ? t('dayOptionNamed', { date: formatDate(day.date), name: day.name, number: index + 1 })
+      : t('dayOption', { date: formatDate(day.date), number: index + 1 });
 
   function placeName(tripPlace: ItineraryTripPlace | null) {
     if (!tripPlace) return null;
@@ -1309,6 +1320,36 @@ export function ItineraryManager({
     }
   }
 
+  async function handleDayNameSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!dayNameEditor) return;
+
+    setSavingDayName(true);
+    setDayNameError(null);
+    try {
+      const result = await updateItineraryDayName(
+        tripId,
+        dayNameEditor.id,
+        dayNameValue.trim() || null,
+      );
+      setItinerary((current) =>
+        current
+          ? {
+              ...current,
+              days: current.days.map((day) =>
+                day.id === result.id ? { ...day, name: result.name } : day,
+              ),
+            }
+          : current,
+      );
+      setDayNameEditor(null);
+    } catch {
+      setDayNameError(t('dayNameError'));
+    } finally {
+      setSavingDayName(false);
+    }
+  }
+
   function openDayMove(day: ItineraryDay) {
     setDaySettingsOpen(false);
     setDayMoveSourceId(day.id);
@@ -1421,12 +1462,7 @@ export function ItineraryManager({
         <Select onValueChange={(value) => setSelectedDayId(value)} value={selectedDayId}>
           <SelectTrigger aria-label={t('chooseDay')} className="min-w-0 flex-1">
             <SelectValue>
-              {selectedDay
-                ? t('dayOption', {
-                    date: formatDate(selectedDay.date),
-                    number: selectedIndex + 1,
-                  })
-                : t('chooseDay')}
+              {selectedDay ? dayOption(selectedDay, selectedIndex) : t('chooseDay')}
             </SelectValue>
           </SelectTrigger>
           <SelectContent align="start">
@@ -1435,7 +1471,7 @@ export function ItineraryManager({
                 {/* How full a day is decides which day you want next, so the
                     dropdown carries the count the desktop rail already shows. */}
                 <span className="flex w-full items-center justify-between gap-3">
-                  <span>{t('dayOption', { date: formatDate(day.date), number: index + 1 })}</span>
+                  <span>{dayOption(day, index)}</span>
                   <span className="text-xs tabular-nums text-muted-foreground">
                     {t('dayItemCount', { count: day.items.length })}
                   </span>
@@ -1485,10 +1521,21 @@ export function ItineraryManager({
                     type="button"
                   >
                     <span>
-                      <span className="block text-xs text-muted-foreground">
-                        {t('dayNumber', { number: index + 1 })}
-                      </span>
-                      <span className="block text-sm font-medium">{formatDate(day.date)}</span>
+                      {day.name ? (
+                        <>
+                          <span className="block truncate text-sm font-medium">{day.name}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {t('dayOption', { date: formatDate(day.date), number: index + 1 })}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="block text-xs text-muted-foreground">
+                            {t('dayNumber', { number: index + 1 })}
+                          </span>
+                          <span className="block text-sm font-medium">{formatDate(day.date)}</span>
+                        </>
+                      )}
                     </span>
                     <span className="text-xs tabular-nums text-muted-foreground">
                       {day.items.length}
@@ -1507,11 +1554,25 @@ export function ItineraryManager({
                 band of its own cost a row of the plan for nothing. */}
             <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-3 border-b border-border px-4 py-3 sm:flex-nowrap sm:gap-4 sm:px-6 sm:py-4">
               <div className="min-w-0 flex-1">
-                {/* The day picker above already carries the date; this is the heading
-                    for the day being planned, not a second copy of it. */}
-                <h2 className="text-base font-semibold tracking-tight sm:text-lg">
-                  {formatDate(selectedDay.date, true)}
-                </h2>
+                {/* The day picker above carries navigation context. A saved day name
+                    answers what this date is for, while its calendar context stays close. */}
+                {selectedDay.name ? (
+                  <>
+                    <h2 className="text-base font-semibold tracking-tight sm:text-lg">
+                      {selectedDay.name}
+                    </h2>
+                    <p className="mt-0.5 text-sm text-muted-foreground">
+                      {t('dayOption', {
+                        date: formatDate(selectedDay.date, true),
+                        number: selectedIndex + 1,
+                      })}
+                    </p>
+                  </>
+                ) : (
+                  <h2 className="text-base font-semibold tracking-tight sm:text-lg">
+                    {formatDate(selectedDay.date, true)}
+                  </h2>
+                )}
                 {selectedDay.notes ? (
                   <p className="mt-1.5 max-w-2xl whitespace-pre-wrap text-sm leading-6 text-text-subtle">
                     {selectedDay.notes}
@@ -1663,6 +1724,19 @@ export function ItineraryManager({
                       className="w-full"
                       onClick={() => {
                         setDaySettingsOpen(false);
+                        setDayNameEditor(selectedDay);
+                        setDayNameValue(selectedDay.name ?? '');
+                        setDayNameError(null);
+                      }}
+                      variant="outline"
+                    >
+                      <Pencil aria-hidden="true" data-icon="inline-start" />
+                      {selectedDay.name ? t('editDayName') : t('addDayName')}
+                    </Button>
+                    <Button
+                      className="w-full"
+                      onClick={() => {
+                        setDaySettingsOpen(false);
                         setDayNoteEditor(selectedDay);
                         setDayNoteValue(selectedDay.notes ?? '');
                       }}
@@ -1737,10 +1811,7 @@ export function ItineraryManager({
                   <ItineraryDayTimeline
                     dayOptions={itinerary.days.map((day, dayIndex) => ({
                       id: day.id,
-                      label: t('dayOption', {
-                        date: formatDate(day.date),
-                        number: dayIndex + 1,
-                      }),
+                      label: dayOption(day, dayIndex),
                     }))}
                     defaultTimeZone={selectedDay.defaultTimeZone}
                     distanceUnit={preferences.distanceUnit}
@@ -1898,7 +1969,7 @@ export function ItineraryManager({
                       <SelectContent>
                         {itinerary.days.map((day, index) => (
                           <SelectItem key={day.id} value={day.id}>
-                            {t('dayOption', { date: formatDate(day.date), number: index + 1 })}
+                            {dayOption(day, index)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1930,6 +2001,7 @@ export function ItineraryManager({
 
       {placesDrawerOpen && selectedDay ? (
         <ItineraryPlacesDrawer
+          dayName={selectedDay.name}
           dayNumber={selectedIndex + 1}
           onAddToDay={addPlaceToSelectedDay}
           onTripPlaceAdded={(tripPlace) =>
@@ -2406,7 +2478,10 @@ export function ItineraryManager({
                 <DialogDescription>
                   {t('dayMove.description', {
                     count: dayMoveSource.items.length,
-                    date: formatDate(dayMoveSource.date, true),
+                    day: dayOption(
+                      dayMoveSource,
+                      itinerary.days.findIndex(({ id }) => id === dayMoveSource.id),
+                    ),
                   })}
                 </DialogDescription>
               </DialogHeader>
@@ -2429,9 +2504,10 @@ export function ItineraryManager({
                         {dayMoveTarget
                           ? t('dayMove.targetOption', {
                               count: dayMoveTarget.items.length,
-                              date: formatDate(dayMoveTarget.date),
-                              number:
-                                itinerary.days.findIndex(({ id }) => id === dayMoveTarget.id) + 1,
+                              day: dayOption(
+                                dayMoveTarget,
+                                itinerary.days.findIndex(({ id }) => id === dayMoveTarget.id),
+                              ),
                             })
                           : t('dayMove.targetPlaceholder')}
                       </SelectValue>
@@ -2442,8 +2518,7 @@ export function ItineraryManager({
                           <SelectItem key={day.id} value={day.id}>
                             {t('dayMove.targetOption', {
                               count: day.items.length,
-                              date: formatDate(day.date),
-                              number: index + 1,
+                              day: dayOption(day, index),
                             })}
                           </SelectItem>
                         ),
@@ -2553,6 +2628,56 @@ export function ItineraryManager({
               </Button>
               <Button disabled={savingDayNote} type="submit">
                 {savingDayNote ? t('saving') : t('saveDayNote')}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(dayNameEditor)}
+        onOpenChange={(open) => {
+          if (!open && !savingDayName) setDayNameEditor(null);
+        }}
+      >
+        <DialogContent closeLabel={t('close')}>
+          <form className="space-y-6" onSubmit={handleDayNameSave}>
+            <DialogHeader>
+              <DialogTitle>{t('dayNameTitle')}</DialogTitle>
+              <DialogDescription>
+                {t('dayNameDescription', {
+                  date: dayNameEditor ? formatDate(dayNameEditor.date, true) : '',
+                })}
+              </DialogDescription>
+            </DialogHeader>
+            <Field>
+              <FieldLabel htmlFor="itinerary-day-name">{t('dayNameLabel')}</FieldLabel>
+              <Input
+                autoFocus
+                id="itinerary-day-name"
+                maxLength={120}
+                onChange={(event) => setDayNameValue(event.target.value)}
+                placeholder={t('dayNamePlaceholder')}
+                value={dayNameValue}
+              />
+              <FieldDescription>{t('dayNameHint')}</FieldDescription>
+              {dayNameError ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {dayNameError}
+                </p>
+              ) : null}
+            </Field>
+            <DialogFooter>
+              <Button
+                disabled={savingDayName}
+                onClick={() => setDayNameEditor(null)}
+                type="button"
+                variant="outline"
+              >
+                {t('cancel')}
+              </Button>
+              <Button disabled={savingDayName} type="submit">
+                {savingDayName ? t('saving') : t('saveDayName')}
               </Button>
             </DialogFooter>
           </form>

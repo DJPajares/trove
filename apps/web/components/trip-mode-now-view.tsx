@@ -105,6 +105,7 @@ function TripModeNowSkeleton({ label }: Readonly<{ label: string }>) {
 
 export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripMode.views.now');
+  const itineraryT = useTranslations('itinerary');
   const memoryTranslations = useTranslations('memories.capture');
   const [memoryOpen, setMemoryOpen] = useState(false);
   const locale = useLocale();
@@ -315,9 +316,17 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="sr-only">{t('title')}</h2>
+        {readyContext.day?.name ? (
+          <h2 className="text-base font-semibold tracking-tight sm:text-lg">
+            {readyContext.day.name}
+          </h2>
+        ) : (
+          <h2 className="sr-only">{t('title')}</h2>
+        )}
         <p className="text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
-          {date}
+          {readyContext.day?.name
+            ? itineraryT('dayOption', { date, number: readyContext.day.number })
+            : date}
         </p>
         {/* Naming the zone is what keeps a planned clock from reading as the
             phone's own. It costs one line, and it is the line that says so. */}

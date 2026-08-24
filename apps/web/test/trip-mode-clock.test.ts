@@ -40,7 +40,14 @@ function context(overrides: Partial<TripModeContext> = {}): TripModeContext {
     contextAt: '2026-09-05T02:00:00.000Z',
     contextSource: 'live',
     currentOrRelevant: null,
-    day: { date: '2026-09-05', defaultTimeZone: timeZone, id: 'day', items: [] },
+    day: {
+      date: '2026-09-05',
+      defaultTimeZone: timeZone,
+      id: 'day',
+      items: [],
+      name: null,
+      number: 1,
+    },
     leaveBy: null,
     nextItemId: null,
     selectedDate: '2026-09-05',
@@ -68,6 +75,8 @@ test('an item start time is a boundary', () => {
         defaultTimeZone: timeZone,
         id: 'day',
         items: [item({ startInstant: at.toISOString() })],
+        name: null,
+        number: 1,
       },
     }),
     now,
@@ -85,6 +94,8 @@ test('an item end time is a boundary', () => {
         defaultTimeZone: timeZone,
         id: 'day',
         items: [item({ durationMinutes: 30, startInstant: '2026-09-05T01:50:00.000Z' })],
+        name: null,
+        number: 1,
       },
     }),
     now,
@@ -127,6 +138,8 @@ test('past items do not produce boundaries', () => {
         defaultTimeZone: timeZone,
         id: 'day',
         items: [item({ startInstant: '2026-09-05T00:00:00.000Z' })],
+        name: null,
+        number: 1,
       },
     }),
     now,
@@ -147,6 +160,8 @@ test('completed and skipped items are ignored', () => {
           item({ id: 'done', startInstant: '2026-09-05T02:30:00.000Z', travelStatus: 'completed' }),
           item({ id: 'skip', startInstant: '2026-09-05T02:40:00.000Z', travelStatus: 'skipped' }),
         ],
+        name: null,
+        number: 1,
       },
     }),
     now,
@@ -183,7 +198,14 @@ test('a daypart boundary is correct across a spring-forward transition', () => {
   // US DST begins 2026-03-08. Standing at 23:00 local on the 7th, the next
   // boundary is midnight, which is a real instant even though 02:00 is not.
   const newYork = context({
-    day: { date: '2026-03-07', defaultTimeZone: 'America/New_York', id: 'day', items: [] },
+    day: {
+      date: '2026-03-07',
+      defaultTimeZone: 'America/New_York',
+      id: 'day',
+      items: [],
+      name: null,
+      number: 1,
+    },
     selectedDate: '2026-03-07',
     trip: {
       endDate: '2026-03-09',
@@ -201,7 +223,14 @@ test('a daypart boundary is correct across a spring-forward transition', () => {
 
 test('a boundary in a half-hour offset zone lands on the local clock', () => {
   const kolkata = context({
-    day: { date: '2026-09-05', defaultTimeZone: 'Asia/Kolkata', id: 'day', items: [] },
+    day: {
+      date: '2026-09-05',
+      defaultTimeZone: 'Asia/Kolkata',
+      id: 'day',
+      items: [],
+      name: null,
+      number: 1,
+    },
     trip: {
       endDate: '2026-09-06',
       id: 'trip',
@@ -220,7 +249,14 @@ test('the day zone and the trip zone are read independently', () => {
   // The traveller has flown east: the day runs on Tokyo time while the trip's
   // reference zone — which is what rolls the date — is still Singapore.
   const split = context({
-    day: { date: '2026-09-05', defaultTimeZone: 'Asia/Tokyo', id: 'day', items: [] },
+    day: {
+      date: '2026-09-05',
+      defaultTimeZone: 'Asia/Tokyo',
+      id: 'day',
+      items: [],
+      name: null,
+      number: 1,
+    },
   });
   // 14:30Z is 23:30 JST and 22:30 SGT. The day runs on Tokyo time, so Tokyo
   // midnight (15:00Z) flips its items to overdue before Singapore's midnight
@@ -240,6 +276,8 @@ test("an item's own zone contributes a boundary the day's zone would miss", () =
         defaultTimeZone: timeZone,
         id: 'day',
         items: [item({ dayPart: 'evening', timeZone: 'Asia/Tokyo' })],
+        name: null,
+        number: 1,
       },
     }),
     new Date('2026-09-05T14:30:00.000Z'),

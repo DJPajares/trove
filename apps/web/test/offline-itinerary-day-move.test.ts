@@ -43,6 +43,7 @@ function day(
     experienceRating: null,
     id,
     items: ids.map((itemId, position) => item(itemId, id, position)),
+    name: `${id} name`,
     notes: `${id} note`,
     routeStartTravelMode: 'drive',
   };
@@ -109,6 +110,7 @@ test('offline append moves the daily base with the items', () => {
     dailyBaseTripPlaceId: 'source-arrival',
   });
   expect(result.days.map(({ notes }) => notes)).toStrictEqual(['source note', 'target note']);
+  expect(result.days.map(({ name }) => name)).toStrictEqual(['source name', 'target name']);
 });
 
 test('offline swap exchanges the ordered item lists and is idempotent', () => {

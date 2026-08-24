@@ -435,6 +435,7 @@ export async function listItinerary(userId: string, tripId: string, languageCode
       experienceRating: day.experienceRating,
       id: day.id,
       items: day.items.map((item) => serializeItineraryItem(item, options)),
+      name: day.name,
       notes: day.notes,
       routeStartTravelMode: mapTravelMode(day.routeStartTravelMode),
     })),
@@ -907,6 +908,25 @@ export async function updateItineraryDayNote(
     });
   });
   return { id: result.id, notes: result.notes };
+}
+
+export async function updateItineraryDayName(
+  userId: string,
+  tripId: string,
+  itineraryDayId: string,
+  name: string | null,
+) {
+  const prisma = getPrismaClient();
+  const result = await prisma.$transaction(async (transaction) => {
+    await findOwnedTrip(transaction, userId, tripId);
+    const day = await findDay(transaction, tripId, itineraryDayId);
+    return transaction.itineraryDay.update({
+      where: { id: day.id },
+      data: { name: name?.trim() || null },
+      select: { id: true, name: true },
+    });
+  });
+  return { id: result.id, name: result.name };
 }
 
 /**

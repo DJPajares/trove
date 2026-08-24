@@ -363,7 +363,14 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   if (state.status === 'loading') {
-    return <PageState className="mx-auto max-w-5xl" kind="loading" title={t('loading')} />;
+    return (
+      <PageState
+        className="mx-auto max-w-5xl"
+        kind="loading"
+        loadingShape="media"
+        title={t('loading')}
+      />
+    );
   }
 
   if (state.status === 'error' || !story) {

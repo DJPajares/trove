@@ -544,7 +544,7 @@ export function SavedPlacesManager() {
       ) : null}
 
       {status === 'loading' ? (
-        <PageState headingLevel={2} kind="loading" title={t('loading')} />
+        <PageState headingLevel={2} kind="loading" loadingShape="list" title={t('loading')} />
       ) : status === 'error' ? (
         <PageState
           actions={<Button onClick={() => void refresh()}>{t('tryAgain')}</Button>}

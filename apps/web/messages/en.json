@@ -1767,6 +1767,7 @@
   "offlineStorage": {
     "title": "Offline & Storage",
     "description": "Manage the trips Trove keeps on this device for offline use.",
+    "loading": "Loading offline storage…",
     "cloudSafetyNote": "Removing a local copy only clears this device. Your trip stays safe in Trove.",
     "empty": "No trips are stored on this device yet. Prepare a trip from Trip Mode to use it offline.",
     "unavailable": "Trove can't read offline storage in this browser.",

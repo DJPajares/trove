@@ -5,7 +5,10 @@ import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { useNotifications } from '@/components/notifications-provider';
+import { PageState } from '@/components/page-state';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item';
 import {
   Popover,
   PopoverContent,
@@ -38,9 +41,9 @@ export function NotificationCenter() {
       >
         <Bell aria-hidden="true" className="size-4" />
         {count ? (
-          <span className="absolute top-1 right-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-4 font-semibold text-primary-foreground">
+          <Badge className="absolute top-1 right-1" size="count" variant="solid">
             {count > 9 ? '9+' : count}
-          </span>
+          </Badge>
         ) : null}
       </PopoverTrigger>
       <PopoverContent
@@ -70,40 +73,49 @@ export function NotificationCenter() {
         </PopoverHeader>
 
         {count ? (
-          <div className="max-h-80 overflow-y-auto" role="list">
-            {notifications.slice(0, 5).map((notification) => (
-              <Link
-                className="block border-b border-border px-4 py-3 outline-none last:border-b-0 hover:bg-muted/60 focus-visible:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
-                href={notification.actionPath}
-                key={notification.id}
-                onClick={() => void markRead(notification.id).catch(() => undefined)}
-                role="listitem"
-              >
-                <span className="block text-sm font-medium text-foreground">
-                  {t(`kinds.${notification.kind}.centerTitle`, {
-                    label: notification.label,
-                  })}
-                </span>
-                <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                  {t('centerMeta', {
-                    time: new Intl.DateTimeFormat(locale, {
-                      dateStyle: 'medium',
-                      timeStyle: 'short',
-                      timeZone: notification.timeZone,
-                    }).format(new Date(notification.eventAt)),
-                    trip: notification.trip.name,
-                  })}
-                </span>
-              </Link>
-            ))}
+          <div className="max-h-80 overflow-y-auto">
+            <ItemGroup variant="list">
+              {notifications.slice(0, 5).map((notification) => (
+                <Item
+                  key={notification.id}
+                  render={
+                    <Link
+                      href={notification.actionPath}
+                      onClick={() => void markRead(notification.id).catch(() => undefined)}
+                      role="listitem"
+                    />
+                  }
+                  size="sm"
+                >
+                  <ItemContent className="min-w-0">
+                    <ItemTitle>
+                      {t(`kinds.${notification.kind}.centerTitle`, {
+                        label: notification.label,
+                      })}
+                    </ItemTitle>
+                    <ItemDescription>
+                      {t('centerMeta', {
+                        time: new Intl.DateTimeFormat(locale, {
+                          dateStyle: 'medium',
+                          timeStyle: 'short',
+                          timeZone: notification.timeZone,
+                        }).format(new Date(notification.eventAt)),
+                        trip: notification.trip.name,
+                      })}
+                    </ItemDescription>
+                  </ItemContent>
+                </Item>
+              ))}
+            </ItemGroup>
           </div>
         ) : (
-          <div className="px-4 py-7 text-center">
-            <p className="text-sm font-medium text-foreground">{t('emptyTitle')}</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              {status === 'error' ? t('loadError') : t('emptyDescription')}
-            </p>
-          </div>
+          <PageState
+            className="px-4"
+            description={status === 'error' ? t('loadError') : t('emptyDescription')}
+            headingLevel={2}
+            kind={status === 'error' ? 'error' : 'empty'}
+            title={t('emptyTitle')}
+          />
         )}
 
         <div className="border-t border-border p-2">

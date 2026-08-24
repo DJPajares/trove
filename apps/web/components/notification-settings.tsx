@@ -4,6 +4,7 @@ import { Bell, CircleAlert } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
+import { EditorialSection } from '@/components/editorial-section';
 import { useNotifications } from '@/components/notifications-provider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
@@ -62,22 +63,13 @@ export function NotificationSettings() {
 
   return (
     <Card className="gap-0 py-0" id="notifications">
-      <section aria-labelledby="notification-settings-heading" className="p-5 sm:p-6">
-        <div className="flex items-start gap-3">
-          <Bell aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand" />
-          <div className="min-w-0">
-            <h2
-              className="text-lg leading-6 font-semibold tracking-tight"
-              id="notification-settings-heading"
-            >
-              {t('title')}
-            </h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-              {t('description')}
-            </p>
-          </div>
-        </div>
-
+      <EditorialSection
+        className="p-5 sm:p-6"
+        description={t('description')}
+        headingId="notification-settings-heading"
+        icon={<Bell aria-hidden="true" />}
+        title={t('title')}
+      >
         {error || status === 'error' ? (
           <Alert className="mt-5" role="alert" variant="destructive">
             <CircleAlert aria-hidden="true" />
@@ -128,7 +120,7 @@ export function NotificationSettings() {
         </div>
 
         <p className="mt-4 text-xs leading-5 text-text-subtle">{t('privacyNote')}</p>
-      </section>
+      </EditorialSection>
     </Card>
   );
 }

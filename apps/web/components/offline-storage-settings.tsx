@@ -4,6 +4,7 @@ import { CloudDownload, Download, HardDrive, RefreshCw, Trash2, TriangleAlert } 
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 
+import { EditorialSection } from '@/components/editorial-section';
 import { useOnlineStatus } from '@/components/trip-sync-status';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -133,22 +134,13 @@ export function OfflineStorageSettings() {
 
   return (
     <Card className="gap-0 py-0" id="offline-storage">
-      <section aria-labelledby="offline-storage-heading" className="p-5 sm:p-6">
-        <div className="flex items-start gap-3">
-          <HardDrive aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand" />
-          <div className="min-w-0">
-            <h2
-              className="text-lg leading-6 font-semibold tracking-tight"
-              id="offline-storage-heading"
-            >
-              {t('title')}
-            </h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-              {t('description')}
-            </p>
-          </div>
-        </div>
-
+      <EditorialSection
+        className="p-5 sm:p-6"
+        description={t('description')}
+        headingId="offline-storage-heading"
+        icon={<HardDrive aria-hidden="true" />}
+        title={t('title')}
+      >
         {actionError ? (
           <Alert className="mt-5" role="alert" variant="destructive">
             <TriangleAlert aria-hidden="true" />
@@ -265,7 +257,7 @@ export function OfflineStorageSettings() {
           <p className="mt-4 text-xs leading-5 text-text-subtle">{t('offlineHint')}</p>
         ) : null}
         <p className="mt-4 text-xs leading-5 text-text-subtle">{t('cloudSafetyNote')}</p>
-      </section>
+      </EditorialSection>
 
       <AlertDialog
         onOpenChange={(open) => !open && setRemoveTarget(null)}

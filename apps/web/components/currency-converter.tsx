@@ -5,11 +5,11 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 
 import { CurrencyCombobox, useCurrencyMetadata } from '@/components/currency-combobox';
+import { EditorialSection } from '@/components/editorial-section';
 import { MoneyInput } from '@/components/money-input';
 import { usePreferences } from '@/components/preferences-provider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import {
   convertCurrencyAmount,
@@ -135,86 +135,80 @@ export function CurrencyConverter() {
     : null;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle as="h2">{t('title')}</CardTitle>
-        <CardDescription>{t('description')}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form className="space-y-5" onSubmit={handleSubmit}>
-          {error ? (
-            <Alert role="alert" variant="destructive">
-              <CircleAlert aria-hidden="true" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          ) : null}
-          <FieldGroup className="gap-5">
-            <Field className="max-w-xs">
-              <FieldLabel htmlFor="currency-amount">{t('amount')}</FieldLabel>
-              <MoneyInput
-                autoComplete="off"
-                id="currency-amount"
-                onValueChange={updateAmount}
-                placeholder={t('amountPlaceholder')}
+    <EditorialSection description={t('description')} headingLevel={2} title={t('title')}>
+      <form className="space-y-5" onSubmit={handleSubmit}>
+        {error ? (
+          <Alert role="alert" variant="destructive">
+            <CircleAlert aria-hidden="true" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+        <FieldGroup className="gap-5">
+          <Field className="max-w-xs">
+            <FieldLabel htmlFor="currency-amount">{t('amount')}</FieldLabel>
+            <MoneyInput
+              autoComplete="off"
+              id="currency-amount"
+              onValueChange={updateAmount}
+              placeholder={t('amountPlaceholder')}
+              required
+              value={amount}
+            />
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-end">
+            <Field>
+              <FieldLabel htmlFor="currency-source">{t('from')}</FieldLabel>
+              <CurrencyCombobox
+                aria-describedby="currency-source-description"
+                aria-label={t('from')}
+                id="currency-source"
+                onValueChange={updateSource}
+                placeholder={t('currencyPlaceholder')}
                 required
-                value={amount}
+                value={sourceCode}
               />
+              <FieldDescription id="currency-source-description">
+                {currencyNames.get(sourceCode) ?? t('currencyCodeHint')}
+              </FieldDescription>
             </Field>
-            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-end">
-              <Field>
-                <FieldLabel htmlFor="currency-source">{t('from')}</FieldLabel>
-                <CurrencyCombobox
-                  aria-describedby="currency-source-description"
-                  aria-label={t('from')}
-                  id="currency-source"
-                  onValueChange={updateSource}
-                  placeholder={t('currencyPlaceholder')}
-                  required
-                  value={sourceCode}
-                />
-                <FieldDescription id="currency-source-description">
-                  {currencyNames.get(sourceCode) ?? t('currencyCodeHint')}
-                </FieldDescription>
-              </Field>
-              <Button
-                className="w-full sm:mb-[1.625rem] sm:w-auto"
-                disabled={!sourceCode || !targetCode}
-                onClick={swapCurrencies}
-                type="button"
-                variant="outline"
-              >
-                <ArrowLeftRight aria-hidden="true" data-icon="inline-start" />
-                {t('swap')}
-              </Button>
-              <Field>
-                <FieldLabel htmlFor="currency-target">{t('to')}</FieldLabel>
-                <CurrencyCombobox
-                  aria-describedby="currency-target-description"
-                  aria-label={t('to')}
-                  id="currency-target"
-                  onValueChange={updateTarget}
-                  placeholder={t('currencyPlaceholder')}
-                  required
-                  value={targetCode}
-                />
-                <FieldDescription id="currency-target-description">
-                  {currencyNames.get(targetCode) ?? t('currencyCodeHint')}
-                </FieldDescription>
-              </Field>
-            </div>
-          </FieldGroup>
-          {currencyMetadata.source === 'cache' ? (
-            <p className="text-sm leading-5 text-muted-foreground">{t('currencyListCached')}</p>
-          ) : null}
-          <div className="flex flex-wrap items-center gap-3">
-            <Button disabled={converting} type="submit">
-              <RefreshCw aria-hidden="true" data-icon="inline-start" />
-              {converting ? t('converting') : t('convert')}
+            <Button
+              className="w-full sm:mb-[1.625rem] sm:w-auto"
+              disabled={!sourceCode || !targetCode}
+              onClick={swapCurrencies}
+              type="button"
+              variant="outline"
+            >
+              <ArrowLeftRight aria-hidden="true" data-icon="inline-start" />
+              {t('swap')}
             </Button>
-            <p className="text-sm text-muted-foreground">{t('referenceOnly')}</p>
+            <Field>
+              <FieldLabel htmlFor="currency-target">{t('to')}</FieldLabel>
+              <CurrencyCombobox
+                aria-describedby="currency-target-description"
+                aria-label={t('to')}
+                id="currency-target"
+                onValueChange={updateTarget}
+                placeholder={t('currencyPlaceholder')}
+                required
+                value={targetCode}
+              />
+              <FieldDescription id="currency-target-description">
+                {currencyNames.get(targetCode) ?? t('currencyCodeHint')}
+              </FieldDescription>
+            </Field>
           </div>
-        </form>
-      </CardContent>
+        </FieldGroup>
+        {currencyMetadata.source === 'cache' ? (
+          <p className="text-sm leading-5 text-muted-foreground">{t('currencyListCached')}</p>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          <Button disabled={converting} type="submit">
+            <RefreshCw aria-hidden="true" data-icon="inline-start" />
+            {converting ? t('converting') : t('convert')}
+          </Button>
+          <p className="text-sm text-muted-foreground">{t('referenceOnly')}</p>
+        </div>
+      </form>
       {result ? (
         <div aria-live="polite" className="border-t border-border bg-muted/35 px-5 py-4 sm:px-6">
           <p className="text-sm font-medium text-muted-foreground">{t('result')}</p>
@@ -238,6 +232,6 @@ export function CurrencyConverter() {
           )}
         </div>
       ) : null}
-    </Card>
+    </EditorialSection>
   );
 }

@@ -26,6 +26,12 @@ type EditorialSectionProps = React.ComponentProps<'section'> &
     eyebrow?: string;
     headingId?: string;
     headingLevel?: 2 | 3;
+    /**
+     * A small brand-toned glyph beside the title, for the settings-card family
+     * of sections that need one and nothing else in the shared vocabulary.
+     * Every travel-content section leaves this unset.
+     */
+    icon?: ReactNode;
     title: string;
   };
 
@@ -38,6 +44,7 @@ export function EditorialSection({
   eyebrow,
   headingId,
   headingLevel = 2,
+  icon,
   title,
   treatment,
   ...props
@@ -45,6 +52,27 @@ export function EditorialSection({
   const Heading = headingLevel === 2 ? 'h2' : 'h3';
   const generatedHeadingId = useId();
   const resolvedHeadingId = headingId ?? generatedHeadingId;
+
+  const titleColumn = (
+    <div className="max-w-[var(--layout-reading)]">
+      {eyebrow ? (
+        <p className="mb-2 text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
+          {eyebrow}
+        </p>
+      ) : null}
+      <Heading
+        className="text-[length:var(--text-section-title)] leading-[1.18] font-semibold tracking-[-0.022em] text-pretty"
+        id={resolvedHeadingId}
+      >
+        {title}
+      </Heading>
+      {description ? (
+        <p className="mt-2 text-sm leading-[1.55] text-pretty text-muted-foreground">
+          {description}
+        </p>
+      ) : null}
+    </div>
+  );
 
   return (
     <section
@@ -56,24 +84,16 @@ export function EditorialSection({
       {...props}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="max-w-[var(--layout-reading)]">
-          {eyebrow ? (
-            <p className="mb-2 text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
-              {eyebrow}
-            </p>
-          ) : null}
-          <Heading
-            className="text-[length:var(--text-section-title)] leading-[1.18] font-semibold tracking-[-0.022em] text-pretty"
-            id={resolvedHeadingId}
-          >
-            {title}
-          </Heading>
-          {description ? (
-            <p className="mt-2 text-sm leading-[1.55] text-pretty text-muted-foreground">
-              {description}
-            </p>
-          ) : null}
-        </div>
+        {icon ? (
+          <div className="flex min-w-0 items-start gap-3">
+            <span aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand [&_svg]:size-5">
+              {icon}
+            </span>
+            {titleColumn}
+          </div>
+        ) : (
+          titleColumn
+        )}
         {actions ? (
           <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
         ) : null}

@@ -29,6 +29,7 @@ import { useOfflineDataRefreshKey, useOnlineStatus } from '@/components/trip-syn
 import { TripWeatherContext } from '@/components/trip-weather-context';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useTripModeClock } from '@/hooks/use-trip-mode-clock';
 import {
   fetchTripModeContext,
   type ItineraryItem,
@@ -114,10 +115,19 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   const [reloadKey, setReloadKey] = useState(0);
   const [state, setState] = useState<LoadState>({ context: null, status: 'loading' });
   const [supporting, setSupporting] = useState<SupportingContext>({ reservations: [], tasks: [] });
+  // A preview stands at a fixed hypothetical time, so it must never tick.
+  const clockRefreshKey = useTripModeClock({
+    context: state.context,
+    enabled: !isPreview,
+  });
 
   useEffect(() => {
     const controller = new AbortController();
-    setState({ context: null, status: 'loading' });
+    // A clock refresh replaces data that is already on screen, so only a first
+    // load — or a reload after failure — is allowed to blank the view.
+    setState((current) =>
+      current.status === 'ready' ? current : { context: null, status: 'loading' },
+    );
     void fetchTripModeContext(tripId, contextOptions(controller.signal))
       .then((context) => setState({ context, status: 'ready' }))
       .catch((error) => {
@@ -126,7 +136,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
         }
       });
     return () => controller.abort();
-  }, [contextOptions, offlineDataRefreshKey, reloadKey, tripId]);
+  }, [clockRefreshKey, contextOptions, offlineDataRefreshKey, reloadKey, tripId]);
 
   useEffect(() => {
     let active = true;

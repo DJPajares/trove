@@ -1540,11 +1540,11 @@ export function ItineraryManager({
                     onClick={() => setSelectedDayId(day.id)}
                     type="button"
                   >
-                    <span>
+                    <span className="min-w-0 flex-1">
                       {day.name ? (
                         <>
                           <span className="block truncate text-sm font-medium">{day.name}</span>
-                          <span className="block text-xs text-muted-foreground">
+                          <span className="block truncate text-xs text-muted-foreground">
                             {t('dayOption', { date: formatDate(day.date), number: index + 1 })}
                           </span>
                         </>
@@ -1557,7 +1557,7 @@ export function ItineraryManager({
                         </>
                       )}
                     </span>
-                    <span className="text-xs tabular-nums text-muted-foreground">
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                       {day.items.length}
                     </span>
                   </button>
@@ -1575,7 +1575,7 @@ export function ItineraryManager({
                     name enough room to be the day's identity. */}
                 {selectedDay.name ? (
                   <>
-                    <h2 className="text-lg leading-6 font-semibold tracking-tight text-balance">
+                    <h2 className="text-lg leading-6 font-semibold tracking-tight break-words text-balance">
                       {selectedDay.name}
                     </h2>
                     <p className="mt-1 text-sm leading-5 text-muted-foreground">
@@ -1586,7 +1586,7 @@ export function ItineraryManager({
                     </p>
                   </>
                 ) : (
-                  <h2 className="text-lg leading-6 font-semibold tracking-tight text-balance">
+                  <h2 className="text-lg leading-6 font-semibold tracking-tight break-words text-balance">
                     {formatDate(selectedDay.date, true)}
                   </h2>
                 )}

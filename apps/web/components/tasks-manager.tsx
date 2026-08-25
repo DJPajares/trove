@@ -325,7 +325,11 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
       <TripSectionHeader
         actions={
           <>
-            <Button nativeButton={false} render={<Link href="/tools" />} variant="outline">
+            <Button
+              nativeButton={false}
+              render={<Link href="/tools/task-templates" />}
+              variant="outline"
+            >
               <Wrench aria-hidden="true" data-icon="inline-start" />
               {t('templates')}
             </Button>

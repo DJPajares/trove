@@ -193,12 +193,15 @@ Desktop/tablet should use additional space intelligently, including split itiner
 
 Global navigation is a signed-in surface. Its destinations all require a session, so a signed-out visitor is offered the product itself, its appearance control, and the two ways in — never a set of destinations that lead back to sign-in.
 
-Global navigation:
+Primary global destinations:
 
 - Home
 - Trips
 - Saved
-- Tools
+
+On desktop and tablet, a burger menu in the header opens a right-side Menu drawer. On mobile, the bottom bar contains Home, Trips, a centered Create action, Saved, and More; More opens a tall bottom drawer.
+
+The drawer presents Search, Notifications, Appearance, and Account as action controls that open their existing dialogs, popovers, or menus. Tools is an expandable grouping within the drawer, with Currency and Task Templates opening on independent pages. The More label is reserved for mobile.
 
 Trip Mode must not replace global navigation.
 
@@ -306,6 +309,8 @@ Trove
 ```
 
 Travel Wallet is optional for the initial MVP if scope or security complexity becomes too large.
+
+Tools is reached through the global Menu or More drawer rather than appearing as a fourth primary navigation destination.
 
 ---
 

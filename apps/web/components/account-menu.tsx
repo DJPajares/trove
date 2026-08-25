@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
+import { appMenuActionClassName } from '@/components/app-menu-action';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -41,7 +42,12 @@ function getDisplayName(user: User | null, fallback: string) {
   return user.email ?? fallback;
 }
 
-export function AccountMenu() {
+type AccountMenuProps = {
+  label?: string;
+  onNavigate?: () => void;
+};
+
+export function AccountMenu({ label, onNavigate }: Readonly<AccountMenuProps> = {}) {
   const t = useTranslations('account');
   const [user, setUser] = useState<User | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -85,11 +91,17 @@ export function AccountMenu() {
   }, []);
 
   async function handleSignOut() {
-    if (await signOut()) setUser(null);
+    if (await signOut()) {
+      setUser(null);
+      onNavigate?.();
+    }
   }
 
   async function handleRequestSignOut() {
-    if (await requestSignOut()) setUser(null);
+    if (await requestSignOut()) {
+      setUser(null);
+      onNavigate?.();
+    }
   }
 
   const displayName = getDisplayName(user, t('signedOut'));
@@ -98,9 +110,18 @@ export function AccountMenu() {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
-          render={<Button aria-label={t('button')} size="icon" type="button" variant="ghost" />}
+          render={
+            <Button
+              aria-label={label ?? t('button')}
+              className={label ? appMenuActionClassName : undefined}
+              size={label ? 'default' : 'icon'}
+              type="button"
+              variant={label ? 'outline' : 'ghost'}
+            />
+          }
         >
-          <UserRound aria-hidden="true" className="size-4" />
+          <UserRound aria-hidden="true" className={label ? 'size-5 text-brand' : 'size-4'} />
+          {label ? <span>{label}</span> : null}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
           <DropdownMenuGroup>
@@ -120,7 +141,7 @@ export function AccountMenu() {
 
           {user ? (
             <>
-              <DropdownMenuLinkItem render={<Link href="/profile" />}>
+              <DropdownMenuLinkItem render={<Link href="/profile" onClick={onNavigate} />}>
                 <UserRound aria-hidden="true" className="size-4" />
                 {t('profile')}
               </DropdownMenuLinkItem>
@@ -141,11 +162,11 @@ export function AccountMenu() {
             </>
           ) : (
             <>
-              <DropdownMenuLinkItem render={<Link href="/sign-in" />}>
+              <DropdownMenuLinkItem render={<Link href="/sign-in" onClick={onNavigate} />}>
                 <LogIn aria-hidden="true" className="size-4" />
                 {t('signIn')}
               </DropdownMenuLinkItem>
-              <DropdownMenuLinkItem render={<Link href="/sign-up" />}>
+              <DropdownMenuLinkItem render={<Link href="/sign-up" onClick={onNavigate} />}>
                 <UserPlus aria-hidden="true" className="size-4" />
                 {t('signUp')}
               </DropdownMenuLinkItem>

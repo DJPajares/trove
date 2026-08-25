@@ -3,6 +3,7 @@
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import { appMenuActionClassName } from '@/components/app-menu-action';
 import { usePreferences } from '@/components/preferences-provider';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,7 +24,7 @@ const appearanceIcons = {
   system: Monitor,
 };
 
-export function AppearanceMenu() {
+export function AppearanceMenu({ label }: Readonly<{ label?: string }> = {}) {
   const t = useTranslations('appearance');
   const { appearanceSaveError, preferences, setAppearance } = usePreferences();
   const appearance = preferences.appearance;
@@ -32,9 +33,18 @@ export function AppearanceMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<Button aria-label={t('button')} size="icon" type="button" variant="ghost" />}
+        render={
+          <Button
+            aria-label={label ?? t('button')}
+            className={label ? appMenuActionClassName : undefined}
+            size={label ? 'default' : 'icon'}
+            type="button"
+            variant={label ? 'outline' : 'ghost'}
+          />
+        }
       >
-        <CurrentIcon aria-hidden="true" className="size-4" />
+        <CurrentIcon aria-hidden="true" className={label ? 'size-5 text-brand' : 'size-4'} />
+        {label ? <span>{label}</span> : null}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-40">
         <DropdownMenuGroup>

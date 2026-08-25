@@ -75,6 +75,18 @@ export function formatLocalTime(value: Date | null) {
   return value?.toISOString().slice(11, 16) ?? null;
 }
 
+export function durationMinutesUntilLocalEnd(startTime: string | null, endTime: string) {
+  if (!startTime || !LOCAL_TIME_PATTERN.test(startTime) || !LOCAL_TIME_PATTERN.test(endTime)) {
+    throw new Error('invalid_local_end_time');
+  }
+
+  const durationMinutes =
+    (parseLocalTime(endTime).getTime() - parseLocalTime(startTime).getTime()) / 60_000;
+  if (durationMinutes <= 0) throw new Error('invalid_local_end_time');
+
+  return durationMinutes;
+}
+
 export function floatingLocalTimeToInstant(date: string, time: string, timeZone: string) {
   if (!isValidIanaTimeZone(timeZone) || !LOCAL_TIME_PATTERN.test(time)) {
     throw new Error('invalid_local_time');

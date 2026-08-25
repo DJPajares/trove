@@ -96,7 +96,14 @@ function itineraryOperationAlreadyApplied(
           };
     comparisons.push(JSON.stringify(scheduleFields(current)) === JSON.stringify(desired));
   }
-  const fields = ['customLabel', 'durationMinutes', 'notes', 'plannedCost', 'priority'] as const;
+  const fields = [
+    'customLabel',
+    'durationMinutes',
+    'localEndTime',
+    'notes',
+    'plannedCost',
+    'priority',
+  ] as const;
   for (const field of fields) {
     if (input[field] !== undefined) {
       comparisons.push(JSON.stringify(current[field]) === JSON.stringify(input[field]));
@@ -149,6 +156,7 @@ function itineraryOperationConflicts(
     'customLabel',
     'customLocation',
     'durationMinutes',
+    'localEndTime',
     'notes',
     'plannedCost',
     'priority',

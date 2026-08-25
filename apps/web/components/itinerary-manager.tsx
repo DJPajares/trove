@@ -172,18 +172,22 @@ type FormState = {
   customLabel: string;
   durationMinutes: string;
   exactTime: string;
+  localEndTime: string;
   notes: string;
   schedule: 'afternoon' | 'anytime' | 'evening' | 'exact' | 'morning' | 'none';
+  timingMode: 'duration' | 'end_time';
   tripPlaceId: string;
 };
 
 function createFormState(item: ItineraryItem | null): FormState {
   return {
     customLabel: item?.customLabel ?? '',
-    durationMinutes: item?.durationMinutes?.toString() ?? '',
+    durationMinutes: item?.localEndTime ? '' : (item?.durationMinutes?.toString() ?? ''),
     exactTime: item?.localStartTime ?? '',
+    localEndTime: item?.localEndTime ?? '',
     notes: item?.notes ?? '',
     schedule: item?.localStartTime ? 'exact' : (item?.dayPart ?? 'none'),
+    timingMode: item?.localEndTime ? 'end_time' : 'duration',
     tripPlaceId: item?.tripPlace?.id ?? '',
   };
 }
@@ -744,9 +748,13 @@ export function ItineraryManager({
     setIdentityPickerOpen(false);
     setTimingExpanded(Boolean(item.localStartTime || item.dayPart));
     setCustomDurationOpen(
-      Boolean(item.durationMinutes && !isDurationPreset(item.durationMinutes.toString())),
+      Boolean(
+        !item.localEndTime &&
+        item.durationMinutes &&
+        !isDurationPreset(item.durationMinutes.toString()),
+      ),
     );
-    const parts = durationParts(item.durationMinutes?.toString() ?? '');
+    const parts = durationParts(item.localEndTime ? '' : (item.durationMinutes?.toString() ?? ''));
     setCustomDurationHours(parts.hours);
     setCustomDurationMinutes(parts.minutes);
     providerSearchRequest.current?.abort();
@@ -1134,7 +1142,14 @@ export function ItineraryManager({
   }
 
   function removeTiming() {
-    setForm((current) => ({ ...current, exactTime: '', schedule: 'none' }));
+    setForm((current) => ({
+      ...current,
+      durationMinutes: current.timingMode === 'end_time' ? '' : current.durationMinutes,
+      exactTime: '',
+      localEndTime: '',
+      schedule: 'none',
+      timingMode: 'duration',
+    }));
     setTimingExpanded(false);
     setSuggestedTime(null);
     setSuggestedTimeStatus('idle');
@@ -1151,7 +1166,8 @@ export function ItineraryManager({
       setFormError(t('exactTimeError'));
       return null;
     }
-    const duration = form.durationMinutes ? Number(form.durationMinutes) : null;
+    const duration =
+      form.timingMode === 'duration' && form.durationMinutes ? Number(form.durationMinutes) : null;
     const customDurationHasInput = Boolean(
       customDurationHours.trim() || customDurationMinutes.trim(),
     );
@@ -1159,13 +1175,29 @@ export function ItineraryManager({
       setFormError(t('durationError'));
       return null;
     }
-    if (customDurationOpen && customDurationHasInput && duration === null) {
+    if (
+      form.timingMode === 'duration' &&
+      customDurationOpen &&
+      customDurationHasInput &&
+      duration === null
+    ) {
       setFormError(t('durationError'));
       return null;
+    }
+    if (form.timingMode === 'end_time' && form.localEndTime) {
+      if (form.schedule !== 'exact' || !form.exactTime) {
+        setFormError(t('endTimeStartRequired'));
+        return null;
+      }
+      if (form.localEndTime <= form.exactTime) {
+        setFormError(t('endTimeError'));
+        return null;
+      }
     }
     const input: ItineraryItemInput = {
       customLabel: customLabel || null,
       durationMinutes: duration,
+      localEndTime: form.timingMode === 'end_time' ? form.localEndTime || null : null,
       notes: form.notes.trim() || null,
       schedule:
         form.schedule === 'exact'
@@ -1199,8 +1231,12 @@ export function ItineraryManager({
       }
       await refresh();
       closeEditor();
-    } catch {
-      setFormError(t('saveError'));
+    } catch (error) {
+      setFormError(
+        error instanceof ItineraryApiError && error.code === 'invalid_local_end_time'
+          ? t('endTimeError')
+          : t('saveError'),
+      );
     } finally {
       setSaving(false);
     }
@@ -1454,6 +1490,7 @@ export function ItineraryManager({
         currentSection="itinerary"
         density="compact"
         description={t('description')}
+        showCover
         tripId={tripId}
       />
 
@@ -1891,6 +1928,7 @@ export function ItineraryManager({
                     routesStale={routes?.stale ?? false}
                     savingRouteOwner={savingRouteOwner}
                     selectedDayId={selectedDay.id}
+                    timeFormat={preferences.timeFormat}
                     unscheduledLabel={t('unscheduled')}
                   />
                 ) : (
@@ -2318,7 +2356,19 @@ export function ItineraryManager({
                                 <Button
                                   aria-pressed={form.schedule === value}
                                   key={value}
-                                  onClick={() => updateForm('schedule', value)}
+                                  onClick={() =>
+                                    setForm((current) => ({
+                                      ...current,
+                                      ...(value !== 'exact' && current.timingMode === 'end_time'
+                                        ? {
+                                            durationMinutes: '',
+                                            localEndTime: '',
+                                            timingMode: 'duration' as const,
+                                          }
+                                        : {}),
+                                      schedule: value,
+                                    }))
+                                  }
                                   size="sm"
                                   type="button"
                                   variant={form.schedule === value ? 'secondary' : 'outline'}
@@ -2376,84 +2426,144 @@ export function ItineraryManager({
                       <Field>
                         <FieldLabel>{t('durationQuestion')}</FieldLabel>
                         <FieldDescription>{t('durationHint')}</FieldDescription>
-                        <div className="flex flex-wrap gap-2">
-                          {ITINERARY_DURATION_PRESETS.map((minutes) => (
-                            <Button
-                              aria-pressed={form.durationMinutes === minutes.toString()}
-                              key={minutes}
-                              onClick={() => chooseDurationPreset(minutes)}
-                              size="sm"
-                              type="button"
-                              variant={
-                                form.durationMinutes === minutes.toString()
-                                  ? 'secondary'
-                                  : 'outline'
-                              }
-                            >
-                              {t(`durationPreset.${minutes}`)}
-                            </Button>
-                          ))}
+                        <div
+                          aria-label={t('timingModeLabel')}
+                          className="flex flex-wrap gap-2"
+                          role="group"
+                        >
                           <Button
-                            aria-pressed={customDurationOpen}
-                            onClick={showCustomDuration}
+                            aria-pressed={form.timingMode === 'duration'}
+                            onClick={() =>
+                              setForm((current) => ({
+                                ...current,
+                                localEndTime: '',
+                                timingMode: 'duration',
+                              }))
+                            }
                             size="sm"
                             type="button"
-                            variant={customDurationOpen ? 'secondary' : 'outline'}
+                            variant={form.timingMode === 'duration' ? 'secondary' : 'outline'}
                           >
-                            {t('customDuration')}
+                            {t('durationMode')}
                           </Button>
-                          {form.durationMinutes ? (
-                            <Button
-                              aria-label={t('clearDuration')}
-                              onClick={() => {
-                                updateForm('durationMinutes', '');
-                                setCustomDurationOpen(false);
-                                setCustomDurationHours('');
-                                setCustomDurationMinutes('');
-                              }}
-                              size="icon-sm"
-                              type="button"
-                              variant="ghost"
-                            >
-                              <X aria-hidden="true" />
-                            </Button>
-                          ) : null}
+                          <Button
+                            aria-pressed={form.timingMode === 'end_time'}
+                            disabled={form.schedule !== 'exact' || !form.exactTime}
+                            onClick={() => {
+                              setForm((current) => ({
+                                ...current,
+                                durationMinutes: '',
+                                timingMode: 'end_time',
+                              }));
+                              setCustomDurationOpen(false);
+                              setCustomDurationHours('');
+                              setCustomDurationMinutes('');
+                            }}
+                            size="sm"
+                            type="button"
+                            variant={form.timingMode === 'end_time' ? 'secondary' : 'outline'}
+                          >
+                            {t('endTimeMode')}
+                          </Button>
                         </div>
-                        {customDurationOpen ? (
-                          <div className="grid grid-cols-2 gap-3 rounded-[var(--radius-lg)] bg-muted/40 p-3">
-                            <Field>
-                              <FieldLabel htmlFor="itinerary-duration-hours">
-                                {t('hours')}
-                              </FieldLabel>
-                              <Input
-                                id="itinerary-duration-hours"
-                                inputMode="numeric"
-                                min="0"
-                                onChange={(event) =>
-                                  updateCustomDuration('hours', event.target.value)
-                                }
-                                type="number"
-                                value={customDurationHours}
-                              />
-                            </Field>
-                            <Field>
-                              <FieldLabel htmlFor="itinerary-duration-minutes">
-                                {t('minutes')}
-                              </FieldLabel>
-                              <Input
-                                id="itinerary-duration-minutes"
-                                inputMode="numeric"
-                                max="59"
-                                min="0"
-                                onChange={(event) =>
-                                  updateCustomDuration('minutes', event.target.value)
-                                }
-                                type="number"
-                                value={customDurationMinutes}
-                              />
-                            </Field>
+                        {form.timingMode === 'duration' ? (
+                          <>
+                            <div className="flex flex-wrap gap-2">
+                              {ITINERARY_DURATION_PRESETS.map((minutes) => (
+                                <Button
+                                  aria-pressed={form.durationMinutes === minutes.toString()}
+                                  key={minutes}
+                                  onClick={() => chooseDurationPreset(minutes)}
+                                  size="sm"
+                                  type="button"
+                                  variant={
+                                    form.durationMinutes === minutes.toString()
+                                      ? 'secondary'
+                                      : 'outline'
+                                  }
+                                >
+                                  {t(`durationPreset.${minutes}`)}
+                                </Button>
+                              ))}
+                              <Button
+                                aria-pressed={customDurationOpen}
+                                onClick={showCustomDuration}
+                                size="sm"
+                                type="button"
+                                variant={customDurationOpen ? 'secondary' : 'outline'}
+                              >
+                                {t('customDuration')}
+                              </Button>
+                              {form.durationMinutes ? (
+                                <Button
+                                  aria-label={t('clearDuration')}
+                                  onClick={() => {
+                                    updateForm('durationMinutes', '');
+                                    setCustomDurationOpen(false);
+                                    setCustomDurationHours('');
+                                    setCustomDurationMinutes('');
+                                  }}
+                                  size="icon-sm"
+                                  type="button"
+                                  variant="ghost"
+                                >
+                                  <X aria-hidden="true" />
+                                </Button>
+                              ) : null}
+                            </div>
+                            {customDurationOpen ? (
+                              <div className="grid grid-cols-2 gap-3 rounded-[var(--radius-lg)] bg-muted/40 p-3">
+                                <Field>
+                                  <FieldLabel htmlFor="itinerary-duration-hours">
+                                    {t('hours')}
+                                  </FieldLabel>
+                                  <Input
+                                    id="itinerary-duration-hours"
+                                    inputMode="numeric"
+                                    min="0"
+                                    onChange={(event) =>
+                                      updateCustomDuration('hours', event.target.value)
+                                    }
+                                    type="number"
+                                    value={customDurationHours}
+                                  />
+                                </Field>
+                                <Field>
+                                  <FieldLabel htmlFor="itinerary-duration-minutes">
+                                    {t('minutes')}
+                                  </FieldLabel>
+                                  <Input
+                                    id="itinerary-duration-minutes"
+                                    inputMode="numeric"
+                                    max="59"
+                                    min="0"
+                                    onChange={(event) =>
+                                      updateCustomDuration('minutes', event.target.value)
+                                    }
+                                    type="number"
+                                    value={customDurationMinutes}
+                                  />
+                                </Field>
+                              </div>
+                            ) : null}
+                          </>
+                        ) : (
+                          <div className="space-y-2">
+                            <FieldLabel htmlFor="itinerary-end-time">{t('endTime')}</FieldLabel>
+                            <TimeInput
+                              aria-describedby="itinerary-end-time-hint"
+                              aria-invalid={Boolean(
+                                form.localEndTime && form.localEndTime <= form.exactTime,
+                              )}
+                              id="itinerary-end-time"
+                              onValueChange={(value) => updateForm('localEndTime', value)}
+                              value={form.localEndTime}
+                            />
+                            <FieldDescription id="itinerary-end-time-hint">
+                              {t('endTimeHint')}
+                            </FieldDescription>
                           </div>
-                        ) : null}
+                        )}
                       </Field>
 
                       <Field>

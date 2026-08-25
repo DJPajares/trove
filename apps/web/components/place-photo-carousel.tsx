@@ -104,12 +104,6 @@ export function PlacePhotoCarousel({
           className="pointer-events-none absolute inset-0 bg-linear-to-t from-neutral-950/82 via-neutral-950/18 to-neutral-950/8"
         />
 
-        {generic ? (
-          <span className="absolute top-4 left-4 rounded-[var(--radius-md)] border border-media-fallback-foreground/18 bg-neutral-950/62 px-2.5 py-1.5 text-xs font-medium text-media-fallback-foreground backdrop-blur-sm">
-            {t('representativePhoto')}
-          </span>
-        ) : null}
-
         {heading ? (
           <div
             className={cn(
@@ -118,6 +112,11 @@ export function PlacePhotoCarousel({
             )}
           >
             {heading}
+            {generic ? (
+              <span className="mt-1 w-fit rounded-[var(--radius-sm)] border border-media-fallback-foreground/18 bg-neutral-950/56 px-2 py-1 text-[0.6875rem] font-medium text-media-fallback-foreground/90 backdrop-blur-sm">
+                {t('representativePhoto')}
+              </span>
+            ) : null}
           </div>
         ) : null}
 

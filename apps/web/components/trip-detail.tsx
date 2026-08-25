@@ -264,13 +264,11 @@ export function TripDetail({
 
   return (
     <article className="mx-auto w-full max-w-5xl space-y-8">
-      {backToTrips}
-
       {/* The trip's photograph carries its name rather than sitting beside it:
           this is the one screen where the cover is the subject. The scrim is a
           fixed dark wash in both themes, because what it has to stay legible
           against is a photograph, not the page. */}
-      <div>
+      <div className="-mx-[var(--gutter-inline-start)] -mt-8 md:mx-0 md:mt-0">
         <section aria-labelledby="trip-detail-heading" className="relative isolate">
           <TripMedia
             alt={
@@ -278,14 +276,21 @@ export function TripDetail({
                 ? mediaTranslations('alt.tripEditorial', { name: destinations ?? trip.name })
                 : ''
             }
-            className="w-full"
+            className="max-h-[72dvh] w-full rounded-none md:rounded-[var(--radius-2xl)]"
             // The page's Largest Contentful Paint by a distance.
             preload
             sizes="(max-width: 1023px) 100vw, 1024px"
             source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
             variant="hero"
           />
-          <div className="pointer-events-none absolute inset-0 flex flex-col justify-end gap-2 rounded-[var(--radius-2xl)] bg-gradient-to-t from-surface-overlay from-25% via-surface-overlay/70 to-transparent p-5 sm:p-8">
+          <Link
+            aria-label={t('backToTrips')}
+            className="absolute top-[max(1rem,var(--safe-top))] left-[max(1rem,var(--safe-left))] z-10 flex size-10 items-center justify-center rounded-full border border-media-fallback-foreground/18 bg-neutral-950/58 text-media-fallback-foreground backdrop-blur-sm outline-none transition-colors hover:bg-neutral-950/78 focus-visible:ring-3 focus-visible:ring-ring/50"
+            href="/trips"
+          >
+            <ArrowLeft aria-hidden="true" className="size-4" />
+          </Link>
+          <div className="pointer-events-none absolute inset-0 flex flex-col justify-end gap-2 bg-gradient-to-t from-surface-overlay from-25% via-surface-overlay/70 to-transparent p-5 sm:rounded-[var(--radius-2xl)] sm:p-8">
             <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-media-fallback-foreground/85 uppercase">
               {destinations ?? t('destinationOpen')}
             </p>

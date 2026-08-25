@@ -51,6 +51,7 @@ export type ItineraryItem = {
   durationMinutes: number | null;
   id: string;
   itineraryDayId: string | null;
+  localEndTime?: string | null;
   localStartTime: string | null;
   notes: string | null;
   plannedCost: { amount: string; currencyCode: string } | null;
@@ -234,6 +235,7 @@ export type ItineraryItemInput = {
   customLocation?: { label: string; timeZone?: string | null } | null;
   durationMinutes?: number | null;
   itineraryDayId?: string;
+  localEndTime?: string | null;
   notes?: string | null;
   plannedCost?: { amount: string; currencyCode: string } | null;
   priority?: ItineraryPriority | null;

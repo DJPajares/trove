@@ -5,7 +5,6 @@ import {
   Check,
   CircleAlert,
   Ellipsis,
-  Eye,
   FolderPlus,
   MapPinned,
   NotebookPen,
@@ -649,7 +648,7 @@ export function SavedPlacesManager() {
           <EditorialSection
             actions={
               <ChipGroup
-                className="-mx-1 flex-nowrap overflow-x-auto px-1 pb-1 sm:mx-0 sm:max-w-[32rem] sm:px-0"
+                className="interaction-scrollbar -mx-1 flex-nowrap overflow-x-auto px-1 pb-1 sm:mx-0 sm:max-w-[32rem] sm:px-0"
                 multiple={false}
                 onValueChange={([value]) => setCategoryFilter((value ?? 'all') as CategoryFilter)}
                 value={[categoryFilter]}
@@ -684,7 +683,7 @@ export function SavedPlacesManager() {
                   const editorial = getEditorialImage(savedPlace);
                   return (
                     <Item
-                      className="min-h-20 flex-nowrap px-3 py-3 text-left hover:bg-muted/60"
+                      className="group relative min-h-20 flex-nowrap px-3 py-3 text-left hover:bg-muted/60"
                       key={savedPlace.id}
                       variant="default"
                     >
@@ -719,7 +718,14 @@ export function SavedPlacesManager() {
                       <ItemContent className="min-w-0 gap-1.5">
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
                           <ItemTitle className="max-w-full text-base">
-                            {getPlaceName(savedPlace)}
+                            <button
+                              aria-label={t('viewDetails', { name: getPlaceName(savedPlace) })}
+                              className="rounded-[var(--radius-sm)] text-left outline-none after:absolute after:inset-0 group-hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+                              onClick={() => setDetailsPlace(savedPlace)}
+                              type="button"
+                            >
+                              {getPlaceName(savedPlace)}
+                            </button>
                           </ItemTitle>
                           {category ? (
                             <Badge size="sm" variant="muted">
@@ -754,18 +760,7 @@ export function SavedPlacesManager() {
                           </p>
                         ) : null}
                       </ItemContent>
-                      <ItemActions className="shrink-0 self-start">
-                        {/* A Custom Place has details worth showing too, so this
-                            is no longer conditional on a Google listing. */}
-                        <Button
-                          aria-label={t('viewDetails', { name: getPlaceName(savedPlace) })}
-                          onClick={() => setDetailsPlace(savedPlace)}
-                          size="sm"
-                          variant="ghost"
-                        >
-                          <Eye aria-hidden="true" />
-                          <span className="hidden sm:inline">{t('viewDetailsAction')}</span>
-                        </Button>
+                      <ItemActions className="relative z-10 shrink-0 self-start">
                         <DropdownMenu>
                           <DropdownMenuTrigger
                             render={

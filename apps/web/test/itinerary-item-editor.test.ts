@@ -8,6 +8,7 @@ import {
   itineraryIdentityLegacyPatch,
   itineraryProviderSuggestions,
 } from '../lib/itinerary/item-editor.ts';
+import { formatItineraryTimeRange, itineraryLocalEndTime } from '../lib/itinerary/item-timing.ts';
 import type { ProviderSuggestion } from '../lib/saved/api.ts';
 
 test('local Trip Place filtering has no arbitrary result cap', () => {
@@ -68,4 +69,31 @@ test('duration conversion supports presets and custom hours and minutes', () => 
   expect(durationMinutesFromParts({ hours: '', minutes: '45' })).toBe('45');
   expect(durationMinutesFromParts({ hours: '1', minutes: '60' })).toBe('');
   expect(durationMinutesFromParts({ hours: '0', minutes: '0' })).toBe('');
+});
+
+test('formats an explicit itinerary end ahead of its derived duration', () => {
+  const item = { durationMinutes: 90, localEndTime: '10:20', localStartTime: '09:00' };
+
+  expect(itineraryLocalEndTime(item)).toBe('10:20');
+  expect(formatItineraryTimeRange(item, 'en-US', '12h')).toBe('9:00 AM - 10:20 AM');
+});
+
+test('derives and formats the end of a duration while preserving start-only items', () => {
+  expect(
+    formatItineraryTimeRange(
+      { durationMinutes: 90, localEndTime: null, localStartTime: '09:00' },
+      'en-GB',
+      '24h',
+    ),
+  ).toBe('9:00 - 10:30');
+  expect(
+    itineraryLocalEndTime({ durationMinutes: 90, localEndTime: null, localStartTime: '23:30' }),
+  ).toBe('01:00');
+  expect(
+    formatItineraryTimeRange(
+      { durationMinutes: null, localEndTime: null, localStartTime: '09:00' },
+      'en-GB',
+      '24h',
+    ),
+  ).toBe('9:00');
 });

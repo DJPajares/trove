@@ -69,6 +69,7 @@ import {
   updateItineraryItemTravelStatus,
 } from '@/lib/itinerary/api';
 import { buildDaySequence, resolveDailyBases } from '@/lib/itinerary/day-sequence';
+import { formatItineraryTimeRange } from '@/lib/itinerary/item-timing';
 import { fetchReservations, type Reservation } from '@/lib/reservations/api';
 import { fetchTasks, type Task } from '@/lib/tasks/api';
 import { cn } from '@/lib/utils';
@@ -82,7 +83,13 @@ type SupportingContext = { reservations: Reservation[]; tasks: Task[] };
 
 type UndoAction =
   | { itemId: string; kind: 'organize'; itineraryDayId: string; position: number }
-  | { itemId: string; kind: 'schedule'; schedule: ItineraryScheduleInput }
+  | {
+      durationMinutes: number | null;
+      itemId: string;
+      kind: 'schedule';
+      localEndTime: string | null;
+      schedule: ItineraryScheduleInput;
+    }
   | { itemId: string; kind: 'status'; travelStatus: ItineraryTravelStatus };
 
 const stopTitleClassName =
@@ -255,18 +262,9 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     snapshotFor(item)?.address ??
     item.tripPlace?.place.providerAddress ??
     null;
-  const formatTime = (value: string) => {
-    const [hour, minute] = value.split(':').map(Number);
-    return new Intl.DateTimeFormat(locale, {
-      hour: 'numeric',
-      hour12: preferences.timeFormat === '12h',
-      minute: '2-digit',
-      timeZone: 'UTC',
-    }).format(new Date(Date.UTC(2000, 0, 1, hour, minute)));
-  };
   const itemSchedule = (item: ItineraryItem) =>
     item.localStartTime
-      ? formatTime(item.localStartTime)
+      ? formatItineraryTimeRange(item, locale, preferences.timeFormat)
       : item.dayPart
         ? t(`schedule.${item.dayPart}`)
         : t('schedule.none');
@@ -408,14 +406,20 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     setUndoAction(null);
     try {
       const previousSchedule = scheduleInputFromItem(scheduleItem);
+      const nextSchedule = scheduleInput(schedule, exactTime);
       await updateItineraryItem(tripId, scheduleItem.id, {
-        schedule: scheduleInput(schedule, exactTime),
+        ...(nextSchedule.kind === 'exact' || !scheduleItem.localEndTime
+          ? {}
+          : { localEndTime: null }),
+        schedule: nextSchedule,
       });
       await refresh();
       if (isPreview) {
         setUndoAction({
           itemId: scheduleItem.id,
           kind: 'schedule',
+          durationMinutes: scheduleItem.durationMinutes,
+          localEndTime: scheduleItem.localEndTime ?? null,
           schedule: previousSchedule,
         });
       }
@@ -442,7 +446,11 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
           position: action.position,
         });
       } else {
-        await updateItineraryItem(tripId, action.itemId, { schedule: action.schedule });
+        await updateItineraryItem(tripId, action.itemId, {
+          durationMinutes: action.localEndTime ? null : action.durationMinutes,
+          localEndTime: action.localEndTime,
+          schedule: action.schedule,
+        });
       }
       await refresh();
       setUndoAction(null);

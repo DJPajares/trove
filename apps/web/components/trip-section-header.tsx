@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
 import type { HeaderDensity } from '@/components/page-header';
+import { TripMedia } from '@/components/trip-media';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -17,6 +18,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useEditorialImages } from '@/hooks/use-editorial-images';
+import { editorialSubjectKey } from '@/lib/media/editorial-images';
+import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import { fetchTrip, type Trip } from '@/lib/trips/api';
 import {
   primaryTripDestinations,
@@ -25,6 +29,7 @@ import {
   type TripDestination,
   type TripSection,
 } from '@/lib/trips/navigation';
+import { tripEditorialSubject } from '@/lib/trips/summary';
 import { cn } from '@/lib/utils';
 
 export type { TripSection };
@@ -36,6 +41,7 @@ type TripSectionHeaderProps = {
   description?: string;
   media?: ReactNode;
   meta?: ReactNode;
+  showCover?: boolean;
   tripId: string;
 };
 
@@ -63,6 +69,7 @@ export function TripSectionHeader({
   description,
   media,
   meta,
+  showCover = false,
   tripId,
 }: Readonly<TripSectionHeaderProps>) {
   const t = useTranslations('trips');
@@ -84,6 +91,12 @@ export function TripSectionHeader({
       active = false;
     };
   }, [tripId]);
+
+  const coverSubject = showCover && trip ? tripEditorialSubject(trip) : null;
+  const editorialImages = useEditorialImages(coverSubject ? [coverSubject] : []);
+  const editorial = coverSubject
+    ? (editorialImages.get(editorialSubjectKey(coverSubject))?.[0] ?? null)
+    : null;
 
   const lifecycle = trip?.lifecycle ?? 'planning';
   const primary = primaryTripDestinations(tripId, lifecycle, trip?.startDate ?? '');
@@ -110,37 +123,27 @@ export function TripSectionHeader({
       data-density={density}
       data-slot="trip-section-header"
     >
-      <Link
-        className="inline-flex min-h-9 items-center gap-2 rounded-[var(--radius-md)] px-2 text-sm font-medium text-muted-foreground outline-none transition-colors duration-[var(--motion-standard)] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
-        href="/trips"
-      >
-        <ArrowLeft aria-hidden="true" className="size-4" />
-        {t('title')}
-      </Link>
-
-      <div
-        className={cn(
-          'grid items-end gap-4 sm:grid-cols-[minmax(0,1fr)_auto]',
-          density === 'immersive' && 'md:grid-cols-[minmax(0,1fr)_minmax(16rem,0.6fr)] md:gap-10',
-        )}
-      >
-        <div className="min-w-0 max-w-[var(--layout-reading)]">
-          <h1
-            className={cn(
-              'text-[length:var(--text-page-title)] leading-[1.08] font-semibold tracking-[-0.035em] text-pretty text-foreground',
-              density === 'immersive' &&
-                'md:text-[length:var(--text-immersive-title)] md:leading-[1.02]',
-              // On a working screen the trip's name is orientation, not the
-              // headline: the traveller came for what is inside the trip, and a
-              // phone only has so many rows to give.
-              density === 'compact' &&
-                'text-[length:var(--text-section-title)] leading-[1.15] sm:text-[length:var(--text-page-title)] sm:leading-[1.08]',
-            )}
-          >
-            {trip?.name ?? t('titleLoading')}
-          </h1>
-          {trip ? (
-            <p className="mt-2 text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
+      {showCover && trip ? (
+        <section
+          aria-labelledby="trip-section-cover-heading"
+          className="relative isolate -mx-[var(--gutter-inline-start)] -mt-8 md:mx-0 md:mt-0"
+        >
+          <TripMedia
+            alt={t('coverImageAlt', { name: trip.name })}
+            className="max-h-[58dvh] w-full rounded-none md:rounded-[var(--radius-2xl)]"
+            preload
+            sizes="(max-width: 1023px) 100vw, 1024px"
+            source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
+            variant="hero"
+          />
+          <div className="pointer-events-none absolute inset-0 flex flex-col justify-end gap-2 bg-gradient-to-t from-surface-overlay from-20% via-surface-overlay/55 to-transparent p-5 md:rounded-[var(--radius-2xl)] md:p-7">
+            <h1
+              className="text-[length:var(--text-page-title)] leading-[1.08] font-semibold tracking-[-0.035em] text-pretty text-media-fallback-foreground"
+              id="trip-section-cover-heading"
+            >
+              {trip.name}
+            </h1>
+            <p className="text-[length:var(--text-metadata)] font-medium text-media-fallback-foreground/85 tabular-nums">
               {t('dateRange', {
                 endDate: formatDate(trip.endDate),
                 startDate: formatDate(trip.startDate),
@@ -148,16 +151,67 @@ export function TripSectionHeader({
               {' · '}
               {t(`lifecycle.${trip.lifecycle}`)}
             </p>
-          ) : null}
-          {meta ? (
-            <div className="mt-2 text-[length:var(--text-metadata)] leading-5 font-medium text-text-subtle tabular-nums">
-              {meta}
-            </div>
-          ) : null}
-          {density === 'compact' && actions && !media ? (
-            <div className="mt-4 flex flex-wrap items-center gap-2 sm:hidden">{actions}</div>
-          ) : null}
-        </div>
+          </div>
+          <Link
+            aria-label={t('backToTrips')}
+            className="absolute top-[max(1rem,var(--safe-top))] left-[max(1rem,var(--safe-left))] z-10 flex size-10 items-center justify-center rounded-full border border-media-fallback-foreground/18 bg-neutral-950/58 text-media-fallback-foreground backdrop-blur-sm outline-none transition-colors hover:bg-neutral-950/78 focus-visible:ring-3 focus-visible:ring-ring/50"
+            href="/trips"
+          >
+            <ArrowLeft aria-hidden="true" className="size-4" />
+          </Link>
+        </section>
+      ) : (
+        <Link
+          className="inline-flex min-h-9 items-center gap-2 rounded-[var(--radius-md)] px-2 text-sm font-medium text-muted-foreground outline-none transition-colors duration-[var(--motion-standard)] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+          href="/trips"
+        >
+          <ArrowLeft aria-hidden="true" className="size-4" />
+          {t('title')}
+        </Link>
+      )}
+
+      <div
+        className={cn(
+          'grid items-end gap-4 sm:grid-cols-[minmax(0,1fr)_auto]',
+          density === 'immersive' && 'md:grid-cols-[minmax(0,1fr)_minmax(16rem,0.6fr)] md:gap-10',
+        )}
+      >
+        {showCover ? null : (
+          <div className="min-w-0 max-w-[var(--layout-reading)]">
+            <h1
+              className={cn(
+                'text-[length:var(--text-page-title)] leading-[1.08] font-semibold tracking-[-0.035em] text-pretty text-foreground',
+                density === 'immersive' &&
+                  'md:text-[length:var(--text-immersive-title)] md:leading-[1.02]',
+                // On a working screen the trip's name is orientation, not the
+                // headline: the traveller came for what is inside the trip, and a
+                // phone only has so many rows to give.
+                density === 'compact' &&
+                  'text-[length:var(--text-section-title)] leading-[1.15] sm:text-[length:var(--text-page-title)] sm:leading-[1.08]',
+              )}
+            >
+              {trip?.name ?? t('titleLoading')}
+            </h1>
+            {trip ? (
+              <p className="mt-2 text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
+                {t('dateRange', {
+                  endDate: formatDate(trip.endDate),
+                  startDate: formatDate(trip.startDate),
+                })}
+                {' · '}
+                {t(`lifecycle.${trip.lifecycle}`)}
+              </p>
+            ) : null}
+            {meta ? (
+              <div className="mt-2 text-[length:var(--text-metadata)] leading-5 font-medium text-text-subtle tabular-nums">
+                {meta}
+              </div>
+            ) : null}
+            {density === 'compact' && actions && !media ? (
+              <div className="mt-4 flex flex-wrap items-center gap-2 sm:hidden">{actions}</div>
+            ) : null}
+          </div>
+        )}
         {media ? (
           <div className="min-w-0">
             {media}

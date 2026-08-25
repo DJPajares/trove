@@ -2,6 +2,7 @@ import { beforeEach, expect, test } from 'vitest';
 
 import {
   createItineraryItem,
+  duplicateItineraryItem,
   itemSortMinute,
   timedInsertIndex,
   updateItineraryItem,
@@ -126,6 +127,7 @@ function seedItem(tripId: string, dayId: string, id: string, position: number, l
     dayPart: null,
     id,
     itineraryDayId: dayId,
+    localEndTime: null,
     localStartTime: parseLocalTime(localTime),
     position,
     startInstant: null,
@@ -207,4 +209,75 @@ test('clearing an item time leaves it where it sat', async () => {
   await updateItineraryItem('user', 'trip', 'b', { schedule: { kind: 'none' } });
 
   expect(dayOrder('day')).toStrictEqual(['a', 'b', 'c']);
+});
+
+test('an explicit local end time persists with its effective duration', async () => {
+  seedDay('trip', 'day', 'user');
+
+  const result = await createItineraryItem('user', 'trip', {
+    customLabel: 'Museum',
+    itineraryDayId: 'day',
+    localEndTime: '10:30',
+    schedule: { kind: 'exact', localTime: '09:00' },
+  });
+
+  expect(result).toMatchObject({
+    durationMinutes: 90,
+    localEndTime: '10:30',
+    localStartTime: '09:00',
+  });
+});
+
+test('moving an explicit-end start preserves its end and recalculates the duration', async () => {
+  seedDay('trip', 'day', 'user');
+  seedItem('trip', 'day', 'museum', 0, '09:00');
+  await updateItineraryItem('user', 'trip', 'museum', { localEndTime: '10:30' });
+
+  const result = await updateItineraryItem('user', 'trip', 'museum', {
+    schedule: { kind: 'exact', localTime: '09:30' },
+  });
+
+  expect(result.item).toMatchObject({
+    durationMinutes: 60,
+    localEndTime: '10:30',
+    localStartTime: '09:30',
+  });
+});
+
+test('rejects an explicit end that precedes its start or loses its exact start', async () => {
+  seedDay('trip', 'day', 'user');
+  seedItem('trip', 'day', 'museum', 0, '09:00');
+
+  await expect(
+    updateItineraryItem('user', 'trip', 'museum', { localEndTime: '08:30' }),
+  ).rejects.toThrow('invalid_local_end_time');
+
+  await updateItineraryItem('user', 'trip', 'museum', { localEndTime: '10:30' });
+  await expect(
+    updateItineraryItem('user', 'trip', 'museum', { schedule: { kind: 'none' } }),
+  ).rejects.toThrow('invalid_local_end_time');
+});
+
+test('switching from an explicit end to a duration clears the explicit field', async () => {
+  seedDay('trip', 'day', 'user');
+  seedItem('trip', 'day', 'museum', 0, '09:00');
+  await updateItineraryItem('user', 'trip', 'museum', { localEndTime: '10:30' });
+
+  const result = await updateItineraryItem('user', 'trip', 'museum', {
+    durationMinutes: 45,
+    localEndTime: null,
+  });
+
+  expect(result.item).toMatchObject({ durationMinutes: 45, localEndTime: null });
+});
+
+test('duplicating an item preserves its explicit end time', async () => {
+  seedDay('trip', 'day', 'user');
+  seedItem('trip', 'day', 'museum', 0, '09:00');
+  await updateItineraryItem('user', 'trip', 'museum', { localEndTime: '10:30' });
+
+  await duplicateItineraryItem('user', 'trip', 'museum');
+
+  const duplicate = store.itineraryItem.find((item) => item.id !== 'museum');
+  expect(duplicate).toMatchObject({ durationMinutes: 90, localEndTime: parseLocalTime('10:30') });
 });

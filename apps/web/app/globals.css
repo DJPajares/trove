@@ -236,6 +236,26 @@ body {
   --header-offset: 0px;
 }
 
+.interaction-scrollbar {
+  scrollbar-width: none;
+}
+
+.interaction-scrollbar::-webkit-scrollbar {
+  height: 0;
+}
+
+.interaction-scrollbar:hover,
+.interaction-scrollbar:focus-within,
+.interaction-scrollbar:active {
+  scrollbar-width: thin;
+}
+
+.interaction-scrollbar:hover::-webkit-scrollbar,
+.interaction-scrollbar:focus-within::-webkit-scrollbar,
+.interaction-scrollbar:active::-webkit-scrollbar {
+  height: 0.375rem;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Dialog as SheetPrimitive } from '@base-ui/react/dialog';
+import { Drawer as SheetPrimitive } from '@base-ui/react/drawer';
 
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -34,8 +34,22 @@ const desktopSideClasses: Record<SheetSide, string> = {
   top: 'md:inset-x-0 md:top-0 md:bottom-auto md:h-auto md:max-h-[90dvh] md:w-full md:rounded-t-none md:rounded-b-[var(--radius-xl)] md:border md:border-x-0 md:border-t-0 md:border-b md:pt-[var(--safe-top)] md:data-ending-style:translate-x-0 md:data-ending-style:translate-y-[-2.5rem] md:data-starting-style:translate-x-0 md:data-starting-style:translate-y-[-2.5rem]',
 };
 
+function subscribeToSheetViewport(onChange: () => void) {
+  const query = window.matchMedia('(max-width: 767px)');
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+}
+
 function Sheet({ ...props }: SheetPrimitive.Root.Props) {
-  return <SheetPrimitive.Root data-slot="sheet" {...props} />;
+  const mobile = React.useSyncExternalStore(
+    subscribeToSheetViewport,
+    () => window.matchMedia('(max-width: 767px)').matches,
+    () => false,
+  );
+
+  return (
+    <SheetPrimitive.Root data-slot="sheet" swipeDirection={mobile ? 'down' : 'right'} {...props} />
+  );
 }
 
 function SheetTrigger({ ...props }: SheetPrimitive.Trigger.Props) {
@@ -80,40 +94,52 @@ function SheetContent({
   return (
     <SheetPortal>
       <SheetOverlay />
-      <SheetPrimitive.Popup
-        data-slot="sheet-content"
-        data-side={side}
-        data-mobile-side={mobileSide}
-        className={cn(
-          'fixed z-[var(--layer-overlay)] flex max-h-[100dvh] flex-col gap-4 border-border bg-popover bg-clip-padding text-sm text-popover-foreground shadow-[var(--shadow-overlay)] transition-[opacity,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)] data-ending-style:opacity-0 data-starting-style:opacity-0',
-          mobileSideClasses[mobileSide],
-          desktopSideClasses[side],
-          className,
-        )}
-        {...props}
+      <SheetPrimitive.Viewport
+        className="fixed inset-0 z-[var(--layer-overlay)]"
+        data-slot="sheet-viewport"
       >
-        {children}
-        {showCloseButton && (
-          <SheetPrimitive.Close
-            data-slot="sheet-close"
-            render={
-              <Button
-                variant="ghost"
-                // An absolute offset resolves against the padding box, so the
-                // popup's own safe padding never reaches this button: it has to
-                // clear the insets itself. `max()` collapses to the plain offset
-                // on any device where the insets are zero. The two sides a sheet
-                // is not flush against are reset back.
-                className="absolute top-[max(0.75rem,var(--safe-top))] right-[max(0.75rem,var(--safe-right))] in-data-[mobile-side=bottom]:top-3 in-data-[mobile-side=left]:right-3 md:in-data-[side=bottom]:top-3 md:in-data-[side=left]:right-3"
-                size="icon-sm"
-              />
-            }
-          >
-            <XIcon />
-            <span className="sr-only">{closeLabel}</span>
-          </SheetPrimitive.Close>
-        )}
-      </SheetPrimitive.Popup>
+        <SheetPrimitive.Popup
+          data-slot="sheet-content"
+          data-side={side}
+          data-mobile-side={mobileSide}
+          className={cn(
+            'fixed z-[var(--layer-overlay)] flex max-h-[100dvh] flex-col gap-4 border-border bg-popover bg-clip-padding text-sm text-popover-foreground shadow-[var(--shadow-overlay)] transition-[opacity,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)] [transform:translateY(var(--drawer-swipe-movement-y,0px))] data-ending-style:opacity-0 data-starting-style:opacity-0 data-swiping:duration-0 md:[transform:translateX(var(--drawer-swipe-movement-x,0px))]',
+            mobileSideClasses[mobileSide],
+            desktopSideClasses[side],
+            className,
+          )}
+          {...props}
+        >
+          {mobileSide === 'bottom' ? (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute top-2 left-1/2 z-10 h-1 w-10 -translate-x-1/2 rounded-full bg-foreground/25 md:hidden"
+              data-slot="sheet-drag-handle"
+            />
+          ) : null}
+          {children}
+          {showCloseButton && (
+            <SheetPrimitive.Close
+              data-slot="sheet-close"
+              render={
+                <Button
+                  variant="ghost"
+                  // An absolute offset resolves against the padding box, so the
+                  // popup's own safe padding never reaches this button: it has to
+                  // clear the insets itself. `max()` collapses to the plain offset
+                  // on any device where the insets are zero. The two sides a sheet
+                  // is not flush against are reset back.
+                  className="absolute top-[max(0.75rem,var(--safe-top))] right-[max(0.75rem,var(--safe-right))] in-data-[mobile-side=bottom]:top-3 in-data-[mobile-side=left]:right-3 md:in-data-[side=bottom]:top-3 md:in-data-[side=left]:right-3"
+                  size="icon-sm"
+                />
+              }
+            >
+              <XIcon />
+              <span className="sr-only">{closeLabel}</span>
+            </SheetPrimitive.Close>
+          )}
+        </SheetPrimitive.Popup>
+      </SheetPrimitive.Viewport>
     </SheetPortal>
   );
 }

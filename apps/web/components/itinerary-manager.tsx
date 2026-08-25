@@ -1624,6 +1624,22 @@ export function ItineraryManager({
                       <PopoverTitle className="text-sm">{t('daySettings')}</PopoverTitle>
                     </PopoverHeader>
 
+                    <div className="border-b border-border p-2">
+                      <Button
+                        className="w-full justify-start px-3"
+                        onClick={() => {
+                          setDaySettingsOpen(false);
+                          setDayNameEditor(selectedDay);
+                          setDayNameValue(selectedDay.name ?? '');
+                          setDayNameError(null);
+                        }}
+                        variant="ghost"
+                      >
+                        <Pencil aria-hidden="true" data-icon="inline-start" />
+                        {selectedDay.name ? t('editDayName') : t('addDayName')}
+                      </Button>
+                    </div>
+
                     <div className="flex items-center justify-between gap-4 px-4 py-4">
                       <div className="flex min-w-0 items-start gap-3">
                         <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-secondary text-secondary-foreground">
@@ -1753,19 +1769,6 @@ export function ItineraryManager({
                     </Collapsible>
 
                     <div className="space-y-0.5 border-t border-border p-2">
-                      <Button
-                        className="w-full justify-start px-3"
-                        onClick={() => {
-                          setDaySettingsOpen(false);
-                          setDayNameEditor(selectedDay);
-                          setDayNameValue(selectedDay.name ?? '');
-                          setDayNameError(null);
-                        }}
-                        variant="ghost"
-                      >
-                        <Pencil aria-hidden="true" data-icon="inline-start" />
-                        {selectedDay.name ? t('editDayName') : t('addDayName')}
-                      </Button>
                       <Button
                         className="w-full justify-start px-3"
                         onClick={() => {

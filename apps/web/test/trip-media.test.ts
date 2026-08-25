@@ -28,6 +28,17 @@ test('an existing trip cover leads the media precedence', () => {
   ).toStrictEqual({ kind: 'trip-cover', url: 'https://assets.example/trip-cover.jpg' });
 });
 
+test('a chosen Memory leads only when a story explicitly prefers it', () => {
+  expect(
+    resolveTripMediaSource({
+      coverUrl: 'https://assets.example/trip-cover.jpg',
+      editorial,
+      memoryUrl: 'blob:memory-photo',
+      preferMemory: true,
+    }),
+  ).toStrictEqual({ kind: 'memory', url: 'blob:memory-photo' });
+});
+
 test('already-loaded Memory media is used when no trip cover exists', () => {
   expect(resolveTripMediaSource({ editorial, memoryUrl: 'blob:memory-photo' })).toStrictEqual({
     kind: 'memory',

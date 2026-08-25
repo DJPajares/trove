@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 import {
   editorialSubjectKey,
+  readCachedEditorialImages,
   resolveEditorialImages,
   type EditorialImageReference,
   type EditorialSubject,
@@ -21,7 +22,9 @@ const EMPTY_IMAGES: ReadonlyMap<string, EditorialImageReference[]> = new Map();
  * `editorialSubjectKey`.
  */
 export function useEditorialImages(subjects: EditorialSubject[]) {
-  const [images, setImages] = useState(EMPTY_IMAGES);
+  const [images, setImages] = useState(() =>
+    subjects.length ? readCachedEditorialImages(subjects) : EMPTY_IMAGES,
+  );
 
   // The subjects array is rebuilt on every render, so the effect keys on what
   // is actually being asked for rather than on the array's identity.
@@ -50,5 +53,6 @@ export function useEditorialImages(subjects: EditorialSubject[]) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subjectSignature]);
 
-  return images;
+  const cachedImages = readCachedEditorialImages(subjects);
+  return cachedImages.size > 0 ? cachedImages : images;
 }

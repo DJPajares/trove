@@ -10,12 +10,14 @@ const skeletonVariants = cva('w-full', {
       media: 'grid gap-5 sm:grid-cols-[minmax(0,1.2fr)_minmax(16rem,0.8fr)]',
       text: 'max-w-2xl space-y-4',
       timeline: 'max-w-3xl space-y-0',
+      trip: 'mx-auto w-full max-w-5xl space-y-5',
+      tripHero: 'mx-auto w-full max-w-5xl space-y-5',
     },
   },
   defaultVariants: { shape: 'text' },
 });
 
-export type LoadingShape = 'list' | 'media' | 'text' | 'timeline';
+export type LoadingShape = 'list' | 'media' | 'text' | 'timeline' | 'trip' | 'tripHero';
 
 export function ContentSkeleton({
   className,
@@ -66,6 +68,35 @@ export function ContentSkeleton({
             </div>
           </div>
         ))}
+      </div>
+    );
+  }
+
+  if (shape === 'trip' || shape === 'tripHero') {
+    return (
+      <div aria-hidden="true" className={cn(skeletonVariants({ shape }), className)}>
+        {shape === 'tripHero' ? (
+          <Skeleton className="-mx-[var(--gutter-inline-start)] -mt-8 aspect-[4/5] w-[calc(100%+var(--gutter-inline-start)+var(--gutter-inline-end))] rounded-none sm:aspect-[2/1] md:mx-0 md:mt-0 md:w-full md:rounded-[var(--radius-2xl)]" />
+        ) : (
+          <>
+            <Skeleton className="h-9 w-24" />
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-2/3 max-w-sm" />
+              <Skeleton className="h-4 w-48" />
+            </div>
+          </>
+        )}
+        <div className="flex items-center gap-2 border-b border-border-subtle pb-1">
+          <Skeleton className="h-10 w-20" />
+          <Skeleton className="h-10 w-24" />
+          <Skeleton className="h-10 w-24" />
+          <Skeleton className="ml-auto h-9 w-10" />
+        </div>
+        <div className="max-w-3xl space-y-4 pt-2">
+          <Skeleton className="h-4 w-2/5" />
+          <Skeleton className="h-24 w-full rounded-[var(--radius-lg)]" />
+          <Skeleton className="h-24 w-full rounded-[var(--radius-lg)]" />
+        </div>
       </div>
     );
   }

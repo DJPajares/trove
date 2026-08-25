@@ -163,7 +163,6 @@ export function SavedPlacesManager() {
   const [detailsPlace, setDetailsPlace] = useState<SavedPlace | null>(null);
 
   const refresh = useCallback(async () => {
-    setStatus('loading');
     setError(null);
 
     try {
@@ -172,7 +171,7 @@ export function SavedPlacesManager() {
       setSavedPlaces(result.savedPlaces);
       setStatus('idle');
     } catch {
-      setStatus('error');
+      setStatus((current) => (current === 'loading' ? 'error' : 'idle'));
     }
   }, []);
 

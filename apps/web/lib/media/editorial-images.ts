@@ -87,6 +87,17 @@ export function editorialSubjectKey(subject: {
  */
 const resolvedImages = new Map<string, EditorialImageReference[] | null>();
 
+/** Reads session-cached imagery without starting work, so revisiting a route paints it immediately. */
+export function readCachedEditorialImages(subjects: EditorialSubject[]) {
+  const cached = new Map<string, EditorialImageReference[]>();
+  for (const subject of subjects) {
+    const key = editorialSubjectKey(subject);
+    const references = resolvedImages.get(key);
+    if (references) cached.set(key, references);
+  }
+  return cached;
+}
+
 /** Test seam, and the only way this module's memory is ever discarded. */
 export function resetEditorialImageCache() {
   resolvedImages.clear();

@@ -114,11 +114,9 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
     </div>
   );
 
-  return isSignedIn ? (
-    <TripCreationProvider>
-      <AppMenuProvider>{shell}</AppMenuProvider>
+  return (
+    <TripCreationProvider enabled={isSignedIn}>
+      {isSignedIn ? <AppMenuProvider>{shell}</AppMenuProvider> : shell}
     </TripCreationProvider>
-  ) : (
-    shell
   );
 }

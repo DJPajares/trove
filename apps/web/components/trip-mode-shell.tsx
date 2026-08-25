@@ -1,15 +1,6 @@
 'use client';
 
-import {
-  ArrowLeft,
-  CalendarDays,
-  ChevronDown,
-  Clock3,
-  Compass,
-  Eye,
-  Map,
-  MapPinned,
-} from 'lucide-react';
+import { ArrowLeft, CalendarDays, Clock3, Compass, Eye, Map, MapPinned } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -26,13 +17,6 @@ import { TripSyncStatus } from '@/components/trip-sync-status';
 import { TripMedia } from '@/components/trip-media';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
 import {
   fetchItinerary,
   type Itinerary,
@@ -123,26 +107,6 @@ function addPreviewParams(href: string, date: string, time: string) {
   return `${path}?${params.toString()}${hash ? `#${hash}` : ''}`;
 }
 
-/**
- * Whether the preview controls belong in a sheet rather than inline.
- *
- * The same breakpoint `TimeInput` already uses to make the same choice, so a
- * phone never gets two different answers about what an overlay is for.
- */
-function useSheetDisclosure() {
-  const [mobile, setMobile] = useState(false);
-
-  useEffect(() => {
-    const query = window.matchMedia('(max-width: 767px)');
-    const update = () => setMobile(query.matches);
-    update();
-    query.addEventListener('change', update);
-    return () => query.removeEventListener('change', update);
-  }, []);
-
-  return mobile;
-}
-
 type PreviewControlsProps = {
   activityCounts: Readonly<Record<string, number>>;
   endDate: string;
@@ -152,7 +116,7 @@ type PreviewControlsProps = {
   startDate: string;
 };
 
-/** The two controls a preview actually has, wherever they are disclosed. */
+/** The two controls that define the active Preview state. */
 function TripModePreviewControls({
   activityCounts,
   endDate,
@@ -193,14 +157,8 @@ function TripModePreviewControls({
 }
 
 /**
- * Where and when the preview is standing, in one line.
- *
- * Those are two facts, and they used to cost a bordered block holding two
- * labelled controls and two paragraphs of explanation — roughly a quarter of a
- * phone's first viewport, spent before the itinerary had said anything at all.
- * They are now simply stated, and the controls that change them are one
- * interaction away: a sheet on a phone, an inline disclosure everywhere else,
- * so a wide screen never loses its place to an overlay it did not need.
+ * Keeps the current simulated moment visible and immediately adjustable before
+ * the traveller moves into the previewed Trip Mode experience.
  */
 function TripModePreviewSummary({
   activityCounts,
@@ -212,8 +170,6 @@ function TripModePreviewSummary({
   const t = useTranslations('tripMode');
   const locale = useLocale();
   const { preferences } = usePreferences();
-  const sheetDisclosure = useSheetDisclosure();
-  const [open, setOpen] = useState(false);
 
   const dateLabel = new Intl.DateTimeFormat(locale, {
     day: 'numeric',
@@ -237,67 +193,17 @@ function TripModePreviewSummary({
         <p className="min-w-0 flex-1 text-sm leading-5 font-medium text-pretty text-foreground">
           {summary}
         </p>
-        <Button
-          aria-controls={sheetDisclosure ? undefined : 'trip-mode-preview-controls'}
-          aria-expanded={sheetDisclosure ? undefined : open}
-          className="shrink-0"
-          onClick={() => setOpen((current) => !current)}
-          size="sm"
-          type="button"
-          variant="outline"
-        >
-          {t('preview.edit')}
-          {sheetDisclosure ? null : (
-            <ChevronDown
-              aria-hidden="true"
-              className={cn(
-                'transition-transform duration-[var(--motion-standard)] motion-reduce:transition-none',
-                open && 'rotate-180',
-              )}
-              data-icon="inline-end"
-            />
-          )}
-        </Button>
       </div>
-
-      {sheetDisclosure ? (
-        <Sheet onOpenChange={setOpen} open={open}>
-          <SheetContent closeLabel={t('preview.close')} mobileSide="bottom">
-            <SheetHeader>
-              <SheetTitle>{t('preview.title')}</SheetTitle>
-              <SheetDescription>{t('preview.description')}</SheetDescription>
-            </SheetHeader>
-            <div className="min-h-0 overflow-y-auto px-6 pb-6">
-              <TripModePreviewControls
-                activityCounts={activityCounts}
-                endDate={endDate}
-                idPrefix="trip-mode-preview-sheet"
-                onChange={onChange}
-                selection={selection}
-                startDate={startDate}
-              />
-            </div>
-          </SheetContent>
-        </Sheet>
-      ) : (
-        <div
-          className="border-t border-status-info/25 px-4 py-4"
-          hidden={!open}
-          id="trip-mode-preview-controls"
-        >
-          <p className="mb-4 max-w-[var(--layout-reading)] text-sm leading-[1.55] text-pretty text-muted-foreground">
-            {t('preview.description')}
-          </p>
-          <TripModePreviewControls
-            activityCounts={activityCounts}
-            endDate={endDate}
-            idPrefix="trip-mode-preview-panel"
-            onChange={onChange}
-            selection={selection}
-            startDate={startDate}
-          />
-        </div>
-      )}
+      <div className="border-t border-status-info/25 px-3 py-4 sm:px-4">
+        <TripModePreviewControls
+          activityCounts={activityCounts}
+          endDate={endDate}
+          idPrefix="trip-mode-preview-controls"
+          onChange={onChange}
+          selection={selection}
+          startDate={startDate}
+        />
+      </div>
     </div>
   );
 }

@@ -277,14 +277,10 @@
     "label": "Trip Mode",
     "preview": {
       "label": "Trip Mode Preview",
-      "title": "Preview Trip Mode",
-      "description": "Choose a trip day and local time. This uses your real itinerary, and any edits you make update the actual trip.",
       "date": "Trip day",
       "time": "Local time",
       "timeDescription": "Uses the selected day's timezone. Route times are estimates, not future traffic.",
-      "summary": "Preview · {date} · {time}",
-      "edit": "Edit",
-      "close": "Close"
+      "summary": "Preview · {date} · {time}"
     },
     "navigation": "Trip Mode navigation",
     "exit": "Exit Trip Mode",

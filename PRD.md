@@ -1186,6 +1186,8 @@ Users may select:
 - trip day,
 - simulated point/time of day.
 
+The active Preview surface exposes direct controls for trip day and local time, so neither value sits behind a generic Edit action.
+
 Preview reuses the same Now / Today / Map / Trip components and the same underlying itinerary as live Trip Mode. It does not create a sandbox/copy.
 
 Preview should allow testing:

@@ -18,6 +18,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 
 import { DatePicker } from '@/components/date-picker';
 import { PageState } from '@/components/page-state';
+import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
 import { usePreferences } from '@/components/preferences-provider';
 import { TimeInput } from '@/components/time-input';
 import { PlanScorePanel } from '@/components/plan-score-panel';
@@ -35,10 +36,14 @@ import {
 import {
   fetchItinerary,
   type Itinerary,
+  type ItineraryTripPlace,
   type TripModeContextRequestOptions,
 } from '@/lib/itinerary/api';
+import { useEditorialImages } from '@/hooks/use-editorial-images';
+import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
+import { resolveProviderPlaceName, resolveTripPlaceName } from '@/lib/trip-places/place-name';
 import { fetchTrip, type Trip } from '@/lib/trips/api';
 import { cn } from '@/lib/utils';
 
@@ -69,6 +74,18 @@ function TripModePreviewProvider({
 
 export function useTripModePreview() {
   return useContext(TripModePreviewContext);
+}
+
+type TripModePlaceDetailsContextValue = {
+  openPlaceDetails: (tripPlace: ItineraryTripPlace) => void;
+};
+
+const TripModePlaceDetailsContext = createContext<TripModePlaceDetailsContextValue>({
+  openPlaceDetails: () => undefined,
+});
+
+export function useTripModePlaceDetails() {
+  return useContext(TripModePlaceDetailsContext);
 }
 
 type TripModeShellProps = {
@@ -330,12 +347,34 @@ export function TripModeShell({
   tripId,
 }: Readonly<TripModeShellProps>) {
   const t = useTranslations('tripMode');
+  const itineraryT = useTranslations('itinerary');
+  const tripPlacesT = useTranslations('tripPlaces');
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [reloadKey, setReloadKey] = useState(0);
   const [state, setState] = useState<LoadState>({ itinerary: null, status: 'loading', trip: null });
+  const [detailsPlace, setDetailsPlace] = useState<ItineraryTripPlace | null>(null);
+  const detailsProviderName = detailsPlace ? resolveProviderPlaceName(detailsPlace) : null;
+  const detailsSubjects: EditorialSubject[] =
+    detailsPlace && detailsProviderName
+      ? [
+          {
+            category: detailsPlace.place.snapshot?.category,
+            name: detailsProviderName,
+            placeId: detailsPlace.place.id,
+          },
+        ]
+      : [];
+  const detailsImages = useEditorialImages(detailsSubjects);
+  const detailsEditorialImages = detailsSubjects[0]
+    ? (detailsImages.get(editorialSubjectKey(detailsSubjects[0])) ?? [])
+    : [];
+  const openPlaceDetails = useCallback((tripPlace: ItineraryTripPlace) => {
+    setDetailsPlace(tripPlace);
+  }, []);
+  const placeDetailsContext = useMemo(() => ({ openPlaceDetails }), [openPlaceDetails]);
 
   useEffect(() => {
     let active = true;
@@ -581,7 +620,9 @@ export function TripModeShell({
         </nav>
 
         <div className="min-h-[min(32rem,55dvh)] border-t border-border pt-6 sm:pt-8">
-          {children}
+          <TripModePlaceDetailsContext.Provider value={placeDetailsContext}>
+            {children}
+          </TripModePlaceDetailsContext.Provider>
         </div>
 
         {/* Day quality is a review of the plan, not an answer to "what do I need
@@ -595,6 +636,28 @@ export function TripModeShell({
           />
         ) : null}
       </section>
+
+      {detailsPlace ? (
+        <PlaceDetailsSheet
+          editorialImages={detailsEditorialImages}
+          meta={[
+            detailsPlace.priority
+              ? {
+                  label: tripPlacesT('priorityLabel'),
+                  value: tripPlacesT(`priority.${detailsPlace.priority}`),
+                }
+              : null,
+            detailsPlace.note ? { label: itineraryT('notes'), value: detailsPlace.note } : null,
+          ].filter((row): row is PlaceDetailsRow => row !== null)}
+          name={resolveTripPlaceName(detailsPlace, {
+            custom: itineraryT('customPlace'),
+            provider: itineraryT('providerPlace'),
+          })}
+          officialName={detailsPlace.customName?.trim() ? detailsProviderName : null}
+          onOpenChange={(open) => !open && setDetailsPlace(null)}
+          place={detailsPlace.place}
+        />
+      ) : null}
     </TripModePreviewProvider>
   );
 }

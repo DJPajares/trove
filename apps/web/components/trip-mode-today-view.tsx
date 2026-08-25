@@ -25,7 +25,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
 import { TimelineGroup, TimelineMarker, TimelineRow } from '@/components/timeline-row';
-import { useTripModePreview } from '@/components/trip-mode-shell';
+import { useTripModePlaceDetails, useTripModePreview } from '@/components/trip-mode-shell';
 import { useOfflineDataRefreshKey, useOnlineStatus } from '@/components/trip-sync-status';
 import { TripModeAddItemDialog } from '@/components/trip-mode-add-item-dialog';
 import { TripModeMemoryDialog } from '@/components/trip-mode-memory-dialog';
@@ -69,7 +69,6 @@ import {
   updateItineraryItemTravelStatus,
 } from '@/lib/itinerary/api';
 import { buildDaySequence, resolveDailyBases } from '@/lib/itinerary/day-sequence';
-import {} from '@/lib/saved/api';
 import { fetchReservations, type Reservation } from '@/lib/reservations/api';
 import { fetchTasks, type Task } from '@/lib/tasks/api';
 import { cn } from '@/lib/utils';
@@ -85,6 +84,9 @@ type UndoAction =
   | { itemId: string; kind: 'organize'; itineraryDayId: string; position: number }
   | { itemId: string; kind: 'schedule'; schedule: ItineraryScheduleInput }
   | { itemId: string; kind: 'status'; travelStatus: ItineraryTravelStatus };
+
+const stopTitleClassName =
+  'rounded-[var(--radius-sm)] text-left outline-none after:absolute after:inset-0 hover:underline focus-visible:ring-3 focus-visible:ring-ring/40';
 
 function providerId(item: ItineraryItem) {
   return item.tripPlace?.place.providerRefs.find((ref) => ref.provider === 'google')
@@ -129,6 +131,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   const online = useOnlineStatus();
   const offlineDataRefreshKey = useOfflineDataRefreshKey();
   const { contextOptions, isPreview } = useTripModePreview();
+  const { openPlaceDetails } = useTripModePlaceDetails();
   const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
   const [reloadKey, setReloadKey] = useState(0);
   const [mutatingItemId, setMutatingItemId] = useState<string | null>(null);
@@ -478,6 +481,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
         tripPlace.place.snapshot?.name ??
         tripPlace.place.providerLabel ??
         t('itemFallback'),
+      tripPlace,
     };
   };
 
@@ -573,7 +577,16 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                       {entry.stopNumber}
                     </TimelineMarker>
                   }
-                  title={base.name}
+                  title={
+                    <button
+                      aria-label={itineraryT('viewDetailsFor', { name: base.name })}
+                      className={stopTitleClassName}
+                      onClick={() => openPlaceDetails(base.tripPlace)}
+                      type="button"
+                    >
+                      {base.name}
+                    </button>
+                  }
                 />
               );
             }
@@ -590,6 +603,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
             const upcomingIndex = upcomingItems.findIndex((candidate) => candidate.id === item.id);
             const linkedReservations = reservationsByItem.get(item.id) ?? [];
             const linkedTasks = openTasksByItem.get(item.id) ?? [];
+            const tripPlace = item.tripPlace;
             const undoLabel = item.travelStatus === 'completed' ? t('undoComplete') : t('undoSkip');
 
             return (
@@ -740,7 +754,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                       <span className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
                         {linkedReservations.length ? (
                           <Link
-                            className="inline-flex min-h-8 items-center gap-1.5 rounded-[var(--radius-sm)] outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+                            className="relative z-10 inline-flex min-h-8 items-center gap-1.5 rounded-[var(--radius-sm)] outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
                             href={`/trips/${tripId}/reservations`}
                           >
                             <ClipboardCheck
@@ -757,7 +771,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                         ) : null}
                         {linkedTasks.length ? (
                           <Link
-                            className="inline-flex min-h-8 items-center gap-1.5 rounded-[var(--radius-sm)] outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+                            className="relative z-10 inline-flex min-h-8 items-center gap-1.5 rounded-[var(--radius-sm)] outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
                             href={`/trips/${tripId}/tasks`}
                           >
                             <CheckCircle2
@@ -795,11 +809,25 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                 selected={isCurrent}
                 tabIndex={-1}
                 title={
-                  <span
-                    className={cn(!upcoming && 'text-muted-foreground line-through decoration-1')}
-                  >
-                    {name}
-                  </span>
+                  tripPlace ? (
+                    <button
+                      aria-label={itineraryT('viewDetailsFor', { name })}
+                      className={cn(
+                        stopTitleClassName,
+                        !upcoming && 'text-muted-foreground line-through decoration-1',
+                      )}
+                      onClick={() => openPlaceDetails(tripPlace)}
+                      type="button"
+                    >
+                      {name}
+                    </button>
+                  ) : (
+                    <span
+                      className={cn(!upcoming && 'text-muted-foreground line-through decoration-1')}
+                    >
+                      {name}
+                    </span>
+                  )
                 }
               />
             );

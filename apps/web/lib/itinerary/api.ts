@@ -381,56 +381,110 @@ function dayPartIndex(value: ItineraryDayPart | null) {
   return null;
 }
 
-function offlineTripModeContext(
+export function offlineTripModeContext(
   itinerary: Itinerary,
   options: TripModeContextRequestOptions,
 ): TripModeContext {
-  const selectedDate = options.date ?? localDateInTimeZone(itinerary.trip.referenceTimeZone);
+  const requestedAt = options.at ? new Date(options.at) : new Date();
+  const selectedDate =
+    options.date ?? localDateInTimeZone(itinerary.trip.referenceTimeZone, requestedAt);
   const day = itinerary.days.find((candidate) => candidate.date === selectedDate) ?? null;
   const activeItems = day?.items.filter((item) => item.travelStatus === 'upcoming') ?? [];
   const contextTimeZone = day?.defaultTimeZone ?? itinerary.trip.referenceTimeZone;
   const at = options.date
     ? localPreviewInstant(options.date, options.time, contextTimeZone)
-    : options.at
-      ? new Date(options.at)
-      : new Date();
-  const localTime = options.time ?? localTimeInTimeZone(at, contextTimeZone);
-  const localMinute = minuteOfDay(localTime);
-  const localPart = localMinute < 12 * 60 ? 0 : localMinute < 17 * 60 ? 1 : 2;
+    : requestedAt;
+  const itemStart = (item: ItineraryItem) => {
+    if (item.startInstant) return new Date(item.startInstant).getTime();
+    if (!item.localStartTime || !day) return null;
+    return localPreviewInstant(
+      day.date,
+      item.localStartTime,
+      item.timeZone ?? contextTimeZone,
+    ).getTime();
+  };
+  const scheduledStarts = activeItems
+    .flatMap((item) => {
+      const start = itemStart(item);
+      return start === null ? [] : [start];
+    })
+    .toSorted((left, right) => left - right);
   const phases = activeItems.map((item) => {
-    if (item.localStartTime) {
-      const start = minuteOfDay(item.localStartTime);
-      const end = start + (item.durationMinutes ?? 1);
-      return localMinute < start ? 'future' : localMinute < end ? 'current' : 'overdue';
+    const start = itemStart(item);
+    if (start !== null) {
+      if (at.getTime() < start) return 'future' as const;
+      const nextStart = scheduledStarts.find((candidate) => candidate > start);
+      const end = item.durationMinutes
+        ? start + item.durationMinutes * 60_000
+        : (nextStart ?? start + 60 * 60_000);
+      return at.getTime() < end ? ('current_exact' as const) : ('overdue' as const);
     }
+
+    const itemTimeZone = item.timeZone ?? contextTimeZone;
+    const itemLocalDate = localDateInTimeZone(itemTimeZone, at);
+    if (itemLocalDate < selectedDate) return 'future' as const;
+    if (itemLocalDate > selectedDate) return 'overdue' as const;
     const itemPart = dayPartIndex(item.dayPart);
-    if (itemPart === null) return 'flexible';
-    return localPart < itemPart ? 'future' : localPart === itemPart ? 'current' : 'overdue';
+    if (itemPart === null) return 'flexible' as const;
+    const minute = minuteOfDay(localTimeInTimeZone(at, itemTimeZone));
+    const localPart = minute < 12 * 60 ? 0 : minute < 17 * 60 ? 1 : 2;
+    return localPart < itemPart
+      ? ('future' as const)
+      : localPart === itemPart
+        ? ('current_day_part' as const)
+        : ('overdue' as const);
   });
-  const currentIndex = phases.findIndex((phase) => phase === 'current');
-  const overdueIndex = phases.findLastIndex((phase) => phase === 'overdue');
+  const currentExactIndex = activeItems.reduce((latest, item, index) => {
+    if (phases[index] !== 'current_exact') return latest;
+    if (latest < 0 || itemStart(item)! >= itemStart(activeItems[latest]!)!) return index;
+    return latest;
+  }, -1);
+  const dayPartIndexValue = phases.findIndex((phase) => phase === 'current_day_part');
   const flexibleIndex = phases.findIndex((phase) => phase === 'flexible');
-  const relevantIndex = currentIndex >= 0 ? currentIndex : Math.max(overdueIndex, flexibleIndex);
-  const current = relevantIndex >= 0 ? activeItems[relevantIndex] : null;
-  const nextIndex = phases.findIndex(
-    (phase, index) => index > relevantIndex && (phase === 'future' || phase === 'flexible'),
-  );
-  const next = nextIndex >= 0 ? activeItems[nextIndex] : null;
-  const currentReason = current?.localStartTime
-    ? 'exact_time'
-    : dayPartIndex(current?.dayPart ?? null) !== null
-      ? 'day_part'
-      : current
-        ? 'itinerary_order'
-        : null;
+  const relevantIndex =
+    currentExactIndex >= 0
+      ? currentExactIndex
+      : dayPartIndexValue >= 0
+        ? dayPartIndexValue
+        : flexibleIndex;
+  const current = relevantIndex >= 0 ? activeItems[relevantIndex]! : null;
+  const futureStart = (item: ItineraryItem) => {
+    const start = itemStart(item);
+    if (start !== null) return start;
+    const itemPart = dayPartIndex(item.dayPart);
+    if (itemPart === null) return Number.POSITIVE_INFINITY;
+    const time = itemPart === 0 ? '00:00' : itemPart === 1 ? '12:00' : '17:00';
+    return localPreviewInstant(selectedDate, time, item.timeZone ?? contextTimeZone).getTime();
+  };
+  const future = activeItems
+    .filter((_, index) => phases[index] === 'future')
+    .toSorted((left, right) => futureStart(left) - futureStart(right))[0];
+  const next =
+    future ??
+    (current
+      ? activeItems.find(
+          (_, index) =>
+            index > relevantIndex &&
+            (phases[index] === 'current_day_part' || phases[index] === 'flexible'),
+        )
+      : null) ??
+    null;
+  const currentReason =
+    currentExactIndex >= 0
+      ? 'exact_time'
+      : dayPartIndexValue >= 0
+        ? 'day_part'
+        : current
+          ? 'itinerary_order'
+          : null;
   return {
     contextAt: at.toISOString(),
-    contextSource: options.date ? 'preview' : 'live',
+    contextSource: options.date || options.at ? 'preview' : 'live',
     currentOrRelevant:
       current && currentReason
         ? {
             itemId: current.id,
-            kind: currentIndex >= 0 ? 'current' : 'relevant',
+            kind: currentExactIndex >= 0 ? 'current' : 'relevant',
             reason: currentReason,
           }
         : null,
@@ -449,7 +503,7 @@ function offlineTripModeContext(
     selectedDate,
     state: day
       ? current
-        ? currentIndex >= 0
+        ? currentExactIndex >= 0
           ? 'current'
           : 'relevant'
         : next

@@ -20,7 +20,7 @@ import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
-import { useTripModePreview } from '@/components/trip-mode-shell';
+import { useTripModePlaceDetails, useTripModePreview } from '@/components/trip-mode-shell';
 import { useOfflineDataRefreshKey, useOnlineStatus } from '@/components/trip-sync-status';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -42,7 +42,6 @@ import {
   type ItineraryMapLocation,
   type ItineraryMapPoint,
 } from '@/lib/maps/itinerary-map';
-import { googleMapsPlaceHref } from '@/lib/saved/api';
 import { cn } from '@/lib/utils';
 
 type LoadState =
@@ -98,6 +97,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
   const online = useOnlineStatus();
   const offlineDataRefreshKey = useOfflineDataRefreshKey();
   const { contextOptions, isPreview, withPreviewHref } = useTripModePreview();
+  const { openPlaceDetails } = useTripModePlaceDetails();
   const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
   const [routeState, setRouteState] = useState<RouteState>({ data: null, status: 'idle' });
   const [reloadKey, setReloadKey] = useState(0);
@@ -443,6 +443,12 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
               onViewItem={(itemId) =>
                 router.push(withPreviewHref(`/trips/${tripId}/mode/today#trip-mode-item-${itemId}`))
               }
+              onViewPlaceDetails={(point) => {
+                const tripPlace = itinerary.tripPlaces.find(
+                  (candidate) => candidate.id === point.tripPlaceId,
+                );
+                if (tripPlace) openPlaceDetails(tripPlace);
+              }}
               points={mapPoints}
               routePolylines={routePolylines}
               selectedPointId={selectedPointId}
@@ -471,18 +477,14 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
                   <p className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
                     {t(day.dailyBaseTripPlaceId ? 'dayBase' : 'accommodationBase')}
                   </p>
-                  {googleMapsPlaceHref(baseTripPlace.place) ? (
-                    <a
-                      className="mt-1 block rounded-[var(--radius-sm)] text-sm font-semibold outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
-                      href={googleMapsPlaceHref(baseTripPlace.place)!}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      {placeName(baseTripPlace)}
-                    </a>
-                  ) : (
-                    <p className="mt-1 text-sm font-semibold">{placeName(baseTripPlace)}</p>
-                  )}
+                  <button
+                    aria-label={itineraryT('viewDetailsFor', { name: placeName(baseTripPlace) })}
+                    className="mt-1 block rounded-[var(--radius-sm)] text-left text-sm font-semibold outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+                    onClick={() => openPlaceDetails(baseTripPlace)}
+                    type="button"
+                  >
+                    {placeName(baseTripPlace)}
+                  </button>
                 </div>
               </div>
             </section>

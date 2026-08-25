@@ -488,6 +488,11 @@ export function ItineraryManager({
       ? t('dayOptionNamed', { date: formatDate(day.date), name: day.name, number: index + 1 })
       : t('dayOption', { date: formatDate(day.date), number: index + 1 });
 
+  // The selected-day panel carries a custom title. Keeping the picker to date
+  // context makes scanning and switching days more reliable on narrow screens.
+  const dayPickerOption = (day: ItineraryDay, index: number) =>
+    t('dayOption', { date: formatDate(day.date), number: index + 1 });
+
   function placeName(tripPlace: ItineraryTripPlace | null) {
     if (!tripPlace) return null;
     // Every name is already here: the traveller's own, or the one Trove stored
@@ -1449,7 +1454,7 @@ export function ItineraryManager({
           <AlertDescription>{t('timeZoneConsequence')}</AlertDescription>
         </Alert>
       ) : null}
-      <div className="flex items-center gap-2 md:hidden">
+      <div className="flex items-center gap-2.5 px-1 md:hidden">
         <Button
           aria-label={t('previousDay')}
           disabled={selectedIndex <= 0}
@@ -1462,7 +1467,7 @@ export function ItineraryManager({
         <Select onValueChange={(value) => setSelectedDayId(value)} value={selectedDayId}>
           <SelectTrigger aria-label={t('chooseDay')} className="min-w-0 flex-1">
             <SelectValue>
-              {selectedDay ? dayOption(selectedDay, selectedIndex) : t('chooseDay')}
+              {selectedDay ? dayPickerOption(selectedDay, selectedIndex) : t('chooseDay')}
             </SelectValue>
           </SelectTrigger>
           <SelectContent align="start">
@@ -1471,7 +1476,7 @@ export function ItineraryManager({
                 {/* How full a day is decides which day you want next, so the
                     dropdown carries the count the desktop rail already shows. */}
                 <span className="flex w-full items-center justify-between gap-3">
-                  <span>{dayOption(day, index)}</span>
+                  <span>{dayPickerOption(day, index)}</span>
                   <span className="text-xs tabular-nums text-muted-foreground">
                     {t('dayItemCount', { count: day.items.length })}
                   </span>
@@ -1549,19 +1554,16 @@ export function ItineraryManager({
 
         {selectedDay ? (
           <div className="min-w-0">
-            {/* The heading and the day's actions share a row from the start
-                rather than stacking on a phone: the date is one line long, so a
-                band of its own cost a row of the plan for nothing. */}
-            <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-3 border-b border-border px-4 py-3 sm:flex-nowrap sm:gap-4 sm:px-6 sm:py-4">
+            <div className="flex flex-col gap-4 border-b border-border px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6 sm:py-4">
               <div className="min-w-0 flex-1">
-                {/* The day picker above carries navigation context. A saved day name
-                    answers what this date is for, while its calendar context stays close. */}
+                {/* The picker carries calendar navigation. This block gives a saved
+                    name enough room to be the day's identity. */}
                 {selectedDay.name ? (
                   <>
-                    <h2 className="text-base font-semibold tracking-tight sm:text-lg">
+                    <h2 className="text-lg leading-6 font-semibold tracking-tight text-balance">
                       {selectedDay.name}
                     </h2>
-                    <p className="mt-0.5 text-sm text-muted-foreground">
+                    <p className="mt-1 text-sm leading-5 text-muted-foreground">
                       {t('dayOption', {
                         date: formatDate(selectedDay.date, true),
                         number: selectedIndex + 1,
@@ -1569,7 +1571,7 @@ export function ItineraryManager({
                     </p>
                   </>
                 ) : (
-                  <h2 className="text-base font-semibold tracking-tight sm:text-lg">
+                  <h2 className="text-lg leading-6 font-semibold tracking-tight text-balance">
                     {formatDate(selectedDay.date, true)}
                   </h2>
                 )}
@@ -1579,8 +1581,8 @@ export function ItineraryManager({
                   </p>
                 ) : null}
               </div>
-              <div className="flex shrink-0 flex-wrap items-center gap-2">
-                <Button onClick={() => openCreate(selectedDay)}>
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:shrink-0">
+                <Button className="w-full sm:w-auto" onClick={() => openCreate(selectedDay)}>
                   <Plus aria-hidden="true" data-icon="inline-start" />
                   {t('addItem')}
                 </Button>
@@ -1589,6 +1591,7 @@ export function ItineraryManager({
                     render={
                       <Button
                         aria-label={t('daySettings')}
+                        className="border border-border-subtle bg-background shadow-[var(--shadow-control)] sm:border-transparent sm:bg-transparent sm:shadow-none"
                         size="icon"
                         type="button"
                         variant="ghost"
@@ -1773,30 +1776,29 @@ export function ItineraryManager({
               onValueChange={(value) => setMobileView(value as 'list' | 'map')}
               value={mobileView}
             >
-              <TabsList
-                aria-label={t('map.viewNavigation')}
-                className="grid w-full grid-cols-2 lg:hidden"
-              >
-                <TabsTab
-                  aria-controls="itinerary-list-panel"
-                  className="gap-2"
-                  id="itinerary-list-tab"
-                  value="list"
-                >
-                  <List aria-hidden="true" data-icon="inline-start" />
-                  {t('map.listView')}
-                </TabsTab>
-                <TabsTab
-                  aria-controls="itinerary-map-panel"
-                  className="gap-2"
-                  id="itinerary-map-tab"
-                  value="map"
-                >
-                  <MapIcon aria-hidden="true" data-icon="inline-start" />
-                  {t('map.mapView')}
-                </TabsTab>
-                <TabsIndicator />
-              </TabsList>
+              <div className="border-b border-border px-3 py-3 lg:hidden">
+                <TabsList aria-label={t('map.viewNavigation')} className="grid w-full grid-cols-2">
+                  <TabsTab
+                    aria-controls="itinerary-list-panel"
+                    className="gap-2"
+                    id="itinerary-list-tab"
+                    value="list"
+                  >
+                    <List aria-hidden="true" data-icon="inline-start" />
+                    {t('map.listView')}
+                  </TabsTab>
+                  <TabsTab
+                    aria-controls="itinerary-map-panel"
+                    className="gap-2"
+                    id="itinerary-map-tab"
+                    value="map"
+                  >
+                    <MapIcon aria-hidden="true" data-icon="inline-start" />
+                    {t('map.mapView')}
+                  </TabsTab>
+                  <TabsIndicator />
+                </TabsList>
+              </div>
             </Tabs>
 
             <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.9fr)]">

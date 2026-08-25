@@ -20,7 +20,14 @@ type ContextItemRecord = Prisma.ItineraryItemGetPayload<{
   include: typeof itineraryItemInclude;
 }>;
 
+type ContextScheduleItem = Pick<
+  ContextItemRecord,
+  'dayPart' | 'durationMinutes' | 'id' | 'startInstant' | 'timeZone'
+>;
+
 type ItemPhase = 'current_day_part' | 'current_exact' | 'flexible' | 'future' | 'overdue';
+
+const FINAL_UNTIMED_DURATION_MINUTES = 60;
 
 export type TripModeContextOptions = {
   at?: Date;
@@ -69,16 +76,21 @@ function compareLocalDate(localDate: string, itemDate: string) {
 }
 
 function resolveItemPhase(
-  item: ContextItemRecord,
+  item: ContextScheduleItem,
   itemDate: string,
   dayTimeZone: string,
   at: Date,
+  scheduledStarts: readonly number[],
 ): ItemPhase {
   if (item.startInstant) {
     const start = item.startInstant.getTime();
     const now = at.getTime();
     if (now < start) return 'future';
-    if (item.durationMinutes && now < start + item.durationMinutes * 60_000) {
+    const nextScheduledStart = scheduledStarts.find((candidate) => candidate > start);
+    const end = item.durationMinutes
+      ? start + item.durationMinutes * 60_000
+      : (nextScheduledStart ?? start + FINAL_UNTIMED_DURATION_MINUTES * 60_000);
+    if (now < end) {
       return 'current_exact';
     }
     return 'overdue';
@@ -97,20 +109,24 @@ function resolveItemPhase(
   return 'current_day_part';
 }
 
-function selectCurrentOrRelevant(items: ContextItemRecord[], phases: Map<string, ItemPhase>) {
-  const priorities: ItemPhase[] = ['current_exact', 'current_day_part', 'overdue', 'flexible'];
+function selectCurrentOrRelevant<T extends ContextScheduleItem>(
+  items: readonly T[],
+  phases: ReadonlyMap<string, ItemPhase>,
+) {
+  const currentExact = items.reduce<T | null>((latest, item) => {
+    if (phases.get(item.id) !== 'current_exact') return latest;
+    if (!latest || item.startInstant!.getTime() >= latest.startInstant!.getTime()) return item;
+    return latest;
+  }, null);
+  if (currentExact) {
+    return { item: currentExact, kind: 'current' as const, reason: 'exact_time' as const };
+  }
 
-  for (const phase of priorities) {
+  for (const phase of ['current_day_part', 'flexible'] as const) {
     const item = items.find((candidate) => phases.get(candidate.id) === phase);
     if (!item) continue;
-    if (phase === 'current_exact') {
-      return { item, kind: 'current' as const, reason: 'exact_time' as const };
-    }
     if (phase === 'current_day_part') {
       return { item, kind: 'relevant' as const, reason: 'day_part' as const };
-    }
-    if (phase === 'overdue') {
-      return { item, kind: 'relevant' as const, reason: 'overdue' as const };
     }
     return { item, kind: 'relevant' as const, reason: 'itinerary_order' as const };
   }
@@ -118,17 +134,59 @@ function selectCurrentOrRelevant(items: ContextItemRecord[], phases: Map<string,
   return null;
 }
 
-function selectNextItem(
-  items: ContextItemRecord[],
-  phases: Map<string, ItemPhase>,
-  currentOrRelevant: ReturnType<typeof selectCurrentOrRelevant>,
-) {
-  if (!currentOrRelevant) {
-    return items.find((item) => phases.get(item.id) === 'future') ?? null;
-  }
+function futureStart(item: ContextScheduleItem, itemDate: string, dayTimeZone: string) {
+  if (item.startInstant) return item.startInstant.getTime();
+  if (!item.dayPart || item.dayPart === 'ANYTIME') return Number.POSITIVE_INFINITY;
+  const hour = item.dayPart === 'MORNING' ? '00' : item.dayPart === 'AFTERNOON' ? '12' : '17';
+  return floatingLocalTimeToInstant(itemDate, `${hour}:00`, item.timeZone ?? dayTimeZone).getTime();
+}
 
+function selectNextItem<T extends ContextScheduleItem>(
+  items: readonly T[],
+  phases: ReadonlyMap<string, ItemPhase>,
+  currentOrRelevant: ReturnType<typeof selectCurrentOrRelevant<T>>,
+  itemDate: string,
+  dayTimeZone: string,
+) {
+  const future = items
+    .filter((item) => phases.get(item.id) === 'future')
+    .toSorted(
+      (left, right) =>
+        futureStart(left, itemDate, dayTimeZone) - futureStart(right, itemDate, dayTimeZone),
+    )[0];
+  if (future) return future;
+
+  if (!currentOrRelevant) return null;
   const currentIndex = items.findIndex((item) => item.id === currentOrRelevant.item.id);
-  return items.slice(currentIndex + 1).at(0) ?? null;
+  return (
+    items
+      .slice(currentIndex + 1)
+      .find((item) =>
+        ['current_day_part', 'flexible'].includes(phases.get(item.id) ?? 'overdue'),
+      ) ?? null
+  );
+}
+
+/** The server's pure timing policy, exported so its important business rules stay directly tested. */
+export function resolveTripModeItemSelection<T extends ContextScheduleItem>(
+  items: readonly T[],
+  itemDate: string,
+  dayTimeZone: string,
+  at: Date,
+) {
+  const scheduledStarts = items
+    .flatMap((item) => (item.startInstant ? [item.startInstant.getTime()] : []))
+    .toSorted((left, right) => left - right);
+  const phases = new Map(
+    items.map((item) => [
+      item.id,
+      resolveItemPhase(item, itemDate, dayTimeZone, at, scheduledStarts),
+    ]),
+  );
+  const currentOrRelevant = selectCurrentOrRelevant(items, phases);
+  const nextItem = selectNextItem(items, phases, currentOrRelevant, itemDate, dayTimeZone);
+
+  return { currentOrRelevant, nextItem };
 }
 
 async function resolveLeaveBy(input: {
@@ -256,11 +314,12 @@ export async function resolveTripModeContext(
 
   const activeItems = day.items.filter((item) => item.travelStatus === 'UPCOMING');
   const dayDate = formatDateOnly(day.date);
-  const phases = new Map(
-    activeItems.map((item) => [item.id, resolveItemPhase(item, dayDate, day.defaultTimeZone, at)]),
+  const { currentOrRelevant, nextItem } = resolveTripModeItemSelection(
+    activeItems,
+    dayDate,
+    day.defaultTimeZone,
+    at,
   );
-  const currentOrRelevant = selectCurrentOrRelevant(activeItems, phases);
-  const nextItem = selectNextItem(activeItems, phases, currentOrRelevant);
   const leaveBy = await resolveLeaveBy({
     bufferSeconds: options.routeBufferSeconds ?? null,
     contextAt: at,
@@ -303,7 +362,7 @@ export async function resolveTripModeContext(
     leaveBy,
     nextItemId: nextItem?.id ?? null,
     state:
-      activeItems.length === 0
+      activeItems.length === 0 || (!currentOrRelevant && !nextItem)
         ? ('no_next_item' as const)
         : currentOrRelevant?.kind === 'current'
           ? ('current' as const)

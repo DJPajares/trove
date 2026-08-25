@@ -104,6 +104,45 @@ test('an item end time is a boundary', () => {
   expect(found).toStrictEqual(new Date('2026-09-05T02:20:00.000Z'));
 });
 
+test('the final scheduled item without a duration expires after 60 minutes', () => {
+  const found = nextTripModeBoundary(
+    context({
+      day: {
+        date: '2026-09-05',
+        defaultTimeZone: timeZone,
+        id: 'day',
+        items: [item({ startInstant: '2026-09-05T01:30:00.000Z' })],
+        name: null,
+        number: 1,
+      },
+    }),
+    now,
+  );
+
+  expect(found).toStrictEqual(new Date('2026-09-05T02:30:00.000Z'));
+});
+
+test('a durationless item with a later scheduled stop stays active until that stop', () => {
+  const found = nextTripModeBoundary(
+    context({
+      day: {
+        date: '2026-09-05',
+        defaultTimeZone: timeZone,
+        id: 'day',
+        items: [
+          item({ id: 'first', startInstant: '2026-09-05T01:30:00.000Z' }),
+          item({ id: 'later', startInstant: '2026-09-05T03:00:00.000Z' }),
+        ],
+        name: null,
+        number: 1,
+      },
+    }),
+    now,
+  );
+
+  expect(found).toStrictEqual(new Date('2026-09-05T03:00:00.000Z'));
+});
+
 test('a leave-by alarm is a boundary', () => {
   const found = nextTripModeBoundary(
     context({

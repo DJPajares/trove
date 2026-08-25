@@ -45,6 +45,12 @@ export function nextTripModeBoundary(context: TripModeContext, now: Date): Date 
   // An item with no instant is phased against the local clock in its own zone,
   // falling back to the day's, so each zone in play has to be watched.
   const phaseZones = new Set([context.day?.defaultTimeZone ?? context.trip.referenceTimeZone]);
+  const scheduledItems = (context.day?.items ?? []).filter(
+    (item) => item.travelStatus === 'upcoming' && item.startInstant,
+  );
+  const latestScheduledStart = Math.max(
+    ...scheduledItems.map((item) => new Date(item.startInstant!).getTime()),
+  );
 
   for (const item of context.day?.items ?? []) {
     if (item.travelStatus !== 'upcoming') continue;
@@ -55,6 +61,8 @@ export function nextTripModeBoundary(context: TripModeContext, now: Date): Date 
     candidates.push(start);
     if (item.durationMinutes) {
       candidates.push(new Date(start.getTime() + item.durationMinutes * 60_000));
+    } else if (start.getTime() === latestScheduledStart) {
+      candidates.push(new Date(start.getTime() + 60 * 60_000));
     }
   }
 

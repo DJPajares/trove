@@ -8,6 +8,8 @@ import { useTranslations } from 'next-intl';
 import type { ComponentType } from 'react';
 
 import { AppMenuTrigger } from '@/components/app-menu';
+import { useTripCreation } from '@/components/trip-creation-provider';
+import { Button } from '@/components/ui/button';
 import { navigationTransition } from '@/lib/motion';
 import {
   isAppMenuPath,
@@ -36,6 +38,7 @@ type PrimaryNavigationProps = {
 export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>) {
   const pathname = usePathname();
   const t = useTranslations('navigation');
+  const { openCreateTrip } = useTripCreation();
   const icons = { home: House, saved: Bookmark, trips: MapPinned };
   const items: NavigationItem[] = primaryNavigationDestinations.map(({ column, href, key }) => ({
     column,
@@ -117,18 +120,17 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
           </ul>
         </nav>
 
-        {/* Starting a trip is the one thing a traveller does from anywhere, so it
-            sits in the middle of the bar rather than behind a destination. It is
-            a link because it goes somewhere; /trips already reads and clears the
-            create parameter, so nothing new happens here. It stays outside the
-            nav landmark because it is an action, not a fifth destination. */}
-        <Link
+        {/* Creation is an action, not a destination: the shared sheet opens over
+            whichever screen the traveller is already using. */}
+        <Button
           aria-label={t('createTrip')}
           className="absolute -top-6 left-1/2 flex size-14 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-surface)] ring-4 ring-background transition-[background-color,translate] duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:bg-brand-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:translate-y-px"
-          href="/trips?create=1"
+          onClick={openCreateTrip}
+          size="icon-lg"
+          type="button"
         >
           <Plus aria-hidden="true" className="size-6" />
-        </Link>
+        </Button>
       </div>
     </div>
   );

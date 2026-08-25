@@ -134,7 +134,7 @@
   "trips": {
     "continuePlanning": "Continue planning",
     "openTripMode": "Open Trip Mode",
-    "previewTripMode": "Preview Trip Mode",
+    "previewTripMode": "Preview",
     "destinations": "Destinations",
     "editTrip": "Edit trip",
     "planningReadiness": "Planning readiness",
@@ -1702,7 +1702,7 @@
     "completedLabel": "Recently completed",
     "openTripMode": "Open Trip Mode",
     "continuePlanning": "Continue planning",
-    "previewTripMode": "Preview Trip Mode",
+    "previewTripMode": "Preview",
     "viewTrip": "View trip",
     "viewMemories": "View memories",
     "addMemories": "Add memories",

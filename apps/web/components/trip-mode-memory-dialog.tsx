@@ -31,6 +31,7 @@ import {
   maxMemoryPhotoSize,
   MemoriesApiError,
 } from '@/lib/memories/api';
+import { resolveItineraryItemPlaceName } from '@/lib/trip-places/place-name';
 
 const NO_CONTEXT = 'none';
 
@@ -91,6 +92,7 @@ export function TripModeMemoryDialog({
   );
   const selectedItem = contextItems.find((item) => item.id === itemId) ?? null;
   const canSave = (note.trim().length > 0 || photos.length > 0) && !saving;
+  const itemLabel = (item: ItineraryItem) => resolveItineraryItemPlaceName(item, t('noContext'));
 
   function addPhotos(files: FileList | null) {
     if (!files?.length) return;
@@ -219,19 +221,13 @@ export function TripModeMemoryDialog({
             <FieldLabel htmlFor="memory-context">{t('context')}</FieldLabel>
             <Select onValueChange={(value) => setItemId(value ?? NO_CONTEXT)} value={itemId}>
               <SelectTrigger id="memory-context">
-                <SelectValue>
-                  {selectedItem
-                    ? (selectedItem.tripPlace?.place.name ??
-                      selectedItem.customLabel ??
-                      t('noContext'))
-                    : t('noContext')}
-                </SelectValue>
+                <SelectValue>{selectedItem ? itemLabel(selectedItem) : t('noContext')}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NO_CONTEXT}>{t('noContext')}</SelectItem>
                 {contextItems.map((item) => (
                   <SelectItem key={item.id} value={item.id}>
-                    {item.tripPlace?.place.name ?? item.customLabel ?? t('noContext')}
+                    {itemLabel(item)}
                   </SelectItem>
                 ))}
               </SelectContent>

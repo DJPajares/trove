@@ -5,8 +5,10 @@ import { createAuthenticatedSupabaseClient } from './supabase-auth.js';
 
 export const PROFILE_PHOTOS_BUCKET = 'profile-photos';
 
+export type ProfileAppearance = 'dark' | 'light';
+
 export type ProfileUpdate = {
-  appearance?: 'dark' | 'light' | 'system' | null;
+  appearance?: ProfileAppearance | null;
   avatarPath?: string | null;
   dateFormat?: 'dmy' | 'mdy' | 'ymd' | null;
   displayName?: string | null;
@@ -20,7 +22,7 @@ export type ProfileUpdate = {
 type ProfileRecord = Awaited<ReturnType<typeof findOrCreateProfile>>;
 
 type ProfilePersistenceUpdate = {
-  appearance?: 'DARK' | 'LIGHT' | 'SYSTEM' | null;
+  appearance?: 'DARK' | 'LIGHT' | null;
   avatarPath?: string | null;
   dateFormat?: 'DAY_MONTH_YEAR' | 'MONTH_DAY_YEAR' | 'YEAR_MONTH_DAY' | null;
   displayName?: string | null;
@@ -46,7 +48,6 @@ function mapProfileValue(value: string | null | undefined) {
     LIGHT: 'light',
     MILES: 'mi',
     MONTH_DAY_YEAR: 'mdy',
-    SYSTEM: 'system',
     YEAR_MONTH_DAY: 'ymd',
     CELSIUS: 'celsius',
   };
@@ -55,7 +56,14 @@ function mapProfileValue(value: string | null | undefined) {
 }
 
 function toAppearance(value: Exclude<ProfileUpdate['appearance'], null | undefined>) {
-  return value === 'dark' ? 'DARK' : value === 'light' ? 'LIGHT' : 'SYSTEM';
+  return value === 'dark' ? 'DARK' : 'LIGHT';
+}
+
+/** Old PWA clients may still submit System after the database value is removed. */
+export function normalizeLegacyAppearance(
+  appearance: ProfileAppearance | 'system',
+): ProfileAppearance {
+  return appearance === 'system' ? 'light' : appearance;
 }
 
 function toDateFormat(value: Exclude<ProfileUpdate['dateFormat'], null | undefined>) {

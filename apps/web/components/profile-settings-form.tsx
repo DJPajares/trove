@@ -333,7 +333,6 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
                 setAppearance(appearance);
               }}
               options={[
-                ['system', t('system')],
                 ['light', t('light')],
                 ['dark', t('dark')],
               ]}

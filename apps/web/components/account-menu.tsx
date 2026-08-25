@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
-import { appMenuActionClassName } from '@/components/app-menu-action';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -43,11 +42,10 @@ function getDisplayName(user: User | null, fallback: string) {
 }
 
 type AccountMenuProps = {
-  label?: string;
   onNavigate?: () => void;
 };
 
-export function AccountMenu({ label, onNavigate }: Readonly<AccountMenuProps> = {}) {
+export function AccountMenu({ onNavigate }: Readonly<AccountMenuProps> = {}) {
   const t = useTranslations('account');
   const [user, setUser] = useState<User | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -112,16 +110,15 @@ export function AccountMenu({ label, onNavigate }: Readonly<AccountMenuProps> = 
         <DropdownMenuTrigger
           render={
             <Button
-              aria-label={label ?? t('button')}
-              className={label ? appMenuActionClassName : undefined}
-              size={label ? 'default' : 'icon'}
+              aria-label={t('button')}
+              className="text-foreground"
+              size="icon-sm"
               type="button"
-              variant={label ? 'outline' : 'ghost'}
+              variant="ghost"
             />
           }
         >
-          <UserRound aria-hidden="true" className={label ? 'size-5 text-brand' : 'size-4'} />
-          {label ? <span>{label}</span> : null}
+          <UserRound aria-hidden="true" className="size-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
           <DropdownMenuGroup>

@@ -1780,9 +1780,9 @@ export function ItineraryManager({
                       </Button>
                       {selectedDay.items.length ? (
                         <Button
-                          className="w-full justify-start px-3"
+                          className="mt-2 w-full justify-start px-3"
                           onClick={() => openDayMove(selectedDay)}
-                          variant="ghost"
+                          variant="outline"
                         >
                           <CalendarClock aria-hidden="true" data-icon="inline-start" />
                           {t('dayMove.action')}

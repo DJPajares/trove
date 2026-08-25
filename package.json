@@ -21,8 +21,11 @@
     "db:generate": "pnpm --filter @trove/db db:generate",
     "db:migrate": "pnpm --filter @trove/db db:migrate:dev",
     "db:migrate:deploy": "pnpm --filter @trove/db db:migrate:deploy",
+    "db:migrate:prod": "pnpm --filter @trove/api production:operation migrate",
     "db:seed": "pnpm --filter @trove/db db:seed",
-    "db:validate-env": "pnpm --filter @trove/db db:validate-env"
+    "db:validate-env": "pnpm --filter @trove/db db:validate-env",
+    "editorial-images:reconcile": "pnpm --filter @trove/api editorial-images:reconcile",
+    "editorial-images:reconcile:prod": "pnpm --filter @trove/api production:operation reconcile"
   },
   "devDependencies": {
     "husky": "^9.1.7",

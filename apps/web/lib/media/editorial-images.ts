@@ -55,7 +55,13 @@ const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
  * name the same photograph on both sides: the client dedupes a screen's
  * subjects with it and the server caches its answers under it.
  */
-export function editorialSubjectKey(subject: { category?: TrovePlaceCategory; name: string }) {
+export function editorialSubjectKey(subject: {
+  category?: TrovePlaceCategory;
+  name: string;
+  placeId?: string;
+}) {
+  if (subject.placeId) return `place:${subject.placeId.toLowerCase()}`;
+
   const name = subject.name
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')

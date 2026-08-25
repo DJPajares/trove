@@ -1165,11 +1165,12 @@ function editorialProvider() {
 
   const provider = new PexelsEditorialImageProvider({
     apiKey: 'server-key',
-    fetcher: async () => {
+    fetcher: async (input) => {
       fetches += 1;
       return Response.json({
         photos: [
           {
+            alt: new URL(String(input)).searchParams.get('query') ?? '',
             id: fetches,
             photographer: 'Ada Rivera',
             photographer_url: 'https://www.pexels.com/@ada',
@@ -1248,5 +1249,33 @@ test('a place list with no resolvable photos asks once per subject, not once per
     { ownerId: 'owner-1' },
   );
 
-  expect(fetches, 'an empty answer is remembered too').toBe(2);
+  expect(fetches, 'each exact answer and each category fallback is remembered').toBe(4);
+});
+
+test('missing places of the same detailed type share one generic provider request', async () => {
+  let fetches = 0;
+  const provider = new PexelsEditorialImageProvider({
+    apiKey: 'server-key',
+    fetcher: async () => {
+      fetches += 1;
+      return Response.json({ photos: [] });
+    },
+    hourlyBudget: 150,
+    source: 'editorial-images',
+  });
+  const service = new CachedEditorialImagesService(provider);
+
+  await service.resolveMany(
+    ['Sunrise', 'Moonlight', 'Corner'].map((name) => ({
+      subject: {
+        category: 'food_and_drink' as const,
+        name,
+        primaryType: 'bakery',
+        rawTypes: ['bakery'],
+      },
+    })),
+    { ownerId: 'owner-1' },
+  );
+
+  expect(fetches, 'three exact lookups share one bakery fallback').toBe(4);
 });

@@ -418,10 +418,11 @@ model TravelLegCache {
 /// `missCode`/`missedAt`, mirroring PlaceProviderRef's failure columns, so an
 /// empty answer is negatively cached rather than re-asked on every render.
 model EditorialImageSet {
-  id         String   @id @default(uuid(7)) @db.Uuid
-  subjectKey String   @unique @map("subject_key")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                String   @id @default(uuid(7)) @db.Uuid
+  subjectKey        String   @unique @map("subject_key")
+  resolutionVersion Int      @default(1) @map("resolution_version")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   cachedAt DateTime? @map("cached_at") @db.Timestamptz(3)
   missCode String?   @map("miss_code")
@@ -432,6 +433,7 @@ model EditorialImageSet {
   editorialImageForPlaces Place[]          @relation("PlaceEditorialImageSet")
 
   @@index([cachedAt])
+  @@index([resolutionVersion, cachedAt])
   @@map("editorial_image_sets")
   @@schema("trove")
 }

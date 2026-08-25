@@ -114,14 +114,41 @@ The database is available at `localhost:54329`. See [`packages/db/README.md`](pa
 
 ## Production Database Migrations
 
-Deploy migrations to production using the Supabase connection string:
+Copy `.env.production.example` to the gitignored `.env.production` and fill in
+the exact connection strings from Supabase Dashboard > Connect. Prisma uses
+`DIRECT_URL` on port `5432`; runtime database access uses `DATABASE_URL` on port
+`6543` with `pgbouncer=true`. Keep `TROVE_ENVIRONMENT="production"` in that file.
+
+Deploy committed migrations after validating the production target:
 
 ```bash
-export DATABASE_URL="postgresql://postgres.[YOUR-DB]:[YOUR-PASSWORD]@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres?schema=trove"
-pnpm db:migrate:deploy
+pnpm db:migrate:prod
 ```
 
-Replace placeholders with your Supabase connection details from the project settings. The `DATABASE_URL` environment variable is required; verify it is set before running migrations. Never commit credentials to the repository.
+Never commit credentials or place a production connection string in shell history.
+
+## Editorial Image Reconciliation
+
+Editorial image maintenance is an operator utility, separate from trip and
+itinerary requests. Its default mode only reports outdated image collections:
+
+```bash
+pnpm editorial-images:reconcile
+pnpm editorial-images:reconcile:prod
+```
+
+Add `--apply` to invalidate selected collections without calling Pexels, or
+explicitly add `--refresh --apply` for serial, paced, capped active refresh:
+
+```bash
+pnpm editorial-images:reconcile -- --apply
+pnpm editorial-images:reconcile:prod -- --refresh --apply --limit 5
+pnpm editorial-images:reconcile -- --help
+```
+
+Use `--category`, `--place-id`, `--cursor`, or `--all` to narrow or resume a run.
+Production reconciliation loads `.env.production`; active refresh also requires
+`PEXELS_API_KEY` in that file.
 
 ## PWA Foundation
 

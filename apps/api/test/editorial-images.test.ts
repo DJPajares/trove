@@ -7,6 +7,12 @@ import {
 } from '../src/services/cached-editorial-images.js';
 import { resetEditorialImageBudget } from '../src/services/editorial-image-budget.js';
 import {
+  detailedEditorialPlaceType,
+  editorialMatchScore,
+  genericEditorialSubject,
+} from '../src/services/editorial-image-matching.js';
+import {
+  EDITORIAL_IMAGE_RESOLUTION_VERSION,
   editorialSubjectKey,
   EditorialImageProviderError,
   type EditorialImageProvider,
@@ -56,10 +62,27 @@ type EditorialImageSetRow = {
   images: EditorialImageRow[];
   missCode: string | null;
   missedAt: Date | null;
+  resolutionVersion: number;
   subjectKey: string;
 };
 
+type CachedPlaceRow = {
+  id: string;
+  ownerId: string | null;
+  providerAddress: string | null;
+  providerLabel: string | null;
+  providerRefs: Array<{
+    cachedFormattedAddress: string | null;
+    cachedLanguageCode: string | null;
+    cachedName: string | null;
+    cachedPrimaryType: string | null;
+    cachedTypes: string[];
+    provider: 'GOOGLE';
+  }>;
+};
+
 const rows = new Map<string, EditorialImageSetRow>();
+const places = new Map<string, CachedPlaceRow>();
 const tripUpdates: { data: Record<string, unknown>; where: Record<string, unknown> }[] = [];
 const placeUpdates: { data: Record<string, unknown>; where: Record<string, unknown> }[] = [];
 let cacheReadFails = false;
@@ -72,6 +95,7 @@ function blankRow(subjectKey: string): EditorialImageSetRow {
     images: [],
     missCode: null,
     missedAt: null,
+    resolutionVersion: EDITORIAL_IMAGE_RESOLUTION_VERSION,
     subjectKey,
   };
 }
@@ -112,6 +136,15 @@ function installStubPrisma() {
       },
     },
     place: {
+      findMany: async (args: {
+        where: { id: { in: string[] }; OR: Array<{ ownerId: string | null }> };
+      }) =>
+        args.where.id.in.flatMap((id) => {
+          const place = places.get(id);
+          return place && args.where.OR.some(({ ownerId }) => ownerId === place.ownerId)
+            ? [place]
+            : [];
+        }),
       updateMany: async (args: {
         data: Record<string, unknown>;
         where: Record<string, unknown>;
@@ -209,6 +242,7 @@ const owner = { ownerId: 'owner-1' };
 
 beforeEach(() => {
   rows.clear();
+  places.clear();
   cacheReadFails = false;
   cacheWriteFails = false;
   tripUpdates.length = 0;
@@ -227,9 +261,18 @@ test('the subject key normalises spelling and keeps categories apart', () => {
   expect(editorialSubjectKey({ category: 'food_and_drink', name: 'Central' })).not.toBe(
     editorialSubjectKey({ category: 'transport', name: 'Central' }),
   );
+  expect(editorialSubjectKey({ category: 'stay', name: 'Central', placeId: 'PLACE-A' })).toBe(
+    'place:place-a',
+  );
+  expect(editorialSubjectKey({ category: 'stay', name: 'Central', placeId: 'place-a' })).not.toBe(
+    editorialSubjectKey({ category: 'stay', name: 'Central', placeId: 'place-b' }),
+  );
+  expect(editorialSubjectKey({ category: 'food_and_drink', kind: 'generic', name: 'Bakery' })).toBe(
+    'generic:food_and_drink:bakery',
+  );
 });
 
-test('the Pexels request asks for three large landscape photos and carries the key', async () => {
+test('an exact Pexels request asks for enough candidates to verify the place', async () => {
   let capturedUrl = '';
   let capturedInit: RequestInit | undefined;
 
@@ -243,18 +286,35 @@ test('the Pexels request asks for three large landscape photos and carries the k
     hourlyBudget: 150,
   });
 
-  await provider.search({ category: 'stay', name: 'Lisbon' });
+  await provider.search({ category: 'stay', languageCode: 'pt', name: 'Lisbon' });
 
   const url = new URL(capturedUrl);
   expect(url.pathname).toBe('/v1/search');
   expect(url.searchParams.get('query')).toBe('Lisbon hotel');
-  expect(url.searchParams.get('per_page')).toBe('3');
+  expect(url.searchParams.get('per_page')).toBe('15');
+  expect(url.searchParams.get('locale')).toBe('pt-BR');
   expect(url.searchParams.get('orientation')).toBe('landscape');
   expect(url.searchParams.get('size')).toBe('large');
   expect((capturedInit?.headers as Record<string, string> | undefined)?.Authorization).toBe(
     'server-key',
   );
   expect(getProviderCallCounts()['pexels:search']).toBe(1);
+});
+
+test('a shared generic Pexels request asks for only three candidates', async () => {
+  let capturedUrl = '';
+  const provider = new PexelsEditorialImageProvider({
+    apiKey: 'server-key',
+    fetcher: async (input) => {
+      capturedUrl = String(input);
+      return Response.json({ photos: [] });
+    },
+    hourlyBudget: 150,
+  });
+
+  await provider.search({ category: 'food_and_drink', kind: 'generic', name: 'bakery' });
+
+  expect(new URL(capturedUrl).searchParams.get('per_page')).toBe('3');
 });
 
 test('a Pexels photo maps to a reference that can always be credited', async () => {
@@ -264,7 +324,7 @@ test('a Pexels photo maps to a reference that can always be credited', async () 
       Response.json({
         photos: [
           {
-            alt: 'Tram on a hill',
+            alt: 'Lisbon tram on a hill',
             avg_color: '#5A6B7C',
             height: 4000,
             id: 4321,
@@ -295,7 +355,7 @@ test('a Pexels photo maps to a reference that can always be credited', async () 
   });
   expect(image?.sourceUrl).toBe('https://images.example/original.jpg');
   expect(image?.dominantColor).toBe('#5A6B7C');
-  expect(image?.altText).toBe('Tram on a hill');
+  expect(image?.altText).toBe('Lisbon tram on a hill');
 });
 
 test('a photo Trove could not credit is treated as no photo at all', async () => {
@@ -329,7 +389,66 @@ test('a place query carries its category so a name alone is never the whole ask'
   expect(buildPexelsQuery({ category: 'food_and_drink', name: 'Central' })).toBe(
     'Central restaurant',
   );
-  expect(buildPexelsQuery({ category: 'other', name: 'Central' })).toBe('Central');
+  expect(buildPexelsQuery({ category: 'other', name: 'Central' })).toBe('Central travel place');
+  expect(
+    buildPexelsQuery({
+      address: '123 Main Street, Kyoto, Japan',
+      category: 'food_and_drink',
+      name: 'Central',
+      primaryType: 'bakery',
+      rawTypes: ['bakery', 'food', 'point_of_interest'],
+    }),
+  ).toBe('Central Kyoto Japan bakery restaurant');
+});
+
+test('only a meaningful type in the same category becomes a shared generic subject', () => {
+  const bakery = {
+    category: 'food_and_drink' as const,
+    name: 'Central',
+    primaryType: 'point_of_interest',
+    rawTypes: ['point_of_interest', 'bakery', 'establishment'],
+  };
+
+  expect(detailedEditorialPlaceType(bakery)).toBe('bakery');
+  expect(genericEditorialSubject(bakery)).toStrictEqual({
+    category: 'food_and_drink',
+    kind: 'generic',
+    name: 'bakery',
+    primaryType: 'bakery',
+  });
+  expect(
+    genericEditorialSubject({ category: 'things_to_do', name: 'Central', rawTypes: ['bakery'] }),
+  ).toMatchObject({ name: 'landmark', primaryType: null });
+});
+
+test('an exact photograph must name the place, and an ambiguous name must locate it', () => {
+  expect(
+    editorialMatchScore(
+      { address: '68 Fukakusa, Kyoto, Japan', name: 'Fushimi Inari Taisha' },
+      {
+        altText: 'Fushimi Inari Taisha shrine in Kyoto',
+        providerPageUrl: 'https://www.pexels.com/photo/shrine-12/',
+      },
+    ),
+  ).toBeGreaterThan(100);
+  expect(
+    editorialMatchScore(
+      { address: '68 Fukakusa, Kyoto, Japan', name: 'Fushimi Inari Taisha' },
+      { altText: 'A Kyoto shrine', providerPageUrl: 'https://www.pexels.com/photo/shrine-12/' },
+    ),
+  ).toBe(0);
+  expect(
+    editorialMatchScore(
+      { address: '123 Main Street, Tokyo, Japan', name: 'Central' },
+      { altText: 'Central station in Kyoto' },
+    ),
+  ).toBe(0);
+  expect(
+    editorialMatchScore(
+      { address: '123 Main Street, Tokyo, Japan', name: 'Central' },
+      { altText: 'Central station in Tokyo' },
+    ),
+  ).toBeGreaterThan(0);
 });
 
 test('the hourly budget stops requests before they leave the process', async () => {
@@ -395,7 +514,7 @@ test.each([1, 2, 3])(
 
 test('Pexels excludes invalid and duplicate photos while preserving provider order', async () => {
   const photo = (id: number, overrides: Record<string, unknown> = {}) => ({
-    alt: `Photo ${id}`,
+    alt: `Lisbon photo ${id}`,
     avg_color: '#5A6B7C',
     height: 4000,
     id,
@@ -503,6 +622,22 @@ test('a stale photo is refreshed once, and a fresh one is not', async () => {
   expect(reread[0]).toStrictEqual(refreshed[0]);
 });
 
+test('a fresh collection from an older resolver version is never served as current', async () => {
+  const now = new Date('2026-08-22T00:00:00.000Z');
+  storePhotos('destination:oslo', now);
+  const row = rows.get('destination:oslo');
+  if (!row) throw new Error('Expected cached image fixture.');
+  row.resolutionVersion = EDITORIAL_IMAGE_RESOLUTION_VERSION - 1;
+  const { provider, subjects } = countingProvider(() => [reference('verified-oslo')]);
+  const service = new CachedEditorialImagesService(provider, () => now);
+
+  const [result] = await service.resolveMany([{ subject: { name: 'Oslo' } }], owner);
+
+  expect(subjects).toHaveLength(1);
+  expect(result?.status === 'ok' && result.images[0]?.externalPhotoId).toBe('verified-oslo');
+  expect(rows.get('destination:oslo')?.resolutionVersion).toBe(EDITORIAL_IMAGE_RESOLUTION_VERSION);
+});
+
 test('a subject the provider has nothing for is not asked about again', async () => {
   const { provider, subjects } = countingProvider(() => []);
   const service = new CachedEditorialImagesService(
@@ -515,7 +650,113 @@ test('a subject the provider has nothing for is not asked about again', async ()
 
   expect(first[0]).toStrictEqual({ status: 'empty', subjectKey: 'destination:nowhere' });
   expect(second[0]).toStrictEqual(first[0]);
-  expect(subjects, 'the empty answer was remembered').toHaveLength(1);
+  expect(subjects, 'the exact and shared generic answers were both remembered').toHaveLength(2);
+});
+
+test('same-name canonical places use cached locality and share one detailed-type fallback', async () => {
+  for (const [id, city] of [
+    ['place-tokyo', 'Tokyo'],
+    ['place-kyoto', 'Kyoto'],
+  ] as const) {
+    places.set(id, {
+      id,
+      ownerId: 'owner-1',
+      providerAddress: `1 Main Street, ${city}, Japan`,
+      providerLabel: 'Central',
+      providerRefs: [
+        {
+          cachedFormattedAddress: `1 Main Street, ${city}, Japan`,
+          cachedLanguageCode: 'ja',
+          cachedName: 'Central Bakery',
+          cachedPrimaryType: 'bakery',
+          cachedTypes: ['bakery', 'food', 'point_of_interest'],
+          provider: 'GOOGLE',
+        },
+      ],
+    });
+  }
+
+  const { provider, subjects } = countingProvider((subject) =>
+    subject.kind === 'generic' ? [reference('shared-bakery')] : [],
+  );
+  const service = new CachedEditorialImagesService(
+    provider,
+    () => new Date('2026-08-22T00:00:00.000Z'),
+  );
+  const requests = [
+    {
+      placeId: 'place-tokyo',
+      subject: { category: 'food_and_drink' as const, name: 'Central' },
+    },
+    {
+      placeId: 'place-kyoto',
+      subject: { category: 'food_and_drink' as const, name: 'Central' },
+    },
+  ];
+
+  const first = await service.resolveMany(requests, owner);
+  const second = await service.resolveMany(requests, owner);
+
+  expect(first.map((result) => result.subjectKey)).toStrictEqual([
+    'place:place-tokyo',
+    'place:place-kyoto',
+  ]);
+  expect(first.every((result) => result.status === 'ok')).toBe(true);
+  expect(second).toStrictEqual(first);
+  expect(subjects).toHaveLength(3);
+  expect(subjects[0]).toMatchObject({
+    address: '1 Main Street, Tokyo, Japan',
+    languageCode: 'ja',
+    name: 'Central Bakery',
+    primaryType: 'bakery',
+  });
+  expect(subjects[1]).toMatchObject({ address: '1 Main Street, Kyoto, Japan' });
+  expect(subjects[2]).toMatchObject({ kind: 'generic', name: 'bakery' });
+  expect(rows.get('place:place-tokyo')?.missCode).toBe('NO_VERIFIED_MATCH');
+  expect(rows.get('generic:food_and_drink:bakery')?.images).toHaveLength(1);
+});
+
+test('a verified exact miss remains quiet beyond the ordinary empty-result lifetime', async () => {
+  let now = new Date('2026-08-01T00:00:00.000Z');
+  const { provider, subjects } = countingProvider((subject) =>
+    subject.kind === 'generic' ? [reference('generic-landmark')] : [],
+  );
+  const service = new CachedEditorialImagesService(provider, () => now);
+  const request = { subject: { category: 'things_to_do' as const, name: 'Hidden Temple' } };
+
+  await service.resolveMany([request], owner);
+  now = new Date(now.getTime() + EDITORIAL_IMAGE_MISS_TTL_MS + DAY_MS);
+  await service.resolveMany([request], owner);
+
+  expect(subjects).toHaveLength(2);
+
+  now = new Date(
+    new Date('2026-08-01T00:00:00.000Z').getTime() + EDITORIAL_IMAGE_CACHE_TTL_MS + DAY_MS,
+  );
+  await service.resolveMany([request], owner);
+
+  expect(subjects.filter((subject) => subject.kind !== 'generic')).toHaveLength(2);
+});
+
+test('a rejected older photograph is retained for audit but never returned', async () => {
+  const now = new Date('2026-08-22T00:00:00.000Z');
+  storePhotos('destination:nowhere', now);
+  const row = rows.get('destination:nowhere');
+  if (!row) throw new Error('Expected cached image fixture.');
+  row.resolutionVersion = EDITORIAL_IMAGE_RESOLUTION_VERSION - 1;
+
+  const { provider } = countingProvider((subject) =>
+    subject.kind === 'generic' ? [reference('verified-fallback')] : [],
+  );
+  const service = new CachedEditorialImagesService(provider, () => now);
+
+  const [first] = await service.resolveMany([{ subject: { name: 'Nowhere' } }], owner);
+  const [second] = await service.resolveMany([{ subject: { name: 'Nowhere' } }], owner);
+
+  expect(first?.status === 'ok' && first.images[0]?.externalPhotoId).toBe('verified-fallback');
+  expect(second).toStrictEqual(first);
+  expect(rows.get('destination:nowhere')?.images).toHaveLength(1);
+  expect(rows.get('destination:nowhere')?.missCode).toBe('NO_VERIFIED_MATCH');
 });
 
 test('a negative answer is re-asked once its window has passed', async () => {

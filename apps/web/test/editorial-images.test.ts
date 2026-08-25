@@ -67,6 +67,12 @@ test('the subject key normalises the ways one destination gets spelled', () => {
   expect(editorialSubjectKey({ category: 'stay', name: 'Central' })).not.toBe(
     editorialSubjectKey({ category: 'transport', name: 'Central' }),
   );
+  expect(editorialSubjectKey({ category: 'stay', name: 'Central', placeId: 'PLACE-A' })).toBe(
+    'place:place-a',
+  );
+  expect(editorialSubjectKey({ category: 'stay', name: 'Central', placeId: 'place-a' })).not.toBe(
+    editorialSubjectKey({ category: 'stay', name: 'Central', placeId: 'place-b' }),
+  );
 });
 
 test('the first collection image is the stable representative for non-gallery surfaces', () => {
@@ -90,6 +96,23 @@ test('a screen asks for each distinct subject once', async () => {
   expect(fetchMock).toHaveBeenCalledTimes(1);
   expect(sentSubjects(fetchMock.mock.calls)[0]).toHaveLength(1);
   expect(resolved.get('destination:lisbon')?.[0]?.attribution).toStrictEqual(attribution);
+});
+
+test('same-name places are requested separately while repeat canonical IDs are deduplicated', async () => {
+  const fetchMock = vi.fn(async (..._call: FetchCall) =>
+    respond([image('place:place-a'), image('place:place-b')]),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+
+  const resolved = await resolveEditorialImages([
+    { category: 'stay', name: 'Central', placeId: 'place-a' },
+    { category: 'stay', name: 'Central Hotel', placeId: 'place-a' },
+    { category: 'stay', name: 'Central', placeId: 'place-b' },
+  ]);
+
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(sentSubjects(fetchMock.mock.calls)[0]).toHaveLength(2);
+  expect([...resolved.keys()]).toStrictEqual(['place:place-a', 'place:place-b']);
 });
 
 test('an ordered collection already given this session is never asked for again', async () => {

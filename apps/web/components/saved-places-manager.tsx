@@ -281,6 +281,7 @@ export function SavedPlacesManager() {
         editorialSubjectKey({
           category: savedPlace.place.snapshot?.category,
           name: getPlaceName(savedPlace),
+          placeId: savedPlace.place.id,
         }),
       ) ?? []
     );

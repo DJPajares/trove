@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
  * arrives.
  */
 export const PROVIDER_CALL_SOURCES = [
+  'editorial-image-reconciliation',
   'editorial-images',
   'global-search',
   'itinerary',

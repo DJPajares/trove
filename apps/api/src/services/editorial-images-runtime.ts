@@ -12,11 +12,12 @@ import type { ProviderCallSource } from './provider-usage.js';
  * only state it ever has to handle.
  */
 export function createEditorialImagesService(options: {
+  beforeProviderRequest?: () => Promise<void>;
   environment?: Record<string, string | undefined>;
   logger?: EditorialImagesLogger;
   source: ProviderCallSource;
 }) {
-  const { environment = process.env, logger, source } = options;
+  const { beforeProviderRequest, environment = process.env, logger, source } = options;
   const editorialImagesEnvironment = getEditorialImagesEnvironment(environment);
 
   if (!editorialImagesEnvironment) {
@@ -26,6 +27,7 @@ export function createEditorialImagesService(options: {
   return new CachedEditorialImagesService(
     new PexelsEditorialImageProvider({
       apiKey: editorialImagesEnvironment.pexelsApiKey,
+      beforeRequest: beforeProviderRequest,
       hourlyBudget: getEditorialImageHourlyBudget(editorialImagesEnvironment.hourlyBudget),
       source,
     }),

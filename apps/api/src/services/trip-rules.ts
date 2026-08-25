@@ -44,12 +44,19 @@ const countryPrimaryTimeZones = new Map(
 );
 
 /**
- * Country-only destinations have no coordinate or Place result to resolve, so
- * use the maintained dataset's primary IANA zone. Free-text cities and regions
- * deliberately do not match and continue through the normal fallback order.
+ * An explicitly named country supplies a deterministic timezone without a
+ * provider request, whether it is the entire destination or the last component
+ * of a city/region label. Bare cities stay ambiguous and continue through the
+ * normal fallback order rather than being guessed.
  */
 export function resolveCountryPrimaryTimeZone(destination: string) {
-  return countryPrimaryTimeZones.get(normalizeCountryName(destination)) ?? null;
+  const exactCountry = countryPrimaryTimeZones.get(normalizeCountryName(destination));
+  if (exactCountry) return exactCountry;
+
+  const countrySuffix = destination.split(',').at(-1);
+  if (!countrySuffix || countrySuffix === destination) return null;
+
+  return countryPrimaryTimeZones.get(normalizeCountryName(countrySuffix)) ?? null;
 }
 
 export function isValidIanaTimeZone(value: string) {

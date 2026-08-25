@@ -6,6 +6,7 @@ import {
   ChevronDown,
   CircleAlert,
   ImagePlus,
+  MapPin,
   Plus,
   Trash2,
 } from 'lucide-react';
@@ -323,10 +324,63 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
     setPendingShrink(null);
   }
 
+  const primaryDestination = form.destinations[0]?.trim() ?? '';
+  const tripNameField = (
+    <Field data-invalid={!form.name.trim() && Boolean(error)}>
+      <FieldLabel htmlFor="trip-name">{t('name')}</FieldLabel>
+      <Input
+        aria-invalid={!form.name.trim() && Boolean(error)}
+        autoComplete="off"
+        id="trip-name"
+        maxLength={120}
+        onChange={(event) => updateField('name', event.target.value)}
+        placeholder={t('namePlaceholder')}
+        required
+        value={form.name}
+      />
+    </Field>
+  );
+  const tripDateFields = (
+    <>
+      <div className={cn('grid gap-4', trip ? 'sm:grid-cols-2' : 'grid-cols-2 gap-3')}>
+        <Field data-invalid={Boolean(dateError)}>
+          <FieldLabel htmlFor="trip-start-date">{t('startDate')}</FieldLabel>
+          <DatePicker
+            aria-describedby={dateError ? 'trip-date-error' : undefined}
+            aria-invalid={Boolean(dateError)}
+            className={trip ? undefined : 'gap-1.5 px-2 text-sm'}
+            id="trip-start-date"
+            label={t('startDate')}
+            onChange={(value) => updateField('startDate', value)}
+            required
+            value={form.startDate}
+          />
+        </Field>
+        <Field data-invalid={Boolean(dateError)}>
+          <FieldLabel htmlFor="trip-end-date">{t('endDate')}</FieldLabel>
+          <DatePicker
+            aria-describedby={dateError ? 'trip-date-error' : undefined}
+            aria-invalid={Boolean(dateError)}
+            className={trip ? undefined : 'gap-1.5 px-2 text-sm'}
+            id="trip-end-date"
+            label={t('endDate')}
+            min={form.startDate}
+            onChange={(value) => updateField('endDate', value)}
+            required
+            value={form.endDate}
+          />
+        </Field>
+      </div>
+      <FieldError id="trip-date-error">{dateError}</FieldError>
+    </>
+  );
+
   return (
     <>
       <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-        <div className="flex-1 space-y-8 overflow-y-auto px-5 pb-8">
+        <div
+          className={cn('flex-1 overflow-y-auto px-5', trip ? 'space-y-8 pb-8' : 'space-y-6 pb-6')}
+        >
           {error ? (
             <Alert role="alert" variant="destructive">
               <CircleAlert aria-hidden="true" />
@@ -334,228 +388,252 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
             </Alert>
           ) : null}
 
-          <section aria-labelledby="trip-basics-heading" className="space-y-5">
-            <div>
-              <h3 className="font-medium" id="trip-basics-heading">
-                {t('basicsTitle')}
-              </h3>
-              <p className="mt-1 text-sm text-muted-foreground">{t('basicsDescription')}</p>
-            </div>
-            <Field data-invalid={!form.name.trim() && Boolean(error)}>
-              <FieldLabel htmlFor="trip-name">{t('name')}</FieldLabel>
-              <Input
-                aria-invalid={!form.name.trim() && Boolean(error)}
-                autoComplete="off"
-                id="trip-name"
-                maxLength={120}
-                onChange={(event) => updateField('name', event.target.value)}
-                placeholder={t('namePlaceholder')}
-                required
-                value={form.name}
-              />
-            </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field data-invalid={Boolean(dateError)}>
-                <FieldLabel htmlFor="trip-start-date">{t('startDate')}</FieldLabel>
-                <DatePicker
-                  aria-describedby={dateError ? 'trip-date-error' : undefined}
-                  aria-invalid={Boolean(dateError)}
-                  id="trip-start-date"
-                  label={t('startDate')}
-                  onChange={(value) => updateField('startDate', value)}
-                  required
-                  value={form.startDate}
-                />
-              </Field>
-              <Field data-invalid={Boolean(dateError)}>
-                <FieldLabel htmlFor="trip-end-date">{t('endDate')}</FieldLabel>
-                <DatePicker
-                  aria-describedby={dateError ? 'trip-date-error' : undefined}
-                  aria-invalid={Boolean(dateError)}
-                  id="trip-end-date"
-                  label={t('endDate')}
-                  min={form.startDate}
-                  onChange={(value) => updateField('endDate', value)}
-                  required
-                  value={form.endDate}
-                />
-              </Field>
-            </div>
-            <FieldError id="trip-date-error">{dateError}</FieldError>
-          </section>
-
-          <section aria-labelledby="trip-destinations-heading" className="space-y-4 border-t pt-7">
-            <div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between sm:gap-4">
+          <section
+            aria-label={trip ? undefined : t('creationEssentials')}
+            aria-labelledby={trip ? 'trip-basics-heading' : undefined}
+            className={cn(trip ? 'space-y-5' : 'space-y-6')}
+          >
+            {trip ? (
               <div>
-                <h3 className="font-medium" id="trip-destinations-heading">
-                  {t('destinationsTitle')}
+                <h3 className="font-medium" id="trip-basics-heading">
+                  {t('basicsTitle')}
                 </h3>
-                <FieldDescription>{t('destinationsDescription')}</FieldDescription>
-              </div>
-              <Button
-                onClick={() =>
-                  setForm((current) => ({
-                    ...current,
-                    destinations: [...current.destinations, ''],
-                  }))
-                }
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                <Plus aria-hidden="true" data-icon="inline-start" />
-                {t('addDestination')}
-              </Button>
-            </div>
-            {form.destinations.length ? (
-              <div className="space-y-3">
-                {form.destinations.map((destination, index) => (
-                  <div
-                    className="flex items-center gap-2"
-                    key={`${index}-${form.destinations.length}`}
-                  >
-                    <span className="w-5 text-center text-xs tabular-nums text-muted-foreground">
-                      {index + 1}
-                    </span>
-                    <Input
-                      aria-label={t('destinationLabel', { number: index + 1 })}
-                      maxLength={200}
-                      onChange={(event) => updateDestination(index, event.target.value)}
-                      placeholder={t('destinationPlaceholder')}
-                      value={destination}
-                    />
-                    <div className="flex shrink-0">
-                      <Button
-                        aria-label={t('moveDestinationUp')}
-                        disabled={index === 0}
-                        onClick={() => moveDestination(index, -1)}
-                        size="icon-sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        <ArrowUp aria-hidden="true" />
-                      </Button>
-                      <Button
-                        aria-label={t('moveDestinationDown')}
-                        disabled={index === form.destinations.length - 1}
-                        onClick={() => moveDestination(index, 1)}
-                        size="icon-sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        <ArrowDown aria-hidden="true" />
-                      </Button>
-                      <Button
-                        aria-label={t('removeDestination')}
-                        onClick={() =>
-                          setForm((current) => ({
-                            ...current,
-                            destinations: current.destinations.filter(
-                              (_, position) => position !== index,
-                            ),
-                          }))
-                        }
-                        size="icon-sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        <Trash2 aria-hidden="true" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                <p className="mt-1 text-sm text-muted-foreground">{t('basicsDescription')}</p>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">{t('noDestinations')}</p>
+              <>
+                <TripMedia
+                  alt={
+                    primaryDestination
+                      ? t('destinationPreviewAlt', { destination: primaryDestination })
+                      : t('destinationPreviewFallback')
+                  }
+                  className="aspect-[16/7] w-full sm:aspect-[2.35/1]"
+                  sizes="(max-width: 640px) 100vw, 576px"
+                  source={resolveTripMediaSource({ editorial: coverEditorial })}
+                  variant="card"
+                />
+                <Field>
+                  <FieldLabel
+                    className="w-full items-center justify-between"
+                    htmlFor="trip-primary-destination"
+                  >
+                    <span>{t('primaryDestination')}</span>
+                    <span className="text-xs font-normal text-muted-foreground">
+                      {t('optional')}
+                    </span>
+                  </FieldLabel>
+                  <div className="relative">
+                    <MapPin
+                      aria-hidden="true"
+                      className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                    />
+                    <Input
+                      aria-describedby="trip-primary-destination-hint"
+                      autoComplete="off"
+                      className="pl-10"
+                      id="trip-primary-destination"
+                      maxLength={200}
+                      onChange={(event) =>
+                        updateField('destinations', event.target.value ? [event.target.value] : [])
+                      }
+                      placeholder={t('primaryDestinationPlaceholder')}
+                      value={form.destinations[0] ?? ''}
+                    />
+                  </div>
+                  <FieldDescription id="trip-primary-destination-hint">
+                    {t('primaryDestinationHint')}
+                  </FieldDescription>
+                </Field>
+              </>
             )}
+            {trip ? tripNameField : null}
+            {tripDateFields}
+            {!trip ? tripNameField : null}
           </section>
 
-          <section aria-labelledby="trip-cover-heading" className="space-y-4 border-t pt-7">
-            <div>
-              <h3 className="font-medium" id="trip-cover-heading">
-                {t('coverTitle')}
-              </h3>
-              <p className="mt-1 text-sm text-muted-foreground">{t('coverHint')}</p>
-            </div>
-            {/* One frame for both answers. The shared ladder puts an upload
+          {trip ? (
+            <>
+              <section
+                aria-labelledby="trip-destinations-heading"
+                className="space-y-4 border-t pt-7"
+              >
+                <div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between sm:gap-4">
+                  <div>
+                    <h3 className="font-medium" id="trip-destinations-heading">
+                      {t('destinationsTitle')}
+                    </h3>
+                    <FieldDescription>{t('destinationsDescription')}</FieldDescription>
+                  </div>
+                  <Button
+                    onClick={() =>
+                      setForm((current) => ({
+                        ...current,
+                        destinations: [...current.destinations, ''],
+                      }))
+                    }
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    <Plus aria-hidden="true" data-icon="inline-start" />
+                    {t('addDestination')}
+                  </Button>
+                </div>
+                {form.destinations.length ? (
+                  <div className="space-y-3">
+                    {form.destinations.map((destination, index) => (
+                      <div
+                        className="flex items-center gap-2"
+                        key={`${index}-${form.destinations.length}`}
+                      >
+                        <span className="w-5 text-center text-xs tabular-nums text-muted-foreground">
+                          {index + 1}
+                        </span>
+                        <Input
+                          aria-label={t('destinationLabel', { number: index + 1 })}
+                          maxLength={200}
+                          onChange={(event) => updateDestination(index, event.target.value)}
+                          placeholder={t('destinationPlaceholder')}
+                          value={destination}
+                        />
+                        <div className="flex shrink-0">
+                          <Button
+                            aria-label={t('moveDestinationUp')}
+                            disabled={index === 0}
+                            onClick={() => moveDestination(index, -1)}
+                            size="icon-sm"
+                            type="button"
+                            variant="ghost"
+                          >
+                            <ArrowUp aria-hidden="true" />
+                          </Button>
+                          <Button
+                            aria-label={t('moveDestinationDown')}
+                            disabled={index === form.destinations.length - 1}
+                            onClick={() => moveDestination(index, 1)}
+                            size="icon-sm"
+                            type="button"
+                            variant="ghost"
+                          >
+                            <ArrowDown aria-hidden="true" />
+                          </Button>
+                          <Button
+                            aria-label={t('removeDestination')}
+                            onClick={() =>
+                              setForm((current) => ({
+                                ...current,
+                                destinations: current.destinations.filter(
+                                  (_, position) => position !== index,
+                                ),
+                              }))
+                            }
+                            size="icon-sm"
+                            type="button"
+                            variant="ghost"
+                          >
+                            <Trash2 aria-hidden="true" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">{t('noDestinations')}</p>
+                )}
+              </section>
+
+              <section aria-labelledby="trip-cover-heading" className="space-y-4 border-t pt-7">
+                <div>
+                  <h3 className="font-medium" id="trip-cover-heading">
+                    {t('coverTitle')}
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">{t('coverHint')}</p>
+                </div>
+                {/* One frame for both answers. The shared ladder puts an upload
                 above the suggestion, so removing an upload simply reveals the
                 photograph underneath it again. */}
-            <TripMedia
-              alt={t('coverAlt')}
-              className="aspect-[16/9] w-full"
-              sizes="(max-width: 640px) 100vw, 640px"
-              source={resolveTripMediaSource({ coverUrl: coverPreview, editorial: coverEditorial })}
-              variant="card"
-            />
-            {coverEditorial && !coverPreview ? (
-              <p className="text-sm text-muted-foreground">
-                {t('coverEditorialHint', { name: coverSubjectName })}
-              </p>
-            ) : null}
-            <div className="flex flex-wrap gap-2">
-              {/* The input this wraps is `sr-only`, so it is focusable but has
+                <TripMedia
+                  alt={t('coverAlt')}
+                  className="aspect-[16/9] w-full"
+                  sizes="(max-width: 640px) 100vw, 640px"
+                  source={resolveTripMediaSource({
+                    coverUrl: coverPreview,
+                    editorial: coverEditorial,
+                  })}
+                  variant="card"
+                />
+                {coverEditorial && !coverPreview ? (
+                  <p className="text-sm text-muted-foreground">
+                    {t('coverEditorialHint', { name: coverSubjectName })}
+                  </p>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  {/* The input this wraps is `sr-only`, so it is focusable but has
                   no ring of its own to show; the label wears it instead. */}
-              <label
-                className={cn(
-                  buttonVariants({ variant: 'outline' }),
-                  'cursor-pointer focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/40',
-                )}
-              >
-                <ImagePlus aria-hidden="true" data-icon="inline-start" />
-                {coverPreview ? t('changeCover') : t('chooseCover')}
-                <Input
-                  accept="image/jpeg,image/png,image/webp"
-                  className="sr-only"
-                  onChange={handleCoverChange}
-                  type="file"
-                />
-              </label>
-              {coverPreview ? (
-                <Button
-                  onClick={() => {
-                    setCoverFile(null);
-                    setCoverPreview(null);
-                    setForm((current) => ({ ...current, coverPhotoPath: null }));
-                  }}
-                  type="button"
-                  variant="ghost"
-                >
-                  {t('removeCover')}
-                </Button>
-              ) : null}
-            </div>
-          </section>
+                  <label
+                    className={cn(
+                      buttonVariants({ variant: 'outline' }),
+                      'cursor-pointer focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/40',
+                    )}
+                  >
+                    <ImagePlus aria-hidden="true" data-icon="inline-start" />
+                    {coverPreview ? t('changeCover') : t('chooseCover')}
+                    <Input
+                      accept="image/jpeg,image/png,image/webp"
+                      className="sr-only"
+                      onChange={handleCoverChange}
+                      type="file"
+                    />
+                  </label>
+                  {coverPreview ? (
+                    <Button
+                      onClick={() => {
+                        setCoverFile(null);
+                        setCoverPreview(null);
+                        setForm((current) => ({ ...current, coverPhotoPath: null }));
+                      }}
+                      type="button"
+                      variant="ghost"
+                    >
+                      {t('removeCover')}
+                    </Button>
+                  ) : null}
+                </div>
+              </section>
 
-          <section className="border-t pt-7">
-            <Collapsible onOpenChange={setDetailsOpen} open={detailsOpen}>
-              <CollapsibleTrigger className="group w-full justify-between text-left">
-                <span>
-                  <span className="block font-medium text-foreground">{t('moreDetails')}</span>
-                  <span className="mt-1 block text-sm font-normal text-muted-foreground">
-                    {t('moreDetailsHint')}
-                  </span>
-                </span>
-                <ChevronDown
-                  aria-hidden="true"
-                  className="shrink-0 transition-transform duration-[var(--motion-standard)] group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
-                />
-              </CollapsibleTrigger>
-              <CollapsiblePanel>
-                <TripOptionalDetails
-                  deviceTimeZone={deviceTimeZone}
-                  onChange={updateFields}
-                  trip={trip}
-                  values={{
-                    notes: form.notes,
-                    partySize: form.partySize,
-                    planningReadiness: form.planningReadiness,
-                    referenceTimeZone: form.referenceTimeZone,
-                    startingLocation: form.startingLocation,
-                  }}
-                />
-              </CollapsiblePanel>
-            </Collapsible>
-          </section>
+              <section className="border-t pt-7">
+                <Collapsible onOpenChange={setDetailsOpen} open={detailsOpen}>
+                  <CollapsibleTrigger className="group w-full justify-between text-left">
+                    <span>
+                      <span className="block font-medium text-foreground">{t('moreDetails')}</span>
+                      <span className="mt-1 block text-sm font-normal text-muted-foreground">
+                        {t('moreDetailsHint')}
+                      </span>
+                    </span>
+                    <ChevronDown
+                      aria-hidden="true"
+                      className="shrink-0 transition-transform duration-[var(--motion-standard)] group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
+                    />
+                  </CollapsibleTrigger>
+                  <CollapsiblePanel>
+                    <TripOptionalDetails
+                      deviceTimeZone={deviceTimeZone}
+                      onChange={updateFields}
+                      trip={trip}
+                      values={{
+                        notes: form.notes,
+                        partySize: form.partySize,
+                        planningReadiness: form.planningReadiness,
+                        referenceTimeZone: form.referenceTimeZone,
+                        startingLocation: form.startingLocation,
+                      }}
+                    />
+                  </CollapsiblePanel>
+                </Collapsible>
+              </section>
+            </>
+          ) : null}
         </div>
 
         <SheetFooter className="gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -570,10 +648,15 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
               <Trash2 aria-hidden="true" data-icon="inline-start" />
               {t('deleteTrip')}
             </Button>
-          ) : (
+          ) : trip ? (
             <span />
-          )}
-          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+          ) : null}
+          <div
+            className={cn(
+              'flex flex-col-reverse gap-2 sm:flex-row',
+              !trip && 'w-full sm:justify-end',
+            )}
+          >
             <Button
               disabled={status === 'saving'}
               onClick={onCancel}

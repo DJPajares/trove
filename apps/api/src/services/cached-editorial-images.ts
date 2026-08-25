@@ -98,7 +98,7 @@ function toReferences(row: CachedEditorialImageSetRow) {
     .toSorted((left, right) => left.position - right.position)
     .map(toReference)
     .filter((image): image is EditorialImageReference => image !== null)
-    .slice(0, MAX_IMAGES_PER_SUBJECT);
+    .slice(0, row.subjectKey.startsWith('generic:') ? 1 : MAX_IMAGES_PER_SUBJECT);
 }
 
 /**
@@ -145,6 +145,7 @@ export class CachedEditorialImagesService extends EditorialImagesService {
         });
         results.set(request.subjectKey, {
           images: cached.images,
+          matchKind: request.subject.kind === 'generic' ? 'generic' : 'exact',
           status: 'ok',
           subjectKey: request.subjectKey,
         });
@@ -320,6 +321,7 @@ export class CachedEditorialImagesService extends EditorialImagesService {
         });
         results.set(request.subjectKey, {
           images: cached.images,
+          matchKind: 'generic',
           status: 'ok',
           subjectKey: request.subjectKey,
         });
@@ -456,14 +458,17 @@ export class CachedEditorialImagesService extends EditorialImagesService {
     if (result.status === 'unavailable') {
       if (existing.length === 0) return result;
       pins.push(this.pin(request, row?.id, context));
-      return { images: existing, status: 'ok', subjectKey: request.subjectKey };
+      return {
+        images: existing,
+        matchKind: request.subject.kind === 'generic' ? 'generic' : 'exact',
+        status: 'ok',
+        subjectKey: request.subjectKey,
+      };
     }
 
     const now = this.now();
-    const images = (result.status === 'ok' ? result.images : existing).slice(
-      0,
-      MAX_IMAGES_PER_SUBJECT,
-    );
+    const maximumImages = request.subject.kind === 'generic' ? 1 : MAX_IMAGES_PER_SUBJECT;
+    const images = (result.status === 'ok' ? result.images : existing).slice(0, maximumImages);
     const setData =
       images.length > 0
         ? {
@@ -478,7 +483,7 @@ export class CachedEditorialImagesService extends EditorialImagesService {
             missedAt: now,
             resolutionVersion: EDITORIAL_IMAGE_RESOLUTION_VERSION,
           };
-    const imageRows = images.slice(0, MAX_IMAGES_PER_SUBJECT).map((image, position) => ({
+    const imageRows = images.map((image, position) => ({
       altText: image.altText,
       dominantColor: image.dominantColor,
       externalPhotoId: image.externalPhotoId,
@@ -517,7 +522,12 @@ export class CachedEditorialImagesService extends EditorialImagesService {
     if (images.length === 0) return { status: 'empty', subjectKey: request.subjectKey };
 
     pins.push(this.pin(request, imageSetId, context));
-    return { images, status: 'ok', subjectKey: request.subjectKey };
+    return {
+      images,
+      matchKind: request.subject.kind === 'generic' ? 'generic' : 'exact',
+      status: 'ok',
+      subjectKey: request.subjectKey,
+    };
   }
 
   /** Pin only rows the authenticated caller may update. */

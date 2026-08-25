@@ -32,3 +32,15 @@ test('photo descriptions are supplementary, trimmed, and optional', () => {
   expect(photographicDescription(image('   '))).toBeNull();
   expect(photographicDescription(image(null))).toBeNull();
 });
+
+test('representative category photos never receive a place-specific description', () => {
+  expect(
+    photographicDescription({
+      ...image('An unrelated Eiffel Tower photograph'),
+      matchKind: 'generic',
+    }),
+  ).toBeNull();
+  expect(
+    photographicDescription({ ...image('The real Hobbiton movie set'), matchKind: 'exact' }),
+  ).toBe('The real Hobbiton movie set');
+});

@@ -13,6 +13,8 @@ export type EditorialImageAttribution = {
   providerPageUrl: string;
 };
 
+export type EditorialImageMatchKind = 'exact' | 'generic';
+
 /**
  * A reference to a photograph, never the photograph. `sourceUrl` is the
  * provider's unsized hotlink, `dominantColor` is what a frame paints while one loads, and
@@ -24,6 +26,7 @@ export type EditorialImageReference = {
   dominantColor: string | null;
   externalPhotoId: string;
   height: number | null;
+  matchKind?: EditorialImageMatchKind;
   sourceUrl: string;
   width: number | null;
 };
@@ -41,7 +44,12 @@ export type EditorialSubject = {
 };
 
 type EditorialImageResult =
-  | { images: EditorialImageReference[]; status: 'ok'; subjectKey: string }
+  | {
+      images: EditorialImageReference[];
+      matchKind: EditorialImageMatchKind;
+      status: 'ok';
+      subjectKey: string;
+    }
   | { status: 'empty'; subjectKey: string }
   | { code: string; status: 'unavailable'; subjectKey: string };
 
@@ -159,8 +167,14 @@ export async function resolveEditorialImages(subjects: EditorialSubject[]) {
 
     for (const image of await requestEditorialImages(batch, accessToken)) {
       if (image.status === 'ok') {
-        resolvedImages.set(image.subjectKey, image.images);
-        resolved.set(image.subjectKey, image.images);
+        const matchKind: EditorialImageMatchKind =
+          image.matchKind === 'generic' ? 'generic' : 'exact';
+        const references = image.images
+          .slice(0, matchKind === 'generic' ? 1 : image.images.length)
+          .map((reference) => ({ ...reference, matchKind }));
+
+        resolvedImages.set(image.subjectKey, references);
+        resolved.set(image.subjectKey, references);
         continue;
       }
 

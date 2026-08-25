@@ -22,8 +22,8 @@ const DEFAULT_TIMEOUT_MS = 8_000;
 
 /**
  * An exact request asks for enough landscape candidates to verify the venue;
- * a generic request asks for only three. At most three verified references are
- * retained, with provider order breaking score ties for stable cached media.
+ * a generic request asks for one representative image. At most three verified
+ * references are retained, with provider order breaking score ties.
  */
 export const PEXELS_SEARCH_PARAMETERS = {
   orientation: 'landscape',
@@ -31,7 +31,7 @@ export const PEXELS_SEARCH_PARAMETERS = {
 } as const;
 
 const EXACT_CANDIDATE_COUNT = '15';
-const GENERIC_CANDIDATE_COUNT = '3';
+const GENERIC_CANDIDATE_COUNT = '1';
 
 type Fetcher = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
@@ -47,11 +47,23 @@ type PexelsPhotoSource = {
 type PexelsPhoto = {
   alt?: string;
   avg_color?: string;
+  description?: string;
   height?: number;
   id?: number;
+  location?: string | { city?: string; country?: string; name?: string };
+  metadata?: {
+    country?: string;
+    description?: string;
+    location?: string;
+    name?: string;
+    title?: string;
+  };
+  name?: string;
   photographer?: string;
   photographer_url?: string;
   src?: PexelsPhotoSource;
+  tags?: Array<string | { name?: string; title?: string }>;
+  title?: string;
   url?: string;
   width?: number;
 };
@@ -131,6 +143,26 @@ function mapPexelsPhoto(photo: PexelsPhoto): EditorialImageReference | null {
   };
 }
 
+function photoMetadata(photo: PexelsPhoto) {
+  const location =
+    typeof photo.location === 'string'
+      ? [photo.location]
+      : [photo.location?.city, photo.location?.country, photo.location?.name];
+  const tags = (photo.tags ?? []).flatMap((tag) =>
+    typeof tag === 'string' ? [tag] : [tag.name, tag.title],
+  );
+
+  return [
+    ...location,
+    ...tags,
+    photo.metadata?.country,
+    photo.metadata?.description,
+    photo.metadata?.location,
+    photo.metadata?.name,
+    photo.metadata?.title,
+  ];
+}
+
 export class PexelsEditorialImageProvider implements EditorialImageProvider {
   readonly name = 'pexels' as const;
 
@@ -179,7 +211,12 @@ export class PexelsEditorialImageProvider implements EditorialImageProvider {
         const score = reference
           ? editorialMatchScore(subject, {
               altText: reference.altText,
+              description: cleanString(photo.description),
+              metadata: photoMetadata(photo),
+              name: cleanString(photo.name),
               providerPageUrl: reference.attribution.providerPageUrl,
+              sourceUrl: reference.sourceUrl,
+              title: cleanString(photo.title),
             })
           : 0;
         if (
@@ -196,7 +233,7 @@ export class PexelsEditorialImageProvider implements EditorialImageProvider {
       })
       .toSorted((left, right) => right.score - left.score || left.position - right.position)
       .map(({ reference }) => reference)
-      .slice(0, 3);
+      .slice(0, subject.kind === 'generic' ? 1 : 3);
   }
 
   /**

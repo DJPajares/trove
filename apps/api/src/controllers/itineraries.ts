@@ -98,6 +98,11 @@ const itemFields = {
     .nullable()
     .optional(),
   durationMinutes: z.number().int().positive().max(43_200).nullable().optional(),
+  localEndTime: z
+    .string()
+    .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/)
+    .nullable()
+    .optional(),
   notes: z.string().trim().max(5_000).nullable().optional(),
   plannedCost: plannedCostSchema.nullable().optional(),
   priority: z.enum(['must_go', 'interested', 'maybe']).nullable().optional(),
@@ -114,11 +119,17 @@ const createItemSchema = z
   .strict()
   .refine((value) => Boolean(value.tripPlaceId || value.customLabel?.trim()), {
     message: 'minimum_content_required',
+  })
+  .refine((value) => !(value.localEndTime && value.durationMinutes), {
+    message: 'exclusive_itinerary_timing_required',
   });
 const updateItemSchema = z
   .object(itemFields)
   .strict()
-  .refine((value) => Object.values(value).some((field) => field !== undefined));
+  .refine((value) => Object.values(value).some((field) => field !== undefined))
+  .refine((value) => !(value.localEndTime && value.durationMinutes), {
+    message: 'exclusive_itinerary_timing_required',
+  });
 
 function getUserId(request: FastifyRequest, reply: FastifyReply) {
   if (!request.authUserId) {

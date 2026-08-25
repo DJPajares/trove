@@ -978,6 +978,8 @@ function applyInput(item: ItineraryItem, input: ItineraryItemInput, itinerary?: 
       : null;
   }
   if (input.durationMinutes !== undefined) item.durationMinutes = input.durationMinutes;
+  if (input.localEndTime !== undefined) item.localEndTime = input.localEndTime;
+  else if (input.durationMinutes !== undefined) item.localEndTime = null;
   if (input.notes !== undefined) item.notes = input.notes?.trim() || null;
   if (input.plannedCost !== undefined) item.plannedCost = input.plannedCost;
   if (input.priority !== undefined) item.priority = input.priority;
@@ -987,6 +989,13 @@ function applyInput(item: ItineraryItem, input: ItineraryItemInput, itinerary?: 
       : null;
   }
   if (input.schedule) applySchedule(item, input.schedule);
+  if (item.localEndTime && item.localStartTime) {
+    const [startHour = 0, startMinute = 0] = item.localStartTime.split(':').map(Number);
+    const [endHour = 0, endMinute = 0] = item.localEndTime.split(':').map(Number);
+    item.durationMinutes = (endHour - startHour) * 60 + endMinute - startMinute;
+  } else if (input.localEndTime === null && input.durationMinutes === undefined) {
+    item.durationMinutes = null;
+  }
   item.updatedAt = new Date().toISOString();
 }
 
@@ -1039,6 +1048,7 @@ export function applyOfflineMutation(
       durationMinutes: mutation.input.durationMinutes ?? null,
       id: mutation.clientItemId,
       itineraryDayId: day.id,
+      localEndTime: mutation.input.localEndTime ?? null,
       localStartTime: null,
       notes: mutation.input.notes?.trim() || null,
       plannedCost: mutation.input.plannedCost ?? null,

@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { ItineraryItem, ItineraryRouteSegment, RouteTravelMode } from '@/lib/itinerary/api';
 import type { DayTimelineEntry } from '@/lib/itinerary/day-sequence';
+import { formatItineraryTimeRange } from '@/lib/itinerary/item-timing';
 
 /**
  * A stop's name, and the whole row along with it.
@@ -77,6 +78,7 @@ export type ItineraryDayTimelineProps = {
   routesStale: boolean;
   savingRouteOwner: string | null;
   selectedDayId: string;
+  timeFormat: '12h' | '24h';
   unscheduledLabel: string;
 };
 
@@ -113,6 +115,7 @@ export function ItineraryDayTimeline({
   routesStale,
   savingRouteOwner,
   selectedDayId,
+  timeFormat,
   unscheduledLabel,
 }: Readonly<ItineraryDayTimelineProps>) {
   const t = useTranslations('itinerary');
@@ -322,15 +325,21 @@ export function ItineraryDayTimeline({
                     {item.localStartTime
                       ? item.timeZone && item.timeZone !== defaultTimeZone
                         ? t('exactTimeWithTimeZone', {
-                            time: item.localStartTime,
+                            time:
+                              formatItineraryTimeRange(item, locale, timeFormat) ??
+                              item.localStartTime,
                             timeZone: item.timeZone,
                           })
-                        : t('exactTimeValue', { time: item.localStartTime })
+                        : t('exactTimeValue', {
+                            time:
+                              formatItineraryTimeRange(item, locale, timeFormat) ??
+                              item.localStartTime,
+                          })
                       : item.dayPart
                         ? t(`schedule.${item.dayPart}`)
                         : t('schedule.none')}
                   </span>
-                  {item.durationMinutes ? (
+                  {item.durationMinutes && !item.localStartTime ? (
                     <span>{t('durationValue', { minutes: item.durationMinutes })}</span>
                   ) : null}
                   {item.plannedCost ? (

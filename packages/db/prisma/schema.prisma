@@ -737,6 +737,7 @@ model ItineraryItem {
   travelModeToNext        RouteTravelMode         @default(DRIVE) @map("travel_mode_to_next")
   travelStatus            ItineraryTravelStatus   @default(UPCOMING) @map("travel_status")
   localStartTime          DateTime?               @map("local_start_time") @db.Time(0)
+  localEndTime            DateTime?               @map("local_end_time") @db.Time(0)
   startInstant            DateTime?               @map("start_instant") @db.Timestamptz(3)
   timeSemantics           ItineraryTimeSemantics? @map("time_semantics")
   timeZone                String?                 @map("time_zone")

@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 
 import {
+  durationMinutesUntilLocalEnd,
   floatingLocalTimeToInstant,
   formatInstantInTimeZone,
   formatLocalTime,
@@ -15,6 +16,17 @@ test('persists a floating local plan as a deterministic derived instant', () => 
     '2026-08-12T01:30:00.000Z',
   );
   expect(formatLocalTime(parseLocalTime('09:30'))).toBe('09:30');
+});
+
+test('derives an effective duration from a later explicit local end time', () => {
+  expect(durationMinutesUntilLocalEnd('09:00', '10:30')).toBe(90);
+  expect(durationMinutesUntilLocalEnd('00:00', '23:59')).toBe(1439);
+});
+
+test('rejects explicit end times without a start or outside the same local day', () => {
+  expect(() => durationMinutesUntilLocalEnd(null, '10:30')).toThrow('invalid_local_end_time');
+  expect(() => durationMinutesUntilLocalEnd('10:30', '10:30')).toThrow('invalid_local_end_time');
+  expect(() => durationMinutesUntilLocalEnd('23:30', '00:30')).toThrow('invalid_local_end_time');
 });
 
 test('formats one authoritative instant independently for flight departure and arrival timezones', () => {

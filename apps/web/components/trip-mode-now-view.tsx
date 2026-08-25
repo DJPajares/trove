@@ -36,6 +36,7 @@ import {
   type RouteTravelMode,
   type TripModeContext,
 } from '@/lib/itinerary/api';
+import { formatItineraryTimeRange } from '@/lib/itinerary/item-timing';
 import {} from '@/lib/saved/api';
 import { fetchReservations, type Reservation } from '@/lib/reservations/api';
 import { fetchTasks, type Task } from '@/lib/tasks/api';
@@ -211,11 +212,17 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
       timeZone: 'UTC',
     }).format(new Date(`${value}T00:00:00.000Z`));
   const formatSchedule = (item: ItineraryItem) => {
+    if (item.localStartTime) {
+      return formatItineraryTimeRange(item, locale, preferences.timeFormat);
+    }
     if (item.startInstant) {
-      return timeFormat(
-        item.startInstant,
-        item.timeZone ?? readyContext.day?.defaultTimeZone ?? readyContext.trip.referenceTimeZone,
-      );
+      const timeZone =
+        item.timeZone ?? readyContext.day?.defaultTimeZone ?? readyContext.trip.referenceTimeZone;
+      const start = timeFormat(item.startInstant, timeZone);
+      if (!item.durationMinutes) return start;
+
+      const end = new Date(new Date(item.startInstant).getTime() + item.durationMinutes * 60_000);
+      return `${start} - ${timeFormat(end.toISOString(), timeZone)}`;
     }
     if (item.dayPart) return t(`dayPart.${item.dayPart}`);
     return t('scheduleFlexible');

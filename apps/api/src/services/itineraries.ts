@@ -2,6 +2,7 @@ import { getPrismaClient, type Prisma } from '@trove/db';
 
 import { DAY_PART_WINDOWS } from './day-part-windows.js';
 import {
+  durationMinutesUntilLocalEnd,
   floatingLocalTimeToInstant,
   formatLocalTime,
   parseLocalTime,
@@ -28,6 +29,7 @@ export type ItineraryItemInput = {
   customLocation?: { label: string; timeZone?: string | null } | null;
   durationMinutes?: number | null;
   itineraryDayId?: string;
+  localEndTime?: string | null;
   notes?: string | null;
   plannedCost?: { amount: string; currencyCode: string } | null;
   priority?: 'interested' | 'maybe' | 'must_go' | null;
@@ -68,6 +70,7 @@ export class ItineraryValidationError extends Error {
     public readonly code:
       | 'invalid_itinerary_item'
       | 'invalid_itinerary_day_move'
+      | 'invalid_local_end_time'
       | 'invalid_local_time'
       | 'invalid_time_zone'
       | 'trip_place_not_found',
@@ -190,6 +193,7 @@ export function serializeItineraryItem(
     durationMinutes: item.durationMinutes,
     id: item.id,
     itineraryDayId: item.itineraryDayId,
+    localEndTime: formatLocalTime(item.localEndTime),
     localStartTime: formatLocalTime(item.localStartTime),
     notes: item.notes,
     plannedCost:
@@ -284,6 +288,44 @@ function normalizeContent(customLabel: string | null | undefined, tripPlaceId: s
   const label = customLabel?.trim() || null;
   if (!label && !tripPlaceId) throw new ItineraryValidationError('invalid_itinerary_item');
   return label;
+}
+
+function resolveItemTiming(
+  input: Pick<ItineraryItemInput, 'durationMinutes' | 'localEndTime'>,
+  localStartTime: Date | null,
+  current?: Pick<ItineraryItemRecord, 'durationMinutes' | 'localEndTime'>,
+) {
+  if (input.localEndTime && input.durationMinutes) {
+    throw new ItineraryValidationError('invalid_local_end_time');
+  }
+
+  const localEndTime =
+    input.localEndTime !== undefined
+      ? input.localEndTime
+      : input.durationMinutes !== undefined
+        ? null
+        : formatLocalTime(current?.localEndTime ?? null);
+
+  if (!localEndTime) {
+    return {
+      durationMinutes:
+        input.durationMinutes !== undefined
+          ? input.durationMinutes
+          : input.localEndTime === null && current?.localEndTime
+            ? null
+            : (current?.durationMinutes ?? null),
+      localEndTime: null,
+    };
+  }
+
+  try {
+    return {
+      durationMinutes: durationMinutesUntilLocalEnd(formatLocalTime(localStartTime), localEndTime),
+      localEndTime: parseLocalTime(localEndTime),
+    };
+  } catch {
+    throw new ItineraryValidationError('invalid_local_end_time');
+  }
 }
 
 function scheduleData(schedule: ItineraryScheduleInput, date: string, timeZone: string) {
@@ -995,6 +1037,7 @@ export async function createItineraryItem(
         })
       )._max.position ?? -1;
     const schedule = scheduleData(input.schedule, formatDateOnly(day.date), timeZone.timeZone);
+    const timing = resolveItemTiming(input, schedule.localStartTime);
     const item = await transaction.itineraryItem.create({
       data: {
         ...(input.clientItemId ? { id: input.clientItemId } : {}),
@@ -1002,8 +1045,9 @@ export async function createItineraryItem(
         customLocation: customLocation.label,
         customLocationTimeZone: customLocation.timeZone,
         dayPart: schedule.dayPart,
-        durationMinutes: input.durationMinutes ?? null,
+        durationMinutes: timing.durationMinutes,
         itineraryDayId: day.id,
+        localEndTime: timing.localEndTime,
         localStartTime: schedule.localStartTime,
         notes: input.notes?.trim() || null,
         plannedCostAmount: input.plannedCost?.amount ?? null,
@@ -1102,6 +1146,7 @@ export async function updateItineraryItem(
             startInstant: current.startInstant,
             timeSemantics: current.timeSemantics,
           };
+    const timing = resolveItemTiming(input, schedule.localStartTime, current);
 
     const updated = await transaction.itineraryItem.update({
       where: { id: itemId },
@@ -1110,7 +1155,8 @@ export async function updateItineraryItem(
         customLocation: customLocation.label,
         customLocationTimeZone: customLocation.timeZone,
         dayPart: schedule.dayPart,
-        ...(input.durationMinutes !== undefined ? { durationMinutes: input.durationMinutes } : {}),
+        durationMinutes: timing.durationMinutes,
+        localEndTime: timing.localEndTime,
         localStartTime: schedule.localStartTime,
         ...(input.notes !== undefined ? { notes: input.notes?.trim() || null } : {}),
         ...(input.plannedCost !== undefined

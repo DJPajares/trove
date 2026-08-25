@@ -13,7 +13,10 @@ import { cn } from '@/lib/utils';
  * On a phone the day plan is the reason the app is open; a permanent brand bar
  * spends a tenth of the viewport on chrome the traveller is not reading.
  */
-export function AppHeader({ children }: Readonly<{ children: ReactNode }>) {
+export function AppHeader({
+  children,
+  className,
+}: Readonly<{ children: ReactNode; className?: string }>) {
   const shouldReduceMotion = useReducedMotion();
   // Someone who has asked for less movement gets a header that simply stays put
   // rather than one that slides away without animating.
@@ -39,6 +42,7 @@ export function AppHeader({ children }: Readonly<{ children: ReactNode }>) {
       className={cn(
         'sticky top-0 z-[var(--layer-sticky)] border-b border-border-subtle bg-background/95 pt-[var(--safe-top)] backdrop-blur transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)] supports-[backdrop-filter]:bg-background/88',
         collapsed && '-translate-y-full',
+        className,
       )}
       data-translucent-surface
       // Tabbing must never move focus to a control that has scrolled out of

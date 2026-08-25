@@ -232,7 +232,6 @@ enum ProfileDateFormat {
 }
 
 enum ProfileAppearance {
-  SYSTEM @map("system")
   LIGHT  @map("light")
   DARK   @map("dark")
 

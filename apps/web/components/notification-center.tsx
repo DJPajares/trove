@@ -4,7 +4,6 @@ import { Bell, CheckCheck, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 
-import { appMenuActionClassName } from '@/components/app-menu-action';
 import { useNotifications } from '@/components/notifications-provider';
 import { PageState } from '@/components/page-state';
 import { Badge } from '@/components/ui/badge';
@@ -18,14 +17,10 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
 
-type NotificationCenterProps = {
-  label?: string;
-  onNavigate?: () => void;
-};
+type NotificationCenterProps = { onNavigate?: () => void };
 
-export function NotificationCenter({ label, onNavigate }: Readonly<NotificationCenterProps> = {}) {
+export function NotificationCenter({ onNavigate }: Readonly<NotificationCenterProps> = {}) {
   const t = useTranslations('notifications');
   const locale = useLocale();
   const { markAllRead, markRead, notifications, refresh, status } = useNotifications();
@@ -38,22 +33,17 @@ export function NotificationCenter({ label, onNavigate }: Readonly<NotificationC
         render={
           <Button
             aria-label={t('centerButton', { count })}
-            className={cn('relative', label && appMenuActionClassName)}
+            className="relative text-foreground"
             disabled={status === 'loading'}
-            size={label ? 'default' : 'icon'}
+            size="icon-sm"
             type="button"
-            variant={label ? 'outline' : 'ghost'}
+            variant="ghost"
           />
         }
       >
-        <Bell aria-hidden="true" className={label ? 'size-5 text-brand' : 'size-4'} />
-        {label ? <span>{label}</span> : null}
+        <Bell aria-hidden="true" className="size-4" />
         {count ? (
-          <Badge
-            className={cn('absolute', label ? 'top-3 right-3' : 'top-1 right-1')}
-            size="count"
-            variant="solid"
-          >
+          <Badge className="absolute top-0.5 right-0.5" size="count" variant="solid">
             {count > 9 ? '9+' : count}
           </Badge>
         ) : null}

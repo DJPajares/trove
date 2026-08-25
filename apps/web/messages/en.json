@@ -17,7 +17,7 @@
     "openMenu": "Open menu",
     "openMenuWithNotifications": "Open menu, {count, plural, one {# new notification} other {# new notifications}}",
     "closeMenu": "Close menu",
-    "quickActions": "Quick actions",
+    "menuActions": "Menu actions",
     "more": "More",
     "moreWithNotifications": "More, {count, plural, one {# new notification} other {# new notifications}}",
     "search": "Search",
@@ -29,10 +29,12 @@
   },
   "appearance": {
     "button": "Change appearance",
+    "darkMode": "Dark mode",
     "label": "Appearance",
-    "system": "System",
     "light": "Light",
     "dark": "Dark",
+    "switchToDark": "Switch to dark mode",
+    "switchToLight": "Switch to light mode",
     "unsaved": "This appearance is active, but couldn't be saved to your profile."
   },
   "account": {
@@ -77,7 +79,6 @@
     "monthDayYear": "Month / day / year",
     "dayMonthYear": "Day / month / year",
     "yearMonthDay": "Year / month / day",
-    "system": "System",
     "light": "Light",
     "dark": "Dark",
     "photoAlt": "Profile photo",

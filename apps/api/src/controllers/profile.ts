@@ -2,11 +2,15 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { getBearerToken } from '../services/request-auth.js';
-import { getProfile, updateProfile } from '../services/profile.js';
+import { getProfile, normalizeLegacyAppearance, updateProfile } from '../services/profile.js';
 
 const profileUpdateSchema = z
   .object({
-    appearance: z.enum(['dark', 'light', 'system']).nullable().optional(),
+    appearance: z
+      .enum(['dark', 'light', 'system'])
+      .transform(normalizeLegacyAppearance)
+      .nullable()
+      .optional(),
     avatarPath: z.string().trim().max(512).nullable().optional(),
     dateFormat: z.enum(['dmy', 'mdy', 'ymd']).nullable().optional(),
     displayName: z.string().trim().max(100).nullable().optional(),

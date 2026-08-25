@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 
 import { AppHeader } from '@/components/app-header';
 import { AppMenuProvider, AppMenuTrigger } from '@/components/app-menu';
-import { AppearanceMenu } from '@/components/appearance-menu';
+import { AppearanceToggle } from '@/components/appearance-toggle';
 import { DesktopAppHeader } from '@/components/desktop-app-header';
 import { PageTransition } from '@/components/page-transition';
 import { PrimaryNavigation } from '@/components/primary-navigation';
@@ -48,7 +48,7 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
           <AppMenuTrigger variant="desktop" />
         ) : (
           <>
-            <AppearanceMenu />
+            <AppearanceToggle />
             {/* On the narrowest screens the wordmark and the primary action
                 need the room. Sign in stays one tap away from the landing
                 hero and from the sign-up page's own link. */}

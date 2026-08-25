@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 export type Profile = {
-  appearance: 'dark' | 'light' | 'system' | null;
+  appearance: 'dark' | 'light' | null;
   avatarPath: string | null;
   avatarUrl: string | null;
   dateFormat: 'dmy' | 'mdy' | 'ymd' | null;

@@ -1,4 +1,4 @@
-export type Appearance = 'dark' | 'light' | 'system';
+export type Appearance = 'dark' | 'light';
 export type DateFormat = 'dmy' | 'mdy' | 'ymd';
 export type DistanceUnit = 'km' | 'mi';
 export type TemperatureUnit = 'celsius' | 'fahrenheit';
@@ -31,7 +31,7 @@ export function getPreferenceDefaults(locale: string): ProfilePreferences {
     .hourCycle;
 
   return {
-    appearance: 'system',
+    appearance: 'light',
     dateFormat: yearMonthRegions.has(region) ? 'ymd' : dayMonthRegions.has(region) ? 'dmy' : 'mdy',
     distanceUnit: metricRegions.has(region) ? 'km' : 'mi',
     temperatureUnit:
@@ -40,4 +40,8 @@ export function getPreferenceDefaults(locale: string): ProfilePreferences {
         : 'celsius',
     timeFormat: hourCycle === 'h11' || hourCycle === 'h12' ? '12h' : '24h',
   };
+}
+
+export function toggleAppearance(appearance: Appearance): Appearance {
+  return appearance === 'dark' ? 'light' : 'dark';
 }

@@ -207,8 +207,6 @@
     "primaryDestination": "Where are you going?",
     "primaryDestinationPlaceholder": "Kyoto, Japan",
     "primaryDestinationHint": "Add places and other destinations later.",
-    "destinationPreviewAlt": "Travel photograph for {destination}",
-    "destinationPreviewFallback": "Your next journey",
     "optional": "Optional",
     "basicsTitle": "Trip basics",
     "basicsDescription": "Give this trip a clear name and inclusive travel dates.",

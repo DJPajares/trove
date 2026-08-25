@@ -131,7 +131,7 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
     setPendingDetailsFocus(false);
   }, [detailsOpen, pendingDetailsFocus]);
 
-  // What the cover should show while the trip is still being described. The
+  // What the cover should show while an existing trip is being edited. The
   // draft settles before it is asked about, so typing a city name costs one
   // request rather than one per keystroke.
   const draftSubjectName = editorialCoverSubjectName(form.destinations);
@@ -149,9 +149,10 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
     return () => clearTimeout(timer);
   }, [draftSubjectName]);
 
-  const coverSubject: EditorialSubject | null = coverSubjectName
-    ? { category: 'destination', name: coverSubjectName, tripId: trip?.id }
-    : null;
+  const coverSubject: EditorialSubject | null =
+    trip && coverSubjectName
+      ? { category: 'destination', name: coverSubjectName, tripId: trip?.id }
+      : null;
   const editorialImages = useEditorialImages(coverSubject ? [coverSubject] : []);
   const coverEditorial = coverSubject
     ? (editorialImages.get(editorialSubjectKey(coverSubject))?.[0] ?? null)
@@ -324,7 +325,6 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
     setPendingShrink(null);
   }
 
-  const primaryDestination = form.destinations[0]?.trim() ?? '';
   const tripNameField = (
     <Field data-invalid={!form.name.trim() && Boolean(error)}>
       <FieldLabel htmlFor="trip-name">{t('name')}</FieldLabel>
@@ -401,51 +401,36 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
                 <p className="mt-1 text-sm text-muted-foreground">{t('basicsDescription')}</p>
               </div>
             ) : (
-              <>
-                <TripMedia
-                  alt={
-                    primaryDestination
-                      ? t('destinationPreviewAlt', { destination: primaryDestination })
-                      : t('destinationPreviewFallback')
-                  }
-                  className="aspect-[16/7] w-full sm:aspect-[2.35/1]"
-                  sizes="(max-width: 640px) 100vw, 576px"
-                  source={resolveTripMediaSource({ editorial: coverEditorial })}
-                  variant="card"
-                />
-                <Field>
-                  <FieldLabel
-                    className="w-full items-center justify-between"
-                    htmlFor="trip-primary-destination"
-                  >
-                    <span>{t('primaryDestination')}</span>
-                    <span className="text-xs font-normal text-muted-foreground">
-                      {t('optional')}
-                    </span>
-                  </FieldLabel>
-                  <div className="relative">
-                    <MapPin
-                      aria-hidden="true"
-                      className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                    />
-                    <Input
-                      aria-describedby="trip-primary-destination-hint"
-                      autoComplete="off"
-                      className="pl-10"
-                      id="trip-primary-destination"
-                      maxLength={200}
-                      onChange={(event) =>
-                        updateField('destinations', event.target.value ? [event.target.value] : [])
-                      }
-                      placeholder={t('primaryDestinationPlaceholder')}
-                      value={form.destinations[0] ?? ''}
-                    />
-                  </div>
-                  <FieldDescription id="trip-primary-destination-hint">
-                    {t('primaryDestinationHint')}
-                  </FieldDescription>
-                </Field>
-              </>
+              <Field>
+                <FieldLabel
+                  className="w-full items-center justify-between"
+                  htmlFor="trip-primary-destination"
+                >
+                  <span>{t('primaryDestination')}</span>
+                  <span className="text-xs font-normal text-muted-foreground">{t('optional')}</span>
+                </FieldLabel>
+                <div className="relative">
+                  <MapPin
+                    aria-hidden="true"
+                    className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                  />
+                  <Input
+                    aria-describedby="trip-primary-destination-hint"
+                    autoComplete="off"
+                    className="pl-10"
+                    id="trip-primary-destination"
+                    maxLength={200}
+                    onChange={(event) =>
+                      updateField('destinations', event.target.value ? [event.target.value] : [])
+                    }
+                    placeholder={t('primaryDestinationPlaceholder')}
+                    value={form.destinations[0] ?? ''}
+                  />
+                </div>
+                <FieldDescription id="trip-primary-destination-hint">
+                  {t('primaryDestinationHint')}
+                </FieldDescription>
+              </Field>
             )}
             {trip ? tripNameField : null}
             {tripDateFields}

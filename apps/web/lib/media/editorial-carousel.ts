@@ -5,5 +5,7 @@ export function carouselIndex(index: number, total: number) {
 }
 
 export function photographicDescription(image: EditorialImageReference | undefined) {
+  if (image?.matchKind === 'generic') return null;
+
   return image?.altText?.trim().replace(/[—–]/g, '-') || null;
 }

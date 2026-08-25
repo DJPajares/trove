@@ -1,3 +1,5 @@
+import { getAllCountries } from 'countries-and-timezones';
+
 import { categorizePlaceTypes } from './place-categories.js';
 import { normalizeEditorialSubjectText, type EditorialImageSubject } from './editorial-images.js';
 import type { TrovePlaceCategory } from './places.js';
@@ -61,6 +63,19 @@ const AMBIGUOUS_PLACE_TOKENS = new Set([
   'store',
 ]);
 
+/** Business suffixes describe an offering, not the landmark a photograph depicts. */
+const PLACE_NAME_MODIFIER_TOKENS = new Set([
+  'adventure',
+  'adventures',
+  'experience',
+  'experiences',
+  'guided',
+  'tour',
+  'tours',
+  'visit',
+  'visits',
+]);
+
 const PEXELS_LOCALES: Record<string, string> = {
   ca: 'ca-ES',
   cs: 'cs-CZ',
@@ -97,6 +112,85 @@ function normalizedTokens(value: string) {
     .trim()
     .split(/\s+/)
     .filter(Boolean);
+}
+
+const COUNTRY_CODES_BY_NAME = new Map(
+  Object.values(getAllCountries()).map((country) => [
+    normalizedTokens(country.name).join(' '),
+    country.id,
+  ]),
+);
+
+for (const [name, countryCode] of [
+  ['america', 'US'],
+  ['england', 'GB'],
+  ['great britain', 'GB'],
+  ['scotland', 'GB'],
+  ['united states', 'US'],
+  ['usa', 'US'],
+  ['wales', 'GB'],
+] as const) {
+  COUNTRY_CODES_BY_NAME.set(name, countryCode);
+}
+
+type EditorialPhotoEvidence = {
+  altText?: string | null;
+  description?: string | null;
+  metadata?: readonly (string | null | undefined)[];
+  name?: string | null;
+  providerPageUrl?: string | null;
+  sourceUrl?: string | null;
+  title?: string | null;
+};
+
+function tokenVariants(token: string) {
+  if (token.endsWith('ies') && token.length > 4) return [token, `${token.slice(0, -3)}y`];
+  if (token.endsWith('s') && !token.endsWith('ss') && token.length > 3) {
+    return [token, token.slice(0, -1)];
+  }
+
+  return [token];
+}
+
+function evidenceContainsToken(evidenceTokens: ReadonlySet<string>, token: string) {
+  return tokenVariants(token).some((variant) => evidenceTokens.has(variant));
+}
+
+function expectedCountry(address: string | null | undefined) {
+  const candidate = address?.split(',').at(-1);
+  if (!candidate) return null;
+
+  const name = normalizedTokens(candidate).join(' ');
+  const code = COUNTRY_CODES_BY_NAME.get(name);
+
+  return code ? { code, tokens: normalizedTokens(candidate) } : null;
+}
+
+function countriesMentioned(tokens: string[]) {
+  const phrase = ` ${tokens.join(' ')} `;
+  const matches: Array<{ code: string; end: number; start: number }> = [];
+
+  for (const [name, code] of COUNTRY_CODES_BY_NAME) {
+    const start = phrase.indexOf(` ${name} `);
+    if (start === -1) continue;
+
+    matches.push({ code, end: start + name.length + 2, start });
+  }
+
+  return new Set(
+    matches
+      .filter(
+        (match) =>
+          !matches.some(
+            (other) =>
+              other !== match &&
+              other.start <= match.start &&
+              other.end >= match.end &&
+              other.end - other.start > match.end - match.start,
+          ),
+      )
+      .map((match) => match.code),
+  );
 }
 
 function addressLocality(address: string | null | undefined) {
@@ -190,28 +284,40 @@ export function supportedEditorialLocale(languageCode: string | null | undefined
   return exact ?? PEXELS_LOCALES[normalized.split('-')[0]?.toLowerCase() ?? ''];
 }
 
-function photoDescription(altText: string | null | undefined, photoUrl: string | null | undefined) {
-  let path = '';
-
-  if (photoUrl) {
+function photoPath(value: string | null | undefined) {
+  if (value) {
     try {
-      path = decodeURIComponent(new URL(photoUrl).pathname).replace(/-\d+\/?$/, '');
+      return decodeURIComponent(new URL(value).pathname).replace(/-\d+\/?$/, '');
     } catch {
-      path = '';
+      return '';
     }
   }
 
-  return normalizedTokens([altText, path].filter(Boolean).join(' '));
+  return '';
+}
+
+function photoDescription(photo: EditorialPhotoEvidence) {
+  return normalizedTokens(
+    [
+      photo.altText,
+      photo.description,
+      photo.name,
+      photo.title,
+      ...(photo.metadata ?? []),
+      photoPath(photo.providerPageUrl),
+      photoPath(photo.sourceUrl),
+    ]
+      .filter(Boolean)
+      .join(' '),
+  );
 }
 
 /**
- * Stock-photo metadata cannot prove physical location. Requiring the venue's
- * distinguishing words is the strongest honest evidence the provider exposes.
+ * Provider text can identify a landmark without reproducing every business
+ * suffix. Country/locality corroborates abbreviated names, while a conflicting
+ * country rules out an otherwise convincing namesake.
  */
-export function editorialMatchScore(
-  subject: EditorialImageSubject,
-  photo: { altText?: string | null; providerPageUrl?: string | null },
-) {
+export function editorialMatchScore(subject: EditorialImageSubject, photo: EditorialPhotoEvidence) {
   if (subject.kind === 'generic') return 1;
 
   const nameTokens = normalizedTokens(subject.name).filter(
@@ -219,24 +325,48 @@ export function editorialMatchScore(
   );
   if (!nameTokens.length) return 0;
 
-  const evidence = photoDescription(photo.altText, photo.providerPageUrl);
-  const evidenceTokens = new Set(evidence);
-  const distinctive = nameTokens.filter((token) => !AMBIGUOUS_PLACE_TOKENS.has(token));
-  const required = distinctive.length ? distinctive : nameTokens;
+  const evidence = photoDescription(photo);
+  const evidenceTokens = new Set(evidence.flatMap(tokenVariants));
+  const coreNameTokens = nameTokens.filter((token) => !PLACE_NAME_MODIFIER_TOKENS.has(token));
+  const distinctive = coreNameTokens.filter((token) => !AMBIGUOUS_PLACE_TOKENS.has(token));
+  const required = distinctive.length ? distinctive : coreNameTokens;
+  const matchedDistinctive = required.filter((token) =>
+    evidenceContainsToken(evidenceTokens, token),
+  );
+  if (matchedDistinctive.length === 0) return 0;
 
-  if (!required.every((token) => evidenceTokens.has(token))) return 0;
+  const country = expectedCountry(subject.address);
+  const photoCountries = countriesMentioned(evidence);
+  if (country && photoCountries.size > 0 && !photoCountries.has(country.code)) return 0;
 
   const localityTokens = normalizedTokens(addressLocality(subject.address)).filter(
     (token) => token.length > 2 && !PLACE_NAME_STOP_WORDS.has(token),
   );
-  const localityHits = localityTokens.filter((token) => evidenceTokens.has(token)).length;
+  const countryTokens = new Set(country?.tokens ?? []);
+  const specificLocalityTokens = localityTokens.filter((token) => !countryTokens.has(token));
+  const localityHits = specificLocalityTokens.filter((token) =>
+    evidenceContainsToken(evidenceTokens, token),
+  ).length;
+  const countryMatches = country ? photoCountries.has(country.code) : false;
   const ambiguous =
     distinctive.length === 0 || (distinctive.length === 1 && (distinctive[0]?.length ?? 0) < 4);
 
-  if (ambiguous && localityTokens.length > 0 && localityHits === 0) return 0;
+  if (ambiguous && specificLocalityTokens.length > 0 && localityHits === 0) return 0;
+  if (ambiguous && specificLocalityTokens.length === 0 && country && !countryMatches) return 0;
 
-  const namePhrase = nameTokens.join(' ');
+  const allDistinctiveMatched = matchedDistinctive.length === required.length;
+  const recognizableAnchor = matchedDistinctive.some((token) => token.length >= 6);
+  if (!allDistinctiveMatched && !(recognizableAnchor && (localityHits > 0 || countryMatches))) {
+    return 0;
+  }
+
+  const namePhrase = coreNameTokens.join(' ');
   const evidencePhrase = evidence.join(' ');
 
-  return (evidencePhrase.includes(namePhrase) ? 100 : 50) + localityHits;
+  return (
+    (evidencePhrase.includes(namePhrase) ? 140 : allDistinctiveMatched ? 100 : 60) +
+    matchedDistinctive.length * 4 +
+    localityHits * 3 +
+    (countryMatches ? 12 : 0)
+  );
 }

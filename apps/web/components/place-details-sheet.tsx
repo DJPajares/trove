@@ -1,6 +1,6 @@
 'use client';
 
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, XIcon } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { PlacePhotoCarousel } from '@/components/place-photo-carousel';
@@ -8,10 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetDescription,
   SheetFooter,
-  SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
@@ -45,9 +45,8 @@ type PlaceDetailsSheetProps = {
  * and a live call per opening is exactly the fan-out that turns a screen into a
  * bill. Google Maps stays one tap away for those.
  *
- * It is also where a thumbnail's photograph gets credited. The row it was opened
- * from is too small to carry the credit, so the obligation lands here, on the
- * one surface that shows the photograph at a size worth reading.
+ * Photography keeps its attribution metadata without rendering credits on this
+ * authenticated surface. Generic images are explicitly labeled as illustrative.
  */
 export function PlaceDetailsSheet({
   editorialImages,
@@ -64,10 +63,17 @@ export function PlaceDetailsSheet({
   const locale = useLocale();
 
   const category = place.snapshot?.category;
-  const address =
-    place.kind === 'custom'
-      ? null
-      : (place.snapshot?.address ?? place.providerAddress ?? t('unavailableDescription'));
+  const providerAddress = place.snapshot?.address ?? place.providerAddress;
+  const address = place.kind === 'custom' ? null : (providerAddress ?? t('unavailableDescription'));
+  const location = providerAddress
+    ?.split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(-2)
+    .join(', ');
+  const coverDescription =
+    [officialName, location].filter(Boolean).join(' - ') ||
+    (place.kind === 'custom' ? t('customDescription') : t('place'));
   const mapsHref = googleMapsPlaceHref(place);
   const coordinateFormatter = new Intl.NumberFormat(locale, { maximumFractionDigits: 5 });
   const dateFormatter = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' });
@@ -102,30 +108,41 @@ export function PlaceDetailsSheet({
   return (
     <Sheet onOpenChange={onOpenChange} open>
       <SheetContent
-        className="md:data-[side=right]:w-[min(30rem,calc(100%-0.5rem))]"
+        className="gap-0 overflow-hidden md:data-[side=right]:w-[min(30rem,calc(100%-0.5rem))]"
         closeLabel={t('close')}
         side="right"
+        showCloseButton={false}
       >
-        <SheetHeader>
-          <SheetTitle>{name}</SheetTitle>
-          <SheetDescription>
-            {officialName ?? (place.kind === 'custom' ? t('customDescription') : t('place'))}
-          </SheetDescription>
-        </SheetHeader>
-
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 pb-6">
-          <PlacePhotoCarousel category={category} images={editorialImages} name={name} />
-
-          {category ? (
-            <Badge size="sm" variant="muted">
-              {categoryTranslations(`categories.${category}`)}
-            </Badge>
-          ) : null}
+        <div className="min-h-0 flex-1 overflow-y-auto pb-6">
+          <PlacePhotoCarousel
+            category={category}
+            footer={
+              category ? (
+                <div>
+                  <Badge size="sm" variant="muted">
+                    {categoryTranslations(`categories.${category}`)}
+                  </Badge>
+                </div>
+              ) : undefined
+            }
+            heading={
+              <>
+                <SheetTitle className="text-[1.75rem] leading-[1.1] text-balance text-media-fallback-foreground">
+                  {name}
+                </SheetTitle>
+                <SheetDescription className="text-media-fallback-foreground/82">
+                  {coverDescription}
+                </SheetDescription>
+              </>
+            }
+            images={editorialImages}
+            name={name}
+          />
 
           {rows.length ? (
-            <dl className="grid gap-3">
+            <dl className="grid gap-4 px-6 pt-5">
               {rows.map((row) => (
-                <div className="grid gap-0.5" key={row.label}>
+                <div className="grid gap-1" key={row.label}>
                   <dt className="text-xs text-muted-foreground">{row.label}</dt>
                   <dd className="text-sm break-words text-foreground">{row.value}</dd>
                 </div>
@@ -146,6 +163,19 @@ export function PlaceDetailsSheet({
             </Button>
           </SheetFooter>
         ) : null}
+
+        <SheetClose
+          render={
+            <Button
+              className="absolute top-[max(1rem,var(--safe-top))] right-[max(1rem,var(--safe-right))] border-media-fallback-foreground/18 bg-neutral-950/58 text-media-fallback-foreground backdrop-blur-sm hover:bg-neutral-950/78 hover:text-media-fallback-foreground"
+              size="icon-sm"
+              variant="ghost"
+            />
+          }
+        >
+          <XIcon aria-hidden="true" />
+          <span className="sr-only">{t('close')}</span>
+        </SheetClose>
       </SheetContent>
     </Sheet>
   );

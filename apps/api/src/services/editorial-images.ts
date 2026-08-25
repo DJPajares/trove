@@ -3,7 +3,9 @@ import type { TrovePlaceCategory } from './places.js';
 
 export const EDITORIAL_IMAGE_PROVIDERS = ['pexels'] as const;
 export type EditorialImageProviderName = (typeof EDITORIAL_IMAGE_PROVIDERS)[number];
-export const EDITORIAL_IMAGE_RESOLUTION_VERSION = 2;
+export const EDITORIAL_IMAGE_RESOLUTION_VERSION = 3;
+
+export type EditorialImageMatchKind = 'exact' | 'generic';
 
 /**
  * What Trove asks a photograph for. A trip asks by destination name; a place
@@ -75,6 +77,7 @@ export interface EditorialImageProvider {
 export type EditorialImageResult =
   | {
       images: EditorialImageReference[];
+      matchKind: EditorialImageMatchKind;
       status: 'ok';
       subjectKey: string;
     }
@@ -233,7 +236,12 @@ export class EditorialImagesService {
       const images = await this.provider.search(subject);
 
       return images.length > 0
-        ? { images, status: 'ok', subjectKey }
+        ? {
+            images,
+            matchKind: subject.kind === 'generic' ? 'generic' : 'exact',
+            status: 'ok',
+            subjectKey,
+          }
         : { status: 'empty', subjectKey };
     } catch (error) {
       const providerError = getEditorialImageProviderError(error);

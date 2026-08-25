@@ -21,7 +21,7 @@ const attribution = {
   providerPageUrl: 'https://provider.example/photo/1',
 };
 
-function image(subjectKey: string, count = 1) {
+function image(subjectKey: string, count = 1, matchKind: 'exact' | 'generic' = 'exact') {
   return {
     images: Array.from({ length: count }, (_, index) => {
       const externalPhotoId = String(index + 1);
@@ -35,6 +35,7 @@ function image(subjectKey: string, count = 1) {
         width: 1200,
       };
     }),
+    matchKind,
     status: 'ok' as const,
     subjectKey,
   };
@@ -128,6 +129,32 @@ test('an ordered collection already given this session is never asked for again'
     '2',
     '3',
   ]);
+});
+
+test('generic provenance survives browser caching and never exposes multiple representative photos', async () => {
+  const fetchMock = vi.fn(async () => respond([image('place:place-a', 3, 'generic')]));
+  vi.stubGlobal('fetch', fetchMock);
+
+  const first = await resolveEditorialImages([{ name: 'Central', placeId: 'place-a' }]);
+  const second = await resolveEditorialImages([{ name: 'Central', placeId: 'place-a' }]);
+
+  expect(first.get('place:place-a')).toHaveLength(1);
+  expect(first.get('place:place-a')?.[0]?.matchKind).toBe('generic');
+  expect(second.get('place:place-a')?.[0]?.matchKind).toBe('generic');
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+test('verified image collections retain their explicit exact provenance', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => respond([image('destination:lisbon', 3)])),
+  );
+
+  const resolved = await resolveEditorialImages([{ name: 'Lisbon' }]);
+
+  expect(resolved.get('destination:lisbon')?.map((reference) => reference.matchKind)).toStrictEqual(
+    ['exact', 'exact', 'exact'],
+  );
 });
 
 test('a screen asking for too much is capped, never split into a fan-out', async () => {

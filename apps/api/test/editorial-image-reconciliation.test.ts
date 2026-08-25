@@ -5,6 +5,7 @@ import {
   type EditorialImageReconciliationOptions,
 } from '../src/services/editorial-image-reconciliation.js';
 import {
+  EDITORIAL_IMAGE_RESOLUTION_VERSION,
   EditorialImageProviderError,
   EditorialImagesService,
   type EditorialImageReference,
@@ -153,7 +154,7 @@ test('the default reconciliation pass only reports outdated sets', async () => {
   addPlaceSet('set-2', 'Moonlight');
   const current = sets.get('set-2');
   if (!current) throw new Error('Expected current-version fixture.');
-  current.resolutionVersion = 2;
+  current.resolutionVersion = EDITORIAL_IMAGE_RESOLUTION_VERSION;
 
   const report = await reconcileEditorialImages(options);
 

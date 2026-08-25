@@ -301,7 +301,7 @@ test('an exact Pexels request asks for enough candidates to verify the place', a
   expect(getProviderCallCounts()['pexels:search']).toBe(1);
 });
 
-test('a shared generic Pexels request asks for only three candidates', async () => {
+test('a shared generic Pexels request asks for only one representative candidate', async () => {
   let capturedUrl = '';
   const provider = new PexelsEditorialImageProvider({
     apiKey: 'server-key',
@@ -314,7 +314,7 @@ test('a shared generic Pexels request asks for only three candidates', async () 
 
   await provider.search({ category: 'food_and_drink', kind: 'generic', name: 'bakery' });
 
-  expect(new URL(capturedUrl).searchParams.get('per_page')).toBe('3');
+  expect(new URL(capturedUrl).searchParams.get('per_page')).toBe('1');
 });
 
 test('a Pexels photo maps to a reference that can always be credited', async () => {
@@ -451,6 +451,114 @@ test('an exact photograph must name the place, and an ambiguous name must locate
   ).toBeGreaterThan(0);
 });
 
+test('a distinctive landmark can omit business suffixes when its photo names the actual place', () => {
+  const hobbiton = {
+    address: '501 Buckland Road, Matamata 3472, New Zealand',
+    name: 'Hobbiton™ Movie Set Tours',
+  };
+
+  expect(
+    editorialMatchScore(hobbiton, {
+      altText:
+        'Lush green landscape of Hobbiton with iconic hobbit holes and serene lake reflecting the vibrant scenery.',
+      providerPageUrl: 'https://www.pexels.com/photo/hill-in-the-hobbiton-movie-set-17824132/',
+    }),
+  ).toBeGreaterThan(100);
+  expect(editorialMatchScore(hobbiton, { altText: 'Hobbiton, New Zealand' })).toBeGreaterThan(0);
+  expect(
+    editorialMatchScore(hobbiton, {
+      altText: 'Rolling green hills',
+      sourceUrl: 'https://images.example/photos/hobbiton-movie-set.jpg',
+    }),
+  ).toBeGreaterThan(0);
+});
+
+test('all available photo metadata can corroborate a place while contradictory countries reject it', () => {
+  const hobbiton = {
+    address: '501 Buckland Road, Matamata 3472, New Zealand',
+    name: 'Hobbiton™ Movie Set Tours',
+  };
+
+  expect(
+    editorialMatchScore(hobbiton, {
+      altText: 'A green hillside',
+      description: 'A visit to Hobbiton',
+      metadata: ['Matamata', 'New Zealand'],
+      name: 'Movie set landscape',
+      title: 'Hobbit holes',
+    }),
+  ).toBeGreaterThan(100);
+  expect(
+    editorialMatchScore(hobbiton, {
+      altText: 'Hobbiton movie set inspired attraction in England',
+    }),
+  ).toBe(0);
+  expect(
+    editorialMatchScore(
+      { address: '123 Main Street, Tokyo, Japan', name: 'Central' },
+      { altText: 'Central station in Kyoto, Japan' },
+    ),
+  ).toBe(0);
+});
+
+test('Pexels scores optional descriptions, names, titles, tags, and locations without extra calls', async () => {
+  let fetches = 0;
+  const provider = new PexelsEditorialImageProvider({
+    apiKey: 'server-key',
+    fetcher: async () => {
+      fetches += 1;
+      return Response.json({
+        photos: [
+          {
+            alt: 'Lush hills and a peaceful lake',
+            description: 'Explore Hobbiton',
+            height: 4000,
+            id: 17824132,
+            location: { city: 'Matamata', country: 'New Zealand' },
+            name: 'Movie set landscape',
+            photographer: 'Ada Rivera',
+            photographer_url: 'https://www.pexels.com/@ada',
+            src: { original: 'https://images.example/hobbiton-movie-set.jpg' },
+            tags: ['Hobbiton', { name: 'New Zealand' }],
+            title: 'Hobbit holes',
+            url: 'https://www.pexels.com/photo/17824132/',
+            width: 6000,
+          },
+        ],
+      });
+    },
+    hourlyBudget: 150,
+  });
+
+  const [image] = await provider.search({
+    address: '501 Buckland Road, Matamata 3472, New Zealand',
+    name: 'Hobbiton™ Movie Set Tours',
+  });
+
+  expect(image?.externalPhotoId).toBe('17824132');
+  expect(fetches).toBe(1);
+});
+
+test('Pexels retains exactly one generic photograph even when the provider returns more', async () => {
+  const photo = (id: number) => ({
+    alt: `Bakery interior ${id}`,
+    id,
+    photographer: 'Ada Rivera',
+    photographer_url: 'https://www.pexels.com/@ada',
+    src: { original: `https://images.example/${id}.jpg` },
+    url: `https://www.pexels.com/photo/bakery-${id}/`,
+  });
+  const provider = new PexelsEditorialImageProvider({
+    apiKey: 'server-key',
+    fetcher: async () => Response.json({ photos: [photo(1), photo(2), photo(3)] }),
+    hourlyBudget: 150,
+  });
+
+  expect(
+    await provider.search({ category: 'food_and_drink', kind: 'generic', name: 'bakery' }),
+  ).toHaveLength(1);
+});
+
 test('the hourly budget stops requests before they leave the process', async () => {
   let fetches = 0;
   const provider = new PexelsEditorialImageProvider({
@@ -505,7 +613,7 @@ test.each([1, 2, 3])(
     const first = await service.resolveMany([{ subject: { name: 'Kyoto' } }], owner);
     const second = await service.resolveMany([{ subject: { name: '  kyoto ' } }], owner);
 
-    expect(first[0]).toMatchObject({ status: 'ok' });
+    expect(first[0]).toMatchObject({ matchKind: 'exact', status: 'ok' });
     expect(first[0]?.status === 'ok' && first[0].images).toHaveLength(count);
     expect(first).toStrictEqual(second);
     expect(subjects, 'a fresh collection is never asked about').toHaveLength(0);
@@ -701,7 +809,9 @@ test('same-name canonical places use cached locality and share one detailed-type
     'place:place-tokyo',
     'place:place-kyoto',
   ]);
-  expect(first.every((result) => result.status === 'ok')).toBe(true);
+  expect(first.every((result) => result.status === 'ok' && result.matchKind === 'generic')).toBe(
+    true,
+  );
   expect(second).toStrictEqual(first);
   expect(subjects).toHaveLength(3);
   expect(subjects[0]).toMatchObject({
@@ -714,6 +824,28 @@ test('same-name canonical places use cached locality and share one detailed-type
   expect(subjects[2]).toMatchObject({ kind: 'generic', name: 'bakery' });
   expect(rows.get('place:place-tokyo')?.missCode).toBe('NO_VERIFIED_MATCH');
   expect(rows.get('generic:food_and_drink:bakery')?.images).toHaveLength(1);
+});
+
+test('fresh shared generic collections expose their provenance and defensively return one photo', async () => {
+  const now = new Date('2026-08-22T00:00:00.000Z');
+  const exact = blankRow('things_to_do:hidden temple');
+  rows.set(exact.subjectKey, {
+    ...exact,
+    missCode: 'NO_VERIFIED_MATCH',
+    missedAt: now,
+  });
+  storePhotos('generic:things_to_do:landmark', now, 3);
+  const { provider, subjects } = countingProvider();
+  const service = new CachedEditorialImagesService(provider, () => now);
+
+  const [result] = await service.resolveMany(
+    [{ subject: { category: 'things_to_do', name: 'Hidden Temple' } }],
+    owner,
+  );
+
+  expect(result).toMatchObject({ matchKind: 'generic', status: 'ok' });
+  expect(result?.status === 'ok' && result.images).toHaveLength(1);
+  expect(subjects).toHaveLength(0);
 });
 
 test('a verified exact miss remains quiet beyond the ordinary empty-result lifetime', async () => {

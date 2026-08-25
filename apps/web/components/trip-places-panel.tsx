@@ -151,7 +151,11 @@ export function TripPlacesPanel({
     if (!providerName) return [];
     return (
       editorialImages.get(
-        editorialSubjectKey({ category: tripPlace.place.snapshot?.category, name: providerName }),
+        editorialSubjectKey({
+          category: tripPlace.place.snapshot?.category,
+          name: providerName,
+          placeId: tripPlace.place.id,
+        }),
       ) ?? []
     );
   };

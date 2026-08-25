@@ -3,6 +3,7 @@ import type { TrovePlaceCategory } from './places.js';
 
 export const EDITORIAL_IMAGE_PROVIDERS = ['pexels'] as const;
 export type EditorialImageProviderName = (typeof EDITORIAL_IMAGE_PROVIDERS)[number];
+export const EDITORIAL_IMAGE_RESOLUTION_VERSION = 2;
 
 /**
  * What Trove asks a photograph for. A trip asks by destination name; a place
@@ -10,8 +11,14 @@ export type EditorialImageProviderName = (typeof EDITORIAL_IMAGE_PROVIDERS)[numb
  * depending on which one the traveller means.
  */
 export type EditorialImageSubject = {
+  address?: string | null;
   category?: TrovePlaceCategory;
+  kind?: 'exact' | 'generic';
+  languageCode?: string | null;
   name: string;
+  placeId?: string;
+  primaryType?: string | null;
+  rawTypes?: readonly string[];
 };
 
 /**
@@ -115,20 +122,36 @@ export type EditorialImagesLogger = {
 /**
  * The resolution key, and the whole of what makes a photograph deterministic.
  *
- * Casing, surrounding space and accents are how the same destination arrives
- * spelled three ways, so they are normalised away before the key is formed.
- * The category is part of the key rather than a filter applied afterwards, so
- * a restaurant and a district sharing a name never collapse into one answer.
+ * A provider-backed place is keyed by its canonical Place ID, so two venues
+ * named "Central" never borrow each other's photographs. Destinations remain
+ * keyed by normalised name and category, while generic fallbacks are shared by
+ * their detailed type and broad category.
  */
-export function editorialSubjectKey(subject: EditorialImageSubject) {
-  const name = subject.name
+export function normalizeEditorialSubjectText(value: string) {
+  return value
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
     .trim()
     .replace(/\s+/g, ' ')
     .toLowerCase();
+}
+
+export function editorialSubjectKey(subject: EditorialImageSubject) {
+  const name = normalizeEditorialSubjectText(subject.name);
+
+  if (subject.kind === 'generic') {
+    return `generic:${subject.category ?? 'other'}:${name}`;
+  }
+
+  if (subject.placeId) {
+    return `place:${subject.placeId.toLowerCase()}`;
+  }
 
   return `${subject.category ?? 'destination'}:${name}`;
+}
+
+function requestSubject(request: EditorialImageResolveRequest): EditorialImageSubject {
+  return request.placeId ? { ...request.subject, placeId: request.placeId } : request.subject;
 }
 
 function getEditorialImageProviderError(error: unknown): EditorialImageProviderError {
@@ -164,10 +187,11 @@ export class EditorialImagesService {
     const unique = new Map<string, UniqueEditorialImageRequest>();
 
     for (const request of requests) {
-      const subjectKey = editorialSubjectKey(request.subject);
+      const subject = requestSubject(request);
+      const subjectKey = editorialSubjectKey(subject);
       const entry = unique.get(subjectKey) ?? {
         placeIds: [],
-        subject: request.subject,
+        subject,
         subjectKey,
         tripIds: [],
       };
@@ -186,7 +210,7 @@ export class EditorialImagesService {
     const bySubjectKey = new Map(resolved.map((result) => [result.subjectKey, result]));
 
     return requests.map((request) => {
-      const subjectKey = editorialSubjectKey(request.subject);
+      const subjectKey = editorialSubjectKey(requestSubject(request));
 
       return bySubjectKey.get(subjectKey) ?? { status: 'empty', subjectKey };
     });

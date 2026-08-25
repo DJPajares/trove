@@ -97,7 +97,11 @@ async function main() {
   const resolved: Record<string, EditorialImageReference> = {};
 
   for (const subject of LANDING_IMAGE_SUBJECTS) {
-    const [image] = await provider.search({ category: subject.category, name: subject.name });
+    const [image] = await provider.search({
+      category: subject.category,
+      kind: 'generic',
+      name: subject.name,
+    });
 
     if (!image) {
       throw new Error(

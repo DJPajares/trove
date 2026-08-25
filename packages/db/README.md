@@ -70,4 +70,10 @@ Memory photos are not seeded, because rows without matching objects in the priva
 4. Apply committed migrations in a deployment with `pnpm --filter @trove/db db:migrate:deploy`.
 5. Regenerate the client with `pnpm --filter @trove/db db:generate` whenever the schema changes.
 
+For a production deployment from your terminal, copy `.env.production.example`
+to the gitignored root `.env.production`, set `TROVE_ENVIRONMENT="production"`,
+and provide the production session/direct `DIRECT_URL` on port `5432`. Run
+`pnpm db:migrate:prod`; it validates the target before invoking
+`prisma migrate deploy` and never prints the connection string.
+
 Do not run `prisma db pull` against Supabase-managed schemas or add `auth`/`storage` to the Prisma datasource.

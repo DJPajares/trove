@@ -9,7 +9,11 @@ import type {
   EditorialImageSubject,
 } from './editorial-images.js';
 import { EditorialImageProviderError } from './editorial-images.js';
-import type { TrovePlaceCategory } from './places.js';
+import {
+  buildEditorialSearchQuery,
+  editorialMatchScore,
+  supportedEditorialLocale,
+} from './editorial-image-matching.js';
 import type { ProviderCallSource } from './provider-usage.js';
 import { recordProviderCall } from './provider-usage.js';
 
@@ -17,31 +21,17 @@ const DEFAULT_BASE_URL = 'https://api.pexels.com';
 const DEFAULT_TIMEOUT_MS = 8_000;
 
 /**
- * One request returns the first three landscape results in provider order. The
- * order is cached with the subject, so the representative first photo and the
- * place-detail collection remain stable until the cache becomes stale.
+ * An exact request asks for enough landscape candidates to verify the venue;
+ * a generic request asks for only three. At most three verified references are
+ * retained, with provider order breaking score ties for stable cached media.
  */
 export const PEXELS_SEARCH_PARAMETERS = {
   orientation: 'landscape',
-  per_page: '3',
   size: 'large',
 } as const;
 
-/**
- * A name alone is ambiguous - "Central" is a park, a station and a market - so
- * the category the traveller already told Trove about is added to the query.
- * These terms are part of the resolution key's meaning and changing one changes
- * which photograph a subject resolves to.
- */
-const CATEGORY_QUERY_TERMS: Record<TrovePlaceCategory, string> = {
-  destination: 'travel',
-  food_and_drink: 'restaurant',
-  other: '',
-  shopping: 'shopping',
-  stay: 'hotel',
-  things_to_do: 'landmark',
-  transport: 'station',
-};
+const EXACT_CANDIDATE_COUNT = '15';
+const GENERIC_CANDIDATE_COUNT = '3';
 
 type Fetcher = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
@@ -74,6 +64,7 @@ type PexelsSearchResponse = {
 export type PexelsEditorialImageProviderOptions = {
   apiKey: string;
   baseUrl?: string;
+  beforeRequest?: () => Promise<void>;
   clock?: () => Date;
   fetcher?: Fetcher;
   hourlyBudget: number;
@@ -100,10 +91,7 @@ export function mapPexelsError(responseStatus: number, body: PexelsSearchRespons
 }
 
 export function buildPexelsQuery(subject: EditorialImageSubject) {
-  const categoryTerm = CATEGORY_QUERY_TERMS[subject.category ?? 'destination'];
-  const name = subject.name.trim().replace(/\s+/g, ' ');
-
-  return categoryTerm ? `${name} ${categoryTerm}` : name;
+  return buildEditorialSearchQuery(subject);
 }
 
 function cleanString(value: string | undefined) {
@@ -148,6 +136,7 @@ export class PexelsEditorialImageProvider implements EditorialImageProvider {
 
   private readonly apiKey: string;
   private readonly baseUrl: string;
+  private readonly beforeRequest: (() => Promise<void>) | undefined;
   private readonly clock: () => Date;
   private readonly fetcher: Fetcher;
   private readonly hourlyBudget: number;
@@ -157,6 +146,7 @@ export class PexelsEditorialImageProvider implements EditorialImageProvider {
   constructor(options: PexelsEditorialImageProviderOptions) {
     this.apiKey = options.apiKey.trim();
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '');
+    this.beforeRequest = options.beforeRequest;
     this.clock = options.clock ?? (() => new Date());
     this.fetcher = options.fetcher ?? globalThis.fetch;
     this.hourlyBudget = options.hourlyBudget;
@@ -167,6 +157,13 @@ export class PexelsEditorialImageProvider implements EditorialImageProvider {
   async search(subject: EditorialImageSubject) {
     const url = new URL('/v1/search', this.baseUrl);
     url.searchParams.set('query', buildPexelsQuery(subject));
+    url.searchParams.set(
+      'per_page',
+      subject.kind === 'generic' ? GENERIC_CANDIDATE_COUNT : EXACT_CANDIDATE_COUNT,
+    );
+
+    const locale = supportedEditorialLocale(subject.languageCode);
+    if (locale) url.searchParams.set('locale', locale);
 
     for (const [key, value] of Object.entries(PEXELS_SEARCH_PARAMETERS)) {
       url.searchParams.set(key, value);
@@ -177,10 +174,17 @@ export class PexelsEditorialImageProvider implements EditorialImageProvider {
     const seenUrls = new Set<string>();
 
     return (body.photos ?? [])
-      .flatMap((photo) => {
+      .flatMap((photo, position) => {
         const reference = mapPexelsPhoto(photo);
+        const score = reference
+          ? editorialMatchScore(subject, {
+              altText: reference.altText,
+              providerPageUrl: reference.attribution.providerPageUrl,
+            })
+          : 0;
         if (
           !reference ||
+          score === 0 ||
           seenIds.has(reference.externalPhotoId) ||
           seenUrls.has(reference.sourceUrl)
         ) {
@@ -188,8 +192,10 @@ export class PexelsEditorialImageProvider implements EditorialImageProvider {
         }
         seenIds.add(reference.externalPhotoId);
         seenUrls.add(reference.sourceUrl);
-        return [reference];
+        return [{ position, reference, score }];
       })
+      .toSorted((left, right) => right.score - left.score || left.position - right.position)
+      .map(({ reference }) => reference)
       .slice(0, 3);
   }
 
@@ -203,8 +209,15 @@ export class PexelsEditorialImageProvider implements EditorialImageProvider {
       throw new EditorialImageProviderError('configuration_missing');
     }
 
-    const now = this.clock().getTime();
+    if (
+      !canSpendEditorialImageCall({ hourlyBudget: this.hourlyBudget, now: this.clock().getTime() })
+    ) {
+      throw new EditorialImageProviderError('rate_limited');
+    }
 
+    if (this.beforeRequest) await this.beforeRequest();
+
+    const now = this.clock().getTime();
     if (!canSpendEditorialImageCall({ hourlyBudget: this.hourlyBudget, now })) {
       throw new EditorialImageProviderError('rate_limited');
     }

@@ -11,7 +11,9 @@
   "scripts": {
     "build": "../../node_modules/.bin/tsc --project tsconfig.build.json",
     "dev": "tsx watch src/server.ts",
+    "editorial-images:reconcile": "tsx scripts/reconcile-editorial-images.ts",
     "lint": "../../node_modules/.bin/oxlint --deny-warnings scripts src test",
+    "production:operation": "tsx scripts/run-production-operation.ts",
     "start": "node dist/server.js",
     "test": "../../node_modules/.bin/tsc --noEmit --project tsconfig.test.json && ../../node_modules/.bin/vitest run",
     "typecheck": "../../node_modules/.bin/tsc --noEmit --project tsconfig.json"

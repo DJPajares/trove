@@ -203,7 +203,7 @@ export function TripsManager() {
 
       <Sheet onOpenChange={(open) => !open && setCreating(false)} open={creating}>
         <SheetContent
-          className="w-full md:data-[side=right]:w-[min(44rem,calc(100%-0.5rem))]"
+          className="w-full md:data-[side=right]:w-[min(36rem,calc(100%-0.5rem))]"
           closeLabel={t('close')}
         >
           <SheetHeader className="border-b">

@@ -168,11 +168,15 @@ test('accepts IANA timezone identifiers and safely rejects invalid values', () =
   expect(isValidIanaTimeZone('not-a-timezone')).toBe(false);
 });
 
-test('uses a country primary timezone only for a country-only destination', () => {
+test('uses a named country to infer a destination timezone without guessing bare cities', () => {
+  expect(resolveCountryPrimaryTimeZone('Japan')).toBe('Asia/Tokyo');
+  expect(resolveCountryPrimaryTimeZone('Kyoto, Japan')).toBe('Asia/Tokyo');
   expect(resolveCountryPrimaryTimeZone('New Zealand')).toBe('Pacific/Auckland');
   expect(resolveCountryPrimaryTimeZone('  new   zealand  ')).toBe('Pacific/Auckland');
+  expect(resolveCountryPrimaryTimeZone('Auckland, New Zealand')).toBe('Pacific/Auckland');
+  expect(resolveCountryPrimaryTimeZone('Queenstown, Otago, New Zealand')).toBe('Pacific/Auckland');
   expect(resolveCountryPrimaryTimeZone('Auckland')).toBeNull();
-  expect(resolveCountryPrimaryTimeZone('Auckland, New Zealand')).toBeNull();
+  expect(resolveCountryPrimaryTimeZone('Auckland, Somewhere unknown')).toBeNull();
 });
 
 test('keeps explicit and Place-specific timezones ahead of country inference', () => {

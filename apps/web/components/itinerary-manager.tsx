@@ -483,10 +483,12 @@ export function ItineraryManager({
   const formatDate = (date: string, long = false) =>
     (long ? longDateFormatter : dateFormatter).format(new Date(`${date}T00:00:00.000Z`));
 
+  const dayPickerOption = (day: ItineraryDay, index: number) =>
+    t('dayOption', { date: formatDate(day.date), number: index + 1 });
   const dayOption = (day: ItineraryDay, index: number) =>
     day.name
       ? t('dayOptionNamed', { date: formatDate(day.date), name: day.name, number: index + 1 })
-      : t('dayOption', { date: formatDate(day.date), number: index + 1 });
+      : dayPickerOption(day, index);
 
   function placeName(tripPlace: ItineraryTripPlace | null) {
     if (!tripPlace) return null;
@@ -1462,7 +1464,7 @@ export function ItineraryManager({
         <Select onValueChange={(value) => setSelectedDayId(value)} value={selectedDayId}>
           <SelectTrigger aria-label={t('chooseDay')} className="min-w-0 flex-1">
             <SelectValue>
-              {selectedDay ? dayOption(selectedDay, selectedIndex) : t('chooseDay')}
+              {selectedDay ? dayPickerOption(selectedDay, selectedIndex) : t('chooseDay')}
             </SelectValue>
           </SelectTrigger>
           <SelectContent align="start">
@@ -1471,7 +1473,7 @@ export function ItineraryManager({
                 {/* How full a day is decides which day you want next, so the
                     dropdown carries the count the desktop rail already shows. */}
                 <span className="flex w-full items-center justify-between gap-3">
-                  <span>{dayOption(day, index)}</span>
+                  <span>{dayPickerOption(day, index)}</span>
                   <span className="text-xs tabular-nums text-muted-foreground">
                     {t('dayItemCount', { count: day.items.length })}
                   </span>

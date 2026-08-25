@@ -3,12 +3,10 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
-import { AccountMenu } from '@/components/account-menu';
 import { AppHeader } from '@/components/app-header';
+import { AppMenuProvider, AppMenuTrigger } from '@/components/app-menu';
 import { AppearanceMenu } from '@/components/appearance-menu';
 import { DesktopAppHeader } from '@/components/desktop-app-header';
-import { GlobalSearch } from '@/components/global-search';
-import { NotificationCenter } from '@/components/notification-center';
 import { PageTransition } from '@/components/page-transition';
 import { PrimaryNavigation } from '@/components/primary-navigation';
 import { Button } from '@/components/ui/button';
@@ -47,12 +45,7 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
 
       <div className="flex items-center justify-self-end gap-1">
         {isSignedIn ? (
-          <>
-            <GlobalSearch />
-            <NotificationCenter />
-            <AppearanceMenu />
-            <AccountMenu />
-          </>
+          <AppMenuTrigger variant="desktop" />
         ) : (
           <>
             <AppearanceMenu />
@@ -82,7 +75,7 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
     </div>
   );
 
-  return (
+  const shell = (
     <div
       className={cn(
         'min-h-dvh bg-surface text-foreground',
@@ -119,4 +112,6 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
       {isSignedIn ? <PrimaryNavigation variant="mobile" /> : null}
     </div>
   );
+
+  return isSignedIn ? <AppMenuProvider>{shell}</AppMenuProvider> : shell;
 }

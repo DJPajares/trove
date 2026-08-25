@@ -1,5 +1,7 @@
-import { ToolsManager } from '@/components/tools-manager';
+import { redirect } from 'next/navigation';
 
-export default async function ToolsPage() {
-  return <ToolsManager />;
+import { defaultToolPath } from '@/lib/navigation';
+
+export default function ToolsPage() {
+  redirect(defaultToolPath);
 }

@@ -5,8 +5,8 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 
 import { CurrencyCombobox, useCurrencyMetadata } from '@/components/currency-combobox';
-import { EditorialSection } from '@/components/editorial-section';
 import { MoneyInput } from '@/components/money-input';
+import { PageHeader } from '@/components/page-header';
 import { usePreferences } from '@/components/preferences-provider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -135,7 +135,8 @@ export function CurrencyConverter() {
     : null;
 
   return (
-    <EditorialSection description={t('description')} headingLevel={2} title={t('title')}>
+    <section className="mx-auto w-full max-w-5xl space-y-7">
+      <PageHeader description={t('description')} title={t('title')} />
       <form className="space-y-5" onSubmit={handleSubmit}>
         {error ? (
           <Alert role="alert" variant="destructive">
@@ -232,6 +233,6 @@ export function CurrencyConverter() {
           )}
         </div>
       ) : null}
-    </EditorialSection>
+    </section>
   );
 }

@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { appMenuActionClassName } from '@/components/app-menu-action';
 import { ContentSkeleton } from '@/components/content-skeleton';
 import { PageState } from '@/components/page-state';
 import { SearchField } from '@/components/search-field';
@@ -86,7 +87,12 @@ function ResultRow({
   );
 }
 
-export function GlobalSearch() {
+type GlobalSearchProps = {
+  label?: string;
+  onNavigate?: () => void;
+};
+
+export function GlobalSearch({ label, onNavigate }: Readonly<GlobalSearchProps> = {}) {
   const t = useTranslations('globalSearch');
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -98,7 +104,10 @@ export function GlobalSearch() {
   const resultCount =
     response?.groups.reduce((total, group) => total + group.results.length, 0) ?? 0;
 
-  const close = useCallback(() => setOpen(false), []);
+  const close = useCallback(() => {
+    setOpen(false);
+    onNavigate?.();
+  }, [onNavigate]);
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
@@ -165,9 +174,18 @@ export function GlobalSearch() {
   return (
     <Dialog onOpenChange={setOpen} open={open}>
       <DialogTrigger
-        render={<Button aria-label={t('button')} size="icon" type="button" variant="ghost" />}
+        render={
+          <Button
+            aria-label={label ?? t('button')}
+            className={label ? appMenuActionClassName : undefined}
+            size={label ? 'default' : 'icon'}
+            type="button"
+            variant={label ? 'outline' : 'ghost'}
+          />
+        }
       >
-        <Search aria-hidden="true" className="size-4" />
+        <Search aria-hidden="true" className={label ? 'size-5 text-brand' : 'size-4'} />
+        {label ? <span>{label}</span> : null}
       </DialogTrigger>
       <DialogContent
         className="grid h-[min(42rem,calc(100dvh-2rem))] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-2xl sm:p-0"

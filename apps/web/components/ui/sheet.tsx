@@ -81,18 +81,20 @@ function SheetContent({
   className,
   children,
   closeLabel,
+  keepMounted = false,
   mobileSide = 'bottom',
   side = 'right',
   showCloseButton = true,
   ...props
 }: SheetPrimitive.Popup.Props & {
   closeLabel: string;
+  keepMounted?: boolean;
   mobileSide?: SheetSide;
   side?: SheetSide;
   showCloseButton?: boolean;
 }) {
   return (
-    <SheetPortal>
+    <SheetPortal keepMounted={keepMounted}>
       <SheetOverlay />
       <SheetPrimitive.Viewport
         className="fixed inset-0 z-[var(--layer-overlay)]"

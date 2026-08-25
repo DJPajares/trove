@@ -4,6 +4,7 @@ import { Bell, CheckCheck, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 
+import { appMenuActionClassName } from '@/components/app-menu-action';
 import { useNotifications } from '@/components/notifications-provider';
 import { PageState } from '@/components/page-state';
 import { Badge } from '@/components/ui/badge';
@@ -17,8 +18,14 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 
-export function NotificationCenter() {
+type NotificationCenterProps = {
+  label?: string;
+  onNavigate?: () => void;
+};
+
+export function NotificationCenter({ label, onNavigate }: Readonly<NotificationCenterProps> = {}) {
   const t = useTranslations('notifications');
   const locale = useLocale();
   const { markAllRead, markRead, notifications, refresh, status } = useNotifications();
@@ -31,17 +38,22 @@ export function NotificationCenter() {
         render={
           <Button
             aria-label={t('centerButton', { count })}
-            className="relative"
+            className={cn('relative', label && appMenuActionClassName)}
             disabled={status === 'loading'}
-            size="icon"
+            size={label ? 'default' : 'icon'}
             type="button"
-            variant="ghost"
+            variant={label ? 'outline' : 'ghost'}
           />
         }
       >
-        <Bell aria-hidden="true" className="size-4" />
+        <Bell aria-hidden="true" className={label ? 'size-5 text-brand' : 'size-4'} />
+        {label ? <span>{label}</span> : null}
         {count ? (
-          <Badge className="absolute top-1 right-1" size="count" variant="solid">
+          <Badge
+            className={cn('absolute', label ? 'top-3 right-3' : 'top-1 right-1')}
+            size="count"
+            variant="solid"
+          >
             {count > 9 ? '9+' : count}
           </Badge>
         ) : null}
@@ -81,7 +93,10 @@ export function NotificationCenter() {
                   render={
                     <Link
                       href={notification.actionPath}
-                      onClick={() => void markRead(notification.id).catch(() => undefined)}
+                      onClick={() => {
+                        onNavigate?.();
+                        void markRead(notification.id).catch(() => undefined);
+                      }}
                       role="listitem"
                     />
                   }
@@ -122,7 +137,7 @@ export function NotificationCenter() {
           <Button
             className="w-full justify-start"
             nativeButton={false}
-            render={<Link href="/profile#notifications" />}
+            render={<Link href="/profile#notifications" onClick={onNavigate} />}
             size="sm"
             variant="ghost"
           >

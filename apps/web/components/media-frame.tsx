@@ -4,6 +4,7 @@ import { cva } from 'class-variance-authority';
 import Image from 'next/image';
 import { useState } from 'react';
 
+import { Skeleton } from '@/components/ui/skeleton';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { pexelsImageLoader } from '@/lib/media/pexels-loader';
 import { resolvePlaceCategoryFallback } from '@/lib/media/place-category-fallback';
@@ -103,6 +104,12 @@ function EditorialImage({
 
   return (
     <>
+      <Skeleton
+        className={cn(
+          'absolute inset-0 rounded-none transition-opacity duration-[var(--motion-standard)]',
+          loaded ? 'pointer-events-none opacity-0' : 'opacity-100',
+        )}
+      />
       <Image
         alt={alt}
         className={cn(
@@ -139,9 +146,19 @@ export function MediaFrame({
   source,
   variant = 'card',
 }: Readonly<MediaFrameProps>) {
-  const [unreachable, setUnreachable] = useState(false);
+  const sourceKey =
+    source.kind === 'editorial'
+      ? `editorial:${source.reference.sourceUrl}`
+      : source.kind === 'fallback'
+        ? 'fallback'
+        : source.kind === 'local'
+          ? `local:${source.src.src}`
+          : `${source.kind}:${source.url}`;
+  const [unreachableSourceKey, setUnreachableSourceKey] = useState<string | null>(null);
+  const [loadedSourceKey, setLoadedSourceKey] = useState<string | null>(null);
   const frameClassName = cn(frameVariants({ variant }), className);
-  const resolved = unreachable ? ({ kind: 'fallback' } as const) : source;
+  const resolved = unreachableSourceKey === sourceKey ? ({ kind: 'fallback' } as const) : source;
+  const loaded = loadedSourceKey === sourceKey;
 
   if (resolved.kind === 'fallback') {
     return (
@@ -165,7 +182,8 @@ export function MediaFrame({
       >
         <EditorialImage
           alt={alt}
-          onError={() => setUnreachable(true)}
+          key={sourceKey}
+          onError={() => setUnreachableSourceKey(sourceKey)}
           preload={preload}
           reference={resolved.reference}
           sizes={sizes}
@@ -177,14 +195,24 @@ export function MediaFrame({
   if (resolved.kind === 'memory' && /^(blob:|data:)/.test(resolved.url)) {
     return (
       <span className={frameClassName} data-media-kind="memory" data-slot={dataSlot}>
+        <Skeleton
+          className={cn(
+            'absolute inset-0 rounded-none transition-opacity duration-[var(--motion-standard)]',
+            loaded ? 'pointer-events-none opacity-0' : 'opacity-100',
+          )}
+        />
         {/* Offline Memory previews use browser-local URLs that Next Image cannot optimize. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           alt={alt}
-          className="absolute inset-0 size-full object-cover"
+          className={cn(
+            'absolute inset-0 size-full object-cover transition-opacity duration-[var(--motion-standard)]',
+            loaded ? 'opacity-100' : 'opacity-0',
+          )}
           decoding="async"
           loading={preload ? 'eager' : 'lazy'}
-          onError={() => setUnreachable(true)}
+          onError={() => setUnreachableSourceKey(sourceKey)}
+          onLoad={() => setLoadedSourceKey(sourceKey)}
           src={resolved.url}
         />
       </span>
@@ -195,11 +223,21 @@ export function MediaFrame({
 
   return (
     <span className={frameClassName} data-media-kind={resolved.kind} data-slot={dataSlot}>
+      <Skeleton
+        className={cn(
+          'absolute inset-0 rounded-none transition-opacity duration-[var(--motion-standard)]',
+          loaded ? 'pointer-events-none opacity-0' : 'opacity-100',
+        )}
+      />
       <Image
         alt={alt}
-        className="object-cover"
+        className={cn(
+          'object-cover transition-opacity duration-[var(--motion-standard)]',
+          loaded ? 'opacity-100' : 'opacity-0',
+        )}
         fill
-        onError={() => setUnreachable(true)}
+        onError={() => setUnreachableSourceKey(sourceKey)}
+        onLoad={() => setLoadedSourceKey(sourceKey)}
         preload={preload}
         sizes={sizes}
         src={src}

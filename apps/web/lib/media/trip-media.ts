@@ -18,6 +18,7 @@ type ResolveTripMediaSourceInput = {
   coverUrl?: string | null;
   editorial?: EditorialImageReference | null;
   memoryUrl?: string | null;
+  preferMemory?: boolean;
 };
 
 /**
@@ -40,9 +41,11 @@ export function resolveTripMediaSource({
   coverUrl,
   editorial,
   memoryUrl,
+  preferMemory = false,
 }: ResolveTripMediaSourceInput): TripMediaSource {
   const resolvedCoverUrl = coverUrl?.trim();
   const resolvedMemoryUrl = memoryUrl?.trim();
+  if (preferMemory && resolvedMemoryUrl) return { kind: 'memory', url: resolvedMemoryUrl };
   if (resolvedCoverUrl) return { kind: 'trip-cover', url: resolvedCoverUrl };
   if (resolvedMemoryUrl) return { kind: 'memory', url: resolvedMemoryUrl };
   if (editorial) return { kind: 'editorial', reference: editorial };

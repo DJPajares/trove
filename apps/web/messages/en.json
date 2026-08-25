@@ -1,7 +1,8 @@
 {
   "app": {
     "name": "Trove",
-    "description": "Plan it. Live it. Remember it."
+    "description": "Plan it. Live it. Remember it.",
+    "loading": "Opening Trove…"
   },
   "navigation": {
     "primary": "Primary navigation",

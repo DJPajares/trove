@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { editorialSubjectKey } from '@/lib/media/editorial-images';
-import { resolveTripMediaSource } from '@/lib/media/trip-media';
+import { resolveTripMediaSource, type TripMediaSource } from '@/lib/media/trip-media';
 import { fetchTrip, type Trip } from '@/lib/trips/api';
 import {
   primaryTripDestinations,
@@ -36,12 +36,15 @@ export type { TripSection };
 
 type TripSectionHeaderProps = {
   actions?: ReactNode;
+  coverMeta?: ReactNode;
+  coverSource?: TripMediaSource;
   currentSection: TripSection;
   density?: HeaderDensity;
   description?: string;
   media?: ReactNode;
   meta?: ReactNode;
   showCover?: boolean;
+  trip?: Trip;
   tripId: string;
 };
 
@@ -64,24 +67,28 @@ function emphasisClasses(destination: TripDestination, active: boolean) {
  */
 export function TripSectionHeader({
   actions,
+  coverMeta,
+  coverSource,
   currentSection,
   density = 'default',
   description,
   media,
   meta,
   showCover = false,
+  trip: suppliedTrip,
   tripId,
 }: Readonly<TripSectionHeaderProps>) {
   const t = useTranslations('trips');
   const locale = useLocale();
-  const [trip, setTrip] = useState<Trip | null>(null);
+  const [loadedTrip, setLoadedTrip] = useState<{ trip: Trip; tripId: string } | null>(null);
 
   useEffect(() => {
+    if (suppliedTrip?.id === tripId) return;
+
     let active = true;
-    setTrip(null);
     void fetchTrip(tripId)
       .then((result) => {
-        if (active) setTrip(result.trip);
+        if (active) setLoadedTrip({ trip: result.trip, tripId });
       })
       // Navigation must never be the thing that breaks: without the trip the
       // header simply loses its name and dates.
@@ -90,9 +97,16 @@ export function TripSectionHeader({
     return () => {
       active = false;
     };
-  }, [tripId]);
+  }, [suppliedTrip, tripId]);
 
-  const coverSubject = showCover && trip ? tripEditorialSubject(trip) : null;
+  const trip =
+    suppliedTrip?.id === tripId
+      ? suppliedTrip
+      : loadedTrip?.tripId === tripId
+        ? loadedTrip.trip
+        : null;
+
+  const coverSubject = showCover && trip && !coverSource ? tripEditorialSubject(trip) : null;
   const editorialImages = useEditorialImages(coverSubject ? [coverSubject] : []);
   const editorial = coverSubject
     ? (editorialImages.get(editorialSubjectKey(coverSubject))?.[0] ?? null)
@@ -133,7 +147,9 @@ export function TripSectionHeader({
             className="max-h-[58dvh] w-full rounded-none md:rounded-[var(--radius-2xl)]"
             preload
             sizes="(max-width: 1023px) 100vw, 1024px"
-            source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
+            source={
+              coverSource ?? resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })
+            }
             variant="hero"
           />
           <div className="pointer-events-none absolute inset-0 flex flex-col justify-end gap-2 bg-gradient-to-t from-surface-overlay from-20% via-surface-overlay/55 to-transparent p-5 md:rounded-[var(--radius-2xl)] md:p-7">
@@ -151,6 +167,7 @@ export function TripSectionHeader({
               {' · '}
               {t(`lifecycle.${trip.lifecycle}`)}
             </p>
+            {coverMeta ? <div className="pointer-events-auto -ml-1">{coverMeta}</div> : null}
           </div>
           <Link
             aria-label={t('backToTrips')}

@@ -10,6 +10,7 @@ const {
   editorialSubjectKey,
   MAX_EDITORIAL_IMAGE_SUBJECTS,
   primaryEditorialImage,
+  readCachedEditorialImages,
   resetEditorialImageCache,
   resolveEditorialImages,
 } = await import('../lib/media/editorial-images.ts');
@@ -129,6 +130,11 @@ test('an ordered collection already given this session is never asked for again'
     '2',
     '3',
   ]);
+  expect(
+    readCachedEditorialImages([{ name: 'Lisbon' }])
+      .get('destination:lisbon')
+      ?.map((item) => item.externalPhotoId),
+  ).toStrictEqual(['1', '2', '3']);
 });
 
 test('generic provenance survives browser caching and never exposes multiple representative photos', async () => {

@@ -24,7 +24,6 @@ import { MemoryEditorDialog } from '@/components/memory-editor-dialog';
 import { PageState } from '@/components/page-state';
 import { StoryCoverPicker } from '@/components/story-cover-picker';
 import { TripSectionHeader } from '@/components/trip-section-header';
-import { TripMedia } from '@/components/trip-media';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import { Button } from '@/components/ui/button';
 import {
@@ -52,7 +51,7 @@ import {
 import { selectPhotoLayout } from '@/lib/memories/photo-layout';
 import { buildTripStory, placeName, type StoryPlace, type TripStory } from '@/lib/memories/story';
 import { fetchTrip, updateTripExperienceRating, type Trip } from '@/lib/trips/api';
-import { tripDestinationSummary, tripEditorialSubject } from '@/lib/trips/summary';
+import { tripEditorialSubject } from '@/lib/trips/summary';
 import { cn } from '@/lib/utils';
 
 type LoadState =
@@ -253,7 +252,6 @@ function MemoryEntry({
 
 export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('memories.story');
-  const mediaTranslations = useTranslations('media');
   const locale = useLocale();
   const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
@@ -277,7 +275,11 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   }, [focusedMemoryId, state.status]);
 
   const refresh = useCallback(async () => {
-    setState({ data: null, status: 'loading' });
+    setState((current) =>
+      current.status === 'ready' && current.data.trip.id === tripId
+        ? current
+        : { data: null, status: 'loading' },
+    );
     try {
       const [memories, trip] = await Promise.all([fetchMemories(tripId), fetchTrip(tripId)]);
       setState({
@@ -285,7 +287,9 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
         status: 'ready',
       });
     } catch {
-      setState({ data: null, status: 'error' });
+      setState((current) =>
+        current.status === 'ready' ? current : { data: null, status: 'error' },
+      );
     }
     void fetchItinerary(tripId)
       .then(setItinerary)
@@ -303,7 +307,10 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
 
   // One subject for the whole screen, and none at all once the trip already has
   // a cover of its own — the same shape every other trip surface asks for.
-  const subject = state.data ? tripEditorialSubject(state.data.trip) : null;
+  const subject =
+    state.data && !state.data.storyCover?.url && !state.data.trip.coverPhotoUrl
+      ? tripEditorialSubject(state.data.trip)
+      : null;
   const editorialImages = useEditorialImages(subject ? [subject] : []);
   const editorial = subject
     ? (editorialImages.get(editorialSubjectKey(subject))?.[0] ?? null)
@@ -369,7 +376,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
       <PageState
         className="mx-auto max-w-5xl"
         kind="loading"
-        loadingShape="media"
+        loadingShape="tripHero"
         title={t('loading')}
       />
     );
@@ -393,15 +400,10 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
     coverUrl: trip.coverPhotoUrl,
     editorial,
     memoryUrl: storyCover?.url,
+    preferMemory: true,
   });
-  const hasPhoto = headSource.kind !== 'fallback';
-  const destinations = tripDestinationSummary(trip);
   const dateOnly = (value: string) =>
     new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeZone: 'UTC' }).format(
-      new Date(`${value}T00:00:00.000Z`),
-    );
-  const shortDate = (value: string) =>
-    new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
       new Date(`${value}T00:00:00.000Z`),
     );
   const localTime = (memory: Memory) => {
@@ -524,10 +526,12 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
     );
   }
 
-  const dateRange = t('dateRange', {
-    end: shortDate(trip.endDate),
-    start: shortDate(trip.startDate),
-  });
+  const tripRating = ratingAffordance(
+    t('rateTrip'),
+    trip.experienceRating,
+    () => setRatingEditor({ kind: 'trip' }),
+    'onImage',
+  );
 
   const header = (
     <TripSectionHeader
@@ -554,61 +558,13 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
           </DropdownMenu>
         </>
       }
+      coverMeta={tripRating}
+      coverSource={headSource}
       currentSection="memories"
+      showCover
+      trip={trip}
       tripId={tripId}
     />
-  );
-
-  const tripRating = ratingAffordance(
-    t('rateTrip'),
-    trip.experienceRating,
-    () => setRatingEditor({ kind: 'trip' }),
-    hasPhoto ? 'onImage' : 'default',
-  );
-
-  /**
-   * With a photograph — the trip's own cover, a chosen Memory, or, absent both,
-   * an editorial stand-in for the destination — it opens the story and carries
-   * the dates over it. Without one, the same line stands on its own: an empty
-   * frame would be a decoration standing in for something that isn't there.
-   */
-  const storyHead = hasPhoto ? (
-    <div className="relative -mx-[var(--layout-gutter)] overflow-hidden md:mx-0 md:rounded-[var(--radius-xl)]">
-      <TripMedia
-        alt={
-          headSource.kind === 'editorial'
-            ? mediaTranslations('alt.tripEditorial', { name: destinations ?? trip.name })
-            : ''
-        }
-        className="w-full"
-        preload
-        sizes="(max-width: 640px) 100vw, 1024px"
-        source={headSource}
-        variant="hero"
-      />
-      {/* Both layers sit over the credit chip the frame draws in the bottom
-          corner, so both stay `pointer-events-none` to keep it clickable; the
-          bottom padding below clears it visually. Only the rating takes events
-          back, because it is the one control in here. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent"
-      />
-      <div
-        className={cn(
-          'pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-center gap-x-2 gap-y-1 p-4 sm:p-6',
-          headSource.kind === 'editorial' && 'pb-10 sm:pb-12',
-        )}
-      >
-        <p className="text-sm font-medium text-white/90">{dateRange}</p>
-        <span className="pointer-events-auto">{tripRating}</span>
-      </div>
-    </div>
-  ) : (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-      <p className="text-sm font-medium text-muted-foreground">{dateRange}</p>
-      {tripRating}
-    </div>
   );
 
   const ratingDay =
@@ -684,7 +640,6 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
       <section className="mx-auto w-full max-w-5xl space-y-7">
         {header}
         {liveRegion}
-        {storyHead}
         <PageState
           actions={
             <Button onClick={() => setEditor({ memory: null, mode: 'create' })}>
@@ -707,7 +662,6 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
     <section className="mx-auto w-full max-w-5xl space-y-8">
       {header}
       {liveRegion}
-      {storyHead}
 
       {/* Highlights and Places are ways into the story, not second copies of it. */}
       {lensOptions.length > 1 ? (

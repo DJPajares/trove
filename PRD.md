@@ -189,6 +189,8 @@ Mobile should be the primary design reference for in-trip use.
 
 Desktop/tablet should use additional space intelligently, including split itinerary/map layouts where appropriate.
 
+Loading must preserve orientation. Keep the global shell and any already-rendered content visible during route changes and background refreshes; reserve the final geometry with layout-matched skeletons only where content has not loaded yet. Media must reserve its aspect ratio and use a stable placeholder until the image is ready. Do not fade the whole content canvas to blank, and respect reduced-motion preferences in every loading treatment.
+
 ## 4.5 Navigation
 
 Global navigation is a signed-in surface. Its destinations all require a session, so a signed-out visitor is offered the product itself, its appearance control, and the two ways in — never a set of destinations that lead back to sign-in.
@@ -1802,7 +1804,7 @@ Days is the narrative spine and follows the trip's own progression. Each Memory 
 The reading experience must be visual:
 
 - user photos are the leading element of a Memory wherever they exist,
-- the cover carries the top of the story,
+- the cover carries the top of the story, using a traveller-selected Memory photo first, then the trip cover, editorial imagery, and finally Trove's branded fallback,
 - captured date and time are context beneath a Memory, not the heading above it,
 - the shape of the trip is felt through its progression rather than enumerated as counts.
 

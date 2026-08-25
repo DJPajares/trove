@@ -101,12 +101,13 @@ function AppMenuContent() {
       showCloseButton={false}
       side="right"
     >
-      <SheetHeader className="gap-2 pt-7 pr-5 md:pt-6 md:pr-6">
-        <div className="flex min-w-0 items-center justify-between gap-3">
-          <SheetTitle>
-            <span className="md:hidden">{t('more')}</span>
-            <span className="hidden md:inline">{t('menu')}</span>
-          </SheetTitle>
+      <SheetHeader className="gap-0 px-5 pt-7 pb-3 md:px-6 md:pt-6 md:pb-4">
+        <SheetTitle className="sr-only">
+          <span className="md:hidden">{t('more')}</span>
+          <span className="hidden md:inline">{t('menu')}</span>
+        </SheetTitle>
+        <SheetDescription className="sr-only">{t('menuDescription')}</SheetDescription>
+        <div className="flex justify-end">
           <div
             aria-label={t('menuActions')}
             className="flex shrink-0 items-center gap-1"
@@ -130,7 +131,6 @@ function AppMenuContent() {
             </SheetClose>
           </div>
         </div>
-        <SheetDescription>{t('menuDescription')}</SheetDescription>
       </SheetHeader>
 
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 md:px-6">

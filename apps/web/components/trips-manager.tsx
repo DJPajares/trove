@@ -7,8 +7,8 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
+import { useTripCreation } from '@/components/trip-creation-provider';
 import { TripFeaturedCard } from '@/components/trip-featured-card';
-import { TripForm } from '@/components/trip-form';
 import { TripListRow } from '@/components/trip-list-row';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { editorialSubjectKey } from '@/lib/media/editorial-images';
@@ -16,13 +16,6 @@ import { groupTripsForLibrary, PAST_TRIPS_PREVIEW_COUNT } from '@/lib/trips/life
 import { libraryEditorialSubjects, tripEditorialSubject } from '@/lib/trips/summary';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
 import { fetchTrips, type Trip } from '@/lib/trips/api';
 
 /**
@@ -31,12 +24,12 @@ import { fetchTrips, type Trip } from '@/lib/trips/api';
  */
 export function TripsManager() {
   const t = useTranslations('trips');
+  const { latestCreatedTrip, openCreateTrip } = useTripCreation();
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const shouldCreateTrip = searchParams.get('create') === '1';
   const [trips, setTrips] = useState<Trip[]>([]);
-  const [creating, setCreating] = useState(false);
   const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
 
   const groupedTrips = useMemo(() => groupTripsForLibrary(trips), [trips]);
@@ -51,9 +44,9 @@ export function TripsManager() {
 
   useEffect(() => {
     if (!shouldCreateTrip) return;
-    setCreating(true);
+    openCreateTrip();
     router.replace(pathname, { scroll: false });
-  }, [pathname, router, shouldCreateTrip]);
+  }, [openCreateTrip, pathname, router, shouldCreateTrip]);
 
   useEffect(() => {
     let active = true;
@@ -74,18 +67,22 @@ export function TripsManager() {
     };
   }, []);
 
-  function handleSaved(trip: Trip) {
+  useEffect(() => {
+    if (!latestCreatedTrip) return;
     setTrips((current) =>
-      [...current, trip].toSorted((left, right) => left.startDate.localeCompare(right.startDate)),
+      current.some((trip) => trip.id === latestCreatedTrip.id)
+        ? current
+        : [...current, latestCreatedTrip].toSorted((left, right) =>
+            left.startDate.localeCompare(right.startDate),
+          ),
     );
-    setCreating(false);
-  }
+  }, [latestCreatedTrip]);
 
   return (
     <section className="mx-auto w-full max-w-5xl space-y-8">
       <PageHeader
         actions={
-          <Button onClick={() => setCreating(true)}>
+          <Button onClick={openCreateTrip}>
             <Plus aria-hidden="true" data-icon="inline-start" />
             {t('newTrip')}
           </Button>
@@ -114,7 +111,7 @@ export function TripsManager() {
       ) : trips.length === 0 ? (
         <PageState
           actions={
-            <Button onClick={() => setCreating(true)}>
+            <Button onClick={openCreateTrip}>
               <Plus aria-hidden="true" data-icon="inline-start" />
               {t('createFirstTrip')}
             </Button>
@@ -200,21 +197,6 @@ export function TripsManager() {
           ) : null}
         </div>
       )}
-
-      <Sheet onOpenChange={(open) => !open && setCreating(false)} open={creating}>
-        <SheetContent
-          className="w-full md:data-[side=right]:w-[min(36rem,calc(100%-0.5rem))]"
-          closeLabel={t('close')}
-        >
-          <SheetHeader className="border-b">
-            <SheetTitle>{t('createTitle')}</SheetTitle>
-            <SheetDescription>{t('createDescription')}</SheetDescription>
-          </SheetHeader>
-          {creating ? (
-            <TripForm onCancel={() => setCreating(false)} onSaved={handleSaved} trip={null} />
-          ) : null}
-        </SheetContent>
-      </Sheet>
     </section>
   );
 }

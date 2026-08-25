@@ -878,6 +878,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
       <TripModeMemoryDialog
         dayDate={date}
         dayId={day.id}
+        defaultItemId={context.currentOrRelevant?.itemId ?? null}
         items={day.items}
         onOpenChange={setMemoryOpen}
         onSaved={(queued) => {

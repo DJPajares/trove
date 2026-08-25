@@ -10,6 +10,7 @@ import { ExperienceRatingSummary } from '@/components/experience-rating-field';
 import { HomeFocalTrip } from '@/components/home-focal-trip';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
+import { useTripCreation } from '@/components/trip-creation-provider';
 import { TripListRow } from '@/components/trip-list-row';
 import { Button } from '@/components/ui/button';
 import {
@@ -64,6 +65,7 @@ function itemLabel(item: ItineraryItem) {
 
 export function HomeExperience() {
   const t = useTranslations('home');
+  const { latestCreatedTrip, openCreateTrip } = useTripCreation();
   const [data, setData] = useState<HomeData>({ savedPlaces: [], trips: [] });
   const [status, setStatus] = useState<HomeStatus>('loading');
   const [tripModeContext, setTripModeContext] = useState<TripModeContext | null>(null);
@@ -106,6 +108,15 @@ export function HomeExperience() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!latestCreatedTrip) return;
+    setData((current) =>
+      current.trips.some((trip) => trip.id === latestCreatedTrip.id)
+        ? current
+        : { ...current, trips: [...current.trips, latestCreatedTrip] },
+    );
+  }, [latestCreatedTrip]);
 
   const primary = useMemo(() => selectPrimaryTrip(data.trips), [data.trips]);
   // Only a trip actually under way has a "now" worth asking about.
@@ -215,7 +226,7 @@ export function HomeExperience() {
         <PageState
           actions={
             <>
-              <Button nativeButton={false} render={<Link href="/trips?create=1" />}>
+              <Button onClick={openCreateTrip}>
                 <Plus aria-hidden="true" data-icon="inline-start" />
                 {t('createTrip')}
               </Button>

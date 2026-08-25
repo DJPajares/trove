@@ -13,6 +13,11 @@ type NameableTripPlace = {
   };
 };
 
+type NameableItineraryItem = {
+  customLabel: string | null;
+  tripPlace: NameableTripPlace | null;
+};
+
 type NameFallbacks = {
   /** Shown when a custom Place somehow has no name of its own. */
   custom: string;
@@ -43,6 +48,14 @@ export function resolveTripPlaceName(tripPlace: NameableTripPlace, fallbacks: Na
   if (custom) return custom;
   if (tripPlace.place.kind === 'custom') return tripPlace.place.name ?? fallbacks.custom;
   return resolveProviderPlaceName(tripPlace) ?? fallbacks.provider;
+}
+
+/** Names the itinerary item shown by Memory capture without resolving provider data again. */
+export function resolveItineraryItemPlaceName(item: NameableItineraryItem, fallback: string) {
+  const label = item.customLabel?.trim();
+  if (label) return label;
+  if (!item.tripPlace) return fallback;
+  return resolveTripPlaceName(item.tripPlace, { custom: fallback, provider: fallback });
 }
 
 /** The address line, falling back the same way the name does. */

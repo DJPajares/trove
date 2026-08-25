@@ -128,8 +128,8 @@ function TripModePreviewControls({
   const t = useTranslations('tripMode');
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <Field>
+    <div className="grid grid-cols-2 gap-3 sm:gap-4">
+      <Field className="min-w-0">
         <FieldLabel htmlFor={`${idPrefix}-date`}>{t('preview.date')}</FieldLabel>
         <DatePicker
           activityCounts={activityCounts}
@@ -142,7 +142,7 @@ function TripModePreviewControls({
           value={selection.date}
         />
       </Field>
-      <Field>
+      <Field className="min-w-0">
         <FieldLabel htmlFor={`${idPrefix}-time`}>{t('preview.time')}</FieldLabel>
         <TimeInput
           id={`${idPrefix}-time`}

@@ -1460,7 +1460,7 @@ export function ItineraryManager({
       <PageState
         className="mx-auto max-w-5xl"
         kind="loading"
-        loadingShape="timeline"
+        loadingShape="tripHero"
         title={t('loading')}
       />
     );

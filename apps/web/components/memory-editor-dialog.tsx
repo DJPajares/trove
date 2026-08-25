@@ -50,6 +50,7 @@ import {
   type Memory,
   type MemoryPhoto,
 } from '@/lib/memories/api';
+import { resolveItineraryItemPlaceName } from '@/lib/trip-places/place-name';
 
 const NO_DAY = 'none';
 const NO_ITEM = 'none';
@@ -275,7 +276,7 @@ export function MemoryEditorDialog({
   }
 
   function itemLabel(item: ItineraryItem) {
-    return item.tripPlace?.place.name ?? item.customLabel ?? t('noContext');
+    return resolveItineraryItemPlaceName(item, t('noContext'));
   }
 
   return (

@@ -9,6 +9,7 @@ import { AppearanceToggle } from '@/components/appearance-toggle';
 import { DesktopAppHeader } from '@/components/desktop-app-header';
 import { PageTransition } from '@/components/page-transition';
 import { PrimaryNavigation } from '@/components/primary-navigation';
+import { TripCreationProvider } from '@/components/trip-creation-provider';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -113,5 +114,11 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
     </div>
   );
 
-  return isSignedIn ? <AppMenuProvider>{shell}</AppMenuProvider> : shell;
+  return isSignedIn ? (
+    <TripCreationProvider>
+      <AppMenuProvider>{shell}</AppMenuProvider>
+    </TripCreationProvider>
+  ) : (
+    shell
+  );
 }

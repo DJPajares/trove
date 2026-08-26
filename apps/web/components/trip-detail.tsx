@@ -22,7 +22,10 @@ import { ExperienceRatingSummary } from '@/components/experience-rating-field';
 import { OfflineReadyStatus } from '@/components/offline-ready-status';
 import { PageState } from '@/components/page-state';
 import { PlanScorePanel } from '@/components/plan-score-panel';
-import { TripDestinationActions } from '@/components/trip-destination-actions';
+import {
+  TripDestinationAction,
+  TripDestinationActions,
+} from '@/components/trip-destination-actions';
 import { TripForm } from '@/components/trip-form';
 import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
 import { TripMedia } from '@/components/trip-media';
@@ -53,7 +56,11 @@ import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import { fetchTripInfo, type TripInfoEntry } from '@/lib/trip-info/api';
 import { deleteTrip, fetchTrip, TripApiError, type Trip } from '@/lib/trips/api';
 import { formatTripDateRange } from '@/lib/trips/format';
-import { primaryTripDestinations, supportingTripDestinations } from '@/lib/trips/navigation';
+import {
+  primaryTripDestinations,
+  supportingTripDestinations,
+  type TripDestination,
+} from '@/lib/trips/navigation';
 import { tripDestinationSummary, tripEditorialSubject } from '@/lib/trips/summary';
 
 /** The tools' icons. Which tools there are, and their order, is the navigation contract's. */
@@ -101,6 +108,49 @@ function TripFact({ label, value }: Readonly<{ label: string; value: ReactNode }
     <div>
       <p className="text-[length:var(--text-metadata)] font-medium text-text-subtle">{label}</p>
       <p className="mt-1 text-sm break-words text-foreground">{value}</p>
+    </div>
+  );
+}
+
+/**
+ * A completed trip leads with the traveller's next likely task: revisiting or
+ * adding memories. Itinerary and Trip Mode remain direct destinations, while
+ * editing stays visibly available without competing with that reflection.
+ */
+function CompletedTripActions({
+  destinations,
+  editTripLabel,
+  memoriesLabel,
+  onEdit,
+}: Readonly<{
+  destinations: TripDestination[];
+  editTripLabel: string;
+  memoriesLabel: string;
+  onEdit: () => void;
+}>) {
+  const itinerary = destinations.find((destination) => destination.section === 'itinerary');
+  const mode = destinations.find((destination) => destination.section === 'mode');
+  const memories = destinations.find((destination) => destination.section === 'memories');
+
+  if (!itinerary || !mode || !memories) return null;
+
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+      <TripDestinationAction
+        className="w-full sm:w-auto"
+        destination={memories}
+        labelOverride={memoriesLabel}
+      />
+      <div className="flex flex-wrap items-center gap-1.5">
+        <TripDestinationAction destination={itinerary} />
+        <TripDestinationAction destination={mode} />
+      </div>
+      <div className="border-t border-border-subtle pt-2 sm:border-0 sm:pt-0">
+        <Button onClick={onEdit} variant="ghost">
+          <Pencil aria-hidden="true" data-icon="inline-start" />
+          {editTripLabel}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -314,32 +364,34 @@ export function TripDetail({
         </Alert>
       ) : null}
 
-      {/*
-        Which actions a stage offers, in what order, and which one leads is the
-        navigation contract's answer - the same one the trip's own screens use.
-        On the trip's own route all three experiences are offered whatever the
-        stage, because this is the screen that must never hide one of them.
-      */}
+      {/* The navigation contract decides which destinations exist and their
+          visual weight. Completion gives memories a distinct action layout;
+          every other lifecycle keeps the compact shared action row. */}
       <div className="space-y-3">
         <TripLifecycleBadge lifecycle={trip.lifecycle} />
-        <TripDestinationActions
-          destinations={primaryTripDestinations(trip.id, trip.lifecycle, trip.startDate)}
-          extra={
-            <Button onClick={() => setEditing(true)} variant="ghost">
-              <Pencil aria-hidden="true" data-icon="inline-start" />
-              {t('editTrip')}
-            </Button>
-          }
-          labelOverrides={
-            trip.lifecycle === 'completed'
-              ? { memories: t(trip.memoryCount ? 'viewMemories' : 'addMemories') }
-              : {
-                  itinerary: t('continuePlanning'),
-                  mode: t(trip.lifecycle === 'active' ? 'openTripMode' : 'previewTripMode'),
-                }
-          }
-          minEmphasis="quiet"
-        />
+        {trip.lifecycle === 'completed' ? (
+          <CompletedTripActions
+            destinations={primaryTripDestinations(trip.id, trip.lifecycle, trip.startDate)}
+            editTripLabel={t('editTrip')}
+            memoriesLabel={t(trip.memoryCount ? 'viewMemories' : 'addMemories')}
+            onEdit={() => setEditing(true)}
+          />
+        ) : (
+          <TripDestinationActions
+            destinations={primaryTripDestinations(trip.id, trip.lifecycle, trip.startDate)}
+            extra={
+              <Button onClick={() => setEditing(true)} variant="ghost">
+                <Pencil aria-hidden="true" data-icon="inline-start" />
+                {t('editTrip')}
+              </Button>
+            }
+            labelOverrides={{
+              itinerary: t('continuePlanning'),
+              mode: t(trip.lifecycle === 'active' ? 'openTripMode' : 'previewTripMode'),
+            }}
+            minEmphasis="quiet"
+          />
+        )}
       </div>
 
       {/*

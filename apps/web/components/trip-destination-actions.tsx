@@ -52,6 +52,50 @@ type TripDestinationActionsProps = {
   size?: 'default' | 'sm';
 };
 
+type TripDestinationActionProps = {
+  className?: string;
+  destination: TripDestination;
+  inverse?: boolean;
+  labelOverride?: string;
+  size?: 'default' | 'sm';
+};
+
+/**
+ * One destination control. Keeping this separate from the collection lets a
+ * focal surface arrange its actions by purpose without re-creating the route,
+ * icon, label, or lifecycle-emphasis rules.
+ */
+export function TripDestinationAction({
+  className,
+  destination,
+  inverse = false,
+  labelOverride,
+  size = 'default',
+}: Readonly<TripDestinationActionProps>) {
+  const t = useTranslations('trips');
+  const Icon = sectionIcons[destination.labelKey as keyof typeof sectionIcons];
+
+  return (
+    <Button
+      className={cn(
+        inverse
+          ? destination.emphasis === 'leading'
+            ? 'border-white/20 shadow-lg shadow-black/15'
+            : 'border-white/30 bg-white/12 text-white shadow-none backdrop-blur-md hover:border-white/45 hover:bg-white/20 hover:text-white dark:bg-white/12 dark:hover:bg-white/20'
+          : undefined,
+        className,
+      )}
+      nativeButton={false}
+      render={<Link href={destination.href} />}
+      size={size}
+      variant={tripDestinationEmphasisVariant(destination.emphasis)}
+    >
+      {Icon ? <Icon aria-hidden="true" data-icon="inline-start" /> : null}
+      {labelOverride ?? t(destination.labelKey)}
+    </Button>
+  );
+}
+
 /**
  * The actions a trip offers at the stage it is in.
  *
@@ -68,36 +112,21 @@ export function TripDestinationActions({
   minEmphasis = 'standard',
   size = 'default',
 }: Readonly<TripDestinationActionsProps>) {
-  const t = useTranslations('trips');
   const offered = destinations.filter((destination) =>
     isEmphasisAtLeast(destination.emphasis, minEmphasis),
   );
 
   return (
     <div className={cn('flex flex-wrap items-center gap-2', className)}>
-      {offered.map((destination) => {
-        const Icon = sectionIcons[destination.labelKey as keyof typeof sectionIcons];
-
-        return (
-          <Button
-            className={
-              inverse
-                ? destination.emphasis === 'leading'
-                  ? 'border-white/20 shadow-lg shadow-black/15'
-                  : 'border-white/30 bg-white/12 text-white shadow-none backdrop-blur-md hover:border-white/45 hover:bg-white/20 hover:text-white dark:bg-white/12 dark:hover:bg-white/20'
-                : undefined
-            }
-            key={destination.section}
-            nativeButton={false}
-            render={<Link href={destination.href} />}
-            size={size}
-            variant={tripDestinationEmphasisVariant(destination.emphasis)}
-          >
-            {Icon ? <Icon aria-hidden="true" data-icon="inline-start" /> : null}
-            {labelOverrides?.[destination.section] ?? t(destination.labelKey)}
-          </Button>
-        );
-      })}
+      {offered.map((destination) => (
+        <TripDestinationAction
+          destination={destination}
+          inverse={inverse}
+          key={destination.section}
+          labelOverride={labelOverrides?.[destination.section]}
+          size={size}
+        />
+      ))}
       {extra}
     </div>
   );

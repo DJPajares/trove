@@ -27,6 +27,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { DatePicker } from '@/components/date-picker';
+import { ItineraryCreateItemSheet } from '@/components/itinerary-create-item-sheet';
 import { PageState } from '@/components/page-state';
 import { ItineraryDayTimeline } from '@/components/itinerary-day-timeline';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
@@ -166,7 +167,6 @@ import {
 
 type EditorState =
   | { dayId: null; item: null; mode: 'closed' }
-  | { dayId: string; item: null; mode: 'create' }
   | { dayId: string; item: ItineraryItem; mode: 'edit' };
 
 type FormState = {
@@ -297,6 +297,7 @@ export function ItineraryManager({
   const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState>({ dayId: null, item: null, mode: 'closed' });
+  const [createDay, setCreateDay] = useState<ItineraryDay | null>(null);
   const [form, setForm] = useState<FormState>(() => createFormState(null));
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -712,27 +713,7 @@ export function ItineraryManager({
   }
 
   function openCreate(day: ItineraryDay) {
-    setForm(createFormState(null));
-    setFormError(null);
-    setPlaceQuery('');
-    currentPlaceQuery.current = '';
-    setProviderResults([]);
-    setProviderSessionToken(null);
-    setPlaceSearchStatus('idle');
-    setIdentityChanged(false);
-    setIdentityPickerOpen(true);
-    setTimingExpanded(false);
-    setCustomDurationOpen(false);
-    setCustomDurationHours('');
-    setCustomDurationMinutes('');
-    providerSearchRequest.current?.abort();
-    providerSearchRequest.current = null;
-    providerSearchRequestQuery.current = null;
-    providerSearchCache.current = new Map();
-    suggestedTimeRequest.current?.abort();
-    setSuggestedTime(null);
-    setSuggestedTimeStatus('idle');
-    setEditor({ dayId: day.id, item: null, mode: 'create' });
+    setCreateDay(day);
   }
 
   function openEdit(item: ItineraryItem) {
@@ -1210,7 +1191,7 @@ export function ItineraryManager({
 
     // Omitted legacy fields survive an ordinary edit. A new identity must not
     // inherit an old custom location or item-level priority, though.
-    if (editor.mode === 'edit') Object.assign(input, itineraryIdentityLegacyPatch(identityChanged));
+    Object.assign(input, itineraryIdentityLegacyPatch(identityChanged));
 
     return input;
   }
@@ -1218,17 +1199,13 @@ export function ItineraryManager({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const input = buildInput();
-    if (!input || editor.mode === 'closed') return;
+    if (!input || editor.mode !== 'edit') return;
     setSaving(true);
     setFormError(null);
     setTimeZoneConsequence(false);
     try {
-      if (editor.mode === 'create') {
-        await createItineraryItem(tripId, { ...input, itineraryDayId: editor.dayId });
-      } else {
-        const result = await updateItineraryItem(tripId, editor.item.id, input);
-        setTimeZoneConsequence(Boolean(result.timeZoneConsequence));
-      }
+      const result = await updateItineraryItem(tripId, editor.item.id, input);
+      setTimeZoneConsequence(Boolean(result.timeZoneConsequence));
       await refresh();
       closeEditor();
     } catch (error) {
@@ -2103,10 +2080,8 @@ export function ItineraryManager({
           closeLabel={t('close')}
         >
           <SheetHeader className="border-b">
-            <SheetTitle>{editor.mode === 'edit' ? t('editTitle') : t('createTitle')}</SheetTitle>
-            <SheetDescription>
-              {editor.mode === 'edit' ? t('editDescription') : t('createDescription')}
-            </SheetDescription>
+            <SheetTitle>{t('editTitle')}</SheetTitle>
+            <SheetDescription>{t('editDescription')}</SheetDescription>
           </SheetHeader>
           {editor.mode !== 'closed' ? (
             <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
@@ -2584,24 +2559,20 @@ export function ItineraryManager({
                 </FieldGroup>
               </div>
               <SheetFooter className="sm:flex-row sm:items-center sm:justify-between">
-                {editor.mode === 'edit' ? (
-                  <Button
-                    onClick={() => setItemToDelete(editor.item)}
-                    type="button"
-                    variant="destructive"
-                  >
-                    <Trash2 aria-hidden="true" data-icon="inline-start" />
-                    {t('deleteItem')}
-                  </Button>
-                ) : (
-                  <span />
-                )}
+                <Button
+                  onClick={() => setItemToDelete(editor.item)}
+                  type="button"
+                  variant="destructive"
+                >
+                  <Trash2 aria-hidden="true" data-icon="inline-start" />
+                  {t('deleteItem')}
+                </Button>
                 <div className="flex flex-col-reverse gap-2 sm:flex-row">
                   <Button disabled={saving} onClick={closeEditor} type="button" variant="outline">
                     {t('cancel')}
                   </Button>
                   <Button disabled={saving || selectingPlace || !hasItemIdentity} type="submit">
-                    {saving ? t('saving') : editor.mode === 'edit' ? t('save') : t('addItem')}
+                    {saving ? t('saving') : t('save')}
                   </Button>
                 </div>
               </SheetFooter>
@@ -2609,6 +2580,28 @@ export function ItineraryManager({
           ) : null}
         </SheetContent>
       </Sheet>
+
+      {createDay ? (
+        <ItineraryCreateItemSheet
+          dayId={createDay.id}
+          onCreated={refresh}
+          onOpenChange={(open) => !open && setCreateDay(null)}
+          onTripPlaceAdded={(tripPlace) =>
+            setItinerary((current) =>
+              current && !current.tripPlaces.some((place) => place.id === tripPlace.id)
+                ? {
+                    ...current,
+                    tripPlaces: [...current.tripPlaces, itineraryTripPlaceFromTripPlace(tripPlace)],
+                  }
+                : current,
+            )
+          }
+          open
+          placeUse={placeUse}
+          tripId={tripId}
+          tripPlaces={itinerary?.tripPlaces ?? []}
+        />
+      ) : null}
 
       <Dialog
         open={Boolean(dayMoveSource)}

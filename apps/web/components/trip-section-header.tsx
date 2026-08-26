@@ -43,8 +43,8 @@ type TripSectionHeaderProps = {
   description?: string;
   media?: ReactNode;
   meta?: ReactNode;
-  mobileNavigationControls?: ReactNode;
   showCover?: boolean;
+  stickyNavigation?: boolean;
   trip?: Trip;
   tripId: string;
 };
@@ -75,8 +75,8 @@ export function TripSectionHeader({
   description,
   media,
   meta,
-  mobileNavigationControls,
   showCover = true,
+  stickyNavigation = false,
   trip: suppliedTrip,
   tripId,
 }: Readonly<TripSectionHeaderProps>) {
@@ -135,12 +135,12 @@ export function TripSectionHeader({
 
   return (
     // A sticky child is bounded by the height of its nearest box ancestor. On
-    // itinerary, flatten this header at mobile widths so its controls stay
-    // anchored to the full planning section rather than stopping at the
-    // header's lower edge. Desktop keeps the ordinary header box and flow.
+    // itinerary, flatten this header at mobile widths so the unchanged
+    // navigation row stays anchored to the full planning section. Desktop
+    // keeps the ordinary header box and flow.
     <header
       className={cn(
-        mobileNavigationControls && 'contents md:block',
+        stickyNavigation && 'contents md:block',
         'space-y-5',
         density === 'compact' && 'space-y-3 sm:space-y-5',
       )}
@@ -260,86 +260,82 @@ export function TripSectionHeader({
 
       <div
         className={cn(
-          mobileNavigationControls &&
-            'sticky top-[calc(var(--safe-top)+var(--header-offset))] z-[calc(var(--layer-sticky)-1)] -mx-1 rounded-[var(--radius-lg)] border border-border bg-background p-1 shadow-[var(--shadow-control)] md:static md:z-auto md:mx-0 md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none',
+          'flex items-center justify-between gap-2 border-b border-border-subtle',
+          stickyNavigation &&
+            'sticky top-[calc(var(--safe-top)+var(--header-offset))] z-[calc(var(--layer-sticky)-1)] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/88 md:static md:z-auto md:bg-transparent md:backdrop-blur-none',
         )}
       >
-        <div className="flex items-center justify-between gap-2 border-b border-border-subtle">
-          <nav aria-label={t('tripNavigation')} className="min-w-0">
-            {/* `overflow-x-auto` also clips vertically, which would cut the tabs'
-                focus ring. The negative margin buys it room without moving the
-                margin box, so each tab's active underline stays welded to the
-                section border below. */}
-            <ul className="-m-1 flex items-center gap-1 overflow-x-auto p-1">
-              {primary.map((destination) => {
-                const active = destination.section === currentSection;
-                return (
-                  <li key={destination.section}>
-                    <Link
-                      aria-current={active ? 'page' : undefined}
-                      className={cn(
-                        'relative inline-flex min-h-11 items-center whitespace-nowrap px-3 text-sm font-medium outline-none transition-colors duration-[var(--motion-standard)] after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:bg-transparent focus-visible:ring-3 focus-visible:ring-ring/40',
-                        active && 'after:bg-brand',
-                        emphasisClasses(destination, active),
-                      )}
-                      href={destination.href}
-                    >
-                      {t(destination.labelKey)}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
+        <nav aria-label={t('tripNavigation')} className="min-w-0">
+          {/* `overflow-x-auto` also clips vertically, which would cut the tabs'
+              focus ring. The negative margin buys it room without moving the
+              margin box, so each tab's active underline stays welded to the
+              section border below. */}
+          <ul className="-m-1 flex items-center gap-1 overflow-x-auto p-1">
+            {primary.map((destination) => {
+              const active = destination.section === currentSection;
+              return (
+                <li key={destination.section}>
+                  <Link
+                    aria-current={active ? 'page' : undefined}
+                    className={cn(
+                      'relative inline-flex min-h-11 items-center whitespace-nowrap px-3 text-sm font-medium outline-none transition-colors duration-[var(--motion-standard)] after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:bg-transparent focus-visible:ring-3 focus-visible:ring-ring/40',
+                      active && 'after:bg-brand',
+                      emphasisClasses(destination, active),
+                    )}
+                    href={destination.href}
+                  >
+                    {t(destination.labelKey)}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  // The accessible name has to contain the visible one, so when the
-                  // trigger reads "Expenses" the label leads with it.
-                  aria-label={
-                    currentLabel ? t('moreLabelCurrent', { section: currentLabel }) : t('moreLabel')
-                  }
-                  className={cn(
-                    'shrink-0',
-                    currentLabel ? 'bg-secondary text-secondary-foreground' : undefined,
-                  )}
-                  size="sm"
-                  type="button"
-                  variant="ghost"
-                />
-              }
-            >
-              {/* Icon or name, never both — the row is tight at 375px. Off the core
-                  experiences the name always shows, because it is the only thing telling
-                  the traveller where they are. */}
-              {currentLabel ? null : <Ellipsis aria-hidden="true" data-icon="inline-start" />}
-              <span className={currentLabel ? undefined : 'hidden sm:inline'}>
-                {currentLabel ?? t('more')}
-              </span>
-              <ChevronDown aria-hidden="true" data-icon="inline-end" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-52">
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>{t('supportingTools')}</DropdownMenuLabel>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              {supporting.map((destination) => (
-                <DropdownMenuLinkItem
-                  aria-current={destination.section === currentSection ? 'page' : undefined}
-                  key={destination.section}
-                  render={<Link href={destination.href} />}
-                >
-                  {t(destination.labelKey)}
-                </DropdownMenuLinkItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-        {mobileNavigationControls ? (
-          <div className="px-1 pt-2 pb-1 md:hidden">{mobileNavigationControls}</div>
-        ) : null}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                // The accessible name has to contain the visible one, so when the
+                // trigger reads "Expenses" the label leads with it.
+                aria-label={
+                  currentLabel ? t('moreLabelCurrent', { section: currentLabel }) : t('moreLabel')
+                }
+                className={cn(
+                  'shrink-0',
+                  currentLabel ? 'bg-secondary text-secondary-foreground' : undefined,
+                )}
+                size="sm"
+                type="button"
+                variant="ghost"
+              />
+            }
+          >
+            {/* Icon or name, never both — the row is tight at 375px. Off the core
+                experiences the name always shows, because it is the only thing telling
+                the traveller where they are. */}
+            {currentLabel ? null : <Ellipsis aria-hidden="true" data-icon="inline-start" />}
+            <span className={currentLabel ? undefined : 'hidden sm:inline'}>
+              {currentLabel ?? t('more')}
+            </span>
+            <ChevronDown aria-hidden="true" data-icon="inline-end" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-52">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>{t('supportingTools')}</DropdownMenuLabel>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            {supporting.map((destination) => (
+              <DropdownMenuLinkItem
+                aria-current={destination.section === currentSection ? 'page' : undefined}
+                key={destination.section}
+                render={<Link href={destination.href} />}
+              >
+                {t(destination.labelKey)}
+              </DropdownMenuLinkItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {description ? (

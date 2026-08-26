@@ -1490,44 +1490,8 @@ export function ItineraryManager({
         currentSection="itinerary"
         density="compact"
         description={t('description')}
-        mobileNavigationControls={
-          <div className="flex items-center gap-2.5">
-            <Button
-              aria-label={t('previousDay')}
-              disabled={selectedIndex <= 0}
-              onClick={() => selectAdjacentDay(-1)}
-              size="icon"
-              variant="outline"
-            >
-              <ChevronLeft aria-hidden="true" />
-            </Button>
-            <DatePicker
-              activityCounts={dayActivityCounts}
-              className="min-w-0 flex-1"
-              clearable={false}
-              id="itinerary-day-picker"
-              label={t('chooseDay')}
-              max={itinerary.trip.endDate}
-              min={itinerary.trip.startDate}
-              onChange={(date) => {
-                const day = itinerary.days.find((candidate) => candidate.date === date);
-                if (day) setSelectedDayId(day.id);
-              }}
-              required
-              value={selectedDay?.date ?? ''}
-            />
-            <Button
-              aria-label={t('nextDay')}
-              disabled={selectedIndex < 0 || selectedIndex >= itinerary.days.length - 1}
-              onClick={() => selectAdjacentDay(1)}
-              size="icon"
-              variant="outline"
-            >
-              <ChevronRight aria-hidden="true" />
-            </Button>
-          </div>
-        }
         showCover
+        stickyNavigation
         tripId={tripId}
       />
 
@@ -1543,6 +1507,44 @@ export function ItineraryManager({
           <AlertDescription>{t('timeZoneConsequence')}</AlertDescription>
         </Alert>
       ) : null}
+      <div className="relative sticky top-[calc(var(--safe-top)+var(--header-offset)+4.5rem)] z-[calc(var(--layer-sticky)-1)] -mx-1 bg-background/95 backdrop-blur before:pointer-events-none before:absolute before:inset-x-0 before:-top-7 before:h-7 before:bg-background/95 before:backdrop-blur before:content-[''] supports-[backdrop-filter]:bg-background/88 supports-[backdrop-filter]:before:bg-background/88 md:hidden">
+        <div className="flex items-center gap-2.5">
+          <Button
+            aria-label={t('previousDay')}
+            disabled={selectedIndex <= 0}
+            onClick={() => selectAdjacentDay(-1)}
+            size="icon"
+            variant="outline"
+          >
+            <ChevronLeft aria-hidden="true" />
+          </Button>
+          <DatePicker
+            activityCounts={dayActivityCounts}
+            className="min-w-0 flex-1"
+            clearable={false}
+            id="itinerary-day-picker"
+            label={t('chooseDay')}
+            max={itinerary.trip.endDate}
+            min={itinerary.trip.startDate}
+            onChange={(date) => {
+              const day = itinerary.days.find((candidate) => candidate.date === date);
+              if (day) setSelectedDayId(day.id);
+            }}
+            required
+            value={selectedDay?.date ?? ''}
+          />
+          <Button
+            aria-label={t('nextDay')}
+            disabled={selectedIndex < 0 || selectedIndex >= itinerary.days.length - 1}
+            onClick={() => selectAdjacentDay(1)}
+            size="icon"
+            variant="outline"
+          >
+            <ChevronRight aria-hidden="true" />
+          </Button>
+        </div>
+      </div>
+
       <div className="overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card shadow-[var(--shadow-surface)] md:grid md:min-h-[34rem] md:grid-cols-[15rem_minmax(0,1fr)]">
         <nav
           aria-label={t('dayNavigation')}

@@ -35,6 +35,7 @@ import {
   type TripModeSchedule,
 } from '@/components/trip-mode-schedule-fields';
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -608,6 +609,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
             const isCurrent = context.currentOrRelevant?.itemId === item.id;
             const busy = mutatingItemId === item.id;
             const upcoming = item.travelStatus === 'upcoming';
+            const completed = item.travelStatus === 'completed';
             const upcomingIndex = upcomingItems.findIndex((candidate) => candidate.id === item.id);
             const linkedReservations = reservationsByItem.get(item.id) ?? [];
             const linkedTasks = openTasksByItem.get(item.id) ?? [];
@@ -731,6 +733,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                     </DropdownMenu>
                   </div>
                 }
+                className={completed ? 'bg-status-success/10' : undefined}
                 connector={connector}
                 description={
                   <>
@@ -805,13 +808,16 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                 }
                 meta={
                   isCurrent || !upcoming ? (
-                    <span className="font-medium text-foreground">
-                      {isCurrent
-                        ? t('current')
-                        : item.travelStatus === 'completed'
-                          ? t('statusCompleted')
-                          : t('statusSkipped')}
-                    </span>
+                    completed ? (
+                      <Badge variant="success">
+                        <CheckCircle2 aria-hidden="true" />
+                        {t('statusCompleted')}
+                      </Badge>
+                    ) : (
+                      <span className="font-medium text-foreground">
+                        {isCurrent ? t('current') : t('statusSkipped')}
+                      </span>
+                    )
                   ) : null
                 }
                 selected={isCurrent}

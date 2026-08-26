@@ -733,7 +733,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                     </DropdownMenu>
                   </div>
                 }
-                className={completed ? 'bg-status-success/10' : undefined}
+                className={completed ? 'bg-muted/50' : undefined}
                 connector={connector}
                 description={
                   <>

@@ -272,7 +272,7 @@ export function TripSectionHeader({
         className={cn(
           'flex items-center justify-between gap-2 border-b border-border-subtle',
           stickyNavigation &&
-            'sticky top-[calc(var(--safe-top)+var(--header-offset))] z-[calc(var(--layer-sticky)-1)] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/88 md:static md:z-auto md:bg-transparent md:backdrop-blur-none',
+            'sticky top-[calc(var(--safe-top)+var(--header-offset))] z-[var(--layer-sticky)] bg-background backdrop-blur md:static md:z-auto md:bg-transparent md:backdrop-blur-none',
         )}
       >
         <nav aria-label={t('tripNavigation')} className="min-w-0">

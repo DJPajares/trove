@@ -63,8 +63,13 @@ export function primaryTripDestinations(
  */
 export function visibleTripNavigationDestinations(
   destinations: TripDestination[],
+  currentSection: TripSection,
 ): TripDestination[] {
-  return destinations.filter((destination) => destination.labelKey !== 'preview');
+  return destinations.filter(
+    (destination) =>
+      destination.labelKey !== 'preview' &&
+      !(currentSection === 'itinerary' && destination.section === 'mode'),
+  );
 }
 
 /**

@@ -23,7 +23,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { PageState } from '@/components/page-state';
-import { ItineraryPlacesDrawer } from '@/components/itinerary-places-drawer';
+import { ItineraryCreateItemSheet } from '@/components/itinerary-create-item-sheet';
 import { usePreferences } from '@/components/preferences-provider';
 import { TimelineGroup, TimelineMarker, TimelineRow } from '@/components/timeline-row';
 import { useTripModePlaceDetails, useTripModePreview } from '@/components/trip-mode-shell';
@@ -58,7 +58,6 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  createItineraryItem,
   fetchItinerary,
   fetchTripModeContext,
   organizeItineraryItem,
@@ -75,7 +74,6 @@ import { formatItineraryTimeRange } from '@/lib/itinerary/item-timing';
 import { scheduledPlaceUse } from '@/lib/itinerary/places';
 import { fetchReservations, type Reservation } from '@/lib/reservations/api';
 import { fetchTasks, type Task } from '@/lib/tasks/api';
-import type { TripPlace } from '@/lib/trip-places/api';
 import { cn } from '@/lib/utils';
 
 type LoadState =
@@ -149,7 +147,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [placesDrawerOpen, setPlacesDrawerOpen] = useState(false);
+  const [createItemOpen, setCreateItemOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [pendingMemoriesKey, setPendingMemoriesKey] = useState(0);
   const [scheduleItem, setScheduleItem] = useState<ItineraryItem | null>(null);
@@ -312,25 +310,6 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
       };
     });
   };
-
-  async function addTripPlaceToDay(tripPlace: TripPlace) {
-    if (!day) return false;
-    try {
-      await createItineraryItem(tripId, {
-        itineraryDayId: day.id,
-        schedule: { kind: 'none' },
-        tripPlaceId: tripPlace.id,
-      });
-      await refresh();
-      setError(null);
-      setUndoAction(null);
-      setFeedback(t('feedback.added'));
-      return true;
-    } catch {
-      setError(t('actionError'));
-      return false;
-    }
-  }
 
   async function changeStatus(item: ItineraryItem, travelStatus: ItineraryTravelStatus) {
     const previous = item.travelStatus;
@@ -538,7 +517,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
         </div>
         {/* Adding to the day is the one action worth a control of its own here;
             the rest of what a day collects lives under the row it belongs to. */}
-        <Button onClick={() => setPlacesDrawerOpen(true)} size="sm">
+        <Button onClick={() => setCreateItemOpen(true)} size="sm">
           <Plus aria-hidden="true" data-icon="inline-start" />
           {t('addItem')}
         </Button>
@@ -876,7 +855,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
       ) : (
         <PageState
           actions={
-            <Button onClick={() => setPlacesDrawerOpen(true)}>
+            <Button onClick={() => setCreateItemOpen(true)}>
               <Plus aria-hidden="true" data-icon="inline-start" />
               {t('addFirstItem')}
             </Button>
@@ -923,17 +902,23 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
         tripId={tripId}
       />
 
-      {placesDrawerOpen ? (
-        <ItineraryPlacesDrawer
-          dayName={day.name}
-          dayNumber={itinerary.days.findIndex((candidate) => candidate.id === day.id) + 1}
-          onAddToDay={addTripPlaceToDay}
-          onOpenChange={setPlacesDrawerOpen}
+      {createItemOpen ? (
+        <ItineraryCreateItemSheet
+          dayId={day.id}
+          onCreated={async () => {
+            await refresh();
+            setError(null);
+            setUndoAction(null);
+            setFeedback(t('feedback.added'));
+          }}
+          onOpenChange={setCreateItemOpen}
           onTripPlaceAdded={() => {
             void refresh().catch(() => undefined);
           }}
+          open
           placeUse={placeUse}
           tripId={tripId}
+          tripPlaces={itinerary.tripPlaces}
         />
       ) : null}
 

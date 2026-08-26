@@ -153,9 +153,13 @@ export function TripSectionHeader({
       data-slot="trip-section-header"
     >
       {showCover && trip ? (
-        <section aria-labelledby="trip-section-cover-heading" className="relative isolate">
+        <section
+          aria-labelledby="trip-section-cover-heading"
+          className="relative isolate -mx-[var(--gutter-inline-start)] -mt-8 md:mx-0 md:mt-0"
+        >
           <TripMedia
             alt={t('coverImageAlt', { name: trip.name })}
+            className="rounded-none md:rounded-[var(--radius-2xl)]"
             preload
             sizes="(max-width: 1023px) 100vw, 1024px"
             source={
@@ -163,7 +167,7 @@ export function TripSectionHeader({
             }
             variant="cover"
           />
-          <div className="pointer-events-none absolute inset-0 flex flex-col justify-end gap-2 rounded-[var(--radius-2xl)] bg-gradient-to-t from-surface-overlay from-20% via-surface-overlay/55 to-transparent p-5 md:p-7">
+          <div className="pointer-events-none absolute inset-0 flex flex-col justify-end gap-2 rounded-none bg-gradient-to-t from-surface-overlay from-20% via-surface-overlay/55 to-transparent p-5 md:rounded-[var(--radius-2xl)] md:p-7">
             <h1
               className="text-[length:var(--text-page-title)] leading-[1.08] font-semibold tracking-[-0.035em] text-pretty text-media-fallback-foreground"
               id="trip-section-cover-heading"

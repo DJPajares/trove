@@ -346,7 +346,10 @@ export function TripDetail({
 
   return (
     <article className="mx-auto w-full max-w-5xl space-y-8">
-      <section aria-labelledby="trip-detail-heading" className="relative isolate">
+      <section
+        aria-labelledby="trip-detail-heading"
+        className="relative isolate -mx-[var(--gutter-inline-start)] -mt-8 md:mx-0 md:mt-0"
+      >
         <TripMedia
           alt={
             editorial
@@ -355,6 +358,7 @@ export function TripDetail({
           }
           // The page's Largest Contentful Paint by a distance.
           preload
+          className="rounded-none md:rounded-[var(--radius-2xl)]"
           sizes="(max-width: 1023px) 100vw, 1024px"
           source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
           variant="cover"
@@ -372,7 +376,7 @@ export function TripDetail({
               render={
                 <Button
                   aria-label={t('tripActions')}
-                  className="border border-white/20 bg-neutral-950/58 text-white shadow-sm backdrop-blur-sm hover:bg-neutral-950/78 hover:text-white"
+                  className="size-10 rounded-full border border-white/20 bg-neutral-950/58 text-white shadow-sm backdrop-blur-sm hover:bg-neutral-950/78 hover:text-white"
                   size="icon"
                   type="button"
                   variant="ghost"
@@ -406,7 +410,7 @@ export function TripDetail({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div className="pointer-events-none absolute inset-0 flex flex-col justify-end rounded-[var(--radius-2xl)] bg-gradient-to-t from-surface-overlay from-10% via-surface-overlay/66 to-transparent p-5 sm:p-8">
+        <div className="pointer-events-none absolute inset-0 flex flex-col justify-end rounded-none bg-gradient-to-t from-surface-overlay from-10% via-surface-overlay/66 to-transparent p-5 sm:p-8 md:rounded-[var(--radius-2xl)]">
           <div className="flex items-end justify-between gap-4">
             <div className="min-w-0">
               <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-media-fallback-foreground/85 uppercase">

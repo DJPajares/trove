@@ -15,6 +15,12 @@ const lifecycleVariants: Record<Trip['lifecycle'], 'brand' | 'muted' | 'success'
   planning: 'muted',
 };
 
+const onMediaLifecycleClasses: Record<Trip['lifecycle'], string> = {
+  active: 'border-white/22 bg-brand text-white dark:text-primary-foreground',
+  completed: 'border-white/22 bg-status-success text-white dark:text-primary-foreground',
+  planning: 'border-white/22 bg-neutral-950/58 text-white',
+};
+
 type TripLifecycleBadgeProps = {
   className?: string;
   lifecycle: Trip['lifecycle'];
@@ -32,8 +38,8 @@ export function TripLifecycleBadge({
   return (
     <Badge
       className={cn(
-        tone === 'onMedia' &&
-          'border border-white/22 bg-neutral-950/58 text-white shadow-sm backdrop-blur-sm',
+        tone === 'onMedia' && 'border shadow-sm backdrop-blur-sm',
+        tone === 'onMedia' && onMediaLifecycleClasses[lifecycle],
         className,
       )}
       variant={lifecycleVariants[lifecycle]}

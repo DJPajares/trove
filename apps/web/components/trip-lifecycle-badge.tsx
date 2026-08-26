@@ -2,6 +2,7 @@ import { useTranslations } from 'next-intl';
 
 import { Badge } from '@/components/ui/badge';
 import type { Trip } from '@/lib/trips/api';
+import { cn } from '@/lib/utils';
 
 /**
  * A trip being travelled is the one thing on a screen that should read as
@@ -17,14 +18,26 @@ const lifecycleVariants: Record<Trip['lifecycle'], 'brand' | 'muted' | 'success'
 type TripLifecycleBadgeProps = {
   className?: string;
   lifecycle: Trip['lifecycle'];
+  tone?: 'default' | 'onMedia';
 };
 
 /** Where a trip is in its life, said the same way everywhere it is said. */
-export function TripLifecycleBadge({ className, lifecycle }: Readonly<TripLifecycleBadgeProps>) {
+export function TripLifecycleBadge({
+  className,
+  lifecycle,
+  tone = 'default',
+}: Readonly<TripLifecycleBadgeProps>) {
   const t = useTranslations('trips');
 
   return (
-    <Badge className={className} variant={lifecycleVariants[lifecycle]}>
+    <Badge
+      className={cn(
+        tone === 'onMedia' &&
+          'border border-white/22 bg-neutral-950/58 text-white shadow-sm backdrop-blur-sm',
+        className,
+      )}
+      variant={lifecycleVariants[lifecycle]}
+    >
       {t(`lifecycle.${lifecycle}`)}
     </Badge>
   );

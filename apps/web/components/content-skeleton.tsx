@@ -76,7 +76,7 @@ export function ContentSkeleton({
     return (
       <div aria-hidden="true" className={cn(skeletonVariants({ shape }), className)}>
         {shape === 'tripHero' ? (
-          <Skeleton className="-mx-[var(--gutter-inline-start)] -mt-8 aspect-[4/5] w-[calc(100%+var(--gutter-inline-start)+var(--gutter-inline-end))] rounded-none sm:aspect-[2/1] md:mx-0 md:mt-0 md:w-full md:rounded-[var(--radius-2xl)]" />
+          <Skeleton className="h-[var(--trip-cover-height)] w-full rounded-[var(--radius-2xl)]" />
         ) : (
           <>
             <Skeleton className="h-9 w-24" />

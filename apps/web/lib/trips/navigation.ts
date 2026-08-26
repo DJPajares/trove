@@ -16,6 +16,23 @@ export type TripDestination = {
   section: TripSection;
 };
 
+export type TripCoreExperience = Extract<TripSection, 'itinerary' | 'memories' | 'mode'>;
+
+export type TripOverviewDestination = Omit<TripDestination, 'section'> & {
+  section: TripCoreExperience;
+};
+
+export type TripOverviewDestinations = {
+  primary: TripOverviewDestination;
+  secondary: [TripOverviewDestination, TripOverviewDestination];
+};
+
+function isTripCoreExperience(
+  destination: TripDestination,
+): destination is TripOverviewDestination {
+  return ['itinerary', 'memories', 'mode'].includes(destination.section);
+}
+
 /**
  * A trip is planned, then lived, then remembered, and the interface should lean
  * toward whichever of those the traveller is actually in. Emphasis shifts; the set
@@ -55,6 +72,42 @@ export function primaryTripDestinations(
       section: 'memories',
     },
   ];
+}
+
+/**
+ * Projects the stable three-experience navigation contract into the overview's
+ * one-primary, two-secondary composition. The source list remains the single
+ * place that owns lifecycle routing, labels and Preview parameters.
+ */
+export function tripOverviewDestinations(
+  tripId: string,
+  lifecycle: Trip['lifecycle'],
+  startDate: string,
+): TripOverviewDestinations {
+  const destinations = primaryTripDestinations(tripId, lifecycle, startDate);
+  const coreDestinations = destinations.filter(isTripCoreExperience);
+  const primary = coreDestinations.find((destination) => destination.emphasis === 'leading');
+  const distinctSections = new Set(coreDestinations.map((destination) => destination.section));
+  const distinctHrefs = new Set(coreDestinations.map((destination) => destination.href));
+  const secondary = coreDestinations.filter((destination) => destination !== primary);
+  const [firstSecondary, secondSecondary, ...unexpectedSecondary] = secondary;
+
+  if (
+    coreDestinations.length !== destinations.length ||
+    distinctSections.size !== 3 ||
+    distinctHrefs.size !== 3 ||
+    !primary ||
+    !firstSecondary ||
+    !secondSecondary ||
+    unexpectedSecondary.length
+  ) {
+    throw new Error('invalid_trip_overview_destinations');
+  }
+
+  return {
+    primary,
+    secondary: [firstSecondary, secondSecondary],
+  };
 }
 
 /**

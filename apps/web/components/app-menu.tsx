@@ -212,7 +212,7 @@ export function AppMenuTrigger({ active = false, variant }: Readonly<AppMenuTrig
         <button
           aria-label={unreadCount ? t('moreWithNotifications', { count: unreadCount }) : t('more')}
           className={cn(
-            'relative isolate flex min-h-12 w-full min-w-0 flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-1 py-1.5 text-xs font-medium transition-colors duration-[var(--motion-standard)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+            'relative isolate flex min-h-14 w-full min-w-0 flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-1 py-1.5 text-xs font-medium transition-colors duration-[var(--motion-standard)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
             active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
           )}
           type="button"

@@ -318,15 +318,11 @@ export function HomeExperience() {
           <Button
             className="mt-3"
             nativeButton={false}
-            render={
-              <Link
-                href={`/trips/${recentCompleted.id}/${recentCompleted.memoryCount ? 'memories' : 'itinerary'}`}
-              />
-            }
+            render={<Link href={`/trips/${recentCompleted.id}/memories`} />}
             size="sm"
             variant="ghost"
           >
-            {t(recentCompleted.memoryCount ? 'viewMemories' : 'viewTrip')}
+            {t('viewMemories')}
             <ChevronRight aria-hidden="true" data-icon="inline-end" />
           </Button>
         </EditorialSection>

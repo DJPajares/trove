@@ -81,7 +81,8 @@
   /* What sits below the header right now. Trip Mode's own sticky bar reads this
      instead of hard-coding the header's height, so the two cannot drift. */
   --header-offset: var(--header-height);
-  --bottom-bar-height: 4rem;
+  --bottom-bar-height: 4.75rem;
+  --trip-cover-height: clamp(14rem, 50vw, 24rem);
   --text-immersive-title: clamp(2.5rem, 5vw, 4.75rem);
   --text-page-title: clamp(1.875rem, 4vw, 2.75rem);
   --text-section-title: clamp(1.25rem, 2vw, 1.75rem);

@@ -254,7 +254,7 @@ export function HomeExperience() {
             </Button>
           }
           density="compact"
-          description={t('savedPlacesDescription')}
+          headerLayout="inline"
           title={t('savedPlacesTitle')}
           treatment="ruled"
         >

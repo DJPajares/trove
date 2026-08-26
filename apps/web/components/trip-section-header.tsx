@@ -255,7 +255,12 @@ export function TripSectionHeader({
           <div
             className={cn(
               'flex shrink-0 flex-wrap items-center gap-2',
-              density === 'compact' && 'hidden sm:flex',
+              // Cover-based working screens (for example itinerary) still
+              // need their contextual action on phones. The title branch
+              // above is intentionally omitted when a cover is present, so
+              // hiding compact actions here would make the action unreachable
+              // at mobile widths.
+              density === 'compact' && !showCover && 'hidden sm:flex',
             )}
           >
             {actions}
@@ -267,7 +272,7 @@ export function TripSectionHeader({
         className={cn(
           'flex items-center justify-between gap-2 border-b border-border-subtle',
           stickyNavigation &&
-            'sticky top-[calc(var(--safe-top)+var(--header-offset))] z-[calc(var(--layer-sticky)-1)] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/88 md:static md:z-auto md:bg-transparent md:backdrop-blur-none',
+            'sticky top-[calc(var(--safe-top)+var(--header-offset))] z-[var(--layer-sticky)] bg-background backdrop-blur md:static md:z-auto md:bg-transparent md:backdrop-blur-none',
         )}
       >
         <nav aria-label={t('tripNavigation')} className="min-w-0">

@@ -401,6 +401,11 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
                 <p className="mt-1 text-sm text-muted-foreground">{t('basicsDescription')}</p>
               </div>
             ) : (
+              tripNameField
+            )}
+            {trip ? tripNameField : null}
+            {tripDateFields}
+            {!trip ? (
               <Field>
                 <FieldLabel
                   className="w-full items-center justify-between"
@@ -431,10 +436,7 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
                   {t('primaryDestinationHint')}
                 </FieldDescription>
               </Field>
-            )}
-            {trip ? tripNameField : null}
-            {tripDateFields}
-            {!trip ? tripNameField : null}
+            ) : null}
           </section>
 
           {trip ? (

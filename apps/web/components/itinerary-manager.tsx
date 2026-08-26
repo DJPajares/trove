@@ -1655,6 +1655,13 @@ export function ItineraryManager({
                   <PopoverContent
                     align="end"
                     className="max-h-[min(36rem,var(--available-height))] w-[min(22rem,calc(100vw-2rem))] gap-0 overflow-y-auto p-0"
+                    collisionAvoidance={{
+                      align: 'shift',
+                      fallbackAxisSide: 'none',
+                      side: 'shift',
+                    }}
+                    collisionPadding={16}
+                    positionMethod="fixed"
                     sideOffset={8}
                   >
                     <PopoverHeader className="border-b border-border px-4 py-3.5">

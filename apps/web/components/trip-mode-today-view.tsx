@@ -857,7 +857,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
         />
       )}
 
-      <div className="flex flex-wrap gap-2 border-t border-border-subtle pt-4">
+      <div className="flex flex-wrap gap-2 pt-4">
         <Button
           nativeButton={false}
           render={<Link href={expenseHref()} />}

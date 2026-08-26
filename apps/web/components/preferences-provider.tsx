@@ -63,13 +63,29 @@ export function PreferencesProvider({
   locale,
 }: Readonly<{ children: ReactNode; locale: string }>) {
   const defaults = useMemo(() => getPreferenceDefaults(locale), [locale]);
-  const { setTheme } = useTheme();
+  const { setTheme, theme } = useTheme();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [preferences, setPreferences] = useState<ProfilePreferences>(defaults);
   const [status, setStatus] = useState<PreferencesStatus>('loading');
   const [appearanceSaveError, setAppearanceSaveError] = useState(false);
+  const [appearanceReady, setAppearanceReady] = useState(false);
   const appearanceRevision = useRef(0);
   const appearanceSaveQueue = useRef<Promise<void>>(Promise.resolve());
+  const appliedAppearance = useRef(theme);
+
+  useEffect(() => {
+    appliedAppearance.current = theme;
+  }, [theme]);
+
+  const applyAppearance = useCallback(
+    (appearance: Appearance) => {
+      if (appliedAppearance.current === appearance) return;
+
+      appliedAppearance.current = appearance;
+      setTheme(appearance);
+    },
+    [setTheme],
+  );
 
   useEffect(() => {
     let active = true;
@@ -86,24 +102,31 @@ export function PreferencesProvider({
           const appearance = shouldApplyLoadedAppearance ? loaded.appearance : current.appearance;
           return { ...loaded, appearance };
         });
-        if (shouldApplyLoadedAppearance) setTheme(loaded.appearance);
+        setAppearanceReady(true);
         setStatus('ready');
       })
       .catch(() => {
         if (!active) return;
+        setAppearanceReady(true);
         setStatus('unavailable');
       });
 
     return () => {
       active = false;
     };
-  }, [defaults, setTheme]);
+  }, [defaults]);
+
+  useEffect(() => {
+    if (!appearanceReady) return;
+    applyAppearance(preferences.appearance);
+  }, [appearanceReady, applyAppearance, preferences.appearance]);
 
   const setAppearance = useCallback(
     (appearance: Appearance) => {
       const revision = ++appearanceRevision.current;
       setPreferences((current) => ({ ...current, appearance }));
-      setTheme(appearance);
+      setAppearanceReady(true);
+      applyAppearance(appearance);
       setAppearanceSaveError(false);
 
       appearanceSaveQueue.current = appearanceSaveQueue.current
@@ -121,7 +144,7 @@ export function PreferencesProvider({
           }
         });
     },
-    [setTheme],
+    [applyAppearance],
   );
 
   const saveProfileChanges = useCallback(
@@ -136,13 +159,10 @@ export function PreferencesProvider({
           ? { ...next, appearance: current.appearance }
           : next;
       });
-      if (changes.appearance) {
-        setTheme(changes.appearance);
-        setAppearanceSaveError(false);
-      }
+      if (changes.appearance) setAppearanceSaveError(false);
       return nextProfile;
     },
-    [defaults, setTheme],
+    [defaults],
   );
 
   const value = useMemo<PreferencesContextValue>(

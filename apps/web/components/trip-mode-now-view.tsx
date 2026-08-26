@@ -587,7 +587,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
           there is nothing next, the empty state has already offered Today and
           this row does not offer it a second time. */}
       {hasNext || readyContext.day ? (
-        <div className="flex flex-wrap gap-2 border-t border-border-subtle pt-4">
+        <div className="flex flex-wrap gap-2 pt-4">
           {hasNext ? (
             <Button
               nativeButton={false}

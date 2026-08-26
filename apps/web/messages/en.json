@@ -137,6 +137,14 @@
     "previewTripMode": "Preview",
     "destinations": "Destinations",
     "editTrip": "Edit trip",
+    "tripActions": "Trip actions",
+    "tripExperiences": "Trip experiences",
+    "experienceDescription": {
+      "itinerary": "View and manage your plan.",
+      "memories": "Collect and revisit your memories.",
+      "preview": "Preview the trip before departure.",
+      "tripMode": "Navigate and explore your trip."
+    },
     "planningReadiness": "Planning readiness",
     "readinessState": {
       "in_progress": "In progress",

@@ -159,15 +159,15 @@ export function TripSectionHeader({
         >
           <TripMedia
             alt={t('coverImageAlt', { name: trip.name })}
-            className="max-h-[58dvh] w-full rounded-none md:rounded-[var(--radius-2xl)]"
+            className="rounded-none md:rounded-[var(--radius-2xl)]"
             preload
             sizes="(max-width: 1023px) 100vw, 1024px"
             source={
               coverSource ?? resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })
             }
-            variant="hero"
+            variant="cover"
           />
-          <div className="pointer-events-none absolute inset-0 flex flex-col justify-end gap-2 bg-gradient-to-t from-surface-overlay from-20% via-surface-overlay/55 to-transparent p-5 md:rounded-[var(--radius-2xl)] md:p-7">
+          <div className="pointer-events-none absolute inset-0 flex flex-col justify-end gap-2 rounded-none bg-gradient-to-t from-surface-overlay from-20% via-surface-overlay/55 to-transparent p-5 md:rounded-[var(--radius-2xl)] md:p-7">
             <h1
               className="text-[length:var(--text-page-title)] leading-[1.08] font-semibold tracking-[-0.035em] text-pretty text-media-fallback-foreground"
               id="trip-section-cover-heading"

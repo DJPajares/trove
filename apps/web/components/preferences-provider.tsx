@@ -63,29 +63,25 @@ export function PreferencesProvider({
   locale,
 }: Readonly<{ children: ReactNode; locale: string }>) {
   const defaults = useMemo(() => getPreferenceDefaults(locale), [locale]);
-  const { setTheme, theme } = useTheme();
+  const { setTheme } = useTheme();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [preferences, setPreferences] = useState<ProfilePreferences>(defaults);
   const [status, setStatus] = useState<PreferencesStatus>('loading');
   const [appearanceSaveError, setAppearanceSaveError] = useState(false);
-  const [appearanceReady, setAppearanceReady] = useState(false);
   const appearanceRevision = useRef(0);
   const appearanceSaveQueue = useRef<Promise<void>>(Promise.resolve());
-  const appliedAppearance = useRef(theme);
+  const setThemeRef = useRef(setTheme);
 
   useEffect(() => {
-    appliedAppearance.current = theme;
-  }, [theme]);
+    setThemeRef.current = setTheme;
+  }, [setTheme]);
 
-  const applyAppearance = useCallback(
-    (appearance: Appearance) => {
-      if (appliedAppearance.current === appearance) return;
-
-      appliedAppearance.current = appearance;
-      setTheme(appearance);
-    },
-    [setTheme],
-  );
+  // next-themes recreates its setter whenever the theme changes. Keeping the
+  // latest setter behind a stable callback prevents the profile-sync effect
+  // from running again mid-toggle and briefly repainting the previous theme.
+  const applyAppearance = useCallback((appearance: Appearance) => {
+    setThemeRef.current(appearance);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -102,30 +98,23 @@ export function PreferencesProvider({
           const appearance = shouldApplyLoadedAppearance ? loaded.appearance : current.appearance;
           return { ...loaded, appearance };
         });
-        setAppearanceReady(true);
+        if (shouldApplyLoadedAppearance) applyAppearance(loaded.appearance);
         setStatus('ready');
       })
       .catch(() => {
         if (!active) return;
-        setAppearanceReady(true);
         setStatus('unavailable');
       });
 
     return () => {
       active = false;
     };
-  }, [defaults]);
-
-  useEffect(() => {
-    if (!appearanceReady) return;
-    applyAppearance(preferences.appearance);
-  }, [appearanceReady, applyAppearance, preferences.appearance]);
+  }, [applyAppearance, defaults]);
 
   const setAppearance = useCallback(
     (appearance: Appearance) => {
       const revision = ++appearanceRevision.current;
       setPreferences((current) => ({ ...current, appearance }));
-      setAppearanceReady(true);
       applyAppearance(appearance);
       setAppearanceSaveError(false);
 

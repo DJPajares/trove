@@ -87,7 +87,7 @@ export function TripFeaturedCard({ editorial, trip }: Readonly<TripFeaturedCardP
             }
             labelOverrides={
               trip.lifecycle === 'completed'
-                ? { memories: t(trip.memoryCount ? 'viewMemories' : 'addMemories') }
+                ? { memories: t('viewMemories') }
                 : {
                     itinerary: t('continuePlanning'),
                     mode: t(trip.lifecycle === 'active' ? 'openTripMode' : 'previewTripMode'),

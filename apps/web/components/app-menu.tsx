@@ -1,7 +1,6 @@
 'use client';
 
 import { ArrowLeftRight, ChevronRight, ClipboardCheck, Ellipsis, Menu, X } from 'lucide-react';
-import { motion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -24,7 +23,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { navigationTransition } from '@/lib/motion';
 import { isNavigationPathActive, toolNavigationDestinations } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 
@@ -212,23 +210,21 @@ export function AppMenuTrigger({ active = false, variant }: Readonly<AppMenuTrig
         <button
           aria-label={unreadCount ? t('moreWithNotifications', { count: unreadCount }) : t('more')}
           className={cn(
-            'relative isolate flex min-h-12 w-full min-w-0 flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-1 py-1.5 text-xs font-medium transition-colors duration-[var(--motion-standard)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-            active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+            'relative isolate flex min-h-14 w-full min-w-0 flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-1 py-1.5 text-xs font-medium transition-colors duration-[var(--motion-standard)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+            active ? 'font-semibold text-brand' : 'text-muted-foreground hover:text-foreground',
           )}
           type="button"
         />
       }
     >
-      {active ? (
-        <motion.span
-          aria-hidden="true"
-          className="absolute inset-0 -z-10 rounded-[var(--radius-xl)] bg-secondary"
-          layoutId="primary-navigation-mobile"
-          transition={navigationTransition}
-        />
-      ) : null}
       <span className="relative">
-        <Ellipsis aria-hidden="true" className="size-4" />
+        <Ellipsis aria-hidden="true" className="size-5" />
+        {active && !unreadCount ? (
+          <span
+            aria-hidden="true"
+            className="absolute -top-1 -right-2 size-2.5 rounded-full bg-brand"
+          />
+        ) : null}
         {badge}
       </span>
       <span className="relative max-w-full truncate">{t('more')}</span>

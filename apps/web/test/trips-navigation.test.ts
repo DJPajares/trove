@@ -5,6 +5,7 @@ import {
   primaryTripDestinations,
   supportingTripDestinations,
   tripDestinationEmphasisVariant,
+  tripOverviewDestinations,
   tripSectionLabelKey,
   type TripSection,
   visibleTripNavigationDestinations,
@@ -152,6 +153,41 @@ test('every stage leads with exactly one action', () => {
     );
     expect(leading, `${lifecycle} must lead with one action`).toHaveLength(1);
   }
+});
+
+test('the Trip Overview projects one primary action and two unique secondary actions', () => {
+  const expected = {
+    active: { primary: 'mode', secondary: ['itinerary', 'memories'] },
+    completed: { primary: 'memories', secondary: ['itinerary', 'mode'] },
+    planning: { primary: 'itinerary', secondary: ['mode', 'memories'] },
+  } as const;
+
+  for (const lifecycle of ['planning', 'active', 'completed'] as const) {
+    const overview = tripOverviewDestinations(TRIP, lifecycle, START);
+    const all = [overview.primary, ...overview.secondary];
+
+    expect(overview.primary.section).toBe(expected[lifecycle].primary);
+    expect(overview.secondary.map((entry) => entry.section)).toStrictEqual(
+      expected[lifecycle].secondary,
+    );
+    expect(new Set(all.map((entry) => entry.section)).size).toBe(3);
+    expect(new Set(all.map((entry) => entry.href)).size).toBe(3);
+  }
+});
+
+test('the planning overview has one planning route and keeps Preview parameters intact', () => {
+  const overview = tripOverviewDestinations(TRIP, 'planning', START);
+
+  expect(overview.primary.href).toBe(`/trips/${TRIP}/itinerary`);
+  expect(overview.secondary.map((entry) => entry.href)).toStrictEqual([
+    `/trips/${TRIP}/mode?preview=1&date=2026-09-05&time=09%3A00`,
+    `/trips/${TRIP}/memories`,
+  ]);
+  expect(
+    [overview.primary, ...overview.secondary].filter(
+      (entry) => entry.href === `/trips/${TRIP}/itinerary`,
+    ),
+  ).toHaveLength(1);
 });
 
 test('every section can say its own name, including the ones no menu lists', () => {

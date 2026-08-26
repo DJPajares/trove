@@ -63,14 +63,14 @@ export function HomeWeatherInset({ target }: Readonly<{ target: HomeWeatherTarge
       <section
         aria-busy="true"
         aria-label={t('loading')}
-        className="rounded-[var(--radius-lg)] border border-white/20 bg-black/25 p-3 text-white backdrop-blur-md supports-[backdrop-filter]:bg-black/20"
+        className="rounded-[var(--radius-lg)] border border-border-subtle bg-muted/45 p-3"
         role="status"
       >
         <div className="flex items-center gap-3">
-          <Skeleton className="size-9 bg-white/25" />
+          <Skeleton className="size-9" />
           <div className="space-y-2">
-            <Skeleton className="h-3 w-20 bg-white/25" />
-            <Skeleton className="h-4 w-32 bg-white/25" />
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-4 w-32" />
           </div>
         </div>
       </section>
@@ -81,13 +81,12 @@ export function HomeWeatherInset({ target }: Readonly<{ target: HomeWeatherTarge
     return (
       <section
         aria-live="polite"
-        className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-white/20 bg-black/30 p-3 text-white backdrop-blur-md"
+        className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-border-subtle bg-muted/45 p-3"
       >
-        <CloudSun aria-hidden="true" className="size-5 shrink-0 text-white/80" />
-        <p className="min-w-0 flex-1 text-sm text-white/85">{t('unavailable')}</p>
+        <CloudSun aria-hidden="true" className="size-5 shrink-0 text-brand" />
+        <p className="min-w-0 flex-1 text-sm text-muted-foreground">{t('unavailable')}</p>
         <Button
           aria-label={t('tryAgain')}
-          className="text-white hover:bg-white/15 hover:text-white"
           onClick={() => setReloadKey((value) => value + 1)}
           size="icon-sm"
           variant="ghost"
@@ -110,11 +109,11 @@ export function HomeWeatherInset({ target }: Readonly<{ target: HomeWeatherTarge
   const weatherCode = reading?.reading?.weatherCode;
 
   return (
-    <section className="rounded-[var(--radius-lg)] border border-white/20 bg-black/30 p-3 text-white backdrop-blur-md supports-[backdrop-filter]:bg-black/20">
+    <section className="rounded-[var(--radius-lg)] border border-border-subtle bg-muted/45 p-3">
       <div className="flex items-start gap-3">
-        <CloudSun aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-white/85" />
+        <CloudSun aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand" />
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-white/75">
+          <p className="text-xs font-medium text-muted-foreground">
             {reading?.kind === 'current' ? t('current') : t('forecast', { date: formattedDate })}
           </p>
           {temperature !== null && weatherCode !== undefined ? (
@@ -123,11 +122,11 @@ export function HomeWeatherInset({ target }: Readonly<{ target: HomeWeatherTarge
                 {Math.round(temperature)}
                 {unit}
               </p>
-              <p className="text-sm text-white/80">
+              <p className="text-sm text-muted-foreground">
                 {conditionT(`condition.${weatherConditionKey(weatherCode)}`)}
               </p>
               {reading?.kind === 'forecast' ? (
-                <p className="text-xs text-white/70">
+                <p className="text-xs text-text-subtle">
                   {conditionT('range', {
                     high: `${Math.round(reading.reading.temperatureMax)}${unit}`,
                     low: `${Math.round(reading.reading.temperatureMin)}${unit}`,
@@ -136,13 +135,13 @@ export function HomeWeatherInset({ target }: Readonly<{ target: HomeWeatherTarge
               ) : null}
             </div>
           ) : (
-            <p className="mt-1 text-sm text-white/80">{t('outOfRange')}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t('outOfRange')}</p>
           )}
           {data.source === 'cache' ? (
-            <p className="mt-1 text-xs text-white/65">{t(data.stale ? 'stale' : 'cached')}</p>
+            <p className="mt-1 text-xs text-text-subtle">{t(data.stale ? 'stale' : 'cached')}</p>
           ) : null}
           <a
-            className="mt-1 inline-flex rounded-sm text-xs text-white/65 underline-offset-4 hover:text-white hover:underline focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+            className="mt-1 inline-flex rounded-sm text-xs text-text-subtle underline-offset-4 hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             href={data.attribution.url}
             rel="noreferrer"
             target="_blank"

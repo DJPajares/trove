@@ -22,6 +22,8 @@ type EditorialSectionProps = React.ComponentProps<'section'> &
   VariantProps<typeof sectionVariants> & {
     actions?: ReactNode;
     description?: string;
+    /** Keeps the title and action opposite each other whenever the available width allows. */
+    headerLayout?: 'inline' | 'stacked';
     /** A short kicker above the title, in the same brand-uppercase treatment `PageHeader` uses. */
     eyebrow?: string;
     headingId?: string;
@@ -42,6 +44,7 @@ export function EditorialSection({
   density,
   description,
   eyebrow,
+  headerLayout = 'stacked',
   headingId,
   headingLevel = 2,
   icon,
@@ -54,7 +57,12 @@ export function EditorialSection({
   const resolvedHeadingId = headingId ?? generatedHeadingId;
 
   const titleColumn = (
-    <div className="max-w-[var(--layout-reading)]">
+    <div
+      className={cn(
+        'min-w-0',
+        headerLayout === 'inline' ? 'flex-1' : 'max-w-[var(--layout-reading)]',
+      )}
+    >
       {eyebrow ? (
         <p className="mb-2 text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
           {eyebrow}
@@ -83,9 +91,17 @@ export function EditorialSection({
       data-treatment={treatment ?? 'plain'}
       {...props}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div
+        className={cn(
+          headerLayout === 'inline'
+            ? 'flex flex-wrap items-center justify-between gap-x-4 gap-y-3'
+            : 'flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between',
+        )}
+      >
         {icon ? (
-          <div className="flex min-w-0 items-start gap-3">
+          <div
+            className={cn('flex min-w-0 items-start gap-3', headerLayout === 'inline' && 'flex-1')}
+          >
             <span aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand [&_svg]:size-5">
               {icon}
             </span>

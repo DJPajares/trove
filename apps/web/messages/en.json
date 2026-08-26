@@ -143,6 +143,7 @@
       "itinerary": "View and manage your plan.",
       "memories": "Collect and revisit your memories.",
       "preview": "Preview the trip before departure.",
+      "previewCompleted": "Rehearse your itinerary with a chosen day and time.",
       "tripMode": "Navigate and explore your trip."
     },
     "planningReadiness": "Planning readiness",
@@ -1744,7 +1745,6 @@
     "createTrip": "Create trip",
     "viewSavedPlaces": "View Saved Places",
     "savedPlacesTitle": "Saved Places",
-    "savedPlacesDescription": "A few places worth keeping close for a future trip.",
     "savedPlaceFallback": "Saved place",
     "savedPlaceDescription": "Saved for later",
     "otherTripsTitle": "Other trips",

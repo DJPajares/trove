@@ -29,6 +29,7 @@ import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import { resolveProviderPlaceName, resolveTripPlaceName } from '@/lib/trip-places/place-name';
 import { fetchTrip, type Trip } from '@/lib/trips/api';
+import { isTripModeAvailable } from '@/lib/trips/navigation';
 import { cn } from '@/lib/utils';
 
 type PreviewSelection = { date: string; time: string };
@@ -395,7 +396,7 @@ export function TripModeShell({
   });
   const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00.000Z`));
 
-  if (trip.lifecycle !== 'active' && !(previewSelection && trip.lifecycle === 'planning')) {
+  if (!isTripModeAvailable(trip.lifecycle, Boolean(previewSelection))) {
     return (
       <section className="mx-auto w-full max-w-6xl">
         <PageState

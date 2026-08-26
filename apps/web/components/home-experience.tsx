@@ -254,7 +254,7 @@ export function HomeExperience() {
             </Button>
           }
           density="compact"
-          description={t('savedPlacesDescription')}
+          headerLayout="inline"
           title={t('savedPlacesTitle')}
           treatment="ruled"
         >
@@ -285,12 +285,18 @@ export function HomeExperience() {
         <section aria-labelledby="other-trips-heading" className="space-y-4">
           <div className="flex items-center justify-between gap-4">
             <h2
-              className="text-[length:var(--text-section-title)] font-semibold tracking-[-0.02em] text-foreground"
+              className="min-w-0 text-[length:var(--text-section-title)] font-semibold tracking-[-0.02em] text-foreground"
               id="other-trips-heading"
             >
               {t('otherTripsTitle')}
             </h2>
-            <Button nativeButton={false} render={<Link href="/trips" />} size="sm" variant="ghost">
+            <Button
+              className="shrink-0"
+              nativeButton={false}
+              render={<Link href="/trips" />}
+              size="sm"
+              variant="ghost"
+            >
               {t('viewTrips')}
               <ChevronRight aria-hidden="true" data-icon="inline-end" />
             </Button>

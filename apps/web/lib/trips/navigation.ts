@@ -58,6 +58,16 @@ export function primaryTripDestinations(
 }
 
 /**
+ * Trip section headers omit the planning Preview entry without changing the
+ * shared set of destinations or the preview route itself.
+ */
+export function visibleTripNavigationDestinations(
+  destinations: TripDestination[],
+): TripDestination[] {
+  return destinations.filter((destination) => destination.labelKey !== 'preview');
+}
+
+/**
  * How much visual weight a destination's control carries. The mapping lives
  * beside the emphasis it reads so a surface never invents its own answer, and
  * so the whole lifecycle rule stays testable without rendering anything.

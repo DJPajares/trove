@@ -7,6 +7,7 @@ import {
   tripDestinationEmphasisVariant,
   tripSectionLabelKey,
   type TripSection,
+  visibleTripNavigationDestinations,
 } from '../lib/trips/navigation.ts';
 
 const TRIP = 'trip-japan';
@@ -65,6 +66,26 @@ test('Trip Mode opens as a rehearsal before departure and directly afterwards', 
       `${lifecycle} should not open Preview`,
     ).toBe(`/trips/${TRIP}/mode`);
   }
+});
+
+test('trip section navigation omits planning Preview without hiding Trip Mode', () => {
+  expect(
+    visibleTripNavigationDestinations(primaryTripDestinations(TRIP, 'planning', START)).map(
+      (entry) => entry.section,
+    ),
+  ).toStrictEqual(['itinerary', 'memories']);
+
+  expect(
+    visibleTripNavigationDestinations(primaryTripDestinations(TRIP, 'active', START)).map(
+      (entry) => entry.section,
+    ),
+  ).toStrictEqual(['itinerary', 'mode', 'memories']);
+
+  expect(
+    visibleTripNavigationDestinations(primaryTripDestinations(TRIP, 'completed', START)).map(
+      (entry) => entry.section,
+    ),
+  ).toStrictEqual(['itinerary', 'mode', 'memories']);
 });
 
 test('supporting tools stay complete and out of the primary set', () => {

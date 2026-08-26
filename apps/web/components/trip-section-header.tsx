@@ -255,7 +255,12 @@ export function TripSectionHeader({
           <div
             className={cn(
               'flex shrink-0 flex-wrap items-center gap-2',
-              density === 'compact' && 'hidden sm:flex',
+              // Cover-based working screens (for example itinerary) still
+              // need their contextual action on phones. The title branch
+              // above is intentionally omitted when a cover is present, so
+              // hiding compact actions here would make the action unreachable
+              // at mobile widths.
+              density === 'compact' && !showCover && 'hidden sm:flex',
             )}
           >
             {actions}

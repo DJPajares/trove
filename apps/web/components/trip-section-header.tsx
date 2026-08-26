@@ -44,6 +44,7 @@ type TripSectionHeaderProps = {
   media?: ReactNode;
   meta?: ReactNode;
   showCover?: boolean;
+  stickyNavigation?: boolean;
   trip?: Trip;
   tripId: string;
 };
@@ -74,7 +75,8 @@ export function TripSectionHeader({
   description,
   media,
   meta,
-  showCover = false,
+  showCover = true,
+  stickyNavigation = false,
   trip: suppliedTrip,
   tripId,
 }: Readonly<TripSectionHeaderProps>) {
@@ -132,8 +134,16 @@ export function TripSectionHeader({
     );
 
   return (
+    // A sticky child is bounded by the height of its nearest box ancestor. On
+    // itinerary, flatten this header at mobile widths so the unchanged
+    // navigation row stays anchored to the full planning section. Desktop
+    // keeps the ordinary header box and flow.
     <header
-      className={cn('space-y-5', density === 'compact' && 'space-y-3 sm:space-y-5')}
+      className={cn(
+        stickyNavigation && 'contents md:block',
+        'space-y-5',
+        density === 'compact' && 'space-y-3 sm:space-y-5',
+      )}
       data-density={density}
       data-slot="trip-section-header"
     >
@@ -248,7 +258,13 @@ export function TripSectionHeader({
         ) : null}
       </div>
 
-      <div className="flex items-center justify-between gap-2 border-b border-border-subtle">
+      <div
+        className={cn(
+          'flex items-center justify-between gap-2 border-b border-border-subtle',
+          stickyNavigation &&
+            'sticky top-[calc(var(--safe-top)+var(--header-offset))] z-[calc(var(--layer-sticky)-1)] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/88 md:static md:z-auto md:bg-transparent md:backdrop-blur-none',
+        )}
+      >
         <nav aria-label={t('tripNavigation')} className="min-w-0">
           {/* `overflow-x-auto` also clips vertically, which would cut the tabs'
               focus ring. The negative margin buys it room without moving the

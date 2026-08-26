@@ -1468,6 +1468,7 @@ export function ItineraryManager({
         density="compact"
         description={t('description')}
         showCover
+        stickyNavigation
         tripId={tripId}
       />
 
@@ -1483,7 +1484,7 @@ export function ItineraryManager({
           <AlertDescription>{t('timeZoneConsequence')}</AlertDescription>
         </Alert>
       ) : null}
-      <div className="sticky top-[calc(var(--safe-top)+0.75rem)] z-[calc(var(--layer-sticky)-1)] -mx-1 md:hidden">
+      <div className="relative sticky top-[calc(var(--safe-top)+var(--header-offset)+4.5rem)] z-[calc(var(--layer-sticky)-1)] -mx-1 bg-background/95 backdrop-blur before:pointer-events-none before:absolute before:inset-x-0 before:-top-7 before:h-7 before:bg-background/95 before:backdrop-blur before:content-[''] supports-[backdrop-filter]:bg-background/88 supports-[backdrop-filter]:before:bg-background/88 md:hidden">
         <div className="flex items-center gap-2.5">
           <Button
             aria-label={t('previousDay')}

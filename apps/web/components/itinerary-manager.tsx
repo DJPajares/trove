@@ -1506,10 +1506,7 @@ export function ItineraryManager({
           <AlertDescription>{t('timeZoneConsequence')}</AlertDescription>
         </Alert>
       ) : null}
-      <div
-        className="sticky top-[calc(var(--safe-top)+0.75rem)] z-[calc(var(--layer-sticky)-1)] -mx-1 rounded-[var(--radius-lg)] border border-border bg-background/95 p-1 shadow-[var(--shadow-control)] backdrop-blur supports-[backdrop-filter]:bg-background/88 md:hidden"
-        data-translucent-surface
-      >
+      <div className="sticky top-[calc(var(--safe-top)+0.75rem)] z-[calc(var(--layer-sticky)-1)] -mx-1 md:hidden">
         <div className="flex items-center gap-2.5">
           <Button
             aria-label={t('previousDay')}

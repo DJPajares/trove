@@ -28,6 +28,7 @@ import {
   tripSectionLabelKey,
   type TripDestination,
   type TripSection,
+  visibleTripNavigationDestinations,
 } from '@/lib/trips/navigation';
 import { tripEditorialSubject } from '@/lib/trips/summary';
 import { cn } from '@/lib/utils';
@@ -41,6 +42,7 @@ type TripSectionHeaderProps = {
   currentSection: TripSection;
   density?: HeaderDensity;
   description?: string;
+  hidePlanningPreviewTab?: boolean;
   media?: ReactNode;
   meta?: ReactNode;
   showCover?: boolean;
@@ -64,7 +66,9 @@ function emphasisClasses(destination: TripDestination, active: boolean) {
  * The header every trip page shares. The trip is the subject — its name is the
  * heading wherever you are inside it — and the three experiences Trove is built
  * around are the only destinations on show. Everything else a trip needs stays one
- * interaction away rather than competing for the same attention.
+ * interaction away rather than competing for the same attention. An itinerary
+ * may opt out of showing the planning Preview entry while keeping the shared
+ * navigation contract everywhere else.
  */
 export function TripSectionHeader({
   actions,
@@ -73,6 +77,7 @@ export function TripSectionHeader({
   currentSection,
   density = 'default',
   description,
+  hidePlanningPreviewTab = false,
   media,
   meta,
   showCover = true,
@@ -115,7 +120,10 @@ export function TripSectionHeader({
     : null;
 
   const lifecycle = trip?.lifecycle ?? 'planning';
-  const primary = primaryTripDestinations(tripId, lifecycle, trip?.startDate ?? '');
+  const primary = visibleTripNavigationDestinations(
+    primaryTripDestinations(tripId, lifecycle, trip?.startDate ?? ''),
+    hidePlanningPreviewTab,
+  );
   const supporting = supportingTripDestinations(tripId);
   const activeSupporting = supporting.find((entry) => entry.section === currentSection);
   const onCoreExperience = primary.some((entry) => entry.section === currentSection);

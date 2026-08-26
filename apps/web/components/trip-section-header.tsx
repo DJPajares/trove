@@ -120,7 +120,6 @@ export function TripSectionHeader({
   const lifecycle = trip?.lifecycle ?? 'planning';
   const primary = visibleTripNavigationDestinations(
     primaryTripDestinations(tripId, lifecycle, trip?.startDate ?? ''),
-    currentSection,
   );
   const supporting = supportingTripDestinations(tripId);
   const activeSupporting = supporting.find((entry) => entry.section === currentSection);

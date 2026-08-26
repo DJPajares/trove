@@ -58,18 +58,13 @@ export function primaryTripDestinations(
 }
 
 /**
- * Trip section headers omit the planning Preview entry without changing the
- * shared set of destinations or the preview route itself.
+ * Trip section headers keep only the planning and memories destinations. The
+ * shared destination set and the Preview and Trip Mode routes remain intact.
  */
 export function visibleTripNavigationDestinations(
   destinations: TripDestination[],
-  currentSection: TripSection,
 ): TripDestination[] {
-  return destinations.filter(
-    (destination) =>
-      destination.labelKey !== 'preview' &&
-      !(currentSection === 'itinerary' && destination.section === 'mode'),
-  );
+  return destinations.filter((destination) => destination.section !== 'mode');
 }
 
 /**

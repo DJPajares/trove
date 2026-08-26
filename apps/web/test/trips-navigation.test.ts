@@ -68,41 +68,14 @@ test('Trip Mode opens as a rehearsal before departure and directly afterwards', 
   }
 });
 
-test('trip section navigation omits Preview and hides Trip Mode only on itineraries', () => {
-  expect(
-    visibleTripNavigationDestinations(
-      primaryTripDestinations(TRIP, 'planning', START),
-      'itinerary',
-    ).map((entry) => entry.section),
-  ).toStrictEqual(['itinerary', 'memories']);
-
-  expect(
-    visibleTripNavigationDestinations(
-      primaryTripDestinations(TRIP, 'active', START),
-      'itinerary',
-    ).map((entry) => entry.section),
-  ).toStrictEqual(['itinerary', 'memories']);
-
-  expect(
-    visibleTripNavigationDestinations(
-      primaryTripDestinations(TRIP, 'completed', START),
-      'itinerary',
-    ).map((entry) => entry.section),
-  ).toStrictEqual(['itinerary', 'memories']);
-
-  expect(
-    visibleTripNavigationDestinations(
-      primaryTripDestinations(TRIP, 'active', START),
-      'memories',
-    ).map((entry) => entry.section),
-  ).toStrictEqual(['itinerary', 'mode', 'memories']);
-
-  expect(
-    visibleTripNavigationDestinations(
-      primaryTripDestinations(TRIP, 'completed', START),
-      'reservations',
-    ).map((entry) => entry.section),
-  ).toStrictEqual(['itinerary', 'mode', 'memories']);
+test('trip section navigation omits Preview and Trip Mode on every section', () => {
+  for (const lifecycle of ['planning', 'active', 'completed'] as const) {
+    expect(
+      visibleTripNavigationDestinations(primaryTripDestinations(TRIP, lifecycle, START)).map(
+        (entry) => entry.section,
+      ),
+    ).toStrictEqual(['itinerary', 'memories']);
+  }
 });
 
 test('supporting tools stay complete and out of the primary set', () => {

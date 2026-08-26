@@ -68,24 +68,14 @@ test('Trip Mode opens as a rehearsal before departure and directly afterwards', 
   }
 });
 
-test('trip section navigation omits planning Preview without hiding Trip Mode', () => {
-  expect(
-    visibleTripNavigationDestinations(primaryTripDestinations(TRIP, 'planning', START)).map(
-      (entry) => entry.section,
-    ),
-  ).toStrictEqual(['itinerary', 'memories']);
-
-  expect(
-    visibleTripNavigationDestinations(primaryTripDestinations(TRIP, 'active', START)).map(
-      (entry) => entry.section,
-    ),
-  ).toStrictEqual(['itinerary', 'mode', 'memories']);
-
-  expect(
-    visibleTripNavigationDestinations(primaryTripDestinations(TRIP, 'completed', START)).map(
-      (entry) => entry.section,
-    ),
-  ).toStrictEqual(['itinerary', 'mode', 'memories']);
+test('trip section navigation omits Preview and Trip Mode on every section', () => {
+  for (const lifecycle of ['planning', 'active', 'completed'] as const) {
+    expect(
+      visibleTripNavigationDestinations(primaryTripDestinations(TRIP, lifecycle, START)).map(
+        (entry) => entry.section,
+      ),
+    ).toStrictEqual(['itinerary', 'memories']);
+  }
 });
 
 test('supporting tools stay complete and out of the primary set', () => {

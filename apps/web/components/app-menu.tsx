@@ -102,46 +102,49 @@ function AppMenuContent() {
       side="right"
     >
       <SheetHeader className="gap-0 px-5 pt-7 pb-3 md:px-6 md:pt-6 md:pb-4">
-        <SheetTitle className="sr-only">
-          <span className="md:hidden">{t('more')}</span>
-          <span className="hidden md:inline">{t('menu')}</span>
-        </SheetTitle>
-        <SheetDescription className="sr-only">{t('menuDescription')}</SheetDescription>
-        <div className="flex justify-end">
-          <div
-            aria-label={t('menuActions')}
-            className="flex shrink-0 items-center gap-1"
-            role="toolbar"
+        <div className="flex items-center justify-between gap-3">
+          <SheetTitle>
+            <span className="md:hidden">{t('more')}</span>
+            <span className="hidden md:inline">{t('menu')}</span>
+          </SheetTitle>
+          <SheetClose
+            render={
+              <Button
+                aria-label={t('closeMenu')}
+                className="text-foreground"
+                size="icon-sm"
+                type="button"
+                variant="ghost"
+              />
+            }
           >
-            <NotificationCenter onNavigate={closeMenu} />
-            <AppearanceToggle />
-            <AccountMenu onNavigate={closeMenu} />
-            <SheetClose
-              render={
-                <Button
-                  aria-label={t('closeMenu')}
-                  className="text-foreground"
-                  size="icon-sm"
-                  type="button"
-                  variant="ghost"
-                />
-              }
-            >
-              <X aria-hidden="true" />
-            </SheetClose>
-          </div>
+            <X aria-hidden="true" />
+          </SheetClose>
         </div>
+        <SheetDescription className="sr-only">{t('menuDescription')}</SheetDescription>
       </SheetHeader>
 
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 md:px-6">
-        <div className="space-y-2">
-          <GlobalSearch onNavigate={closeMenu} triggerVariant="field" />
+        <section aria-labelledby="app-menu-quick-actions-heading" className="space-y-2">
+          <h2
+            className="px-1 text-sm font-semibold text-foreground"
+            id="app-menu-quick-actions-heading"
+          >
+            {t('quickActions')}
+          </h2>
+          <div aria-label={t('quickActions')} className="grid grid-cols-3 gap-2" role="toolbar">
+            <NotificationCenter onNavigate={closeMenu} triggerVariant="quickAction" />
+            <AppearanceToggle triggerVariant="quickAction" />
+            <AccountMenu onNavigate={closeMenu} triggerVariant="quickAction" />
+          </div>
           {appearanceSaveError ? (
             <p className="px-1 text-xs leading-5 text-destructive" role="status">
               {appearance('unsaved')}
             </p>
           ) : null}
-        </div>
+        </section>
+
+        <GlobalSearch onNavigate={closeMenu} triggerVariant="field" />
 
         <div className="border-t border-border-subtle pt-5">
           <AppMenuTools pathname={pathname} />

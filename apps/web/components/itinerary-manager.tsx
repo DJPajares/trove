@@ -1467,7 +1467,6 @@ export function ItineraryManager({
         currentSection="itinerary"
         density="compact"
         description={t('description')}
-        hidePlanningPreviewTab
         showCover
         stickyNavigation
         tripId={tripId}

@@ -68,21 +68,21 @@ test('Trip Mode opens as a rehearsal before departure and directly afterwards', 
   }
 });
 
-test('an itinerary can hide only the planning Preview destination', () => {
+test('trip section navigation omits planning Preview without hiding Trip Mode', () => {
   expect(
-    visibleTripNavigationDestinations(primaryTripDestinations(TRIP, 'planning', START), true).map(
+    visibleTripNavigationDestinations(primaryTripDestinations(TRIP, 'planning', START)).map(
       (entry) => entry.section,
     ),
   ).toStrictEqual(['itinerary', 'memories']);
 
   expect(
-    visibleTripNavigationDestinations(primaryTripDestinations(TRIP, 'planning', START), false).map(
+    visibleTripNavigationDestinations(primaryTripDestinations(TRIP, 'active', START)).map(
       (entry) => entry.section,
     ),
   ).toStrictEqual(['itinerary', 'mode', 'memories']);
 
   expect(
-    visibleTripNavigationDestinations(primaryTripDestinations(TRIP, 'active', START), true).map(
+    visibleTripNavigationDestinations(primaryTripDestinations(TRIP, 'completed', START)).map(
       (entry) => entry.section,
     ),
   ).toStrictEqual(['itinerary', 'mode', 'memories']);

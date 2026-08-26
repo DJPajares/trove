@@ -58,15 +58,12 @@ export function primaryTripDestinations(
 }
 
 /**
- * Some surfaces can intentionally omit the planning Preview entry without
- * changing the shared set of destinations or the preview route itself.
+ * Trip section headers omit the planning Preview entry without changing the
+ * shared set of destinations or the preview route itself.
  */
 export function visibleTripNavigationDestinations(
   destinations: TripDestination[],
-  hidePlanningPreview: boolean,
 ): TripDestination[] {
-  if (!hidePlanningPreview) return destinations;
-
   return destinations.filter((destination) => destination.labelKey !== 'preview');
 }
 

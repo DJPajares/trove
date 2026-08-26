@@ -17,7 +17,7 @@
     "openMenu": "Open menu",
     "openMenuWithNotifications": "Open menu, {count, plural, one {# new notification} other {# new notifications}}",
     "closeMenu": "Close menu",
-    "menuActions": "Menu actions",
+    "quickActions": "Quick actions",
     "more": "More",
     "moreWithNotifications": "More, {count, plural, one {# new notification} other {# new notifications}}",
     "search": "Search",

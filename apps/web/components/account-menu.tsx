@@ -43,10 +43,15 @@ function getDisplayName(user: User | null, fallback: string) {
 
 type AccountMenuProps = {
   onNavigate?: () => void;
+  triggerVariant?: 'icon' | 'quickAction';
 };
 
-export function AccountMenu({ onNavigate }: Readonly<AccountMenuProps> = {}) {
+export function AccountMenu({
+  onNavigate,
+  triggerVariant = 'icon',
+}: Readonly<AccountMenuProps> = {}) {
   const t = useTranslations('account');
+  const navigation = useTranslations('navigation');
   const [user, setUser] = useState<User | null>(null);
   const [isReady, setIsReady] = useState(false);
   const {
@@ -112,13 +117,17 @@ export function AccountMenu({ onNavigate }: Readonly<AccountMenuProps> = {}) {
             <Button
               aria-label={t('button')}
               className="text-foreground"
-              size="icon-sm"
+              size={triggerVariant === 'quickAction' ? 'quick-action' : 'icon-sm'}
               type="button"
               variant="ghost"
             />
           }
         >
-          <UserRound aria-hidden="true" className="size-4" />
+          <UserRound
+            aria-hidden="true"
+            className={triggerVariant === 'quickAction' ? 'size-3.5' : 'size-4'}
+          />
+          {triggerVariant === 'quickAction' ? <span>{navigation('account')}</span> : null}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
           <DropdownMenuGroup>

@@ -18,9 +18,15 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 
-type NotificationCenterProps = { onNavigate?: () => void };
+type NotificationCenterProps = {
+  onNavigate?: () => void;
+  triggerVariant?: 'icon' | 'quickAction';
+};
 
-export function NotificationCenter({ onNavigate }: Readonly<NotificationCenterProps> = {}) {
+export function NotificationCenter({
+  onNavigate,
+  triggerVariant = 'icon',
+}: Readonly<NotificationCenterProps> = {}) {
   const t = useTranslations('notifications');
   const locale = useLocale();
   const { markAllRead, markRead, notifications, refresh, status } = useNotifications();
@@ -35,15 +41,27 @@ export function NotificationCenter({ onNavigate }: Readonly<NotificationCenterPr
             aria-label={t('centerButton', { count })}
             className="relative text-foreground"
             disabled={status === 'loading'}
-            size="icon-sm"
+            size={triggerVariant === 'quickAction' ? 'quick-action' : 'icon-sm'}
             type="button"
             variant="ghost"
           />
         }
       >
-        <Bell aria-hidden="true" className="size-4" />
+        <Bell
+          aria-hidden="true"
+          className={triggerVariant === 'quickAction' ? 'size-3.5' : 'size-4'}
+        />
+        {triggerVariant === 'quickAction' ? <span>{t('centerTitle')}</span> : null}
         {count ? (
-          <Badge className="absolute top-0.5 right-0.5" size="count" variant="solid">
+          <Badge
+            className={
+              triggerVariant === 'quickAction'
+                ? 'absolute top-1 right-2'
+                : 'absolute top-0.5 right-0.5'
+            }
+            size="count"
+            variant="solid"
+          >
             {count > 9 ? '9+' : count}
           </Badge>
         ) : null}

@@ -54,52 +54,49 @@ export function HomeFocalTrip({
     <div className="space-y-3">
       <section
         aria-labelledby="home-focal-heading"
-        className="overflow-hidden rounded-[var(--radius-2xl)] border border-border-subtle bg-card shadow-[var(--shadow-card)]"
+        className="relative isolate min-h-[31rem] overflow-hidden rounded-[var(--radius-2xl)] border border-border-subtle bg-surface-media shadow-[var(--shadow-card)] sm:min-h-[29rem] lg:min-h-[31rem]"
       >
-        <div className="relative isolate">
-          <TripMedia
-            alt={
-              editorial
-                ? mediaTranslations('alt.tripEditorial', { name: destinations ?? trip.name })
-                : ''
-            }
-            className="rounded-none"
-            preload
-            sizes="(max-width: 1023px) 100vw, 1024px"
-            source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
-            variant="cover"
-          />
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 bg-gradient-to-t from-surface-overlay from-10% via-surface-overlay/58 to-transparent"
-          />
-          <div className="absolute inset-0 flex flex-col justify-end p-5 text-white sm:p-7">
+        <TripMedia
+          alt={
+            editorial
+              ? mediaTranslations('alt.tripEditorial', { name: destinations ?? trip.name })
+              : ''
+          }
+          className="absolute inset-0 h-full w-full rounded-none"
+          preload
+          sizes="(max-width: 1023px) 100vw, 1024px"
+          source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
+          variant="hero"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-[linear-gradient(180deg,rgba(10,20,15,0.22)_0%,rgba(10,20,15,0.42)_35%,rgba(8,18,13,0.92)_100%)]"
+        />
+
+        <div className="relative flex min-h-[31rem] flex-col justify-end gap-4 p-5 text-white sm:min-h-[29rem] sm:p-7 lg:min-h-[31rem] lg:max-w-3xl lg:p-9">
+          <div className="space-y-1.5">
             <p className="text-sm font-medium text-white/78">{t(stageLabels[trip.lifecycle])}</p>
             <h1
-              className="mt-1 max-w-2xl text-3xl leading-[1.08] font-semibold tracking-[-0.035em] text-balance sm:text-4xl"
+              className="max-w-2xl text-3xl leading-[1.08] font-semibold tracking-[-0.035em] text-balance sm:text-4xl"
               id="home-focal-heading"
             >
               {trip.name}
             </h1>
-            <p className="mt-1 text-sm text-white/78">
+            <p className="text-sm text-white/78">
               {destinations ?? t('destinationOpen')} <span aria-hidden="true">·</span>{' '}
               <span className="tabular-nums">{dateRange}</span>
             </p>
           </div>
-        </div>
 
-        <div className="space-y-5 p-5 sm:p-7">
           {trip.lifecycle === 'planning' ? (
             <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
               <div className="space-y-2">
                 <p className="text-lg font-medium">
                   {t('countdown', { count: daysUntilTripStart(trip) })}
                 </p>
-                <p className="text-sm text-muted-foreground">
-                  {t(`readiness.${trip.planningReadiness}`)}
-                </p>
+                <p className="text-sm text-white/78">{t(`readiness.${trip.planningReadiness}`)}</p>
                 {trip.itineraryCoverage ? (
-                  <TripItineraryCoverage coverage={trip.itineraryCoverage} />
+                  <TripItineraryCoverage coverage={trip.itineraryCoverage} inverse />
                 ) : null}
               </div>
               {weatherTarget ? <HomeWeatherInset target={weatherTarget} /> : null}
@@ -109,14 +106,14 @@ export function HomeFocalTrip({
           {trip.lifecycle === 'active' ? (
             <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
               <div className="space-y-2">
-                <p className="text-sm font-medium text-muted-foreground">{t('nextUp')}</p>
+                <p className="text-sm font-medium text-white/78">{t('nextUp')}</p>
                 <p className="text-base leading-6">
                   {nextItem
                     ? t(nextItem.upcoming ? 'nextItem' : 'currentItem', { name: nextItem.label })
                     : t('noNextItem')}
                 </p>
                 {trip.itineraryCoverage ? (
-                  <TripItineraryCoverage coverage={trip.itineraryCoverage} />
+                  <TripItineraryCoverage coverage={trip.itineraryCoverage} inverse />
                 ) : null}
               </div>
               {weatherTarget ? <HomeWeatherInset target={weatherTarget} /> : null}
@@ -125,20 +122,26 @@ export function HomeFocalTrip({
 
           {trip.lifecycle === 'completed' ? (
             <div className="space-y-3">
-              <p className="max-w-xl text-sm leading-6 text-muted-foreground">
+              <p className="max-w-xl text-sm leading-6 text-white/78">
                 {t('states.completed.tripDescription', {
                   endDate: formatTripDate(trip.endDate, locale),
                   startDate: formatTripDate(trip.startDate, locale),
                 })}
               </p>
               {trip.experienceRating === null ? null : (
-                <ExperienceRatingSummary label={t('yourRating')} rating={trip.experienceRating} />
+                <ExperienceRatingSummary
+                  className="text-white"
+                  label={t('yourRating')}
+                  rating={trip.experienceRating}
+                  tone="onImage"
+                />
               )}
             </div>
           ) : null}
 
           <TripDestinationActions
             destinations={primaryTripDestinations(trip.id, trip.lifecycle, trip.startDate)}
+            inverse
             labelOverrides={
               trip.lifecycle === 'completed'
                 ? { memories: t('viewMemories') }
@@ -150,10 +153,11 @@ export function HomeFocalTrip({
           />
 
           {promptKey ? (
-            <div className="flex items-start justify-between gap-3 border-t border-border-subtle pt-4">
-              <p className="text-sm leading-6 text-muted-foreground">{t(promptKey)}</p>
+            <div className="flex items-start justify-between gap-3 border-t border-white/20 pt-3">
+              <p className="text-sm leading-6 text-white/75">{t(promptKey)}</p>
               <Button
                 aria-label={t('dismissPrompt')}
+                className="text-white hover:bg-white/15 hover:text-white"
                 onClick={() => onDismissPrompt(trip.id)}
                 size="icon-sm"
                 variant="ghost"

@@ -453,10 +453,10 @@ export function TripDetail({
         <div className="grid grid-cols-2 gap-3">
           {overviewDestinations.secondary.map((destination) => (
             <TripExperienceTile
-              description={t(`experienceDescription.${destination.labelKey}`)}
+              description={t(`experienceDescription.${destination.descriptionKey}`)}
               destination={destination}
               key={destination.section}
-              label={t(destination.labelKey)}
+              label={t(destination.displayLabelKey)}
             />
           ))}
         </div>

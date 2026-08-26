@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 
 import {
   isEmphasisAtLeast,
+  isTripModeAvailable,
   primaryTripDestinations,
   supportingTripDestinations,
   tripDestinationEmphasisVariant,
@@ -57,16 +58,23 @@ test('every destination is reachable at every stage, none are hidden', () => {
   }
 });
 
-test('Trip Mode opens as a rehearsal before departure and directly afterwards', () => {
+test('Trip Mode opens as a rehearsal before departure and after a completed trip', () => {
   const planning = primaryTripDestinations(TRIP, 'planning', START)[1];
   expect(planning?.href).toBe(`/trips/${TRIP}/mode?preview=1&date=2026-09-05&time=09%3A00`);
 
-  for (const lifecycle of ['active', 'completed'] as const) {
-    expect(
-      primaryTripDestinations(TRIP, lifecycle, START)[1]?.href,
-      `${lifecycle} should not open Preview`,
-    ).toBe(`/trips/${TRIP}/mode`);
-  }
+  expect(primaryTripDestinations(TRIP, 'active', START)[1]?.href).toBe(`/trips/${TRIP}/mode`);
+  expect(primaryTripDestinations(TRIP, 'completed', START)[1]?.href).toBe(
+    `/trips/${TRIP}/mode?preview=1&date=2026-09-05&time=09%3A00`,
+  );
+});
+
+test('Trip Mode is live only for active trips, while Preview is available before and after', () => {
+  expect(isTripModeAvailable('planning', false)).toBe(false);
+  expect(isTripModeAvailable('planning', true)).toBe(true);
+  expect(isTripModeAvailable('active', false)).toBe(true);
+  expect(isTripModeAvailable('active', true)).toBe(true);
+  expect(isTripModeAvailable('completed', false)).toBe(false);
+  expect(isTripModeAvailable('completed', true)).toBe(true);
 });
 
 test('trip section navigation omits Preview and Trip Mode on every section', () => {
@@ -173,6 +181,18 @@ test('the Trip Overview projects one primary action and two unique secondary act
     expect(new Set(all.map((entry) => entry.section)).size).toBe(3);
     expect(new Set(all.map((entry) => entry.href)).size).toBe(3);
   }
+});
+
+test('completed overview uses Preview copy while retaining the mode destination identity', () => {
+  const overview = tripOverviewDestinations(TRIP, 'completed', START);
+  const mode = overview.secondary.find((entry) => entry.section === 'mode');
+
+  expect(mode).toMatchObject({
+    descriptionKey: 'previewCompleted',
+    displayLabelKey: 'preview',
+    labelKey: 'tripMode',
+  });
+  expect(mode?.href).toBe(`/trips/${TRIP}/mode?preview=1&date=2026-09-05&time=09%3A00`);
 });
 
 test('the planning overview has one planning route and keeps Preview parameters intact', () => {

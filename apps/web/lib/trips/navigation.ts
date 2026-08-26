@@ -18,8 +18,15 @@ export type TripDestination = {
 
 export type TripCoreExperience = Extract<TripSection, 'itinerary' | 'memories' | 'mode'>;
 
-export type TripOverviewDestination = Omit<TripDestination, 'section'> & {
+type TripCoreDestination = Omit<TripDestination, 'section'> & {
   section: TripCoreExperience;
+};
+
+export type TripOverviewDestination = TripCoreDestination & {
+  /** The label shown by the overview, which can differ from the canonical route label. */
+  displayLabelKey: string;
+  /** The localized description shown by the overview tile. */
+  descriptionKey: string;
 };
 
 export type TripOverviewDestinations = {
@@ -27,9 +34,7 @@ export type TripOverviewDestinations = {
   secondary: [TripOverviewDestination, TripOverviewDestination];
 };
 
-function isTripCoreExperience(
-  destination: TripDestination,
-): destination is TripOverviewDestination {
+function isTripCoreExperience(destination: TripDestination): destination is TripCoreDestination {
   return ['itinerary', 'memories', 'mode'].includes(destination.section);
 }
 
@@ -56,10 +61,10 @@ export function primaryTripDestinations(
     {
       emphasis:
         lifecycle === 'active' ? 'leading' : lifecycle === 'completed' ? 'quiet' : 'standard',
-      // Before departure Trip Mode is only useful as a rehearsal, so it opens in
-      // Preview at the first day rather than pretending the trip has started.
+      // Planning and completed trips use Trip Mode as a rehearsal, so they open
+      // in Preview at the first day rather than pretending the trip is live.
       href:
-        lifecycle === 'planning'
+        lifecycle === 'planning' || lifecycle === 'completed'
           ? `${base}/mode?preview=1&date=${encodeURIComponent(startDate)}&time=09%3A00`
           : `${base}/mode`,
       labelKey: lifecycle === 'planning' ? 'preview' : 'tripMode',
@@ -75,6 +80,16 @@ export function primaryTripDestinations(
 }
 
 /**
+ * Trip Mode is live only during an active trip. Planning and completed trips can
+ * still open the same experience when the traveller explicitly chooses Preview.
+ */
+export function isTripModeAvailable(lifecycle: Trip['lifecycle'], isPreview: boolean): boolean {
+  return (
+    lifecycle === 'active' || (isPreview && (lifecycle === 'planning' || lifecycle === 'completed'))
+  );
+}
+
+/**
  * Projects the stable three-experience navigation contract into the overview's
  * one-primary, two-secondary composition. The source list remains the single
  * place that owns lifecycle routing, labels and Preview parameters.
@@ -86,14 +101,23 @@ export function tripOverviewDestinations(
 ): TripOverviewDestinations {
   const destinations = primaryTripDestinations(tripId, lifecycle, startDate);
   const coreDestinations = destinations.filter(isTripCoreExperience);
-  const primary = coreDestinations.find((destination) => destination.emphasis === 'leading');
-  const distinctSections = new Set(coreDestinations.map((destination) => destination.section));
-  const distinctHrefs = new Set(coreDestinations.map((destination) => destination.href));
-  const secondary = coreDestinations.filter((destination) => destination !== primary);
+  const overviewDestinations = coreDestinations.map((destination) => {
+    const isCompletedPreview = lifecycle === 'completed' && destination.section === 'mode';
+
+    return {
+      ...destination,
+      descriptionKey: isCompletedPreview ? 'previewCompleted' : destination.labelKey,
+      displayLabelKey: isCompletedPreview ? 'preview' : destination.labelKey,
+    } satisfies TripOverviewDestination;
+  });
+  const primary = overviewDestinations.find((destination) => destination.emphasis === 'leading');
+  const distinctSections = new Set(overviewDestinations.map((destination) => destination.section));
+  const distinctHrefs = new Set(overviewDestinations.map((destination) => destination.href));
+  const secondary = overviewDestinations.filter((destination) => destination !== primary);
   const [firstSecondary, secondSecondary, ...unexpectedSecondary] = secondary;
 
   if (
-    coreDestinations.length !== destinations.length ||
+    overviewDestinations.length !== destinations.length ||
     distinctSections.size !== 3 ||
     distinctHrefs.size !== 3 ||
     !primary ||

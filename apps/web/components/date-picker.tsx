@@ -18,6 +18,7 @@ type DatePickerProps = {
   'aria-describedby'?: string;
   'aria-invalid'?: boolean;
   className?: string;
+  clearable?: boolean;
   disabled?: boolean;
   id: string;
   label: string;
@@ -56,6 +57,7 @@ function DatePicker({
   'aria-describedby': ariaDescribedBy,
   'aria-invalid': ariaInvalid,
   className,
+  clearable = true,
   disabled,
   id,
   label,
@@ -179,19 +181,26 @@ function DatePicker({
           onSelect={selectDate}
           selected={selectedDate}
         />
-        <div className="flex items-center justify-between border-t border-border px-2 py-2">
-          <Button
-            disabled={!value}
-            onClick={() => {
-              onChange('');
-              setOpen(false);
-            }}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            {t('clear')}
-          </Button>
+        <div
+          className={cn(
+            'flex items-center border-t border-border px-2 py-2',
+            clearable ? 'justify-between' : 'justify-end',
+          )}
+        >
+          {clearable ? (
+            <Button
+              disabled={!value}
+              onClick={() => {
+                onChange('');
+                setOpen(false);
+              }}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              {t('clear')}
+            </Button>
+          ) : null}
           <Button
             disabled={todayDisabled}
             onClick={() => selectDate(today)}

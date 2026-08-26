@@ -26,6 +26,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
+import { DatePicker } from '@/components/date-picker';
 import { PageState } from '@/components/page-state';
 import { ItineraryDayTimeline } from '@/components/itinerary-day-timeline';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
@@ -462,6 +463,10 @@ export function ItineraryManager({
     document.getElementById(`itinerary-item-${reference}`)?.focus();
   }, []);
   const selectedIndex = itinerary?.days.findIndex((day) => day.id === selectedDayId) ?? -1;
+  const dayActivityCounts = useMemo(
+    () => Object.fromEntries((itinerary?.days ?? []).map((day) => [day.date, day.items.length])),
+    [itinerary?.days],
+  );
   // Shown in the Places drawer so nothing gets added to a day twice unnoticed.
   const placeUse = useMemo(() => (itinerary ? scheduledPlaceUse(itinerary) : {}), [itinerary]);
   const dateFormatter = useMemo(
@@ -500,11 +505,6 @@ export function ItineraryManager({
     day.name
       ? t('dayOptionNamed', { date: formatDate(day.date), name: day.name, number: index + 1 })
       : t('dayOption', { date: formatDate(day.date), number: index + 1 });
-
-  // The selected-day panel carries a custom title. Keeping the picker to date
-  // context makes scanning and switching days more reliable on narrow screens.
-  const dayPickerOption = (day: ItineraryDay, index: number) =>
-    t('dayOption', { date: formatDate(day.date), number: index + 1 });
 
   function placeName(tripPlace: ItineraryTripPlace | null) {
     if (!tripPlace) return null;
@@ -1506,46 +1506,45 @@ export function ItineraryManager({
           <AlertDescription>{t('timeZoneConsequence')}</AlertDescription>
         </Alert>
       ) : null}
-      <div className="flex items-center gap-2.5 px-1 md:hidden">
-        <Button
-          aria-label={t('previousDay')}
-          disabled={selectedIndex <= 0}
-          onClick={() => selectAdjacentDay(-1)}
-          size="icon"
-          variant="outline"
-        >
-          <ChevronLeft aria-hidden="true" />
-        </Button>
-        <Select onValueChange={(value) => setSelectedDayId(value)} value={selectedDayId}>
-          <SelectTrigger aria-label={t('chooseDay')} className="min-w-0 flex-1">
-            <SelectValue>
-              {selectedDay ? dayPickerOption(selectedDay, selectedIndex) : t('chooseDay')}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent align="start">
-            {itinerary.days.map((day, index) => (
-              <SelectItem key={day.id} value={day.id}>
-                {/* How full a day is decides which day you want next, so the
-                    dropdown carries the count the desktop rail already shows. */}
-                <span className="flex w-full items-center justify-between gap-3">
-                  <span>{dayPickerOption(day, index)}</span>
-                  <span className="text-xs tabular-nums text-muted-foreground">
-                    {t('dayItemCount', { count: day.items.length })}
-                  </span>
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button
-          aria-label={t('nextDay')}
-          disabled={selectedIndex < 0 || selectedIndex >= itinerary.days.length - 1}
-          onClick={() => selectAdjacentDay(1)}
-          size="icon"
-          variant="outline"
-        >
-          <ChevronRight aria-hidden="true" />
-        </Button>
+      <div
+        className="sticky top-[calc(var(--safe-top)+0.75rem)] z-[calc(var(--layer-sticky)-1)] -mx-1 rounded-[var(--radius-lg)] border border-border bg-background/95 p-1 shadow-[var(--shadow-control)] backdrop-blur supports-[backdrop-filter]:bg-background/88 md:hidden"
+        data-translucent-surface
+      >
+        <div className="flex items-center gap-2.5">
+          <Button
+            aria-label={t('previousDay')}
+            disabled={selectedIndex <= 0}
+            onClick={() => selectAdjacentDay(-1)}
+            size="icon"
+            variant="outline"
+          >
+            <ChevronLeft aria-hidden="true" />
+          </Button>
+          <DatePicker
+            activityCounts={dayActivityCounts}
+            className="min-w-0 flex-1"
+            clearable={false}
+            id="itinerary-day-picker"
+            label={t('chooseDay')}
+            max={itinerary.trip.endDate}
+            min={itinerary.trip.startDate}
+            onChange={(date) => {
+              const day = itinerary.days.find((candidate) => candidate.date === date);
+              if (day) setSelectedDayId(day.id);
+            }}
+            required
+            value={selectedDay?.date ?? ''}
+          />
+          <Button
+            aria-label={t('nextDay')}
+            disabled={selectedIndex < 0 || selectedIndex >= itinerary.days.length - 1}
+            onClick={() => selectAdjacentDay(1)}
+            size="icon"
+            variant="outline"
+          >
+            <ChevronRight aria-hidden="true" />
+          </Button>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card shadow-[var(--shadow-surface)] md:grid md:min-h-[34rem] md:grid-cols-[15rem_minmax(0,1fr)]">

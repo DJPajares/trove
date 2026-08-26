@@ -152,7 +152,7 @@ function DatePicker({
         />
       </PopoverTrigger>
       <PopoverContent
-        align="start"
+        align="center"
         className="max-h-[calc(100dvh-1rem)] w-[min(calc(100vw-1rem),21.5rem)] gap-0 overflow-y-auto p-0"
         collisionAvoidance={{ align: 'shift', fallbackAxisSide: 'none', side: 'shift' }}
         collisionPadding={8}

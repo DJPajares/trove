@@ -80,16 +80,26 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
   }
 
   return (
-    <div
-      className="fixed inset-x-0 bottom-0 z-[var(--layer-sticky)] h-[calc(var(--bottom-bar-height)+var(--safe-bottom))] border-t border-border-subtle bg-background/96 pt-2 pr-[max(0.5rem,var(--safe-right))] pb-[var(--safe-bottom)] pl-[max(0.5rem,var(--safe-left))] shadow-[0_-0.25rem_1.25rem_oklch(0_0_0/0.035)] backdrop-blur supports-[backdrop-filter]:bg-background/90 md:hidden"
-      data-translucent-surface
-    >
-      <div className="relative mx-auto h-full max-w-xl">
-        <span
-          aria-hidden="true"
-          className="absolute -top-8 left-1/2 z-0 size-20 -translate-x-1/2 rounded-full bg-background shadow-[0_-0.2rem_0.8rem_oklch(0_0_0/0.08)] ring-1 ring-border-subtle supports-[backdrop-filter]:bg-background/94"
-        />
-        <nav aria-label={t('mobile')} className="relative z-10 h-full">
+    // The bar itself only sizes and positions. Its surface is a separate masked
+    // layer, because the mask that carves the notch would otherwise carve the
+    // create action out of existence along with it. Padding lives on the content
+    // wrapper for the same reason: `inset-0` resolves against the padding box
+    // while the mask resolves against the border box, and the two must agree.
+    <div className="fixed inset-x-0 bottom-0 z-[var(--layer-sticky)] h-[calc(var(--bottom-bar-height)+var(--safe-bottom))] md:hidden">
+      {/* The hairline is its own layer, cut to the same silhouette grown by 1px,
+          because a `border-top` can only draw the flat part and would die at the
+          shoulders where the curve begins. */}
+      <span
+        aria-hidden="true"
+        className="nav-notch-edge absolute -top-px right-0 bottom-0 left-0 z-0 bg-border-subtle"
+      />
+      <span
+        aria-hidden="true"
+        className="nav-notch-surface absolute inset-0 z-0 bg-background/96 backdrop-blur supports-[backdrop-filter]:bg-background/90"
+        data-translucent-surface
+      />
+      <div className="relative z-10 mx-auto h-full max-w-xl px-[max(0.5rem,var(--safe-left),var(--safe-right))] pt-2 pb-[var(--safe-bottom)]">
+        <nav aria-label={t('mobile')} className="h-full">
           <ul className="grid grid-cols-5 gap-1">
             {items.map(({ column, href, icon: Icon, label }) => {
               const active = isNavigationPathActive(pathname, href);
@@ -106,16 +116,8 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
                     )}
                     href={href}
                   >
-                    <span className="relative">
-                      <Icon aria-hidden="true" className="size-5" />
-                      {active ? (
-                        <span
-                          aria-hidden="true"
-                          className="absolute -top-1 -right-2 size-2.5 rounded-full bg-brand"
-                        />
-                      ) : null}
-                    </span>
-                    <span className="relative max-w-full truncate">{label}</span>
+                    <Icon aria-hidden="true" className="size-5" />
+                    <span className="max-w-full truncate">{label}</span>
                   </Link>
                 </li>
               );
@@ -125,19 +127,20 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
             </li>
           </ul>
         </nav>
-
-        {/* Creation is an action, not a destination: the shared sheet opens over
-            whichever screen the traveller is already using. */}
-        <Button
-          aria-label={t('createTrip')}
-          className="absolute -top-6 left-1/2 z-20 flex size-16 -translate-x-1/2 items-center justify-center rounded-full border border-primary/15 bg-primary text-primary-foreground shadow-[0_0.5rem_1rem_oklch(0_0_0/0.16)] transition-[background-color,box-shadow,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:bg-brand-strong hover:shadow-[0_0.35rem_0.8rem_oklch(0_0_0/0.14)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring active:translate-y-px"
-          onClick={openCreateTrip}
-          size="icon-lg"
-          type="button"
-        >
-          <Plus aria-hidden="true" className="size-7" />
-        </Button>
       </div>
+
+      {/* Creation is an action, not a destination: the shared sheet opens over
+          whichever screen the traveller is already using. It sits outside the
+          masked surface and rides above the notch rather than inside it, so the
+          curve reads as the bar giving way to the button. */}
+      <Button
+        aria-label={t('createTrip')}
+        className="absolute top-[calc(-1*var(--nav-action-overhang))] left-1/2 z-20 size-[var(--nav-action-size)] -translate-x-1/2 rounded-full bg-primary text-primary-foreground shadow-[var(--nav-action-shadow)] transition-[background-color,box-shadow,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:bg-brand-strong hover:shadow-[var(--nav-action-shadow-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring active:translate-y-px"
+        onClick={openCreateTrip}
+        type="button"
+      >
+        <Plus aria-hidden="true" className="size-7" />
+      </Button>
     </div>
   );
 }

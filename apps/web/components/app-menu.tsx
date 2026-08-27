@@ -219,15 +219,9 @@ export function AppMenuTrigger({ active = false, variant }: Readonly<AppMenuTrig
     >
       <span className="relative">
         <Ellipsis aria-hidden="true" className="size-5" />
-        {active && !unreadCount ? (
-          <span
-            aria-hidden="true"
-            className="absolute -top-1 -right-2 size-2.5 rounded-full bg-brand"
-          />
-        ) : null}
         {badge}
       </span>
-      <span className="relative max-w-full truncate">{t('more')}</span>
+      <span className="max-w-full truncate">{t('more')}</span>
     </SheetTrigger>
   );
 }

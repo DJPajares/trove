@@ -82,6 +82,20 @@
      instead of hard-coding the header's height, so the two cannot drift. */
   --header-offset: var(--header-height);
   --bottom-bar-height: 4.75rem;
+  /* The mobile bar's create action floats above the bar, and the bar's top edge
+     curves away beneath it. `.nav-notch-surface` cuts that curve; this places the
+     button against it: exactly half the button rides above the bar, so its
+     midline lands on the bar's top edge. */
+  --nav-action-size: 4rem;
+  --nav-action-overhang: calc(var(--nav-action-size) / 2);
+  /* Contact shadow plus a wide ambient one. A single shadow reads as a sticker;
+     the near/far pair is what makes the button look lifted off the bar. */
+  --nav-action-shadow:
+    0 0.125rem 0.25rem oklch(0 0 0 / 0.14), 0 0.5rem 1rem oklch(0 0 0 / 0.16),
+    0 1rem 2rem oklch(0 0 0 / 0.12);
+  --nav-action-shadow-hover:
+    0 0.0625rem 0.125rem oklch(0 0 0 / 0.14), 0 0.25rem 0.625rem oklch(0 0 0 / 0.16),
+    0 0.625rem 1.25rem oklch(0 0 0 / 0.1);
   --trip-cover-height: clamp(14rem, 50vw, 24rem);
   --text-immersive-title: clamp(2.5rem, 5vw, 4.75rem);
   --text-page-title: clamp(1.875rem, 4vw, 2.75rem);
@@ -255,6 +269,59 @@ body {
 .interaction-scrollbar:focus-within::-webkit-scrollbar,
 .interaction-scrollbar:active::-webkit-scrollbar {
   height: 0.375rem;
+}
+
+/* Cuts the concave dip into the top edge of the mobile bottom bar so the create
+   action can float clear of it, and draws the hairline that follows it.
+
+   Both layers share one mask recipe and differ only in their silhouette tile.
+   Four mask layers unioned by the default `add` composite: a fixed-size tile
+   carrying the curve, then three plain fills for the flat remainder. This
+   deliberately avoids `mask-composite`, whose WebKit legacy property takes
+   different keywords, and deliberately pins the tile in pixels so the curve
+   cannot stretch with the viewport. The fills overlap the tile by 1px because a
+   fractional viewport width otherwise leaves a hairline seam.
+
+   The curve is a circle concentric with the button, which is what makes the gap
+   between them uniform: radius 40px is the button's 32px plus an 8px gap. The
+   button's midline sits on the bar's top edge, so that circle is centred on the
+   edge too and dips a full 40px below it. The 12px shoulder fillets are what
+   blend the curve into the flat edge instead of creasing against it. Path
+   constants follow from those numbers, with depth = radius + centre:
+     a = sqrt(depth * (radius - centre + 2 * fillet))       (flat edge resumes)
+     T = (a * radius / (radius + fillet), fillet * depth / (radius + fillet))
+                                                            (fillet meets curve)
+   The edge tile is the same silhouette grown by 1px — its layer starts 1px
+   higher, and its hole is 1px smaller (radius 39, fillet 13, centre 1px lower) —
+   so the border layer shows through as an even hairline all the way round rather
+   than dying at the shoulders the way a plain `border-top` does. Both solve to
+   the same a = 50.596, which is why the hairline meets the flat edge cleanly.
+   Recompute both tiles if the button size or the gap changes. */
+.nav-notch-surface,
+.nav-notch-edge {
+  --nav-notch-tile: 10rem;
+  --nav-notch-band: 4rem;
+  --nav-notch-mask:
+    var(--nav-notch-shape), linear-gradient(black, black), linear-gradient(black, black),
+    linear-gradient(black, black);
+  --nav-notch-position: 50% 0, 0 0, 100% 0, 0 100%;
+  --nav-notch-size:
+    var(--nav-notch-tile) var(--nav-notch-band),
+    calc(50% - var(--nav-notch-tile) / 2 + 1px) var(--nav-notch-band),
+    calc(50% - var(--nav-notch-tile) / 2 + 1px) var(--nav-notch-band),
+    100% calc(100% - var(--nav-notch-band) + 1px);
+  mask-image: var(--nav-notch-mask);
+  mask-position: var(--nav-notch-position);
+  mask-size: var(--nav-notch-size);
+  mask-repeat: no-repeat;
+}
+
+.nav-notch-surface {
+  --nav-notch-shape: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 64'><path fill='black' d='M0 0H29.404A12 12 0 0 1 41.08 9.2308A40 40 0 0 0 118.92 9.2308A12 12 0 0 1 130.596 0H160V64H0Z'/></svg>");
+}
+
+.nav-notch-edge {
+  --nav-notch-shape: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 64'><path fill='black' d='M0 0H29.404A13 13 0 0 1 42.053 10A39 39 0 0 0 117.947 10A13 13 0 0 1 130.596 0H160V64H0Z'/></svg>");
 }
 
 @layer base {

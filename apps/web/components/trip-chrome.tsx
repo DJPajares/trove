@@ -27,7 +27,6 @@ import {
   tripSectionLabelKey,
   visibleTripNavigationDestinations,
   type TripDestination,
-  type TripSection,
 } from '@/lib/trips/navigation';
 import { cn } from '@/lib/utils';
 
@@ -45,16 +44,6 @@ const TripChromeContext = createContext<TripChromeSlots | null>(null);
 
 export function useTripChrome() {
   return useContext(TripChromeContext);
-}
-
-/**
- * Itinerary is a working screen rather than a page about a trip: the nav row
- * follows the traveller down a long plan, and the trip's name is orientation
- * rather than a headline. That is a property of the section, and the chrome is
- * now the only thing that knows which section is on screen.
- */
-function sectionDensity(section: TripSection | null) {
-  return section === 'itinerary' ? 'compact' : 'default';
 }
 
 function emphasisClasses(destination: TripDestination, active: boolean) {
@@ -96,7 +85,6 @@ export function TripChrome({
   const [coverSource, setCoverSource] = useState<TripMediaSource | null>(null);
 
   const currentSection = tripSectionFromPathname(pathname, tripId);
-  const density = sectionDensity(currentSection);
   const stickyNavigation = currentSection === 'itinerary';
 
   const lifecycle = trip?.lifecycle ?? 'planning';
@@ -138,12 +126,7 @@ export function TripChrome({
           navigation row stays anchored to the full planning section. Desktop
           keeps the ordinary header box and flow. */}
         <header
-          className={cn(
-            stickyNavigation && 'contents md:block',
-            'space-y-5',
-            density === 'compact' && 'space-y-3 sm:space-y-5',
-          )}
-          data-density={density}
+          className={cn(stickyNavigation && 'contents md:block', 'space-y-5')}
           data-slot="trip-chrome"
         >
           <section
@@ -165,30 +148,40 @@ export function TripChrome({
                 on the trip, and they wait inside boxes the right size, so the
                 answer arriving never moves anything below. */}
               {trip ? (
-                <>
-                  <h1
-                    className="text-[length:var(--text-page-title)] leading-[1.08] font-semibold tracking-[-0.035em] text-pretty text-media-fallback-foreground"
-                    id="trip-section-cover-heading"
-                  >
-                    {trip.name}
-                  </h1>
-                  <p className="text-[length:var(--text-metadata)] font-medium text-media-fallback-foreground/85 tabular-nums">
-                    {t('dateRange', {
-                      endDate: formatDate(trip.endDate),
-                      startDate: formatDate(trip.startDate),
-                    })}
-                    {' · '}
-                    {t(`lifecycle.${trip.lifecycle}`)}
-                  </p>
-                </>
+                <h1
+                  className="text-[length:var(--text-page-title)] leading-[1.08] font-semibold tracking-[-0.035em] text-pretty text-media-fallback-foreground"
+                  id="trip-section-cover-heading"
+                >
+                  {trip.name}
+                </h1>
               ) : (
                 <div aria-busy="true" aria-live="polite" role="status">
                   <span className="sr-only">{t('titleLoading')}</span>
                   <Skeleton className="h-[calc(var(--text-page-title)*1.08)] w-3/5 max-w-sm bg-media-fallback-foreground/20" />
-                  <Skeleton className="mt-2 h-[length:var(--text-metadata)] w-2/5 max-w-56 bg-media-fallback-foreground/20" />
                 </div>
               )}
-              <div className="pointer-events-auto -ml-1 empty:hidden" ref={setCoverMetaSlot} />
+              {trip ? (
+                <p className="text-[length:var(--text-metadata)] font-medium text-media-fallback-foreground/85 tabular-nums">
+                  {t('dateRange', {
+                    endDate: formatDate(trip.endDate),
+                    startDate: formatDate(trip.startDate),
+                  })}
+                  {' · '}
+                  {t(`lifecycle.${trip.lifecycle}`)}
+                </p>
+              ) : (
+                <Skeleton className="h-[length:var(--text-metadata)] w-2/5 max-w-56 bg-media-fallback-foreground/20" />
+              )}
+              {/* A screen's own control on the cover, such as Memories' rating, sits
+                out of flow at the corner the overview seats its lifecycle badge in.
+                In flow, a control taller than the date line would push the whole
+                bottom-anchored title/date block up, so the name would sit at a
+                different height depending on whether a screen has put a control
+                here. Positioned instead, it never moves the text at all. */}
+              <div
+                className="pointer-events-auto absolute right-5 bottom-5 empty:hidden md:right-7 md:bottom-7"
+                ref={setCoverMetaSlot}
+              />
             </div>
             <Link
               aria-label={t('backToTrips')}

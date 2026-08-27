@@ -46,8 +46,8 @@ export function ExperienceRatingStars({
             'size-4',
             value <= rating
               ? onImage
-                ? 'fill-current text-white'
-                : 'fill-current text-brand'
+                ? 'fill-current text-rating-on-media'
+                : 'fill-current text-rating'
               : onImage
                 ? 'text-white/40'
                 : 'text-border',
@@ -149,7 +149,7 @@ export function ExperienceRatingField({
             <button
               aria-label={t('starLabel', { value })}
               aria-pressed={rating !== null && value <= rating}
-              className="rounded-[var(--radius-sm)] p-0.5 text-muted-foreground outline-none transition-colors hover:text-brand focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-60"
+              className="rounded-[var(--radius-sm)] p-0.5 text-muted-foreground outline-none transition-colors hover:text-rating focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-60"
               disabled={disabled || saving}
               key={value}
               onClick={() => selectStar(value)}
@@ -159,7 +159,7 @@ export function ExperienceRatingField({
                 aria-hidden="true"
                 className={cn(
                   'size-5',
-                  rating !== null && value <= rating ? 'fill-current text-brand' : undefined,
+                  rating !== null && value <= rating ? 'fill-current text-rating' : undefined,
                 )}
               />
             </button>

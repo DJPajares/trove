@@ -2146,6 +2146,7 @@
       "removePhoto": "Remove {name}"
     },
     "story": {
+      "description": "The moments you kept, gathered into the days they happened on.",
       "loading": "Loading your memories…",
       "loadError": "We could not open your memories",
       "loadErrorDescription": "The story is still safe. Try again in a moment.",

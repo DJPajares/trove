@@ -77,7 +77,7 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
   );
 
   return (
-    <section className="space-y-8">
+    <section className="space-y-7">
       <TripSectionHeader
         actions={addButton(t('addPlace'))}
         currentSection="places"

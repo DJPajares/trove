@@ -71,7 +71,7 @@ export function ItineraryRouteSummary({
     return (
       <div
         aria-label={t('loading')}
-        className="flex min-h-14 items-center gap-3 border-b border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground sm:px-6"
+        className="flex min-h-16 items-center gap-3 border-b border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground sm:px-6"
         role="status"
       >
         <Route aria-hidden="true" className="size-4 animate-pulse motion-reduce:animate-none" />
@@ -92,7 +92,9 @@ export function ItineraryRouteSummary({
   return (
     <section
       aria-label={t('summaryLabel')}
-      className="border-b border-border bg-muted/20 px-4 py-3 sm:px-6"
+      // The same minimum the loading row holds, so the summary and its
+      // attribution land in a box that was already their size.
+      className="min-h-16 border-b border-border bg-muted/20 px-4 py-3 sm:px-6"
     >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         <span className="inline-flex items-center gap-2 font-medium">

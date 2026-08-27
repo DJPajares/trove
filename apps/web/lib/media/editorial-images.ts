@@ -1,5 +1,5 @@
 import type { TrovePlaceCategory } from '@/lib/place-categories';
-import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import { getBrowserSession } from '@/lib/supabase/client';
 
 /**
  * Attribution travels with the photograph rather than beside it. The API drops
@@ -109,13 +109,8 @@ export function primaryEditorialImage(images: readonly EditorialImageReference[]
 }
 
 async function getAccessToken() {
-  const supabase = createBrowserSupabaseClient();
-  if (!supabase) return null;
-
-  const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session) return null;
-
-  return data.session.access_token;
+  const session = await getBrowserSession();
+  return session?.access_token ?? null;
 }
 
 async function requestEditorialImages(subjects: EditorialSubject[], accessToken: string) {

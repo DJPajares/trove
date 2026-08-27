@@ -1,4 +1,4 @@
-import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import { createBrowserSupabaseClient, getBrowserSession } from '@/lib/supabase/client';
 import {
   getRememberedOfflineUser,
   readTripSnapshot,
@@ -74,13 +74,13 @@ async function getAuthContext() {
   const supabase = createBrowserSupabaseClient();
   if (!supabase) throw new TripApiError('supabase_not_configured', 500);
 
-  const { data, error } = await supabase.auth.getSession();
-  if (!error && data.session) {
-    rememberOfflineUser(data.session.user.id);
+  const session = await getBrowserSession();
+  if (session) {
+    rememberOfflineUser(session.user.id);
     return {
-      accessToken: data.session.access_token,
+      accessToken: session.access_token,
       supabase,
-      userId: data.session.user.id,
+      userId: session.user.id,
     };
   }
 

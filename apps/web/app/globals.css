@@ -342,6 +342,17 @@ body {
   }
 }
 
+/* The route-pending bar. Reduced motion collapses it to a still bar, which is
+   the message: the tap registered and the next screen is on its way. */
+@keyframes trove-route-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
 @media (prefers-reduced-transparency: reduce) {
   [data-translucent-surface] {
     background: var(--background) !important;

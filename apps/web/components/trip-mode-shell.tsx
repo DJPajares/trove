@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { DatePicker } from '@/components/date-picker';
+import { ContentSkeleton } from '@/components/content-skeleton';
 import { PageState } from '@/components/page-state';
 import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
 import { usePreferences } from '@/components/preferences-provider';
@@ -16,7 +17,9 @@ import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripSyncStatus } from '@/components/trip-sync-status';
 import { TripMedia } from '@/components/trip-media';
 import { TripModeTasksProvider } from '@/components/trip-mode-tasks';
+import { useTripContext } from '@/components/trip-provider';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import {
   fetchItinerary,
@@ -91,6 +94,53 @@ const tripModeViews = [
   { icon: Map, key: 'map', path: '/map' },
   { icon: MapPinned, key: 'trip', path: '/trip' },
 ] as const;
+
+/**
+ * The four views, which depend on nothing but the trip's id. Sharing this
+ * between the loading state and the loaded shell is what stops the row moving
+ * when the trip arrives.
+ */
+function TripModeNavigationFrame({
+  tripId,
+  withPreviewHref = (href: string) => href,
+}: Readonly<{ tripId: string; withPreviewHref?: (href: string) => string }>) {
+  const t = useTranslations('tripMode');
+  const pathname = usePathname();
+  const basePath = `/trips/${tripId}/mode`;
+
+  return (
+    <nav
+      aria-label={t('navigation')}
+      className="sticky top-[calc(var(--safe-top)+var(--header-offset)+0.75rem)] z-[calc(var(--layer-sticky)-1)] -mx-1 rounded-[var(--radius-lg)] border border-border bg-background/95 p-1 shadow-[var(--shadow-control)] backdrop-blur supports-[backdrop-filter]:bg-background/88"
+      data-translucent-surface
+    >
+      <ul className="grid grid-cols-4 gap-1">
+        {tripModeViews.map(({ icon: Icon, key, path }) => {
+          const href = `${basePath}${path}`;
+          const active = pathname === href;
+
+          return (
+            <li key={key}>
+              <Link
+                aria-current={active ? 'page' : undefined}
+                className={cn(
+                  'flex min-h-11 items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-2 py-1.5 text-xs font-medium outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 sm:text-sm',
+                  active
+                    ? 'bg-secondary text-secondary-foreground'
+                    : 'text-muted-foreground hover:bg-surface-hover hover:text-foreground',
+                )}
+                href={withPreviewHref(href)}
+              >
+                <Icon aria-hidden="true" className="size-4" />
+                <span>{t(`views.${key}.label`)}</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
@@ -263,6 +313,10 @@ export function TripModeShell({
   const searchParams = useSearchParams();
   const [reloadKey, setReloadKey] = useState(0);
   const [state, setState] = useState<LoadState>({ itinerary: null, status: 'loading', trip: null });
+  // Trip Mode carries its own copy of the trip alongside the itinerary, but the
+  // layout above it may already have one. Where it does, the thumbnail is right
+  // from the first frame instead of being a grey square that fills in.
+  const contextTrip = useTripContext()?.trip ?? null;
   const [detailsPlace, setDetailsPlace] = useState<ItineraryTripPlace | null>(null);
   const detailsProviderName = detailsPlace ? resolveProviderPlaceName(detailsPlace) : null;
   const detailsSubjects: EditorialSubject[] =
@@ -357,9 +411,50 @@ export function TripModeShell({
   }
 
   if (state.status === 'loading') {
+    // The shell's own frame, at the size it will be: the way out, the four
+    // views and the box the view lands in are all knowable from the trip's id
+    // alone, so only the trip's name and dates wait — and they wait in place.
     return (
-      <section className="mx-auto w-full max-w-6xl">
-        <PageState kind="loading" loadingShape="timeline" title={t('loading')} />
+      <section
+        aria-busy="true"
+        className="mx-auto w-full max-w-6xl space-y-5 sm:space-y-6"
+        data-slot="trip-mode-shell"
+        role="status"
+      >
+        <span className="sr-only">{t('loading')}</span>
+        <header className="space-y-3 sm:space-y-5">
+          <Button
+            className="-ml-2 text-muted-foreground hover:text-foreground"
+            nativeButton={false}
+            render={<Link href="/trips" />}
+            size="sm"
+            variant="ghost"
+          >
+            <ArrowLeft aria-hidden="true" data-icon="inline-start" />
+            {t('exit')}
+          </Button>
+
+          <div className="flex items-center gap-3 sm:gap-4">
+            <TripMedia
+              alt=""
+              className="size-11 shrink-0 shadow-[var(--shadow-control)] sm:size-16"
+              sizes="64px"
+              source={resolveTripMediaSource({ coverUrl: contextTrip?.coverPhotoUrl })}
+              variant="thumbnail"
+            />
+            <div className="min-w-0 flex-1" aria-hidden="true">
+              <Skeleton className="h-[length:var(--text-metadata)] w-20" />
+              <Skeleton className="mt-0.5 h-[calc(var(--text-section-title)*1.15)] w-3/5 max-w-xs" />
+              <Skeleton className="mt-0.5 h-[length:var(--text-metadata)] w-2/5 max-w-48" />
+            </div>
+          </div>
+        </header>
+
+        <TripModeNavigationFrame tripId={tripId} />
+
+        <div className="min-h-[min(32rem,55dvh)] border-t border-border pt-6 sm:pt-8">
+          <ContentSkeleton shape="timeline" />
+        </div>
       </section>
     );
   }
@@ -428,8 +523,6 @@ export function TripModeShell({
     );
   }
 
-  const basePath = `/trips/${trip.id}/mode`;
-
   return (
     <TripModePreviewProvider value={previewContext}>
       <TripModeTasksProvider tripId={trip.id}>
@@ -497,36 +590,7 @@ export function TripModeShell({
 
           <TripSyncStatus tripId={trip.id} />
 
-          <nav
-            aria-label={t('navigation')}
-            className="sticky top-[calc(var(--safe-top)+var(--header-offset)+0.75rem)] z-[calc(var(--layer-sticky)-1)] -mx-1 rounded-[var(--radius-lg)] border border-border bg-background/95 p-1 shadow-[var(--shadow-control)] backdrop-blur supports-[backdrop-filter]:bg-background/88"
-            data-translucent-surface
-          >
-            <ul className="grid grid-cols-4 gap-1">
-              {tripModeViews.map(({ icon: Icon, key, path }) => {
-                const href = `${basePath}${path}`;
-                const active = pathname === href;
-
-                return (
-                  <li key={key}>
-                    <Link
-                      aria-current={active ? 'page' : undefined}
-                      className={cn(
-                        'flex min-h-11 items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-2 py-1.5 text-xs font-medium outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 sm:text-sm',
-                        active
-                          ? 'bg-secondary text-secondary-foreground'
-                          : 'text-muted-foreground hover:bg-surface-hover hover:text-foreground',
-                      )}
-                      href={withPreviewHref(href)}
-                    >
-                      <Icon aria-hidden="true" className="size-4" />
-                      <span>{t(`views.${key}.label`)}</span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
+          <TripModeNavigationFrame tripId={trip.id} withPreviewHref={withPreviewHref} />
 
           <div className="min-h-[min(32rem,55dvh)] border-t border-border pt-6 sm:pt-8">
             <TripModePlaceDetailsContext.Provider value={placeDetailsContext}>

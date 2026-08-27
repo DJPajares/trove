@@ -2,7 +2,8 @@
   "app": {
     "name": "Trove",
     "description": "Plan it. Live it. Remember it.",
-    "loading": "Opening Trove…"
+    "loading": "Opening Trove…",
+    "navigating": "Loading the next screen…"
   },
   "navigation": {
     "primary": "Primary navigation",

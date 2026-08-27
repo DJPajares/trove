@@ -1,8 +1,12 @@
 import { getTranslations } from 'next-intl/server';
 
-import { PageState } from '@/components/page-state';
+import { TripDetailSkeleton } from '@/components/trip-detail-skeleton';
 
 export default async function TripLoading() {
   const t = await getTranslations('trips');
-  return <PageState kind="loading" loadingShape="trip" title={t('tripLoading')} />;
+  return (
+    <div className="mx-auto w-full max-w-5xl">
+      <TripDetailSkeleton label={t('tripLoading')} />
+    </div>
+  );
 }

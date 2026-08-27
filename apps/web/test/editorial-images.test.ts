@@ -4,6 +4,12 @@ const getSession = vi.fn();
 
 vi.mock('@/lib/supabase/client', () => ({
   createBrowserSupabaseClient: () => ({ auth: { getSession } }),
+  // The module reads the session through this helper now, so concurrent callers
+  // share one answer. The tests still drive it through `getSession`.
+  getBrowserSession: async () => {
+    const { data, error } = await getSession();
+    return error ? null : data.session;
+  },
 }));
 
 const {

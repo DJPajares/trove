@@ -425,20 +425,12 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   if (status === 'loading') {
-    return (
-      <PageState
-        className="mx-auto max-w-5xl"
-        kind="loading"
-        loadingShape="list"
-        title={t('loading')}
-      />
-    );
+    return <PageState kind="loading" loadingShape="list" title={t('loading')} />;
   }
   if (status === 'error' || !data) {
     return (
       <PageState
         actions={<Button onClick={() => void refresh()}>{t('tryAgain')}</Button>}
-        className="mx-auto max-w-5xl"
         description={t('loadErrorDescription')}
         icon={<CircleAlert aria-hidden="true" />}
         kind="error"
@@ -454,7 +446,7 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
       : null;
 
   return (
-    <section className="mx-auto w-full max-w-5xl space-y-7">
+    <section className="space-y-7">
       <TripSectionHeader
         actions={
           <Button onClick={openCreate}>
@@ -464,7 +456,6 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
         }
         currentSection="reservations"
         description={t('description')}
-        tripId={tripId}
       />
 
       {error ? (

@@ -23,6 +23,7 @@ import {
 import { MemoryEditorDialog } from '@/components/memory-editor-dialog';
 import { PageState } from '@/components/page-state';
 import { StoryCoverPicker } from '@/components/story-cover-picker';
+import { useTripContext } from '@/components/trip-provider';
 import { TripSectionHeader } from '@/components/trip-section-header';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import { Button } from '@/components/ui/button';
@@ -50,7 +51,7 @@ import {
 } from '@/lib/memories/api';
 import { selectPhotoLayout } from '@/lib/memories/photo-layout';
 import { buildTripStory, placeName, type StoryPlace, type TripStory } from '@/lib/memories/story';
-import { fetchTrip, updateTripExperienceRating, type Trip } from '@/lib/trips/api';
+import { updateTripExperienceRating } from '@/lib/trips/api';
 import { tripEditorialSubject } from '@/lib/trips/summary';
 import { cn } from '@/lib/utils';
 
@@ -58,7 +59,7 @@ type LoadState =
   | { data: null; status: 'error' }
   | { data: null; status: 'loading' }
   | {
-      data: { memories: Memory[]; storyCover: StoryCover | null; trip: Trip };
+      data: { memories: Memory[]; storyCover: StoryCover | null };
       status: 'ready';
     };
 
@@ -253,6 +254,8 @@ function MemoryEntry({
 export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('memories.story');
   const locale = useLocale();
+  const tripContext = useTripContext();
+  const trip = tripContext?.trip ?? null;
   const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
   const [editor, setEditor] = useState<EditorState>({ memory: null, mode: 'closed' });
@@ -275,15 +278,11 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   }, [focusedMemoryId, state.status]);
 
   const refresh = useCallback(async () => {
-    setState((current) =>
-      current.status === 'ready' && current.data.trip.id === tripId
-        ? current
-        : { data: null, status: 'loading' },
-    );
+    setState({ data: null, status: 'loading' });
     try {
-      const [memories, trip] = await Promise.all([fetchMemories(tripId), fetchTrip(tripId)]);
+      const memories = await fetchMemories(tripId);
       setState({
-        data: { memories: memories.memories, storyCover: memories.storyCover, trip: trip.trip },
+        data: { memories: memories.memories, storyCover: memories.storyCover },
         status: 'ready',
       });
     } catch {
@@ -308,9 +307,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   // One subject for the whole screen, and none at all once the trip already has
   // a cover of its own — the same shape every other trip surface asks for.
   const subject =
-    state.data && !state.data.storyCover?.url && !state.data.trip.coverPhotoUrl
-      ? tripEditorialSubject(state.data.trip)
-      : null;
+    trip && !state.data?.storyCover?.url && !trip.coverPhotoUrl ? tripEditorialSubject(trip) : null;
   const editorialImages = useEditorialImages(subject ? [subject] : []);
   const editorial = subject
     ? (editorialImages.get(editorialSubjectKey(subject))?.[0] ?? null)
@@ -344,11 +341,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
 
   async function saveTripRating(rating: number | null, note: string | null) {
     const result = await updateTripExperienceRating(tripId, rating, note);
-    setState((current) =>
-      current.status === 'ready'
-        ? { data: { ...current.data, trip: result.trip }, status: 'ready' }
-        : current,
-    );
+    tripContext?.setTrip(result.trip);
   }
 
   async function saveDayRating(itineraryDayId: string, rating: number | null, note: string | null) {
@@ -371,22 +364,16 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
     );
   }
 
-  if (state.status === 'loading') {
-    return (
-      <PageState
-        className="mx-auto max-w-5xl"
-        kind="loading"
-        loadingShape="tripHero"
-        title={t('loading')}
-      />
-    );
+  // The story and the trip are fetched in parallel by different owners now, so
+  // the screen waits for both rather than for one request that carried both.
+  if (state.status === 'loading' || !trip) {
+    return <PageState kind="loading" loadingShape="tripSection" title={t('loading')} />;
   }
 
   if (state.status === 'error' || !story) {
     return (
       <PageState
         actions={<Button onClick={() => void refresh()}>{t('tryAgain')}</Button>}
-        className="mx-auto max-w-5xl"
         description={t('loadErrorDescription')}
         icon={<CircleAlert aria-hidden="true" />}
         kind="error"
@@ -395,7 +382,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
     );
   }
 
-  const { storyCover, trip } = state.data;
+  const { storyCover } = state.data;
   const headSource = resolveTripMediaSource({
     coverUrl: trip.coverPhotoUrl,
     editorial,
@@ -561,9 +548,6 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
       coverMeta={tripRating}
       coverSource={headSource}
       currentSection="memories"
-      showCover
-      trip={trip}
-      tripId={tripId}
     />
   );
 
@@ -637,7 +621,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
 
   if (!story.memoryCount) {
     return (
-      <section className="mx-auto w-full max-w-5xl space-y-7">
+      <section className="space-y-7">
         {header}
         {liveRegion}
         <PageState
@@ -659,7 +643,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   return (
-    <section className="mx-auto w-full max-w-5xl space-y-8">
+    <section className="space-y-8">
       {header}
       {liveRegion}
 

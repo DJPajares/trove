@@ -217,3 +217,27 @@ export function supportingTripDestinations(tripId: string): TripDestination[] {
     section,
   }));
 }
+
+/**
+ * The trip section a path is standing on, or null when the path is not one of
+ * a trip's sections. The chrome derives this rather than taking it as a prop:
+ * it is mounted by the layout, which never learns which child is rendering.
+ */
+export function tripSectionFromPathname(pathname: string, tripId: string): TripSection | null {
+  const prefix = `/trips/${tripId}/`;
+  if (!pathname.startsWith(prefix)) return null;
+
+  const segment = pathname.slice(prefix.length).split('/')[0];
+  const sections: TripSection[] = [
+    'expenses',
+    'info',
+    'itinerary',
+    'memories',
+    'mode',
+    'places',
+    'reservations',
+    'tasks',
+  ];
+
+  return sections.find((section) => section === segment) ?? null;
+}

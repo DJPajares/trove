@@ -59,22 +59,7 @@ export function HomeWeatherInset({ target }: Readonly<{ target: HomeWeatherTarge
   }).format(new Date(`${target.date}T00:00:00.000Z`));
 
   if (state.status === 'loading') {
-    return (
-      <section
-        aria-busy="true"
-        aria-label={t('loading')}
-        className="rounded-[var(--radius-lg)] border border-border-subtle bg-muted/45 p-3"
-        role="status"
-      >
-        <div className="flex items-center gap-3">
-          <Skeleton className="size-9" />
-          <div className="space-y-2">
-            <Skeleton className="h-3 w-20" />
-            <Skeleton className="h-4 w-32" />
-          </div>
-        </div>
-      </section>
-    );
+    return <HomeWeatherInsetSkeleton label={t('loading')} />;
   }
 
   if (state.status === 'error') {
@@ -148,6 +133,32 @@ export function HomeWeatherInset({ target }: Readonly<{ target: HomeWeatherTarge
           >
             {data.attribution.label}
           </a>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The inset's box, at the size it will be.
+ *
+ * Home also reaches for it before it knows whether there is any weather to
+ * show — on an active trip the target depends on a second request — and the
+ * honest answer there is the same box, not a hole that closes later.
+ */
+export function HomeWeatherInsetSkeleton({ label }: Readonly<{ label: string }>) {
+  return (
+    <section
+      aria-busy="true"
+      aria-label={label}
+      className="rounded-[var(--radius-lg)] border border-border-subtle bg-muted/45 p-3"
+      role="status"
+    >
+      <div className="flex items-center gap-3">
+        <Skeleton className="size-9" />
+        <div className="space-y-2">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-4 w-32" />
         </div>
       </div>
     </section>

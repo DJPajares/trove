@@ -2,7 +2,7 @@ import { X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { ExperienceRatingSummary } from '@/components/experience-rating-field';
-import { HomeWeatherInset } from '@/components/home-weather-inset';
+import { HomeWeatherInset, HomeWeatherInsetSkeleton } from '@/components/home-weather-inset';
 import { TripDestinationActions } from '@/components/trip-destination-actions';
 import { TripItineraryCoverage } from '@/components/trip-itinerary-coverage';
 import { TripMedia } from '@/components/trip-media';
@@ -29,6 +29,8 @@ export type HomeFocalTripProps = {
   onDismissPrompt: (tripId: string) => void;
   promptKey: CompletedPromptKey | null;
   trip: Trip;
+  /** True while Home is still working out whether there is weather to show. */
+  weatherPending?: boolean;
   weatherTarget: HomeWeatherTarget | null;
 };
 
@@ -38,11 +40,13 @@ export function HomeFocalTrip({
   onDismissPrompt,
   promptKey,
   trip,
+  weatherPending = false,
   weatherTarget,
 }: Readonly<HomeFocalTripProps>) {
   const t = useTranslations('home');
   const tripsT = useTranslations('trips');
   const mediaTranslations = useTranslations('media');
+  const weatherT = useTranslations('home.weather');
   const locale = useLocale();
   const destinations = tripDestinationSummary(trip);
   const dateRange = tripsT('dateRange', {
@@ -99,7 +103,11 @@ export function HomeFocalTrip({
                   <TripItineraryCoverage coverage={trip.itineraryCoverage} inverse />
                 ) : null}
               </div>
-              {weatherTarget ? <HomeWeatherInset target={weatherTarget} /> : null}
+              {weatherTarget ? (
+                <HomeWeatherInset target={weatherTarget} />
+              ) : weatherPending ? (
+                <HomeWeatherInsetSkeleton label={weatherT('loading')} />
+              ) : null}
             </div>
           ) : null}
 
@@ -116,7 +124,11 @@ export function HomeFocalTrip({
                   <TripItineraryCoverage coverage={trip.itineraryCoverage} inverse />
                 ) : null}
               </div>
-              {weatherTarget ? <HomeWeatherInset target={weatherTarget} /> : null}
+              {weatherTarget ? (
+                <HomeWeatherInset target={weatherTarget} />
+              ) : weatherPending ? (
+                <HomeWeatherInsetSkeleton label={weatherT('loading')} />
+              ) : null}
             </div>
           ) : null}
 

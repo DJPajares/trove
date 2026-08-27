@@ -10,6 +10,7 @@ import { ExperienceRatingSummary } from '@/components/experience-rating-field';
 import { HomeFocalTrip } from '@/components/home-focal-trip';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useTripCreation } from '@/components/trip-creation-provider';
 import { TripListRow } from '@/components/trip-list-row';
 import { Button } from '@/components/ui/button';
@@ -173,7 +174,27 @@ export function HomeExperience() {
   }, [primaryTripId]);
 
   if (status === 'loading') {
-    return <PageState kind="loading" loadingShape="media" title={t('loading')} />;
+    // Home is one tall card and the sections beneath it, so that is what waits
+    // here — at the card's real height, inside the same measure. A 4:3 block
+    // beside a column of bars was a picture of a different screen.
+    return (
+      <div
+        aria-busy="true"
+        aria-live="polite"
+        className="mx-auto w-full max-w-5xl space-y-9"
+        role="status"
+      >
+        <span className="sr-only">{t('loading')}</span>
+        <div aria-hidden="true" className="space-y-3">
+          <Skeleton className="min-h-[31rem] w-full rounded-[var(--radius-2xl)] sm:min-h-[29rem] lg:min-h-[31rem]" />
+        </div>
+        <div aria-hidden="true" className="space-y-4">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-16 w-full rounded-[var(--radius-lg)]" />
+          <Skeleton className="h-16 w-full rounded-[var(--radius-lg)]" />
+        </div>
+      </div>
+    );
   }
 
   if (status === 'error') {
@@ -220,6 +241,7 @@ export function HomeExperience() {
           onDismissPrompt={dismissCompletedPrompt}
           promptKey={selectCompletedPrompt(primary, dismissedPrompts)}
           trip={primary}
+          weatherPending={primary.lifecycle === 'active' && tripModeContextStatus !== 'ready'}
           weatherTarget={weatherTarget}
         />
       ) : (

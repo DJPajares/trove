@@ -441,7 +441,7 @@
       "now": {
         "label": "Now",
         "title": "Now",
-        "timeZone": "Times shown in {timeZone}",
+        "localTime": "It's {time} in {timeZone}",
         "loading": "Checking your trip…",
         "loadError": "We couldn't load your current trip context",
         "loadErrorDescription": "Check your connection and try again.",

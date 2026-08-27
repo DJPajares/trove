@@ -34,6 +34,7 @@ import { useOfflineDataRefreshKey, useOnlineStatus } from '@/components/trip-syn
 import { TripWeatherContext } from '@/components/trip-weather-context';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useNowTick } from '@/hooks/use-now-tick';
 import { useTripModeClock } from '@/hooks/use-trip-mode-clock';
 import {
   fetchTripModeContext,
@@ -126,6 +127,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
     context: state.context,
     enabled: !isPreview,
   });
+  const now = useNowTick(!isPreview);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -194,6 +196,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   const { context: readyContext } = state;
+  const nowZone = readyContext.day?.defaultTimeZone ?? readyContext.trip.referenceTimeZone;
   const date = new Intl.DateTimeFormat(locale, {
     dateStyle: 'full',
     timeZone: 'UTC',
@@ -310,9 +313,10 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
         </p>
         {/* Naming the zone is what keeps a planned clock from reading as the
             phone's own. It costs one line, and it is the line that says so. */}
-        <p className="mt-0.5 text-[length:var(--text-metadata)] leading-5 text-text-subtle">
-          {t('timeZone', {
-            timeZone: readyContext.day?.defaultTimeZone ?? readyContext.trip.referenceTimeZone,
+        <p className="mt-0.5 text-[length:var(--text-metadata)] leading-5 text-text-subtle tabular-nums">
+          {t('localTime', {
+            time: timeFormat(isPreview ? readyContext.contextAt : now.toISOString(), nowZone),
+            timeZone: nowZone,
           })}
         </p>
       </div>

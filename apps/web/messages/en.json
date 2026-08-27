@@ -427,7 +427,7 @@
       "nearbyTitle": "Tasks nearby",
       "here": "Here",
       "next": "Next",
-      "stopTitle": "Tasks for this stop",
+      "stopTitle": "Stop tasks",
       "todayTitle": "Today's tasks",
       "tripTitle": "Tasks",
       "tripDescription": "{count, plural, =0 {No trip-wide tasks need attention.} one {# trip-wide task needs attention.} other {# trip-wide tasks need attention.}}",

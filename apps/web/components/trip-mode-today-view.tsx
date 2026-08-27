@@ -804,12 +804,14 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                         </Link>
                       </span>
                     ) : null}
-                    <TripModeTaskDisclosure
-                      addContext={{ itineraryItemId: item.id, kind: 'item' }}
-                      className="relative z-10 mt-1.5 border-t border-border-subtle pt-1"
-                      tasks={linkedTasks}
-                      title={tasksT('stopTitle')}
-                    />
+                    {linkedTasks.length ? (
+                      <TripModeTaskDisclosure
+                        addContext={{ itineraryItemId: item.id, kind: 'item' }}
+                        className="relative z-10 mt-1.5 border-t border-border-subtle pt-1"
+                        tasks={linkedTasks}
+                        title={tasksT('stopTitle')}
+                      />
+                    ) : null}
                   </>
                 }
                 id={`trip-mode-item-${item.id}`}

@@ -86,9 +86,16 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
     // wrapper for the same reason: `inset-0` resolves against the padding box
     // while the mask resolves against the border box, and the two must agree.
     <div className="fixed inset-x-0 bottom-0 z-[var(--layer-sticky)] h-[calc(var(--bottom-bar-height)+var(--safe-bottom))] md:hidden">
+      {/* The hairline is its own layer, cut to the same silhouette grown by 1px,
+          because a `border-top` can only draw the flat part and would die at the
+          shoulders where the curve begins. */}
       <span
         aria-hidden="true"
-        className="nav-notch-surface absolute inset-0 z-0 border-t border-border-subtle bg-background/96 backdrop-blur supports-[backdrop-filter]:bg-background/90"
+        className="nav-notch-edge absolute -top-px right-0 bottom-0 left-0 z-0 bg-border-subtle"
+      />
+      <span
+        aria-hidden="true"
+        className="nav-notch-surface absolute inset-0 z-0 bg-background/96 backdrop-blur supports-[backdrop-filter]:bg-background/90"
         data-translucent-surface
       />
       <div className="relative z-10 mx-auto h-full max-w-xl px-[max(0.5rem,var(--safe-left),var(--safe-right))] pt-2 pb-[var(--safe-bottom)]">
@@ -128,7 +135,7 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
           curve reads as the bar giving way to the button. */}
       <Button
         aria-label={t('createTrip')}
-        className="absolute top-[calc(-1*var(--nav-action-overhang))] left-1/2 z-20 size-[var(--nav-action-size)] -translate-x-1/2 rounded-full bg-primary text-primary-foreground shadow-[0_0.5rem_1rem_oklch(0_0_0/0.16)] transition-[background-color,box-shadow,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:bg-brand-strong hover:shadow-[0_0.35rem_0.8rem_oklch(0_0_0/0.14)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring active:translate-y-px"
+        className="absolute top-[calc(-1*var(--nav-action-overhang))] left-1/2 z-20 size-[var(--nav-action-size)] -translate-x-1/2 rounded-full bg-primary text-primary-foreground shadow-[var(--nav-action-shadow)] transition-[background-color,box-shadow,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:bg-brand-strong hover:shadow-[var(--nav-action-shadow-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring active:translate-y-px"
         onClick={openCreateTrip}
         type="button"
       >

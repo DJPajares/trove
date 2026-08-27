@@ -317,7 +317,7 @@ export function TripDetail({
   }
 
   return (
-    <article className="mx-auto w-full max-w-5xl space-y-8">
+    <article className="mx-auto w-full max-w-5xl space-y-7">
       <section
         aria-labelledby="trip-detail-heading"
         className="relative isolate -mx-[var(--gutter-inline-start)] -mt-8 md:mx-0 md:mt-0"
@@ -382,7 +382,7 @@ export function TripDetail({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div className="pointer-events-none absolute inset-0 flex flex-col justify-end rounded-none bg-gradient-to-t from-surface-overlay from-10% via-surface-overlay/66 to-transparent p-5 sm:p-8 md:rounded-[var(--radius-2xl)]">
+        <div className="pointer-events-none absolute inset-0 flex flex-col justify-end rounded-none bg-gradient-to-t from-surface-overlay from-20% via-surface-overlay/55 to-transparent p-5 md:rounded-[var(--radius-2xl)] md:p-7">
           <div className="flex items-end justify-between gap-4">
             <div className="min-w-0">
               <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-media-fallback-foreground/85 uppercase">

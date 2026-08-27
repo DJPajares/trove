@@ -57,6 +57,15 @@
   --text-subtle: oklch(0.497 0.025 65);
   --brand: oklch(0.374 0.072 153);
   --brand-strong: oklch(0.298 0.061 153);
+  /* Experience Rating has a colour of its own rather than borrowing the brand's:
+     a rating is the traveller's own mark, not a Trove accent. Gold, but dark
+     enough to clear 3:1 non-text contrast (WCAG 1.4.11) on every light surface
+     down to muted; the brighter amber a rating usually gets measures about 2:1
+     on background and would fail. */
+  --rating: oklch(0.62 0.13 80);
+  /* Stars over the cover scrim, which is dark in both themes, so this value does
+     not flip with the theme - the same reasoning as --media-fallback-foreground. */
+  --rating-on-media: oklch(0.85 0.13 82);
   --status-success: oklch(0.52 0.119 150);
   /* Dark enough to carry small warning text at WCAG AA on background, card,
      and muted surfaces; same amber hue and chroma as before. */
@@ -165,6 +174,9 @@
   --text-subtle: oklch(0.718 0.021 85);
   --brand: oklch(0.77 0.09 151);
   --brand-strong: oklch(0.824 0.074 151);
+  --rating: oklch(0.83 0.13 82);
+  /* Deliberately the same value as in :root; the scrim below it is dark in both. */
+  --rating-on-media: oklch(0.85 0.13 82);
   --status-success: oklch(0.721 0.116 150);
   --status-warning: oklch(0.806 0.113 74);
   --status-info: oklch(0.735 0.081 230);
@@ -209,6 +221,8 @@
   --color-text-subtle: var(--text-subtle);
   --color-brand: var(--brand);
   --color-brand-strong: var(--brand-strong);
+  --color-rating: var(--rating);
+  --color-rating-on-media: var(--rating-on-media);
   --color-status-success: var(--status-success);
   --color-status-warning: var(--status-warning);
   --color-status-info: var(--status-info);

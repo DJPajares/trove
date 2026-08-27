@@ -548,6 +548,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
       coverMeta={tripRating}
       coverSource={headSource}
       currentSection="memories"
+      description={t('description')}
     />
   );
 
@@ -643,7 +644,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   return (
-    <section className="space-y-8">
+    <section className="space-y-7">
       {header}
       {liveRegion}
 

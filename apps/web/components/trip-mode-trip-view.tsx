@@ -494,7 +494,6 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
         </EditorialSection>
 
         <div className="space-y-8">
-          <OfflineReadyStatus tripId={tripId} />
           <TripNotificationControl tripId={tripId} />
 
           {dailyBase ? (
@@ -615,6 +614,10 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
               ))}
             </ItemGroup>
           </EditorialSection>
+
+          {/* Preparing the device is housekeeping, not travelling: it closes the
+              page rather than opening it, and stays folded until asked. */}
+          <OfflineReadyStatus tripId={tripId} variant="compact" />
         </div>
       </div>
     </div>

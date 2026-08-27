@@ -1,6 +1,16 @@
 'use client';
 
-import { ArrowLeft, CalendarDays, Clock3, Compass, Eye, Map, MapPinned } from 'lucide-react';
+import {
+  ArrowLeft,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  Compass,
+  Eye,
+  Map,
+  MapPinned,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -159,6 +169,16 @@ function addPreviewParams(href: string, date: string, time: string) {
   return `${path}?${params.toString()}${hash ? `#${hash}` : ''}`;
 }
 
+/**
+ * The previewed day one step in `offset`, or `null` when that step would leave
+ * the trip. ISO dates sort as strings, so the bounds check needs no parsing.
+ */
+function adjacentPreviewDate(date: string, offset: number, startDate: string, endDate: string) {
+  const [year = 1970, month = 1, day = 1] = date.split('-').map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1, day + offset)).toISOString().slice(0, 10);
+  return shifted >= startDate && shifted <= endDate ? shifted : null;
+}
+
 type PreviewControlsProps = {
   activityCounts: Readonly<Record<string, number>>;
   endDate: string;
@@ -178,21 +198,47 @@ function TripModePreviewControls({
   startDate,
 }: Readonly<PreviewControlsProps>) {
   const t = useTranslations('tripMode');
+  const previousDate = adjacentPreviewDate(selection.date, -1, startDate, endDate);
+  const nextDate = adjacentPreviewDate(selection.date, 1, startDate, endDate);
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4">
+    <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
       <Field className="min-w-0">
         <FieldLabel htmlFor={`${idPrefix}-date`}>{t('preview.date')}</FieldLabel>
-        <DatePicker
-          activityCounts={activityCounts}
-          id={`${idPrefix}-date`}
-          label={t('preview.date')}
-          max={endDate}
-          min={startDate}
-          onChange={(date) => date && onChange({ date })}
-          required
-          value={selection.date}
-        />
+        {/* Stepping a day at a time is the move Preview is made for, so it
+            costs a tap rather than a trip through the calendar. */}
+        <div className="flex items-center gap-2">
+          <Button
+            aria-label={t('preview.previousDay')}
+            disabled={!previousDate}
+            onClick={() => previousDate && onChange({ date: previousDate })}
+            size="icon"
+            variant="outline"
+          >
+            <ChevronLeft aria-hidden="true" />
+          </Button>
+          <DatePicker
+            activityCounts={activityCounts}
+            className="min-w-0 flex-1"
+            clearable={false}
+            id={`${idPrefix}-date`}
+            label={t('preview.date')}
+            max={endDate}
+            min={startDate}
+            onChange={(date) => date && onChange({ date })}
+            required
+            value={selection.date}
+          />
+          <Button
+            aria-label={t('preview.nextDay')}
+            disabled={!nextDate}
+            onClick={() => nextDate && onChange({ date: nextDate })}
+            size="icon"
+            variant="outline"
+          >
+            <ChevronRight aria-hidden="true" />
+          </Button>
+        </div>
       </Field>
       <Field className="min-w-0">
         <FieldLabel htmlFor={`${idPrefix}-time`}>{t('preview.time')}</FieldLabel>

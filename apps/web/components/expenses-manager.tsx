@@ -1,7 +1,7 @@
 'use client';
 
 import { CircleAlert, Pencil, Plus, ReceiptText, Trash2, WalletCards } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { DatePicker } from '@/components/date-picker';
@@ -62,13 +62,14 @@ import {
   type ExpenseCategory,
   type ExpenseInput,
   type ExpensePlace,
-  type ExpensesResponse,
 } from '@/lib/expenses/api';
 import {
   convertCurrencyAmount,
   getCurrencyRate,
   type CachedCurrencyRate,
 } from '@/lib/currency/api';
+import { queryKeys } from '@/lib/query/keys';
+import { useTripResource } from '@/lib/query/use-trip-resource';
 
 type EditorState =
   | { kind: 'closed'; expense: null }
@@ -141,8 +142,9 @@ export function ExpensesManager({
   const t = useTranslations('expenses');
   const locale = useLocale();
   const { preferredCurrency } = usePreferences();
-  const [data, setData] = useState<ExpensesResponse | null>(null);
-  const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
+  const { data, refresh, status } = useTripResource(queryKeys.expenses(tripId), () =>
+    fetchExpenses(tripId),
+  );
   const [error, setError] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState>({ kind: 'closed', expense: null });
   const [expenseForm, setExpenseForm] = useState<ExpenseForm>(() => createExpenseForm(null, null));
@@ -154,20 +156,6 @@ export function ExpensesManager({
   const homeCurrencyCode = preferredCurrency;
   const [homeRates, setHomeRates] = useState<Record<string, CachedCurrencyRate>>({});
   const quickAddHandled = useRef<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    setError(null);
-    try {
-      setData(await fetchExpenses(tripId));
-      setStatus('idle');
-    } catch {
-      setStatus('error');
-    }
-  }, [tripId]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   useEffect(() => {
     if (!quickAdd) {

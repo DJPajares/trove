@@ -1,5 +1,6 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft,
   CalendarClock,
@@ -21,7 +22,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
+import { useMemo, useState, type ComponentType, type ReactNode } from 'react';
 
 import { EditorialSection } from '@/components/editorial-section';
 import { ExperienceRatingSummary } from '@/components/experience-rating-field';
@@ -74,6 +75,7 @@ import {
 } from '@/lib/trips/navigation';
 import { tripDestinationSummary } from '@/lib/trips/summary';
 import { cn } from '@/lib/utils';
+import { queryKeys } from '@/lib/query/keys';
 
 /** The tools' icons. Which tools there are, and their order, is the navigation contract's. */
 const supportingIcons: Record<
@@ -191,6 +193,8 @@ function TripExperienceTile({
  * score or the reflection, the facts, the supporting tools, and the details the
  * traveller pinned.
  */
+const EMPTY_TRIP_INFO: TripInfoEntry[] = [];
+
 export function TripDetail({
   planScoreEnabled,
   tripId,
@@ -212,28 +216,21 @@ export function TripDetail({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [tripInfo, setTripInfo] = useState<TripInfoEntry[]>([]);
-  const [tripInfoStatus, setTripInfoStatus] = useState<'error' | 'idle' | 'loading'>('idle');
-
-  useEffect(() => {
-    let active = true;
-    setTripInfoStatus('loading');
-
-    void fetchTripInfo(tripId)
-      .then(({ entries }) => {
-        if (!active) return;
-        setTripInfo(entries.filter((entry) => entry.isPinned));
-        setTripInfoStatus('idle');
-      })
-      .catch(() => {
-        if (!active) return;
-        setTripInfoStatus('error');
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [tripId]);
+  // The same entry the Trip Info screen reads, so opening this overview after
+  // editing trip info shows the edit without asking again.
+  const tripInfoQuery = useQuery({
+    queryFn: () => fetchTripInfo(tripId),
+    queryKey: queryKeys.tripInfo(tripId),
+  });
+  const tripInfo = useMemo(
+    () => tripInfoQuery.data?.entries.filter((entry) => entry.isPinned) ?? EMPTY_TRIP_INFO,
+    [tripInfoQuery.data],
+  );
+  const tripInfoStatus = tripInfoQuery.isPending
+    ? 'loading'
+    : tripInfoQuery.error
+      ? 'error'
+      : 'idle';
 
   const backToTrips = (
     <Link

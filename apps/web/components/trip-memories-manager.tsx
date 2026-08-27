@@ -1,5 +1,6 @@
 'use client';
 
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowDown,
   ArrowUp,
@@ -43,6 +44,7 @@ import { editorialSubjectKey } from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import {
   fetchMemories,
+  type MemoriesResponse,
   reorderHighlights,
   type Memory,
   type MemoryPhoto,
@@ -54,6 +56,7 @@ import { buildTripStory, placeName, type StoryPlace, type TripStory } from '@/li
 import { updateTripExperienceRating } from '@/lib/trips/api';
 import { tripEditorialSubject } from '@/lib/trips/summary';
 import { cn } from '@/lib/utils';
+import { queryKeys } from '@/lib/query/keys';
 
 type LoadState =
   | { data: null; status: 'error' }
@@ -256,8 +259,27 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   const locale = useLocale();
   const tripContext = useTripContext();
   const trip = tripContext?.trip ?? null;
-  const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
-  const [itinerary, setItinerary] = useState<Itinerary | null>(null);
+  const queryClient = useQueryClient();
+  const memoriesQuery = useQuery({
+    queryFn: () => fetchMemories(tripId),
+    queryKey: queryKeys.memories(tripId),
+  });
+  // The itinerary is what lets a memory name the stop it belongs to. It is the
+  // same entry the itinerary screen and Trip Mode read, so arriving here from
+  // either asks for nothing, and a failure only costs the labels.
+  const itinerary =
+    useQuery({ queryFn: () => fetchItinerary(tripId), queryKey: queryKeys.itinerary(tripId) })
+      .data ?? null;
+
+  const state: LoadState = memoriesQuery.data
+    ? {
+        data: {
+          memories: memoriesQuery.data.memories,
+          storyCover: memoriesQuery.data.storyCover,
+        },
+        status: 'ready',
+      }
+    : { data: null, status: memoriesQuery.error ? 'error' : 'loading' };
   const [editor, setEditor] = useState<EditorState>({ memory: null, mode: 'closed' });
   const [ratingEditor, setRatingEditor] = useState<RatingEditor>(null);
   const [coverPickerOpen, setCoverPickerOpen] = useState(false);
@@ -278,26 +300,8 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   }, [focusedMemoryId, state.status]);
 
   const refresh = useCallback(async () => {
-    setState({ data: null, status: 'loading' });
-    try {
-      const memories = await fetchMemories(tripId);
-      setState({
-        data: { memories: memories.memories, storyCover: memories.storyCover },
-        status: 'ready',
-      });
-    } catch {
-      setState((current) =>
-        current.status === 'ready' ? current : { data: null, status: 'error' },
-      );
-    }
-    void fetchItinerary(tripId)
-      .then(setItinerary)
-      .catch(() => setItinerary(null));
-  }, [tripId]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.memories(tripId) });
+  }, [queryClient, tripId]);
 
   const story: TripStory | null = useMemo(
     () => (state.data ? buildTripStory(state.data.memories) : null),
@@ -346,7 +350,9 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
 
   async function saveDayRating(itineraryDayId: string, rating: number | null, note: string | null) {
     const result = await updateItineraryDayExperienceRating(tripId, itineraryDayId, rating, note);
-    setItinerary((current) =>
+    // The itinerary entry is shared, so the rating shows up on the itinerary
+    // screen and in Trip Mode without any of them refetching.
+    queryClient.setQueryData(queryKeys.itinerary(tripId), (current: Itinerary | undefined) =>
       current
         ? {
             ...current,
@@ -581,10 +587,10 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
         memories={state.data.memories}
         onOpenChange={setCoverPickerOpen}
         onSelected={(cover) =>
-          setState((current) =>
-            current.status === 'ready'
-              ? { data: { ...current.data, storyCover: cover }, status: 'ready' }
-              : current,
+          queryClient.setQueryData(
+            queryKeys.memories(tripId),
+            (current: MemoriesResponse | undefined) =>
+              current ? { ...current, storyCover: cover } : current,
           )
         }
         open={coverPickerOpen}

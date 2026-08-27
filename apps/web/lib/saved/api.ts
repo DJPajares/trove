@@ -133,8 +133,13 @@ async function savedRequest<T>(path: string, init?: RequestInit) {
   return response.json() as Promise<T>;
 }
 
+export type SavedPlacesResponse = {
+  collections: SavedCollection[];
+  savedPlaces: SavedPlace[];
+};
+
 export function fetchSavedPlaces() {
-  return savedRequest<{ collections: SavedCollection[]; savedPlaces: SavedPlace[] }>('/saved');
+  return savedRequest<SavedPlacesResponse>('/saved');
 }
 
 export function saveCanonicalPlace(placeId: string) {

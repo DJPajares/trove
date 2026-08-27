@@ -1,5 +1,6 @@
 'use client';
 
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Bookmark,
   Check,
@@ -75,6 +76,7 @@ import {
   createCollection,
   createCustomPlace,
   fetchSavedPlaces,
+  type SavedPlacesResponse,
   GOOGLE_PLACES_SEARCH_DEBOUNCE_MS,
   removeCollection,
   removeFromCollection,
@@ -101,6 +103,7 @@ import {
   removeSavedPlaceState,
   updateCollectionMembershipState,
 } from '@/lib/saved/collection-membership';
+import { queryKeys } from '@/lib/query/keys';
 
 type CollectionEditor =
   { collection: null; mode: 'closed' | 'create' } | { collection: SavedCollection; mode: 'rename' };
@@ -122,15 +125,63 @@ function sortCollections(collections: SavedCollection[]) {
   return collections.toSorted((left, right) => left.name.localeCompare(right.name));
 }
 
+const EMPTY_SAVED_PLACES: SavedPlace[] = [];
+const EMPTY_COLLECTIONS: SavedCollection[] = [];
+
 export function SavedPlacesManager() {
   const t = useTranslations('saved');
   const mediaTranslations = useTranslations('media');
   const locale = useLocale();
-  const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
-  const [collections, setCollections] = useState<SavedCollection[]>([]);
+  const queryClient = useQueryClient();
+  const savedQuery = useQuery({ queryFn: fetchSavedPlaces, queryKey: queryKeys.savedPlaces() });
+  const savedPlaces = savedQuery.data?.savedPlaces ?? EMPTY_SAVED_PLACES;
+  const collections = savedQuery.data?.collections ?? EMPTY_COLLECTIONS;
+
+  /**
+   * Writes straight into the shared cache while keeping the setState signature
+   * this screen's optimistic updates are written against. Saving a Place from
+   * the itinerary's add sheet and saving one here are the same collection, so
+   * both surfaces move together rather than each holding a copy.
+   */
+  const writeSaved = useCallback(
+    <Key extends 'collections' | 'savedPlaces'>(
+      field: Key,
+      next:
+        | SavedPlacesResponse[Key]
+        | ((current: SavedPlacesResponse[Key]) => SavedPlacesResponse[Key]),
+    ) => {
+      queryClient.setQueryData(
+        queryKeys.savedPlaces(),
+        (current: SavedPlacesResponse | undefined) =>
+          current
+            ? {
+                ...current,
+                [field]:
+                  typeof next === 'function'
+                    ? (next as (value: SavedPlacesResponse[Key]) => SavedPlacesResponse[Key])(
+                        current[field],
+                      )
+                    : next,
+              }
+            : current,
+      );
+    },
+    [queryClient],
+  );
+
+  const setSavedPlaces = useCallback(
+    (next: SavedPlace[] | ((current: SavedPlace[]) => SavedPlace[])) =>
+      writeSaved('savedPlaces', next),
+    [writeSaved],
+  );
+  const setCollections = useCallback(
+    (next: SavedCollection[] | ((current: SavedCollection[]) => SavedCollection[])) =>
+      writeSaved('collections', next),
+    [writeSaved],
+  );
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
-  const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
+  const status = savedQuery.isPending ? 'loading' : savedQuery.error ? 'error' : 'idle';
   const [error, setError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addMode, setAddMode] = useState<'custom' | 'search'>('search');
@@ -164,20 +215,8 @@ export function SavedPlacesManager() {
 
   const refresh = useCallback(async () => {
     setError(null);
-
-    try {
-      const result = await fetchSavedPlaces();
-      setCollections(result.collections);
-      setSavedPlaces(result.savedPlaces);
-      setStatus('idle');
-    } catch {
-      setStatus((current) => (current === 'loading' ? 'error' : 'idle'));
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.savedPlaces() });
+  }, [queryClient]);
 
   useEffect(() => {
     const input = searchQuery.trim();

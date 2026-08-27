@@ -12,7 +12,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { DatePicker } from '@/components/date-picker';
@@ -68,11 +68,12 @@ import {
   fetchReservations,
   setReservationDocumentOffline,
   type Reservation,
-  type ReservationsResponse,
   type ReservationType,
   updateReservation,
   uploadReservationDocument,
 } from '@/lib/reservations/api';
+import { queryKeys } from '@/lib/query/keys';
+import { useTripResource } from '@/lib/query/use-trip-resource';
 
 type EditorState =
   | { mode: 'closed'; reservation: null }
@@ -189,8 +190,9 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
     bytes < 1024 * 1024
       ? t('documentKilobytes', { value: Math.ceil(bytes / 1024) })
       : t('documentMegabytes', { value: (bytes / (1024 * 1024)).toFixed(1) });
-  const [data, setData] = useState<ReservationsResponse | null>(null);
-  const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
+  const { data, refresh, status } = useTripResource(queryKeys.reservations(tripId), () =>
+    fetchReservations(tripId),
+  );
   const [error, setError] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState>({ mode: 'closed', reservation: null });
   const [form, setForm] = useState<ReservationForm>(() => createForm(null));
@@ -204,20 +206,6 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
     id: string;
     reservation: Reservation;
   } | null>(null);
-
-  const refresh = useCallback(async () => {
-    setError(null);
-    try {
-      setData(await fetchReservations(tripId));
-      setStatus('idle');
-    } catch {
-      setStatus('error');
-    }
-  }, [tripId]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   function openCreate() {
     setForm(createForm(null, preferredCurrency));

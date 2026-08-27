@@ -3,7 +3,7 @@
 import { CircleAlert, ClipboardCheck, Layers, List, Pencil, Plus, Wrench } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { EditorialSection } from '@/components/editorial-section';
 import { PageState } from '@/components/page-state';
@@ -38,10 +38,11 @@ import {
   fetchTasks,
   type Task,
   type TaskContext,
-  type TasksResponse,
   updateTask,
 } from '@/lib/tasks/api';
 import { groupTasksByContext } from '@/lib/tasks/grouping';
+import { queryKeys } from '@/lib/query/keys';
+import { useTripResource } from '@/lib/query/use-trip-resource';
 
 type EditorState =
   { mode: 'closed'; task: null } | { mode: 'create'; task: null } | { mode: 'edit'; task: Task };
@@ -88,8 +89,9 @@ function TaskSubGroup({
 export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tasks');
   const locale = useLocale();
-  const [data, setData] = useState<TasksResponse | null>(null);
-  const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
+  const { data, refresh, status } = useTripResource(queryKeys.tasks(tripId), () =>
+    fetchTasks(tripId),
+  );
   const [error, setError] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState>({ mode: 'closed', task: null });
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
@@ -108,20 +110,6 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
     setView(next);
     storeView(next);
   }
-
-  const refresh = useCallback(async () => {
-    setError(null);
-    try {
-      setData(await fetchTasks(tripId));
-      setStatus('idle');
-    } catch {
-      setStatus('error');
-    }
-  }, [tripId]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   const dateFormatter = useMemo(
     () => new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' }),

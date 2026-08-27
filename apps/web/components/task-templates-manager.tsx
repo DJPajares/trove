@@ -1,8 +1,9 @@
 'use client';
 
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CircleAlert, ClipboardCheck, CopyPlus, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useState, type FormEvent } from 'react';
 
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
@@ -53,6 +54,7 @@ import {
   updateTaskTemplate,
 } from '@/lib/tasks/api';
 import { fetchTrips, type Trip } from '@/lib/trips/api';
+import { queryKeys } from '@/lib/query/keys';
 
 type EditorState =
   | { mode: 'closed'; template: null }
@@ -67,11 +69,27 @@ function createForm(template: TaskTemplate | null): TemplateForm {
   };
 }
 
+const EMPTY_TEMPLATES: TaskTemplate[] = [];
+const EMPTY_TRIPS: Trip[] = [];
+
 export function TaskTemplatesManager() {
   const t = useTranslations('taskTemplates');
-  const [templates, setTemplates] = useState<TaskTemplate[]>([]);
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
+  const queryClient = useQueryClient();
+  const templatesQuery = useQuery({
+    queryFn: fetchTaskTemplates,
+    queryKey: queryKeys.taskTemplates(),
+  });
+  // The trip list is shared with the Trips library, so opening this screen
+  // after visiting that one costs nothing.
+  const tripsQuery = useQuery({ queryFn: fetchTrips, queryKey: queryKeys.trips() });
+  const templates = templatesQuery.data?.templates ?? EMPTY_TEMPLATES;
+  const trips = tripsQuery.data?.trips ?? EMPTY_TRIPS;
+  const status =
+    templatesQuery.isPending || tripsQuery.isPending
+      ? 'loading'
+      : templatesQuery.error || tripsQuery.error
+        ? 'error'
+        : 'idle';
   const [error, setError] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState>({ mode: 'closed', template: null });
   const [form, setForm] = useState<TemplateForm>(() => createForm(null));
@@ -85,19 +103,11 @@ export function TaskTemplatesManager() {
 
   const refresh = useCallback(async () => {
     setError(null);
-    try {
-      const [templateResult, tripResult] = await Promise.all([fetchTaskTemplates(), fetchTrips()]);
-      setTemplates(templateResult.templates);
-      setTrips(tripResult.trips);
-      setStatus('idle');
-    } catch {
-      setStatus('error');
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.taskTemplates() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.trips() }),
+    ]);
+  }, [queryClient]);
 
   function openCreate() {
     setForm(createForm(null));

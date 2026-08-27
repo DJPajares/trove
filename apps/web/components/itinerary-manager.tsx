@@ -1,5 +1,6 @@
 'use client';
 
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CalendarClock,
   CheckCircle2,
@@ -114,7 +115,6 @@ import {
   type Itinerary,
   ItineraryApiError,
   type ItineraryDay,
-  type ItineraryDayRoutes,
   type ItineraryDayTimeSuggestion,
   type ItineraryItem,
   type ItineraryItemInput,
@@ -164,6 +164,8 @@ import {
   ITINERARY_DURATION_PRESETS,
   normalizeItineraryPlaceQuery,
 } from '@/lib/itinerary/item-editor';
+import { queryKeys } from '@/lib/query/keys';
+import { ITINERARY_EDIT_QUERY_ROOTS, invalidateTripQueries } from '@/lib/query/trip-invalidation';
 
 type EditorState =
   | { dayId: null; item: null; mode: 'closed' }
@@ -292,9 +294,32 @@ export function ItineraryManager({
   const requestedDayId = searchParams.get('day');
   const { preferences } = usePreferences();
   const online = useOnlineStatus();
-  const [itinerary, setItinerary] = useState<Itinerary | null>(null);
+  const queryClient = useQueryClient();
+  const itineraryQuery = useQuery({
+    queryFn: () => fetchItinerary(tripId),
+    queryKey: queryKeys.itinerary(tripId),
+  });
+  const itinerary = itineraryQuery.data ?? null;
+
+  /**
+   * Writes a server-confirmed itinerary change straight into the shared entry.
+   *
+   * Keeping the setState signature means the edits below did not have to move,
+   * and because Trip Mode and the Memories screen read the same entry, a change
+   * made here shows up there without any of them refetching.
+   */
+  const setItinerary = useCallback(
+    (update: (current: Itinerary | null) => Itinerary | null) => {
+      queryClient.setQueryData(
+        queryKeys.itinerary(tripId),
+        (current: Itinerary | undefined) =>
+          (update(current ?? null) ?? undefined) as Itinerary | undefined,
+      );
+    },
+    [queryClient, tripId],
+  );
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
-  const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
+  const status = itineraryQuery.isPending ? 'loading' : itineraryQuery.error ? 'error' : 'idle';
   const [error, setError] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState>({ dayId: null, item: null, mode: 'closed' });
   const [createDay, setCreateDay] = useState<ItineraryDay | null>(null);
@@ -345,12 +370,6 @@ export function ItineraryManager({
   const [mobileView, setMobileView] = useState<'list' | 'map'>('list');
   const [selectedMapPointId, setSelectedMapPointId] = useState<string | null>(null);
   const [selectedMapItemId, setSelectedMapItemId] = useState<string | null>(null);
-  const [routeSnapshot, setRouteSnapshot] = useState<{
-    data: ItineraryDayRoutes;
-    includesPolylines: boolean;
-    revision: string;
-  } | null>(null);
-  const [routeStatus, setRouteStatus] = useState<'error' | 'idle' | 'loading'>('loading');
   const [savingRouteOwner, setSavingRouteOwner] = useState<string | null>(null);
   const [placesDrawerOpen, setPlacesDrawerOpen] = useState(false);
   const desktopMapLayout = useDesktopMapLayout();
@@ -361,24 +380,21 @@ export function ItineraryManager({
 
   const refresh = useCallback(async () => {
     setError(null);
-    try {
-      const next = await fetchItinerary(tripId);
-      setItinerary(next);
-      setSelectedDayId((current) => {
-        const preferred = current ?? initialDayIdRef.current;
-        return preferred && next.days.some((day) => day.id === preferred)
-          ? preferred
-          : (next.days[0]?.id ?? null);
-      });
-      setStatus('idle');
-    } catch {
-      setStatus('error');
-    }
-  }, [tripId]);
+    await invalidateTripQueries(queryClient, tripId, ITINERARY_EDIT_QUERY_ROOTS);
+  }, [queryClient, tripId]);
 
+  // The selected day follows the itinerary rather than the fetch, so a day that
+  // survives an edit stays selected and a day that does not falls back to the
+  // first one.
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    if (!itinerary) return;
+    setSelectedDayId((current) => {
+      const preferred = current ?? initialDayIdRef.current;
+      return preferred && itinerary.days.some((day) => day.id === preferred)
+        ? preferred
+        : (itinerary.days[0]?.id ?? null);
+    });
+  }, [itinerary]);
 
   // Which day you are planning is part of where you are, so a reload, a shared
   // link, and the back button all land on the same day you left.
@@ -403,7 +419,51 @@ export function ItineraryManager({
   );
   const routeRevision = itineraryDayRouteRevision(selectedDay);
   const includeRoutePolylines = desktopMapLayout === true || mobileView === 'map';
-  const routes = routeSnapshot?.revision === routeRevision ? routeSnapshot.data : null;
+  /**
+   * A day's legs, keyed by the ordering they were computed for.
+   *
+   * The revision is in the key because a leg chain is a chain between adjacent
+   * stops: replaying an older one would confidently name origins that no longer
+   * come before their destination. Reordering a day therefore asks a new
+   * question rather than invalidating an answer.
+   *
+   * Polylines are a second dimension of the same question, and a set fetched
+   * with them answers a request without them too - so if the map has already
+   * paid for this day, the list reuses that instead of buying it again.
+   */
+  const polylineRoutesCached =
+    queryClient.getQueryData(
+      queryKeys.itineraryDayRoutes(tripId, selectedDay?.id ?? '', routeRevision, true, locale),
+    ) !== undefined;
+  const requestRoutePolylines = includeRoutePolylines || polylineRoutesCached;
+
+  const routesQuery = useQuery({
+    enabled: selectedDay !== null && desktopMapLayout !== null,
+    queryFn: ({ signal }) =>
+      fetchItineraryDayRoutes(tripId, selectedDay?.id as string, {
+        includePolyline: requestRoutePolylines,
+        languageCode: locale,
+        revision: routeRevision,
+        signal,
+      }),
+    queryKey: queryKeys.itineraryDayRoutes(
+      tripId,
+      selectedDay?.id ?? '',
+      routeRevision,
+      requestRoutePolylines,
+      locale,
+    ),
+  });
+
+  const routes = routesQuery.data ?? null;
+  const routeStatus: 'error' | 'idle' | 'loading' =
+    !selectedDay || desktopMapLayout === null
+      ? 'idle'
+      : routesQuery.isPending
+        ? 'loading'
+        : routesQuery.error
+          ? 'error'
+          : 'idle';
   const routePolylines = useMemo(
     () =>
       routes?.segments
@@ -412,52 +472,6 @@ export function ItineraryManager({
     [routes],
   );
 
-  useEffect(() => {
-    if (!selectedDay) {
-      setRouteSnapshot(null);
-      setRouteStatus('idle');
-      return;
-    }
-    if (desktopMapLayout === null) return;
-    if (
-      routeSnapshot?.revision === routeRevision &&
-      (!includeRoutePolylines || routeSnapshot.includesPolylines)
-    ) {
-      setRouteStatus('idle');
-      return;
-    }
-
-    const controller = new AbortController();
-    setRouteStatus('loading');
-    void fetchItineraryDayRoutes(tripId, selectedDay.id, {
-      includePolyline: includeRoutePolylines,
-      languageCode: locale,
-      revision: routeRevision,
-      signal: controller.signal,
-    })
-      .then((result) => {
-        if (controller.signal.aborted) return;
-        setRouteSnapshot({
-          data: result,
-          includesPolylines: includeRoutePolylines,
-          revision: routeRevision,
-        });
-        setRouteStatus('idle');
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setRouteStatus('error');
-      });
-
-    return () => controller.abort();
-  }, [
-    desktopMapLayout,
-    includeRoutePolylines,
-    locale,
-    routeRevision,
-    routeSnapshot,
-    selectedDay,
-    tripId,
-  ]);
   const planScoreRevision = useMemo(() => itineraryPlanScoreRevision(itinerary), [itinerary]);
   const focusItineraryItem = useCallback((reference: string) => {
     setSelectedMapItemId(reference);

@@ -1,5 +1,6 @@
 'use client';
 
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from 'next-themes';
 import {
   createContext,
@@ -23,6 +24,7 @@ import {
   type Appearance,
   type ProfilePreferences,
 } from '@/lib/profile/preferences';
+import { queryKeys } from '@/lib/query/keys';
 
 type PreferencesStatus = 'loading' | 'ready' | 'unavailable';
 
@@ -64,9 +66,15 @@ export function PreferencesProvider({
 }: Readonly<{ children: ReactNode; locale: string }>) {
   const defaults = useMemo(() => getPreferenceDefaults(locale), [locale]);
   const { setTheme } = useTheme();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const queryClient = useQueryClient();
+  const profileQuery = useQuery({ queryFn: fetchProfile, queryKey: queryKeys.profile() });
+  const profile = profileQuery.data?.profile ?? null;
   const [preferences, setPreferences] = useState<ProfilePreferences>(defaults);
-  const [status, setStatus] = useState<PreferencesStatus>('loading');
+  const status: PreferencesStatus = profileQuery.isPending
+    ? 'loading'
+    : profileQuery.error
+      ? 'unavailable'
+      : 'ready';
   const [appearanceSaveError, setAppearanceSaveError] = useState(false);
   const appearanceRevision = useRef(0);
   const appearanceSaveQueue = useRef<Promise<void>>(Promise.resolve());
@@ -83,33 +91,41 @@ export function PreferencesProvider({
     setThemeRef.current(appearance);
   }, []);
 
+  // The traveller may have toggled appearance while the profile was still in
+  // flight. `appearanceRevision` counts those toggles, so a profile that landed
+  // after one is applied for everything except appearance - otherwise the
+  // screen would briefly repaint the theme they just moved away from.
+  const appliedProfileRef = useRef<Profile | null>(null);
+
+  /**
+   * Writes a just-saved profile back into the cache without a second round trip.
+   *
+   * It is marked applied first so the effect below leaves it alone: each save
+   * path already decided what should happen to `preferences`, and in particular
+   * whether an appearance the traveller is mid-toggle on should survive.
+   */
+  const writeProfile = useCallback(
+    (nextProfile: Profile) => {
+      appliedProfileRef.current = nextProfile;
+      queryClient.setQueryData(queryKeys.profile(), { profile: nextProfile });
+    },
+    [queryClient],
+  );
+
   useEffect(() => {
-    let active = true;
+    if (!profile || appliedProfileRef.current === profile) return;
+
     const revisionAtLoad = appearanceRevision.current;
+    appliedProfileRef.current = profile;
 
-    void fetchProfile()
-      .then(({ profile: nextProfile }) => {
-        if (!active) return;
-
-        const loaded = preferencesFromProfile(nextProfile, defaults);
-        const shouldApplyLoadedAppearance = appearanceRevision.current === revisionAtLoad;
-        setProfile(nextProfile);
-        setPreferences((current) => {
-          const appearance = shouldApplyLoadedAppearance ? loaded.appearance : current.appearance;
-          return { ...loaded, appearance };
-        });
-        if (shouldApplyLoadedAppearance) applyAppearance(loaded.appearance);
-        setStatus('ready');
-      })
-      .catch(() => {
-        if (!active) return;
-        setStatus('unavailable');
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [applyAppearance, defaults]);
+    const loaded = preferencesFromProfile(profile, defaults);
+    const shouldApplyLoadedAppearance = appearanceRevision.current === revisionAtLoad;
+    setPreferences((current) => {
+      const appearance = shouldApplyLoadedAppearance ? loaded.appearance : current.appearance;
+      return { ...loaded, appearance };
+    });
+    if (shouldApplyLoadedAppearance) applyAppearance(loaded.appearance);
+  }, [applyAppearance, defaults, profile]);
 
   const setAppearance = useCallback(
     (appearance: Appearance) => {
@@ -123,8 +139,7 @@ export function PreferencesProvider({
         .then(async () => {
           try {
             const { profile: nextProfile } = await persistProfile({ appearance });
-            setProfile(nextProfile);
-            setStatus('ready');
+            writeProfile(nextProfile);
             if (appearanceRevision.current === revision) setAppearanceSaveError(false);
           } catch (error) {
             if (appearanceRevision.current === revision && !isSignedOutError(error)) {
@@ -133,15 +148,14 @@ export function PreferencesProvider({
           }
         });
     },
-    [applyAppearance],
+    [applyAppearance, writeProfile],
   );
 
   const saveProfileChanges = useCallback(
     async (changes: ProfileUpdate) => {
       await appearanceSaveQueue.current.catch(() => undefined);
       const { profile: nextProfile } = await persistProfile(changes);
-      setProfile(nextProfile);
-      setStatus('ready');
+      writeProfile(nextProfile);
       setPreferences((current) => {
         const next = preferencesFromProfile(nextProfile, defaults);
         return changes.appearance === undefined
@@ -151,7 +165,7 @@ export function PreferencesProvider({
       if (changes.appearance) setAppearanceSaveError(false);
       return nextProfile;
     },
-    [defaults],
+    [defaults, writeProfile],
   );
 
   const value = useMemo<PreferencesContextValue>(

@@ -62,10 +62,13 @@ async function tripPlaceRequest<T>(path: string, init?: RequestInit) {
   return response.json() as Promise<T>;
 }
 
+export type TripPlacesResponse = {
+  trip: { id: string; name: string };
+  tripPlaces: TripPlace[];
+};
+
 export function fetchTripPlaces(tripId: string) {
-  return tripPlaceRequest<{ trip: { id: string; name: string }; tripPlaces: TripPlace[] }>(
-    `/trips/${tripId}/places`,
-  );
+  return tripPlaceRequest<TripPlacesResponse>(`/trips/${tripId}/places`);
 }
 
 export function addTripPlace(

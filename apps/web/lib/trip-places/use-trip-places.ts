@@ -1,6 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useState } from 'react';
+
+import { queryKeys } from '@/lib/query/keys';
 
 import {
   fetchTripPlaces,
@@ -8,6 +11,7 @@ import {
   TripPlaceApiError,
   type TripPlace,
   type TripPlacePriority,
+  type TripPlacesResponse,
   updateTripPlace,
 } from './api';
 
@@ -25,30 +29,45 @@ export type TripPlacesError = { key: string; values?: Record<string, number> };
  * when it was added, so opening this screen asks Google for nothing.
  */
 export function useTripPlaces(tripId: string) {
-  const [tripName, setTripName] = useState('');
-  const [places, setPlaces] = useState<TripPlace[]>([]);
-  const [status, setStatus] = useState<TripPlacesStatus>('loading');
+  const queryClient = useQueryClient();
   const [error, setError] = useState<TripPlacesError | null>(null);
+  const queryKey = queryKeys.tripPlaces(tripId);
+
+  const query = useQuery({ queryFn: () => fetchTripPlaces(tripId), queryKey });
+
+  const places = query.data?.tripPlaces ?? [];
+  const tripName = query.data?.trip.name ?? '';
+  const status: TripPlacesStatus = query.isPending ? 'loading' : query.error ? 'error' : 'idle';
 
   const refresh = useCallback(async () => {
-    setStatus('loading');
-    try {
-      const result = await fetchTripPlaces(tripId);
-      setTripName(result.trip.name);
-      setPlaces(result.tripPlaces);
-      setStatus('idle');
-    } catch {
-      setStatus('error');
-    }
-  }, [tripId]);
+    await queryClient.invalidateQueries({ queryKey });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryClient, tripId]);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  /**
+   * Writes an edited Place straight back into the cache. The server has already
+   * confirmed it, so a refetch would only ask for what is now in hand - and the
+   * Places page and the itinerary's drawer both read this entry, so both move
+   * together without either re-fetching.
+   */
+  const setPlaces = useCallback(
+    (update: (current: TripPlace[]) => TripPlace[]) => {
+      queryClient.setQueryData(queryKey, (current: TripPlacesResponse | undefined) =>
+        current ? { ...current, tripPlaces: update(current.tripPlaces) } : current,
+      );
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [queryClient, tripId],
+  );
 
-  const replace = useCallback((tripPlace: TripPlace) => {
-    setPlaces((current) => current.map((entry) => (entry.id === tripPlace.id ? tripPlace : entry)));
-  }, []);
+  const replace = useCallback(
+    (tripPlace: TripPlace) => {
+      setPlaces((current) =>
+        current.map((entry) => (entry.id === tripPlace.id ? tripPlace : entry)),
+      );
+    },
+    [setPlaces],
+  );
 
   const setPriority = useCallback(
     async (tripPlace: TripPlace, priority: TripPlacePriority | null) => {

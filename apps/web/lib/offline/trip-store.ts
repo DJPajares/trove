@@ -17,11 +17,12 @@ import { applyItineraryDayMove } from '@/lib/itinerary/day-move';
 import { itemSortMinute, reslotItemByTime } from '@/lib/itinerary/item-order';
 
 const DATABASE_NAME = 'trove-offline';
-const DATABASE_VERSION = 3;
+const DATABASE_VERSION = 4;
 const SNAPSHOT_STORE = 'trip-snapshots';
 const MUTATION_STORE = 'mutations';
 const DOCUMENT_STORE = 'reservation-documents';
 const MEMORY_MEDIA_STORE = 'memory-media';
+const QUERY_CACHE_STORE = 'query-cache';
 const LAST_OFFLINE_USER_KEY = 'trove.last-offline-user';
 const OFFLINE_SNAPSHOT_STALE_AFTER_MS = 14 * 24 * 60 * 60 * 1_000;
 
@@ -304,6 +305,12 @@ function openDatabase() {
           const store = database.createObjectStore(MEMORY_MEDIA_STORE, { keyPath: 'key' });
           store.createIndex('by-user', 'userId');
           store.createIndex('by-user-trip', ['userId', 'tripId']);
+        }
+        // The read cache lives here rather than in a database of its own so it
+        // shares one version ladder and one wipe path with everything else that
+        // is private to a signed-in traveller.
+        if (!database.objectStoreNames.contains(QUERY_CACHE_STORE)) {
+          database.createObjectStore(QUERY_CACHE_STORE, { keyPath: 'key' });
         }
       },
       { once: true },
@@ -629,13 +636,14 @@ export async function clearAllOfflineTripData() {
   try {
     const database = await openDatabase();
     const transaction = database.transaction(
-      [SNAPSHOT_STORE, MUTATION_STORE, DOCUMENT_STORE, MEMORY_MEDIA_STORE],
+      [SNAPSHOT_STORE, MUTATION_STORE, DOCUMENT_STORE, MEMORY_MEDIA_STORE, QUERY_CACHE_STORE],
       'readwrite',
     );
     transaction.objectStore(SNAPSHOT_STORE).clear();
     transaction.objectStore(MUTATION_STORE).clear();
     transaction.objectStore(DOCUMENT_STORE).clear();
     transaction.objectStore(MEMORY_MEDIA_STORE).clear();
+    transaction.objectStore(QUERY_CACHE_STORE).clear();
     await transactionDone(transaction);
   } catch {
     // Continue clearing the user marker and private route caches.
@@ -1489,4 +1497,34 @@ export async function applyMutationToStoredItinerary(
     itinerary: applyOfflineMutation(snapshot.itinerary, operation),
     savedAt: new Date().toISOString(),
   });
+}
+
+/**
+ * The three operations the read cache persister needs, over the `query-cache`
+ * store. Kept here rather than in `lib/query` so every reader and writer of the
+ * offline database goes through one module, and so a wipe cannot miss the store.
+ */
+export async function readQueryCacheEntry(key: string) {
+  const database = await openDatabase();
+  const transaction = database.transaction(QUERY_CACHE_STORE, 'readonly');
+  const record = await requestResult(
+    transaction.objectStore(QUERY_CACHE_STORE).get(key) as IDBRequest<
+      { key: string; value: string } | undefined
+    >,
+  );
+  return record?.value ?? null;
+}
+
+export async function writeQueryCacheEntry(key: string, value: string) {
+  const database = await openDatabase();
+  const transaction = database.transaction(QUERY_CACHE_STORE, 'readwrite');
+  transaction.objectStore(QUERY_CACHE_STORE).put({ key, value });
+  await transactionDone(transaction);
+}
+
+export async function deleteQueryCacheEntry(key: string) {
+  const database = await openDatabase();
+  const transaction = database.transaction(QUERY_CACHE_STORE, 'readwrite');
+  transaction.objectStore(QUERY_CACHE_STORE).delete(key);
+  await transactionDone(transaction);
 }

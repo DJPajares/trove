@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
 
 import { fetchTripPlanScore, type TripPlanScore } from '@/lib/plan-score/api';
+import { queryKeys } from '@/lib/query/keys';
 
 export type PlanScoreLoadStatus = 'disabled' | 'error' | 'idle' | 'loading';
 
@@ -11,45 +13,37 @@ export type PlanScoreLoadStatus = 'disabled' | 'error' | 'idle' | 'loading';
  * caller keeps its last result and shows an unavailable state.
  *
  * `revision` changes whenever an itinerary, route, place, or reservation edit
- * invalidates the score, following the invalidation contract.
+ * invalidates the score, following the invalidation contract. It is part of the
+ * query key rather than a refetch trigger, which is what makes an unchanged
+ * trip free - this is the most expensive endpoint in the app, fanning out to
+ * one Routes call per leg per day plus a Place lookup per scheduled Place, so a
+ * second look at a trip nobody edited must not pay for it again.
  */
 export function useTripPlanScore(tripId: string | null, revision: string) {
-  const [data, setData] = useState<TripPlanScore | null>(null);
-  const [status, setStatus] = useState<PlanScoreLoadStatus>('idle');
-  const [attempt, setAttempt] = useState(0);
+  const queryClient = useQueryClient();
 
-  const retry = useCallback(() => setAttempt((value) => value + 1), []);
+  const { data, error, isPending } = useQuery({
+    enabled: tripId !== null,
+    queryFn: ({ signal }) => fetchTripPlanScore(tripId as string, signal),
+    queryKey: queryKeys.planScore(tripId ?? '', revision),
+  });
 
-  useEffect(() => {
-    if (!tripId) {
-      setData(null);
-      setStatus('idle');
-      return;
-    }
+  const retry = useCallback(() => {
+    if (!tripId) return;
+    void queryClient.invalidateQueries({ queryKey: queryKeys.planScore(tripId, revision) });
+  }, [queryClient, revision, tripId]);
 
-    const controller = new AbortController();
-    setStatus('loading');
+  // `null` from the endpoint is the kill switch rather than an absent score,
+  // and it is a different state from a score that failed to load.
+  const status: PlanScoreLoadStatus = !tripId
+    ? 'idle'
+    : isPending
+      ? 'loading'
+      : error
+        ? 'error'
+        : data === null
+          ? 'disabled'
+          : 'idle';
 
-    fetchTripPlanScore(tripId, controller.signal)
-      .then((result) => {
-        if (controller.signal.aborted) return;
-        if (result === null) {
-          setData(null);
-          setStatus('disabled');
-          return;
-        }
-        setData(result);
-        setStatus('idle');
-      })
-      .catch((error: unknown) => {
-        if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
-          return;
-        }
-        setStatus('error');
-      });
-
-    return () => controller.abort();
-  }, [attempt, revision, tripId]);
-
-  return { data, retry, status };
+  return { data: (data ?? null) as TripPlanScore | null, retry, status };
 }

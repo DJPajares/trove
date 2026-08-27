@@ -11,7 +11,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { EditorialSection } from '@/components/editorial-section';
@@ -54,10 +54,11 @@ import {
   deleteTripInfo,
   fetchTripInfo,
   type TripInfoEntry,
-  type TripInfoResponse,
   updateTripInfo,
 } from '@/lib/trip-info/api';
 import { cn } from '@/lib/utils';
+import { queryKeys } from '@/lib/query/keys';
+import { useTripResource } from '@/lib/query/use-trip-resource';
 
 type EditorState =
   | { entry: null; mode: 'closed' }
@@ -86,8 +87,9 @@ function createForm(entry: TripInfoEntry | null): TripInfoForm {
 
 export function TripInfoManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripInfo');
-  const [data, setData] = useState<TripInfoResponse | null>(null);
-  const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
+  const { data, refresh, status } = useTripResource(queryKeys.tripInfo(tripId), () =>
+    fetchTripInfo(tripId),
+  );
   const [error, setError] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState>({ entry: null, mode: 'closed' });
   const [form, setForm] = useState<TripInfoForm>(() => createForm(null));
@@ -96,20 +98,6 @@ export function TripInfoManager({ tripId }: Readonly<{ tripId: string }>) {
   const [entryToDelete, setEntryToDelete] = useState<TripInfoEntry | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    setError(null);
-    try {
-      setData(await fetchTripInfo(tripId));
-      setStatus('idle');
-    } catch {
-      setStatus('error');
-    }
-  }, [tripId]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   function openCreate() {
     setForm(createForm(null));

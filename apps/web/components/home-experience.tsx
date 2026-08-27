@@ -1,5 +1,6 @@
 'use client';
 
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bookmark, ChevronRight, CircleAlert, MapPinned, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -35,6 +36,7 @@ import { fetchSavedPlaces, type SavedPlace } from '@/lib/saved/api';
 import { fetchTrips, type Trip } from '@/lib/trips/api';
 import { selectPrimaryTrip } from '@/lib/trips/lifecycle';
 import { tripEditorialSubject } from '@/lib/trips/summary';
+import { queryKeys } from '@/lib/query/keys';
 
 type HomeData = {
   savedPlaces: SavedPlace[];
@@ -64,15 +66,17 @@ function itemLabel(item: ItineraryItem) {
   return item.customLabel ?? item.customLocation?.label ?? item.tripPlace?.place.name ?? null;
 }
 
+const EMPTY_SAVED_PLACES: SavedPlace[] = [];
+const EMPTY_TRIPS: Trip[] = [];
+
 export function HomeExperience() {
   const t = useTranslations('home');
   const { latestCreatedTrip, openCreateTrip } = useTripCreation();
-  const [data, setData] = useState<HomeData>({ savedPlaces: [], trips: [] });
-  const [status, setStatus] = useState<HomeStatus>('loading');
-  const [tripModeContext, setTripModeContext] = useState<TripModeContext | null>(null);
-  const [tripModeContextStatus, setTripModeContextStatus] = useState<'idle' | 'loading' | 'ready'>(
-    'idle',
-  );
+  const queryClient = useQueryClient();
+  // Both lists are shared with the Trips library and Saved Places, so arriving
+  // at Home from either costs nothing.
+  const tripsQuery = useQuery({ queryFn: fetchTrips, queryKey: queryKeys.trips() });
+  const savedQuery = useQuery({ queryFn: fetchSavedPlaces, queryKey: queryKeys.savedPlaces() });
   const [dismissedPrompts, setDismissedPrompts] = useState<string[]>([]);
 
   useEffect(() => {
@@ -91,33 +95,23 @@ export function HomeExperience() {
     });
   }
 
-  useEffect(() => {
-    let active = true;
-    void Promise.all([
-      fetchTrips(),
-      fetchSavedPlaces().catch(() => ({ collections: [], savedPlaces: [] })),
-    ])
-      .then(([tripResponse, savedResponse]) => {
-        if (!active) return;
-        setData({ savedPlaces: savedResponse.savedPlaces, trips: tripResponse.trips });
-        setStatus('idle');
-      })
-      .catch(() => {
-        if (active) setStatus('error');
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+  // Saved Places are supplementary here: failing to load them leaves the
+  // section empty rather than turning Home into an error screen, which is what
+  // the original `.catch` on that request meant.
+  const data: HomeData = {
+    savedPlaces: savedQuery.data?.savedPlaces ?? EMPTY_SAVED_PLACES,
+    trips: tripsQuery.data?.trips ?? EMPTY_TRIPS,
+  };
+  const status: HomeStatus = tripsQuery.isPending ? 'loading' : tripsQuery.error ? 'error' : 'idle';
 
   useEffect(() => {
     if (!latestCreatedTrip) return;
-    setData((current) =>
-      current.trips.some((trip) => trip.id === latestCreatedTrip.id)
+    queryClient.setQueryData(queryKeys.trips(), (current: { trips: Trip[] } | undefined) =>
+      !current || current.trips.some((trip) => trip.id === latestCreatedTrip.id)
         ? current
         : { ...current, trips: [...current.trips, latestCreatedTrip] },
     );
-  }, [latestCreatedTrip]);
+  }, [latestCreatedTrip, queryClient]);
 
   const primary = useMemo(() => selectPrimaryTrip(data.trips), [data.trips]);
   // Only a trip actually under way has a "now" worth asking about.
@@ -149,29 +143,28 @@ export function HomeExperience() {
     return subject ? (editorialImages.get(editorialSubjectKey(subject))?.[0] ?? null) : null;
   };
 
-  useEffect(() => {
-    if (!primaryTripId) {
-      setTripModeContext(null);
-      setTripModeContextStatus('idle');
-      return;
-    }
-    let active = true;
-    setTripModeContextStatus('loading');
-    void fetchTripModeContext(primaryTripId)
-      .then((context) => {
-        if (!active) return;
-        setTripModeContext(context);
-        setTripModeContextStatus('ready');
-      })
-      .catch(() => {
-        if (!active) return;
-        setTripModeContext(null);
-        setTripModeContextStatus('ready');
-      });
-    return () => {
-      active = false;
-    };
-  }, [primaryTripId]);
+  /**
+   * Home asks for one trip's "now", never one per trip in the list - this
+   * endpoint can reach Routes and Places, and a per-trip loop over it is
+   * exactly the shape that turns a home screen into a bill.
+   *
+   * Trip Mode reads the same key, so walking from Home into Trip Mode reuses
+   * this answer instead of buying it twice.
+   */
+  const tripModeContextQuery = useQuery({
+    enabled: primaryTripId !== null,
+    queryFn: ({ signal }) => fetchTripModeContext(primaryTripId as string, { signal }),
+    queryKey: queryKeys.tripModeContext(primaryTripId ?? '', {}),
+  });
+
+  const tripModeContext = tripModeContextQuery.data ?? null;
+  // A context that would not load is not an error worth showing on Home; the
+  // section simply renders without it.
+  const tripModeContextStatus = !primaryTripId
+    ? 'idle'
+    : tripModeContextQuery.isPending
+      ? 'loading'
+      : 'ready';
 
   if (status === 'loading') {
     // Home is one tall card and the sections beneath it, so that is what waits

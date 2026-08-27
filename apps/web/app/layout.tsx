@@ -8,6 +8,7 @@ import './globals.css';
 import { AppShell } from '@/components/app-shell';
 import { OnboardingGate } from '@/components/onboarding-gate';
 import { PwaProvider } from '@/components/pwa-provider';
+import { QueryProvider } from '@/components/query-provider';
 import { PreferencesProvider } from '@/components/preferences-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import { TroveMotionProvider } from '@/components/trove-motion-provider';
@@ -59,12 +60,14 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <ThemeProvider>
           <TroveMotionProvider>
             <NextIntlClientProvider>
-              <PwaProvider>
-                <PreferencesProvider locale={locale}>
-                  <OnboardingGate />
-                  <AppShell isSignedIn={authUserId !== null}>{children}</AppShell>
-                </PreferencesProvider>
-              </PwaProvider>
+              <QueryProvider userId={authUserId}>
+                <PwaProvider>
+                  <PreferencesProvider locale={locale}>
+                    <OnboardingGate />
+                    <AppShell isSignedIn={authUserId !== null}>{children}</AppShell>
+                  </PreferencesProvider>
+                </PwaProvider>
+              </QueryProvider>
             </NextIntlClientProvider>
           </TroveMotionProvider>
         </ThemeProvider>

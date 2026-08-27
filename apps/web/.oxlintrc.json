@@ -1,0 +1,17 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxlint/configuration_schema.json",
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "@tanstack/react-query",
+            "importNames": ["useMutation", "useMutationState", "useIsMutating"],
+            "message": "TanStack Query is read-side only in Trove. Writes go through queueOfflineMutation/syncOfflineMutations in lib/offline/trip-sync.ts, which owns the offline queue, conflict states and replay. A second write path would race it."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,5 +1,6 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import { Bookmark, CircleAlert, MapPinned, NotebookPen, Pencil, Plus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -37,6 +38,7 @@ import {
 } from '@/lib/saved/api';
 import { PROVIDER_SEARCH_RESULT_LIMIT } from '@/lib/saved/search-results';
 import { addTripPlace, type TripPlace } from '@/lib/trip-places/api';
+import { queryKeys } from '@/lib/query/keys';
 
 type AddTripPlaceSheetProps = {
   onAdded: (tripPlace: TripPlace) => void;
@@ -56,6 +58,8 @@ type AddTripPlaceSheetProps = {
  *
  * An empty field never calls the provider, per PRD section 16.1.
  */
+const EMPTY_SAVED_PLACES: SavedPlace[] = [];
+
 export function AddTripPlaceSheet({
   onAdded,
   onOpenChange,
@@ -64,7 +68,6 @@ export function AddTripPlaceSheet({
 }: Readonly<AddTripPlaceSheetProps>) {
   const t = useTranslations('tripPlaces');
   const locale = useLocale();
-  const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ProviderSuggestion[]>([]);
   const [searchStatus, setSearchStatus] = useState<'empty' | 'idle' | 'loading' | 'unavailable'>(
@@ -80,22 +83,14 @@ export function AddTripPlaceSheet({
   const [customNote, setCustomNote] = useState('');
   const [creating, setCreating] = useState(false);
 
-  // Saved Places are fetched once so they can answer the search locally, and they
-  // arrive already named — the API serves what Trove stored, so this costs nothing
-  // at the provider. Failing to load them costs the traveller nothing they can see:
-  // the provider search still works.
-  useEffect(() => {
-    let active = true;
-    void fetchSavedPlaces()
-      .then((result) => {
-        if (!active) return;
-        setSavedPlaces(result.savedPlaces);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, []);
+  // Saved Places answer the search locally, and they arrive already named — the
+  // API serves what Trove stored, so this costs nothing at the provider. The
+  // shared cache means opening this sheet a second time asks for nothing at
+  // all. Failing to load them costs the traveller nothing they can see: the
+  // provider search still works.
+  const savedPlaces =
+    useQuery({ queryFn: fetchSavedPlaces, queryKey: queryKeys.savedPlaces() }).data?.savedPlaces ??
+    EMPTY_SAVED_PLACES;
 
   // Nothing typed means nothing to ask the provider about.
   useEffect(() => {

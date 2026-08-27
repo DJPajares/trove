@@ -1,5 +1,6 @@
 'use client';
 
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import {
   createContext,
@@ -8,7 +9,6 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
   type ReactNode,
 } from 'react';
 
@@ -19,9 +19,19 @@ import {
   saveNotificationSettings,
   type NotificationSettings,
   type TroveNotification,
-  NotificationsApiError,
 } from '@/lib/notifications/api';
+import { apiErrorStatus } from '@/lib/query/client';
+import { queryKeys } from '@/lib/query/keys';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+
+const NOTIFICATIONS_POLL_MS = 5 * 60 * 1_000;
+
+const DEFAULT_SETTINGS: NotificationSettings = { browserEnabled: false, enabled: false };
+
+type NotificationsResponse = {
+  notifications: TroveNotification[];
+  settings: NotificationSettings;
+};
 
 type NotificationsStatus = 'error' | 'loading' | 'ready' | 'unavailable';
 
@@ -47,38 +57,48 @@ function formatEventTime(notification: TroveNotification) {
 
 export function NotificationsProvider({ children }: Readonly<{ children: ReactNode }>) {
   const t = useTranslations('notifications');
-  const [notifications, setNotifications] = useState<TroveNotification[]>([]);
-  const [settings, setSettings] = useState<NotificationSettings>({
-    browserEnabled: false,
-    enabled: false,
-  });
-  const [status, setStatus] = useState<NotificationsStatus>('loading');
+  const queryClient = useQueryClient();
+  const queryKey = queryKeys.notifications();
   const deliveryInFlight = useRef(new Set<string>());
 
+  const query = useQuery({
+    queryFn: fetchNotifications,
+    queryKey,
+    // Notifications are the one read in Trove that is genuinely time-sensitive
+    // and costs nothing but a database query, so this is the only query allowed
+    // a poll and a focus refetch.
+    refetchInterval: NOTIFICATIONS_POLL_MS,
+    refetchOnWindowFocus: true,
+  });
+
+  const notifications = query.data?.notifications ?? [];
+  const settings = query.data?.settings ?? DEFAULT_SETTINGS;
+
+  const status: NotificationsStatus = query.isPending
+    ? 'loading'
+    : apiErrorStatus(query.error) === 401
+      ? 'unavailable'
+      : query.error
+        ? 'error'
+        : 'ready';
+
+  const write = useCallback(
+    (update: (current: NotificationsResponse) => NotificationsResponse) => {
+      queryClient.setQueryData(queryKey, (current: NotificationsResponse | undefined) =>
+        current ? update(current) : current,
+      );
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [queryClient],
+  );
+
   const refresh = useCallback(async () => {
-    try {
-      const response = await fetchNotifications();
-      setNotifications(response.notifications);
-      setSettings(response.settings);
-      setStatus('ready');
-    } catch (error) {
-      if (error instanceof NotificationsApiError && error.status === 401) {
-        setNotifications([]);
-        setStatus('unavailable');
-        return;
-      }
-      setStatus((current) => (current === 'loading' ? 'error' : current));
-    }
-  }, []);
+    await queryClient.invalidateQueries({ queryKey });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryClient]);
 
   useEffect(() => {
-    void refresh();
-    const interval = window.setInterval(() => void refresh(), 5 * 60 * 1_000);
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') void refresh();
-    };
     const handleRefresh = () => void refresh();
-    document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('trove-notifications-refresh', handleRefresh);
 
     const supabase = createBrowserSupabaseClient();
@@ -99,8 +119,6 @@ export function NotificationsProvider({ children }: Readonly<{ children: ReactNo
     }).data.subscription;
 
     return () => {
-      window.clearInterval(interval);
-      document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('trove-notifications-refresh', handleRefresh);
       subscription?.unsubscribe();
     };
@@ -144,13 +162,14 @@ export function NotificationsProvider({ children }: Readonly<{ children: ReactNo
             new Notification(title, options);
           }
           await markNotification(notification.id, { browserDelivered: true });
-          setNotifications((current) =>
-            current.map((item) =>
+          write((current) => ({
+            ...current,
+            notifications: current.notifications.map((item) =>
               item.id === notification.id
                 ? { ...item, browserDeliveredAt: new Date().toISOString() }
                 : item,
             ),
-          );
+          }));
         } catch {
           // Browser delivery is supplementary. In-app notifications remain available.
         } finally {
@@ -158,27 +177,30 @@ export function NotificationsProvider({ children }: Readonly<{ children: ReactNo
         }
       })();
     }
-  }, [notifications, settings.browserEnabled, t]);
+  }, [notifications, settings.browserEnabled, t, write]);
 
   const value = useMemo<NotificationsContextValue>(
     () => ({
       async markAllRead() {
-        const previous = notifications;
-        setNotifications([]);
+        const previous = queryClient.getQueryData<NotificationsResponse>(queryKey);
+        write((current) => ({ ...current, notifications: [] }));
         try {
           await markAllNotificationsRead();
         } catch {
-          setNotifications(previous);
+          if (previous) queryClient.setQueryData(queryKey, previous);
           throw new Error('notifications_update_failed');
         }
       },
       async markRead(notificationId) {
-        const previous = notifications;
-        setNotifications((current) => current.filter((item) => item.id !== notificationId));
+        const previous = queryClient.getQueryData<NotificationsResponse>(queryKey);
+        write((current) => ({
+          ...current,
+          notifications: current.notifications.filter((item) => item.id !== notificationId),
+        }));
         try {
           await markNotification(notificationId, { read: true });
         } catch {
-          setNotifications(previous);
+          if (previous) queryClient.setQueryData(queryKey, previous);
           throw new Error('notification_update_failed');
         }
       },
@@ -188,13 +210,16 @@ export function NotificationsProvider({ children }: Readonly<{ children: ReactNo
       status,
       async updateSettings(changes) {
         const result = await saveNotificationSettings(changes);
-        setSettings(result.settings);
-        if (!result.settings.enabled) setNotifications([]);
-        else void refresh();
+        write((current) => ({
+          notifications: result.settings.enabled ? current.notifications : [],
+          settings: result.settings,
+        }));
+        if (result.settings.enabled) void refresh();
         return result.settings;
       },
     }),
-    [notifications, refresh, settings, status],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [notifications, queryClient, refresh, settings, status, write],
   );
 
   return <NotificationsContext.Provider value={value}>{children}</NotificationsContext.Provider>;

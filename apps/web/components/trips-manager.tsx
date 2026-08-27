@@ -1,9 +1,10 @@
 'use client';
 
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ChevronDown, CircleAlert, MapPinned, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
@@ -17,11 +18,14 @@ import { libraryEditorialSubjects, tripEditorialSubject } from '@/lib/trips/summ
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
 import { fetchTrips, type Trip } from '@/lib/trips/api';
+import { queryKeys } from '@/lib/query/keys';
 
 /**
  * The library creates trips; editing and deleting a trip belong to the trip's
  * own route, where the traveller can see what they are changing.
  */
+const EMPTY_TRIPS: Trip[] = [];
+
 export function TripsManager() {
   const t = useTranslations('trips');
   const { latestCreatedTrip, openCreateTrip } = useTripCreation();
@@ -29,8 +33,10 @@ export function TripsManager() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const shouldCreateTrip = searchParams.get('create') === '1';
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
+  const queryClient = useQueryClient();
+  const tripsQuery = useQuery({ queryFn: fetchTrips, queryKey: queryKeys.trips() });
+  const trips = tripsQuery.data?.trips ?? EMPTY_TRIPS;
+  const status = tripsQuery.isPending ? 'loading' : tripsQuery.error ? 'error' : 'idle';
 
   const groupedTrips = useMemo(() => groupTripsForLibrary(trips), [trips]);
 
@@ -49,34 +55,18 @@ export function TripsManager() {
   }, [openCreateTrip, pathname, router, shouldCreateTrip]);
 
   useEffect(() => {
-    let active = true;
-
-    void fetchTrips()
-      .then(({ trips: nextTrips }) => {
-        if (!active) return;
-        setTrips(nextTrips);
-        setStatus('idle');
-      })
-      .catch(() => {
-        if (!active) return;
-        setStatus('error');
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
     if (!latestCreatedTrip) return;
-    setTrips((current) =>
-      current.some((trip) => trip.id === latestCreatedTrip.id)
-        ? current
-        : [...current, latestCreatedTrip].toSorted((left, right) =>
-            left.startDate.localeCompare(right.startDate),
-          ),
-    );
-  }, [latestCreatedTrip]);
+    queryClient.setQueryData(queryKeys.trips(), (current: { trips: Trip[] } | undefined) => {
+      if (!current) return current;
+      if (current.trips.some((trip) => trip.id === latestCreatedTrip.id)) return current;
+      return {
+        ...current,
+        trips: [...current.trips, latestCreatedTrip].toSorted((left, right) =>
+          left.startDate.localeCompare(right.startDate),
+        ),
+      };
+    });
+  }, [latestCreatedTrip, queryClient]);
 
   return (
     <section className="mx-auto w-full max-w-5xl space-y-8">

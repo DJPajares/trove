@@ -50,7 +50,8 @@ import {
 import { fetchExpenses } from '@/lib/expenses/api';
 import { fetchReservations } from '@/lib/reservations/api';
 import type { Task, TasksResponse } from '@/lib/tasks/api';
-import { sortTripModeTasks, tripTasks } from '@/lib/tasks/trip-mode';
+import { groupTasksByContext } from '@/lib/tasks/grouping';
+import { tripTasks } from '@/lib/tasks/trip-mode';
 import { fetchTripInfo, type TripInfoEntry } from '@/lib/trip-info/api';
 import { fetchTrip, type Trip } from '@/lib/trips/api';
 
@@ -115,30 +116,10 @@ function ContextualTaskGroups({ data }: Readonly<{ data: TasksResponse }>) {
     new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
       new Date(`${date}T00:00:00.000Z`),
     );
-  const itemTasks = (itemId: string) =>
-    sortTripModeTasks(
-      data.tasks.filter(
-        (task) => task.context.kind === 'item' && task.context.itineraryItemId === itemId,
-      ),
-    );
-  const dayGroups = data.contexts.days
-    .map((day) => ({
-      day,
-      dayTasks: sortTripModeTasks(
-        data.tasks.filter(
-          (task) => task.context.kind === 'day' && task.context.itineraryDayId === day.id,
-        ),
-      ),
-      items: data.contexts.items
-        .filter((item) => item.itineraryDayId === day.id)
-        .map((item) => ({ ...item, tasks: itemTasks(item.id) }))
-        .filter((item) => item.tasks.length),
-    }))
-    .filter((group) => group.dayTasks.length || group.items.length);
-  const unscheduledItems = data.contexts.items
-    .filter((item) => item.itineraryDayId === null)
-    .map((item) => ({ ...item, tasks: itemTasks(item.id) }))
-    .filter((item) => item.tasks.length);
+  const { days: dayGroups, unscheduled: unscheduledItems } = groupTasksByContext(
+    data.tasks,
+    data.contexts,
+  );
 
   return (
     <div className="divide-y divide-border-subtle border-y border-border-subtle py-1">

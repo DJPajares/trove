@@ -1,9 +1,9 @@
 'use client';
 
-import { CircleAlert, ClipboardCheck, Pencil, Plus, Wrench } from 'lucide-react';
+import { CircleAlert, ClipboardCheck, Layers, List, Pencil, Plus, Wrench } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { EditorialSection } from '@/components/editorial-section';
 import { PageState } from '@/components/page-state';
@@ -31,6 +31,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from '@/components/ui/item';
+import { Tabs, TabsIndicator, TabsList, TabsTab } from '@/components/ui/tabs';
 import {
   createTask,
   deleteTask,
@@ -40,9 +41,49 @@ import {
   type TasksResponse,
   updateTask,
 } from '@/lib/tasks/api';
+import { groupTasksByContext } from '@/lib/tasks/grouping';
 
 type EditorState =
   { mode: 'closed'; task: null } | { mode: 'create'; task: null } | { mode: 'edit'; task: Task };
+
+type TasksView = 'grouped' | 'list';
+
+const VIEW_STORAGE_KEY = 'trove.tasks-view';
+
+function readStoredView(): TasksView | null {
+  try {
+    const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
+    return stored === 'grouped' || stored === 'list' ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeView(view: TasksView) {
+  try {
+    window.localStorage.setItem(VIEW_STORAGE_KEY, view);
+  } catch {
+    // A browser that refuses storage still gets the view it asked for; only the
+    // remembering is lost.
+  }
+}
+
+/** One labelled run of rows inside a grouped day: its own tasks, or one stop's. */
+function TaskSubGroup({
+  label,
+  renderTask,
+  tasks,
+}: Readonly<{ label: string; renderTask: (task: Task) => ReactNode; tasks: readonly Task[] }>) {
+  if (!tasks.length) return null;
+  return (
+    <div className="py-2 first:pt-0 last:pb-0">
+      <p className="mb-1 px-3 text-xs font-semibold text-foreground">{label}</p>
+      <ItemGroup aria-label={label} variant="list">
+        {tasks.map(renderTask)}
+      </ItemGroup>
+    </div>
+  );
+}
 
 export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tasks');
@@ -54,6 +95,19 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [changingTaskId, setChangingTaskId] = useState<string | null>(null);
+  const [view, setView] = useState<TasksView>('list');
+
+  // Read after mount: the server has no way to know which view this browser
+  // last chose, and guessing during render would hydrate the wrong one.
+  useEffect(() => {
+    const stored = readStoredView();
+    if (stored) setView(stored);
+  }, []);
+
+  function changeView(next: TasksView) {
+    setView(next);
+    storeView(next);
+  }
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -75,6 +129,9 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
   );
   const openTasks = data?.tasks.filter((task) => !task.completed) ?? [];
   const completedTasks = data?.tasks.filter((task) => task.completed) ?? [];
+  // Completed work keeps its own section below, so the groups stay a picture of
+  // what is still to do.
+  const groups = data ? groupTasksByContext(openTasks, data.contexts) : null;
 
   function formatDate(value: string) {
     return dateFormatter.format(new Date(`${value}T00:00:00.000Z`));
@@ -136,7 +193,7 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
     }
   }
 
-  function renderTask(task: Task) {
+  function renderTaskRow(task: Task, showContext: boolean) {
     const completed = task.completed;
     // Calendar-date comparison, matching how a due date is already treated
     // everywhere else in this file (a date the traveller picked, not a zoned
@@ -176,7 +233,9 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
           </ItemTitle>
           <ItemDescription className="line-clamp-none">
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span>{contextLabel(task.context)}</span>
+              {/* Inside a group the heading already says where the task sits;
+                  repeating it in every row is noise. */}
+              {showContext ? <span>{contextLabel(task.context)}</span> : null}
               {dueDateLabel}
             </span>
             {task.note ? <span className="mt-1 block line-clamp-2">{task.note}</span> : null}
@@ -195,6 +254,9 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
       </Item>
     );
   }
+
+  const renderTask = (task: Task) => renderTaskRow(task, true);
+  const renderGroupedTask = (task: Task) => renderTaskRow(task, false);
 
   if (status === 'loading') {
     return <PageState kind="loading" loadingShape="list" title={t('loading')} />;
@@ -243,12 +305,80 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
 
       {openTasks.length ? (
         <EditorialSection
+          actions={
+            <Tabs onValueChange={(value) => changeView(value as TasksView)} value={view}>
+              <TabsList aria-label={t('viewNavigation')}>
+                <TabsTab className="gap-2" value="list">
+                  <List aria-hidden="true" data-icon="inline-start" />
+                  {t('viewList')}
+                </TabsTab>
+                <TabsTab className="gap-2" value="grouped">
+                  <Layers aria-hidden="true" data-icon="inline-start" />
+                  {t('viewGrouped')}
+                </TabsTab>
+                <TabsIndicator />
+              </TabsList>
+            </Tabs>
+          }
           description={t('openDescription', { count: openTasks.length })}
+          headerLayout="inline"
           title={t('open')}
         >
-          <ItemGroup aria-label={t('open')} variant="list">
-            {openTasks.map(renderTask)}
-          </ItemGroup>
+          {view === 'list' || !groups ? (
+            <ItemGroup aria-label={t('open')} variant="list">
+              {openTasks.map(renderTask)}
+            </ItemGroup>
+          ) : (
+            <div className="divide-y divide-border-subtle border-y border-border-subtle">
+              {groups.trip.length ? (
+                <section aria-label={t('groupTrip')} className="py-4">
+                  <h3 className="px-3 text-sm font-semibold text-foreground">{t('groupTrip')}</h3>
+                  <ItemGroup aria-label={t('groupTrip')} className="mt-1" variant="list">
+                    {groups.trip.map(renderGroupedTask)}
+                  </ItemGroup>
+                </section>
+              ) : null}
+              {groups.days.map(({ day, dayTasks, items }) => (
+                <section aria-label={formatDate(day.date)} className="py-4" key={day.id}>
+                  <h3 className="px-3 text-sm font-semibold text-foreground">
+                    {formatDate(day.date)}
+                  </h3>
+                  <div className="mt-1 divide-y divide-border-subtle">
+                    <TaskSubGroup
+                      label={t('groupDayTasks')}
+                      renderTask={renderGroupedTask}
+                      tasks={dayTasks}
+                    />
+                    {items.map((item) => (
+                      <TaskSubGroup
+                        key={item.id}
+                        label={item.label}
+                        renderTask={renderGroupedTask}
+                        tasks={item.tasks}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+              {groups.unscheduled.length ? (
+                <section aria-label={t('groupUnscheduled')} className="py-4">
+                  <h3 className="px-3 text-sm font-semibold text-foreground">
+                    {t('groupUnscheduled')}
+                  </h3>
+                  <div className="mt-1 divide-y divide-border-subtle">
+                    {groups.unscheduled.map((item) => (
+                      <TaskSubGroup
+                        key={item.id}
+                        label={item.label}
+                        renderTask={renderGroupedTask}
+                        tasks={item.tasks}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+            </div>
+          )}
         </EditorialSection>
       ) : (
         <PageState

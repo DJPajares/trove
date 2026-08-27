@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import { forgetCachedMediaPath } from '@/lib/media/storage-cache-key';
 
 export type Profile = {
   appearance: 'dark' | 'light' | null;
@@ -90,4 +91,5 @@ export async function uploadProfilePhoto(file: File) {
 
 export async function removeProfilePhoto(supabase: SupabaseClient, path: string) {
   await supabase.storage.from('profile-photos').remove([path]);
+  await forgetCachedMediaPath('profile-photos', path);
 }

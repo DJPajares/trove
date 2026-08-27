@@ -5,6 +5,7 @@ import { fetchReservations } from '@/lib/reservations/api';
 import { fetchTasks } from '@/lib/tasks/api';
 import { fetchTripInfo } from '@/lib/trip-info/api';
 import { fetchTrip } from '@/lib/trips/api';
+import { storageCacheKey, USER_MEDIA_CACHE } from '@/lib/media/storage-cache-key';
 
 import {
   isOfflineApiReachable,
@@ -60,6 +61,35 @@ async function cacheTripPages(tripId: string) {
   );
 }
 
+/**
+ * Warms the trip's own cover into the image cache.
+ *
+ * Only media the traveller owns in Trove Storage: editorial photography is
+ * hotlinked from the provider by contract, and pre-downloading it for a trip
+ * that may never be opened offline is closer to keeping a copy than that
+ * contract allows. `useEditorialImages` already declines to resolve offline,
+ * and the branded fallback is a designed state rather than a failure.
+ *
+ * `cache.add` would fetch and store under the request's own URL, which for a
+ * signed URL is a key nothing will ever ask for again - so the normalizer is
+ * applied here by hand, exactly as the service worker applies it as a plugin.
+ *
+ * A photograph is decoration, so unlike the pages above, failing to warm one
+ * must not fail the preparation.
+ */
+async function cacheTripCover(coverPhotoUrl: string | null) {
+  if (!coverPhotoUrl || !('caches' in window)) return;
+
+  try {
+    const response = await fetch(coverPhotoUrl);
+    if (!response.ok) return;
+    const cache = await caches.open(USER_MEDIA_CACHE);
+    await cache.put(new Request(storageCacheKey(coverPhotoUrl)), response);
+  } catch {
+    // The cover falls back to the branded gradient offline.
+  }
+}
+
 export async function prepareTripForOffline(tripId: string) {
   const { accessToken, userId } = await getOfflineAuthContext();
   if (!accessToken || !navigator.onLine) {
@@ -71,7 +101,7 @@ export async function prepareTripForOffline(tripId: string) {
   try {
     await syncOfflineMutations();
     void getCurrenciesWithCache().catch(() => undefined);
-    await Promise.all([
+    const [, tripResult] = await Promise.all([
       fetchItinerary(tripId),
       fetchTrip(tripId),
       fetchReservations(tripId),
@@ -81,6 +111,7 @@ export async function prepareTripForOffline(tripId: string) {
       refreshSelectedDocuments(userId, tripId),
       cacheTripPages(tripId),
     ]);
+    await cacheTripCover(tripResult.trip.coverPhotoUrl);
     if (!isOfflineApiReachable()) throw new OfflineSyncError('offline_preparation_unavailable');
     await markTripPrepared(userId, tripId);
   } catch (error) {

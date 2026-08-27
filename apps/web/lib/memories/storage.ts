@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { forgetCachedMediaPath } from '@/lib/media/storage-cache-key';
+
 export const MEMORY_PHOTOS_BUCKET = 'memory-photos';
 
 export const allowedMemoryPhotoTypes = new Set([
@@ -52,9 +54,13 @@ export async function uploadMemoryPhotoObject(
     contentType,
     upsert: true,
   });
+  // This is the one bucket where a path can come to hold different bytes, so a
+  // retry has to drop whatever the device cached for the previous attempt.
+  if (!error) await forgetCachedMediaPath(MEMORY_PHOTOS_BUCKET, path);
   return !error;
 }
 
 export async function removeMemoryPhotoObject(supabase: SupabaseClient, path: string) {
   await supabase.storage.from(MEMORY_PHOTOS_BUCKET).remove([path]);
+  await forgetCachedMediaPath(MEMORY_PHOTOS_BUCKET, path);
 }

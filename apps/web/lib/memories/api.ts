@@ -16,6 +16,7 @@ import {
 } from '@/lib/offline/trip-store';
 import { getOfflineAuthContext } from '@/lib/offline/trip-sync';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import { forgetCachedMediaUrls } from '@/lib/media/storage-cache-key';
 
 import {
   isAllowedMemoryPhoto,
@@ -207,14 +208,30 @@ export function updateMemory(tripId: string, memoryId: string, input: MemoryInpu
   );
 }
 
-export function deleteMemory(tripId: string, memoryId: string) {
-  return memoryRequest<void>(`/trips/${tripId}/memories/${memoryId}`, { method: 'DELETE' });
+/**
+ * `photoUrls` is what the caller is currently showing for this Memory. The
+ * server owns the objects, so deletion happens there; these are passed only so
+ * the device stops holding photographs the traveller has removed.
+ */
+export async function deleteMemory(
+  tripId: string,
+  memoryId: string,
+  photoUrls: readonly (string | null)[] = [],
+) {
+  await memoryRequest<void>(`/trips/${tripId}/memories/${memoryId}`, { method: 'DELETE' });
+  await forgetCachedMediaUrls(photoUrls);
 }
 
-export function deleteMemoryPhoto(tripId: string, memoryId: string, photoId: string) {
-  return memoryRequest<void>(`/trips/${tripId}/memories/${memoryId}/photos/${photoId}`, {
+export async function deleteMemoryPhoto(
+  tripId: string,
+  memoryId: string,
+  photoId: string,
+  photoUrl?: string | null,
+) {
+  await memoryRequest<void>(`/trips/${tripId}/memories/${memoryId}/photos/${photoId}`, {
     method: 'DELETE',
   });
+  await forgetCachedMediaUrls([photoUrl]);
 }
 
 /** Reorders one Memory's own photos; every other Memory's photos are untouched. */

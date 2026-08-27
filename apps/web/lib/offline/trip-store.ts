@@ -15,6 +15,7 @@ import type { TripInfoEntry, TripInfoInput, TripInfoResponse } from '@/lib/trip-
 import type { Trip } from '@/lib/trips/api';
 import { applyItineraryDayMove } from '@/lib/itinerary/day-move';
 import { itemSortMinute, reslotItemByTime } from '@/lib/itinerary/item-order';
+import { PRIVATE_MEDIA_CACHES } from '@/lib/media/storage-cache-key';
 
 const DATABASE_NAME = 'trove-offline';
 const DATABASE_VERSION = 4;
@@ -657,7 +658,10 @@ export async function clearAllOfflineTripData() {
     const cacheNames = await caches.keys();
     await Promise.all(
       cacheNames
-        .filter((cacheName) => cacheName.includes('trove-pwa-trip-mode'))
+        .filter(
+          (cacheName) =>
+            cacheName.includes('trove-pwa-trip-mode') || PRIVATE_MEDIA_CACHES.includes(cacheName),
+        )
         .map((cacheName) => caches.delete(cacheName)),
     );
   }

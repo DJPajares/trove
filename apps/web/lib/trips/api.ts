@@ -6,6 +6,7 @@ import {
   saveTripSnapshot,
   setOfflineApiReachable,
 } from '@/lib/offline/trip-store';
+import { forgetCachedMediaPath } from '@/lib/media/storage-cache-key';
 
 export type TripDestination = {
   id: string;
@@ -207,4 +208,6 @@ export async function uploadTripCover(file: File) {
 export async function removeTripCover(path: string) {
   const { supabase } = await getAuthContext();
   await supabase.storage.from('trip-covers').remove([path]);
+  // A removed cover must not survive in the device's image cache.
+  await forgetCachedMediaPath('trip-covers', path);
 }

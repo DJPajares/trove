@@ -201,7 +201,7 @@ export function MemoryEditorDialog({
     if (!memory || !photoToDelete) return;
     setBusyPhotoId(photoToDelete.id);
     try {
-      await deleteMemoryPhoto(tripId, memory.id, photoToDelete.id);
+      await deleteMemoryPhoto(tripId, memory.id, photoToDelete.id, photoToDelete.url);
       setExistingPhotos((current) => current.filter((photo) => photo.id !== photoToDelete.id));
       setPhotoToDelete(null);
     } catch {
@@ -215,7 +215,11 @@ export function MemoryEditorDialog({
     if (!memory) return;
     setDeleting(true);
     try {
-      await deleteMemory(tripId, memory.id);
+      await deleteMemory(
+        tripId,
+        memory.id,
+        existingPhotos.map((photo) => photo.url),
+      );
       setConfirmDelete(false);
       onDeleted?.();
     } catch {

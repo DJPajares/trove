@@ -3,13 +3,14 @@
 import {
   BedDouble,
   CalendarDays,
+  CheckCircle2,
+  ChevronDown,
   ChevronRight,
   CircleAlert,
   ClipboardCheck,
   Info,
   MapPinned,
   ReceiptText,
-  Route,
   StickyNote,
   Users,
 } from 'lucide-react';
@@ -22,8 +23,15 @@ import { PageState } from '@/components/page-state';
 import { OfflineReadyStatus } from '@/components/offline-ready-status';
 import { TripNotificationControl } from '@/components/trip-notification-control';
 import { useTripModePreview } from '@/components/trip-mode-shell';
+import {
+  ManageTasksLink,
+  TripModeTaskList,
+  TripModeTasksNotice,
+  useTripModeTasks,
+} from '@/components/trip-mode-tasks';
 import { useOfflineDataRefreshKey } from '@/components/trip-sync-status';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Item,
   ItemContent,
@@ -41,7 +49,8 @@ import {
 } from '@/lib/itinerary/api';
 import { fetchExpenses } from '@/lib/expenses/api';
 import { fetchReservations } from '@/lib/reservations/api';
-import { fetchTasks } from '@/lib/tasks/api';
+import type { Task, TasksResponse } from '@/lib/tasks/api';
+import { sortTripModeTasks, tripTasks } from '@/lib/tasks/trip-mode';
 import { fetchTripInfo, type TripInfoEntry } from '@/lib/trip-info/api';
 import { fetchTrip, type Trip } from '@/lib/trips/api';
 
@@ -60,17 +69,15 @@ type Tool = {
     | 'itineraryDescription'
     | 'notesDescription'
     | 'placesDescription'
-    | 'reservationsDescription'
-    | 'tasksDescription';
+    | 'reservationsDescription';
   href: string;
   icon: typeof CalendarDays;
-  key: 'expenses' | 'info' | 'itinerary' | 'notes' | 'places' | 'reservations' | 'tasks';
+  key: 'expenses' | 'info' | 'itinerary' | 'notes' | 'places' | 'reservations';
 };
 
 type SupportingCounts = {
   expenses: number | null;
   reservations: number | null;
-  tasks: number | null;
 };
 
 function TripViewSkeleton({ label }: Readonly<{ label: string }>) {
@@ -91,18 +98,88 @@ function TripViewSkeleton({ label }: Readonly<{ label: string }>) {
   );
 }
 
+function TaskGroup({ label, tasks }: Readonly<{ label: string; tasks: readonly Task[] }>) {
+  if (!tasks.length) return null;
+  return (
+    <div className="py-3 first:pt-0 last:pb-0">
+      <p className="mb-1.5 text-xs font-semibold text-foreground">{label}</p>
+      <TripModeTaskList tasks={tasks} />
+    </div>
+  );
+}
+
+function ContextualTaskGroups({ data }: Readonly<{ data: TasksResponse }>) {
+  const t = useTranslations('tripMode.tasks');
+  const locale = useLocale();
+  const formatDate = (date: string) =>
+    new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
+      new Date(`${date}T00:00:00.000Z`),
+    );
+  const itemTasks = (itemId: string) =>
+    sortTripModeTasks(
+      data.tasks.filter(
+        (task) => task.context.kind === 'item' && task.context.itineraryItemId === itemId,
+      ),
+    );
+  const dayGroups = data.contexts.days
+    .map((day) => ({
+      day,
+      dayTasks: sortTripModeTasks(
+        data.tasks.filter(
+          (task) => task.context.kind === 'day' && task.context.itineraryDayId === day.id,
+        ),
+      ),
+      items: data.contexts.items
+        .filter((item) => item.itineraryDayId === day.id)
+        .map((item) => ({ ...item, tasks: itemTasks(item.id) }))
+        .filter((item) => item.tasks.length),
+    }))
+    .filter((group) => group.dayTasks.length || group.items.length);
+  const unscheduledItems = data.contexts.items
+    .filter((item) => item.itineraryDayId === null)
+    .map((item) => ({ ...item, tasks: itemTasks(item.id) }))
+    .filter((item) => item.tasks.length);
+
+  return (
+    <div className="divide-y divide-border-subtle border-y border-border-subtle py-1">
+      {dayGroups.map(({ day, dayTasks, items }) => (
+        <section className="py-4" key={day.id}>
+          <h4 className="text-sm font-semibold text-foreground">{formatDate(day.date)}</h4>
+          <div className="mt-2 divide-y divide-border-subtle">
+            <TaskGroup label={t('dayTasks')} tasks={dayTasks} />
+            {items.map((item) => (
+              <TaskGroup key={item.id} label={item.label} tasks={item.tasks} />
+            ))}
+          </div>
+        </section>
+      ))}
+      {unscheduledItems.length ? (
+        <section className="py-4">
+          <h4 className="text-sm font-semibold text-foreground">{t('unscheduled')}</h4>
+          <div className="mt-2 divide-y divide-border-subtle">
+            {unscheduledItems.map((item) => (
+              <TaskGroup key={item.id} label={item.label} tasks={item.tasks} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
 export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripMode.views.trip');
   const itineraryT = useTranslations('itinerary');
+  const tasksT = useTranslations('tripMode.tasks');
   const locale = useLocale();
   const { contextOptions } = useTripModePreview();
+  const tripModeTasks = useTripModeTasks();
   const offlineDataRefreshKey = useOfflineDataRefreshKey();
   const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
   const [pinnedInfo, setPinnedInfo] = useState<TripInfoEntry[]>([]);
   const [supportingCounts, setSupportingCounts] = useState<SupportingCounts>({
     expenses: null,
     reservations: null,
-    tasks: null,
   });
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -110,7 +187,7 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
     let active = true;
     setState({ data: null, status: 'loading' });
     setPinnedInfo([]);
-    setSupportingCounts({ expenses: null, reservations: null, tasks: null });
+    setSupportingCounts({ expenses: null, reservations: null });
 
     void Promise.all([
       fetchTripModeContext(tripId, contextOptions()),
@@ -132,25 +209,19 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
         // Trip Info is a supporting destination. Its separate failure should not hide the trip.
       });
 
-    void Promise.allSettled([
-      fetchReservations(tripId),
-      fetchTasks(tripId),
-      fetchExpenses(tripId),
-    ]).then(([reservationsResult, tasksResult, expensesResult]) => {
-      if (!active) return;
-      setSupportingCounts({
-        expenses:
-          expensesResult.status === 'fulfilled' ? expensesResult.value.expenses.length : null,
-        reservations:
-          reservationsResult.status === 'fulfilled'
-            ? reservationsResult.value.reservations.length
-            : null,
-        tasks:
-          tasksResult.status === 'fulfilled'
-            ? tasksResult.value.tasks.filter((task) => !task.completed).length
-            : null,
-      });
-    });
+    void Promise.allSettled([fetchReservations(tripId), fetchExpenses(tripId)]).then(
+      ([reservationsResult, expensesResult]) => {
+        if (!active) return;
+        setSupportingCounts({
+          expenses:
+            expensesResult.status === 'fulfilled' ? expensesResult.value.expenses.length : null,
+          reservations:
+            reservationsResult.status === 'fulfilled'
+              ? reservationsResult.value.reservations.length
+              : null,
+        });
+      },
+    );
 
     return () => {
       active = false;
@@ -234,12 +305,6 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
       key: 'reservations',
     },
     {
-      descriptionKey: 'tasksDescription',
-      href: `/trips/${tripId}/tasks`,
-      icon: Route,
-      key: 'tasks',
-    },
-    {
       descriptionKey: 'expensesDescription',
       href: `/trips/${tripId}/expenses`,
       icon: ReceiptText,
@@ -258,6 +323,10 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
       key: 'info',
     },
   ];
+  const allTasks = tripModeTasks.data?.tasks ?? [];
+  const tripWideTasks = tripTasks(allTasks);
+  const contextualTaskCount = allTasks.filter((task) => task.context.kind !== 'trip').length;
+  const openTripTaskCount = tripWideTasks.filter((task) => !task.completed).length;
 
   return (
     <div className="space-y-8 pb-2 sm:space-y-10">
@@ -305,6 +374,54 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
           </div>
         </dl>
       </section>
+
+      <EditorialSection
+        actions={
+          <>
+            <Button
+              disabled={tripModeTasks.status !== 'ready'}
+              onClick={() => tripModeTasks.openCreate({ kind: 'trip' })}
+              size="sm"
+            >
+              {tasksT('add')}
+            </Button>
+            <ManageTasksLink tripId={tripId} />
+          </>
+        }
+        description={tasksT('tripDescription', { count: openTripTaskCount })}
+        headingId="trip-mode-tasks-heading"
+        headingLevel={3}
+        title={tasksT('tripTitle')}
+      >
+        <TripModeTasksNotice />
+        {tripModeTasks.status === 'loading' ? (
+          <Skeleton className="h-20 w-full" />
+        ) : (
+          <TripModeTaskList emptyText={tasksT('tripEmpty')} tasks={tripWideTasks} />
+        )}
+        {tripModeTasks.data && contextualTaskCount ? (
+          <Collapsible className="border-t border-border-subtle pt-2">
+            <CollapsibleTrigger className="group w-full justify-between gap-3 py-2 text-left">
+              <span className="inline-flex items-center gap-2 text-foreground">
+                <CheckCircle2 aria-hidden="true" className="text-brand" />
+                {tasksT('byDayAndPlace')}
+              </span>
+              <span className="inline-flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                {tasksT('taskCount', { count: contextualTaskCount })}
+                <ChevronDown
+                  aria-hidden="true"
+                  className="transition-transform duration-[var(--motion-standard)] group-data-panel-open:rotate-180 motion-reduce:transition-none"
+                />
+              </span>
+            </CollapsibleTrigger>
+            <CollapsiblePanel>
+              <div className="pt-2">
+                <ContextualTaskGroups data={tripModeTasks.data} />
+              </div>
+            </CollapsiblePanel>
+          </Collapsible>
+        ) : null}
+      </EditorialSection>
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
         <EditorialSection
@@ -486,13 +603,11 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
                           ? t('tools.reservationsCount', {
                               count: supportingCounts.reservations,
                             })
-                          : key === 'tasks' && supportingCounts.tasks !== null
-                            ? t('tools.tasksCount', { count: supportingCounts.tasks })
-                            : key === 'expenses' && supportingCounts.expenses !== null
-                              ? t('tools.expensesCount', { count: supportingCounts.expenses })
-                              : key === 'notes'
-                                ? t('tools.notesCount', { count: notes.length })
-                                : t(`tools.${descriptionKey}`)}
+                          : key === 'expenses' && supportingCounts.expenses !== null
+                            ? t('tools.expensesCount', { count: supportingCounts.expenses })
+                            : key === 'notes'
+                              ? t('tools.notesCount', { count: notes.length })
+                              : t(`tools.${descriptionKey}`)}
                     </ItemDescription>
                   </ItemContent>
                   <ChevronRight aria-hidden="true" className="size-4 text-muted-foreground" />

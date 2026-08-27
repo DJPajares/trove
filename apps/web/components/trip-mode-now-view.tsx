@@ -25,6 +25,11 @@ import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
 import { TripModeMemoryDialog } from '@/components/trip-mode-memory-dialog';
 import { useTripModePreview } from '@/components/trip-mode-shell';
+import {
+  TripModeTaskList,
+  TripModeTasksNotice,
+  useTripModeTasks,
+} from '@/components/trip-mode-tasks';
 import { useOfflineDataRefreshKey, useOnlineStatus } from '@/components/trip-sync-status';
 import { TripWeatherContext } from '@/components/trip-weather-context';
 import { Button } from '@/components/ui/button';
@@ -37,16 +42,13 @@ import {
   type TripModeContext,
 } from '@/lib/itinerary/api';
 import { formatItineraryTimeRange } from '@/lib/itinerary/item-timing';
-import {} from '@/lib/saved/api';
 import { fetchReservations, type Reservation } from '@/lib/reservations/api';
-import { fetchTasks, type Task } from '@/lib/tasks/api';
+import { defaultTripModeTaskContext, nowTaskGroups } from '@/lib/tasks/trip-mode';
 
 type LoadState =
   | { context: null; status: 'error' }
   | { context: null; status: 'loading' }
   | { context: TripModeContext; status: 'ready' };
-
-type SupportingContext = { reservations: Reservation[]; tasks: Task[] };
 
 function providerId(item: ItineraryItem | null) {
   return item?.tripPlace?.place.providerRefs.find((ref) => ref.provider === 'google')
@@ -108,15 +110,17 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripMode.views.now');
   const itineraryT = useTranslations('itinerary');
   const memoryTranslations = useTranslations('memories.capture');
+  const tasksT = useTranslations('tripMode.tasks');
   const [memoryOpen, setMemoryOpen] = useState(false);
   const locale = useLocale();
   const { preferences } = usePreferences();
   const online = useOnlineStatus();
   const offlineDataRefreshKey = useOfflineDataRefreshKey();
   const { contextOptions, isPreview, withPreviewHref } = useTripModePreview();
+  const tripModeTasks = useTripModeTasks();
   const [reloadKey, setReloadKey] = useState(0);
   const [state, setState] = useState<LoadState>({ context: null, status: 'loading' });
-  const [supporting, setSupporting] = useState<SupportingContext>({ reservations: [], tasks: [] });
+  const [reservations, setReservations] = useState<Reservation[]>([]);
   // A preview stands at a fixed hypothetical time, so it must never tick.
   const clockRefreshKey = useTripModeClock({
     context: state.context,
@@ -142,17 +146,12 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
 
   useEffect(() => {
     let active = true;
-    setSupporting({ reservations: [], tasks: [] });
-    void Promise.allSettled([fetchReservations(tripId), fetchTasks(tripId)]).then(
-      ([reservationsResult, tasksResult]) => {
-        if (!active) return;
-        setSupporting({
-          reservations:
-            reservationsResult.status === 'fulfilled' ? reservationsResult.value.reservations : [],
-          tasks: tasksResult.status === 'fulfilled' ? tasksResult.value.tasks : [],
-        });
-      },
-    );
+    setReservations([]);
+    void fetchReservations(tripId)
+      .then((result) => {
+        if (active) setReservations(result.reservations);
+      })
+      .catch(() => undefined);
     return () => {
       active = false;
     };
@@ -206,11 +205,6 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
       minute: '2-digit',
       timeZone,
     }).format(new Date(value));
-  const dateFormat = (value: string) =>
-    new Intl.DateTimeFormat(locale, {
-      dateStyle: 'medium',
-      timeZone: 'UTC',
-    }).format(new Date(`${value}T00:00:00.000Z`));
   const formatSchedule = (item: ItineraryItem) => {
     if (item.localStartTime) {
       return formatItineraryTimeRange(item, locale, preferences.timeFormat);
@@ -289,36 +283,15 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
     reservation.checkInDate ??
     null;
   const relevantReservation =
-    supporting.reservations.find((reservation) => reservation.itineraryItem?.id === nextItem?.id) ??
-    supporting.reservations.find(
-      (reservation) => reservation.itineraryItem?.id === currentItem?.id,
-    ) ??
-    supporting.reservations.find(
+    reservations.find((reservation) => reservation.itineraryItem?.id === nextItem?.id) ??
+    reservations.find((reservation) => reservation.itineraryItem?.id === currentItem?.id) ??
+    reservations.find(
       (reservation) =>
         reservationDate(reservation) === readyContext.selectedDate ||
         reservation.applicableDays.some((day) => day.id === selectedDayId),
     ) ??
     null;
-  const relevantTask =
-    supporting.tasks.find(
-      (task) =>
-        !task.completed &&
-        task.context.kind === 'item' &&
-        task.context.itineraryItemId === nextItem?.id,
-    ) ??
-    supporting.tasks.find(
-      (task) =>
-        !task.completed &&
-        task.context.kind === 'item' &&
-        task.context.itineraryItemId === currentItem?.id,
-    ) ??
-    supporting.tasks.find(
-      (task) =>
-        !task.completed &&
-        (task.dueDate === readyContext.selectedDate ||
-          (task.context.kind === 'day' && task.context.itineraryDayId === selectedDayId)),
-    ) ??
-    null;
+  const taskGroups = nowTaskGroups(tripModeTasks.data?.tasks ?? [], currentItem?.id, nextItem?.id);
 
   return (
     <div className="space-y-6">
@@ -527,58 +500,63 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
         selectedDate={readyContext.selectedDate}
       />
 
-      {relevantReservation || relevantTask ? (
+      <TripModeTasksNotice />
+
+      {taskGroups.length ? (
+        <section aria-labelledby="trip-mode-nearby-tasks-heading">
+          <h3 className="text-sm font-semibold text-foreground" id="trip-mode-nearby-tasks-heading">
+            {tasksT('nearbyTitle')}
+          </h3>
+          <div className="mt-2 divide-y divide-border border-y border-border">
+            {taskGroups.map((group) => {
+              const item = group.itemId === currentItem?.id ? currentItem : nextItem;
+              return (
+                <div className="py-3" key={`${group.kind}-${group.itemId}`}>
+                  <p className="text-xs font-semibold tracking-[0.08em] text-brand uppercase">
+                    {tasksT(group.kind)}
+                  </p>
+                  {item ? (
+                    <p className="mt-1 text-sm font-medium text-foreground">
+                      {itemName(item, t('placeFallback'))}
+                    </p>
+                  ) : null}
+                  <TripModeTaskList className="mt-2" tasks={group.tasks} />
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {relevantReservation ? (
         <section aria-labelledby="trip-mode-context-heading">
           <h3 className="text-sm font-semibold text-foreground" id="trip-mode-context-heading">
             {t('supportingContext')}
           </h3>
           <ul className="mt-2 border-y border-border">
-            {relevantReservation ? (
-              <li>
-                <Link
-                  className="flex min-h-14 items-center gap-3 rounded-[var(--radius-sm)] py-2.5 outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
-                  href={`/trips/${tripId}/reservations`}
-                >
-                  <ClipboardCheck aria-hidden="true" className="size-5 shrink-0 text-brand" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-foreground">
-                      {relevantReservation.title}
-                    </span>
-                    {relevantReservation.bookingReference || relevantReservation.localTime ? (
-                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                        {relevantReservation.bookingReference
-                          ? t('bookingReference', {
-                              reference: relevantReservation.bookingReference,
-                            })
-                          : relevantReservation.localTime}
-                      </span>
-                    ) : null}
+            <li>
+              <Link
+                className="flex min-h-14 items-center gap-3 rounded-[var(--radius-sm)] py-2.5 outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+                href={`/trips/${tripId}/reservations`}
+              >
+                <ClipboardCheck aria-hidden="true" className="size-5 shrink-0 text-brand" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-foreground">
+                    {relevantReservation.title}
                   </span>
-                  <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-text-subtle" />
-                </Link>
-              </li>
-            ) : null}
-            {relevantTask ? (
-              <li className={relevantReservation ? 'border-t border-border' : undefined}>
-                <Link
-                  className="flex min-h-14 items-center gap-3 rounded-[var(--radius-sm)] py-2.5 outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
-                  href={`/trips/${tripId}/tasks`}
-                >
-                  <ListChecks aria-hidden="true" className="size-5 shrink-0 text-brand" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-foreground">
-                      {relevantTask.label}
-                    </span>
+                  {relevantReservation.bookingReference || relevantReservation.localTime ? (
                     <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                      {relevantTask.dueDate
-                        ? t('taskDue', { date: dateFormat(relevantTask.dueDate) })
-                        : t('taskContext')}
+                      {relevantReservation.bookingReference
+                        ? t('bookingReference', {
+                            reference: relevantReservation.bookingReference,
+                          })
+                        : relevantReservation.localTime}
                     </span>
-                  </span>
-                  <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-text-subtle" />
-                </Link>
-              </li>
-            ) : null}
+                  ) : null}
+                </span>
+                <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-text-subtle" />
+              </Link>
+            </li>
           </ul>
         </section>
       ) : null}
@@ -586,26 +564,40 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
       {/* What the day offers doing, after the day has been described. When
           there is nothing next, the empty state has already offered Today and
           this row does not offer it a second time. */}
-      {hasNext || readyContext.day ? (
-        <div className="flex flex-wrap gap-2 pt-4">
-          {hasNext ? (
-            <Button
-              nativeButton={false}
-              render={<Link href={withPreviewHref(`/trips/${tripId}/mode/today`)} />}
-              variant="outline"
-            >
-              <CalendarDays aria-hidden="true" data-icon="inline-start" />
-              {t('openToday')}
-            </Button>
-          ) : null}
-          {readyContext.day ? (
-            <Button onClick={() => setMemoryOpen(true)} variant="outline">
-              <Sparkles aria-hidden="true" data-icon="inline-start" />
-              {memoryTranslations('quickAction')}
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="flex flex-wrap gap-2 pt-4">
+        <Button
+          disabled={tripModeTasks.status !== 'ready'}
+          onClick={() =>
+            tripModeTasks.openCreate(
+              defaultTripModeTaskContext({
+                currentItemId: currentItem?.id,
+                dayId: readyContext.day?.id,
+                nextItemId: nextItem?.id,
+              }),
+            )
+          }
+          variant="outline"
+        >
+          <ListChecks aria-hidden="true" data-icon="inline-start" />
+          {tasksT('add')}
+        </Button>
+        {hasNext ? (
+          <Button
+            nativeButton={false}
+            render={<Link href={withPreviewHref(`/trips/${tripId}/mode/today`)} />}
+            variant="outline"
+          >
+            <CalendarDays aria-hidden="true" data-icon="inline-start" />
+            {t('openToday')}
+          </Button>
+        ) : null}
+        {readyContext.day ? (
+          <Button onClick={() => setMemoryOpen(true)} variant="outline">
+            <Sparkles aria-hidden="true" data-icon="inline-start" />
+            {memoryTranslations('quickAction')}
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

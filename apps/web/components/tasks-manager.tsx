@@ -1,14 +1,13 @@
 'use client';
 
-import { CircleAlert, ClipboardCheck, Pencil, Plus, Trash2, Wrench } from 'lucide-react';
+import { CircleAlert, ClipboardCheck, Pencil, Plus, Wrench } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { DatePicker } from '@/components/date-picker';
 import { EditorialSection } from '@/components/editorial-section';
 import { PageState } from '@/components/page-state';
-import { TimeInput } from '@/components/time-input';
+import { TaskEditorSheet, type TaskEditorSubmission } from '@/components/task-editor-sheet';
 import { TripSectionHeader } from '@/components/trip-section-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -23,8 +22,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
 import {
   Item,
   ItemActions,
@@ -34,22 +31,6 @@ import {
   ItemMedia,
   ItemTitle,
 } from '@/components/ui/item';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
-import { Textarea } from '@/components/ui/textarea';
 import {
   createTask,
   deleteTask,
@@ -62,35 +43,6 @@ import {
 
 type EditorState =
   { mode: 'closed'; task: null } | { mode: 'create'; task: null } | { mode: 'edit'; task: Task };
-type TaskForm = {
-  context: string;
-  dueDate: string;
-  dueLocalTime: string;
-  label: string;
-  note: string;
-};
-
-function contextValue(context: TaskContext) {
-  if (context.kind === 'day') return `day:${context.itineraryDayId}`;
-  if (context.kind === 'item') return `item:${context.itineraryItemId}`;
-  return 'trip';
-}
-
-function contextFromValue(value: string): TaskContext {
-  if (value.startsWith('day:')) return { itineraryDayId: value.slice(4), kind: 'day' };
-  if (value.startsWith('item:')) return { itineraryItemId: value.slice(5), kind: 'item' };
-  return { kind: 'trip' };
-}
-
-function createForm(task: Task | null): TaskForm {
-  return {
-    context: task ? contextValue(task.context) : 'trip',
-    dueDate: task?.dueDate ?? '',
-    dueLocalTime: task?.dueLocalTime ?? '',
-    label: task?.label ?? '',
-    note: task?.note ?? '',
-  };
-}
 
 export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tasks');
@@ -99,9 +51,6 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
   const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState>({ mode: 'closed', task: null });
-  const [form, setForm] = useState<TaskForm>(() => createForm(null));
-  const [formError, setFormError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [changingTaskId, setChangingTaskId] = useState<string | null>(null);
@@ -124,21 +73,11 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
     () => new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' }),
     [locale],
   );
-  const longDateFormatter = useMemo(
-    () =>
-      new Intl.DateTimeFormat(locale, {
-        day: 'numeric',
-        month: 'long',
-        timeZone: 'UTC',
-        year: 'numeric',
-      }),
-    [locale],
-  );
   const openTasks = data?.tasks.filter((task) => !task.completed) ?? [];
   const completedTasks = data?.tasks.filter((task) => task.completed) ?? [];
 
-  function formatDate(value: string, long = false) {
-    return (long ? longDateFormatter : dateFormatter).format(new Date(`${value}T00:00:00.000Z`));
+  function formatDate(value: string) {
+    return dateFormatter.format(new Date(`${value}T00:00:00.000Z`));
   }
 
   function contextLabel(context: TaskContext) {
@@ -152,60 +91,20 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   function openCreate() {
-    setForm(createForm(null));
-    setFormError(null);
     setEditor({ mode: 'create', task: null });
   }
 
   function openEdit(task: Task) {
-    setForm(createForm(task));
-    setFormError(null);
     setEditor({ mode: 'edit', task });
   }
 
   function closeEditor() {
     setEditor({ mode: 'closed', task: null });
-    setFormError(null);
   }
 
-  function updateForm<Key extends keyof TaskForm>(key: Key, value: TaskForm[Key]) {
-    setForm((current) => ({ ...current, [key]: value }));
-    setFormError(null);
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const label = form.label.trim();
-    if (!label) {
-      setFormError(t('labelRequired'));
-      return;
-    }
-    if (!form.dueDate && form.dueLocalTime) {
-      setFormError(t('dueTimeRequiresDate'));
-      return;
-    }
-    setSaving(true);
-    setFormError(null);
-    const input = {
-      context: contextFromValue(form.context),
-      dueDate: form.dueDate || null,
-      dueLocalTime: form.dueLocalTime || null,
-      label,
-      note: form.note.trim() || null,
-    };
-    try {
-      if (editor.mode === 'create') {
-        await createTask(tripId, input);
-      } else if (editor.mode === 'edit') {
-        await updateTask(tripId, editor.task.id, input);
-      }
-      await refresh();
-      closeEditor();
-    } catch {
-      setFormError(t('saveError'));
-    } finally {
-      setSaving(false);
-    }
+  async function saveEditor(input: TaskEditorSubmission, task: Task | null) {
+    if (task) return (await updateTask(tripId, task.id, input)).task;
+    return (await createTask(tripId, input)).task;
   }
 
   async function handleCompletion(task: Task) {
@@ -387,125 +286,17 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
         </EditorialSection>
       ) : null}
 
-      <Sheet onOpenChange={(open) => !open && closeEditor()} open={editor.mode !== 'closed'}>
-        <SheetContent
-          className="w-full md:data-[side=right]:w-[min(38rem,calc(100%-0.5rem))]"
-          closeLabel={t('close')}
-        >
-          <SheetHeader className="border-b">
-            <SheetTitle>{editor.mode === 'edit' ? t('editTitle') : t('createTitle')}</SheetTitle>
-            <SheetDescription>
-              {editor.mode === 'edit' ? t('editDescription') : t('createDescription')}
-            </SheetDescription>
-          </SheetHeader>
-          {editor.mode !== 'closed' ? (
-            <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-              <div className="min-h-0 flex-1 overflow-y-auto p-5">
-                <FieldGroup>
-                  {formError ? (
-                    <Alert role="alert" variant="destructive">
-                      <CircleAlert aria-hidden="true" />
-                      <AlertDescription>{formError}</AlertDescription>
-                    </Alert>
-                  ) : null}
-                  <Field>
-                    <FieldLabel htmlFor="task-label">{t('label')}</FieldLabel>
-                    <Input
-                      id="task-label"
-                      maxLength={200}
-                      onChange={(event) => updateForm('label', event.target.value)}
-                      placeholder={t('labelPlaceholder')}
-                      required
-                      value={form.label}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="task-context">{t('context')}</FieldLabel>
-                    <Select
-                      onValueChange={(value) => updateForm('context', value ?? 'trip')}
-                      value={form.context}
-                    >
-                      <SelectTrigger className="w-full" id="task-context">
-                        <SelectValue>{contextLabel(contextFromValue(form.context))}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent align="start">
-                        <SelectItem value="trip">{t('contextTrip')}</SelectItem>
-                        {data.contexts.days.map((day) => (
-                          <SelectItem key={day.id} value={`day:${day.id}`}>
-                            {t('contextDay', { date: formatDate(day.date, true) })}
-                          </SelectItem>
-                        ))}
-                        {data.contexts.items.map((item) => (
-                          <SelectItem key={item.id} value={`item:${item.id}`}>
-                            {t('contextItem', { label: item.label })}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FieldDescription>{t('contextHint')}</FieldDescription>
-                  </Field>
-                  <div className="grid gap-5 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel>{t('dueDateLabel')}</FieldLabel>
-                      <DatePicker
-                        id="task-due-date"
-                        label={t('dueDateLabel')}
-                        onChange={(value) => {
-                          updateForm('dueDate', value);
-                          if (!value) updateForm('dueLocalTime', '');
-                        }}
-                        value={form.dueDate}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="task-due-time">{t('dueTimeLabel')}</FieldLabel>
-                      <TimeInput
-                        disabled={!form.dueDate}
-                        id="task-due-time"
-                        onValueChange={(value) => updateForm('dueLocalTime', value)}
-                        value={form.dueLocalTime}
-                      />
-                    </Field>
-                  </div>
-                  <FieldDescription>{t('dueTimeHint')}</FieldDescription>
-                  <Field>
-                    <FieldLabel htmlFor="task-note">{t('note')}</FieldLabel>
-                    <Textarea
-                      id="task-note"
-                      maxLength={5000}
-                      onChange={(event) => updateForm('note', event.target.value)}
-                      placeholder={t('notePlaceholder')}
-                      value={form.note}
-                    />
-                  </Field>
-                </FieldGroup>
-              </div>
-              <SheetFooter className="sm:flex-row sm:items-center sm:justify-between">
-                {editor.mode === 'edit' ? (
-                  <Button
-                    onClick={() => setTaskToDelete(editor.task)}
-                    type="button"
-                    variant="destructive"
-                  >
-                    <Trash2 aria-hidden="true" data-icon="inline-start" />
-                    {t('deleteTask')}
-                  </Button>
-                ) : (
-                  <span />
-                )}
-                <div className="flex flex-col-reverse gap-2 sm:flex-row">
-                  <Button disabled={saving} onClick={closeEditor} type="button" variant="outline">
-                    {t('cancel')}
-                  </Button>
-                  <Button disabled={saving} type="submit">
-                    {saving ? t('saving') : editor.mode === 'edit' ? t('save') : t('addTask')}
-                  </Button>
-                </div>
-              </SheetFooter>
-            </form>
-          ) : null}
-        </SheetContent>
-      </Sheet>
+      {editor.mode !== 'closed' ? (
+        <TaskEditorSheet
+          contexts={data.contexts}
+          onDeleteRequest={setTaskToDelete}
+          onOpenChange={(open) => !open && closeEditor()}
+          onSaved={refresh}
+          onSubmit={saveEditor}
+          open
+          task={editor.task}
+        />
+      ) : null}
 
       <AlertDialog
         onOpenChange={(open) => !open && setTaskToDelete(null)}

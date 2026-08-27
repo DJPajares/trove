@@ -15,6 +15,7 @@ import { TimeInput } from '@/components/time-input';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripSyncStatus } from '@/components/trip-sync-status';
 import { TripMedia } from '@/components/trip-media';
+import { TripModeTasksProvider } from '@/components/trip-mode-tasks';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import {
@@ -431,140 +432,142 @@ export function TripModeShell({
 
   return (
     <TripModePreviewProvider value={previewContext}>
-      <section
-        className="mx-auto w-full max-w-6xl space-y-5 sm:space-y-6"
-        data-slot="trip-mode-shell"
-      >
-        <header className="space-y-3 sm:space-y-5">
-          <Button
-            className="-ml-2 text-muted-foreground hover:text-foreground"
-            nativeButton={false}
-            render={<Link href="/trips" />}
-            size="sm"
-            variant="ghost"
-          >
-            <ArrowLeft aria-hidden="true" data-icon="inline-start" />
-            {t('exit')}
-          </Button>
+      <TripModeTasksProvider tripId={trip.id}>
+        <section
+          className="mx-auto w-full max-w-6xl space-y-5 sm:space-y-6"
+          data-slot="trip-mode-shell"
+        >
+          <header className="space-y-3 sm:space-y-5">
+            <Button
+              className="-ml-2 text-muted-foreground hover:text-foreground"
+              nativeButton={false}
+              render={<Link href="/trips" />}
+              size="sm"
+              variant="ghost"
+            >
+              <ArrowLeft aria-hidden="true" data-icon="inline-start" />
+              {t('exit')}
+            </Button>
 
-          {/* On a phone the trip's name is orientation, not the headline: the
+            {/* On a phone the trip's name is orientation, not the headline: the
               traveller came for what is happening now, and a 390x844 viewport
               only has so many rows before the itinerary has to appear. */}
-          <div className="flex items-center gap-3 sm:gap-4">
-            <TripMedia
-              alt=""
-              className="size-11 shrink-0 shadow-[var(--shadow-control)] sm:size-16"
-              sizes="64px"
-              source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl })}
-              variant="thumbnail"
-            />
-            <div className="min-w-0 flex-1">
-              <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
-                {previewSelection ? t('preview.label') : t('label')}
-              </p>
-              <h1 className="mt-0.5 break-words text-[length:var(--text-section-title)] leading-[1.15] font-semibold tracking-[-0.025em] text-foreground sm:text-[length:var(--text-page-title)] sm:leading-[1.08]">
-                {trip.name}
-              </h1>
-              <p className="mt-0.5 text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
-                {t('dateRange', {
-                  endDate: formatDate(trip.endDate),
-                  startDate: formatDate(trip.startDate),
-                })}
-              </p>
+            <div className="flex items-center gap-3 sm:gap-4">
+              <TripMedia
+                alt=""
+                className="size-11 shrink-0 shadow-[var(--shadow-control)] sm:size-16"
+                sizes="64px"
+                source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl })}
+                variant="thumbnail"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
+                  {previewSelection ? t('preview.label') : t('label')}
+                </p>
+                <h1 className="mt-0.5 break-words text-[length:var(--text-section-title)] leading-[1.15] font-semibold tracking-[-0.025em] text-foreground sm:text-[length:var(--text-page-title)] sm:leading-[1.08]">
+                  {trip.name}
+                </h1>
+                <p className="mt-0.5 text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
+                  {t('dateRange', {
+                    endDate: formatDate(trip.endDate),
+                    startDate: formatDate(trip.startDate),
+                  })}
+                </p>
+              </div>
+              <Button
+                className="hidden shrink-0 sm:inline-flex"
+                nativeButton={false}
+                render={<Link href={`/trips/${trip.id}/itinerary`} />}
+                variant="outline"
+              >
+                {t('openPlanning')}
+              </Button>
             </div>
-            <Button
-              className="hidden shrink-0 sm:inline-flex"
-              nativeButton={false}
-              render={<Link href={`/trips/${trip.id}/itinerary`} />}
-              variant="outline"
-            >
-              {t('openPlanning')}
-            </Button>
+          </header>
+
+          {previewSelection ? (
+            <TripModePreviewSummary
+              activityCounts={activityCounts}
+              endDate={trip.endDate}
+              onChange={updatePreview}
+              selection={previewSelection}
+              startDate={trip.startDate}
+            />
+          ) : null}
+
+          <TripSyncStatus tripId={trip.id} />
+
+          <nav
+            aria-label={t('navigation')}
+            className="sticky top-[calc(var(--safe-top)+var(--header-offset)+0.75rem)] z-[calc(var(--layer-sticky)-1)] -mx-1 rounded-[var(--radius-lg)] border border-border bg-background/95 p-1 shadow-[var(--shadow-control)] backdrop-blur supports-[backdrop-filter]:bg-background/88"
+            data-translucent-surface
+          >
+            <ul className="grid grid-cols-4 gap-1">
+              {tripModeViews.map(({ icon: Icon, key, path }) => {
+                const href = `${basePath}${path}`;
+                const active = pathname === href;
+
+                return (
+                  <li key={key}>
+                    <Link
+                      aria-current={active ? 'page' : undefined}
+                      className={cn(
+                        'flex min-h-11 items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-2 py-1.5 text-xs font-medium outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 sm:text-sm',
+                        active
+                          ? 'bg-secondary text-secondary-foreground'
+                          : 'text-muted-foreground hover:bg-surface-hover hover:text-foreground',
+                      )}
+                      href={withPreviewHref(href)}
+                    >
+                      <Icon aria-hidden="true" className="size-4" />
+                      <span>{t(`views.${key}.label`)}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+
+          <div className="min-h-[min(32rem,55dvh)] border-t border-border pt-6 sm:pt-8">
+            <TripModePlaceDetailsContext.Provider value={placeDetailsContext}>
+              {children}
+            </TripModePlaceDetailsContext.Provider>
           </div>
-        </header>
 
-        {previewSelection ? (
-          <TripModePreviewSummary
-            activityCounts={activityCounts}
-            endDate={trip.endDate}
-            onChange={updatePreview}
-            selection={previewSelection}
-            startDate={trip.startDate}
-          />
-        ) : null}
-
-        <TripSyncStatus tripId={trip.id} />
-
-        <nav
-          aria-label={t('navigation')}
-          className="sticky top-[calc(var(--safe-top)+var(--header-offset)+0.75rem)] z-[calc(var(--layer-sticky)-1)] -mx-1 rounded-[var(--radius-lg)] border border-border bg-background/95 p-1 shadow-[var(--shadow-control)] backdrop-blur supports-[backdrop-filter]:bg-background/88"
-          data-translucent-surface
-        >
-          <ul className="grid grid-cols-4 gap-1">
-            {tripModeViews.map(({ icon: Icon, key, path }) => {
-              const href = `${basePath}${path}`;
-              const active = pathname === href;
-
-              return (
-                <li key={key}>
-                  <Link
-                    aria-current={active ? 'page' : undefined}
-                    className={cn(
-                      'flex min-h-11 items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-2 py-1.5 text-xs font-medium outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 sm:text-sm',
-                      active
-                        ? 'bg-secondary text-secondary-foreground'
-                        : 'text-muted-foreground hover:bg-surface-hover hover:text-foreground',
-                    )}
-                    href={withPreviewHref(href)}
-                  >
-                    <Icon aria-hidden="true" className="size-4" />
-                    <span>{t(`views.${key}.label`)}</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-
-        <div className="min-h-[min(32rem,55dvh)] border-t border-border pt-6 sm:pt-8">
-          <TripModePlaceDetailsContext.Provider value={placeDetailsContext}>
-            {children}
-          </TripModePlaceDetailsContext.Provider>
-        </div>
-
-        {/* Day quality is a review of the plan, not an answer to "what do I need
+          {/* Day quality is a review of the plan, not an answer to "what do I need
             now". Above the view it was the largest single thing between a phone
             and its own itinerary. */}
-        {planScoreEnabled && previewSelection ? (
-          <TripModePreviewPlanScore
-            date={previewSelection.date}
-            revision={trip.updatedAt}
-            tripId={trip.id}
+          {planScoreEnabled && previewSelection ? (
+            <TripModePreviewPlanScore
+              date={previewSelection.date}
+              revision={trip.updatedAt}
+              tripId={trip.id}
+            />
+          ) : null}
+        </section>
+
+        {detailsPlace ? (
+          <PlaceDetailsSheet
+            editorialImages={detailsEditorialImages}
+            meta={[
+              detailsPlace.priority
+                ? {
+                    label: tripPlacesT('priorityLabel'),
+                    value: tripPlacesT(`priority.${detailsPlace.priority}`),
+                  }
+                : null,
+              detailsPlace.note ? { label: itineraryT('notes'), value: detailsPlace.note } : null,
+            ].filter((row): row is PlaceDetailsRow => row !== null)}
+            name={resolveTripPlaceName(detailsPlace, {
+              custom: itineraryT('customPlace'),
+              provider: itineraryT('providerPlace'),
+            })}
+            officialName={detailsPlace.customName?.trim() ? detailsProviderName : null}
+            onOpenChange={(open) => !open && setDetailsPlace(null)}
+            place={detailsPlace.place}
           />
         ) : null}
-      </section>
-
-      {detailsPlace ? (
-        <PlaceDetailsSheet
-          editorialImages={detailsEditorialImages}
-          meta={[
-            detailsPlace.priority
-              ? {
-                  label: tripPlacesT('priorityLabel'),
-                  value: tripPlacesT(`priority.${detailsPlace.priority}`),
-                }
-              : null,
-            detailsPlace.note ? { label: itineraryT('notes'), value: detailsPlace.note } : null,
-          ].filter((row): row is PlaceDetailsRow => row !== null)}
-          name={resolveTripPlaceName(detailsPlace, {
-            custom: itineraryT('customPlace'),
-            provider: itineraryT('providerPlace'),
-          })}
-          officialName={detailsPlace.customName?.trim() ? detailsProviderName : null}
-          onOpenChange={(open) => !open && setDetailsPlace(null)}
-          place={detailsPlace.place}
-        />
-      ) : null}
+      </TripModeTasksProvider>
     </TripModePreviewProvider>
   );
 }

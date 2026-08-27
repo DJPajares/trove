@@ -16,6 +16,7 @@ import {
   RotateCcw,
   SkipForward,
   StickyNote,
+  ListChecks,
   WalletCards,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -30,6 +31,11 @@ import { useTripModePlaceDetails, useTripModePreview } from '@/components/trip-m
 import { useOfflineDataRefreshKey, useOnlineStatus } from '@/components/trip-sync-status';
 import { TripModeMemoryDialog } from '@/components/trip-mode-memory-dialog';
 import { TripModePendingMemories } from '@/components/trip-mode-pending-memories';
+import {
+  TripModeTaskDisclosure,
+  TripModeTasksNotice,
+  useTripModeTasks,
+} from '@/components/trip-mode-tasks';
 import {
   TripModeScheduleFields,
   type TripModeSchedule,
@@ -73,15 +79,13 @@ import { buildDaySequence, resolveDailyBases } from '@/lib/itinerary/day-sequenc
 import { formatItineraryTimeRange } from '@/lib/itinerary/item-timing';
 import { scheduledPlaceUse } from '@/lib/itinerary/places';
 import { fetchReservations, type Reservation } from '@/lib/reservations/api';
-import { fetchTasks, type Task } from '@/lib/tasks/api';
+import { tasksForItem, todayTaskRollup } from '@/lib/tasks/trip-mode';
 import { cn } from '@/lib/utils';
 
 type LoadState =
   | { data: null; status: 'error' }
   | { data: null; status: 'loading' }
   | { data: { context: TripModeContext; itinerary: Itinerary }; status: 'ready' };
-
-type SupportingContext = { reservations: Reservation[]; tasks: Task[] };
 
 type UndoAction =
   | { itemId: string; kind: 'organize'; itineraryDayId: string; position: number }
@@ -135,12 +139,14 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripMode.views.today');
   const itineraryT = useTranslations('itinerary');
   const memoryTranslations = useTranslations('memories.capture');
+  const tasksT = useTranslations('tripMode.tasks');
   const locale = useLocale();
   const { preferences } = usePreferences();
   const online = useOnlineStatus();
   const offlineDataRefreshKey = useOfflineDataRefreshKey();
   const { contextOptions, isPreview } = useTripModePreview();
   const { openPlaceDetails } = useTripModePlaceDetails();
+  const tripModeTasks = useTripModeTasks();
   const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
   const [reloadKey, setReloadKey] = useState(0);
   const [mutatingItemId, setMutatingItemId] = useState<string | null>(null);
@@ -154,7 +160,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   const [schedule, setSchedule] = useState<TripModeSchedule>('none');
   const [exactTime, setExactTime] = useState('');
   const [scheduleError, setScheduleError] = useState<string | null>(null);
-  const [supporting, setSupporting] = useState<SupportingContext>({ reservations: [], tasks: [] });
+  const [reservations, setReservations] = useState<Reservation[]>([]);
 
   const refresh = useCallback(async () => {
     const [context, itinerary] = await Promise.all([
@@ -167,7 +173,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   useEffect(() => {
     let active = true;
     setState({ data: null, status: 'loading' });
-    setSupporting({ reservations: [], tasks: [] });
+    setReservations([]);
     setUndoAction(null);
     void Promise.all([fetchTripModeContext(tripId, contextOptions()), fetchItinerary(tripId)])
       .then(([context, itinerary]) => {
@@ -176,16 +182,11 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
       .catch(() => {
         if (active) setState({ data: null, status: 'error' });
       });
-    void Promise.allSettled([fetchReservations(tripId), fetchTasks(tripId)]).then(
-      ([reservationsResult, tasksResult]) => {
-        if (!active) return;
-        setSupporting({
-          reservations:
-            reservationsResult.status === 'fulfilled' ? reservationsResult.value.reservations : [],
-          tasks: tasksResult.status === 'fulfilled' ? tasksResult.value.tasks : [],
-        });
-      },
-    );
+    void fetchReservations(tripId)
+      .then((result) => {
+        if (active) setReservations(result.reservations);
+      })
+      .catch(() => undefined);
     return () => {
       active = false;
     };
@@ -205,24 +206,14 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   );
   const reservationsByItem = useMemo(() => {
     const grouped = new Map<string, Reservation[]>();
-    for (const reservation of supporting.reservations) {
+    for (const reservation of reservations) {
       if (!reservation.itineraryItem) continue;
       const current = grouped.get(reservation.itineraryItem.id) ?? [];
       current.push(reservation);
       grouped.set(reservation.itineraryItem.id, current);
     }
     return grouped;
-  }, [supporting.reservations]);
-  const openTasksByItem = useMemo(() => {
-    const grouped = new Map<string, Task[]>();
-    for (const task of supporting.tasks) {
-      if (task.completed || task.context.kind !== 'item') continue;
-      const current = grouped.get(task.context.itineraryItemId) ?? [];
-      current.push(task);
-      grouped.set(task.context.itineraryItemId, current);
-    }
-    return grouped;
-  }, [supporting.tasks]);
+  }, [reservations]);
 
   useEffect(() => {
     if (!day || !window.location.hash.startsWith('#trip-mode-item-')) return;
@@ -484,6 +475,12 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   // Legs are left out here: Trip Mode never asked the API for route segments,
   // and a day list is not worth a new round of them.
   const entries = buildDaySequence({ bases: resolveDailyBases({ day }), items: day.items });
+  const dailyTasks = todayTaskRollup({
+    date: day.date,
+    dayId: day.id,
+    itemIds: day.items.map((item) => item.id),
+    tasks: tripModeTasks.data?.tasks ?? [],
+  });
   const resolveBase = (tripPlaceId: string) => {
     const tripPlace = itinerary.tripPlaces.find((candidate) => candidate.id === tripPlaceId);
     if (!tripPlace) return null;
@@ -517,11 +514,24 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
         </div>
         {/* Adding to the day is the one action worth a control of its own here;
             the rest of what a day collects lives under the row it belongs to. */}
-        <Button onClick={() => setCreateItemOpen(true)} size="sm">
-          <Plus aria-hidden="true" data-icon="inline-start" />
-          {t('addItem')}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            disabled={tripModeTasks.status !== 'ready'}
+            onClick={() => tripModeTasks.openCreate({ itineraryDayId: day.id, kind: 'day' })}
+            size="sm"
+            variant="outline"
+          >
+            <ListChecks aria-hidden="true" data-icon="inline-start" />
+            {tasksT('add')}
+          </Button>
+          <Button onClick={() => setCreateItemOpen(true)} size="sm">
+            <Plus aria-hidden="true" data-icon="inline-start" />
+            {t('addItem')}
+          </Button>
+        </div>
       </header>
+
+      <TripModeTasksNotice />
 
       {day.notes ? (
         <section className="flex items-start gap-3 border-y border-border py-4">
@@ -617,7 +627,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
             const completed = item.travelStatus === 'completed';
             const upcomingIndex = upcomingItems.findIndex((candidate) => candidate.id === item.id);
             const linkedReservations = reservationsByItem.get(item.id) ?? [];
-            const linkedTasks = openTasksByItem.get(item.id) ?? [];
+            const linkedTasks = tasksForItem(tripModeTasks.data?.tasks ?? [], item.id);
             const tripPlace = item.tripPlace;
             const undoLabel = item.travelStatus === 'completed' ? t('undoComplete') : t('undoSkip');
 
@@ -661,6 +671,15 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                           <WalletCards aria-hidden="true" />
                           {t('addExpense')}
                         </DropdownMenuLinkItem>
+                        <DropdownMenuItem
+                          disabled={tripModeTasks.status !== 'ready'}
+                          onClick={() =>
+                            tripModeTasks.openCreate({ itineraryItemId: item.id, kind: 'item' })
+                          }
+                        >
+                          <ListChecks aria-hidden="true" />
+                          {tasksT('add')}
+                        </DropdownMenuItem>
                         {upcoming ? (
                           <>
                             <DropdownMenuItem
@@ -766,38 +785,32 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                         </span>
                       </span>
                     ) : null}
-                    {linkedReservations.length || linkedTasks.length ? (
+                    {linkedReservations.length ? (
                       <span className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
-                        {linkedReservations.length ? (
-                          <Link
-                            className="relative z-10 inline-flex min-h-8 items-center gap-1.5 rounded-[var(--radius-sm)] outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
-                            href={`/trips/${tripId}/reservations`}
-                          >
-                            <ClipboardCheck
-                              aria-hidden="true"
-                              className="size-3.5 shrink-0 text-brand"
-                            />
-                            <span className="min-w-0 truncate">{linkedReservations[0]!.title}</span>
-                            {linkedReservations.length > 1 ? (
-                              <span className="shrink-0 text-text-subtle">
-                                {t('moreReservations', { count: linkedReservations.length - 1 })}
-                              </span>
-                            ) : null}
-                          </Link>
-                        ) : null}
-                        {linkedTasks.length ? (
-                          <Link
-                            className="relative z-10 inline-flex min-h-8 items-center gap-1.5 rounded-[var(--radius-sm)] outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
-                            href={`/trips/${tripId}/tasks`}
-                          >
-                            <CheckCircle2
-                              aria-hidden="true"
-                              className="size-3.5 shrink-0 text-brand"
-                            />
-                            {t('linkedTasks', { count: linkedTasks.length })}
-                          </Link>
-                        ) : null}
+                        <Link
+                          className="relative z-10 inline-flex min-h-8 items-center gap-1.5 rounded-[var(--radius-sm)] outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+                          href={`/trips/${tripId}/reservations`}
+                        >
+                          <ClipboardCheck
+                            aria-hidden="true"
+                            className="size-3.5 shrink-0 text-brand"
+                          />
+                          <span className="min-w-0 truncate">{linkedReservations[0]!.title}</span>
+                          {linkedReservations.length > 1 ? (
+                            <span className="shrink-0 text-text-subtle">
+                              {t('moreReservations', { count: linkedReservations.length - 1 })}
+                            </span>
+                          ) : null}
+                        </Link>
                       </span>
+                    ) : null}
+                    {linkedTasks.length ? (
+                      <TripModeTaskDisclosure
+                        addContext={{ itineraryItemId: item.id, kind: 'item' }}
+                        className="relative z-10 mt-1.5 border-t border-border-subtle pt-1"
+                        tasks={linkedTasks}
+                        title={tasksT('stopTitle')}
+                      />
                     ) : null}
                   </>
                 }
@@ -867,6 +880,14 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
           title={t('emptyTitle')}
         />
       )}
+
+      <section className="border-y border-border py-1" aria-label={tasksT('todayTitle')}>
+        <TripModeTaskDisclosure
+          addContext={{ itineraryDayId: day.id, kind: 'day' }}
+          tasks={dailyTasks}
+          title={tasksT('todayTitle')}
+        />
+      </section>
 
       <div className="flex flex-wrap gap-2 pt-4">
         <Button

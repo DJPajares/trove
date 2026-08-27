@@ -1162,6 +1162,16 @@ function applyTaskOperation(data: TasksResponse, operation: OfflineMutationOpera
   return next;
 }
 
+export function applyOfflineTaskMutation(
+  data: TasksResponse,
+  operation:
+    | Extract<OfflineMutationOperation, { kind: 'task_create' }>
+    | Extract<OfflineMutationOperation, { kind: 'task_delete' }>
+    | Extract<OfflineMutationOperation, { kind: 'task_update' }>,
+) {
+  return applyTaskOperation(data, operation);
+}
+
 function applyTripInfoOperation(data: TripInfoResponse, operation: OfflineMutationOperation) {
   const next = structuredClone(data);
   if (operation.kind === 'trip_info_create') {

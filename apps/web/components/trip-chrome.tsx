@@ -160,30 +160,28 @@ export function TripChrome({
                   <Skeleton className="h-[calc(var(--text-page-title)*1.08)] w-3/5 max-w-sm bg-media-fallback-foreground/20" />
                 </div>
               )}
-              {/* A screen's own control on the cover sits opposite the dates, where
-                the overview seats its lifecycle badge. The name keeps the cover's
-                full measure either way, and when the control and the dates cannot
-                share a line the control drops below them rather than breaking them
-                in two — so the name and the dates read the same on every trip page,
-                whether or not a screen has put a control here. */}
-              <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
-                {trip ? (
-                  <p className="max-w-full shrink-0 text-[length:var(--text-metadata)] font-medium text-media-fallback-foreground/85 tabular-nums">
-                    {t('dateRange', {
-                      endDate: formatDate(trip.endDate),
-                      startDate: formatDate(trip.startDate),
-                    })}
-                    {' · '}
-                    {t(`lifecycle.${trip.lifecycle}`)}
-                  </p>
-                ) : (
-                  <Skeleton className="h-[length:var(--text-metadata)] w-2/5 max-w-56 bg-media-fallback-foreground/20" />
-                )}
-                <div
-                  className="pointer-events-auto -mr-1 ml-auto shrink-0 empty:hidden"
-                  ref={setCoverMetaSlot}
-                />
-              </div>
+              {trip ? (
+                <p className="text-[length:var(--text-metadata)] font-medium text-media-fallback-foreground/85 tabular-nums">
+                  {t('dateRange', {
+                    endDate: formatDate(trip.endDate),
+                    startDate: formatDate(trip.startDate),
+                  })}
+                  {' · '}
+                  {t(`lifecycle.${trip.lifecycle}`)}
+                </p>
+              ) : (
+                <Skeleton className="h-[length:var(--text-metadata)] w-2/5 max-w-56 bg-media-fallback-foreground/20" />
+              )}
+              {/* A screen's own control on the cover, such as Memories' rating, sits
+                out of flow at the corner the overview seats its lifecycle badge in.
+                In flow, a control taller than the date line would push the whole
+                bottom-anchored title/date block up, so the name would sit at a
+                different height depending on whether a screen has put a control
+                here. Positioned instead, it never moves the text at all. */}
+              <div
+                className="pointer-events-auto absolute right-5 bottom-5 empty:hidden md:right-7 md:bottom-7"
+                ref={setCoverMetaSlot}
+              />
             </div>
             <Link
               aria-label={t('backToTrips')}

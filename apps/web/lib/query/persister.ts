@@ -23,7 +23,9 @@ function cacheKey(userId: string) {
  * cache is far past what a 5 MB synchronous store should hold, and writing it
  * on the main thread would stall paint on every mutation.
  */
-export function createQueryPersister(userId: string) {
+export function createQueryPersister(
+  userId: string,
+): ReturnType<typeof createAsyncStoragePersister> {
   const key = cacheKey(userId);
 
   return createAsyncStoragePersister({

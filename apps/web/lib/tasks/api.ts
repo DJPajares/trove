@@ -54,7 +54,12 @@ export type TaskTemplateInput = {
 export type TasksResponse = {
   contexts: {
     days: Array<{ date: string; id: string }>;
-    items: Array<{ id: string; itineraryDayId: string | null; label: string }>;
+    items: Array<{
+      id: string;
+      itineraryDayId: string | null;
+      label: string;
+      localStartTime?: string | null;
+    }>;
   };
   tasks: Task[];
   trip: { id: string; name: string };

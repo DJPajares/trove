@@ -233,7 +233,19 @@ export async function listTasks(userId: string, tripId: string) {
           customLocation: true,
           id: true,
           itineraryDayId: true,
-          tripPlace: { include: { place: true } },
+          localStartTime: true,
+          tripPlace: {
+            include: {
+              place: {
+                include: {
+                  providerRefs: {
+                    orderBy: { cachedAt: 'desc' },
+                    select: { cachedName: true },
+                  },
+                },
+              },
+            },
+          },
         },
       },
       tasks: {
@@ -250,10 +262,14 @@ export async function listTasks(userId: string, tripId: string) {
       items: trip.itineraryItems.map((item) => ({
         id: item.id,
         itineraryDayId: item.itineraryDayId,
+        localStartTime: formatLocalTime(item.localStartTime),
         label:
           item.customLabel ??
           item.customLocation ??
           item.tripPlace?.place.customName ??
+          item.tripPlace?.place.providerRefs.find((reference) => reference.cachedName)
+            ?.cachedName ??
+          item.tripPlace?.place.providerLabel ??
           'Itinerary item',
       })),
     },

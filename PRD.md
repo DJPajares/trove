@@ -1137,6 +1137,13 @@ Current/next determination should use:
 
 Missing timing/location data must produce an honest fallback rather than fabricated precision.
 
+Contextual Tasks in Now:
+
+- show separate **Here** and **Next** groups for tasks attached to the current and destination itinerary items,
+- show every relevant task and do not repeat one itinerary item when current and next resolve to the same stop,
+- keep open tasks prominent and completed tasks available in collapsed secondary content,
+- quick-add attaches to current stop, then next stop, then current day, then the trip.
+
 ### Today
 
 Allow:
@@ -1151,6 +1158,13 @@ Allow:
 - expense.
 
 These actions update the actual itinerary/trip data.
+
+Contextual Tasks in Today:
+
+- every destination row provides a collapsed task disclosure with stop-prefilled quick-add,
+- a collapsed **Today's tasks** section follows the itinerary and deduplicates tasks attached to the selected day, tasks attached to stops on that day, and trip-level tasks due that day,
+- both destination disclosures and the daily rollup start collapsed,
+- the Today header provides day-prefilled task quick-add.
 
 ### Map
 
@@ -1176,6 +1190,8 @@ Provide quick access to:
 - Notes,
 - Trip Info,
 - Travel Wallet where retained/available.
+
+The Trip view places a dedicated Tasks section immediately after the summary. Trip-level tasks are expanded and prominent. Completed trip-level tasks remain reopenable in collapsed secondary content. Day- and stop-specific tasks remain accessible through one collapsed **Tasks by day and place** disclosure, grouped in itinerary order. The section provides trip-prefilled quick-add and a path to the full Tasks screen; Tasks are not repeated in the generic Trip tools list.
 
 ---
 
@@ -1326,6 +1342,14 @@ Tasks may attach to:
 - day,
 - itinerary item.
 
+User-facing attachment choices are:
+
+- **Entire trip**,
+- **Specific day**, followed by a trip-date selector,
+- **Specific place**, followed by itinerary stops grouped by day in itinerary order.
+
+Specific place means a specific itinerary stop, including label-only and custom-location stops. Repeated visits remain distinct and display their planned date/time for disambiguation. Unscheduled stops remain available in an **Unscheduled** group.
+
 Minimum:
 
 - task label.
@@ -1339,6 +1363,8 @@ Optional:
 A Task due date/time inherits timezone from its attachment context in this order: itinerary item, trip day, then trip reference timezone. The resolved due timezone is persisted with the dated Task and is re-resolved only when the user changes the due date/time or its attached day/item context.
 
 Task Templates are part of the MVP under global Tools and may populate reusable trip tasks without turning Trove into a generic task manager.
+
+Trip Mode supports quick creation and complete/reopen only. Editing and deletion remain on the full Tasks screen. Trip Mode loads the trip's task response once per shell, updates completion optimistically, rolls back failed completion changes with a retry message, and uses the existing offline mutation queue. Task-loading failure must not hide itinerary or other Trip Mode content. Preview uses the same task behavior and underlying data as live Trip Mode.
 
 ---
 

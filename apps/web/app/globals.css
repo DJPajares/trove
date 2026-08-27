@@ -82,6 +82,13 @@
      instead of hard-coding the header's height, so the two cannot drift. */
   --header-offset: var(--header-height);
   --bottom-bar-height: 4.75rem;
+  /* The mobile bar's create action floats above the bar, and the bar's top edge
+     curves away beneath it. `.nav-notch-surface` cuts that curve; these place the
+     button against it. Rise is how far the button's centre sits above the bar's
+     top edge, so raising the button flattens the curve. */
+  --nav-action-size: 4rem;
+  --nav-action-rise: 0.75rem;
+  --nav-action-overhang: calc(var(--nav-action-rise) + var(--nav-action-size) / 2);
   --trip-cover-height: clamp(14rem, 50vw, 24rem);
   --text-immersive-title: clamp(2.5rem, 5vw, 4.75rem);
   --text-page-title: clamp(1.875rem, 4vw, 2.75rem);
@@ -255,6 +262,41 @@ body {
 .interaction-scrollbar:focus-within::-webkit-scrollbar,
 .interaction-scrollbar:active::-webkit-scrollbar {
   height: 0.375rem;
+}
+
+/* Cuts the concave dip into the top edge of the mobile bottom bar so the create
+   action can float clear of it. Four mask layers unioned by the default `add`
+   composite: a fixed-size tile carrying the curve, then three plain fills for
+   the flat remainder. Deliberately avoids `mask-composite`, whose WebKit legacy
+   property takes different keywords, and deliberately pins the tile in pixels so
+   the curve cannot stretch with the viewport. The fills overlap the tile by 1px
+   because a fractional viewport width otherwise leaves a hairline seam.
+
+   The curve is a circle concentric with the button, which is what makes the gap
+   between them uniform: radius 40px is the button's 32px plus an 8px gap, and
+   --nav-action-rise puts its centre 12px above the top edge, so it dips 28px.
+   The 12px shoulder fillets are what blend that curve into the flat edge instead
+   of creasing against it. Path constants follow from those four numbers:
+     a = sqrt(depth * (radius + rise + 2 * fillet)) = 46.13  (flat edge resumes)
+     T = (a * radius / (radius + fillet), fillet * depth / (radius + fillet))
+       = (35.485, 6.4615)                                    (fillet meets curve)
+   Recompute both if any of those tokens change. */
+.nav-notch-surface {
+  --nav-notch-tile: 8rem;
+  --nav-notch-band: 4rem;
+  --nav-notch-mask:
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 64'><path fill='black' d='M0 0H17.87A12 12 0 0 1 28.515 6.4615A40 40 0 0 0 99.485 6.4615A12 12 0 0 1 110.13 0H128V64H0Z'/></svg>"),
+    linear-gradient(black, black), linear-gradient(black, black), linear-gradient(black, black);
+  --nav-notch-position: 50% 0, 0 0, 100% 0, 0 100%;
+  --nav-notch-size:
+    var(--nav-notch-tile) var(--nav-notch-band),
+    calc(50% - var(--nav-notch-tile) / 2 + 1px) var(--nav-notch-band),
+    calc(50% - var(--nav-notch-tile) / 2 + 1px) var(--nav-notch-band),
+    100% calc(100% - var(--nav-notch-band) + 1px);
+  mask-image: var(--nav-notch-mask);
+  mask-position: var(--nav-notch-position);
+  mask-size: var(--nav-notch-size);
+  mask-repeat: no-repeat;
 }
 
 @layer base {

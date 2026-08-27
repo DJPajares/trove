@@ -102,7 +102,7 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
         className={cn(
           'mx-auto w-full max-w-[var(--layout-app)] scroll-mt-[calc(var(--safe-top)+var(--header-height)+1rem)] py-8 pl-[var(--gutter-inline-start)] pr-[var(--gutter-inline-end)] outline-none md:py-12',
           isSignedIn &&
-            'pt-[calc(var(--safe-top)+2rem)] pb-[calc(var(--bottom-bar-height)+var(--safe-bottom)+1.5rem)] md:py-12',
+            'pt-[calc(var(--safe-top)+2rem)] pb-[calc(var(--bottom-bar-height)+var(--safe-bottom)+var(--nav-action-overhang)+0.75rem)] md:py-12',
         )}
         id="main-content"
         tabIndex={-1}

@@ -11,13 +11,15 @@ const skeletonVariants = cva('w-full', {
       text: 'max-w-2xl space-y-4',
       timeline: 'max-w-3xl space-y-0',
       trip: 'mx-auto w-full max-w-5xl space-y-5',
+      tripSection: 'w-full space-y-4',
       tripHero: 'mx-auto w-full max-w-5xl space-y-5',
     },
   },
   defaultVariants: { shape: 'text' },
 });
 
-export type LoadingShape = 'list' | 'media' | 'text' | 'timeline' | 'trip' | 'tripHero';
+export type LoadingShape =
+  'list' | 'media' | 'text' | 'timeline' | 'trip' | 'tripHero' | 'tripSection';
 
 export function ContentSkeleton({
   className,
@@ -68,6 +70,18 @@ export function ContentSkeleton({
             </div>
           </div>
         ))}
+      </div>
+    );
+  }
+
+  // The content area of a trip's screen, with the cover and the navigation row
+  // left to `TripChrome` — they are already on screen by the time this shows.
+  if (shape === 'tripSection') {
+    return (
+      <div aria-hidden="true" className={cn(skeletonVariants({ shape }), className)}>
+        <Skeleton className="h-4 w-2/5 max-w-48" />
+        <Skeleton className="h-24 w-full rounded-[var(--radius-lg)]" />
+        <Skeleton className="h-24 w-full rounded-[var(--radius-lg)]" />
       </div>
     );
   }

@@ -30,6 +30,8 @@ import { PageState } from '@/components/page-state';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripForm } from '@/components/trip-form';
 import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
+import { TripDetailSkeleton } from '@/components/trip-detail-skeleton';
+import { useTripContext } from '@/components/trip-provider';
 import { TripMedia } from '@/components/trip-media';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -60,19 +62,17 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { useEditorialImages } from '@/hooks/use-editorial-images';
-import { editorialSubjectKey } from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import { fetchTripInfo, type TripInfoEntry } from '@/lib/trip-info/api';
-import { deleteTrip, fetchTrip, TripApiError, type Trip } from '@/lib/trips/api';
+import { deleteTrip } from '@/lib/trips/api';
 import { formatTripDateRange } from '@/lib/trips/format';
 import {
   supportingTripDestinations,
   tripOverviewDestinations,
   type TripOverviewDestination,
 } from '@/lib/trips/navigation';
-import { tripDestinationSummary, tripEditorialSubject } from '@/lib/trips/summary';
+import { tripDestinationSummary } from '@/lib/trips/summary';
 import { cn } from '@/lib/utils';
 
 /** The tools' icons. Which tools there are, and their order, is the navigation contract's. */
@@ -201,37 +201,19 @@ export function TripDetail({
   const locale = useLocale();
   const router = useRouter();
 
-  const [trip, setTrip] = useState<Trip | null>(null);
-  const [status, setStatus] = useState<'error' | 'idle' | 'loading' | 'missing'>('loading');
-  const [reloadKey, setReloadKey] = useState(0);
+  // The trip itself belongs to the layout: it is the same trip every screen
+  // inside the trip is showing, and fetching it here as well is what used to
+  // make the cover arrive twice.
+  const tripContext = useTripContext();
+  const trip = tripContext?.trip ?? null;
+  const status = tripContext?.status ?? 'loading';
+  const editorial = tripContext?.editorial ?? null;
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [tripInfo, setTripInfo] = useState<TripInfoEntry[]>([]);
   const [tripInfoStatus, setTripInfoStatus] = useState<'error' | 'idle' | 'loading'>('idle');
-
-  useEffect(() => {
-    let active = true;
-    setStatus('loading');
-
-    void fetchTrip(tripId)
-      .then(({ trip: result }) => {
-        if (!active) return;
-        setTrip(result);
-        setStatus('idle');
-      })
-      .catch((error: unknown) => {
-        if (!active) return;
-        // A trip that is gone is a different answer from a trip that would not
-        // load, and only one of them is worth offering a retry for.
-        setStatus(error instanceof TripApiError && error.status === 404 ? 'missing' : 'error');
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [reloadKey, tripId]);
 
   useEffect(() => {
     let active = true;
@@ -253,14 +235,6 @@ export function TripDetail({
     };
   }, [tripId]);
 
-  // One subject for the whole screen, and none at all once the traveller has
-  // given the trip a cover of its own.
-  const subject = trip ? tripEditorialSubject(trip) : null;
-  const editorialImages = useEditorialImages(subject ? [subject] : []);
-  const editorial = subject
-    ? (editorialImages.get(editorialSubjectKey(subject))?.[0] ?? null)
-    : null;
-
   const backToTrips = (
     <Link
       className="inline-flex min-h-9 items-center gap-2 rounded-[var(--radius-md)] px-2 text-sm font-medium text-muted-foreground outline-none transition-colors duration-[var(--motion-standard)] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
@@ -272,9 +246,7 @@ export function TripDetail({
   );
 
   if (status === 'loading') {
-    return (
-      <PageState kind="loading" loadingShape="tripHero" scope="section" title={t('tripLoading')} />
-    );
+    return <TripDetailSkeleton label={t('tripLoading')} />;
   }
 
   if (status === 'missing' || status === 'error') {
@@ -285,7 +257,7 @@ export function TripDetail({
           actions={
             <>
               {status === 'error' ? (
-                <Button onClick={() => setReloadKey((value) => value + 1)}>{t('tryAgain')}</Button>
+                <Button onClick={() => tripContext?.refresh()}>{t('tryAgain')}</Button>
               ) : null}
               <Button
                 nativeButton={false}
@@ -572,7 +544,7 @@ export function TripDetail({
               onCancel={() => setEditing(false)}
               onDelete={() => setConfirmingDelete(true)}
               onSaved={(saved) => {
-                setTrip(saved);
+                tripContext?.setTrip(saved);
                 setEditing(false);
               }}
               trip={trip}

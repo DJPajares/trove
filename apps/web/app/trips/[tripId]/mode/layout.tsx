@@ -1,28 +1,22 @@
-import { Suspense, type ReactNode } from 'react';
-import { getTranslations } from 'next-intl/server';
+import type { ReactNode } from 'react';
 
-import { PageState } from '@/components/page-state';
 import { TripModeShell } from '@/components/trip-mode-shell';
 import { isPlanScoreEnabled } from '@/lib/plan-score/config.server';
 
+/**
+ * No Suspense fallback here on purpose: the shell paints its own frame while it
+ * loads, and a boundary above it could only put a different shape in front of
+ * that one first.
+ */
 export default async function TripModeLayout({
   children,
   params,
 }: Readonly<{ children: ReactNode; params: Promise<{ tripId: string }> }>) {
   const { tripId } = await params;
-  const t = await getTranslations('tripMode');
 
   return (
-    <Suspense
-      fallback={
-        <section className="mx-auto w-full max-w-6xl">
-          <PageState kind="loading" title={t('loading')} />
-        </section>
-      }
-    >
-      <TripModeShell planScoreEnabled={isPlanScoreEnabled()} tripId={tripId}>
-        {children}
-      </TripModeShell>
-    </Suspense>
+    <TripModeShell planScoreEnabled={isPlanScoreEnabled()} tripId={tripId}>
+      {children}
+    </TripModeShell>
   );
 }

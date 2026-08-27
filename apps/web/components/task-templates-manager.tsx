@@ -182,20 +182,28 @@ export function TaskTemplatesManager() {
   }
 
   if (status === 'loading') {
+    // The heading and its action are the same whether the templates have
+    // arrived or not, so they stay put and only the list waits.
     return (
-      <PageState
-        className="mx-auto max-w-5xl"
-        kind="loading"
-        loadingShape="list"
-        title={t('loading')}
-      />
+      <section className="mx-auto w-full max-w-5xl space-y-7">
+        <PageHeader
+          actions={
+            <Button disabled type="button">
+              <Plus aria-hidden="true" data-icon="inline-start" />
+              {t('newTemplate')}
+            </Button>
+          }
+          description={t('description')}
+          title={t('title')}
+        />
+        <PageState headingLevel={2} kind="loading" loadingShape="list" title={t('loading')} />
+      </section>
     );
   }
   if (status === 'error') {
     return (
       <PageState
         actions={<Button onClick={() => void refresh()}>{t('tryAgain')}</Button>}
-        className="mx-auto max-w-5xl"
         description={t('loadErrorDescription')}
         icon={<CircleAlert aria-hidden="true" />}
         kind="error"

@@ -1433,20 +1433,12 @@ export function ItineraryManager({
   }
 
   if (status === 'loading') {
-    return (
-      <PageState
-        className="mx-auto max-w-5xl"
-        kind="loading"
-        loadingShape="tripHero"
-        title={t('loading')}
-      />
-    );
+    return <PageState kind="loading" loadingShape="tripSection" title={t('loading')} />;
   }
   if (status === 'error' || !itinerary) {
     return (
       <PageState
         actions={<Button onClick={() => void refresh()}>{t('tryAgain')}</Button>}
-        className="mx-auto max-w-5xl"
         description={t('loadErrorDescription')}
         icon={<CircleAlert aria-hidden="true" />}
         kind="error"
@@ -1456,7 +1448,7 @@ export function ItineraryManager({
   }
 
   return (
-    <section className="mx-auto w-full max-w-5xl space-y-7">
+    <section className="space-y-7">
       <TripSectionHeader
         actions={
           <Button onClick={() => setPlacesDrawerOpen(true)} variant="outline">
@@ -1465,11 +1457,7 @@ export function ItineraryManager({
           </Button>
         }
         currentSection="itinerary"
-        density="compact"
         description={t('description')}
-        showCover
-        stickyNavigation
-        tripId={tripId}
       />
 
       {error ? (

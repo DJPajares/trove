@@ -4,16 +4,16 @@ import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
 import { Button } from '@/components/ui/button';
 
-/** The same shell `SavedPlacesManager` renders, with only the places waiting. */
-export default async function SavedLoading() {
-  const t = await getTranslations('saved');
+/** The shell `TaskTemplatesManager` renders, with only the templates waiting. */
+export default async function TaskTemplatesLoading() {
+  const t = await getTranslations('taskTemplates');
 
   return (
-    <section className="mx-auto w-full max-w-6xl space-y-8">
+    <section className="mx-auto w-full max-w-5xl space-y-7">
       <PageHeader
         actions={
           <Button disabled type="button">
-            {t('addPlace')}
+            {t('newTemplate')}
           </Button>
         }
         description={t('description')}

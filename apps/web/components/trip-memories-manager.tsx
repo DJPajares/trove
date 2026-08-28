@@ -495,7 +495,10 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
     return rating ? (
       <Button
         aria-label={label}
-        className={cn('h-auto px-1.5 py-1', onImage ? 'hover:bg-white/15' : undefined)}
+        className={cn(
+          'h-auto px-1.5 py-1',
+          onImage ? 'translate-x-1.5 translate-y-1 hover:bg-white/15' : undefined,
+        )}
         onClick={onOpen}
         size="sm"
         type="button"
@@ -507,7 +510,9 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
       <Button
         aria-label={label}
         className={cn(
-          onImage ? 'text-white/70 hover:bg-white/15 hover:text-white' : 'text-text-subtle',
+          onImage
+            ? 'translate-x-2.5 translate-y-2 text-white/70 hover:bg-white/15 hover:text-white'
+            : 'text-text-subtle',
         )}
         onClick={onOpen}
         size="icon-sm"

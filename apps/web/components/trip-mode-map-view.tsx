@@ -1,5 +1,6 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import {
   BedDouble,
   CalendarDays,
@@ -20,20 +21,17 @@ import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
+import { useTripModeData } from '@/components/trip-mode-data';
 import { useTripModePlaceDetails, useTripModePreview } from '@/components/trip-mode-shell';
-import { useOfflineDataRefreshKey, useOnlineStatus } from '@/components/trip-sync-status';
+import { useOnlineStatus } from '@/components/trip-sync-status';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  fetchItinerary,
   fetchItineraryDayRoutes,
-  fetchTripModeContext,
-  type Itinerary,
   type ItineraryDayRoutes,
   type ItineraryItem,
   type ItineraryTripPlace,
-  type TripModeContext,
 } from '@/lib/itinerary/api';
 import { dayStopNumbers, resolveDailyBases } from '@/lib/itinerary/day-sequence';
 import { itineraryDayRouteRevision } from '@/lib/itinerary/routes';
@@ -42,12 +40,8 @@ import {
   type ItineraryMapLocation,
   type ItineraryMapPoint,
 } from '@/lib/maps/itinerary-map';
+import { queryKeys } from '@/lib/query/keys';
 import { cn } from '@/lib/utils';
-
-type LoadState =
-  | { data: null; status: 'error' }
-  | { data: null; status: 'loading' }
-  | { data: { context: TripModeContext; itinerary: Itinerary }; status: 'ready' };
 
 type RouteState =
   | { data: null; status: 'error' | 'idle' | 'loading' }
@@ -95,12 +89,9 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
   const router = useRouter();
   const { preferences } = usePreferences();
   const online = useOnlineStatus();
-  const offlineDataRefreshKey = useOfflineDataRefreshKey();
-  const { contextOptions, isPreview, withPreviewHref } = useTripModePreview();
+  const { isPreview, withPreviewHref } = useTripModePreview();
+  const { context, itinerary, refresh, status } = useTripModeData();
   const { openPlaceDetails } = useTripModePlaceDetails();
-  const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
-  const [routeState, setRouteState] = useState<RouteState>({ data: null, status: 'idle' });
-  const [reloadKey, setReloadKey] = useState(0);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle');
   const [deviceLocation, setDeviceLocation] = useState<DeviceLocation | null>(null);
@@ -115,64 +106,42 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
     if (!('geolocation' in navigator)) setLocationStatus('unsupported');
   }, [isPreview]);
 
-  useEffect(() => {
-    let active = true;
-    setState({ data: null, status: 'loading' });
-    void Promise.all([fetchTripModeContext(tripId, contextOptions()), fetchItinerary(tripId)])
-      .then(([context, itinerary]) => {
-        if (active) setState({ data: { context, itinerary }, status: 'ready' });
-      })
-      .catch(() => {
-        if (active) setState({ data: null, status: 'error' });
-      });
-    return () => {
-      active = false;
-    };
-  }, [contextOptions, offlineDataRefreshKey, reloadKey, tripId]);
-
   const day = useMemo(() => {
-    if (state.status !== 'ready') return null;
-    return (
-      state.data.itinerary.days.find(
-        (candidate) => candidate.date === state.data.context.selectedDate,
-      ) ?? null
-    );
-  }, [state]);
+    if (!context || !itinerary) return null;
+    return itinerary.days.find((candidate) => candidate.date === context.selectedDate) ?? null;
+  }, [context, itinerary]);
 
   // Keyed on the day's ordering, not just its identity, so a reorder made in the
   // planner invalidates the legs this view is showing.
   const routeRevision = itineraryDayRouteRevision(day);
 
-  useEffect(() => {
-    if (!day || !online) {
-      setRouteState({ data: null, status: 'idle' });
-      return;
-    }
-    const controller = new AbortController();
-    setRouteState({ data: null, status: 'loading' });
-    void fetchItineraryDayRoutes(tripId, day.id, {
-      includePolyline: true,
-      languageCode: locale,
-      revision: routeRevision,
-      signal: controller.signal,
-    })
-      .then((data) => setRouteState({ data, status: 'idle' }))
-      .catch((error) => {
-        if (!(error instanceof DOMException && error.name === 'AbortError')) {
-          setRouteState({ data: null, status: 'error' });
-        }
-      });
-    return () => controller.abort();
-  }, [day, locale, online, routeRevision, tripId]);
+  const routesQuery = useQuery({
+    enabled: Boolean(day && online),
+    queryFn: ({ signal }) =>
+      fetchItineraryDayRoutes(tripId, day?.id as string, {
+        includePolyline: true,
+        languageCode: locale,
+        revision: routeRevision,
+        signal,
+      }),
+    queryKey: queryKeys.itineraryDayRoutes(tripId, day?.id ?? '', routeRevision, true, locale),
+  });
+  const routeState: RouteState = routesQuery.data
+    ? { data: routesQuery.data, status: 'idle' }
+    : !day || !online
+      ? { data: null, status: 'idle' }
+      : routesQuery.error
+        ? { data: null, status: 'error' }
+        : routesQuery.isPending
+          ? { data: null, status: 'loading' }
+          : { data: null, status: 'idle' };
 
-  if (state.status === 'loading') return <MapSkeleton label={t('loading')} />;
+  if (status === 'loading') return <MapSkeleton label={t('loading')} />;
 
-  if (state.status === 'error') {
+  if (status === 'error' || !context || !itinerary) {
     return (
       <PageState
-        actions={
-          <Button onClick={() => setReloadKey((value) => value + 1)}>{t('tryAgain')}</Button>
-        }
+        actions={<Button onClick={() => void refresh()}>{t('tryAgain')}</Button>}
         description={t('loadErrorDescription')}
         headingLevel={2}
         icon={<CircleAlert aria-hidden="true" />}
@@ -182,7 +151,6 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
     );
   }
 
-  const { context, itinerary } = state.data;
   const date = new Intl.DateTimeFormat(locale, {
     dateStyle: 'full',
     timeZone: 'UTC',

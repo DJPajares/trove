@@ -24,6 +24,7 @@ import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-deta
 import { usePreferences } from '@/components/preferences-provider';
 import { TimeInput } from '@/components/time-input';
 import { PlanScorePanel } from '@/components/plan-score-panel';
+import { TripModeDataProvider } from '@/components/trip-mode-data';
 import { TripSyncStatus } from '@/components/trip-sync-status';
 import { TripMedia } from '@/components/trip-media';
 import { TripModeTasksProvider } from '@/components/trip-mode-tasks';
@@ -33,16 +34,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import {
   fetchItinerary,
-  type Itinerary,
   type ItineraryTripPlace,
   type TripModeContextRequestOptions,
 } from '@/lib/itinerary/api';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
+import { queryKeys } from '@/lib/query/keys';
+import { useTripResource } from '@/lib/query/use-trip-resource';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import { resolveProviderPlaceName, resolveTripPlaceName } from '@/lib/trip-places/place-name';
-import { fetchTrip, type Trip } from '@/lib/trips/api';
 import { isTripModeAvailable } from '@/lib/trips/navigation';
 import { cn } from '@/lib/utils';
 
@@ -92,11 +93,6 @@ type TripModeShellProps = {
   planScoreEnabled: boolean;
   tripId: string;
 };
-
-type LoadState =
-  | { itinerary: null; status: 'error'; trip: null }
-  | { itinerary: Itinerary; status: 'idle'; trip: Trip }
-  | { itinerary: null; status: 'loading'; trip: null };
 
 const tripModeViews = [
   { icon: Clock3, key: 'now', path: '' },
@@ -357,12 +353,13 @@ export function TripModeShell({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [reloadKey, setReloadKey] = useState(0);
-  const [state, setState] = useState<LoadState>({ itinerary: null, status: 'loading', trip: null });
-  // Trip Mode carries its own copy of the trip alongside the itinerary, but the
-  // layout above it may already have one. Where it does, the thumbnail is right
-  // from the first frame instead of being a grey square that fills in.
-  const contextTrip = useTripContext()?.trip ?? null;
+  const tripContext = useTripContext();
+  const contextTrip = tripContext?.trip ?? null;
+  const {
+    data: itinerary,
+    refresh: refreshItinerary,
+    status: itineraryStatus,
+  } = useTripResource(queryKeys.itinerary(tripId), () => fetchItinerary(tripId));
   const [detailsPlace, setDetailsPlace] = useState<ItineraryTripPlace | null>(null);
   const detailsProviderName = detailsPlace ? resolveProviderPlaceName(detailsPlace) : null;
   const detailsSubjects: EditorialSubject[] =
@@ -384,34 +381,17 @@ export function TripModeShell({
   }, []);
   const placeDetailsContext = useMemo(() => ({ openPlaceDetails }), [openPlaceDetails]);
 
-  useEffect(() => {
-    let active = true;
-    setState({ itinerary: null, status: 'loading', trip: null });
-
-    void Promise.all([fetchTrip(tripId), fetchItinerary(tripId)])
-      .then(([{ trip }, itinerary]) => {
-        if (active) setState({ itinerary, status: 'idle', trip });
-      })
-      .catch(() => {
-        if (active) setState({ itinerary: null, status: 'error', trip: null });
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [reloadKey, tripId]);
-
   const isPreview = searchParams.get('preview') === '1';
   const requestedDate = searchParams.get('date');
   const requestedTime = searchParams.get('time');
   const previewDate =
-    state.trip &&
+    contextTrip &&
     requestedDate &&
     DATE_PATTERN.test(requestedDate) &&
-    requestedDate >= state.trip.startDate &&
-    requestedDate <= state.trip.endDate
+    requestedDate >= contextTrip.startDate &&
+    requestedDate <= contextTrip.endDate
       ? requestedDate
-      : (state.trip?.startDate ?? '');
+      : (contextTrip?.startDate ?? '');
   const previewTime = requestedTime && TIME_PATTERN.test(requestedTime) ? requestedTime : '09:00';
   const previewSelection = useMemo(
     () => (isPreview && previewDate ? { date: previewDate, time: previewTime } : null),
@@ -442,10 +422,10 @@ export function TripModeShell({
   );
 
   useEffect(() => {
-    if (state.status !== 'idle' || !navigator.onLine) return;
-    const basePath = `/trips/${state.trip.id}/mode`;
+    if (!contextTrip || itineraryStatus !== 'idle' || !navigator.onLine) return;
+    const basePath = `/trips/${contextTrip.id}/mode`;
     for (const { path } of tripModeViews) router.prefetch(`${basePath}${path}`);
-  }, [router, state]);
+  }, [contextTrip, itineraryStatus, router]);
 
   function updatePreview(next: { date?: string; time?: string }) {
     if (!previewSelection) return;
@@ -456,7 +436,7 @@ export function TripModeShell({
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }
 
-  if (state.status === 'loading') {
+  if (tripContext?.status === 'loading' || itineraryStatus === 'loading') {
     // The shell's own frame, at the size it will be: the way out, the four
     // views and the box the view lands in are all knowable from the trip's id
     // alone, so only the trip's name and dates wait — and they wait in place.
@@ -505,13 +485,27 @@ export function TripModeShell({
     );
   }
 
-  if (state.status === 'error') {
+  if (
+    !tripContext ||
+    tripContext.status === 'error' ||
+    tripContext.status === 'missing' ||
+    itineraryStatus === 'error' ||
+    !contextTrip ||
+    !itinerary
+  ) {
     return (
       <section className="mx-auto w-full max-w-6xl">
         <PageState
           actions={
             <>
-              <Button onClick={() => setReloadKey((value) => value + 1)}>{t('tryAgain')}</Button>
+              <Button
+                onClick={() => {
+                  tripContext?.refresh();
+                  void refreshItinerary();
+                }}
+              >
+                {t('tryAgain')}
+              </Button>
               <Button nativeButton={false} render={<Link href="/trips" />} variant="outline">
                 {t('backToTrips')}
               </Button>
@@ -526,7 +520,7 @@ export function TripModeShell({
     );
   }
 
-  const { itinerary, trip } = state;
+  const trip = contextTrip;
   const activityCounts = Object.fromEntries(
     itinerary.days.map((day) => [day.date, day.items.length]),
   );
@@ -571,113 +565,119 @@ export function TripModeShell({
 
   return (
     <TripModePreviewProvider value={previewContext}>
-      <TripModeTasksProvider tripId={trip.id}>
-        <section
-          className="mx-auto w-full max-w-6xl space-y-5 sm:space-y-6"
-          data-slot="trip-mode-shell"
-        >
-          <header className="space-y-3 sm:space-y-5">
-            <Button
-              className="-ml-2 text-muted-foreground hover:text-foreground"
-              nativeButton={false}
-              render={<Link href="/trips" />}
-              size="sm"
-              variant="ghost"
-            >
-              <ArrowLeft aria-hidden="true" data-icon="inline-start" />
-              {t('exit')}
-            </Button>
+      <TripModeDataProvider
+        contextOptions={contextOptions}
+        isPreview={Boolean(previewSelection)}
+        tripId={trip.id}
+      >
+        <TripModeTasksProvider tripId={trip.id}>
+          <section
+            className="mx-auto w-full max-w-6xl space-y-5 sm:space-y-6"
+            data-slot="trip-mode-shell"
+          >
+            <header className="space-y-3 sm:space-y-5">
+              <Button
+                className="-ml-2 text-muted-foreground hover:text-foreground"
+                nativeButton={false}
+                render={<Link href="/trips" />}
+                size="sm"
+                variant="ghost"
+              >
+                <ArrowLeft aria-hidden="true" data-icon="inline-start" />
+                {t('exit')}
+              </Button>
 
-            {/* On a phone the trip's name is orientation, not the headline: the
+              {/* On a phone the trip's name is orientation, not the headline: the
               traveller came for what is happening now, and a 390x844 viewport
               only has so many rows before the itinerary has to appear. */}
-            <div className="flex items-center gap-3 sm:gap-4">
-              <TripMedia
-                alt=""
-                className="size-11 shrink-0 shadow-[var(--shadow-control)] sm:size-16"
-                sizes="64px"
-                source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl })}
-                variant="thumbnail"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
-                  {previewSelection ? t('preview.label') : t('label')}
-                </p>
-                <h1 className="mt-0.5 break-words text-[length:var(--text-section-title)] leading-[1.15] font-semibold tracking-[-0.025em] text-foreground sm:text-[length:var(--text-page-title)] sm:leading-[1.08]">
-                  {trip.name}
-                </h1>
-                <p className="mt-0.5 text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
-                  {t('dateRange', {
-                    endDate: formatDate(trip.endDate),
-                    startDate: formatDate(trip.startDate),
-                  })}
-                </p>
+              <div className="flex items-center gap-3 sm:gap-4">
+                <TripMedia
+                  alt=""
+                  className="size-11 shrink-0 shadow-[var(--shadow-control)] sm:size-16"
+                  sizes="64px"
+                  source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl })}
+                  variant="thumbnail"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
+                    {previewSelection ? t('preview.label') : t('label')}
+                  </p>
+                  <h1 className="mt-0.5 break-words text-[length:var(--text-section-title)] leading-[1.15] font-semibold tracking-[-0.025em] text-foreground sm:text-[length:var(--text-page-title)] sm:leading-[1.08]">
+                    {trip.name}
+                  </h1>
+                  <p className="mt-0.5 text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
+                    {t('dateRange', {
+                      endDate: formatDate(trip.endDate),
+                      startDate: formatDate(trip.startDate),
+                    })}
+                  </p>
+                </div>
+                <Button
+                  className="hidden shrink-0 sm:inline-flex"
+                  nativeButton={false}
+                  render={<Link href={`/trips/${trip.id}/itinerary`} />}
+                  variant="outline"
+                >
+                  {t('openPlanning')}
+                </Button>
               </div>
-              <Button
-                className="hidden shrink-0 sm:inline-flex"
-                nativeButton={false}
-                render={<Link href={`/trips/${trip.id}/itinerary`} />}
-                variant="outline"
-              >
-                {t('openPlanning')}
-              </Button>
+            </header>
+
+            {previewSelection ? (
+              <TripModePreviewSummary
+                activityCounts={activityCounts}
+                endDate={trip.endDate}
+                onChange={updatePreview}
+                selection={previewSelection}
+                startDate={trip.startDate}
+              />
+            ) : null}
+
+            <TripSyncStatus tripId={trip.id} />
+
+            <TripModeNavigationFrame tripId={trip.id} withPreviewHref={withPreviewHref} />
+
+            <div className="min-h-[min(32rem,55dvh)] border-t border-border pt-6 sm:pt-8">
+              <TripModePlaceDetailsContext.Provider value={placeDetailsContext}>
+                {children}
+              </TripModePlaceDetailsContext.Provider>
             </div>
-          </header>
 
-          {previewSelection ? (
-            <TripModePreviewSummary
-              activityCounts={activityCounts}
-              endDate={trip.endDate}
-              onChange={updatePreview}
-              selection={previewSelection}
-              startDate={trip.startDate}
-            />
-          ) : null}
-
-          <TripSyncStatus tripId={trip.id} />
-
-          <TripModeNavigationFrame tripId={trip.id} withPreviewHref={withPreviewHref} />
-
-          <div className="min-h-[min(32rem,55dvh)] border-t border-border pt-6 sm:pt-8">
-            <TripModePlaceDetailsContext.Provider value={placeDetailsContext}>
-              {children}
-            </TripModePlaceDetailsContext.Provider>
-          </div>
-
-          {/* Day quality is a review of the plan, not an answer to "what do I need
+            {/* Day quality is a review of the plan, not an answer to "what do I need
             now". Above the view it was the largest single thing between a phone
             and its own itinerary. */}
-          {planScoreEnabled && previewSelection ? (
-            <TripModePreviewPlanScore
-              date={previewSelection.date}
-              revision={trip.updatedAt}
-              tripId={trip.id}
+            {planScoreEnabled && previewSelection ? (
+              <TripModePreviewPlanScore
+                date={previewSelection.date}
+                revision={trip.updatedAt}
+                tripId={trip.id}
+              />
+            ) : null}
+          </section>
+
+          {detailsPlace ? (
+            <PlaceDetailsSheet
+              editorialImages={detailsEditorialImages}
+              meta={[
+                detailsPlace.priority
+                  ? {
+                      label: tripPlacesT('priorityLabel'),
+                      value: tripPlacesT(`priority.${detailsPlace.priority}`),
+                    }
+                  : null,
+                detailsPlace.note ? { label: itineraryT('notes'), value: detailsPlace.note } : null,
+              ].filter((row): row is PlaceDetailsRow => row !== null)}
+              name={resolveTripPlaceName(detailsPlace, {
+                custom: itineraryT('customPlace'),
+                provider: itineraryT('providerPlace'),
+              })}
+              officialName={detailsPlace.customName?.trim() ? detailsProviderName : null}
+              onOpenChange={(open) => !open && setDetailsPlace(null)}
+              place={detailsPlace.place}
             />
           ) : null}
-        </section>
-
-        {detailsPlace ? (
-          <PlaceDetailsSheet
-            editorialImages={detailsEditorialImages}
-            meta={[
-              detailsPlace.priority
-                ? {
-                    label: tripPlacesT('priorityLabel'),
-                    value: tripPlacesT(`priority.${detailsPlace.priority}`),
-                  }
-                : null,
-              detailsPlace.note ? { label: itineraryT('notes'), value: detailsPlace.note } : null,
-            ].filter((row): row is PlaceDetailsRow => row !== null)}
-            name={resolveTripPlaceName(detailsPlace, {
-              custom: itineraryT('customPlace'),
-              provider: itineraryT('providerPlace'),
-            })}
-            officialName={detailsPlace.customName?.trim() ? detailsProviderName : null}
-            onOpenChange={(open) => !open && setDetailsPlace(null)}
-            place={detailsPlace.place}
-          />
-        ) : null}
-      </TripModeTasksProvider>
+        </TripModeTasksProvider>
+      </TripModeDataProvider>
     </TripModePreviewProvider>
   );
 }

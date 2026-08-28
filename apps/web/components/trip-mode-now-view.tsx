@@ -19,37 +19,27 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
 import { TripModeMemoryDialog } from '@/components/trip-mode-memory-dialog';
+import { useTripModeData } from '@/components/trip-mode-data';
 import { useTripModePreview } from '@/components/trip-mode-shell';
 import {
   TripModeTaskList,
   TripModeTasksNotice,
   useTripModeTasks,
 } from '@/components/trip-mode-tasks';
-import { useOfflineDataRefreshKey, useOnlineStatus } from '@/components/trip-sync-status';
+import { useOnlineStatus } from '@/components/trip-sync-status';
 import { TripWeatherContext } from '@/components/trip-weather-context';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNowTick } from '@/hooks/use-now-tick';
-import { useTripModeClock } from '@/hooks/use-trip-mode-clock';
-import {
-  fetchTripModeContext,
-  type ItineraryItem,
-  type RouteTravelMode,
-  type TripModeContext,
-} from '@/lib/itinerary/api';
+import type { ItineraryItem, RouteTravelMode } from '@/lib/itinerary/api';
 import { formatItineraryTimeRange } from '@/lib/itinerary/item-timing';
-import { fetchReservations, type Reservation } from '@/lib/reservations/api';
+import type { Reservation } from '@/lib/reservations/api';
 import { defaultTripModeTaskContext, nowTaskGroups } from '@/lib/tasks/trip-mode';
-
-type LoadState =
-  | { context: null; status: 'error' }
-  | { context: null; status: 'loading' }
-  | { context: TripModeContext; status: 'ready' };
 
 function providerId(item: ItineraryItem | null) {
   return item?.tripPlace?.place.providerRefs.find((ref) => ref.provider === 'google')
@@ -116,50 +106,11 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   const locale = useLocale();
   const { preferences } = usePreferences();
   const online = useOnlineStatus();
-  const offlineDataRefreshKey = useOfflineDataRefreshKey();
-  const { contextOptions, isPreview, withPreviewHref } = useTripModePreview();
+  const { isPreview, withPreviewHref } = useTripModePreview();
+  const { context, refresh, reservations: loadedReservations, status } = useTripModeData();
   const tripModeTasks = useTripModeTasks();
-  const [reloadKey, setReloadKey] = useState(0);
-  const [state, setState] = useState<LoadState>({ context: null, status: 'loading' });
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-  // A preview stands at a fixed hypothetical time, so it must never tick.
-  const clockRefreshKey = useTripModeClock({
-    context: state.context,
-    enabled: !isPreview,
-  });
+  const reservations = loadedReservations ?? [];
   const now = useNowTick(!isPreview);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    // A clock refresh replaces data that is already on screen, so only a first
-    // load — or a reload after failure — is allowed to blank the view.
-    setState((current) =>
-      current.status === 'ready' ? current : { context: null, status: 'loading' },
-    );
-    void fetchTripModeContext(tripId, contextOptions(controller.signal))
-      .then((context) => setState({ context, status: 'ready' }))
-      .catch((error) => {
-        if (!(error instanceof DOMException && error.name === 'AbortError')) {
-          setState({ context: null, status: 'error' });
-        }
-      });
-    return () => controller.abort();
-  }, [clockRefreshKey, contextOptions, offlineDataRefreshKey, reloadKey, tripId]);
-
-  useEffect(() => {
-    let active = true;
-    setReservations([]);
-    void fetchReservations(tripId)
-      .then((result) => {
-        if (active) setReservations(result.reservations);
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [offlineDataRefreshKey, reloadKey, tripId]);
-
-  const context = state.context;
   const currentItem = useMemo(
     () => context?.day?.items.find((item) => item.id === context.currentOrRelevant?.itemId) ?? null,
     [context],
@@ -169,14 +120,14 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
     [context],
   );
 
-  if (state.status === 'loading') return <TripModeNowSkeleton label={t('loading')} />;
+  if (status === 'loading') return <TripModeNowSkeleton label={t('loading')} />;
 
-  if (state.status === 'error') {
+  if (status === 'error' || !context) {
     return (
       <PageState
         actions={
           <>
-            <Button onClick={() => setReloadKey((value) => value + 1)}>{t('tryAgain')}</Button>
+            <Button onClick={() => void refresh()}>{t('tryAgain')}</Button>
             <Button
               nativeButton={false}
               render={<Link href={withPreviewHref(`/trips/${tripId}/mode/today`)} />}
@@ -195,7 +146,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
     );
   }
 
-  const { context: readyContext } = state;
+  const readyContext = context;
   const nowZone = readyContext.day?.defaultTimeZone ?? readyContext.trip.referenceTimeZone;
   const date = new Intl.DateTimeFormat(locale, {
     dateStyle: 'full',

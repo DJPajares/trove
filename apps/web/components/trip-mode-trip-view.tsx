@@ -16,20 +16,20 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import { EditorialSection } from '@/components/editorial-section';
 import { PageState } from '@/components/page-state';
 import { OfflineReadyStatus } from '@/components/offline-ready-status';
 import { TripNotificationControl } from '@/components/trip-notification-control';
-import { useTripModePreview } from '@/components/trip-mode-shell';
+import { useTripModeData } from '@/components/trip-mode-data';
 import {
   ManageTasksLink,
   TripModeTaskList,
   TripModeTasksNotice,
   useTripModeTasks,
 } from '@/components/trip-mode-tasks';
-import { useOfflineDataRefreshKey } from '@/components/trip-sync-status';
+import { useTripContext } from '@/components/trip-provider';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
@@ -41,27 +41,13 @@ import {
   ItemTitle,
 } from '@/components/ui/item';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  fetchItinerary,
-  fetchTripModeContext,
-  type Itinerary,
-  type TripModeContext,
-} from '@/lib/itinerary/api';
 import { fetchExpenses } from '@/lib/expenses/api';
-import { fetchReservations } from '@/lib/reservations/api';
+import { queryKeys } from '@/lib/query/keys';
+import { useTripResource } from '@/lib/query/use-trip-resource';
 import type { Task, TasksResponse } from '@/lib/tasks/api';
 import { groupTasksByContext } from '@/lib/tasks/grouping';
 import { tripTasks } from '@/lib/tasks/trip-mode';
-import { fetchTripInfo, type TripInfoEntry } from '@/lib/trip-info/api';
-import { fetchTrip, type Trip } from '@/lib/trips/api';
-
-type LoadState =
-  | { data: null; status: 'error' }
-  | { data: null; status: 'loading' }
-  | {
-      data: { context: TripModeContext; itinerary: Itinerary; trip: Trip };
-      status: 'ready';
-    };
+import { fetchTripInfo } from '@/lib/trip-info/api';
 
 type Tool = {
   descriptionKey:
@@ -74,11 +60,6 @@ type Tool = {
   href: string;
   icon: typeof CalendarDays;
   key: 'expenses' | 'info' | 'itinerary' | 'notes' | 'places' | 'reservations';
-};
-
-type SupportingCounts = {
-  expenses: number | null;
-  reservations: number | null;
 };
 
 function TripViewSkeleton({ label }: Readonly<{ label: string }>) {
@@ -153,61 +134,20 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
   const itineraryT = useTranslations('itinerary');
   const tasksT = useTranslations('tripMode.tasks');
   const locale = useLocale();
-  const { contextOptions } = useTripModePreview();
+  const { context, itinerary, refresh, reservations, status } = useTripModeData();
+  const tripContext = useTripContext();
+  const trip = tripContext?.trip ?? null;
   const tripModeTasks = useTripModeTasks();
-  const offlineDataRefreshKey = useOfflineDataRefreshKey();
-  const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
-  const [pinnedInfo, setPinnedInfo] = useState<TripInfoEntry[]>([]);
-  const [supportingCounts, setSupportingCounts] = useState<SupportingCounts>({
-    expenses: null,
-    reservations: null,
-  });
-  const [reloadKey, setReloadKey] = useState(0);
-
-  useEffect(() => {
-    let active = true;
-    setState({ data: null, status: 'loading' });
-    setPinnedInfo([]);
-    setSupportingCounts({ expenses: null, reservations: null });
-
-    void Promise.all([
-      fetchTripModeContext(tripId, contextOptions()),
-      fetchItinerary(tripId),
-      fetchTrip(tripId),
-    ])
-      .then(([context, itinerary, { trip }]) => {
-        if (active) setState({ data: { context, itinerary, trip }, status: 'ready' });
-      })
-      .catch(() => {
-        if (active) setState({ data: null, status: 'error' });
-      });
-
-    void fetchTripInfo(tripId)
-      .then(({ entries }) => {
-        if (active) setPinnedInfo(entries.filter((entry) => entry.isPinned).slice(0, 3));
-      })
-      .catch(() => {
-        // Trip Info is a supporting destination. Its separate failure should not hide the trip.
-      });
-
-    void Promise.allSettled([fetchReservations(tripId), fetchExpenses(tripId)]).then(
-      ([reservationsResult, expensesResult]) => {
-        if (!active) return;
-        setSupportingCounts({
-          expenses:
-            expensesResult.status === 'fulfilled' ? expensesResult.value.expenses.length : null,
-          reservations:
-            reservationsResult.status === 'fulfilled'
-              ? reservationsResult.value.reservations.length
-              : null,
-        });
-      },
-    );
-
-    return () => {
-      active = false;
-    };
-  }, [contextOptions, offlineDataRefreshKey, reloadKey, tripId]);
+  const tripInfo = useTripResource(queryKeys.tripInfo(tripId), () => fetchTripInfo(tripId));
+  const expenses = useTripResource(queryKeys.expenses(tripId), () => fetchExpenses(tripId));
+  const pinnedInfo = useMemo(
+    () => tripInfo.data?.entries.filter((entry) => entry.isPinned).slice(0, 3) ?? [],
+    [tripInfo.data],
+  );
+  const supportingCounts = {
+    expenses: expenses.data?.expenses.length ?? null,
+    reservations: reservations?.length ?? null,
+  };
 
   const dateFormatter = useMemo(
     () =>
@@ -218,13 +158,30 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
     [locale],
   );
 
-  if (state.status === 'loading') return <TripViewSkeleton label={t('loading')} />;
+  if (status === 'loading' || tripContext?.status === 'loading') {
+    return <TripViewSkeleton label={t('loading')} />;
+  }
 
-  if (state.status === 'error') {
+  if (
+    status === 'error' ||
+    !context ||
+    !itinerary ||
+    !tripContext ||
+    tripContext.status === 'error' ||
+    tripContext.status === 'missing' ||
+    !trip
+  ) {
     return (
       <PageState
         actions={
-          <Button onClick={() => setReloadKey((current) => current + 1)}>{t('tryAgain')}</Button>
+          <Button
+            onClick={() => {
+              tripContext?.refresh();
+              void refresh();
+            }}
+          >
+            {t('tryAgain')}
+          </Button>
         }
         description={t('loadErrorDescription')}
         headingLevel={2}
@@ -235,7 +192,6 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
     );
   }
 
-  const { context, itinerary, trip } = state.data;
   const selectedDayIndex = itinerary.days.findIndex((day) => day.date >= context.selectedDate);
   const upcomingDays = selectedDayIndex >= 0 ? itinerary.days.slice(selectedDayIndex) : [];
   const selectedDay = selectedDayIndex >= 0 ? itinerary.days[selectedDayIndex]! : null;

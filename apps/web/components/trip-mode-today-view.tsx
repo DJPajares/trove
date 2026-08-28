@@ -21,14 +21,15 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { PageState } from '@/components/page-state';
 import { ItineraryCreateItemSheet } from '@/components/itinerary-create-item-sheet';
 import { usePreferences } from '@/components/preferences-provider';
 import { TimelineGroup, TimelineMarker, TimelineRow } from '@/components/timeline-row';
+import { useTripModeData } from '@/components/trip-mode-data';
 import { useTripModePlaceDetails, useTripModePreview } from '@/components/trip-mode-shell';
-import { useOfflineDataRefreshKey, useOnlineStatus } from '@/components/trip-sync-status';
+import { useOnlineStatus } from '@/components/trip-sync-status';
 import { TripModeMemoryDialog } from '@/components/trip-mode-memory-dialog';
 import { TripModePendingMemories } from '@/components/trip-mode-pending-memories';
 import {
@@ -64,28 +65,19 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  fetchItinerary,
-  fetchTripModeContext,
   organizeItineraryItem,
-  type Itinerary,
   type ItineraryItem,
   type ItineraryScheduleInput,
   type ItineraryTravelStatus,
-  type TripModeContext,
   updateItineraryItem,
   updateItineraryItemTravelStatus,
 } from '@/lib/itinerary/api';
 import { buildDaySequence, resolveDailyBases } from '@/lib/itinerary/day-sequence';
 import { formatItineraryTimeRange } from '@/lib/itinerary/item-timing';
 import { scheduledPlaceUse } from '@/lib/itinerary/places';
-import { fetchReservations, type Reservation } from '@/lib/reservations/api';
+import type { Reservation } from '@/lib/reservations/api';
 import { tasksForItem, todayTaskRollup } from '@/lib/tasks/trip-mode';
 import { cn } from '@/lib/utils';
-
-type LoadState =
-  | { data: null; status: 'error' }
-  | { data: null; status: 'loading' }
-  | { data: { context: TripModeContext; itinerary: Itinerary }; status: 'ready' };
 
 type UndoAction =
   | { itemId: string; kind: 'organize'; itineraryDayId: string; position: number }
@@ -143,12 +135,17 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   const locale = useLocale();
   const { preferences } = usePreferences();
   const online = useOnlineStatus();
-  const offlineDataRefreshKey = useOfflineDataRefreshKey();
-  const { contextOptions, isPreview } = useTripModePreview();
+  const { isPreview, previewSelection } = useTripModePreview();
+  const {
+    context,
+    itinerary,
+    refresh,
+    reservations: loadedReservations,
+    setItinerary,
+    status,
+  } = useTripModeData();
   const { openPlaceDetails } = useTripModePlaceDetails();
   const tripModeTasks = useTripModeTasks();
-  const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
-  const [reloadKey, setReloadKey] = useState(0);
   const [mutatingItemId, setMutatingItemId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
@@ -160,50 +157,17 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   const [schedule, setSchedule] = useState<TripModeSchedule>('none');
   const [exactTime, setExactTime] = useState('');
   const [scheduleError, setScheduleError] = useState<string | null>(null);
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-
-  const refresh = useCallback(async () => {
-    const [context, itinerary] = await Promise.all([
-      fetchTripModeContext(tripId, contextOptions()),
-      fetchItinerary(tripId),
-    ]);
-    setState({ data: { context, itinerary }, status: 'ready' });
-  }, [contextOptions, tripId]);
+  const reservations = loadedReservations ?? [];
 
   useEffect(() => {
-    let active = true;
-    setState({ data: null, status: 'loading' });
-    setReservations([]);
     setUndoAction(null);
-    void Promise.all([fetchTripModeContext(tripId, contextOptions()), fetchItinerary(tripId)])
-      .then(([context, itinerary]) => {
-        if (active) setState({ data: { context, itinerary }, status: 'ready' });
-      })
-      .catch(() => {
-        if (active) setState({ data: null, status: 'error' });
-      });
-    void fetchReservations(tripId)
-      .then((result) => {
-        if (active) setReservations(result.reservations);
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [contextOptions, offlineDataRefreshKey, reloadKey, tripId]);
+  }, [previewSelection?.date, previewSelection?.time]);
 
   const day = useMemo(() => {
-    if (state.status !== 'ready') return null;
-    return (
-      state.data.itinerary.days.find(
-        (candidate) => candidate.date === state.data.context.selectedDate,
-      ) ?? null
-    );
-  }, [state]);
-  const placeUse = useMemo(
-    () => (state.status === 'ready' ? scheduledPlaceUse(state.data.itinerary) : {}),
-    [state],
-  );
+    if (!context || !itinerary) return null;
+    return itinerary.days.find((candidate) => candidate.date === context.selectedDate) ?? null;
+  }, [context, itinerary]);
+  const placeUse = useMemo(() => (itinerary ? scheduledPlaceUse(itinerary) : {}), [itinerary]);
   const reservationsByItem = useMemo(() => {
     const grouped = new Map<string, Reservation[]>();
     for (const reservation of reservations) {
@@ -224,14 +188,12 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     });
   }, [day]);
 
-  if (state.status === 'loading') return <TodaySkeleton label={t('loading')} />;
+  if (status === 'loading') return <TodaySkeleton label={t('loading')} />;
 
-  if (state.status === 'error') {
+  if (status === 'error' || !context || !itinerary) {
     return (
       <PageState
-        actions={
-          <Button onClick={() => setReloadKey((value) => value + 1)}>{t('tryAgain')}</Button>
-        }
+        actions={<Button onClick={() => void refresh()}>{t('tryAgain')}</Button>}
         description={t('loadErrorDescription')}
         headingLevel={2}
         icon={<CircleAlert aria-hidden="true" />}
@@ -241,7 +203,6 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     );
   }
 
-  const { context, itinerary } = state.data;
   const date = new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeZone: 'UTC' }).format(
     new Date(`${context.selectedDate}T00:00:00.000Z`),
   );
@@ -282,22 +243,16 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   };
 
   const setLocalStatus = (itemId: string, travelStatus: ItineraryTravelStatus) => {
-    setState((current) => {
-      if (current.status !== 'ready') return current;
+    setItinerary((current) => {
+      if (!current) return current;
       return {
         ...current,
-        data: {
-          ...current.data,
-          itinerary: {
-            ...current.data.itinerary,
-            days: current.data.itinerary.days.map((candidate) => ({
-              ...candidate,
-              items: candidate.items.map((item) =>
-                item.id === itemId ? { ...item, travelStatus } : item,
-              ),
-            })),
-          },
-        },
+        days: current.days.map((candidate) => ({
+          ...candidate,
+          items: candidate.items.map((item) =>
+            item.id === itemId ? { ...item, travelStatus } : item,
+          ),
+        })),
       };
     });
   };

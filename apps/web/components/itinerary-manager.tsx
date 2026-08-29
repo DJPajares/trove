@@ -31,6 +31,7 @@ import { DatePicker } from '@/components/date-picker';
 import { ItineraryCreateItemSheet } from '@/components/itinerary-create-item-sheet';
 import { PageState } from '@/components/page-state';
 import { ItineraryDayTimeline } from '@/components/itinerary-day-timeline';
+import { ItineraryOverview } from '@/components/itinerary-overview';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
 import { ItineraryPlacesDrawer } from '@/components/itinerary-places-drawer';
@@ -136,6 +137,7 @@ import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { buildDaySequence, dayStopNumbers, resolveDailyBases } from '@/lib/itinerary/day-sequence';
 import { scheduledPlaceUse } from '@/lib/itinerary/places';
 import { itineraryDayRouteRevision, itineraryPlanScoreRevision } from '@/lib/itinerary/routes';
+import { itineraryViewHref, resolveItineraryView } from '@/lib/itinerary/view';
 import {
   buildItineraryMapPoints,
   dailyBasePoints,
@@ -300,6 +302,11 @@ export function ItineraryManager({
     queryKey: queryKeys.itinerary(tripId),
   });
   const itinerary = itineraryQuery.data ?? null;
+  const itineraryView = useMemo(
+    () => resolveItineraryView(requestedDayId, itinerary?.days.map((day) => day.id) ?? []),
+    [itinerary?.days, requestedDayId],
+  );
+  const activeView = itineraryView.view;
 
   /**
    * Writes a server-confirmed itinerary change straight into the shared entry.
@@ -374,18 +381,15 @@ export function ItineraryManager({
   const [savingRouteOwner, setSavingRouteOwner] = useState<string | null>(null);
   const [placesDrawerOpen, setPlacesDrawerOpen] = useState(false);
   const desktopMapLayout = useDesktopMapLayout();
-  const planningMapVisible = desktopMapLayout === true || mobileView === 'map';
-  const shouldMountPlanningMap = planningMapVisible || planningMapMounted;
+  const planningMapVisible =
+    activeView === 'day' && (desktopMapLayout === true || mobileView === 'map');
+  const shouldMountPlanningMap = activeView === 'day' && (planningMapVisible || planningMapMounted);
 
   // Desktop opens the map immediately. Remember that construction so resizing
   // to the mobile list does not discard a map the user has already paid to load.
   useEffect(() => {
-    if (desktopMapLayout === true) setPlanningMapMounted(true);
-  }, [desktopMapLayout]);
-
-  // The URL seeds the first selection and then follows it. Reading it on every
-  // refresh instead would undo a manual day switch on the next mutation.
-  const initialDayIdRef = useRef(requestedDayId);
+    if (activeView === 'day' && desktopMapLayout === true) setPlanningMapMounted(true);
+  }, [activeView, desktopMapLayout]);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -398,21 +402,30 @@ export function ItineraryManager({
   useEffect(() => {
     if (!itinerary) return;
     setSelectedDayId((current) => {
-      const preferred = current ?? initialDayIdRef.current;
+      const preferred = itineraryView.view === 'day' ? itineraryView.selectedDayId : current;
       return preferred && itinerary.days.some((day) => day.id === preferred)
         ? preferred
         : (itinerary.days[0]?.id ?? null);
     });
-  }, [itinerary]);
+  }, [itinerary, itineraryView]);
+
+  // A stale shared link is not a different view. Clean it back to the canonical
+  // overview URL instead of silently planning the wrong day.
+  useEffect(() => {
+    if (!itinerary || !itineraryView.invalidRequestedDay) return;
+    router.replace(itineraryViewHref(pathname, searchParams.toString(), null), {
+      scroll: false,
+    });
+  }, [itinerary, itineraryView.invalidRequestedDay, pathname, router, searchParams]);
 
   // Which day you are planning is part of where you are, so a reload, a shared
   // link, and the back button all land on the same day you left.
   useEffect(() => {
-    if (!selectedDayId || requestedDayId === selectedDayId) return;
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('day', selectedDayId);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  }, [pathname, requestedDayId, router, searchParams, selectedDayId]);
+    if (activeView !== 'day' || !selectedDayId || requestedDayId === selectedDayId) return;
+    router.replace(itineraryViewHref(pathname, searchParams.toString(), selectedDayId), {
+      scroll: false,
+    });
+  }, [activeView, pathname, requestedDayId, router, searchParams, selectedDayId]);
 
   const selectedDay = useMemo(
     () => itinerary?.days.find((day) => day.id === selectedDayId) ?? null,
@@ -447,7 +460,7 @@ export function ItineraryManager({
   const requestRoutePolylines = includeRoutePolylines || polylineRoutesCached;
 
   const routesQuery = useQuery({
-    enabled: selectedDay !== null && desktopMapLayout !== null,
+    enabled: activeView === 'day' && selectedDay !== null && desktopMapLayout !== null,
     queryFn: ({ signal }) =>
       fetchItineraryDayRoutes(tripId, selectedDay?.id as string, {
         includePolyline: requestRoutePolylines,
@@ -466,7 +479,7 @@ export function ItineraryManager({
 
   const routes = routesQuery.data ?? null;
   const routeStatus: 'error' | 'idle' | 'loading' =
-    !selectedDay || desktopMapLayout === null
+    activeView !== 'day' || !selectedDay || desktopMapLayout === null
       ? 'idle'
       : routesQuery.isPending
         ? 'loading'
@@ -638,7 +651,7 @@ export function ItineraryManager({
   );
 
   const mapPoints = useMemo(() => {
-    if (!itinerary || !selectedDay) return [];
+    if (activeView !== 'day' || !itinerary || !selectedDay) return [];
     const points = buildItineraryMapPoints({
       itinerary,
       orderOffset: stopNumbers.itemOffset,
@@ -668,7 +681,7 @@ export function ItineraryManager({
       ),
       ...bases,
     ];
-  }, [dailyBases, itinerary, placeUse, selectedDay, selectedIndex, stopNumbers, t]);
+  }, [activeView, dailyBases, itinerary, placeUse, selectedDay, selectedIndex, stopNumbers, t]);
 
   /**
    * A base is a stop of the day, so it reads like one: numbered in travel order,
@@ -1455,6 +1468,27 @@ export function ItineraryManager({
     if (day) setSelectedDayId(day.id);
   }
 
+  function openDay(dayId: string) {
+    setSelectedDayId(dayId);
+    router.push(itineraryViewHref(pathname, searchParams.toString(), dayId), { scroll: false });
+  }
+
+  function openOverviewItem(item: ItineraryItem) {
+    if (!item.itineraryDayId) return;
+    openDay(item.itineraryDayId);
+    openEdit(item);
+  }
+
+  function changeItineraryView(value: string) {
+    if (value === 'overview') {
+      router.push(itineraryViewHref(pathname, searchParams.toString(), null), { scroll: false });
+      return;
+    }
+
+    const dayId = selectedDayId ?? itinerary?.days[0]?.id;
+    if (dayId) openDay(dayId);
+  }
+
   if (status === 'loading') {
     return <PageState kind="loading" loadingShape="tripSection" title={t('loading')} />;
   }
@@ -1495,499 +1529,539 @@ export function ItineraryManager({
           <AlertDescription>{t('timeZoneConsequence')}</AlertDescription>
         </Alert>
       ) : null}
-      {/* The bridge keeps the two mobile sticky rows visually contiguous. The
-          tab row sits one layer above it so its active underline remains crisp
-          while scrolling content stays covered. */}
-      <div className="relative sticky top-[calc(var(--safe-top)+var(--header-offset)+3.25rem)] z-[calc(var(--layer-sticky)-1)] -mx-1 bg-background pb-3 backdrop-blur before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-background before:content-[''] md:hidden">
-        <div className="flex items-center gap-2.5">
-          <Button
-            aria-label={t('previousDay')}
-            disabled={selectedIndex <= 0}
-            onClick={() => selectAdjacentDay(-1)}
-            size="icon"
-            variant="outline"
-          >
-            <ChevronLeft aria-hidden="true" />
-          </Button>
-          <DatePicker
-            activityCounts={dayActivityCounts}
-            className="min-w-0 flex-1"
-            clearable={false}
-            id="itinerary-day-picker"
-            label={t('chooseDay')}
-            max={itinerary.trip.endDate}
-            min={itinerary.trip.startDate}
-            onChange={(date) => {
-              const day = itinerary.days.find((candidate) => candidate.date === date);
-              if (day) setSelectedDayId(day.id);
-            }}
-            required
-            value={selectedDay?.date ?? ''}
-          />
-          <Button
-            aria-label={t('nextDay')}
-            disabled={selectedIndex < 0 || selectedIndex >= itinerary.days.length - 1}
-            onClick={() => selectAdjacentDay(1)}
-            size="icon"
-            variant="outline"
-          >
-            <ChevronRight aria-hidden="true" />
-          </Button>
-        </div>
-      </div>
+      <Tabs onValueChange={changeItineraryView} value={activeView}>
+        <TabsList aria-label={t('view.navigation')}>
+          <TabsTab value="overview">{t('view.overview')}</TabsTab>
+          <TabsTab value="day">{t('view.day')}</TabsTab>
+          <TabsIndicator />
+        </TabsList>
+      </Tabs>
 
-      <div className="overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card shadow-[var(--shadow-surface)] md:grid md:min-h-[34rem] md:grid-cols-[15rem_minmax(0,1fr)]">
-        <nav
-          aria-label={t('dayNavigation')}
-          className="relative hidden border-r border-border md:block"
-        >
-          {/* Filled rather than stretched: absolute content adds nothing to the grid
+      {activeView === 'overview' ? (
+        <ItineraryOverview
+          days={itinerary.days}
+          locale={locale}
+          onEditItem={openOverviewItem}
+          onOpenDay={openDay}
+          resolveItemName={itemName}
+          timeFormat={preferences.timeFormat}
+        />
+      ) : (
+        <>
+          {/* The bridge keeps the two mobile sticky rows visually contiguous. The
+              tab row sits one layer above it so its active underline remains crisp
+              while scrolling content stays covered. */}
+          <div className="relative sticky top-[calc(var(--safe-top)+var(--header-offset)+3.25rem)] z-[calc(var(--layer-sticky)-1)] -mx-1 bg-background pb-3 backdrop-blur before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-background before:content-[''] md:hidden">
+            <div className="flex items-center gap-2.5">
+              <Button
+                aria-label={t('previousDay')}
+                disabled={selectedIndex <= 0}
+                onClick={() => selectAdjacentDay(-1)}
+                size="icon"
+                variant="outline"
+              >
+                <ChevronLeft aria-hidden="true" />
+              </Button>
+              <DatePicker
+                activityCounts={dayActivityCounts}
+                className="min-w-0 flex-1"
+                clearable={false}
+                id="itinerary-day-picker"
+                label={t('chooseDay')}
+                max={itinerary.trip.endDate}
+                min={itinerary.trip.startDate}
+                onChange={(date) => {
+                  const day = itinerary.days.find((candidate) => candidate.date === date);
+                  if (day) setSelectedDayId(day.id);
+                }}
+                required
+                value={selectedDay?.date ?? ''}
+              />
+              <Button
+                aria-label={t('nextDay')}
+                disabled={selectedIndex < 0 || selectedIndex >= itinerary.days.length - 1}
+                onClick={() => selectAdjacentDay(1)}
+                size="icon"
+                variant="outline"
+              >
+                <ChevronRight aria-hidden="true" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card shadow-[var(--shadow-surface)] md:grid md:min-h-[34rem] md:grid-cols-[15rem_minmax(0,1fr)]">
+            <nav
+              aria-label={t('dayNavigation')}
+              className="relative hidden border-r border-border md:block"
+            >
+              {/* Filled rather than stretched: absolute content adds nothing to the grid
               row, so a long trip's day list scrolls inside the panel instead of
               making the rail taller than the day being planned beside it. */}
-          <div className="flex flex-col md:absolute md:inset-0">
-            <div className="border-b border-border px-4 py-3">
-              <p className="text-sm font-semibold">{t('days')}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {t('dayCount', { count: itinerary.days.length })}
-              </p>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-2">
-              {itinerary.days.map((day, index) => {
-                const active = day.id === selectedDayId;
-                return (
-                  <button
-                    aria-current={active ? 'date' : undefined}
-                    className={cn(
-                      'flex min-h-14 w-full items-center justify-between gap-3 rounded-[var(--radius-md)] px-3 py-2 text-left transition-colors duration-[var(--motion-standard)] outline-none focus-visible:ring-3 focus-visible:ring-ring/40',
-                      active ? 'bg-secondary text-secondary-foreground' : 'hover:bg-surface-hover',
-                    )}
-                    key={day.id}
-                    onClick={() => setSelectedDayId(day.id)}
-                    type="button"
-                  >
-                    <span className="min-w-0 flex-1">
-                      {day.name ? (
-                        <>
-                          <span className="block truncate text-sm font-medium">{day.name}</span>
-                          <span className="block truncate text-xs text-muted-foreground">
-                            {t('dayOption', { date: formatDate(day.date), number: index + 1 })}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="block text-xs text-muted-foreground">
-                            {t('dayNumber', { number: index + 1 })}
-                          </span>
-                          <span className="block text-sm font-medium">{formatDate(day.date)}</span>
-                        </>
-                      )}
-                    </span>
-                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                      {day.items.length}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </nav>
-
-        {selectedDay ? (
-          <div className="min-w-0">
-            <div className="flex flex-col gap-4 border-b border-border px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6 sm:py-4">
-              <div className="min-w-0 flex-1">
-                {/* The picker carries calendar navigation. This block gives a saved
-                    name enough room to be the day's identity. */}
-                {selectedDay.name ? (
-                  <>
-                    <h2 className="text-lg leading-6 font-semibold tracking-tight break-words text-balance">
-                      {selectedDay.name}
-                    </h2>
-                    <p className="mt-1 text-sm leading-5 text-muted-foreground">
-                      {t('dayOption', {
-                        date: formatDate(selectedDay.date, true),
-                        number: selectedIndex + 1,
-                      })}
-                    </p>
-                  </>
-                ) : (
-                  <h2 className="text-lg leading-6 font-semibold tracking-tight break-words text-balance">
-                    {formatDate(selectedDay.date, true)}
-                  </h2>
-                )}
-                {selectedDay.notes ? (
-                  <p className="mt-1.5 max-w-2xl whitespace-pre-wrap text-sm leading-6 text-text-subtle">
-                    {selectedDay.notes}
+              <div className="flex flex-col md:absolute md:inset-0">
+                <div className="border-b border-border px-4 py-3">
+                  <p className="text-sm font-semibold">{t('days')}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {t('dayCount', { count: itinerary.days.length })}
                   </p>
-                ) : null}
-              </div>
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:shrink-0">
-                <Button className="w-full sm:w-auto" onClick={() => openCreate(selectedDay)}>
-                  <Plus aria-hidden="true" data-icon="inline-start" />
-                  {t('addItem')}
-                </Button>
-                <Popover onOpenChange={setDaySettingsOpen} open={daySettingsOpen}>
-                  <PopoverTrigger
-                    render={
-                      <Button
-                        aria-label={t('daySettings')}
-                        className="border border-border-subtle bg-background shadow-[var(--shadow-control)] sm:border-transparent sm:bg-transparent sm:shadow-none"
-                        size="icon"
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                  {itinerary.days.map((day, index) => {
+                    const active = day.id === selectedDayId;
+                    return (
+                      <button
+                        aria-current={active ? 'date' : undefined}
+                        className={cn(
+                          'flex min-h-14 w-full items-center justify-between gap-3 rounded-[var(--radius-md)] px-3 py-2 text-left transition-colors duration-[var(--motion-standard)] outline-none focus-visible:ring-3 focus-visible:ring-ring/40',
+                          active
+                            ? 'bg-secondary text-secondary-foreground'
+                            : 'hover:bg-surface-hover',
+                        )}
+                        key={day.id}
+                        onClick={() => setSelectedDayId(day.id)}
                         type="button"
-                        variant="ghost"
-                      />
-                    }
-                  >
-                    <Settings2 aria-hidden="true" />
-                  </PopoverTrigger>
-                  <PopoverContent
-                    align="end"
-                    className="max-h-[min(36rem,var(--available-height))] w-[min(22rem,calc(100vw-2rem))] gap-0 overflow-y-auto p-0"
-                    collisionAvoidance={{
-                      align: 'shift',
-                      fallbackAxisSide: 'none',
-                      side: 'shift',
-                    }}
-                    collisionPadding={16}
-                    positionMethod="fixed"
-                    sideOffset={8}
-                  >
-                    <PopoverHeader className="border-b border-border px-4 py-3.5">
-                      <PopoverTitle className="text-sm">{t('daySettings')}</PopoverTitle>
-                    </PopoverHeader>
-
-                    <div className="border-b border-border p-2">
-                      <Button
-                        className="w-full justify-start px-3"
-                        onClick={() => {
-                          setDaySettingsOpen(false);
-                          setDayNameEditor(selectedDay);
-                          setDayNameValue(selectedDay.name ?? '');
-                          setDayNameError(null);
-                        }}
-                        variant="ghost"
                       >
-                        <Pencil aria-hidden="true" data-icon="inline-start" />
-                        {selectedDay.name ? t('editDayName') : t('addDayName')}
-                      </Button>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-4 px-4 py-4">
-                      <div className="flex min-w-0 items-start gap-3">
-                        <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-secondary text-secondary-foreground">
-                          <Ruler aria-hidden="true" className="size-4" />
+                        <span className="min-w-0 flex-1">
+                          {day.name ? (
+                            <>
+                              <span className="block truncate text-sm font-medium">{day.name}</span>
+                              <span className="block truncate text-xs text-muted-foreground">
+                                {t('dayOption', { date: formatDate(day.date), number: index + 1 })}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="block text-xs text-muted-foreground">
+                                {t('dayNumber', { number: index + 1 })}
+                              </span>
+                              <span className="block text-sm font-medium">
+                                {formatDate(day.date)}
+                              </span>
+                            </>
+                          )}
                         </span>
-                        <div className="min-w-0">
-                          <label
-                            className="text-sm font-medium text-foreground"
-                            htmlFor="itinerary-travel-details"
+                        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                          {day.items.length}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </nav>
+
+            {selectedDay ? (
+              <div className="min-w-0">
+                <div className="flex flex-col gap-4 border-b border-border px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6 sm:py-4">
+                  <div className="min-w-0 flex-1">
+                    {/* The picker carries calendar navigation. This block gives a saved
+                    name enough room to be the day's identity. */}
+                    {selectedDay.name ? (
+                      <>
+                        <h2 className="text-lg leading-6 font-semibold tracking-tight break-words text-balance">
+                          {selectedDay.name}
+                        </h2>
+                        <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                          {t('dayOption', {
+                            date: formatDate(selectedDay.date, true),
+                            number: selectedIndex + 1,
+                          })}
+                        </p>
+                      </>
+                    ) : (
+                      <h2 className="text-lg leading-6 font-semibold tracking-tight break-words text-balance">
+                        {formatDate(selectedDay.date, true)}
+                      </h2>
+                    )}
+                    {selectedDay.notes ? (
+                      <p className="mt-1.5 max-w-2xl whitespace-pre-wrap text-sm leading-6 text-text-subtle">
+                        {selectedDay.notes}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:shrink-0">
+                    <Button className="w-full sm:w-auto" onClick={() => openCreate(selectedDay)}>
+                      <Plus aria-hidden="true" data-icon="inline-start" />
+                      {t('addItem')}
+                    </Button>
+                    <Popover onOpenChange={setDaySettingsOpen} open={daySettingsOpen}>
+                      <PopoverTrigger
+                        render={
+                          <Button
+                            aria-label={t('daySettings')}
+                            className="border border-border-subtle bg-background shadow-[var(--shadow-control)] sm:border-transparent sm:bg-transparent sm:shadow-none"
+                            size="icon"
+                            type="button"
+                            variant="ghost"
+                          />
+                        }
+                      >
+                        <Settings2 aria-hidden="true" />
+                      </PopoverTrigger>
+                      <PopoverContent
+                        align="end"
+                        className="max-h-[min(36rem,var(--available-height))] w-[min(22rem,calc(100vw-2rem))] gap-0 overflow-y-auto p-0"
+                        collisionAvoidance={{
+                          align: 'shift',
+                          fallbackAxisSide: 'none',
+                          side: 'shift',
+                        }}
+                        collisionPadding={16}
+                        positionMethod="fixed"
+                        sideOffset={8}
+                      >
+                        <PopoverHeader className="border-b border-border px-4 py-3.5">
+                          <PopoverTitle className="text-sm">{t('daySettings')}</PopoverTitle>
+                        </PopoverHeader>
+
+                        <div className="border-b border-border p-2">
+                          <Button
+                            className="w-full justify-start px-3"
+                            onClick={() => {
+                              setDaySettingsOpen(false);
+                              setDayNameEditor(selectedDay);
+                              setDayNameValue(selectedDay.name ?? '');
+                              setDayNameError(null);
+                            }}
+                            variant="ghost"
                           >
-                            {t('distance')}
-                          </label>
-                          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                            {t('distanceHelp')}
-                          </p>
+                            <Pencil aria-hidden="true" data-icon="inline-start" />
+                            {selectedDay.name ? t('editDayName') : t('addDayName')}
+                          </Button>
                         </div>
-                      </div>
-                      <Switch
-                        checked={!compact}
-                        id="itinerary-travel-details"
-                        onCheckedChange={(checked) => setCompactItinerary(!checked)}
-                      />
-                    </div>
 
-                    <Collapsible className="border-t border-border px-4 py-3">
-                      <CollapsibleTrigger className="group w-full justify-between gap-3 text-left">
-                        <span className="flex min-w-0 items-center gap-3">
-                          <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-secondary text-secondary-foreground">
-                            <MapPinned aria-hidden="true" className="size-4" />
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block text-sm font-medium text-foreground">
-                              {t('dailyBase')}
+                        <div className="flex items-center justify-between gap-4 px-4 py-4">
+                          <div className="flex min-w-0 items-start gap-3">
+                            <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-secondary text-secondary-foreground">
+                              <Ruler aria-hidden="true" className="size-4" />
                             </span>
-                            <span className="mt-0.5 block truncate text-xs font-normal text-muted-foreground">
-                              {dailyBaseSummary}
-                            </span>
-                          </span>
-                        </span>
-                        <ChevronDown
-                          aria-hidden="true"
-                          className="shrink-0 transition-transform duration-[var(--motion-standard)] group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
-                        />
-                      </CollapsibleTrigger>
-                      <CollapsiblePanel>
-                        <div className="space-y-3 pt-4">
-                          <p className="text-xs leading-5 text-muted-foreground">
-                            {t('dailyBaseHelp')}
-                          </p>
-                          <div className="space-y-1.5">
-                            <p className="text-xs font-medium text-muted-foreground">
-                              {t('dailyBaseArrival')}
-                            </p>
-                            <Select
-                              onValueChange={(value) =>
-                                void handleDailyBase(selectedDay, value === 'none' ? null : value)
-                              }
-                              value={selectedDay.dailyBaseTripPlaceId ?? 'none'}
-                            >
-                              <SelectTrigger
-                                aria-label={t('dailyBaseArrival')}
-                                className="w-full"
-                                size="sm"
+                            <div className="min-w-0">
+                              <label
+                                className="text-sm font-medium text-foreground"
+                                htmlFor="itinerary-travel-details"
                               >
-                                <SelectValue>
-                                  {selectedDay.dailyBaseTripPlaceId
-                                    ? placeName(
-                                        itinerary.tripPlaces.find(
-                                          (place) => place.id === selectedDay.dailyBaseTripPlaceId,
-                                        ) ?? null,
-                                      )
-                                    : t('noDailyBase')}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent align="end">
-                                <SelectItem value="none">{t('noDailyBase')}</SelectItem>
-                                {alphabeticalTripPlaces.map((place) => (
-                                  <SelectItem key={place.id} value={place.id}>
-                                    {placeName(place)}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                                {t('distance')}
+                              </label>
+                              <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                                {t('distanceHelp')}
+                              </p>
+                            </div>
                           </div>
-                          <div className="space-y-1.5">
-                            <p className="text-xs font-medium text-muted-foreground">
-                              {t('dailyBaseDeparture')}
-                            </p>
-                            <Select
-                              onValueChange={(value) =>
-                                void handleDailyBase(
-                                  selectedDay,
-                                  selectedDay.dailyBaseTripPlaceId,
-                                  value === 'same' ? null : value,
-                                )
-                              }
-                              value={selectedDay.dailyBaseDepartureTripPlaceId ?? 'same'}
-                            >
-                              <SelectTrigger
-                                aria-label={t('dailyBaseDeparture')}
-                                className="w-full"
-                                size="sm"
-                              >
-                                <SelectValue>
-                                  {selectedDay.dailyBaseDepartureTripPlaceId
-                                    ? placeName(
-                                        itinerary.tripPlaces.find(
-                                          (place) =>
-                                            place.id === selectedDay.dailyBaseDepartureTripPlaceId,
-                                        ) ?? null,
-                                      )
-                                    : t('dailyBaseSameAsArrival')}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent align="end">
-                                <SelectItem value="same">{t('dailyBaseSameAsArrival')}</SelectItem>
-                                {alphabeticalTripPlaces.map((place) => (
-                                  <SelectItem key={place.id} value={place.id}>
-                                    {placeName(place)}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
+                          <Switch
+                            checked={!compact}
+                            id="itinerary-travel-details"
+                            onCheckedChange={(checked) => setCompactItinerary(!checked)}
+                          />
                         </div>
-                      </CollapsiblePanel>
-                    </Collapsible>
 
-                    <div className="space-y-0.5 border-t border-border p-2">
-                      <Button
-                        className="w-full justify-start px-3"
-                        onClick={() => {
-                          setDaySettingsOpen(false);
-                          setDayNoteEditor(selectedDay);
-                          setDayNoteValue(selectedDay.notes ?? '');
-                        }}
-                        variant="ghost"
-                      >
-                        <NotebookPen aria-hidden="true" data-icon="inline-start" />
-                        {selectedDay.notes ? t('editDayNote') : t('addDayNote')}
-                      </Button>
-                      {selectedDay.items.length ? (
-                        <Button
-                          className="mt-2 w-full justify-start px-3"
-                          onClick={() => openDayMove(selectedDay)}
-                          variant="outline"
-                        >
-                          <CalendarClock aria-hidden="true" data-icon="inline-start" />
-                          {t('dayMove.action')}
-                        </Button>
-                      ) : null}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
+                        <Collapsible className="border-t border-border px-4 py-3">
+                          <CollapsibleTrigger className="group w-full justify-between gap-3 text-left">
+                            <span className="flex min-w-0 items-center gap-3">
+                              <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-secondary text-secondary-foreground">
+                                <MapPinned aria-hidden="true" className="size-4" />
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block text-sm font-medium text-foreground">
+                                  {t('dailyBase')}
+                                </span>
+                                <span className="mt-0.5 block truncate text-xs font-normal text-muted-foreground">
+                                  {dailyBaseSummary}
+                                </span>
+                              </span>
+                            </span>
+                            <ChevronDown
+                              aria-hidden="true"
+                              className="shrink-0 transition-transform duration-[var(--motion-standard)] group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
+                            />
+                          </CollapsibleTrigger>
+                          <CollapsiblePanel>
+                            <div className="space-y-3 pt-4">
+                              <p className="text-xs leading-5 text-muted-foreground">
+                                {t('dailyBaseHelp')}
+                              </p>
+                              <div className="space-y-1.5">
+                                <p className="text-xs font-medium text-muted-foreground">
+                                  {t('dailyBaseArrival')}
+                                </p>
+                                <Select
+                                  onValueChange={(value) =>
+                                    void handleDailyBase(
+                                      selectedDay,
+                                      value === 'none' ? null : value,
+                                    )
+                                  }
+                                  value={selectedDay.dailyBaseTripPlaceId ?? 'none'}
+                                >
+                                  <SelectTrigger
+                                    aria-label={t('dailyBaseArrival')}
+                                    className="w-full"
+                                    size="sm"
+                                  >
+                                    <SelectValue>
+                                      {selectedDay.dailyBaseTripPlaceId
+                                        ? placeName(
+                                            itinerary.tripPlaces.find(
+                                              (place) =>
+                                                place.id === selectedDay.dailyBaseTripPlaceId,
+                                            ) ?? null,
+                                          )
+                                        : t('noDailyBase')}
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent align="end">
+                                    <SelectItem value="none">{t('noDailyBase')}</SelectItem>
+                                    {alphabeticalTripPlaces.map((place) => (
+                                      <SelectItem key={place.id} value={place.id}>
+                                        {placeName(place)}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-1.5">
+                                <p className="text-xs font-medium text-muted-foreground">
+                                  {t('dailyBaseDeparture')}
+                                </p>
+                                <Select
+                                  onValueChange={(value) =>
+                                    void handleDailyBase(
+                                      selectedDay,
+                                      selectedDay.dailyBaseTripPlaceId,
+                                      value === 'same' ? null : value,
+                                    )
+                                  }
+                                  value={selectedDay.dailyBaseDepartureTripPlaceId ?? 'same'}
+                                >
+                                  <SelectTrigger
+                                    aria-label={t('dailyBaseDeparture')}
+                                    className="w-full"
+                                    size="sm"
+                                  >
+                                    <SelectValue>
+                                      {selectedDay.dailyBaseDepartureTripPlaceId
+                                        ? placeName(
+                                            itinerary.tripPlaces.find(
+                                              (place) =>
+                                                place.id ===
+                                                selectedDay.dailyBaseDepartureTripPlaceId,
+                                            ) ?? null,
+                                          )
+                                        : t('dailyBaseSameAsArrival')}
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent align="end">
+                                    <SelectItem value="same">
+                                      {t('dailyBaseSameAsArrival')}
+                                    </SelectItem>
+                                    {alphabeticalTripPlaces.map((place) => (
+                                      <SelectItem key={place.id} value={place.id}>
+                                        {placeName(place)}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          </CollapsiblePanel>
+                        </Collapsible>
 
-            {compact ? null : (
-              <ItineraryRouteSummary
-                data={routes}
-                distanceUnit={preferences.distanceUnit}
-                locale={locale}
-                status={routeStatus}
-              />
-            )}
+                        <div className="space-y-0.5 border-t border-border p-2">
+                          <Button
+                            className="w-full justify-start px-3"
+                            onClick={() => {
+                              setDaySettingsOpen(false);
+                              setDayNoteEditor(selectedDay);
+                              setDayNoteValue(selectedDay.notes ?? '');
+                            }}
+                            variant="ghost"
+                          >
+                            <NotebookPen aria-hidden="true" data-icon="inline-start" />
+                            {selectedDay.notes ? t('editDayNote') : t('addDayNote')}
+                          </Button>
+                          {selectedDay.items.length ? (
+                            <Button
+                              className="mt-2 w-full justify-start px-3"
+                              onClick={() => openDayMove(selectedDay)}
+                              variant="outline"
+                            >
+                              <CalendarClock aria-hidden="true" data-icon="inline-start" />
+                              {t('dayMove.action')}
+                            </Button>
+                          ) : null}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
 
-            <Tabs
-              onValueChange={(value) => {
-                const view = value as 'list' | 'map';
-                setMobileView(view);
-                if (view === 'map') setPlanningMapMounted(true);
-              }}
-              value={mobileView}
-            >
-              <div className="border-b border-border px-3 py-3 lg:hidden">
-                <TabsList aria-label={t('map.viewNavigation')} className="grid w-full grid-cols-2">
-                  <TabsTab
-                    aria-controls="itinerary-list-panel"
-                    className="gap-2"
-                    id="itinerary-list-tab"
-                    value="list"
-                  >
-                    <List aria-hidden="true" data-icon="inline-start" />
-                    {t('map.listView')}
-                  </TabsTab>
-                  <TabsTab
-                    aria-controls="itinerary-map-panel"
-                    className="gap-2"
-                    id="itinerary-map-tab"
-                    value="map"
-                  >
-                    <MapIcon aria-hidden="true" data-icon="inline-start" />
-                    {t('map.mapView')}
-                  </TabsTab>
-                  <TabsIndicator />
-                </TabsList>
-              </div>
-            </Tabs>
-
-            <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.9fr)]">
-              <div
-                aria-labelledby="itinerary-list-tab"
-                className={cn('p-4 sm:p-6', mobileView === 'map' && 'hidden lg:block')}
-                id="itinerary-list-panel"
-                role="tabpanel"
-                tabIndex={mobileView === 'list' ? 0 : -1}
-              >
-                {selectedDay.items.length ? (
-                  <ItineraryDayTimeline
-                    dayOptions={itinerary.days.map((day, dayIndex) => ({
-                      id: day.id,
-                      label: dayOption(day, dayIndex),
-                    }))}
-                    defaultTimeZone={selectedDay.defaultTimeZone}
+                {compact ? null : (
+                  <ItineraryRouteSummary
+                    data={routes}
                     distanceUnit={preferences.distanceUnit}
-                    entries={shownSequence}
-                    itemCount={selectedDay.items.length}
-                    label={t('itemListLabel')}
                     locale={locale}
-                    onDeleteItem={setItemToDelete}
-                    onDuplicateItem={(item) => void handleDuplicate(item)}
-                    onEditItem={openEdit}
-                    onModeChange={(segment, mode) => void handleRouteModeChange(segment, mode)}
-                    onMoveItem={(item, dayId, position) =>
-                      void handleOrganize(item, dayId, position)
-                    }
-                    onSelectBase={selectBaseOnMap}
-                    onSelectItem={selectItemOnMap}
-                    onViewBaseDetails={(tripPlaceId) =>
-                      setDetailsPlace(tripPlaceById(tripPlaceId) ?? null)
-                    }
-                    onViewItemDetails={(item) => setDetailsPlace(item.tripPlace)}
-                    organizingItemId={organizingItemId}
-                    resolveBase={(tripPlaceId) => {
-                      const tripPlace = tripPlaceById(tripPlaceId);
-                      if (!tripPlace) return null;
-                      const point = mapPoints.find(
-                        (candidate) =>
-                          candidate.kind === 'base' && candidate.tripPlaceId === tripPlace.id,
-                      );
-                      return {
-                        located: Boolean(point),
-                        name: placeName(tripPlace) ?? t('providerPlace'),
-                        selected: Boolean(point && selectedMapPointId === point.id),
-                      };
-                    }}
-                    resolveItem={(item) => ({
-                      located: Boolean(item.tripPlace && placeLocation(item.tripPlace)),
-                      mapsHref: item.tripPlace ? googleMapsPlaceHref(item.tripPlace.place) : null,
-                      name: itemName(item),
-                      selected: selectedMapItemId === item.id,
-                    })}
-                    routesStale={routes?.stale ?? false}
-                    savingRouteOwner={savingRouteOwner}
-                    selectedDayId={selectedDay.id}
-                    timeFormat={preferences.timeFormat}
-                    unscheduledLabel={t('unscheduled')}
-                  />
-                ) : (
-                  <PageState
-                    actions={
-                      <Button onClick={() => openCreate(selectedDay)} variant="outline">
-                        <Plus aria-hidden="true" data-icon="inline-start" />
-                        {t('addFirstItem')}
-                      </Button>
-                    }
-                    className="min-h-60 justify-center"
-                    description={t('emptyDescription')}
-                    headingLevel={2}
-                    icon={<CalendarClock aria-hidden="true" />}
-                    title={t('emptyTitle')}
+                    status={routeStatus}
                   />
                 )}
-                {planScoreEnabled ? (
-                  <ItineraryPlanScore
-                    onSelectReference={focusItineraryItem}
-                    revision={planScoreRevision}
-                    selectedDayId={selectedDayId}
-                    tripId={tripId}
-                  />
-                ) : null}
-              </div>
 
-              <aside
-                aria-label={t('map.regionLabel')}
-                className={cn(
-                  'min-w-0 border-border lg:block lg:border-l',
-                  mobileView === 'list' && 'hidden',
-                )}
-                id="itinerary-map-panel"
-                role="tabpanel"
-                tabIndex={mobileView === 'map' ? 0 : -1}
-              >
-                {shouldMountPlanningMap ? (
-                  <ItineraryPlanningMap
-                    onAddToDay={(point) => addTripPlaceToSelectedDay(point.tripPlaceId)}
-                    onClearSelection={clearMapSelection}
-                    onSelectPoint={handleMapPointSelection}
-                    onViewItem={viewMapItem}
-                    onViewPlaceDetails={(point) => {
-                      const tripPlace = tripPlaceById(point.tripPlaceId);
-                      if (tripPlace) setDetailsPlace(tripPlace);
-                    }}
-                    points={mapPoints}
-                    routePolylines={routePolylines}
-                    selectedPointId={selectedMapPointId}
-                    suspendUpdates={!planningMapVisible}
-                  />
-                ) : (
-                  <div aria-hidden="true" className="hidden min-h-[34rem] bg-muted/40 lg:block" />
-                )}
-              </aside>
-            </div>
+                <Tabs
+                  onValueChange={(value) => {
+                    const view = value as 'list' | 'map';
+                    setMobileView(view);
+                    if (view === 'map') setPlanningMapMounted(true);
+                  }}
+                  value={mobileView}
+                >
+                  <div className="border-b border-border px-3 py-3 lg:hidden">
+                    <TabsList
+                      aria-label={t('map.viewNavigation')}
+                      className="grid w-full grid-cols-2"
+                    >
+                      <TabsTab
+                        aria-controls="itinerary-list-panel"
+                        className="gap-2"
+                        id="itinerary-list-tab"
+                        value="list"
+                      >
+                        <List aria-hidden="true" data-icon="inline-start" />
+                        {t('map.listView')}
+                      </TabsTab>
+                      <TabsTab
+                        aria-controls="itinerary-map-panel"
+                        className="gap-2"
+                        id="itinerary-map-tab"
+                        value="map"
+                      >
+                        <MapIcon aria-hidden="true" data-icon="inline-start" />
+                        {t('map.mapView')}
+                      </TabsTab>
+                      <TabsIndicator />
+                    </TabsList>
+                  </div>
+                </Tabs>
+
+                <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.9fr)]">
+                  <div
+                    aria-labelledby="itinerary-list-tab"
+                    className={cn('p-4 sm:p-6', mobileView === 'map' && 'hidden lg:block')}
+                    id="itinerary-list-panel"
+                    role="tabpanel"
+                    tabIndex={mobileView === 'list' ? 0 : -1}
+                  >
+                    {selectedDay.items.length ? (
+                      <ItineraryDayTimeline
+                        dayOptions={itinerary.days.map((day, dayIndex) => ({
+                          id: day.id,
+                          label: dayOption(day, dayIndex),
+                        }))}
+                        defaultTimeZone={selectedDay.defaultTimeZone}
+                        distanceUnit={preferences.distanceUnit}
+                        entries={shownSequence}
+                        itemCount={selectedDay.items.length}
+                        label={t('itemListLabel')}
+                        locale={locale}
+                        onDeleteItem={setItemToDelete}
+                        onDuplicateItem={(item) => void handleDuplicate(item)}
+                        onEditItem={openEdit}
+                        onModeChange={(segment, mode) => void handleRouteModeChange(segment, mode)}
+                        onMoveItem={(item, dayId, position) =>
+                          void handleOrganize(item, dayId, position)
+                        }
+                        onSelectBase={selectBaseOnMap}
+                        onSelectItem={selectItemOnMap}
+                        onViewBaseDetails={(tripPlaceId) =>
+                          setDetailsPlace(tripPlaceById(tripPlaceId) ?? null)
+                        }
+                        onViewItemDetails={(item) => setDetailsPlace(item.tripPlace)}
+                        organizingItemId={organizingItemId}
+                        resolveBase={(tripPlaceId) => {
+                          const tripPlace = tripPlaceById(tripPlaceId);
+                          if (!tripPlace) return null;
+                          const point = mapPoints.find(
+                            (candidate) =>
+                              candidate.kind === 'base' && candidate.tripPlaceId === tripPlace.id,
+                          );
+                          return {
+                            located: Boolean(point),
+                            name: placeName(tripPlace) ?? t('providerPlace'),
+                            selected: Boolean(point && selectedMapPointId === point.id),
+                          };
+                        }}
+                        resolveItem={(item) => ({
+                          located: Boolean(item.tripPlace && placeLocation(item.tripPlace)),
+                          mapsHref: item.tripPlace
+                            ? googleMapsPlaceHref(item.tripPlace.place)
+                            : null,
+                          name: itemName(item),
+                          selected: selectedMapItemId === item.id,
+                        })}
+                        routesStale={routes?.stale ?? false}
+                        savingRouteOwner={savingRouteOwner}
+                        selectedDayId={selectedDay.id}
+                        timeFormat={preferences.timeFormat}
+                        unscheduledLabel={t('unscheduled')}
+                      />
+                    ) : (
+                      <PageState
+                        actions={
+                          <Button onClick={() => openCreate(selectedDay)} variant="outline">
+                            <Plus aria-hidden="true" data-icon="inline-start" />
+                            {t('addFirstItem')}
+                          </Button>
+                        }
+                        className="min-h-60 justify-center"
+                        description={t('emptyDescription')}
+                        headingLevel={2}
+                        icon={<CalendarClock aria-hidden="true" />}
+                        title={t('emptyTitle')}
+                      />
+                    )}
+                    {planScoreEnabled ? (
+                      <ItineraryPlanScore
+                        onSelectReference={focusItineraryItem}
+                        revision={planScoreRevision}
+                        selectedDayId={selectedDayId}
+                        tripId={tripId}
+                      />
+                    ) : null}
+                  </div>
+
+                  <aside
+                    aria-label={t('map.regionLabel')}
+                    className={cn(
+                      'min-w-0 border-border lg:block lg:border-l',
+                      mobileView === 'list' && 'hidden',
+                    )}
+                    id="itinerary-map-panel"
+                    role="tabpanel"
+                    tabIndex={mobileView === 'map' ? 0 : -1}
+                  >
+                    {shouldMountPlanningMap ? (
+                      <ItineraryPlanningMap
+                        onAddToDay={(point) => addTripPlaceToSelectedDay(point.tripPlaceId)}
+                        onClearSelection={clearMapSelection}
+                        onSelectPoint={handleMapPointSelection}
+                        onViewItem={viewMapItem}
+                        onViewPlaceDetails={(point) => {
+                          const tripPlace = tripPlaceById(point.tripPlaceId);
+                          if (tripPlace) setDetailsPlace(tripPlace);
+                        }}
+                        points={mapPoints}
+                        routePolylines={routePolylines}
+                        selectedPointId={selectedMapPointId}
+                        suspendUpdates={!planningMapVisible}
+                      />
+                    ) : (
+                      <div
+                        aria-hidden="true"
+                        className="hidden min-h-[34rem] bg-muted/40 lg:block"
+                      />
+                    )}
+                  </aside>
+                </div>
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </div>
+        </>
+      )}
 
       {itinerary.unscheduledItems.length ? (
         <section className="space-y-3">

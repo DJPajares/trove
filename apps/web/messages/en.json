@@ -1047,7 +1047,7 @@
   },
   "itinerary": {
     "title": "Itinerary for {trip}",
-    "description": "Shape each day with only the detail you need. Times, notes, and costs can stay flexible.",
+    "description": "See the shape of your whole trip, then open a day when you want to plan it.",
     "backToTrips": "Trips",
     "tripPlaces": "Trip places",
     "tripTasks": "Tasks",
@@ -1063,6 +1063,19 @@
     "dayOption": "Day {number}, {date}",
     "dayOptionNamed": "{name}, Day {number}, {date}",
     "dayItemCount": "{count, plural, =0 {No items} one {# item} other {# items}}",
+    "view": {
+      "navigation": "Choose itinerary view",
+      "overview": "Overview",
+      "day": "Day"
+    },
+    "overview": {
+      "title": "Your whole trip",
+      "description": "{count, plural, one {One day in one view.} other {All # days in one view.}}",
+      "itemsForDay": "Plans for day {number}",
+      "editItem": "Open {name} in day view",
+      "emptyDay": "No plans yet",
+      "openDay": "Open day"
+    },
     "stopNumber": "Stop {number}",
     "dayBaseStartDescription": "Daily base · where this day starts",
     "dayBaseEndDescription": "Daily base · where this day ends",

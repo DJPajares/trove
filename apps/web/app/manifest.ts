@@ -8,7 +8,7 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
   ]);
 
   return {
-    background_color: '#f8f6ed',
+    background_color: '#f8f1e7',
     categories: ['travel', 'productivity'],
     description: app('description'),
     display: 'standalone',
@@ -57,6 +57,6 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     start_url: '/',
     // Matches the light `themeColor` in the root layout, so the standalone
     // status bar and the app header are the same surface.
-    theme_color: '#f8f6ed',
+    theme_color: '#f8f1e7',
   };
 }

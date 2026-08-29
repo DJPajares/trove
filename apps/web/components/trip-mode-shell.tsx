@@ -281,14 +281,14 @@ function TripModePreviewSummary({
   const summary = t('preview.summary', { date: dateLabel, time: timeLabel });
 
   return (
-    <div className="border-y border-status-info/35 bg-status-info/8">
+    <div className="border-y border-accent-strong/35 bg-accent-strong/8">
       <div className="flex items-center gap-2.5 px-3 py-2.5 sm:gap-3 sm:px-4">
-        <Eye aria-hidden="true" className="size-4 shrink-0 text-status-info" />
+        <Eye aria-hidden="true" className="size-4 shrink-0 text-accent-strong" />
         <p className="min-w-0 flex-1 text-sm leading-5 font-medium text-pretty text-foreground">
           {summary}
         </p>
       </div>
-      <div className="border-t border-status-info/25 px-3 py-4 sm:px-4">
+      <div className="border-t border-accent-strong/25 px-3 py-4 sm:px-4">
         <TripModePreviewControls
           activityCounts={activityCounts}
           endDate={endDate}

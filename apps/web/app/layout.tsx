@@ -10,9 +10,11 @@ import { OnboardingGate } from '@/components/onboarding-gate';
 import { PwaProvider } from '@/components/pwa-provider';
 import { QueryProvider } from '@/components/query-provider';
 import { PreferencesProvider } from '@/components/preferences-provider';
+import { ThemeColorMeta } from '@/components/theme-color-meta';
 import { ThemeProvider } from '@/components/theme-provider';
 import { TroveMotionProvider } from '@/components/trove-motion-provider';
 import { getAuthUserId } from '@/lib/auth/session';
+import { appleStatusBarStyle, themeColor } from '@/lib/theme-color';
 
 const instrumentSans = Instrument_Sans({
   display: 'swap',
@@ -26,6 +28,11 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     applicationName: t('name'),
+    // iOS ignores theme-color in standalone and reads this instead. Like
+    // themeColor above it can only carry the first-paint default; ThemeColorMeta
+    // swaps it to `black` when the app is dark. Without it iOS falls back to an
+    // opaque white bar with dark text in both themes.
+    appleWebApp: { statusBarStyle: appleStatusBarStyle.light, title: t('name') },
     description: t('description'),
     icons: {
       // iOS ignores SVG for the home-screen icon, so point it at the PNG the
@@ -42,10 +49,13 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export const viewport: Viewport = {
   colorScheme: 'light dark',
-  themeColor: [
-    { color: '#f8f6ed', media: '(prefers-color-scheme: light)' },
-    { color: '#19382b', media: '(prefers-color-scheme: dark)' },
-  ],
+  // One value, not a `prefers-color-scheme` pair. Appearance is a profile field
+  // and `ThemeProvider` runs with `enableSystem={false}`, so the phone's setting
+  // does not say which theme Trove is painting; keying the status bar to it left
+  // the bar ivory in dark mode. `ThemeColorMeta` corrects this on the client
+  // once the theme resolves, so this only has to cover the first paint, where
+  // light is both `defaultTheme` and the profile default.
+  themeColor: themeColor.light,
   // Lets Trove paint to the edges of a notched display. It is also what makes
   // every env(safe-area-inset-*) in the shell resolve to a real value.
   viewportFit: 'cover',
@@ -58,6 +68,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     <html lang={locale} className={instrumentSans.variable} suppressHydrationWarning>
       <body>
         <ThemeProvider>
+          <ThemeColorMeta />
           <TroveMotionProvider>
             <NextIntlClientProvider>
               <QueryProvider userId={authUserId}>

@@ -63,7 +63,7 @@ export function BrandedFallback({
     >
       <span
         aria-hidden="true"
-        className="absolute -right-[18%] -bottom-[28%] size-[78%] rounded-full border border-media-fallback-foreground/15 bg-accent/25"
+        className="absolute -right-[18%] -bottom-[28%] size-[78%] rounded-full border border-media-fallback-foreground/15 bg-accent/45"
       />
       <span
         aria-hidden="true"

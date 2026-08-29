@@ -152,11 +152,12 @@ Trove should feel:
 
 Initial direction:
 
-- deep forest green,
+- olive green,
 - warm ivory/off-white,
-- restrained apricot/coral accents,
-- warm charcoal typography,
-- dark mode using deep charcoal/green-black rather than pure black.
+- restrained terracotta accents,
+- warm walnut-brown typography,
+- warm taupe as the neutral ramp for borders and secondary text,
+- dark mode using a deep olive-black rather than pure black.
 
 Exact color values are implementation/design decisions.
 

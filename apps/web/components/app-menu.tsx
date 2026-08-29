@@ -9,6 +9,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import { AccountMenu } from '@/components/account-menu';
 import { AppearanceToggle } from '@/components/appearance-toggle';
 import { GlobalSearch } from '@/components/global-search';
+import { NavActiveIndicator } from '@/components/nav-active-indicator';
 import { NotificationCenter } from '@/components/notification-center';
 import { useNotifications } from '@/components/notifications-provider';
 import { usePreferences } from '@/components/preferences-provider';
@@ -217,6 +218,7 @@ export function AppMenuTrigger({ active = false, variant }: Readonly<AppMenuTrig
         />
       }
     >
+      {active ? <NavActiveIndicator /> : null}
       <span className="relative">
         <Ellipsis aria-hidden="true" className="size-5" />
         {badge}

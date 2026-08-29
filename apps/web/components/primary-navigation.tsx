@@ -8,6 +8,7 @@ import { useTranslations } from 'next-intl';
 import type { ComponentType } from 'react';
 
 import { AppMenuTrigger } from '@/components/app-menu';
+import { NavActiveIndicator } from '@/components/nav-active-indicator';
 import { useTripCreation } from '@/components/trip-creation-provider';
 import { Button } from '@/components/ui/button';
 import { navigationTransition } from '@/lib/motion';
@@ -116,6 +117,7 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
                     )}
                     href={href}
                   >
+                    {active ? <NavActiveIndicator /> : null}
                     <Icon aria-hidden="true" className="size-5" />
                     <span className="max-w-full truncate">{label}</span>
                   </Link>

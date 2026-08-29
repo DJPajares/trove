@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 
@@ -97,6 +97,7 @@ export function ItineraryOverview({
           const date = dateFormatter.format(new Date(`${day.date}T00:00:00.000Z`));
 
           const dayLabel = t('dayNumber', { number: index + 1 });
+          const expanded = day.items.length > 0 && expandedDayIds.has(day.id);
           const dayDetails = (
             <div className="min-w-0">
               <p className="text-xs font-medium text-muted-foreground">
@@ -104,19 +105,36 @@ export function ItineraryOverview({
                 <span aria-hidden="true"> · </span>
                 {t('dayItemCount', { count: day.items.length })}
               </p>
-              <h3 className="mt-1 text-base leading-6 font-semibold text-foreground">
-                <button
-                  className="group inline-flex max-w-full items-center gap-1 rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
-                  onClick={() => onOpenDay(day.id)}
-                  type="button"
-                >
-                  <span className="truncate">{day.name ?? date}</span>
-                  <ChevronRight
-                    aria-hidden="true"
-                    className="size-4 shrink-0 text-text-subtle transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
-                  />
-                </button>
-              </h3>
+              <div className="mt-1 flex min-w-0 items-center gap-1">
+                <h3 className="min-w-0 flex-1 text-base leading-6 font-semibold text-foreground">
+                  <button
+                    className="max-w-full rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+                    onClick={() => onOpenDay(day.id)}
+                    type="button"
+                  >
+                    <span className="block truncate">{day.name ?? date}</span>
+                  </button>
+                </h3>
+                {day.items.length ? (
+                  <CollapsibleTrigger
+                    aria-label={
+                      expanded
+                        ? t('overview.collapseDay', { day: dayLabel })
+                        : t('overview.expandDay', { day: dayLabel })
+                    }
+                    className="shrink-0 p-1 text-text-subtle hover:text-foreground"
+                  >
+                    <ChevronRight
+                      aria-hidden="true"
+                      className={
+                        expanded
+                          ? 'rotate-90 transition-transform duration-[var(--motion-standard)] motion-reduce:transition-none'
+                          : 'transition-transform duration-[var(--motion-standard)] motion-reduce:transition-none'
+                      }
+                    />
+                  </CollapsibleTrigger>
+                ) : null}
+              </div>
               {day.name ? <p className="mt-0.5 text-sm text-muted-foreground">{date}</p> : null}
             </div>
           );
@@ -146,8 +164,6 @@ export function ItineraryOverview({
             );
           }
 
-          const expanded = expandedDayIds.has(day.id);
-
           return (
             <li key={day.id}>
               <Collapsible
@@ -157,22 +173,7 @@ export function ItineraryOverview({
                 }
                 open={expanded}
               >
-                <div className="flex min-w-0 items-start gap-2">
-                  <CollapsibleTrigger
-                    aria-label={
-                      expanded
-                        ? t('overview.collapseDay', { day: dayLabel })
-                        : t('overview.expandDay', { day: dayLabel })
-                    }
-                    className="mt-5 shrink-0 p-1 text-text-subtle hover:text-foreground"
-                  >
-                    <ChevronDown
-                      aria-hidden="true"
-                      className="transition-transform duration-[var(--motion-standard)] group-data-panel-open:rotate-180 motion-reduce:transition-none"
-                    />
-                  </CollapsibleTrigger>
-                  {dayDetails}
-                </div>
+                {dayDetails}
 
                 <CollapsiblePanel>
                   <ul aria-label={t('overview.itemsForDay', { number: index + 1 })}>

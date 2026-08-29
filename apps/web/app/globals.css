@@ -20,6 +20,10 @@
   --muted-foreground: oklch(0.515 0.03 74);
   --accent: oklch(0.775 0.105 42);
   --accent-foreground: oklch(0.285 0.045 40);
+  /* --accent is pale because shadcn uses it as a hover surface; this is the
+     full-strength terracotta for anything that has to read as terracotta at
+     rest - an icon, a border, a rule. Same split as --brand / --brand-strong. */
+  --accent-strong: oklch(0.505 0.125 40);
   --destructive: oklch(0.522 0.196 25);
   --border: oklch(0.858 0.023 78);
   --border-subtle: oklch(0.895 0.018 78);
@@ -70,7 +74,7 @@
   /* Dark enough to carry small warning text at WCAG AA on background, card,
      and muted surfaces; same amber hue and chroma as before. */
   --status-warning: oklch(0.53 0.126 72);
-  --status-info: oklch(0.498 0.1 233);
+  --status-info: oklch(0.498 0.072 225);
   --status-danger: oklch(0.522 0.196 25);
   --radius: 0.875rem;
   --layout-gutter: clamp(1rem, 2vw, 2rem);
@@ -141,6 +145,7 @@
   --muted-foreground: oklch(0.735 0.031 77);
   --accent: oklch(0.745 0.112 42);
   --accent-foreground: oklch(0.245 0.03 42);
+  --accent-strong: oklch(0.775 0.115 42);
   --destructive: oklch(0.715 0.163 26);
   --border: oklch(0.395 0.026 52);
   --border-subtle: oklch(0.335 0.024 52);
@@ -179,7 +184,7 @@
   --rating-on-media: oklch(0.85 0.13 82);
   --status-success: oklch(0.755 0.115 155);
   --status-warning: oklch(0.806 0.113 74);
-  --status-info: oklch(0.735 0.084 233);
+  --status-info: oklch(0.742 0.062 225);
   --status-danger: oklch(0.715 0.163 26);
   --shadow-surface:
     0 1px 2px oklch(0.09 0.014 50 / 0.16), 0 16px 40px oklch(0.09 0.014 50 / 0.18);
@@ -204,6 +209,7 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-accent-strong: var(--accent-strong);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
   --color-border-subtle: var(--border-subtle);

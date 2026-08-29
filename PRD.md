@@ -157,7 +157,7 @@ Initial direction:
 - restrained terracotta accents,
 - warm walnut-brown typography,
 - warm taupe as the neutral ramp for borders and secondary text,
-- dark mode using a deep walnut brown rather than pure black.
+- dark mode using a deep olive-black rather than pure black.
 
 Exact color values are implementation/design decisions.
 

@@ -131,32 +131,32 @@
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0.205 0.021 52);
+  --background: oklch(0.182 0.011 115);
   --foreground: oklch(0.935 0.016 79);
-  --card: oklch(0.252 0.024 52);
+  --card: oklch(0.222 0.012 115);
   --card-foreground: oklch(0.935 0.016 79);
-  --popover: oklch(0.252 0.024 52);
+  --popover: oklch(0.222 0.012 115);
   --popover-foreground: oklch(0.935 0.016 79);
   --primary: oklch(0.78 0.085 115);
-  --primary-foreground: oklch(0.235 0.028 50);
+  --primary-foreground: oklch(0.222 0.028 115);
   --secondary: oklch(0.315 0.032 108);
   --secondary-foreground: oklch(0.895 0.035 112);
-  --muted: oklch(0.288 0.022 52);
+  --muted: oklch(0.258 0.012 115);
   --muted-foreground: oklch(0.735 0.031 77);
   --accent: oklch(0.745 0.112 42);
   --accent-foreground: oklch(0.245 0.03 42);
   --accent-strong: oklch(0.775 0.115 42);
   --destructive: oklch(0.715 0.163 26);
-  --border: oklch(0.395 0.026 52);
-  --border-subtle: oklch(0.335 0.024 52);
-  --border-strong: oklch(0.475 0.03 52);
-  --input: oklch(0.395 0.026 52);
+  --border: oklch(0.365 0.013 115);
+  --border-subtle: oklch(0.305 0.012 115);
+  --border-strong: oklch(0.445 0.015 115);
+  --input: oklch(0.365 0.013 115);
   --ring: oklch(0.725 0.078 115);
-  --surface: oklch(0.205 0.021 52);
-  --surface-raised: oklch(0.252 0.024 52);
-  --surface-sunken: oklch(0.172 0.019 52);
-  --surface-hover: oklch(0.302 0.028 52);
-  --surface-tint: oklch(0.238 0.03 105);
+  --surface: oklch(0.182 0.011 115);
+  --surface-raised: oklch(0.222 0.012 115);
+  --surface-sunken: oklch(0.152 0.01 115);
+  --surface-hover: oklch(0.275 0.013 115);
+  --surface-tint: oklch(0.248 0.026 112);
   --surface-media: oklch(0.288 0.046 115);
   /* Deliberately the same value as in :root. The tints below it are dark in
      both themes, so their ink does not flip with the theme. */
@@ -175,7 +175,7 @@
   --media-fallback-transport-to: oklch(0.276 0.041 250);
   --media-fallback-other-from: oklch(0.243 0.015 79);
   --media-fallback-other-to: oklch(0.276 0.015 79);
-  --surface-overlay: oklch(0.105 0.015 50 / 0.78);
+  --surface-overlay: oklch(0.105 0.01 115 / 0.78);
   --text-subtle: oklch(0.735 0.031 77);
   --brand: oklch(0.78 0.085 115);
   --brand-strong: oklch(0.845 0.072 115);
@@ -187,9 +187,9 @@
   --status-info: oklch(0.742 0.062 225);
   --status-danger: oklch(0.715 0.163 26);
   --shadow-surface:
-    0 1px 2px oklch(0.09 0.014 50 / 0.16), 0 16px 40px oklch(0.09 0.014 50 / 0.18);
-  --shadow-overlay: 0 24px 72px oklch(0.09 0.014 50 / 0.48);
-  --shadow-control: 0 1px 2px oklch(0.09 0.014 50 / 0.32);
+    0 1px 2px oklch(0.09 0.01 115 / 0.16), 0 16px 40px oklch(0.09 0.01 115 / 0.18);
+  --shadow-overlay: 0 24px 72px oklch(0.09 0.01 115 / 0.48);
+  --shadow-control: 0 1px 2px oklch(0.09 0.01 115 / 0.32);
 }
 
 @theme inline {

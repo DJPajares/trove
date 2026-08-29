@@ -186,8 +186,7 @@
   --status-warning: oklch(0.806 0.113 74);
   --status-info: oklch(0.742 0.062 225);
   --status-danger: oklch(0.715 0.163 26);
-  --shadow-surface:
-    0 1px 2px oklch(0.09 0.01 115 / 0.16), 0 16px 40px oklch(0.09 0.01 115 / 0.18);
+  --shadow-surface: 0 1px 2px oklch(0.09 0.01 115 / 0.16), 0 16px 40px oklch(0.09 0.01 115 / 0.18);
   --shadow-overlay: 0 24px 72px oklch(0.09 0.01 115 / 0.48);
   --shadow-control: 0 1px 2px oklch(0.09 0.01 115 / 0.32);
 }

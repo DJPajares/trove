@@ -50,11 +50,8 @@ export function ItineraryOverview({
       }),
     [locale],
   );
-  const populatedDayIds = useMemo(
-    () => days.filter((day) => day.items.length > 0).map((day) => day.id),
-    [days],
-  );
-  const allDaysExpanded = allOverviewDaysExpanded(expandedDayIds, populatedDayIds);
+  const dayIds = useMemo(() => days.map((day) => day.id), [days]);
+  const allDaysExpanded = allOverviewDaysExpanded(expandedDayIds, dayIds);
 
   const itemTiming = (item: ItineraryItem) =>
     item.localStartTime
@@ -77,11 +74,11 @@ export function ItineraryOverview({
             {t('overview.description', { count: days.length })}
           </p>
         </div>
-        {populatedDayIds.length ? (
+        {dayIds.length ? (
           <Button
             onClick={() =>
               setExpandedDayIds((current) =>
-                setAllOverviewDaysExpanded(current, populatedDayIds, !allDaysExpanded),
+                setAllOverviewDaysExpanded(current, dayIds, !allDaysExpanded),
               )
             }
             size="xs"
@@ -97,7 +94,7 @@ export function ItineraryOverview({
           const date = dateFormatter.format(new Date(`${day.date}T00:00:00.000Z`));
 
           const dayLabel = t('dayNumber', { number: index + 1 });
-          const expanded = day.items.length > 0 && expandedDayIds.has(day.id);
+          const expanded = expandedDayIds.has(day.id);
           const dayDetails = (
             <div className="min-w-0">
               <p className="text-xs font-medium text-muted-foreground">
@@ -115,54 +112,27 @@ export function ItineraryOverview({
                     <span className="block truncate">{day.name ?? date}</span>
                   </button>
                 </h3>
-                {day.items.length ? (
-                  <CollapsibleTrigger
-                    aria-label={
+                <CollapsibleTrigger
+                  aria-label={
+                    expanded
+                      ? t('overview.collapseDay', { day: dayLabel })
+                      : t('overview.expandDay', { day: dayLabel })
+                  }
+                  className="shrink-0 p-1 text-text-subtle hover:text-foreground"
+                >
+                  <ChevronRight
+                    aria-hidden="true"
+                    className={
                       expanded
-                        ? t('overview.collapseDay', { day: dayLabel })
-                        : t('overview.expandDay', { day: dayLabel })
+                        ? 'rotate-90 transition-transform duration-[var(--motion-standard)] motion-reduce:transition-none'
+                        : 'transition-transform duration-[var(--motion-standard)] motion-reduce:transition-none'
                     }
-                    className="shrink-0 p-1 text-text-subtle hover:text-foreground"
-                  >
-                    <ChevronRight
-                      aria-hidden="true"
-                      className={
-                        expanded
-                          ? 'rotate-90 transition-transform duration-[var(--motion-standard)] motion-reduce:transition-none'
-                          : 'transition-transform duration-[var(--motion-standard)] motion-reduce:transition-none'
-                      }
-                    />
-                  </CollapsibleTrigger>
-                ) : null}
+                  />
+                </CollapsibleTrigger>
               </div>
               {day.name ? <p className="mt-0.5 text-sm text-muted-foreground">{date}</p> : null}
             </div>
           );
-
-          if (!day.items.length) {
-            return (
-              <li
-                className="grid gap-4 px-4 py-5 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-8 md:px-6"
-                key={day.id}
-              >
-                {dayDetails}
-                <button
-                  className="group flex w-full items-center justify-between gap-3 rounded-[var(--radius-md)] bg-muted/30 px-3 py-3 text-left text-sm text-muted-foreground outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px"
-                  onClick={() => onOpenDay(day.id)}
-                  type="button"
-                >
-                  <span>{t('overview.emptyDay')}</span>
-                  <span className="inline-flex shrink-0 items-center gap-1 font-medium text-foreground">
-                    {t('overview.openDay')}
-                    <ChevronRight
-                      aria-hidden="true"
-                      className="size-4 transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
-                    />
-                  </span>
-                </button>
-              </li>
-            );
-          }
 
           return (
             <li key={day.id}>
@@ -176,33 +146,50 @@ export function ItineraryOverview({
                 {dayDetails}
 
                 <CollapsiblePanel>
-                  <ul aria-label={t('overview.itemsForDay', { number: index + 1 })}>
-                    {day.items.map((item) => {
-                      const name = resolveItemName(item);
+                  {day.items.length ? (
+                    <ul aria-label={t('overview.itemsForDay', { number: index + 1 })}>
+                      {day.items.map((item) => {
+                        const name = resolveItemName(item);
 
-                      return (
-                        <li key={item.id}>
-                          <button
-                            aria-label={t('overview.editItem', { name })}
-                            className="group grid w-full grid-cols-[minmax(5.5rem,auto)_minmax(0,1fr)_auto] items-center gap-3 rounded-[var(--radius-md)] px-2 py-2 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px"
-                            onClick={() => onEditItem(item)}
-                            type="button"
-                          >
-                            <span className="text-xs font-medium whitespace-nowrap text-text-subtle tabular-nums">
-                              {itemTiming(item)}
-                            </span>
-                            <span className="truncate text-sm font-medium text-foreground">
-                              {name}
-                            </span>
-                            <ChevronRight
-                              aria-hidden="true"
-                              className="size-4 text-text-subtle transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
-                            />
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                        return (
+                          <li key={item.id}>
+                            <button
+                              aria-label={t('overview.editItem', { name })}
+                              className="group grid w-full grid-cols-[minmax(5.5rem,auto)_minmax(0,1fr)_auto] items-center gap-3 rounded-[var(--radius-md)] px-2 py-2 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px"
+                              onClick={() => onEditItem(item)}
+                              type="button"
+                            >
+                              <span className="text-xs font-medium whitespace-nowrap text-text-subtle tabular-nums">
+                                {itemTiming(item)}
+                              </span>
+                              <span className="truncate text-sm font-medium text-foreground">
+                                {name}
+                              </span>
+                              <ChevronRight
+                                aria-hidden="true"
+                                className="size-4 text-text-subtle transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
+                              />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <button
+                      className="group flex w-full items-center justify-between gap-3 rounded-[var(--radius-md)] bg-muted/30 px-3 py-3 text-left text-sm text-muted-foreground outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px"
+                      onClick={() => onOpenDay(day.id)}
+                      type="button"
+                    >
+                      <span>{t('overview.emptyDay')}</span>
+                      <span className="inline-flex shrink-0 items-center gap-1 font-medium text-foreground">
+                        {t('overview.openDay')}
+                        <ChevronRight
+                          aria-hidden="true"
+                          className="size-4 transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
+                        />
+                      </span>
+                    </button>
+                  )}
                 </CollapsiblePanel>
               </Collapsible>
             </li>

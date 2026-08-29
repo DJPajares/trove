@@ -1073,6 +1073,10 @@
       "description": "{count, plural, one {One day in one view.} other {All # days in one view.}}",
       "itemsForDay": "Plans for day {number}",
       "editItem": "Open {name} in day view",
+      "collapseAll": "Collapse all",
+      "expandAll": "Expand all",
+      "collapseDay": "Collapse plans for {day}",
+      "expandDay": "Expand plans for {day}",
       "emptyDay": "No plans yet",
       "openDay": "Open day"
     },

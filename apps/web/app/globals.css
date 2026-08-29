@@ -6,57 +6,57 @@
 
 :root {
   color-scheme: light;
-  --background: oklch(0.973 0.014 85);
-  --foreground: oklch(0.274 0.021 62);
-  --card: oklch(0.993 0.007 85);
-  --card-foreground: oklch(0.274 0.021 62);
-  --popover: oklch(0.993 0.007 85);
-  --popover-foreground: oklch(0.274 0.021 62);
-  --primary: oklch(0.374 0.072 153);
-  --primary-foreground: oklch(0.982 0.012 85);
-  --secondary: oklch(0.913 0.034 145);
-  --secondary-foreground: oklch(0.298 0.041 151);
-  --muted: oklch(0.938 0.014 85);
-  --muted-foreground: oklch(0.497 0.025 65);
-  --accent: oklch(0.781 0.103 49);
-  --accent-foreground: oklch(0.27 0.025 55);
-  --destructive: oklch(0.55 0.193 28);
-  --border: oklch(0.867 0.019 85);
-  --border-subtle: oklch(0.9 0.015 85);
-  --border-strong: oklch(0.79 0.026 85);
-  --input: oklch(0.867 0.019 85);
-  --ring: oklch(0.51 0.086 153);
-  --surface: oklch(0.973 0.014 85);
-  --surface-raised: oklch(0.993 0.007 85);
-  --surface-sunken: oklch(0.938 0.014 85);
-  --surface-hover: oklch(0.952 0.02 85);
-  --surface-tint: oklch(0.955 0.025 92);
-  --surface-media: oklch(0.335 0.062 153);
+  --background: oklch(0.962 0.016 79);
+  --foreground: oklch(0.285 0.039 47);
+  --card: oklch(0.985 0.009 79);
+  --card-foreground: oklch(0.285 0.039 47);
+  --popover: oklch(0.985 0.009 79);
+  --popover-foreground: oklch(0.285 0.039 47);
+  --primary: oklch(0.455 0.07 115);
+  --primary-foreground: oklch(0.978 0.013 80);
+  --secondary: oklch(0.905 0.032 110);
+  --secondary-foreground: oklch(0.355 0.048 114);
+  --muted: oklch(0.925 0.02 79);
+  --muted-foreground: oklch(0.515 0.03 74);
+  --accent: oklch(0.775 0.105 42);
+  --accent-foreground: oklch(0.285 0.045 40);
+  --destructive: oklch(0.522 0.196 25);
+  --border: oklch(0.858 0.023 78);
+  --border-subtle: oklch(0.895 0.018 78);
+  --border-strong: oklch(0.775 0.03 77);
+  --input: oklch(0.858 0.023 78);
+  --ring: oklch(0.575 0.08 115);
+  --surface: oklch(0.962 0.016 79);
+  --surface-raised: oklch(0.985 0.009 79);
+  --surface-sunken: oklch(0.925 0.02 79);
+  --surface-hover: oklch(0.94 0.022 79);
+  --surface-tint: oklch(0.944 0.028 86);
+  --surface-media: oklch(0.36 0.052 115);
   /* The branded media fallback, one tint per place category. Every pair stays
      dark in both themes, so its ink is the same ivory in both themes too -
-     --primary-foreground could not do that job, because it flips to a dark green
+     --primary-foreground could not do that job, because it flips to a dark walnut
      in dark mode and would leave the icon invisible on these tints. The
      single-gradient version this replaced had the mirror-image problem: it
      inverted in dark mode, where --brand-strong is lighter than --surface-media. */
-  --media-fallback-foreground: oklch(0.982 0.012 85);
-  --media-fallback-destination-from: oklch(0.298 0.061 153);
-  --media-fallback-destination-to: oklch(0.335 0.062 153);
-  --media-fallback-things-to-do-from: oklch(0.302 0.055 62);
-  --media-fallback-things-to-do-to: oklch(0.339 0.058 62);
-  --media-fallback-food-and-drink-from: oklch(0.305 0.062 35);
-  --media-fallback-food-and-drink-to: oklch(0.342 0.065 35);
-  --media-fallback-stay-from: oklch(0.296 0.048 185);
-  --media-fallback-stay-to: oklch(0.333 0.05 185);
-  --media-fallback-shopping-from: oklch(0.3 0.052 330);
-  --media-fallback-shopping-to: oklch(0.337 0.055 330);
-  --media-fallback-transport-from: oklch(0.298 0.05 240);
-  --media-fallback-transport-to: oklch(0.335 0.052 240);
-  --media-fallback-other-from: oklch(0.3 0.02 100);
-  --media-fallback-other-to: oklch(0.337 0.022 100);
-  --surface-overlay: oklch(0.18 0.025 62 / 0.72);
-  --text-subtle: oklch(0.497 0.025 65);
-  --brand: oklch(0.374 0.072 153);
-  --brand-strong: oklch(0.298 0.061 153);
+  --media-fallback-foreground: oklch(0.978 0.013 80);
+  --media-fallback-destination-from: oklch(0.3 0.056 115);
+  --media-fallback-destination-to: oklch(0.338 0.056 115);
+  --media-fallback-things-to-do-from: oklch(0.3 0.052 75);
+  --media-fallback-things-to-do-to: oklch(0.338 0.052 75);
+  --media-fallback-food-and-drink-from: oklch(0.3 0.058 40);
+  --media-fallback-food-and-drink-to: oklch(0.338 0.058 40);
+  --media-fallback-stay-from: oklch(0.3 0.046 190);
+  --media-fallback-stay-to: oklch(0.338 0.046 190);
+  --media-fallback-shopping-from: oklch(0.3 0.05 330);
+  --media-fallback-shopping-to: oklch(0.338 0.05 330);
+  --media-fallback-transport-from: oklch(0.3 0.048 250);
+  --media-fallback-transport-to: oklch(0.338 0.048 250);
+  --media-fallback-other-from: oklch(0.3 0.018 79);
+  --media-fallback-other-to: oklch(0.338 0.018 79);
+  --surface-overlay: oklch(0.16 0.024 47 / 0.72);
+  --text-subtle: oklch(0.515 0.03 74);
+  --brand: oklch(0.455 0.07 115);
+  --brand-strong: oklch(0.385 0.058 115);
   /* Experience Rating has a colour of its own rather than borrowing the brand's:
      a rating is the traveller's own mark, not a Trove accent. Gold, but dark
      enough to clear 3:1 non-text contrast (WCAG 1.4.11) on every light surface
@@ -66,12 +66,12 @@
   /* Stars over the cover scrim, which is dark in both themes, so this value does
      not flip with the theme - the same reasoning as --media-fallback-foreground. */
   --rating-on-media: oklch(0.85 0.13 82);
-  --status-success: oklch(0.52 0.119 150);
+  --status-success: oklch(0.488 0.115 155);
   /* Dark enough to carry small warning text at WCAG AA on background, card,
      and muted surfaces; same amber hue and chroma as before. */
   --status-warning: oklch(0.53 0.126 72);
-  --status-info: oklch(0.578 0.091 230);
-  --status-danger: oklch(0.55 0.193 28);
+  --status-info: oklch(0.498 0.1 233);
+  --status-danger: oklch(0.522 0.196 25);
   --radius: 0.875rem;
   --layout-gutter: clamp(1rem, 2vw, 2rem);
   --layout-reading: 65ch;
@@ -115,9 +115,9 @@
   --motion-slow: 320ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --shadow-surface:
-    0 1px 2px oklch(0.274 0.021 62 / 0.035), 0 14px 36px oklch(0.374 0.072 153 / 0.07);
-  --shadow-overlay: 0 24px 72px oklch(0.274 0.021 62 / 0.18);
-  --shadow-control: 0 1px 2px oklch(0.274 0.021 62 / 0.09);
+    0 1px 2px oklch(0.285 0.039 47 / 0.035), 0 14px 36px oklch(0.455 0.07 115 / 0.07);
+  --shadow-overlay: 0 24px 72px oklch(0.285 0.039 47 / 0.18);
+  --shadow-control: 0 1px 2px oklch(0.285 0.039 47 / 0.09);
   --layer-sticky: 40;
   /* Non-modal notices: above sticky chrome so they are never buried by it,
      below overlays so a dialog is never argued with by a toast. */
@@ -127,64 +127,64 @@
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0.196 0.026 154);
-  --foreground: oklch(0.94 0.015 85);
-  --card: oklch(0.243 0.032 154);
-  --card-foreground: oklch(0.94 0.015 85);
-  --popover: oklch(0.243 0.032 154);
-  --popover-foreground: oklch(0.94 0.015 85);
-  --primary: oklch(0.77 0.09 151);
-  --primary-foreground: oklch(0.205 0.029 155);
-  --secondary: oklch(0.305 0.038 153);
-  --secondary-foreground: oklch(0.902 0.032 145);
-  --muted: oklch(0.279 0.025 154);
-  --muted-foreground: oklch(0.718 0.021 85);
-  --accent: oklch(0.772 0.096 50);
-  --accent-foreground: oklch(0.229 0.027 53);
-  --destructive: oklch(0.75 0.151 29);
-  --border: oklch(0.388 0.027 154);
-  --border-subtle: oklch(0.335 0.026 154);
-  --border-strong: oklch(0.47 0.032 154);
-  --input: oklch(0.388 0.027 154);
-  --ring: oklch(0.72 0.083 151);
-  --surface: oklch(0.196 0.026 154);
-  --surface-raised: oklch(0.243 0.032 154);
-  --surface-sunken: oklch(0.166 0.023 154);
-  --surface-hover: oklch(0.294 0.032 154);
-  --surface-tint: oklch(0.226 0.034 151);
-  --surface-media: oklch(0.274 0.051 153);
+  --background: oklch(0.205 0.021 52);
+  --foreground: oklch(0.935 0.016 79);
+  --card: oklch(0.252 0.024 52);
+  --card-foreground: oklch(0.935 0.016 79);
+  --popover: oklch(0.252 0.024 52);
+  --popover-foreground: oklch(0.935 0.016 79);
+  --primary: oklch(0.78 0.085 115);
+  --primary-foreground: oklch(0.235 0.028 50);
+  --secondary: oklch(0.315 0.032 108);
+  --secondary-foreground: oklch(0.895 0.035 112);
+  --muted: oklch(0.288 0.022 52);
+  --muted-foreground: oklch(0.735 0.031 77);
+  --accent: oklch(0.745 0.112 42);
+  --accent-foreground: oklch(0.245 0.03 42);
+  --destructive: oklch(0.715 0.163 26);
+  --border: oklch(0.395 0.026 52);
+  --border-subtle: oklch(0.335 0.024 52);
+  --border-strong: oklch(0.475 0.03 52);
+  --input: oklch(0.395 0.026 52);
+  --ring: oklch(0.725 0.078 115);
+  --surface: oklch(0.205 0.021 52);
+  --surface-raised: oklch(0.252 0.024 52);
+  --surface-sunken: oklch(0.172 0.019 52);
+  --surface-hover: oklch(0.302 0.028 52);
+  --surface-tint: oklch(0.238 0.03 105);
+  --surface-media: oklch(0.288 0.046 115);
   /* Deliberately the same value as in :root. The tints below it are dark in
      both themes, so their ink does not flip with the theme. */
-  --media-fallback-foreground: oklch(0.982 0.012 85);
-  --media-fallback-destination-from: oklch(0.243 0.049 153);
-  --media-fallback-destination-to: oklch(0.274 0.051 153);
-  --media-fallback-things-to-do-from: oklch(0.247 0.045 62);
-  --media-fallback-things-to-do-to: oklch(0.278 0.047 62);
-  --media-fallback-food-and-drink-from: oklch(0.25 0.05 35);
-  --media-fallback-food-and-drink-to: oklch(0.281 0.052 35);
-  --media-fallback-stay-from: oklch(0.241 0.04 185);
-  --media-fallback-stay-to: oklch(0.272 0.042 185);
-  --media-fallback-shopping-from: oklch(0.245 0.042 330);
-  --media-fallback-shopping-to: oklch(0.276 0.044 330);
-  --media-fallback-transport-from: oklch(0.243 0.041 240);
-  --media-fallback-transport-to: oklch(0.274 0.043 240);
-  --media-fallback-other-from: oklch(0.245 0.017 100);
-  --media-fallback-other-to: oklch(0.276 0.019 100);
-  --surface-overlay: oklch(0.1 0.018 154 / 0.78);
-  --text-subtle: oklch(0.718 0.021 85);
-  --brand: oklch(0.77 0.09 151);
-  --brand-strong: oklch(0.824 0.074 151);
+  --media-fallback-foreground: oklch(0.978 0.013 80);
+  --media-fallback-destination-from: oklch(0.243 0.048 115);
+  --media-fallback-destination-to: oklch(0.276 0.048 115);
+  --media-fallback-things-to-do-from: oklch(0.243 0.044 75);
+  --media-fallback-things-to-do-to: oklch(0.276 0.044 75);
+  --media-fallback-food-and-drink-from: oklch(0.243 0.049 40);
+  --media-fallback-food-and-drink-to: oklch(0.276 0.049 40);
+  --media-fallback-stay-from: oklch(0.243 0.039 190);
+  --media-fallback-stay-to: oklch(0.276 0.039 190);
+  --media-fallback-shopping-from: oklch(0.243 0.043 330);
+  --media-fallback-shopping-to: oklch(0.276 0.043 330);
+  --media-fallback-transport-from: oklch(0.243 0.041 250);
+  --media-fallback-transport-to: oklch(0.276 0.041 250);
+  --media-fallback-other-from: oklch(0.243 0.015 79);
+  --media-fallback-other-to: oklch(0.276 0.015 79);
+  --surface-overlay: oklch(0.105 0.015 50 / 0.78);
+  --text-subtle: oklch(0.735 0.031 77);
+  --brand: oklch(0.78 0.085 115);
+  --brand-strong: oklch(0.845 0.072 115);
   --rating: oklch(0.83 0.13 82);
   /* Deliberately the same value as in :root; the scrim below it is dark in both. */
   --rating-on-media: oklch(0.85 0.13 82);
-  --status-success: oklch(0.721 0.116 150);
+  --status-success: oklch(0.755 0.115 155);
   --status-warning: oklch(0.806 0.113 74);
-  --status-info: oklch(0.735 0.081 230);
-  --status-danger: oklch(0.75 0.151 29);
+  --status-info: oklch(0.735 0.084 233);
+  --status-danger: oklch(0.715 0.163 26);
   --shadow-surface:
-    0 1px 2px oklch(0.08 0.014 154 / 0.16), 0 16px 40px oklch(0.08 0.014 154 / 0.18);
-  --shadow-overlay: 0 24px 72px oklch(0.08 0.014 154 / 0.48);
-  --shadow-control: 0 1px 2px oklch(0.08 0.014 154 / 0.32);
+    0 1px 2px oklch(0.09 0.014 50 / 0.16), 0 16px 40px oklch(0.09 0.014 50 / 0.18);
+  --shadow-overlay: 0 24px 72px oklch(0.09 0.014 50 / 0.48);
+  --shadow-control: 0 1px 2px oklch(0.09 0.014 50 / 0.32);
 }
 
 @theme inline {

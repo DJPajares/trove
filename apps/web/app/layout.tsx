@@ -43,8 +43,8 @@ export async function generateMetadata(): Promise<Metadata> {
 export const viewport: Viewport = {
   colorScheme: 'light dark',
   themeColor: [
-    { color: '#f8f6ed', media: '(prefers-color-scheme: light)' },
-    { color: '#19382b', media: '(prefers-color-scheme: dark)' },
+    { color: '#f8f1e7', media: '(prefers-color-scheme: light)' },
+    { color: '#1f140e', media: '(prefers-color-scheme: dark)' },
   ],
   // Lets Trove paint to the edges of a notched display. It is also what makes
   // every env(safe-area-inset-*) in the shell resolve to a real value.

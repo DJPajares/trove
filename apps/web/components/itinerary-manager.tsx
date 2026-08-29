@@ -368,11 +368,20 @@ export function ItineraryManager({
   const [selectingPlace, setSelectingPlace] = useState(false);
   const [organizingItemId, setOrganizingItemId] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<'list' | 'map'>('list');
+  const [planningMapMounted, setPlanningMapMounted] = useState(false);
   const [selectedMapPointId, setSelectedMapPointId] = useState<string | null>(null);
   const [selectedMapItemId, setSelectedMapItemId] = useState<string | null>(null);
   const [savingRouteOwner, setSavingRouteOwner] = useState<string | null>(null);
   const [placesDrawerOpen, setPlacesDrawerOpen] = useState(false);
   const desktopMapLayout = useDesktopMapLayout();
+  const planningMapVisible = desktopMapLayout === true || mobileView === 'map';
+  const shouldMountPlanningMap = planningMapVisible || planningMapMounted;
+
+  // Desktop opens the map immediately. Remember that construction so resizing
+  // to the mobile list does not discard a map the user has already paid to load.
+  useEffect(() => {
+    if (desktopMapLayout === true) setPlanningMapMounted(true);
+  }, [desktopMapLayout]);
 
   // The URL seeds the first selection and then follows it. Reading it on every
   // refresh instead would undo a manual day switch on the next mutation.
@@ -418,7 +427,7 @@ export function ItineraryManager({
     [dayMoveTargetId, itinerary],
   );
   const routeRevision = itineraryDayRouteRevision(selectedDay);
-  const includeRoutePolylines = desktopMapLayout === true || mobileView === 'map';
+  const includeRoutePolylines = planningMapVisible;
   /**
    * A day's legs, keyed by the ordering they were computed for.
    *
@@ -1830,7 +1839,11 @@ export function ItineraryManager({
             )}
 
             <Tabs
-              onValueChange={(value) => setMobileView(value as 'list' | 'map')}
+              onValueChange={(value) => {
+                const view = value as 'list' | 'map';
+                setMobileView(view);
+                if (view === 'map') setPlanningMapMounted(true);
+              }}
               value={mobileView}
             >
               <div className="border-b border-border px-3 py-3 lg:hidden">
@@ -1952,7 +1965,7 @@ export function ItineraryManager({
                 role="tabpanel"
                 tabIndex={mobileView === 'map' ? 0 : -1}
               >
-                {desktopMapLayout || mobileView === 'map' ? (
+                {shouldMountPlanningMap ? (
                   <ItineraryPlanningMap
                     onAddToDay={(point) => addTripPlaceToSelectedDay(point.tripPlaceId)}
                     onClearSelection={clearMapSelection}
@@ -1965,6 +1978,7 @@ export function ItineraryManager({
                     points={mapPoints}
                     routePolylines={routePolylines}
                     selectedPointId={selectedMapPointId}
+                    suspendUpdates={!planningMapVisible}
                   />
                 ) : (
                   <div aria-hidden="true" className="hidden min-h-[34rem] bg-muted/40 lg:block" />

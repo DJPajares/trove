@@ -44,6 +44,8 @@ type ItineraryPlanningMapProps = {
   points: ItineraryMapPoint[];
   routePolylines: string[];
   selectedPointId: string | null;
+  /** Keeps a retained, hidden map from updating its viewport until it is visible again. */
+  suspendUpdates?: boolean;
 };
 
 type LoadedGoogleMaps = Awaited<ReturnType<typeof loadGoogleMaps>>;
@@ -107,6 +109,7 @@ export function ItineraryPlanningMap({
   points,
   routePolylines,
   selectedPointId,
+  suspendUpdates = false,
 }: Readonly<ItineraryPlanningMapProps>) {
   const t = useTranslations('itinerary.map');
   const locale = useLocale();
@@ -228,7 +231,7 @@ export function ItineraryPlanningMap({
   }, [hasInitialPoint, hasResolvedTheme, locale]);
 
   useEffect(() => {
-    if (status !== 'ready' || !mapRef.current) return;
+    if (suspendUpdates || status !== 'ready' || !mapRef.current) return;
     let active = true;
     void loadGoogleMaps(locale)
       .then(({ core, maps, marker }) => {
@@ -247,6 +250,8 @@ export function ItineraryPlanningMap({
         const framing = new Set(viewportPoints(points).map((point) => point.id));
         points.forEach((point) => {
           const content = markerContent(point);
+          const selected = selectedPointIdRef.current === point.id;
+          content.dataset.selected = String(selected);
           const advancedMarker = new marker.AdvancedMarkerElement({
             gmpClickable: true,
             map: mapRef.current,
@@ -257,8 +262,13 @@ export function ItineraryPlanningMap({
                 : point.kind === 'base'
                   ? t(baseMarkerLabelKey(point.baseRole), { name: point.name })
                   : t('consideredMarkerLabel', { name: point.name }),
-            zIndex:
-              point.kind === 'scheduled' ? 10 + (point.order ?? 0) : point.kind === 'base' ? 8 : 1,
+            zIndex: selected
+              ? 100
+              : point.kind === 'scheduled'
+                ? 10 + (point.order ?? 0)
+                : point.kind === 'base'
+                  ? 8
+                  : 1,
           });
           advancedMarker.append(content);
           advancedMarker.addEventListener('gmp-click', () => {
@@ -315,15 +325,16 @@ export function ItineraryPlanningMap({
     return () => {
       active = false;
     };
-  }, [currentLocation, locale, points, routePolylines, status, t]);
+  }, [currentLocation, locale, points, routePolylines, status, suspendUpdates, t]);
 
   useEffect(() => {
+    if (suspendUpdates) return;
     markerRefs.current.forEach((marker, id) => {
       const content = marker.firstElementChild as HTMLElement | null;
       if (content) content.dataset.selected = String(id === selectedPointId);
       marker.zIndex = id === selectedPointId ? 100 : null;
     });
-  }, [selectedPointId]);
+  }, [selectedPointId, suspendUpdates]);
 
   if (!points.length && !currentLocation) {
     return (

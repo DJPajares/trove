@@ -47,6 +47,9 @@ importers:
       '@trove/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@trove/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       ai:
         specifier: 7.0.83
         version: 7.0.83(zod@4.4.3)
@@ -207,6 +210,10 @@ importers:
         version: 4.23.12
 
   packages/types:
+    dependencies:
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@trove/config':
         specifier: workspace:*

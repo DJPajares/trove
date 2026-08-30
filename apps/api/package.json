@@ -26,6 +26,7 @@
     "@fastify/rate-limit": "^11.2.0",
     "@supabase/supabase-js": "^2.112.4",
     "@trove/db": "workspace:*",
+    "@trove/types": "workspace:*",
     "ai": "7.0.83",
     "countries-and-timezones": "^3.10.0",
     "dotenv": "^17.4.2",

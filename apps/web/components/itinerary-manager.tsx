@@ -2879,7 +2879,7 @@ export function ItineraryManager({
                 {t('cancel')}
               </Button>
               <Button disabled={savingDayNote} type="submit">
-                {savingDayNote ? t('saving') : t('saveDayNote')}
+                {savingDayNote ? t('saving') : t('save')}
               </Button>
             </DialogFooter>
           </form>
@@ -2929,7 +2929,7 @@ export function ItineraryManager({
                 {t('cancel')}
               </Button>
               <Button disabled={savingDayName} type="submit">
-                {savingDayName ? t('saving') : t('saveDayName')}
+                {savingDayName ? t('saving') : t('save')}
               </Button>
             </DialogFooter>
           </form>

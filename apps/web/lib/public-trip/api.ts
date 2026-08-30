@@ -42,10 +42,11 @@ const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
  */
 export async function fetchPublicItinerary(tripId: string): Promise<PublicItinerary | null> {
   const response = await fetch(`${apiUrl}/public/trips/${encodeURIComponent(tripId)}/itinerary`, {
-    // Matches the API's own max-age, so a link making the rounds in a group chat
-    // is not one database read per tap, while turning sharing off still takes
-    // effect while the owner is watching.
-    next: { revalidate: 60 },
+    // Read through on every request. Next would otherwise serve its own copy for
+    // the life of a revalidate window, which would put the page a minute behind
+    // the switch that revoked it - see the API controller for why that window
+    // cannot exist on either side.
+    cache: 'no-store',
   });
 
   if (!response.ok) return null;

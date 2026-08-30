@@ -132,7 +132,10 @@ Example:
 
 ## GitHub Rules
 
-- Never commit or push to `main`. Check the branch before the first edit, not after the commit.
+- Never commit or push to `main`. Check the branch before the first edit, and again
+  immediately before every commit and every push. The check is not once per task:
+  merging a PR returns the working tree to `main` between turns, so a branch that
+  was correct earlier in a session is not evidence it still is.
 - Create a PR for implementation tasks unless the task clearly does not modify code.
 - Include a concise summary and a simple list of things to manually see the changes.
 - Never auto-merge.

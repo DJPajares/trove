@@ -224,7 +224,10 @@ test('the shared itinerary answers with no credentials at all', async () => {
 
   expect(response.statusCode, 'no Authorization header, and none required').toBe(200);
   expect(response.json().trip.name).toBe('Kyoto in spring');
-  expect(response.headers['cache-control']).toBe('public, max-age=60');
+  // Not a caching preference to tune later. Turning the switch off is a traveller
+  // taking their plan back, and any window here is a window in which the link
+  // they revoked still works.
+  expect(response.headers['cache-control']).toBe('no-store');
 
   await app.close();
 });
@@ -246,6 +249,9 @@ test('every way of not finding a trip looks the same', async () => {
   for (const response of responses) {
     expect(response.statusCode).toBe(404);
     expect(response.json()).toStrictEqual({ code: 'trip_not_found' });
+    // The mirror of the 200's rule: a held 404 would keep a trip shared a moment
+    // ago reading as private to the people it was just sent to.
+    expect(response.headers['cache-control']).toBe('no-store');
   }
 
   await app.close();

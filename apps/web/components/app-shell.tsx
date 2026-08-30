@@ -29,7 +29,7 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
   const navigation = useTranslations('navigation');
 
   const headerContent = (
-    <div className="mx-auto grid h-[var(--header-height)] w-full max-w-[var(--layout-app)] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 pl-[var(--gutter-inline-start)] pr-[var(--gutter-inline-end)] md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+    <div className="mx-auto grid h-[var(--header-height)] w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 pl-[var(--gutter-inline-start)] pr-[var(--gutter-inline-end)] md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
       <Link
         className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground"
         href="/"

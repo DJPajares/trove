@@ -16,6 +16,7 @@ import { registerNotificationRoutes } from './routes/notifications.js';
 import { registerPlacesRoutes } from './routes/places.js';
 import { registerPlanScoreRoutes } from './routes/plan-score.js';
 import { registerProfileRoutes } from './routes/profile.js';
+import { registerPublicTripRoutes } from './routes/public-trips.js';
 import { registerReservationRoutes } from './routes/reservations.js';
 import { registerSearchRoutes } from './routes/search.js';
 import { registerTripRoutes } from './routes/trips.js';
@@ -129,8 +130,8 @@ export function buildApp() {
 
   // A rate limiter only sees routes registered after it is loaded, so the routes
   // it protects are registered inside a scope that awaits it rather than beside
-  // it. Limits are opt-in per route (`global: false`); only the provider-backed
-  // ones declare a `rateLimit` config.
+  // it. Limits are opt-in per route (`global: false`); the provider-backed ones
+  // and the public share declare a `rateLimit` config.
   void app.register(async (instance) => {
     await instance.register(rateLimit, { global: false });
 
@@ -149,6 +150,7 @@ export function buildApp() {
     registerTripInfoRoutes(instance);
     registerTripPlacesRoutes(instance);
     registerTripRoutes(instance);
+    registerPublicTripRoutes(instance);
     registerPlanScoreRoutes(instance);
     registerMemoryRoutes(instance);
     registerSearchRoutes(instance);

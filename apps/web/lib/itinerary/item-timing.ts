@@ -17,16 +17,22 @@ export function itineraryLocalEndTime(item: TimedItineraryItem) {
     .padStart(2, '0')}:${(totalMinutes % 60).toString().padStart(2, '0')}`;
 }
 
+/**
+ * `locale` leaves the choice to `Intl`, for readers with no preference to honour
+ * - a visitor on a shared itinerary has no profile to have set one in.
+ */
+export type ItineraryTimeFormat = '12h' | '24h' | 'locale';
+
 export function formatItineraryTimeRange(
   item: TimedItineraryItem,
   locale: string,
-  timeFormat: '12h' | '24h',
+  timeFormat: ItineraryTimeFormat,
 ) {
   if (!item.localStartTime) return null;
 
   const formatter = new Intl.DateTimeFormat(locale, {
     hour: 'numeric',
-    hour12: timeFormat === '12h',
+    ...(timeFormat === 'locale' ? {} : { hour12: timeFormat === '12h' }),
     minute: '2-digit',
     timeZone: 'UTC',
   });

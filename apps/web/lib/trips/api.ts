@@ -40,6 +40,11 @@ export type Trip = {
   startingLocation: { isOverride: boolean; name: string; placeId: string } | null;
   startingLocationOverride: string | null;
   updatedAt: string;
+  /**
+   * `public` means anyone with `/shared/<id>` can read the itinerary. Optional so
+   * snapshots written before sharing existed remain readable offline.
+   */
+  visibility?: 'private' | 'public';
   /** Optional so older offline snapshots omit weather instead of failing. */
   weatherLocation?: { latitude: number; longitude: number; timeZone: string } | null;
 };
@@ -181,6 +186,18 @@ export async function updateTripExperienceRating(
 ) {
   return tripRequest<{ trip: Trip }>(`/trips/${tripId}/experience-rating`, {
     body: JSON.stringify({ note, rating }),
+    method: 'PATCH',
+  });
+}
+
+/**
+ * Turns the shared link on or off. Its own endpoint rather than a field on
+ * `saveTrip`, because publishing a trip is the one change that alters who can
+ * see it and should not be able to ride along with an unrelated edit.
+ */
+export async function updateTripVisibility(tripId: string, visibility: 'private' | 'public') {
+  return tripRequest<{ trip: Trip }>(`/trips/${tripId}/visibility`, {
+    body: JSON.stringify({ visibility }),
     method: 'PATCH',
   });
 }

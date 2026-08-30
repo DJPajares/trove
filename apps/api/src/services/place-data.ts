@@ -104,7 +104,11 @@ export type PlaceHydrationOptions = {
   languageCode?: string;
   /** Test seam. Production omits it and gets the configured service. */
   now?: Date;
-  /** Test seam. `null` stands for "no provider configured". */
+  /**
+   * `null` stands for "no provider", which is both the test seam and the way a
+   * caller declares it must never cause a provider call. See
+   * `readPlaceSnapshots`.
+   */
   placesService?: PlacesService | null;
   /** Autocomplete session that led to this explicit Place selection. */
   sessionToken?: string;
@@ -317,6 +321,27 @@ function rememberFailure(externalPlaceId: string, languageCode: string, now: Dat
     backoffKey(externalPlaceId, languageCode),
     now.getTime() + FAILED_HYDRATION_TTL_MS,
   );
+}
+
+/**
+ * What the database already holds, and only that.
+ *
+ * `hydratePlaceSnapshots` may refresh a stale snapshot from Google, which is
+ * correct on a surface a signed-in traveller asked for and unacceptable on one
+ * anybody with a link can load: a stale trip would turn every visit into billed
+ * provider calls. Passing no provider makes that structural rather than a rule
+ * to remember - the function returns what it read before any provider code is
+ * constructed - so the guarantee lives at the call site rather than in a
+ * comment.
+ *
+ * A snapshot too old to refresh is still a name and an address. On a read-only
+ * page that is the whole job.
+ */
+export async function readPlaceSnapshots(
+  externalPlaceIds: readonly string[],
+  options: Pick<PlaceHydrationOptions, 'now' | 'source'> = {},
+): Promise<Map<string, PlaceSnapshotSource>> {
+  return hydratePlaceSnapshots(externalPlaceIds, { ...options, placesService: null });
 }
 
 /** The single-place form, for the moment a Place is first added to Trove. */

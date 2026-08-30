@@ -28,7 +28,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useSignOut } from '@/lib/auth/use-sign-out';
+import { floatingActionTriggerClass } from '@/lib/shell/floating-actions';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import { cn } from '@/lib/utils';
 
 function getDisplayName(user: User | null, fallback: string) {
   if (!user) return fallback;
@@ -43,7 +45,7 @@ function getDisplayName(user: User | null, fallback: string) {
 
 type AccountMenuProps = {
   onNavigate?: () => void;
-  triggerVariant?: 'icon' | 'quickAction';
+  triggerVariant?: 'floating' | 'icon' | 'quickAction';
 };
 
 export function AccountMenu({
@@ -52,6 +54,7 @@ export function AccountMenu({
 }: Readonly<AccountMenuProps> = {}) {
   const t = useTranslations('account');
   const navigation = useTranslations('navigation');
+  const floating = triggerVariant === 'floating';
   const [user, setUser] = useState<User | null>(null);
   const [isReady, setIsReady] = useState(false);
   const {
@@ -116,8 +119,11 @@ export function AccountMenu({
           render={
             <Button
               aria-label={t('button')}
-              className="text-foreground"
-              size={triggerVariant === 'quickAction' ? 'quick-action' : 'icon-sm'}
+              className={cn('text-foreground', floating && floatingActionTriggerClass)}
+              data-translucent-surface={floating ? '' : undefined}
+              size={
+                triggerVariant === 'quickAction' ? 'quick-action' : floating ? 'icon' : 'icon-sm'
+              }
               type="button"
               variant="ghost"
             />
@@ -125,7 +131,9 @@ export function AccountMenu({
         >
           <UserRound
             aria-hidden="true"
-            className={triggerVariant === 'quickAction' ? 'size-3.5' : 'size-4'}
+            className={
+              triggerVariant === 'quickAction' ? 'size-3.5' : floating ? 'size-5' : 'size-4'
+            }
           />
           {triggerVariant === 'quickAction' ? <span>{navigation('account')}</span> : null}
         </DropdownMenuTrigger>

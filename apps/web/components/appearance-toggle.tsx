@@ -6,10 +6,11 @@ import { useTranslations } from 'next-intl';
 import { usePreferences } from '@/components/preferences-provider';
 import { Button } from '@/components/ui/button';
 import { toggleAppearance } from '@/lib/profile/preferences';
+import { floatingActionTriggerClass } from '@/lib/shell/floating-actions';
 import { cn } from '@/lib/utils';
 
 type AppearanceToggleProps = {
-  triggerVariant?: 'icon' | 'quickAction';
+  triggerVariant?: 'floating' | 'icon' | 'quickAction';
 };
 
 export function AppearanceToggle({
@@ -19,14 +20,16 @@ export function AppearanceToggle({
   const { preferences, setAppearance } = usePreferences();
   const dark = preferences.appearance === 'dark';
   const Icon = dark ? Moon : Sun;
+  const floating = triggerVariant === 'floating';
 
   return (
     <Button
       aria-label={t('darkMode')}
       aria-pressed={dark}
-      className="text-foreground"
+      className={cn('text-foreground', floating && floatingActionTriggerClass)}
+      data-translucent-surface={floating ? '' : undefined}
       onClick={() => setAppearance(toggleAppearance(preferences.appearance))}
-      size={triggerVariant === 'quickAction' ? 'quick-action' : 'icon-sm'}
+      size={triggerVariant === 'quickAction' ? 'quick-action' : floating ? 'icon' : 'icon-sm'}
       title={t(dark ? 'switchToLight' : 'switchToDark')}
       type="button"
       variant={dark ? 'secondary' : 'ghost'}
@@ -34,7 +37,7 @@ export function AppearanceToggle({
       <Icon
         aria-hidden="true"
         className={cn(
-          triggerVariant === 'quickAction' ? 'size-3.5' : 'size-4',
+          triggerVariant === 'quickAction' ? 'size-3.5' : floating ? 'size-5' : 'size-4',
           dark && 'fill-current',
         )}
       />

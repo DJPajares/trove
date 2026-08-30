@@ -17,10 +17,12 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { floatingActionTriggerClass } from '@/lib/shell/floating-actions';
+import { cn } from '@/lib/utils';
 
 type NotificationCenterProps = {
   onNavigate?: () => void;
-  triggerVariant?: 'icon' | 'quickAction';
+  triggerVariant?: 'floating' | 'icon' | 'quickAction';
 };
 
 export function NotificationCenter({
@@ -30,6 +32,7 @@ export function NotificationCenter({
   const t = useTranslations('notifications');
   const locale = useLocale();
   const { markAllRead, markRead, notifications, refresh, status } = useNotifications();
+  const floating = triggerVariant === 'floating';
   if (status === 'unavailable') return null;
 
   const count = notifications.length;
@@ -39,9 +42,10 @@ export function NotificationCenter({
         render={
           <Button
             aria-label={t('centerButton', { count })}
-            className="relative text-foreground"
+            className={cn('relative text-foreground', floating && floatingActionTriggerClass)}
+            data-translucent-surface={floating ? '' : undefined}
             disabled={status === 'loading'}
-            size={triggerVariant === 'quickAction' ? 'quick-action' : 'icon-sm'}
+            size={triggerVariant === 'quickAction' ? 'quick-action' : floating ? 'icon' : 'icon-sm'}
             type="button"
             variant="ghost"
           />
@@ -49,7 +53,7 @@ export function NotificationCenter({
       >
         <Bell
           aria-hidden="true"
-          className={triggerVariant === 'quickAction' ? 'size-3.5' : 'size-4'}
+          className={triggerVariant === 'quickAction' ? 'size-3.5' : floating ? 'size-5' : 'size-4'}
         />
         {triggerVariant === 'quickAction' ? <span>{t('centerTitle')}</span> : null}
         {count ? (
@@ -57,7 +61,9 @@ export function NotificationCenter({
             className={
               triggerVariant === 'quickAction'
                 ? 'absolute top-1 right-2'
-                : 'absolute top-0.5 right-0.5'
+                : floating
+                  ? 'absolute top-1 right-1'
+                  : 'absolute top-0.5 right-0.5'
             }
             size="count"
             variant="solid"

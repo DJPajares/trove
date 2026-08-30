@@ -1,15 +1,16 @@
 import { type ThemeName, themeNameFrom } from '@/lib/theme-color';
 
 /**
- * Carries the resolved theme to the server so the root layout can render the
- * matching `theme-color` and Apple status-bar style in the first byte of HTML.
+ * Carries the resolved theme to the server so the manifest route can open the
+ * standalone splash screen on the ground the traveller last chose.
  *
  * next-themes keeps appearance in `localStorage`, which the server cannot read,
  * and appearance is a profile field rather than an OS setting, so
- * `prefers-color-scheme` cannot stand in for it either. That left the server
- * emitting the light default for everyone: a dark-mode traveller saw a white
- * status bar until hydration, and on iOS standalone - where the status-bar style
- * is read once at launch and never again - for the whole session.
+ * `prefers-color-scheme` cannot stand in for it either. Without the cookie the
+ * server emits the light default for everyone, and a splash sits outside the
+ * document where hydration can never correct it.
+ *
+ * The status bar no longer rides on this: it is pinned in `lib/theme-color.ts`.
  */
 export const APPEARANCE_COOKIE = 'trove-appearance';
 

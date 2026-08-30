@@ -3,16 +3,15 @@ import { fileURLToPath } from 'node:url';
 
 import { expect, test, vi } from 'vitest';
 
-import { appleStatusBarStyle, themeColor, themeNameFrom } from '../lib/theme-color.ts';
+import { statusBarColor, statusBarStyle, themeColor, themeNameFrom } from '../lib/theme-color.ts';
 import { readAppearanceCookie } from '../lib/theme-cookie.ts';
 
 /**
- * `--background` is oklch in CSS and hex in `theme-color.ts`, because a
- * `<meta name="theme-color">` cannot read a custom property. Nothing in the type
- * system can see that pair, and the failure is both silent and ugly: the phone's
- * status bar keeps the old palette while the page paints the new one. The two
- * grounds have already moved twice, so this converts the tokens and asserts the
- * hexes still match.
+ * `--background` is oklch in CSS and hex in `theme-color.ts`, because a manifest
+ * cannot read a custom property. Nothing in the type system can see that pair,
+ * and the failure is silent: the splash screen keeps the old palette while the
+ * page paints the new one. The two grounds have already moved twice, so this
+ * converts the tokens and asserts the hexes still match.
  */
 const globals = readFileSync(fileURLToPath(new URL('../app/globals.css', import.meta.url)), 'utf8');
 
@@ -72,22 +71,27 @@ function oklchToHex(lightness: number, chroma: number, hue: number) {
     .join('')}`;
 }
 
-test('the status bar paints the same ground the page does', () => {
+test('the splash screen paints the same grounds the page does', () => {
   expect(background(':root {')).toBe(themeColor.light);
   expect(background('.dark {')).toBe(themeColor.dark);
 });
 
-/** iOS takes keywords rather than colours, so only these three are meaningful. */
-test('the iOS status bar styles stay on the readable pair', () => {
-  expect(appleStatusBarStyle.light).toBe('default');
-  expect(appleStatusBarStyle.dark).toBe('black');
-  expect(Object.values(appleStatusBarStyle)).not.toContain('black-translucent');
+/**
+ * Android has no control over status bar icon colour that a page can reach - it
+ * derives the contrast from this colour's luminance. A light bar is therefore
+ * the only way to ask for the dark icons that read against it, and iOS's
+ * `default` keyword is the same bar. `black-translucent` forces light text,
+ * which is the unreadable half of the bug this pins shut.
+ */
+test('the status bar is pinned to one readable bar', () => {
+  expect(statusBarColor).toBe('#ffffff');
+  expect(statusBarStyle).toBe('default');
 });
 
 /**
  * next-themes reports `undefined` before it resolves. Falling back to anything
- * but light would flash the wrong status bar on first paint, since light is both
- * `defaultTheme` and the profile default.
+ * but light would write the wrong appearance cookie on first paint, since light
+ * is both `defaultTheme` and the profile default.
  */
 test('an unresolved theme is treated as light', () => {
   expect(themeNameFrom(undefined)).toBe('light');
@@ -117,16 +121,16 @@ test('the splash screen opens on the ground it is given', async () => {
 });
 
 /**
- * Android freezes the manifest's `theme_color` into the installed app at install
- * time, so any value here is right in one theme and wrong - unreadably so - in
- * the other. Leaving it out hands the status bar to `<meta name="theme-color">`,
- * which follows the traveller's toggle.
+ * Android reads the manifest's `theme_color` once, at install, and never
+ * revisits it. A themed value is therefore right only in the theme the traveller
+ * installed in - the bug. Pinning it makes the freeze harmless, so what this
+ * guards is that the two themes never disagree about it again.
  */
-test('the manifest leaves the status bar to the page', async () => {
+test('the manifest freezes the same status bar in both themes', async () => {
   const { buildManifest } = await import('../lib/pwa/manifest.ts');
 
-  expect(await buildManifest('dark')).not.toHaveProperty('theme_color');
-  expect(await buildManifest('light')).not.toHaveProperty('theme_color');
+  expect((await buildManifest('dark')).theme_color).toBe(statusBarColor);
+  expect((await buildManifest('light')).theme_color).toBe(statusBarColor);
 });
 
 /**

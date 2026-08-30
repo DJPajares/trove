@@ -1,33 +1,43 @@
 /**
- * The status bar's colour, spelled here as hex as well as in `globals.css` as
- * oklch: `<meta name="theme-color">` cannot read a custom property, and the
- * browser chrome it paints sits outside the document. `theme-color` in the test
- * suite asserts the two agree, so the pair cannot drift unnoticed.
+ * The status bar's colour, and it does not move.
  *
- * Keyed to Trove's own theme rather than to `prefers-color-scheme`. Appearance
- * is a persisted profile field and `ThemeProvider` runs with
- * `enableSystem={false}`, so the phone's setting says nothing about which theme
- * the app is actually painting. Keying the status bar to the OS is what left it
- * white-on-white: on a phone set to light, the media query resolved to ivory in
- * both app themes, while `color-scheme: dark` had the browser draw its status
- * bar icons light.
+ * Four attempts tried to make it follow Trove's theme and all four failed on
+ * Android, because the platform does not offer the control they assumed. A page
+ * cannot set status bar text colour anywhere: Chrome derives the icon contrast
+ * from this colour's luminance, and in an installed standalone app it prefers
+ * the manifest's `theme_color`, which it reads once at install and never
+ * revisits. So a colour that has to change is a colour that will be wrong -
+ * either frozen on the theme the traveller happened to install in, or paired
+ * with icons the page cannot recolour to match.
+ *
+ * White is the one value that survives that. It is right on its own terms in
+ * both themes, it cannot go stale, and its luminance guarantees the dark icons
+ * that make it readable. In dark mode it reads as a light band above the app
+ * rather than a seam - the deliberate cost of a bar that is never unreadable.
+ */
+export const statusBarColor = '#ffffff';
+
+/**
+ * iOS takes keywords rather than colours, and `default` is the light bar with
+ * dark text - the same bar `statusBarColor` asks Android for. `black-translucent`
+ * is not an option: it forces light text, which is the unreadable half of the
+ * problem this pins shut.
+ */
+export const statusBarStyle = 'default';
+
+/**
+ * Trove's two grounds, spelled here as hex as well as in `globals.css` as oklch.
+ * These are the manifest's `background_color` - the splash screen, which sits
+ * outside the document and so can only be coloured ahead of time. The splash is
+ * still allowed to follow the traveller's theme: a stale splash is a flash,
+ * which is why it keeps the freedom the status bar gave up.
+ *
+ * `theme-color` in the test suite asserts these agree with `--background`, so
+ * the pair cannot drift unnoticed.
  */
 export const themeColor = {
   dark: '#12130d',
   light: '#f8f1e7',
-} as const;
-
-/**
- * iOS ignores `theme-color` in standalone and takes only these three keywords,
- * so the closest readable pair is `default` (light bar, dark text) and `black`
- * (black bar, light text) - near enough to the two grounds that the seam does
- * not show. `black-translucent` is not an option despite the shell already
- * holding content clear of `--safe-top`: it forces light status bar text, which
- * is precisely the unreadable combination over the ivory light theme.
- */
-export const appleStatusBarStyle = {
-  dark: 'black',
-  light: 'default',
 } as const;
 
 export type ThemeName = keyof typeof themeColor;

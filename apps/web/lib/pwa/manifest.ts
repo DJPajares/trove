@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { getTranslations } from 'next-intl/server';
 
-import { themeColor, type ThemeName } from '@/lib/theme-color';
+import { statusBarColor, themeColor, type ThemeName } from '@/lib/theme-color';
 
 /**
  * The manifest paints the standalone splash screen, which sits outside the
@@ -10,19 +10,19 @@ import { themeColor, type ThemeName } from '@/lib/theme-color';
  * `crossorigin="use-credentials"`: a manifest is fetched without credentials by
  * default, even from its own origin.
  *
- * Deliberately no `theme_color`. Android freezes the manifest's colour into the
- * installed app at install time and never revisits it, so a cookie-driven one
- * only ever looked right in the theme the traveller happened to install in -
- * and in the other it painted a bar whose icon contrast still followed the live
- * page, which is how an install in light mode ended up white-on-white in dark.
- * With no colour to freeze, the only signal left is `<meta name="theme-color">`,
- * which `generateViewport` renders from the same cookie and `ThemeColorMeta`
- * moves with every toggle. A stale splash is a flash; a stale status bar is
- * unreadable, so only the splash keeps a baked value.
+ * `theme_color` is pinned rather than themed. Android reads it once at install
+ * and never revisits it, which is exactly why a cookie-driven value failed: it
+ * was only ever right in the theme the traveller happened to install in. A
+ * value that never changes has nothing to go stale, so the freeze is harmless -
+ * and carrying it here covers the installs where Android takes the manifest's
+ * word over `<meta name="theme-color">` entirely. See `lib/theme-color.ts`.
  *
- * Everything but `background_color` is fixed. Chrome identifies an installed app
- * by `id` and `start_url`, so those - and the name and icons around them - stay
- * the same in both themes.
+ * `background_color` keeps the theme, because the splash is the one surface
+ * where being a beat behind costs a flash rather than a readable status bar.
+ *
+ * Everything else is fixed. Chrome identifies an installed app by `id` and
+ * `start_url`, so those - and the name and icons around them - stay the same in
+ * both themes.
  */
 export async function buildManifest(theme: ThemeName): Promise<MetadataRoute.Manifest> {
   const [app, navigation] = await Promise.all([
@@ -78,5 +78,6 @@ export async function buildManifest(theme: ThemeName): Promise<MetadataRoute.Man
       { name: navigation('saved'), short_name: navigation('saved'), url: '/saved' },
     ],
     start_url: '/',
+    theme_color: statusBarColor,
   };
 }

@@ -42,6 +42,8 @@ import {
   type SearchResultKind,
   type TroveSearchResult,
 } from '@/lib/search/api';
+import { floatingActionTriggerClass } from '@/lib/shell/floating-actions';
+import { cn } from '@/lib/utils';
 
 const LOCAL_SEARCH_DELAY_MS = 350;
 
@@ -88,7 +90,7 @@ function ResultRow({
 
 type GlobalSearchProps = {
   onNavigate?: () => void;
-  triggerVariant?: 'field' | 'icon';
+  triggerVariant?: 'field' | 'floating' | 'icon';
 };
 
 export function GlobalSearch({
@@ -96,6 +98,7 @@ export function GlobalSearch({
   triggerVariant = 'icon',
 }: Readonly<GlobalSearchProps> = {}) {
   const t = useTranslations('globalSearch');
+  const floating = triggerVariant === 'floating';
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [response, setResponse] = useState<SearchResponse | null>(null);
@@ -179,18 +182,19 @@ export function GlobalSearch({
         render={
           <Button
             aria-label={t('button')}
-            className={
-              triggerVariant === 'field'
-                ? 'w-full justify-start border-border-strong bg-background text-muted-foreground shadow-none hover:bg-surface-hover hover:text-foreground'
-                : undefined
-            }
+            className={cn(
+              triggerVariant === 'field' &&
+                'w-full justify-start border-border-strong bg-background text-muted-foreground shadow-none hover:bg-surface-hover hover:text-foreground',
+              floating && ['text-foreground', floatingActionTriggerClass],
+            )}
+            data-translucent-surface={floating ? '' : undefined}
             size={triggerVariant === 'field' ? 'default' : 'icon'}
             type="button"
             variant={triggerVariant === 'field' ? 'outline' : 'ghost'}
           />
         }
       >
-        <Search aria-hidden="true" className="size-4" />
+        <Search aria-hidden="true" className={floating ? 'size-5' : 'size-4'} />
         {triggerVariant === 'field' ? <span>{t('button')}</span> : null}
       </DialogTrigger>
       <DialogContent

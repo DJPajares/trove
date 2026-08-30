@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { AccountMenu } from '@/components/account-menu';
 import { AppearanceToggle } from '@/components/appearance-toggle';
+import { GlobalSearch } from '@/components/global-search';
 import { NotificationCenter } from '@/components/notification-center';
 import { useNotifications } from '@/components/notifications-provider';
 import { Badge } from '@/components/ui/badge';
@@ -17,20 +18,20 @@ import { navigationTransition } from '@/lib/motion';
 import { floatingActionDelay, floatingActionOrder } from '@/lib/shell/floating-actions';
 
 /**
- * The three controls portal their popups to the end of the document, so a tap
- * inside an open account menu or notification panel lands nowhere near the
- * stack. Without this the stack would collapse out from under its own popup.
+ * The controls portal their popups to the end of the document, so a tap inside
+ * an open account menu, notification panel or search dialog lands nowhere near
+ * the stack. Without this the stack would collapse out from under its own popup.
  */
 const POPUP_SELECTOR =
-  '[data-slot="dropdown-menu-content"],[data-slot="popover-content"],[data-slot="sheet-content"]';
+  '[data-slot="dropdown-menu-content"],[data-slot="popover-content"],[data-slot="sheet-content"],[data-slot="dialog-content"]';
 
 /**
  * The everyday controls, floating in the upper right of the mobile shell.
  *
  * Below `md` the signed-in shell has no header at all — the bottom bar is the
- * only chrome — so these three would otherwise sit two taps deep inside the
- * More drawer. The burger unfolds them downwards and turns into an X in the
- * same place, so the way out is where the way in was.
+ * only chrome — so these would otherwise sit two taps deep inside the More
+ * drawer. The burger unfolds them downwards and turns into an X in the same
+ * place, so the way out is where the way in was.
  */
 export function FloatingActionStack() {
   const t = useTranslations('navigation');
@@ -99,6 +100,7 @@ export function FloatingActionStack() {
     account: <AccountMenu onNavigate={collapse} triggerVariant="floating" />,
     appearance: <AppearanceToggle triggerVariant="floating" />,
     notifications: <NotificationCenter onNavigate={collapse} triggerVariant="floating" />,
+    search: <GlobalSearch onNavigate={collapse} triggerVariant="floating" />,
   };
 
   return (

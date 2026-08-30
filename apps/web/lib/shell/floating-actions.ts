@@ -2,9 +2,12 @@
  * The mobile quick-actions stack that unfolds from the floating burger button.
  *
  * The order is the hierarchy the traveller reads top to bottom, nearest the
- * trigger first: who they are, what is waiting for them, then how the app looks.
+ * trigger first. Search leads because it is the only one that starts something
+ * — the other three answer a question about the app rather than about the trip,
+ * and they are reached once where search is reached again and again. After it:
+ * who they are, what is waiting for them, then how the app looks.
  */
-export const floatingActionOrder = ['account', 'notifications', 'appearance'] as const;
+export const floatingActionOrder = ['search', 'account', 'notifications', 'appearance'] as const;
 
 export type FloatingAction = (typeof floatingActionOrder)[number];
 

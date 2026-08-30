@@ -8,8 +8,12 @@ import {
 } from '@/lib/shell/floating-actions';
 
 describe('floating action stack order', () => {
-  it('reads identity, then what is waiting, then appearance', () => {
-    expect(floatingActionOrder).toEqual(['account', 'notifications', 'appearance']);
+  it('leads with the one action that starts something', () => {
+    expect(floatingActionOrder[0]).toBe('search');
+  });
+
+  it('then reads identity, what is waiting, and how the app looks', () => {
+    expect(floatingActionOrder).toEqual(['search', 'account', 'notifications', 'appearance']);
   });
 });
 
@@ -21,8 +25,10 @@ describe('floatingActionDelay', () => {
   });
 
   it('folds back towards the trigger on the way out', () => {
-    expect(floatingActionDelay(floatingActionOrder.length - 1, true)).toBe(0);
-    expect(floatingActionDelay(0, true)).toBeCloseTo(FLOATING_ACTION_STAGGER_S * 2);
+    const last = floatingActionOrder.length - 1;
+
+    expect(floatingActionDelay(last, true)).toBe(0);
+    expect(floatingActionDelay(0, true)).toBeCloseTo(FLOATING_ACTION_STAGGER_S * last);
   });
 
   it('finishes the whole reveal inside one standard beat', () => {

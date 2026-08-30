@@ -93,7 +93,9 @@ function AppMenuContent() {
 
   return (
     <SheetContent
-      className="h-[min(42rem,calc(100dvh-3rem))] gap-0 md:h-full"
+      // Mobile keeps only Tools now, so the drawer hugs what it holds rather
+      // than opening two thirds of a screen of empty popover.
+      className="h-auto max-h-[min(42rem,calc(100dvh-3rem))] gap-0 md:h-full"
       closeLabel={t('closeMenu')}
       keepMounted
       mobileSide="bottom"
@@ -151,9 +153,16 @@ function AppMenuContent() {
           </p>
         ) : null}
 
-        <GlobalSearch onNavigate={closeMenu} triggerVariant="field" />
+        {/* Search leads the mobile floating stack, so the drawer keeps its
+            full-width field for desktop and tablet. */}
+        <div className="hidden md:block">
+          <GlobalSearch onNavigate={closeMenu} triggerVariant="field" />
+        </div>
 
-        <div className="border-t border-border-subtle pt-5">
+        {/* Nothing sits above Tools on mobile, so the divider only earns its
+            line where the drawer still has a quick-actions row and a search
+            field to divide it from. */}
+        <div className="md:border-t md:border-border-subtle md:pt-5">
           <AppMenuTools pathname={pathname} />
         </div>
       </div>

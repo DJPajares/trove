@@ -3,6 +3,7 @@ import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 
 import { getWebOrigins } from './environment.js';
+import { setAiGenerationTelemetrySink } from './services/ai-generation-telemetry.js';
 import { setProviderUsageSink } from './services/provider-usage.js';
 import { registerAuthenticationRoutes } from './routes/auth.js';
 import { registerCurrencyRoutes } from './routes/currency.js';
@@ -117,6 +118,13 @@ export function buildApp() {
         ? 'google provider negative cache hit'
         : 'google provider request',
     );
+  });
+
+  // AI telemetry deliberately carries only provider/model identifiers, timing,
+  // token counts, and a normalized result. Prompts and generated objects never
+  // cross this boundary into application logs.
+  setAiGenerationTelemetrySink((event) => {
+    app.log.info(event, 'ai generation');
   });
 
   // A rate limiter only sees routes registered after it is loaded, so the routes

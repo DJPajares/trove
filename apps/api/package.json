@@ -10,6 +10,7 @@
   },
   "scripts": {
     "ai-planning:cleanup": "tsx scripts/cleanup-ai-planning-retention.ts",
+    "ai:verify": "tsx scripts/verify-ai-generation.ts",
     "build": "../../node_modules/.bin/tsc --project tsconfig.build.json",
     "dev": "tsx watch src/server.ts",
     "editorial-images:reconcile": "tsx scripts/reconcile-editorial-images.ts",

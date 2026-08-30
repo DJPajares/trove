@@ -97,7 +97,7 @@ export type AiGenerationResult<OUTPUT> = {
   output: OUTPUT;
 };
 
-type AiGatewayOptions = {
+export type AiGatewayOptions = {
   clock?: () => number;
   maxOutputTokens: number;
   now?: () => Date;
@@ -175,6 +175,10 @@ export class AiGateway {
 
     const aborted = new Promise<never>((_, reject) => {
       const onAbort = () => reject(ABORTED);
+      if (signal.aborted) {
+        onAbort();
+        return;
+      }
       signal.addEventListener('abort', onAbort, { once: true });
       removeAbortListener = () => signal.removeEventListener('abort', onAbort);
     });

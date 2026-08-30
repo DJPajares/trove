@@ -1,6 +1,6 @@
 'use client';
 
-import { Menu, X } from 'lucide-react';
+import { Menu, Search, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -15,7 +15,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useCollapsingHeader } from '@/hooks/use-collapsing-header';
 import { navigationTransition } from '@/lib/motion';
-import { floatingActionDelay, floatingActionOrder } from '@/lib/shell/floating-actions';
+import {
+  floatingActionDelay,
+  floatingActionOrder,
+  floatingActionTriggerClass,
+} from '@/lib/shell/floating-actions';
+import { cn } from '@/lib/utils';
 
 /**
  * The controls portal their popups to the end of the document, so a tap inside
@@ -35,7 +40,9 @@ const POPUP_SELECTOR =
  */
 export function FloatingActionStack() {
   const t = useTranslations('navigation');
+  const search = useTranslations('globalSearch');
   const pathname = usePathname();
+  const [searchOpen, setSearchOpen] = useState(false);
   const { notifications, status } = useNotifications();
   const [expanded, setExpanded] = useState(false);
   const reducedMotion = useReducedMotion();
@@ -100,106 +107,142 @@ export function FloatingActionStack() {
     account: <AccountMenu onNavigate={collapse} triggerVariant="floating" />,
     appearance: <AppearanceToggle triggerVariant="floating" />,
     notifications: <NotificationCenter onNavigate={collapse} triggerVariant="floating" />,
-    search: <GlobalSearch onNavigate={collapse} triggerVariant="floating" />,
-  };
-
-  return (
-    <div
-      className="fixed top-[calc(0.75rem+var(--safe-top))] right-[max(0.75rem,var(--safe-right))] z-[var(--layer-notice)] flex flex-col items-end gap-3 transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)] md:hidden"
-      onFocusCapture={reveal}
-      onKeyDown={(event) => {
-        if (event.key !== 'Escape' || !expanded) return;
-
-        event.stopPropagation();
-        collapseAndRestoreFocus();
-      }}
-      ref={wrapperRef}
-      style={
-        hidden
-          ? { transform: 'translateY(calc(-100% - 0.75rem - var(--safe-top)))' }
-          : { transform: 'none' }
-      }
-    >
+    // Search fills the screen, so the stack that opened it has nothing left to
+    // say and folds away. The dialog itself lives outside the stack for exactly
+    // that reason: collapsing must not take its own dialog down with it.
+    search: (
       <Button
-        aria-controls="floating-action-stack"
-        aria-expanded={expanded}
-        aria-label={
-          expanded
-            ? t('closeQuickActions')
-            : unreadCount
-              ? t('openQuickActionsWithNotifications', { count: unreadCount })
-              : t('openQuickActions')
-        }
-        className="relative rounded-full border-border-subtle bg-background/95 text-foreground shadow-[var(--nav-action-shadow)] backdrop-blur focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring supports-[backdrop-filter]:bg-background/90"
+        aria-label={search('button')}
+        className={cn('text-foreground', floatingActionTriggerClass)}
         data-translucent-surface
-        onClick={() => (expanded ? collapseAndRestoreFocus() : setExpanded(true))}
-        ref={triggerRef}
+        onClick={() => {
+          setSearchOpen(true);
+          setExpanded(false);
+        }}
         size="icon"
         type="button"
         variant="ghost"
       >
-        {/* The icon swaps inside a box that never moves, so the tap target stays
-            put under a finger that is already on it. */}
-        <AnimatePresence initial={false} mode="wait">
-          <motion.span
-            animate={{ opacity: 1, rotate: 0 }}
-            className="flex items-center justify-center"
-            exit={{ opacity: 0, rotate: 90 }}
-            initial={{ opacity: 0, rotate: -90 }}
-            key={expanded ? 'close' : 'open'}
-            transition={navigationTransition}
-          >
-            {expanded ? (
-              <X aria-hidden="true" className="size-5" />
-            ) : (
-              <Menu aria-hidden="true" className="size-5" />
-            )}
-          </motion.span>
-        </AnimatePresence>
-        {/* Expanded, the notification button carries its own count a few pixels
-            below. Two badges would read as two different numbers. */}
-        {!expanded && unreadCount ? (
-          <Badge aria-hidden="true" className="absolute top-1 right-1" size="count" variant="solid">
-            {unreadCount > 9 ? '9+' : unreadCount}
-          </Badge>
-        ) : null}
+        <Search aria-hidden="true" className="size-5" />
       </Button>
+    ),
+  };
 
-      <AnimatePresence>
-        {expanded ? (
-          <motion.div
-            aria-label={t('quickActions')}
-            className="flex flex-col items-end gap-3"
-            id="floating-action-stack"
-            key="floating-action-stack"
-            role="group"
-          >
-            {floatingActionOrder.map((action, index) => (
-              <motion.div
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{
-                  opacity: 0,
-                  scale: 0.85,
-                  // Folds back towards the trigger it came from.
-                  transition: {
+  return (
+    <>
+      <div
+        className="fixed top-[calc(0.75rem+var(--safe-top))] right-[max(0.75rem,var(--safe-right))] z-[var(--layer-notice)] flex flex-col items-end gap-3 transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)] md:hidden"
+        onFocusCapture={reveal}
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape' || !expanded) return;
+
+          event.stopPropagation();
+          collapseAndRestoreFocus();
+        }}
+        ref={wrapperRef}
+        style={
+          hidden
+            ? { transform: 'translateY(calc(-100% - 0.75rem - var(--safe-top)))' }
+            : { transform: 'none' }
+        }
+      >
+        <Button
+          aria-controls="floating-action-stack"
+          aria-expanded={expanded}
+          aria-label={
+            expanded
+              ? t('closeQuickActions')
+              : unreadCount
+                ? t('openQuickActionsWithNotifications', { count: unreadCount })
+                : t('openQuickActions')
+          }
+          className="relative rounded-full border-border-subtle bg-background/95 text-foreground shadow-[var(--nav-action-shadow)] backdrop-blur focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring supports-[backdrop-filter]:bg-background/90"
+          data-translucent-surface
+          onClick={() => (expanded ? collapseAndRestoreFocus() : setExpanded(true))}
+          ref={triggerRef}
+          size="icon"
+          type="button"
+          variant="ghost"
+        >
+          {/* The icon swaps inside a box that never moves, so the tap target stays
+            put under a finger that is already on it. */}
+          <AnimatePresence initial={false} mode="wait">
+            <motion.span
+              animate={{ opacity: 1, rotate: 0 }}
+              className="flex items-center justify-center"
+              exit={{ opacity: 0, rotate: 90 }}
+              initial={{ opacity: 0, rotate: -90 }}
+              key={expanded ? 'close' : 'open'}
+              transition={navigationTransition}
+            >
+              {expanded ? (
+                <X aria-hidden="true" className="size-5" />
+              ) : (
+                <Menu aria-hidden="true" className="size-5" />
+              )}
+            </motion.span>
+          </AnimatePresence>
+          {/* Expanded, the notification button carries its own count a few pixels
+            below. Two badges would read as two different numbers. */}
+          {!expanded && unreadCount ? (
+            <Badge
+              aria-hidden="true"
+              className="absolute top-1 right-1"
+              size="count"
+              variant="solid"
+            >
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </Badge>
+          ) : null}
+        </Button>
+
+        <AnimatePresence>
+          {expanded ? (
+            <motion.div
+              aria-label={t('quickActions')}
+              className="flex flex-col items-end gap-3"
+              id="floating-action-stack"
+              key="floating-action-stack"
+              role="group"
+            >
+              {floatingActionOrder.map((action, index) => (
+                <motion.div
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{
+                    opacity: 0,
+                    scale: 0.85,
+                    // Folds back towards the trigger it came from.
+                    transition: {
+                      ...navigationTransition,
+                      delay: reducedMotion ? 0 : floatingActionDelay(index, true),
+                    },
+                    y: -8,
+                  }}
+                  initial={{ opacity: 0, scale: 0.85, y: -8 }}
+                  key={action}
+                  transition={{
                     ...navigationTransition,
-                    delay: reducedMotion ? 0 : floatingActionDelay(index, true),
-                  },
-                  y: -8,
-                }}
-                initial={{ opacity: 0, scale: 0.85, y: -8 }}
-                key={action}
-                transition={{
-                  ...navigationTransition,
-                  delay: reducedMotion ? 0 : floatingActionDelay(index),
-                }}
-              >
-                {actions[action]}
-              </motion.div>
-            ))}
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-    </div>
+                    delay: reducedMotion ? 0 : floatingActionDelay(index),
+                  }}
+                >
+                  {actions[action]}
+                </motion.div>
+              ))}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </div>
+
+      {/* A sibling of the stack, not a child: outside it so a collapse never
+          unmounts an open dialog, and outside it so the modal can mark the
+          burger inert along with the rest of the page. Focus comes back to that
+          burger, the one control still on screen when the dialog closes. */}
+      <GlobalSearch
+        finalFocus={triggerRef}
+        onNavigate={collapse}
+        onOpenChange={setSearchOpen}
+        open={searchOpen}
+      />
+    </>
   );
 }

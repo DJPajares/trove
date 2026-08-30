@@ -2,6 +2,14 @@
   "name": "@trove/types",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "devDependencies": {
     "@trove/config": "workspace:*"
   },
@@ -9,5 +17,8 @@
     "build": "../../node_modules/.bin/tsc --project tsconfig.build.json",
     "lint": "../../node_modules/.bin/oxlint --deny-warnings src",
     "typecheck": "../../node_modules/.bin/tsc --noEmit --project tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "4.4.3"
   }
 }

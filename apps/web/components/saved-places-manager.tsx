@@ -23,6 +23,7 @@ import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
 import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
 import { PlaceMedia } from '@/components/place-media';
+import { useRegisterPrimaryAction } from '@/components/primary-action-provider';
 import { SearchField } from '@/components/search-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -217,6 +218,15 @@ export function SavedPlacesManager() {
     setError(null);
     await queryClient.invalidateQueries({ queryKey: queryKeys.savedPlaces() });
   }, [queryClient]);
+
+  // In the library there is one thing worth making, and the header button and
+  // the bottom bar's create button now open the same sheet to make it. Its
+  // form resets on close, so arriving from either is the same fresh start.
+  useRegisterPrimaryAction({
+    enabled: true,
+    label: t('addPlace'),
+    onTrigger: () => setAddOpen(true),
+  });
 
   useEffect(() => {
     const input = searchQuery.trim();

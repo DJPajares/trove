@@ -37,6 +37,7 @@ import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
 import { ItineraryPlacesDrawer } from '@/components/itinerary-places-drawer';
 import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
 import { PlanScorePanel } from '@/components/plan-score-panel';
+import { useRegisterPrimaryAction } from '@/components/primary-action-provider';
 import {
   Popover,
   PopoverContent,
@@ -447,6 +448,20 @@ export function ItineraryManager({
     () => itinerary?.days.find((day) => day.id === selectedDayId) ?? null,
     [itinerary, selectedDayId],
   );
+
+  // Planning a day, the nearest thing to make is a stop on it, so the bottom
+  // bar's create button makes that instead of another trip. The day it adds to
+  // is the one the URL is already showing, which is why switching days needs no
+  // bookkeeping here. The whole-trip overview names no day and so claims
+  // nothing: the button keeps its global meaning there rather than guessing.
+  useRegisterPrimaryAction({
+    enabled: activeView === 'day' && selectedDay !== null,
+    label: t('addItem'),
+    onTrigger: () => {
+      if (selectedDay) openCreate(selectedDay);
+    },
+  });
+
   const dayMoveSource = useMemo(
     () => itinerary?.days.find((day) => day.id === dayMoveSourceId) ?? null,
     [dayMoveSourceId, itinerary],

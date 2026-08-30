@@ -1754,20 +1754,20 @@
     "tryAgain": "Try again",
     "states": {
       "active": {
-        "title": "Your trip is under way",
+        "title": "Under way",
         "description": "Keep the next useful detail close, then step into Trip Mode when you need it."
       },
       "planning": {
-        "title": "Your next trip is taking shape",
+        "title": "Coming up",
         "description": "Keep planning at your own pace. Trove keeps the practical details within reach."
       },
       "completed": {
-        "title": "A trip to revisit",
+        "title": "Looking back",
         "description": "Your trip is complete. Revisit the itinerary whenever you want.",
         "tripDescription": "{startDate} to {endDate}. The itinerary is still here whenever you need it."
       },
       "empty": {
-        "title": "Where would you like to go next?",
+        "title": "Home",
         "description": "Start a trip when the dates are clear, or keep places for later while the idea is still forming."
       }
     },

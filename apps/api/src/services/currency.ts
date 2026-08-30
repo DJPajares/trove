@@ -11,6 +11,13 @@ type FrankfurterRateResponse = {
   rate?: number;
 };
 
+type FrankfurterRatesResponse = Array<{
+  base?: string;
+  date?: string;
+  quote?: string;
+  rate?: number;
+}>;
+
 type FrankfurterCurrencyResponse = Array<{
   iso_code?: string;
   name?: string;
@@ -22,6 +29,26 @@ export type CurrencyRate = {
   date: string;
   provider: 'frankfurter';
   quote: string;
+  rate: number;
+};
+
+/**
+ * Every quote for one base, in a single answer.
+ *
+ * Each quote carries its own date because the upstream reference does not move
+ * every currency on the same day. `date` is the newest of them — what the board
+ * as a whole represents — while a conversion reports the dates of the two
+ * currencies it actually used.
+ */
+export type CurrencyRateBoard = {
+  base: string;
+  date: string;
+  provider: 'frankfurter';
+  rates: Record<string, CurrencyRateBoardEntry>;
+};
+
+export type CurrencyRateBoardEntry = {
+  date: string;
   rate: number;
 };
 
@@ -47,6 +74,7 @@ export class CurrencyProviderError extends Error {
 export interface CurrencyProvider {
   getCurrencies(): Promise<CurrencyMetadata[]>;
   getRate(base: string, quote: string): Promise<CurrencyRate>;
+  getRateBoard(base: string): Promise<CurrencyRateBoard>;
 }
 
 type FrankfurterCurrencyProviderOptions = {
@@ -128,6 +156,57 @@ export class FrankfurterCurrencyProvider implements CurrencyProvider {
     return currencies;
   }
 
+  /**
+   * One request returns every quote for `base`, which is what makes a daily
+   * snapshot cheaper than a per-pair cache: an unseen pair becomes arithmetic
+   * rather than another call.
+   */
+  async getRateBoard(base: string): Promise<CurrencyRateBoard> {
+    const normalizedBase = normalizeCurrencyCode(base);
+
+    if (!CURRENCY_CODE_PATTERN.test(normalizedBase)) {
+      throw new CurrencyProviderError('invalid_request');
+    }
+
+    const response = await this.requestJson<FrankfurterRatesResponse>(
+      `/v2/rates?base=${encodeURIComponent(normalizedBase)}`,
+    );
+
+    if (!Array.isArray(response)) {
+      throw new CurrencyProviderError('invalid_response');
+    }
+
+    const rates: Record<string, CurrencyRateBoardEntry> = {};
+    let latestDate = '';
+
+    for (const row of response) {
+      const rowBase = typeof row.base === 'string' ? normalizeCurrencyCode(row.base) : '';
+      const quote = typeof row.quote === 'string' ? normalizeCurrencyCode(row.quote) : '';
+
+      // A single malformed row should not discard the whole board; the quotes
+      // that parsed are still every pair those currencies can form.
+      if (
+        rowBase !== normalizedBase ||
+        !CURRENCY_CODE_PATTERN.test(quote) ||
+        !isDate(row.date) ||
+        typeof row.rate !== 'number' ||
+        !Number.isFinite(row.rate) ||
+        row.rate <= 0
+      ) {
+        continue;
+      }
+
+      rates[quote] = { date: row.date, rate: row.rate };
+      if (row.date > latestDate) latestDate = row.date;
+    }
+
+    if (!latestDate) {
+      throw new CurrencyProviderError('invalid_response');
+    }
+
+    return { base: normalizedBase, date: latestDate, provider: 'frankfurter', rates };
+  }
+
   async getRate(base: string, quote: string): Promise<CurrencyRate> {
     const normalizedBase = normalizeCurrencyCode(base);
     const normalizedQuote = normalizeCurrencyCode(quote);
@@ -177,5 +256,9 @@ export class CurrencyService {
 
   getRate(base: string, quote: string) {
     return this.provider.getRate(base, quote);
+  }
+
+  getRateBoard(base: string) {
+    return this.provider.getRateBoard(base);
   }
 }

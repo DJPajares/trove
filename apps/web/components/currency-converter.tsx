@@ -1,8 +1,8 @@
 'use client';
 
-import { ArrowLeftRight, CircleAlert, RefreshCw } from 'lucide-react';
+import { ArrowLeftRight, CircleAlert } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { CurrencyCombobox, useCurrencyMetadata } from '@/components/currency-combobox';
 import { MoneyInput } from '@/components/money-input';
@@ -13,19 +13,41 @@ import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import {
   convertCurrencyAmount,
-  getCurrencyRate,
-  type CachedCurrencyRate,
+  deriveRateFromBoard,
+  getRateBoardWithCache,
+  type CachedCurrencyRateBoard,
 } from '@/lib/currency/api';
 
-type ConversionResult = {
-  amount: string;
-  rate: CachedCurrencyRate | null;
-  source: string;
-  target: string;
+type BoardState = {
+  board: CachedCurrencyRateBoard | null;
+  status: 'loading' | 'ready' | 'unavailable';
 };
+
+type CurrencyPair = { source: string; target: string };
+
+/**
+ * Shared the same way the currency list is, so a remount — or React's
+ * development double-effect — reuses one request rather than issuing another.
+ */
+let boardPromise: ReturnType<typeof getRateBoardWithCache> | null = null;
+
+function loadRateBoard() {
+  boardPromise ??= getRateBoardWithCache().catch((error: unknown) => {
+    boardPromise = null;
+    throw error;
+  });
+  return boardPromise;
+}
+
+const recentPairsKey = 'trove:currency-recent-pairs:v1';
+const maxRecentPairs = 4;
 
 function normalizeCurrencyCode(value: string) {
   return value.trim().toUpperCase();
+}
+
+function isCurrencyCode(value: string) {
+  return /^[A-Z]{3}$/.test(value);
 }
 
 function validAmount(value: string) {
@@ -44,6 +66,35 @@ function formatAmount(locale: string, amount: string, currencyCode: string) {
   }
 }
 
+function readRecentPairs(): CurrencyPair[] {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem(recentPairsKey) ?? 'null');
+    if (!Array.isArray(value)) return [];
+
+    return value
+      .filter(
+        (pair): pair is CurrencyPair =>
+          Boolean(pair) &&
+          typeof pair === 'object' &&
+          isCurrencyCode(String((pair as CurrencyPair).source)) &&
+          isCurrencyCode(String((pair as CurrencyPair).target)),
+      )
+      .slice(0, maxRecentPairs);
+  } catch {
+    return [];
+  }
+}
+
+function writeRecentPairs(pairs: CurrencyPair[]) {
+  try {
+    window.localStorage.setItem(recentPairsKey, JSON.stringify(pairs));
+  } catch {
+    // Private browsing or a full quota should not break the converter.
+  }
+}
+
 export function CurrencyConverter() {
   const t = useTranslations('currency');
   const locale = useLocale();
@@ -52,9 +103,27 @@ export function CurrencyConverter() {
   const [amount, setAmount] = useState('');
   const [source, setSource] = useState('USD');
   const [target, setTarget] = useState('');
-  const [result, setResult] = useState<ConversionResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [converting, setConverting] = useState(false);
+  const [recentPairs, setRecentPairs] = useState<CurrencyPair[]>([]);
+  const [{ board, status: boardStatus }, setBoardState] = useState<BoardState>({
+    board: null,
+    status: 'loading',
+  });
+
+  // The whole day's board arrives once, so every later change is arithmetic:
+  // no request per keystroke, and the page keeps working offline.
+  useEffect(() => {
+    let active = true;
+    void loadRateBoard()
+      .then((next) => {
+        if (active) setBoardState({ board: next, status: 'ready' });
+      })
+      .catch(() => {
+        if (active) setBoardState({ board: null, status: 'unavailable' });
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (preferencesStatus !== 'loading') {
@@ -62,177 +131,205 @@ export function CurrencyConverter() {
     }
   }, [preferredCurrency, preferencesStatus]);
 
+  useEffect(() => {
+    setRecentPairs(readRecentPairs());
+  }, []);
+
   const currencyNames = useMemo(
     () => new Map(currencyMetadata.currencies.map((currency) => [currency.code, currency.name])),
     [currencyMetadata.currencies],
   );
   const sourceCode = normalizeCurrencyCode(source);
   const targetCode = normalizeCurrencyCode(target);
+  const samePair = sourceCode === targetCode && isCurrencyCode(sourceCode);
+  const rate = useMemo(
+    () =>
+      board && isCurrencyCode(sourceCode) && isCurrencyCode(targetCode) && !samePair
+        ? deriveRateFromBoard(board, sourceCode, targetCode)
+        : null,
+    [board, samePair, sourceCode, targetCode],
+  );
 
-  function resetResult() {
-    setError(null);
-    setResult(null);
-  }
+  const rememberPair = useCallback((pair: CurrencyPair) => {
+    setRecentPairs((current) => {
+      const next = [
+        pair,
+        ...current.filter((entry) => entry.source !== pair.source || entry.target !== pair.target),
+      ].slice(0, maxRecentPairs);
+      writeRecentPairs(next);
+      return next;
+    });
+  }, []);
 
-  function updateAmount(value: string) {
-    setAmount(value);
-    resetResult();
-  }
-
-  function updateSource(value: string) {
-    setSource(value.toUpperCase());
-    resetResult();
-  }
-
-  function updateTarget(value: string) {
-    setTarget(value.toUpperCase());
-    resetResult();
-  }
+  // A pair is only worth remembering once it has actually produced a value,
+  // which keeps half-typed codes out of the quick picks.
+  useEffect(() => {
+    if (rate) rememberPair({ source: rate.base, target: rate.quote });
+  }, [rate, rememberPair]);
 
   function swapCurrencies() {
     setSource(targetCode);
     setTarget(sourceCode);
-    resetResult();
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!validAmount(amount) || !/^[A-Z]{3}$/.test(sourceCode) || !/^[A-Z]{3}$/.test(targetCode)) {
-      setError(t('invalidInput'));
-      setResult(null);
-      return;
-    }
-
-    setConverting(true);
-    setError(null);
-    try {
-      if (sourceCode === targetCode) {
-        setResult({ amount, rate: null, source: sourceCode, target: targetCode });
-        return;
-      }
-
-      const rate = await getCurrencyRate(sourceCode, targetCode);
-      const convertedAmount = convertCurrencyAmount(amount, rate.rate);
-      if (!convertedAmount) throw new Error('invalid_conversion');
-      setResult({ amount: convertedAmount, rate, source: sourceCode, target: targetCode });
-    } catch {
-      setResult(null);
-      setError(t('conversionUnavailable'));
-    } finally {
-      setConverting(false);
-    }
+  function applyPair(pair: CurrencyPair) {
+    setSource(pair.source);
+    setTarget(pair.target);
   }
 
-  const rateDate = result?.rate
+  const convertedAmount = validAmount(amount)
+    ? samePair
+      ? amount
+      : rate && convertCurrencyAmount(amount, rate.rate)
+    : null;
+  const rateDate = rate
     ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(
-        new Date(`${result.rate.date}T00:00:00`),
+        new Date(`${rate.date}T00:00:00`),
       )
     : null;
-  const refreshedAt = result?.rate
+  const refreshedAt = rate
     ? new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }).format(
-        new Date(result.rate.fetchedAt),
+        new Date(rate.fetchedAt),
       )
     : null;
+  const rateDetail =
+    rate && rateDate && refreshedAt
+      ? `${t('rateDetails', {
+          date: rateDate,
+          rate: rate.rate.toLocaleString(locale, { maximumFractionDigits: 6 }),
+          source: rate.base,
+          target: rate.quote,
+        })} · ${
+          rate.source === 'cache'
+            ? t('cachedRate', { refreshedAt })
+            : t('liveRate', { refreshedAt })
+        }`
+      : null;
+  const pairUnavailable =
+    boardStatus === 'ready' &&
+    !rate &&
+    !samePair &&
+    isCurrencyCode(sourceCode) &&
+    isCurrencyCode(targetCode);
+
+  const detail =
+    boardStatus === 'loading'
+      ? t('loadingRates')
+      : pairUnavailable
+        ? t('pairUnavailable')
+        : samePair
+          ? t('sameCurrency')
+          : rateDetail;
 
   return (
-    <section className="mx-auto w-full max-w-5xl space-y-7">
+    <section className="mx-auto w-full max-w-3xl space-y-6">
       <PageHeader description={t('description')} title={t('title')} />
-      <form className="space-y-5" onSubmit={handleSubmit}>
-        {error ? (
-          <Alert role="alert" variant="destructive">
-            <CircleAlert aria-hidden="true" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
-        <FieldGroup className="gap-5">
-          <Field className="max-w-xs">
-            <FieldLabel htmlFor="currency-amount">{t('amount')}</FieldLabel>
-            <MoneyInput
-              autoComplete="off"
-              id="currency-amount"
-              onValueChange={updateAmount}
-              placeholder={t('amountPlaceholder')}
-              required
-              value={amount}
-            />
-          </Field>
-          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-end">
-            <Field>
-              <FieldLabel htmlFor="currency-source">{t('from')}</FieldLabel>
-              <CurrencyCombobox
-                aria-describedby="currency-source-description"
-                aria-label={t('from')}
-                id="currency-source"
-                onValueChange={updateSource}
-                placeholder={t('currencyPlaceholder')}
-                required
-                value={sourceCode}
+
+      {boardStatus === 'unavailable' ? (
+        <Alert role="alert" variant="destructive">
+          <CircleAlert aria-hidden="true" />
+          <AlertDescription>{t('conversionUnavailable')}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      <div className="overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card shadow-[var(--shadow-surface)]">
+        <div className="space-y-6 p-5 sm:p-6">
+          <FieldGroup className="gap-6">
+            <Field className="max-w-xs">
+              <FieldLabel htmlFor="currency-amount">{t('amount')}</FieldLabel>
+              <MoneyInput
+                autoComplete="off"
+                id="currency-amount"
+                onValueChange={setAmount}
+                placeholder={t('amountPlaceholder')}
+                value={amount}
               />
-              <FieldDescription id="currency-source-description">
-                {currencyNames.get(sourceCode) ?? t('currencyCodeHint')}
-              </FieldDescription>
             </Field>
-            <Button
-              className="w-full sm:mb-[1.625rem] sm:w-auto"
-              disabled={!sourceCode || !targetCode}
-              onClick={swapCurrencies}
-              type="button"
-              variant="outline"
-            >
-              <ArrowLeftRight aria-hidden="true" data-icon="inline-start" />
-              {t('swap')}
-            </Button>
-            <Field>
-              <FieldLabel htmlFor="currency-target">{t('to')}</FieldLabel>
-              <CurrencyCombobox
-                aria-describedby="currency-target-description"
-                aria-label={t('to')}
-                id="currency-target"
-                onValueChange={updateTarget}
-                placeholder={t('currencyPlaceholder')}
-                required
-                value={targetCode}
-              />
-              <FieldDescription id="currency-target-description">
-                {currencyNames.get(targetCode) ?? t('currencyCodeHint')}
-              </FieldDescription>
-            </Field>
-          </div>
-        </FieldGroup>
-        {currencyMetadata.source === 'cache' ? (
-          <p className="text-sm leading-5 text-muted-foreground">{t('currencyListCached')}</p>
-        ) : null}
-        <div className="flex flex-wrap items-center gap-3">
-          <Button disabled={converting} type="submit">
-            <RefreshCw aria-hidden="true" data-icon="inline-start" />
-            {converting ? t('converting') : t('convert')}
-          </Button>
-          <p className="text-sm text-muted-foreground">{t('referenceOnly')}</p>
+
+            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+              <Field>
+                <FieldLabel htmlFor="currency-source">{t('from')}</FieldLabel>
+                <CurrencyCombobox
+                  aria-describedby="currency-source-description"
+                  aria-label={t('from')}
+                  id="currency-source"
+                  onValueChange={(value) => setSource(value.toUpperCase())}
+                  placeholder={t('currencyPlaceholder')}
+                  value={sourceCode}
+                />
+                <FieldDescription id="currency-source-description">
+                  {currencyNames.get(sourceCode) ?? t('currencyCodeHint')}
+                </FieldDescription>
+              </Field>
+
+              <Button
+                aria-label={t('swap')}
+                className="w-full rounded-full sm:mt-7 sm:w-11"
+                disabled={!sourceCode && !targetCode}
+                onClick={swapCurrencies}
+                size="icon"
+                type="button"
+                variant="outline"
+              >
+                <ArrowLeftRight aria-hidden="true" />
+              </Button>
+
+              <Field>
+                <FieldLabel htmlFor="currency-target">{t('to')}</FieldLabel>
+                <CurrencyCombobox
+                  aria-describedby="currency-target-description"
+                  aria-label={t('to')}
+                  id="currency-target"
+                  onValueChange={(value) => setTarget(value.toUpperCase())}
+                  placeholder={t('currencyPlaceholder')}
+                  value={targetCode}
+                />
+                <FieldDescription id="currency-target-description">
+                  {currencyNames.get(targetCode) ?? t('currencyCodeHint')}
+                </FieldDescription>
+              </Field>
+            </div>
+          </FieldGroup>
+
+          {currencyMetadata.source === 'cache' ? (
+            <p className="text-sm leading-5 text-muted-foreground">{t('currencyListCached')}</p>
+          ) : null}
         </div>
-      </form>
-      {result ? (
-        <div aria-live="polite" className="border-t border-border bg-muted/35 px-5 py-4 sm:px-6">
+
+        <div
+          aria-live="polite"
+          className="min-h-[7.5rem] border-t border-border-subtle bg-muted/35 px-5 py-5 sm:px-6"
+        >
           <p className="text-sm font-medium text-muted-foreground">{t('result')}</p>
-          <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-            {formatAmount(locale, result.amount, result.target)}
+          <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums text-foreground">
+            {convertedAmount ? formatAmount(locale, convertedAmount, targetCode) : '—'}
           </p>
-          {result.rate && rateDate && refreshedAt ? (
-            <p className="mt-2 text-sm leading-5 text-muted-foreground">
-              {t('rateDetails', {
-                date: rateDate,
-                rate: result.rate.rate.toLocaleString(locale, { maximumFractionDigits: 6 }),
-                source: result.source,
-                target: result.target,
-              })}{' '}
-              {result.rate.source === 'cache'
-                ? t('cachedRate', { refreshedAt })
-                : t('liveRate', { refreshedAt })}
-            </p>
-          ) : (
-            <p className="mt-2 text-sm leading-5 text-muted-foreground">{t('sameCurrency')}</p>
-          )}
+          {detail ? <p className="mt-2 text-sm leading-5 text-muted-foreground">{detail}</p> : null}
+        </div>
+      </div>
+
+      {recentPairs.length > 1 ? (
+        <div className="space-y-3">
+          <p className="text-sm font-medium text-muted-foreground">{t('recentPairs')}</p>
+          <div className="flex flex-wrap gap-2">
+            {recentPairs.map((pair) => (
+              <Button
+                aria-label={t('usePair', { source: pair.source, target: pair.target })}
+                className="rounded-full tabular-nums"
+                key={`${pair.source}-${pair.target}`}
+                onClick={() => applyPair(pair)}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {pair.source} → {pair.target}
+              </Button>
+            ))}
+          </div>
         </div>
       ) : null}
+
+      <p className="text-sm text-muted-foreground">{t('referenceOnly')}</p>
     </section>
   );
 }

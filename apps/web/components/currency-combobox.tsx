@@ -1,5 +1,6 @@
 'use client';
 
+import { Combobox as ComboboxPrimitive } from '@base-ui/react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState, type ComponentProps } from 'react';
 
@@ -82,6 +83,10 @@ export function CurrencyCombobox({
 }: Readonly<CurrencyComboboxProps>) {
   const t = useTranslations('travelInputs.currency');
   const { currencies, status } = useCurrencyMetadata();
+  // The field itself shows only the code, so the default filter would match on
+  // three letters alone. Searching by name is how most people find a currency,
+  // so both halves stay searchable.
+  const filter = ComboboxPrimitive.useFilter({ sensitivity: 'base' });
   const code = value.trim().toUpperCase();
   const selected = useMemo(
     () => currencies.find((currency) => currency.code === code) ?? null,
@@ -112,7 +117,11 @@ export function CurrencyCombobox({
   return (
     <Combobox
       items={currencies}
-      itemToStringLabel={(currency) => `${currency.name} (${currency.code})`}
+      filter={(currency, query) =>
+        filter.contains(currency, query, (item: CurrencyMetadata) => item.code) ||
+        filter.contains(currency, query, (item: CurrencyMetadata) => item.name)
+      }
+      itemToStringLabel={(currency) => currency.code}
       value={selected}
       onValueChange={(currency) => onValueChange(currency?.code ?? '')}
       disabled={disabled}

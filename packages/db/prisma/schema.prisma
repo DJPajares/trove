@@ -446,6 +446,61 @@ model TravelLegCache {
   @@schema("trove")
 }
 
+/// One day's exchange rates from Frankfurter, always expressed against EUR.
+///
+/// Frankfurter republishes once per working day, so asking it per conversion
+/// was a provider call inside a user-driven loop: every keystroke on the
+/// converter, and every expense rendered in the home currency, paid for an
+/// answer that had not changed since the morning.
+///
+/// The whole board is stored rather than the pair that was asked for, because
+/// `/v2/rates` returns every quote for the price of one request. A pair Trove
+/// has never seen is then arithmetic — `rates[quote] / rates[base]` — instead
+/// of a new call, which is what keeps the cost flat as people pick currencies.
+model CurrencyRateSnapshot {
+  id        String                     @id @default(uuid(7)) @db.Uuid
+  provider  String                     @default("frankfurter")
+  base      String                     @db.Char(3)
+  rateDate  DateTime                   @map("rate_date") @db.Date
+  fetchedAt DateTime                   @default(now()) @map("fetched_at") @db.Timestamptz(3)
+  rates     CurrencyRateSnapshotRate[]
+
+  @@unique([provider, base, rateDate], name: "currency_rate_snapshot_day")
+  @@index([fetchedAt])
+  @@map("currency_rate_snapshots")
+  @@schema("trove")
+}
+
+/// One quote currency's rate inside a snapshot, with its own publication date.
+model CurrencyRateSnapshotRate {
+  snapshotId String   @map("snapshot_id") @db.Uuid
+  code       String   @db.Char(3)
+  rate       Decimal  @db.Decimal(20, 10)
+  /// The reference does not move every currency on the same day, so a quote
+  /// carries the date it was actually published rather than the board's.
+  rateDate   DateTime @map("rate_date") @db.Date
+
+  snapshot CurrencyRateSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@id([snapshotId, code])
+  @@map("currency_rate_snapshot_rates")
+  @@schema("trove")
+}
+
+/// Frankfurter's currency list, refreshed on the same daily cadence as rates.
+///
+/// Names and symbols are reference data rather than provider truth about a
+/// place, so a shared copy is safe to keep and cheap to serve.
+model CurrencyMetadataEntry {
+  code      String   @id @db.Char(3)
+  name      String
+  symbol    String?
+  fetchedAt DateTime @default(now()) @map("fetched_at") @db.Timestamptz(3)
+
+  @@map("currency_metadata")
+  @@schema("trove")
+}
+
 /// One editorial subject cache, containing an ordered collection of photographs.
 ///
 /// Editorial imagery is Trove's second, deliberately separate media track: it is

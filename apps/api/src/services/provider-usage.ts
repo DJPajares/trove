@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
  * arrives.
  */
 export const PROVIDER_CALL_SOURCES = [
+  'currency',
   'editorial-image-reconciliation',
   'editorial-images',
   'global-search',
@@ -48,6 +49,7 @@ export type ProviderExpectedSku =
    * counted here anyway so an editorial fan-out is caught by the same tests that
    * catch a Places one, rather than only surfacing as a throttled provider.
    */
+  | 'currency-rates-free'
   | 'editorial-images-free'
   | 'places-autocomplete-requests'
   | 'place-details-pro'
@@ -55,8 +57,8 @@ export type ProviderExpectedSku =
   | 'routes-compute-routes-essentials';
 
 type ProviderEventBase = {
-  operation: 'computeRoute' | 'getDetails' | 'search';
-  provider: 'google' | 'pexels';
+  operation: 'computeRoute' | 'getDetails' | 'getRates' | 'search';
+  provider: 'frankfurter' | 'google' | 'pexels';
   source: ProviderCallSource;
 };
 
@@ -66,6 +68,7 @@ export type ProviderCall = ProviderEventBase & {
   /** The provider endpoint, normalised so it contains no provider ids. */
   endpoint:
     | '/directions/v2:computeRoutes'
+    | '/v2/rates'
     | '/v1/places/:placeId'
     | '/v1/places:autocomplete'
     | '/v1/search';
@@ -77,7 +80,7 @@ export type ProviderCall = ProviderEventBase & {
 };
 
 export type ProviderCacheEvent = ProviderEventBase & {
-  cache: 'editorial-image' | 'place-details' | 'place-evidence' | 'route';
+  cache: 'currency' | 'editorial-image' | 'place-details' | 'place-evidence' | 'route';
   failureCode?: 'NOT_FOUND' | 'UNUSABLE_LOCATION';
   includePolyline?: boolean;
   kind: 'cache_hit' | 'negative_cache_hit';

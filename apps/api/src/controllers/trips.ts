@@ -12,6 +12,7 @@ import {
   TripValidationError,
   updateTrip,
   updateTripExperienceRating,
+  updateTripVisibility,
 } from '../services/trips.js';
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -66,6 +67,7 @@ const tripUpdateSchema = z
   })
   .strict();
 const tripParamsSchema = z.object({ tripId: z.uuid() }).strict();
+const visibilitySchema = z.object({ visibility: z.enum(['private', 'public']) }).strict();
 const experienceRatingSchema = z
   .object({
     note: z.string().trim().max(2_000).nullable().optional(),
@@ -195,6 +197,27 @@ export async function deleteTripController(request: FastifyRequest, reply: Fasti
   try {
     await deleteTrip(context.userId, context.accessToken, tripId);
     return reply.code(204).send();
+  } catch (error) {
+    return handleTripError(error, reply);
+  }
+}
+
+export async function updateTripVisibilityController(request: FastifyRequest, reply: FastifyReply) {
+  const context = getRequestContext(request, reply);
+  const tripId = parseTripId(request, reply);
+  if (!context || !tripId) return;
+  const parsed = visibilitySchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ code: 'invalid_visibility' });
+
+  try {
+    return {
+      trip: await updateTripVisibility(
+        context.userId,
+        context.accessToken,
+        tripId,
+        parsed.data.visibility,
+      ),
+    };
   } catch (error) {
     return handleTripError(error, reply);
   }

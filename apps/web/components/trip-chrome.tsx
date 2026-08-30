@@ -1,18 +1,20 @@
 'use client';
 
-import { ArrowLeft, ChevronDown, Ellipsis } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Ellipsis, Share2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { TripMedia } from '@/components/trip-media';
+import { TripShareDialog } from '@/components/trip-share-dialog';
 import { useTripContext } from '@/components/trip-provider';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuLinkItem,
   DropdownMenuSeparator,
@@ -73,6 +75,7 @@ export function TripChrome({
   tripId,
 }: Readonly<{ children: ReactNode; tripId: string }>) {
   const t = useTranslations('trips');
+  const share = useTranslations('trips.share');
   const locale = useLocale();
   const pathname = usePathname();
   const context = useTripContext();
@@ -83,6 +86,7 @@ export function TripChrome({
   const [descriptionSlot, setDescriptionSlot] = useState<HTMLElement | null>(null);
   const [coverMetaSlot, setCoverMetaSlot] = useState<HTMLElement | null>(null);
   const [coverSource, setCoverSource] = useState<TripMediaSource | null>(null);
+  const [sharing, setSharing] = useState(false);
 
   const currentSection = tripSectionFromPathname(pathname, tripId);
   const stickyNavigation = currentSection === 'itinerary';
@@ -278,6 +282,19 @@ export function TripChrome({
                     {t(destination.labelKey)}
                   </DropdownMenuLinkItem>
                 ))}
+                {/* Sharing belongs to the trip rather than to any one section,
+                    and the overflow menu is the only control in the chrome that
+                    already does. It waits for the trip: there is nothing to
+                    publish until its id and current visibility have landed. */}
+                {trip ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setSharing(true)}>
+                      <Share2 aria-hidden="true" data-icon="inline-start" />
+                      {share('action')}
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -286,6 +303,18 @@ export function TripChrome({
         </header>
 
         {children}
+
+        {/* `setTrip` writes the new visibility straight back into the trip the
+            whole subtree already reads, so the switch reflects the saved state
+            without a second fetch. */}
+        {trip ? (
+          <TripShareDialog
+            onOpenChange={setSharing}
+            onTripChange={(updated) => context?.setTrip(updated)}
+            open={sharing}
+            trip={trip}
+          />
+        ) : null}
       </div>
     </TripChromeContext.Provider>
   );

@@ -76,6 +76,16 @@ function mapReadiness(value: string) {
   return value === 'READY' ? ('ready' as const) : ('in_progress' as const);
 }
 
+/**
+ * Only the two states a traveller can actually choose. `SHARED` is scaffolding
+ * for named collaborators, which nothing implements yet, and reporting it as
+ * anything other than private would tell the owner their trip is out in the
+ * world when it is not.
+ */
+function mapVisibility(value: string) {
+  return value === 'PUBLIC' ? ('public' as const) : ('private' as const);
+}
+
 function mapTimeZoneSource(value: string) {
   const values: Record<string, string> = {
     DESTINATION: 'destination',
@@ -159,6 +169,7 @@ async function serializeTrip(
       : null,
     startingLocationOverride: trip.startingPlace?.customName ?? null,
     updatedAt: trip.updatedAt.toISOString(),
+    visibility: mapVisibility(trip.visibility),
     weatherLocation,
   };
 }
@@ -507,6 +518,36 @@ export async function updateTrip(
           : {}),
       },
     });
+  });
+
+  return getTrip(userId, accessToken, tripId);
+}
+
+/**
+ * Turning a link on or off, kept off the general trip update.
+ *
+ * `updateTrip` normalizes dates, re-resolves time zones and can refuse on a
+ * date shrink - none of which a share toggle should be able to trip over, and
+ * none of which should be able to ride along with one. Publishing a trip is also
+ * the one field on a trip that changes who can see it, so it is worth being able
+ * to read every write of it in one place.
+ */
+export async function updateTripVisibility(
+  userId: string,
+  accessToken: string,
+  tripId: string,
+  visibility: 'private' | 'public',
+) {
+  const prisma = getPrismaClient();
+  const existing = await prisma.trip.findFirst({
+    where: { id: tripId, ownerId: userId },
+    select: { id: true },
+  });
+  if (!existing) throw new TripNotFoundError();
+
+  await prisma.trip.update({
+    where: { id: tripId },
+    data: { visibility: visibility === 'public' ? 'PUBLIC' : 'PRIVATE' },
   });
 
   return getTrip(userId, accessToken, tripId);

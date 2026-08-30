@@ -279,7 +279,21 @@
     "deleteDescription": "{name} and its planning data will be permanently removed.",
     "deleteTrip": "Delete trip",
     "deleting": "Deleting…",
-    "deleteError": "We couldn't delete this trip. Try again."
+    "deleteError": "We couldn't delete this trip. Try again.",
+    "share": {
+      "action": "Share",
+      "title": "Share this trip",
+      "description": "Anyone with the link can read the itinerary. They do not need a Trove account.",
+      "toggleLabel": "Anyone with the link can view",
+      "carries": "The link shows day and item names, times, and any notes you have written. It does not show planned costs.",
+      "linkLabel": "Share link",
+      "copy": "Copy link",
+      "copied": "Link copied",
+      "copyFailed": "Could not copy the link. Select it and copy manually.",
+      "saving": "Saving…",
+      "saveFailed": "Could not change sharing. Try again.",
+      "close": "Done"
+    }
   },
   "tripMode": {
     "label": "Trip Mode",
@@ -1546,7 +1560,7 @@
     "editNote": "Edit note for {name}",
     "remove": "Remove {name} from this trip",
     "viewDetails": "View details for {name}",
-    "referencedError": "This place is on your itinerary in {count, plural, one {one place} other {# places}}. Remove it from those days first, then remove it here \u2014 your notes, expenses and memories stay either way.",
+    "referencedError": "This place is on your itinerary in {count, plural, one {one place} other {# places}}. Remove it from those days first, then remove it here — your notes, expenses and memories stay either way.",
     "addPlaceTitle": "Add a place",
     "addPlaceDescription": "Search for somewhere you already saved or somewhere new, or add a private place.",
     "loadSavedError": "We couldn't load your Saved Places. Try again.",
@@ -2251,6 +2265,30 @@
       "saving": "Saving…",
       "saveError": "We could not save this memory. Try again.",
       "storageFull": "This device has no room left for more photos. Sync or remove a few, then try again."
+    }
+  },
+  "sharedTrip": {
+    "title": "{trip}",
+    "description": "A trip itinerary shared from Trove.",
+    "eyebrow": "Shared itinerary",
+    "dateRange": "{startDate} – {endDate}",
+    "dayNumber": "Day {number}",
+    "dayItemCount": "{count, plural, =0 {No plans} one {# plan} other {# plans}}",
+    "itemsForDay": "Plans for day {number}",
+    "emptyDay": "Nothing planned yet",
+    "emptyTrip": "This trip has no days planned yet.",
+    "untitledItem": "Itinerary item",
+    "readOnly": "You are reading a shared copy. Nothing here can be changed.",
+    "footerPrompt": "Planning a trip of your own?",
+    "footerAction": "Try Trove",
+    "notFoundTitle": "This trip is not shared",
+    "notFoundDescription": "The link may have been turned off, or it may never have pointed anywhere. Ask whoever sent it for a new one.",
+    "notFoundAction": "Go to Trove",
+    "dayPart": {
+      "morning": "Morning",
+      "afternoon": "Afternoon",
+      "evening": "Evening",
+      "anytime": "Anytime"
     }
   }
 }

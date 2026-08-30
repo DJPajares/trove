@@ -20,6 +20,7 @@ export const PROVIDER_CALL_SOURCES = [
   'place-resolution',
   'places-autocomplete',
   'plan-score',
+  'public-share',
   'screen-hydration',
   'trip-mode-context',
   'trip-places',

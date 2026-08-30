@@ -7,6 +7,7 @@ import { AppHeader } from '@/components/app-header';
 import { AppMenuProvider, AppMenuTrigger } from '@/components/app-menu';
 import { AppearanceToggle } from '@/components/appearance-toggle';
 import { DesktopAppHeader } from '@/components/desktop-app-header';
+import { FloatingActionStack } from '@/components/floating-action-stack';
 import { PageTransition } from '@/components/page-transition';
 import { PrimaryNavigation } from '@/components/primary-navigation';
 import { TripCreationProvider } from '@/components/trip-creation-provider';
@@ -97,6 +98,11 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
       ) : (
         <AppHeader>{headerContent}</AppHeader>
       )}
+
+      {/* Mobile has no header to hang the everyday controls from, so they float
+          in the upper right instead. Ahead of the main content in the DOM, which
+          is also where a traveller tabbing through the page expects them. */}
+      {isSignedIn ? <FloatingActionStack /> : null}
 
       <main
         className={cn(

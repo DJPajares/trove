@@ -218,6 +218,8 @@ On desktop and tablet, a burger menu in the header opens a right-side Menu drawe
 
 The drawer keeps Notifications, the Light/Dark toggle, Account, and Close together in its header. Search is a full-width control below them and opens the existing search dialog. Tools is a visible heading followed by Currency and Task Templates, which open on independent pages without an expand/collapse step. The More label is reserved for mobile.
 
+Mobile has no header to hang the everyday controls from, so Account, Notifications, and the Light/Dark toggle float in the upper right instead, behind a burger button that unfolds them downwards in that order and becomes a close control in the same position. Because they are already on screen there, the drawer offers its quick-actions group to desktop and tablet alone; on mobile the drawer is Search and Tools. The floating stack yields to the scroll direction so it never sits on top of a sticky trip or Trip Mode header.
+
 Trip Mode must not replace global navigation.
 
 Trip Mode may introduce its own Now / Today / Map / Trip navigation, but the user must retain a clear way to leave Trip Mode and reach the stable global navigation on every supported form factor.

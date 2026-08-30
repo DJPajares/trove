@@ -124,7 +124,12 @@ function AppMenuContent() {
       </SheetHeader>
 
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 md:px-6">
-        <section aria-labelledby="app-menu-quick-actions-heading" className="space-y-2">
+        {/* Mobile reaches these three from the floating stack in the upper
+            right, so the drawer offers them to desktop alone. */}
+        <section
+          aria-labelledby="app-menu-quick-actions-heading"
+          className="hidden space-y-2 md:block"
+        >
           <h2
             className="px-1 text-sm font-semibold text-foreground"
             id="app-menu-quick-actions-heading"
@@ -136,12 +141,15 @@ function AppMenuContent() {
             <AppearanceToggle triggerVariant="quickAction" />
             <AccountMenu onNavigate={closeMenu} triggerVariant="quickAction" />
           </div>
-          {appearanceSaveError ? (
-            <p className="px-1 text-xs leading-5 text-destructive" role="status">
-              {appearance('unsaved')}
-            </p>
-          ) : null}
         </section>
+
+        {/* Outside the section above: the appearance toggle it reports on still
+            exists on mobile, so its failure has to be sayable there too. */}
+        {appearanceSaveError ? (
+          <p className="px-1 text-xs leading-5 text-destructive" role="status">
+            {appearance('unsaved')}
+          </p>
+        ) : null}
 
         <GlobalSearch onNavigate={closeMenu} triggerVariant="field" />
 

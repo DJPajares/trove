@@ -103,17 +103,37 @@ vi.mock('next-intl/server', () => ({
 }));
 
 /**
- * The manifest paints the standalone splash screen, which sits outside the
- * document and so cannot be corrected on the client. Nothing in the type system
- * ties it to the ground the app actually opens on, and the two were hardcoded
- * apart once already.
+ * The manifest paints the standalone splash screen and the installed app's
+ * Android status bar, both of which sit outside the document and so cannot be
+ * corrected on the client. A manifest hardcoded light is what left that bar
+ * ivory under the dark theme, so this asserts it opens on whichever ground it
+ * is asked for.
  */
-test('the manifest opens on the light ground', async () => {
-  const { default: manifest } = await import('../app/manifest.ts');
-  const { background_color: backgroundColor, theme_color: manifestThemeColor } = await manifest();
+test('the manifest opens on the ground it is given', async () => {
+  const { buildManifest } = await import('../lib/pwa/manifest.ts');
+  const dark = await buildManifest('dark');
+  const light = await buildManifest('light');
 
-  expect(backgroundColor).toBe(themeColor.light);
-  expect(manifestThemeColor).toBe(themeColor.light);
+  expect(dark.background_color).toBe(themeColor.dark);
+  expect(dark.theme_color).toBe(themeColor.dark);
+  expect(light.background_color).toBe(themeColor.light);
+  expect(light.theme_color).toBe(themeColor.light);
+});
+
+/**
+ * Chrome identifies an installed app by these, so a theme that changed them
+ * would read as a different app rather than a recoloured one.
+ */
+test('the manifest is the same app in both themes', async () => {
+  const { buildManifest } = await import('../lib/pwa/manifest.ts');
+  const dark = await buildManifest('dark');
+  const light = await buildManifest('light');
+
+  expect(dark.id).toBe(light.id);
+  expect(dark.start_url).toBe(light.start_url);
+  expect(dark.scope).toBe(light.scope);
+  expect(dark.name).toBe(light.name);
+  expect(dark.icons).toStrictEqual(light.icons);
 });
 
 /**

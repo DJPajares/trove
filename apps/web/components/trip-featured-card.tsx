@@ -33,16 +33,26 @@ export function TripFeaturedCard({ editorial, onShare, trip }: Readonly<TripFeat
       aria-labelledby="featured-trip-heading"
       className="overflow-hidden rounded-[var(--radius-2xl)] border border-border-subtle bg-card shadow-[var(--shadow-card)]"
     >
-      <div className="grid md:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
-        <div className="min-w-0">
+      <div className="grid lg:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
+        <div className="relative min-w-0">
           <TripMedia
             alt={editorial ? mediaTranslations('alt.tripEditorial', { name: subjectName }) : ''}
-            className="h-56 w-full rounded-none md:h-full md:min-h-[24rem]"
+            className="h-56 w-full rounded-none lg:h-full lg:min-h-[24rem]"
             preload
-            sizes="(max-width: 767px) 100vw, (max-width: 1279px) 55vw, 580px"
+            sizes="(max-width: 1023px) 100vw, (max-width: 1279px) 55vw, 580px"
             source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
             variant="card"
           />
+          <Button
+            aria-label={share('action')}
+            className="absolute top-3 right-3 size-10 rounded-full border border-media-fallback-foreground/18 bg-neutral-950/58 text-media-fallback-foreground shadow-sm backdrop-blur-sm hover:bg-neutral-950/78 hover:text-media-fallback-foreground"
+            onClick={onShare}
+            size="icon"
+            type="button"
+            variant="ghost"
+          >
+            <Share2 aria-hidden="true" />
+          </Button>
         </div>
 
         <div className="flex min-w-0 flex-col justify-center gap-4 p-5 sm:p-6 lg:p-8">
@@ -75,34 +85,19 @@ export function TripFeaturedCard({ editorial, onShare, trip }: Readonly<TripFeat
           ) : null}
 
           <TripDestinationActions
+            className="flex-nowrap"
             destinations={primaryTripDestinations(trip.id, trip.lifecycle, trip.startDate)}
             extra={
-              // One flex item, not two, so the pair can never be split across lines
-              // with one control orphaned below - which is what left the overview
-              // button sitting alone under the row. Left-aligned: they follow the
-              // text actions directly rather than being pushed to the far edge, and
-              // when the row runs out of width they wrap together, still reading as
-              // a continuation of the actions rather than a separate cluster.
-              <div className="flex shrink-0 items-center gap-1">
-                <Button
-                  aria-label={share('action')}
-                  onClick={onShare}
-                  size="icon"
-                  type="button"
-                  variant="ghost"
-                >
-                  <Share2 aria-hidden="true" />
-                </Button>
-                <Button
-                  aria-label={t('overview')}
-                  nativeButton={false}
-                  render={<Link href={`/trips/${trip.id}`} />}
-                  size="icon"
-                  variant="ghost"
-                >
-                  <Info aria-hidden="true" />
-                </Button>
-              </div>
+              <Button
+                aria-label={t('overview')}
+                className="shrink-0"
+                nativeButton={false}
+                render={<Link href={`/trips/${trip.id}`} />}
+                size="icon"
+                variant="ghost"
+              >
+                <Info aria-hidden="true" />
+              </Button>
             }
             labelOverrides={
               trip.lifecycle === 'completed'

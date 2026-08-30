@@ -9,6 +9,7 @@ import {
   useState,
   type ComponentProps,
   type KeyboardEvent,
+  type MouseEvent,
 } from 'react';
 
 import { usePreferences } from '@/components/preferences-provider';
@@ -23,50 +24,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import {
+  formatSegmentedTime,
+  nearestTimeSegment,
+  parseCanonicalTime,
+  parseTimeInput,
+  replaceTimePeriod,
+  type TimeSegmentKind,
+} from '@/lib/time/time-segments';
 import { cn } from '@/lib/utils';
-
-function parseCanonicalTime(value: string) {
-  const match = /^(\d{2}):(\d{2})$/.exec(value);
-  if (!match) return null;
-  const hour = Number(match[1]);
-  const minute = Number(match[2]);
-  return hour <= 23 && minute <= 59 ? { hour, minute } : null;
-}
-
-function parseTimeInput(value: string) {
-  const trimmed = value.trim();
-  const canonical = /^(\d{1,2}):(\d{2})$/.exec(trimmed);
-  if (canonical) {
-    const hour = Number(canonical[1]);
-    const minute = Number(canonical[2]);
-    return hour <= 23 && minute <= 59
-      ? `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-      : null;
-  }
-
-  const twelveHour = /^(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m\.?$/i.exec(trimmed);
-  if (!twelveHour) return null;
-  const displayHour = Number(twelveHour[1]);
-  const minute = Number(twelveHour[2] ?? '0');
-  if (displayHour < 1 || displayHour > 12 || minute > 59) return null;
-  const period = twelveHour[3]?.toLowerCase();
-  const hour = (displayHour % 12) + (period === 'p' ? 12 : 0);
-  return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-}
-
-function formatTime(value: string, locale: string, format: '12h' | '24h') {
-  const parsed = parseCanonicalTime(value);
-  if (!parsed) return '';
-  if (format === '24h') return value;
-
-  const date = new Date(Date.UTC(2000, 0, 1, parsed.hour, parsed.minute));
-  return new Intl.DateTimeFormat(locale, {
-    hour: 'numeric',
-    hour12: true,
-    minute: '2-digit',
-    timeZone: 'UTC',
-  }).format(date);
-}
 
 function useMobilePicker() {
   const [mobile, setMobile] = useState(false);
@@ -182,7 +148,9 @@ export function TimeInput({
   disabled,
   id,
   onBlur,
+  onClick,
   onFocus,
+  onKeyDown,
   onValueChange,
   required,
   value,
@@ -195,18 +163,39 @@ export function TimeInput({
   const [open, setOpen] = useState(false);
   const [focused, setFocused] = useState(false);
   const [invalid, setInvalid] = useState(false);
-  const [displayValue, setDisplayValue] = useState(() =>
-    formatTime(value, locale, preferences.timeFormat),
+  const [activeSegment, setActiveSegment] = useState<TimeSegmentKind | null>(null);
+  const [displayValue, setDisplayValue] = useState(
+    () => formatSegmentedTime(value, locale, preferences.timeFormat).text,
   );
 
   useEffect(() => {
-    if (!focused) setDisplayValue(formatTime(value, locale, preferences.timeFormat));
+    if (!focused) {
+      setDisplayValue(formatSegmentedTime(value, locale, preferences.timeFormat).text);
+    }
   }, [focused, locale, preferences.timeFormat, value]);
 
   function selectTime(nextValue: string) {
     onValueChange(nextValue);
-    setDisplayValue(formatTime(nextValue, locale, preferences.timeFormat));
+    setDisplayValue(formatSegmentedTime(nextValue, locale, preferences.timeFormat).text);
     setInvalid(false);
+  }
+
+  function getCurrentDisplay() {
+    const canonical = parseTimeInput(displayValue, locale) ?? value;
+    return { canonical, ...formatSegmentedTime(canonical, locale, preferences.timeFormat) };
+  }
+
+  function selectSegment(
+    input: HTMLInputElement,
+    kind: TimeSegmentKind,
+    canonical = getCurrentDisplay().canonical,
+  ) {
+    const segment = formatSegmentedTime(canonical, locale, preferences.timeFormat).segments.find(
+      (candidate) => candidate.kind === kind,
+    );
+    if (!segment) return;
+    setActiveSegment(kind);
+    window.requestAnimationFrame(() => input.setSelectionRange(segment.start, segment.end));
   }
 
   function changeOpen(nextOpen: boolean) {
@@ -219,7 +208,55 @@ export function TimeInput({
       event.preventDefault();
       setOpen(true);
     }
-    props.onKeyDown?.(event);
+
+    const current = getCurrentDisplay();
+    const selected =
+      current.segments.find((segment) => segment.kind === activeSegment) ??
+      nearestTimeSegment(current.segments, event.currentTarget.selectionStart ?? 0);
+    const selectedIndex = selected ? current.segments.indexOf(selected) : -1;
+
+    if (selectedIndex >= 0 && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+      const direction = event.key === 'ArrowLeft' ? -1 : 1;
+      const next = current.segments[selectedIndex + direction];
+      if (next) {
+        event.preventDefault();
+        selectSegment(event.currentTarget, next.kind, current.canonical);
+      }
+    }
+
+    if (selectedIndex >= 0 && event.key === 'Tab') {
+      const direction = event.shiftKey ? -1 : 1;
+      const next = current.segments[selectedIndex + direction];
+      if (next) {
+        event.preventDefault();
+        selectSegment(event.currentTarget, next.kind, current.canonical);
+      } else {
+        setActiveSegment(null);
+      }
+    }
+
+    if (selected?.kind === 'period' && /^[ap]$/i.test(event.key)) {
+      const nextValue = replaceTimePeriod(
+        current.canonical,
+        event.key.toLocaleLowerCase() === 'a' ? 'am' : 'pm',
+      );
+      if (nextValue) {
+        event.preventDefault();
+        selectTime(nextValue);
+        selectSegment(event.currentTarget, 'period', nextValue);
+      }
+    } else if (selected?.kind === 'period' && /^\d$/.test(event.key)) {
+      event.preventDefault();
+    }
+
+    onKeyDown?.(event);
+  }
+
+  function handleClick(event: MouseEvent<HTMLInputElement>) {
+    const current = getCurrentDisplay();
+    const segment = nearestTimeSegment(current.segments, event.currentTarget.selectionStart ?? 0);
+    if (segment) selectSegment(event.currentTarget, segment.kind, current.canonical);
+    onClick?.(event);
   }
 
   const trigger = (
@@ -245,7 +282,12 @@ export function TimeInput({
         id={id}
         onBlur={(event) => {
           setFocused(false);
-          const parsed = parseTimeInput(event.currentTarget.value);
+          setActiveSegment(null);
+          const currentFormatted = formatSegmentedTime(value, locale, preferences.timeFormat).text;
+          const parsed =
+            event.currentTarget.value === currentFormatted
+              ? value
+              : parseTimeInput(event.currentTarget.value, locale);
           if (parsed) selectTime(parsed);
           else if (!event.currentTarget.value.trim()) {
             onValueChange('');
@@ -258,13 +300,15 @@ export function TimeInput({
         }}
         onChange={(event) => {
           const nextDisplay = event.target.value;
-          const parsed = parseTimeInput(nextDisplay);
+          const parsed = parseTimeInput(nextDisplay, locale);
           setDisplayValue(nextDisplay);
           setInvalid(Boolean(nextDisplay) && !parsed);
           onValueChange(parsed ?? '');
         }}
+        onClick={handleClick}
         onFocus={(event) => {
           setFocused(true);
+          selectSegment(event.currentTarget, 'hour');
           onFocus?.(event);
         }}
         onKeyDown={handleKeyDown}

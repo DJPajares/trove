@@ -85,6 +85,7 @@
   --layout-gutter: clamp(1rem, 2vw, 2rem);
   --layout-reading: 65ch;
   --layout-app: 87.5rem;
+  --itinerary-time-column: 7.5rem;
   /* Only meaningful because the document declares viewport-fit=cover; without
      it every inset resolves to 0px and the shell silently loses its guards. */
   --safe-top: env(safe-area-inset-top, 0px);

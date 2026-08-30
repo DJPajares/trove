@@ -155,7 +155,7 @@ export function ItineraryOverview({
                           <li key={item.id}>
                             <button
                               aria-label={t('overview.editItem', { name })}
-                              className="group grid w-full grid-cols-[minmax(5.5rem,auto)_minmax(0,1fr)_auto] items-center gap-3 rounded-[var(--radius-md)] px-2 py-2 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px"
+                              className="group grid w-full grid-cols-[var(--itinerary-time-column)_minmax(0,1fr)_auto] items-center gap-3 rounded-[var(--radius-md)] px-2 py-2 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px"
                               onClick={() => onEditItem(item)}
                               type="button"
                             >

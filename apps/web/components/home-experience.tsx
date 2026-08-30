@@ -167,9 +167,13 @@ export function HomeExperience() {
       : 'ready';
 
   if (status === 'loading') {
-    // Home is one tall card and the sections beneath it, so that is what waits
-    // here — at the card's real height, inside the same measure. A 4:3 block
-    // beside a column of bars was a picture of a different screen.
+    // Home is a page header, one tall card, and the sections beneath it, so that
+    // is what waits here — at the card's real height, inside the same measure. A
+    // 4:3 block beside a column of bars was a picture of a different screen.
+    //
+    // The header waits as bars rather than as real copy: its title and
+    // description are keyed off the focal trip's lifecycle, which is exactly
+    // what has not arrived yet.
     return (
       <div
         aria-busy="true"
@@ -178,6 +182,19 @@ export function HomeExperience() {
         role="status"
       >
         <span className="sr-only">{t('loading')}</span>
+        <div aria-hidden="true">
+          <Skeleton className="h-[calc(var(--text-page-title)*1.08)] w-2/3 max-w-sm" />
+          {/* Each bar sits in a line box the height of the real description's
+              leading, so the header keeps its height when the copy arrives. */}
+          <div className="mt-3 max-w-[var(--layout-reading)]">
+            <div className="flex h-[1.65rem] items-center">
+              <Skeleton className="h-4 w-full" />
+            </div>
+            <div className="flex h-[1.65rem] items-center">
+              <Skeleton className="h-4 w-4/5" />
+            </div>
+          </div>
+        </div>
         <div aria-hidden="true" className="space-y-3">
           <Skeleton className="min-h-[31rem] w-full rounded-[var(--radius-2xl)] sm:min-h-[29rem] lg:min-h-[31rem]" />
         </div>

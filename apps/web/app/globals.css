@@ -14,6 +14,11 @@
   --popover-foreground: oklch(0.285 0.039 47);
   --primary: oklch(0.455 0.07 115);
   --primary-foreground: oklch(0.978 0.013 80);
+  /* The brand tone for a bar or a fill over the cover scrim, which is dark in
+     both themes, so this value does not flip with the theme - the same
+     reasoning as --rating-on-media. --primary itself could not do that job: in
+     light mode it is a dark olive that vanishes into the scrim. */
+  --primary-on-media: oklch(0.78 0.085 115);
   --secondary: oklch(0.905 0.032 110);
   --secondary-foreground: oklch(0.355 0.048 114);
   --muted: oklch(0.925 0.02 79);
@@ -139,6 +144,8 @@
   --popover-foreground: oklch(0.935 0.016 79);
   --primary: oklch(0.78 0.085 115);
   --primary-foreground: oklch(0.222 0.028 115);
+  /* Deliberately the same value as in :root; the scrim below it is dark in both. */
+  --primary-on-media: oklch(0.78 0.085 115);
   --secondary: oklch(0.315 0.032 108);
   --secondary-foreground: oklch(0.895 0.035 112);
   --muted: oklch(0.258 0.012 115);
@@ -202,6 +209,7 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-on-media: var(--primary-on-media);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);

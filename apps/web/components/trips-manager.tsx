@@ -4,13 +4,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ChevronDown, CircleAlert, MapPinned, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
 import { useTripCreation } from '@/components/trip-creation-provider';
 import { TripFeaturedCard } from '@/components/trip-featured-card';
 import { TripListRow } from '@/components/trip-list-row';
+import { TripShareDialog } from '@/components/trip-share-dialog';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { editorialSubjectKey } from '@/lib/media/editorial-images';
 import { groupTripsForLibrary, PAST_TRIPS_PREVIEW_COUNT } from '@/lib/trips/lifecycle';
@@ -37,6 +38,11 @@ export function TripsManager() {
   const tripsQuery = useQuery({ queryFn: fetchTrips, queryKey: queryKeys.trips() });
   const trips = tripsQuery.data?.trips ?? EMPTY_TRIPS;
   const status = tripsQuery.isPending ? 'loading' : tripsQuery.error ? 'error' : 'idle';
+
+  // The library owns one dialog for whichever trip asked for it, rather than a
+  // mounted dialog per card.
+  const [sharingTripId, setSharingTripId] = useState<string | null>(null);
+  const sharingTrip = trips.find((trip) => trip.id === sharingTripId) ?? null;
 
   const groupedTrips = useMemo(() => groupTripsForLibrary(trips), [trips]);
 
@@ -117,6 +123,7 @@ export function TripsManager() {
           {groupedTrips.featured ? (
             <TripFeaturedCard
               editorial={editorialFor(groupedTrips.featured)}
+              onShare={() => setSharingTripId(groupedTrips.featured?.id ?? null)}
               trip={groupedTrips.featured}
             />
           ) : null}
@@ -187,6 +194,26 @@ export function TripsManager() {
           ) : null}
         </div>
       )}
+
+      {/* The saved trip is written straight back into the library's own cache, so
+          the card the traveller just shared reflects it without a refetch. */}
+      {sharingTrip ? (
+        <TripShareDialog
+          onOpenChange={(open) => !open && setSharingTripId(null)}
+          onTripChange={(updated) =>
+            queryClient.setQueryData(queryKeys.trips(), (current: { trips: Trip[] } | undefined) =>
+              current
+                ? {
+                    ...current,
+                    trips: current.trips.map((trip) => (trip.id === updated.id ? updated : trip)),
+                  }
+                : current,
+            )
+          }
+          open
+          trip={sharingTrip}
+        />
+      ) : null}
     </section>
   );
 }

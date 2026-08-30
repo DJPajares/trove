@@ -14,6 +14,7 @@ import {
   Navigation,
   Pencil,
   ReceiptText,
+  Share2,
   Sparkles,
   StickyNote,
   Users,
@@ -33,6 +34,7 @@ import { TripForm } from '@/components/trip-form';
 import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
 import { TripDetailSkeleton } from '@/components/trip-detail-skeleton';
 import { useTripContext } from '@/components/trip-provider';
+import { TripShareDialog } from '@/components/trip-share-dialog';
 import { TripMedia } from '@/components/trip-media';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -200,6 +202,7 @@ export function TripDetail({
   tripId,
 }: Readonly<{ planScoreEnabled: boolean; tripId: string }>) {
   const t = useTranslations('trips');
+  const share = useTranslations('trips.share');
   const experienceRatingTranslations = useTranslations('experienceRating');
   const mediaTranslations = useTranslations('media');
   const locale = useLocale();
@@ -213,6 +216,7 @@ export function TripDetail({
   const status = tripContext?.status ?? 'loading';
   const editorial = tripContext?.editorial ?? null;
   const [editing, setEditing] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -358,6 +362,14 @@ export function TripDetail({
               <DropdownMenuItem onClick={() => setEditing(true)}>
                 <Pencil aria-hidden="true" />
                 {t('editTrip')}
+              </DropdownMenuItem>
+              {/* Sharing sits with editing rather than among the tools: both are
+                  things done to the trip itself, and this menu is the one the
+                  overview offers. It is also the first stop from a trip in the
+                  library, so a trip can be shared without opening its plan. */}
+              <DropdownMenuItem onClick={() => setSharing(true)}>
+                <Share2 aria-hidden="true" />
+                {share('action')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
@@ -525,6 +537,13 @@ export function TripDetail({
           </div>
         </EditorialSection>
       ) : null}
+
+      <TripShareDialog
+        onOpenChange={setSharing}
+        onTripChange={(updated) => tripContext?.setTrip(updated)}
+        open={sharing}
+        trip={trip}
+      />
 
       <Sheet onOpenChange={(open) => !open && setEditing(false)} open={editing}>
         <SheetContent

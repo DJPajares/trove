@@ -1,4 +1,4 @@
-import { Info } from 'lucide-react';
+import { Info, Share2 } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 
@@ -16,11 +16,14 @@ import { tripDestinationSummary } from '@/lib/trips/summary';
 
 export type TripFeaturedCardProps = {
   editorial: EditorialImageReference | null;
+  /** Opens the share dialog the library owns, so one dialog serves every card. */
+  onShare: () => void;
   trip: Trip;
 };
 
-export function TripFeaturedCard({ editorial, trip }: Readonly<TripFeaturedCardProps>) {
+export function TripFeaturedCard({ editorial, onShare, trip }: Readonly<TripFeaturedCardProps>) {
   const t = useTranslations('trips');
+  const share = useTranslations('trips.share');
   const mediaTranslations = useTranslations('media');
   const locale = useLocale();
   const subjectName = trip.destinations[0]?.name ?? trip.name;
@@ -74,15 +77,26 @@ export function TripFeaturedCard({ editorial, trip }: Readonly<TripFeaturedCardP
           <TripDestinationActions
             destinations={primaryTripDestinations(trip.id, trip.lifecycle, trip.startDate)}
             extra={
-              <Button
-                aria-label={t('overview')}
-                nativeButton={false}
-                render={<Link href={`/trips/${trip.id}`} />}
-                size="icon"
-                variant="ghost"
-              >
-                <Info aria-hidden="true" />
-              </Button>
+              <>
+                <Button
+                  aria-label={share('action')}
+                  onClick={onShare}
+                  size="icon"
+                  type="button"
+                  variant="ghost"
+                >
+                  <Share2 aria-hidden="true" />
+                </Button>
+                <Button
+                  aria-label={t('overview')}
+                  nativeButton={false}
+                  render={<Link href={`/trips/${trip.id}`} />}
+                  size="icon"
+                  variant="ghost"
+                >
+                  <Info aria-hidden="true" />
+                </Button>
+              </>
             }
             labelOverrides={
               trip.lifecycle === 'completed'

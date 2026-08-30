@@ -1,3 +1,6 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import Fastify from 'fastify';
 import { beforeEach, expect, test } from 'vitest';
 
@@ -246,4 +249,38 @@ test('every way of not finding a trip looks the same', async () => {
   }
 
   await app.close();
+});
+
+/**
+ * The schema said a trip could be `public` and the database said otherwise:
+ * `trips_owner_only_visibility` pinned every row to `private` while visibility
+ * was scaffolding nothing read, so the first write of a real value failed as a
+ * 500 that no unit test could see - the fake Prisma client has no constraints to
+ * violate.
+ *
+ * Reading the migrations is the only place that gap is visible without a live
+ * database. It asserts what the service can write is what the table will accept.
+ */
+test('the database accepts every visibility the API can write', () => {
+  const directory = new URL('../../../packages/db/prisma/migrations/', import.meta.url);
+  const sql = readdirSync(fileURLToPath(directory))
+    .filter((entry) => !entry.endsWith('.toml'))
+    .sort()
+    .map((entry) =>
+      readFileSync(fileURLToPath(new URL(`${entry}/migration.sql`, directory)), 'utf8'),
+    )
+    .join('\n');
+
+  // The last word on the column, whichever migration had it.
+  const constraint = [...sql.matchAll(/CHECK \(\s*"visibility"([^)]*)\)/g)].at(-1)?.[1];
+  if (constraint === undefined) throw new Error('no visibility CHECK constraint in any migration');
+
+  expect(sql, 'the owner-only constraint must be dropped, not left in place').toContain(
+    'DROP CONSTRAINT "trips_owner_only_visibility"',
+  );
+  // `updateTripVisibility` writes exactly these two, so the table must take both.
+  expect(constraint).toContain("'private'");
+  expect(constraint).toContain("'public'");
+  // `shared` is for collaborators nothing implements; the database still refuses it.
+  expect(constraint).not.toContain("'shared'");
 });

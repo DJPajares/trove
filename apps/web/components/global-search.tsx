@@ -224,11 +224,11 @@ export function GlobalSearch({
           </div>
           <SearchField
             autoFocus
-            className="mt-3"
             label={t('label')}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t('placeholder')}
             value={query}
+            wrapperClassName="mt-3"
           />
         </DialogHeader>
 

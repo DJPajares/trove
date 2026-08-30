@@ -169,7 +169,7 @@ export function FloatingActionStack() {
                 ? t('openQuickActionsWithNotifications', { count: unreadCount })
                 : t('openQuickActions')
           }
-          className="relative rounded-full border-border-subtle bg-background/95 text-foreground shadow-[var(--nav-action-shadow)] backdrop-blur focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring supports-[backdrop-filter]:bg-background/90"
+          className="relative rounded-full border-border-subtle bg-background/95 text-foreground shadow-[var(--nav-action-shadow)] backdrop-blur focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring supports-[backdrop-filter]:bg-background/90 md:border-transparent md:bg-transparent md:shadow-none md:backdrop-blur-none md:hover:border-border-subtle md:hover:bg-background/95 md:hover:shadow-[var(--nav-action-shadow)] md:hover:backdrop-blur md:aria-expanded:bg-transparent md:supports-[backdrop-filter]:bg-transparent"
           data-translucent-surface
           onClick={() => (expanded ? collapseAndRestoreFocus() : setExpanded(true))}
           ref={triggerRef}

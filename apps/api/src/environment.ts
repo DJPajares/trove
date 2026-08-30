@@ -23,6 +23,158 @@ type EditorialImagesEnvironment = {
   pexelsApiKey: string;
 };
 
+export const DEFAULT_AI_PROVIDER = 'vertex' as const;
+export const DEFAULT_AI_MODEL = 'gemini-3.1-flash-lite';
+export const DEFAULT_AI_LOCATION = 'global';
+export const DEFAULT_AI_TIMEOUT_MS = 60_000;
+export const DEFAULT_AI_MAX_OUTPUT_TOKENS = 8_192;
+
+const MIN_AI_TIMEOUT_MS = 1_000;
+const MAX_AI_TIMEOUT_MS = 300_000;
+const MAX_AI_OUTPUT_TOKENS = 65_536;
+
+type AiUnavailableCode =
+  'ai_budget_disabled' | 'ai_disabled' | 'configuration_invalid' | 'configuration_missing';
+
+export type AvailableAiEnvironment = {
+  maxOutputTokens: number;
+  provider: typeof DEFAULT_AI_PROVIDER;
+  status: 'available';
+  timeoutMs: number;
+  vertex: {
+    credentials: { clientEmail: string; privateKey: string } | null;
+    location: string;
+    model: string;
+    project: string;
+  };
+};
+
+export type AiEnvironment =
+  | AvailableAiEnvironment
+  | {
+      code: AiUnavailableCode;
+      maxOutputTokens: number;
+      status: 'unavailable';
+      timeoutMs: number;
+    };
+
+function isEnabled(value: string | undefined) {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true';
+}
+
+function parseBoundedInteger(
+  value: string | undefined,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+) {
+  if (!value?.trim()) return fallback;
+
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= minimum && parsed <= maximum ? parsed : null;
+}
+
+/**
+ * AI configuration is API-only. Disabled and invalid environments become a
+ * recoverable gateway state rather than preventing the manual app from booting.
+ */
+export function getAiGenerationEnvironment(
+  environment: Record<string, string | undefined> = process.env,
+): AiEnvironment {
+  const timeoutMs = parseBoundedInteger(
+    environment.TROVE_AI_TIMEOUT_MS,
+    DEFAULT_AI_TIMEOUT_MS,
+    MIN_AI_TIMEOUT_MS,
+    MAX_AI_TIMEOUT_MS,
+  );
+  const maxOutputTokens = parseBoundedInteger(
+    environment.TROVE_AI_MAX_OUTPUT_TOKENS,
+    DEFAULT_AI_MAX_OUTPUT_TOKENS,
+    1,
+    MAX_AI_OUTPUT_TOKENS,
+  );
+  const safeTimeoutMs = timeoutMs ?? DEFAULT_AI_TIMEOUT_MS;
+  const safeMaxOutputTokens = maxOutputTokens ?? DEFAULT_AI_MAX_OUTPUT_TOKENS;
+
+  if (isEnabled(environment.TROVE_AI_DISABLED)) {
+    return {
+      code: 'ai_disabled',
+      maxOutputTokens: safeMaxOutputTokens,
+      status: 'unavailable',
+      timeoutMs: safeTimeoutMs,
+    };
+  }
+
+  if (isEnabled(environment.TROVE_AI_BUDGET_DISABLED)) {
+    return {
+      code: 'ai_budget_disabled',
+      maxOutputTokens: safeMaxOutputTokens,
+      status: 'unavailable',
+      timeoutMs: safeTimeoutMs,
+    };
+  }
+
+  if (timeoutMs === null || maxOutputTokens === null) {
+    return {
+      code: 'configuration_invalid',
+      maxOutputTokens: safeMaxOutputTokens,
+      status: 'unavailable',
+      timeoutMs: safeTimeoutMs,
+    };
+  }
+
+  const provider = environment.TROVE_AI_PROVIDER?.trim() || DEFAULT_AI_PROVIDER;
+  const project = environment.GOOGLE_VERTEX_PROJECT?.trim();
+  const location = environment.GOOGLE_VERTEX_LOCATION?.trim() || DEFAULT_AI_LOCATION;
+  const model = environment.TROVE_AI_MODEL?.trim() || DEFAULT_AI_MODEL;
+  const clientEmail = environment.GOOGLE_VERTEX_CLIENT_EMAIL?.trim();
+  const privateKey = environment.GOOGLE_VERTEX_PRIVATE_KEY?.trim();
+
+  if (provider !== DEFAULT_AI_PROVIDER || model.length > 120) {
+    return {
+      code: 'configuration_invalid',
+      maxOutputTokens,
+      status: 'unavailable',
+      timeoutMs,
+    };
+  }
+
+  if (!project) {
+    return {
+      code: 'configuration_missing',
+      maxOutputTokens,
+      status: 'unavailable',
+      timeoutMs,
+    };
+  }
+
+  if (Boolean(clientEmail) !== Boolean(privateKey)) {
+    return {
+      code: 'configuration_invalid',
+      maxOutputTokens,
+      status: 'unavailable',
+      timeoutMs,
+    };
+  }
+
+  return {
+    maxOutputTokens,
+    provider: DEFAULT_AI_PROVIDER,
+    status: 'available',
+    timeoutMs,
+    vertex: {
+      credentials:
+        clientEmail && privateKey
+          ? { clientEmail, privateKey: privateKey.replaceAll('\\n', '\n') }
+          : null,
+      location,
+      model,
+      project,
+    },
+  };
+}
+
 export function getAuthenticationEnvironment(
   environment: Record<string, string | undefined> = process.env,
 ): AuthenticationEnvironment | null {

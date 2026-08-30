@@ -103,21 +103,30 @@ vi.mock('next-intl/server', () => ({
 }));
 
 /**
- * The manifest paints the standalone splash screen and the installed app's
- * Android status bar, both of which sit outside the document and so cannot be
- * corrected on the client. A manifest hardcoded light is what left that bar
- * ivory under the dark theme, so this asserts it opens on whichever ground it
- * is asked for.
+ * The splash screen sits outside the document and so cannot be corrected on the
+ * client. A manifest hardcoded light is what left it ivory under the dark theme,
+ * so this asserts it opens on whichever ground it is asked for.
  */
-test('the manifest opens on the ground it is given', async () => {
+test('the splash screen opens on the ground it is given', async () => {
   const { buildManifest } = await import('../lib/pwa/manifest.ts');
   const dark = await buildManifest('dark');
   const light = await buildManifest('light');
 
   expect(dark.background_color).toBe(themeColor.dark);
-  expect(dark.theme_color).toBe(themeColor.dark);
   expect(light.background_color).toBe(themeColor.light);
-  expect(light.theme_color).toBe(themeColor.light);
+});
+
+/**
+ * Android freezes the manifest's `theme_color` into the installed app at install
+ * time, so any value here is right in one theme and wrong - unreadably so - in
+ * the other. Leaving it out hands the status bar to `<meta name="theme-color">`,
+ * which follows the traveller's toggle.
+ */
+test('the manifest leaves the status bar to the page', async () => {
+  const { buildManifest } = await import('../lib/pwa/manifest.ts');
+
+  expect(await buildManifest('dark')).not.toHaveProperty('theme_color');
+  expect(await buildManifest('light')).not.toHaveProperty('theme_color');
 });
 
 /**

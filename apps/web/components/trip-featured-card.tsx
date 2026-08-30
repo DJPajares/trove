@@ -72,14 +72,13 @@ export function TripFeaturedCard({ editorial, trip }: Readonly<TripFeaturedCardP
           ) : null}
 
           <TripDestinationActions
-            className="flex-nowrap gap-1 [&_[data-slot=button]]:px-2 min-[380px]:gap-1.5 sm:gap-2 sm:[&_[data-slot=button]]:px-3 [&_[data-icon=inline-start]]:hidden min-[380px]:[&_[data-icon=inline-start]]:inline"
             destinations={primaryTripDestinations(trip.id, trip.lifecycle, trip.startDate)}
             extra={
               <Button
                 aria-label={t('overview')}
                 nativeButton={false}
                 render={<Link href={`/trips/${trip.id}`} />}
-                size="icon-sm"
+                size="icon"
                 variant="ghost"
               >
                 <Info aria-hidden="true" />
@@ -93,7 +92,6 @@ export function TripFeaturedCard({ editorial, trip }: Readonly<TripFeaturedCardP
                     mode: t(trip.lifecycle === 'active' ? 'openTripMode' : 'previewTripMode'),
                   }
             }
-            size="sm"
           />
         </div>
       </div>

@@ -37,10 +37,12 @@ export function TripItineraryCoverage({
       <Progress.Track
         className={cn(
           'h-1.5 overflow-hidden rounded-full',
-          inverse ? 'bg-white/25' : 'bg-primary/15',
+          inverse ? 'bg-primary-on-media/25' : 'bg-primary/25',
         )}
       >
-        <Progress.Indicator className={cn('rounded-full', inverse ? 'bg-white' : 'bg-primary')} />
+        <Progress.Indicator
+          className={cn('rounded-full', inverse ? 'bg-primary-on-media' : 'bg-primary')}
+        />
       </Progress.Track>
     </Progress.Root>
   );

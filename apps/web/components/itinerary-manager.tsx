@@ -294,6 +294,7 @@ export function ItineraryManager({
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedDayId = searchParams.get('day');
+  const requestedView = searchParams.get('view');
   const { preferences } = usePreferences();
   const online = useOnlineStatus();
   const queryClient = useQueryClient();
@@ -303,8 +304,13 @@ export function ItineraryManager({
   });
   const itinerary = itineraryQuery.data ?? null;
   const itineraryView = useMemo(
-    () => resolveItineraryView(requestedDayId, itinerary?.days.map((day) => day.id) ?? []),
-    [itinerary?.days, requestedDayId],
+    () =>
+      resolveItineraryView(
+        requestedView,
+        requestedDayId,
+        itinerary?.days.map((day) => day.id) ?? [],
+      ),
+    [itinerary?.days, requestedDayId, requestedView],
   );
   const activeView = itineraryView.view;
 
@@ -409,14 +415,24 @@ export function ItineraryManager({
     });
   }, [itinerary, itineraryView]);
 
-  // A stale shared link is not a different view. Clean it back to the canonical
-  // overview URL instead of silently planning the wrong day.
+  // A stale shared link is not a different view. Clean it back to the day the
+  // itinerary actually opened on instead of leaving a day that is not there.
   useEffect(() => {
     if (!itinerary || !itineraryView.invalidRequestedDay) return;
-    router.replace(itineraryViewHref(pathname, searchParams.toString(), null), {
-      scroll: false,
-    });
-  }, [itinerary, itineraryView.invalidRequestedDay, pathname, router, searchParams]);
+    router.replace(
+      itineraryViewHref(pathname, searchParams.toString(), itineraryView.selectedDayId),
+      {
+        scroll: false,
+      },
+    );
+  }, [
+    itinerary,
+    itineraryView.invalidRequestedDay,
+    itineraryView.selectedDayId,
+    pathname,
+    router,
+    searchParams,
+  ]);
 
   // Which day you are planning is part of where you are, so a reload, a shared
   // link, and the back button all land on the same day you left.
@@ -1531,8 +1547,8 @@ export function ItineraryManager({
       ) : null}
       <Tabs onValueChange={changeItineraryView} value={activeView}>
         <TabsList aria-label={t('view.navigation')}>
-          <TabsTab value="overview">{t('view.overview')}</TabsTab>
           <TabsTab value="day">{t('view.day')}</TabsTab>
+          <TabsTab value="overview">{t('view.overview')}</TabsTab>
           <TabsIndicator />
         </TabsList>
       </Tabs>

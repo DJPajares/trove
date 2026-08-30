@@ -43,7 +43,7 @@ Trove is not only an itinerary planner. It is designed to remain useful before, 
 - Allow users to preview Trip Mode before travel.
 - Provide contextual route, timing, weather, task, reservation, and expense information.
 - Preserve completed journeys through lightweight Memories.
-- Remain extensible for future AI, social, booking, discovery, translation, and native-app features.
+- Add AI-assisted trip creation after the core planning/travel flows are stable while remaining extensible for further AI, social, booking, discovery, translation, and native-app features.
 
 ## 2.2 Non-Goals for Initial Release
 
@@ -62,6 +62,8 @@ The initial release does not aim to provide:
 - automatic Smart Cost Forecasting,
 - native iOS/Android apps,
 - full multilingual UI.
+
+AI-assisted trip creation is an approved post-MVP roadmap phase defined in Section 7.6. It remains outside the initial release described by this non-goal list.
 
 ---
 
@@ -132,6 +134,16 @@ The Fastify API should remain reusable by web and future native clients.
 - The same root serves Home once the visitor is authenticated. Only the signed-out branch differs.
 - An authenticated visitor who reaches the sign-in or sign-up routes is sent on rather than shown a form they no longer need.
 - A deep link into a protected path continues to return the visitor to that path after they sign in. The redirect target is validated as an application-relative path.
+
+## 3.7 AI Provider Direction
+
+- AI-assisted trip creation uses a server-only, provider-neutral generation boundary. Planner domain contracts, persistence, and clients must not depend on a provider-specific request or response shape.
+- Vertex AI with `gemini-3.1-flash-lite` is the development configuration while Google Cloud trial credits are available. This is an environment choice, not a permanent product dependency.
+- Provider and model selection, timeouts, token budgets, availability, and budget controls are configuration-driven so changing provider/model does not change the planner contract or review UI.
+- Local development may use Google Application Default Credentials. Deployed environments use server credentials managed outside source control. Credentials and provider authorization data never reach a browser bundle.
+- Each user-initiated **Generate** or **Regenerate** action dispatches exactly one app-level model call. Provider grounding and deterministic validation are bounded non-model operations and do not create a conversational/follow-up loop.
+- Global and budget kill switches may stop new model dispatches at any time. Disabling AI must not prevent manual trip creation or editing existing trips.
+- Raw prompts, structured model output, and credentials must not appear in application logs, traces, error reporting, or content-free operational records.
 
 ---
 
@@ -397,6 +409,70 @@ Start/end dates are inclusive and end date cannot precede start date.
 - Default to 1.
 - Traveller names are not required.
 - Traveller identity and collaboration are separate concepts.
+
+## 7.6 AI-Assisted Trip Creation
+
+AI-assisted trip creation is the first approved AI product capability. It is an accelerator into the standard Trove planning model, not a parallel AI-only trip or itinerary system.
+
+### 7.6.1 Entry and Interaction Model
+
+- The primary AI entry is one free-form prompt. A traveller may name one or more places, ask Trove to suggest a destination, provide dates, describe activities, reserve work time, record meetings or transport, identify Must Go places, or state any other planning constraint in ordinary language.
+- The interaction is not a chat. Trove does not ask follow-up questions before generation. Missing information is filled using the explicit assumptions below and disclosed in the draft.
+- One submission starts one **Generate** action and exactly one app-level model call. **Regenerate** also uses exactly one app-level model call and creates a new draft revision only when it succeeds.
+- The AI prompt is the primary trip-creation entry, but the existing manual creation route remains a complete fallback. Missing credentials, provider failure, quota exhaustion, cancellation, or a kill switch must never block manual trip creation.
+- No Trip or ordinary planning record is created until the traveller reviews a valid draft and confirms **Apply**.
+
+### 7.6.2 Assumptions and Planning Rules
+
+- Every inferred value is represented as a reviewable assumption. The draft never presents an inference as traveller-supplied fact.
+- When dates are missing, the model selects only a **3-, 5-, or 7-day** trip-length tier. Application code then assigns that duration beginning on the next Friday that is at least 14 calendar days after generation. The model does not invent exact dates outside this rule.
+- When destination is missing, the model may infer a destination from the prompt, Profile home location, season, and selected trip length. The inferred destination and rationale are disclosed.
+- Default pace is balanced: two to three anchor activities on a full day, with lighter arrival and departure days.
+- Exact times are retained only when the traveller explicitly supplies them. Other activities use Morning/Afternoon/Evening/Anytime and an AI-estimated duration.
+- Work, meetings, supplied transport, and intentional free time use normal itinerary items/blocks rather than new record types.
+- User-supplied fixed commitments, Must Go requirements, exact times, and other declared hard constraints outrank suggestions. Final validation may reorder flexible suggestions or move them to **Unscheduled**, but it must not move a fixed commitment.
+- A generated trip may span at most 14 inclusive days and contain at most 24 provider-backed real-place items. Custom labels/blocks do not bypass feasibility rules, and repeated references to the same real Place do not justify provider-call fan-out.
+
+### 7.6.3 Grounding and Validation
+
+- Generated destinations and real-place suggestions are resolved on demand through the provider rules in Sections 11 and 16. A confident provider identity reuses the canonical Trove Place.
+- The complete Generate or Regenerate run may make at most **50 outbound Google calls**, shared across Text Search (New), place/detail evidence, opening-hours checks, and route checks. Provider usage accounting records the AI-planner source and billable SKU.
+- Text Search and final checks request the cheapest field mask that satisfies the reviewed surface. Mutable provider data such as opening hours remains on-demand evidence and is never permanently cached as Trove-owned truth.
+- Trove never fabricates provider IDs, coordinates, addresses, opening hours, routes, ratings, or confidence. Evidence needed after the provider cap is reached is labeled **Not checked**.
+- An unresolved, ambiguous, unavailable, or over-cap suggestion becomes a Custom Place with an optional useful AI note and an explicit unverified/not-checked state. This does not by itself prevent Apply.
+- After grounding, deterministic validation checks schema validity, duplicate places, hard-constraint conflicts, opening-hours evidence, route feasibility, and supported entity limits. A malformed or invalid result never creates partial Trip data.
+
+### 7.6.4 Draft Review and Apply
+
+- The review uses the normal itinerary and map language and shows assumptions, Custom Places, unverified/not-checked evidence, conflicts, provider attribution, and material warnings.
+- The draft does not show a numeric Plan Score. It may explain validation evidence, but numeric Plan Score begins only after Apply against standard itinerary data.
+- Before Apply, a traveller may edit, replace, remove, move, or reorder items and may change schedule/day part, duration, priority, trip name, and party size without another model call.
+- Editing an AI-estimated duration promotes it to user-owned provenance. Destination or date-range changes require Regenerate rather than a local draft edit.
+- A bounded evidence recheck or Custom Place verification does not dispatch the model. Regenerate consumes the normal model quota and preserves the previous valid draft if it fails.
+- Material warnings require explicit acknowledgement before Apply. Non-material unresolved places remain allowed.
+- Apply is authenticated, atomic, revision-safe, and idempotent. A failure creates no partial records, and concurrent/repeated successful requests resolve to the same applied Trip.
+- Apply may create only the reviewed **Trip, destinations, Daily Bases, Trip Places, Custom Places, and itinerary items**. It must not create Saved Place relationships, reservations, Tasks, Notes, Expenses, budgets, Memories, notifications, bookings, or other trip records.
+- Applied records use the existing domain models, ownership rules, and editing surfaces. An AI-created Trip is an ordinary Trove Trip after Apply.
+
+### 7.6.5 Sessions, Quotas, Retention, and Recovery
+
+- Trove creates an owner-scoped `AiPlanningSession` before model dispatch. It stores lifecycle status/stage, raw prompt while needed, schema-versioned draft JSON, optimistic draft revision, expiry, warning acknowledgement, and the applied Trip reference.
+- Generation is synchronous from the traveller's perspective but resumable: refreshing the client recovers the same session, current stage, and latest valid revision rather than starting another run.
+- A failed initial Generate creates no Trip. A failed Regenerate preserves the prior valid draft and revision.
+- A content-free `AiGenerationRun` records provider, model, token counts, latency, result/error classification, and timestamps for quota and operations. It stores no prompt or model output.
+- Each account may dispatch at most **five** Generate/Regenerate model runs in a rolling 24-hour window. Reads, local draft edits, evidence rechecks, Cancel, and Apply do not consume this quota.
+- Unapplied planning sessions expire after seven days. Apply or Cancel immediately removes the raw prompt and draft; expiry cleanup removes them no later than the retention boundary.
+- Content-free generation-run telemetry is retained for 30 days, then deleted. Ownership, cross-user isolation, and deletion follow the private-data rules in Section 33.3.
+- Initial launch is available to all signed-in users after security, privacy, quality, cost, and browser-validation gates pass. It is not a cohort-only feature, but global and budget kill switches remain mandatory.
+
+### 7.6.6 Itinerary Duration Provenance
+
+Each itinerary duration records one of:
+
+- `USER_OWNED` — explicitly supplied or later edited by the traveller;
+- `AI_ESTIMATED` — proposed by AI and not yet confirmed through a duration edit.
+
+Existing and manually created itinerary durations are `USER_OWNED`. Editing an `AI_ESTIMATED` duration promotes it to `USER_OWNED`; provenance never silently changes in the opposite direction.
 
 ---
 
@@ -1682,8 +1758,10 @@ For the initial MVP, evaluated evidence receives these reliability values:
 
 - 100: explicit user-owned timing/reservation data or fresh provider/route evidence;
 - 75: permitted cached provider/route evidence that is not stale;
-- 50: normal/estimated duration or coarse daypart evidence;
+- 50: an `AI_ESTIMATED` duration, another normal/estimated duration, or coarse daypart evidence;
 - 25: stale evidence that remains safe to use with a visible stale qualification.
+
+An `AI_ESTIMATED` duration stays at the estimated-evidence reliability level until the traveller edits it. That edit promotes its provenance to `USER_OWNED`, after which it receives the user-owned reliability level where the duration is used. Merely applying an AI draft does not promote the estimate.
 
 Evidence too stale or incomplete to support the factor is `unknown` and affects completeness rather than receiving a misleading confidence value. Factor confidence is the mean reliability of the evidence used by that factor. Day confidence is the applicable-factor-weighted mean of evaluated factor confidence values.
 
@@ -2029,18 +2107,17 @@ Do not initially ask for detailed travel preferences, destination interests, tra
 
 These are recorded for future brainstorming and are intentionally not deeply specified. They are **not MVP requirements** unless another section explicitly states a narrower MVP capability.
 
-## 35.1 AI
+## 35.1 Further AI
 
-Purpose:
+AI-assisted trip creation is approved and specified in Section 7.6. Future AI beyond that bounded creation flow may include:
 
-- itinerary generation,
 - AI-assisted itinerary improvement,
 - richer Plan Score explanation/help,
 - trip Q&A,
 - Trip Mode assistance,
 - Memory curation.
 
-MVP deterministic Plan Score calculation/explanations and deterministic provider-backed alternative suggestions do not depend on this future AI scope.
+AI-assisted trip creation does not authorize assistant chat, autonomous post-Apply replanning, booking, or any other future item in this list. MVP deterministic Plan Score calculation/explanations and deterministic provider-backed alternative suggestions remain independent from AI.
 
 ## 35.2 Social & Collaboration
 
@@ -2149,9 +2226,13 @@ This section is the authoritative high-level MVP scope summary. Detailed behavio
 - onboarding
 - responsive/accessibility/PWA polish
 
-## 36.3 Deferred
+## 36.3 Approved Post-MVP Roadmap
 
-- AI-dependent product features
+- AI-assisted trip creation defined in Section 7.6
+
+## 36.4 Deferred
+
+- AI-dependent product features beyond Section 7.6
 - social/collaboration/sharing workflows
 - public discovery
 - booking/purchasing
@@ -2243,6 +2324,23 @@ Includes:
 - Experience Rating
 - completed-trip/search integration
 - focused final regression/privacy validation
+
+## Phase 8 — AI-Assisted Trip Creation
+
+Implement only after the core planning, travel, Plan Score, and Memories flows are stable.
+
+Sequence:
+
+1. planning-session persistence, generation-run telemetry, retention, and duration provenance;
+2. provider-neutral AI gateway and development Vertex configuration;
+3. versioned planner contracts and deterministic defaults;
+4. capped Google place grounding and provider accounting;
+5. authenticated resumable session APIs and rolling quota;
+6. one-call generation, grounding, scheduling, and validation pipeline;
+7. atomic/idempotent Apply into standard Trove models;
+8. AI-first composer with complete manual fallback;
+9. draft itinerary/map review, essential editing, warning acknowledgement, and confirmation;
+10. security, privacy, cost, quality, operational, responsive, accessibility, and launch gates.
 
 ---
 

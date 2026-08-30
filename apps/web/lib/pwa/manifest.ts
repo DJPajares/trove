@@ -1,16 +1,29 @@
 import type { MetadataRoute } from 'next';
 import { getTranslations } from 'next-intl/server';
 
-import { themeColor } from '@/lib/theme-color';
+import { themeColor, type ThemeName } from '@/lib/theme-color';
 
-export default async function manifest(): Promise<MetadataRoute.Manifest> {
+/**
+ * The manifest paints the standalone splash screen and, on Android, the system
+ * bar of the installed app - which Chrome takes from `theme_color` rather than
+ * from the page's `theme-color` meta, so the page cannot correct it afterwards.
+ * It therefore has to open on the same ground the app does, which is why the
+ * route serving it reads the appearance cookie and the link tag requesting it
+ * carries `crossorigin="use-credentials"`: a manifest is fetched without
+ * credentials by default, even from its own origin.
+ *
+ * Everything but the two colours is fixed. Chrome identifies an installed app by
+ * `id` and `start_url`, so those - and the name and icons around them - stay the
+ * same in both themes.
+ */
+export async function buildManifest(theme: ThemeName): Promise<MetadataRoute.Manifest> {
   const [app, navigation] = await Promise.all([
     getTranslations('app'),
     getTranslations('navigation'),
   ]);
 
   return {
-    background_color: themeColor.light,
+    background_color: themeColor[theme],
     categories: ['travel', 'productivity'],
     description: app('description'),
     display: 'standalone',
@@ -57,10 +70,6 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
       { name: navigation('saved'), short_name: navigation('saved'), url: '/saved' },
     ],
     start_url: '/',
-    // A manifest is fetched without credentials and cached by the browser, so
-    // unlike the layout's `theme-color` it cannot follow the traveller's
-    // appearance. It stays light, and the seam it leaves is the splash screen
-    // only: the standalone status bar is painted from the page.
-    theme_color: themeColor.light,
+    theme_color: themeColor[theme],
   };
 }

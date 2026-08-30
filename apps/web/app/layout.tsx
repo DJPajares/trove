@@ -82,6 +82,13 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang={locale} className={instrumentSans.variable} suppressHydrationWarning>
       <body>
+        {/* Not `metadata.manifest`: the link Next injects for it cannot carry
+            `crossorigin`, and a manifest is fetched without credentials by
+            default even from its own origin. With the cookie, the route can
+            open the installed app on the theme the traveller last chose -
+            which on Android is the only say the app has over its status bar.
+            React hoists the tag into `head`. */}
+        <link crossOrigin="use-credentials" href="/manifest.webmanifest" rel="manifest" />
         <ThemeProvider>
           <ThemeColorMeta />
           <TroveMotionProvider>

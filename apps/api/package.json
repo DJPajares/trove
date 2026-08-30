@@ -10,6 +10,7 @@
   },
   "scripts": {
     "ai-planning:cleanup": "tsx scripts/cleanup-ai-planning-retention.ts",
+    "ai:verify": "tsx scripts/verify-ai-generation.ts",
     "build": "../../node_modules/.bin/tsc --project tsconfig.build.json",
     "dev": "tsx watch src/server.ts",
     "editorial-images:reconcile": "tsx scripts/reconcile-editorial-images.ts",
@@ -20,10 +21,12 @@
     "typecheck": "../../node_modules/.bin/tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {
+    "@ai-sdk/google-vertex": "5.0.66",
     "@fastify/cors": "11.3.0",
     "@fastify/rate-limit": "^11.2.0",
     "@supabase/supabase-js": "^2.112.4",
     "@trove/db": "workspace:*",
+    "ai": "7.0.83",
     "countries-and-timezones": "^3.10.0",
     "dotenv": "^17.4.2",
     "fastify": "^5.12.1",

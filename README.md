@@ -112,6 +112,28 @@ pnpm --filter @trove/db db:migrate:deploy
 
 The database is available at `localhost:54329`. See [`packages/db/README.md`](packages/db/README.md) for health checks, shadow database setup, and reset behavior. This container provides PostgreSQL only; hosted Supabase remains the Auth, Storage, and production platform.
 
+## Local Vertex AI configuration
+
+The API's AI gateway uses Vertex AI and Google Application Default Credentials
+for local development. Authenticate once with the Google Cloud CLI, then set
+`GOOGLE_VERTEX_PROJECT` in the root `.env` file:
+
+```bash
+gcloud auth application-default login
+pnpm --filter @trove/api ai:verify
+```
+
+The verification command makes one bounded structured-output request and prints
+only its result classification, model/provider metadata, timing, and token
+counts. It never prints the prompt or generated object. Use the optional
+`GOOGLE_VERTEX_CLIENT_EMAIL` and `GOOGLE_VERTEX_PRIVATE_KEY` pair only in a
+server environment that cannot use ADC; never commit either value.
+
+Set `TROVE_AI_DISABLED=1` for an emergency global stop or
+`TROVE_AI_BUDGET_DISABLED=1` to halt provider spend. Both switches prevent the
+provider from being constructed or called while manual trip planning remains
+available.
+
 ## Production Database Migrations
 
 Copy `.env.production.example` to the gitignored `.env.production` and fill in

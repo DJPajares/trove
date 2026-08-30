@@ -179,6 +179,51 @@ enum ItineraryTravelStatus {
   @@schema("trove")
 }
 
+enum ItineraryDurationProvenance {
+  USER_OWNED   @map("user_owned")
+  AI_ESTIMATED @map("ai_estimated")
+
+  @@map("itinerary_duration_provenance")
+  @@schema("trove")
+}
+
+enum AiPlanningSessionStatus {
+  PENDING    @map("pending")
+  GENERATING @map("generating")
+  REVIEWING  @map("reviewing")
+  FAILED     @map("failed")
+  APPLIED    @map("applied")
+  CANCELLED  @map("cancelled")
+  EXPIRED    @map("expired")
+
+  @@map("ai_planning_session_status")
+  @@schema("trove")
+}
+
+enum AiPlanningSessionStage {
+  CREATED    @map("created")
+  GENERATING @map("generating")
+  GROUNDING  @map("grounding")
+  SCHEDULING @map("scheduling")
+  VALIDATING @map("validating")
+  REVIEWING  @map("reviewing")
+  APPLYING   @map("applying")
+  COMPLETE   @map("complete")
+
+  @@map("ai_planning_session_stage")
+  @@schema("trove")
+}
+
+enum AiGenerationRunResult {
+  PENDING   @map("pending")
+  SUCCEEDED @map("succeeded")
+  FAILED    @map("failed")
+  CANCELLED @map("cancelled")
+
+  @@map("ai_generation_run_result")
+  @@schema("trove")
+}
+
 enum RouteTravelMode {
   DRIVE   @map("drive")
   FLIGHT  @map("flight")
@@ -232,8 +277,8 @@ enum ProfileDateFormat {
 }
 
 enum ProfileAppearance {
-  LIGHT  @map("light")
-  DARK   @map("dark")
+  LIGHT @map("light")
+  DARK  @map("dark")
 
   @@map("profile_appearance")
   @@schema("trove")
@@ -287,6 +332,8 @@ model Profile {
   taskTemplates               TaskTemplate[]
   notifications               Notification[]
   tripNotificationPreferences TripNotificationPreference[]
+  aiPlanningSessions          AiPlanningSession[]
+  aiGenerationRuns            AiGenerationRun[]
 
   @@index([homePlaceId])
   @@map("profiles")
@@ -515,6 +562,7 @@ model Trip {
   notifications                Notification[]
   notificationPreferences      TripNotificationPreference[]
   memories                     Memory[]
+  aiPlanningSession            AiPlanningSession?           @relation("AiPlanningAppliedTrip")
 
   @@unique([id, ownerId])
   @@index([ownerId])
@@ -725,31 +773,32 @@ model ItineraryDay {
 }
 
 model ItineraryItem {
-  id                      String                  @id @default(uuid(7)) @db.Uuid
-  tripId                  String                  @map("trip_id") @db.Uuid
-  itineraryDayId          String?                 @map("itinerary_day_id") @db.Uuid
-  tripPlaceId             String?                 @map("trip_place_id") @db.Uuid
-  customLabel             String?                 @map("custom_label")
-  customLocation          String?                 @map("custom_location")
-  customLocationTimeZone  String?                 @map("custom_location_time_zone")
+  id                      String                      @id @default(uuid(7)) @db.Uuid
+  tripId                  String                      @map("trip_id") @db.Uuid
+  itineraryDayId          String?                     @map("itinerary_day_id") @db.Uuid
+  tripPlaceId             String?                     @map("trip_place_id") @db.Uuid
+  customLabel             String?                     @map("custom_label")
+  customLocation          String?                     @map("custom_location")
+  customLocationTimeZone  String?                     @map("custom_location_time_zone")
   position                Int
-  travelModeToNext        RouteTravelMode         @default(DRIVE) @map("travel_mode_to_next")
-  travelStatus            ItineraryTravelStatus   @default(UPCOMING) @map("travel_status")
-  localStartTime          DateTime?               @map("local_start_time") @db.Time(0)
-  localEndTime            DateTime?               @map("local_end_time") @db.Time(0)
-  startInstant            DateTime?               @map("start_instant") @db.Timestamptz(3)
-  timeSemantics           ItineraryTimeSemantics? @map("time_semantics")
-  timeZone                String?                 @map("time_zone")
-  timeZoneSource          ItemTimeZoneSource?     @map("time_zone_source")
-  timeZoneResolvedAt      DateTime?               @map("time_zone_resolved_at") @db.Timestamptz(3)
-  dayPart                 ItineraryDayPart?       @map("day_part")
-  durationMinutes         Int?                    @map("duration_minutes")
-  notes                   String?                 @db.Text
+  travelModeToNext        RouteTravelMode             @default(DRIVE) @map("travel_mode_to_next")
+  travelStatus            ItineraryTravelStatus       @default(UPCOMING) @map("travel_status")
+  localStartTime          DateTime?                   @map("local_start_time") @db.Time(0)
+  localEndTime            DateTime?                   @map("local_end_time") @db.Time(0)
+  startInstant            DateTime?                   @map("start_instant") @db.Timestamptz(3)
+  timeSemantics           ItineraryTimeSemantics?     @map("time_semantics")
+  timeZone                String?                     @map("time_zone")
+  timeZoneSource          ItemTimeZoneSource?         @map("time_zone_source")
+  timeZoneResolvedAt      DateTime?                   @map("time_zone_resolved_at") @db.Timestamptz(3)
+  dayPart                 ItineraryDayPart?           @map("day_part")
+  durationMinutes         Int?                        @map("duration_minutes")
+  durationProvenance      ItineraryDurationProvenance @default(USER_OWNED) @map("duration_provenance")
+  notes                   String?                     @db.Text
   priority                TripPlacePriority?
-  plannedCostAmount       Decimal?                @map("planned_cost_amount") @db.Decimal(12, 2)
-  plannedCostCurrencyCode String?                 @map("planned_cost_currency_code") @db.Char(3)
-  createdAt               DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt               DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  plannedCostAmount       Decimal?                    @map("planned_cost_amount") @db.Decimal(12, 2)
+  plannedCostCurrencyCode String?                     @map("planned_cost_currency_code") @db.Char(3)
+  createdAt               DateTime                    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   trip                  Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
   itineraryDay          ItineraryDay?  @relation("ItineraryDayItems", fields: [itineraryDayId, tripId], references: [id, tripId], onDelete: NoAction)
@@ -765,6 +814,60 @@ model ItineraryItem {
   @@index([itineraryDayId, tripId])
   @@index([tripPlaceId, tripId])
   @@map("itinerary_items")
+  @@schema("trove")
+}
+
+model AiPlanningSession {
+  id                           String                  @id @default(uuid(7)) @db.Uuid
+  ownerId                      String                  @map("owner_id") @db.Uuid
+  status                       AiPlanningSessionStatus @default(PENDING)
+  stage                        AiPlanningSessionStage  @default(CREATED)
+  rawPrompt                    String?                 @map("raw_prompt") @db.Text
+  draft                        Json?                   @db.JsonB
+  schemaVersion                Int                     @default(1) @map("schema_version")
+  draftRevision                Int                     @default(0) @map("draft_revision")
+  warningsAcknowledgedRevision Int?                    @map("warnings_acknowledged_revision")
+  warningsAcknowledgedAt       DateTime?               @map("warnings_acknowledged_at") @db.Timestamptz(3)
+  lastErrorCode                String?                 @map("last_error_code") @db.VarChar(120)
+  expiresAt                    DateTime                @default(dbgenerated("(CURRENT_TIMESTAMP + '7 days'::interval)")) @map("expires_at") @db.Timestamptz(3)
+  appliedTripId                String?                 @unique @map("applied_trip_id") @db.Uuid
+  createdAt                    DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                    DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner       Profile           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  appliedTrip Trip?             @relation("AiPlanningAppliedTrip", fields: [appliedTripId], references: [id], onDelete: SetNull)
+  runs        AiGenerationRun[]
+
+  @@unique([id, ownerId])
+  @@index([ownerId, status, updatedAt])
+  @@index([status, expiresAt])
+  @@map("ai_planning_sessions")
+  @@schema("trove")
+}
+
+model AiGenerationRun {
+  id           String                @id @default(uuid(7)) @db.Uuid
+  sessionId    String                @map("session_id") @db.Uuid
+  ownerId      String                @map("owner_id") @db.Uuid
+  provider     String                @db.VarChar(120)
+  model        String                @db.VarChar(120)
+  inputTokens  Int?                  @map("input_tokens")
+  outputTokens Int?                  @map("output_tokens")
+  totalTokens  Int?                  @map("total_tokens")
+  latencyMs    Int?                  @map("latency_ms")
+  result       AiGenerationRunResult @default(PENDING)
+  errorCode    String?               @map("error_code") @db.VarChar(120)
+  completedAt  DateTime?             @map("completed_at") @db.Timestamptz(3)
+  createdAt    DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  session AiPlanningSession @relation(fields: [sessionId, ownerId], references: [id, ownerId], onDelete: Cascade)
+  owner   Profile           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, createdAt])
+  @@index([sessionId, createdAt])
+  @@index([sessionId, ownerId])
+  @@index([createdAt])
+  @@map("ai_generation_runs")
   @@schema("trove")
 }
 

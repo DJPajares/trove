@@ -142,6 +142,10 @@ function mapTravelStatus(value: string) {
   return 'upcoming' as const;
 }
 
+function mapDurationProvenance(value: string) {
+  return value === 'AI_ESTIMATED' ? ('ai_estimated' as const) : ('user_owned' as const);
+}
+
 function mapDayTimeZoneSource(value: string) {
   const values: Record<string, string> = {
     ACCOMMODATION: 'accommodation',
@@ -191,6 +195,7 @@ export function serializeItineraryItem(
       : null,
     dayPart: mapDayPart(item.dayPart),
     durationMinutes: item.durationMinutes,
+    durationProvenance: mapDurationProvenance(item.durationProvenance),
     id: item.id,
     itineraryDayId: item.itineraryDayId,
     localEndTime: formatLocalTime(item.localEndTime),
@@ -1046,6 +1051,7 @@ export async function createItineraryItem(
         customLocationTimeZone: customLocation.timeZone,
         dayPart: schedule.dayPart,
         durationMinutes: timing.durationMinutes,
+        durationProvenance: 'USER_OWNED',
         itineraryDayId: day.id,
         localEndTime: timing.localEndTime,
         localStartTime: schedule.localStartTime,
@@ -1147,6 +1153,7 @@ export async function updateItineraryItem(
             timeSemantics: current.timeSemantics,
           };
     const timing = resolveItemTiming(input, schedule.localStartTime, current);
+    const durationChanged = timing.durationMinutes !== current.durationMinutes;
 
     const updated = await transaction.itineraryItem.update({
       where: { id: itemId },
@@ -1156,6 +1163,11 @@ export async function updateItineraryItem(
         customLocationTimeZone: customLocation.timeZone,
         dayPart: schedule.dayPart,
         durationMinutes: timing.durationMinutes,
+        ...(input.durationMinutes !== undefined ||
+        input.localEndTime !== undefined ||
+        durationChanged
+          ? { durationProvenance: 'USER_OWNED' as const }
+          : {}),
         localEndTime: timing.localEndTime,
         localStartTime: schedule.localStartTime,
         ...(input.notes !== undefined ? { notes: input.notes?.trim() || null } : {}),

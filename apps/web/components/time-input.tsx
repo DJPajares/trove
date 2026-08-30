@@ -168,7 +168,6 @@ export function TimeInput({
   const mobile = useMobilePicker();
   const [open, setOpen] = useState(false);
   const [invalid, setInvalid] = useState(false);
-  const [activeSegment, setActiveSegment] = useState<TimeSegmentKind | null>(null);
   /**
    * The time being typed. Non-null exactly while the field is focused, and it
    * is what makes an empty field segmented: a draft always renders segments,
@@ -183,6 +182,16 @@ export function TimeInput({
    * `12` that could still turn out to be a lone `1`.
    */
   const pendingDigits = useRef<{ digits: string; kind: TimeSegmentKind } | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  /**
+   * The draft and the selected segment are also held in refs because entry is
+   * driven from a native `beforeinput` listener. Two characters can arrive
+   * before React has re-rendered between them, and a handler reading state
+   * would apply the second to a draft that no longer exists - which is how a
+   * phone keyboard ended up able to type only one digit per section.
+   */
+  const draftRef = useRef<TimeDraft | null>(null);
+  const activeSegmentRef = useRef<TimeSegmentKind | null>(null);
 
   useEffect(() => {
     if (!draft) {
@@ -203,8 +212,24 @@ export function TimeInput({
       (candidate) => candidate.kind === kind,
     );
     if (!segment) return;
-    setActiveSegment(kind);
+    activeSegmentRef.current = kind;
     window.requestAnimationFrame(() => input.setSelectionRange(segment.start, segment.end));
+  }
+
+  function clearDraft() {
+    draftRef.current = null;
+    activeSegmentRef.current = null;
+    pendingDigits.current = null;
+    setDraft(null);
+  }
+
+  /** The segment the caret is working in, preferring the one entry last landed on. */
+  function currentSegment(input: HTMLInputElement, current: TimeDraft) {
+    const segments = formatSegmentedDraft(current, locale, preferences.timeFormat).segments;
+    return (
+      segments.find((segment) => segment.kind === activeSegmentRef.current) ??
+      nearestTimeSegment(segments, input.selectionStart ?? 0)
+    );
   }
 
   /**
@@ -213,6 +238,7 @@ export function TimeInput({
    * some arbitrary hour the traveller never meant to pick.
    */
   function applyDraft(next: TimeDraft) {
+    draftRef.current = next;
     setDraft(next);
     onValueChange(canonicalFromDraft(next, preferences.timeFormat) ?? '');
     setInvalid(false);
@@ -257,6 +283,95 @@ export function TimeInput({
     }
   }
 
+  /**
+   * Applies one typed character to whichever segment the caret is in. Digits
+   * fill the hour or minute; `a`/`p` set the day period from wherever the
+   * caret happens to be, because a phone keyboard offers no other way to reach
+   * it. Anything else is ignored - the mask only ever holds a time.
+   */
+  function insertCharacter(input: HTMLInputElement, character: string) {
+    const current = draftRef.current;
+    if (!current) return;
+
+    const selected = currentSegment(input, current);
+    if (!selected) return;
+
+    if (preferences.timeFormat === '12h' && /^[ap]$/i.test(character)) {
+      pendingDigits.current = null;
+      const next: TimeDraft = {
+        ...current,
+        period: character.toLocaleLowerCase() === 'a' ? 'am' : 'pm',
+      };
+      applyDraft(next);
+      selectSegment(input, 'period', next);
+      return;
+    }
+
+    // A digit means nothing in the period segment, and no other character
+    // belongs anywhere in the field.
+    if (selected.kind === 'period' || !/^\d$/.test(character)) return;
+
+    typeDigit(input, current, selected.kind, character);
+  }
+
+  function clearSegment(input: HTMLInputElement) {
+    const current = draftRef.current;
+    if (!current) return;
+
+    const selected = currentSegment(input, current);
+    if (!selected) return;
+
+    pendingDigits.current = null;
+    const next = { ...current, [selected.kind]: null };
+    applyDraft(next);
+    selectSegment(input, selected.kind, next);
+  }
+
+  /**
+   * Entry runs off `beforeinput` rather than `keydown` because a phone's
+   * virtual keyboard does not report the key that was pressed - `keydown`
+   * arrives with no usable `key`, so every digit and the `a`/`p` shortcut fell
+   * through and the caret was thrown back to the start of the field.
+   * `beforeinput` carries the actual character on every platform, so desktop
+   * and mobile now share one path; `keydown` is left to move between segments.
+   */
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+
+    const handleBeforeInput = (event: InputEvent) => {
+      if (!draftRef.current) return;
+
+      if (event.inputType.startsWith('delete')) {
+        event.preventDefault();
+        clearSegment(input);
+        return;
+      }
+
+      if (!event.inputType.startsWith('insert')) return;
+
+      const inserted = event.data ?? '';
+      if (!inserted) return;
+      event.preventDefault();
+
+      // A pasted or autofilled time arrives whole rather than character by character.
+      const pasted = inserted.length > 1 ? parseTimeInput(inserted, locale) : null;
+      if (pasted) {
+        const next = draftFromCanonical(pasted, preferences.timeFormat);
+        applyDraft(next);
+        selectSegment(input, 'hour', next);
+        return;
+      }
+
+      for (const character of inserted) insertCharacter(input, character);
+    };
+
+    input.addEventListener('beforeinput', handleBeforeInput);
+    return () => input.removeEventListener('beforeinput', handleBeforeInput);
+    // `insertCharacter` closes over the props and preferences below; the draft
+    // itself is read from a ref, so re-subscribing cannot drop a keystroke.
+  }, [locale, onValueChange, preferences.timeFormat]);
+
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'ArrowDown' && event.altKey) {
       event.preventDefault();
@@ -265,16 +380,13 @@ export function TimeInput({
       return;
     }
 
-    const current = draft;
+    const current = draftRef.current;
     if (!current) {
       onKeyDown?.(event);
       return;
     }
 
-    const segments = formatSegmentedDraft(current, locale, preferences.timeFormat).segments;
-    const selected =
-      segments.find((segment) => segment.kind === activeSegment) ??
-      nearestTimeSegment(segments, event.currentTarget.selectionStart ?? 0);
+    const selected = currentSegment(event.currentTarget, current);
 
     if (!selected) {
       onKeyDown?.(event);
@@ -290,7 +402,7 @@ export function TimeInput({
         pendingDigits.current = null;
         selectSegment(event.currentTarget, next.kind, current);
       } else if (event.key === 'Tab') {
-        setActiveSegment(null);
+        activeSegmentRef.current = null;
       }
       onKeyDown?.(event);
       return;
@@ -320,47 +432,17 @@ export function TimeInput({
       return;
     }
 
-    if (event.key === 'Backspace' || event.key === 'Delete') {
-      event.preventDefault();
-      pendingDigits.current = null;
-      const next = { ...current, [selected.kind]: null };
-      applyDraft(next);
-      selectSegment(event.currentTarget, selected.kind, next);
-      onKeyDown?.(event);
-      return;
-    }
-
-    if (selected.kind === 'period') {
-      if (/^[ap]$/i.test(event.key)) {
-        event.preventDefault();
-        const next = {
-          ...current,
-          period: event.key.toLocaleLowerCase() === 'a' ? ('am' as const) : ('pm' as const),
-        };
-        applyDraft(next);
-        selectSegment(event.currentTarget, 'period', next);
-      } else if (/^\d$/.test(event.key)) {
-        event.preventDefault();
-      }
-      onKeyDown?.(event);
-      return;
-    }
-
-    if (/^\d$/.test(event.key) && !event.metaKey && !event.ctrlKey && !event.altKey) {
-      event.preventDefault();
-      typeDigit(event.currentTarget, current, selected.kind, event.key);
-    }
-
     onKeyDown?.(event);
   }
 
   function handleClick(event: MouseEvent<HTMLInputElement>) {
-    if (draft) {
-      const segments = formatSegmentedDraft(draft, locale, preferences.timeFormat).segments;
+    const current = draftRef.current;
+    if (current) {
+      const segments = formatSegmentedDraft(current, locale, preferences.timeFormat).segments;
       const segment = nearestTimeSegment(segments, event.currentTarget.selectionStart ?? 0);
       if (segment) {
         pendingDigits.current = null;
-        selectSegment(event.currentTarget, segment.kind, draft);
+        selectSegment(event.currentTarget, segment.kind, current);
       }
     }
     onClick?.(event);
@@ -383,15 +465,14 @@ export function TimeInput({
     <div className="relative max-w-56">
       <Input
         {...props}
+        ref={inputRef}
         aria-invalid={ariaInvalid || invalid || undefined}
         className={cn('pr-18 tabular-nums', className)}
         disabled={disabled}
         id={id}
         onBlur={(event) => {
-          const current = draft;
-          setDraft(null);
-          setActiveSegment(null);
-          pendingDigits.current = null;
+          const current = draftRef.current;
+          clearDraft();
 
           if (current) {
             const canonical = canonicalFromDraft(current, preferences.timeFormat);
@@ -408,16 +489,20 @@ export function TimeInput({
           onBlur?.(event);
         }}
         onChange={(event) => {
-          // Segment keystrokes are handled in `keydown`, so this is the paste
-          // and IME path - a whole time arriving at once.
+          // `beforeinput` handles and cancels ordinary entry, so this only runs
+          // for input it could not cancel - a composed IME commit, say. Accept
+          // it when it reads as a whole time and otherwise let the draft stand.
           const parsed = parseTimeInput(event.target.value, locale);
           if (parsed) {
-            applyDraft(draftFromCanonical(parsed, preferences.timeFormat));
+            const next = draftFromCanonical(parsed, preferences.timeFormat);
+            applyDraft(next);
+            selectSegment(event.currentTarget, 'hour', next);
           }
         }}
         onClick={handleClick}
         onFocus={(event) => {
           const next = draftFromCanonical(value, preferences.timeFormat);
+          draftRef.current = next;
           setDraft(next);
           pendingDigits.current = null;
           selectSegment(event.currentTarget, 'hour', next);
@@ -435,8 +520,7 @@ export function TimeInput({
           className="absolute inset-y-1 right-10"
           disabled={disabled}
           onClick={() => {
-            setDraft(null);
-            pendingDigits.current = null;
+            clearDraft();
             selectTime('');
           }}
           size="icon-sm"

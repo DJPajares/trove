@@ -93,7 +93,9 @@ function AppMenuContent() {
 
   return (
     <SheetContent
-      className="h-[min(42rem,calc(100dvh-3rem))] gap-0 md:h-full"
+      // Mobile keeps only Tools now, so the drawer hugs what it holds rather
+      // than opening two thirds of a screen of empty popover.
+      className="h-auto max-h-[min(42rem,calc(100dvh-3rem))] gap-0 md:h-full"
       closeLabel={t('closeMenu')}
       keepMounted
       mobileSide="bottom"
@@ -124,7 +126,12 @@ function AppMenuContent() {
       </SheetHeader>
 
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 md:px-6">
-        <section aria-labelledby="app-menu-quick-actions-heading" className="space-y-2">
+        {/* Mobile reaches these three from the floating stack in the upper
+            right, so the drawer offers them to desktop alone. */}
+        <section
+          aria-labelledby="app-menu-quick-actions-heading"
+          className="hidden space-y-2 md:block"
+        >
           <h2
             className="px-1 text-sm font-semibold text-foreground"
             id="app-menu-quick-actions-heading"
@@ -136,16 +143,26 @@ function AppMenuContent() {
             <AppearanceToggle triggerVariant="quickAction" />
             <AccountMenu onNavigate={closeMenu} triggerVariant="quickAction" />
           </div>
-          {appearanceSaveError ? (
-            <p className="px-1 text-xs leading-5 text-destructive" role="status">
-              {appearance('unsaved')}
-            </p>
-          ) : null}
         </section>
 
-        <GlobalSearch onNavigate={closeMenu} triggerVariant="field" />
+        {/* Outside the section above: the appearance toggle it reports on still
+            exists on mobile, so its failure has to be sayable there too. */}
+        {appearanceSaveError ? (
+          <p className="px-1 text-xs leading-5 text-destructive" role="status">
+            {appearance('unsaved')}
+          </p>
+        ) : null}
 
-        <div className="border-t border-border-subtle pt-5">
+        {/* Search leads the mobile floating stack, so the drawer keeps its
+            full-width field for desktop and tablet. */}
+        <div className="hidden md:block">
+          <GlobalSearch onNavigate={closeMenu} triggerVariant="field" />
+        </div>
+
+        {/* Nothing sits above Tools on mobile, so the divider only earns its
+            line where the drawer still has a quick-actions row and a search
+            field to divide it from. */}
+        <div className="md:border-t md:border-border-subtle md:pt-5">
           <AppMenuTools pathname={pathname} />
         </div>
       </div>

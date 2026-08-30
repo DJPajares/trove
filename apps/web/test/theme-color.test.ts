@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 
 import { appleStatusBarStyle, themeColor, themeNameFrom } from '../lib/theme-color.ts';
+import { readAppearanceCookie } from '../lib/theme-cookie.ts';
 
 /**
  * `--background` is oklch in CSS and hex in `theme-color.ts`, because a
@@ -92,4 +93,38 @@ test('an unresolved theme is treated as light', () => {
   expect(themeNameFrom(undefined)).toBe('light');
   expect(themeNameFrom('light')).toBe('light');
   expect(themeNameFrom('dark')).toBe('dark');
+});
+
+// The manifest is a server module and reaches for its copy through next-intl,
+// which resolves to its client build under Vitest. The strings are not what is
+// under test here.
+vi.mock('next-intl/server', () => ({
+  getTranslations: async () => (key: string) => key,
+}));
+
+/**
+ * The manifest paints the standalone splash screen, which sits outside the
+ * document and so cannot be corrected on the client. Nothing in the type system
+ * ties it to the ground the app actually opens on, and the two were hardcoded
+ * apart once already.
+ */
+test('the manifest opens on the light ground', async () => {
+  const { default: manifest } = await import('../app/manifest.ts');
+  const { background_color: backgroundColor, theme_color: manifestThemeColor } = await manifest();
+
+  expect(backgroundColor).toBe(themeColor.light);
+  expect(manifestThemeColor).toBe(themeColor.light);
+});
+
+/**
+ * The cookie is the only thing telling the server which theme to paint, and it
+ * arrives as an arbitrary string. Anything but `dark` has to fall back to light,
+ * the theme a first visit is about to settle on.
+ */
+test('an unwritten appearance cookie reads as light', () => {
+  expect(readAppearanceCookie('dark')).toBe('dark');
+  expect(readAppearanceCookie('light')).toBe('light');
+  expect(readAppearanceCookie(undefined)).toBe('light');
+  expect(readAppearanceCookie('')).toBe('light');
+  expect(readAppearanceCookie('Dark')).toBe('light');
 });

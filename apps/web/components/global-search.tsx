@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 
 import { ContentSkeleton } from '@/components/content-skeleton';
 import { PageState } from '@/components/page-state';
@@ -87,16 +87,41 @@ function ResultRow({
 }
 
 type GlobalSearchProps = {
+  /**
+   * Where focus lands when a controlled dialog closes. Its opener is somewhere
+   * the caller owns, and may well have unmounted while the dialog was up.
+   */
+  finalFocus?: RefObject<HTMLElement | null>;
   onNavigate?: () => void;
+  onOpenChange?: (open: boolean) => void;
+  /**
+   * Pass this to drive the dialog from outside. A controlled search renders no
+   * trigger of its own and leaves the keyboard shortcut to its owner, so the
+   * two never race to open the same dialog.
+   */
+  open?: boolean;
   triggerVariant?: 'field' | 'icon';
 };
 
 export function GlobalSearch({
+  finalFocus,
   onNavigate,
+  onOpenChange,
+  open: openProp,
   triggerVariant = 'icon',
 }: Readonly<GlobalSearchProps> = {}) {
   const t = useTranslations('globalSearch');
-  const [open, setOpen] = useState(false);
+  const controlled = openProp !== undefined;
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlled ? openProp : uncontrolledOpen;
+
+  const setOpen = useCallback(
+    (next: boolean) => {
+      if (!controlled) setUncontrolledOpen(next);
+      onOpenChange?.(next);
+    },
+    [controlled, onOpenChange],
+  );
   const [query, setQuery] = useState('');
   const [response, setResponse] = useState<SearchResponse | null>(null);
   const [status, setStatus] = useState<'error' | 'idle' | 'loading' | 'places' | 'ready'>('idle');
@@ -112,6 +137,8 @@ export function GlobalSearch({
   }, [onNavigate]);
 
   useEffect(() => {
+    if (controlled) return;
+
     function handleShortcut(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
@@ -120,7 +147,7 @@ export function GlobalSearch({
     }
     window.addEventListener('keydown', handleShortcut);
     return () => window.removeEventListener('keydown', handleShortcut);
-  }, []);
+  }, [controlled, setOpen]);
 
   useEffect(() => {
     requestRef.current?.abort();
@@ -175,27 +202,30 @@ export function GlobalSearch({
 
   return (
     <Dialog onOpenChange={setOpen} open={open}>
-      <DialogTrigger
-        render={
-          <Button
-            aria-label={t('button')}
-            className={
-              triggerVariant === 'field'
-                ? 'w-full justify-start border-border-strong bg-background text-muted-foreground shadow-none hover:bg-surface-hover hover:text-foreground'
-                : undefined
-            }
-            size={triggerVariant === 'field' ? 'default' : 'icon'}
-            type="button"
-            variant={triggerVariant === 'field' ? 'outline' : 'ghost'}
-          />
-        }
-      >
-        <Search aria-hidden="true" className="size-4" />
-        {triggerVariant === 'field' ? <span>{t('button')}</span> : null}
-      </DialogTrigger>
+      {controlled ? null : (
+        <DialogTrigger
+          render={
+            <Button
+              aria-label={t('button')}
+              className={
+                triggerVariant === 'field'
+                  ? 'w-full justify-start border-border-strong bg-background text-muted-foreground shadow-none hover:bg-surface-hover hover:text-foreground'
+                  : undefined
+              }
+              size={triggerVariant === 'field' ? 'default' : 'icon'}
+              type="button"
+              variant={triggerVariant === 'field' ? 'outline' : 'ghost'}
+            />
+          }
+        >
+          <Search aria-hidden="true" className="size-4" />
+          {triggerVariant === 'field' ? <span>{t('button')}</span> : null}
+        </DialogTrigger>
+      )}
       <DialogContent
         className="grid h-[min(42rem,calc(100dvh-2rem))] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-2xl sm:p-0"
         closeLabel={t('close')}
+        finalFocus={finalFocus}
       >
         <DialogHeader className="border-b border-border p-5 pr-14 sm:p-6 sm:pr-16">
           <div className="flex items-start justify-between gap-4">

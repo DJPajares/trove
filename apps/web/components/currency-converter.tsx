@@ -196,7 +196,7 @@ export function CurrencyConverter() {
     rate && rateDate && refreshedAt
       ? `${t('rateDetails', {
           date: rateDate,
-          rate: rate.rate.toLocaleString(locale, { maximumFractionDigits: 6 }),
+          rate: rate.rate.toLocaleString(locale, { maximumSignificantDigits: 5 }),
           source: rate.base,
           target: rate.quote,
         })} · ${
@@ -235,7 +235,7 @@ export function CurrencyConverter() {
       <div className="overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card shadow-[var(--shadow-surface)]">
         <div className="space-y-6 p-5 sm:p-6">
           <FieldGroup className="gap-6">
-            <Field className="max-w-xs">
+            <Field className="w-1/2">
               <FieldLabel htmlFor="currency-amount">{t('amount')}</FieldLabel>
               <MoneyInput
                 autoComplete="off"
@@ -246,7 +246,7 @@ export function CurrencyConverter() {
               />
             </Field>
 
-            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-3 sm:gap-4">
               <Field>
                 <FieldLabel htmlFor="currency-source">{t('from')}</FieldLabel>
                 <CurrencyCombobox
@@ -264,7 +264,7 @@ export function CurrencyConverter() {
 
               <Button
                 aria-label={t('swap')}
-                className="w-full rounded-full sm:mt-7 sm:w-11"
+                className="mt-7 w-11 shrink-0 rounded-full"
                 disabled={!sourceCode && !targetCode}
                 onClick={swapCurrencies}
                 size="icon"

@@ -17,10 +17,10 @@ export default async function CurrencyLoading() {
           className="overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card shadow-[var(--shadow-surface)]"
         >
           <div className="space-y-6 p-5 sm:p-6">
-            <Skeleton className="h-11 w-full max-w-xs rounded-[var(--radius-md)]" />
-            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+            <Skeleton className="h-11 w-1/2 rounded-[var(--radius-md)]" />
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-3 sm:gap-4">
               <Skeleton className="h-11 w-full rounded-[var(--radius-md)]" />
-              <Skeleton className="h-11 w-full rounded-full sm:mt-7 sm:w-11" />
+              <Skeleton className="mt-7 h-11 w-11 shrink-0 rounded-full" />
               <Skeleton className="h-11 w-full rounded-[var(--radius-md)]" />
             </div>
           </div>

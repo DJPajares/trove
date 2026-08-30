@@ -8,6 +8,7 @@ import { AppearanceToggle } from '@/components/appearance-toggle';
 import { DesktopAppHeader } from '@/components/desktop-app-header';
 import { FloatingActionStack } from '@/components/floating-action-stack';
 import { PageTransition } from '@/components/page-transition';
+import { PrimaryActionProvider } from '@/components/primary-action-provider';
 import { PrimaryNavigation } from '@/components/primary-navigation';
 import { TripCreationProvider } from '@/components/trip-creation-provider';
 import { Button } from '@/components/ui/button';
@@ -119,5 +120,12 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
     </div>
   );
 
-  return <TripCreationProvider enabled={isSignedIn}>{shell}</TripCreationProvider>;
+  // The registry sits inside trip creation because the bottom bar falls back to
+  // it: a screen that claims the create button borrows it, and everything else
+  // still starts a trip with it.
+  return (
+    <TripCreationProvider enabled={isSignedIn}>
+      <PrimaryActionProvider>{shell}</PrimaryActionProvider>
+    </TripCreationProvider>
+  );
 }

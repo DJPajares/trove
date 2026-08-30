@@ -8,6 +8,7 @@ import { useTranslations } from 'next-intl';
 import type { ComponentType } from 'react';
 
 import { NavActiveIndicator } from '@/components/nav-active-indicator';
+import { usePrimaryAction } from '@/components/primary-action-provider';
 import { useTripCreation } from '@/components/trip-creation-provider';
 import { Button } from '@/components/ui/button';
 import { navigationTransition } from '@/lib/motion';
@@ -35,6 +36,7 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
   const pathname = usePathname();
   const t = useTranslations('navigation');
   const { openCreateTrip } = useTripCreation();
+  const primaryAction = usePrimaryAction();
   const icons = { home: House, saved: Bookmark, tools: Wrench, trips: MapPinned };
   const items: NavigationItem[] = primaryNavigationDestinations.map(({ column, href, key }) => ({
     column,
@@ -126,11 +128,17 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
       {/* Creation is an action, not a destination: the shared sheet opens over
           whichever screen the traveller is already using. It sits outside the
           masked surface and rides above the notch rather than inside it, so the
-          curve reads as the bar giving way to the button. */}
+          curve reads as the bar giving way to the button.
+
+          What it creates is the screen's to name. On a day of the itinerary the
+          nearest thing to make is a stop on that day, and in the saved library
+          it is another place; a screen that claims the button says so through
+          the primary action registry, and everywhere else it starts a trip. The
+          icon and its place never move, so the button stays the same button. */}
       <Button
-        aria-label={t('createTrip')}
+        aria-label={primaryAction?.label ?? t('createTrip')}
         className="absolute top-[calc(-1*var(--nav-action-overhang))] left-1/2 z-20 size-[var(--nav-action-size)] -translate-x-1/2 rounded-full bg-primary text-primary-foreground shadow-[var(--nav-action-shadow)] transition-[background-color,box-shadow,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:bg-brand-strong hover:shadow-[var(--nav-action-shadow-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring active:translate-y-px"
-        onClick={openCreateTrip}
+        onClick={primaryAction?.onTrigger ?? openCreateTrip}
         type="button"
       >
         <Plus aria-hidden="true" className="size-7" />

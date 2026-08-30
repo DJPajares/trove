@@ -219,13 +219,11 @@ export function HomeExperience() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-9">
-      {!primary ? (
-        <PageHeader
-          description={t(`states.${stage}.description`)}
-          headingId="home-heading"
-          title={t(`states.${stage}.title`)}
-        />
-      ) : null}
+      <PageHeader
+        description={t(`states.${stage}.description`)}
+        headingId="home-heading"
+        title={t(`states.${stage}.title`)}
+      />
 
       {primary ? (
         <HomeFocalTrip

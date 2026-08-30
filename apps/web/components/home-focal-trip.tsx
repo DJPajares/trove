@@ -80,12 +80,12 @@ export function HomeFocalTrip({
         <div className="relative flex min-h-[31rem] flex-col justify-end gap-4 p-5 text-white sm:min-h-[29rem] sm:p-7 lg:min-h-[31rem] lg:max-w-3xl lg:p-9">
           <div className="space-y-1.5">
             <p className="text-sm font-medium text-white/78">{t(stageLabels[trip.lifecycle])}</p>
-            <h1
+            <h2
               className="max-w-2xl text-3xl leading-[1.08] font-semibold tracking-[-0.035em] text-balance sm:text-4xl"
               id="home-focal-heading"
             >
               {trip.name}
-            </h1>
+            </h2>
             <p className="text-sm text-white/78">
               {destinations ?? t('destinationOpen')} <span aria-hidden="true">·</span>{' '}
               <span className="tabular-nums">{dateRange}</span>

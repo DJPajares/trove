@@ -1,7 +1,7 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 
-import { PrismaClient } from './generated/prisma/client.js';
-export type { Prisma } from './generated/prisma/client.js';
+import { Prisma, PrismaClient } from './generated/prisma/client.js';
+export { Prisma };
 import { getDatabaseEnvironment } from './environment.js';
 
 type PrismaClientGlobal = typeof globalThis & {

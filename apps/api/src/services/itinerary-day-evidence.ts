@@ -24,6 +24,7 @@ export type PlaceHoursEvidence = Map<
 export type ItineraryDayItemRecord = {
   dayPart: string | null;
   durationMinutes: number | null;
+  durationProvenance?: string;
   id: string;
   localStartTime: Date | null;
   reservationCount: number;
@@ -128,7 +129,10 @@ export function toDayEvidenceItems(
       duration:
         item.durationMinutes === null
           ? null
-          : { minutes: item.durationMinutes, source: 'USER_OWNED' },
+          : {
+              minutes: item.durationMinutes,
+              source: item.durationProvenance === 'AI_ESTIMATED' ? 'ESTIMATED' : 'USER_OWNED',
+            },
       // FLOATING_LOCAL is the exact-clock-time case (see `scheduleData`'s
       // `local_time` branch): the traveller picked a real start, not just a
       // daypart, so it is as much a commitment as a reservation or an

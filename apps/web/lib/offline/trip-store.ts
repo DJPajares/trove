@@ -983,6 +983,7 @@ function applySchedule(item: ItineraryItem, schedule: ItineraryScheduleInput) {
 }
 
 function applyInput(item: ItineraryItem, input: ItineraryItemInput, itinerary?: Itinerary) {
+  const previousDurationMinutes = item.durationMinutes;
   if (input.customLabel !== undefined) item.customLabel = input.customLabel?.trim() || null;
   if (input.customLocation !== undefined) {
     item.customLocation = input.customLocation
@@ -1007,6 +1008,13 @@ function applyInput(item: ItineraryItem, input: ItineraryItemInput, itinerary?: 
     item.durationMinutes = (endHour - startHour) * 60 + endMinute - startMinute;
   } else if (input.localEndTime === null && input.durationMinutes === undefined) {
     item.durationMinutes = null;
+  }
+  if (
+    input.durationMinutes !== undefined ||
+    input.localEndTime !== undefined ||
+    item.durationMinutes !== previousDurationMinutes
+  ) {
+    item.durationProvenance = 'user_owned';
   }
   item.updatedAt = new Date().toISOString();
 }
@@ -1058,6 +1066,7 @@ export function applyOfflineMutation(
         : null,
       dayPart: null,
       durationMinutes: mutation.input.durationMinutes ?? null,
+      durationProvenance: 'user_owned',
       id: mutation.clientItemId,
       itineraryDayId: day.id,
       localEndTime: mutation.input.localEndTime ?? null,

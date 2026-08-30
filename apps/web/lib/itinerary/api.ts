@@ -49,6 +49,7 @@ export type ItineraryItem = {
   customLocation: { label: string; timeZone: string | null } | null;
   dayPart: ItineraryDayPart | null;
   durationMinutes: number | null;
+  durationProvenance?: 'ai_estimated' | 'user_owned';
   id: string;
   itineraryDayId: string | null;
   localEndTime?: string | null;

@@ -161,6 +161,7 @@ export async function getItineraryDayTimeSuggestions(
         return {
           dayPart: overridden ? REQUESTED_DAY_PARTS[options.schedule!] : item.dayPart,
           durationMinutes: item.durationMinutes,
+          durationProvenance: item.durationProvenance,
           id: item.id,
           localStartTime: overridden ? null : item.localStartTime,
           reservationCount: item._count.reservations,

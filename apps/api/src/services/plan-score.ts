@@ -363,6 +363,7 @@ export async function getTripPlanScore(
         items: day.items.map((item) => ({
           dayPart: item.dayPart,
           durationMinutes: item.durationMinutes,
+          durationProvenance: item.durationProvenance,
           id: item.id,
           localStartTime: item.localStartTime,
           reservationCount: item._count.reservations,

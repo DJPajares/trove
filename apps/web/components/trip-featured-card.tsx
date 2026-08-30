@@ -77,7 +77,13 @@ export function TripFeaturedCard({ editorial, onShare, trip }: Readonly<TripFeat
           <TripDestinationActions
             destinations={primaryTripDestinations(trip.id, trip.lifecycle, trip.startDate)}
             extra={
-              <>
+              // One flex item, not two, so the pair can never be split across lines
+              // with one control orphaned below - which is what left the overview
+              // button sitting alone under the row. Left-aligned: they follow the
+              // text actions directly rather than being pushed to the far edge, and
+              // when the row runs out of width they wrap together, still reading as
+              // a continuation of the actions rather than a separate cluster.
+              <div className="flex shrink-0 items-center gap-1">
                 <Button
                   aria-label={share('action')}
                   onClick={onShare}
@@ -96,7 +102,7 @@ export function TripFeaturedCard({ editorial, onShare, trip }: Readonly<TripFeat
                 >
                   <Info aria-hidden="true" />
                 </Button>
-              </>
+              </div>
             }
             labelOverrides={
               trip.lifecycle === 'completed'

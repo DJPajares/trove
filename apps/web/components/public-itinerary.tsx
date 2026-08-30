@@ -102,7 +102,15 @@ export async function PublicItinerary({ itinerary, locale }: Readonly<PublicItin
 
                         return (
                           <li
-                            className="grid grid-cols-[minmax(5.5rem,auto)_minmax(0,1fr)] items-baseline gap-3 px-2 py-2"
+                            // Fixed, not `auto`. Each row is its own grid, so an
+                            // `auto` column is sized by that row alone and a stop
+                            // with a range shunts its name out of line with the
+                            // plain-time rows above it. 7.5rem is measured rather
+                            // than chosen: at this type size the widest 12-hour
+                            // range runs 118px, a 24-hour range 75px, the longest
+                            // daypart 58px and a plain time 46px. Re-measure if the
+                            // type changes; do not nudge it.
+                            className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-baseline gap-3 px-2 py-2"
                             key={item.id}
                           >
                             <span className="text-xs font-medium whitespace-nowrap text-text-subtle tabular-nums">

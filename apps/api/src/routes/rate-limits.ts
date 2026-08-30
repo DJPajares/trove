@@ -14,7 +14,12 @@ export const PROVIDER_FANOUT_RATE_LIMIT = perMinute(30);
 
 /**
  * The shared itinerary. It reaches no provider and so costs nothing per request,
- * but it is the one route with no signed-in user behind it, and a link doing the
- * rounds is meant to be opened by a group rather than hammered by one client.
+ * but it is the one route with no signed-in user behind it.
+ *
+ * This is the only limit here that carries real load rather than standing by. The
+ * route answers `no-store` in both directions, so that revoking a link takes
+ * effect on the next reload rather than a minute later, which means every visit
+ * is a database read and this ceiling is what bounds them. Cheap reads, but no
+ * longer free ones.
  */
 export const PUBLIC_SHARE_RATE_LIMIT = perMinute(60);

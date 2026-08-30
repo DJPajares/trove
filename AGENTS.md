@@ -53,6 +53,9 @@ The approved product requirements live in `PRD.md` once generated. Linear is the
 
 Linear is the implementation source of truth.
 
+Every Trove issue belongs to the `Trove` project on the `wonderland` team. Never
+file one outside it.
+
 When a request comes from a prompt, first evaluate its size and risk. Small,
 self-contained, low-risk changes with clear scope may be processed immediately
 without a Linear issue. Larger, cross-cutting, ambiguous, or otherwise

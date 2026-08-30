@@ -278,6 +278,7 @@ function seedProviderRef(externalPlaceId: string, overrides: Partial<ProviderRef
 
 function detailsFor(externalPlaceId: string): ProviderPlaceDetails {
   return {
+    attributions: [],
     category: 'things_to_do',
     externalPlaceId,
     formattedAddress: '93 Stamford Rd, Singapore',

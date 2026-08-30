@@ -232,6 +232,7 @@ export class CachedPlacesService extends PlacesService {
       result: {
         freshness: { fetchedAt: reference.cachedAt.toISOString(), source: 'cache' },
         place: {
+          attributions: [],
           category,
           externalPlaceId: request.externalPlaceId,
           formattedAddress: reference.cachedFormattedAddress,

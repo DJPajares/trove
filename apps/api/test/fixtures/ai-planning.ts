@@ -119,7 +119,14 @@ export function explicitModelProposal(): AiPlannerModelProposal {
 }
 
 function verifiedPlace(id: string, name: string, placeId: string) {
-  return { id, name, placeId, resolution: 'verified' as const };
+  return {
+    attributions: [],
+    id,
+    name,
+    placeId,
+    provider: 'google' as const,
+    resolution: 'verified' as const,
+  };
 }
 
 function identityEvidence(id: string, subjectId: string) {

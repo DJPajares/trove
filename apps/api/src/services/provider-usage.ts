@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
  * arrives.
  */
 export const PROVIDER_CALL_SOURCES = [
+  'ai-planner',
   'currency',
   'editorial-image-reconciliation',
   'editorial-images',
@@ -53,12 +54,13 @@ export type ProviderExpectedSku =
   | 'currency-rates-free'
   | 'editorial-images-free'
   | 'places-autocomplete-requests'
+  | 'places-text-search-pro'
   | 'place-details-pro'
   | 'place-details-enterprise'
   | 'routes-compute-routes-essentials';
 
 type ProviderEventBase = {
-  operation: 'computeRoute' | 'getDetails' | 'getRates' | 'search';
+  operation: 'computeRoute' | 'getDetails' | 'getRates' | 'search' | 'textSearch';
   provider: 'frankfurter' | 'google' | 'pexels';
   source: ProviderCallSource;
 };
@@ -72,6 +74,7 @@ export type ProviderCall = ProviderEventBase & {
     | '/v2/rates'
     | '/v1/places/:placeId'
     | '/v1/places:autocomplete'
+    | '/v1/places:searchText'
     | '/v1/search';
   expectedSku: ProviderExpectedSku;
   includePolyline?: boolean;
@@ -94,6 +97,33 @@ export type ProviderUsageSink = (event: ProviderUsageEvent) => void;
 
 const counts = new Map<string, number>();
 let sink: ProviderUsageSink | null = null;
+
+export const AI_PLANNER_PROVIDER_CALL_LIMIT = 50;
+
+/** A request-scoped guard shared by every billable Google provider client. */
+export class ProviderCallBudget {
+  private usedCalls = 0;
+
+  constructor(readonly limit = AI_PLANNER_PROVIDER_CALL_LIMIT) {
+    if (!Number.isInteger(limit) || limit < 0) {
+      throw new RangeError('provider_call_budget_limit_invalid');
+    }
+  }
+
+  claim() {
+    if (this.usedCalls >= this.limit) return false;
+    this.usedCalls += 1;
+    return true;
+  }
+
+  snapshot() {
+    return {
+      limit: this.limit,
+      remaining: Math.max(0, this.limit - this.usedCalls),
+      used: this.usedCalls,
+    };
+  }
+}
 
 function countKey(call: Pick<ProviderCall, 'operation' | 'provider'>) {
   return `${call.provider}:${call.operation}`;

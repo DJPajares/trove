@@ -6,6 +6,7 @@ import { getPlacesEnvironment } from '../src/environment.js';
 import {
   GOOGLE_AUTOCOMPLETE_FIELD_MASK,
   GOOGLE_PLACE_LOCATION_FIELD_MASK,
+  GOOGLE_TEXT_SEARCH_FIELD_MASK,
   GooglePlacesProvider,
 } from '../src/services/google-places.js';
 import { categorizePlaceTypes } from '../src/services/place-categories.js';
@@ -16,6 +17,67 @@ test('maps provider types into the stable Trove taxonomy', () => {
   expect(categorizePlaceTypes(['store'], 'coffee_shop')).toBe('food_and_drink');
   expect(categorizePlaceTypes(['airport', 'establishment'])).toBe('transport');
   expect(categorizePlaceTypes(['establishment'])).toBe('other');
+});
+
+test('Google Text Search is capped at two durable identity results with attribution', async () => {
+  let capturedInit: RequestInit | undefined;
+  const provider = new GooglePlacesProvider({
+    apiKey: 'server-key',
+    fetcher: async (_input, init) => {
+      capturedInit = init;
+      return Response.json({
+        places: [
+          {
+            attributions: [{ provider: 'Example Data', providerUri: 'https://example.com/source' }],
+            displayName: { text: 'National Museum' },
+            formattedAddress: '93 Stamford Road, Singapore 178897',
+            googleMapsUri: 'https://maps.google.com/?cid=1',
+            id: 'ChIJmuseum',
+            location: { latitude: 1.2966, longitude: 103.8485 },
+            primaryType: 'museum',
+            types: ['museum'],
+            utcOffsetMinutes: 480,
+          },
+          { displayName: { text: 'Missing coordinates' }, id: 'ChIJinvalid' },
+        ],
+      });
+    },
+  });
+
+  const places = await provider.textSearch({
+    languageCode: 'en',
+    regionCode: 'sg',
+    textQuery: 'National Museum Singapore',
+  });
+  const headers = new Headers(capturedInit?.headers);
+  const body = JSON.parse(String(capturedInit?.body)) as Record<string, unknown>;
+
+  expect(body).toStrictEqual({
+    languageCode: 'en',
+    pageSize: 2,
+    regionCode: 'sg',
+    textQuery: 'National Museum Singapore',
+  });
+  expect(headers.get('X-Goog-FieldMask')).toBe(GOOGLE_TEXT_SEARCH_FIELD_MASK);
+  expect(GOOGLE_TEXT_SEARCH_FIELD_MASK).not.toContain('*');
+  for (const mutableField of ['rating', 'regularOpeningHours', 'photos', 'websiteUri']) {
+    expect(GOOGLE_TEXT_SEARCH_FIELD_MASK).not.toContain(mutableField);
+  }
+  expect(places).toStrictEqual([
+    {
+      attributions: [{ provider: 'Example Data', providerUri: 'https://example.com/source' }],
+      category: 'things_to_do',
+      externalPlaceId: 'ChIJmuseum',
+      formattedAddress: '93 Stamford Road, Singapore 178897',
+      googleMapsUri: 'https://maps.google.com/?cid=1',
+      location: { latitude: 1.2966, longitude: 103.8485 },
+      name: 'National Museum',
+      primaryType: 'museum',
+      provider: 'google',
+      rawTypes: ['museum'],
+      utcOffsetMinutes: 480,
+    },
+  ]);
 });
 
 test('reads the Google API key only from server environment', () => {
@@ -102,6 +164,7 @@ test('Google details concludes the session and asks only for what Trove stores',
       capturedHeaders = new Headers(init?.headers);
 
       return Response.json({
+        attributions: [{ provider: 'Example Data', providerUri: 'https://example.com/source' }],
         displayName: { text: 'Trove Hotel' },
         formattedAddress: '1 Example Street, Singapore',
         googleMapsUri: 'https://maps.google.com/?cid=123',
@@ -134,6 +197,9 @@ test('Google details concludes the session and asks only for what Trove stores',
   expect(place.rawTypes).toStrictEqual(['hotel', 'lodging', 'establishment']);
   expect(place.name).toBe('Trove Hotel');
   expect(place.location).toStrictEqual({ latitude: 1.3, longitude: 103.8 });
+  expect(place.attributions).toStrictEqual([
+    { provider: 'Example Data', providerUri: 'https://example.com/source' },
+  ]);
 });
 
 test('a geocoded address with no displayName falls back to its formatted address as the name', async () => {

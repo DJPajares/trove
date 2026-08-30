@@ -38,6 +38,7 @@ export type RouteEstimate = {
 };
 
 export type RouteProviderErrorCode =
+  | 'budget_exhausted'
   | 'configuration_missing'
   | 'invalid_request'
   | 'provider_unavailable'

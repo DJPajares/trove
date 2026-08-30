@@ -1,6 +1,7 @@
 import { categorizePlaceTypes } from './place-categories.js';
 import {
   providerTargetFingerprint,
+  type ProviderCallBudget,
   recordProviderCall,
   type ProviderCall,
   type ProviderCallSource,
@@ -12,9 +13,12 @@ import {
   type PlaceOpeningPeriod,
   type PlaceOpeningPoint,
   type PlaceSearchRequest,
+  type PlaceTextSearchProvider,
+  type PlaceTextSearchRequest,
   type PlacesProvider,
   type PlaceSuggestion,
   type ProviderPlaceDetails,
+  type ProviderPlaceIdentity,
 } from './places.js';
 
 const DEFAULT_BASE_URL = 'https://places.googleapis.com';
@@ -36,6 +40,7 @@ export const GOOGLE_AUTOCOMPLETE_FIELD_MASK = [
  * request into Place Details Enterprise or Enterprise + Atmosphere.
  */
 export const GOOGLE_PLACE_LOCATION_FIELD_MASK = [
+  'attributions',
   'id',
   'displayName',
   'formattedAddress',
@@ -44,6 +49,18 @@ export const GOOGLE_PLACE_LOCATION_FIELD_MASK = [
   'primaryType',
   'googleMapsUri',
   'utcOffsetMinutes',
+].join(',');
+
+export const GOOGLE_TEXT_SEARCH_FIELD_MASK = [
+  'places.attributions',
+  'places.id',
+  'places.displayName',
+  'places.formattedAddress',
+  'places.location',
+  'places.types',
+  'places.primaryType',
+  'places.googleMapsUri',
+  'places.utcOffsetMinutes',
 ].join(',');
 
 /**
@@ -56,6 +73,7 @@ export const GOOGLE_PLACE_LOCATION_FIELD_MASK = [
  * reach the database. Rating and hours may not be stored at any TTL (PRD 11.4).
  */
 export const GOOGLE_PLACE_EVIDENCE_FIELD_MASK = [
+  'attributions',
   'id',
   'rating',
   'regularOpeningHours',
@@ -88,6 +106,7 @@ type GoogleAutocompleteResponse = {
 };
 
 type GooglePlaceDetails = {
+  attributions?: GoogleAttribution[];
   displayName?: GoogleText;
   formattedAddress?: string;
   googleMapsUri?: string;
@@ -105,6 +124,13 @@ type GooglePlaceDetails = {
   types?: string[];
   utcOffsetMinutes?: number;
 };
+
+type GoogleAttribution = {
+  provider?: string;
+  providerUri?: string;
+};
+
+type GoogleTextSearchResponse = { places?: GooglePlaceDetails[] };
 
 /**
  * Google states opening points as day/hour/minute in the place's local time.
@@ -127,6 +153,7 @@ type GooglePlacesProviderOptions = {
   fetcher?: Fetcher;
   requestTimeoutMs?: number;
   source?: ProviderCallSource;
+  budget?: ProviderCallBudget;
 };
 
 function cleanString(value: unknown) {
@@ -237,7 +264,7 @@ function createSuggestion(prediction: GooglePlacePrediction): PlaceSuggestion | 
   };
 }
 
-function isValidLocationBias(request: PlaceSearchRequest) {
+function isValidLocationBias(request: Pick<PlaceSearchRequest, 'locationBias'>) {
   if (!request.locationBias) {
     return true;
   }
@@ -252,7 +279,49 @@ function isValidLocationBias(request: PlaceSearchRequest) {
   );
 }
 
-export class GooglePlacesProvider implements PlacesProvider {
+function mapAttributions(attributions: GoogleAttribution[] | undefined) {
+  return (attributions ?? []).flatMap((attribution) => {
+    const provider = cleanString(attribution.provider);
+    if (!provider) return [];
+    return [{ provider, providerUri: cleanString(attribution.providerUri) }];
+  });
+}
+
+function mapPlaceIdentity(response: GooglePlaceDetails): ProviderPlaceIdentity | null {
+  const externalPlaceId = cleanString(response.id);
+  const name = cleanString(response.displayName?.text) ?? cleanString(response.formattedAddress);
+  const latitude = response.location?.latitude;
+  const longitude = response.location?.longitude;
+  const hasLocation =
+    typeof latitude === 'number' &&
+    Number.isFinite(latitude) &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    typeof longitude === 'number' &&
+    Number.isFinite(longitude) &&
+    longitude >= -180 &&
+    longitude <= 180;
+  if (!externalPlaceId || !name || !hasLocation) return null;
+
+  const rawTypes = cleanStringList(response.types);
+  const primaryType = cleanString(response.primaryType);
+  return {
+    attributions: mapAttributions(response.attributions),
+    category: categorizePlaceTypes(rawTypes, primaryType),
+    externalPlaceId,
+    formattedAddress: cleanString(response.formattedAddress),
+    googleMapsUri: cleanString(response.googleMapsUri),
+    location: { latitude, longitude },
+    name,
+    primaryType,
+    provider: 'google',
+    rawTypes,
+    utcOffsetMinutes:
+      typeof response.utcOffsetMinutes === 'number' ? response.utcOffsetMinutes : null,
+  };
+}
+
+export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProvider {
   readonly name = 'google' as const;
 
   private readonly apiKey: string;
@@ -260,6 +329,7 @@ export class GooglePlacesProvider implements PlacesProvider {
   private readonly fetcher: Fetcher;
   private readonly requestTimeoutMs: number;
   private readonly source: ProviderCallSource;
+  private readonly budget?: ProviderCallBudget;
 
   constructor(options: GooglePlacesProviderOptions) {
     this.apiKey = options.apiKey.trim();
@@ -267,6 +337,7 @@ export class GooglePlacesProvider implements PlacesProvider {
     this.fetcher = options.fetcher ?? globalThis.fetch;
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.source = options.source ?? 'test';
+    this.budget = options.budget;
   }
 
   private async requestJson<T>(
@@ -276,6 +347,10 @@ export class GooglePlacesProvider implements PlacesProvider {
   ): Promise<T> {
     if (!this.apiKey) {
       throw new PlaceProviderError('configuration_missing');
+    }
+
+    if (this.budget && !this.budget.claim()) {
+      throw new PlaceProviderError('budget_exhausted');
     }
 
     // Counted here rather than in the callers so it records requests that are
@@ -356,6 +431,49 @@ export class GooglePlacesProvider implements PlacesProvider {
       .filter((suggestion): suggestion is PlaceSuggestion => suggestion !== null);
   }
 
+  async textSearch(request: PlaceTextSearchRequest): Promise<ProviderPlaceIdentity[]> {
+    if (!request.textQuery.trim() || !isValidLocationBias(request)) {
+      throw new PlaceProviderError('invalid_request');
+    }
+
+    const response = await this.requestJson<GoogleTextSearchResponse>(
+      new URL('/v1/places:searchText', this.baseUrl),
+      {
+        body: JSON.stringify({
+          languageCode: request.languageCode,
+          locationBias: request.locationBias
+            ? {
+                circle: {
+                  center: {
+                    latitude: request.locationBias.latitude,
+                    longitude: request.locationBias.longitude,
+                  },
+                  radius: request.locationBias.radiusMeters,
+                },
+              }
+            : undefined,
+          pageSize: 2,
+          regionCode: request.regionCode,
+          textQuery: request.textQuery,
+        }),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-FieldMask': GOOGLE_TEXT_SEARCH_FIELD_MASK,
+        },
+        method: 'POST',
+      },
+      {
+        endpoint: '/v1/places:searchText',
+        expectedSku: 'places-text-search-pro',
+        operation: 'textSearch',
+      },
+    );
+
+    return (response.places ?? [])
+      .map(mapPlaceIdentity)
+      .filter((place): place is ProviderPlaceIdentity => place !== null);
+  }
+
   async getDetails(request: PlaceDetailsRequest): Promise<ProviderPlaceDetails> {
     if (
       !request.externalPlaceId.trim() ||
@@ -413,6 +531,7 @@ export class GooglePlacesProvider implements PlacesProvider {
     const openingPeriods = mapOpeningPeriods(response.regularOpeningHours?.periods);
 
     return {
+      attributions: mapAttributions(response.attributions),
       category: categorizePlaceTypes(rawTypes, primaryType),
       externalPlaceId,
       formattedAddress: cleanString(response.formattedAddress),

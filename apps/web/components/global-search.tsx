@@ -212,8 +212,8 @@ export function GlobalSearch({
         closeLabel={t('close')}
         finalFocus={finalFocus}
       >
-        <DialogHeader className="border-b border-border p-5 pr-14 sm:p-6 sm:pr-16">
-          <div className="flex items-start justify-between gap-4">
+        <DialogHeader className="border-b border-border p-5 sm:p-6">
+          <div className="flex items-start justify-between gap-4 pr-8 sm:pr-10">
             <div className="space-y-1">
               <DialogTitle>{t('title')}</DialogTitle>
               <DialogDescription>{t('description')}</DialogDescription>

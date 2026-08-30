@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { usePreferences } from '@/components/preferences-provider';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,8 +33,14 @@ import { floatingActionTriggerClass } from '@/lib/shell/floating-actions';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 
-function getDisplayName(user: User | null, fallback: string) {
+function getDisplayName(
+  user: User | null,
+  profileName: string | null | undefined,
+  fallback: string,
+) {
   if (!user) return fallback;
+
+  if (profileName?.trim()) return profileName.trim();
 
   const metadataName = user.user_metadata?.display_name;
   if (typeof metadataName === 'string' && metadataName.trim()) {
@@ -53,6 +60,7 @@ export function AccountMenu({
   triggerVariant = 'icon',
 }: Readonly<AccountMenuProps> = {}) {
   const t = useTranslations('account');
+  const { profile } = usePreferences();
   const floating = triggerVariant === 'floating';
   const [user, setUser] = useState<User | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -109,7 +117,11 @@ export function AccountMenu({
     }
   }
 
-  const displayName = getDisplayName(user, t('signedOut'));
+  const displayName = getDisplayName(user, profile?.displayName, t('signedOut'));
+  const email =
+    isReady && user?.email?.trim().toLocaleLowerCase() !== displayName.trim().toLocaleLowerCase()
+      ? user?.email
+      : null;
 
   return (
     <>
@@ -130,13 +142,13 @@ export function AccountMenu({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
           <DropdownMenuGroup>
-            <DropdownMenuLabel className="px-2 py-2">
+            <DropdownMenuLabel className="px-2 py-2 tracking-normal normal-case">
               <span className="block truncate text-sm font-semibold text-foreground">
                 {displayName}
               </span>
-              {isReady && user?.email ? (
+              {email ? (
                 <span className="mt-0.5 block truncate text-xs font-normal text-muted-foreground">
-                  {user.email}
+                  {email}
                 </span>
               ) : null}
             </DropdownMenuLabel>

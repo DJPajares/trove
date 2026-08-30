@@ -256,10 +256,12 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
     .slice(0, NEARBY_PLACE_LIMIT)
     .map(({ point }) => point);
   const mapPoints = [...scheduledPoints, ...(basePoint ? [basePoint] : []), ...nearbyPoints];
-  const routePolylines =
-    routeState.data?.segments
-      .map((segment) => segment.encodedPolyline)
-      .filter((polyline): polyline is string => Boolean(polyline)) ?? [];
+  const routeLines =
+    routeState.data?.segments.flatMap((segment) =>
+      segment.encodedPolyline
+        ? [{ encodedPolyline: segment.encodedPolyline, mode: segment.mode }]
+        : [],
+    ) ?? [];
   const routeSummaryData: ItineraryDayRoutes = routeState.data ?? {
     generatedAt: context.contextAt,
     segments: [],
@@ -418,7 +420,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
                 if (tripPlace) openPlaceDetails(tripPlace);
               }}
               points={mapPoints}
-              routePolylines={routePolylines}
+              routeLines={routeLines}
               selectedPointId={selectedPointId}
             />
           ) : (

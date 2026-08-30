@@ -517,11 +517,13 @@ export function ItineraryManager({
         : routesQuery.error
           ? 'error'
           : 'idle';
-  const routePolylines = useMemo(
+  const routeLines = useMemo(
     () =>
-      routes?.segments
-        .map((segment) => segment.encodedPolyline)
-        .filter((polyline): polyline is string => Boolean(polyline)) ?? [],
+      routes?.segments.flatMap((segment) =>
+        segment.encodedPolyline
+          ? [{ encodedPolyline: segment.encodedPolyline, mode: segment.mode }]
+          : [],
+      ) ?? [],
     [routes],
   );
 
@@ -2076,7 +2078,7 @@ export function ItineraryManager({
                           if (tripPlace) setDetailsPlace(tripPlace);
                         }}
                         points={mapPoints}
-                        routePolylines={routePolylines}
+                        routeLines={routeLines}
                         selectedPointId={selectedMapPointId}
                         suspendUpdates={!planningMapVisible}
                       />

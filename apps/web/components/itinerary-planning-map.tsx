@@ -6,6 +6,7 @@ import { useTheme } from 'next-themes';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { PageState } from '@/components/page-state';
+import type { RouteTravelMode } from '@/lib/itinerary/api';
 import { Button } from '@/components/ui/button';
 import {
   getGoogleMapsMapId,
@@ -17,6 +18,7 @@ import {
   type ItineraryMapPoint,
   viewportPoints,
 } from '@/lib/maps/itinerary-map';
+import { routeLineStyle } from '@/lib/maps/route-line-style';
 import { googleMapsCoordinatesHref } from '@/lib/saved/api';
 import { cn } from '@/lib/utils';
 
@@ -42,10 +44,16 @@ type ItineraryPlanningMapProps = {
    */
   onViewPlaceDetails?: (point: ItineraryMapPoint) => void;
   points: ItineraryMapPoint[];
-  routePolylines: string[];
+  /** A day's travel legs, each drawn in the style of the mode it is taken in. */
+  routeLines: RouteLine[];
   selectedPointId: string | null;
   /** Keeps a retained, hidden map from updating its viewport until it is visible again. */
   suspendUpdates?: boolean;
+};
+
+export type RouteLine = {
+  encodedPolyline: string;
+  mode: RouteTravelMode;
 };
 
 type LoadedGoogleMaps = Awaited<ReturnType<typeof loadGoogleMaps>>;
@@ -107,7 +115,7 @@ export function ItineraryPlanningMap({
   onViewItem,
   onViewPlaceDetails,
   points,
-  routePolylines,
+  routeLines,
   selectedPointId,
   suspendUpdates = false,
 }: Readonly<ItineraryPlanningMapProps>) {
@@ -279,27 +287,36 @@ export function ItineraryPlanningMap({
           if (framing.has(point.id)) bounds.extend({ lat: point.latitude, lng: point.longitude });
         });
 
-        const routePaths = routePolylines
-          .map(decodeGooglePolyline)
-          .filter((path) => path.length > 1);
+        const routePaths = routeLines
+          .map((line) => ({ mode: line.mode, path: decodeGooglePolyline(line.encodedPolyline) }))
+          .filter(({ path }) => path.length > 1);
         const routeColor = getComputedStyle(document.documentElement)
           .getPropertyValue('--primary')
           .trim();
-        polylineRefs.current = routePaths.map(
-          (path) =>
-            new maps.Polyline({
-              clickable: false,
-              map: mapRef.current,
-              path: path.map((point) => ({ lat: point.latitude, lng: point.longitude })),
-              strokeColor: routeColor,
-              strokeOpacity: 0.82,
-              strokeWeight: 5,
-              zIndex: 2,
-            }),
-        );
-        routePaths.flat().forEach((point) => {
-          bounds.extend({ lat: point.latitude, lng: point.longitude });
+        polylineRefs.current = routePaths.map(({ mode, path }) => {
+          const { icons, ...stroke } = routeLineStyle(mode);
+          return new maps.Polyline({
+            clickable: false,
+            map: mapRef.current,
+            path: path.map((point) => ({ lat: point.latitude, lng: point.longitude })),
+            strokeColor: routeColor,
+            ...stroke,
+            ...(icons
+              ? {
+                  icons: icons.map(({ icon, repeat }) => ({
+                    icon: { fillColor: routeColor, strokeColor: routeColor, ...icon },
+                    repeat,
+                  })),
+                }
+              : {}),
+            zIndex: 2,
+          });
         });
+        routePaths
+          .flatMap(({ path }) => path)
+          .forEach((point) => {
+            bounds.extend({ lat: point.latitude, lng: point.longitude });
+          });
 
         if (currentLocation) {
           const advancedMarker = new marker.AdvancedMarkerElement({
@@ -325,7 +342,7 @@ export function ItineraryPlanningMap({
     return () => {
       active = false;
     };
-  }, [currentLocation, locale, points, routePolylines, status, suspendUpdates, t]);
+  }, [currentLocation, locale, points, routeLines, status, suspendUpdates, t]);
 
   useEffect(() => {
     if (suspendUpdates) return;

@@ -6,6 +6,7 @@ import {
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
   type ComponentProps,
   type KeyboardEvent,
@@ -25,11 +26,16 @@ import {
 } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
+  applyTimeDigit,
+  canonicalFromDraft,
+  draftFromCanonical,
+  formatSegmentedDraft,
   formatSegmentedTime,
   nearestTimeSegment,
   parseCanonicalTime,
   parseTimeInput,
-  replaceTimePeriod,
+  stepTimeSegment,
+  type TimeDraft,
   type TimeSegmentKind,
 } from '@/lib/time/time-segments';
 import { cn } from '@/lib/utils';
@@ -161,18 +167,30 @@ export function TimeInput({
   const { preferences } = usePreferences();
   const mobile = useMobilePicker();
   const [open, setOpen] = useState(false);
-  const [focused, setFocused] = useState(false);
   const [invalid, setInvalid] = useState(false);
   const [activeSegment, setActiveSegment] = useState<TimeSegmentKind | null>(null);
+  /**
+   * The time being typed. Non-null exactly while the field is focused, and it
+   * is what makes an empty field segmented: a draft always renders segments,
+   * where a bare value only does so once it is already complete.
+   */
+  const [draft, setDraft] = useState<TimeDraft | null>(null);
   const [displayValue, setDisplayValue] = useState(
     () => formatSegmentedTime(value, locale, preferences.timeFormat).text,
   );
+  /**
+   * Digits typed into the current segment but not yet resolved - the `1` of a
+   * `12` that could still turn out to be a lone `1`.
+   */
+  const pendingDigits = useRef<{ digits: string; kind: TimeSegmentKind } | null>(null);
 
   useEffect(() => {
-    if (!focused) {
+    if (!draft) {
       setDisplayValue(formatSegmentedTime(value, locale, preferences.timeFormat).text);
     }
-  }, [focused, locale, preferences.timeFormat, value]);
+  }, [draft, locale, preferences.timeFormat, value]);
+
+  const segmentedDraft = draft ? formatSegmentedDraft(draft, locale, preferences.timeFormat) : null;
 
   function selectTime(nextValue: string) {
     onValueChange(nextValue);
@@ -180,17 +198,8 @@ export function TimeInput({
     setInvalid(false);
   }
 
-  function getCurrentDisplay() {
-    const canonical = parseTimeInput(displayValue, locale) ?? value;
-    return { canonical, ...formatSegmentedTime(canonical, locale, preferences.timeFormat) };
-  }
-
-  function selectSegment(
-    input: HTMLInputElement,
-    kind: TimeSegmentKind,
-    canonical = getCurrentDisplay().canonical,
-  ) {
-    const segment = formatSegmentedTime(canonical, locale, preferences.timeFormat).segments.find(
+  function selectSegment(input: HTMLInputElement, kind: TimeSegmentKind, source: TimeDraft) {
+    const segment = formatSegmentedDraft(source, locale, preferences.timeFormat).segments.find(
       (candidate) => candidate.kind === kind,
     );
     if (!segment) return;
@@ -198,64 +207,162 @@ export function TimeInput({
     window.requestAnimationFrame(() => input.setSelectionRange(segment.start, segment.end));
   }
 
+  /**
+   * A draft only reaches the form once it is a whole time. Anything less
+   * reports empty, so a half-typed field is treated as unset rather than as
+   * some arbitrary hour the traveller never meant to pick.
+   */
+  function applyDraft(next: TimeDraft) {
+    setDraft(next);
+    onValueChange(canonicalFromDraft(next, preferences.timeFormat) ?? '');
+    setInvalid(false);
+  }
+
+  function neighbourSegment(current: TimeDraft, kind: TimeSegmentKind, direction: number) {
+    const segments = formatSegmentedDraft(current, locale, preferences.timeFormat).segments;
+    const index = segments.findIndex((segment) => segment.kind === kind);
+    return index < 0 ? undefined : segments[index + direction];
+  }
+
   function changeOpen(nextOpen: boolean) {
     if (nextOpen && !value) selectTime('09:00');
     setOpen(nextOpen);
+  }
+
+  function typeDigit(
+    input: HTMLInputElement,
+    current: TimeDraft,
+    kind: 'hour' | 'minute',
+    key: string,
+  ) {
+    const buffered = pendingDigits.current?.kind === kind ? pendingDigits.current.digits : '';
+    const { complete, value: settled } = applyTimeDigit(
+      kind,
+      buffered,
+      key,
+      preferences.timeFormat,
+    );
+
+    const next = { ...current, [kind]: settled };
+    applyDraft(next);
+
+    if (complete) {
+      pendingDigits.current = null;
+      const following = neighbourSegment(next, kind, 1);
+      if (following) selectSegment(input, following.kind, next);
+      else selectSegment(input, kind, next);
+    } else {
+      pendingDigits.current = { digits: key, kind };
+      selectSegment(input, kind, next);
+    }
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'ArrowDown' && event.altKey) {
       event.preventDefault();
       setOpen(true);
+      onKeyDown?.(event);
+      return;
     }
 
-    const current = getCurrentDisplay();
+    const current = draft;
+    if (!current) {
+      onKeyDown?.(event);
+      return;
+    }
+
+    const segments = formatSegmentedDraft(current, locale, preferences.timeFormat).segments;
     const selected =
-      current.segments.find((segment) => segment.kind === activeSegment) ??
-      nearestTimeSegment(current.segments, event.currentTarget.selectionStart ?? 0);
-    const selectedIndex = selected ? current.segments.indexOf(selected) : -1;
+      segments.find((segment) => segment.kind === activeSegment) ??
+      nearestTimeSegment(segments, event.currentTarget.selectionStart ?? 0);
 
-    if (selectedIndex >= 0 && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
-      const direction = event.key === 'ArrowLeft' ? -1 : 1;
-      const next = current.segments[selectedIndex + direction];
-      if (next) {
-        event.preventDefault();
-        selectSegment(event.currentTarget, next.kind, current.canonical);
-      }
+    if (!selected) {
+      onKeyDown?.(event);
+      return;
     }
 
-    if (selectedIndex >= 0 && event.key === 'Tab') {
-      const direction = event.shiftKey ? -1 : 1;
-      const next = current.segments[selectedIndex + direction];
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Tab') {
+      const direction =
+        event.key === 'ArrowLeft' || (event.key === 'Tab' && event.shiftKey) ? -1 : 1;
+      const next = neighbourSegment(current, selected.kind, direction);
       if (next) {
         event.preventDefault();
-        selectSegment(event.currentTarget, next.kind, current.canonical);
-      } else {
+        pendingDigits.current = null;
+        selectSegment(event.currentTarget, next.kind, current);
+      } else if (event.key === 'Tab') {
         setActiveSegment(null);
       }
+      onKeyDown?.(event);
+      return;
     }
 
-    if (selected?.kind === 'period' && /^[ap]$/i.test(event.key)) {
-      const nextValue = replaceTimePeriod(
-        current.canonical,
-        event.key.toLocaleLowerCase() === 'a' ? 'am' : 'pm',
-      );
-      if (nextValue) {
-        event.preventDefault();
-        selectTime(nextValue);
-        selectSegment(event.currentTarget, 'period', nextValue);
-      }
-    } else if (selected?.kind === 'period' && /^\d$/.test(event.key)) {
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
       event.preventDefault();
+      pendingDigits.current = null;
+      const delta = event.key === 'ArrowUp' ? 1 : -1;
+      let next: TimeDraft;
+      if (selected.kind === 'period') {
+        next = { ...current, period: current.period === 'am' ? 'pm' : 'am' };
+      } else {
+        next = {
+          ...current,
+          [selected.kind]: stepTimeSegment(
+            selected.kind,
+            current[selected.kind],
+            delta,
+            preferences.timeFormat,
+          ),
+        };
+      }
+      applyDraft(next);
+      selectSegment(event.currentTarget, selected.kind, next);
+      onKeyDown?.(event);
+      return;
+    }
+
+    if (event.key === 'Backspace' || event.key === 'Delete') {
+      event.preventDefault();
+      pendingDigits.current = null;
+      const next = { ...current, [selected.kind]: null };
+      applyDraft(next);
+      selectSegment(event.currentTarget, selected.kind, next);
+      onKeyDown?.(event);
+      return;
+    }
+
+    if (selected.kind === 'period') {
+      if (/^[ap]$/i.test(event.key)) {
+        event.preventDefault();
+        const next = {
+          ...current,
+          period: event.key.toLocaleLowerCase() === 'a' ? ('am' as const) : ('pm' as const),
+        };
+        applyDraft(next);
+        selectSegment(event.currentTarget, 'period', next);
+      } else if (/^\d$/.test(event.key)) {
+        event.preventDefault();
+      }
+      onKeyDown?.(event);
+      return;
+    }
+
+    if (/^\d$/.test(event.key) && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      event.preventDefault();
+      typeDigit(event.currentTarget, current, selected.kind, event.key);
     }
 
     onKeyDown?.(event);
   }
 
   function handleClick(event: MouseEvent<HTMLInputElement>) {
-    const current = getCurrentDisplay();
-    const segment = nearestTimeSegment(current.segments, event.currentTarget.selectionStart ?? 0);
-    if (segment) selectSegment(event.currentTarget, segment.kind, current.canonical);
+    if (draft) {
+      const segments = formatSegmentedDraft(draft, locale, preferences.timeFormat).segments;
+      const segment = nearestTimeSegment(segments, event.currentTarget.selectionStart ?? 0);
+      if (segment) {
+        pendingDigits.current = null;
+        selectSegment(event.currentTarget, segment.kind, draft);
+      }
+    }
     onClick?.(event);
   }
 
@@ -281,48 +388,57 @@ export function TimeInput({
         disabled={disabled}
         id={id}
         onBlur={(event) => {
-          setFocused(false);
+          const current = draft;
+          setDraft(null);
           setActiveSegment(null);
-          const currentFormatted = formatSegmentedTime(value, locale, preferences.timeFormat).text;
-          const parsed =
-            event.currentTarget.value === currentFormatted
-              ? value
-              : parseTimeInput(event.currentTarget.value, locale);
-          if (parsed) selectTime(parsed);
-          else if (!event.currentTarget.value.trim()) {
-            onValueChange('');
-            setInvalid(false);
-          } else {
-            onValueChange('');
-            setInvalid(true);
+          pendingDigits.current = null;
+
+          if (current) {
+            const canonical = canonicalFromDraft(current, preferences.timeFormat);
+            if (canonical) selectTime(canonical);
+            else {
+              // An untouched field is simply empty; a half-typed one is wrong.
+              const untouched =
+                current.hour === null && current.minute === null && current.period === null;
+              onValueChange('');
+              setInvalid(!untouched);
+            }
           }
+
           onBlur?.(event);
         }}
         onChange={(event) => {
-          const nextDisplay = event.target.value;
-          const parsed = parseTimeInput(nextDisplay, locale);
-          setDisplayValue(nextDisplay);
-          setInvalid(Boolean(nextDisplay) && !parsed);
-          onValueChange(parsed ?? '');
+          // Segment keystrokes are handled in `keydown`, so this is the paste
+          // and IME path - a whole time arriving at once.
+          const parsed = parseTimeInput(event.target.value, locale);
+          if (parsed) {
+            applyDraft(draftFromCanonical(parsed, preferences.timeFormat));
+          }
         }}
         onClick={handleClick}
         onFocus={(event) => {
-          setFocused(true);
-          selectSegment(event.currentTarget, 'hour');
+          const next = draftFromCanonical(value, preferences.timeFormat);
+          setDraft(next);
+          pendingDigits.current = null;
+          selectSegment(event.currentTarget, 'hour', next);
           onFocus?.(event);
         }}
         onKeyDown={handleKeyDown}
         placeholder={preferences.timeFormat === '12h' ? t('placeholder12') : t('placeholder24')}
         required={required}
         type="text"
-        value={displayValue}
+        value={segmentedDraft ? segmentedDraft.text : displayValue}
       />
       {value ? (
         <Button
           aria-label={t('clear')}
           className="absolute inset-y-1 right-10"
           disabled={disabled}
-          onClick={() => selectTime('')}
+          onClick={() => {
+            setDraft(null);
+            pendingDigits.current = null;
+            selectTime('');
+          }}
           size="icon-sm"
           type="button"
           variant="ghost"

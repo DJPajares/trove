@@ -1940,7 +1940,6 @@
   },
   "pwaUpdate": {
     "title": "Update available",
-    "description": "Reload to get the latest version of Trove.",
     "reload": "Reload",
     "reloading": "Reloading...",
     "later": "Later"

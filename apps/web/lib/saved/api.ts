@@ -40,12 +40,41 @@ export type CanonicalPlace = {
  * replaces the in-app detail sheet at zero provider cost. `null` for a Place
  * with no Google reference (a custom Place) — callers hide the action then,
  * rather than linking to an ambiguous coordinate search.
+ *
+ * `query` is not optional. Google's Maps URL API treats `query_place_id` as a
+ * refinement of `query`, so a link carrying only the place id resolves to
+ * nothing and opens a blank map. The id still does the real work — it pins the
+ * result to this exact listing — but something has to be searched for, so the
+ * name the provider already gave us goes in the query and the id disambiguates
+ * it. Coordinates are the last resort for the query alone; paired with the id
+ * they still open the place rather than a bare pin.
  */
-export function googleMapsPlaceHref(place: { providerRefs: Array<{ externalPlaceId: string }> }) {
-  const providerId = place.providerRefs[0]?.externalPlaceId;
-  return providerId
-    ? `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(providerId)}`
-    : null;
+export function googleMapsPlaceHref(place: {
+  location?: { latitude: number; longitude: number } | null;
+  name?: string | null;
+  providerAddress?: string | null;
+  providerLabel?: string | null;
+  providerRefs: Array<{ externalPlaceId: string; provider: 'google' }>;
+  snapshot?: Pick<PlaceSnapshot, 'address' | 'googleMapsUri' | 'name'> | null;
+}) {
+  // The provider's own canonical URL for the listing, stored when the Place was
+  // last resolved. Nothing beats it for landing on the right page.
+  if (place.snapshot?.googleMapsUri) return place.snapshot.googleMapsUri;
+
+  const providerId = place.providerRefs.find((ref) => ref.provider === 'google')?.externalPlaceId;
+  if (!providerId) return null;
+
+  const query =
+    place.snapshot?.name ??
+    place.name ??
+    place.providerLabel ??
+    place.snapshot?.address ??
+    place.providerAddress ??
+    (place.location ? `${place.location.latitude},${place.location.longitude}` : null);
+  if (!query) return null;
+
+  const params = new URLSearchParams({ api: '1', query, query_place_id: providerId });
+  return `https://www.google.com/maps/search/?${params.toString()}`;
 }
 
 /**

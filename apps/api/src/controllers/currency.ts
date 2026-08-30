@@ -1,7 +1,8 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
-import { CurrencyProviderError, type CurrencyService } from '../services/currency.js';
+import type { CachedCurrencyService } from '../services/cached-currency.js';
+import { CurrencyProviderError } from '../services/currency.js';
 
 const currencyCodeSchema = z
   .string()
@@ -36,7 +37,7 @@ function sendProviderError(reply: FastifyReply, error: unknown) {
   throw error;
 }
 
-export function createCurrencyControllers(currencyService: CurrencyService) {
+export function createCurrencyControllers(currencyService: CachedCurrencyService) {
   return {
     async listCurrencies(_request: FastifyRequest, reply: FastifyReply) {
       try {
@@ -44,6 +45,19 @@ export function createCurrencyControllers(currencyService: CurrencyService) {
           currencies: await currencyService.getCurrencies(),
           provider: 'frankfurter',
         });
+      } catch (error) {
+        return sendProviderError(reply, error);
+      }
+    },
+
+    /**
+     * The whole daily board in one response. A client that holds it can convert
+     * any pair offline and without a request per keystroke, which is the point
+     * of caching a snapshot rather than a pair.
+     */
+    async getRates(_request: FastifyRequest, reply: FastifyReply) {
+      try {
+        return reply.send(await currencyService.getRateBoard());
       } catch (error) {
         return sendProviderError(reply, error);
       }

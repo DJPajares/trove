@@ -1,5 +1,5 @@
 import { fetchItinerary } from '@/lib/itinerary/api';
-import { getCurrenciesWithCache } from '@/lib/currency/api';
+import { getCurrenciesWithCache, getRateBoardWithCache } from '@/lib/currency/api';
 import { fetchExpenses } from '@/lib/expenses/api';
 import { fetchReservations } from '@/lib/reservations/api';
 import { fetchTasks } from '@/lib/tasks/api';
@@ -100,7 +100,10 @@ export async function prepareTripForOffline(tripId: string) {
 
   try {
     await syncOfflineMutations();
+    // The board covers every pair, so warming it makes the converter work for
+    // any currency the trip turns out to need, not just the ones seen online.
     void getCurrenciesWithCache().catch(() => undefined);
+    void getRateBoardWithCache().catch(() => undefined);
     const [, tripResult] = await Promise.all([
       fetchItinerary(tripId),
       fetchTrip(tripId),

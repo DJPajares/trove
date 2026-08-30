@@ -4,17 +4,25 @@ import { getTranslations } from 'next-intl/server';
 import { themeColor, type ThemeName } from '@/lib/theme-color';
 
 /**
- * The manifest paints the standalone splash screen and, on Android, the system
- * bar of the installed app - which Chrome takes from `theme_color` rather than
- * from the page's `theme-color` meta, so the page cannot correct it afterwards.
- * It therefore has to open on the same ground the app does, which is why the
- * route serving it reads the appearance cookie and the link tag requesting it
- * carries `crossorigin="use-credentials"`: a manifest is fetched without
- * credentials by default, even from its own origin.
+ * The manifest paints the standalone splash screen, which sits outside the
+ * document, so it opens on the ground the appearance cookie names. That is why
+ * the route serving it reads the cookie and the link tag requesting it carries
+ * `crossorigin="use-credentials"`: a manifest is fetched without credentials by
+ * default, even from its own origin.
  *
- * Everything but the two colours is fixed. Chrome identifies an installed app by
- * `id` and `start_url`, so those - and the name and icons around them - stay the
- * same in both themes.
+ * Deliberately no `theme_color`. Android freezes the manifest's colour into the
+ * installed app at install time and never revisits it, so a cookie-driven one
+ * only ever looked right in the theme the traveller happened to install in -
+ * and in the other it painted a bar whose icon contrast still followed the live
+ * page, which is how an install in light mode ended up white-on-white in dark.
+ * With no colour to freeze, the only signal left is `<meta name="theme-color">`,
+ * which `generateViewport` renders from the same cookie and `ThemeColorMeta`
+ * moves with every toggle. A stale splash is a flash; a stale status bar is
+ * unreadable, so only the splash keeps a baked value.
+ *
+ * Everything but `background_color` is fixed. Chrome identifies an installed app
+ * by `id` and `start_url`, so those - and the name and icons around them - stay
+ * the same in both themes.
  */
 export async function buildManifest(theme: ThemeName): Promise<MetadataRoute.Manifest> {
   const [app, navigation] = await Promise.all([
@@ -70,6 +78,5 @@ export async function buildManifest(theme: ThemeName): Promise<MetadataRoute.Man
       { name: navigation('saved'), short_name: navigation('saved'), url: '/saved' },
     ],
     start_url: '/',
-    theme_color: themeColor[theme],
   };
 }

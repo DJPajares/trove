@@ -68,7 +68,8 @@ export async function generateViewport(): Promise<Viewport> {
     // setting does not say which theme Trove is painting; keying the status bar
     // to it left the bar ivory in dark mode. The appearance cookie does say, so
     // the first paint already lands on the right ground and `ThemeColorMeta`
-    // only has to follow a toggle from there.
+    // only has to follow a toggle from there. Since the manifest ships no
+    // `theme_color`, this pair is the whole of what colours the status bar.
     themeColor: themeColor[await getAppearance()],
     // Lets Trove paint to the edges of a notched display. It is also what makes
     // every env(safe-area-inset-*) in the shell resolve to a real value.
@@ -84,10 +85,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body>
         {/* Not `metadata.manifest`: the link Next injects for it cannot carry
             `crossorigin`, and a manifest is fetched without credentials by
-            default even from its own origin. With the cookie, the route can
-            open the installed app on the theme the traveller last chose -
-            which on Android is the only say the app has over its status bar.
-            React hoists the tag into `head`. */}
+            default even from its own origin. With the cookie, the route can open
+            the splash screen on the theme the traveller last chose. The status
+            bar is not the manifest's to say - see `lib/pwa/manifest.ts` for why
+            it carries no `theme_color`. React hoists the tag into `head`. */}
         <link crossOrigin="use-credentials" href="/manifest.webmanifest" rel="manifest" />
         <ThemeProvider>
           <ThemeColorMeta />

@@ -12,8 +12,7 @@
  * centre, and columns two and four sit close enough to that on a 320px screen that a
  * wider mark would overhang the curve.
  *
- * Shared rather than inlined because it has to appear identically here and in
- * `AppMenuTrigger`, which lives in another file.
+ * Shared so every mobile destination uses the same current-page mark.
  */
 export function NavActiveIndicator() {
   return (

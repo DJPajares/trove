@@ -4,7 +4,6 @@ import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
 import { AppHeader } from '@/components/app-header';
-import { AppMenuProvider, AppMenuTrigger } from '@/components/app-menu';
 import { AppearanceToggle } from '@/components/appearance-toggle';
 import { DesktopAppHeader } from '@/components/desktop-app-header';
 import { FloatingActionStack } from '@/components/floating-action-stack';
@@ -45,35 +44,35 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
           actions keep the same edges they have signed in. */}
       {isSignedIn ? <PrimaryNavigation variant="desktop" /> : <span className="hidden md:block" />}
 
-      <div className="flex items-center justify-self-end gap-1">
-        {isSignedIn ? (
-          <AppMenuTrigger variant="desktop" />
-        ) : (
-          <>
-            <AppearanceToggle />
-            {/* On the narrowest screens the wordmark and the primary action
-                need the room. Sign in stays one tap away from the landing
-                hero and from the sign-up page's own link. */}
-            <Button
-              className="ml-1 hidden sm:inline-flex"
-              nativeButton={false}
-              render={<Link href="/sign-in" />}
-              size="sm"
-              variant="ghost"
-            >
-              {auth('signIn')}
-            </Button>
-            <Button
-              nativeButton={false}
-              render={<Link href="/sign-up" />}
-              size="sm"
-              variant="default"
-            >
-              {auth('createAccount')}
-            </Button>
-          </>
-        )}
-      </div>
+      {isSignedIn ? (
+        // Keeps the centre navigation optically centred while the floating
+        // quick actions occupy the header's right rail independently.
+        <span aria-hidden="true" className="hidden md:block" />
+      ) : (
+        <div className="flex items-center justify-self-end gap-1">
+          <AppearanceToggle />
+          {/* On the narrowest screens the wordmark and the primary action
+              need the room. Sign in stays one tap away from the landing
+              hero and from the sign-up page's own link. */}
+          <Button
+            className="ml-1 hidden sm:inline-flex"
+            nativeButton={false}
+            render={<Link href="/sign-in" />}
+            size="sm"
+            variant="ghost"
+          >
+            {auth('signIn')}
+          </Button>
+          <Button
+            nativeButton={false}
+            render={<Link href="/sign-up" />}
+            size="sm"
+            variant="default"
+          >
+            {auth('createAccount')}
+          </Button>
+        </div>
+      )}
     </div>
   );
 
@@ -99,9 +98,9 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
         <AppHeader>{headerContent}</AppHeader>
       )}
 
-      {/* Mobile has no header to hang the everyday controls from, so they float
-          in the upper right instead. Ahead of the main content in the DOM, which
-          is also where a traveller tabbing through the page expects them. */}
+      {/* The everyday controls float in the upper right at every signed-in
+          viewport. Ahead of the main content in the DOM, which is also where a
+          traveller tabbing through the page expects them. */}
       {isSignedIn ? <FloatingActionStack /> : null}
 
       <main
@@ -120,9 +119,5 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
     </div>
   );
 
-  return (
-    <TripCreationProvider enabled={isSignedIn}>
-      {isSignedIn ? <AppMenuProvider>{shell}</AppMenuProvider> : shell}
-    </TripCreationProvider>
-  );
+  return <TripCreationProvider enabled={isSignedIn}>{shell}</TripCreationProvider>;
 }

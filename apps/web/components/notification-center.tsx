@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
 
 type NotificationCenterProps = {
   onNavigate?: () => void;
-  triggerVariant?: 'floating' | 'icon' | 'quickAction';
+  triggerVariant?: 'floating' | 'icon';
 };
 
 export function NotificationCenter({
@@ -45,26 +45,16 @@ export function NotificationCenter({
             className={cn('relative text-foreground', floating && floatingActionTriggerClass)}
             data-translucent-surface={floating ? '' : undefined}
             disabled={status === 'loading'}
-            size={triggerVariant === 'quickAction' ? 'quick-action' : floating ? 'icon' : 'icon-sm'}
+            size={floating ? 'icon' : 'icon-sm'}
             type="button"
             variant="ghost"
           />
         }
       >
-        <Bell
-          aria-hidden="true"
-          className={triggerVariant === 'quickAction' ? 'size-3.5' : floating ? 'size-5' : 'size-4'}
-        />
-        {triggerVariant === 'quickAction' ? <span>{t('centerTitle')}</span> : null}
+        <Bell aria-hidden="true" className={floating ? 'size-5' : 'size-4'} />
         {count ? (
           <Badge
-            className={
-              triggerVariant === 'quickAction'
-                ? 'absolute top-1 right-2'
-                : floating
-                  ? 'absolute top-1 right-1'
-                  : 'absolute top-0.5 right-0.5'
-            }
+            className={floating ? 'absolute top-1 right-1' : 'absolute top-0.5 right-0.5'}
             size="count"
             variant="solid"
           >

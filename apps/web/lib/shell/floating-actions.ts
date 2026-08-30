@@ -1,5 +1,5 @@
 /**
- * The mobile quick-actions stack that unfolds from the floating burger button.
+ * The signed-in quick-actions stack that unfolds from the floating burger button.
  *
  * The order is the hierarchy the traveller reads top to bottom, nearest the
  * trigger first. Search leads because it is the only one that starts something

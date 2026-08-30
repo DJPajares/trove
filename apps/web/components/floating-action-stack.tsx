@@ -31,12 +31,12 @@ const POPUP_SELECTOR =
   '[data-slot="dropdown-menu-content"],[data-slot="popover-content"],[data-slot="sheet-content"],[data-slot="dialog-content"]';
 
 /**
- * The everyday controls, floating in the upper right of the mobile shell.
+ * The everyday controls, floating in the upper right of the signed-in shell.
  *
- * Below `md` the signed-in shell has no header at all — the bottom bar is the
- * only chrome — so these would otherwise sit two taps deep inside the More
- * drawer. The burger unfolds them downwards and turns into an X in the same
- * place, so the way out is where the way in was.
+ * The same trigger serves every viewport. On mobile it stands in for the
+ * absent header; on tablet and desktop it occupies the header's open right
+ * rail. The burger unfolds downwards and turns into an X in the same place, so
+ * the way out is where the way in was.
  */
 export function FloatingActionStack() {
   const t = useTranslations('navigation');
@@ -49,7 +49,7 @@ export function FloatingActionStack() {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
-  // Matches `AppMenuProvider`: an unavailable feed has nothing to count.
+  // An unavailable feed has nothing to count.
   const unreadCount = status === 'unavailable' ? 0 : notifications.length;
 
   const collapse = useCallback(() => setExpanded(false), []);
@@ -76,6 +76,19 @@ export function FloatingActionStack() {
   useEffect(() => {
     setExpanded(false);
   }, [pathname]);
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'k') return;
+
+      event.preventDefault();
+      setExpanded(false);
+      setSearchOpen(true);
+    };
+
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, []);
 
   useEffect(() => {
     if (!expanded) return;
@@ -131,7 +144,7 @@ export function FloatingActionStack() {
   return (
     <>
       <div
-        className="fixed top-[calc(0.75rem+var(--safe-top))] right-[max(0.75rem,var(--safe-right))] z-[var(--layer-notice)] flex flex-col items-end gap-3 transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)] md:hidden"
+        className="fixed top-[calc(0.75rem+var(--safe-top))] right-[max(0.75rem,var(--safe-right))] z-[var(--layer-notice)] flex flex-col items-end gap-3 transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)]"
         onFocusCapture={reveal}
         onKeyDown={(event) => {
           if (event.key !== 'Escape' || !expanded) return;
@@ -156,7 +169,7 @@ export function FloatingActionStack() {
                 ? t('openQuickActionsWithNotifications', { count: unreadCount })
                 : t('openQuickActions')
           }
-          className="relative rounded-full border-border-subtle bg-background/95 text-foreground shadow-[var(--nav-action-shadow)] backdrop-blur focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring supports-[backdrop-filter]:bg-background/90"
+          className="relative rounded-full border-border-subtle bg-background/95 text-foreground shadow-[var(--nav-action-shadow)] backdrop-blur focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring supports-[backdrop-filter]:bg-background/90 md:border-transparent md:bg-transparent md:shadow-none md:backdrop-blur-none md:hover:border-border-subtle md:hover:bg-background/95 md:hover:shadow-[var(--nav-action-shadow)] md:hover:backdrop-blur md:aria-expanded:bg-transparent md:supports-[backdrop-filter]:bg-transparent"
           data-translucent-surface
           onClick={() => (expanded ? collapseAndRestoreFocus() : setExpanded(true))}
           ref={triggerRef}

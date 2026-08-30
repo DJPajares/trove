@@ -1,7 +1,7 @@
 'use client';
 
 import { useSerwist } from '@serwist/turbopack/react';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
@@ -64,34 +64,30 @@ export function PwaUpdatePrompt() {
           transition={{ duration: motionDuration.standard, ease: motionEase }}
         >
           <div
-            className="rounded-[var(--radius-md)] border border-border-subtle bg-popover p-4 text-popover-foreground shadow-[var(--shadow-overlay)]"
+            className="flex items-center gap-2 rounded-[var(--radius-md)] border border-border-subtle bg-popover py-2 pr-2 pl-3 text-popover-foreground shadow-[var(--shadow-overlay)]"
             role="status"
           >
-            <div className="flex gap-3">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
-                <RefreshCw aria-hidden="true" className="size-4" />
-              </span>
-              <div className="grid gap-1">
-                <p className="text-sm font-medium">{t('title')}</p>
-                <p className="text-sm text-pretty text-muted-foreground">{t('description')}</p>
-              </div>
-            </div>
-            <div className="mt-3 flex justify-end gap-2">
-              <Button onClick={() => setDismissed(true)} size="sm" variant="ghost">
-                {t('later')}
-              </Button>
-              <Button
-                disabled={reloading}
-                onClick={() => {
-                  acceptedUpdate.current = true;
-                  setReloading(true);
-                  serwist?.messageSkipWaiting();
-                }}
-                size="sm"
-              >
-                {reloading ? t('reloading') : t('reload')}
-              </Button>
-            </div>
+            <RefreshCw aria-hidden="true" className="size-4 shrink-0 text-brand" />
+            <p className="flex-1 truncate text-sm font-medium">{t('title')}</p>
+            <Button
+              disabled={reloading}
+              onClick={() => {
+                acceptedUpdate.current = true;
+                setReloading(true);
+                serwist?.messageSkipWaiting();
+              }}
+              size="sm"
+            >
+              {reloading ? t('reloading') : t('reload')}
+            </Button>
+            <Button
+              aria-label={t('later')}
+              onClick={() => setDismissed(true)}
+              size="icon-sm"
+              variant="ghost"
+            >
+              <X aria-hidden="true" />
+            </Button>
           </div>
         </motion.div>
       ) : null}

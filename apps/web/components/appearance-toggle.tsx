@@ -10,7 +10,7 @@ import { floatingActionTriggerClass } from '@/lib/shell/floating-actions';
 import { cn } from '@/lib/utils';
 
 type AppearanceToggleProps = {
-  triggerVariant?: 'floating' | 'icon' | 'quickAction';
+  triggerVariant?: 'floating' | 'icon';
 };
 
 export function AppearanceToggle({
@@ -29,19 +29,15 @@ export function AppearanceToggle({
       className={cn('text-foreground', floating && floatingActionTriggerClass)}
       data-translucent-surface={floating ? '' : undefined}
       onClick={() => setAppearance(toggleAppearance(preferences.appearance))}
-      size={triggerVariant === 'quickAction' ? 'quick-action' : floating ? 'icon' : 'icon-sm'}
+      size={floating ? 'icon' : 'icon-sm'}
       title={t(dark ? 'switchToLight' : 'switchToDark')}
       type="button"
       variant={dark ? 'secondary' : 'ghost'}
     >
       <Icon
         aria-hidden="true"
-        className={cn(
-          triggerVariant === 'quickAction' ? 'size-3.5' : floating ? 'size-5' : 'size-4',
-          dark && 'fill-current',
-        )}
+        className={cn(floating ? 'size-5' : 'size-4', dark && 'fill-current')}
       />
-      {triggerVariant === 'quickAction' ? <span>{t('label')}</span> : null}
     </Button>
   );
 }

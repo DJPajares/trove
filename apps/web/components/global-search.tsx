@@ -100,7 +100,6 @@ type GlobalSearchProps = {
    * two never race to open the same dialog.
    */
   open?: boolean;
-  triggerVariant?: 'field' | 'icon';
 };
 
 export function GlobalSearch({
@@ -108,7 +107,6 @@ export function GlobalSearch({
   onNavigate,
   onOpenChange,
   open: openProp,
-  triggerVariant = 'icon',
 }: Readonly<GlobalSearchProps> = {}) {
   const t = useTranslations('globalSearch');
   const controlled = openProp !== undefined;
@@ -204,22 +202,9 @@ export function GlobalSearch({
     <Dialog onOpenChange={setOpen} open={open}>
       {controlled ? null : (
         <DialogTrigger
-          render={
-            <Button
-              aria-label={t('button')}
-              className={
-                triggerVariant === 'field'
-                  ? 'w-full justify-start border-border-strong bg-background text-muted-foreground shadow-none hover:bg-surface-hover hover:text-foreground'
-                  : undefined
-              }
-              size={triggerVariant === 'field' ? 'default' : 'icon'}
-              type="button"
-              variant={triggerVariant === 'field' ? 'outline' : 'ghost'}
-            />
-          }
+          render={<Button aria-label={t('button')} size="icon" type="button" variant="ghost" />}
         >
           <Search aria-hidden="true" className="size-4" />
-          {triggerVariant === 'field' ? <span>{t('button')}</span> : null}
         </DialogTrigger>
       )}
       <DialogContent

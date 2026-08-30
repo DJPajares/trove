@@ -45,7 +45,7 @@ function getDisplayName(user: User | null, fallback: string) {
 
 type AccountMenuProps = {
   onNavigate?: () => void;
-  triggerVariant?: 'floating' | 'icon' | 'quickAction';
+  triggerVariant?: 'floating' | 'icon';
 };
 
 export function AccountMenu({
@@ -53,7 +53,6 @@ export function AccountMenu({
   triggerVariant = 'icon',
 }: Readonly<AccountMenuProps> = {}) {
   const t = useTranslations('account');
-  const navigation = useTranslations('navigation');
   const floating = triggerVariant === 'floating';
   const [user, setUser] = useState<User | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -121,21 +120,13 @@ export function AccountMenu({
               aria-label={t('button')}
               className={cn('text-foreground', floating && floatingActionTriggerClass)}
               data-translucent-surface={floating ? '' : undefined}
-              size={
-                triggerVariant === 'quickAction' ? 'quick-action' : floating ? 'icon' : 'icon-sm'
-              }
+              size={floating ? 'icon' : 'icon-sm'}
               type="button"
               variant="ghost"
             />
           }
         >
-          <UserRound
-            aria-hidden="true"
-            className={
-              triggerVariant === 'quickAction' ? 'size-3.5' : floating ? 'size-5' : 'size-4'
-            }
-          />
-          {triggerVariant === 'quickAction' ? <span>{navigation('account')}</span> : null}
+          <UserRound aria-hidden="true" className={floating ? 'size-5' : 'size-4'} />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
           <DropdownMenuGroup>

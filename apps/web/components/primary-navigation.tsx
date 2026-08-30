@@ -1,22 +1,17 @@
 'use client';
 
-import { Bookmark, House, MapPinned, Plus } from 'lucide-react';
+import { Bookmark, House, MapPinned, Plus, Wrench } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { ComponentType } from 'react';
 
-import { AppMenuTrigger } from '@/components/app-menu';
 import { NavActiveIndicator } from '@/components/nav-active-indicator';
 import { useTripCreation } from '@/components/trip-creation-provider';
 import { Button } from '@/components/ui/button';
 import { navigationTransition } from '@/lib/motion';
-import {
-  isAppMenuPath,
-  isNavigationPathActive,
-  primaryNavigationDestinations,
-} from '@/lib/navigation';
+import { isNavigationPathActive, primaryNavigationDestinations } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 
 type NavigationItem = {
@@ -40,7 +35,7 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
   const pathname = usePathname();
   const t = useTranslations('navigation');
   const { openCreateTrip } = useTripCreation();
-  const icons = { home: House, saved: Bookmark, trips: MapPinned };
+  const icons = { home: House, saved: Bookmark, tools: Wrench, trips: MapPinned };
   const items: NavigationItem[] = primaryNavigationDestinations.map(({ column, href, key }) => ({
     column,
     href,
@@ -124,9 +119,6 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
                 </li>
               );
             })}
-            <li className="col-start-5">
-              <AppMenuTrigger active={isAppMenuPath(pathname)} variant="mobile" />
-            </li>
           </ul>
         </nav>
       </div>

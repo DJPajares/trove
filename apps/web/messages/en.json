@@ -13,17 +13,10 @@
     "trips": "Trips",
     "saved": "Saved",
     "tools": "Tools",
-    "menu": "Menu",
-    "menuDescription": "Your tools and everyday controls.",
-    "openMenu": "Open menu",
-    "openMenuWithNotifications": "Open menu, {count, plural, one {# new notification} other {# new notifications}}",
-    "closeMenu": "Close menu",
     "quickActions": "Quick actions",
     "openQuickActions": "Open quick actions",
     "openQuickActionsWithNotifications": "Open quick actions, {count, plural, one {# new notification} other {# new notifications}}",
     "closeQuickActions": "Close quick actions",
-    "more": "More",
-    "moreWithNotifications": "More, {count, plural, one {# new notification} other {# new notifications}}",
     "search": "Search",
     "notifications": "Notifications",
     "appearance": "Appearance",
@@ -988,7 +981,10 @@
   },
   "tools": {
     "title": "Tools",
-    "description": "Simple utilities for the travel details you need to compare or reuse."
+    "description": "Simple utilities for the travel details you need to compare or reuse.",
+    "currencyUseCase": "Check a price or compare costs while you plan.",
+    "taskTemplatesUseCase": "Keep packing lists and repeatable tasks ready for every trip.",
+    "openTool": "Open {tool}"
   },
   "currency": {
     "title": "Currency",

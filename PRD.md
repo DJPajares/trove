@@ -213,12 +213,15 @@ Primary global destinations:
 - Home
 - Trips
 - Saved
+- Tools
 
-On desktop and tablet, a burger menu in the header opens a right-side Menu drawer. On mobile, the bottom bar contains Home, Trips, a centered Create action, Saved, and More; More opens a tall bottom drawer.
+On desktop and tablet, the header contains Home, Trips, Saved, and Tools. On mobile, the bottom bar contains Home, Trips, a centered Create action, Saved, and Tools. Tools opens a dedicated launcher page and remains the current destination on each child tool route.
 
-The drawer keeps Notifications, the Light/Dark toggle, Account, and Close together in its header. Search is a full-width control below them and opens the existing search dialog. Tools is a visible heading followed by Currency and Task Templates, which open on independent pages without an expand/collapse step. The More label is reserved for mobile.
+Search, Account, Notifications, and the Light/Dark toggle share one floating button in the upper right on every signed-in form factor. The button unfolds them downwards in that order and becomes a close control in the same position. Search leads because it is the only one of the four that starts something rather than reporting on the app.
 
-Mobile has no header to hang the everyday controls from, so Search, Account, Notifications, and the Light/Dark toggle float in the upper right instead, behind a burger button that unfolds them downwards in that order and becomes a close control in the same position. Search leads because it is the only one of the four that starts something rather than reporting on the app. Because all four are already on screen there, the drawer offers its quick-actions group and its search field to desktop and tablet alone; on mobile the drawer is Tools. The floating stack yields to the scroll direction so it never sits on top of a sticky trip or Trip Mode header.
+On mobile, where the signed-in shell has no header, the floating control yields to the scroll direction so it never sits on top of a sticky trip or Trip Mode header. On desktop and tablet, it occupies the header's open right rail and remains available while the stable header is visible.
+
+The Tools launcher introduces Currency and Task Templates through short purpose-led summaries and links to their independent pages. It never embeds every tool interface into one screen.
 
 Trip Mode must not replace global navigation.
 
@@ -327,7 +330,7 @@ Trove
 
 Travel Wallet is optional for the initial MVP if scope or security complexity becomes too large.
 
-Tools is reached through the global Menu or More drawer rather than appearing as a fourth primary navigation destination.
+Tools is the fourth stable global navigation destination. Its launcher provides one clear route to each tool without turning the page into a combined utilities dashboard.
 
 ---
 

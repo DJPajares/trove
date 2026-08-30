@@ -1,7 +1,5 @@
-import { redirect } from 'next/navigation';
-
-import { defaultToolPath } from '@/lib/navigation';
+import { ToolsLauncher } from '@/components/tools-launcher';
 
 export default function ToolsPage() {
-  redirect(defaultToolPath);
+  return <ToolsLauncher />;
 }

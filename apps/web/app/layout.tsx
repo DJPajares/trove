@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Instrument_Sans } from 'next/font/google';
+import { cookies } from 'next/headers';
 import type { ReactNode } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -15,6 +16,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { TroveMotionProvider } from '@/components/trove-motion-provider';
 import { getAuthUserId } from '@/lib/auth/session';
 import { appleStatusBarStyle, themeColor } from '@/lib/theme-color';
+import { APPEARANCE_COOKIE, readAppearanceCookie } from '@/lib/theme-cookie';
 
 const instrumentSans = Instrument_Sans({
   display: 'swap',
@@ -23,16 +25,27 @@ const instrumentSans = Instrument_Sans({
   weight: 'variable',
 });
 
+/**
+ * The theme the status bar should paint, as of the last load. `ThemeColorMeta`
+ * writes the cookie whenever the resolved theme changes, so this is behind by at
+ * most the toggle it corrects on the client.
+ */
+async function getAppearance() {
+  const cookieStore = await cookies();
+
+  return readAppearanceCookie(cookieStore.get(APPEARANCE_COOKIE)?.value);
+}
+
 export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations('app');
+  const [t, theme] = await Promise.all([getTranslations('app'), getAppearance()]);
 
   return {
     applicationName: t('name'),
-    // iOS ignores theme-color in standalone and reads this instead. Like
-    // themeColor above it can only carry the first-paint default; ThemeColorMeta
-    // swaps it to `black` when the app is dark. Without it iOS falls back to an
-    // opaque white bar with dark text in both themes.
-    appleWebApp: { statusBarStyle: appleStatusBarStyle.light, title: t('name') },
+    // iOS ignores theme-color in standalone and reads this instead - once, at
+    // launch, which is why it has to be right in the first byte rather than
+    // corrected on the client. Without it iOS falls back to an opaque white bar
+    // with dark text in both themes.
+    appleWebApp: { statusBarStyle: appleStatusBarStyle[theme], title: t('name') },
     description: t('description'),
     icons: {
       // iOS ignores SVG for the home-screen icon, so point it at the PNG the
@@ -47,19 +60,21 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export const viewport: Viewport = {
-  colorScheme: 'light dark',
-  // One value, not a `prefers-color-scheme` pair. Appearance is a profile field
-  // and `ThemeProvider` runs with `enableSystem={false}`, so the phone's setting
-  // does not say which theme Trove is painting; keying the status bar to it left
-  // the bar ivory in dark mode. `ThemeColorMeta` corrects this on the client
-  // once the theme resolves, so this only has to cover the first paint, where
-  // light is both `defaultTheme` and the profile default.
-  themeColor: themeColor.light,
-  // Lets Trove paint to the edges of a notched display. It is also what makes
-  // every env(safe-area-inset-*) in the shell resolve to a real value.
-  viewportFit: 'cover',
-};
+export async function generateViewport(): Promise<Viewport> {
+  return {
+    colorScheme: 'light dark',
+    // One value, not a `prefers-color-scheme` pair. Appearance is a profile
+    // field and `ThemeProvider` runs with `enableSystem={false}`, so the phone's
+    // setting does not say which theme Trove is painting; keying the status bar
+    // to it left the bar ivory in dark mode. The appearance cookie does say, so
+    // the first paint already lands on the right ground and `ThemeColorMeta`
+    // only has to follow a toggle from there.
+    themeColor: themeColor[await getAppearance()],
+    // Lets Trove paint to the edges of a notched display. It is also what makes
+    // every env(safe-area-inset-*) in the shell resolve to a real value.
+    viewportFit: 'cover',
+  };
+}
 
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   const [locale, authUserId] = await Promise.all([getLocale(), getAuthUserId()]);

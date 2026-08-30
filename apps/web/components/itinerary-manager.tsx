@@ -2214,7 +2214,7 @@ export function ItineraryManager({
                             <NotebookPen aria-hidden="true" className="size-4" />
                           )}
                         </div>
-                        <div className="min-w-0 flex-1">
+                        <div className="flex min-h-9 min-w-0 flex-1 flex-col justify-center">
                           <p className="truncate text-sm font-medium">
                             {form.customLabel || selectedPlaceName}
                           </p>

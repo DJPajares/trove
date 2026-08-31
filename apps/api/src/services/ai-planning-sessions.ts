@@ -61,6 +61,8 @@ export type AiPlanningSessionErrorCode =
   | 'draft_provenance_immutable'
   | 'idempotency_key_required'
   | 'invalid_time_zone'
+  | 'place_unresolved'
+  | 'provider_unavailable'
   | 'invalid_prompt'
   | 'quota_exceeded'
   | 'regenerate_required'
@@ -589,6 +591,54 @@ export async function replaceAiPlanningDraft(
       where: { draftRevision: expectedRevision, id: sessionId, ownerId, status: 'REVIEWING' },
       data: {
         draft: draft as unknown as Prisma.InputJsonValue,
+        draftRevision: { increment: 1 },
+        schemaVersion: AI_PLANNER_SCHEMA_VERSION,
+        warningsAcknowledgedAt: null,
+        warningsAcknowledgedRevision: null,
+      },
+    });
+    if (updated.count !== 1) throw new AiPlanningSessionError('draft_conflict', 409);
+    return transaction.aiPlanningSession.findFirstOrThrow({
+      where: { id: sessionId, ownerId },
+      include: sessionInclude,
+    });
+  });
+  if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
+  return serializeAiPlanningSession(session);
+}
+
+/**
+ * Review evidence and provider identity are server-owned. Review actions build
+ * their next draft on the server, then use this narrow boundary to commit it
+ * under the same optimistic revision contract as a traveller edit. Keeping
+ * this separate from `replaceAiPlanningDraft` means a browser can never submit
+ * its own provenance, attribution, evidence, or warnings.
+ */
+export async function replaceAiPlanningReviewDraft(
+  ownerId: string,
+  sessionId: string,
+  draftInput: unknown,
+  expectedRevision: number,
+  options: PlanningOptions = {},
+) {
+  const prisma = prismaFrom(options);
+  const now = nowFrom(options);
+  const session = await prisma.$transaction(async (transaction) => {
+    await ensureAndLockOwner(transaction, ownerId);
+    const found = await findOwnedSession(transaction, ownerId, sessionId);
+    if (await expireIfNeeded(transaction, found, now)) return SESSION_EXPIRED;
+    if (found.status !== 'REVIEWING' || !found.draft) {
+      throw new AiPlanningSessionError('session_not_reviewable', 409);
+    }
+    if (found.draftRevision !== expectedRevision) {
+      throw new AiPlanningSessionError('draft_conflict', 409);
+    }
+    const validated = validateAiPlannerDraft(draftInput);
+    if (!validated.success) throw new AiPlanningSessionError('draft_invalid', 400);
+    const updated = await transaction.aiPlanningSession.updateMany({
+      where: { draftRevision: expectedRevision, id: sessionId, ownerId, status: 'REVIEWING' },
+      data: {
+        draft: validated.data as unknown as Prisma.InputJsonValue,
         draftRevision: { increment: 1 },
         schemaVersion: AI_PLANNER_SCHEMA_VERSION,
         warningsAcknowledgedAt: null,

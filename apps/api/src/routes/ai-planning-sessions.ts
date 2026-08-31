@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 
 import { createAiPlanningSessionControllers } from '../controllers/ai-planning-sessions.js';
 import { requireAuthenticatedUser } from '../services/request-auth.js';
+import { PROVIDER_FANOUT_RATE_LIMIT } from './rate-limits.js';
 
 export function registerAiPlanningSessionRoutes(app: FastifyInstance) {
   const controllers = createAiPlanningSessionControllers();
@@ -26,6 +27,21 @@ export function registerAiPlanningSessionRoutes(app: FastifyInstance) {
     '/ai/planning-sessions/:sessionId/draft',
     { preHandler: requireAuthenticatedUser },
     controllers.replaceDraft,
+  );
+  app.post(
+    '/ai/planning-sessions/:sessionId/items/:itemId/recheck',
+    { config: PROVIDER_FANOUT_RATE_LIMIT, preHandler: requireAuthenticatedUser },
+    controllers.recheck,
+  );
+  app.post(
+    '/ai/planning-sessions/:sessionId/items/:itemId/replace-place',
+    { config: PROVIDER_FANOUT_RATE_LIMIT, preHandler: requireAuthenticatedUser },
+    controllers.replaceItemPlace,
+  );
+  app.post(
+    '/ai/planning-sessions/:sessionId/places/:placeRefId/verify',
+    { config: PROVIDER_FANOUT_RATE_LIMIT, preHandler: requireAuthenticatedUser },
+    controllers.verifyCustomPlace,
   );
   app.post(
     '/ai/planning-sessions/:sessionId/regenerate',

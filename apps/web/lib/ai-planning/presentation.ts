@@ -24,6 +24,7 @@ export function aiPlanningErrorMessageKey(code: string | null | undefined) {
     case 'content_filtered':
     case 'invalid_prompt':
     case 'invalid_response':
+    case 'place_unresolved':
     case 'provider_unavailable':
     case 'quota_exceeded':
     case 'session_expired':

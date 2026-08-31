@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   createContext,
   useCallback,
@@ -51,6 +52,8 @@ export function useTripCreation() {
 /** One creation sheet follows the signed-in shell, so starting a trip never changes routes. */
 export function TripCreationProvider({ children, enabled }: Readonly<TripCreationProviderProps>) {
   const t = useTranslations('trips');
+  const pathname = usePathname();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [creationMode, setCreationMode] = useState<'ai' | 'manual'>('ai');
@@ -64,9 +67,15 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
 
   useEffect(() => {
     if (!recoveredSession) return;
+    if (recoveredSession.status === 'reviewing') {
+      setOpen(false);
+      const href = `/trips/ai/${recoveredSession.id}`;
+      if (pathname !== href) router.replace(href);
+      return;
+    }
     setCreationMode('ai');
     setOpen(true);
-  }, [recoveredSession]);
+  }, [pathname, recoveredSession, router]);
 
   const recover = useCallback(async () => {
     const result = await recoveryQuery.refetch();

@@ -184,6 +184,14 @@ export const aiPlannerDraftPlaceSchema = z.discriminatedUnion('resolution', [
           .strict(),
       ),
       id: identifierSchema,
+      /** Draft-only map context. It is provider-derived and never client-editable. */
+      location: z
+        .object({
+          latitude: z.number().min(-90).max(90),
+          longitude: z.number().min(-180).max(180),
+        })
+        .strict()
+        .optional(),
       name: labelSchema,
       placeId: z.uuid(),
       provider: z.literal('google'),

@@ -8,8 +8,10 @@ import {
   getAiGenerationEnvironment,
 } from '../src/environment.js';
 
-test('Vertex defaults to ADC and bounded generation settings', () => {
-  expect(getAiGenerationEnvironment({ GOOGLE_VERTEX_PROJECT: ' trove-dev ' })).toStrictEqual({
+test('Vertex uses discoverable ADC and bounded generation settings', () => {
+  expect(
+    getAiGenerationEnvironment({ GOOGLE_VERTEX_PROJECT: ' trove-dev ' }, () => true),
+  ).toStrictEqual({
     maxOutputTokens: DEFAULT_AI_MAX_OUTPUT_TOKENS,
     provider: 'vertex',
     status: 'available',
@@ -25,16 +27,19 @@ test('Vertex defaults to ADC and bounded generation settings', () => {
 
 test('Vertex accepts explicit server credentials and configuration overrides', () => {
   expect(
-    getAiGenerationEnvironment({
-      GOOGLE_VERTEX_CLIENT_EMAIL: ' ai@example.test ',
-      GOOGLE_VERTEX_LOCATION: ' us-central1 ',
-      GOOGLE_VERTEX_PRIVATE_KEY: 'line-one\\nline-two',
-      GOOGLE_VERTEX_PROJECT: 'trove-preview',
-      TROVE_AI_MAX_OUTPUT_TOKENS: '4096',
-      TROVE_AI_MODEL: 'gemini-test',
-      TROVE_AI_PROVIDER: 'vertex',
-      TROVE_AI_TIMEOUT_MS: '45000',
-    }),
+    getAiGenerationEnvironment(
+      {
+        GOOGLE_VERTEX_CLIENT_EMAIL: ' ai@example.test ',
+        GOOGLE_VERTEX_LOCATION: ' us-central1 ',
+        GOOGLE_VERTEX_PRIVATE_KEY: 'line-one\\nline-two',
+        GOOGLE_VERTEX_PROJECT: 'trove-preview',
+        TROVE_AI_MAX_OUTPUT_TOKENS: '4096',
+        TROVE_AI_MODEL: 'gemini-test',
+        TROVE_AI_PROVIDER: 'vertex',
+        TROVE_AI_TIMEOUT_MS: '45000',
+      },
+      () => false,
+    ),
   ).toStrictEqual({
     maxOutputTokens: 4096,
     provider: 'vertex',
@@ -47,6 +52,21 @@ test('Vertex accepts explicit server credentials and configuration overrides', (
       project: 'trove-preview',
     },
   });
+});
+
+test('an unauthenticated Vertex project is a configuration state, not an outage', () => {
+  expect(
+    getAiGenerationEnvironment({ GOOGLE_VERTEX_PROJECT: 'trove-dev' }, () => false),
+  ).toMatchObject({ code: 'configuration_missing', status: 'unavailable' });
+});
+
+test('GOOGLE_APPLICATION_CREDENTIALS is a discoverable ADC source', () => {
+  expect(
+    getAiGenerationEnvironment({
+      GOOGLE_APPLICATION_CREDENTIALS: '/tmp/service-account.json',
+      GOOGLE_VERTEX_PROJECT: 'trove-dev',
+    }),
+  ).toMatchObject({ status: 'available', vertex: { credentials: null } });
 });
 
 test('global and budget switches make AI unavailable before credential validation', () => {
@@ -73,5 +93,8 @@ test.each([
     'configuration_invalid',
   ],
 ])('invalid or incomplete AI configuration is recoverable (%o)', (environment, code) => {
-  expect(getAiGenerationEnvironment(environment)).toMatchObject({ code, status: 'unavailable' });
+  expect(getAiGenerationEnvironment(environment, () => true)).toMatchObject({
+    code,
+    status: 'unavailable',
+  });
 });

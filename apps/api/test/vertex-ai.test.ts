@@ -113,6 +113,38 @@ test('the Vertex adapter normalizes quota errors without retaining SDK request d
   expect(JSON.stringify(error)).not.toContain(secret);
 });
 
+test('an unresolvable credential chain is configuration, not a provider outage', async () => {
+  const model = new MockLanguageModelV4({
+    doGenerate: async () => {
+      throw new Error(
+        'Could not load the default credentials. Browse to https://cloud.google.com/docs/authentication/getting-started for more information.',
+      );
+    },
+  });
+  const provider = new VertexAiGenerationProvider(configuration, { languageModel: model });
+
+  const error = await provider.generateStructured(request()).catch((caught: unknown) => caught);
+
+  expect(error).toBeInstanceOf(AiGenerationProviderError);
+  expect(error).toMatchObject({ code: 'configuration_missing' });
+  expect(JSON.stringify(error)).not.toContain('default credentials');
+});
+
+test('an unrecognized provider error stays a generic outage', async () => {
+  const secret = 'raw-provider-body-and-key';
+  const model = new MockLanguageModelV4({
+    doGenerate: async () => {
+      throw new Error(secret);
+    },
+  });
+  const provider = new VertexAiGenerationProvider(configuration, { languageModel: model });
+
+  const error = await provider.generateStructured(request()).catch((caught: unknown) => caught);
+
+  expect(error).toMatchObject({ code: 'provider_unavailable' });
+  expect(JSON.stringify(error)).not.toContain(secret);
+});
+
 test('the Vertex adapter rejects malformed structured output with a safe code', async () => {
   const model = new MockLanguageModelV4({
     doGenerate: async () => ({

@@ -156,10 +156,17 @@ API deployment's environment, never in `apps/web/.env.local`:
 | `GOOGLE_VERTEX_LOCATION` | Vertex AI location/endpoint. `global` is the default; regional support depends on the selected model. | `global`, `us-central1`, `<supported-region>` |
 | `TROVE_AI_TIMEOUT_MS` | Per-request timeout in milliseconds. Valid range: `1,000–300,000`. | `60000` (default), `120000`, `300000` |
 | `TROVE_AI_MAX_OUTPUT_TOKENS` | Maximum generated tokens. Valid range: `1–65,536`. | `8192` (default), `16384`, `65536` |
-| `GOOGLE_VERTEX_CLIENT_EMAIL` | Optional service-account email. Set it together with the private key, or leave both blank when using ADC. | `vertex-runtime@my-gcp-project.iam.gserviceaccount.com`, *(blank)* |
-| `GOOGLE_VERTEX_PRIVATE_KEY` | Optional service-account private key. Preserve escaped `\\n` line breaks and never commit it. | `"<private-key-with-escaped-newlines>"`, *(blank)* |
+| `GOOGLE_VERTEX_CLIENT_EMAIL` | Service-account email. Set it together with the private key. Both may be left blank only when a Google ADC source is discoverable on the host. | `vertex-runtime@my-gcp-project.iam.gserviceaccount.com`, *(blank)* |
+| `GOOGLE_VERTEX_PRIVATE_KEY` | Service-account private key. Preserve escaped `\\n` line breaks and never commit it. | `"<private-key-with-escaped-newlines>"`, *(blank)* |
 | `TROVE_AI_DISABLED` | Emergency global AI stop. | *(blank)*, `1`, `true` |
 | `TROVE_AI_BUDGET_DISABLED` | Budget kill switch that prevents AI provider usage. | *(blank)*, `1`, `true` |
+
+Leaving the credential pair blank is only valid when the host exposes
+Application Default Credentials — `GOOGLE_APPLICATION_CREDENTIALS`, or a
+`gcloud auth application-default login` on a development machine. Vercel exposes
+neither, so deployments must set the pair. Without a resolvable source the API
+reports `configuration_missing` and disables AI planning rather than spending a
+dispatch on a request that cannot authenticate.
 
 Model IDs and locations are provider-controlled and can change; verify the
 selected combination in Google's [supported models and regions](https://cloud.google.com/vertex-ai/generative-ai/docs/supported-models)

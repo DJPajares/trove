@@ -11,6 +11,10 @@ import {
   regenerateAiPlanningSession,
   replaceAiPlanningDraft,
 } from '../services/ai-planning-sessions.js';
+import {
+  abortActiveAiPlanningSession,
+  runAiPlanningPipeline,
+} from '../services/ai-planning-pipeline.js';
 
 const sessionParamsSchema = z.object({ sessionId: z.uuid() }).strict();
 const promptSchema = z.object({ prompt: z.string() }).strict();
@@ -45,7 +49,49 @@ function handleError(reply: FastifyReply, error: unknown) {
   });
 }
 
-export function createAiPlanningSessionControllers() {
+type DispatchablePlanningSession = {
+  id: string;
+  pendingRunId: string | null;
+  stage: string;
+  status: string;
+};
+
+type PlanningSessionControllerDependencies = {
+  abortSession?: (sessionId: string) => void;
+  getSession?: (ownerId: string, sessionId: string) => Promise<DispatchablePlanningSession>;
+  runPipeline?: (ownerId: string, runId: string) => Promise<void>;
+};
+
+export async function dispatchReservedAiPlanningRun(
+  ownerId: string,
+  session: DispatchablePlanningSession,
+  dependencies: Pick<PlanningSessionControllerDependencies, 'getSession' | 'runPipeline'> = {},
+) {
+  if (
+    session.status !== 'pending' ||
+    session.stage !== 'created' ||
+    session.pendingRunId === null
+  ) {
+    return session;
+  }
+
+  try {
+    await (dependencies.runPipeline ?? runAiPlanningPipeline)(ownerId, session.pendingRunId);
+  } catch (error) {
+    // An idempotent concurrent request may observe the same reservation before
+    // the first request claims it. It must recover the shared session instead
+    // of surfacing a second dispatch attempt as a client error.
+    if (!(error instanceof AiPlanningSessionError) || error.code !== 'run_already_claimed') {
+      throw error;
+    }
+  }
+
+  return (dependencies.getSession ?? getAiPlanningSession)(ownerId, session.id);
+}
+
+export function createAiPlanningSessionControllers(
+  dependencies: PlanningSessionControllerDependencies = {},
+) {
   return {
     async acknowledgeWarnings(request: FastifyRequest, reply: FastifyReply) {
       const userId = getUserId(request, reply);
@@ -77,8 +123,10 @@ export function createAiPlanningSessionControllers() {
         return reply.code(400).send({ code: 'invalid_planning_session_request' });
       }
       try {
+        const session = await cancelAiPlanningSession(userId, params.data.sessionId);
+        (dependencies.abortSession ?? abortActiveAiPlanningSession)(params.data.sessionId);
         return reply.send({
-          session: await cancelAiPlanningSession(userId, params.data.sessionId),
+          session,
         });
       } catch (error) {
         return handleError(reply, error);
@@ -97,8 +145,13 @@ export function createAiPlanningSessionControllers() {
         return reply.code(400).send({ code: 'idempotency_key_required' });
       }
       try {
+        const session = await createAiPlanningSession(
+          userId,
+          body.data.prompt,
+          idempotencyKey.data,
+        );
         return reply.code(202).send({
-          session: await createAiPlanningSession(userId, body.data.prompt, idempotencyKey.data),
+          session: await dispatchReservedAiPlanningRun(userId, session, dependencies),
         });
       } catch (error) {
         return handleError(reply, error);
@@ -140,14 +193,15 @@ export function createAiPlanningSessionControllers() {
         return reply.code(400).send({ code: 'idempotency_key_required' });
       }
       try {
+        const session = await regenerateAiPlanningSession(
+          userId,
+          params.data.sessionId,
+          body.data.prompt,
+          body.data.expectedRevision,
+          idempotencyKey.data,
+        );
         return reply.code(202).send({
-          session: await regenerateAiPlanningSession(
-            userId,
-            params.data.sessionId,
-            body.data.prompt,
-            body.data.expectedRevision,
-            idempotencyKey.data,
-          ),
+          session: await dispatchReservedAiPlanningRun(userId, session, dependencies),
         });
       } catch (error) {
         return handleError(reply, error);

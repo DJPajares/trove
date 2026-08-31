@@ -8,6 +8,11 @@ export function registerAiPlanningSessionRoutes(app: FastifyInstance) {
 
   app.post('/ai/planning-sessions', { preHandler: requireAuthenticatedUser }, controllers.create);
   app.get(
+    '/ai/planning-sessions/availability',
+    { preHandler: requireAuthenticatedUser },
+    controllers.availability,
+  );
+  app.get(
     '/ai/planning-sessions/recovery',
     { preHandler: requireAuthenticatedUser },
     controllers.recover,

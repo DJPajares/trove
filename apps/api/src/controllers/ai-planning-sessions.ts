@@ -6,6 +6,7 @@ import {
   AiPlanningSessionError,
   cancelAiPlanningSession,
   createAiPlanningSession,
+  getAiPlanningAvailability,
   getAiPlanningSession,
   recoverLatestAiPlanningSession,
   regenerateAiPlanningSession,
@@ -102,6 +103,18 @@ export function createAiPlanningSessionControllers(
   dependencies: PlanningSessionControllerDependencies = {},
 ) {
   return {
+    async availability(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+      const availability = await getAiPlanningAvailability(userId);
+      return reply.send({
+        availability: {
+          ...availability,
+          retryAt: availability.retryAt?.toISOString() ?? null,
+        },
+      });
+    },
+
     async apply(request: FastifyRequest, reply: FastifyReply) {
       const userId = getUserId(request, reply);
       const params = sessionParamsSchema.safeParse(request.params);

@@ -217,6 +217,7 @@
       "tryAgain": "Try again",
       "starting": "Starting plan…",
       "cancel": "Cancel planning",
+      "startOver": "Start over",
       "cancelling": "Cancelling…",
       "cancelled": "Planning cancelled. No trip was created.",
       "stages": {
@@ -231,8 +232,8 @@
       "errors": {
         "ai_budget_disabled": "AI planning is paused right now",
         "ai_disabled": "AI planning is unavailable right now",
-        "configuration_invalid": "AI planning is temporarily unavailable",
-        "configuration_missing": "AI planning is temporarily unavailable",
+        "configuration_invalid": "AI planning configuration needs attention",
+        "configuration_missing": "AI planning isn't configured yet",
         "content_filtered": "That request could not be planned",
         "invalid_prompt": "Add a little more detail before generating",
         "invalid_response": "We could not make a usable plan",

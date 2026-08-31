@@ -14,6 +14,7 @@ import {
 } from 'react';
 
 import { AiPlanningComposer } from '@/components/ai-planning-composer';
+import { isAiPlanningSessionGenerating } from '@/lib/ai-planning/presentation';
 import { TripForm } from '@/components/trip-form';
 import {
   Sheet,
@@ -73,6 +74,10 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
       if (pathname !== href) router.replace(href);
       return;
     }
+    // A failed session is still recoverable data (shown once the user opens
+    // "New trip" themselves) but must not force the sheet open on every
+    // navigation with no way to dismiss it — only an in-flight run resumes.
+    if (!isAiPlanningSessionGenerating(recoveredSession.status)) return;
     setCreationMode('ai');
     setOpen(true);
   }, [pathname, recoveredSession, router]);

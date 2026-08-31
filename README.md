@@ -146,7 +146,58 @@ For private Storage bucket and policy setup, see
 ### AI planning (Vertex AI)
 
 AI planning runs only in the API. Set these values in the root `.env` or in the
-API deployment's environment, never in `apps/web/.env.local`:
+API deployment's environment, never in `apps/web/.env.local`.
+
+#### First-time Google Cloud setup
+
+All four steps are required. Each one fails differently, and the next problem
+only becomes visible once the previous step is done, so work through them in
+order.
+
+1. **Create or pick a Google Cloud project** and copy its ID from the
+   [project selector](https://console.cloud.google.com/projectselector/home/dashboard)
+   into `GOOGLE_VERTEX_PROJECT`.
+2. **Enable the Vertex AI API** (`aiplatform.googleapis.com`) for that project
+   from [APIs & Services → Library](https://console.cloud.google.com/apis/library/aiplatform.googleapis.com).
+   Skipping this returns `403 … Agent Platform API has not been used in project
+   … or it is disabled`. Enabling takes a few minutes to propagate.
+3. **Create a service account** under
+   [IAM & Admin → Service Accounts](https://console.cloud.google.com/iam-admin/serviceaccounts),
+   then grant it the **Vertex AI User** role (`roles/aiplatform.user`) from
+   [IAM & Admin → IAM](https://console.cloud.google.com/iam-admin/iam).
+   Without the role, authentication succeeds but every request returns
+   `403 Permission 'aiplatform.endpoints.predict' denied`. Role grants also
+   take a few minutes to propagate.
+4. **Create a JSON key** for that service account (**Keys → Add key → Create new
+   key → JSON**) and copy two fields *out of the downloaded file*:
+
+   | JSON field | Environment key |
+   | --- | --- |
+   | `client_email` | `GOOGLE_VERTEX_CLIENT_EMAIL` |
+   | `private_key` | `GOOGLE_VERTEX_PRIVATE_KEY` |
+
+   `private_key` is the long value beginning `-----BEGIN PRIVATE KEY-----`.
+   **It is not `private_key_id`**, the short hex string the console's Keys tab
+   displays; pasting that instead fails with
+   `error:1E08010C:DECODER routines::unsupported`. Keep the escaped `\n`
+   sequences and the surrounding double quotes exactly as they appear in the
+   JSON, and never commit the key.
+
+Then restart the API — `tsx watch` does not watch `.env`, so saving the file is
+not enough. Verify with `pnpm --filter @trove/api ai:verify`, or check that
+`GET /ai/planning-sessions/availability` reports `available`.
+
+#### Troubleshooting
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `configuration_missing`, AI planning disabled in the UI | No resolvable credentials | Set the credential pair, or provide an ADC source (step 4) |
+| `error:1E08010C:DECODER routines::unsupported` | `private_key_id` pasted instead of `private_key` | Copy `private_key` from the JSON key file (step 4) |
+| `403 … API has not been used in project … or it is disabled` | Vertex AI API not enabled | Enable `aiplatform.googleapis.com` (step 2), then wait a few minutes |
+| `403 Permission 'aiplatform.endpoints.predict' denied` | Service account has no role | Grant **Vertex AI User** (step 3), then wait a few minutes |
+| `configuration_invalid` | Credentials load but Vertex rejects them | Usually step 2 or 3 above; check the API logs for the underlying 403 |
+
+#### Environment keys
 
 | Environment key | Description | Sample values |
 | --- | --- | --- |

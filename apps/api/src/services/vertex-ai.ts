@@ -2,6 +2,7 @@ import { createGoogleVertex, type GoogleVertexProviderSettings } from '@ai-sdk/g
 import {
   APICallError,
   generateText,
+  jsonSchema,
   LoadAPIKeyError,
   LoadSettingError,
   NoObjectGeneratedError,
@@ -10,6 +11,7 @@ import {
   type LanguageModel,
   type LanguageModelUsage,
 } from 'ai';
+import { z, type ZodType } from 'zod';
 
 import {
   AiGenerationProviderError,
@@ -49,6 +51,51 @@ export function getVertexProviderSettings(
         }
       : {}),
   };
+}
+
+type JsonSchemaNode = Record<string, unknown>;
+
+/**
+ * Vertex's responseSchema is narrower than the JSON Schema Zod emits, in two
+ * ways that fail differently:
+ *
+ * - `enum`/`const` is permitted only on STRING, so a numeric `z.literal()`
+ *   makes the whole request a 400 before the model runs.
+ * - `oneOf` is ignored rather than rejected, so a `z.discriminatedUnion()`
+ *   silently loses its shape and comes back as a bare string or `{}`.
+ *
+ * The constraint Vertex cannot enforce moves into the node's description so the
+ * model still sees it. Nothing here relaxes validation: the caller's Zod schema
+ * remains the authority on the response.
+ */
+function adaptNodeForVertex(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(adaptNodeForVertex);
+  if (value === null || typeof value !== 'object') return value;
+
+  const node: JsonSchemaNode = {};
+  for (const [key, nested] of Object.entries(value)) {
+    node[key] = adaptNodeForVertex(nested);
+  }
+
+  if ('oneOf' in node) {
+    node.anyOf = node.oneOf;
+    delete node.oneOf;
+  }
+
+  const allowed = Array.isArray(node.enum) ? node.enum : 'const' in node ? [node.const] : null;
+
+  if (allowed && node.type !== 'string') {
+    delete node.enum;
+    delete node.const;
+    const hint = `Allowed values: ${allowed.map((entry) => JSON.stringify(entry)).join(', ')}.`;
+    node.description = typeof node.description === 'string' ? `${node.description} ${hint}` : hint;
+  }
+
+  return node;
+}
+
+export function vertexResponseSchema(schema: ZodType<unknown>): JsonSchemaNode {
+  return adaptNodeForVertex(z.toJSONSchema(schema, { io: 'output' })) as JsonSchemaNode;
 }
 
 function mapUsage(usage: LanguageModelUsage | undefined): AiGenerationUsage {
@@ -141,7 +188,16 @@ export class VertexAiGenerationProvider implements AiGenerationProvider {
         output: Output.object({
           description: request.schemaDescription,
           name: request.schemaName,
-          schema: request.schema,
+          // `jsonSchema` performs no runtime checking on its own, so the
+          // caller's Zod schema stays the authority through `validate`.
+          schema: jsonSchema<OUTPUT>(vertexResponseSchema(request.schema), {
+            validate: (value) => {
+              const result = request.schema.safeParse(value);
+              return result.success
+                ? { success: true, value: result.data }
+                : { success: false, error: result.error };
+            },
+          }),
         }),
         prompt: request.prompt,
       });

@@ -1,11 +1,112 @@
 import { createBrowserSupabaseClient, getBrowserSession } from '@/lib/supabase/client';
+import type { Trip } from '@/lib/trips/api';
 
 import type { AiPlanningSessionStage, AiPlanningSessionStatus } from './presentation';
+
+export type AiPlanningDraftItem = {
+  blockType: 'activity' | 'free_time' | 'meeting' | 'transport' | 'work';
+  constraintIds: string[];
+  durationMinutes: number;
+  durationProvenance: 'ai_estimated' | 'user_owned';
+  id: string;
+  isAnchor: boolean;
+  label: string;
+  notes: string | null;
+  origin: 'model' | 'user';
+  placeRefId: string | null;
+  priority: 'interested' | 'maybe' | 'must_go' | null;
+  schedule:
+    | { dayPart: 'afternoon' | 'anytime' | 'evening' | 'morning'; kind: 'day_part' }
+    | { kind: 'exact'; localTime: string; source: 'user' };
+};
+
+export type AiPlanningDraft = {
+  assumptions: Array<{
+    code:
+      | 'dates_defaulted'
+      | 'destination_inferred'
+      | 'interest_inferred'
+      | 'pace_defaulted'
+      | 'party_size_defaulted'
+      | 'trip_name_inferred';
+    fieldPath: string;
+    id: string;
+    rationale: string | null;
+    value: boolean | null | number | string | string[];
+  }>;
+  days: Array<{
+    dailyBaseDeparturePlaceRefId: string | null;
+    dailyBasePlaceRefId: string | null;
+    date: string;
+    destinationId: string | null;
+    items: AiPlanningDraftItem[];
+  }>;
+  evidence: Array<{
+    checkedAt: string | null;
+    code: string | null;
+    id: string;
+    kind: 'identity' | 'opening_hours' | 'route';
+    provider: string | null;
+    status: 'conflict' | 'not_checked' | 'unverified' | 'verified';
+    subjectId: string;
+    subjectType: 'destination' | 'item' | 'place' | 'route';
+  }>;
+  normalizedRequest: unknown;
+  places: Array<
+    | {
+        attributions: Array<{ provider: string; providerUri: string | null }>;
+        id: string;
+        location?: { latitude: number; longitude: number };
+        name: string;
+        placeId: string;
+        provider: 'google';
+        resolution: 'verified';
+      }
+    | {
+        id: string;
+        name: string;
+        note: string | null;
+        resolution: 'custom';
+        verification: 'not_checked' | 'unverified';
+      }
+  >;
+  schemaVersion: number;
+  trip: {
+    dateAssumptionId: string | null;
+    dateSource: 'default' | 'user';
+    destinations: Array<{
+      assumptionId: string | null;
+      destinationIntentId: string | null;
+      id: string;
+      placeRefId: string;
+      source: 'model' | 'user';
+    }>;
+    endDate: string;
+    name: string;
+    nameAssumptionId: string | null;
+    nameSource: 'model' | 'user';
+    pace: 'balanced' | 'packed' | 'relaxed';
+    paceAssumptionId: string | null;
+    paceSource: 'default' | 'user';
+    partySize: number;
+    partySizeAssumptionId: string | null;
+    partySizeSource: 'default' | 'user';
+    startDate: string;
+  };
+  unscheduledItems: AiPlanningDraftItem[];
+  warnings: Array<{
+    code: string;
+    evidenceIds: string[];
+    id: string;
+    itemIds: string[];
+    material: boolean;
+  }>;
+};
 
 export type AiPlanningSession = {
   appliedTripId: string | null;
   createdAt: string;
-  draft: unknown | null;
+  draft: AiPlanningDraft | null;
   draftRevision: number;
   expiresAt: string;
   id: string;
@@ -114,6 +215,79 @@ export function cancelAiPlanningSession(sessionId: string) {
     `/ai/planning-sessions/${sessionId}/cancel`,
     {
       body: JSON.stringify({}),
+      method: 'POST',
+    },
+  );
+}
+
+export function replaceAiPlanningDraft(
+  sessionId: string,
+  draft: AiPlanningDraft,
+  expectedRevision: number,
+) {
+  return aiPlanningRequest<{ session: AiPlanningSession }>(
+    `/ai/planning-sessions/${sessionId}/draft`,
+    {
+      body: JSON.stringify({ draft, expectedRevision }),
+      method: 'PATCH',
+    },
+  );
+}
+
+export function acknowledgeAiPlanningWarnings(sessionId: string, revision: number) {
+  return aiPlanningRequest<{ session: AiPlanningSession }>(
+    `/ai/planning-sessions/${sessionId}/warnings/acknowledge`,
+    {
+      body: JSON.stringify({ revision }),
+      method: 'POST',
+    },
+  );
+}
+
+export function applyAiPlanningSession(
+  sessionId: string,
+  expectedRevision: number,
+  deviceTimeZone: string | undefined,
+) {
+  return aiPlanningRequest<{ trip: Trip }>(`/ai/planning-sessions/${sessionId}/apply`, {
+    body: JSON.stringify({ deviceTimeZone, expectedRevision }),
+    method: 'POST',
+  });
+}
+
+export function recheckAiPlanningItem(sessionId: string, itemId: string, expectedRevision: number) {
+  return aiPlanningRequest<{ session: AiPlanningSession }>(
+    `/ai/planning-sessions/${sessionId}/items/${itemId}/recheck`,
+    {
+      body: JSON.stringify({ expectedRevision }),
+      method: 'POST',
+    },
+  );
+}
+
+export function verifyAiPlanningCustomPlace(
+  sessionId: string,
+  placeRefId: string,
+  expectedRevision: number,
+) {
+  return aiPlanningRequest<{ session: AiPlanningSession }>(
+    `/ai/planning-sessions/${sessionId}/places/${placeRefId}/verify`,
+    {
+      body: JSON.stringify({ expectedRevision }),
+      method: 'POST',
+    },
+  );
+}
+
+export function replaceAiPlanningItemPlace(
+  sessionId: string,
+  itemId: string,
+  input: { expectedRevision: number; externalPlaceId: string; sessionToken?: string },
+) {
+  return aiPlanningRequest<{ session: AiPlanningSession }>(
+    `/ai/planning-sessions/${sessionId}/items/${itemId}/replace-place`,
+    {
+      body: JSON.stringify(input),
       method: 'POST',
     },
   );

@@ -70,6 +70,7 @@ test('a unique exact name and locality match becomes a canonical verified place'
   expect(result.place).toStrictEqual({
     attributions: [{ provider: 'Example Data', providerUri: 'https://example.com/source' }],
     id: 'candidate:museum',
+    location: { latitude: 1.2966, longitude: 103.8485 },
     name: 'National Museum',
     placeId: canonicalPlaceId,
     provider: 'google',

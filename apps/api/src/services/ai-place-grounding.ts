@@ -194,6 +194,7 @@ export class AiPlaceGrounder {
       place: {
         attributions: identity.attributions,
         id: candidate.id,
+        location: identity.location,
         name: identity.name,
         placeId: canonical.id,
         provider: 'google',

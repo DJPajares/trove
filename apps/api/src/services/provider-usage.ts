@@ -11,6 +11,7 @@ import { createHash } from 'node:crypto';
  */
 export const PROVIDER_CALL_SOURCES = [
   'ai-planner',
+  'ai-planner-review',
   'currency',
   'editorial-image-reconciliation',
   'editorial-images',

@@ -17,6 +17,11 @@ import {
   runAiPlanningPipeline,
 } from '../services/ai-planning-pipeline.js';
 import { applyAiPlanningSession } from '../services/ai-planning-apply.js';
+import {
+  recheckAiPlanningItem,
+  replaceAiPlanningItemPlace,
+  verifyAiPlanningCustomPlace,
+} from '../services/ai-planning-review.js';
 import { getBearerToken } from '../services/request-auth.js';
 import { getTrip } from '../services/trips.js';
 
@@ -29,6 +34,25 @@ const draftSchema = z
   .object({ draft: z.unknown(), expectedRevision: z.number().int().nonnegative() })
   .strict();
 const acknowledgementSchema = z.object({ revision: z.number().int().nonnegative() }).strict();
+const reviewRevisionSchema = z
+  .object({ expectedRevision: z.number().int().nonnegative() })
+  .strict();
+const reviewItemParamsSchema = sessionParamsSchema.extend({
+  itemId: z.string().trim().min(1).max(120),
+});
+const reviewPlaceParamsSchema = sessionParamsSchema.extend({
+  placeRefId: z.string().trim().min(1).max(120),
+});
+const replacePlaceSchema = reviewRevisionSchema.extend({
+  externalPlaceId: z.string().trim().min(1).max(512),
+  sessionToken: z
+    .string()
+    .trim()
+    .min(1)
+    .max(36)
+    .regex(/^[A-Za-z0-9_-]+$/)
+    .optional(),
+});
 const emptyBodySchema = z.object({}).strict();
 const applySchema = z
   .object({
@@ -255,6 +279,51 @@ export function createAiPlanningSessionControllers(
       }
     },
 
+    async recheck(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = reviewItemParamsSchema.safeParse(request.params);
+      const body = reviewRevisionSchema.safeParse(request.body);
+      if (!userId) return;
+      if (!params.success || !body.success) {
+        return reply.code(400).send({ code: 'invalid_planning_session_request' });
+      }
+      try {
+        return reply.send({
+          session: await recheckAiPlanningItem(
+            userId,
+            params.data.sessionId,
+            params.data.itemId,
+            body.data.expectedRevision,
+          ),
+        });
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
+
+    async replaceItemPlace(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = reviewItemParamsSchema.safeParse(request.params);
+      const body = replacePlaceSchema.safeParse(request.body);
+      if (!userId) return;
+      if (!params.success || !body.success) {
+        return reply.code(400).send({ code: 'invalid_planning_session_request' });
+      }
+      try {
+        return reply.send({
+          session: await replaceAiPlanningItemPlace(
+            userId,
+            params.data.sessionId,
+            params.data.itemId,
+            body.data.expectedRevision,
+            body.data,
+          ),
+        });
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
+
     async replaceDraft(request: FastifyRequest, reply: FastifyReply) {
       const userId = getUserId(request, reply);
       const params = sessionParamsSchema.safeParse(request.params);
@@ -269,6 +338,28 @@ export function createAiPlanningSessionControllers(
             userId,
             params.data.sessionId,
             body.data.draft,
+            body.data.expectedRevision,
+          ),
+        });
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
+
+    async verifyCustomPlace(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = reviewPlaceParamsSchema.safeParse(request.params);
+      const body = reviewRevisionSchema.safeParse(request.body);
+      if (!userId) return;
+      if (!params.success || !body.success) {
+        return reply.code(400).send({ code: 'invalid_planning_session_request' });
+      }
+      try {
+        return reply.send({
+          session: await verifyAiPlanningCustomPlace(
+            userId,
+            params.data.sessionId,
+            params.data.placeRefId,
             body.data.expectedRevision,
           ),
         });

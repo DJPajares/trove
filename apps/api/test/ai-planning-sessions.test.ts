@@ -20,6 +20,7 @@ import {
   recoverLatestAiPlanningSession,
   regenerateAiPlanningSession,
   replaceAiPlanningDraft,
+  replaceAiPlanningReviewDraft,
 } from '../src/services/ai-planning-sessions.js';
 import { customPlaceDraft, explicitDraft } from './fixtures/ai-planning.js';
 
@@ -627,6 +628,45 @@ describe('review draft safety', () => {
     expect(updated).toMatchObject({ draftRevision: 2, warningAcknowledgement: null });
     await expect(
       replaceAiPlanningDraft(OWNER_ID, sessionId, input, 1, {
+        now: () => NOW,
+        prisma: store.prisma,
+      }),
+    ).rejects.toMatchObject({ code: 'draft_conflict', statusCode: 409 });
+  });
+
+  test('server-owned review refreshes use the same revision and acknowledgement boundary', async () => {
+    const store = createPlanningStore();
+    const sessionId = '00000000-0000-4000-8000-000000000061';
+    store.sessions.set(
+      sessionId,
+      makeSession(sessionId, {
+        draft: explicitDraft(),
+        draftRevision: 1,
+        stage: 'REVIEWING',
+        status: 'REVIEWING',
+        warningsAcknowledgedAt: NOW,
+        warningsAcknowledgedRevision: 1,
+      }),
+    );
+    const refreshed = explicitDraft();
+    refreshed.evidence.push({
+      checkedAt: NOW.toISOString(),
+      code: null,
+      id: 'review:evidence',
+      kind: 'opening_hours',
+      provider: 'google',
+      status: 'verified',
+      subjectId: 'item:museum',
+      subjectType: 'item',
+    });
+    await expect(
+      replaceAiPlanningReviewDraft(OWNER_ID, sessionId, refreshed, 1, {
+        now: () => NOW,
+        prisma: store.prisma,
+      }),
+    ).resolves.toMatchObject({ draftRevision: 2, warningAcknowledgement: null });
+    await expect(
+      replaceAiPlanningReviewDraft(OWNER_ID, sessionId, refreshed, 1, {
         now: () => NOW,
         prisma: store.prisma,
       }),

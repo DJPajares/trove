@@ -1,8 +1,18 @@
 'use client';
 
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 
+import { AiPlanningComposer } from '@/components/ai-planning-composer';
 import { TripForm } from '@/components/trip-form';
 import {
   Sheet,
@@ -11,6 +21,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { Tabs, TabsIndicator, TabsList, TabsPanel, TabsTab } from '@/components/ui/tabs';
+import { recoverAiPlanningSession, type AiPlanningSession } from '@/lib/ai-planning/api';
+import { queryKeys } from '@/lib/query/keys';
 import type { Trip } from '@/lib/trips/api';
 
 type TripCreationContextValue = {
@@ -38,9 +51,32 @@ export function useTripCreation() {
 /** One creation sheet follows the signed-in shell, so starting a trip never changes routes. */
 export function TripCreationProvider({ children, enabled }: Readonly<TripCreationProviderProps>) {
   const t = useTranslations('trips');
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [creationMode, setCreationMode] = useState<'ai' | 'manual'>('ai');
   const [latestCreatedTrip, setLatestCreatedTrip] = useState<Trip | null>(null);
-  const openCreateTrip = useCallback(() => setOpen(true), []);
+  const recoveryQuery = useQuery({
+    enabled,
+    queryFn: recoverAiPlanningSession,
+    queryKey: queryKeys.aiPlanningRecovery(),
+  });
+  const recoveredSession = recoveryQuery.data?.session ?? null;
+
+  useEffect(() => {
+    if (!recoveredSession) return;
+    setCreationMode('ai');
+    setOpen(true);
+  }, [recoveredSession]);
+
+  const recover = useCallback(async () => {
+    const result = await recoveryQuery.refetch();
+    return result.data?.session ?? null;
+  }, [recoveryQuery.refetch]);
+  const openCreateTrip = useCallback(() => {
+    setCreationMode('ai');
+    setOpen(true);
+    void recover();
+  }, [recover]);
   const context = useMemo(
     () => (enabled ? { latestCreatedTrip, openCreateTrip } : disabledTripCreationContext),
     [enabled, latestCreatedTrip, openCreateTrip],
@@ -50,6 +86,13 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
     setLatestCreatedTrip(trip);
     setOpen(false);
   }
+
+  const handlePlanningSessionChange = useCallback(
+    (session: AiPlanningSession | null) => {
+      queryClient.setQueryData(queryKeys.aiPlanningRecovery(), { session });
+    },
+    [queryClient],
+  );
 
   return (
     <TripCreationContext.Provider value={context}>
@@ -62,10 +105,34 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
           >
             <SheetHeader className="border-b">
               <SheetTitle>{t('createTitle')}</SheetTitle>
-              <SheetDescription>{t('createDescription')}</SheetDescription>
+              <SheetDescription>{t('aiPlanning.description')}</SheetDescription>
             </SheetHeader>
             {open ? (
-              <TripForm onCancel={() => setOpen(false)} onSaved={handleSaved} trip={null} />
+              <Tabs
+                className="flex min-h-0 flex-1 flex-col gap-4"
+                onValueChange={(value) => setCreationMode(value as 'ai' | 'manual')}
+                value={creationMode}
+              >
+                <TabsList className="mx-5 w-fit" variant="segmented">
+                  <TabsTab value="ai" variant="segmented">
+                    {t('aiPlanning.tab')}
+                  </TabsTab>
+                  <TabsTab value="manual" variant="segmented">
+                    {t('aiPlanning.manualTab')}
+                  </TabsTab>
+                  <TabsIndicator variant="segmented" />
+                </TabsList>
+                <TabsPanel className="flex min-h-0 flex-1 flex-col" value="ai">
+                  <AiPlanningComposer
+                    onRecover={recover}
+                    onSessionChange={handlePlanningSessionChange}
+                    recoveredSession={recoveredSession}
+                  />
+                </TabsPanel>
+                <TabsPanel className="flex min-h-0 flex-1 flex-col" value="manual">
+                  <TripForm onCancel={() => setOpen(false)} onSaved={handleSaved} trip={null} />
+                </TabsPanel>
+              </Tabs>
             ) : null}
           </SheetContent>
         </Sheet>

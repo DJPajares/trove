@@ -9,6 +9,9 @@ import type { TripModeContextRequestOptions } from '@/lib/itinerary/api';
  * a call site is invisible to both, so keys are only ever built here.
  */
 export const queryKeys = {
+  aiPlanningAvailability: () => ['ai-planning', 'availability'] as const,
+  aiPlanningRecovery: () => ['ai-planning', 'recovery'] as const,
+  aiPlanningSession: (sessionId: string) => ['ai-planning', 'session', sessionId] as const,
   currencies: () => ['currency', 'list'] as const,
   currencyRate: (base: string, quote: string) => ['currency', 'rate', base, quote] as const,
 

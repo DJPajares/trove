@@ -13,6 +13,7 @@ import {
   completeAiPlanningRunFailure,
   completeAiPlanningRunSuccess,
   createAiPlanningSession,
+  getAiPlanningAvailability,
   getAiPlanningSession,
   normalizeAiPlanningPrompt,
   prepareAiPlanningDraftEdit,
@@ -335,6 +336,7 @@ describe('planning-session routes', () => {
     const sessionId = '00000000-0000-4000-8000-000000000010';
     const requests = [
       { method: 'POST', url: '/ai/planning-sessions', payload: { prompt: 'Tokyo' } },
+      { method: 'GET', url: '/ai/planning-sessions/availability' },
       { method: 'GET', url: '/ai/planning-sessions/recovery' },
       { method: 'GET', url: `/ai/planning-sessions/${sessionId}` },
       { method: 'PATCH', url: `/ai/planning-sessions/${sessionId}/draft`, payload: {} },
@@ -358,6 +360,47 @@ describe('planning-session routes', () => {
 });
 
 describe('planning-session reservations and recovery', () => {
+  test('reports a safe advisory quota state without provider telemetry', async () => {
+    const store = createPlanningStore();
+    const sessionId = '00000000-0000-4000-8000-000000000010';
+    for (let index = 0; index < 5; index += 1) {
+      store.runs.set(
+        `00000000-0000-4000-8000-${(index + 700).toString().padStart(12, '0')}`,
+        makeRun(
+          `00000000-0000-4000-8000-${(index + 700).toString().padStart(12, '0')}`,
+          sessionId,
+          { dispatchedAt: new Date(NOW.getTime() - (index + 1) * 1_000) },
+        ),
+      );
+    }
+
+    await expect(
+      getAiPlanningAvailability(OWNER_ID, {
+        environment: AVAILABLE_ENVIRONMENT,
+        now: () => NOW,
+        prisma: store.prisma,
+      }),
+    ).resolves.toStrictEqual({
+      code: null,
+      remainingDispatches: 0,
+      retryAt: new Date(NOW.getTime() - 5_000 + AI_PLANNING_DISPATCH_WINDOW_MS),
+      status: 'quota_exhausted',
+    });
+
+    await expect(
+      getAiPlanningAvailability(OWNER_ID, {
+        environment: { TROVE_AI_DISABLED: 'true' },
+        now: () => NOW,
+        prisma: store.prisma,
+      }),
+    ).resolves.toStrictEqual({
+      code: 'ai_disabled',
+      remainingDispatches: null,
+      retryAt: null,
+      status: 'unavailable',
+    });
+  });
+
   test('trims prompts, enforces 10,000 characters, and reuses create idempotency keys', async () => {
     const store = createPlanningStore();
     const key = '00000000-0000-4000-8000-000000000020';

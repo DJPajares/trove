@@ -71,6 +71,16 @@ export type AiPlanningSessionErrorCode =
   | 'session_not_reviewable'
   | 'warnings_not_acknowledged';
 
+export type AiPlanningAvailability = {
+  code: Extract<
+    AiPlanningSessionErrorCode,
+    'ai_budget_disabled' | 'ai_disabled' | 'configuration_invalid' | 'configuration_missing'
+  > | null;
+  remainingDispatches: number | null;
+  retryAt: Date | null;
+  status: 'available' | 'quota_exhausted' | 'unavailable';
+};
+
 export class AiPlanningSessionError extends Error {
   constructor(
     public readonly code: AiPlanningSessionErrorCode,
@@ -96,6 +106,55 @@ export function normalizeAiPlanningPrompt(value: string) {
     throw new AiPlanningSessionError('invalid_prompt', 400);
   }
   return prompt;
+}
+
+/**
+ * A read-only, advisory view of the same limits `claimAiPlanningDispatch`
+ * enforces. It intentionally does not lock the Profile row: another request
+ * may dispatch between this read and a Generate click, and the claim remains
+ * the only authority for that race.
+ */
+export async function getAiPlanningAvailability(
+  ownerId: string,
+  options: PlanningOptions = {},
+): Promise<AiPlanningAvailability> {
+  const configuration = getAiGenerationEnvironment(options.environment);
+  if (configuration.status === 'unavailable') {
+    return {
+      code: configuration.code,
+      remainingDispatches: null,
+      retryAt: null,
+      status: 'unavailable',
+    };
+  }
+
+  const prisma = prismaFrom(options);
+  const now = nowFrom(options);
+  const cutoff = new Date(now.getTime() - AI_PLANNING_DISPATCH_WINDOW_MS);
+  const [dispatched, oldest] = await Promise.all([
+    prisma.aiGenerationRun.count({ where: { dispatchedAt: { gt: cutoff }, ownerId } }),
+    prisma.aiGenerationRun.findFirst({
+      where: { dispatchedAt: { gt: cutoff }, ownerId },
+      orderBy: { dispatchedAt: 'asc' },
+      select: { dispatchedAt: true },
+    }),
+  ]);
+
+  if (dispatched >= AI_PLANNING_DISPATCH_LIMIT) {
+    return {
+      code: null,
+      remainingDispatches: 0,
+      retryAt: new Date((oldest?.dispatchedAt ?? now).getTime() + AI_PLANNING_DISPATCH_WINDOW_MS),
+      status: 'quota_exhausted',
+    };
+  }
+
+  return {
+    code: null,
+    remainingDispatches: AI_PLANNING_DISPATCH_LIMIT - dispatched,
+    retryAt: null,
+    status: 'available',
+  };
 }
 
 function reservationProvider(environment?: Record<string, string | undefined>) {

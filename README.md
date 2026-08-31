@@ -148,16 +148,24 @@ For private Storage bucket and policy setup, see
 AI planning runs only in the API. Set these values in the root `.env` or in the
 API deployment's environment, never in `apps/web/.env.local`:
 
-- `GOOGLE_VERTEX_PROJECT` is the Google Cloud project ID. Find it in the
-  [Google Cloud project selector](https://console.cloud.google.com/projectselector/home/dashboard)
-  or the Vertex AI console.
-- `GOOGLE_VERTEX_LOCATION` is the Vertex AI region. `global` is the default in
-  the example file; use a supported region for the selected model.
-- `TROVE_AI_PROVIDER` remains `vertex`. `TROVE_AI_MODEL` is the approved model
-  identifier from [Vertex AI Model Garden](https://cloud.google.com/vertex-ai/generative-ai/docs/model-garden/explore-models);
-  keep the example default unless the task explicitly approves a change.
-- `TROVE_AI_TIMEOUT_MS` and `TROVE_AI_MAX_OUTPUT_TOKENS` are bounded request
-  limits. Adjust them only when the provider configuration and task require it.
+| Environment key | Description | Sample values |
+| --- | --- | --- |
+| `TROVE_AI_PROVIDER` | Provider adapter. Only `vertex` is currently supported. | `vertex` |
+| `TROVE_AI_MODEL` | Vertex model ID. Use an available model from [Vertex AI Model Garden](https://cloud.google.com/vertex-ai/generative-ai/docs/model-garden/explore-models). | `gemini-3.1-flash-lite` (default), `gemini-<supported-model>` |
+| `GOOGLE_VERTEX_PROJECT` | Required Google Cloud project ID with Vertex AI enabled. Find it in the [Google Cloud project selector](https://console.cloud.google.com/projectselector/home/dashboard). | `trove-prod`, `my-gcp-project` |
+| `GOOGLE_VERTEX_LOCATION` | Vertex AI location/endpoint. `global` is the default; regional support depends on the selected model. | `global`, `us-central1`, `<supported-region>` |
+| `TROVE_AI_TIMEOUT_MS` | Per-request timeout in milliseconds. Valid range: `1,000–300,000`. | `60000` (default), `120000`, `300000` |
+| `TROVE_AI_MAX_OUTPUT_TOKENS` | Maximum generated tokens. Valid range: `1–65,536`. | `8192` (default), `16384`, `65536` |
+| `GOOGLE_VERTEX_CLIENT_EMAIL` | Optional service-account email. Set it together with the private key, or leave both blank when using ADC. | `vertex-runtime@my-gcp-project.iam.gserviceaccount.com`, *(blank)* |
+| `GOOGLE_VERTEX_PRIVATE_KEY` | Optional service-account private key. Preserve escaped `\\n` line breaks and never commit it. | `"<private-key-with-escaped-newlines>"`, *(blank)* |
+| `TROVE_AI_DISABLED` | Emergency global AI stop. | *(blank)*, `1`, `true` |
+| `TROVE_AI_BUDGET_DISABLED` | Budget kill switch that prevents AI provider usage. | *(blank)*, `1`, `true` |
+
+Model IDs and locations are provider-controlled and can change; verify the
+selected combination in Google's [supported models and regions](https://cloud.google.com/vertex-ai/generative-ai/docs/supported-models)
+before deploying. Keep the example defaults unless the task explicitly approves
+a change.
+
 - For local development, prefer [Google Application Default Credentials](https://cloud.google.com/docs/authentication/provide-credentials-adc):
 
   ```bash

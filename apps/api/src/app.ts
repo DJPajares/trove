@@ -4,6 +4,7 @@ import Fastify from 'fastify';
 
 import { getWebOrigins } from './environment.js';
 import { setAiGenerationTelemetrySink } from './services/ai-generation-telemetry.js';
+import { setAiPlanningTelemetrySink } from './services/ai-planning-telemetry.js';
 import { setProviderUsageSink } from './services/provider-usage.js';
 import { registerAuthenticationRoutes } from './routes/auth.js';
 import { registerAiPlanningSessionRoutes } from './routes/ai-planning-sessions.js';
@@ -12,6 +13,7 @@ import { registerEditorialImageRoutes } from './routes/editorial-images.js';
 import { registerExpenseRoutes } from './routes/expenses.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerItineraryRoutes } from './routes/itineraries.js';
+import { registerMaintenanceRoutes } from './routes/maintenance.js';
 import { registerMemoryRoutes } from './routes/memories.js';
 import { registerNotificationRoutes } from './routes/notifications.js';
 import { registerPlacesRoutes } from './routes/places.js';
@@ -129,6 +131,14 @@ export function buildApp() {
     app.log.info(event, 'ai generation');
   });
 
+  // The planner's own operational events: why a dispatch was refused, how much
+  // of a draft Google could identify, and how Apply resolved. Counts and closed
+  // vocabularies only - see `ai-planning-telemetry.ts` for why there is nowhere
+  // in these events to put a place name, a label, or a prompt.
+  setAiPlanningTelemetrySink((event) => {
+    app.log.info(event, 'ai planning');
+  });
+
   // A rate limiter only sees routes registered after it is loaded, so the routes
   // it protects are registered inside a scope that awaits it rather than beside
   // it. Limits are opt-in per route (`global: false`); the provider-backed ones
@@ -157,6 +167,7 @@ export function buildApp() {
     registerMemoryRoutes(instance);
     registerSearchRoutes(instance);
     registerHealthRoutes(instance);
+    registerMaintenanceRoutes(instance);
   });
 
   return app;

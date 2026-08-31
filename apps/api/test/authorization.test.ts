@@ -29,6 +29,15 @@ function createRecordingPrismaClient() {
               ? (operations as (client: unknown) => unknown)(createRecordingPrismaClient())
               : Promise.all(operations as Promise<unknown>[]);
         }
+        // Raw escapes (the `SELECT ... FOR UPDATE` owner lock) are calls on the
+        // client itself rather than on a model, and are recorded the same way so
+        // an ownership filter smuggled into raw SQL is still visible here.
+        if (model.startsWith('$')) {
+          return (...args: unknown[]) => {
+            recorded.push({ args: { raw: args }, method: model, model: '$raw' });
+            return Promise.resolve([]);
+          };
+        }
         return new Proxy(
           {},
           {
@@ -104,12 +113,109 @@ test('trip-scoped reads reject another user and never query without an ownership
   await assertDeniesCrossUserAccess('getTrip', () => getTrip(INTRUDER_ID, '', OWNER_TRIP_ID));
 });
 
-test('AI planning-session recovery hides another user behind the same not-found boundary', async () => {
-  const { getAiPlanningSession } = await import('../src/services/ai-planning-sessions.js');
+const OTHER_SESSION_ID = '00000000-0000-4000-8000-000000000001';
 
-  await assertDeniesCrossUserAccess('getAiPlanningSession', () =>
-    getAiPlanningSession(INTRUDER_ID, '00000000-0000-4000-8000-000000000001'),
+const WRITE_METHODS = new Set(['create', 'delete', 'deleteMany', 'update', 'updateMany', 'upsert']);
+
+/**
+ * Every AI planning entry point must answer for another user's session exactly
+ * as it answers for one that never existed. A distinct "forbidden" would confirm
+ * the session id, so `session_not_found` is the boundary, and the lookup that
+ * reaches that verdict has to carry the requesting user's `ownerId` - a query
+ * that finds the row first and compares afterwards is one refactor away from
+ * leaking it.
+ *
+ * The owner Profile upsert that these paths take to lock the dispatch counter is
+ * deliberately allowed: it writes a row keyed to the *requesting* user, never to
+ * the owner of the session being probed.
+ */
+async function assertHidesAnotherUsersSession(label: string, call: () => Promise<unknown>) {
+  recorded.length = 0;
+
+  await expect(
+    call,
+    `${label} must answer for another user's session as if it did not exist`,
+  ).rejects.toSatisfy(
+    (error: unknown) =>
+      error instanceof Error &&
+      (error as { code?: unknown }).code === 'session_not_found' &&
+      (error as { statusCode?: unknown }).statusCode === 404,
   );
+
+  const lookups = recorded.filter((query) => query.model === 'aiPlanningSession');
+  expect(lookups.length, `${label} must consult the database before answering`).toBeGreaterThan(0);
+
+  const unscoped = lookups.filter((query) => !isScopedToUser(query.args.where, INTRUDER_ID));
+  expect(
+    unscoped.map((query) => `${query.model}.${query.method}: ${JSON.stringify(query.args.where)}`),
+    `${label} must scope every session query to the requesting user`,
+  ).toStrictEqual([]);
+
+  const escapedWrites = recorded.filter(
+    (query) => query.model !== 'profile' && WRITE_METHODS.has(query.method),
+  );
+  expect(
+    escapedWrites.map((query) => `${query.model}.${query.method}`),
+    `${label} must not write anything for a session it cannot see`,
+  ).toStrictEqual([]);
+}
+
+test('every AI planning entry point hides another user behind the not-found boundary', async () => {
+  const {
+    acknowledgeAiPlanningWarnings,
+    cancelAiPlanningSession,
+    getAiPlanningSession,
+    regenerateAiPlanningSession,
+    replaceAiPlanningDraft,
+  } = await import('../src/services/ai-planning-sessions.js');
+  const { recheckAiPlanningItem, replaceAiPlanningItemPlace, verifyAiPlanningCustomPlace } =
+    await import('../src/services/ai-planning-review.js');
+  const { applyAiPlanningSession } = await import('../src/services/ai-planning-apply.js');
+
+  await assertHidesAnotherUsersSession('getAiPlanningSession', () =>
+    getAiPlanningSession(INTRUDER_ID, OTHER_SESSION_ID),
+  );
+  await assertHidesAnotherUsersSession('replaceAiPlanningDraft', () =>
+    replaceAiPlanningDraft(INTRUDER_ID, OTHER_SESSION_ID, {}, 0),
+  );
+  await assertHidesAnotherUsersSession('regenerateAiPlanningSession', () =>
+    regenerateAiPlanningSession(INTRUDER_ID, OTHER_SESSION_ID, 'three days in Tokyo', 0, 'key'),
+  );
+  await assertHidesAnotherUsersSession('acknowledgeAiPlanningWarnings', () =>
+    acknowledgeAiPlanningWarnings(INTRUDER_ID, OTHER_SESSION_ID, 0),
+  );
+  await assertHidesAnotherUsersSession('cancelAiPlanningSession', () =>
+    cancelAiPlanningSession(INTRUDER_ID, OTHER_SESSION_ID),
+  );
+  await assertHidesAnotherUsersSession('recheckAiPlanningItem', () =>
+    recheckAiPlanningItem(INTRUDER_ID, OTHER_SESSION_ID, 'item-id', 0),
+  );
+  await assertHidesAnotherUsersSession('replaceAiPlanningItemPlace', () =>
+    replaceAiPlanningItemPlace(INTRUDER_ID, OTHER_SESSION_ID, 'item-id', 0, {
+      externalPlaceId: 'places/intruding',
+    }),
+  );
+  await assertHidesAnotherUsersSession('verifyAiPlanningCustomPlace', () =>
+    verifyAiPlanningCustomPlace(INTRUDER_ID, OTHER_SESSION_ID, 'place-ref-id', 0),
+  );
+  await assertHidesAnotherUsersSession('applyAiPlanningSession', () =>
+    applyAiPlanningSession(INTRUDER_ID, OTHER_SESSION_ID, 0, 'UTC'),
+  );
+});
+
+test("AI planning recovery returns nothing rather than another user's session", async () => {
+  const { recoverLatestAiPlanningSession } =
+    await import('../src/services/ai-planning-sessions.js');
+
+  recorded.length = 0;
+  await expect(recoverLatestAiPlanningSession(INTRUDER_ID)).resolves.toBeNull();
+
+  const lookups = recorded.filter((query) => query.model === 'aiPlanningSession');
+  expect(lookups.length, 'recovery must query the database').toBeGreaterThan(0);
+  expect(
+    lookups.filter((query) => !isScopedToUser(query.args.where, INTRUDER_ID)),
+    'recovery must scope every session query to the requesting user',
+  ).toStrictEqual([]);
 });
 
 test('trip-scoped mutations reject another user before writing', async () => {

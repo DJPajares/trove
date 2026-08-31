@@ -3,6 +3,10 @@ import type { AiPlannerDraft } from '@trove/types';
 import { describe, expect, test } from 'vitest';
 
 import { applyAiPlanningSession } from '../src/services/ai-planning-apply.js';
+import {
+  setAiPlanningTelemetrySink,
+  type AiPlanningTelemetryEvent,
+} from '../src/services/ai-planning-telemetry.js';
 import { customPlaceDraft, explicitDraft } from './fixtures/ai-planning.js';
 
 const OWNER_ID = '00000000-0000-4000-8000-000000000001';
@@ -321,6 +325,48 @@ describe('AI planning Apply', () => {
     store.state.sessions[0]!.warningsAcknowledgedAt = NOW;
     store.state.sessions[0]!.warningsAcknowledgedRevision = 1;
     await expect(apply(store)).resolves.toHaveProperty('tripId');
+  });
+
+  test('reports each Apply outcome as a content-free telemetry event', async () => {
+    const events: AiPlanningTelemetryEvent[] = [];
+    setAiPlanningTelemetrySink((event) => events.push(event));
+
+    try {
+      const draft = explicitDraft();
+      draft.warnings.push({
+        code: 'route_conflict',
+        evidenceIds: [],
+        id: 'warning:material',
+        itemIds: ['item:meeting'],
+        material: true,
+      });
+      const store = createApplyStore(draft);
+
+      await expect(apply(store)).rejects.toMatchObject({ code: 'warnings_not_acknowledged' });
+
+      store.state.sessions[0]!.warningsAcknowledgedAt = NOW;
+      store.state.sessions[0]!.warningsAcknowledgedRevision = 1;
+      const applied = await apply(store);
+
+      store.state.sessions[0]!.expiresAt = new Date(NOW.getTime() - 1);
+      const replayed = await apply(store, { revision: 999 });
+      expect(replayed).toStrictEqual(applied);
+    } finally {
+      setAiPlanningTelemetrySink(null);
+    }
+
+    // A replay is the idempotency path working, so it must be distinguishable
+    // from a first Apply on a dashboard rather than inflating the applied count.
+    expect(events).toStrictEqual([
+      {
+        code: 'warnings_not_acknowledged',
+        kind: 'apply_completed',
+        occurredAt: NOW.toISOString(),
+        outcome: 'rejected',
+      },
+      { code: null, kind: 'apply_completed', occurredAt: NOW.toISOString(), outcome: 'applied' },
+      { code: null, kind: 'apply_completed', occurredAt: NOW.toISOString(), outcome: 'replayed' },
+    ]);
   });
 
   test('serializes concurrent retries to exactly one Trip', async () => {

@@ -13,6 +13,10 @@ import {
 } from '../environment.js';
 import type { AiGenerationErrorCode, AiGenerationMetadata } from './ai-generation.js';
 import { validateAiPlannerDraft, validateAiPlannerEditedDraft } from './ai-planning-rules.js';
+import {
+  recordAiPlanningDispatchRejected,
+  type AiPlanningDispatchRejectionCode,
+} from './ai-planning-telemetry.js';
 
 export const AI_PLANNING_PROMPT_MAX_LENGTH = 10_000;
 export const AI_PLANNING_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
@@ -863,10 +867,12 @@ export async function claimAiPlanningDispatch(
   });
 
   if (outcome.kind === 'unavailable') {
+    recordAiPlanningDispatchRejected(outcome.code as AiPlanningDispatchRejectionCode, now);
     throw new AiPlanningSessionError(outcome.code, 503);
   }
   if (outcome.kind === 'expired') throw new AiPlanningSessionError('session_expired', 410);
   if (outcome.kind === 'quota') {
+    recordAiPlanningDispatchRejected('quota_exceeded', now);
     throw new AiPlanningSessionError('quota_exceeded', 429, outcome.retryAt);
   }
   return outcome.value;

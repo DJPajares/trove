@@ -1,4 +1,5 @@
-import { dirname, resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { config } from 'dotenv';
@@ -76,11 +77,36 @@ function parseBoundedInteger(
 }
 
 /**
+ * Google resolves Application Default Credentials lazily, inside the first
+ * generation request, so an unauthenticated environment would otherwise read as
+ * `available` and only fail after a dispatch was spent. Detecting the ADC source
+ * up front keeps the missing credential a configuration state.
+ *
+ * Metadata-server credentials on GCE and Cloud Run cannot be detected
+ * synchronously. The API deploys to Vercel, which has no metadata server, so a
+ * GCP host must set the explicit credential pair or GOOGLE_APPLICATION_CREDENTIALS.
+ */
+function detectApplicationDefaultCredentials(environment: Record<string, string | undefined>) {
+  if (environment.GOOGLE_APPLICATION_CREDENTIALS?.trim()) return true;
+
+  const configRoot = environment.CLOUDSDK_CONFIG?.trim()
+    ? environment.CLOUDSDK_CONFIG.trim()
+    : environment.APPDATA?.trim()
+      ? join(environment.APPDATA.trim(), 'gcloud')
+      : environment.HOME?.trim()
+        ? join(environment.HOME.trim(), '.config', 'gcloud')
+        : null;
+
+  return configRoot ? existsSync(join(configRoot, 'application_default_credentials.json')) : false;
+}
+
+/**
  * AI configuration is API-only. Disabled and invalid environments become a
  * recoverable gateway state rather than preventing the manual app from booting.
  */
 export function getAiGenerationEnvironment(
   environment: Record<string, string | undefined> = process.env,
+  hasApplicationDefaultCredentials = detectApplicationDefaultCredentials,
 ): AiEnvironment {
   const timeoutMs = parseBoundedInteger(
     environment.TROVE_AI_TIMEOUT_MS,
@@ -152,6 +178,15 @@ export function getAiGenerationEnvironment(
   if (Boolean(clientEmail) !== Boolean(privateKey)) {
     return {
       code: 'configuration_invalid',
+      maxOutputTokens,
+      status: 'unavailable',
+      timeoutMs,
+    };
+  }
+
+  if (!clientEmail && !privateKey && !hasApplicationDefaultCredentials(environment)) {
+    return {
+      code: 'configuration_missing',
       maxOutputTokens,
       status: 'unavailable',
       timeoutMs,

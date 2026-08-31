@@ -61,6 +61,19 @@ function mapUsage(usage: LanguageModelUsage | undefined): AiGenerationUsage {
   };
 }
 
+/**
+ * google-auth-library reports an unresolvable credential chain as a bare Error,
+ * so it reaches this mapper untyped and would otherwise be classified as a
+ * transient outage. The message is read only to pick a code and is never
+ * retained: the returned error carries the code alone.
+ */
+const CREDENTIAL_RESOLUTION_FAILURE =
+  /could not load the default credentials|unable to detect a project id/i;
+
+function isCredentialResolutionFailure(error: unknown) {
+  return error instanceof Error && CREDENTIAL_RESOLUTION_FAILURE.test(error.message);
+}
+
 function mapVertexError(error: unknown) {
   if (NoObjectGeneratedError.isInstance(error)) {
     return new AiGenerationProviderError(
@@ -90,6 +103,10 @@ function mapVertexError(error: unknown) {
     if (error.statusCode !== undefined && error.statusCode >= 400 && error.statusCode < 500) {
       return new AiGenerationProviderError('invalid_response');
     }
+  }
+
+  if (isCredentialResolutionFailure(error)) {
+    return new AiGenerationProviderError('configuration_missing');
   }
 
   return new AiGenerationProviderError('provider_unavailable');

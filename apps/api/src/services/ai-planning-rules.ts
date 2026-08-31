@@ -554,7 +554,7 @@ function hardConstraintIssues(draft: AiPlannerDraft, items: LocatedDraftItem[]) 
   return issues;
 }
 
-function draftRuleIssues(draft: AiPlannerDraft) {
+function draftRuleIssues(draft: AiPlannerDraft, allowReviewEdits = false) {
   const issues: AiPlannerRuleIssue[] = [];
   const items = allDraftItems(draft);
   const placeIds = new Set(draft.places.map((place) => place.id));
@@ -689,12 +689,14 @@ function draftRuleIssues(draft: AiPlannerDraft) {
       }
     });
     if (
+      !allowReviewEdits &&
       item.schedule.kind === 'exact' &&
       (item.origin === 'model' || !hasUserTimeConstraint(item, constraints))
     ) {
       issues.push({ code: 'invented_exact_time', path: [...path, 'schedule'], subjectId: item.id });
     }
     if (
+      !allowReviewEdits &&
       item.durationProvenance === 'user_owned' &&
       (item.origin === 'model' || !hasUserDurationConstraint(item, constraints))
     ) {
@@ -705,6 +707,7 @@ function draftRuleIssues(draft: AiPlannerDraft) {
       });
     }
     if (
+      !allowReviewEdits &&
       item.priority === 'must_go' &&
       (item.origin === 'model' || !hasUserMustGoConstraint(item, constraints))
     ) {
@@ -776,5 +779,26 @@ export function validateAiPlannerDraft(value: unknown): AiPlannerValidationResul
   }
 
   const issues = draftRuleIssues(parsed.data);
+  return issues.length > 0 ? { issues, success: false } : { data: parsed.data, success: true };
+}
+
+/**
+ * Review edits are still contract- and rule-validated, but fields explicitly
+ * changed by a person may carry user ownership even when the original item was
+ * proposed by the model. The planning-session service separately enforces the
+ * immutable server-owned fields and only enables this mode after that check.
+ */
+export function validateAiPlannerEditedDraft(
+  value: unknown,
+): AiPlannerValidationResult<AiPlannerDraft> {
+  const parsed = parseAiPlannerDraft(value);
+  if (!parsed.success) {
+    return {
+      issues: parsed.issues.map((issue) => ({ code: issue.code, path: issue.path })),
+      success: false,
+    };
+  }
+
+  const issues = draftRuleIssues(parsed.data, true);
   return issues.length > 0 ? { issues, success: false } : { data: parsed.data, success: true };
 }

@@ -6,6 +6,7 @@ import { getWebOrigins } from './environment.js';
 import { setAiGenerationTelemetrySink } from './services/ai-generation-telemetry.js';
 import { setProviderUsageSink } from './services/provider-usage.js';
 import { registerAuthenticationRoutes } from './routes/auth.js';
+import { registerAiPlanningSessionRoutes } from './routes/ai-planning-sessions.js';
 import { registerCurrencyRoutes } from './routes/currency.js';
 import { registerEditorialImageRoutes } from './routes/editorial-images.js';
 import { registerExpenseRoutes } from './routes/expenses.js';
@@ -136,6 +137,7 @@ export function buildApp() {
     await instance.register(rateLimit, { global: false });
 
     registerAuthenticationRoutes(instance);
+    registerAiPlanningSessionRoutes(instance);
     registerCurrencyRoutes(instance);
     registerWeatherRoutes(instance);
     registerPlacesRoutes(instance);

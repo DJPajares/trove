@@ -901,23 +901,28 @@ model AiPlanningSession {
 }
 
 model AiGenerationRun {
-  id           String                @id @default(uuid(7)) @db.Uuid
-  sessionId    String                @map("session_id") @db.Uuid
-  ownerId      String                @map("owner_id") @db.Uuid
-  provider     String                @db.VarChar(120)
-  model        String                @db.VarChar(120)
-  inputTokens  Int?                  @map("input_tokens")
-  outputTokens Int?                  @map("output_tokens")
-  totalTokens  Int?                  @map("total_tokens")
-  latencyMs    Int?                  @map("latency_ms")
-  result       AiGenerationRunResult @default(PENDING)
-  errorCode    String?               @map("error_code") @db.VarChar(120)
-  completedAt  DateTime?             @map("completed_at") @db.Timestamptz(3)
-  createdAt    DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  id                String                @id @default(uuid(7)) @db.Uuid
+  sessionId         String                @map("session_id") @db.Uuid
+  ownerId           String                @map("owner_id") @db.Uuid
+  idempotencyKey    String                @map("idempotency_key") @db.Uuid
+  baseDraftRevision Int                   @default(0) @map("base_draft_revision")
+  provider          String                @db.VarChar(120)
+  model             String                @db.VarChar(120)
+  inputTokens       Int?                  @map("input_tokens")
+  outputTokens      Int?                  @map("output_tokens")
+  totalTokens       Int?                  @map("total_tokens")
+  latencyMs         Int?                  @map("latency_ms")
+  result            AiGenerationRunResult @default(PENDING)
+  errorCode         String?               @map("error_code") @db.VarChar(120)
+  dispatchedAt      DateTime?             @map("dispatched_at") @db.Timestamptz(3)
+  completedAt       DateTime?             @map("completed_at") @db.Timestamptz(3)
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
 
   session AiPlanningSession @relation(fields: [sessionId, ownerId], references: [id, ownerId], onDelete: Cascade)
   owner   Profile           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
+  @@unique([ownerId, idempotencyKey])
+  @@index([ownerId, dispatchedAt])
   @@index([ownerId, createdAt])
   @@index([sessionId, createdAt])
   @@index([sessionId, ownerId])

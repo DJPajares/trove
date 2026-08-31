@@ -352,7 +352,7 @@ export function AiPlanningComposer({
       </div>
 
       <SheetFooter className="gap-3 sm:flex-row sm:items-center sm:justify-between">
-        {generating && session ? (
+        {session && (generating || session.status === 'failed') ? (
           <Button
             disabled={operation === 'cancelling'}
             onClick={handleCancel}
@@ -360,7 +360,11 @@ export function AiPlanningComposer({
             variant="ghost"
           >
             <X aria-hidden="true" data-icon="inline-start" />
-            {operation === 'cancelling' ? t('cancelling') : t('cancel')}
+            {operation === 'cancelling'
+              ? t('cancelling')
+              : session.status === 'failed'
+                ? t('startOver')
+                : t('cancel')}
           </Button>
         ) : (
           <span />

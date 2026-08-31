@@ -104,6 +104,14 @@ test('trip-scoped reads reject another user and never query without an ownership
   await assertDeniesCrossUserAccess('getTrip', () => getTrip(INTRUDER_ID, '', OWNER_TRIP_ID));
 });
 
+test('AI planning-session recovery hides another user behind the same not-found boundary', async () => {
+  const { getAiPlanningSession } = await import('../src/services/ai-planning-sessions.js');
+
+  await assertDeniesCrossUserAccess('getAiPlanningSession', () =>
+    getAiPlanningSession(INTRUDER_ID, '00000000-0000-4000-8000-000000000001'),
+  );
+});
+
 test('trip-scoped mutations reject another user before writing', async () => {
   const { addTripPlace, removeTripPlace, updateTripPlace } =
     await import('../src/services/trip-places.js');

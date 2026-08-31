@@ -7,6 +7,7 @@ import { AiGenerationProviderError } from '../src/services/ai-generation.js';
 import {
   getVertexProviderSettings,
   VertexAiGenerationProvider,
+  vertexResponseSchema,
 } from '../src/services/vertex-ai.js';
 
 const configuration = {
@@ -143,6 +144,67 @@ test('an unrecognized provider error stays a generic outage', async () => {
 
   expect(error).toMatchObject({ code: 'provider_unavailable' });
   expect(JSON.stringify(error)).not.toContain(secret);
+});
+
+test('the Vertex response schema drops constraints Vertex rejects or ignores', () => {
+  const adapted = vertexResponseSchema(
+    z.object({
+      pace: z.enum(['relaxed', 'balanced']),
+      schedule: z.discriminatedUnion('kind', [
+        z.object({ dayPart: z.string(), kind: z.literal('day_part') }).strict(),
+        z.object({ kind: z.literal('exact'), localTime: z.string() }).strict(),
+      ]),
+      schemaVersion: z.literal(1),
+      selectedDurationDays: z.union([z.literal(3), z.literal(5), z.literal(7)]).nullable(),
+    }),
+  );
+  const serialized = JSON.stringify(adapted);
+
+  // Vertex ignores `oneOf`, so a discriminated union would lose its shape.
+  expect(serialized).not.toContain('"oneOf"');
+  expect(serialized).toContain('"anyOf"');
+
+  // Vertex 400s on `enum`/`const` anywhere the type is not STRING.
+  const offenders: string[] = [];
+  (function walk(node: unknown, path: string) {
+    if (Array.isArray(node))
+      return node.forEach((entry, index) => walk(entry, `${path}[${index}]`));
+    if (node === null || typeof node !== 'object') return;
+    const record = node as Record<string, unknown>;
+    if (('enum' in record || 'const' in record) && record.type !== 'string') offenders.push(path);
+    for (const [key, nested] of Object.entries(record)) walk(nested, `${path}.${key}`);
+  })(adapted, '$');
+  expect(offenders).toStrictEqual([]);
+
+  // The dropped constraint has to survive somewhere the model can read it.
+  const properties = adapted.properties as Record<string, Record<string, unknown> | undefined>;
+  expect(properties.schemaVersion).toMatchObject({
+    description: expect.stringContaining('Allowed values: 1.'),
+    type: 'number',
+  });
+
+  // String enums and literals are already valid for Vertex and stay untouched.
+  expect(properties.pace).toStrictEqual({ enum: ['relaxed', 'balanced'], type: 'string' });
+  expect(serialized).toContain('"const":"day_part"');
+});
+
+test('the Vertex adapter still enforces the caller schema over the relaxed one', async () => {
+  // `schemaVersion` reaches Vertex without its `const`, so the model can return
+  // a wrong value; Zod must still reject it rather than passing it through.
+  const strictSchema = z.object({ schemaVersion: z.literal(1) });
+  const model = new MockLanguageModelV4({
+    doGenerate: async () => ({
+      content: [{ text: '{"schemaVersion":2}', type: 'text' }],
+      finishReason: { raw: undefined, unified: 'stop' },
+      usage: usage(),
+      warnings: [],
+    }),
+  });
+  const provider = new VertexAiGenerationProvider(configuration, { languageModel: model });
+
+  await expect(
+    provider.generateStructured({ ...request(), schema: strictSchema }),
+  ).rejects.toMatchObject({ code: 'invalid_response' });
 });
 
 test('the Vertex adapter rejects malformed structured output with a safe code', async () => {

@@ -38,6 +38,17 @@ Set these in `trove-api` for Preview and Production:
   newlines (escaped `\\n` values are accepted).
 - `TROVE_AI_DISABLED` and `TROVE_AI_BUDGET_DISABLED` — leave unset normally;
   set either to `1` to stop all AI provider construction and requests.
+- `CRON_SECRET` — shared secret for scheduled maintenance. Vercel Cron presents
+  it as `Authorization: Bearer <value>` to
+  `/maintenance/ai-planning-retention`, which runs daily at 03:00 UTC and
+  enforces the 7-day session and 30-day generation-run retention windows. The
+  route refuses every caller while this is unset, so retention stops running if
+  it is missing.
+
+Before launching AI-assisted trip creation to signed-in users, work through
+[`docs/ai/launch-runbook.md`](../../docs/ai/launch-runbook.md): production Vertex
+credentials and budget, the retention secret, dashboards, alerts, the kill-switch
+drill, and the browser pass.
 
 Do not add `SHADOW_DATABASE_URL` to Vercel. It is reserved for isolated migration development and must never point at the shared database.
 `DIRECT_URL` is likewise only for Prisma commands and is not required by the deployed API.

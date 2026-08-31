@@ -227,6 +227,9 @@ decorative editorial imagery, not Google Places data. Use
   `.env.production` used by production database operations.
 - `TROVE_PLAN_SCORE_DISABLED=1` is the server-side Plan Score kill switch. Keep
   the API and web values aligned when disabling that feature.
+- `CRON_SECRET` belongs in the API environment and authenticates the daily
+  AI-planning retention cleanup. Without it the maintenance route refuses every
+  caller, so retention stops running - set it in `trove-api` before launch.
 - The API `PORT` is optional and defaults to `3001`.
 
 Never commit `.env`, `.env.local`, `.env.production`, or any provider key. If a

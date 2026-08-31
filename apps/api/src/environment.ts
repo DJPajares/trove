@@ -194,6 +194,19 @@ export function getAuthenticationEnvironment(
   return { publishableKey, url };
 }
 
+/**
+ * Scheduled maintenance runs as a Vercel Cron request rather than as a signed-in
+ * user, so it authenticates with a shared secret instead of a Supabase session.
+ * Absent secret means the maintenance route stays closed.
+ */
+export function getMaintenanceEnvironment(
+  environment: Record<string, string | undefined> = process.env,
+) {
+  const cronSecret = environment.CRON_SECRET?.trim();
+
+  return cronSecret ? { cronSecret } : null;
+}
+
 export function getWebOrigins(environment: Record<string, string | undefined> = process.env) {
   return (environment.TROVE_WEB_ORIGINS ?? 'http://localhost:3000')
     .split(',')

@@ -6,6 +6,7 @@ import {
   AiPlanningSessionError,
   loadAiPlanningSessionForApplyInTransaction,
 } from './ai-planning-sessions.js';
+import { recordAiPlanningApplyCompleted } from './ai-planning-telemetry.js';
 import {
   enumerateDateRange,
   isValidIanaTimeZone,
@@ -223,14 +224,15 @@ export async function applyAiPlanningSession(
   deviceTimeZone = 'UTC',
   options: ApplyOptions = {},
 ) {
-  if (!isValidIanaTimeZone(deviceTimeZone)) {
-    throw new AiPlanningSessionError('invalid_time_zone', 400);
-  }
-
   const prisma = options.prisma ?? getPrismaClient();
   const now = options.now?.() ?? new Date();
 
-  const outcome = await prisma.$transaction(async (transaction) => {
+  if (!isValidIanaTimeZone(deviceTimeZone)) {
+    recordAiPlanningApplyCompleted('rejected', 'invalid_time_zone', now);
+    throw new AiPlanningSessionError('invalid_time_zone', 400);
+  }
+
+  const runApply = async (transaction: Prisma.TransactionClient) => {
     const loaded = await loadAiPlanningSessionForApplyInTransaction(
       transaction,
       ownerId,
@@ -240,7 +242,7 @@ export async function applyAiPlanningSession(
     );
     if (typeof loaded === 'symbol') return { kind: 'expired' as const };
     if (loaded.kind === 'applied') {
-      return { kind: 'applied' as const, tripId: loaded.tripId };
+      return { kind: 'replayed' as const, tripId: loaded.tripId };
     }
 
     const { draft } = loaded;
@@ -425,8 +427,23 @@ export async function applyAiPlanningSession(
     if (applied.count !== 1) throw new AiPlanningSessionError('draft_conflict', 409);
 
     return { kind: 'applied' as const, tripId: trip.id };
-  });
+  };
 
-  if (outcome.kind === 'expired') throw new AiPlanningSessionError('session_expired', 410);
+  let outcome: Awaited<ReturnType<typeof runApply>>;
+  try {
+    outcome = await prisma.$transaction(runApply);
+  } catch (error) {
+    if (error instanceof AiPlanningSessionError) {
+      recordAiPlanningApplyCompleted('rejected', error.code, now);
+    }
+    throw error;
+  }
+
+  if (outcome.kind === 'expired') {
+    recordAiPlanningApplyCompleted('rejected', 'session_expired', now);
+    throw new AiPlanningSessionError('session_expired', 410);
+  }
+
+  recordAiPlanningApplyCompleted(outcome.kind, null, now);
   return { tripId: outcome.tripId };
 }

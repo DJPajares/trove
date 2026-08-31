@@ -22,6 +22,10 @@ import {
   replaceAiPlanningDraft,
   replaceAiPlanningReviewDraft,
 } from '../src/services/ai-planning-sessions.js';
+import {
+  setAiPlanningTelemetrySink,
+  type AiPlanningTelemetryEvent,
+} from '../src/services/ai-planning-telemetry.js';
 import { customPlaceDraft, explicitDraft } from './fixtures/ai-planning.js';
 
 const OWNER_ID = '00000000-0000-4000-8000-000000000001';
@@ -723,6 +727,56 @@ describe('dispatch quota and lifecycle completion', () => {
       status: 'rejected',
     });
     expect([...store.runs.values()].filter((run) => run.dispatchedAt)).toHaveLength(5);
+  });
+
+  test('a refused dispatch is attributable without naming what was refused', async () => {
+    const events: AiPlanningTelemetryEvent[] = [];
+    setAiPlanningTelemetrySink((event) => events.push(event));
+
+    try {
+      const store = createPlanningStore();
+      const sessionId = '00000000-0000-4000-8000-000000000130';
+      const runId = '00000000-0000-4000-8000-000000000131';
+      store.addRun(makeRun(runId, sessionId), makeSession(sessionId));
+
+      await expect(
+        claimAiPlanningDispatch(OWNER_ID, runId, {
+          environment: { ...AVAILABLE_ENVIRONMENT, TROVE_AI_DISABLED: '1' },
+          now: () => NOW,
+          prisma: store.prisma,
+        }),
+      ).rejects.toMatchObject({ code: 'ai_disabled' });
+
+      const quotaStore = createPlanningStore();
+      for (let index = 0; index < 5; index += 1) {
+        const usedSessionId = `00000000-0000-4000-8000-${String(140 + index).padStart(12, '0')}`;
+        const usedRunId = `00000000-0000-4000-8000-${String(150 + index).padStart(12, '0')}`;
+        quotaStore.addRun(
+          makeRun(usedRunId, usedSessionId, { dispatchedAt: NOW, result: 'SUCCEEDED' }),
+          makeSession(usedSessionId, { status: 'REVIEWING' }),
+        );
+      }
+      const blockedSessionId = '00000000-0000-4000-8000-000000000160';
+      const blockedRunId = '00000000-0000-4000-8000-000000000161';
+      quotaStore.addRun(makeRun(blockedRunId, blockedSessionId), makeSession(blockedSessionId));
+
+      await expect(
+        claimAiPlanningDispatch(OWNER_ID, blockedRunId, {
+          environment: AVAILABLE_ENVIRONMENT,
+          now: () => NOW,
+          prisma: quotaStore.prisma,
+        }),
+      ).rejects.toMatchObject({ code: 'quota_exceeded' });
+    } finally {
+      setAiPlanningTelemetrySink(null);
+    }
+
+    // Enough to alert on quota pressure or a flipped kill switch, and nothing
+    // that says which traveller or which trip was refused.
+    expect(events).toStrictEqual([
+      { code: 'ai_disabled', kind: 'dispatch_rejected', occurredAt: NOW.toISOString() },
+      { code: 'quota_exceeded', kind: 'dispatch_rejected', occurredAt: NOW.toISOString() },
+    ]);
   });
 
   test('uses a strict rolling boundary and reports the next retry time', async () => {

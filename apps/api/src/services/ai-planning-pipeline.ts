@@ -23,6 +23,7 @@ import {
 import { createAiGateway } from './ai-runtime.js';
 import { AiPlaceGrounder, type AiPlaceGroundingResult } from './ai-place-grounding.js';
 import { createAiPlannerProviderContext } from './ai-planner-provider-context.js';
+import { recordAiPlanningDraftAssembled } from './ai-planning-telemetry.js';
 import {
   balancedPaceAnchorRange,
   resolveAiPlannerDefaults,
@@ -864,6 +865,7 @@ export async function runAiPlanningPipeline(
       grounding,
       providerContext,
     );
+    recordAiPlanningDraftAssembled(validated, generationDate);
     await lifecycle.completeSuccess(ownerId, runId, validated, metadata);
   } catch (error) {
     const failure = failureFrom(error, metadata);

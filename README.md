@@ -140,6 +140,8 @@ explains the current publishable/secret key model.
 
 The `trove` schema is private and is accessed through the server-side Prisma
 client. Do not expose it through Supabase's Data API or add client grants.
+For private Storage bucket and policy setup, see
+[`ops/supabase/README.md`](ops/supabase/README.md).
 
 ### AI planning (Vertex AI)
 

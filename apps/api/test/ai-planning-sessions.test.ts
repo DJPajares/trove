@@ -345,6 +345,7 @@ describe('planning-session routes', () => {
         payload: {},
       },
       { method: 'POST', url: `/ai/planning-sessions/${sessionId}/cancel`, payload: {} },
+      { method: 'POST', url: `/ai/planning-sessions/${sessionId}/apply`, payload: {} },
     ] as const;
 
     for (const request of requests) {

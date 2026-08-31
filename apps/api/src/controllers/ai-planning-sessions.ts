@@ -15,6 +15,9 @@ import {
   abortActiveAiPlanningSession,
   runAiPlanningPipeline,
 } from '../services/ai-planning-pipeline.js';
+import { applyAiPlanningSession } from '../services/ai-planning-apply.js';
+import { getBearerToken } from '../services/request-auth.js';
+import { getTrip } from '../services/trips.js';
 
 const sessionParamsSchema = z.object({ sessionId: z.uuid() }).strict();
 const promptSchema = z.object({ prompt: z.string() }).strict();
@@ -26,6 +29,12 @@ const draftSchema = z
   .strict();
 const acknowledgementSchema = z.object({ revision: z.number().int().nonnegative() }).strict();
 const emptyBodySchema = z.object({}).strict();
+const applySchema = z
+  .object({
+    deviceTimeZone: z.string().trim().min(1).max(100).optional(),
+    expectedRevision: z.number().int().nonnegative(),
+  })
+  .strict();
 const idempotencyKeySchema = z.uuid();
 
 function getUserId(request: FastifyRequest, reply: FastifyReply) {
@@ -93,6 +102,31 @@ export function createAiPlanningSessionControllers(
   dependencies: PlanningSessionControllerDependencies = {},
 ) {
   return {
+    async apply(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = sessionParamsSchema.safeParse(request.params);
+      const body = applySchema.safeParse(request.body);
+      const accessToken = getBearerToken(request.headers.authorization);
+      if (!userId) return;
+      if (!accessToken) {
+        return reply.code(500).send({ code: 'authentication_context_missing' });
+      }
+      if (!params.success || !body.success) {
+        return reply.code(400).send({ code: 'invalid_planning_session_request' });
+      }
+      try {
+        const applied = await applyAiPlanningSession(
+          userId,
+          params.data.sessionId,
+          body.data.expectedRevision,
+          body.data.deviceTimeZone,
+        );
+        return reply.send({ trip: await getTrip(userId, accessToken, applied.tripId) });
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
+
     async acknowledgeWarnings(request: FastifyRequest, reply: FastifyReply) {
       const userId = getUserId(request, reply);
       const params = sessionParamsSchema.safeParse(request.params);

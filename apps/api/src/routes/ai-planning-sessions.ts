@@ -37,4 +37,9 @@ export function registerAiPlanningSessionRoutes(app: FastifyInstance) {
     { preHandler: requireAuthenticatedUser },
     controllers.cancel,
   );
+  app.post(
+    '/ai/planning-sessions/:sessionId/apply',
+    { preHandler: requireAuthenticatedUser },
+    controllers.apply,
+  );
 }

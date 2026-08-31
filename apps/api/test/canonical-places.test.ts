@@ -12,7 +12,7 @@ import {
   type ProviderPlaceLabel,
   ProviderReferenceConflictError,
 } from '../src/services/canonical-places.js';
-import type { PlaceProviderName } from '../src/services/places.js';
+import type { PlaceProviderName, ProviderPlaceIdentity } from '../src/services/places.js';
 
 const ownerId = '8926bbe8-abae-470c-ab90-f33af1a8d168';
 
@@ -99,6 +99,35 @@ class MemoryCanonicalPlaceRepository implements CanonicalPlaceRepository {
     this.providerPlaces.set(key, place);
     this.providerPlaceCount += 1;
     return place;
+  }
+
+  async writeProviderSnapshot(
+    placeId: string,
+    identity: ProviderPlaceIdentity,
+    languageCode: string | undefined,
+    fetchedAt: Date,
+  ) {
+    for (const place of this.providerPlaces.values()) {
+      if (place.id !== placeId) continue;
+      const reference = place.providerRefs.find(
+        (entry) => entry.externalPlaceId === identity.externalPlaceId,
+      );
+      if (!reference) throw new Error('provider_reference_not_found');
+      Object.assign(reference, {
+        cachedAt: fetchedAt,
+        cachedFormattedAddress: identity.formattedAddress,
+        cachedGoogleMapsUri: identity.googleMapsUri,
+        cachedLanguageCode: languageCode ?? 'en',
+        cachedLatitude: identity.location.latitude,
+        cachedLongitude: identity.location.longitude,
+        cachedName: identity.name,
+        cachedPrimaryType: identity.primaryType,
+        cachedTypes: identity.rawTypes,
+        cachedUtcOffsetMinutes: identity.utcOffsetMinutes,
+      });
+      return place;
+    }
+    throw new Error('place_not_found');
   }
 
   /** Stands in for the snapshot write a real hydration would have made. */
@@ -206,6 +235,45 @@ test('provider resolution creates identity only on use and reuses it across conc
   const repeated = await service.resolveProviderPlace('google', 'ChIJcanonical');
   expect(repeated.id).toBe(first.id);
   expect(repository.createProviderAttempts).toBe(2);
+});
+
+test('Text Search identity seeds the canonical snapshot without a second details hydration', async () => {
+  const repository = new MemoryCanonicalPlaceRepository();
+  const hydrator = countingHydrator();
+  const service = new CanonicalPlacesService(repository, hydrator.hydrate);
+  const providerIdentity: ProviderPlaceIdentity = {
+    attributions: [{ provider: 'Example Data', providerUri: 'https://example.com/source' }],
+    category: 'things_to_do',
+    externalPlaceId: 'ChIJmuseum',
+    formattedAddress: '93 Stamford Road, Singapore',
+    googleMapsUri: 'https://maps.google.com/?cid=1',
+    location: { latitude: 1.2966, longitude: 103.8485 },
+    name: 'National Museum',
+    primaryType: 'museum',
+    provider: 'google',
+    rawTypes: ['museum'],
+    utcOffsetMinutes: 480,
+  };
+
+  const first = await service.resolveProviderPlaceFromIdentity(providerIdentity, {
+    fetchedAt: new Date('2026-08-31T04:00:00.000Z'),
+    languageCode: 'en',
+  });
+  const second = await service.resolveProviderPlaceFromIdentity(providerIdentity, {
+    fetchedAt: new Date('2026-08-31T04:01:00.000Z'),
+    languageCode: 'en',
+  });
+
+  expect(second.id).toBe(first.id);
+  expect(repository.providerPlaceCount).toBe(1);
+  expect(hydrator.calls).toStrictEqual([]);
+  expect(second.snapshot).toMatchObject({
+    address: '93 Stamford Road, Singapore',
+    name: 'National Museum',
+    rawTypes: ['museum'],
+    utcOffsetMinutes: 480,
+  });
+  expect(JSON.stringify(second.snapshot)).not.toContain('Example Data');
 });
 
 test('custom Places support name-only creation and remain owner-scoped on edit', async () => {

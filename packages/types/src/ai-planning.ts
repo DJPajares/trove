@@ -175,9 +175,18 @@ export const aiPlannerModelProposalSchema = z
 export const aiPlannerDraftPlaceSchema = z.discriminatedUnion('resolution', [
   z
     .object({
+      attributions: z.array(
+        z
+          .object({
+            provider: z.string().trim().min(1).max(200),
+            providerUri: z.url().nullable(),
+          })
+          .strict(),
+      ),
       id: identifierSchema,
       name: labelSchema,
       placeId: z.uuid(),
+      provider: z.literal('google'),
       resolution: z.literal('verified'),
     })
     .strict(),
@@ -281,7 +290,9 @@ export type AiPlannerAssumption = z.infer<typeof aiPlannerAssumptionSchema>;
 export type AiPlannerConstraint = z.infer<typeof aiPlannerConstraintSchema>;
 export type AiPlannerDraft = z.infer<typeof aiPlannerDraftSchema>;
 export type AiPlannerDraftItem = z.infer<typeof aiPlannerDraftItemSchema>;
+export type AiPlannerDraftPlace = z.infer<typeof aiPlannerDraftPlaceSchema>;
 export type AiPlannerEvidence = z.infer<typeof aiPlannerEvidenceSchema>;
+export type AiPlannerCandidatePlace = z.infer<typeof aiPlannerCandidatePlaceSchema>;
 export type AiPlannerModelProposal = z.infer<typeof aiPlannerModelProposalSchema>;
 export type AiPlannerNormalizedRequest = z.infer<typeof aiPlannerNormalizedRequestSchema>;
 export type AiPlannerWarning = z.infer<typeof aiPlannerWarningSchema>;

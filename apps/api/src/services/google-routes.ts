@@ -1,4 +1,8 @@
-import { recordProviderCall, type ProviderCallSource } from './provider-usage.js';
+import {
+  recordProviderCall,
+  type ProviderCallBudget,
+  type ProviderCallSource,
+} from './provider-usage.js';
 import {
   RouteProviderError,
   type RouteEstimate,
@@ -33,6 +37,7 @@ type GoogleRoutesProviderOptions = {
   fetcher?: Fetcher;
   requestTimeoutMs?: number;
   source?: ProviderCallSource;
+  budget?: ProviderCallBudget;
 };
 
 function mapGoogleError(responseStatus: number, body: GoogleErrorResponse) {
@@ -88,6 +93,7 @@ export class GoogleRoutesProvider implements RoutesProvider {
   private readonly fetcher: Fetcher;
   private readonly requestTimeoutMs: number;
   private readonly source: ProviderCallSource;
+  private readonly budget?: ProviderCallBudget;
 
   constructor(options: GoogleRoutesProviderOptions) {
     this.apiKey = options.apiKey.trim();
@@ -95,10 +101,14 @@ export class GoogleRoutesProvider implements RoutesProvider {
     this.fetcher = options.fetcher ?? globalThis.fetch;
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.source = options.source ?? 'test';
+    this.budget = options.budget;
   }
 
   async computeRoute(request: RouteRequest): Promise<RouteEstimate | null> {
     if (!this.apiKey) throw new RouteProviderError('configuration_missing');
+    if (this.budget && !this.budget.claim()) {
+      throw new RouteProviderError('budget_exhausted');
+    }
 
     recordProviderCall({
       cacheMissReason: request.cacheMissReason,

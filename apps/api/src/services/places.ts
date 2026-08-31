@@ -35,6 +35,18 @@ export type PlaceSearchRequest = {
   sessionToken: string;
 };
 
+export type PlaceTextSearchRequest = {
+  languageCode?: string;
+  locationBias?: PlaceLocationBias;
+  regionCode?: string;
+  textQuery: string;
+};
+
+export type ProviderAttribution = {
+  provider: string;
+  providerUri: string | null;
+};
+
 /**
  * `location` asks the provider only for identity and coordinates — everything
  * Trove stores and every screen renders. `evidence` adds just the mutable
@@ -67,6 +79,7 @@ export type PlaceSuggestion = {
 };
 
 export type ProviderPlaceDetails = {
+  attributions: ProviderAttribution[];
   category: TrovePlaceCategory;
   externalPlaceId: string;
   formattedAddress: string | null;
@@ -93,6 +106,7 @@ export type PlaceOpeningPeriod = {
 };
 
 export type PlaceProviderErrorCode =
+  | 'budget_exhausted'
   | 'configuration_missing'
   | 'invalid_request'
   | 'not_found'
@@ -114,6 +128,16 @@ export interface PlacesProvider {
   readonly name: PlaceProviderName;
   getDetails(request: PlaceDetailsRequest): Promise<ProviderPlaceDetails>;
   search(request: PlaceSearchRequest): Promise<PlaceSuggestion[]>;
+}
+
+export type ProviderPlaceIdentity = Omit<
+  ProviderPlaceDetails,
+  'location' | 'openingPeriods' | 'rating'
+> & { location: PlaceCoordinates };
+
+export interface PlaceTextSearchProvider {
+  readonly name: PlaceProviderName;
+  textSearch(request: PlaceTextSearchRequest): Promise<ProviderPlaceIdentity[]>;
 }
 
 /**

@@ -1,12 +1,13 @@
 import { getPrismaClient } from '@trove/db';
 
 import { hydratePlaceSnapshot, isSnapshotFresh, type PlaceSnapshotSource } from './place-data.js';
+import { normalizePlaceLanguageCode } from './place-language.js';
 import {
   type CanonicalPlace,
   placeProviderRefInclude,
   serializeCanonicalPlace,
 } from './place-serializer.js';
-import type { PlaceProviderName } from './places.js';
+import type { PlaceProviderName, ProviderPlaceIdentity } from './places.js';
 import { providerTargetFingerprint, recordProviderCacheEvent } from './provider-usage.js';
 
 export type { CanonicalPlace } from './place-serializer.js';
@@ -67,6 +68,12 @@ export interface CanonicalPlaceRepository {
     provider: PlaceProviderName,
     externalPlaceId: string,
   ): Promise<CanonicalPlaceRecord | null>;
+  writeProviderSnapshot(
+    placeId: string,
+    identity: ProviderPlaceIdentity,
+    languageCode: string | undefined,
+    fetchedAt: Date,
+  ): Promise<CanonicalPlaceRecord>;
   updateOwnedCustomPlace(
     userId: string,
     placeId: string,
@@ -173,6 +180,42 @@ class PrismaCanonicalPlaceRepository implements CanonicalPlaceRepository {
     }
   }
 
+  async writeProviderSnapshot(
+    placeId: string,
+    identity: ProviderPlaceIdentity,
+    languageCode: string | undefined,
+    fetchedAt: Date,
+  ) {
+    await getPrismaClient().placeProviderRef.updateMany({
+      where: {
+        externalPlaceId: identity.externalPlaceId,
+        placeId,
+        provider: toDatabaseProvider(identity.provider),
+      },
+      data: {
+        cachedAt: fetchedAt,
+        cachedFormattedAddress: identity.formattedAddress,
+        cachedGoogleMapsUri: identity.googleMapsUri,
+        cachedLanguageCode: normalizePlaceLanguageCode(languageCode),
+        cachedLatitude: identity.location.latitude,
+        cachedLongitude: identity.location.longitude,
+        cachedName: identity.name,
+        cachedPrimaryType: identity.primaryType,
+        cachedTypes: identity.rawTypes,
+        cachedUtcOffsetMinutes: identity.utcOffsetMinutes,
+        detailsFailedAt: null,
+        detailsFailureCode: null,
+      },
+    });
+
+    const place = await getPrismaClient().place.findUnique({
+      where: { id: placeId },
+      include: placeProviderRefInclude,
+    });
+    if (!place) throw new CanonicalPlaceNotFoundError();
+    return toPlaceRecord(place);
+  }
+
   /**
    * Fills in a label a Place resolved before this was captured. Only ever writes
    * over a null, so the first text a Place was known by is the text it keeps.
@@ -270,43 +313,52 @@ export class CanonicalPlacesService {
     options: { languageCode?: string; sessionToken?: string } = {},
   ) {
     const normalizedExternalPlaceId = externalPlaceId.trim();
-    const existing = await this.repository.findByProviderRef(provider, normalizedExternalPlaceId);
+    const place = await this.getOrCreateProviderPlace(provider, normalizedExternalPlaceId, label);
+    return serializePlace(
+      place,
+      await this.ensureSnapshot(place, normalizedExternalPlaceId, options),
+    );
+  }
 
-    if (existing) {
-      const labelled = await this.withLabel(existing, label);
-      return serializePlace(
-        labelled,
-        await this.ensureSnapshot(labelled, normalizedExternalPlaceId, options),
-      );
-    }
+  /** Reuses the Text Search response as the durable snapshot, avoiding a details call. */
+  async resolveProviderPlaceFromIdentity(
+    identity: ProviderPlaceIdentity,
+    options: { fetchedAt?: Date; languageCode?: string } = {},
+  ) {
+    const place = await this.getOrCreateProviderPlace(identity.provider, identity.externalPlaceId, {
+      address: identity.formattedAddress,
+      name: identity.name,
+    });
+    const snapshotted = await this.repository.writeProviderSnapshot(
+      place.id,
+      identity,
+      options.languageCode,
+      options.fetchedAt ?? new Date(),
+    );
+    const reference = snapshotted.providerRefs.find(
+      (entry) => entry.externalPlaceId === identity.externalPlaceId && entry.provider === 'GOOGLE',
+    );
+    return serializePlace(snapshotted, reference);
+  }
+
+  private async getOrCreateProviderPlace(
+    provider: PlaceProviderName,
+    externalPlaceId: string,
+    label?: ProviderPlaceLabel,
+  ) {
+    const existing = await this.repository.findByProviderRef(provider, externalPlaceId);
+    if (existing) return this.withLabel(existing, label);
 
     try {
-      const created = await this.repository.createProviderPlace(
-        provider,
-        normalizedExternalPlaceId,
-        label,
-      );
-      return serializePlace(
-        created,
-        await this.ensureSnapshot(created, normalizedExternalPlaceId, options),
-      );
+      return await this.repository.createProviderPlace(provider, externalPlaceId, label);
     } catch (error) {
-      if (!(error instanceof ProviderReferenceConflictError)) {
-        throw error;
-      }
-
+      if (!(error instanceof ProviderReferenceConflictError)) throw error;
       const concurrentlyCreated = await this.repository.findByProviderRef(
         provider,
-        normalizedExternalPlaceId,
+        externalPlaceId,
       );
-      if (!concurrentlyCreated) {
-        throw error;
-      }
-      const labelled = await this.withLabel(concurrentlyCreated, label);
-      return serializePlace(
-        labelled,
-        await this.ensureSnapshot(labelled, normalizedExternalPlaceId, options),
-      );
+      if (!concurrentlyCreated) throw error;
+      return this.withLabel(concurrentlyCreated, label);
     }
   }
 

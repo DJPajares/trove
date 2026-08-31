@@ -94,6 +94,18 @@ test('review drafts distinguish verified Places, Custom Places, unchecked eviden
   expect(result.warnings).toContainEqual(expect.objectContaining({ material: true }));
 });
 
+test('verified draft places require explicit Google provenance and attribution shape', () => {
+  const draft = explicitDraft();
+  const verified = draft.places.find((place) => place.resolution === 'verified');
+  expect(verified).toMatchObject({ attributions: [], provider: 'google' });
+
+  if (!verified || verified.resolution !== 'verified') throw new Error('verified fixture missing');
+  const missingProvider = { ...verified } as Record<string, unknown>;
+  delete missingProvider.provider;
+  draft.places[0] = missingProvider as (typeof draft.places)[number];
+  expect(aiPlannerDraftSchema.safeParse(draft).success).toBe(false);
+});
+
 test('malformed model output is rejected without coercion', () => {
   const proposal = explicitModelProposal() as unknown as Record<string, unknown>;
   proposal.items = [{ label: 'unsupported partial item' }];

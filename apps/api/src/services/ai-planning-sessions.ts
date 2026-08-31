@@ -60,6 +60,7 @@ export type AiPlanningSessionErrorCode =
   | 'draft_invalid'
   | 'draft_provenance_immutable'
   | 'idempotency_key_required'
+  | 'invalid_time_zone'
   | 'invalid_prompt'
   | 'quota_exceeded'
   | 'regenerate_required'
@@ -67,7 +68,8 @@ export type AiPlanningSessionErrorCode =
   | 'session_busy'
   | 'session_expired'
   | 'session_not_found'
-  | 'session_not_reviewable';
+  | 'session_not_reviewable'
+  | 'warnings_not_acknowledged';
 
 export class AiPlanningSessionError extends Error {
   constructor(
@@ -901,24 +903,53 @@ export async function loadReviewableAiPlanningSessionForApply(
   const prisma = prismaFrom(options);
   const now = nowFrom(options);
   const outcome = await prisma.$transaction(async (transaction) => {
-    await ensureAndLockOwner(transaction, ownerId);
-    const session = await findOwnedSession(transaction, ownerId, sessionId);
-    if (await expireIfNeeded(transaction, session, now)) return SESSION_EXPIRED;
-    if (
-      session.status !== 'REVIEWING' ||
-      session.draftRevision !== expectedRevision ||
-      !session.draft
-    ) {
-      throw new AiPlanningSessionError('draft_conflict', 409);
-    }
-    return {
-      draft: parseStoredDraft(session.draft),
-      sessionId: session.id,
-      warningAcknowledged:
-        session.warningsAcknowledgedRevision === expectedRevision &&
-        session.warningsAcknowledgedAt !== null,
-    };
+    return loadAiPlanningSessionForApplyInTransaction(
+      transaction,
+      ownerId,
+      sessionId,
+      expectedRevision,
+      now,
+    );
   });
   if (outcome === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
-  return outcome;
+  if (outcome.kind === 'applied') {
+    throw new AiPlanningSessionError('session_not_reviewable', 409);
+  }
+  const { kind: _kind, ...reviewable } = outcome;
+  return reviewable;
+}
+
+export async function loadAiPlanningSessionForApplyInTransaction(
+  transaction: PlanningTransaction,
+  ownerId: string,
+  sessionId: string,
+  expectedRevision: number,
+  now: Date,
+) {
+  await ensureAndLockOwner(transaction, ownerId);
+  const session = await findOwnedSession(transaction, ownerId, sessionId);
+
+  // Applied is a terminal idempotent result. It remains recoverable after the
+  // draft retention window because the content has already been scrubbed.
+  if (session.appliedTripId) {
+    return { kind: 'applied' as const, sessionId: session.id, tripId: session.appliedTripId };
+  }
+
+  if (await expireIfNeeded(transaction, session, now)) return SESSION_EXPIRED;
+  if (
+    session.status !== 'REVIEWING' ||
+    session.draftRevision !== expectedRevision ||
+    !session.draft
+  ) {
+    throw new AiPlanningSessionError('draft_conflict', 409);
+  }
+
+  return {
+    draft: parseStoredDraft(session.draft),
+    kind: 'reviewable' as const,
+    sessionId: session.id,
+    warningAcknowledged:
+      session.warningsAcknowledgedRevision === expectedRevision &&
+      session.warningsAcknowledgedAt !== null,
+  };
 }

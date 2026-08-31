@@ -171,6 +171,8 @@ function createPlanningStore() {
             inputTokens: null,
             latencyMs: null,
             outputTokens: null,
+            // Prisma fills both compound-relation scalars from the parent.
+            ownerId: data.ownerId,
             result: 'PENDING',
             sessionId: id,
             totalTokens: null,

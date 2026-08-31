@@ -286,20 +286,21 @@ export async function createAiPlanningSession(
       });
     }
 
+    // The run inherits both `sessionId` and `ownerId` from the parent session
+    // through the compound relation, so neither may be passed here.
+    const reservedRun: Prisma.AiGenerationRunUncheckedCreateWithoutSessionInput = {
+      baseDraftRevision: 0,
+      idempotencyKey,
+      model: provider.model,
+      provider: provider.provider,
+    };
+
     return transaction.aiPlanningSession.create({
       data: {
         expiresAt: new Date(now.getTime() + AI_PLANNING_SESSION_TTL_MS),
         ownerId,
         rawPrompt: prompt,
-        runs: {
-          create: {
-            baseDraftRevision: 0,
-            idempotencyKey,
-            model: provider.model,
-            ownerId,
-            provider: provider.provider,
-          },
-        },
+        runs: { create: reservedRun },
       },
       include: sessionInclude,
     });
@@ -394,16 +395,17 @@ export async function regenerateAiPlanningSession(
     }
     if (found.runs.length > 0) throw new AiPlanningSessionError('session_busy', 409);
 
-    await transaction.aiGenerationRun.create({
-      data: {
-        baseDraftRevision: found.draftRevision,
-        idempotencyKey,
-        model: provider.model,
-        ownerId,
-        provider: provider.provider,
-        sessionId,
-      },
-    });
+    // A top-level create owns both relation scalars directly, unlike the
+    // nested reservation in `createAiPlanningSession`.
+    const reservedRun: Prisma.AiGenerationRunUncheckedCreateInput = {
+      baseDraftRevision: found.draftRevision,
+      idempotencyKey,
+      model: provider.model,
+      ownerId,
+      provider: provider.provider,
+      sessionId,
+    };
+    await transaction.aiGenerationRun.create({ data: reservedRun });
     return transaction.aiPlanningSession.update({
       where: { id: sessionId },
       data: {

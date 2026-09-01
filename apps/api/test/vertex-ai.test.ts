@@ -15,6 +15,7 @@ const configuration = {
   location: 'global',
   model: 'gemini-3.1-flash-lite',
   project: 'trove-test',
+  thinkingBudgetTokens: 512,
 };
 const schema = z.object({ destination: z.string() });
 
@@ -205,6 +206,28 @@ test('the Vertex adapter still enforces the caller schema over the relaxed one',
   await expect(
     provider.generateStructured({ ...request(), schema: strictSchema }),
   ).rejects.toMatchObject({ code: 'invalid_response' });
+});
+
+test("the Vertex adapter caps the model's reasoning budget", async () => {
+  // Reasoning is billed against maxOutputTokens, so leaving it uncapped lets a
+  // thinking model spend the allowance before finishing its JSON.
+  let seen: unknown;
+  const model = new MockLanguageModelV4({
+    doGenerate: async (options) => {
+      seen = options.providerOptions;
+      return {
+        content: [{ text: '{"destination":"Kyoto"}', type: 'text' }],
+        finishReason: { raw: undefined, unified: 'stop' },
+        usage: usage(),
+        warnings: [],
+      };
+    },
+  });
+  const provider = new VertexAiGenerationProvider(configuration, { languageModel: model });
+
+  await provider.generateStructured(request());
+
+  expect(seen).toMatchObject({ google: { thinkingConfig: { thinkingBudget: 512 } } });
 });
 
 test('the Vertex adapter rejects malformed structured output with a safe code', async () => {

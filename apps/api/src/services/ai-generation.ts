@@ -140,7 +140,8 @@ export class AiGateway {
   private readonly now: () => Date;
   private readonly provider?: AiGenerationProvider;
   private readonly telemetrySink: AiGenerationTelemetrySink;
-  private readonly timeoutMs: number;
+  /** Read by the planner so a retry is only attempted when one still fits. */
+  readonly timeoutMs: number;
   private readonly unavailableCode?: AiGatewayOptions['unavailableCode'];
 
   constructor(options: AiGatewayOptions) {

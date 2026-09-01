@@ -29,10 +29,18 @@ export const DEFAULT_AI_MODEL = 'gemini-3.1-flash-lite';
 export const DEFAULT_AI_LOCATION = 'global';
 export const DEFAULT_AI_TIMEOUT_MS = 60_000;
 export const DEFAULT_AI_MAX_OUTPUT_TOKENS = 8_192;
+/**
+ * Reasoning tokens are drawn from the same allowance as the answer, so an
+ * uncapped thinking model can spend the budget before finishing its JSON and
+ * return a truncated response. Zero is deliberately not the default: pro models
+ * reject `thinking_budget: 0` outright.
+ */
+export const DEFAULT_AI_THINKING_BUDGET_TOKENS = 1_024;
 
 const MIN_AI_TIMEOUT_MS = 1_000;
 const MAX_AI_TIMEOUT_MS = 300_000;
 const MAX_AI_OUTPUT_TOKENS = 65_536;
+const MAX_AI_THINKING_BUDGET_TOKENS = 24_576;
 
 type AiUnavailableCode =
   'ai_budget_disabled' | 'ai_disabled' | 'configuration_invalid' | 'configuration_missing';
@@ -47,6 +55,7 @@ export type AvailableAiEnvironment = {
     location: string;
     model: string;
     project: string;
+    thinkingBudgetTokens: number;
   };
 };
 
@@ -120,6 +129,12 @@ export function getAiGenerationEnvironment(
     1,
     MAX_AI_OUTPUT_TOKENS,
   );
+  const thinkingBudgetTokens = parseBoundedInteger(
+    environment.TROVE_AI_THINKING_BUDGET_TOKENS,
+    DEFAULT_AI_THINKING_BUDGET_TOKENS,
+    0,
+    MAX_AI_THINKING_BUDGET_TOKENS,
+  );
   const safeTimeoutMs = timeoutMs ?? DEFAULT_AI_TIMEOUT_MS;
   const safeMaxOutputTokens = maxOutputTokens ?? DEFAULT_AI_MAX_OUTPUT_TOKENS;
 
@@ -141,7 +156,7 @@ export function getAiGenerationEnvironment(
     };
   }
 
-  if (timeoutMs === null || maxOutputTokens === null) {
+  if (timeoutMs === null || maxOutputTokens === null || thinkingBudgetTokens === null) {
     return {
       code: 'configuration_invalid',
       maxOutputTokens: safeMaxOutputTokens,
@@ -206,6 +221,7 @@ export function getAiGenerationEnvironment(
       location,
       model,
       project,
+      thinkingBudgetTokens,
     },
   };
 }

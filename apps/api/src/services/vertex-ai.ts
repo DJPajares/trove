@@ -27,6 +27,7 @@ export type VertexAiConfiguration = {
   location: string;
   model: string;
   project: string;
+  thinkingBudgetTokens: number;
 };
 
 type VertexAiGenerationProviderOptions = {
@@ -163,12 +164,14 @@ export class VertexAiGenerationProvider implements AiGenerationProvider {
   readonly modelId: string;
   readonly providerId = 'vertex';
   private readonly languageModel: LanguageModel;
+  private readonly thinkingBudgetTokens: number;
 
   constructor(
     configuration: VertexAiConfiguration,
     options: VertexAiGenerationProviderOptions = {},
   ) {
     this.modelId = configuration.model;
+    this.thinkingBudgetTokens = configuration.thinkingBudgetTokens;
     this.languageModel =
       options.languageModel ??
       (options.providerFactory ?? createGoogleVertex)(getVertexProviderSettings(configuration))(
@@ -200,6 +203,12 @@ export class VertexAiGenerationProvider implements AiGenerationProvider {
           }),
         }),
         prompt: request.prompt,
+        // Reasoning is billed against `maxOutputTokens`, so an uncapped
+        // thinking model can exhaust the allowance mid-JSON and finish with
+        // `length` rather than a parseable object.
+        providerOptions: {
+          google: { thinkingConfig: { thinkingBudget: this.thinkingBudgetTokens } },
+        },
       });
 
       return { output: result.output, usage: mapUsage(result.totalUsage) };

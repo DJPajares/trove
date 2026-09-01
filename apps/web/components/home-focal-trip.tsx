@@ -94,7 +94,7 @@ export function HomeFocalTrip({
             </div>
 
             {trip.lifecycle === 'planning' ? (
-              <div className="w-full max-w-xl space-y-3 lg:max-w-sm">
+              <div className="w-full max-w-xl space-y-3 md:max-w-xs">
                 <div className="space-y-2">
                   <p className="text-lg font-medium">
                     {t('countdown', { count: daysUntilTripStart(trip) })}
@@ -106,7 +106,7 @@ export function HomeFocalTrip({
                     <TripItineraryCoverage coverage={trip.itineraryCoverage} inverse />
                   ) : null}
                 </div>
-                <div className="lg:absolute lg:right-9 lg:bottom-9 lg:w-[25rem]">
+                <div className="md:absolute md:right-7 md:bottom-7 md:w-[25rem]">
                   {weatherTarget ? (
                     <HomeWeatherInset target={weatherTarget} />
                   ) : weatherPending ? (
@@ -129,7 +129,7 @@ export function HomeFocalTrip({
                     <TripItineraryCoverage coverage={trip.itineraryCoverage} inverse />
                   ) : null}
                 </div>
-                <div className="lg:absolute lg:right-9 lg:bottom-9 lg:w-[25rem]">
+                <div className="md:absolute md:right-9 md:bottom-9 md:w-[25rem]">
                   {weatherTarget ? (
                     <HomeWeatherInset target={weatherTarget} />
                   ) : weatherPending ? (

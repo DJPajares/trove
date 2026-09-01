@@ -10,15 +10,15 @@
       "import": "./dist/index.js"
     }
   },
-  "devDependencies": {
-    "@trove/config": "workspace:*"
-  },
   "scripts": {
     "build": "../../node_modules/.bin/tsc --project tsconfig.build.json",
     "lint": "../../node_modules/.bin/oxlint --deny-warnings src",
     "typecheck": "../../node_modules/.bin/tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {
-    "zod": "4.4.3"
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@trove/config": "workspace:*"
   }
 }

@@ -10,12 +10,6 @@
       "import": "./dist/index.js"
     }
   },
-  "devDependencies": {
-    "@trove/config": "workspace:*",
-    "@types/pg": "^8.23.1",
-    "prisma": "^7.9.1",
-    "tsx": "^4.23.12"
-  },
   "scripts": {
     "build": "pnpm db:generate && ../../node_modules/.bin/tsc --project tsconfig.build.json",
     "db:generate": "prisma generate",
@@ -31,6 +25,12 @@
     "@prisma/client": "^7.10.0",
     "dotenv": "^17.4.2",
     "pg": "^8.23.0",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@trove/config": "workspace:*",
+    "@types/pg": "^8.23.1",
+    "prisma": "^7.9.1",
+    "tsx": "^4.23.13"
   }
 }

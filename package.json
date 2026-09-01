@@ -25,7 +25,8 @@
     "db:seed": "pnpm --filter @trove/db db:seed",
     "db:validate-env": "pnpm --filter @trove/db db:validate-env",
     "editorial-images:reconcile": "pnpm --filter @trove/api editorial-images:reconcile",
-    "editorial-images:reconcile:prod": "pnpm --filter @trove/api production:operation reconcile"
+    "editorial-images:reconcile:prod": "pnpm --filter @trove/api production:operation reconcile",
+    "ai:reset-quota": "pnpm --filter @trove/api ai-planning:reset-quota"
   },
   "lint-staged": {
     "*.{js,mjs,cjs,ts,tsx}": [

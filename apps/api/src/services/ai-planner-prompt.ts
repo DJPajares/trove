@@ -108,6 +108,8 @@ export function buildAiPlannerPrompt(
     '',
     'Every id you reference must be one you declared: candidatePlaceId must match an id in places, destinationIntentId must match an id in normalizedRequest.destinations, and each constraintIds entry must match an id in normalizedRequest.constraints.',
     '',
+    "In places, set name to the venue's own name exactly as Google Maps lists it, with no descriptive suffix, activity wording, or article added, and set searchQuery to that same name followed by the city it sits in. A name that reads as a label rather than a sign above the door cannot be matched to a real place.",
+    '',
     'Mark origin "user" only for something the traveller actually asked for, otherwise "model". An item with origin "model" must not use priority "must_go" or durationProvenance "user_owned", and must use a day_part schedule rather than an exact one. A constraint with source "model" must have strength "soft".',
     '',
     'A destination with source "user" carries a destinationIntentId and a null assumptionId. A destination with source "model" carries a null destinationIntentId and an assumptionId naming an assumption whose code is destination_inferred.',

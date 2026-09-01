@@ -50,6 +50,7 @@ import {
   activeAiPlanningAssumptions,
   aiPlanningAssumptionMessageValues,
   aiPlanningReviewPageState,
+  appliedAiPlanningSession,
   buildAiPlanningReviewMapPoints,
 } from '@/lib/ai-planning/review';
 import {
@@ -452,7 +453,14 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
     setError(null);
     try {
       const saved = await flushDraft();
-      if (!saved?.draft) return;
+      // A failed flush already shows the autosave banner with its retry, and a
+      // flushed session with no draft is one the server has already applied.
+      // Neither can create a trip, so close the dialog instead of leaving it
+      // sitting there with nothing to act on.
+      if (!saved?.draft) {
+        setConfirmApply(false);
+        return;
+      }
       const latestMaterialWarnings = saved.draft.warnings.filter((warning) => warning.material);
       const latestWarningsAcknowledged =
         !latestMaterialWarnings.length ||
@@ -463,6 +471,14 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
       }
       const deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
       const result = await applyAiPlanningSession(saved.id, saved.draftRevision, deviceTimeZone);
+      const applied = appliedAiPlanningSession(saved, result.trip.id);
+      sessionRef.current = applied;
+      queryClient.setQueryData(queryKeys.aiPlanningSession(sessionId), { session: applied });
+      // Recovery must be emptied, not just refreshed: the server drops an
+      // applied session from recovery, and the app-wide resume pin sends the
+      // traveller back to `/trips/ai/:id` on the very navigation below while a
+      // `reviewing` session is still cached here.
+      queryClient.setQueryData(queryKeys.aiPlanningRecovery(), { session: null });
       queryClient.setQueryData(queryKeys.trips(), (current: { trips: Trip[] } | undefined) =>
         current ? { ...current, trips: [...current.trips, result.trip] } : current,
       );

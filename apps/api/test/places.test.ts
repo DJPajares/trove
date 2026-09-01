@@ -54,7 +54,7 @@ test('Google Text Search is capped at two durable identity results with attribut
 
   expect(body).toStrictEqual({
     languageCode: 'en',
-    pageSize: 2,
+    pageSize: 5,
     regionCode: 'sg',
     textQuery: 'National Museum Singapore',
   });

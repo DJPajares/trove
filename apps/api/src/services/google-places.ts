@@ -452,7 +452,10 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
                 },
               }
             : undefined,
-          pageSize: 2,
+          // Text Search is billed per request, not per result. A wider page
+          // costs the same and is what lets grounding tell an ambiguous name
+          // apart from one whose only good match was ranked third.
+          pageSize: 5,
           regionCode: request.regionCode,
           textQuery: request.textQuery,
         }),

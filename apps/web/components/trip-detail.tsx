@@ -374,14 +374,29 @@ export function TripDetail({
         </div>
       </section>
 
-      {/* Held out of the cover's own top-right corner: that spot belongs to the
-          app-wide quick-actions button on mobile, and a control placed there
-          would sit right underneath it. */}
-      <div className="flex min-h-11 shrink-0 items-center justify-end">
+      {/* The trip in its own words sits beside its own actions, rather than
+          each claiming a full row: the menu is held out of the cover's
+          top-right corner, which belongs to the app-wide quick-actions
+          button on mobile, but a row of its own here would leave nothing
+          beside it but air. */}
+      <div className="flex items-start justify-between gap-4">
+        {trip.description ? (
+          <p className="min-w-0 max-w-[var(--layout-reading)] text-base leading-[1.6] text-pretty whitespace-pre-wrap text-muted-foreground">
+            {trip.description}
+          </p>
+        ) : (
+          <span />
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button aria-label={t('tripActions')} size="icon" type="button" variant="ghost" />
+              <Button
+                aria-label={t('tripActions')}
+                className="shrink-0"
+                size="icon"
+                type="button"
+                variant="ghost"
+              />
             }
           >
             <Ellipsis aria-hidden="true" />
@@ -419,14 +434,6 @@ export function TripDetail({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-
-      {/* The trip in the traveller's own words, and the first thing read after
-          the cover. Prose, so it sits above the facts rather than inside them. */}
-      {trip.description ? (
-        <p className="max-w-[var(--layout-reading)] text-base leading-[1.6] text-pretty whitespace-pre-wrap text-muted-foreground">
-          {trip.description}
-        </p>
-      ) : null}
 
       {deleteError ? (
         <Alert role="alert" variant="destructive">

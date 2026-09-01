@@ -15,6 +15,7 @@ import {
   type AiPlanningSession,
 } from './api';
 import { isAiPlanningPromptValid, isAiPlanningSessionGenerating } from './presentation';
+import { releasesMirroredAiPlanningSession } from './review';
 
 import { queryKeys } from '@/lib/query/keys';
 
@@ -50,6 +51,7 @@ export function useAiPlanningLifecycle(enabled: boolean) {
   const pendingPlanningAttempt = useRef<PendingPlanningAttempt | null>(null);
   const cancelledSessionIds = useRef(new Set<string>());
   const promptTouched = useRef(false);
+  const mirroredRecoveryId = useRef<string | null>(null);
 
   const recoveryQuery = useQuery({
     enabled,
@@ -62,6 +64,7 @@ export function useAiPlanningLifecycle(enabled: boolean) {
     queryKey: queryKeys.aiPlanningAvailability(),
   });
   const recoveredSession = recoveryQuery.data?.session ?? null;
+  const recoveredSessionId = recoveredSession?.id ?? null;
   const activeSession = session && isAiPlanningSessionGenerating(session.status) ? session : null;
   const activeSessionQuery = useQuery({
     enabled: Boolean(activeSession),
@@ -87,6 +90,24 @@ export function useAiPlanningLifecycle(enabled: boolean) {
     // it must never overwrite words they are in the middle of typing.
     if (!promptTouched.current) setPromptValue(recoveredSession.prompt ?? '');
   }, [recoveredSession]);
+
+  // The seeding above only copies recovery in. This copies it *out* again: when
+  // recovery drops the session this hook was following — Apply empties that cache
+  // — the mirror has to let go with it. `cancel` already pairs the two by hand;
+  // this makes the pairing automatic rather than something every caller has to
+  // remember, which is how the redirect loop came back.
+  useEffect(() => {
+    // A run in flight owns its session outright, and is deliberately ahead of
+    // recovery. Recovery is only authoritative once that run has settled.
+    if (operation !== 'idle') return;
+    const previousRecoveredId = mirroredRecoveryId.current;
+    mirroredRecoveryId.current = recoveredSessionId;
+    setSession((current) =>
+      releasesMirroredAiPlanningSession(current, previousRecoveredId, recoveredSessionId)
+        ? null
+        : current,
+    );
+  }, [operation, recoveredSessionId]);
 
   useEffect(() => {
     if (activeSessionQuery.data?.session) publishSession(activeSessionQuery.data.session);

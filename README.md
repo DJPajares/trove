@@ -370,6 +370,21 @@ Production reconciliation loads `.env.production`; active refresh also requires
 
 Trove registers its Serwist service worker only in production. It precaches the static application shell and the `~offline` fallback page; it does not cache Trip Mode, maps, API responses, or queued travel data. During `next dev`, Trove removes a prior Trove service-worker registration and its `trove-pwa-*` caches for the current origin to avoid stale-cache confusion.
 
+## Dev Server Cache
+
+Next 16 runs Turbopack, which keeps a persistent filesystem cache under
+`apps/web/.next/dev/cache/turbopack`. That cache is keyed on the Turbopack version
+alone, so a dependency bump does not invalidate it, and a stale entry can trip an
+upstream `turbo-tasks` panic (`inner_of_upper_lost_followers`) that aborts the dev
+server mid-request. Turbopack usually detects this and deletes the cache itself.
+When it does not:
+
+```bash
+pnpm --filter web dev:reset
+```
+
+That clears only the Turbopack dev cache, leaving the rest of `.next` intact.
+
 ## Delivery Order
 
 1. Foundation

@@ -1,11 +1,12 @@
 import { expect, test } from 'vitest';
 
-import type { AiPlanningDraft } from '../lib/ai-planning/api.ts';
+import type { AiPlanningDraft, AiPlanningSession } from '../lib/ai-planning/api.ts';
 import {
   activeAiPlanningAssumptions,
   aiPlanningAssumptionMessageValues,
   aiPlanningReviewPageState,
   appliedAiPlanningSession,
+  releasesMirroredAiPlanningSession,
   buildAiPlanningReviewMapPoints,
 } from '../lib/ai-planning/review.ts';
 
@@ -206,4 +207,32 @@ test('an applied session drops its draft so the review page cannot render one ag
   });
   expect(session.draft).toBe(draft);
   expect(aiPlanningReviewPageState(applied, null, false)).toBe('redirecting');
+});
+
+test('a mirrored session is released exactly when recovery lets go of it', () => {
+  const reviewing = { id: 'session:review' } as AiPlanningSession;
+
+  // Apply empties the recovery cache. The mirror following that session has to
+  // let go with it, or it pins the traveller back to the draft on the very
+  // navigation Apply just made and loops against the review page's own redirect.
+  expect(releasesMirroredAiPlanningSession(reviewing, 'session:review', null)).toBe(true);
+
+  // Recovery still holds it: nothing has been let go of.
+  expect(releasesMirroredAiPlanningSession(reviewing, 'session:review', 'session:review')).toBe(
+    false,
+  );
+
+  // A run this hook started is deliberately ahead of recovery, so a mirror that
+  // has already moved on must survive an older session being dropped.
+  expect(
+    releasesMirroredAiPlanningSession(
+      { id: 'session:next' } as AiPlanningSession,
+      'session:review',
+      null,
+    ),
+  ).toBe(false);
+
+  // Nothing was being followed, and nothing is being followed now.
+  expect(releasesMirroredAiPlanningSession(reviewing, null, null)).toBe(false);
+  expect(releasesMirroredAiPlanningSession(null, 'session:review', null)).toBe(false);
 });

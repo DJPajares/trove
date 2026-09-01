@@ -75,6 +75,13 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
   // Whether the draft about to arrive is one this screen watched being built.
   // A `reviewing` session recovered on a cold load has nothing to hand off from.
   const handedOff = useRef(false);
+  // Which draft has already been resumed. A draft is worth one redirect, not one
+  // per navigation — see the handoff effect below.
+  const resumedSessionId = useRef<string | null>(null);
+  // Read inside the handoff effect without making it a dependency, so arriving at
+  // a route cannot re-trigger a resume.
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
 
   // The takeover and the sheet are mutually exclusive: both trap focus, and only
   // one of them has anything to say while a plan is being built.
@@ -91,6 +98,7 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
   useEffect(() => {
     if (takeoverPhase !== 'working' || running || session?.status === 'reviewing') return;
     handedOff.current = false;
+    resumedSessionId.current = null;
     setTakeoverPhase(null);
     setCreationMode('ai');
     setOpen(true);
@@ -100,14 +108,19 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
   // and the takeover stays mounted across the redirect so its own fade is what
   // covers the review screen's first paint. A draft recovered on a cold load has
   // no takeover to hand off from and goes straight through.
+  //
+  // A draft is resumed once. Re-pinning on every navigation made the review screen
+  // inescapable — Trips and Home both bounced straight back — and turned any stale
+  // session into a fight with whatever redirect it was racing.
   useEffect(() => {
-    if (session?.status !== 'reviewing') return;
+    if (session?.status !== 'reviewing' || resumedSessionId.current === session.id) return;
+    resumedSessionId.current = session.id;
     const href = `/trips/ai/${session.id}`;
     const navigate = () => {
       handedOff.current = false;
       setOpen(false);
       setTakeoverPhase(null);
-      if (pathname !== href) router.replace(href);
+      if (pathnameRef.current !== href) router.replace(href);
     };
 
     if (!handedOff.current) {
@@ -118,7 +131,7 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
     setTakeoverPhase('landing');
     const timer = window.setTimeout(navigate, reducedMotion ? 0 : LANDING_HOLD_MS);
     return () => window.clearTimeout(timer);
-  }, [pathname, reducedMotion, router, session?.id, session?.status]);
+  }, [reducedMotion, router, session?.id, session?.status]);
 
   const openCreateTrip = useCallback(() => {
     setCreationMode('ai');

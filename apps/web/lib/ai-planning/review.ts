@@ -120,3 +120,22 @@ export function appliedAiPlanningSession(
     warningAcknowledgement: null,
   };
 }
+
+/**
+ * The other half of the contract `appliedAiPlanningSession` starts. Apply empties
+ * the recovery cache, and the app-wide lifecycle mirrors that cache into state so
+ * the takeover can hold a session the server has not reported yet.
+ *
+ * A mirror is allowed to run *ahead* of recovery — a run it started itself is live
+ * here first. It must never outlive one recovery has let go of: a `reviewing`
+ * session left behind after Apply pins the traveller back to the draft on the very
+ * navigation Apply just made, and the review screen's own `appliedTripId` redirect
+ * sends them straight back. That fight is an endless loop, and it has shipped twice.
+ */
+export function releasesMirroredAiPlanningSession(
+  current: AiPlanningSession | null,
+  previousRecoveredId: string | null,
+  recoveredId: string | null,
+) {
+  return Boolean(previousRecoveredId) && !recoveredId && current?.id === previousRecoveredId;
+}

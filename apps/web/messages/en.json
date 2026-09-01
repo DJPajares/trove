@@ -273,6 +273,7 @@
           "evening": "Evening",
           "anytime": "Anytime"
         },
+        "schedule": "Schedule",
         "scheduleExact": "Specific time",
         "exactTime": "Time",
         "duration": "{minutes} minutes",

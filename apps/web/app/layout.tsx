@@ -34,9 +34,9 @@ export async function generateMetadata(): Promise<Metadata> {
     appleWebApp: { statusBarStyle, title: t('name') },
     description: t('description'),
     icons: {
-      // iOS ignores SVG for the home-screen icon, so point it at the PNG the
-      // manifest already ships.
-      apple: '/icons/trove-192.png',
+      // iOS ignores SVG for the home-screen icon. Give it the dedicated opaque
+      // 180px export rather than making it resample an Android launcher asset.
+      apple: '/icons/trove-180.png',
       icon: '/icon.svg',
     },
     title: {

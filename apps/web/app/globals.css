@@ -66,6 +66,11 @@
   --text-subtle: oklch(0.515 0.03 74);
   --brand: oklch(0.455 0.07 115);
   --brand-strong: oklch(0.385 0.058 115);
+  /* The identity stays fixed across appearances, like a printed travel token.
+     Product surfaces can theme around it without changing the mark itself. */
+  --brand-mark-surface: #515723;
+  --brand-mark-ink: #fcf7ee;
+  --brand-mark-accent: #c2603d;
   /* Experience Rating has a colour of its own rather than borrowing the brand's:
      a rating is the traveller's own mark, not a Trove accent. Gold, but dark
      enough to clear 3:1 non-text contrast (WCAG 1.4.11) on every light surface

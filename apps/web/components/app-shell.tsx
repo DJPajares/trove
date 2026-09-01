@@ -1,10 +1,10 @@
-import { MapPinned } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
 import { AppHeader } from '@/components/app-header';
 import { AppearanceToggle } from '@/components/appearance-toggle';
+import { BrandLogo } from '@/components/brand-logo';
 import { DesktopAppHeader } from '@/components/desktop-app-header';
 import { FloatingActionStack } from '@/components/floating-action-stack';
 import { PageTransition } from '@/components/page-transition';
@@ -38,14 +38,8 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
           : 'md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]',
       )}
     >
-      <Link
-        className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground"
-        href="/"
-      >
-        <span className="flex size-8 items-center justify-center rounded-[var(--radius-md)] bg-brand text-primary-foreground shadow-[var(--shadow-control)]">
-          <MapPinned aria-hidden="true" className="size-4" />
-        </span>
-        {app('name')}
+      <Link className="inline-flex min-w-0 items-center text-sm text-foreground" href="/">
+        <BrandLogo markClassName="size-8 shadow-[var(--shadow-control)]" name={app('name')} />
       </Link>
 
       {/* On desktop, destinations sit immediately beside the quick-actions

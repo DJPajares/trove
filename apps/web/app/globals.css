@@ -133,6 +133,9 @@
      below overlays so a dialog is never argued with by a toast. */
   --layer-notice: 45;
   --layer-overlay: 50;
+  /* Above the creation sheet, which the generating takeover covers for the
+     frame between the draft being ready and the sheet closing. */
+  --layer-takeover: 55;
 }
 
 .dark {

@@ -208,7 +208,6 @@
       "availability": "{count, plural, =0 {No AI plans available right now} one {# AI plan available in the next 24 hours} other {# AI plans available in the next 24 hours}}",
       "quotaRetryAt": "Your next AI plan is available after {retryAt}.",
       "quotaRetryUnknown": "Try again later.",
-      "workingHint": "You can leave this open or refresh. Trove will keep this planning session for you.",
       "reviewReadyTitle": "Your plan is ready",
       "reviewReadyDescription": "You can review the itinerary details in the next step.",
       "manualFallbackHint": "You can create a trip manually at any time.",
@@ -220,6 +219,17 @@
       "startOver": "Start over",
       "cancelling": "Cancelling…",
       "cancelled": "Planning cancelled. No trip was created.",
+      "generating": {
+        "label": "Building your itinerary",
+        "hints": {
+          "discovering": "Discovering the best places…",
+          "planning": "Planning your days…",
+          "optimising": "Optimising your route…",
+          "assembling": "Putting your itinerary together…"
+        },
+        "ready": "Your itinerary is ready",
+        "opening": "Opening it now…"
+      },
       "stages": {
         "created": "Starting your plan",
         "generating": "Shaping your itinerary",

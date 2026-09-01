@@ -12,6 +12,7 @@ import {
   Sparkles,
   Trash2,
 } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -62,6 +63,7 @@ import {
   searchProviderPlaces,
   type ProviderSuggestion,
 } from '@/lib/saved/api';
+import { motionDuration, motionEase } from '@/lib/motion';
 import { queryKeys } from '@/lib/query/keys';
 import type { Trip } from '@/lib/trips/api';
 
@@ -156,6 +158,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   const t = useTranslations('trips.aiPlanning.review');
   const general = useTranslations('trips.aiPlanning');
   const locale = useLocale();
+  const reducedMotion = useReducedMotion();
   const router = useRouter();
   const queryClient = useQueryClient();
   const sessionQuery = useQuery({
@@ -491,6 +494,16 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
     }
   }
 
+  // The itinerary settles into place as the generating takeover fades off it.
+  // Two elements, one beat apart — enough to read as arriving, not as a cascade.
+  const arrive = (delay: number) => ({
+    animate: { opacity: 1, y: 0 },
+    initial: reducedMotion ? false : { opacity: 0, y: 10 },
+    transition: reducedMotion
+      ? { duration: 0 }
+      : { delay, duration: motionDuration.standard, ease: motionEase },
+  });
+
   const pageState = aiPlanningReviewPageState(session, draft, sessionQuery.isPending);
   if (pageState === 'loading' || pageState === 'redirecting') {
     return <PageState kind="loading" loadingShape="text" scope="page" title={t('loading')} />;
@@ -510,7 +523,10 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
 
   return (
     <section className="mx-auto max-w-7xl space-y-6 pb-28" aria-labelledby="ai-review-title">
-      <header className="flex flex-col gap-4 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
+      <motion.header
+        className="flex flex-col gap-4 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between"
+        {...arrive(0)}
+      >
         <div className="max-w-2xl">
           <p className="text-sm font-medium text-brand">{t('eyebrow')}</p>
           <h1
@@ -541,7 +557,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
             </span>
           )}
         </div>
-      </header>
+      </motion.header>
 
       {isAiPlanningSessionGenerating(session.status) ? (
         <Alert role="status" variant="info">
@@ -558,7 +574,10 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
         </Alert>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
+      <motion.div
+        className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]"
+        {...arrive(reducedMotion ? 0 : 0.06)}
+      >
         <div className="space-y-6">
           <section className="rounded-[var(--radius-xl)] border border-border bg-card p-4 shadow-[var(--shadow-surface)] sm:p-6">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -1069,7 +1088,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
             </Button>
           </section>
         </aside>
-      </div>
+      </motion.div>
 
       {materialWarnings.length ? (
         <Alert role="alert" variant="warning">

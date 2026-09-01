@@ -349,54 +349,6 @@ export function TripDetail({
         >
           <ArrowLeft aria-hidden="true" className="size-4" />
         </Link>
-        <div className="absolute top-[max(1rem,var(--safe-top))] right-[max(1rem,var(--safe-right))] z-10">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  aria-label={t('tripActions')}
-                  className="size-10 rounded-full border border-white/20 bg-neutral-950/58 text-white shadow-sm backdrop-blur-sm hover:bg-neutral-950/78 hover:text-white"
-                  size="icon"
-                  type="button"
-                  variant="ghost"
-                />
-              }
-            >
-              <Ellipsis aria-hidden="true" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-52" sideOffset={8}>
-              <DropdownMenuItem onClick={() => setEditing(true)}>
-                <Pencil aria-hidden="true" />
-                {t('editTrip')}
-              </DropdownMenuItem>
-              {/* Sharing sits with editing rather than among the tools: both are
-                  things done to the trip itself, and this menu is the one the
-                  overview offers. It is also the first stop from a trip in the
-                  library, so a trip can be shared without opening its plan. */}
-              <DropdownMenuItem onClick={() => setSharing(true)}>
-                <Share2 aria-hidden="true" />
-                {share('action')}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>{t('tripTools')}</DropdownMenuLabel>
-              </DropdownMenuGroup>
-              {supporting.map((destination) => {
-                const Icon = supportingIcons[destination.section as keyof typeof supportingIcons];
-
-                return (
-                  <DropdownMenuLinkItem
-                    key={destination.section}
-                    render={<Link href={destination.href} />}
-                  >
-                    <Icon aria-hidden="true" />
-                    {t(destination.labelKey)}
-                  </DropdownMenuLinkItem>
-                );
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
         <div className="pointer-events-none absolute inset-0 flex flex-col justify-end rounded-none bg-gradient-to-t from-surface-overlay from-20% via-surface-overlay/55 to-transparent p-5 md:rounded-[var(--radius-2xl)] md:p-7">
           <div className="flex items-end justify-between gap-4">
             <div className="min-w-0">
@@ -422,13 +374,66 @@ export function TripDetail({
         </div>
       </section>
 
-      {/* The trip in the traveller's own words, and the first thing read after
-          the cover. Prose, so it sits above the facts rather than inside them. */}
-      {trip.description ? (
-        <p className="max-w-[var(--layout-reading)] text-base leading-[1.6] text-pretty whitespace-pre-wrap text-muted-foreground">
-          {trip.description}
-        </p>
-      ) : null}
+      {/* The trip in its own words sits beside its own actions, rather than
+          each claiming a full row: the menu is held out of the cover's
+          top-right corner, which belongs to the app-wide quick-actions
+          button on mobile, but a row of its own here would leave nothing
+          beside it but air. */}
+      <div className="flex items-start justify-between gap-4">
+        {trip.description ? (
+          <p className="min-w-0 max-w-[var(--layout-reading)] text-base leading-[1.6] text-pretty whitespace-pre-wrap text-muted-foreground">
+            {trip.description}
+          </p>
+        ) : (
+          <span />
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                aria-label={t('tripActions')}
+                className="shrink-0"
+                size="icon"
+                type="button"
+                variant="ghost"
+              />
+            }
+          >
+            <Ellipsis aria-hidden="true" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-52" sideOffset={8}>
+            <DropdownMenuItem onClick={() => setEditing(true)}>
+              <Pencil aria-hidden="true" />
+              {t('editTrip')}
+            </DropdownMenuItem>
+            {/* Sharing sits with editing rather than among the tools: both are
+                things done to the trip itself, and this menu is the one the
+                overview offers. It is also the first stop from a trip in the
+                library, so a trip can be shared without opening its plan. */}
+            <DropdownMenuItem onClick={() => setSharing(true)}>
+              <Share2 aria-hidden="true" />
+              {share('action')}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>{t('tripTools')}</DropdownMenuLabel>
+            </DropdownMenuGroup>
+            {supporting.map((destination) => {
+              const Icon = supportingIcons[destination.section as keyof typeof supportingIcons];
+
+              return (
+                <DropdownMenuLinkItem
+                  key={destination.section}
+                  render={<Link href={destination.href} />}
+                >
+                  <Icon aria-hidden="true" />
+                  {t(destination.labelKey)}
+                </DropdownMenuLinkItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       {deleteError ? (
         <Alert role="alert" variant="destructive">

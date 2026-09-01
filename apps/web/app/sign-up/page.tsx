@@ -6,6 +6,7 @@ import { BrandMark } from '@/components/brand-logo';
 import { EmailAuthForm } from '@/components/email-auth-form';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { getSafeRedirectPath } from '@/lib/auth/redirect';
+import { isSignUpEnabled } from '@/lib/auth/config.server';
 
 type SignUpPageProps = {
   searchParams: Promise<{ next?: string }>;
@@ -13,6 +14,7 @@ type SignUpPageProps = {
 
 export default async function SignUpPage({ searchParams }: Readonly<SignUpPageProps>) {
   const [{ next }, t] = await Promise.all([searchParams, getTranslations('auth')]);
+  const signUpEnabled = isSignUpEnabled();
 
   return (
     <AuthShell headingId="sign-up-heading">
@@ -24,14 +26,16 @@ export default async function SignUpPage({ searchParams }: Readonly<SignUpPagePr
             className="mt-2 text-[clamp(1.75rem,5vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-pretty text-foreground"
             id="sign-up-heading"
           >
-            {t('signUpTitle')}
+            {signUpEnabled ? t('signUpTitle') : t('signUpClosedTitle')}
           </h1>
           <p className="mt-2 text-base leading-7 text-pretty text-muted-foreground">
-            {t('signUpDescription')}
+            {signUpEnabled ? t('signUpDescription') : t('signUpClosedDescription')}
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
-          <EmailAuthForm mode="sign-up" nextPath={getSafeRedirectPath(next)} />
+          {signUpEnabled ? (
+            <EmailAuthForm mode="sign-up" nextPath={getSafeRedirectPath(next)} />
+          ) : null}
           <p className="text-center text-sm text-muted-foreground">
             {t('alreadyHaveAccount')}{' '}
             <Link

@@ -59,6 +59,8 @@ type GenerationGateway = {
   generateStructured<OUTPUT>(
     request: AiStructuredGenerationRequest<OUTPUT>,
   ): Promise<{ metadata: AiGenerationMetadata; output: OUTPUT }>;
+  /** Optional so injected fakes stay valid; absent means the retry is unbounded. */
+  timeoutMs?: number;
 };
 
 type ProviderContext = {
@@ -844,7 +846,12 @@ export async function runAiPlanningPipeline(
     // whichever attempt covered more of the trip so a retry is never a downgrade.
     // An invalid proposal is left alone — it already fails fast, and retrying it
     // would spend a second call on every malformed response.
-    if (proposal.success && isSparseProposal(proposal.data)) {
+    // A second call gets its own full timeout, so retrying after a slow first
+    // attempt can double the traveller's wait and then time out anyway.
+    const retryFits =
+      gateway.timeoutMs === undefined || generation.metadata.latencyMs * 2 <= gateway.timeoutMs;
+
+    if (retryFits && proposal.success && isSparseProposal(proposal.data)) {
       const covered = coveredDayCount(proposal.data.items);
       const retried = await generate(true);
       const retriedProposal = validateAiPlannerModelProposal(retried.output);

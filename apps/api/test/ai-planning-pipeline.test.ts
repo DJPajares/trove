@@ -193,6 +193,36 @@ describe('AI planning pipeline', () => {
     );
   });
 
+  /**
+   * A retry gets its own full timeout, so retrying after a slow first attempt
+   * can double the traveller's wait and then time out anyway.
+   */
+  test.each([
+    ['fast enough for a second call', 240, 2],
+    ['already past half the budget', 40_000, 1],
+  ])('a sparse proposal retries only when %s', async (_label, latencyMs, expected) => {
+    const proposal = missingDetailsProposal();
+    let calls = 0;
+    const gateway: NonNullable<AiPlanningPipelineOptions['gateway']> = {
+      async generateStructured<OUTPUT>() {
+        calls += 1;
+        return { metadata: { ...METADATA, latencyMs }, output: proposal as OUTPUT };
+      },
+      timeoutMs: 60_000,
+    };
+    const harness = createHarness(proposal);
+
+    await runAiPlanningPipeline(OWNER_ID, RUN_ID, {
+      clock: () => NOW,
+      gateway,
+      lifecycle: harness.lifecycle,
+      loadHomeLocation: async () => null,
+      providerContext: noProviders,
+    });
+
+    expect(calls).toBe(expected);
+  });
+
   test('falls back to Custom Places when grounding is unavailable', async () => {
     const harness = createHarness(explicitModelProposal());
 

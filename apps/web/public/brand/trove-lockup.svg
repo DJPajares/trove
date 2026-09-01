@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 204 64" fill="none">
+  <path
+    d="M18 17h28L30 32l16 15H18"
+    stroke="#515723"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="7"
+  />
+  <circle cx="18" cy="47" r="4.25" fill="#c2603d" />
+  <text
+    x="72"
+    y="41"
+    fill="#33261f"
+    font-family="Instrument Sans, ui-sans-serif, sans-serif"
+    font-size="30"
+    font-weight="650"
+    letter-spacing="-0.75"
+  >Trove</text>
+</svg>

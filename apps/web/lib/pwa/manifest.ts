@@ -57,7 +57,7 @@ export async function buildManifest(theme: ThemeName): Promise<MetadataRoute.Man
       {
         purpose: 'maskable',
         sizes: '512x512',
-        src: '/icons/trove-512.png',
+        src: '/icons/trove-maskable-512.png',
         type: 'image/png',
       },
     ],

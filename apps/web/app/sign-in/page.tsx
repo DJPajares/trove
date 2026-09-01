@@ -1,8 +1,8 @@
-import { MapPinned } from 'lucide-react';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 
 import { AuthShell } from '@/components/auth-shell';
+import { BrandMark } from '@/components/brand-logo';
 import { EmailAuthForm } from '@/components/email-auth-form';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { getSafeRedirectPath } from '@/lib/auth/redirect';
@@ -18,9 +18,7 @@ export default async function SignInPage({ searchParams }: Readonly<SignInPagePr
     <AuthShell headingId="sign-in-heading">
       <Card className="w-full max-w-md sm:[--card-spacing:--spacing(6)]">
         <CardHeader>
-          <div className="mb-4 flex size-11 items-center justify-center rounded-[var(--radius-md)] bg-brand text-primary-foreground shadow-[var(--shadow-control)]">
-            <MapPinned aria-hidden="true" className="size-5" />
-          </div>
+          <BrandMark className="mb-4 size-11 shadow-[var(--shadow-control)]" presentation="tile" />
           <p className="text-sm font-medium tracking-[0.01em] text-brand">{t('eyebrow')}</p>
           <h1
             className="mt-2 text-[clamp(1.75rem,5vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-pretty text-foreground"

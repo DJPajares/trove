@@ -149,6 +149,18 @@ test('the manifest is the same app in both themes', async () => {
   expect(dark.icons).toStrictEqual(light.icons);
 });
 
+test('the manifest gives maskable launchers their own safe-zone export', async () => {
+  const { buildManifest } = await import('../lib/pwa/manifest.ts');
+  const manifest = await buildManifest('light');
+
+  expect(manifest.icons).toContainEqual({
+    purpose: 'maskable',
+    sizes: '512x512',
+    src: '/icons/trove-maskable-512.png',
+    type: 'image/png',
+  });
+});
+
 /**
  * The cookie is the only thing telling the server which theme to paint, and it
  * arrives as an arbitrary string. Anything but `dark` has to fall back to light,

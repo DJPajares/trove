@@ -20,6 +20,8 @@ export type Trip = {
   coverPhotoPath: string | null;
   coverPhotoUrl: string | null;
   createdAt: string;
+  /** Optional so snapshots written while this was `notes` remain readable offline. */
+  description?: string | null;
   destinations: TripDestination[];
   endDate: string;
   experienceNote: string | null;
@@ -30,7 +32,6 @@ export type Trip = {
   lifecycle: 'active' | 'completed' | 'planning';
   memoryCount: number;
   name: string;
-  notes: string | null;
   partySize: number;
   planningReadiness: 'in_progress' | 'ready';
   referenceTimeZone: string;
@@ -52,11 +53,11 @@ export type Trip = {
 export type TripInput = {
   confirmDateShrink?: boolean;
   coverPhotoPath?: string | null;
+  description: string | null;
   destinations: Array<{ name: string }>;
   deviceTimeZone: string;
   endDate: string;
   name: string;
-  notes: string | null;
   partySize: number;
   planningReadiness: 'in_progress' | 'ready';
   referenceTimeZone: string | null;

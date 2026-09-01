@@ -11,11 +11,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import type { Trip } from '@/lib/trips/api';
 
 export type TripOptionalDetailsValues = {
-  notes: string;
   partySize: string;
   planningReadiness: 'in_progress' | 'ready';
   referenceTimeZone: string;
@@ -130,18 +128,6 @@ export function TripOptionalDetails({
           ))}
         </NativeSelect>
         <FieldDescription>{t('timeZoneHint')}</FieldDescription>
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="trip-notes">{t('notes')}</FieldLabel>
-        <Textarea
-          id="trip-notes"
-          maxLength={5_000}
-          onChange={(event) => onChange({ notes: event.target.value })}
-          placeholder={t('notesPlaceholder')}
-          rows={4}
-          value={values.notes}
-        />
       </Field>
     </div>
   );

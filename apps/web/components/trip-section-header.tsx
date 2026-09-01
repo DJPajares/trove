@@ -19,6 +19,13 @@ type TripSectionHeaderProps = {
   coverSource?: TripMediaSource;
   currentSection: TripSection;
   description?: string;
+  /**
+   * Whether `description` is the traveller's own words rather than Trove's
+   * standing guidance. Guidance earns its rows on a wide screen and fewer than
+   * none on a phone; what a traveller wrote about their own trip is worth the
+   * rows everywhere.
+   */
+  descriptionIsOwnContent?: boolean;
 };
 
 /**
@@ -39,6 +46,7 @@ export function TripSectionHeader({
   coverSource,
   currentSection,
   description,
+  descriptionIsOwnContent = false,
 }: Readonly<TripSectionHeaderProps>) {
   const chrome = useTripChrome();
   const setCoverSource = chrome?.setCoverSource;
@@ -63,8 +71,11 @@ export function TripSectionHeader({
                 'max-w-[var(--layout-reading)] text-sm leading-[1.55] text-pretty text-muted-foreground',
                 // Standing guidance is worth its rows on a wide screen and worth
                 // fewer than none on a phone, where it sits between the traveller
-                // and their own plan.
-                currentSection === 'itinerary' && 'hidden sm:block',
+                // and their own plan. Their own description is not guidance.
+                currentSection === 'itinerary' && !descriptionIsOwnContent && 'hidden sm:block',
+                // A description has no length Trove controls, and this header is
+                // not where a long one belongs.
+                descriptionIsOwnContent && 'line-clamp-3 whitespace-pre-line',
               )}
             >
               {description}

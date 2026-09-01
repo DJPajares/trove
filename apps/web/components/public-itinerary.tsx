@@ -49,6 +49,11 @@ export async function PublicItinerary({ itinerary, locale }: Readonly<PublicItin
             startDate: formatDate(itinerary.trip.startDate),
           })}
         </p>
+        {itinerary.trip.description ? (
+          <p className="mt-1 max-w-[var(--layout-reading)] text-base leading-[1.6] text-pretty whitespace-pre-wrap text-muted-foreground">
+            {itinerary.trip.description}
+          </p>
+        ) : null}
         <p className="text-sm text-muted-foreground">{t('readOnly')}</p>
       </header>
 

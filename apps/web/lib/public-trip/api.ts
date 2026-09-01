@@ -21,7 +21,14 @@ export type PublicItineraryDay = {
 
 export type PublicItinerary = {
   days: PublicItineraryDay[];
-  trip: { endDate: string; id: string; name: string; startDate: string };
+  trip: {
+    /** The traveller's own framing of the trip, shared along with the plan. */
+    description: string | null;
+    endDate: string;
+    id: string;
+    name: string;
+    startDate: string;
+  };
 };
 
 const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';

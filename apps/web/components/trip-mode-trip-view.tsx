@@ -48,6 +48,7 @@ import type { Task, TasksResponse } from '@/lib/tasks/api';
 import { groupTasksByContext } from '@/lib/tasks/grouping';
 import { tripTasks } from '@/lib/tasks/trip-mode';
 import { fetchTripInfo } from '@/lib/trip-info/api';
+import { cn } from '@/lib/utils';
 
 type Tool = {
   descriptionKey:
@@ -200,8 +201,8 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
   const dailyBase = selectedDay?.dailyBaseTripPlaceId
     ? itinerary.tripPlaces.find((place) => place.id === selectedDay.dailyBaseTripPlaceId)
     : null;
+  const tripDescription = trip.description?.trim() ?? '';
   const notes = [
-    ...(trip.notes ? [{ label: t('tripNote'), value: trip.notes }] : []),
     ...(selectedDay?.notes
       ? [
           {
@@ -269,8 +270,16 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
     <div className="space-y-8 pb-2 sm:space-y-10">
       <header className="max-w-[var(--layout-reading)]">
         <h2 className="sr-only">{t('title')}</h2>
-        <p className="text-sm leading-[1.55] text-pretty text-muted-foreground">
-          {t('description')}
+        {/* Standing guidance until the traveller has written their own account
+            of the trip, at which point theirs is the more useful sentence. It
+            stays out of the notes list below: that list is reminders. */}
+        <p
+          className={cn(
+            'text-sm leading-[1.55] text-pretty text-muted-foreground',
+            tripDescription && 'whitespace-pre-wrap',
+          )}
+        >
+          {tripDescription || t('description')}
         </p>
       </header>
 

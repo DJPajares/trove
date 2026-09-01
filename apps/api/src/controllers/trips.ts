@@ -39,10 +39,10 @@ const tripFields = {
       });
     })
     .optional(),
+  description: z.string().trim().max(5_000).nullable().optional(),
   deviceTimeZone: timeZoneSchema.optional(),
   endDate: dateSchema,
   name: z.string().trim().min(1).max(120),
-  notes: z.string().trim().max(5_000).nullable().optional(),
   partySize: z.number().int().min(1).max(99).optional(),
   planningReadiness: z.enum(['in_progress', 'ready']).optional(),
   referenceTimeZone: timeZoneSchema.nullable().optional(),
@@ -54,11 +54,11 @@ const tripUpdateSchema = z
   .object({
     coverPhotoPath: tripFields.coverPhotoPath,
     confirmDateShrink: z.boolean().optional(),
+    description: tripFields.description,
     destinations: tripFields.destinations,
     deviceTimeZone: tripFields.deviceTimeZone,
     endDate: tripFields.endDate.optional(),
     name: tripFields.name.optional(),
-    notes: tripFields.notes,
     partySize: tripFields.partySize,
     planningReadiness: tripFields.planningReadiness,
     referenceTimeZone: tripFields.referenceTimeZone,

@@ -17,6 +17,8 @@ import {
 } from './places.js';
 
 const GENERIC_LOCALITY_WORDS = new Set(['city', 'prefecture', 'province', 'region']);
+/** Short tokens ("ha", "sa", "st") match too much of an address to place a venue. */
+const LOCALITY_TOKEN_MIN_LENGTH = 4;
 
 export type AiPlaceGroundingCandidate = AiPlannerCandidatePlace & {
   languageCode?: string;
@@ -48,17 +50,75 @@ function normalizeIdentityText(value: string) {
     .replace(/\s+/g, ' ');
 }
 
+function textTokens(value: string) {
+  return normalizeIdentityText(value)
+    .split(' ')
+    .filter((token) => token.length > 0);
+}
+
+function localityTokens(localityHint: string | undefined) {
+  if (!localityHint?.trim()) return [];
+  return textTokens(localityHint).filter((token) => !GENERIC_LOCALITY_WORDS.has(token));
+}
+
+function compactText(value: string) {
+  return textTokens(value).join('');
+}
+
+/**
+ * The planner writes a locality the way a traveller says it and Google writes it
+ * the way the post office does: "Hanoi" against "Hà Nội", "Sapa" against
+ * "Sa Pa", "Ha Long Bay" against "Hạ Long". Demanding every locality token as a
+ * whole word in the address rejected entire regions of real venues, so ask
+ * instead for one substantial piece of the locality to appear with spacing
+ * ignored. This is a disambiguator between same-named venues, not the identity
+ * claim itself - the name tiers and the single-survivor rule make that call.
+ */
 function localityMatches(identity: ProviderPlaceIdentity, localityHint: string | undefined) {
   if (!localityHint?.trim()) return true;
   if (!identity.formattedAddress) return false;
 
-  const tokens = normalizeIdentityText(localityHint)
-    .split(' ')
-    .filter((token) => token && !GENERIC_LOCALITY_WORDS.has(token));
+  const tokens = localityTokens(localityHint);
   if (tokens.length === 0) return true;
 
-  const addressTokens = new Set(normalizeIdentityText(identity.formattedAddress).split(' '));
-  return tokens.every((token) => addressTokens.has(token));
+  const address = compactText(identity.formattedAddress);
+  const substantial = tokens.filter((token) => token.length >= LOCALITY_TOKEN_MIN_LENGTH);
+  return (substantial.length ? substantial : tokens).some((token) => address.includes(token));
+}
+
+/**
+ * A provider display name and the planner's label name the same venue far more
+ * often than they agree character for character: "Sensō-ji Temple" against
+ * "Sensō-ji", or "Tokyo Skytree" against "Tokyo Skytree Tower". Accept a name
+ * whose tokens are wholly contained in the other, which keeps an unrelated
+ * venue out without reaching for fuzzy distance. The single-survivor rule in
+ * `groundCandidate` remains the guard against a loose containment match.
+ */
+function nameTokensContained(left: string, right: string) {
+  const leftTokens = textTokens(left);
+  const rightTokens = textTokens(right);
+  if (!leftTokens.length || !rightTokens.length) return false;
+
+  const [shorter, longer] =
+    leftTokens.length <= rightTokens.length ? [leftTokens, rightTokens] : [rightTokens, leftTokens];
+  const longerTokens = new Set(longer);
+  return shorter.every((token) => longerTokens.has(token));
+}
+
+/**
+ * Google ranks on the query text it is given, so a bare venue name competes
+ * with every same-named venue on earth. Naming the locality the planner already
+ * chose costs nothing - Text Search is billed per request - and is what puts the
+ * intended venue in the returned page at all.
+ */
+function localizedTextQuery(searchQuery: string, localityHint: string | undefined) {
+  const locality = localityHint?.trim();
+  const tokens = localityTokens(locality);
+  if (!locality || !tokens.length) return searchQuery;
+
+  const queryTokens = new Set(textTokens(searchQuery));
+  if (tokens.every((token) => queryTokens.has(token))) return searchQuery;
+  return `${searchQuery}, ${locality}`;
 }
 
 function memoKey(request: PlaceTextSearchRequest) {
@@ -135,7 +195,7 @@ export class AiPlaceGrounder {
       languageCode: candidate.languageCode,
       locationBias: candidate.locationBias,
       regionCode: candidate.regionCode,
-      textQuery: candidate.searchQuery,
+      textQuery: localizedTextQuery(candidate.searchQuery, candidate.localityHint),
     };
     let identities: ProviderPlaceIdentity[];
     try {
@@ -158,12 +218,17 @@ export class AiPlaceGrounder {
 
     const checkedAt = this.clock();
 
-    const expectedName = normalizeIdentityText(candidate.name);
-    const matches = identities.filter(
-      (identity) =>
-        normalizeIdentityText(identity.name) === expectedName &&
-        localityMatches(identity, candidate.localityHint),
+    // Spacing is the other half of the transliteration problem: "Sensō-ji"
+    // against "Senso ji", "Sapa" against "Sa Pa". Compare the names with it
+    // removed so an exact identity still reads as exact.
+    const expectedName = compactText(candidate.name);
+    const located = identities.filter((identity) =>
+      localityMatches(identity, candidate.localityHint),
     );
+    const exact = located.filter((identity) => compactText(identity.name) === expectedName);
+    const matches = exact.length
+      ? exact
+      : located.filter((identity) => nameTokensContained(identity.name, candidate.name));
 
     if (matches.length !== 1) {
       return fallback(

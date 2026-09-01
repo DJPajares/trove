@@ -5,6 +5,7 @@ import {
   activeAiPlanningAssumptions,
   aiPlanningAssumptionMessageValues,
   aiPlanningReviewPageState,
+  appliedAiPlanningSession,
   buildAiPlanningReviewMapPoints,
 } from '../lib/ai-planning/review.ts';
 
@@ -171,4 +172,38 @@ test('a review session with an initializing local draft stays in loading', () =>
       false,
     ),
   ).toBe('redirecting');
+});
+
+test('an applied session drops its draft so the review page cannot render one again', () => {
+  const draft = reviewDraft();
+  const session = {
+    appliedTripId: null,
+    createdAt: '2026-09-01T00:00:00.000Z',
+    draft,
+    draftRevision: 4,
+    expiresAt: '2026-09-08T00:00:00.000Z',
+    id: 'session:review',
+    lastSafeError: null,
+    pendingRunId: null,
+    prompt: 'Tokyo',
+    schemaVersion: 1,
+    stage: 'reviewing' as const,
+    status: 'reviewing' as const,
+    updatedAt: '2026-09-01T00:00:00.000Z',
+    warningAcknowledgement: { acknowledgedAt: '2026-09-01T00:00:00.000Z', revision: 4 },
+  };
+
+  const applied = appliedAiPlanningSession(session, 'trip:1');
+
+  expect(applied).toMatchObject({
+    appliedTripId: 'trip:1',
+    draft: null,
+    draftRevision: 4,
+    id: 'session:review',
+    stage: 'complete',
+    status: 'applied',
+    warningAcknowledgement: null,
+  });
+  expect(session.draft).toBe(draft);
+  expect(aiPlanningReviewPageState(applied, null, false)).toBe('redirecting');
 });

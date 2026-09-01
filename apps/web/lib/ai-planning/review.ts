@@ -100,3 +100,23 @@ export function buildAiPlanningReviewMapPoints(draft: AiPlanningDraft): Itinerar
     ];
   });
 }
+
+/**
+ * Mirrors what Apply just committed on the server: the session is applied, its
+ * draft is gone, and the warning acknowledgement went with it. Writing this into
+ * the session cache before navigating keeps the review page from rendering a
+ * draft the server no longer holds.
+ */
+export function appliedAiPlanningSession(
+  session: AiPlanningSession,
+  tripId: string,
+): AiPlanningSession {
+  return {
+    ...session,
+    appliedTripId: tripId,
+    draft: null,
+    stage: 'complete',
+    status: 'applied',
+    warningAcknowledgement: null,
+  };
+}

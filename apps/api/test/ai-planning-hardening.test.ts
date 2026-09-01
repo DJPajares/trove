@@ -120,21 +120,17 @@ test('malformed and hostile model output never becomes a draft', () => {
   const beyondLastDay = proposal.items.map((item) => ({ ...item, dayIndex: AI_PLANNER_MAX_DAYS }));
   expect(parseAiPlannerModelProposal({ ...proposal, items: beyondLastDay }).success).toBe(false);
 
-  // Structured output arrives as parsed JSON, so `__proto__` is an own property
-  // rather than a prototype write. Zod's strict unknown-key check is the one
-  // place that does not see such a key, so the guarantee is asserted where it
-  // actually holds: nothing is polluted, and the key does not survive into the
-  // value the pipeline goes on to use.
+  // Structured output arrives as parsed JSON, so `__proto__` would be an own
+  // property rather than a prototype write even if it got through. It doesn't:
+  // Zod's strict unknown-key check now enumerates `__proto__` like any other own
+  // key and rejects it as unrecognized, so the hostile payload is refused before
+  // it ever reaches the pipeline.
   const polluted = JSON.parse(
     JSON.stringify({ ...proposal, extra: 1 }).replace('"extra"', '"__proto__"'),
   ) as Record<string, unknown>;
-  const parsed = parseAiPlannerModelProposal(polluted);
 
   expect(Object.keys(polluted)).toContain('__proto__');
-  expect(parsed.success).toBe(true);
-  expect(parsed.success && Object.prototype.hasOwnProperty.call(parsed.data, '__proto__')).toBe(
-    false,
-  );
+  expect(parseAiPlannerModelProposal(polluted).success).toBe(false);
   expect(({} as Record<string, unknown>).extra).toBeUndefined();
   expect(Object.getPrototypeOf({})).toBe(Object.prototype);
 });

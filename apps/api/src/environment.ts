@@ -36,11 +36,13 @@ export const DEFAULT_AI_MAX_OUTPUT_TOKENS = 8_192;
  * reject `thinking_budget: 0` outright.
  */
 export const DEFAULT_AI_THINKING_BUDGET_TOKENS = 1_024;
+export const DEFAULT_AI_PLANNING_DISPATCH_LIMIT = 5;
 
 const MIN_AI_TIMEOUT_MS = 1_000;
 const MAX_AI_TIMEOUT_MS = 300_000;
 const MAX_AI_OUTPUT_TOKENS = 65_536;
 const MAX_AI_THINKING_BUDGET_TOKENS = 24_576;
+const MAX_AI_PLANNING_DISPATCH_LIMIT = 1_000;
 
 type AiUnavailableCode =
   'ai_budget_disabled' | 'ai_disabled' | 'configuration_invalid' | 'configuration_missing';
@@ -224,6 +226,23 @@ export function getAiGenerationEnvironment(
       thinkingBudgetTokens,
     },
   };
+}
+
+/**
+ * A soft limit, not a hard dependency like credentials — an invalid value falls
+ * back to the default rather than becoming a new `configuration_invalid` gate.
+ */
+export function getAiPlanningDispatchLimit(
+  environment: Record<string, string | undefined> = process.env,
+) {
+  return (
+    parseBoundedInteger(
+      environment.TROVE_AI_PLANNING_DISPATCH_LIMIT,
+      DEFAULT_AI_PLANNING_DISPATCH_LIMIT,
+      1,
+      MAX_AI_PLANNING_DISPATCH_LIMIT,
+    ) ?? DEFAULT_AI_PLANNING_DISPATCH_LIMIT
+  );
 }
 
 export function getAuthenticationEnvironment(

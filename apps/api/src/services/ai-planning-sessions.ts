@@ -10,6 +10,7 @@ import {
   DEFAULT_AI_MODEL,
   DEFAULT_AI_PROVIDER,
   getAiGenerationEnvironment,
+  getAiPlanningDispatchLimit,
 } from '../environment.js';
 import type { AiGenerationErrorCode, AiGenerationMetadata } from './ai-generation.js';
 import { validateAiPlannerDraft, validateAiPlannerEditedDraft } from './ai-planning-rules.js';
@@ -20,7 +21,6 @@ import {
 
 export const AI_PLANNING_PROMPT_MAX_LENGTH = 10_000;
 export const AI_PLANNING_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
-export const AI_PLANNING_DISPATCH_LIMIT = 5;
 export const AI_PLANNING_DISPATCH_WINDOW_MS = 24 * 60 * 60 * 1_000;
 
 const ACTIVE_STATUSES = ['FAILED', 'GENERATING', 'PENDING', 'REVIEWING'] as const;
@@ -136,6 +136,7 @@ export async function getAiPlanningAvailability(
 
   const prisma = prismaFrom(options);
   const now = nowFrom(options);
+  const dispatchLimit = getAiPlanningDispatchLimit(options.environment);
   const cutoff = new Date(now.getTime() - AI_PLANNING_DISPATCH_WINDOW_MS);
   const [dispatched, oldest] = await Promise.all([
     prisma.aiGenerationRun.count({ where: { dispatchedAt: { gt: cutoff }, ownerId } }),
@@ -146,7 +147,7 @@ export async function getAiPlanningAvailability(
     }),
   ]);
 
-  if (dispatched >= AI_PLANNING_DISPATCH_LIMIT) {
+  if (dispatched >= dispatchLimit) {
     return {
       code: null,
       remainingDispatches: 0,
@@ -157,7 +158,7 @@ export async function getAiPlanningAvailability(
 
   return {
     code: null,
-    remainingDispatches: AI_PLANNING_DISPATCH_LIMIT - dispatched,
+    remainingDispatches: dispatchLimit - dispatched,
     retryAt: null,
     status: 'available',
   };
@@ -819,11 +820,12 @@ export async function claimAiPlanningDispatch(
       };
     }
 
+    const dispatchLimit = getAiPlanningDispatchLimit(options.environment);
     const cutoff = new Date(now.getTime() - AI_PLANNING_DISPATCH_WINDOW_MS);
     const dispatched = await transaction.aiGenerationRun.count({
       where: { dispatchedAt: { gt: cutoff }, ownerId },
     });
-    if (dispatched >= AI_PLANNING_DISPATCH_LIMIT) {
+    if (dispatched >= dispatchLimit) {
       const oldest = await transaction.aiGenerationRun.findFirst({
         where: { dispatchedAt: { gt: cutoff }, ownerId },
         orderBy: { dispatchedAt: 'asc' },

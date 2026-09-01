@@ -47,6 +47,7 @@ import {
 } from '@/components/ui/popover';
 import { usePreferences } from '@/components/preferences-provider';
 import { TimeInput } from '@/components/time-input';
+import { useTripContext } from '@/components/trip-provider';
 import { TripSectionHeader } from '@/components/trip-section-header';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsIndicator, TabsList, TabsTab } from '@/components/ui/tabs';
@@ -290,6 +291,7 @@ export function ItineraryManager({
 }: Readonly<{ planScoreEnabled: boolean; tripId: string }>) {
   const t = useTranslations('itinerary');
   const tripPlacesTranslations = useTranslations('tripPlaces');
+  const tripDescription = useTripContext()?.trip?.description?.trim() ?? '';
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
@@ -1547,7 +1549,11 @@ export function ItineraryManager({
           </Button>
         }
         currentSection="itinerary"
-        description={t('description')}
+        // The traveller's own account of the trip stands in for Trove's
+        // guidance the moment there is one: it says more about this plan than
+        // any standing sentence can.
+        description={tripDescription || t('description')}
+        descriptionIsOwnContent={Boolean(tripDescription)}
       />
 
       {error ? (

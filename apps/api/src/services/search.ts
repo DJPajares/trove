@@ -117,8 +117,8 @@ async function searchOwnedContent(userId: string, input: string) {
   const [trips, savedPlaces, tripPlaces, reservations, tripInfo, days, itineraryItems, memories] =
     await Promise.all([
       prisma.trip.findMany({
-        where: { ownerId: userId, OR: [{ name: contains }, { notes: contains }] },
-        select: { id: true, name: true, notes: true },
+        where: { ownerId: userId, OR: [{ name: contains }, { description: contains }] },
+        select: { description: true, id: true, name: true },
         orderBy: { updatedAt: 'desc' },
         take: CANDIDATE_LIMIT,
       }),
@@ -272,14 +272,14 @@ async function searchOwnedContent(userId: string, input: string) {
         title: trip.name,
         trip: null,
       });
-    } else if (trip.notes) {
+    } else if (trip.description) {
       results.push({
-        description: excerpt(trip.notes),
+        description: excerpt(trip.description),
         href: `/trips/${trip.id}/itinerary`,
         id: `trip:${trip.id}`,
         kind: 'note',
         noteSource: 'trip',
-        score: scoreValue(query, trip.notes),
+        score: scoreValue(query, trip.description),
         title: trip.name,
         trip: { id: trip.id, name: trip.name },
       });

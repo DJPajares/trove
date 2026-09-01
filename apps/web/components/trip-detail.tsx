@@ -16,7 +16,6 @@ import {
   ReceiptText,
   Share2,
   Sparkles,
-  StickyNote,
   Users,
   WalletCards,
 } from 'lucide-react';
@@ -77,7 +76,6 @@ import {
   type TripOverviewDestination,
 } from '@/lib/trips/navigation';
 import { tripDestinationSummary } from '@/lib/trips/summary';
-import { cn } from '@/lib/utils';
 import { queryKeys } from '@/lib/query/keys';
 
 /** The tools' icons. Which tools there are, and their order, is the navigation contract's. */
@@ -133,15 +131,13 @@ function OverviewFact({
   Icon,
   label,
   value,
-  wide = false,
 }: Readonly<{
   Icon: ComponentType<{ className?: string }>;
   label: string;
   value: ReactNode;
-  wide?: boolean;
 }>) {
   return (
-    <div className={cn('flex gap-3 border-b border-border-subtle py-4', wide && 'sm:col-span-2')}>
+    <div className="flex gap-3 border-b border-border-subtle py-4">
       <Icon aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-text-subtle" />
       <div className="min-w-0">
         <dt className="text-[length:var(--text-metadata)] font-medium text-text-subtle">{label}</dt>
@@ -426,6 +422,14 @@ export function TripDetail({
         </div>
       </section>
 
+      {/* The trip in the traveller's own words, and the first thing read after
+          the cover. Prose, so it sits above the facts rather than inside them. */}
+      {trip.description ? (
+        <p className="max-w-[var(--layout-reading)] text-base leading-[1.6] text-pretty whitespace-pre-wrap text-muted-foreground">
+          {trip.description}
+        </p>
+      ) : null}
+
       {deleteError ? (
         <Alert role="alert" variant="destructive">
           <CircleAlert aria-hidden="true" />
@@ -494,15 +498,6 @@ export function TripDetail({
           label={t('startingLocation')}
           value={trip.startingLocation?.name ?? t('startingLocationUnavailable')}
         />
-
-        {trip.notes ? (
-          <OverviewFact
-            Icon={StickyNote}
-            label={t('notes')}
-            value={<span className="whitespace-pre-wrap">{trip.notes}</span>}
-            wide
-          />
-        ) : null}
       </dl>
 
       {trip.lifecycle !== 'completed' ? <OfflineReadyStatus tripId={trip.id} /> : null}

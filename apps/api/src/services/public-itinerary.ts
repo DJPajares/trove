@@ -37,7 +37,14 @@ export type PublicItinerary = {
     name: string | null;
     notes: string | null;
   }>;
-  trip: { endDate: string; id: string; name: string; startDate: string };
+  trip: {
+    /** The traveller's own framing of the trip, deliberately shared. */
+    description: string | null;
+    endDate: string;
+    id: string;
+    name: string;
+    startDate: string;
+  };
 };
 
 const dayParts: Record<string, PublicItineraryItem['dayPart']> = {
@@ -66,7 +73,9 @@ const publicItemInclude = {
  * travel status, positions and provider ids - the private half of a plan, and
  * exactly what a shared one must not leak. Sharing a serializer would mean every
  * field added to the itinerary in future became public by default; separate
- * shapes mean the public one only ever grows on purpose.
+ * shapes mean the public one only ever grows on purpose. The trip's description
+ * is one such deliberate growth: it is the traveller's own account of the trip,
+ * written to be read, and a shared itinerary without it opens on a bare title.
  */
 export async function listPublicItinerary(
   tripId: string,
@@ -78,6 +87,7 @@ export async function listPublicItinerary(
     // visibility is what stands in for one.
     where: { id: tripId, visibility: 'PUBLIC' },
     select: {
+      description: true,
       endDate: true,
       id: true,
       name: true,
@@ -124,6 +134,7 @@ export async function listPublicItinerary(
       notes: day.notes,
     })),
     trip: {
+      description: trip.description,
       endDate: formatDateOnly(trip.endDate),
       id: trip.id,
       name: trip.name,

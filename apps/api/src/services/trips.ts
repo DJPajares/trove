@@ -23,11 +23,11 @@ export type TripDestinationInput = { name: string };
 
 export type TripCreate = {
   coverPhotoPath?: string | null;
+  description?: string | null;
   destinations?: TripDestinationInput[];
   deviceTimeZone?: string;
   endDate: string;
   name: string;
-  notes?: string | null;
   partySize?: number;
   planningReadiness?: 'in_progress' | 'ready';
   referenceTimeZone?: string | null;
@@ -139,6 +139,7 @@ async function serializeTrip(
     coverPhotoPath: trip.coverPhotoPath,
     coverPhotoUrl: await createCoverUrl(supabase, trip.coverPhotoPath),
     createdAt: trip.createdAt.toISOString(),
+    description: trip.description,
     destinations: trip.destinations.map((destination) => ({
       id: destination.id,
       name: destination.place.customName ?? '',
@@ -154,7 +155,6 @@ async function serializeTrip(
     lifecycle: deriveTripLifecycle(startDate, endDate, trip.referenceTimeZone, now),
     memoryCount: trip._count.memories,
     name: trip.name,
-    notes: trip.notes,
     partySize: trip.partySize,
     planningReadiness: mapReadiness(trip.planningReadiness),
     referenceTimeZone: trip.referenceTimeZone,
@@ -297,9 +297,9 @@ export async function createTrip(userId: string, accessToken: string, input: Tri
       data: {
         coverPhotoPath: input.coverPhotoPath ?? null,
         creatorId: userId,
+        description: input.description?.trim() || null,
         endDate: end,
         name: input.name.trim(),
-        notes: input.notes?.trim() || null,
         ownerId: userId,
         partySize: input.partySize ?? 1,
         planningReadiness: input.planningReadiness === 'ready' ? 'READY' : 'IN_PROGRESS',
@@ -497,9 +497,11 @@ export async function updateTrip(
       where: { id: tripId },
       data: {
         ...(input.coverPhotoPath !== undefined ? { coverPhotoPath: input.coverPhotoPath } : {}),
+        ...(input.description !== undefined
+          ? { description: input.description?.trim() || null }
+          : {}),
         endDate: end,
         ...(input.name !== undefined ? { name: input.name.trim() } : {}),
-        ...(input.notes !== undefined ? { notes: input.notes?.trim() || null } : {}),
         ...(input.partySize !== undefined ? { partySize: input.partySize } : {}),
         ...(input.planningReadiness !== undefined
           ? { planningReadiness: input.planningReadiness === 'ready' ? 'READY' : 'IN_PROGRESS' }

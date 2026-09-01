@@ -42,6 +42,7 @@ import { DatePicker } from '@/components/date-picker';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { SheetFooter } from '@/components/ui/sheet';
+import { Textarea } from '@/components/ui/textarea';
 import {
   createTrip,
   removeTripCover,
@@ -62,10 +63,10 @@ type TripFormProps = {
 
 type FormState = {
   coverPhotoPath: string | null;
+  description: string;
   destinations: string[];
   endDate: string;
   name: string;
-  notes: string;
   partySize: string;
   planningReadiness: 'in_progress' | 'ready';
   referenceTimeZone: string;
@@ -90,10 +91,10 @@ function createInitialForm(trip: Trip | null): FormState {
 
   return {
     coverPhotoPath: trip?.coverPhotoPath ?? null,
+    description: trip?.description ?? '',
     destinations: trip?.destinations.map((destination) => destination.name) ?? [],
     endDate: trip?.endDate ?? today,
     name: trip?.name ?? '',
-    notes: trip?.notes ?? '',
     partySize: String(trip?.partySize ?? 1),
     planningReadiness: trip?.planningReadiness ?? 'in_progress',
     referenceTimeZone: trip?.referenceTimeZoneSource === 'explicit' ? trip.referenceTimeZone : '',
@@ -110,7 +111,7 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [dateError, setDateError] = useState<string | null>(null);
   // A trip that already carries optional detail opens showing it: a traveller
-  // must never have to go looking for their own notes.
+  // must never have to go looking for what they set themselves.
   const [detailsOpen, setDetailsOpen] = useState(() => hasOptionalTripDetails(trip));
   const [pendingDetailsFocus, setPendingDetailsFocus] = useState(false);
   const [status, setStatus] = useState<'idle' | 'saving'>('idle');
@@ -224,6 +225,7 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
 
     return {
       coverPhotoPath,
+      description: form.description.trim() || null,
       destinations: form.destinations
         .map((name) => name.trim())
         .filter(Boolean)
@@ -231,7 +233,6 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
       deviceTimeZone,
       endDate: form.endDate,
       name: form.name.trim(),
-      notes: form.notes.trim() || null,
       partySize,
       planningReadiness: form.planningReadiness,
       referenceTimeZone: form.referenceTimeZone || null,
@@ -405,6 +406,22 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
             )}
             {trip ? tripNameField : null}
             {tripDateFields}
+            {/* Only on an existing trip. Creation asks for the least it can, and
+                a description is written once there is a trip to describe. */}
+            {trip ? (
+              <Field>
+                <FieldLabel htmlFor="trip-description">{t('tripDescription')}</FieldLabel>
+                <Textarea
+                  id="trip-description"
+                  maxLength={5_000}
+                  onChange={(event) => updateField('description', event.target.value)}
+                  placeholder={t('tripDescriptionPlaceholder')}
+                  rows={3}
+                  value={form.description}
+                />
+                <FieldDescription>{t('tripDescriptionHint')}</FieldDescription>
+              </Field>
+            ) : null}
             {!trip ? (
               <Field>
                 <FieldLabel
@@ -609,7 +626,6 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
                       onChange={updateFields}
                       trip={trip}
                       values={{
-                        notes: form.notes,
                         partySize: form.partySize,
                         planningReadiness: form.planningReadiness,
                         referenceTimeZone: form.referenceTimeZone,

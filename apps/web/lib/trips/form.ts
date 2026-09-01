@@ -9,15 +9,16 @@ export const EDITORIAL_PREVIEW_DEBOUNCE_MS = 500;
 /**
  * Whether an existing trip carries anything in its optional half.
  *
- * A traveller's own notes must never become something they have to go looking
- * for, so a trip that already holds any of these opens the panel rather than
- * hiding them behind a control the traveller never closed.
+ * Anything a traveller set themselves must never become something they have to
+ * go looking for, so a trip that already holds any of these opens the panel
+ * rather than hiding them behind a control the traveller never closed. The
+ * description is deliberately absent: it is asked for in the form's main body
+ * now, so it never lands behind this disclosure.
  */
 export function hasOptionalTripDetails(trip: Trip | null) {
   if (!trip) return false;
 
   return Boolean(
-    trip.notes?.trim() ||
     trip.startingLocationOverride?.trim() ||
     trip.referenceTimeZoneSource === 'explicit' ||
     trip.partySize > 1 ||

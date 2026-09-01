@@ -571,11 +571,12 @@ model Trip {
   ownerId                        String                @map("owner_id") @db.Uuid
   creatorId                      String?               @map("creator_id") @db.Uuid
   name                           String
+  /// The traveller's own framing of the trip. Prose, not a planning scratchpad.
+  description                    String?               @db.Text
   startDate                      DateTime              @map("start_date") @db.Date
   endDate                        DateTime              @map("end_date") @db.Date
   partySize                      Int                   @default(1) @map("party_size")
   startingPlaceId                String?               @map("starting_place_id") @db.Uuid
-  notes                          String?               @db.Text
   coverPhotoPath                 String?               @map("cover_photo_path")
   /// The editorial collection standing in for this trip's destination. Separate
   /// from `coverPhotoPath`, which is the traveller's own uploaded cover and

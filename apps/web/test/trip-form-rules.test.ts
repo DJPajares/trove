@@ -12,6 +12,7 @@ function trip(overrides: Partial<Trip> = {}): Trip {
     coverPhotoPath: null,
     coverPhotoUrl: null,
     createdAt: '2026-01-01T00:00:00.000Z',
+    description: null,
     destinations: [],
     endDate: '2026-09-21',
     experienceNote: null,
@@ -20,7 +21,6 @@ function trip(overrides: Partial<Trip> = {}): Trip {
     lifecycle: 'planning',
     memoryCount: 0,
     name: 'A trip',
-    notes: null,
     partySize: 1,
     planningReadiness: 'in_progress',
     referenceTimeZone: 'UTC',
@@ -39,7 +39,6 @@ test('a new trip has nothing hidden, so the panel stays closed', () => {
 });
 
 test('anything the traveller already filled in opens the panel', () => {
-  expect(hasOptionalTripDetails(trip({ notes: 'Bring the good camera' }))).toBe(true);
   expect(hasOptionalTripDetails(trip({ startingLocationOverride: 'Manila' }))).toBe(true);
   expect(hasOptionalTripDetails(trip({ referenceTimeZoneSource: 'explicit' }))).toBe(true);
   expect(hasOptionalTripDetails(trip({ partySize: 2 }))).toBe(true);
@@ -47,8 +46,13 @@ test('anything the traveller already filled in opens the panel', () => {
 });
 
 test('whitespace is not content', () => {
-  expect(hasOptionalTripDetails(trip({ notes: '   ' }))).toBe(false);
   expect(hasOptionalTripDetails(trip({ startingLocationOverride: '  ' }))).toBe(false);
+});
+
+// The description is asked for in the form's main body, so it must not drag the
+// optional panel open behind it.
+test('a description is not what this panel holds', () => {
+  expect(hasOptionalTripDetails(trip({ description: 'Cherry blossom season' }))).toBe(false);
 });
 
 test('a travel party is a whole number of people, at least one', () => {

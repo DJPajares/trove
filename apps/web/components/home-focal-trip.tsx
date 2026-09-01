@@ -78,7 +78,7 @@ export function HomeFocalTrip({
         />
 
         <div className="relative flex min-h-[31rem] flex-col justify-end gap-4 p-5 text-white sm:min-h-[29rem] sm:p-7 lg:min-h-[31rem] lg:p-9">
-          <div className="w-full lg:max-w-3xl">
+          <div className="flex w-full flex-col gap-4 lg:max-w-3xl">
             <div className="space-y-1.5">
               <p className="text-sm font-medium text-white/78">{t(stageLabels[trip.lifecycle])}</p>
               <h2
@@ -94,7 +94,7 @@ export function HomeFocalTrip({
             </div>
 
             {trip.lifecycle === 'planning' ? (
-              <div className="w-full max-w-xl space-y-3">
+              <div className="w-full max-w-xl space-y-3 lg:max-w-sm">
                 <div className="space-y-2">
                   <p className="text-lg font-medium">
                     {t('countdown', { count: daysUntilTripStart(trip) })}
@@ -117,7 +117,7 @@ export function HomeFocalTrip({
             ) : null}
 
             {trip.lifecycle === 'active' ? (
-              <div className="w-full max-w-xl space-y-3">
+              <div className="w-full max-w-xl space-y-3 lg:max-w-sm">
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-white/78">{t('nextUp')}</p>
                   <p className="text-base leading-6">

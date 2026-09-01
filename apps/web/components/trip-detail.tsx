@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   CalendarClock,
@@ -33,6 +33,7 @@ import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripForm } from '@/components/trip-form';
 import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
 import { TripDetailSkeleton } from '@/components/trip-detail-skeleton';
+import { useTripCreation } from '@/components/trip-creation-provider';
 import { useTripContext } from '@/components/trip-provider';
 import { TripShareDialog } from '@/components/trip-share-dialog';
 import { TripMedia } from '@/components/trip-media';
@@ -68,7 +69,7 @@ import {
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import { fetchTripInfo, type TripInfoEntry } from '@/lib/trip-info/api';
-import { deleteTrip } from '@/lib/trips/api';
+import { deleteTrip, type Trip } from '@/lib/trips/api';
 import { formatTripDateRange } from '@/lib/trips/format';
 import {
   supportingTripDestinations,
@@ -207,6 +208,8 @@ export function TripDetail({
   const mediaTranslations = useTranslations('media');
   const locale = useLocale();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { forgetCreatedTrip } = useTripCreation();
 
   // The trip itself belongs to the layout: it is the same trip every screen
   // inside the trip is showing, and fetching it here as well is what used to
@@ -306,6 +309,13 @@ export function TripDetail({
 
     try {
       await deleteTrip(trip.id);
+      forgetCreatedTrip(trip.id);
+      queryClient.setQueryData(queryKeys.trips(), (current: { trips: Trip[] } | undefined) =>
+        current
+          ? { trips: current.trips.filter((candidate) => candidate.id !== trip.id) }
+          : current,
+      );
+      queryClient.removeQueries({ queryKey: queryKeys.trip(trip.id) });
       setConfirmingDelete(false);
       setEditing(false);
       // The route the traveller is standing on no longer exists, so it must not

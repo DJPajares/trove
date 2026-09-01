@@ -15,6 +15,8 @@ import { enumerateDateRange, formatDateOnly, parseDateOnly } from './trip-rules.
 
 export const AI_PLANNER_DEFAULT_PARTY_SIZE = 1;
 export const AI_PLANNER_DEFAULT_PACE = 'balanced' as const;
+/** Anchors trip length when the traveller names none, so the plan has a size. */
+export const AI_PLANNER_DEFAULT_TRIP_LENGTH_DAYS = 5;
 
 export type AiPlannerRuleIssueCode =
   | 'conflicting_hard_constraints'

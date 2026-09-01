@@ -2223,7 +2223,7 @@ export function ItineraryManager({
 
                   {hasItemIdentity ? (
                     <div className="rounded-[var(--radius-lg)] border bg-muted/30 p-3">
-                      <div className="flex items-start gap-3">
+                      <div className="flex items-center gap-3">
                         <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-background text-muted-foreground shadow-xs">
                           {form.tripPlaceId ? (
                             <MapPinned aria-hidden="true" className="size-4" />

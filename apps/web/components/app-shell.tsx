@@ -30,7 +30,14 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
   const navigation = useTranslations('navigation');
 
   const headerContent = (
-    <div className="mx-auto grid h-[var(--header-height)] w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 pl-[var(--gutter-inline-start)] pr-[var(--gutter-inline-end)] md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+    <div
+      className={cn(
+        'mx-auto grid h-[var(--header-height)] w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 pl-[var(--gutter-inline-start)] pr-[var(--gutter-inline-end)]',
+        isSignedIn
+          ? 'md:pr-[calc(var(--gutter-inline-end)+3.25rem)]'
+          : 'md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]',
+      )}
+    >
       <Link
         className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground"
         href="/"
@@ -41,15 +48,11 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
         {app('name')}
       </Link>
 
-      {/* Holds the centre column open on desktop so the mark and the auth
-          actions keep the same edges they have signed in. */}
+      {/* On desktop, destinations sit immediately beside the quick-actions
+          trigger. The reserved right padding keeps the two controls distinct. */}
       {isSignedIn ? <PrimaryNavigation variant="desktop" /> : <span className="hidden md:block" />}
 
-      {isSignedIn ? (
-        // Keeps the centre navigation optically centred while the floating
-        // quick actions occupy the header's right rail independently.
-        <span aria-hidden="true" className="hidden md:block" />
-      ) : (
+      {!isSignedIn ? (
         <div className="flex items-center justify-self-end gap-1">
           <AppearanceToggle />
           {/* On the narrowest screens the wordmark and the primary action
@@ -73,7 +76,7 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
             {auth('createAccount')}
           </Button>
         </div>
-      )}
+      ) : null}
     </div>
   );
 

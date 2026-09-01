@@ -10,10 +10,12 @@ import { floatingActionTriggerClass } from '@/lib/shell/floating-actions';
 import { cn } from '@/lib/utils';
 
 type AppearanceToggleProps = {
+  onToggle?: () => void;
   triggerVariant?: 'floating' | 'icon';
 };
 
 export function AppearanceToggle({
+  onToggle,
   triggerVariant = 'icon',
 }: Readonly<AppearanceToggleProps> = {}) {
   const t = useTranslations('appearance');
@@ -28,7 +30,10 @@ export function AppearanceToggle({
       aria-pressed={dark}
       className={cn('text-foreground', floating && floatingActionTriggerClass)}
       data-translucent-surface={floating ? '' : undefined}
-      onClick={() => setAppearance(toggleAppearance(preferences.appearance))}
+      onClick={() => {
+        setAppearance(toggleAppearance(preferences.appearance));
+        onToggle?.();
+      }}
       size={floating ? 'icon' : 'icon-sm'}
       title={t(dark ? 'switchToLight' : 'switchToDark')}
       type="button"

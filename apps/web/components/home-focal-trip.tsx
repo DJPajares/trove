@@ -93,7 +93,7 @@ export function HomeFocalTrip({
           </div>
 
           {trip.lifecycle === 'planning' ? (
-            <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
+            <div className="w-full max-w-xl space-y-3">
               <div className="space-y-2">
                 <p className="text-lg font-medium">
                   {t('countdown', { count: daysUntilTripStart(trip) })}
@@ -112,7 +112,7 @@ export function HomeFocalTrip({
           ) : null}
 
           {trip.lifecycle === 'active' ? (
-            <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
+            <div className="w-full max-w-xl space-y-3">
               <div className="space-y-2">
                 <p className="text-sm font-medium text-white/78">{t('nextUp')}</p>
                 <p className="text-base leading-6">

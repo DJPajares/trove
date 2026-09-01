@@ -29,6 +29,7 @@ import { queryKeys } from '@/lib/query/keys';
 import type { Trip } from '@/lib/trips/api';
 
 type TripCreationContextValue = {
+  forgetCreatedTrip: (tripId: string) => void;
   latestCreatedTrip: Trip | null;
   openCreateTrip: () => void;
 };
@@ -40,6 +41,7 @@ type TripCreationProviderProps = {
 
 const TripCreationContext = createContext<TripCreationContextValue | null>(null);
 const disabledTripCreationContext: TripCreationContextValue = {
+  forgetCreatedTrip: () => undefined,
   latestCreatedTrip: null,
   openCreateTrip: () => undefined,
 };
@@ -91,9 +93,15 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
     setOpen(true);
     void recover();
   }, [recover]);
+  const forgetCreatedTrip = useCallback((tripId: string) => {
+    setLatestCreatedTrip((current) => (current?.id === tripId ? null : current));
+  }, []);
   const context = useMemo(
-    () => (enabled ? { latestCreatedTrip, openCreateTrip } : disabledTripCreationContext),
-    [enabled, latestCreatedTrip, openCreateTrip],
+    () =>
+      enabled
+        ? { forgetCreatedTrip, latestCreatedTrip, openCreateTrip }
+        : disabledTripCreationContext,
+    [enabled, forgetCreatedTrip, latestCreatedTrip, openCreateTrip],
   );
 
   function handleSaved(trip: Trip) {

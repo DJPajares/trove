@@ -105,7 +105,7 @@ async function tripRequest<T>(path: string, init?: RequestInit) {
       ...init,
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
+        ...(init?.body === undefined ? {} : { 'Content-Type': 'application/json' }),
         ...init?.headers,
       },
     });

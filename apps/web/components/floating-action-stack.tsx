@@ -118,7 +118,7 @@ export function FloatingActionStack() {
 
   const actions: Record<(typeof floatingActionOrder)[number], ReactNode> = {
     account: <AccountMenu onNavigate={collapse} triggerVariant="floating" />,
-    appearance: <AppearanceToggle triggerVariant="floating" />,
+    appearance: <AppearanceToggle onToggle={collapseAndRestoreFocus} triggerVariant="floating" />,
     notifications: <NotificationCenter onNavigate={collapse} triggerVariant="floating" />,
     // Search fills the screen, so the stack that opened it has nothing left to
     // say and folds away. The dialog itself lives outside the stack for exactly

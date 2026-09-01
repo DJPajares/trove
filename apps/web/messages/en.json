@@ -1961,6 +1961,7 @@
       "forecast": "Forecast for {date}",
       "loading": "Loading weather",
       "outOfRange": "A forecast will appear closer to departure.",
+      "source": "Open-Meteo",
       "stale": "Saved weather may be out of date",
       "tryAgain": "Try weather again",
       "unavailable": "Weather is unavailable right now."

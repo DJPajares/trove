@@ -356,7 +356,7 @@ export function ItineraryPlanningMap({
   if (!points.length && !currentLocation) {
     return (
       <PageState
-        className="min-h-[28rem] justify-center rounded-none border-0 bg-muted/35"
+        className="min-h-[28rem] justify-center rounded-none border-0 bg-muted/35 px-6 py-8 sm:px-8"
         description={t('emptyDescription')}
         headingLevel={2}
         icon={<MapPinned aria-hidden="true" />}

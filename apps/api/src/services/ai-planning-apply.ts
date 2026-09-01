@@ -187,7 +187,12 @@ function itemData(input: {
 }) {
   const { item } = input;
   const timeZone = itemTimeZone(item, input.places, input.dayTimeZone);
-  const exactTime = item.schedule.kind === 'exact' ? item.schedule.localTime : null;
+  // `itinerary_items_local_time_context` requires the local time, instant and
+  // semantics to be set together or not at all, and an unscheduled item has no
+  // date to resolve an instant against. A hard time commitment never reaches
+  // here unscheduled: `hard_constraint_unscheduled` rejects that draft first.
+  const exactTime =
+    item.schedule.kind === 'exact' && input.dayDate ? item.schedule.localTime : null;
   try {
     return {
       customLabel: item.label.trim(),
@@ -344,6 +349,14 @@ export async function applyAiPlanningSession(
         : firstItemPlace?.timeZone
           ? ('FIRST_LOCATED_ITEM' as const)
           : ('TRIP_REFERENCE' as const);
+      // `itinerary_days_time_zone_source_context` requires FIRST_LOCATED_ITEM to
+      // carry its source item id in the same statement, and that id does not
+      // exist until the item rows below are written. Insert under a source the
+      // constraint accepts, then promote both columns together once it does.
+      // `defaultTimeZone` is already final here, so only the provenance label is
+      // deferred.
+      const insertedSource =
+        defaultSource === 'FIRST_LOCATED_ITEM' ? ('TRIP_REFERENCE' as const) : defaultSource;
       const created = await transaction.itineraryDay.create({
         data: {
           dailyBaseDepartureTripPlaceId: day.dailyBaseDeparturePlaceRefId
@@ -355,7 +368,7 @@ export async function applyAiPlanningSession(
           date: parseDateOnly(date),
           defaultTimeZone,
           defaultTimeZoneResolvedAt: now,
-          defaultTimeZoneSource: defaultSource,
+          defaultTimeZoneSource: insertedSource,
           defaultTimeZoneSourceTripPlaceId:
             defaultSource === 'EXPLICIT_DAILY_BASE' && day.dailyBasePlaceRefId
               ? (tripPlaceIds.get(day.dailyBasePlaceRefId) ?? null)
@@ -384,7 +397,10 @@ export async function applyAiPlanningSession(
         if (defaultSource === 'FIRST_LOCATED_ITEM' && item.id === firstLocatedItem?.id) {
           await transaction.itineraryDay.update({
             where: { id: created.id },
-            data: { defaultTimeZoneSourceItemId: createdItem.id },
+            data: {
+              defaultTimeZoneSource: defaultSource,
+              defaultTimeZoneSourceItemId: createdItem.id,
+            },
           });
         }
       }

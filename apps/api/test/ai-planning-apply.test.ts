@@ -73,6 +73,37 @@ function matches(value: unknown, expected: unknown) {
   return value === expected;
 }
 
+/**
+ * The database enforces these as CHECK constraints, which an in-memory fake
+ * would otherwise never evaluate — both shipped as 500s because of that gap.
+ * Asserting them at every write makes each existing apply test carry the guard.
+ */
+function assertDayTimeZoneSourceContext(day: Record<string, unknown>) {
+  const source = day.defaultTimeZoneSource;
+  const sourceItemId = day.defaultTimeZoneSourceItemId ?? null;
+  if (source === 'FIRST_LOCATED_ITEM' && sourceItemId === null) {
+    throw new Error('itinerary_days_time_zone_source_context');
+  }
+  if (source !== 'FIRST_LOCATED_ITEM' && sourceItemId !== null) {
+    throw new Error('itinerary_days_time_zone_source_context');
+  }
+}
+
+function assertItemLocalTimeContext(item: Record<string, unknown>) {
+  const parts = [
+    item.localStartTime ?? null,
+    item.startInstant ?? null,
+    item.timeSemantics ?? null,
+  ];
+  const set = parts.filter((value) => value !== null).length;
+  if (set !== 0 && set !== parts.length) {
+    throw new Error('itinerary_items_local_time_context');
+  }
+  if (set === parts.length && (item.timeZone ?? null) === null) {
+    throw new Error('itinerary_items_local_time_context');
+  }
+}
+
 function createApplyStore(
   draft: AiPlannerDraft,
   options: {
@@ -147,6 +178,7 @@ function createApplyStore(
     },
     itineraryDay: {
       async create({ data }: any) {
+        assertDayTimeZoneSourceContext(data);
         const value = { ...data, id: id() };
         working.days.push(value);
         return { id: value.id };
@@ -155,12 +187,14 @@ function createApplyStore(
         const day = working.days.find((candidate) => candidate.id === where.id);
         if (!day) throw new Error('day_not_found');
         Object.assign(day, data);
+        assertDayTimeZoneSourceContext(day);
         return day;
       },
     },
     itineraryItem: {
       async create({ data }: any) {
         if (options.failAt === 'item') throw new Error('injected_item_failure');
+        assertItemLocalTimeContext(data);
         const value = { ...data, id: id() };
         working.items.push(value);
         return { id: value.id };
@@ -252,6 +286,36 @@ function apply(
 }
 
 describe('AI planning Apply', () => {
+  test('an unscheduled exact time is dropped rather than written without an instant', async () => {
+    // No date exists to resolve the instant against, and the schema cannot hold
+    // a local time on its own, so the time is not carried onto the row.
+    const draft = customPlaceDraft();
+    const unscheduled = draft.unscheduledItems[0]!;
+    unscheduled.schedule = { kind: 'exact', localTime: '09:30', source: 'user' };
+    const store = createApplyStore(draft);
+
+    await apply(store);
+
+    const applied = store.state.items.find((item) => item.customLabel === unscheduled.label);
+    expect(applied).toMatchObject({
+      localStartTime: null,
+      startInstant: null,
+      timeSemantics: null,
+    });
+  });
+
+  test('a day whose timezone comes from its first located item records that item', async () => {
+    const store = createApplyStore(customPlaceDraft());
+
+    await apply(store);
+
+    const sourced = store.state.days.filter(
+      (day) => day.defaultTimeZoneSource === 'FIRST_LOCATED_ITEM',
+    );
+    expect(sourced.length).toBeGreaterThan(0);
+    for (const day of sourced) expect(day.defaultTimeZoneSourceItemId).not.toBeNull();
+  });
+
   test('atomically creates standard trip records and preserves reviewed provenance', async () => {
     const draft = customPlaceDraft();
     draft.days[0]!.dailyBasePlaceRefId = 'place:custom';

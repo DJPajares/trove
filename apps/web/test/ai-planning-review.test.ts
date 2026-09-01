@@ -1,7 +1,12 @@
 import { expect, test } from 'vitest';
 
 import type { AiPlanningDraft } from '../lib/ai-planning/api.ts';
-import { buildAiPlanningReviewMapPoints } from '../lib/ai-planning/review.ts';
+import {
+  activeAiPlanningAssumptions,
+  aiPlanningAssumptionMessageValues,
+  aiPlanningReviewPageState,
+  buildAiPlanningReviewMapPoints,
+} from '../lib/ai-planning/review.ts';
 
 function reviewDraft(): AiPlanningDraft {
   return {
@@ -89,4 +94,81 @@ test('review maps use only provider-derived coordinates and preserve item order'
       order: 1,
     }),
   ]);
+});
+
+test('assumption copy values come from structured values instead of model rationale', () => {
+  const draft = reviewDraft();
+  draft.trip.name = 'Tokyo autumn';
+  draft.trip.partySize = 2;
+  const assumption = {
+    code: 'trip_name_inferred' as const,
+    fieldPath: 'trip.name',
+    id: 'assumption:name',
+    rationale: 'The user did not provide a trip name.',
+    value: 'AI suggested name',
+  };
+
+  expect(aiPlanningAssumptionMessageValues(assumption, draft, 'en')).toMatchObject({
+    count: 2,
+    name: 'AI suggested name',
+  });
+});
+
+test('only assumptions still active in the reviewed draft are presented', () => {
+  const draft = reviewDraft();
+  draft.assumptions = [
+    {
+      code: 'trip_name_inferred',
+      fieldPath: 'trip.name',
+      id: 'assumption:name',
+      rationale: null,
+      value: 'Suggested name',
+    },
+    {
+      code: 'interest_inferred',
+      fieldPath: 'normalizedRequest.interests[0]',
+      id: 'assumption:interest',
+      rationale: null,
+      value: 'food',
+    },
+  ];
+
+  expect(activeAiPlanningAssumptions(draft).map((assumption) => assumption.id)).toStrictEqual([
+    'assumption:interest',
+  ]);
+  draft.trip.nameAssumptionId = 'assumption:name';
+  expect(activeAiPlanningAssumptions(draft).map((assumption) => assumption.id)).toStrictEqual([
+    'assumption:name',
+    'assumption:interest',
+  ]);
+});
+
+test('a review session with an initializing local draft stays in loading', () => {
+  const draft = reviewDraft();
+  const session = {
+    appliedTripId: null,
+    createdAt: '2026-09-01T00:00:00.000Z',
+    draft,
+    draftRevision: 1,
+    expiresAt: '2026-09-08T00:00:00.000Z',
+    id: 'session:review',
+    lastSafeError: null,
+    pendingRunId: null,
+    prompt: 'Tokyo',
+    schemaVersion: 1,
+    stage: 'reviewing' as const,
+    status: 'reviewing' as const,
+    updatedAt: '2026-09-01T00:00:00.000Z',
+    warningAcknowledgement: null,
+  };
+
+  expect(aiPlanningReviewPageState(session, null, false)).toBe('loading');
+  expect(aiPlanningReviewPageState(session, draft, false)).toBe('reviewing');
+  expect(
+    aiPlanningReviewPageState(
+      { ...session, status: 'applied', appliedTripId: 'trip:1' },
+      null,
+      false,
+    ),
+  ).toBe('redirecting');
 });

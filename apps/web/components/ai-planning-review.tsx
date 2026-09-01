@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { PageState } from '@/components/page-state';
@@ -45,7 +45,13 @@ import {
   type AiPlanningDraft,
   type AiPlanningDraftItem,
 } from '@/lib/ai-planning/api';
-import { buildAiPlanningReviewMapPoints } from '@/lib/ai-planning/review';
+import { SerialAutosave, type AutosaveSnapshot } from '@/lib/ai-planning/autosave';
+import {
+  activeAiPlanningAssumptions,
+  aiPlanningAssumptionMessageValues,
+  aiPlanningReviewPageState,
+  buildAiPlanningReviewMapPoints,
+} from '@/lib/ai-planning/review';
 import {
   aiPlanningErrorMessageKey,
   isAiPlanningSessionGenerating,
@@ -59,8 +65,15 @@ import { queryKeys } from '@/lib/query/keys';
 import type { Trip } from '@/lib/trips/api';
 
 const ACTIVE_SESSION_POLL_MS = 1_500;
+const AUTOSAVE_DEBOUNCE_MS = 700;
 
-type ReviewOperation = 'acknowledging' | 'applying' | 'idle' | 'saving' | 'verifying';
+type ReviewOperation = 'acknowledging' | 'applying' | 'idle' | 'regenerating' | 'verifying';
+
+const INITIAL_AUTOSAVE_SNAPSHOT: AutosaveSnapshot = {
+  error: null,
+  hasPendingChanges: false,
+  phase: 'saved',
+};
 
 function allItems(draft: AiPlanningDraft) {
   return [...draft.days.flatMap((day) => day.items), ...draft.unscheduledItems];
@@ -163,12 +176,50 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   const [placeQuery, setPlaceQuery] = useState('');
   const [suggestions, setSuggestions] = useState<ProviderSuggestion[]>([]);
   const [suggestionSessionToken, setSuggestionSessionToken] = useState<string | undefined>();
+  const [autosaveSnapshot, setAutosaveSnapshot] = useState(INITIAL_AUTOSAVE_SNAPSHOT);
+  const autosaveRef = useRef<SerialAutosave<AiPlanningDraft, AiPlanningSession> | null>(null);
+  const autosaveSessionIdRef = useRef<string | null>(null);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionRef = useRef<AiPlanningSession | null>(null);
 
   useEffect(() => {
+    sessionRef.current = session;
     if (!session?.draft) return;
-    setDraft(session.draft);
+    const currentAutosave = autosaveRef.current;
+    if (!currentAutosave || autosaveSessionIdRef.current !== session.id) {
+      const nextAutosave = new SerialAutosave({
+        draft: session.draft,
+        getRevision: (result: AiPlanningSession) => result.draftRevision,
+        onStateChange: setAutosaveSnapshot,
+        persist: async (nextDraft, expectedRevision) =>
+          (await replaceAiPlanningDraft(session.id, nextDraft, expectedRevision)).session,
+        result: session,
+        revision: session.draftRevision,
+      });
+      autosaveRef.current = nextAutosave;
+      autosaveSessionIdRef.current = session.id;
+      setAutosaveSnapshot(nextAutosave.snapshot);
+      setDraft(session.draft);
+    } else if (
+      !currentAutosave.snapshot.hasPendingChanges &&
+      currentAutosave.snapshot.phase !== 'saving'
+    ) {
+      currentAutosave.replace({
+        draft: session.draft,
+        result: session,
+        revision: session.draftRevision,
+      });
+      setDraft(session.draft);
+    }
     setRegeneratePrompt(session.prompt ?? '');
   }, [session?.draft, session?.draftRevision, session?.prompt]);
+
+  useEffect(
+    () => () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!session?.appliedTripId) return;
@@ -203,14 +254,34 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   const reviewing = session?.status === 'reviewing';
   const materialWarnings = draft?.warnings.filter((warning) => warning.material) ?? [];
   const warningsAcknowledged =
+    !autosaveSnapshot.hasPendingChanges &&
     session?.warningAcknowledgement?.revision === session?.draftRevision &&
     materialWarnings.length > 0;
   const canApply = Boolean(
-    reviewing && draft && (!materialWarnings.length || warningsAcknowledged),
+    reviewing &&
+    draft &&
+    autosaveSnapshot.phase !== 'error' &&
+    (!materialWarnings.length || warningsAcknowledged),
   );
   const selectedMapPoints = useMemo(
     () => (draft ? buildAiPlanningReviewMapPoints(draft) : []),
     [draft],
+  );
+  const assumptionMessages = useMemo(
+    () =>
+      draft
+        ? [
+            ...new Set(
+              activeAiPlanningAssumptions(draft).map((assumption) =>
+                t(
+                  `assumptionCodes.${assumption.code}`,
+                  aiPlanningAssumptionMessageValues(assumption, draft, locale),
+                ),
+              ),
+            ),
+          ]
+        : [],
+    [draft, locale, t],
   );
   const dateFormatter = useMemo(
     () =>
@@ -224,23 +295,55 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   );
 
   function publish(next: AiPlanningSession) {
+    sessionRef.current = next;
     queryClient.setQueryData(queryKeys.aiPlanningSession(sessionId), { session: next });
     queryClient.setQueryData(queryKeys.aiPlanningRecovery(), { session: next });
   }
 
-  async function save(next: AiPlanningDraft) {
-    if (!session || !reviewing || publishing) return;
+  function clearAutosaveTimer() {
+    if (!autosaveTimerRef.current) return;
+    clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = null;
+  }
+
+  function queueDraft(next: AiPlanningDraft) {
+    const autosave = autosaveRef.current;
+    if (!autosave || !reviewing) return;
     setDraft(next);
-    setOperation('saving');
-    setError(null);
-    try {
-      publish((await replaceAiPlanningDraft(session.id, next, session.draftRevision)).session);
-    } catch (cause) {
-      setError(cause instanceof AiPlanningApiError ? cause.code : 'request_failed');
-      void sessionQuery.refetch();
-    } finally {
-      setOperation('idle');
+    autosave.update(next);
+    clearAutosaveTimer();
+    autosaveTimerRef.current = setTimeout(() => {
+      autosaveTimerRef.current = null;
+      void flushDraft();
+    }, AUTOSAVE_DEBOUNCE_MS);
+  }
+
+  function acceptServerSession(next: AiPlanningSession) {
+    clearAutosaveTimer();
+    const autosave = autosaveRef.current;
+    if (autosave && next.draft) {
+      autosave.replace({ draft: next.draft, result: next, revision: next.draftRevision });
+      setDraft(next.draft);
     }
+    publish(next);
+  }
+
+  async function flushDraft(retry = false) {
+    clearAutosaveTimer();
+    const autosave = autosaveRef.current;
+    if (!autosave) return sessionRef.current;
+    try {
+      const next = retry ? await autosave.retry() : await autosave.flush();
+      publish(next);
+      if (next.draft && !autosave.snapshot.hasPendingChanges) setDraft(next.draft);
+      return next;
+    } catch {
+      return null;
+    }
+  }
+
+  async function retryAutosave() {
+    await flushDraft(true);
   }
 
   async function runRecheck(itemId: string) {
@@ -248,7 +351,11 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
     setOperation('verifying');
     setError(null);
     try {
-      publish((await recheckAiPlanningItem(session.id, itemId, session.draftRevision)).session);
+      const saved = await flushDraft();
+      if (!saved) return;
+      acceptServerSession(
+        (await recheckAiPlanningItem(saved.id, itemId, saved.draftRevision)).session,
+      );
     } catch (cause) {
       setError(cause instanceof AiPlanningApiError ? cause.code : 'request_failed');
     } finally {
@@ -261,8 +368,10 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
     setOperation('verifying');
     setError(null);
     try {
-      publish(
-        (await verifyAiPlanningCustomPlace(session.id, placeRefId, session.draftRevision)).session,
+      const saved = await flushDraft();
+      if (!saved) return;
+      acceptServerSession(
+        (await verifyAiPlanningCustomPlace(saved.id, placeRefId, saved.draftRevision)).session,
       );
     } catch (cause) {
       setError(cause instanceof AiPlanningApiError ? cause.code : 'request_failed');
@@ -276,10 +385,12 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
     setOperation('verifying');
     setError(null);
     try {
-      publish(
+      const saved = await flushDraft();
+      if (!saved) return;
+      acceptServerSession(
         (
-          await replaceAiPlanningItemPlace(session.id, editingItemId, {
-            expectedRevision: session.draftRevision,
+          await replaceAiPlanningItemPlace(saved.id, editingItemId, {
+            expectedRevision: saved.draftRevision,
             externalPlaceId: suggestion.externalPlaceId,
             sessionToken: suggestionSessionToken,
           })
@@ -299,7 +410,11 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
     setOperation('acknowledging');
     setError(null);
     try {
-      publish((await acknowledgeAiPlanningWarnings(session.id, session.draftRevision)).session);
+      const saved = await flushDraft();
+      if (!saved) return;
+      acceptServerSession(
+        (await acknowledgeAiPlanningWarnings(saved.id, saved.draftRevision)).session,
+      );
     } catch (cause) {
       setError(cause instanceof AiPlanningApiError ? cause.code : 'request_failed');
     } finally {
@@ -309,15 +424,17 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
 
   async function regenerate() {
     if (!session || publishing || !regeneratePrompt.trim()) return;
-    setOperation('saving');
+    setOperation('regenerating');
     setError(null);
     try {
-      publish(
+      const saved = await flushDraft();
+      if (!saved) return;
+      acceptServerSession(
         (
           await regenerateAiPlanningSession(
-            session.id,
+            saved.id,
             regeneratePrompt,
-            session.draftRevision,
+            saved.draftRevision,
             crypto.randomUUID(),
           )
         ).session,
@@ -334,12 +451,18 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
     setOperation('applying');
     setError(null);
     try {
+      const saved = await flushDraft();
+      if (!saved?.draft) return;
+      const latestMaterialWarnings = saved.draft.warnings.filter((warning) => warning.material);
+      const latestWarningsAcknowledged =
+        !latestMaterialWarnings.length ||
+        saved.warningAcknowledgement?.revision === saved.draftRevision;
+      if (!latestWarningsAcknowledged) {
+        setConfirmApply(false);
+        return;
+      }
       const deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
-      const result = await applyAiPlanningSession(
-        session.id,
-        session.draftRevision,
-        deviceTimeZone,
-      );
+      const result = await applyAiPlanningSession(saved.id, saved.draftRevision, deviceTimeZone);
       queryClient.setQueryData(queryKeys.trips(), (current: { trips: Trip[] } | undefined) =>
         current ? { ...current, trips: [...current.trips, result.trip] } : current,
       );
@@ -352,10 +475,11 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
     }
   }
 
-  if (sessionQuery.isPending) {
+  const pageState = aiPlanningReviewPageState(session, draft, sessionQuery.isPending);
+  if (pageState === 'loading' || pageState === 'redirecting') {
     return <PageState kind="loading" loadingShape="text" scope="page" title={t('loading')} />;
   }
-  if (!session || !draft || session.status === 'cancelled' || session.status === 'expired') {
+  if (pageState === 'error' || !session || !draft) {
     return (
       <PageState
         actions={<Button onClick={() => router.push('/trips')}>{t('backToTrips')}</Button>}
@@ -381,9 +505,26 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
           </h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">{t('description')}</p>
         </div>
-        <Button disabled={!reviewing || publishing} onClick={() => void save(draft)}>
-          {operation === 'saving' ? t('saving') : t('save')}
-        </Button>
+        <div className="flex min-h-9 items-center gap-3 text-sm" aria-live="polite">
+          {autosaveSnapshot.phase === 'error' ? (
+            <>
+              <span className="text-destructive">{t('autosaveError')}</span>
+              <Button
+                disabled={publishing}
+                onClick={() => void retryAutosave()}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {t('retrySave')}
+              </Button>
+            </>
+          ) : (
+            <span className="text-muted-foreground">
+              {autosaveSnapshot.phase === 'saved' ? t('autosaveSaved') : t('autosaveSaving')}
+            </span>
+          )}
+        </div>
       </header>
 
       {isAiPlanningSessionGenerating(session.status) ? (
@@ -411,7 +552,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                   disabled={!reviewing || publishing}
                   id="review-trip-name"
                   onChange={(event) =>
-                    setDraft({ ...draft, trip: { ...draft.trip, name: event.target.value } })
+                    queueDraft({ ...draft, trip: { ...draft.trip, name: event.target.value } })
                   }
                   value={draft.trip.name}
                 />
@@ -425,7 +566,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                   min={1}
                   onChange={(event) => {
                     const partySize = Math.max(1, Math.min(99, Number(event.target.value) || 1));
-                    setDraft({ ...draft, trip: { ...draft.trip, partySize } });
+                    queueDraft({ ...draft, trip: { ...draft.trip, partySize } });
                   }}
                   type="number"
                   value={draft.trip.partySize}
@@ -437,7 +578,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
             </p>
           </section>
 
-          {draft.assumptions.length ? (
+          {assumptionMessages.length ? (
             <section
               className="rounded-[var(--radius-xl)] border border-border bg-card p-4 sm:p-6"
               aria-labelledby="ai-review-assumptions"
@@ -446,10 +587,8 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                 {t('assumptions')}
               </h2>
               <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-                {draft.assumptions.map((assumption) => (
-                  <li key={assumption.id}>
-                    {assumption.rationale ?? t(`assumptionCodes.${assumption.code}`)}
-                  </li>
+                {assumptionMessages.map((message) => (
+                  <li key={message}>{message}</li>
                 ))}
               </ul>
             </section>
@@ -530,7 +669,9 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                           <div className="flex flex-wrap gap-1">
                             <Button
                               disabled={!reviewing || publishing || itemIndex === 0}
-                              onClick={() => void save(reorderItem(draft, dayIndex, itemIndex, -1))}
+                              onClick={() =>
+                                queueDraft(reorderItem(draft, dayIndex, itemIndex, -1))
+                              }
                               size="icon-sm"
                               title={t('moveEarlier')}
                               type="button"
@@ -542,7 +683,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                               disabled={
                                 !reviewing || publishing || itemIndex === day.items.length - 1
                               }
-                              onClick={() => void save(reorderItem(draft, dayIndex, itemIndex, 1))}
+                              onClick={() => queueDraft(reorderItem(draft, dayIndex, itemIndex, 1))}
                               size="icon-sm"
                               title={t('moveLater')}
                               type="button"
@@ -576,7 +717,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                                   disabled={!reviewing || publishing}
                                   id={`schedule-${item.id}`}
                                   onChange={(event) =>
-                                    void save(
+                                    queueDraft(
                                       withItem(draft, item.id, (current) =>
                                         event.target.value === 'exact'
                                           ? {
@@ -623,7 +764,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                                     disabled={!reviewing || publishing}
                                     id={`time-${item.id}`}
                                     onChange={(event) =>
-                                      setDraft(
+                                      queueDraft(
                                         withItem(draft, item.id, (current) => ({
                                           ...current,
                                           schedule: {
@@ -648,7 +789,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                                   id={`duration-${item.id}`}
                                   min={1}
                                   onChange={(event) =>
-                                    setDraft(
+                                    queueDraft(
                                       withItem(draft, item.id, (current) => ({
                                         ...current,
                                         durationMinutes: Math.max(
@@ -676,7 +817,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                                   disabled={!reviewing || publishing}
                                   id={`priority-${item.id}`}
                                   onChange={(event) =>
-                                    void save(
+                                    queueDraft(
                                       withItem(draft, item.id, (current) => ({
                                         ...current,
                                         priority: event.target.value
@@ -701,7 +842,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                                 disabled={!reviewing || publishing}
                                 id={`notes-${item.id}`}
                                 onChange={(event) =>
-                                  setDraft(
+                                  queueDraft(
                                     withItem(draft, item.id, (current) => ({
                                       ...current,
                                       notes: event.target.value || null,
@@ -720,7 +861,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                                   disabled={!reviewing || publishing}
                                   id={`custom-place-${item.id}`}
                                   onChange={(event) =>
-                                    setDraft(
+                                    queueDraft(
                                       withPlace(draft, place.id, (current) =>
                                         current.resolution === 'custom'
                                           ? { ...current, name: event.target.value }
@@ -741,7 +882,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                                 disabled={!reviewing || publishing}
                                 onChange={(event) => {
                                   if (event.target.value)
-                                    void save(moveItem(draft, item.id, event.target.value));
+                                    queueDraft(moveItem(draft, item.id, event.target.value));
                                   event.currentTarget.value = '';
                                 }}
                               >
@@ -759,7 +900,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                               </select>
                               <Button
                                 disabled={!reviewing || publishing}
-                                onClick={() => void save(removeItem(draft, item.id))}
+                                onClick={() => queueDraft(removeItem(draft, item.id))}
                                 size="sm"
                                 type="button"
                                 variant="destructive"
@@ -769,7 +910,9 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                               </Button>
                               {place?.resolution === 'verified' ? (
                                 <Button
-                                  disabled={!reviewing || publishing}
+                                  disabled={
+                                    !reviewing || publishing || autosaveSnapshot.phase === 'error'
+                                  }
                                   onClick={() => void runRecheck(item.id)}
                                   size="sm"
                                   type="button"
@@ -781,7 +924,9 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                               ) : null}
                               {place?.resolution === 'custom' ? (
                                 <Button
-                                  disabled={!reviewing || publishing}
+                                  disabled={
+                                    !reviewing || publishing || autosaveSnapshot.phase === 'error'
+                                  }
                                   onClick={() => void verifyPlace(place.id)}
                                   size="sm"
                                   type="button"
@@ -809,7 +954,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                                     <li key={suggestion.externalPlaceId}>
                                       <Button
                                         className="w-full justify-start"
-                                        disabled={publishing}
+                                        disabled={publishing || autosaveSnapshot.phase === 'error'}
                                         onClick={() => void replacePlace(suggestion)}
                                         type="button"
                                         variant="ghost"
@@ -881,22 +1026,6 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
           </section>
           <section
             className="rounded-[var(--radius-xl)] border border-border bg-card p-4 sm:p-6"
-            aria-labelledby="ai-review-evidence"
-          >
-            <h2 className="font-semibold" id="ai-review-evidence">
-              {t('evidence')}
-            </h2>
-            <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-              {draft.evidence.map((evidence) => (
-                <li key={evidence.id}>
-                  {t(`evidenceStatus.${evidence.status}`)}
-                  {evidence.provider ? ` · ${evidence.provider}` : ''}
-                </li>
-              ))}
-            </ul>
-          </section>
-          <section
-            className="rounded-[var(--radius-xl)] border border-border bg-card p-4 sm:p-6"
             aria-labelledby="ai-review-regenerate"
           >
             <h2 className="font-semibold" id="ai-review-regenerate">
@@ -911,7 +1040,9 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
             />
             <Button
               className="mt-3"
-              disabled={publishing || !regeneratePrompt.trim()}
+              disabled={
+                publishing || autosaveSnapshot.phase === 'error' || !regeneratePrompt.trim()
+              }
               onClick={() => void regenerate()}
               size="sm"
               type="button"
@@ -938,7 +1069,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
           </p>
           {!warningsAcknowledged ? (
             <Button
-              disabled={!reviewing || publishing}
+              disabled={!reviewing || publishing || autosaveSnapshot.phase === 'error'}
               onClick={() => void acknowledgeWarnings()}
               size="sm"
               type="button"

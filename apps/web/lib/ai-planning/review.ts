@@ -1,6 +1,72 @@
 import type { ItineraryMapPoint } from '@/lib/maps/itinerary-map';
 
-import type { AiPlanningDraft, AiPlanningDraftItem } from './api';
+import type { AiPlanningDraft, AiPlanningDraftItem, AiPlanningSession } from './api';
+
+export type AiPlanningReviewPageState = 'error' | 'loading' | 'redirecting' | 'reviewing';
+
+export function aiPlanningReviewPageState(
+  session: AiPlanningSession | null,
+  draft: AiPlanningDraft | null,
+  queryPending: boolean,
+): AiPlanningReviewPageState {
+  if (queryPending) return 'loading';
+  if (!session) return 'error';
+  if (session.appliedTripId || session.status === 'applied') return 'redirecting';
+  if (session.status === 'pending' || session.status === 'generating') {
+    return draft ? 'reviewing' : 'loading';
+  }
+  if (session.status !== 'reviewing') return 'error';
+  return draft ? 'reviewing' : 'loading';
+}
+
+export function aiPlanningAssumptionMessageValues(
+  assumption: AiPlanningDraft['assumptions'][number],
+  draft: AiPlanningDraft,
+  locale: string,
+) {
+  const listFormatter = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' });
+  const inferredValues = Array.isArray(assumption.value)
+    ? assumption.value
+    : assumption.value === null
+      ? []
+      : [String(assumption.value)];
+
+  const assumedDates = assumption.code === 'dates_defaulted' ? inferredValues : [];
+
+  return {
+    count:
+      assumption.code === 'party_size_defaulted' && typeof assumption.value === 'number'
+        ? assumption.value
+        : draft.trip.partySize,
+    endDate: assumedDates[1] ?? draft.trip.endDate,
+    name:
+      assumption.code === 'trip_name_inferred' && typeof assumption.value === 'string'
+        ? assumption.value
+        : draft.trip.name,
+    pace:
+      assumption.code === 'pace_defaulted' && typeof assumption.value === 'string'
+        ? assumption.value
+        : draft.trip.pace,
+    startDate: assumedDates[0] ?? draft.trip.startDate,
+    value: inferredValues.length ? listFormatter.format(inferredValues) : '',
+  };
+}
+
+export function activeAiPlanningAssumptions(draft: AiPlanningDraft) {
+  const activeIds = new Set(
+    [
+      draft.trip.dateAssumptionId,
+      draft.trip.nameAssumptionId,
+      draft.trip.paceAssumptionId,
+      draft.trip.partySizeAssumptionId,
+      ...draft.trip.destinations.map((destination) => destination.assumptionId),
+    ].filter((id): id is string => Boolean(id)),
+  );
+
+  return draft.assumptions.filter(
+    (assumption) => assumption.code === 'interest_inferred' || activeIds.has(assumption.id),
+  );
+}
 
 /**
  * A review draft can contain free-text Custom Places. Only a verified provider

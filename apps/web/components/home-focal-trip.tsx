@@ -77,107 +77,115 @@ export function HomeFocalTrip({
           className="absolute inset-0 bg-[linear-gradient(180deg,rgba(10,20,15,0.22)_0%,rgba(10,20,15,0.42)_35%,rgba(8,18,13,0.92)_100%)]"
         />
 
-        <div className="relative flex min-h-[31rem] flex-col justify-end gap-4 p-5 text-white sm:min-h-[29rem] sm:p-7 lg:min-h-[31rem] lg:max-w-3xl lg:p-9">
-          <div className="space-y-1.5">
-            <p className="text-sm font-medium text-white/78">{t(stageLabels[trip.lifecycle])}</p>
-            <h2
-              className="max-w-2xl text-3xl leading-[1.08] font-semibold tracking-[-0.035em] text-balance sm:text-4xl"
-              id="home-focal-heading"
-            >
-              {trip.name}
-            </h2>
-            <p className="text-sm text-white/78">
-              {destinations ?? t('destinationOpen')} <span aria-hidden="true">·</span>{' '}
-              <span className="tabular-nums">{dateRange}</span>
-            </p>
-          </div>
-
-          {trip.lifecycle === 'planning' ? (
-            <div className="w-full max-w-xl space-y-3">
-              <div className="space-y-2">
-                <p className="text-lg font-medium">
-                  {t('countdown', { count: daysUntilTripStart(trip) })}
-                </p>
-                <p className="text-sm text-white/78">{t(`readiness.${trip.planningReadiness}`)}</p>
-                {trip.itineraryCoverage ? (
-                  <TripItineraryCoverage coverage={trip.itineraryCoverage} inverse />
-                ) : null}
-              </div>
-              {weatherTarget ? (
-                <HomeWeatherInset target={weatherTarget} />
-              ) : weatherPending ? (
-                <HomeWeatherInsetSkeleton label={weatherT('loading')} />
-              ) : null}
-            </div>
-          ) : null}
-
-          {trip.lifecycle === 'active' ? (
-            <div className="w-full max-w-xl space-y-3">
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-white/78">{t('nextUp')}</p>
-                <p className="text-base leading-6">
-                  {nextItem
-                    ? t(nextItem.upcoming ? 'nextItem' : 'currentItem', { name: nextItem.label })
-                    : t('noNextItem')}
-                </p>
-                {trip.itineraryCoverage ? (
-                  <TripItineraryCoverage coverage={trip.itineraryCoverage} inverse />
-                ) : null}
-              </div>
-              {weatherTarget ? (
-                <HomeWeatherInset target={weatherTarget} />
-              ) : weatherPending ? (
-                <HomeWeatherInsetSkeleton label={weatherT('loading')} />
-              ) : null}
-            </div>
-          ) : null}
-
-          {trip.lifecycle === 'completed' ? (
-            <div className="space-y-3">
-              <p className="max-w-xl text-sm leading-6 text-white/78">
-                {t('states.completed.tripDescription', {
-                  endDate: formatTripDate(trip.endDate, locale),
-                  startDate: formatTripDate(trip.startDate, locale),
-                })}
-              </p>
-              {trip.experienceRating === null ? null : (
-                <ExperienceRatingSummary
-                  className="text-white"
-                  label={t('yourRating')}
-                  rating={trip.experienceRating}
-                  tone="onImage"
-                />
-              )}
-            </div>
-          ) : null}
-
-          <TripDestinationActions
-            destinations={primaryTripDestinations(trip.id, trip.lifecycle, trip.startDate)}
-            inverse
-            labelOverrides={
-              trip.lifecycle === 'completed'
-                ? { memories: t('viewMemories') }
-                : {
-                    itinerary: t('continuePlanning'),
-                    mode: t(trip.lifecycle === 'active' ? 'openTripMode' : 'previewTripMode'),
-                  }
-            }
-          />
-
-          {promptKey ? (
-            <div className="flex items-start justify-between gap-3 border-t border-white/20 pt-3">
-              <p className="text-sm leading-6 text-white/75">{t(promptKey)}</p>
-              <Button
-                aria-label={t('dismissPrompt')}
-                className="text-white hover:bg-white/15 hover:text-white"
-                onClick={() => onDismissPrompt(trip.id)}
-                size="icon-sm"
-                variant="ghost"
+        <div className="relative flex min-h-[31rem] flex-col justify-end gap-4 p-5 text-white sm:min-h-[29rem] sm:p-7 lg:min-h-[31rem] lg:p-9">
+          <div className="w-full lg:max-w-3xl">
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium text-white/78">{t(stageLabels[trip.lifecycle])}</p>
+              <h2
+                className="max-w-2xl text-3xl leading-[1.08] font-semibold tracking-[-0.035em] text-balance sm:text-4xl"
+                id="home-focal-heading"
               >
-                <X aria-hidden="true" />
-              </Button>
+                {trip.name}
+              </h2>
+              <p className="text-sm text-white/78">
+                {destinations ?? t('destinationOpen')} <span aria-hidden="true">·</span>{' '}
+                <span className="tabular-nums">{dateRange}</span>
+              </p>
             </div>
-          ) : null}
+
+            {trip.lifecycle === 'planning' ? (
+              <div className="w-full max-w-xl space-y-3">
+                <div className="space-y-2">
+                  <p className="text-lg font-medium">
+                    {t('countdown', { count: daysUntilTripStart(trip) })}
+                  </p>
+                  <p className="text-sm text-white/78">
+                    {t(`readiness.${trip.planningReadiness}`)}
+                  </p>
+                  {trip.itineraryCoverage ? (
+                    <TripItineraryCoverage coverage={trip.itineraryCoverage} inverse />
+                  ) : null}
+                </div>
+                <div className="lg:absolute lg:right-9 lg:bottom-9 lg:w-[25rem]">
+                  {weatherTarget ? (
+                    <HomeWeatherInset target={weatherTarget} />
+                  ) : weatherPending ? (
+                    <HomeWeatherInsetSkeleton label={weatherT('loading')} />
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {trip.lifecycle === 'active' ? (
+              <div className="w-full max-w-xl space-y-3">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-white/78">{t('nextUp')}</p>
+                  <p className="text-base leading-6">
+                    {nextItem
+                      ? t(nextItem.upcoming ? 'nextItem' : 'currentItem', { name: nextItem.label })
+                      : t('noNextItem')}
+                  </p>
+                  {trip.itineraryCoverage ? (
+                    <TripItineraryCoverage coverage={trip.itineraryCoverage} inverse />
+                  ) : null}
+                </div>
+                <div className="lg:absolute lg:right-9 lg:bottom-9 lg:w-[25rem]">
+                  {weatherTarget ? (
+                    <HomeWeatherInset target={weatherTarget} />
+                  ) : weatherPending ? (
+                    <HomeWeatherInsetSkeleton label={weatherT('loading')} />
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {trip.lifecycle === 'completed' ? (
+              <div className="space-y-3">
+                <p className="max-w-xl text-sm leading-6 text-white/78">
+                  {t('states.completed.tripDescription', {
+                    endDate: formatTripDate(trip.endDate, locale),
+                    startDate: formatTripDate(trip.startDate, locale),
+                  })}
+                </p>
+                {trip.experienceRating === null ? null : (
+                  <ExperienceRatingSummary
+                    className="text-white"
+                    label={t('yourRating')}
+                    rating={trip.experienceRating}
+                    tone="onImage"
+                  />
+                )}
+              </div>
+            ) : null}
+
+            <TripDestinationActions
+              destinations={primaryTripDestinations(trip.id, trip.lifecycle, trip.startDate)}
+              inverse
+              labelOverrides={
+                trip.lifecycle === 'completed'
+                  ? { memories: t('viewMemories') }
+                  : {
+                      itinerary: t('continuePlanning'),
+                      mode: t(trip.lifecycle === 'active' ? 'openTripMode' : 'previewTripMode'),
+                    }
+              }
+            />
+
+            {promptKey ? (
+              <div className="flex items-start justify-between gap-3 border-t border-white/20 pt-3">
+                <p className="text-sm leading-6 text-white/75">{t(promptKey)}</p>
+                <Button
+                  aria-label={t('dismissPrompt')}
+                  className="text-white hover:bg-white/15 hover:text-white"
+                  onClick={() => onDismissPrompt(trip.id)}
+                  size="icon-sm"
+                  variant="ghost"
+                >
+                  <X aria-hidden="true" />
+                </Button>
+              </div>
+            ) : null}
+          </div>
         </div>
       </section>
     </div>

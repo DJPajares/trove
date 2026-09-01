@@ -6,6 +6,7 @@ import { BrandMark } from '@/components/brand-logo';
 import { EmailAuthForm } from '@/components/email-auth-form';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { getSafeRedirectPath } from '@/lib/auth/redirect';
+import { isSignUpEnabled } from '@/lib/auth/config.server';
 
 type SignInPageProps = {
   searchParams: Promise<{ next?: string }>;
@@ -13,6 +14,7 @@ type SignInPageProps = {
 
 export default async function SignInPage({ searchParams }: Readonly<SignInPageProps>) {
   const [{ next }, t] = await Promise.all([searchParams, getTranslations('auth')]);
+  const signUpEnabled = isSignUpEnabled();
 
   return (
     <AuthShell headingId="sign-in-heading">
@@ -32,15 +34,17 @@ export default async function SignInPage({ searchParams }: Readonly<SignInPagePr
         </CardHeader>
         <CardContent className="space-y-6">
           <EmailAuthForm mode="sign-in" nextPath={getSafeRedirectPath(next)} />
-          <p className="text-center text-sm text-muted-foreground">
-            {t('newToTrove')}{' '}
-            <Link
-              className="font-medium text-foreground underline underline-offset-4 transition-colors duration-[var(--motion-standard)] hover:text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-              href="/sign-up"
-            >
-              {t('createAccount')}
-            </Link>
-          </p>
+          {signUpEnabled ? (
+            <p className="text-center text-sm text-muted-foreground">
+              {t('newToTrove')}{' '}
+              <Link
+                className="font-medium text-foreground underline underline-offset-4 transition-colors duration-[var(--motion-standard)] hover:text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                href="/sign-up"
+              >
+                {t('createAccount')}
+              </Link>
+            </p>
+          ) : null}
         </CardContent>
       </Card>
     </AuthShell>

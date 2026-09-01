@@ -1910,7 +1910,9 @@
     "passwordMismatch": "Passwords do not match.",
     "confirmationSent": "Check your email to confirm your account before signing in.",
     "configurationError": "Sign-in is not configured. Check your connection and try again.",
-    "error": "We couldn't complete that request. Check your details and try again."
+    "error": "We couldn't complete that request. Check your details and try again.",
+    "signUpClosedTitle": "Sign-ups are closed",
+    "signUpClosedDescription": "Trove is not open for public sign-up yet. If you already have an account, sign in below."
   },
   "home": {
     "loading": "Loading your travel context…",

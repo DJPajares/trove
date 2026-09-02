@@ -115,6 +115,7 @@ export function explicitModelProposal(): AiPlannerModelProposal {
     ],
     schemaVersion: 1,
     selectedDurationDays: null,
+    tripDescription: 'Three days in Tokyo built around museums and long dinners.',
     tripName: 'Tokyo focus trip',
   };
 }
@@ -215,6 +216,7 @@ export function explicitDraft(): AiPlannerDraft {
     trip: {
       dateAssumptionId: null,
       dateSource: 'user',
+      description: 'Three days in Tokyo built around museums and long dinners.',
       destinations: [
         {
           assumptionId: null,
@@ -284,6 +286,7 @@ export function missingDetailsProposal(): AiPlannerModelProposal {
     places: [{ id: 'candidate:kyoto', name: 'Kyoto', note: null, searchQuery: 'Kyoto Japan' }],
     schemaVersion: 1,
     selectedDurationDays: 5,
+    tripDescription: 'Five slow days in Kyoto, planned around what there is to eat.',
     tripName: 'Kyoto food trip',
   };
 }

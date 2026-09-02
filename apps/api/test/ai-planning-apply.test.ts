@@ -29,6 +29,7 @@ type SessionState = {
   schemaVersion: number;
   stage: string;
   status: string;
+  tripDescription: string | null;
   updatedAt: Date;
   warningsAcknowledgedAt: Date | null;
   warningsAcknowledgedRevision: number | null;
@@ -61,6 +62,7 @@ function makeSession(draft: AiPlannerDraft, overrides: Partial<SessionState> = {
     schemaVersion: 1,
     stage: 'REVIEWING',
     status: 'REVIEWING',
+    tripDescription: null,
     updatedAt: NOW,
     warningsAcknowledgedAt: null,
     warningsAcknowledgedRevision: null,
@@ -632,4 +634,37 @@ test('the revision Apply stores is the one the scorer derives from the same trip
   };
 
   expect(readPlanScoreInputs(rows as never).revision).toBe(trip.planScoreRevision);
+});
+
+/**
+ * The model now drafts a description, so the trip should never land blank just
+ * because nobody typed in the review field. The traveller's own words still win
+ * when they wrote any — that is the whole point of the field being editable.
+ */
+test('the drafted description reaches the trip, and a traveller override outranks it', async () => {
+  const draft = customPlaceDraft();
+  draft.trip.description = 'A slow week in Kyoto, planned around what there is to eat.';
+
+  const drafted = createApplyStore(draft);
+  await apply(drafted);
+  expect(drafted.state.trips[0]).toMatchObject({
+    description: 'A slow week in Kyoto, planned around what there is to eat.',
+    name: draft.trip.name,
+  });
+
+  const overridden = createApplyStore(draft, {
+    session: { tripDescription: 'Our anniversary trip.' },
+  });
+  await apply(overridden);
+  expect(overridden.state.trips[0]).toMatchObject({ description: 'Our anniversary trip.' });
+});
+
+test('a trip applied from a draft written before descriptions existed keeps a null one', async () => {
+  const draft = customPlaceDraft();
+  draft.trip.description = null;
+  const store = createApplyStore(draft);
+
+  await apply(store);
+
+  expect(store.state.trips[0]).toMatchObject({ description: null });
 });

@@ -1,3 +1,4 @@
+import { aiPlannerModelProposalSchema } from '@trove/types';
 import { APICallError } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
 import { expect, test } from 'vitest';
@@ -244,4 +245,22 @@ test('the Vertex adapter rejects malformed structured output with a safe code', 
   await expect(provider.generateStructured(request())).rejects.toMatchObject({
     code: 'invalid_response',
   });
+});
+
+/**
+ * Field descriptions are the stronger of the two levers on naming: this pipeline
+ * already found that Vertex binds a schema description harder than the same
+ * sentence in the prompt. They only work if the narrowing pass leaves them
+ * alone, so assert that they reach the request intact.
+ */
+test('the narrowed response schema keeps the naming and description briefs', () => {
+  const schema = vertexResponseSchema(aiPlannerModelProposalSchema) as {
+    properties: Record<string, { description?: string }>;
+    required?: string[];
+  };
+
+  expect(schema.properties.tripName?.description).toContain('planner_context.naming.tone');
+  expect(schema.properties.tripName?.description).toContain('"X Adventure"');
+  expect(schema.properties.tripDescription?.description).toContain('One or two sentences');
+  expect(schema.required).toContain('tripDescription');
 });

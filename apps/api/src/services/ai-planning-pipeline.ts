@@ -444,6 +444,7 @@ export function assembleAiPlanningDraft(
     trip: {
       dateAssumptionId: defaults.dateAssumptionId,
       dateSource: defaults.dateSource,
+      description: defaults.description,
       destinations,
       endDate: defaults.endDate,
       name: defaults.name,

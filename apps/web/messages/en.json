@@ -264,7 +264,7 @@
         "tripName": "Trip name",
         "partySize": "Party size",
         "tripDescription": "Trip description",
-        "descriptionHint": "Optional. Saved to the trip when you create it.",
+        "descriptionHint": "We drafted this from your request. Edit it, or leave it as is — it saves to the trip when you create it.",
         "descriptionSaving": "Saving description…",
         "assumptions": "Details we filled in",
         "assumptionCodes": {

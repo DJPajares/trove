@@ -36,6 +36,8 @@ export type PlaceSearchRequest = {
 };
 
 export type PlaceTextSearchRequest = {
+  /** Identity-only searches stay on Pro; scoring evidence requires Enterprise. */
+  detail: PlaceDetailLevel;
   /** Internal attribution; never part of the provider query or cache key. */
   cacheMissReason?: ProviderCacheMissReason;
   languageCode?: string;
@@ -137,9 +139,14 @@ export type ProviderPlaceIdentity = Omit<
   'location' | 'openingPeriods' | 'rating'
 > & { location: PlaceCoordinates };
 
+export type ProviderPlaceSearchResult = ProviderPlaceIdentity & {
+  /** Present when requested, even when Google has no hours or rating. */
+  evidence?: Pick<ProviderPlaceDetails, 'openingPeriods' | 'rating'>;
+};
+
 export interface PlaceTextSearchProvider {
   readonly name: PlaceProviderName;
-  textSearch(request: PlaceTextSearchRequest): Promise<ProviderPlaceIdentity[]>;
+  textSearch(request: PlaceTextSearchRequest): Promise<ProviderPlaceSearchResult[]>;
 }
 
 /**

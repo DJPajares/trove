@@ -61,6 +61,7 @@ export type ProviderExpectedSku =
   | 'editorial-images-free'
   | 'places-autocomplete-requests'
   | 'places-text-search-pro'
+  | 'places-text-search-enterprise'
   | 'place-details-pro'
   | 'place-details-enterprise'
   | 'routes-compute-routes-essentials';

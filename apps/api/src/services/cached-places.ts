@@ -63,6 +63,25 @@ function memoKey(request: PlaceDetailsRequest) {
   ].join(' ');
 }
 
+/** Reuse selected Text Search evidence without a Details request or a snapshot write. */
+export function rememberPlaceEvidence(
+  request: Omit<PlaceDetailsRequest, 'detail'>,
+  result: Extract<PlaceDetailsResult, { status: 'ok' }>,
+) {
+  const fetchedAt = Date.parse(result.freshness.fetchedAt);
+  if (!Number.isFinite(fetchedAt) || result.place.externalPlaceId !== request.externalPlaceId)
+    return;
+  const key = memoKey({ ...request, detail: 'evidence' });
+  const expiresAt = fetchedAt + EVIDENCE_MEMO_TTL_MS;
+  // Reusing or re-seeding an older answer must never slide its lifetime.
+  if ((evidenceMemo.get(key)?.expiresAt ?? -Infinity) >= expiresAt) return;
+  if (evidenceMemo.size >= EVIDENCE_MEMO_LIMIT && !evidenceMemo.has(key)) {
+    const oldest = evidenceMemo.keys().next();
+    if (!oldest.done) evidenceMemo.delete(oldest.value);
+  }
+  evidenceMemo.set(key, { expiresAt, result });
+}
+
 /**
  * A snapshot only answers a request asking for the same language: a display
  * name is language-specific, and serving an English name to a request that
@@ -137,7 +156,7 @@ export class CachedPlacesService extends PlacesService {
         }
         await this.writeSnapshot(result.place, request.externalPlaceId, request.languageCode);
       } else {
-        this.writeMemo(request, result);
+        rememberPlaceEvidence(request, result);
       }
     } else if (request.detail === 'location' && result.status === 'empty') {
       await this.writeFailure(request.externalPlaceId, 'NOT_FOUND');
@@ -168,19 +187,6 @@ export class CachedPlacesService extends PlacesService {
     }
 
     return { kind: 'hit', result: entry.result };
-  }
-
-  private writeMemo(request: PlaceDetailsRequest, result: PlaceDetailsResult) {
-    if (evidenceMemo.size >= EVIDENCE_MEMO_LIMIT) {
-      // Insertion-ordered, so the first key is the oldest.
-      const oldest = evidenceMemo.keys().next();
-      if (!oldest.done) evidenceMemo.delete(oldest.value);
-    }
-
-    evidenceMemo.set(memoKey(request), {
-      expiresAt: this.now().getTime() + EVIDENCE_MEMO_TTL_MS,
-      result,
-    });
   }
 
   private async readSnapshot(request: PlaceDetailsRequest): Promise<CacheLookup> {

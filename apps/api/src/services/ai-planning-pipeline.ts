@@ -48,10 +48,16 @@ import {
   completeAiPlanningRunSuccess,
   updateAiPlanningStage,
 } from './ai-planning-sessions.js';
-import { evaluateFeasibility, type PlanScoreDayItem } from './plan-score-factors.js';
+import {
+  evaluateFeasibility,
+  type PlanScoreDayItem,
+  type PlanScoreInterval,
+} from './plan-score-factors.js';
+import { normalizePlaceLanguageCode } from './place-language.js';
 import { openingIntervalsForWeekday, weekdayForLocalDate } from './place-opening-hours.js';
 import type { PlaceDetailsResult, PlaceTextSearchProvider, PlacesService } from './places.js';
 import type { RoutesService } from './routes.js';
+import { rememberPlaceEvidence } from './cached-places.js';
 import { enumerateDateRange } from './trip-rules.js';
 
 type GenerationGateway = {
@@ -99,6 +105,7 @@ export type AiPlanningPipelineOptions = {
     proposal: AiPlannerModelProposal,
     providerContext: ProviderContext,
     targetIds: ReadonlySet<string>,
+    scheduledPlaceIds: ReadonlySet<string>,
   ) => Promise<GroundedCandidate[]>;
   lifecycle?: PlanningLifecycle;
   loadHomeLocation?: (ownerId: string) => Promise<string | null>;
@@ -211,6 +218,7 @@ async function groundCandidates(
   proposal: AiPlannerModelProposal,
   providerContext: ProviderContext,
   targetIds: ReadonlySet<string>,
+  scheduledPlaceIds: ReadonlySet<string>,
 ): Promise<GroundedCandidate[]> {
   const targets = proposal.places.filter((candidate) => targetIds.has(candidate.id));
   if (targets.length === 0) return [];
@@ -224,6 +232,7 @@ async function groundCandidates(
   return grounder.groundCandidates(
     targets.map((candidate) => ({
       ...candidate,
+      detail: scheduledPlaceIds.has(candidate.id) ? 'evidence' : 'location',
       localityHint: localities.get(candidate.id),
     })),
   );
@@ -554,35 +563,51 @@ function feasibilityItem(
   };
 }
 
-async function addOpeningEvidence(
+export async function addOpeningEvidence(
   draft: AiPlannerDraft,
   proposal: AiPlannerModelProposal,
   contexts: Map<string, GroundedPlaceContext>,
   placesService: PlacesService | null,
-) {
-  const externalPlaceIds = [
-    ...new Set(
-      draft.days.flatMap((day) =>
-        day.items.flatMap((item) => {
-          const context = item.placeRefId ? contexts.get(item.placeRefId) : null;
-          return context ? [context.externalPlaceId] : [];
-        }),
-      ),
-    ),
-  ];
+): Promise<{ intervals: Map<string, PlanScoreInterval[]>; ratings: Map<string, number> }> {
+  const requestedContexts = new Map<string, GroundedPlaceContext>();
+  const contextKey = (context: GroundedPlaceContext) =>
+    JSON.stringify([
+      context.externalPlaceId,
+      normalizePlaceLanguageCode(context.languageCode),
+      context.regionCode ?? '',
+    ]);
+  for (const day of draft.days) {
+    for (const item of day.items) {
+      const context = item.placeRefId ? contexts.get(item.placeRefId) : null;
+      if (!context) continue;
+      const key = contextKey(context);
+      // Prefer paid-for evidence if two candidate references resolved to one venue.
+      if (!requestedContexts.has(key) || context.evidence) requestedContexts.set(key, context);
+    }
+  }
   const details = new Map(
     await mapWithConcurrency(
-      externalPlaceIds,
+      [...requestedContexts],
       PROVIDER_CONCURRENCY_LIMIT,
-      async (externalPlaceId) =>
-        [
-          externalPlaceId,
-          placesService
-            ? await placesService.getDetails({ detail: 'evidence', externalPlaceId })
-            : null,
-        ] as const,
+      async ([key, context]) => {
+        const request = {
+          externalPlaceId: context.externalPlaceId,
+          languageCode: context.languageCode,
+          regionCode: context.regionCode,
+        };
+        if (context.evidence) {
+          rememberPlaceEvidence(request, context.evidence);
+          return [key, context.evidence] as const;
+        }
+        return [
+          key,
+          placesService ? await placesService.getDetails({ ...request, detail: 'evidence' }) : null,
+        ] as const;
+      },
     ),
   );
+  const intervals = new Map<string, PlanScoreInterval[]>();
+  const ratings = new Map<string, number>();
 
   for (const day of draft.days) {
     const retained: AiPlannerDraftItem[] = [];
@@ -592,7 +617,7 @@ async function addOpeningEvidence(
         retained.push(item);
         continue;
       }
-      const result = details.get(context.externalPlaceId) ?? null;
+      const result = details.get(contextKey(context)) ?? null;
       const opening = openingEvidence(item, day.date, result);
       const evaluated = opening.intervals
         ? evaluateFeasibility({
@@ -626,11 +651,16 @@ async function addOpeningEvidence(
           material: false,
         });
       }
+      if (opening.intervals) intervals.set(item.id, opening.intervals);
+      if (item.placeRefId && result?.status === 'ok' && result.place.rating !== null) {
+        ratings.set(item.placeRefId, result.place.rating);
+      }
       draft.evidence.push(opening.evidence);
       retained.push(item);
     }
     day.items = retained;
   }
+  return { intervals, ratings };
 }
 
 async function addRouteEvidence(
@@ -887,6 +917,11 @@ export async function runAiPlanningPipeline(
       proposal.data,
       providerContext,
       groundableDraftPlaceIds(draft),
+      new Set(
+        draft.days.flatMap((day) =>
+          day.items.flatMap((item) => (item.placeRefId ? [item.placeRefId] : [])),
+        ),
+      ),
     );
     applyGroundingToDraft(draft, grounding);
 

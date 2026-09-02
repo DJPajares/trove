@@ -3,7 +3,11 @@ import { randomUUID } from 'node:crypto';
 import type { AiPlannerDraft } from '@trove/types';
 import { expect, beforeEach, test } from 'vitest';
 
-import { CachedPlacesService, resetCachedPlacesMemo } from '../src/services/cached-places.js';
+import {
+  CachedPlacesService,
+  rememberPlaceEvidence,
+  resetCachedPlacesMemo,
+} from '../src/services/cached-places.js';
 import { CachedEditorialImagesService } from '../src/services/cached-editorial-images.js';
 import { CachedRoutesService } from '../src/services/cached-routes.js';
 import { resetEditorialImageBudget } from '../src/services/editorial-image-budget.js';
@@ -19,6 +23,8 @@ import {
 import { areGoogleProvidersDisabled, getPlacesEnvironment } from '../src/environment.js';
 import {
   GOOGLE_PLACE_EVIDENCE_FIELD_MASK,
+  GOOGLE_TEXT_SEARCH_EVIDENCE_FIELD_MASK,
+  GOOGLE_TEXT_SEARCH_FIELD_MASK,
   GOOGLE_PLACE_LOCATION_FIELD_MASK,
   GooglePlacesProvider,
   PLACE_DETAIL_FIELD_MASKS,
@@ -733,6 +739,32 @@ test('the mutable half of a place is never written to the database', async () =>
   for (const forbidden of ['4.5', 'rating', 'openingPeriods', 'userRatingCount']) {
     expect(stored.includes(forbidden), forbidden).toBe(false);
   }
+});
+
+test('seeded search evidence keeps its original age and language/region isolation', async () => {
+  let now = new Date('2026-09-02T12:00:00Z');
+  const { provider } = countingPlacesProvider();
+  const result = await new PlacesService(provider, () => now).getDetails({
+    detail: 'evidence',
+    externalPlaceId: 'ChIJmuseum',
+  });
+  if (result.status !== 'ok') throw new Error('fixture must provide evidence');
+  resetProviderCallCounts();
+  const request = { externalPlaceId: 'ChIJmuseum', languageCode: 'en', regionCode: 'SG' };
+  rememberPlaceEvidence(request, result);
+  const service = new CachedPlacesService(provider, () => now);
+  now = new Date(now.getTime() + 5 * 60_000 - 1);
+  const hit = await service.getDetails({ ...request, detail: 'evidence' });
+  expect(hit).toEqual(result);
+  expect(getProviderCallCounts()['google:getDetails'] ?? 0).toBe(0);
+  rememberPlaceEvidence(request, result);
+  now = new Date(now.getTime() + 1);
+  await service.getDetails({ ...request, detail: 'evidence' });
+  expect(getProviderCallCounts()['google:getDetails']).toBe(1);
+  await service.getDetails({ ...request, languageCode: 'ja', detail: 'evidence' });
+  await service.getDetails({ ...request, regionCode: 'JP', detail: 'evidence' });
+  expect(getProviderCallCounts()['google:getDetails']).toBe(3);
+  expect(snapshotWrites).toBe(0);
 });
 
 test('a leg already computed is not computed again', async () => {
@@ -1453,25 +1485,32 @@ test('a generate run searches only the places its finished itinerary stands on',
   ]);
 });
 
-test('separate generation runs reuse persisted grounding while still checking hours and routes', async () => {
+test('six venues use one Places call each, with persisted identity and transient evidence reuse', async () => {
   const proposal = explicitModelProposal();
-  proposal.places.push({
-    id: 'candidate:park',
-    name: 'Ueno Park',
-    note: null,
-    searchQuery: 'Ueno Park Tokyo',
-  });
-  proposal.items.push({
-    ...proposal.items[1]!,
-    id: 'item:park',
-    candidatePlaceId: 'candidate:park',
-    label: 'Ueno Park',
+  proposal.normalizedRequest.constraints = [];
+  const template = proposal.items[1]!;
+  proposal.places = [
+    proposal.places[0]!,
+    ...Array.from({ length: 6 }, (_, index) => ({
+      id: `candidate:venue${index}`,
+      name: `Tokyo Venue ${index}`,
+      note: null,
+      searchQuery: `Tokyo Venue ${index}`,
+    })),
+  ];
+  proposal.items = proposal.places.slice(1).map((place, index) => ({
+    ...template,
+    id: `item:venue${index}`,
+    candidatePlaceId: place.id,
+    label: place.name,
     constraintIds: [],
+    isAnchor: false,
     origin: 'model',
     priority: 'interested',
-    schedule: { kind: 'day_part', dayPart: 'evening' },
+    dayIndex: Math.floor(index / 2),
     durationMinutes: 60,
-  });
+    schedule: { kind: 'day_part', dayPart: index % 2 ? 'afternoon' : 'morning' },
+  }));
   const events: ProviderUsageEvent[] = [];
   setProviderUsageSink((event) => events.push(event));
   const provider = new GooglePlacesProvider({
@@ -1483,14 +1522,23 @@ test('separate generation runs reuse persisted grounding while still checking ho
         const query = (JSON.parse(String(init?.body)) as { textQuery: string }).textQuery;
         const place = proposal.places.find((candidate) => candidate.searchQuery === query)!;
         expect(place).toBeDefined();
+        const mask = new Headers(init?.headers).get('X-Goog-FieldMask');
+        expect(mask).toBe(
+          place.id === 'candidate:tokyo'
+            ? GOOGLE_TEXT_SEARCH_FIELD_MASK
+            : GOOGLE_TEXT_SEARCH_EVIDENCE_FIELD_MASK,
+        );
         return Response.json({
           places: [
             {
               id: `google-${place.id}`,
               displayName: { text: place.name },
+              rating: 4.5,
+              utcOffsetMinutes: 540,
+              regularOpeningHours: { periods: [{ open: {} }] },
               formattedAddress: 'Tokyo, Japan',
               location: {
-                latitude: place.id === 'candidate:park' ? 35.716 : 35.719,
+                latitude: 35.7 + proposal.places.indexOf(place) / 1000,
                 longitude: 139.776,
               },
             },
@@ -1501,7 +1549,8 @@ test('separate generation runs reuse persisted grounding while still checking ho
         GOOGLE_PLACE_EVIDENCE_FIELD_MASK,
       );
       return Response.json({
-        id: url.split('/').at(-1),
+        id: decodeURIComponent(url.split('/').at(-1)!),
+        rating: 4.5,
         utcOffsetMinutes: 540,
         regularOpeningHours: { periods: [{ open: { day: 0, hour: 0, minute: 0 } }] },
       });
@@ -1559,53 +1608,84 @@ test('separate generation runs reuse persisted grounding while still checking ho
       loadHomeLocation: async () => 'Singapore',
       providerContext: {
         placesProvider: provider,
-        placesService: new PlacesService(provider),
+        placesService: new CachedPlacesService(provider),
         routesService,
       },
     });
 
   await run();
   expect(failures).toEqual([]);
-  expect(getProviderCallCounts()['google:textSearch']).toBe(3);
-  expect(snapshotWrites).toBe(3);
-  expect(groundingMappings.size).toBe(3);
+  expect(getProviderCallCounts()['google:textSearch']).toBe(7);
+  expect(getProviderCallCounts()['google:getDetails'] ?? 0).toBe(0);
+  expect(snapshotWrites).toBe(7);
+  expect(groundingMappings.size).toBe(7);
+  expect(
+    events.filter(
+      (event) => event.kind === 'outbound' && event.expectedSku === 'places-text-search-enterprise',
+    ),
+  ).toHaveLength(6);
+  expect(
+    events.filter(
+      (event) => event.kind === 'outbound' && event.expectedSku === 'places-text-search-pro',
+    ),
+  ).toHaveLength(1);
   const originalDates = [...providerRefs.values()].map((ref) => ref.cachedAt);
 
-  await run(); // New grounder, owner and session; only the database state survives.
+  // Search evidence seeds the existing memory cache for the next generation.
+  await run();
+  expect(getProviderCallCounts()['google:textSearch']).toBe(7);
+  expect(getProviderCallCounts()['google:getDetails'] ?? 0).toBe(0);
+  expect(drafts[1]!.evidence.filter((entry) => entry.kind === 'opening_hours')).toEqual(
+    drafts[0]!.evidence.filter((entry) => entry.kind === 'opening_hours'),
+  );
+
+  resetCachedPlacesMemo(); // A separate API instance retains only database state.
+  await run();
   expect(failures).toEqual([]);
-  expect(drafts).toHaveLength(2);
-  expect(getProviderCallCounts()['google:textSearch']).toBe(3);
-  expect(getProviderCallCounts()['google:getDetails']).toBe(4); // Two hours checks per run.
-  expect(snapshotWrites).toBe(3);
+  expect(getProviderCallCounts()['google:textSearch']).toBe(7);
+  expect(getProviderCallCounts()['google:getDetails']).toBe(6);
+  expect(snapshotWrites).toBe(7);
   expect([...providerRefs.values()].map((ref) => ref.cachedAt)).toEqual(originalDates);
-  expect(routeRequests).toHaveLength(2);
-  expect(routeRequests[1]).toEqual(routeRequests[0]);
+  expect(routeRequests).toHaveLength(9); // Three unchanged adjacent legs per run.
   for (const draft of drafts) {
-    expect(draft.evidence.filter((entry) => entry.kind === 'opening_hours')).toHaveLength(2);
+    expect(draft.days.map((day) => day.items.length)).toEqual([2, 2, 2]);
     expect(
-      draft.evidence.some((entry) => entry.kind === 'route' && entry.status === 'verified'),
-    ).toBe(true);
+      draft.evidence.filter(
+        (entry) => entry.kind === 'opening_hours' && entry.status === 'verified',
+      ),
+      JSON.stringify(draft.evidence.filter((entry) => entry.kind === 'opening_hours')),
+    ).toHaveLength(6);
+    expect(
+      draft.evidence.filter((entry) => entry.kind === 'route' && entry.status === 'verified'),
+    ).toHaveLength(3);
+    expect(JSON.stringify(draft)).not.toContain('openingPeriods');
+    expect(JSON.stringify(draft)).not.toContain('rating');
   }
-  expect(drafts[1]!.places).toEqual(drafts[0]!.places);
-  expect(drafts[1]!.evidence.filter((entry) => entry.kind === 'identity')).toEqual(
+  expect(drafts[2]!.places).toEqual(drafts[0]!.places);
+  expect(drafts[2]!.evidence.filter((entry) => entry.kind === 'identity')).toEqual(
     drafts[0]!.evidence.filter((entry) => entry.kind === 'identity'),
   );
-  expect(
-    events.filter((event) => event.kind === 'cache_hit' && event.cache === 'place-grounding'),
-  ).toHaveLength(3);
-  expect(
-    events.filter((event) => event.kind === 'outbound' && event.operation === 'textSearch'),
-  ).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({
-        cacheMissReason: 'missing_grounding_mapping',
-        source: 'ai-planner',
-        expectedSku: 'places-text-search-pro',
-      }),
-    ]),
+
+  // Drop just one decision: mixed new/cached targets still cost one call each.
+  groundingMappings.delete(
+    [...groundingMappings].find(
+      ([, row]) => row.placeProviderRefId === providerRefs.get('google-candidate:venue0')?.id,
+    )![0],
   );
+  resetCachedPlacesMemo();
+  const previousSearches = getProviderCallCounts()['google:textSearch']!;
+  const previousDetails = getProviderCallCounts()['google:getDetails']!;
+  await run();
+  expect(failures).toEqual([]);
+  expect(getProviderCallCounts()['google:textSearch']! - previousSearches).toBe(1);
+  expect(getProviderCallCounts()['google:getDetails']! - previousDetails).toBe(5);
   for (const row of groundingMappings.values()) {
     expect(Object.keys(row).sort()).toEqual(['checkedAt', 'key', 'outcome', 'placeProviderRefId']);
+  }
+  for (const row of providerRefs.values()) {
+    expect(row).not.toHaveProperty('rating');
+    expect(row).not.toHaveProperty('openingPeriods');
+    expect(row).not.toHaveProperty('evidence');
   }
 });
 

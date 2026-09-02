@@ -23,10 +23,13 @@ import {
 } from './provider-usage.js';
 import {
   PlaceProviderError,
+  type PlaceDetailLevel,
+  type PlaceDetailsResult,
   type PlaceLocationBias,
   type PlaceTextSearchProvider,
   type PlaceTextSearchRequest,
   type ProviderPlaceIdentity,
+  type ProviderPlaceSearchResult,
 } from './places.js';
 
 const GENERIC_LOCALITY_WORDS = new Set(['city', 'prefecture', 'province', 'region']);
@@ -34,6 +37,7 @@ const GENERIC_LOCALITY_WORDS = new Set(['city', 'prefecture', 'province', 'regio
 const LOCALITY_TOKEN_MIN_LENGTH = 4;
 
 export type AiPlaceGroundingCandidate = AiPlannerCandidatePlace & {
+  detail?: PlaceDetailLevel;
   languageCode?: string;
   localityHint?: string;
   locationBias?: PlaceLocationBias;
@@ -41,7 +45,10 @@ export type AiPlaceGroundingCandidate = AiPlannerCandidatePlace & {
 };
 
 export type GroundedPlaceContext = {
+  evidence?: Extract<PlaceDetailsResult, { status: 'ok' }>;
   externalPlaceId: string;
+  languageCode?: string;
+  regionCode?: string;
   location: { latitude: number; longitude: number };
 };
 
@@ -156,6 +163,16 @@ function memoKey(request: PlaceTextSearchRequest) {
   ].join('|');
 }
 
+function searchRequest(candidate: AiPlaceGroundingCandidate): PlaceTextSearchRequest {
+  return {
+    detail: candidate.detail ?? 'location',
+    languageCode: candidate.languageCode,
+    locationBias: candidate.locationBias,
+    regionCode: candidate.regionCode,
+    textQuery: localizedTextQuery(candidate.searchQuery, candidate.localityHint),
+  };
+}
+
 function cacheKey(request: PlaceTextSearchRequest, candidate: AiPlaceGroundingCandidate) {
   // Bump the version if matching rules or the provider search page change.
   // The same query can have a different survivor for a different candidate
@@ -198,7 +215,12 @@ function verified(
   checkedAt: Date,
 ): AiPlaceGroundingResult {
   return {
-    context: { externalPlaceId: identity.externalPlaceId, location: identity.location },
+    context: {
+      externalPlaceId: identity.externalPlaceId,
+      location: identity.location,
+      ...(candidate.languageCode ? { languageCode: candidate.languageCode } : {}),
+      ...(candidate.regionCode ? { regionCode: candidate.regionCode } : {}),
+    },
     evidence: {
       checkedAt: checkedAt.toISOString(),
       code: null,
@@ -270,7 +292,7 @@ export class AiPlaceGrounder {
     string,
     Promise<{
       checkedAt: Date;
-      identities: ProviderPlaceIdentity[];
+      identities: ProviderPlaceSearchResult[];
     }>
   >();
 
@@ -360,25 +382,31 @@ export class AiPlaceGrounder {
   }
 
   groundCandidates(candidates: readonly AiPlaceGroundingCandidate[]) {
+    // Decide before dispatch: a destination and a visit can share one query.
+    const profiles = new Map<string, PlaceDetailLevel>();
+    for (const candidate of candidates) {
+      const request = searchRequest(candidate);
+      const key = memoKey(request);
+      if (!profiles.has(key) || request.detail === 'evidence') profiles.set(key, request.detail);
+    }
     return mapWithConcurrency(candidates, PROVIDER_CONCURRENCY_LIMIT, (candidate) =>
-      this.groundCandidate(candidate),
+      this.groundCandidate({
+        ...candidate,
+        detail: profiles.get(memoKey(searchRequest(candidate))),
+      }),
     );
   }
 
   async groundCandidate(candidate: AiPlaceGroundingCandidate): Promise<AiPlaceGroundingResult> {
-    const request: PlaceTextSearchRequest = {
-      languageCode: candidate.languageCode,
-      locationBias: candidate.locationBias,
-      regionCode: candidate.regionCode,
-      textQuery: localizedTextQuery(candidate.searchQuery, candidate.localityHint),
-    };
+    const request = searchRequest(candidate);
     const persistentKey = cacheKey(request, candidate);
     const cached = await this.readCache(persistentKey, candidate);
     if ('result' in cached) return cached.result;
-    let identities: ProviderPlaceIdentity[];
+    let identities: ProviderPlaceSearchResult[];
     let checkedAt: Date;
     try {
-      const key = memoKey(request);
+      // The persistent identity key deliberately excludes the field profile.
+      const key = `${memoKey(request)}|${request.detail}`;
       let pending = this.searchMemo.get(key);
       if (!pending) {
         pending = this.provider
@@ -415,7 +443,7 @@ export class AiPlaceGrounder {
       );
     }
 
-    const identity = matches[0] as ProviderPlaceIdentity;
+    const { evidence, ...identity } = matches[0] as ProviderPlaceSearchResult;
     const canonical = await this.canonicalPlaces.resolveProviderPlaceFromIdentity(identity, {
       fetchedAt: checkedAt,
       languageCode: candidate.languageCode,
@@ -431,6 +459,15 @@ export class AiPlaceGrounder {
         placeId: canonical.id,
       });
     }
-    return verified(candidate, identity, canonical.id, checkedAt);
+    const result = verified(candidate, identity, canonical.id, checkedAt);
+    if (evidence && result.context) {
+      result.context.evidence = {
+        freshness: { fetchedAt: checkedAt.toISOString(), source: 'live' },
+        place: { ...identity, ...evidence },
+        provider: this.provider.name,
+        status: 'ok',
+      };
+    }
+    return result;
   }
 }

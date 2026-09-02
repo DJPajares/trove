@@ -1,5 +1,6 @@
 import {
   AI_PLANNER_MAX_REAL_PLACE_ITEMS,
+  AI_PLANNER_MAX_TRIP_DESCRIPTION,
   AI_PLANNER_TRIP_LENGTH_TIERS,
   type AiPlannerNormalizedRequest,
 } from '@trove/types';
@@ -36,6 +37,33 @@ export const AI_PLANNER_SCHEMA_DESCRIPTION =
   'The items array must cover every day of the trip: one entry per stop, with item.dayIndex ' +
   'set for each day from 0 to selectedDurationDays minus 1, and no day left without items.';
 
+/**
+ * A model left to name trips on its own writes the same title every time, and a
+ * model told to "vary the tone" varies it badly. Picking one tone per run and
+ * naming it in the context is what makes two plans for the same city arrive
+ * under two different names.
+ */
+export const AI_PLANNER_NAME_TONES = {
+  evocative: 'reach for the light, the weather, or the feeling of the place',
+  literary: 'borrow the cadence of a book title without naming a book',
+  nostalgic: 'sound like a memory being recalled rather than a plan being made',
+  playful: 'stay light and a little wry, never twee',
+  punchy: 'three words at most, blunt and concrete',
+  understated: 'say the plain thing plainly and let the place carry it',
+} as const;
+
+export type AiPlannerNameTone = keyof typeof AI_PLANNER_NAME_TONES;
+
+const AI_PLANNER_NAME_TONE_KEYS = Object.keys(AI_PLANNER_NAME_TONES) as AiPlannerNameTone[];
+
+export function pickAiPlannerNameTone(random: () => number = Math.random): AiPlannerNameTone {
+  const index = Math.min(
+    AI_PLANNER_NAME_TONE_KEYS.length - 1,
+    Math.max(0, Math.floor(random() * AI_PLANNER_NAME_TONE_KEYS.length)),
+  );
+  return AI_PLANNER_NAME_TONE_KEYS[index] as AiPlannerNameTone;
+}
+
 export type AiPlannerPromptContext = {
   defaults: {
     durationDays: number;
@@ -46,6 +74,8 @@ export type AiPlannerPromptContext = {
   homeLocation: string | null;
   itemsPerDay: Record<Pace, string>;
   maxRealPlaceItems: number;
+  maxTripDescription: number;
+  naming: { tone: AiPlannerNameTone; toneBrief: string };
   tripLengthTiers: readonly number[];
 };
 
@@ -56,7 +86,10 @@ export type AiPlannerPromptContext = {
 export function buildAiPlannerContext(input: {
   generationDate: Date;
   homeLocation: string | null;
+  /** Pinned by tests; a run that leaves it out gets a fresh tone every time. */
+  nameTone?: AiPlannerNameTone;
 }): AiPlannerPromptContext {
+  const tone = input.nameTone ?? pickAiPlannerNameTone();
   return {
     defaults: {
       durationDays: AI_PLANNER_DEFAULT_TRIP_LENGTH_DAYS,
@@ -67,6 +100,8 @@ export function buildAiPlannerContext(input: {
     homeLocation: input.homeLocation,
     itemsPerDay: AI_PLANNER_ITEMS_PER_DAY,
     maxRealPlaceItems: AI_PLANNER_MAX_REAL_PLACE_ITEMS,
+    maxTripDescription: AI_PLANNER_MAX_TRIP_DESCRIPTION,
+    naming: { tone, toneBrief: AI_PLANNER_NAME_TONES[tone] },
     tripLengthTiers: AI_PLANNER_TRIP_LENGTH_TIERS,
   };
 }
@@ -115,6 +150,8 @@ export function buildAiPlannerPrompt(
     'A destination with source "user" carries a destinationIntentId and a null assumptionId. A destination with source "model" carries a null destinationIntentId and an assumptionId naming an assumption whose code is destination_inferred.',
     '',
     'Set selectedDurationDays to null when datePreference.kind is "exact", and otherwise to one of planner_context.tripLengthTiers, using planner_context.defaults.durationDays when the traveller gives no length. Application code assigns the actual dates.',
+    '',
+    'Name the trip and describe it in the traveller\'s words. Write tripName in the tone named by planner_context.naming.tone, following planner_context.naming.toneBrief: two to six words naming the place, the season, or the shape of the trip. Never "Trip to X", "X Adventure", "Discovering X", "X Getaway", "Exploring X" or "Ultimate X". No subtitle after a colon, no exclamation mark, no pun on the name of the destination, and no proper noun that does not appear in the plan. Write tripDescription as one or two sentences saying what this trip is and who it is for, within planner_context.maxTripDescription characters, without recapping the days or selling the destination.',
     '',
     'Fill the whole trip. This is the most important requirement. The trip has one day for each index from 0 to the last day of the selected length. Set item.dayIndex to the 0-based day the item happens on: it must never be null and must fall inside the trip. Every day must contain items, including the first and the last. Give each day the number of items named in planner_context.itemsPerDay for the chosen pace, spread across morning, afternoon, and evening. Declare a separate entry in places for each real stop and point its item at that entry, so each stop can be verified and mapped. A proposal that leaves a day empty, or that returns only a handful of items for a multi-day trip, is wrong. Keep items that reference a place at or below planner_context.maxRealPlaceItems.',
     '',

@@ -75,6 +75,8 @@ export type AiPlanningDraft = {
   trip: {
     dateAssumptionId: string | null;
     dateSource: 'default' | 'user';
+    /** Null on a draft generated before the model wrote descriptions. */
+    description: string | null;
     destinations: Array<{
       assumptionId: string | null;
       destinationIntentId: string | null;

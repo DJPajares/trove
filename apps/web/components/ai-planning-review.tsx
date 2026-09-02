@@ -87,9 +87,14 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
     setRegeneratePrompt(session.prompt ?? '');
   }, [session?.draft, session?.draftRevision, session?.prompt]);
 
+  // The model drafts a description and the traveller's edit overrides it, so the
+  // field is seeded from the session's own copy first. It reads through
+  // `session.draft` rather than the `draft` state so it does not depend on which
+  // of the two effects ran first.
+  const draftedDescription = session?.draft?.trip.description ?? '';
   useEffect(() => {
-    setDescription(session?.tripDescription ?? '');
-  }, [session?.id, session?.tripDescription]);
+    setDescription(session?.tripDescription ?? draftedDescription);
+  }, [draftedDescription, session?.id, session?.tripDescription]);
 
   useEffect(() => {
     if (!session?.appliedTripId) return;
@@ -147,7 +152,10 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
    * draft, so it needs no revision and cannot invalidate the plan.
    */
   async function saveDescription(next: string) {
-    if (!session || !reviewing || next === (session.tripDescription ?? '')) return;
+    // Comparing against the seeded value, not just the stored one: a first blur
+    // on an untouched field would otherwise save the model's own words back as
+    // if the traveller had written them.
+    if (!session || !reviewing || next === (session.tripDescription ?? draftedDescription)) return;
     setSavingDescription(true);
     setError(null);
     try {

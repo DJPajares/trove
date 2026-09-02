@@ -268,7 +268,9 @@ export async function applyAiPlanningSession(
     const trip = await transaction.trip.create({
       data: {
         creatorId: ownerId,
-        description: loaded.tripDescription,
+        // The traveller's own words win; the model's are the floor, so a trip
+        // never lands blank just because nobody typed in the review field.
+        description: loaded.tripDescription ?? draft.trip.description,
         endDate: parseDateOnly(draft.trip.endDate),
         name: draft.trip.name.trim(),
         ownerId,

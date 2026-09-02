@@ -216,6 +216,10 @@ export function resolveAiPlannerDefaults(
     assumptions,
     dateAssumptionId: dates.assumption?.id ?? null,
     dateSource: dates.source,
+    // Prose rather than a planning value, so it carries no source and no
+    // assumption: there is nothing here for the traveller to accept or correct
+    // that they cannot simply rewrite in the description field itself.
+    description: proposal.tripDescription,
     endDate: dates.endDate,
     name: request.tripName ?? proposal.tripName,
     nameAssumptionId,

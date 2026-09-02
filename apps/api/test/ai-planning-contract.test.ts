@@ -116,3 +116,30 @@ test('malformed model output is rejected without coercion', () => {
   if (result.success) throw new Error('Expected malformed proposal to fail.');
   expect(result.issues.every((issue) => issue.code === 'invalid_contract')).toBe(true);
 });
+
+test('the model must write a trip description, and the draft keeps it beside the name', () => {
+  const proposal = explicitModelProposal() as unknown as Record<string, unknown>;
+  delete proposal.tripDescription;
+
+  expect(parseAiPlannerModelProposal(proposal).success).toBe(false);
+  expect(parseAiPlannerDraft(explicitDraft())).toMatchObject({
+    data: { trip: { description: expect.any(String) } },
+    success: true,
+  });
+});
+
+/**
+ * Every stored draft is re-parsed on read, so a draft written before the model
+ * wrote descriptions has to survive the field arriving. Without the default it
+ * would fail the strict schema and take its whole session down with it.
+ */
+test('a draft stored before descriptions existed still parses, with a null description', () => {
+  const draft = explicitDraft() as unknown as { trip: Record<string, unknown> };
+  delete draft.trip.description;
+
+  const result = parseAiPlannerDraft(draft);
+
+  expect(result.success).toBe(true);
+  if (!result.success) throw new Error('Expected a pre-description draft to parse.');
+  expect(result.data.trip.description).toBeNull();
+});

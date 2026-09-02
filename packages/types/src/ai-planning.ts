@@ -4,6 +4,7 @@ export const AI_PLANNER_SCHEMA_VERSION = 1 as const;
 export const AI_PLANNER_MAX_DAYS = 14;
 export const AI_PLANNER_MAX_REAL_PLACE_ITEMS = 24;
 export const AI_PLANNER_TRIP_LENGTH_TIERS = [3, 5, 7] as const;
+export const AI_PLANNER_MAX_TRIP_DESCRIPTION = 500;
 
 const identifierSchema = z.string().trim().min(1).max(120);
 const labelSchema = z.string().trim().min(1).max(200);
@@ -168,7 +169,26 @@ export const aiPlannerModelProposalSchema = z
     places: z.array(aiPlannerCandidatePlaceSchema),
     schemaVersion: schemaVersionField,
     selectedDurationDays: tripLengthTierSchema.nullable(),
-    tripName: z.string().trim().min(1).max(120),
+    tripDescription: z
+      .string()
+      .trim()
+      .min(1)
+      .max(AI_PLANNER_MAX_TRIP_DESCRIPTION)
+      .describe(
+        "One or two sentences in the traveller's own voice saying what this trip is and who it is " +
+          'for. Not a day-by-day recap, not marketing copy, and never a list of the places below.',
+      ),
+    tripName: z
+      .string()
+      .trim()
+      .min(1)
+      .max(120)
+      .describe(
+        'The trip title, written in the tone named by planner_context.naming.tone. Two to six words ' +
+          'naming the place, the season, or the shape of the trip. Never "Trip to X", "X Adventure", ' +
+          '"Discovering X", "X Getaway", "Exploring X" or "Ultimate X". No subtitle after a colon, no ' +
+          'exclamation mark, and no pun on the name of the destination.',
+      ),
   })
   .strict();
 
@@ -242,6 +262,13 @@ export const aiPlannerWarningSchema = z
 const sourcedTripFields = {
   dateAssumptionId: identifierSchema.nullable(),
   dateSource: z.enum(['user', 'default']),
+  /**
+   * Model-authored prose. The default keeps drafts written before descriptions
+   * existed parseable: the draft schema is strict and every stored draft is
+   * re-parsed on read, so a plain required key would fail every in-flight
+   * session, and a schema version bump would fail them the same way.
+   */
+  description: z.string().trim().max(AI_PLANNER_MAX_TRIP_DESCRIPTION).nullable().default(null),
   endDate: dateOnlySchema,
   name: z.string().trim().min(1).max(120),
   nameAssumptionId: identifierSchema.nullable(),

@@ -879,6 +879,10 @@ model AiPlanningSession {
   status                       AiPlanningSessionStatus @default(PENDING)
   stage                        AiPlanningSessionStage  @default(CREATED)
   rawPrompt                    String?                 @map("raw_prompt") @db.Text
+  /// Traveller-supplied trip description, carried to Trip.description on apply.
+  /// Session metadata rather than part of the plan, so it never touches the
+  /// immutable draft JSON and never moves draftRevision.
+  tripDescription              String?                 @map("trip_description") @db.Text
   draft                        Json?                   @db.JsonB
   schemaVersion                Int                     @default(1) @map("schema_version")
   draftRevision                Int                     @default(0) @map("draft_revision")

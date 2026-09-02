@@ -1,17 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  ArrowDown,
-  ArrowUp,
-  CircleAlert,
-  MapPinned,
-  RefreshCw,
-  Search,
-  ShieldCheck,
-  Sparkles,
-  Trash2,
-} from 'lucide-react';
+import { CircleAlert, MapPinned, Sparkles } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
@@ -30,23 +20,17 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
   acknowledgeAiPlanningWarnings,
   AiPlanningApiError,
   applyAiPlanningSession,
   fetchAiPlanningSession,
-  recheckAiPlanningItem,
   regenerateAiPlanningSession,
-  replaceAiPlanningDraft,
-  replaceAiPlanningItemPlace,
-  verifyAiPlanningCustomPlace,
+  setAiPlanningTripDescription,
   type AiPlanningSession,
   type AiPlanningDraft,
-  type AiPlanningDraftItem,
 } from '@/lib/ai-planning/api';
-import { SerialAutosave, type AutosaveSnapshot } from '@/lib/ai-planning/autosave';
 import {
   activeAiPlanningAssumptions,
   aiPlanningAssumptionMessageValues,
@@ -58,101 +42,13 @@ import {
   aiPlanningErrorMessageKey,
   isAiPlanningSessionGenerating,
 } from '@/lib/ai-planning/presentation';
-import {
-  GOOGLE_PLACES_SEARCH_DEBOUNCE_MS,
-  searchProviderPlaces,
-  type ProviderSuggestion,
-} from '@/lib/saved/api';
 import { motionDuration, motionEase } from '@/lib/motion';
 import { queryKeys } from '@/lib/query/keys';
 import type { Trip } from '@/lib/trips/api';
 
 const ACTIVE_SESSION_POLL_MS = 1_500;
-const AUTOSAVE_DEBOUNCE_MS = 700;
 
-type ReviewOperation = 'acknowledging' | 'applying' | 'idle' | 'regenerating' | 'verifying';
-
-const INITIAL_AUTOSAVE_SNAPSHOT: AutosaveSnapshot = {
-  error: null,
-  hasPendingChanges: false,
-  phase: 'saved',
-};
-
-function allItems(draft: AiPlanningDraft) {
-  return [...draft.days.flatMap((day) => day.items), ...draft.unscheduledItems];
-}
-
-function withItem(
-  draft: AiPlanningDraft,
-  itemId: string,
-  update: (item: AiPlanningDraftItem) => AiPlanningDraftItem,
-) {
-  return {
-    ...draft,
-    days: draft.days.map((day) => ({
-      ...day,
-      items: day.items.map((item) => (item.id === itemId ? update(item) : item)),
-    })),
-    unscheduledItems: draft.unscheduledItems.map((item) =>
-      item.id === itemId ? update(item) : item,
-    ),
-  };
-}
-
-function withPlace(
-  draft: AiPlanningDraft,
-  placeId: string,
-  update: (place: AiPlanningDraft['places'][number]) => AiPlanningDraft['places'][number],
-) {
-  return {
-    ...draft,
-    places: draft.places.map((place) => (place.id === placeId ? update(place) : place)),
-  };
-}
-
-function removeItem(draft: AiPlanningDraft, itemId: string) {
-  return {
-    ...draft,
-    days: draft.days.map((day) => ({
-      ...day,
-      items: day.items.filter((item) => item.id !== itemId),
-    })),
-    unscheduledItems: draft.unscheduledItems.filter((item) => item.id !== itemId),
-  };
-}
-
-function reorderItem(
-  draft: AiPlanningDraft,
-  dayIndex: number,
-  itemIndex: number,
-  direction: -1 | 1,
-) {
-  const items = [...draft.days[dayIndex]!.items];
-  const target = itemIndex + direction;
-  if (target < 0 || target >= items.length) return draft;
-  const [item] = items.splice(itemIndex, 1);
-  if (!item) return draft;
-  items.splice(target, 0, item);
-  return {
-    ...draft,
-    days: draft.days.map((day, index) => (index === dayIndex ? { ...day, items } : day)),
-  };
-}
-
-function moveItem(draft: AiPlanningDraft, itemId: string, destination: string) {
-  const item = allItems(draft).find((candidate) => candidate.id === itemId);
-  if (!item) return draft;
-  const removed = removeItem(draft, itemId);
-  if (destination === 'unscheduled') {
-    return { ...removed, unscheduledItems: [...removed.unscheduledItems, item] };
-  }
-  return {
-    ...removed,
-    days: removed.days.map((day) =>
-      day.date === destination ? { ...day, items: [...day.items, item] } : day,
-    ),
-  };
-}
+type ReviewOperation = 'acknowledging' | 'applying' | 'idle' | 'regenerating';
 
 export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>) {
   const t = useTranslations('trips.aiPlanning.review');
@@ -171,101 +67,41 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   });
   const session = sessionQuery.data?.session ?? null;
   const [draft, setDraft] = useState<AiPlanningDraft | null>(null);
-  const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [operation, setOperation] = useState<ReviewOperation>('idle');
   const [error, setError] = useState<string | null>(null);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
   const [confirmApply, setConfirmApply] = useState(false);
   const [regeneratePrompt, setRegeneratePrompt] = useState('');
-  const [placeQuery, setPlaceQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<ProviderSuggestion[]>([]);
-  const [suggestionSessionToken, setSuggestionSessionToken] = useState<string | undefined>();
-  const [autosaveSnapshot, setAutosaveSnapshot] = useState(INITIAL_AUTOSAVE_SNAPSHOT);
-  const autosaveRef = useRef<SerialAutosave<AiPlanningDraft, AiPlanningSession> | null>(null);
-  const autosaveSessionIdRef = useRef<string | null>(null);
-  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [description, setDescription] = useState('');
+  const [savingDescription, setSavingDescription] = useState(false);
   const sessionRef = useRef<AiPlanningSession | null>(null);
 
+  // The draft is whatever generation produced, so the server copy is always the
+  // truth and there is nothing local to reconcile against it.
   useEffect(() => {
     sessionRef.current = session;
     if (!session?.draft) return;
-    const currentAutosave = autosaveRef.current;
-    if (!currentAutosave || autosaveSessionIdRef.current !== session.id) {
-      const nextAutosave = new SerialAutosave({
-        draft: session.draft,
-        getRevision: (result: AiPlanningSession) => result.draftRevision,
-        onStateChange: setAutosaveSnapshot,
-        persist: async (nextDraft, expectedRevision) =>
-          (await replaceAiPlanningDraft(session.id, nextDraft, expectedRevision)).session,
-        result: session,
-        revision: session.draftRevision,
-      });
-      autosaveRef.current = nextAutosave;
-      autosaveSessionIdRef.current = session.id;
-      setAutosaveSnapshot(nextAutosave.snapshot);
-      setDraft(session.draft);
-    } else if (
-      !currentAutosave.snapshot.hasPendingChanges &&
-      currentAutosave.snapshot.phase !== 'saving'
-    ) {
-      currentAutosave.replace({
-        draft: session.draft,
-        result: session,
-        revision: session.draftRevision,
-      });
-      setDraft(session.draft);
-    }
+    setDraft(session.draft);
     setRegeneratePrompt(session.prompt ?? '');
   }, [session?.draft, session?.draftRevision, session?.prompt]);
 
-  useEffect(
-    () => () => {
-      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
-    },
-    [],
-  );
+  useEffect(() => {
+    setDescription(session?.tripDescription ?? '');
+  }, [session?.id, session?.tripDescription]);
 
   useEffect(() => {
     if (!session?.appliedTripId) return;
     router.replace(`/trips/${session.appliedTripId}`);
   }, [router, session?.appliedTripId]);
 
-  useEffect(() => {
-    if (!editingItemId || placeQuery.trim().length < 2) {
-      setSuggestions([]);
-      return;
-    }
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      void searchProviderPlaces(placeQuery, controller.signal)
-        .then((result) => {
-          if (result.status === 'ok') {
-            setSuggestions(result.suggestions);
-            setSuggestionSessionToken(result.sessionToken);
-          } else {
-            setSuggestions([]);
-          }
-        })
-        .catch(() => setSuggestions([]));
-    }, GOOGLE_PLACES_SEARCH_DEBOUNCE_MS);
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [editingItemId, placeQuery]);
-
   const publishing = operation !== 'idle';
   const reviewing = session?.status === 'reviewing';
   const materialWarnings = draft?.warnings.filter((warning) => warning.material) ?? [];
   const warningsAcknowledged =
-    !autosaveSnapshot.hasPendingChanges &&
     session?.warningAcknowledgement?.revision === session?.draftRevision &&
     materialWarnings.length > 0;
   const canApply = Boolean(
-    reviewing &&
-    draft &&
-    autosaveSnapshot.phase !== 'error' &&
-    (!materialWarnings.length || warningsAcknowledged),
+    reviewing && draft && (!materialWarnings.length || warningsAcknowledged),
   );
   const selectedMapPoints = useMemo(
     () => (draft ? buildAiPlanningReviewMapPoints(draft) : []),
@@ -304,108 +140,20 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
     queryClient.setQueryData(queryKeys.aiPlanningRecovery(), { session: next });
   }
 
-  function clearAutosaveTimer() {
-    if (!autosaveTimerRef.current) return;
-    clearTimeout(autosaveTimerRef.current);
-    autosaveTimerRef.current = null;
-  }
-
-  function queueDraft(next: AiPlanningDraft) {
-    const autosave = autosaveRef.current;
-    if (!autosave || !reviewing) return;
-    setDraft(next);
-    autosave.update(next);
-    clearAutosaveTimer();
-    autosaveTimerRef.current = setTimeout(() => {
-      autosaveTimerRef.current = null;
-      void flushDraft();
-    }, AUTOSAVE_DEBOUNCE_MS);
-  }
-
-  function acceptServerSession(next: AiPlanningSession) {
-    clearAutosaveTimer();
-    const autosave = autosaveRef.current;
-    if (autosave && next.draft) {
-      autosave.replace({ draft: next.draft, result: next, revision: next.draftRevision });
-      setDraft(next.draft);
-    }
-    publish(next);
-  }
-
-  async function flushDraft(retry = false) {
-    clearAutosaveTimer();
-    const autosave = autosaveRef.current;
-    if (!autosave) return sessionRef.current;
-    try {
-      const next = retry ? await autosave.retry() : await autosave.flush();
-      publish(next);
-      if (next.draft && !autosave.snapshot.hasPendingChanges) setDraft(next.draft);
-      return next;
-    } catch {
-      return null;
-    }
-  }
-
-  async function retryAutosave() {
-    await flushDraft(true);
-  }
-
-  async function runRecheck(itemId: string) {
-    if (!session || publishing) return;
-    setOperation('verifying');
+  /**
+   * The only write a reviewed session accepts. It is session metadata beside the
+   * draft, so it needs no revision and cannot invalidate the plan.
+   */
+  async function saveDescription(next: string) {
+    if (!session || !reviewing || next === (session.tripDescription ?? '')) return;
+    setSavingDescription(true);
     setError(null);
     try {
-      const saved = await flushDraft();
-      if (!saved) return;
-      acceptServerSession(
-        (await recheckAiPlanningItem(saved.id, itemId, saved.draftRevision)).session,
-      );
+      publish((await setAiPlanningTripDescription(session.id, next.trim() || null)).session);
     } catch (cause) {
       setError(cause instanceof AiPlanningApiError ? cause.code : 'request_failed');
     } finally {
-      setOperation('idle');
-    }
-  }
-
-  async function verifyPlace(placeRefId: string) {
-    if (!session || publishing) return;
-    setOperation('verifying');
-    setError(null);
-    try {
-      const saved = await flushDraft();
-      if (!saved) return;
-      acceptServerSession(
-        (await verifyAiPlanningCustomPlace(saved.id, placeRefId, saved.draftRevision)).session,
-      );
-    } catch (cause) {
-      setError(cause instanceof AiPlanningApiError ? cause.code : 'request_failed');
-    } finally {
-      setOperation('idle');
-    }
-  }
-
-  async function replacePlace(suggestion: ProviderSuggestion) {
-    if (!session || !editingItemId || publishing) return;
-    setOperation('verifying');
-    setError(null);
-    try {
-      const saved = await flushDraft();
-      if (!saved) return;
-      acceptServerSession(
-        (
-          await replaceAiPlanningItemPlace(saved.id, editingItemId, {
-            expectedRevision: saved.draftRevision,
-            externalPlaceId: suggestion.externalPlaceId,
-            sessionToken: suggestionSessionToken,
-          })
-        ).session,
-      );
-      setPlaceQuery('');
-      setSuggestions([]);
-    } catch (cause) {
-      setError(cause instanceof AiPlanningApiError ? cause.code : 'request_failed');
-    } finally {
-      setOperation('idle');
+      setSavingDescription(false);
     }
   }
 
@@ -414,11 +162,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
     setOperation('acknowledging');
     setError(null);
     try {
-      const saved = await flushDraft();
-      if (!saved) return;
-      acceptServerSession(
-        (await acknowledgeAiPlanningWarnings(saved.id, saved.draftRevision)).session,
-      );
+      publish((await acknowledgeAiPlanningWarnings(session.id, session.draftRevision)).session);
     } catch (cause) {
       setError(cause instanceof AiPlanningApiError ? cause.code : 'request_failed');
     } finally {
@@ -431,14 +175,12 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
     setOperation('regenerating');
     setError(null);
     try {
-      const saved = await flushDraft();
-      if (!saved) return;
-      acceptServerSession(
+      publish(
         (
           await regenerateAiPlanningSession(
-            saved.id,
+            session.id,
             regeneratePrompt,
-            saved.draftRevision,
+            session.draftRevision,
             crypto.randomUUID(),
           )
         ).session,
@@ -455,12 +197,11 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
     setOperation('applying');
     setError(null);
     try {
-      const saved = await flushDraft();
-      // A failed flush already shows the autosave banner with its retry, and a
-      // flushed session with no draft is one the server has already applied.
-      // Neither can create a trip, so close the dialog instead of leaving it
-      // sitting there with nothing to act on.
-      if (!saved?.draft) {
+      // A session with no draft is one the server has already applied, so it
+      // cannot create a trip: close the dialog rather than leave it sitting
+      // there with nothing to act on.
+      const saved = sessionRef.current ?? session;
+      if (!saved.draft) {
         setConfirmApply(false);
         return;
       }
@@ -523,10 +264,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
 
   return (
     <section className="mx-auto max-w-7xl space-y-6 pb-28" aria-labelledby="ai-review-title">
-      <motion.header
-        className="flex flex-col gap-4 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between"
-        {...arrive(0)}
-      >
+      <motion.header className="border-b border-border pb-6" {...arrive(0)}>
         <div className="max-w-2xl">
           <p className="text-sm font-medium text-brand">{t('eyebrow')}</p>
           <h1
@@ -536,26 +274,6 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
             {draft.trip.name}
           </h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">{t('description')}</p>
-        </div>
-        <div className="flex min-h-9 items-center gap-3 text-sm" aria-live="polite">
-          {autosaveSnapshot.phase === 'error' ? (
-            <>
-              <span className="text-destructive">{t('autosaveError')}</span>
-              <Button
-                disabled={publishing}
-                onClick={() => void retryAutosave()}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                {t('retrySave')}
-              </Button>
-            </>
-          ) : (
-            <span className="text-muted-foreground">
-              {autosaveSnapshot.phase === 'saved' ? t('autosaveSaved') : t('autosaveSaving')}
-            </span>
-          )}
         </div>
       </motion.header>
 
@@ -580,37 +298,33 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
       >
         <div className="space-y-6">
           <section className="rounded-[var(--radius-xl)] border border-border bg-card p-4 shadow-[var(--shadow-surface)] sm:p-6">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="review-trip-name">{t('tripName')}</FieldLabel>
-                <Input
-                  disabled={!reviewing || publishing}
-                  id="review-trip-name"
-                  onChange={(event) =>
-                    queueDraft({ ...draft, trip: { ...draft.trip, name: event.target.value } })
-                  }
-                  value={draft.trip.name}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="review-party-size">{t('partySize')}</FieldLabel>
-                <Input
-                  disabled={!reviewing || publishing}
-                  id="review-party-size"
-                  max={99}
-                  min={1}
-                  onChange={(event) => {
-                    const partySize = Math.max(1, Math.min(99, Number(event.target.value) || 1));
-                    queueDraft({ ...draft, trip: { ...draft.trip, partySize } });
-                  }}
-                  type="number"
-                  value={draft.trip.partySize}
-                />
-              </Field>
-            </div>
+            <dl className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <dt className="text-sm text-muted-foreground">{t('tripName')}</dt>
+                <dd className="mt-1 font-medium">{draft.trip.name}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-muted-foreground">{t('partySize')}</dt>
+                <dd className="mt-1 font-medium">{draft.trip.partySize}</dd>
+              </div>
+            </dl>
             <p className="mt-4 text-sm text-muted-foreground">
               {draft.trip.startDate} - {draft.trip.endDate}
             </p>
+            <Field className="mt-4">
+              <FieldLabel htmlFor="review-trip-description">{t('tripDescription')}</FieldLabel>
+              <Textarea
+                disabled={!reviewing || publishing}
+                id="review-trip-description"
+                onBlur={(event) => void saveDescription(event.target.value)}
+                onChange={(event) => setDescription(event.target.value)}
+                rows={3}
+                value={description}
+              />
+              <FieldDescription aria-live="polite">
+                {savingDescription ? t('descriptionSaving') : t('descriptionHint')}
+              </FieldDescription>
+            </Field>
           </section>
 
           {assumptionMessages.length ? (
@@ -650,360 +364,55 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                   </h3>
                 </header>
                 <ol className="divide-y divide-border-subtle">
-                  {day.items.map((item, itemIndex) => {
+                  {day.items.map((item) => {
                     const place = item.placeRefId
                       ? draft.places.find((candidate) => candidate.id === item.placeRefId)
                       : null;
-                    const editing = editingItemId === item.id;
                     return (
                       <li className="p-4 sm:px-6" key={item.id}>
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <p className="font-medium">{item.label}</p>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                              {item.schedule.kind === 'exact'
-                                ? item.schedule.localTime
-                                : t(`dayParts.${item.schedule.dayPart}`)}{' '}
-                              · {t('duration', { minutes: item.durationMinutes })}
-                            </p>
+                        <div>
+                          <p className="font-medium">{item.label}</p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {item.schedule.kind === 'exact'
+                              ? item.schedule.localTime
+                              : t(`dayParts.${item.schedule.dayPart}`)}{' '}
+                            · {t('duration', { minutes: item.durationMinutes })}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {item.origin === 'user' ? t('travelerSupplied') : t('aiSuggested')}
+                          </p>
+                          {place ? (
                             <p className="mt-1 text-xs text-muted-foreground">
-                              {item.origin === 'user' ? t('travelerSupplied') : t('aiSuggested')}
+                              {place.resolution === 'verified'
+                                ? t('verifiedPlace')
+                                : t(`customPlace.${place.verification}`)}
                             </p>
-                            {place ? (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {place.resolution === 'verified'
-                                  ? t('verifiedPlace')
-                                  : t(`customPlace.${place.verification}`)}
-                              </p>
-                            ) : null}
-                            {place?.resolution === 'verified' ? (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {t('providerAttribution')}:{' '}
-                                {place.attributions.length
-                                  ? place.attributions.map((attribution, index) =>
-                                      attribution.providerUri ? (
-                                        <a
-                                          className="underline underline-offset-2"
-                                          href={attribution.providerUri}
-                                          key={`${attribution.provider}-${index}`}
-                                          rel="noreferrer"
-                                          target="_blank"
-                                        >
-                                          {attribution.provider}
-                                        </a>
-                                      ) : (
-                                        <span key={`${attribution.provider}-${index}`}>
-                                          {attribution.provider}
-                                        </span>
-                                      ),
-                                    )
-                                  : t('googleAttribution')}
-                              </p>
-                            ) : null}
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            <Button
-                              disabled={!reviewing || publishing || itemIndex === 0}
-                              onClick={() =>
-                                queueDraft(reorderItem(draft, dayIndex, itemIndex, -1))
-                              }
-                              size="icon-sm"
-                              title={t('moveEarlier')}
-                              type="button"
-                              variant="ghost"
-                            >
-                              <ArrowUp aria-hidden="true" />
-                            </Button>
-                            <Button
-                              disabled={
-                                !reviewing || publishing || itemIndex === day.items.length - 1
-                              }
-                              onClick={() => queueDraft(reorderItem(draft, dayIndex, itemIndex, 1))}
-                              size="icon-sm"
-                              title={t('moveLater')}
-                              type="button"
-                              variant="ghost"
-                            >
-                              <ArrowDown aria-hidden="true" />
-                            </Button>
-                            <Button
-                              disabled={!reviewing || publishing}
-                              onClick={() => {
-                                setEditingItemId(editing ? null : item.id);
-                                setPlaceQuery('');
-                              }}
-                              size="sm"
-                              type="button"
-                              variant="outline"
-                            >
-                              {editing ? t('closeEditor') : t('editItem')}
-                            </Button>
-                          </div>
-                        </div>
-                        {editing ? (
-                          <div className="mt-4 grid gap-4 border-t border-border-subtle pt-4">
-                            <div className="grid gap-4 sm:grid-cols-2">
-                              <Field>
-                                <FieldLabel htmlFor={`schedule-${item.id}`}>
-                                  {t('schedule')}
-                                </FieldLabel>
-                                <select
-                                  className="h-11 rounded-[var(--radius-md)] border border-input bg-background px-3 text-sm"
-                                  disabled={!reviewing || publishing}
-                                  id={`schedule-${item.id}`}
-                                  onChange={(event) =>
-                                    queueDraft(
-                                      withItem(draft, item.id, (current) =>
-                                        event.target.value === 'exact'
-                                          ? {
-                                              ...current,
-                                              schedule: {
-                                                kind: 'exact',
-                                                localTime:
-                                                  current.schedule.kind === 'exact'
-                                                    ? current.schedule.localTime
-                                                    : '12:00',
-                                                source: 'user',
-                                              },
-                                            }
-                                          : {
-                                              ...current,
-                                              schedule: {
-                                                dayPart: event.target.value as
-                                                  'morning' | 'afternoon' | 'evening' | 'anytime',
-                                                kind: 'day_part',
-                                              },
-                                            },
-                                      ),
-                                    )
-                                  }
-                                  value={
-                                    item.schedule.kind === 'day_part'
-                                      ? item.schedule.dayPart
-                                      : 'exact'
-                                  }
-                                >
-                                  <option value="morning">{t('dayParts.morning')}</option>
-                                  <option value="afternoon">{t('dayParts.afternoon')}</option>
-                                  <option value="evening">{t('dayParts.evening')}</option>
-                                  <option value="anytime">{t('dayParts.anytime')}</option>
-                                  <option value="exact">{t('scheduleExact')}</option>
-                                </select>
-                              </Field>
-                              {item.schedule.kind === 'exact' ? (
-                                <Field>
-                                  <FieldLabel htmlFor={`time-${item.id}`}>
-                                    {t('exactTime')}
-                                  </FieldLabel>
-                                  <Input
-                                    disabled={!reviewing || publishing}
-                                    id={`time-${item.id}`}
-                                    onChange={(event) =>
-                                      queueDraft(
-                                        withItem(draft, item.id, (current) => ({
-                                          ...current,
-                                          schedule: {
-                                            kind: 'exact',
-                                            localTime: event.target.value,
-                                            source: 'user',
-                                          },
-                                        })),
-                                      )
-                                    }
-                                    type="time"
-                                    value={item.schedule.localTime}
-                                  />
-                                </Field>
-                              ) : null}
-                              <Field>
-                                <FieldLabel htmlFor={`duration-${item.id}`}>
-                                  {t('durationLabel')}
-                                </FieldLabel>
-                                <Input
-                                  disabled={!reviewing || publishing}
-                                  id={`duration-${item.id}`}
-                                  min={1}
-                                  onChange={(event) =>
-                                    queueDraft(
-                                      withItem(draft, item.id, (current) => ({
-                                        ...current,
-                                        durationMinutes: Math.max(
-                                          1,
-                                          Number(event.target.value) || 1,
-                                        ),
-                                      })),
-                                    )
-                                  }
-                                  type="number"
-                                  value={item.durationMinutes}
-                                />
-                                <FieldDescription>
-                                  {item.durationProvenance === 'ai_estimated'
-                                    ? t('durationEstimated')
-                                    : t('durationOwned')}
-                                </FieldDescription>
-                              </Field>
-                              <Field>
-                                <FieldLabel htmlFor={`priority-${item.id}`}>
-                                  {t('priority')}
-                                </FieldLabel>
-                                <select
-                                  className="h-11 rounded-[var(--radius-md)] border border-input bg-background px-3 text-sm"
-                                  disabled={!reviewing || publishing}
-                                  id={`priority-${item.id}`}
-                                  onChange={(event) =>
-                                    queueDraft(
-                                      withItem(draft, item.id, (current) => ({
-                                        ...current,
-                                        priority: event.target.value
-                                          ? (event.target.value as
-                                              'must_go' | 'interested' | 'maybe')
-                                          : null,
-                                      })),
-                                    )
-                                  }
-                                  value={item.priority ?? ''}
-                                >
-                                  <option value="">{t('priorityNone')}</option>
-                                  <option value="must_go">{t('priorities.must_go')}</option>
-                                  <option value="interested">{t('priorities.interested')}</option>
-                                  <option value="maybe">{t('priorities.maybe')}</option>
-                                </select>
-                              </Field>
-                            </div>
-                            <Field>
-                              <FieldLabel htmlFor={`notes-${item.id}`}>{t('notes')}</FieldLabel>
-                              <Textarea
-                                disabled={!reviewing || publishing}
-                                id={`notes-${item.id}`}
-                                onChange={(event) =>
-                                  queueDraft(
-                                    withItem(draft, item.id, (current) => ({
-                                      ...current,
-                                      notes: event.target.value || null,
-                                    })),
-                                  )
-                                }
-                                value={item.notes ?? ''}
-                              />
-                            </Field>
-                            {place?.resolution === 'custom' ? (
-                              <Field>
-                                <FieldLabel htmlFor={`custom-place-${item.id}`}>
-                                  {t('customPlaceText')}
-                                </FieldLabel>
-                                <Input
-                                  disabled={!reviewing || publishing}
-                                  id={`custom-place-${item.id}`}
-                                  onChange={(event) =>
-                                    queueDraft(
-                                      withPlace(draft, place.id, (current) =>
-                                        current.resolution === 'custom'
-                                          ? { ...current, name: event.target.value }
-                                          : current,
-                                      ),
-                                    )
-                                  }
-                                  value={place.name}
-                                />
-                                <FieldDescription>{t('saveBeforeVerify')}</FieldDescription>
-                              </Field>
-                            ) : null}
-                            <div className="flex flex-wrap gap-2">
-                              <select
-                                aria-label={t('moveTo')}
-                                className="h-9 rounded-[var(--radius-md)] border border-input bg-background px-2 text-sm"
-                                defaultValue=""
-                                disabled={!reviewing || publishing}
-                                onChange={(event) => {
-                                  if (event.target.value)
-                                    queueDraft(moveItem(draft, item.id, event.target.value));
-                                  event.currentTarget.value = '';
-                                }}
-                              >
-                                <option disabled value="">
-                                  {t('moveTo')}
-                                </option>
-                                <option value="unscheduled">{t('unscheduled')}</option>
-                                {draft.days
-                                  .filter((candidate) => candidate.date !== day.date)
-                                  .map((candidate) => (
-                                    <option key={candidate.date} value={candidate.date}>
-                                      {candidate.date}
-                                    </option>
-                                  ))}
-                              </select>
-                              <Button
-                                disabled={!reviewing || publishing}
-                                onClick={() => queueDraft(removeItem(draft, item.id))}
-                                size="sm"
-                                type="button"
-                                variant="destructive"
-                              >
-                                <Trash2 aria-hidden="true" data-icon="inline-start" />
-                                {t('remove')}
-                              </Button>
-                              {place?.resolution === 'verified' ? (
-                                <Button
-                                  disabled={
-                                    !reviewing || publishing || autosaveSnapshot.phase === 'error'
-                                  }
-                                  onClick={() => void runRecheck(item.id)}
-                                  size="sm"
-                                  type="button"
-                                  variant="outline"
-                                >
-                                  <RefreshCw aria-hidden="true" data-icon="inline-start" />
-                                  {t('recheck')}
-                                </Button>
-                              ) : null}
-                              {place?.resolution === 'custom' ? (
-                                <Button
-                                  disabled={
-                                    !reviewing || publishing || autosaveSnapshot.phase === 'error'
-                                  }
-                                  onClick={() => void verifyPlace(place.id)}
-                                  size="sm"
-                                  type="button"
-                                  variant="outline"
-                                >
-                                  <ShieldCheck aria-hidden="true" data-icon="inline-start" />
-                                  {t('verifyPlace')}
-                                </Button>
-                              ) : null}
-                            </div>
-                            <Field>
-                              <FieldLabel htmlFor={`replace-place-${item.id}`}>
-                                {t('replacePlace')}
-                              </FieldLabel>
-                              <Input
-                                disabled={!reviewing || publishing}
-                                id={`replace-place-${item.id}`}
-                                onChange={(event) => setPlaceQuery(event.target.value)}
-                                placeholder={t('replacePlaceholder')}
-                                value={placeQuery}
-                              />
-                              {suggestions.length ? (
-                                <ul className="mt-2 rounded-[var(--radius-md)] border border-border p-1">
-                                  {suggestions.map((suggestion) => (
-                                    <li key={suggestion.externalPlaceId}>
-                                      <Button
-                                        className="w-full justify-start"
-                                        disabled={publishing || autosaveSnapshot.phase === 'error'}
-                                        onClick={() => void replacePlace(suggestion)}
-                                        type="button"
-                                        variant="ghost"
+                          ) : null}
+                          {place?.resolution === 'verified' ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {t('providerAttribution')}:{' '}
+                              {place.attributions.length
+                                ? place.attributions.map((attribution, index) =>
+                                    attribution.providerUri ? (
+                                      <a
+                                        className="underline underline-offset-2"
+                                        href={attribution.providerUri}
+                                        key={`${attribution.provider}-${index}`}
+                                        rel="noreferrer"
+                                        target="_blank"
                                       >
-                                        <Search aria-hidden="true" data-icon="inline-start" />
-                                        {suggestion.name}
-                                      </Button>
-                                    </li>
-                                  ))}
-                                </ul>
-                              ) : null}
-                            </Field>
-                          </div>
-                        ) : null}
+                                        {attribution.provider}
+                                      </a>
+                                    ) : (
+                                      <span key={`${attribution.provider}-${index}`}>
+                                        {attribution.provider}
+                                      </span>
+                                    ),
+                                  )
+                                : t('googleAttribution')}
+                            </p>
+                          ) : null}
+                        </div>
                       </li>
                     );
                   })}
@@ -1020,18 +429,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
               <h2 className="font-semibold">{t('unscheduled')}</h2>
               <ul className="mt-3 space-y-2 text-sm">
                 {draft.unscheduledItems.map((item) => (
-                  <li className="flex items-center justify-between gap-3" key={item.id}>
-                    <span>{item.label}</span>
-                    <Button
-                      disabled={!reviewing || publishing}
-                      onClick={() => setEditingItemId(item.id)}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      {t('editItem')}
-                    </Button>
-                  </li>
+                  <li key={item.id}>{item.label}</li>
                 ))}
               </ul>
             </section>
@@ -1047,7 +445,6 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
               <ItineraryPlanningMap
                 onClearSelection={() => setSelectedPointId(null)}
                 onSelectPoint={(point) => setSelectedPointId(point.id)}
-                onViewItem={(itemId) => setEditingItemId(itemId)}
                 points={selectedMapPoints}
                 routeLines={[]}
                 selectedPointId={selectedPointId}
@@ -1075,9 +472,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
             />
             <Button
               className="mt-3"
-              disabled={
-                publishing || autosaveSnapshot.phase === 'error' || !regeneratePrompt.trim()
-              }
+              disabled={publishing || !regeneratePrompt.trim()}
               onClick={() => void regenerate()}
               size="sm"
               type="button"
@@ -1104,7 +499,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
           </p>
           {!warningsAcknowledged ? (
             <Button
-              disabled={!reviewing || publishing || autosaveSnapshot.phase === 'error'}
+              disabled={!reviewing || publishing}
               onClick={() => void acknowledgeWarnings()}
               size="sm"
               type="button"

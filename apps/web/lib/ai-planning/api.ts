@@ -116,6 +116,7 @@ export type AiPlanningSession = {
   schemaVersion: number;
   stage: AiPlanningSessionStage;
   status: AiPlanningSessionStatus;
+  tripDescription: string | null;
   updatedAt: string;
   warningAcknowledgement: { acknowledgedAt: string; revision: number } | null;
 };
@@ -220,15 +221,12 @@ export function cancelAiPlanningSession(sessionId: string) {
   );
 }
 
-export function replaceAiPlanningDraft(
-  sessionId: string,
-  draft: AiPlanningDraft,
-  expectedRevision: number,
-) {
+/** The draft itself is immutable; a description is session metadata beside it. */
+export function setAiPlanningTripDescription(sessionId: string, description: string | null) {
   return aiPlanningRequest<{ session: AiPlanningSession }>(
-    `/ai/planning-sessions/${sessionId}/draft`,
+    `/ai/planning-sessions/${sessionId}/description`,
     {
-      body: JSON.stringify({ draft, expectedRevision }),
+      body: JSON.stringify({ description }),
       method: 'PATCH',
     },
   );
@@ -253,42 +251,4 @@ export function applyAiPlanningSession(
     body: JSON.stringify({ deviceTimeZone, expectedRevision }),
     method: 'POST',
   });
-}
-
-export function recheckAiPlanningItem(sessionId: string, itemId: string, expectedRevision: number) {
-  return aiPlanningRequest<{ session: AiPlanningSession }>(
-    `/ai/planning-sessions/${sessionId}/items/${itemId}/recheck`,
-    {
-      body: JSON.stringify({ expectedRevision }),
-      method: 'POST',
-    },
-  );
-}
-
-export function verifyAiPlanningCustomPlace(
-  sessionId: string,
-  placeRefId: string,
-  expectedRevision: number,
-) {
-  return aiPlanningRequest<{ session: AiPlanningSession }>(
-    `/ai/planning-sessions/${sessionId}/places/${placeRefId}/verify`,
-    {
-      body: JSON.stringify({ expectedRevision }),
-      method: 'POST',
-    },
-  );
-}
-
-export function replaceAiPlanningItemPlace(
-  sessionId: string,
-  itemId: string,
-  input: { expectedRevision: number; externalPlaceId: string; sessionToken?: string },
-) {
-  return aiPlanningRequest<{ session: AiPlanningSession }>(
-    `/ai/planning-sessions/${sessionId}/items/${itemId}/replace-place`,
-    {
-      body: JSON.stringify(input),
-      method: 'POST',
-    },
-  );
 }

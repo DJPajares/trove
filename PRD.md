@@ -451,9 +451,9 @@ AI-assisted trip creation is the first approved AI product capability. It is an 
 
 - The review uses the normal itinerary and map language and shows assumptions, Custom Places, unverified/not-checked evidence, conflicts, provider attribution, and material warnings.
 - The draft does not show a numeric Plan Score. It may explain validation evidence, but numeric Plan Score begins only after Apply against standard itinerary data.
-- Before Apply, a traveller may edit, replace, remove, move, or reorder items and may change schedule/day part, duration, priority, trip name, and party size without another model call.
-- Editing an AI-estimated duration promotes it to user-owned provenance. Destination or date-range changes require Regenerate rather than a local draft edit.
-- A bounded evidence recheck or Custom Place verification does not dispatch the model. Regenerate consumes the normal model quota and preserves the previous valid draft if it fails.
+- The draft is immutable. It is exactly what the run produced, and no surface may reorder, retime, replace, remove, or otherwise edit it. A traveller who wants a different plan uses Regenerate.
+- The one field a reviewed session accepts is an optional trip description. It is session metadata rather than part of the plan, carried to the Trip on Apply, and it neither advances the draft revision nor invalidates the draft's evidence.
+- Regenerate consumes the normal model quota and preserves the previous valid draft if it fails.
 - Material warnings require explicit acknowledgement before Apply. Non-material unresolved places remain allowed.
 - Apply is authenticated, atomic, revision-safe, and idempotent. A failure creates no partial records, and concurrent/repeated successful requests resolve to the same applied Trip.
 - Apply may create only the reviewed **Trip, destinations, Daily Bases, Trip Places, Custom Places, and itinerary items**. It must not create Saved Place relationships, reservations, Tasks, Notes, Expenses, budgets, Memories, notifications, bookings, or other trip records.
@@ -465,7 +465,7 @@ AI-assisted trip creation is the first approved AI product capability. It is an 
 - Generation is synchronous from the traveller's perspective but resumable: refreshing the client recovers the same session, current stage, and latest valid revision rather than starting another run.
 - A failed initial Generate creates no Trip. A failed Regenerate preserves the prior valid draft and revision.
 - A content-free `AiGenerationRun` records provider, model, token counts, latency, result/error classification, and timestamps for quota and operations. It stores no prompt or model output.
-- Each account may dispatch at most **five** Generate/Regenerate model runs in a rolling 24-hour window. Reads, local draft edits, evidence rechecks, Cancel, and Apply do not consume this quota.
+- Each account may dispatch at most **five** Generate/Regenerate model runs in a rolling 24-hour window. Reads, setting the trip description, warning acknowledgement, Cancel, and Apply do not consume this quota.
 - Unapplied planning sessions expire after seven days. Apply or Cancel immediately removes the raw prompt and draft; expiry cleanup removes them no later than the retention boundary.
 - Content-free generation-run telemetry is retained for 30 days, then deleted. Ownership, cross-user isolation, and deletion follow the private-data rules in Section 33.3.
 - Initial launch is available to all signed-in users after security, privacy, quality, cost, and browser-validation gates pass. It is not a cohort-only feature, but global and budget kill switches remain mandatory.

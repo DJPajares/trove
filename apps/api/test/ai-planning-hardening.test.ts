@@ -1,20 +1,16 @@
 import {
   AI_PLANNER_MAX_DAYS,
   aiPlannerModelProposalSchema,
-  parseAiPlannerDraft,
   parseAiPlannerModelProposal,
-  type AiPlannerDraft,
 } from '@trove/types';
 import { expect, test } from 'vitest';
 
 import {
-  AiPlanningSessionError,
   normalizeAiPlanningPrompt,
-  prepareAiPlanningDraftEdit,
   AI_PLANNING_PROMPT_MAX_LENGTH,
 } from '../src/services/ai-planning-sessions.js';
 import { assembleAiPlanningDraft } from '../src/services/ai-planning-pipeline.js';
-import { explicitDraft, explicitModelProposal } from './fixtures/ai-planning.js';
+import { explicitModelProposal } from './fixtures/ai-planning.js';
 
 const NOW = new Date('2026-08-31T12:00:00.000Z');
 
@@ -113,75 +109,33 @@ test('malformed and hostile model output never becomes a draft', () => {
   expect(Object.getPrototypeOf({})).toBe(Object.prototype);
 });
 
-test('a review edit cannot rewrite warnings, evidence, or the place set', () => {
-  const current: AiPlannerDraft = {
-    ...explicitDraft(),
-    warnings: [
-      {
-        code: 'outside_opening_hours',
-        evidenceIds: ['evidence:museum'],
-        id: 'warning:hours',
-        itemIds: ['item:museum'],
-        material: true,
-      },
-    ],
-  };
-
-  // Editing a label is the whole point of review, so the baseline must pass.
-  const renamed = structuredClone(current);
-  renamed.trip.name = 'Tokyo, renamed';
-  expect(() => prepareAiPlanningDraftEdit(current, renamed)).not.toThrow();
-
-  expectSessionError(
-    () => prepareAiPlanningDraftEdit(current, { ...structuredClone(current), warnings: [] }),
-    'draft_provenance_immutable',
+/**
+ * The draft is what generation produced and nothing else. These used to be
+ * provenance checks on a traveller's edit; the edit path is gone, so the
+ * guarantee is now structural — assert the surface stays absent rather than
+ * trusting that no one adds it back.
+ */
+test('no planning route or service accepts a client-supplied draft', async () => {
+  const sessions = await import('../src/services/ai-planning-sessions.js');
+  const mutators = Object.keys(sessions).filter(
+    (name) => /^(replace|prepare).*Draft/.test(name) || name === 'prepareAiPlanningDraftEdit',
   );
-  expectSessionError(
-    () =>
-      prepareAiPlanningDraftEdit(current, {
-        ...structuredClone(current),
-        warnings: [{ ...current.warnings[0]!, material: false }],
-      }),
-    'draft_provenance_immutable',
-  );
-  expectSessionError(
-    () => prepareAiPlanningDraftEdit(current, { ...structuredClone(current), evidence: [] }),
-    'draft_provenance_immutable',
-  );
+  expect(mutators).toStrictEqual([]);
 
-  const withExtraPlace = structuredClone(current);
-  withExtraPlace.places.push({ ...current.places[0]!, id: 'place:smuggled' });
-  expectSessionError(
-    () => prepareAiPlanningDraftEdit(current, withExtraPlace),
-    'draft_provenance_immutable',
-  );
-
-  const duplicatedItem = structuredClone(current);
-  duplicatedItem.days[1]!.items.push(structuredClone(current.days[1]!.items[1]!));
-  expectSessionError(
-    () => prepareAiPlanningDraftEdit(current, duplicatedItem),
-    'draft_provenance_immutable',
-  );
-
-  const forgedIdentity = structuredClone(current);
-  forgedIdentity.places[0] = {
-    ...(current.places[0] as Extract<AiPlannerDraft['places'][number], { resolution: 'verified' }>),
-    placeId: '00000000-0000-4000-8000-0000000009ff',
-  };
-  expectSessionError(
-    () => prepareAiPlanningDraftEdit(current, forgedIdentity),
-    'draft_provenance_immutable',
-  );
-});
-
-test('a draft that never parsed cannot be edited into the session', () => {
-  const current = explicitDraft();
-
-  expect(parseAiPlannerDraft({ ...current, unknownField: true }).success).toBe(false);
-  expectSessionError(
-    () => prepareAiPlanningDraftEdit(current, { ...current, unknownField: true }),
-    'draft_invalid',
-  );
-  expectSessionError(() => prepareAiPlanningDraftEdit(current, 'not a draft'), 'draft_invalid');
-  expect(new AiPlanningSessionError('draft_invalid', 400).message).toBe('draft_invalid');
+  const Fastify = (await import('fastify')).default;
+  const { registerAiPlanningSessionRoutes } = await import('../src/routes/ai-planning-sessions.js');
+  const app = Fastify();
+  app.decorateRequest('authUserId', '');
+  registerAiPlanningSessionRoutes(app);
+  await app.ready();
+  try {
+    const routes = app.printRoutes({ commonPrefix: false });
+    for (const removed of ['/draft', '/recheck', '/replace-place', '/verify']) {
+      expect(routes, `${removed} is still routable`).not.toContain(removed);
+    }
+    // The one write a reviewed session still accepts.
+    expect(routes).toContain('description');
+  } finally {
+    await app.close();
+  }
 });

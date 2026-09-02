@@ -450,7 +450,7 @@ AI-assisted trip creation is the first approved AI product capability. It is an 
 ### 7.6.4 Draft Review and Apply
 
 - The review uses the normal itinerary and map language and shows assumptions, Custom Places, unverified/not-checked evidence, conflicts, provider attribution, and material warnings.
-- The draft does not show a numeric Plan Score. It may explain validation evidence, but numeric Plan Score begins only after Apply against standard itinerary data.
+- The draft shows a numeric Plan Score alongside its validation evidence. It is computed once the itinerary is final and its places are resolved, from the opening-hours, rating and route evidence that same run already fetched, and costs no additional provider request. Because the draft is immutable, the score stays valid for its whole life.
 - The draft is immutable. It is exactly what the run produced, and no surface may reorder, retime, replace, remove, or otherwise edit it. A traveller who wants a different plan uses Regenerate.
 - The one field a reviewed session accepts is an optional trip description. It is session metadata rather than part of the plan, carried to the Trip on Apply, and it neither advances the draft revision nor invalidates the draft's evidence.
 - Regenerate consumes the normal model quota and preserves the previous valid draft if it fails.
@@ -1829,7 +1829,7 @@ Relevant itinerary/order/time/place/route/reservation/provider-evidence changes 
 
 Plan Score remains independent from lifecycle, manual Ready status, Trip Mode availability, Preview availability, and Experience Rating.
 
-MVP Plan Score must not depend on future AI, traffic-aware replanning, disruption-intelligence features, or Smart Cost Forecasting.
+Plan Score does not depend on AI: the rubric, weights and evidence rules are the same wherever it is computed. An AI-generated draft is scored from the evidence its own generation already fetched, through the shared evaluator, rather than by a second scoring system. MVP Plan Score must not depend on traffic-aware replanning, disruption-intelligence features, or Smart Cost Forecasting.
 
 ---
 

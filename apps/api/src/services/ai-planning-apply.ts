@@ -1,6 +1,7 @@
 import { getPrismaClient, Prisma } from '@trove/db';
 import type { AiPlannerDraft, AiPlannerDraftItem, AiPlannerDraftPlace } from '@trove/types';
 
+import { referencedDraftPlaceIds } from './ai-planning-draft-places.js';
 import { floatingLocalTimeToInstant, parseLocalTime } from './itinerary-rules.js';
 import {
   AiPlanningSessionError,
@@ -57,26 +58,13 @@ function strongestPriority(items: readonly AiPlannerDraftItem[]) {
   return mapPriority(priority ?? null);
 }
 
+/** Apply materializes everything the draft references, scheduled or not. */
 function referencedPlaceIds(draft: AiPlannerDraft) {
-  const ids = new Set(draft.trip.destinations.map((destination) => destination.placeRefId));
-  for (const day of draft.days) {
-    if (day.dailyBasePlaceRefId) ids.add(day.dailyBasePlaceRefId);
-    if (day.dailyBaseDeparturePlaceRefId) ids.add(day.dailyBaseDeparturePlaceRefId);
-    for (const item of day.items) if (item.placeRefId) ids.add(item.placeRefId);
-  }
-  for (const item of draft.unscheduledItems) if (item.placeRefId) ids.add(item.placeRefId);
-  return ids;
+  return referencedDraftPlaceIds(draft, { includeDestinations: true, includeUnscheduled: true });
 }
 
 function tripPlaceReferenceIds(draft: AiPlannerDraft) {
-  const ids = new Set<string>();
-  for (const day of draft.days) {
-    if (day.dailyBasePlaceRefId) ids.add(day.dailyBasePlaceRefId);
-    if (day.dailyBaseDeparturePlaceRefId) ids.add(day.dailyBaseDeparturePlaceRefId);
-    for (const item of day.items) if (item.placeRefId) ids.add(item.placeRefId);
-  }
-  for (const item of draft.unscheduledItems) if (item.placeRefId) ids.add(item.placeRefId);
-  return ids;
+  return referencedDraftPlaceIds(draft, { includeUnscheduled: true });
 }
 
 function placeTimeZone(input: {

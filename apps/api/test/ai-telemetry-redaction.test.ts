@@ -53,28 +53,7 @@ function capturePlanningTelemetry(run: () => void) {
 
 test('planner telemetry reports counts and codes, never planned content', () => {
   const proposal = explicitModelProposal();
-  const grounding = proposal.places.map((place) => ({
-    context: null,
-    evidence: {
-      checkedAt: null,
-      code: 'provider_unavailable',
-      id: `evidence:${place.id}`,
-      kind: 'identity' as const,
-      provider: null,
-      status: 'not_checked' as const,
-      subjectId: place.id,
-      subjectType: 'place' as const,
-    },
-    place: {
-      id: place.id,
-      name: place.name,
-      note: place.note,
-      resolution: 'custom' as const,
-      verification: 'not_checked' as const,
-    },
-    warnings: [],
-  }));
-  const draft = assembleAiPlanningDraft(proposal, grounding, NOW);
+  const draft = assembleAiPlanningDraft(proposal, NOW);
 
   const events = capturePlanningTelemetry(() => {
     recordAiPlanningDraftAssembled(draft, NOW);
@@ -129,31 +108,7 @@ test('planner telemetry reports counts and codes, never planned content', () => 
 
 test('an unrecognized warning code degrades to a bucket instead of widening telemetry', () => {
   const proposal = explicitModelProposal();
-  const draft = assembleAiPlanningDraft(
-    proposal,
-    proposal.places.map((place) => ({
-      context: null,
-      evidence: {
-        checkedAt: null,
-        code: null,
-        id: `evidence:${place.id}`,
-        kind: 'identity' as const,
-        provider: null,
-        status: 'not_checked' as const,
-        subjectId: place.id,
-        subjectType: 'place' as const,
-      },
-      place: {
-        id: place.id,
-        name: place.name,
-        note: place.note,
-        resolution: 'custom' as const,
-        verification: 'not_checked' as const,
-      },
-      warnings: [],
-    })),
-    NOW,
-  );
+  const draft = assembleAiPlanningDraft(proposal, NOW);
 
   const summary = summarizeAiPlanningDraft({
     ...draft,

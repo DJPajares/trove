@@ -3,15 +3,17 @@ import type { AiPlanningSessionStage } from './presentation';
 /**
  * The generating takeover draws one route across four stops, and how much of it
  * is drawn is the server's own answer rather than a timer: the pipeline moves
- * the session `stage` as it generates, grounds, schedules and validates, and the
+ * the session `stage` as it generates, schedules, grounds and validates, and the
  * client already polls that every 1.5s. Reading the drawn fraction off the stage
  * keeps the picture honest — a slow grounding pass looks slow, and a route that
  * has reached its last stop really is one poll away from an itinerary.
  *
- * The gaps between the values are what the eye reads as pace. Grounding fans out
- * to a place lookup per candidate and is reliably the longest leg, so it earns
- * the longest stretch of route; validating is close to instant and gets a sliver,
- * because a stage that finishes before it is seen should not promise much.
+ * The gaps between the values are what the eye reads as pace, so they follow the
+ * pipeline's own order. Scheduling is pure computation and passes almost at once,
+ * so it gets a sliver; grounding then fans out to a place lookup per scheduled
+ * stop and is reliably the longest leg, so it earns the longest stretch of route.
+ * Validating is quick again and gets another sliver, because a stage that
+ * finishes before it is seen should not promise much.
  */
 export function aiPlanningRouteProgress(stage: AiPlanningSessionStage) {
   switch (stage) {
@@ -19,9 +21,9 @@ export function aiPlanningRouteProgress(stage: AiPlanningSessionStage) {
       return 0.14;
     case 'generating':
       return 0.32;
-    case 'grounding':
-      return 0.58;
     case 'scheduling':
+      return 0.4;
+    case 'grounding':
       return 0.82;
     case 'validating':
       return 0.93;
@@ -47,6 +49,7 @@ export function aiPlanningReachedStops(progress: number) {
 export function aiPlanningShowsItineraryCards(stage: AiPlanningSessionStage) {
   return (
     stage === 'scheduling' ||
+    stage === 'grounding' ||
     stage === 'validating' ||
     stage === 'reviewing' ||
     stage === 'complete'
@@ -73,7 +76,7 @@ export function aiPlanningGeneratingHint(stage: AiPlanningSessionStage, tick: nu
   const start = aiPlanningShowsItineraryCards(stage)
     ? stage === 'scheduling'
       ? 1
-      : stage === 'validating'
+      : stage === 'grounding'
         ? 2
         : 3
     : 0;

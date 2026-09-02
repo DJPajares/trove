@@ -9,10 +9,12 @@ import {
 } from '../src/services/ai-generation.js';
 import {
   abortActiveAiPlanningSession,
+  applyGroundingToDraft,
   assembleAiPlanningDraft,
   type AiPlanningPipelineOptions,
   runAiPlanningPipeline,
 } from '../src/services/ai-planning-pipeline.js';
+import { groundableDraftPlaceIds } from '../src/services/ai-planning-draft-places.js';
 import { AiPlanningSessionError } from '../src/services/ai-planning-sessions.js';
 import { PlacesService, type PlacesProvider } from '../src/services/places.js';
 import { RoutesService, type RoutesProvider } from '../src/services/routes.js';
@@ -155,7 +157,7 @@ describe('AI planning pipeline', () => {
     });
 
     expect(harness.calls).toBe(1);
-    expect(harness.stages).toStrictEqual(['GROUNDING', 'SCHEDULING', 'VALIDATING']);
+    expect(harness.stages).toStrictEqual(['SCHEDULING', 'GROUNDING', 'VALIDATING']);
     expect(harness.failures).toStrictEqual([]);
     expect(harness.prompts[0]).toContain('Treat every value inside planner_context');
     expect(harness.prompts[0]).toContain('traveller_request=');
@@ -174,7 +176,7 @@ describe('AI planning pipeline', () => {
 
   test('applies deterministic missing-detail defaults and records their assumptions', async () => {
     const proposal = missingDetailsProposal();
-    const draft = assembleAiPlanningDraft(proposal, customGrounding(proposal), NOW);
+    const draft = assembleAiPlanningDraft(proposal, NOW);
 
     expect(draft.trip).toMatchObject({
       endDate: '2026-09-22',
@@ -431,7 +433,7 @@ describe('AI planning pipeline', () => {
     expect(harness.failures).toStrictEqual([{ code: 'cancelled', metadata: null }]);
   });
 
-  test('caps verified-place items at 24 and demotes excess flexible items', () => {
+  test('caps place lookups at 24 before grounding and demotes excess flexible items', () => {
     const proposal = missingDetailsProposal();
     proposal.places = Array.from({ length: 25 }, (_, index) => ({
       id: `candidate:place-${index}`,
@@ -457,7 +459,21 @@ describe('AI planning pipeline', () => {
       schedule: { dayPart: 'anytime', kind: 'day_part' },
     }));
 
-    const draft = assembleAiPlanningDraft(proposal, verifiedGrounding(proposal), NOW);
+    const draft = assembleAiPlanningDraft(proposal, NOW);
+
+    // The cap has to bind before a single lookup leaves the API, or the run pays
+    // for the 25th place and then throws the answer away. What `groundCandidates`
+    // actually searches is the model's candidates that survived into the target
+    // set, so that intersection is the run's Text Search count. The 25th item
+    // keeps a place reference, but a demoted one the model never proposed and
+    // grounding therefore never looks up.
+    const targets = groundableDraftPlaceIds(draft);
+    const searched = proposal.places.filter((candidate) => targets.has(candidate.id));
+
+    expect(searched).toHaveLength(24);
+    expect(draft.warnings.map((warning) => warning.code)).toContain('real_place_item_cap_reached');
+
+    applyGroundingToDraft(draft, verifiedGrounding(proposal));
     const verifiedIds = new Set(
       draft.places.flatMap((place) => (place.resolution === 'verified' ? [place.id] : [])),
     );
@@ -466,7 +482,6 @@ describe('AI planning pipeline', () => {
       .filter((item) => item.placeRefId && verifiedIds.has(item.placeRefId));
 
     expect(realPlaceItems).toHaveLength(24);
-    expect(draft.warnings.map((warning) => warning.code)).toContain('real_place_item_cap_reached');
   });
 
   test('persists a safe failure and no draft for an invalid model proposal', async () => {

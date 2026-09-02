@@ -8,7 +8,6 @@ import {
   type AiPlannerDraftItem,
   type AiPlannerEvidence,
   type AiPlannerModelProposal,
-  type AiPlannerWarning,
 } from '@trove/types';
 
 import {
@@ -30,6 +29,7 @@ import {
 import { createAiGateway } from './ai-runtime.js';
 import { AiPlaceGrounder, type AiPlaceGroundingResult } from './ai-place-grounding.js';
 import { createAiPlannerProviderContext } from './ai-planner-provider-context.js';
+import { groundableDraftPlaceIds, referencedDraftPlaceIds } from './ai-planning-draft-places.js';
 import { recordAiPlanningDraftAssembled } from './ai-planning-telemetry.js';
 import {
   balancedPaceAnchorRange,
@@ -106,6 +106,7 @@ export type AiPlanningPipelineOptions = {
   groundCandidates?: (
     proposal: AiPlannerModelProposal,
     providerContext: ProviderContext,
+    targetIds: ReadonlySet<string>,
   ) => Promise<GroundedCandidate[]>;
   lifecycle?: PlanningLifecycle;
   loadHomeLocation?: (ownerId: string) => Promise<string | null>;
@@ -207,12 +208,22 @@ function candidateLocalities(proposal: AiPlannerModelProposal) {
   return localities;
 }
 
+/**
+ * Looks up only the candidates named in `targetIds`, which the assembled draft
+ * decides. A candidate the model proposed and the schedule then dropped is not
+ * searched at all, and deliberately carries no evidence and no warning: the
+ * provider was never asked about it, so claiming it was unavailable would be a
+ * lie told at the traveller's expense.
+ */
 async function groundCandidates(
   proposal: AiPlannerModelProposal,
   providerContext: ProviderContext,
+  targetIds: ReadonlySet<string>,
 ): Promise<GroundedCandidate[]> {
+  const targets = proposal.places.filter((candidate) => targetIds.has(candidate.id));
+  if (targets.length === 0) return [];
   if (!providerContext.placesProvider) {
-    return proposal.places.map(unavailableGrounding);
+    return targets.map(unavailableGrounding);
   }
 
   const canonical = createCanonicalPlacesService();
@@ -229,7 +240,7 @@ async function groundCandidates(
   });
   const localities = candidateLocalities(proposal);
   const results = await grounder.groundCandidates(
-    proposal.places.map((candidate) => ({
+    targets.map((candidate) => ({
       ...candidate,
       localityHint: localities.get(candidate.id),
     })),
@@ -273,23 +284,27 @@ function toDraftItem(item: AiPlannerModelProposal['items'][number]): AiPlannerDr
   };
 }
 
-function associateGroundingWarnings(
-  warnings: AiPlannerWarning[],
-  proposal: AiPlannerModelProposal,
-) {
+/**
+ * Folds grounding back into the draft it was scoped to. Warnings are attributed
+ * to the draft's own items rather than the proposal's, so a warning never names
+ * an item the schedule already dropped.
+ */
+export function applyGroundingToDraft(draft: AiPlannerDraft, grounding: GroundedCandidate[]) {
   const itemIds = new Map<string, string[]>();
-  for (const item of proposal.items) {
-    if (!item.candidatePlaceId) continue;
-    itemIds.set(item.candidatePlaceId, [...(itemIds.get(item.candidatePlaceId) ?? []), item.id]);
+  for (const item of [...draft.days.flatMap((day) => day.items), ...draft.unscheduledItems]) {
+    if (!item.placeRefId) continue;
+    itemIds.set(item.placeRefId, [...(itemIds.get(item.placeRefId) ?? []), item.id]);
   }
-  return warnings.map((warning) => {
-    const candidateId = warning.evidenceIds[0]
-      ? proposal.places.find((candidate) =>
-          warning.evidenceIds.some((id) => id === scopedId('identity', candidate.id)),
-        )?.id
-      : undefined;
-    return candidateId ? { ...warning, itemIds: itemIds.get(candidateId) ?? [] } : warning;
-  });
+
+  for (const result of grounding) {
+    const index = draft.places.findIndex((place) => place.id === result.place.id);
+    if (index === -1) continue;
+    draft.places[index] = result.place;
+    draft.evidence.push(result.evidence);
+    for (const warning of result.warnings) {
+      draft.warnings.push({ ...warning, itemIds: itemIds.get(result.place.id) ?? [] });
+    }
+  }
 }
 
 function enforceBalancedPace(draft: AiPlannerDraft, proposal: AiPlannerModelProposal) {
@@ -314,12 +329,15 @@ function enforceBalancedPace(draft: AiPlannerDraft, proposal: AiPlannerModelProp
   });
 }
 
+/**
+ * Runs before grounding, so the cap bounds the lookups a run can make rather
+ * than deciding which already-billed lookups to keep. Only scheduled items are
+ * counted, because only they are grounded: an unscheduled item consuming a slot
+ * would tighten the plan without saving a call.
+ */
 function enforceRealPlaceLimit(draft: AiPlannerDraft, proposal: AiPlannerModelProposal) {
-  const verified = new Set(
-    draft.places.flatMap((place) => (place.resolution === 'verified' ? [place.id] : [])),
-  );
-  const items = [...draft.days.flatMap((day) => day.items), ...draft.unscheduledItems];
-  const realItems = items.filter((item) => item.placeRefId && verified.has(item.placeRefId));
+  const items = draft.days.flatMap((day) => day.items);
+  const realItems = items.filter((item) => item.placeRefId);
   const ordered = realItems.toSorted((left, right) => {
     const hard = Number(isHardItem(right, proposal)) - Number(isHardItem(left, proposal));
     return hard || items.indexOf(left) - items.indexOf(right);
@@ -359,14 +377,18 @@ function enforceRealPlaceLimit(draft: AiPlannerDraft, proposal: AiPlannerModelPr
   }
 }
 
+/**
+ * Builds and prunes the day-to-day itinerary without reaching a provider. The
+ * places it emits are pending placeholders; `applyGroundingToDraft` upgrades the
+ * ones that survive to here.
+ */
 export function assembleAiPlanningDraft(
   proposal: AiPlannerModelProposal,
-  grounding: GroundedCandidate[],
   generationDate: Date,
 ): AiPlannerDraft {
   const defaults = resolveAiPlannerDefaults(proposal.normalizedRequest, proposal, generationDate);
   const dates = enumerateDateRange(defaults.startDate, defaults.endDate);
-  const grounded = new Map(grounding.map((result) => [result.place.id, result]));
+  const candidateIds = new Set(proposal.places.map((candidate) => candidate.id));
   const destinationIds = new Map<string, string>();
   const destinations = proposal.destinations.map((destination, index) => {
     const id = scopedId('destination', `${index}:${destination.candidatePlaceId}`);
@@ -398,7 +420,7 @@ export function assembleAiPlanningDraft(
 
   for (const proposalItem of proposal.items) {
     const item = toDraftItem(proposalItem);
-    if (item.placeRefId && !grounded.has(item.placeRefId)) item.placeRefId = null;
+    if (item.placeRefId && !candidateIds.has(item.placeRefId)) item.placeRefId = null;
     const dayIndex = targetDayIndex(proposalItem, proposal, dates);
     if (dayIndex === null || dayIndex < 0 || dayIndex >= days.length) {
       unscheduledItems.push(item);
@@ -416,9 +438,15 @@ export function assembleAiPlanningDraft(
   const draft: AiPlannerDraft = {
     assumptions: defaults.assumptions,
     days,
-    evidence: grounding.map((result) => result.evidence),
+    evidence: [],
     normalizedRequest: proposal.normalizedRequest,
-    places: grounding.map((result) => result.place),
+    places: proposal.places.map((candidate) => ({
+      id: candidate.id,
+      name: candidate.name,
+      note: candidate.note,
+      resolution: 'custom' as const,
+      verification: 'not_checked' as const,
+    })),
     schemaVersion: proposal.schemaVersion,
     trip: {
       dateAssumptionId: defaults.dateAssumptionId,
@@ -437,13 +465,17 @@ export function assembleAiPlanningDraft(
       startDate: defaults.startDate,
     },
     unscheduledItems,
-    warnings: associateGroundingWarnings(
-      grounding.flatMap((result) => result.warnings),
-      proposal,
-    ),
+    warnings: [],
   };
   enforceBalancedPace(draft, proposal);
   enforceRealPlaceLimit(draft, proposal);
+  // A candidate nothing references is not part of the plan, so it should neither
+  // travel with the draft nor cost a lookup.
+  const referenced = referencedDraftPlaceIds(draft, {
+    includeDestinations: true,
+    includeUnscheduled: true,
+  });
+  draft.places = draft.places.filter((place) => referenced.has(place.id));
   return draft;
 }
 
@@ -864,18 +896,24 @@ export async function runAiPlanningPipeline(
 
     if (!proposal.success) throw new AiPlanningPipelineFailure('invalid_response', metadata);
 
+    await lifecycle.updateStage(ownerId, runId, 'SCHEDULING');
+    let draft: AiPlannerDraft;
+    try {
+      draft = assembleAiPlanningDraft(proposal.data, generationDate);
+    } catch {
+      throw new AiPlanningPipelineFailure('invalid_response', metadata);
+    }
+
+    // Grounding follows scheduling so a lookup is only ever spent on a place the
+    // finished day-to-day itinerary actually stands on.
     await lifecycle.updateStage(ownerId, runId, 'GROUNDING');
     const grounding = await (options.groundCandidates ?? groundCandidates)(
       proposal.data,
       providerContext,
+      groundableDraftPlaceIds(draft),
     );
-    await lifecycle.updateStage(ownerId, runId, 'SCHEDULING');
-    let draft: AiPlannerDraft;
-    try {
-      draft = assembleAiPlanningDraft(proposal.data, grounding, generationDate);
-    } catch {
-      throw new AiPlanningPipelineFailure('invalid_response', metadata);
-    }
+    applyGroundingToDraft(draft, grounding);
+
     await lifecycle.updateStage(ownerId, runId, 'VALIDATING');
     const validated = await validateWithProviderEvidence(
       draft,

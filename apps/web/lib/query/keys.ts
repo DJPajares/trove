@@ -49,7 +49,7 @@ export const queryKeys = {
 
   memories: (tripId: string) => ['memories', tripId] as const,
   notifications: () => ['notifications', 'list'] as const,
-  planScore: (tripId: string, revision: string) => ['plan-score', tripId, revision] as const,
+  planScore: (tripId: string) => ['plan-score', tripId] as const,
   profile: () => ['profile'] as const,
   reservations: (tripId: string) => ['reservations', tripId] as const,
   savedPlaces: () => ['saved'] as const,

@@ -12,26 +12,30 @@ export type PlanScoreLoadStatus = 'disabled' | 'error' | 'idle' | 'loading';
  * Plan Score is advisory and derived, so a failure never blocks planning: the
  * caller keeps its last result and shows an unavailable state.
  *
- * `revision` changes whenever an itinerary, route, place, or reservation edit
- * invalidates the score, following the invalidation contract. It is part of the
- * query key rather than a refetch trigger, which is what makes an unchanged
- * trip free - this is the most expensive endpoint in the app, fanning out to
- * one Routes call per leg per day plus a Place lookup per scheduled Place, so a
- * second look at a trip nobody edited must not pay for it again.
+ * One key per trip, with no revision in it. The server keys its own stored
+ * score against every input the rubric reads and expires it on age, so a client
+ * revision could only ever be a second opinion about the same question - and a
+ * worse-informed one, since it cannot see the provider evidence. Two surfaces
+ * derived it from `Trip.updatedAt`, which the server's own cache write now
+ * bumps, so it changed the key of the score that had just been written.
+ *
+ * Refetching is therefore entirely the invalidation contract's job: this is
+ * still the most expensive endpoint in the app on a server cache miss, so it
+ * must not refetch on its own.
  */
-export function useTripPlanScore(tripId: string | null, revision: string) {
+export function useTripPlanScore(tripId: string | null) {
   const queryClient = useQueryClient();
 
   const { data, error, isPending } = useQuery({
     enabled: tripId !== null,
     queryFn: ({ signal }) => fetchTripPlanScore(tripId as string, signal),
-    queryKey: queryKeys.planScore(tripId ?? '', revision),
+    queryKey: queryKeys.planScore(tripId ?? ''),
   });
 
   const retry = useCallback(() => {
     if (!tripId) return;
-    void queryClient.invalidateQueries({ queryKey: queryKeys.planScore(tripId, revision) });
-  }, [queryClient, revision, tripId]);
+    void queryClient.invalidateQueries({ queryKey: queryKeys.planScore(tripId) });
+  }, [queryClient, tripId]);
 
   // `null` from the endpoint is the kill switch rather than an absent score,
   // and it is a different state from a score that failed to load.

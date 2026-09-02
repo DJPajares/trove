@@ -98,9 +98,9 @@ const experienceIcons: Record<
   mode: Compass,
 };
 
-function TripDetailPlanScore({ revision, tripId }: Readonly<{ revision: string; tripId: string }>) {
+function TripDetailPlanScore({ tripId }: Readonly<{ tripId: string }>) {
   const planScoreTranslations = useTranslations('planScore');
-  const planScore = useTripPlanScore(tripId, revision);
+  const planScore = useTripPlanScore(tripId);
   const planScoreHidden =
     planScore.status === 'disabled' ||
     Boolean(planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED'));
@@ -475,7 +475,7 @@ export function TripDetail({
           />
         )
       ) : planScoreEnabled ? (
-        <TripDetailPlanScore revision={trip.updatedAt} tripId={trip.id} />
+        <TripDetailPlanScore tripId={trip.id} />
       ) : null}
 
       <dl className="grid border-t border-border-subtle sm:grid-cols-2 sm:gap-x-8">

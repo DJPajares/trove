@@ -37,3 +37,13 @@ export const ITINERARY_EDIT_QUERY_ROOTS: readonly TripScopedQueryRoot[] = [
   'plan-score',
   'trip-mode-context',
 ];
+
+/**
+ * The roots a change to what Plan Score reads invalidates.
+ *
+ * The score is keyed on the trip alone, so nothing refreshes it except this.
+ * Must Go priority lives on a Trip Place and reservations decide both a day's
+ * fixed commitments and whether an item is anchored, so neither edit is visible
+ * to the itinerary's own invalidation.
+ */
+export const PLAN_SCORE_INPUT_QUERY_ROOTS: readonly TripScopedQueryRoot[] = ['plan-score'];

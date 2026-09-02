@@ -12,6 +12,11 @@ import {
   queryKeys,
   TRIP_SCOPED_QUERY_ROOTS,
 } from '../lib/query/keys.ts';
+import {
+  invalidateTripQueries,
+  ITINERARY_EDIT_QUERY_ROOTS,
+  PLAN_SCORE_INPUT_QUERY_ROOTS,
+} from '../lib/query/trip-invalidation.ts';
 
 /**
  * The cost guard. TanStack refetches on mount, reconnect and window focus by
@@ -93,7 +98,7 @@ test('trip-scoped keys put the trip id directly after the root', () => {
     queryKeys.itinerary('trip-1'),
     queryKeys.itineraryDayRoutes('trip-1', 'day-1', 'rev', false, undefined),
     queryKeys.memories('trip-1'),
-    queryKeys.planScore('trip-1', 'rev'),
+    queryKeys.planScore('trip-1'),
     queryKeys.reservations('trip-1'),
     queryKeys.tasks('trip-1'),
     queryKeys.trip('trip-1'),
@@ -123,4 +128,47 @@ test('trip mode context keys separate preview days', () => {
 
   expect(monday).not.toEqual(tuesday);
   expect(queryKeys.tripModeContext('trip-1', { date: '2026-09-01' })).toEqual(monday);
+});
+
+/**
+ * Three surfaces render Plan Score - the itinerary day panel, the trip overview
+ * and Trip Mode Preview - and two of them used to derive their own freshness
+ * suffix from `Trip.updatedAt` while the third derived one from the itinerary.
+ * One trip then held two entries and navigating between them missed the cache.
+ * The server keys its own stored score now, so the client's only job is to ask
+ * about a trip.
+ */
+test('every surface asking about one trip shares one Plan Score entry', () => {
+  const client = createQueryClient();
+  client.setQueryData(queryKeys.planScore('trip-1'), { score: 72 });
+
+  // Independently constructed by a different surface, for the same trip.
+  expect(client.getQueryData(queryKeys.planScore('trip-1'))).toStrictEqual({ score: 72 });
+  expect(client.getQueryData(queryKeys.planScore('trip-2'))).toBeUndefined();
+});
+
+/**
+ * With no suffix in the key, invalidation is the only thing that refreshes a
+ * score, so the roots a scoring input clears have to actually reach it - and
+ * have to stop at the trip that changed.
+ */
+test('a Plan Score input change clears that trip and no other', async () => {
+  const client = createQueryClient();
+  client.setQueryData(queryKeys.planScore('trip-1'), { score: 72 });
+  client.setQueryData(queryKeys.planScore('trip-2'), { score: 64 });
+
+  await invalidateTripQueries(client, 'trip-1', PLAN_SCORE_INPUT_QUERY_ROOTS);
+
+  expect(client.getQueryState(queryKeys.planScore('trip-1'))?.isInvalidated).toBe(true);
+  expect(client.getQueryState(queryKeys.planScore('trip-2'))?.isInvalidated).toBe(false);
+});
+
+/** An itinerary edit still clears it, which is what it always did. */
+test('an itinerary edit still clears the Plan Score', async () => {
+  const client = createQueryClient();
+  client.setQueryData(queryKeys.planScore('trip-1'), { score: 72 });
+
+  await invalidateTripQueries(client, 'trip-1', ITINERARY_EDIT_QUERY_ROOTS);
+
+  expect(client.getQueryState(queryKeys.planScore('trip-1'))?.isInvalidated).toBe(true);
 });

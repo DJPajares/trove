@@ -1,5 +1,7 @@
-import { getPrismaClient } from '@trove/db';
+import { getPrismaClient, Prisma } from '@trove/db';
 import { z } from 'zod';
+
+import { tripPlanScoreRevision } from './plan-score-revision.js';
 
 import { arePlanScoreProvidersDisabled } from '../environment.js';
 import {
@@ -380,11 +382,190 @@ export async function loadPlaceEvidence(
   return { hours, ratings };
 }
 
+/**
+ * A stored score outlives a browser session, so its age has to be bounded by
+ * something. The revision covers every Trove-owned input, but opening hours and
+ * ratings move underneath a plan nobody edits and are never persisted, so a day
+ * is the ceiling on how stale the evidence behind a displayed score may be.
+ */
+export const PLAN_SCORE_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
+
+type TripPlanScoreRow = {
+  planScore: Prisma.JsonValue | null;
+  planScoreComputedAt: Date | null;
+  planScoreRevision: string | null;
+};
+
+/** The one shape both the digest and the scorer read, so they cannot disagree. */
+function toPlanScoreDayRecord(
+  day: {
+    date: Date;
+    defaultTimeZone: string;
+    id: string;
+    items: Array<{
+      _count: { reservations: number };
+      dayPart: string | null;
+      durationMinutes: number | null;
+      durationProvenance: string;
+      id: string;
+      localStartTime: Date | null;
+      startInstant: Date | null;
+      timeSemantics: string | null;
+      timeZone: string | null;
+      tripPlaceId: string | null;
+    }>;
+  },
+  commitments: ReturnType<typeof sameDayJourneyCommitment>[],
+): PlanScoreDayRecord {
+  const date = toLocalDate(day.date);
+  return {
+    commitments: commitments.flatMap((commitment) =>
+      commitment && commitment.date === date ? [commitment] : [],
+    ),
+    date,
+    id: day.id,
+    items: day.items.map((item) => ({
+      dayPart: item.dayPart,
+      durationMinutes: item.durationMinutes,
+      durationProvenance: item.durationProvenance,
+      id: item.id,
+      localStartTime: item.localStartTime,
+      reservationCount: item._count.reservations,
+      startInstant: item.startInstant,
+      timeSemantics: item.timeSemantics,
+      timeZone: item.timeZone,
+      tripPlaceId: item.tripPlaceId,
+    })),
+    timeZone: day.defaultTimeZone,
+  };
+}
+
+/**
+ * What a Plan Score reads, as a Prisma selection. Exported so Apply reads the
+ * rows it just created through the same shape rather than reconstructing them:
+ * a second mapper is a second thing to keep in step with the rubric, and a
+ * revision computed from a drifted one silently serves a stale score.
+ */
+export const PLAN_SCORE_TRIP_INCLUDE = {
+  itineraryDays: {
+    orderBy: { date: 'asc' },
+    include: {
+      items: {
+        orderBy: { position: 'asc' },
+        include: { _count: { select: { reservations: true } } },
+      },
+    },
+  },
+  reservations: {
+    select: {
+      flightArrivalLocalDate: true,
+      flightArrivalLocalTime: true,
+      flightDepartureLocalDate: true,
+      flightDepartureLocalTime: true,
+      id: true,
+    },
+  },
+  tripPlaces: {
+    select: { id: true, place: { select: { providerRefs: true } }, priority: true },
+  },
+} as const;
+
+type PlanScoreTripRows = {
+  itineraryDays: Array<{
+    dailyBaseDepartureTripPlaceId: string | null;
+    dailyBaseTripPlaceId: string | null;
+    date: Date;
+    defaultTimeZone: string;
+    id: string;
+    items: Array<{
+      _count: { reservations: number };
+      dayPart: string | null;
+      durationMinutes: number | null;
+      durationProvenance: string;
+      id: string;
+      localStartTime: Date | null;
+      position: number;
+      startInstant: Date | null;
+      timeSemantics: string | null;
+      timeZone: string | null;
+      travelModeToNext: string | null;
+      tripPlaceId: string | null;
+    }>;
+    routeStartTravelMode: string;
+  }>;
+  reservations: Parameters<typeof sameDayJourneyCommitment>[0][];
+  tripPlaces: Array<{ id: string; priority: string | null }>;
+};
+
+/** The single reading of a trip that both the digest and the scorer are built on. */
+export function readPlanScoreInputs(trip: PlanScoreTripRows) {
+  const commitments = trip.reservations.flatMap((reservation) => {
+    const commitment = sameDayJourneyCommitment(reservation);
+    return commitment ? [commitment] : [];
+  });
+  const mustGoTripPlaceIds = trip.tripPlaces
+    .filter((tripPlace) => tripPlace.priority === 'MUST_GO')
+    .map((tripPlace) => tripPlace.id);
+  const days = trip.itineraryDays.map((day) => toPlanScoreDayRecord(day, commitments));
+
+  return {
+    days,
+    mustGoTripPlaceIds,
+    revision: tripPlanScoreRevision({
+      days: trip.itineraryDays.map((day, index) => ({
+        record: days[index]!,
+        routing: {
+          dailyBaseDepartureTripPlaceId: day.dailyBaseDepartureTripPlaceId,
+          dailyBaseTripPlaceId: day.dailyBaseTripPlaceId,
+          items: day.items.map((item) => ({
+            id: item.id,
+            position: item.position,
+            travelModeToNext: item.travelModeToNext,
+          })),
+          routeStartTravelMode: day.routeStartTravelMode,
+        },
+      })),
+      mustGoTripPlaceIds,
+    }),
+  };
+}
+
+function readCachedPlanScore(trip: TripPlanScoreRow, revision: string, now: Date) {
+  if (trip.planScoreRevision !== revision || !trip.planScoreComputedAt) return null;
+  if (now.getTime() - trip.planScoreComputedAt.getTime() >= PLAN_SCORE_CACHE_TTL_MS) return null;
+
+  // A row written before the current payload shape is a miss, not something to
+  // hand to a client.
+  return parseStoredPlanScore(trip.planScore);
+}
+
+/**
+ * Writing on every compute is what makes this worth having: the saving reaches
+ * a hand-built trip too, not only one an AI run already paid for.
+ */
+async function writeCachedPlanScore(
+  prisma: ReturnType<typeof getPrismaClient>,
+  tripId: string,
+  planScore: TripPlanScore,
+  revision: string,
+  now: Date,
+) {
+  await prisma.trip.update({
+    where: { id: tripId },
+    data: {
+      planScore: planScore as unknown as Prisma.InputJsonValue,
+      planScoreComputedAt: now,
+      planScoreRevision: revision,
+    },
+  });
+}
+
 export async function getTripPlanScore(
   userId: string,
   tripId: string,
-  services: { placesService?: PlacesService | null } = {},
+  services: { now?: () => Date; placesService?: PlacesService | null } = {},
 ): Promise<TripPlanScore | null> {
+  const now = services.now?.() ?? new Date();
   // Do this before opening Prisma: stale clients may still reach the endpoint,
   // but an administrative kill switch must make that request cost-free too.
   //
@@ -423,14 +604,18 @@ export async function getTripPlanScore(
   });
   if (!trip) throw new ItineraryNotFoundError('trip_not_found');
 
+  // Everything here is Prisma rows and arithmetic. The revision has to be
+  // decided before a provider is constructed, or a cache hit would still pay for
+  // the fan-out it exists to avoid.
+  const { days: dayRecords, mustGoTripPlaceIds, revision } = readPlanScoreInputs(trip);
+
+  const cached = readCachedPlanScore(trip, revision, now);
+  if (cached) return cached;
+
   const placesService =
     services.placesService === undefined
       ? createPlacesService({ source: 'plan-score' })
       : services.placesService;
-  const commitments = trip.reservations.flatMap((reservation) => {
-    const commitment = sameDayJourneyCommitment(reservation);
-    return commitment ? [commitment] : [];
-  });
 
   const routesService = createRoutesService({ source: 'plan-score' });
   // One resolver for the whole trip. Days share places constantly - the same
@@ -478,34 +663,13 @@ export async function getTripPlanScore(
   ]);
 
   const result = buildTripPlanScore({
-    days: trip.itineraryDays.map((day) => {
-      const date = toLocalDate(day.date);
-      return {
-        commitments: commitments.filter((commitment) => commitment.date === date),
-        date,
-        id: day.id,
-        items: day.items.map((item) => ({
-          dayPart: item.dayPart,
-          durationMinutes: item.durationMinutes,
-          durationProvenance: item.durationProvenance,
-          id: item.id,
-          localStartTime: item.localStartTime,
-          reservationCount: item._count.reservations,
-          startInstant: item.startInstant,
-          timeSemantics: item.timeSemantics,
-          timeZone: item.timeZone,
-          tripPlaceId: item.tripPlaceId,
-        })),
-        timeZone: day.defaultTimeZone,
-      };
-    }),
+    days: dayRecords,
     hours: placeEvidence.hours,
-    mustGoTripPlaceIds: trip.tripPlaces
-      .filter((tripPlace) => tripPlace.priority === 'MUST_GO')
-      .map((tripPlace) => tripPlace.id),
+    mustGoTripPlaceIds,
     ratings: placeEvidence.ratings,
     routes: new Map(routeResults.map(({ id, routes }) => [id, routes])),
   });
 
+  await writeCachedPlanScore(prisma, trip.id, result, revision, now);
   return result;
 }

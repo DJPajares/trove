@@ -877,6 +877,7 @@ export async function loadAiPlanningSessionForApplyInTransaction(
     draft: parseStoredDraft(session.draft),
     kind: 'reviewable' as const,
     sessionId: session.id,
+    planScore: parseStoredPlanScore(session.planScore),
     tripDescription: session.tripDescription,
     warningAcknowledged:
       session.warningsAcknowledgedRevision === expectedRevision &&

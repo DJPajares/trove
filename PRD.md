@@ -1827,6 +1827,8 @@ Trove may prefill an editable field with a deterministic proposal the user expli
 
 Relevant itinerary/order/time/place/route/reservation/provider-evidence changes invalidate/recalculate affected results.
 
+A computed result is stored and reused. It is keyed by a digest of every Trove-owned input the rubric reads, so an itinerary, order, timing, place, reservation or Must Go change invalidates it without a separate trigger. Provider evidence cannot be keyed that way — opening hours and ratings move under a plan nobody edited, and are never persisted — so a stored result also expires on age, and is recomputed once a day at the latest. A rubric change invalidates every stored result.
+
 Plan Score remains independent from lifecycle, manual Ready status, Trip Mode availability, Preview availability, and Experience Rating.
 
 Plan Score does not depend on AI: the rubric, weights and evidence rules are the same wherever it is computed. An AI-generated draft is scored from the evidence its own generation already fetched, through the shared evaluator, rather than by a second scoring system. MVP Plan Score must not depend on traffic-aware replanning, disruption-intelligence features, or Smart Cost Forecasting.

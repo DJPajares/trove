@@ -73,7 +73,10 @@ import {
   uploadReservationDocument,
 } from '@/lib/reservations/api';
 import { queryKeys } from '@/lib/query/keys';
+import { useQueryClient } from '@tanstack/react-query';
+
 import { useTripResource } from '@/lib/query/use-trip-resource';
+import { invalidateTripQueries, PLAN_SCORE_INPUT_QUERY_ROOTS } from '@/lib/query/trip-invalidation';
 
 type EditorState =
   | { mode: 'closed'; reservation: null }
@@ -190,9 +193,19 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
     bytes < 1024 * 1024
       ? t('documentKilobytes', { value: Math.ceil(bytes / 1024) })
       : t('documentMegabytes', { value: (bytes / (1024 * 1024)).toFixed(1) });
+  const queryClient = useQueryClient();
   const { data, refresh, status } = useTripResource(queryKeys.reservations(tripId), () =>
     fetchReservations(tripId),
   );
+  /**
+   * A reservation decides a day's fixed commitments and whether the item it is
+   * attached to is anchored, both of which the Plan Score reads. Its documents
+   * decide neither, so only the reservation itself clears the score.
+   */
+  const refreshWithPlanScore = async () => {
+    await refresh();
+    await invalidateTripQueries(queryClient, tripId, PLAN_SCORE_INPUT_QUERY_ROOTS);
+  };
   const [error, setError] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState>({ mode: 'closed', reservation: null });
   const [form, setForm] = useState<ReservationForm>(() => createForm(null));
@@ -332,7 +345,7 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
       } else if (editor.mode === 'edit') {
         await updateReservation(tripId, editor.reservation.id, input);
       }
-      await refresh();
+      await refreshWithPlanScore();
       closeEditor();
     } catch {
       setFormError(t('saveError'));
@@ -348,7 +361,7 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
       await deleteReservation(tripId, reservationToDelete.id);
       setReservationToDelete(null);
       closeEditor();
-      await refresh();
+      await refreshWithPlanScore();
     } catch {
       setError(t('deleteError'));
     } finally {

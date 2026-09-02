@@ -138,7 +138,7 @@ import { useCompactItinerary } from '@/hooks/use-compact-itinerary';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { buildDaySequence, dayStopNumbers, resolveDailyBases } from '@/lib/itinerary/day-sequence';
 import { scheduledPlaceUse } from '@/lib/itinerary/places';
-import { itineraryDayRouteRevision, itineraryPlanScoreRevision } from '@/lib/itinerary/routes';
+import { itineraryDayRouteRevision } from '@/lib/itinerary/routes';
 import { itineraryViewHref, resolveItineraryView } from '@/lib/itinerary/view';
 import {
   buildItineraryMapPoints,
@@ -238,19 +238,17 @@ function useDesktopMapLayout() {
 
 function ItineraryPlanScore({
   onSelectReference,
-  revision,
   selectedDayId,
   tripId,
 }: Readonly<{
   onSelectReference: (reference: string) => void;
-  revision: string;
   selectedDayId: string | null;
   tripId: string;
 }>) {
   const planScoreTranslations = useTranslations('planScore');
   const { hasBeenVisible: planScoreVisible, ref: planScoreSentinelRef } =
     useInViewOnce<HTMLDivElement>();
-  const planScore = useTripPlanScore(planScoreVisible ? tripId : null, revision);
+  const planScore = useTripPlanScore(planScoreVisible ? tripId : null);
   const planScoreDay = planScore.data?.days.find((day) => day.dayId === selectedDayId) ?? null;
   const planScoreHidden =
     planScore.status === 'disabled' ||
@@ -529,7 +527,6 @@ export function ItineraryManager({
     [routes],
   );
 
-  const planScoreRevision = useMemo(() => itineraryPlanScoreRevision(itinerary), [itinerary]);
   const focusItineraryItem = useCallback((reference: string) => {
     setSelectedMapItemId(reference);
     document.getElementById(`itinerary-item-${reference}`)?.focus();
@@ -2056,7 +2053,6 @@ export function ItineraryManager({
                     {planScoreEnabled ? (
                       <ItineraryPlanScore
                         onSelectReference={focusItineraryItem}
-                        revision={planScoreRevision}
                         selectedDayId={selectedDayId}
                         tripId={tripId}
                       />

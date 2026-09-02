@@ -302,13 +302,9 @@ function TripModePreviewSummary({
   );
 }
 
-function TripModePreviewPlanScore({
-  date,
-  revision,
-  tripId,
-}: Readonly<{ date: string; revision: string; tripId: string }>) {
+function TripModePreviewPlanScore({ date, tripId }: Readonly<{ date: string; tripId: string }>) {
   const planScoreTranslations = useTranslations('planScore');
-  const planScore = useTripPlanScore(tripId, revision);
+  const planScore = useTripPlanScore(tripId);
   const previewDayScore = planScore.data?.days.find((day) => day.date === date) ?? null;
   const planScoreHidden =
     planScore.status === 'disabled' ||
@@ -647,11 +643,7 @@ export function TripModeShell({
             now". Above the view it was the largest single thing between a phone
             and its own itinerary. */}
             {planScoreEnabled && previewSelection ? (
-              <TripModePreviewPlanScore
-                date={previewSelection.date}
-                revision={trip.updatedAt}
-                tripId={trip.id}
-              />
+              <TripModePreviewPlanScore date={previewSelection.date} tripId={trip.id} />
             ) : null}
           </section>
 

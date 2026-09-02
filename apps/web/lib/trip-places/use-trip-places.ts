@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 
 import { queryKeys } from '@/lib/query/keys';
+import { invalidateTripQueries, PLAN_SCORE_INPUT_QUERY_ROOTS } from '@/lib/query/trip-invalidation';
 
 import {
   fetchTripPlaces,
@@ -74,11 +75,13 @@ export function useTripPlaces(tripId: string) {
       setError(null);
       try {
         replace((await updateTripPlace(tripId, tripPlace.id, { priority })).tripPlace);
+        // Must Go is a scoring input, and nothing else clears the score.
+        await invalidateTripQueries(queryClient, tripId, PLAN_SCORE_INPUT_QUERY_ROOTS);
       } catch {
         setError({ key: 'actionError' });
       }
     },
-    [replace, tripId],
+    [queryClient, replace, tripId],
   );
 
   /**
@@ -109,6 +112,10 @@ export function useTripPlaces(tripId: string) {
       try {
         await removeTripPlace(tripId, tripPlace.id);
         setPlaces((current) => current.filter((entry) => entry.id !== tripPlace.id));
+        // Removal is refused while the itinerary schedules the Place, so this can
+        // only ever drop an unscheduled one - which is exactly the Must Go the
+        // score was counting as unmet.
+        await invalidateTripQueries(queryClient, tripId, PLAN_SCORE_INPUT_QUERY_ROOTS);
         return { ok: true as const };
       } catch (cause) {
         const referenced =
@@ -122,7 +129,7 @@ export function useTripPlaces(tripId: string) {
         return { ok: false as const, referenceCount, referenced };
       }
     },
-    [tripId],
+    [queryClient, setPlaces, tripId],
   );
 
   return {

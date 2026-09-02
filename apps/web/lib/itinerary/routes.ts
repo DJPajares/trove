@@ -1,4 +1,4 @@
-import type { Itinerary, ItineraryDay } from './api';
+import type { ItineraryDay } from './api';
 
 type RevisionDay = Pick<
   ItineraryDay,
@@ -32,36 +32,4 @@ export function itineraryDayRouteRevision(day: RevisionDay | null): string {
       item.travelModeToNext ?? '',
     ]),
   ].join(':');
-}
-
-type PlanScoreRevisionDay = RevisionDay & Pick<ItineraryDay, 'date'>;
-
-/**
- * What Plan Score is actually computed from: the leg chain, plus the timing and
- * priority the score reads directly.
- *
- * This is deliberately not the route signature. Scoring a trip costs a provider
- * request for every place on every day, so keying it on a whole item — as an
- * `updatedAt` does — meant renaming a note or correcting a planned cost
- * re-scored the entire trip. Listing the inputs by name means a field that
- * cannot move the score cannot trigger the work either.
- */
-export function itineraryPlanScoreRevision(itinerary: Itinerary | null): string {
-  if (!itinerary) return '';
-  return itinerary.days
-    .map((day: PlanScoreRevisionDay) =>
-      [
-        itineraryDayRouteRevision(day),
-        day.date,
-        ...day.items.flatMap((item) => [
-          item.dayPart ?? '',
-          String(item.durationMinutes ?? ''),
-          item.localStartTime ?? '',
-          item.priority ?? '',
-          item.startInstant ?? '',
-          item.timeSemantics ?? '',
-        ]),
-      ].join(':'),
-    )
-    .join('|');
 }

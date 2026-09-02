@@ -2,6 +2,8 @@ import { getPrismaClient, Prisma } from '@trove/db';
 import type { AiPlannerDraft, AiPlannerDraftItem, AiPlannerDraftPlace } from '@trove/types';
 
 import { referencedDraftPlaceIds } from './ai-planning-draft-places.js';
+import { remapDraftPlanScore } from './ai-planning-plan-score.js';
+import { PLAN_SCORE_TRIP_INCLUDE, readPlanScoreInputs } from './plan-score.js';
 import { floatingLocalTimeToInstant, parseLocalTime } from './itinerary-rules.js';
 import {
   AiPlanningSessionError,
@@ -318,6 +320,11 @@ export async function applyAiPlanningSession(
       tripPlaceIds.set(referenceId, created.id);
     }
 
+    // The draft's score is keyed on draft identifiers; collect what each became
+    // so it can be rewritten rather than recomputed.
+    const dayIdByDate = new Map<string, string>();
+    const itemIdByDraftId = new Map<string, string>();
+
     const draftDays = new Map(draft.days.map((day) => [day.date, day]));
     for (const date of enumerateDateRange(draft.trip.startDate, draft.trip.endDate)) {
       const day = draftDays.get(date);
@@ -366,6 +373,7 @@ export async function applyAiPlanningSession(
         },
         select: { id: true },
       });
+      dayIdByDate.set(date, created.id);
       for (const [position, item] of day.items.entries()) {
         const createdItem = await transaction.itineraryItem.create({
           data: {
@@ -383,6 +391,7 @@ export async function applyAiPlanningSession(
           },
           select: { id: true },
         });
+        itemIdByDraftId.set(item.id, createdItem.id);
         if (defaultSource === 'FIRST_LOCATED_ITEM' && item.id === firstLocatedItem?.id) {
           await transaction.itineraryDay.update({
             where: { id: created.id },
@@ -407,6 +416,30 @@ export async function applyAiPlanningSession(
           tripId: trip.id,
           tripPlaceIds,
         }),
+      });
+    }
+
+    // The run already paid for the evidence behind this score, so carry it onto
+    // the trip rather than letting the first page view buy it a second time. The
+    // revision is read back off the rows just written, through the same reading
+    // the scorer uses, so a stored score is only ever served for the trip it was
+    // actually computed from.
+    if (loaded.planScore) {
+      const rows = await transaction.trip.findFirstOrThrow({
+        where: { id: trip.id },
+        include: PLAN_SCORE_TRIP_INCLUDE,
+      });
+      await transaction.trip.update({
+        where: { id: trip.id },
+        data: {
+          planScore: remapDraftPlanScore(loaded.planScore, {
+            dayIdByDate,
+            itemIdByDraftId,
+            tripPlaceIdByPlaceRefId: tripPlaceIds,
+          }) as unknown as Prisma.InputJsonValue,
+          planScoreComputedAt: now,
+          planScoreRevision: readPlanScoreInputs(rows).revision,
+        },
       });
     }
 

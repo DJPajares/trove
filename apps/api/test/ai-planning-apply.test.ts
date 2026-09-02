@@ -7,7 +7,8 @@ import {
   setAiPlanningTelemetrySink,
   type AiPlanningTelemetryEvent,
 } from '../src/services/ai-planning-telemetry.js';
-import { customPlaceDraft, explicitDraft } from './fixtures/ai-planning.js';
+import { readPlanScoreInputs } from '../src/services/plan-score.js';
+import { customPlaceDraft, emptyPlanScore, explicitDraft } from './fixtures/ai-planning.js';
 
 const OWNER_ID = '00000000-0000-4000-8000-000000000001';
 const OTHER_OWNER_ID = '00000000-0000-4000-8000-000000000002';
@@ -23,6 +24,7 @@ type SessionState = {
   id: string;
   lastErrorCode: string | null;
   ownerId: string;
+  planScore: unknown;
   rawPrompt: string | null;
   schemaVersion: number;
   stage: string;
@@ -54,6 +56,7 @@ function makeSession(draft: AiPlannerDraft, overrides: Partial<SessionState> = {
     id: SESSION_ID,
     lastErrorCode: null,
     ownerId: OWNER_ID,
+    planScore: null,
     rawPrompt: 'Plan Tokyo',
     schemaVersion: 1,
     stage: 'REVIEWING',
@@ -231,6 +234,33 @@ function createApplyStore(
         const value = { ...data, id: id() };
         working.trips.push(value);
         return { id: value.id };
+      },
+      // Apply reads the rows it just wrote to key the carried score, through the
+      // same shape the scorer uses.
+      async findFirstOrThrow({ where }: any) {
+        const trip = working.trips.find((candidate) => candidate.id === where.id);
+        if (!trip) throw new Error('trip_not_found');
+        return {
+          ...trip,
+          itineraryDays: working.days.map((day) => ({
+            ...day,
+            items: working.items
+              .filter((item) => item.itineraryDayId === day.id)
+              .toSorted((left, right) => left.position - right.position)
+              .map((item) => ({ ...item, _count: { reservations: 0 } })),
+          })),
+          reservations: [],
+          tripPlaces: working.tripPlaces.map((tripPlace) => ({
+            ...tripPlace,
+            place: { providerRefs: [] },
+          })),
+        };
+      },
+      async update({ where, data }: any) {
+        const trip = working.trips.find((candidate) => candidate.id === where.id);
+        if (!trip) throw new Error('trip_not_found');
+        Object.assign(trip, data);
+        return trip;
       },
     },
     tripDestination: {
@@ -518,4 +548,88 @@ describe('AI planning Apply', () => {
       status: 'REVIEWING',
     });
   });
+});
+
+/**
+ * The run already paid for the evidence behind the draft's score, so the applied
+ * trip must not buy the same judgement again. The identifiers have to move with
+ * it: the itinerary panel picks a day by `dayId` and focuses a suggestion by its
+ * reference, and a draft names days by date and places by draft reference.
+ */
+test('the draft score is carried onto the trip, keyed and remapped to its rows', async () => {
+  const draft = customPlaceDraft();
+  const dayItem = draft.days.flatMap((day) => day.items)[0];
+  if (!dayItem) throw new Error('fixture missing a scheduled item');
+
+  const planScore = {
+    ...emptyPlanScore(),
+    days: draft.days.map((day) => ({
+      completeness: 80,
+      confidence: 90,
+      date: day.date,
+      dayId: day.date,
+      explanations: {
+        uncertainty: [],
+        whatWorks: [],
+        worthImproving: [
+          {
+            action: 'ADJUST_TIME' as const,
+            factor: 'FEASIBILITY',
+            messageKey: 'feasibility.tight',
+            references: [dayItem.id],
+            values: {},
+          },
+        ],
+      },
+      factors: {},
+      score: 72,
+      withheldReasons: [],
+    })),
+  };
+
+  const store = createApplyStore(draft, { session: { planScore } });
+  await apply(store);
+
+  const trip = store.state.trips[0]!;
+  expect(trip.planScoreRevision, 'a carried score must be keyed to its trip').toEqual(
+    expect.any(String),
+  );
+  expect(trip.planScoreComputedAt).toEqual(NOW);
+
+  const stored = trip.planScore as typeof planScore;
+  const dayIds = store.state.days.map((day) => day.id);
+  const itemIds = new Set(store.state.items.map((item) => item.id));
+
+  // A date would match no day on the trip, and the panel would render nothing.
+  for (const day of stored.days) expect(dayIds).toContain(day.dayId);
+  for (const reference of stored.days.flatMap((day) =>
+    day.explanations.worthImproving.flatMap((entry) => entry.references),
+  )) {
+    expect(itemIds, 'a suggestion must point at a row that exists').toContain(reference);
+  }
+});
+
+/**
+ * Two readings of a trip would be two things to keep in step with the rubric, so
+ * Apply and the scorer share one. This fails the moment they stop agreeing.
+ */
+test('the revision Apply stores is the one the scorer derives from the same trip', async () => {
+  const draft = customPlaceDraft();
+  const store = createApplyStore(draft, { session: { planScore: emptyPlanScore() } });
+  await apply(store);
+
+  const trip = store.state.trips[0]!;
+  const rows = {
+    itineraryDays: store.state.days.map((day) => ({
+      ...day,
+      items: store.state.items
+        .filter((item) => item.itineraryDayId === day.id)
+        .toSorted((left, right) => left.position - right.position)
+        .map((item) => ({ ...item, _count: { reservations: 0 } })),
+    })),
+    reservations: [],
+    tripPlaces: store.state.tripPlaces.map((tripPlace) => ({ ...tripPlace })),
+  };
+
+  expect(readPlanScoreInputs(rows as never).revision).toBe(trip.planScoreRevision);
 });

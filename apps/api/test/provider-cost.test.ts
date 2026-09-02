@@ -47,7 +47,11 @@ import {
 import { explicitModelProposal, missingDetailsProposal } from './fixtures/ai-planning.js';
 import { PlacesService } from '../src/services/places.js';
 import { RoutesService } from '../src/services/routes.js';
-import { getTripPlanScore, type TripPlanScore } from '../src/services/plan-score.js';
+import {
+  getTripPlanScore,
+  PLAN_SCORE_CACHE_TTL_MS,
+  type TripPlanScore,
+} from '../src/services/plan-score.js';
 import {
   getProviderCallCounts,
   recordProviderCall,
@@ -111,9 +115,11 @@ const editorialImages = new Map<
   string,
   { cachedAt: Date | null; id: string; images: unknown[]; subjectKey: string }
 >();
+type PlanScoreTripFixture = ReturnType<typeof buildPlanScoreTripFixture>;
 let tripFixture: unknown = null;
 let dayFixture: unknown = null;
 let tripFindFirstCalls = 0;
+let tripPlanScoreWrites = 0;
 
 function decimal(value: number) {
   return { toNumber: () => value };
@@ -262,6 +268,13 @@ function installStubPrisma() {
         tripFindFirstCalls += 1;
         return tripFixture;
       },
+      // Plan Score caches what it computes, so the fixture has to accept the
+      // write back and answer the next read from it.
+      update: async ({ data }: { data: Record<string, unknown> }) => {
+        tripPlanScoreWrites += 1;
+        Object.assign(tripFixture as object, data);
+        return tripFixture;
+      },
     },
     itineraryDay: {
       findFirst: async () => dayFixture,
@@ -287,7 +300,7 @@ function buildPlanScoreTripFixture() {
   const scheduledTripPlace = {
     id: 'tp-scheduled',
     place: place('place-scheduled', 'ChIJscheduled'),
-    priority: null,
+    priority: null as string | null,
   };
   const unscheduledTripPlace = {
     id: 'tp-unscheduled',
@@ -307,14 +320,14 @@ function buildPlanScoreTripFixture() {
         dayPart: null,
         durationMinutes: 60,
         id: 'item-1',
-        localStartTime: null,
+        localStartTime: null as Date | null,
         position: 0,
         startInstant: null,
         timeSemantics: null,
         timeZone: null,
-        travelModeToNext: 'WALK',
+        travelModeToNext: 'WALK' as string | null,
         tripPlace: scheduledTripPlace,
-        tripPlaceId: 'tp-scheduled',
+        tripPlaceId: 'tp-scheduled' as string | null,
       },
     ],
     routeStartTravelMode: 'WALK',
@@ -446,6 +459,7 @@ beforeEach(() => {
   tripFixture = null;
   dayFixture = null;
   tripFindFirstCalls = 0;
+  tripPlanScoreWrites = 0;
   resetCachedPlacesMemo();
   resetFailedPlaceHydrations();
   resetProviderCallCounts();
@@ -979,6 +993,128 @@ test('TROVE_PLAN_SCORE_DISABLED cannot reach scoring that costs no provider call
       planScore.buildPlanScoreFromEvaluations({ days: [], mustGoIds: [], scheduledIds: [] }),
     ),
   ).toMatchObject({ withheldReasons: ['NO_SCORABLE_DAY'] });
+});
+
+/**
+ * The whole point of storing a score: a second look at an unchanged trip costs
+ * nothing. Everything above proves what one computation costs; this proves the
+ * next one costs zero, and that the key notices what the rubric actually reads.
+ */
+test('a stored Plan Score serves an unchanged trip with no provider call', async () => {
+  tripFixture = buildPlanScoreTripFixture();
+  const { provider, requests } = detailRequestsProvider();
+  const placesService = new CachedPlacesService(provider);
+  const scoreAt = (now: Date) =>
+    withEnvOverride(
+      { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
+      () => getTripPlanScore('user-1', 'trip-1', { now: () => now, placesService }),
+    );
+
+  const first = await scoreAt(new Date('2026-09-01T09:00:00.000Z'));
+  expect(requests.length, 'the first look has to compute').toBeGreaterThan(0);
+  expect(tripPlanScoreWrites).toBe(1);
+
+  requests.length = 0;
+  resetCachedPlacesMemo(); // A separate API instance retains only database state.
+  const second = await scoreAt(new Date('2026-09-01T10:00:00.000Z'));
+
+  expect(requests, 'an unchanged trip must not reach the provider again').toStrictEqual([]);
+  expect(second).toStrictEqual(first);
+  expect(tripPlanScoreWrites, 'a hit must not rewrite the row').toBe(1);
+});
+
+test('the stored Plan Score is invalidated by what the rubric reads, and only that', async () => {
+  const scoreAt = (now: Date, placesService: CachedPlacesService) =>
+    withEnvOverride(
+      { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
+      () => getTripPlanScore('user-1', 'trip-1', { now: () => now, placesService }),
+    );
+  const NOW = new Date('2026-09-01T09:00:00.000Z');
+
+  // Each case warms the cache, applies one edit, and reports whether the next
+  // look had to pay for itself.
+  const recomputesAfter = async (edit: (trip: PlanScoreTripFixture) => void) => {
+    tripFixture = buildPlanScoreTripFixture();
+    const { provider, requests } = detailRequestsProvider();
+    const placesService = new CachedPlacesService(provider);
+    await scoreAt(NOW, placesService);
+    requests.length = 0;
+    resetCachedPlacesMemo();
+    edit(tripFixture as PlanScoreTripFixture);
+    await scoreAt(NOW, placesService);
+    return requests.length > 0;
+  };
+
+  expect(await recomputesAfter(() => {}), 'nothing changed').toBe(false);
+
+  // Timing, order, duration, place and priority all move the score.
+  expect(
+    await recomputesAfter((trip) => {
+      trip.itineraryDays[0]!.items[0]!.localStartTime = new Date('1970-01-01T09:30:00.000Z');
+    }),
+    'a start time moves the score',
+  ).toBe(true);
+  expect(
+    await recomputesAfter((trip) => {
+      trip.itineraryDays[0]!.items[0]!.durationMinutes = 120;
+    }),
+    'a duration moves the score',
+  ).toBe(true);
+  expect(
+    await recomputesAfter((trip) => {
+      trip.itineraryDays[0]!.items[0]!.position = 5;
+    }),
+    'an order change moves the legs',
+  ).toBe(true);
+  expect(
+    await recomputesAfter((trip) => {
+      trip.itineraryDays[0]!.items[0]!.travelModeToNext = 'DRIVE';
+    }),
+    'a travel mode moves the legs',
+  ).toBe(true);
+  expect(
+    await recomputesAfter((trip) => {
+      trip.tripPlaces[0]!.priority = 'MUST_GO';
+    }),
+    'Must Go priority moves the trip factor',
+  ).toBe(true);
+  expect(
+    await recomputesAfter((trip) => {
+      trip.itineraryDays[0]!.items[0]!.tripPlaceId = 'tp-unscheduled';
+    }),
+    'a different place moves the evidence and the legs',
+  ).toBe(true);
+
+  // A field the rubric cannot read must not trigger the most expensive endpoint
+  // in the app, which is the reason the key names its inputs rather than
+  // hashing a row wholesale.
+  expect(
+    await recomputesAfter((trip) => {
+      (trip as unknown as { name: string }).name = 'Renamed after scoring';
+    }),
+    'a trip rename cannot move the score',
+  ).toBe(false);
+});
+
+test('a stored Plan Score expires even when nothing about the trip changed', async () => {
+  tripFixture = buildPlanScoreTripFixture();
+  const { provider, requests } = detailRequestsProvider();
+  const placesService = new CachedPlacesService(provider);
+  const scoreAt = (now: Date) =>
+    withEnvOverride(
+      { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
+      () => getTripPlanScore('user-1', 'trip-1', { now: () => now, placesService }),
+    );
+
+  const first = new Date('2026-09-01T09:00:00.000Z');
+  await scoreAt(first);
+  requests.length = 0;
+  resetCachedPlacesMemo();
+
+  // Opening hours and ratings move underneath a plan nobody edits, and no
+  // revision can express that, so age alone has to force the refresh.
+  await scoreAt(new Date(first.getTime() + PLAN_SCORE_CACHE_TTL_MS));
+  expect(requests.length, 'an expired score must be recomputed').toBeGreaterThan(0);
 });
 
 /**

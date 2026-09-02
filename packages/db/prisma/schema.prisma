@@ -600,6 +600,13 @@ model Trip {
   /// always wins over it.
   editorialImageSetId            String?               @map("editorial_image_set_id") @db.Uuid
   planningReadiness              TripPlanningReadiness @default(IN_PROGRESS) @map("planning_readiness")
+  /// Last computed Plan Score, kept only as a cache. `planScoreRevision` is a
+  /// digest of every Trove-owned input the rubric reads, so an itinerary edit
+  /// invalidates it without a trigger; `planScoreComputedAt` bounds how stale
+  /// the provider evidence behind it may be, which no revision can express.
+  planScore                      Json?                 @map("plan_score") @db.JsonB
+  planScoreRevision              String?               @map("plan_score_revision") @db.VarChar(64)
+  planScoreComputedAt            DateTime?             @map("plan_score_computed_at") @db.Timestamptz(3)
   budgetAmount                   Decimal?              @map("budget_amount") @db.Decimal(12, 2)
   budgetCurrencyCode             String?               @map("budget_currency_code") @db.Char(3)
   visibility                     TripVisibility        @default(PRIVATE)

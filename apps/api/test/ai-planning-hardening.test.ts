@@ -81,29 +81,7 @@ test('the model cannot assert provider identity, evidence, or extra fields', () 
 
 test('grounding, not the model, decides which places are verified', () => {
   const proposal = explicitModelProposal();
-  const grounding = proposal.places.map((place) => ({
-    context: null,
-    evidence: {
-      checkedAt: null,
-      code: 'provider_unavailable',
-      id: `evidence:${place.id}`,
-      kind: 'identity' as const,
-      provider: null,
-      status: 'not_checked' as const,
-      subjectId: place.id,
-      subjectType: 'place' as const,
-    },
-    place: {
-      id: place.id,
-      name: place.name,
-      note: place.note,
-      resolution: 'custom' as const,
-      verification: 'not_checked' as const,
-    },
-    warnings: [],
-  }));
-
-  const draft = assembleAiPlanningDraft(proposal, grounding, NOW);
+  const draft = assembleAiPlanningDraft(proposal, NOW);
 
   expect(draft.places.every((place) => place.resolution === 'custom')).toBe(true);
   expect(JSON.stringify(draft.places)).not.toContain('placeId');

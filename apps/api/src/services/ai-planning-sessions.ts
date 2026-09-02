@@ -24,7 +24,12 @@ export const AI_PLANNING_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
 export const AI_PLANNING_DISPATCH_WINDOW_MS = 24 * 60 * 60 * 1_000;
 
 const ACTIVE_STATUSES = ['FAILED', 'GENERATING', 'PENDING', 'REVIEWING'] as const;
-const DISPATCH_STAGES = ['GENERATING', 'GROUNDING', 'SCHEDULING', 'VALIDATING'] as const;
+/**
+ * Ordered, and `updateAiPlanningStage` rejects any move backwards through it, so
+ * this sequence has to match the pipeline's. The pipeline schedules before it
+ * grounds: a run only looks up the places its finished itinerary stands on.
+ */
+const DISPATCH_STAGES = ['GENERATING', 'SCHEDULING', 'GROUNDING', 'VALIDATING'] as const;
 const SESSION_EXPIRED = Symbol('session_expired');
 
 type PlanningPrisma = ReturnType<typeof getPrismaClient>;

@@ -13,8 +13,8 @@ import type { AiPlanningSessionStage } from '../lib/ai-planning/presentation.ts'
 const stages: AiPlanningSessionStage[] = [
   'created',
   'generating',
-  'grounding',
   'scheduling',
+  'grounding',
   'validating',
   'reviewing',
   'complete',
@@ -43,16 +43,18 @@ test('every stage lights at least one stop, and only a finished route lights the
 
 test('the days only stack up once there is a schedule to stack', () => {
   expect(aiPlanningShowsItineraryCards('generating')).toBe(false);
-  expect(aiPlanningShowsItineraryCards('grounding')).toBe(false);
   expect(aiPlanningShowsItineraryCards('scheduling')).toBe(true);
+  // Grounding now follows scheduling, so the days it looks places up for are
+  // already on screen. Hiding them here would stack the cards and then drop them.
+  expect(aiPlanningShowsItineraryCards('grounding')).toBe(true);
   expect(aiPlanningShowsItineraryCards('reviewing')).toBe(true);
 });
 
 test('a hint always resolves, and starts from what its stage is actually doing', () => {
-  expect(aiPlanningGeneratingHint('grounding', 0)).toBe('discovering');
+  expect(aiPlanningGeneratingHint('generating', 0)).toBe('discovering');
   expect(aiPlanningGeneratingHint('scheduling', 0)).toBe('planning');
-  expect(aiPlanningGeneratingHint('validating', 0)).toBe('optimising');
-  expect(aiPlanningGeneratingHint('reviewing', 0)).toBe('assembling');
+  expect(aiPlanningGeneratingHint('grounding', 0)).toBe('optimising');
+  expect(aiPlanningGeneratingHint('validating', 0)).toBe('assembling');
 
   // A stage that outlasts the whole set keeps cycling rather than stalling.
   for (const stage of stages) {
@@ -60,5 +62,5 @@ test('a hint always resolves, and starts from what its stage is actually doing',
       expect(aiPlanningGeneratingHints).toContain(aiPlanningGeneratingHint(stage, tick));
     }
   }
-  expect(aiPlanningGeneratingHint('grounding', 4)).toBe('discovering');
+  expect(aiPlanningGeneratingHint('generating', 4)).toBe('discovering');
 });

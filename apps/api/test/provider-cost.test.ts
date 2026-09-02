@@ -26,6 +26,10 @@ import {
   type PlacesProvider,
   type ProviderPlaceDetails,
 } from '../src/services/places.js';
+import { AiPlaceGrounder } from '../src/services/ai-place-grounding.js';
+import { groundableDraftPlaceIds } from '../src/services/ai-planning-draft-places.js';
+import { assembleAiPlanningDraft } from '../src/services/ai-planning-pipeline.js';
+import { missingDetailsProposal } from './fixtures/ai-planning.js';
 import { getTripPlanScore } from '../src/services/plan-score.js';
 import {
   getProviderCallCounts,
@@ -1279,4 +1283,80 @@ test('missing places of the same detailed type share one generic provider reques
   );
 
   expect(fetches, 'three exact lookups share one bakery fallback').toBe(4);
+});
+
+/**
+ * The planner used to look up every place the model *considered*: grounding ran
+ * before scheduling, so orphan candidates, out-of-range items, pace-dropped
+ * items and everything past the real-place cap were all billed and then thrown
+ * away. Scheduling now runs first and grounding only sees what survived, so this
+ * asserts the searched set rather than trusting the stage order to stay put.
+ */
+test('a generate run searches only the places its finished itinerary stands on', async () => {
+  const proposal = missingDetailsProposal();
+  const kyoto = proposal.places[0]!;
+
+  proposal.places = [
+    kyoto,
+    // Referenced by an item that lands on a real day: searched.
+    { id: 'candidate:used', name: 'Nishiki Market', note: null, searchQuery: 'Nishiki Market' },
+    // Referenced only by an item whose dayIndex falls outside the trip, so it
+    // ends up unscheduled: not searched.
+    { id: 'candidate:unscheduled', name: 'Kinkaku-ji', note: null, searchQuery: 'Kinkaku-ji' },
+    // Declared and never referenced at all. Nothing rejects this, so it has to
+    // be dropped here or it is a free lookup on every run.
+    { id: 'candidate:orphan', name: 'Fushimi Inari', note: null, searchQuery: 'Fushimi Inari' },
+  ];
+
+  const item = (id: string, candidatePlaceId: string, dayIndex: number) => ({
+    blockType: 'activity' as const,
+    candidatePlaceId,
+    constraintIds: [],
+    dayIndex,
+    destinationIntentId: null,
+    durationMinutes: 60,
+    durationProvenance: 'ai_estimated' as const,
+    id,
+    isAnchor: false,
+    label: id,
+    notes: null,
+    origin: 'model' as const,
+    priority: 'interested' as const,
+    schedule: { dayPart: 'anytime' as const, kind: 'day_part' as const },
+  });
+
+  proposal.items = [
+    item('item:used', 'candidate:used', 0),
+    item('item:unscheduled', 'candidate:unscheduled', 9),
+  ];
+
+  const draft = assembleAiPlanningDraft(proposal, new Date('2026-08-31T12:00:00.000Z'));
+  const targets = groundableDraftPlaceIds(draft);
+  const searchable = proposal.places.filter((candidate) => targets.has(candidate.id));
+
+  const queries: string[] = [];
+  const grounder = new AiPlaceGrounder(
+    {
+      name: 'google' as const,
+      async textSearch(request) {
+        queries.push(request.textQuery);
+        return [];
+      },
+    },
+    {
+      async resolveProviderPlaceFromIdentity() {
+        return { id: 'unused' };
+      },
+    },
+  );
+  await grounder.groundCandidates(searchable);
+
+  // The destination Kyoto (apply needs it as a TripDestination) and the one
+  // scheduled stop. The unscheduled and orphan candidates cost nothing.
+  expect(queries.toSorted()).toStrictEqual(['Kyoto Japan', 'Nishiki Market']);
+  expect(draft.places.map((place) => place.id).toSorted()).toStrictEqual([
+    'candidate:kyoto',
+    'candidate:unscheduled',
+    'candidate:used',
+  ]);
 });

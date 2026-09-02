@@ -27,7 +27,11 @@ import {
   type AiStructuredGenerationRequest,
 } from './ai-generation.js';
 import { createAiGateway } from './ai-runtime.js';
-import { AiPlaceGrounder, type AiPlaceGroundingResult } from './ai-place-grounding.js';
+import {
+  AiPlaceGrounder,
+  type AiPlaceGroundingResult,
+  type GroundedPlaceContext,
+} from './ai-place-grounding.js';
 import { createAiPlannerProviderContext } from './ai-planner-provider-context.js';
 import { groundableDraftPlaceIds, referencedDraftPlaceIds } from './ai-planning-draft-places.js';
 import { recordAiPlanningDraftAssembled } from './ai-planning-telemetry.js';
@@ -46,12 +50,7 @@ import {
 } from './ai-planning-sessions.js';
 import { evaluateFeasibility, type PlanScoreDayItem } from './plan-score-factors.js';
 import { openingIntervalsForWeekday, weekdayForLocalDate } from './place-opening-hours.js';
-import type {
-  PlaceDetailsResult,
-  PlaceTextSearchProvider,
-  PlacesService,
-  ProviderPlaceIdentity,
-} from './places.js';
+import type { PlaceDetailsResult, PlaceTextSearchProvider, PlacesService } from './places.js';
 import type { RoutesService } from './routes.js';
 import { enumerateDateRange } from './trip-rules.js';
 
@@ -69,14 +68,7 @@ type ProviderContext = {
   routesService: RoutesService | null;
 };
 
-type GroundedPlaceContext = {
-  externalPlaceId: string;
-  location: { latitude: number; longitude: number };
-};
-
-type GroundedCandidate = AiPlaceGroundingResult & {
-  context: GroundedPlaceContext | null;
-};
+type GroundedCandidate = AiPlaceGroundingResult;
 
 type PlanningLifecycle = {
   claim(ownerId: string, runId: string): ReturnType<typeof claimAiPlanningDispatch>;
@@ -227,30 +219,14 @@ async function groundCandidates(
   }
 
   const canonical = createCanonicalPlacesService();
-  const contexts = new Map<string, GroundedPlaceContext>();
-  const grounder = new AiPlaceGrounder(providerContext.placesProvider, {
-    async resolveProviderPlaceFromIdentity(identity: ProviderPlaceIdentity, options) {
-      const place = await canonical.resolveProviderPlaceFromIdentity(identity, options);
-      contexts.set(place.id, {
-        externalPlaceId: identity.externalPlaceId,
-        location: identity.location,
-      });
-      return { id: place.id };
-    },
-  });
+  const grounder = new AiPlaceGrounder(providerContext.placesProvider, canonical);
   const localities = candidateLocalities(proposal);
-  const results = await grounder.groundCandidates(
+  return grounder.groundCandidates(
     targets.map((candidate) => ({
       ...candidate,
       localityHint: localities.get(candidate.id),
     })),
   );
-
-  return results.map((result) => ({
-    ...result,
-    context:
-      result.place.resolution === 'verified' ? (contexts.get(result.place.placeId) ?? null) : null,
-  }));
 }
 
 function targetDayIndex(

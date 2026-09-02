@@ -36,6 +36,8 @@ export type PlaceSearchRequest = {
 };
 
 export type PlaceTextSearchRequest = {
+  /** Internal attribution; never part of the provider query or cache key. */
+  cacheMissReason?: ProviderCacheMissReason;
   languageCode?: string;
   locationBias?: PlaceLocationBias;
   regionCode?: string;

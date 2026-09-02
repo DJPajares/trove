@@ -9,6 +9,19 @@ import type {
 
 import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
 import {
+  PrismaAiPlaceGroundingCacheRepository,
+  type AiPlaceGroundingCacheRepository,
+  type GroundingCacheWrite,
+} from './ai-place-grounding-cache.js';
+import { PLACE_CACHE_TTL_MS } from './cached-places.js';
+import { isSnapshotFresh, toPlaceCoordinates } from './place-data.js';
+import { getActivePlaceDetailsFailure } from './place-details-failures.js';
+import {
+  providerTargetFingerprint,
+  recordProviderCacheEvent,
+  type ProviderCacheMissReason,
+} from './provider-usage.js';
+import {
   PlaceProviderError,
   type PlaceLocationBias,
   type PlaceTextSearchProvider,
@@ -27,7 +40,14 @@ export type AiPlaceGroundingCandidate = AiPlannerCandidatePlace & {
   regionCode?: string;
 };
 
+export type GroundedPlaceContext = {
+  externalPlaceId: string;
+  location: { latitude: number; longitude: number };
+};
+
 export type AiPlaceGroundingResult = {
+  /** Internal only: evidence checks need this on cached and live resolutions. */
+  context: GroundedPlaceContext | null;
   evidence: AiPlannerEvidence;
   place: AiPlannerDraftPlace;
   warnings: AiPlannerWarning[];
@@ -74,7 +94,10 @@ function compactText(value: string) {
  * ignored. This is a disambiguator between same-named venues, not the identity
  * claim itself - the name tiers and the single-survivor rule make that call.
  */
-function localityMatches(identity: ProviderPlaceIdentity, localityHint: string | undefined) {
+function localityMatches(
+  identity: Pick<ProviderPlaceIdentity, 'formattedAddress'>,
+  localityHint: string | undefined,
+) {
   if (!localityHint?.trim()) return true;
   if (!identity.formattedAddress) return false;
 
@@ -133,6 +156,72 @@ function memoKey(request: PlaceTextSearchRequest) {
   ].join('|');
 }
 
+function cacheKey(request: PlaceTextSearchRequest, candidate: AiPlaceGroundingCandidate) {
+  // Bump the version if matching rules or the provider search page change.
+  // The same query can have a different survivor for a different candidate
+  // name or locality. A query-only key would incorrectly reuse that decision.
+  return createHash('sha256')
+    .update(
+      JSON.stringify([
+        'google:grounding:v1',
+        memoKey(request),
+        normalizeIdentityText(candidate.name),
+        candidate.localityHint?.trim() ? normalizeIdentityText(candidate.localityHint) : null,
+      ]),
+    )
+    .digest('hex');
+}
+
+type GroundingIdentity = Pick<
+  ProviderPlaceIdentity,
+  'attributions' | 'externalPlaceId' | 'formattedAddress' | 'location' | 'name'
+>;
+
+function eligibleMatches<T extends Pick<ProviderPlaceIdentity, 'name' | 'formattedAddress'>>(
+  identities: T[],
+  candidate: AiPlaceGroundingCandidate,
+) {
+  const expectedName = compactText(candidate.name);
+  const located = identities.filter((identity) =>
+    localityMatches(identity, candidate.localityHint),
+  );
+  const exact = located.filter((identity) => compactText(identity.name) === expectedName);
+  return exact.length
+    ? exact
+    : located.filter((identity) => nameTokensContained(identity.name, candidate.name));
+}
+
+function verified(
+  candidate: AiPlaceGroundingCandidate,
+  identity: GroundingIdentity,
+  placeId: string,
+  checkedAt: Date,
+): AiPlaceGroundingResult {
+  return {
+    context: { externalPlaceId: identity.externalPlaceId, location: identity.location },
+    evidence: {
+      checkedAt: checkedAt.toISOString(),
+      code: null,
+      id: scopedId('identity', candidate.id),
+      kind: 'identity',
+      provider: 'google',
+      status: 'verified',
+      subjectId: candidate.id,
+      subjectType: 'place',
+    },
+    place: {
+      attributions: identity.attributions,
+      id: candidate.id,
+      location: identity.location,
+      name: identity.name,
+      placeId,
+      provider: 'google',
+      resolution: 'verified',
+    },
+    warnings: [],
+  };
+}
+
 function scopedId(scope: string, candidateId: string) {
   const digest = createHash('sha256').update(candidateId).digest('hex').slice(0, 24);
   return `${scope}:${digest}`;
@@ -146,6 +235,7 @@ function fallback(
 ): AiPlaceGroundingResult {
   const evidenceId = scopedId('identity', candidate.id);
   return {
+    context: null,
     evidence: {
       checkedAt,
       code,
@@ -176,13 +266,98 @@ function fallback(
 }
 
 export class AiPlaceGrounder {
-  private readonly searchMemo = new Map<string, Promise<ProviderPlaceIdentity[]>>();
+  private readonly searchMemo = new Map<
+    string,
+    Promise<{
+      checkedAt: Date;
+      identities: ProviderPlaceIdentity[];
+    }>
+  >();
 
   constructor(
     private readonly provider: PlaceTextSearchProvider,
     private readonly canonicalPlaces: CanonicalIdentityResolver,
     private readonly clock: () => Date = () => new Date(),
+    private readonly cache: AiPlaceGroundingCacheRepository | null = new PrismaAiPlaceGroundingCacheRepository(),
   ) {}
+
+  private async readCache(
+    key: string,
+    candidate: AiPlaceGroundingCandidate,
+  ): Promise<{ result: AiPlaceGroundingResult } | { reason: ProviderCacheMissReason }> {
+    if (!this.cache) return { reason: 'missing_grounding_mapping' };
+    try {
+      const entry = await this.cache.read(key);
+      if (!entry) return { reason: 'missing_grounding_mapping' };
+      const now = this.clock();
+      const age = now.getTime() - entry.checkedAt.getTime();
+      if (!Number.isFinite(age) || age < 0) return { reason: 'invalid_grounding_mapping' };
+      if (age > PLACE_CACHE_TTL_MS) return { reason: 'stale_grounding_mapping' };
+
+      if (entry.outcome === 'unresolved' || entry.outcome === 'ambiguous') {
+        if (entry.placeProviderRef) return { reason: 'invalid_grounding_mapping' };
+        recordProviderCacheEvent({
+          cache: 'place-grounding',
+          kind: 'negative_cache_hit',
+          operation: 'textSearch',
+          provider: 'google',
+          source: 'ai-planner',
+        });
+        return {
+          result: fallback(
+            candidate,
+            'unverified',
+            `place_${entry.outcome}`,
+            entry.checkedAt.toISOString(),
+          ),
+        };
+      }
+
+      const reference = entry.placeProviderRef;
+      if (entry.outcome !== 'verified' || !reference || reference.provider !== 'GOOGLE') {
+        return { reason: 'invalid_grounding_mapping' };
+      }
+      // A later snapshot may have changed its identity or required attribution.
+      // Only the snapshot this decision verified may reuse its uniqueness proof.
+      if (
+        !isSnapshotFresh(reference, { now, languageCode: candidate.languageCode }) ||
+        reference.cachedAt?.getTime() !== entry.checkedAt.getTime() ||
+        getActivePlaceDetailsFailure(reference, now)
+      )
+        return { reason: 'grounding_reference_changed' };
+
+      const location = toPlaceCoordinates(reference);
+      if (!location || !reference.cachedName) return { reason: 'incomplete_snapshot' };
+      const identity: GroundingIdentity = {
+        attributions: [],
+        externalPlaceId: reference.externalPlaceId,
+        formattedAddress: reference.cachedFormattedAddress ?? null,
+        location,
+        name: reference.cachedName,
+      };
+      if (eligibleMatches([identity], candidate).length !== 1)
+        return { reason: 'grounding_match_changed' };
+      recordProviderCacheEvent({
+        cache: 'place-grounding',
+        kind: 'cache_hit',
+        operation: 'textSearch',
+        placeFingerprint: providerTargetFingerprint(reference.externalPlaceId),
+        provider: 'google',
+        source: 'ai-planner',
+      });
+      return { result: verified(candidate, identity, reference.placeId, entry.checkedAt) };
+    } catch {
+      return { reason: 'cache_read_failed' };
+    }
+  }
+
+  private async writeCache(key: string, entry: GroundingCacheWrite) {
+    try {
+      await this.cache?.write(key, entry);
+    } catch {
+      // Persistence is an optimisation; the paid-for result is still usable.
+    }
+  }
 
   groundCandidates(candidates: readonly AiPlaceGroundingCandidate[]) {
     return mapWithConcurrency(candidates, PROVIDER_CONCURRENCY_LIMIT, (candidate) =>
@@ -197,15 +372,21 @@ export class AiPlaceGrounder {
       regionCode: candidate.regionCode,
       textQuery: localizedTextQuery(candidate.searchQuery, candidate.localityHint),
     };
+    const persistentKey = cacheKey(request, candidate);
+    const cached = await this.readCache(persistentKey, candidate);
+    if ('result' in cached) return cached.result;
     let identities: ProviderPlaceIdentity[];
+    let checkedAt: Date;
     try {
       const key = memoKey(request);
       let pending = this.searchMemo.get(key);
       if (!pending) {
-        pending = this.provider.textSearch(request);
+        pending = this.provider
+          .textSearch({ ...request, cacheMissReason: cached.reason })
+          .then((identities) => ({ identities, checkedAt: this.clock() }));
         this.searchMemo.set(key, pending);
       }
-      identities = await pending;
+      ({ identities, checkedAt } = await pending);
     } catch (error) {
       const code = error instanceof PlaceProviderError ? error.code : 'provider_unavailable';
       return fallback(
@@ -216,21 +397,16 @@ export class AiPlaceGrounder {
       );
     }
 
-    const checkedAt = this.clock();
-
     // Spacing is the other half of the transliteration problem: "Sensō-ji"
     // against "Senso ji", "Sapa" against "Sa Pa". Compare the names with it
     // removed so an exact identity still reads as exact.
-    const expectedName = compactText(candidate.name);
-    const located = identities.filter((identity) =>
-      localityMatches(identity, candidate.localityHint),
-    );
-    const exact = located.filter((identity) => compactText(identity.name) === expectedName);
-    const matches = exact.length
-      ? exact
-      : located.filter((identity) => nameTokensContained(identity.name, candidate.name));
+    const matches = eligibleMatches(identities, candidate);
 
     if (matches.length !== 1) {
+      await this.writeCache(persistentKey, {
+        checkedAt,
+        outcome: matches.length > 1 ? 'ambiguous' : 'unresolved',
+      });
       return fallback(
         candidate,
         'unverified',
@@ -245,27 +421,16 @@ export class AiPlaceGrounder {
       languageCode: candidate.languageCode,
     });
 
-    return {
-      evidence: {
-        checkedAt: checkedAt.toISOString(),
-        code: null,
-        id: scopedId('identity', candidate.id),
-        kind: 'identity',
-        provider: 'google',
-        status: 'verified',
-        subjectId: candidate.id,
-        subjectType: 'place',
-      },
-      place: {
-        attributions: identity.attributions,
-        id: candidate.id,
-        location: identity.location,
-        name: identity.name,
+    // The snapshot does not store third-party credits. Reusing an attributed
+    // result would drop them, so leave that result on the live path.
+    if (identity.attributions.length === 0) {
+      await this.writeCache(persistentKey, {
+        checkedAt,
+        outcome: 'verified',
+        externalPlaceId: identity.externalPlaceId,
         placeId: canonical.id,
-        provider: 'google',
-        resolution: 'verified',
-      },
-      warnings: [],
-    };
+      });
+    }
+    return verified(candidate, identity, canonical.id, checkedAt);
   }
 }

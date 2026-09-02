@@ -411,11 +411,28 @@ model PlaceProviderRef {
   detailsFailureCode     String?   @map("details_failure_code")
   detailsFailedAt        DateTime? @map("details_failed_at") @db.Timestamptz(3)
 
-  place Place @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  place          Place                   @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  groundingCache AiPlaceGroundingCache[]
 
   @@unique([provider, externalPlaceId])
   @@index([placeId])
   @@map("place_provider_refs")
+  @@schema("trove")
+}
+
+/// A grounding decision for a versioned hash of the query and matching inputs.
+/// Only identity and Trove lookup metadata are stored, never provider content.
+/// Both successful and negative decisions expire 30 days after checkedAt.
+model AiPlaceGroundingCache {
+  key                String   @id @db.VarChar(64)
+  outcome            String
+  checkedAt          DateTime @map("checked_at") @db.Timestamptz(3)
+  placeProviderRefId String?  @map("place_provider_ref_id") @db.Uuid
+
+  placeProviderRef PlaceProviderRef? @relation(fields: [placeProviderRefId], references: [id], onDelete: Cascade)
+
+  @@index([placeProviderRefId])
+  @@map("ai_place_grounding_cache")
   @@schema("trove")
 }
 

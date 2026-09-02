@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto';
+
+import type { AiPlannerDraft } from '@trove/types';
 import { expect, beforeEach, test } from 'vitest';
 
 import { CachedPlacesService, resetCachedPlacesMemo } from '../src/services/cached-places.js';
@@ -28,8 +31,14 @@ import {
 } from '../src/services/places.js';
 import { AiPlaceGrounder } from '../src/services/ai-place-grounding.js';
 import { groundableDraftPlaceIds } from '../src/services/ai-planning-draft-places.js';
-import { assembleAiPlanningDraft } from '../src/services/ai-planning-pipeline.js';
-import { missingDetailsProposal } from './fixtures/ai-planning.js';
+import {
+  assembleAiPlanningDraft,
+  runAiPlanningPipeline,
+  type AiPlanningPipelineOptions,
+} from '../src/services/ai-planning-pipeline.js';
+import { explicitModelProposal, missingDetailsProposal } from './fixtures/ai-planning.js';
+import { PlacesService } from '../src/services/places.js';
+import { RoutesService } from '../src/services/routes.js';
 import { getTripPlanScore } from '../src/services/plan-score.js';
 import {
   getProviderCallCounts,
@@ -50,6 +59,9 @@ import { resolveTripModeContext } from '../src/services/trip-mode-context.js';
 const DAY_MS = 24 * 60 * 60 * 1_000;
 
 type ProviderRefRow = {
+  id: string;
+  placeId: string;
+  provider: 'GOOGLE';
   cachedAt: Date | null;
   cachedFormattedAddress: string | null;
   cachedGoogleMapsUri: string | null;
@@ -74,6 +86,18 @@ type LegRow = {
 };
 
 const providerRefs = new Map<string, ProviderRefRow>();
+type GroundingMappingRow = {
+  key: string;
+  checkedAt: Date;
+  outcome: string;
+  placeProviderRefId: string | null;
+};
+const groundingMappings = new Map<string, GroundingMappingRow>();
+const providerLabels = new Map<
+  string,
+  { providerLabel: string | null; providerAddress: string | null }
+>();
+let snapshotWrites = 0;
 const legs = new Map<string, LegRow>();
 const editorialImages = new Map<
   string,
@@ -91,12 +115,49 @@ function legKeyOf(where: Record<string, unknown>) {
   return JSON.stringify(where);
 }
 
+function canonicalRecord(id: string) {
+  const reference = [...providerRefs.values()].find((ref) => ref.placeId === id);
+  if (!reference) return null;
+  return {
+    id,
+    kind: 'PROVIDER',
+    ownerId: null,
+    customLatitude: null,
+    customLongitude: null,
+    customName: null,
+    customNote: null,
+    customTimeZone: null,
+    ...providerLabels.get(id),
+    providerRefs: [reference],
+  };
+}
+
 function installStubPrisma() {
   (globalThis as { trovePrismaClient?: unknown }).trovePrismaClient = {
     placeProviderRef: {
       findUnique: async (args: {
-        where: { provider_externalPlaceId: { externalPlaceId: string } };
-      }) => providerRefs.get(args.where.provider_externalPlaceId.externalPlaceId) ?? null,
+        where: { provider_externalPlaceId: { externalPlaceId: string }; placeId?: string };
+        include?: { place?: unknown };
+      }) => {
+        const reference = providerRefs.get(args.where.provider_externalPlaceId.externalPlaceId);
+        if (!reference || (args.where.placeId && reference.placeId !== args.where.placeId))
+          return null;
+        return args.include?.place
+          ? { ...reference, place: canonicalRecord(reference.placeId) }
+          : reference;
+      },
+      create: async (args: {
+        data: {
+          externalPlaceId: string;
+          place: { create: { providerLabel: string | null; providerAddress: string | null } };
+        };
+      }) => {
+        const placeId = randomUUID();
+        seedProviderRef(args.data.externalPlaceId, { placeId });
+        providerLabels.set(placeId, args.data.place.create);
+        const reference = providerRefs.get(args.data.externalPlaceId)!;
+        return { ...reference, place: canonicalRecord(placeId) };
+      },
       findMany: async (args: { where: { externalPlaceId: { in: string[] } } }) =>
         args.where.externalPlaceId.in.flatMap((externalPlaceId) => {
           const row = providerRefs.get(externalPlaceId);
@@ -108,6 +169,7 @@ function installStubPrisma() {
       }) => {
         const existing = providerRefs.get(args.where.externalPlaceId);
         if (!existing) return { count: 0 };
+        snapshotWrites += 1;
         Object.assign(existing, args.data);
         if (typeof args.data.cachedLatitude === 'number') {
           existing.cachedLatitude = decimal(args.data.cachedLatitude);
@@ -116,6 +178,29 @@ function installStubPrisma() {
           existing.cachedLongitude = decimal(args.data.cachedLongitude);
         }
         return { count: 1 };
+      },
+    },
+    aiPlaceGroundingCache: {
+      findUnique: async (args: { where: { key: string } }) => {
+        const mapping = groundingMappings.get(args.where.key);
+        if (!mapping) return null;
+        return {
+          ...mapping,
+          placeProviderRef:
+            [...providerRefs.values()].find((ref) => ref.id === mapping.placeProviderRefId) ?? null,
+        };
+      },
+      upsert: async (args: {
+        create: GroundingMappingRow;
+        update: Omit<GroundingMappingRow, 'key'>;
+        where: { key: string };
+      }) => {
+        groundingMappings.set(
+          args.where.key,
+          groundingMappings.has(args.where.key)
+            ? { key: args.where.key, ...args.update }
+            : args.create,
+        );
       },
     },
     travelLegCache: {
@@ -158,6 +243,7 @@ function installStubPrisma() {
       },
     },
     place: {
+      findUnique: async (args: { where: { id: string } }) => canonicalRecord(args.where.id),
       updateMany: async () => ({ count: 0 }),
     },
     trip: {
@@ -263,6 +349,9 @@ function detailRequestsProvider() {
 
 function seedProviderRef(externalPlaceId: string, overrides: Partial<ProviderRefRow> = {}) {
   providerRefs.set(externalPlaceId, {
+    id: randomUUID(),
+    placeId: randomUUID(),
+    provider: 'GOOGLE',
     cachedAt: null,
     cachedFormattedAddress: null,
     cachedGoogleMapsUri: null,
@@ -340,6 +429,9 @@ function countingRoutesProvider() {
 
 beforeEach(() => {
   providerRefs.clear();
+  groundingMappings.clear();
+  providerLabels.clear();
+  snapshotWrites = 0;
   legs.clear();
   editorialImages.clear();
   resetEditorialImageBudget();
@@ -1359,4 +1451,201 @@ test('a generate run searches only the places its finished itinerary stands on',
     'candidate:unscheduled',
     'candidate:used',
   ]);
+});
+
+test('separate generation runs reuse persisted grounding while still checking hours and routes', async () => {
+  const proposal = explicitModelProposal();
+  proposal.places.push({
+    id: 'candidate:park',
+    name: 'Ueno Park',
+    note: null,
+    searchQuery: 'Ueno Park Tokyo',
+  });
+  proposal.items.push({
+    ...proposal.items[1]!,
+    id: 'item:park',
+    candidatePlaceId: 'candidate:park',
+    label: 'Ueno Park',
+    constraintIds: [],
+    origin: 'model',
+    priority: 'interested',
+    schedule: { kind: 'day_part', dayPart: 'evening' },
+    durationMinutes: 60,
+  });
+  const events: ProviderUsageEvent[] = [];
+  setProviderUsageSink((event) => events.push(event));
+  const provider = new GooglePlacesProvider({
+    apiKey: 'test-key',
+    source: 'ai-planner',
+    fetcher: async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/v1/places:searchText')) {
+        const query = (JSON.parse(String(init?.body)) as { textQuery: string }).textQuery;
+        const place = proposal.places.find((candidate) => candidate.searchQuery === query)!;
+        expect(place).toBeDefined();
+        return Response.json({
+          places: [
+            {
+              id: `google-${place.id}`,
+              displayName: { text: place.name },
+              formattedAddress: 'Tokyo, Japan',
+              location: {
+                latitude: place.id === 'candidate:park' ? 35.716 : 35.719,
+                longitude: 139.776,
+              },
+            },
+          ],
+        });
+      }
+      expect(new Headers(init?.headers).get('X-Goog-FieldMask')).toBe(
+        GOOGLE_PLACE_EVIDENCE_FIELD_MASK,
+      );
+      return Response.json({
+        id: url.split('/').at(-1),
+        utcOffsetMinutes: 540,
+        regularOpeningHours: { periods: [{ open: { day: 0, hour: 0, minute: 0 } }] },
+      });
+    },
+  });
+  const routeRequests: RouteRequest[] = [];
+  const routesService = new RoutesService({
+    name: 'google',
+    async computeRoute(request) {
+      routeRequests.push(request);
+      return { distanceMeters: 500, durationSeconds: 600, encodedPolyline: null };
+    },
+  });
+  const drafts: AiPlannerDraft[] = [];
+  const failures: string[] = [];
+  const lifecycle: NonNullable<AiPlanningPipelineOptions['lifecycle']> = {
+    async claim(_ownerId, runId) {
+      return {
+        baseDraftRevision: 0,
+        model: 'test',
+        prompt: 'Tokyo trip',
+        provider: 'vertex',
+        runId,
+        sessionId: randomUUID(),
+      };
+    },
+    async completeFailure(_ownerId, _runId, code) {
+      failures.push(code);
+    },
+    async completeSuccess(_ownerId, _runId, draft) {
+      drafts.push(draft);
+    },
+    async updateStage() {},
+  };
+  const gateway: NonNullable<AiPlanningPipelineOptions['gateway']> = {
+    async generateStructured<OUTPUT>() {
+      return {
+        output: proposal as OUTPUT,
+        metadata: {
+          inputTokens: 1,
+          outputTokens: 1,
+          totalTokens: 2,
+          latencyMs: 1,
+          model: 'test',
+          provider: 'vertex' as const,
+        },
+      };
+    },
+  };
+  const run = () =>
+    runAiPlanningPipeline(randomUUID(), randomUUID(), {
+      clock: () => new Date('2026-09-02T12:00:00Z'),
+      gateway,
+      lifecycle,
+      loadHomeLocation: async () => 'Singapore',
+      providerContext: {
+        placesProvider: provider,
+        placesService: new PlacesService(provider),
+        routesService,
+      },
+    });
+
+  await run();
+  expect(failures).toEqual([]);
+  expect(getProviderCallCounts()['google:textSearch']).toBe(3);
+  expect(snapshotWrites).toBe(3);
+  expect(groundingMappings.size).toBe(3);
+  const originalDates = [...providerRefs.values()].map((ref) => ref.cachedAt);
+
+  await run(); // New grounder, owner and session; only the database state survives.
+  expect(failures).toEqual([]);
+  expect(drafts).toHaveLength(2);
+  expect(getProviderCallCounts()['google:textSearch']).toBe(3);
+  expect(getProviderCallCounts()['google:getDetails']).toBe(4); // Two hours checks per run.
+  expect(snapshotWrites).toBe(3);
+  expect([...providerRefs.values()].map((ref) => ref.cachedAt)).toEqual(originalDates);
+  expect(routeRequests).toHaveLength(2);
+  expect(routeRequests[1]).toEqual(routeRequests[0]);
+  for (const draft of drafts) {
+    expect(draft.evidence.filter((entry) => entry.kind === 'opening_hours')).toHaveLength(2);
+    expect(
+      draft.evidence.some((entry) => entry.kind === 'route' && entry.status === 'verified'),
+    ).toBe(true);
+  }
+  expect(drafts[1]!.places).toEqual(drafts[0]!.places);
+  expect(drafts[1]!.evidence.filter((entry) => entry.kind === 'identity')).toEqual(
+    drafts[0]!.evidence.filter((entry) => entry.kind === 'identity'),
+  );
+  expect(
+    events.filter((event) => event.kind === 'cache_hit' && event.cache === 'place-grounding'),
+  ).toHaveLength(3);
+  expect(
+    events.filter((event) => event.kind === 'outbound' && event.operation === 'textSearch'),
+  ).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        cacheMissReason: 'missing_grounding_mapping',
+        source: 'ai-planner',
+        expectedSku: 'places-text-search-pro',
+      }),
+    ]),
+  );
+  for (const row of groundingMappings.values()) {
+    expect(Object.keys(row).sort()).toEqual(['checkedAt', 'key', 'outcome', 'placeProviderRefId']);
+  }
+});
+
+test('a persisted negative grounding result avoids another billable search and records its cache hit', async () => {
+  const events: ProviderUsageEvent[] = [];
+  setProviderUsageSink((event) => events.push(event));
+  const provider = new GooglePlacesProvider({
+    apiKey: 'test-key',
+    source: 'ai-planner',
+    fetcher: async () => Response.json({ places: [] }),
+  });
+  const canonical = {
+    async resolveProviderPlaceFromIdentity() {
+      throw new Error('must not canonicalise');
+    },
+  };
+  const place = {
+    id: 'candidate:missing',
+    name: 'Unknown venue',
+    searchQuery: 'Unknown venue Singapore',
+    note: null,
+  };
+  const first = await new AiPlaceGrounder(provider, canonical).groundCandidate(place);
+  const second = await new AiPlaceGrounder(provider, canonical).groundCandidate({
+    ...place,
+    id: 'candidate:other-run',
+  });
+  expect(getProviderCallCounts()['google:textSearch']).toBe(1);
+  expect(second.evidence).toMatchObject({
+    code: 'place_unresolved',
+    checkedAt: first.evidence.checkedAt,
+  });
+  expect([...groundingMappings.values()]).toEqual([
+    expect.objectContaining({ outcome: 'unresolved', placeProviderRefId: null }),
+  ]);
+  expect(events).toContainEqual({
+    cache: 'place-grounding',
+    kind: 'negative_cache_hit',
+    operation: 'textSearch',
+    provider: 'google',
+    source: 'ai-planner',
+  });
 });

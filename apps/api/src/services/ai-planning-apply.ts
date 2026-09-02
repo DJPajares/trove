@@ -266,6 +266,7 @@ export async function applyAiPlanningSession(
     const trip = await transaction.trip.create({
       data: {
         creatorId: ownerId,
+        description: loaded.tripDescription,
         endDate: parseDateOnly(draft.trip.endDate),
         name: draft.trip.name.trim(),
         ownerId,

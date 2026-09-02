@@ -166,17 +166,15 @@ test('every AI planning entry point hides another user behind the not-found boun
     cancelAiPlanningSession,
     getAiPlanningSession,
     regenerateAiPlanningSession,
-    replaceAiPlanningDraft,
+    setAiPlanningTripDescription,
   } = await import('../src/services/ai-planning-sessions.js');
-  const { recheckAiPlanningItem, replaceAiPlanningItemPlace, verifyAiPlanningCustomPlace } =
-    await import('../src/services/ai-planning-review.js');
   const { applyAiPlanningSession } = await import('../src/services/ai-planning-apply.js');
 
   await assertHidesAnotherUsersSession('getAiPlanningSession', () =>
     getAiPlanningSession(INTRUDER_ID, OTHER_SESSION_ID),
   );
-  await assertHidesAnotherUsersSession('replaceAiPlanningDraft', () =>
-    replaceAiPlanningDraft(INTRUDER_ID, OTHER_SESSION_ID, {}, 0),
+  await assertHidesAnotherUsersSession('setAiPlanningTripDescription', () =>
+    setAiPlanningTripDescription(INTRUDER_ID, OTHER_SESSION_ID, 'intruding description'),
   );
   await assertHidesAnotherUsersSession('regenerateAiPlanningSession', () =>
     regenerateAiPlanningSession(INTRUDER_ID, OTHER_SESSION_ID, 'three days in Tokyo', 0, 'key'),
@@ -186,17 +184,6 @@ test('every AI planning entry point hides another user behind the not-found boun
   );
   await assertHidesAnotherUsersSession('cancelAiPlanningSession', () =>
     cancelAiPlanningSession(INTRUDER_ID, OTHER_SESSION_ID),
-  );
-  await assertHidesAnotherUsersSession('recheckAiPlanningItem', () =>
-    recheckAiPlanningItem(INTRUDER_ID, OTHER_SESSION_ID, 'item-id', 0),
-  );
-  await assertHidesAnotherUsersSession('replaceAiPlanningItemPlace', () =>
-    replaceAiPlanningItemPlace(INTRUDER_ID, OTHER_SESSION_ID, 'item-id', 0, {
-      externalPlaceId: 'places/intruding',
-    }),
-  );
-  await assertHidesAnotherUsersSession('verifyAiPlanningCustomPlace', () =>
-    verifyAiPlanningCustomPlace(INTRUDER_ID, OTHER_SESSION_ID, 'place-ref-id', 0),
   );
   await assertHidesAnotherUsersSession('applyAiPlanningSession', () =>
     applyAiPlanningSession(INTRUDER_ID, OTHER_SESSION_ID, 0, 'UTC'),

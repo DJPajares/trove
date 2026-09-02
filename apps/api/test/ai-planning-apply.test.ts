@@ -291,6 +291,24 @@ describe('AI planning Apply', () => {
     // a local time on its own, so the time is not carried onto the row.
     const draft = customPlaceDraft();
     const unscheduled = draft.unscheduledItems[0]!;
+    // An exact time only ever reaches a draft from a traveller's own request, so
+    // the item has to carry the constraint that authorises it or the draft is
+    // not one the pipeline could have produced.
+    draft.normalizedRequest.constraints.push({
+      date: null,
+      dayPart: null,
+      destinationIntentId: null,
+      durationMinutes: null,
+      id: 'constraint:viewpoint',
+      kind: 'activity',
+      label: 'Viewpoint at 09:30',
+      localTime: '09:30',
+      priority: null,
+      source: 'user',
+      strength: 'flexible',
+    });
+    unscheduled.constraintIds = ['constraint:viewpoint'];
+    unscheduled.origin = 'user';
     unscheduled.schedule = { kind: 'exact', localTime: '09:30', source: 'user' };
     const store = createApplyStore(draft);
 

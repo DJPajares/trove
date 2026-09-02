@@ -1,10 +1,5 @@
 import { getPrismaClient, Prisma } from '@trove/db';
-import {
-  AI_PLANNER_SCHEMA_VERSION,
-  parseAiPlannerDraft,
-  type AiPlannerDraft,
-  type AiPlannerDraftItem,
-} from '@trove/types';
+import { AI_PLANNER_SCHEMA_VERSION } from '@trove/types';
 
 import {
   DEFAULT_AI_MODEL,
@@ -13,7 +8,7 @@ import {
   getAiPlanningDispatchLimit,
 } from '../environment.js';
 import type { AiGenerationErrorCode, AiGenerationMetadata } from './ai-generation.js';
-import { validateAiPlannerDraft, validateAiPlannerEditedDraft } from './ai-planning-rules.js';
+import { validateAiPlannerDraft } from './ai-planning-rules.js';
 import {
   recordAiPlanningDispatchRejected,
   type AiPlanningDispatchRejectionCode,
@@ -55,6 +50,7 @@ type SessionRecord = {
   schemaVersion: number;
   stage: string;
   status: string;
+  tripDescription: string | null;
   updatedAt: Date;
   warningsAcknowledgedAt: Date | null;
   warningsAcknowledgedRevision: number | null;
@@ -199,6 +195,7 @@ export function serializeAiPlanningSession(session: SessionRecord) {
     schemaVersion: session.schemaVersion,
     stage: session.stage.toLowerCase(),
     status: session.status.toLowerCase(),
+    tripDescription: session.tripDescription,
     updatedAt: session.updatedAt.toISOString(),
     warningAcknowledgement:
       session.warningsAcknowledgedRevision === null || !session.warningsAcknowledgedAt
@@ -430,207 +427,22 @@ export async function regenerateAiPlanningSession(
   return serializeAiPlanningSession(session);
 }
 
-function jsonEqual(left: unknown, right: unknown) {
-  const canonicalize = (value: unknown): unknown => {
-    if (Array.isArray(value)) return value.map(canonicalize);
-    if (!value || typeof value !== 'object') return value;
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .toSorted(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
-        .map(([key, nested]) => [key, canonicalize(nested)]),
-    );
-  };
-  return JSON.stringify(canonicalize(left)) === JSON.stringify(canonicalize(right));
-}
-
-function allItems(draft: AiPlannerDraft) {
-  return [...draft.days.flatMap((day) => day.items), ...draft.unscheduledItems];
-}
-
-function immutableItemFields(item: AiPlannerDraftItem) {
-  return {
-    blockType: item.blockType,
-    constraintIds: item.constraintIds,
-    id: item.id,
-    isAnchor: item.isAnchor,
-    label: item.label,
-    origin: item.origin,
-    placeRefId: item.placeRefId,
-  };
-}
-
-export function prepareAiPlanningDraftEdit(current: AiPlannerDraft, input: unknown) {
-  const parsed = parseAiPlannerDraft(input);
-  if (!parsed.success) throw new AiPlanningSessionError('draft_invalid', 400);
-  const candidate = parsed.data;
-
-  if (
-    !jsonEqual(current.normalizedRequest, candidate.normalizedRequest) ||
-    !jsonEqual(current.assumptions, candidate.assumptions) ||
-    !jsonEqual(current.evidence, candidate.evidence) ||
-    !jsonEqual(current.warnings, candidate.warnings)
-  ) {
-    throw new AiPlanningSessionError('draft_provenance_immutable', 409);
-  }
-  if (
-    current.trip.startDate !== candidate.trip.startDate ||
-    current.trip.endDate !== candidate.trip.endDate ||
-    !jsonEqual(current.trip.destinations, candidate.trip.destinations)
-  ) {
-    throw new AiPlanningSessionError('regenerate_required', 409);
-  }
-
-  const { name: _oldName, partySize: _oldPartySize, ...currentTripLocked } = current.trip;
-  const { name: _newName, partySize: _newPartySize, ...candidateTripLocked } = candidate.trip;
-  if (!jsonEqual(currentTripLocked, candidateTripLocked)) {
-    throw new AiPlanningSessionError('draft_provenance_immutable', 409);
-  }
-
-  const candidatePlaces = new Map(candidate.places.map((place) => [place.id, place]));
-  if (candidatePlaces.size !== current.places.length) {
-    throw new AiPlanningSessionError('draft_provenance_immutable', 409);
-  }
-  const places = current.places.map((place) => {
-    const next = candidatePlaces.get(place.id);
-    if (!next || next.resolution !== place.resolution) {
-      throw new AiPlanningSessionError('draft_provenance_immutable', 409);
-    }
-    if (place.resolution === 'verified') {
-      if (!jsonEqual(place, next)) {
-        throw new AiPlanningSessionError('draft_provenance_immutable', 409);
-      }
-      return place;
-    }
-    if (next.resolution !== 'custom' || place.verification !== next.verification) {
-      throw new AiPlanningSessionError('draft_provenance_immutable', 409);
-    }
-    return { ...place, name: next.name, note: next.note };
-  });
-
-  if (candidate.days.length !== current.days.length) {
-    throw new AiPlanningSessionError('regenerate_required', 409);
-  }
-  current.days.forEach((day, index) => {
-    const next = candidate.days[index];
-    if (!next || day.date !== next.date || day.destinationId !== next.destinationId) {
-      throw new AiPlanningSessionError('regenerate_required', 409);
-    }
-    if (
-      day.dailyBasePlaceRefId !== next.dailyBasePlaceRefId ||
-      day.dailyBaseDeparturePlaceRefId !== next.dailyBaseDeparturePlaceRefId
-    ) {
-      throw new AiPlanningSessionError('draft_provenance_immutable', 409);
-    }
-  });
-
-  const currentItems = new Map(allItems(current).map((item) => [item.id, item]));
-  const candidateItems = allItems(candidate);
-  const seen = new Set<string>();
-  const normalizeItem = (item: AiPlannerDraftItem) => {
-    const previous = currentItems.get(item.id);
-    if (!previous || seen.has(item.id)) {
-      throw new AiPlanningSessionError('draft_provenance_immutable', 409);
-    }
-    seen.add(item.id);
-    if (!jsonEqual(immutableItemFields(previous), immutableItemFields(item))) {
-      throw new AiPlanningSessionError('draft_provenance_immutable', 409);
-    }
-    const durationChanged = previous.durationMinutes !== item.durationMinutes;
-    if (!durationChanged && previous.durationProvenance !== item.durationProvenance) {
-      throw new AiPlanningSessionError('draft_provenance_immutable', 409);
-    }
-    return {
-      ...item,
-      durationProvenance: durationChanged ? ('user_owned' as const) : previous.durationProvenance,
-    };
-  };
-  const normalizedItems = new Map(candidateItems.map((item) => [item.id, normalizeItem(item)]));
-  const draft: AiPlannerDraft = {
-    ...candidate,
-    days: candidate.days.map((day) => ({
-      ...day,
-      items: day.items.map((item) => normalizedItems.get(item.id)!),
-    })),
-    places,
-    trip: {
-      ...current.trip,
-      name: candidate.trip.name,
-      nameAssumptionId:
-        candidate.trip.name === current.trip.name ? current.trip.nameAssumptionId : null,
-      nameSource: candidate.trip.name === current.trip.name ? current.trip.nameSource : 'user',
-      partySize: candidate.trip.partySize,
-      partySizeAssumptionId:
-        candidate.trip.partySize === current.trip.partySize
-          ? current.trip.partySizeAssumptionId
-          : null,
-      partySizeSource:
-        candidate.trip.partySize === current.trip.partySize ? current.trip.partySizeSource : 'user',
-    },
-    unscheduledItems: candidate.unscheduledItems.map((item) => normalizedItems.get(item.id)!),
-  };
-  const validated = validateAiPlannerEditedDraft(draft);
-  if (!validated.success) throw new AiPlanningSessionError('draft_invalid', 400);
-  return validated.data;
-}
-
 function parseStoredDraft(value: Prisma.JsonValue | null) {
-  const validated = validateAiPlannerEditedDraft(value);
+  const validated = validateAiPlannerDraft(value);
   if (!validated.success) throw new AiPlanningSessionError('draft_invalid', 400);
   return validated.data;
-}
-
-export async function replaceAiPlanningDraft(
-  ownerId: string,
-  sessionId: string,
-  draftInput: unknown,
-  expectedRevision: number,
-  options: PlanningOptions = {},
-) {
-  const prisma = prismaFrom(options);
-  const now = nowFrom(options);
-  const session = await prisma.$transaction(async (transaction) => {
-    await ensureAndLockOwner(transaction, ownerId);
-    const found = await findOwnedSession(transaction, ownerId, sessionId);
-    if (await expireIfNeeded(transaction, found, now)) return SESSION_EXPIRED;
-    if (found.status !== 'REVIEWING' || !found.draft) {
-      throw new AiPlanningSessionError('session_not_reviewable', 409);
-    }
-    if (found.draftRevision !== expectedRevision) {
-      throw new AiPlanningSessionError('draft_conflict', 409);
-    }
-    const draft = prepareAiPlanningDraftEdit(parseStoredDraft(found.draft), draftInput);
-    const updated = await transaction.aiPlanningSession.updateMany({
-      where: { draftRevision: expectedRevision, id: sessionId, ownerId, status: 'REVIEWING' },
-      data: {
-        draft: draft as unknown as Prisma.InputJsonValue,
-        draftRevision: { increment: 1 },
-        schemaVersion: AI_PLANNER_SCHEMA_VERSION,
-        warningsAcknowledgedAt: null,
-        warningsAcknowledgedRevision: null,
-      },
-    });
-    if (updated.count !== 1) throw new AiPlanningSessionError('draft_conflict', 409);
-    return transaction.aiPlanningSession.findFirstOrThrow({
-      where: { id: sessionId, ownerId },
-      include: sessionInclude,
-    });
-  });
-  if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
-  return serializeAiPlanningSession(session);
 }
 
 /**
- * Review evidence and provider identity are server-owned. Review actions build
- * their next draft on the server, then use this narrow boundary to commit it
- * under the same optimistic revision contract as a traveller edit. Keeping
- * this separate from `replaceAiPlanningDraft` means a browser can never submit
- * its own provenance, attribution, evidence, or warnings.
+ * The one field of a reviewed session a traveller can change. It is session
+ * metadata rather than part of the plan, so it never touches the draft JSON and
+ * never moves `draftRevision`: a description cannot change what was generated,
+ * and must not invalidate the evidence or the Plan Score computed against it.
  */
-export async function replaceAiPlanningReviewDraft(
+export async function setAiPlanningTripDescription(
   ownerId: string,
   sessionId: string,
-  draftInput: unknown,
-  expectedRevision: number,
+  description: string | null,
   options: PlanningOptions = {},
 ) {
   const prisma = prismaFrom(options);
@@ -642,22 +454,10 @@ export async function replaceAiPlanningReviewDraft(
     if (found.status !== 'REVIEWING' || !found.draft) {
       throw new AiPlanningSessionError('session_not_reviewable', 409);
     }
-    if (found.draftRevision !== expectedRevision) {
-      throw new AiPlanningSessionError('draft_conflict', 409);
-    }
-    const validated = validateAiPlannerDraft(draftInput);
-    if (!validated.success) throw new AiPlanningSessionError('draft_invalid', 400);
-    const updated = await transaction.aiPlanningSession.updateMany({
-      where: { draftRevision: expectedRevision, id: sessionId, ownerId, status: 'REVIEWING' },
-      data: {
-        draft: validated.data as unknown as Prisma.InputJsonValue,
-        draftRevision: { increment: 1 },
-        schemaVersion: AI_PLANNER_SCHEMA_VERSION,
-        warningsAcknowledgedAt: null,
-        warningsAcknowledgedRevision: null,
-      },
+    await transaction.aiPlanningSession.updateMany({
+      where: { id: sessionId, ownerId, status: 'REVIEWING' },
+      data: { tripDescription: description?.trim() || null },
     });
-    if (updated.count !== 1) throw new AiPlanningSessionError('draft_conflict', 409);
     return transaction.aiPlanningSession.findFirstOrThrow({
       where: { id: sessionId, ownerId },
       include: sessionInclude,
@@ -1072,6 +872,7 @@ export async function loadAiPlanningSessionForApplyInTransaction(
     draft: parseStoredDraft(session.draft),
     kind: 'reviewable' as const,
     sessionId: session.id,
+    tripDescription: session.tripDescription,
     warningAcknowledged:
       session.warningsAcknowledgedRevision === expectedRevision &&
       session.warningsAcknowledgedAt !== null,

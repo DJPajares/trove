@@ -36,7 +36,7 @@ type ItineraryPlanningMapProps = {
   onAddToDay?: (point: ItineraryMapPoint) => Promise<boolean>;
   onClearSelection: () => void;
   onSelectPoint: (point: ItineraryMapPoint) => void;
-  onViewItem: (itemId: string) => void;
+  onViewItem?: (itemId: string) => void;
   /**
    * Opens what Trove knows about the Place behind this pin. Omitted by surfaces
    * that cannot resolve a pin back to its Place, which fall back to the
@@ -449,7 +449,7 @@ export function ItineraryPlanningMap({
                 {t('addToDay')}
               </Button>
             ) : null}
-            {selectedPoint.itemId ? (
+            {onViewItem && selectedPoint.itemId ? (
               <Button onClick={() => onViewItem(selectedPoint.itemId!)} size="sm" variant="outline">
                 <Eye aria-hidden="true" data-icon="inline-start" />
                 {t('viewItem')}

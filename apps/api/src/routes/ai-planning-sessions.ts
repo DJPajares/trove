@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify';
 
 import { createAiPlanningSessionControllers } from '../controllers/ai-planning-sessions.js';
 import { requireAuthenticatedUser } from '../services/request-auth.js';
-import { PROVIDER_FANOUT_RATE_LIMIT } from './rate-limits.js';
 
 export function registerAiPlanningSessionRoutes(app: FastifyInstance) {
   const controllers = createAiPlanningSessionControllers();
@@ -23,25 +22,12 @@ export function registerAiPlanningSessionRoutes(app: FastifyInstance) {
     { preHandler: requireAuthenticatedUser },
     controllers.get,
   );
+  // The draft itself is immutable. A description is session metadata, not part of
+  // the plan, so this reaches no provider and needs no fan-out limit.
   app.patch(
-    '/ai/planning-sessions/:sessionId/draft',
+    '/ai/planning-sessions/:sessionId/description',
     { preHandler: requireAuthenticatedUser },
-    controllers.replaceDraft,
-  );
-  app.post(
-    '/ai/planning-sessions/:sessionId/items/:itemId/recheck',
-    { config: PROVIDER_FANOUT_RATE_LIMIT, preHandler: requireAuthenticatedUser },
-    controllers.recheck,
-  );
-  app.post(
-    '/ai/planning-sessions/:sessionId/items/:itemId/replace-place',
-    { config: PROVIDER_FANOUT_RATE_LIMIT, preHandler: requireAuthenticatedUser },
-    controllers.replaceItemPlace,
-  );
-  app.post(
-    '/ai/planning-sessions/:sessionId/places/:placeRefId/verify',
-    { config: PROVIDER_FANOUT_RATE_LIMIT, preHandler: requireAuthenticatedUser },
-    controllers.verifyCustomPlace,
+    controllers.setDescription,
   );
   app.post(
     '/ai/planning-sessions/:sessionId/regenerate',

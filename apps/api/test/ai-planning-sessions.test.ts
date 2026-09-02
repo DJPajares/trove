@@ -7,7 +7,6 @@ import {
   AI_PLANNING_DISPATCH_WINDOW_MS,
   AI_PLANNING_PROMPT_MAX_LENGTH,
   acknowledgeAiPlanningWarnings,
-  AiPlanningSessionError,
   cancelAiPlanningSession,
   claimAiPlanningDispatch,
   completeAiPlanningRunFailure,
@@ -16,17 +15,15 @@ import {
   getAiPlanningAvailability,
   getAiPlanningSession,
   normalizeAiPlanningPrompt,
-  prepareAiPlanningDraftEdit,
   recoverLatestAiPlanningSession,
   regenerateAiPlanningSession,
-  replaceAiPlanningDraft,
-  replaceAiPlanningReviewDraft,
+  setAiPlanningTripDescription,
 } from '../src/services/ai-planning-sessions.js';
 import {
   setAiPlanningTelemetrySink,
   type AiPlanningTelemetryEvent,
 } from '../src/services/ai-planning-telemetry.js';
-import { customPlaceDraft, explicitDraft } from './fixtures/ai-planning.js';
+import { explicitDraft } from './fixtures/ai-planning.js';
 
 const OWNER_ID = '00000000-0000-4000-8000-000000000001';
 const OTHER_OWNER_ID = '00000000-0000-4000-8000-000000000002';
@@ -348,7 +345,11 @@ describe('planning-session routes', () => {
       { method: 'GET', url: '/ai/planning-sessions/availability' },
       { method: 'GET', url: '/ai/planning-sessions/recovery' },
       { method: 'GET', url: `/ai/planning-sessions/${sessionId}` },
-      { method: 'PATCH', url: `/ai/planning-sessions/${sessionId}/draft`, payload: {} },
+      {
+        method: 'PATCH',
+        url: `/ai/planning-sessions/${sessionId}/description`,
+        payload: { description: 'A week in Tokyo' },
+      },
       { method: 'POST', url: `/ai/planning-sessions/${sessionId}/regenerate`, payload: {} },
       {
         method: 'POST',
@@ -469,7 +470,7 @@ describe('planning-session reservations and recovery', () => {
     );
     const calls = [
       () =>
-        replaceAiPlanningDraft(OTHER_OWNER_ID, sessionId, explicitDraft(), 1, {
+        setAiPlanningTripDescription(OTHER_OWNER_ID, sessionId, 'Intruding description', {
           now: () => NOW,
           prisma: store.prisma,
         }),
@@ -547,140 +548,7 @@ describe('planning-session reservations and recovery', () => {
   });
 });
 
-describe('review draft safety', () => {
-  test('allows review edits and promotes changed AI durations to user ownership', () => {
-    const current = customPlaceDraft();
-    const input = structuredClone(current);
-    input.trip.name = 'My Tokyo plan';
-    input.trip.partySize = 3;
-    const customPlace = input.places.find((place) => place.id === 'place:custom');
-    if (!customPlace || customPlace.resolution !== 'custom') throw new Error('fixture missing');
-    customPlace.name = 'My quiet viewpoint';
-    customPlace.note = 'Use the east entrance.';
-    const item = input.unscheduledItems[0]!;
-    item.durationMinutes = 75;
-    item.notes = 'Bring water.';
-    item.priority = 'interested';
-    item.schedule = { kind: 'exact', localTime: '14:00', source: 'user' };
-
-    const edited = prepareAiPlanningDraftEdit(current, input);
-    expect(edited.trip).toMatchObject({ name: 'My Tokyo plan', nameSource: 'user', partySize: 3 });
-    expect(edited.places.find((place) => place.id === 'place:custom')).toMatchObject({
-      name: 'My quiet viewpoint',
-      note: 'Use the east entrance.',
-    });
-    expect(edited.unscheduledItems[0]).toMatchObject({
-      durationMinutes: 75,
-      durationProvenance: 'user_owned',
-      notes: 'Bring water.',
-      priority: 'interested',
-    });
-  });
-
-  test('rejects date, destination, evidence, verified identity, and item provenance changes', () => {
-    const current = explicitDraft();
-    const cases = [
-      () => {
-        const value = structuredClone(current);
-        value.trip.startDate = '2026-10-01';
-        return value;
-      },
-      () => {
-        const value = structuredClone(current);
-        value.days[0]!.destinationId = null;
-        return value;
-      },
-      () => {
-        const value = structuredClone(current);
-        value.evidence[0]!.provider = 'other';
-        return value;
-      },
-      () => {
-        const value = structuredClone(current);
-        const place = value.places[0]!;
-        if (place.resolution === 'verified') place.name = 'Spoofed destination';
-        return value;
-      },
-      () => {
-        const value = structuredClone(current);
-        value.days[1]!.items[0]!.origin = 'model';
-        return value;
-      },
-    ];
-
-    cases.forEach((makeValue) =>
-      expect(() => prepareAiPlanningDraftEdit(current, makeValue())).toThrow(
-        AiPlanningSessionError,
-      ),
-    );
-  });
-
-  test('full draft replacement increments once, rejects stale revisions, and resets acknowledgement', async () => {
-    const store = createPlanningStore();
-    const sessionId = '00000000-0000-4000-8000-000000000060';
-    const session = makeSession(sessionId, {
-      draft: explicitDraft(),
-      draftRevision: 1,
-      stage: 'REVIEWING',
-      status: 'REVIEWING',
-      warningsAcknowledgedAt: NOW,
-      warningsAcknowledgedRevision: 1,
-    });
-    store.sessions.set(sessionId, session);
-    const input = explicitDraft();
-    input.trip.name = 'Edited Tokyo';
-    const updated = await replaceAiPlanningDraft(OWNER_ID, sessionId, input, 1, {
-      now: () => NOW,
-      prisma: store.prisma,
-    });
-    expect(updated).toMatchObject({ draftRevision: 2, warningAcknowledgement: null });
-    await expect(
-      replaceAiPlanningDraft(OWNER_ID, sessionId, input, 1, {
-        now: () => NOW,
-        prisma: store.prisma,
-      }),
-    ).rejects.toMatchObject({ code: 'draft_conflict', statusCode: 409 });
-  });
-
-  test('server-owned review refreshes use the same revision and acknowledgement boundary', async () => {
-    const store = createPlanningStore();
-    const sessionId = '00000000-0000-4000-8000-000000000061';
-    store.sessions.set(
-      sessionId,
-      makeSession(sessionId, {
-        draft: explicitDraft(),
-        draftRevision: 1,
-        stage: 'REVIEWING',
-        status: 'REVIEWING',
-        warningsAcknowledgedAt: NOW,
-        warningsAcknowledgedRevision: 1,
-      }),
-    );
-    const refreshed = explicitDraft();
-    refreshed.evidence.push({
-      checkedAt: NOW.toISOString(),
-      code: null,
-      id: 'review:evidence',
-      kind: 'opening_hours',
-      provider: 'google',
-      status: 'verified',
-      subjectId: 'item:museum',
-      subjectType: 'item',
-    });
-    await expect(
-      replaceAiPlanningReviewDraft(OWNER_ID, sessionId, refreshed, 1, {
-        now: () => NOW,
-        prisma: store.prisma,
-      }),
-    ).resolves.toMatchObject({ draftRevision: 2, warningAcknowledgement: null });
-    await expect(
-      replaceAiPlanningReviewDraft(OWNER_ID, sessionId, refreshed, 1, {
-        now: () => NOW,
-        prisma: store.prisma,
-      }),
-    ).rejects.toMatchObject({ code: 'draft_conflict', statusCode: 409 });
-  });
-
+describe('review session safety', () => {
   test('warning acknowledgement is revision-exact', async () => {
     const store = createPlanningStore();
     const sessionId = '00000000-0000-4000-8000-000000000062';

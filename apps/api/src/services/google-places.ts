@@ -469,6 +469,7 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
         endpoint: '/v1/places:searchText',
         expectedSku: 'places-text-search-pro',
         operation: 'textSearch',
+        cacheMissReason: request.cacheMissReason,
       },
     );
 

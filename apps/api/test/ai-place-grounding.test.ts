@@ -1,6 +1,12 @@
 import { expect, test } from 'vitest';
 
 import { AiPlaceGrounder } from '../src/services/ai-place-grounding.js';
+import type {
+  AiPlaceGroundingCacheRepository,
+  GroundingCacheReference,
+  GroundingCacheWrite,
+} from '../src/services/ai-place-grounding-cache.js';
+import { PLACE_CACHE_TTL_MS } from '../src/services/cached-places.js';
 import {
   PlaceProviderError,
   type PlaceTextSearchProvider,
@@ -60,6 +66,7 @@ function setup(answer: ProviderPlaceIdentity[] | Error) {
       },
     },
     () => new Date('2026-08-31T04:00:00.000Z'),
+    null,
   );
   return { grounder, queries, resolutions, searches: () => searches };
 }
@@ -261,4 +268,271 @@ test('a locality on the other side of the world still rejects the venue', async 
 
   expect(result.place).toMatchObject({ resolution: 'custom', verification: 'unverified' });
   expect(resolutions).toStrictEqual([]);
+});
+
+function cachedSetup(
+  initialAnswer: ProviderPlaceIdentity[] | Error = [identity({ attributions: [] })],
+) {
+  const entries = new Map<string, GroundingCacheWrite>();
+  const writes: GroundingCacheWrite[] = [];
+  const state = {
+    answer: initialAnswer,
+    now: new Date('2026-09-02T12:00:00.000Z'),
+    reference: null as GroundingCacheReference | null,
+    searches: 0,
+    resolutions: 0,
+    readFails: false,
+    writeFails: false,
+  };
+  const cache: AiPlaceGroundingCacheRepository = {
+    async read(key) {
+      if (state.readFails) throw new Error('cache unavailable');
+      const entry = entries.get(key);
+      return entry
+        ? { ...entry, placeProviderRef: entry.outcome === 'verified' ? state.reference : null }
+        : null;
+    },
+    async write(key, entry) {
+      if (state.writeFails) throw new Error('cache unavailable');
+      entries.set(key, entry);
+      writes.push(entry);
+    },
+  };
+  const newGrounder = () =>
+    new AiPlaceGrounder(
+      {
+        name: 'google',
+        async textSearch() {
+          state.searches += 1;
+          if (state.answer instanceof Error) throw state.answer;
+          return state.answer;
+        },
+      },
+      {
+        async resolveProviderPlaceFromIdentity(place, options) {
+          state.resolutions += 1;
+          state.reference = {
+            id: 'reference-id',
+            placeId: canonicalPlaceId,
+            provider: 'GOOGLE',
+            externalPlaceId: place.externalPlaceId,
+            cachedAt: options?.fetchedAt,
+            cachedName: place.name,
+            cachedFormattedAddress: place.formattedAddress,
+            cachedLatitude: place.location.latitude,
+            cachedLongitude: place.location.longitude,
+            cachedLanguageCode: options?.languageCode ?? 'en',
+          };
+          return { id: canonicalPlaceId };
+        },
+      },
+      () => state.now,
+      cache,
+    );
+  return { cache, entries, newGrounder, state, writes };
+}
+
+test('a new run reuses the identity and original evidence without refreshing either timestamp', async () => {
+  const { newGrounder, state, entries, writes } = cachedSetup();
+  const first = await newGrounder().groundCandidate(candidate());
+  const checkedAt = state.now;
+  state.now = new Date(checkedAt.getTime() + 86_400_000);
+  const second = await newGrounder().groundCandidate(
+    candidate({ id: 'candidate:another-traveller', note: 'Different note' }),
+  );
+
+  expect(state.searches).toBe(1);
+  expect(state.resolutions).toBe(1);
+  expect(writes).toHaveLength(1);
+  expect(state.reference?.cachedAt).toEqual(checkedAt);
+  expect(second.context).toEqual(first.context);
+  expect(second.place).toMatchObject({ placeId: canonicalPlaceId, resolution: 'verified' });
+  expect(second.evidence).toMatchObject({
+    checkedAt: checkedAt.toISOString(),
+    subjectId: 'candidate:another-traveller',
+  });
+  expect([...entries.keys()][0]).toMatch(/^[a-f0-9]{64}$/);
+  expect(writes[0]).toStrictEqual({
+    checkedAt,
+    outcome: 'verified',
+    externalPlaceId: 'ChIJmuseum',
+    placeId: canonicalPlaceId,
+  });
+});
+
+test('completed unresolved and ambiguous outcomes are shared, with the current candidate note and IDs', async () => {
+  for (const answer of [[], [identity(), identity({ externalPlaceId: 'duplicate' })]]) {
+    const { newGrounder, state, writes } = cachedSetup(answer);
+    const first = await newGrounder().groundCandidate(candidate());
+    state.now = new Date(state.now.getTime() + 86_400_000);
+    const second = await newGrounder().groundCandidate(
+      candidate({ id: 'candidate:copy', note: 'New note' }),
+    );
+    expect(state.searches).toBe(1);
+    expect(state.resolutions).toBe(0);
+    expect(second.evidence.code).toBe(first.evidence.code);
+    expect(second.evidence.checkedAt).toBe(first.evidence.checkedAt);
+    expect(second.context).toBeNull();
+    expect(second.place).toMatchObject({
+      id: 'candidate:copy',
+      note: 'New note',
+      verification: 'unverified',
+    });
+    expect(writes).toHaveLength(1);
+    expect(Object.keys(writes[0]!).sort()).toEqual(['checkedAt', 'outcome']);
+  }
+});
+
+test('positive and negative decisions expire only after the 30-day ceiling', async () => {
+  for (const answer of [[identity({ attributions: [] })], [], [identity(), identity()]]) {
+    const { newGrounder, state } = cachedSetup(answer);
+    await newGrounder().groundCandidate(candidate());
+    state.now = new Date(state.now.getTime() + PLACE_CACHE_TTL_MS);
+    await newGrounder().groundCandidate(candidate());
+    expect(state.searches).toBe(1);
+    state.now = new Date(state.now.getTime() + 1);
+    await newGrounder().groundCandidate(candidate());
+    expect(state.searches).toBe(2);
+  }
+});
+
+test('matching context isolates decisions even when the provider query is identical', async () => {
+  const changes = [
+    { name: 'Unrelated Museum' },
+    { localityHint: undefined },
+    { localityHint: 'London' },
+    { languageCode: 'ja' },
+    { regionCode: 'GB' },
+    { locationBias: { latitude: 1, longitude: 103, radiusMeters: 500 } },
+    { searchQuery: 'National Museum Galleries Singapore' },
+  ];
+  for (const change of changes) {
+    const { newGrounder, state } = cachedSetup();
+    await newGrounder().groundCandidate(candidate());
+    const result = await newGrounder().groundCandidate(candidate(change));
+    expect(state.searches, JSON.stringify(change)).toBe(2);
+    if (change.name || change.localityHint === 'London')
+      expect(result.place.resolution).toBe('custom');
+  }
+
+  const { newGrounder, state } = cachedSetup([
+    identity({ attributions: [], name: 'National Museum of Singapore' }),
+    identity({ name: 'National Museum Annexe' }),
+  ]);
+  await newGrounder().groundCandidate(candidate()); // ambiguous
+  const differentName = await newGrounder().groundCandidate(
+    candidate({ name: 'National Museum Annexe' }),
+  );
+  expect(state.searches).toBe(2);
+  expect(differentName.place.resolution).toBe('verified');
+});
+
+test('normalization and bias coordinates retain the existing request-key semantics', async () => {
+  const { newGrounder, state } = cachedSetup();
+  const bias = { latitude: 1, longitude: 103, radiusMeters: 500 };
+  await newGrounder().groundCandidate(candidate({ regionCode: 'sg', locationBias: bias }));
+  await newGrounder().groundCandidate(
+    candidate({
+      name: 'Nátional MUSEUM',
+      localityHint: ' SÍNGAPORE CITY ',
+      searchQuery: ' National, MUSEUM Singapore ',
+      languageCode: ' EN ',
+      regionCode: ' SG ',
+      locationBias: bias,
+    }),
+  );
+  expect(state.searches).toBe(1);
+  for (const changedBias of [
+    { ...bias, latitude: 2 },
+    { ...bias, longitude: 104 },
+    { ...bias, radiusMeters: 1000 },
+  ])
+    await newGrounder().groundCandidate(candidate({ regionCode: 'sg', locationBias: changedBias }));
+  expect(state.searches).toBe(4);
+});
+
+test('missing, stale, changed, failed, or mismatched reference snapshots force a new search', async () => {
+  const changes: Array<Partial<GroundingCacheReference> | null> = [
+    null,
+    { cachedAt: null },
+    { cachedAt: new Date('2026-07-01') },
+    { cachedAt: new Date('2026-09-02T12:00:00.001Z') },
+    { cachedName: null },
+    { cachedLatitude: null },
+    { cachedLanguageCode: 'ja' },
+    { cachedName: 'Asian Civilisations Museum' },
+    { cachedFormattedAddress: 'London, UK' },
+    { detailsFailureCode: 'NOT_FOUND', detailsFailedAt: new Date('2026-09-02T12:00:00Z') },
+  ];
+  for (const change of changes) {
+    const { newGrounder, state } = cachedSetup();
+    await newGrounder().groundCandidate(candidate());
+    if (change === null) state.reference = null;
+    else Object.assign(state.reference!, change);
+    await newGrounder().groundCandidate(candidate());
+    expect(state.searches, JSON.stringify(change)).toBe(2);
+  }
+});
+
+test('provider failures are retried in new runs and never become negative mappings', async () => {
+  for (const code of [
+    'provider_unavailable',
+    'rate_limited',
+    'quota_exceeded',
+    'configuration_missing',
+    'budget_exhausted',
+  ] as const) {
+    const { newGrounder, state, entries } = cachedSetup(new PlaceProviderError(code));
+    for (let run = 0; run < 2; run += 1) {
+      const result = await newGrounder().groundCandidate(candidate());
+      expect(result.place).toMatchObject({ verification: 'not_checked' });
+    }
+    expect(state.searches).toBe(2);
+    expect(entries.size).toBe(0);
+  }
+});
+
+test('attributed identities stay live and retain their provider credits', async () => {
+  const { newGrounder, state, entries } = cachedSetup([identity()]);
+  await newGrounder().groundCandidate(candidate());
+  const result = await newGrounder().groundCandidate(candidate());
+  expect(state.searches).toBe(2);
+  expect(entries.size).toBe(0);
+  expect(result.place).toMatchObject({ attributions: identity().attributions });
+});
+
+test('cache errors preserve live grounding and concurrent identical queries still search once', async () => {
+  for (const error of ['readFails', 'writeFails'] as const) {
+    const { newGrounder, state } = cachedSetup();
+    state[error] = true;
+    const results = await newGrounder().groundCandidates([candidate(), candidate({ id: 'copy' })]);
+    expect(state.searches).toBe(1);
+    expect(results.every((result) => result.place.resolution === 'verified')).toBe(true);
+  }
+});
+
+test('a cached exact survivor cannot answer a broader name that would be ambiguous', async () => {
+  const { newGrounder, state } = cachedSetup([
+    identity({ attributions: [], name: 'National Museum of Singapore' }),
+    identity({ attributions: [], externalPlaceId: 'annexe', name: 'National Museum Annexe' }),
+  ]);
+  const first = await newGrounder().groundCandidate(
+    candidate({ name: 'National Museum of Singapore' }),
+  );
+  expect(first.place.resolution).toBe('verified');
+  const second = await newGrounder().groundCandidate(candidate());
+  expect(state.searches).toBe(2);
+  expect(second.evidence.code).toBe('place_ambiguous');
+});
+
+test('a later attributed snapshot cannot revive an older positive mapping', async () => {
+  const { newGrounder, state } = cachedSetup();
+  await newGrounder().groundCandidate(candidate());
+  state.reference!.cachedName = null;
+  state.now = new Date(state.now.getTime() + 1_000);
+  state.answer = [identity()];
+  await newGrounder().groundCandidate(candidate());
+  const result = await newGrounder().groundCandidate(candidate());
+  expect(state.searches).toBe(3);
+  expect(result.place).toMatchObject({ attributions: identity().attributions });
 });

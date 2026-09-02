@@ -35,14 +35,19 @@ export type ProviderCacheMissReason =
   | 'cache_read_failed'
   | 'evidence_memo_expired'
   | 'evidence_not_memoized'
+  | 'grounding_reference_changed'
+  | 'grounding_match_changed'
+  | 'invalid_grounding_mapping'
   | 'incomplete_snapshot'
   | 'language_mismatch'
   | 'missing_editorial_image'
+  | 'missing_grounding_mapping'
   | 'missing_leg'
   | 'missing_snapshot'
   | 'negative_cache_expired'
   | 'polyline_missing'
   | 'stale_editorial_image'
+  | 'stale_grounding_mapping'
   | 'stale_leg'
   | 'stale_snapshot';
 
@@ -85,7 +90,13 @@ export type ProviderCall = ProviderEventBase & {
 };
 
 export type ProviderCacheEvent = ProviderEventBase & {
-  cache: 'currency' | 'editorial-image' | 'place-details' | 'place-evidence' | 'route';
+  cache:
+    | 'currency'
+    | 'editorial-image'
+    | 'place-details'
+    | 'place-evidence'
+    | 'place-grounding'
+    | 'route';
   failureCode?: 'NOT_FOUND' | 'UNUSABLE_LOCATION';
   includePolyline?: boolean;
   kind: 'cache_hit' | 'negative_cache_hit';

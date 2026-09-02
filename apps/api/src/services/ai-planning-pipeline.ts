@@ -33,6 +33,11 @@ import {
   type GroundedPlaceContext,
 } from './ai-place-grounding.js';
 import { createAiPlannerProviderContext } from './ai-planner-provider-context.js';
+import {
+  buildPlanScoreFromEvaluations,
+  evaluateScoredDay,
+  type TripPlanScore,
+} from './plan-score.js';
 import { groundableDraftPlaceIds, referencedDraftPlaceIds } from './ai-planning-draft-places.js';
 import { recordAiPlanningDraftAssembled } from './ai-planning-telemetry.js';
 import {
@@ -52,6 +57,8 @@ import {
   evaluateFeasibility,
   type PlanScoreDayItem,
   type PlanScoreInterval,
+  type PlanScorePlace,
+  type PlanScoreRouteSegment,
 } from './plan-score-factors.js';
 import { normalizePlaceLanguageCode } from './place-language.js';
 import { openingIntervalsForWeekday, weekdayForLocalDate } from './place-opening-hours.js';
@@ -88,6 +95,7 @@ type PlanningLifecycle = {
     ownerId: string,
     runId: string,
     draft: AiPlannerDraft,
+    planScore: TripPlanScore,
     metadata: AiGenerationMetadata,
   ): Promise<unknown>;
   updateStage(
@@ -663,12 +671,21 @@ export async function addOpeningEvidence(
   return { intervals, ratings };
 }
 
+/**
+ * Returns the travel evidence it already computed. The legs were paid for to
+ * find transition conflicts; scoring reads the same numbers rather than asking
+ * for them again.
+ */
 async function addRouteEvidence(
   draft: AiPlannerDraft,
   proposal: AiPlannerModelProposal,
   contexts: Map<string, GroundedPlaceContext>,
+  intervals: Map<string, PlanScoreInterval[]>,
   routesService: RoutesService | null,
-) {
+): Promise<{
+  inbound: Map<string, number>;
+  segments: Map<string, PlanScoreRouteSegment[]>;
+}> {
   type RouteResult = Awaited<ReturnType<RoutesService['computeRoute']>> | null;
   const routeRequests = new Map<
     string,
@@ -698,22 +715,45 @@ async function addRouteEvidence(
     ),
   );
 
+  const inboundMinutes = new Map<string, number>();
+  const daySegments = new Map<string, PlanScoreRouteSegment[]>();
+
   for (const day of draft.days) {
     const inbound = new Map<string, number | null>();
     const routeEvidenceIds = new Map<string, string>();
+    const segments: PlanScoreRouteSegment[] = [];
+    daySegments.set(day.date, segments);
     for (let index = 1; index < day.items.length; index += 1) {
       const previous = day.items[index - 1]!;
       const next = day.items[index]!;
       const origin = previous.placeRefId ? contexts.get(previous.placeRefId) : null;
       const destination = next.placeRefId ? contexts.get(next.placeRefId) : null;
-      if (!origin || !destination) continue;
       const routeId = scopedId('route', `${day.date}:${previous.id}:${next.id}`);
+      // A transition nobody could route is still a transition. Reporting it as
+      // an unknown segment keeps the day's travel honest, where dropping it
+      // would quietly score the day as if the leg took no time.
+      if (!origin || !destination) {
+        segments.push({ id: routeId, scope: 'LOCAL', status: 'UNKNOWN' });
+        continue;
+      }
       const evidenceId = scopedId('route-evidence', routeId);
       routeEvidenceIds.set(next.id, evidenceId);
       const memoKey = `${origin.location.latitude}:${origin.location.longitude}:${destination.location.latitude}:${destination.location.longitude}`;
       const result = routeResults.get(memoKey) ?? null;
-      if (result?.status === 'ok') inbound.set(next.id, result.estimate.durationSeconds / 60);
-      else inbound.set(next.id, null);
+      if (result?.status === 'ok') {
+        const minutes = result.estimate.durationSeconds / 60;
+        inbound.set(next.id, minutes);
+        inboundMinutes.set(next.id, minutes);
+        segments.push({
+          duration: { minutes, source: 'FRESH_PROVIDER' },
+          id: routeId,
+          scope: 'LOCAL',
+          status: 'KNOWN',
+        });
+      } else {
+        inbound.set(next.id, null);
+        segments.push({ id: routeId, scope: 'LOCAL', status: 'UNKNOWN' });
+      }
       const status =
         result?.status === 'ok'
           ? 'verified'
@@ -751,7 +791,9 @@ async function addRouteEvidence(
 
     const feasibility = evaluateFeasibility({
       commitments: [],
-      items: day.items.map((item) => feasibilityItem(item, null, inbound.get(item.id) ?? null)),
+      items: day.items.map((item) =>
+        feasibilityItem(item, intervals.get(item.id) ?? null, inbound.get(item.id) ?? null),
+      ),
     });
     for (const conflict of feasibility.conflicts.filter((entry) =>
       ['ARRIVES_AFTER_FIXED_START', 'TIGHT_TRANSITION'].includes(entry.kind),
@@ -779,6 +821,85 @@ async function addRouteEvidence(
       });
     }
   }
+
+  return { inbound: inboundMinutes, segments: daySegments };
+}
+
+/** Mirrors `toDayPlaces`, keyed on the draft's place references. */
+function draftDayPlaces(
+  day: AiPlannerDraft['days'][number],
+  ratings: Map<string, number>,
+): PlanScorePlace[] {
+  const placeRefIds = [
+    ...new Set(day.items.flatMap((item) => (item.placeRefId ? [item.placeRefId] : []))),
+  ];
+  return placeRefIds.map((placeRefId) => {
+    const rating = ratings.get(placeRefId);
+    return {
+      rating:
+        rating === undefined
+          ? { status: 'UNKNOWN' as const }
+          : { rating, source: 'FRESH_PROVIDER' as const, status: 'KNOWN' as const },
+      tripPlaceId: placeRefId,
+    };
+  });
+}
+
+/**
+ * Scores the finished draft from the evidence validation already gathered, so a
+ * Plan Score costs no provider request of its own. This is the one pass that
+ * sees both halves at once: the hours check runs before routes exist, and the
+ * transition check runs before the day is final, so neither can stand in for a
+ * judgement of the whole day.
+ */
+function scoreDraft(
+  draft: AiPlannerDraft,
+  evidence: {
+    inbound: Map<string, number>;
+    intervals: Map<string, PlanScoreInterval[]>;
+    ratings: Map<string, number>;
+    segments: Map<string, PlanScoreRouteSegment[]>;
+  },
+) {
+  const scheduledIds = [
+    ...new Set(
+      draft.days.flatMap((day) =>
+        day.items.flatMap((item) => (item.placeRefId ? [item.placeRefId] : [])),
+      ),
+    ),
+  ];
+  // An unscheduled Must Go is exactly what this factor exists to notice, so the
+  // wanted set spans the whole draft while the scheduled set spans only days.
+  const mustGoIds = [
+    ...new Set(
+      [...draft.days.flatMap((day) => day.items), ...draft.unscheduledItems].flatMap((item) =>
+        item.priority === 'must_go' && item.placeRefId ? [item.placeRefId] : [],
+      ),
+    ),
+  ];
+
+  return buildPlanScoreFromEvaluations({
+    days: draft.days.map((day) => ({
+      date: day.date,
+      evaluation: evaluateScoredDay({
+        // A draft has no reservations by design, so an overlapping-commitment
+        // conflict is structurally unreachable rather than merely unchecked.
+        commitments: [],
+        dayId: day.date,
+        items: day.items.map((item) =>
+          feasibilityItem(
+            item,
+            evidence.intervals.get(item.id) ?? null,
+            evidence.inbound.get(item.id) ?? null,
+          ),
+        ),
+        places: draftDayPlaces(day, evidence.ratings),
+        segments: evidence.segments.get(day.date) ?? [],
+      }),
+    })),
+    mustGoIds,
+    scheduledIds,
+  });
 }
 
 async function validateWithProviderEvidence(
@@ -792,11 +913,26 @@ async function validateWithProviderEvidence(
       result.context ? ([[result.place.id, result.context]] as const) : [],
     ),
   );
-  await addOpeningEvidence(draft, proposal, contexts, providerContext.placesService);
-  await addRouteEvidence(draft, proposal, contexts, providerContext.routesService);
+  const { intervals, ratings } = await addOpeningEvidence(
+    draft,
+    proposal,
+    contexts,
+    providerContext.placesService,
+  );
+  const { inbound, segments } = await addRouteEvidence(
+    draft,
+    proposal,
+    contexts,
+    intervals,
+    providerContext.routesService,
+  );
   const validated = validateAiPlannerDraft(draft);
   if (!validated.success) throw new AiPlanningPipelineFailure('invalid_response', null);
-  return validated.data;
+
+  return {
+    draft: validated.data,
+    planScore: scoreDraft(validated.data, { inbound, intervals, ratings, segments }),
+  };
 }
 
 function defaultLifecycle(
@@ -811,8 +947,8 @@ function defaultLifecycle(
       }),
     completeFailure: (ownerId, runId, code, metadata) =>
       completeAiPlanningRunFailure(ownerId, runId, code, metadata, lifecycleOptions),
-    completeSuccess: (ownerId, runId, draft, metadata) =>
-      completeAiPlanningRunSuccess(ownerId, runId, draft, metadata, lifecycleOptions),
+    completeSuccess: (ownerId, runId, draft, planScore, metadata) =>
+      completeAiPlanningRunSuccess(ownerId, runId, draft, planScore, metadata, lifecycleOptions),
     updateStage: (ownerId, runId, stage) =>
       updateAiPlanningStage(ownerId, runId, stage, lifecycleOptions),
   };
@@ -932,8 +1068,8 @@ export async function runAiPlanningPipeline(
       grounding,
       providerContext,
     );
-    recordAiPlanningDraftAssembled(validated, generationDate);
-    await lifecycle.completeSuccess(ownerId, runId, validated, metadata);
+    recordAiPlanningDraftAssembled(validated.draft, generationDate);
+    await lifecycle.completeSuccess(ownerId, runId, validated.draft, validated.planScore, metadata);
   } catch (error) {
     const failure = failureFrom(error, metadata);
     await lifecycle.completeFailure(ownerId, runId, failure.code, failure.metadata);

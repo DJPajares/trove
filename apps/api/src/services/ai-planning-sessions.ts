@@ -9,6 +9,7 @@ import {
 } from '../environment.js';
 import type { AiGenerationErrorCode, AiGenerationMetadata } from './ai-generation.js';
 import { validateAiPlannerDraft } from './ai-planning-rules.js';
+import { parseStoredPlanScore, type TripPlanScore } from './plan-score.js';
 import {
   recordAiPlanningDispatchRejected,
   type AiPlanningDispatchRejectionCode,
@@ -49,6 +50,7 @@ type SessionRecord = {
   runs: PendingRun[];
   schemaVersion: number;
   stage: string;
+  planScore: Prisma.JsonValue | null;
   status: string;
   tripDescription: string | null;
   updatedAt: Date;
@@ -191,6 +193,7 @@ export function serializeAiPlanningSession(session: SessionRecord) {
     id: session.id,
     lastSafeError: session.lastErrorCode,
     pendingRunId: session.runs[0]?.id ?? null,
+    planScore: parseStoredPlanScore(session.planScore),
     prompt: session.rawPrompt,
     schemaVersion: session.schemaVersion,
     stage: session.stage.toLowerCase(),
@@ -725,6 +728,7 @@ export async function completeAiPlanningRunSuccess(
   ownerId: string,
   runId: string,
   draftInput: unknown,
+  planScore: TripPlanScore,
   metadata: AiGenerationMetadata,
   options: PlanningOptions = {},
 ) {
@@ -760,6 +764,7 @@ export async function completeAiPlanningRunSuccess(
         draft: validated.data as unknown as Prisma.InputJsonValue,
         draftRevision: { increment: 1 },
         lastErrorCode: null,
+        planScore: planScore as unknown as Prisma.InputJsonValue,
         schemaVersion: AI_PLANNER_SCHEMA_VERSION,
         stage: 'REVIEWING',
         status: 'REVIEWING',

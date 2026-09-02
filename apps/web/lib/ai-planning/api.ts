@@ -1,3 +1,4 @@
+import type { TripPlanScore } from '@/lib/plan-score/api';
 import { createBrowserSupabaseClient, getBrowserSession } from '@/lib/supabase/client';
 import type { Trip } from '@/lib/trips/api';
 
@@ -112,6 +113,8 @@ export type AiPlanningSession = {
   id: string;
   lastSafeError: string | null;
   pendingRunId: string | null;
+  /** Scored during generation from evidence that run already fetched. */
+  planScore: TripPlanScore | null;
   prompt: string | null;
   schemaVersion: number;
   stage: AiPlanningSessionStage;

@@ -23,7 +23,7 @@ import {
   setAiPlanningTelemetrySink,
   type AiPlanningTelemetryEvent,
 } from '../src/services/ai-planning-telemetry.js';
-import { explicitDraft } from './fixtures/ai-planning.js';
+import { emptyPlanScore, explicitDraft } from './fixtures/ai-planning.js';
 
 const OWNER_ID = '00000000-0000-4000-8000-000000000001';
 const OTHER_OWNER_ID = '00000000-0000-4000-8000-000000000002';
@@ -751,13 +751,20 @@ describe('dispatch quota and lifecycle completion', () => {
     const session = makeSession(sessionId, { stage: 'GENERATING', status: 'GENERATING' });
     const run = makeRun(runId, sessionId, { dispatchedAt: NOW });
     store.addRun(run, session);
-    await completeAiPlanningRunSuccess(OWNER_ID, runId, explicitDraft(), metadata, {
-      now: () => NOW,
-      prisma: store.prisma,
-    });
+    await completeAiPlanningRunSuccess(
+      OWNER_ID,
+      runId,
+      explicitDraft(),
+      emptyPlanScore(),
+      metadata,
+      {
+        now: () => NOW,
+        prisma: store.prisma,
+      },
+    );
     expect(session).toMatchObject({ draftRevision: 1, status: 'REVIEWING' });
     await expect(
-      completeAiPlanningRunSuccess(OWNER_ID, runId, explicitDraft(), metadata, {
+      completeAiPlanningRunSuccess(OWNER_ID, runId, explicitDraft(), emptyPlanScore(), metadata, {
         now: () => NOW,
         prisma: store.prisma,
       }),
@@ -776,10 +783,17 @@ describe('dispatch quota and lifecycle completion', () => {
       prisma: raceStore.prisma,
     });
     await expect(
-      completeAiPlanningRunSuccess(OWNER_ID, raceRunId, explicitDraft(), metadata, {
-        now: () => NOW,
-        prisma: raceStore.prisma,
-      }),
+      completeAiPlanningRunSuccess(
+        OWNER_ID,
+        raceRunId,
+        explicitDraft(),
+        emptyPlanScore(),
+        metadata,
+        {
+          now: () => NOW,
+          prisma: raceStore.prisma,
+        },
+      ),
     ).rejects.toMatchObject({ code: 'draft_conflict' });
     expect(raceSession).toMatchObject({ draft: null, rawPrompt: null, status: 'CANCELLED' });
   });

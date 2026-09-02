@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { PageState } from '@/components/page-state';
+import { PlanScorePanel } from '@/components/plan-score-panel';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -53,6 +54,7 @@ type ReviewOperation = 'acknowledging' | 'applying' | 'idle' | 'regenerating';
 export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>) {
   const t = useTranslations('trips.aiPlanning.review');
   const general = useTranslations('trips.aiPlanning');
+  const planScoreCopy = useTranslations('planScore');
   const locale = useLocale();
   const reducedMotion = useReducedMotion();
   const router = useRouter();
@@ -437,6 +439,15 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
         </div>
 
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
+          {session.planScore ? (
+            <PlanScorePanel
+              explanations={session.planScore.explanations}
+              score={session.planScore.score}
+              scope="trip"
+              status="idle"
+              title={planScoreCopy('title')}
+            />
+          ) : null}
           <section
             className="overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card"
             aria-label={t('mapLabel')}

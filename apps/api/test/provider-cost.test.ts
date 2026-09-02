@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 import type { AiPlannerDraft } from '@trove/types';
+import { readFile } from 'node:fs/promises';
+
 import { expect, beforeEach, test } from 'vitest';
 
 import {
@@ -45,7 +47,7 @@ import {
 import { explicitModelProposal, missingDetailsProposal } from './fixtures/ai-planning.js';
 import { PlacesService } from '../src/services/places.js';
 import { RoutesService } from '../src/services/routes.js';
-import { getTripPlanScore } from '../src/services/plan-score.js';
+import { getTripPlanScore, type TripPlanScore } from '../src/services/plan-score.js';
 import {
   getProviderCallCounts,
   recordProviderCall,
@@ -953,6 +955,33 @@ test('TROVE_PLAN_SCORE_DISABLED stops every provider call, even with a working s
 });
 
 /**
+ * The switch bounds this endpoint's fan-out. Draft scoring makes no provider call
+ * of its own, so silencing it would cost a traveller their score and save
+ * nothing — asserted here because the guarantee is otherwise only an accident of
+ * which module reads the flag.
+ */
+test('TROVE_PLAN_SCORE_DISABLED cannot reach scoring that costs no provider call', async () => {
+  const { arePlanScoreProvidersDisabled } = await import('../src/environment.js');
+  const planScore = await import('../src/services/plan-score.js');
+  const pipelineSource = await readFile(
+    new URL('../src/services/ai-planning-pipeline.ts', import.meta.url),
+    'utf8',
+  );
+
+  expect(arePlanScoreProvidersDisabled({ TROVE_PLAN_SCORE_DISABLED: '1' })).toBe(true);
+
+  // The draft scorer is pure over evidence it is handed, so the flag has no
+  // reachable path into it.
+  expect(pipelineSource).not.toContain('arePlanScoreProvidersDisabled');
+  expect(pipelineSource).toContain('buildPlanScoreFromEvaluations');
+  expect(
+    await withEnvOverride({ TROVE_PLAN_SCORE_DISABLED: '1' }, async () =>
+      planScore.buildPlanScoreFromEvaluations({ days: [], mustGoIds: [], scheduledIds: [] }),
+    ),
+  ).toMatchObject({ withheldReasons: ['NO_SCORABLE_DAY'] });
+});
+
+/**
  * The tests below are the ones that hold the DB-first architecture in place.
  * They assert what *navigation* costs, which is the number that produced the
  * bill this work exists to remove.
@@ -1565,6 +1594,7 @@ test('six venues use one Places call each, with persisted identity and transient
     },
   });
   const drafts: AiPlannerDraft[] = [];
+  const planScores: TripPlanScore[] = [];
   const failures: string[] = [];
   const lifecycle: NonNullable<AiPlanningPipelineOptions['lifecycle']> = {
     async claim(_ownerId, runId) {
@@ -1580,8 +1610,9 @@ test('six venues use one Places call each, with persisted identity and transient
     async completeFailure(_ownerId, _runId, code) {
       failures.push(code);
     },
-    async completeSuccess(_ownerId, _runId, draft) {
+    async completeSuccess(_ownerId, _runId, draft, planScore) {
       drafts.push(draft);
+      planScores.push(planScore);
     },
     async updateStage() {},
   };
@@ -1661,6 +1692,22 @@ test('six venues use one Places call each, with persisted identity and transient
     expect(JSON.stringify(draft)).not.toContain('openingPeriods');
     expect(JSON.stringify(draft)).not.toContain('rating');
   }
+  // Scoring rides on the evidence above and must not move a single count: every
+  // provider assertion in this test is the guard, so a score that fetched
+  // anything of its own would break them rather than this block.
+  for (const planScore of planScores) {
+    expect(planScore.days.map((day) => day.dayId)).toEqual(drafts[0]!.days.map((day) => day.date));
+    expect(planScore.score).not.toBeNull();
+    for (const day of planScore.days) {
+      expect(day.factors.FEASIBILITY.state).toBe('EVALUATED');
+      expect(day.factors.TRAVEL_EFFORT.state).toBe('EVALUATED');
+      // The rating arrives free on the same response the hours came from.
+      expect(day.factors.PLACE_QUALITY.state).toBe('EVALUATED');
+    }
+    // Derived from the plan, never a copy of the mutable evidence behind it.
+    expect(JSON.stringify(planScore)).not.toContain('openingPeriods');
+  }
+
   expect(drafts[2]!.places).toEqual(drafts[0]!.places);
   expect(drafts[2]!.evidence.filter((entry) => entry.kind === 'identity')).toEqual(
     drafts[0]!.evidence.filter((entry) => entry.kind === 'identity'),

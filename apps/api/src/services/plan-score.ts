@@ -1,4 +1,5 @@
 import { getPrismaClient } from '@trove/db';
+import { z } from 'zod';
 
 import { arePlanScoreProvidersDisabled } from '../environment.js';
 import {
@@ -29,6 +30,7 @@ import {
   evaluatePaceBuffer,
   evaluatePlaceQuality,
   evaluateTravelEffort,
+  type PlanScoreDayItem,
   type PlanScoreFixedCommitment,
   type PlanScorePlace,
   type PlanScoreRouteSegment,
@@ -126,28 +128,40 @@ function toDayPlaces(day: PlanScoreDayRecord, ratings: Map<string, number>): Pla
   });
 }
 
-type DayEvaluation = {
+export type PlanScoreDayEvaluation = {
   conflicts: ReturnType<typeof evaluateFeasibility>['conflicts'];
   input: PlanScoreDayInput;
   pace: ReturnType<typeof evaluatePaceBuffer>;
   travel: ReturnType<typeof evaluateTravelEffort>;
 };
 
-function evaluateDayRecord(day: PlanScoreDayRecord, record: PlanScoreTripRecord): DayEvaluation {
-  const routes = record.routes.get(day.id);
-  const items = toDayEvidenceItems(day, routes, record.hours);
-  const segments = toRouteSegments(routes);
-  const feasibility = evaluateFeasibility({ commitments: toCommitments(day), items });
-  const travel = evaluateTravelEffort(segments);
-  const pace = evaluatePaceBuffer({ items, segments });
-  const placeQuality = evaluatePlaceQuality(toDayPlaces(day, record.ratings));
+/**
+ * The rubric over one day's evidence, with no opinion about where that evidence
+ * came from. A stored trip reads it from Prisma rows; the AI planner builds the
+ * same shapes from a draft it has just grounded. Keeping the mapping outside is
+ * what lets both score identically without either owning the other's queries.
+ */
+export function evaluateScoredDay(input: {
+  commitments: PlanScoreFixedCommitment[];
+  dayId: string;
+  items: PlanScoreDayItem[];
+  places: PlanScorePlace[];
+  segments: PlanScoreRouteSegment[];
+}): PlanScoreDayEvaluation {
+  const feasibility = evaluateFeasibility({
+    commitments: input.commitments,
+    items: input.items,
+  });
+  const travel = evaluateTravelEffort(input.segments);
+  const pace = evaluatePaceBuffer({ items: input.items, segments: input.segments });
+  const placeQuality = evaluatePlaceQuality(input.places);
 
   return {
     conflicts: feasibility.conflicts,
     input: {
-      dayId: day.id,
+      dayId: input.dayId,
       // Route efficiency is deliberately absent: an alternative-order comparison
-      // needs a pairwise duration matrix this endpoint does not fetch.
+      // needs a pairwise duration matrix no caller fetches.
       factors: {
         FEASIBILITY: feasibility.factor,
         PACE_BUFFER: pace.factor,
@@ -160,21 +174,109 @@ function evaluateDayRecord(day: PlanScoreDayRecord, record: PlanScoreTripRecord)
   };
 }
 
+function evaluateDayRecord(
+  day: PlanScoreDayRecord,
+  record: PlanScoreTripRecord,
+): PlanScoreDayEvaluation {
+  const routes = record.routes.get(day.id);
+  return evaluateScoredDay({
+    commitments: toCommitments(day),
+    dayId: day.id,
+    items: toDayEvidenceItems(day, routes, record.hours),
+    places: toDayPlaces(day, record.ratings),
+    segments: toRouteSegments(routes),
+  });
+}
+
+const factorOutcomeSchema = z.union([
+  z.object({ confidence: z.number(), score: z.number(), state: z.literal('EVALUATED') }).strict(),
+  z
+    .object({
+      reason: z.enum(['INSUFFICIENT_EVIDENCE', 'MISSING_EVIDENCE', 'UNUSABLE_EVIDENCE']),
+      state: z.literal('UNKNOWN'),
+    })
+    .strict(),
+  z.object({ state: z.literal('NOT_APPLICABLE') }).strict(),
+]);
+
+const explanationGroupsSchema = z
+  .object({
+    uncertainty: z.array(explanationSchema()),
+    whatWorks: z.array(explanationSchema()),
+    worthImproving: z.array(explanationSchema()),
+  })
+  .strict();
+
+function explanationSchema() {
+  return z
+    .object({
+      action: z
+        .enum([
+          'ADD_BUFFER',
+          'ADJUST_TIME',
+          'RECONSIDER_DETOUR',
+          'REORDER_MANUALLY',
+          'REVIEW_ALTERNATIVE',
+          'SCHEDULE_MUST_GO',
+        ])
+        .nullable(),
+      factor: z.string(),
+      messageKey: z.string(),
+      references: z.array(z.string()),
+      values: z.record(z.string(), z.union([z.number(), z.string()])),
+    })
+    .strict();
+}
+
+const tripPlanScoreSchema = z
+  .object({
+    days: z.array(
+      z
+        .object({
+          completeness: z.number(),
+          confidence: z.number().nullable(),
+          date: z.string(),
+          dayId: z.string(),
+          explanations: explanationGroupsSchema,
+          factors: z.record(z.string(), factorOutcomeSchema),
+          score: z.number().nullable(),
+          withheldReasons: z.array(z.string()),
+        })
+        .strict(),
+    ),
+    explanations: explanationGroupsSchema,
+    fingerprint: z.string(),
+    generatedAt: z.string(),
+    mustGoPriorityFit: factorOutcomeSchema,
+    score: z.number().nullable(),
+    withheldReasons: z.array(z.string()),
+  })
+  .strict();
+
 /**
- * Pure scoring over already-loaded evidence, so the aggregation and explanation
- * wiring can be exercised without a database or provider.
+ * A score is derived, so a row that predates the current shape is worth nothing
+ * and is better dropped than surfaced. Returning null degrades the panel to its
+ * unavailable state rather than failing the session that carries it.
  */
-export function buildTripPlanScore(record: PlanScoreTripRecord): TripPlanScore {
-  const evaluations = record.days.map((day) => ({
-    day,
-    evaluation: evaluateDayRecord(day, record),
-  }));
-  const scheduledTripPlaceIds = record.days.flatMap((day) =>
-    day.items.flatMap((item) => (item.tripPlaceId ? [item.tripPlaceId] : [])),
-  );
+export function parseStoredPlanScore(value: unknown): TripPlanScore | null {
+  if (value === null || value === undefined) return null;
+  const parsed = tripPlanScoreSchema.safeParse(value);
+  return parsed.success ? (parsed.data as TripPlanScore) : null;
+}
+
+/**
+ * Aggregation and explanation over days that have already been evaluated, so a
+ * caller that assembled its own evidence never reimplements the trip rubric.
+ */
+export function buildPlanScoreFromEvaluations(input: {
+  days: Array<{ date: string; evaluation: PlanScoreDayEvaluation }>;
+  mustGoIds: string[];
+  scheduledIds: string[];
+}): TripPlanScore {
+  const evaluations = input.days;
   const mustGoPriorityFit: PlanScoreFactorResult = evaluateMustGoPriorityFit({
-    mustGoTripPlaceIds: record.mustGoTripPlaceIds,
-    scheduledTripPlaceIds,
+    mustGoTripPlaceIds: input.mustGoIds,
+    scheduledTripPlaceIds: input.scheduledIds,
     source: 'USER_OWNED',
   });
   const tripInput = {
@@ -182,14 +284,14 @@ export function buildTripPlanScore(record: PlanScoreTripRecord): TripPlanScore {
     mustGoPriorityFit,
   };
   const result = scoreTrip(tripInput);
-  const scheduled = new Set(scheduledTripPlaceIds);
+  const scheduled = new Set(input.scheduledIds);
 
   return {
     days: result.days.map((dayResult, index) => {
       const entry = evaluations[index];
       return {
         ...toPlanScoreDayPayload(dayResult),
-        date: entry?.day.date ?? '',
+        date: entry?.date ?? '',
         explanations: explainDay({
           alternatives: [],
           conflicts: entry?.evaluation.conflicts ?? [],
@@ -205,7 +307,7 @@ export function buildTripPlanScore(record: PlanScoreTripRecord): TripPlanScore {
     }),
     explanations: explainTrip({
       mustGoPriorityFit: result.mustGoPriorityFit,
-      unscheduledMustGoTripPlaceIds: record.mustGoTripPlaceIds.filter(
+      unscheduledMustGoTripPlaceIds: input.mustGoIds.filter(
         (tripPlaceId) => !scheduled.has(tripPlaceId),
       ),
     }),
@@ -215,6 +317,23 @@ export function buildTripPlanScore(record: PlanScoreTripRecord): TripPlanScore {
     score: result.score,
     withheldReasons: result.withheldReasons,
   };
+}
+
+/**
+ * Pure scoring over already-loaded evidence, so the aggregation and explanation
+ * wiring can be exercised without a database or provider.
+ */
+export function buildTripPlanScore(record: PlanScoreTripRecord): TripPlanScore {
+  return buildPlanScoreFromEvaluations({
+    days: record.days.map((day) => ({
+      date: day.date,
+      evaluation: evaluateDayRecord(day, record),
+    })),
+    mustGoIds: record.mustGoTripPlaceIds,
+    scheduledIds: record.days.flatMap((day) =>
+      day.items.flatMap((item) => (item.tripPlaceId ? [item.tripPlaceId] : [])),
+    ),
+  });
 }
 
 /**
@@ -268,6 +387,11 @@ export async function getTripPlanScore(
 ): Promise<TripPlanScore | null> {
   // Do this before opening Prisma: stale clients may still reach the endpoint,
   // but an administrative kill switch must make that request cost-free too.
+  //
+  // This is the switch's only reader, and deliberately so. It exists to stop the
+  // fan-out this endpoint causes; the AI planner scores a draft from evidence its
+  // own run already paid for and reaches no provider to score it, so there is
+  // nothing here for the switch to save and it must not silence that score.
   if (arePlanScoreProvidersDisabled()) return null;
 
   const prisma = getPrismaClient();

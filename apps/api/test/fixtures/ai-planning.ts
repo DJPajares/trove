@@ -3,6 +3,7 @@ import type {
   AiPlannerModelProposal,
   AiPlannerNormalizedRequest,
 } from '@trove/types';
+import { buildPlanScoreFromEvaluations } from '../../src/services/plan-score.js';
 
 const TOKYO_PLACE_ID = '0199a6f8-6e28-7a31-b11c-45db8dc98611';
 const KYOTO_PLACE_ID = '0199a6f8-6e28-7a31-b11c-45db8dc98612';
@@ -427,4 +428,12 @@ export function customPlaceDraft(): AiPlannerDraft {
     material: false,
   });
   return draft;
+}
+
+/**
+ * A real, empty score rather than a hand-written literal, so the fixture cannot
+ * drift from the payload the scorer actually produces.
+ */
+export function emptyPlanScore() {
+  return buildPlanScoreFromEvaluations({ days: [], mustGoIds: [], scheduledIds: [] });
 }

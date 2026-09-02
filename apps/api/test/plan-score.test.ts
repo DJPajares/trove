@@ -4,7 +4,13 @@ import type {
   ItineraryDayRoutes,
   ItineraryRouteSegment,
 } from '../src/services/itinerary-routes.js';
-import { buildTripPlanScore, type PlanScoreTripRecord } from '../src/services/plan-score.js';
+import {
+  buildPlanScoreFromEvaluations,
+  buildTripPlanScore,
+  evaluateScoredDay,
+  parseStoredPlanScore,
+  type PlanScoreTripRecord,
+} from '../src/services/plan-score.js';
 
 function segment(id: string, destinationId: string, durationSeconds: number | null) {
   return {
@@ -533,4 +539,60 @@ test('an exact time wins over a daypart left on the same item', () => {
   const exactOnly = buildTripPlanScore(plannedTrip).days[0];
 
   expect(both?.factors).toStrictEqual(exactOnly?.factors);
+});
+
+/**
+ * The stored score is read back through a schema written by hand, so drift
+ * between it and the payload the scorer emits would not throw — every stored
+ * score would quietly parse to null and no panel would ever render one. Round
+ * a real score through JSON to keep the two honest.
+ */
+test('a real score survives being stored and read back', () => {
+  const score = buildPlanScoreFromEvaluations({
+    days: [
+      {
+        date: '2026-10-02',
+        evaluation: evaluateScoredDay({
+          commitments: [],
+          dayId: '2026-10-02',
+          items: [
+            {
+              duration: { minutes: 60, source: 'ESTIMATED' },
+              fixed: false,
+              id: 'item:a',
+              inboundTravel: { minutes: 10, source: 'FRESH_PROVIDER' },
+              openingHours: {
+                intervals: [{ endMinute: 1_080, startMinute: 540 }],
+                source: 'FRESH_PROVIDER',
+                status: 'KNOWN',
+              },
+              start: null,
+              startWindow: { earliestMinute: 0, latestMinute: 720, source: 'ESTIMATED' },
+            },
+          ],
+          places: [
+            {
+              rating: { rating: 4.6, source: 'FRESH_PROVIDER', status: 'KNOWN' },
+              tripPlaceId: 'place:a',
+            },
+          ],
+          segments: [
+            {
+              duration: { minutes: 10, source: 'FRESH_PROVIDER' },
+              id: 'segment:a',
+              scope: 'LOCAL',
+              status: 'KNOWN',
+            },
+          ],
+        }),
+      },
+    ],
+    mustGoIds: ['place:a'],
+    scheduledIds: ['place:a'],
+  });
+
+  const stored = JSON.parse(JSON.stringify(score)) as unknown;
+  expect(parseStoredPlanScore(stored)).toStrictEqual(stored);
+  expect(parseStoredPlanScore(null)).toBeNull();
+  expect(parseStoredPlanScore({ score: 80 })).toBeNull();
 });

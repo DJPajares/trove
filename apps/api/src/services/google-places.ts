@@ -19,6 +19,7 @@ import {
   type PlaceSuggestion,
   type ProviderPlaceDetails,
   type ProviderPlaceIdentity,
+  type ProviderPlaceSearchResult,
 } from './places.js';
 
 const DEFAULT_BASE_URL = 'https://places.googleapis.com';
@@ -61,6 +62,12 @@ export const GOOGLE_TEXT_SEARCH_FIELD_MASK = [
   'places.primaryType',
   'places.googleMapsUri',
   'places.utcOffsetMinutes',
+].join(',');
+
+export const GOOGLE_TEXT_SEARCH_EVIDENCE_FIELD_MASK = [
+  GOOGLE_TEXT_SEARCH_FIELD_MASK,
+  'places.regularOpeningHours',
+  'places.rating',
 ].join(',');
 
 /**
@@ -431,7 +438,7 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
       .filter((suggestion): suggestion is PlaceSuggestion => suggestion !== null);
   }
 
-  async textSearch(request: PlaceTextSearchRequest): Promise<ProviderPlaceIdentity[]> {
+  async textSearch(request: PlaceTextSearchRequest): Promise<ProviderPlaceSearchResult[]> {
     if (!request.textQuery.trim() || !isValidLocationBias(request)) {
       throw new PlaceProviderError('invalid_request');
     }
@@ -461,21 +468,45 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
         }),
         headers: {
           'Content-Type': 'application/json',
-          'X-Goog-FieldMask': GOOGLE_TEXT_SEARCH_FIELD_MASK,
+          'X-Goog-FieldMask':
+            request.detail === 'evidence'
+              ? GOOGLE_TEXT_SEARCH_EVIDENCE_FIELD_MASK
+              : GOOGLE_TEXT_SEARCH_FIELD_MASK,
         },
         method: 'POST',
       },
       {
         endpoint: '/v1/places:searchText',
-        expectedSku: 'places-text-search-pro',
+        expectedSku:
+          request.detail === 'evidence'
+            ? 'places-text-search-enterprise'
+            : 'places-text-search-pro',
+        detailLevel: request.detail,
         operation: 'textSearch',
         cacheMissReason: request.cacheMissReason,
       },
     );
 
-    return (response.places ?? [])
-      .map(mapPlaceIdentity)
-      .filter((place): place is ProviderPlaceIdentity => place !== null);
+    return (response.places ?? []).flatMap((place): ProviderPlaceSearchResult[] => {
+      const identity = mapPlaceIdentity(place);
+      if (!identity) return [];
+      return [
+        {
+          ...identity,
+          ...(request.detail === 'evidence'
+            ? {
+                evidence: {
+                  openingPeriods: mapOpeningPeriods(place.regularOpeningHours?.periods),
+                  rating:
+                    typeof place.rating === 'number' && Number.isFinite(place.rating)
+                      ? place.rating
+                      : null,
+                },
+              }
+            : {}),
+        },
+      ];
+    });
   }
 
   async getDetails(request: PlaceDetailsRequest): Promise<ProviderPlaceDetails> {
@@ -522,7 +553,9 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
     // unresolvable.
     const name = cleanString(response.displayName?.text) ?? cleanString(response.formattedAddress);
 
-    if (!externalPlaceId || !name) {
+    // Evidence requests deliberately omit display fields. Their absence must
+    // not discard the hours/rating answer or require a more expensive mask.
+    if (!externalPlaceId || (!name && request.detail === 'location')) {
       throw new PlaceProviderError('provider_unavailable');
     }
 
@@ -541,7 +574,7 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
       formattedAddress: cleanString(response.formattedAddress),
       googleMapsUri: cleanString(response.googleMapsUri),
       location: hasLocation ? { latitude, longitude } : null,
-      name,
+      name: name ?? '',
       openingPeriods,
       primaryType,
       provider: 'google',

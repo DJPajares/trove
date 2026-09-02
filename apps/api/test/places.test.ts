@@ -7,6 +7,7 @@ import {
   GOOGLE_AUTOCOMPLETE_FIELD_MASK,
   GOOGLE_PLACE_LOCATION_FIELD_MASK,
   GOOGLE_TEXT_SEARCH_FIELD_MASK,
+  GOOGLE_TEXT_SEARCH_EVIDENCE_FIELD_MASK,
   GooglePlacesProvider,
 } from '../src/services/google-places.js';
 import { categorizePlaceTypes } from '../src/services/place-categories.js';
@@ -19,7 +20,7 @@ test('maps provider types into the stable Trove taxonomy', () => {
   expect(categorizePlaceTypes(['establishment'])).toBe('other');
 });
 
-test('Google Text Search is capped at two durable identity results with attribution', async () => {
+test('Google Text Search requests five identity results with attribution', async () => {
   let capturedInit: RequestInit | undefined;
   const provider = new GooglePlacesProvider({
     apiKey: 'server-key',
@@ -45,6 +46,7 @@ test('Google Text Search is capped at two durable identity results with attribut
   });
 
   const places = await provider.textSearch({
+    detail: 'location',
     languageCode: 'en',
     regionCode: 'sg',
     textQuery: 'National Museum Singapore',
@@ -80,11 +82,80 @@ test('Google Text Search is capped at two durable identity results with attribut
   ]);
 });
 
+test('enriched Text Search returns scoring evidence and distinguishes missing fields from unrequested fields', async () => {
+  let calls = 0;
+  const provider = new GooglePlacesProvider({
+    apiKey: 'test-key',
+    fetcher: async (_input, init) => {
+      calls += 1;
+      expect(new Headers(init?.headers).get('X-Goog-FieldMask')).toBe(
+        GOOGLE_TEXT_SEARCH_EVIDENCE_FIELD_MASK,
+      );
+      expect(JSON.parse(String(init?.body)).pageSize).toBe(5);
+      return Response.json({
+        places: [
+          {
+            id: 'with-evidence',
+            displayName: { text: 'Museum' },
+            location: { latitude: 1, longitude: 103 },
+            attributions: [{ provider: 'Data', providerUri: 'https://example.com' }],
+            rating: 4.7,
+            utcOffsetMinutes: 480,
+            regularOpeningHours: { periods: [{ open: {} }] },
+          },
+          {
+            id: 'missing-evidence',
+            displayName: { text: 'Park' },
+            location: { latitude: 1, longitude: 103 },
+          },
+        ],
+      });
+    },
+  });
+  const results = await provider.textSearch({ detail: 'evidence', textQuery: 'Museum' });
+  expect(calls).toBe(1);
+  expect(results[0]).toMatchObject({
+    attributions: [{ provider: 'Data', providerUri: 'https://example.com' }],
+    utcOffsetMinutes: 480,
+    evidence: {
+      rating: 4.7,
+      openingPeriods: [{ open: { day: 0, hour: 0, minute: 0 }, close: null }],
+    },
+  });
+  expect(results[1]?.evidence).toEqual({ rating: null, openingPeriods: [] });
+  for (const field of ['*', 'photos', 'reviews', 'websiteUri'])
+    expect(GOOGLE_TEXT_SEARCH_EVIDENCE_FIELD_MASK).not.toContain(field);
+});
+
 test('reads the Google API key only from server environment', () => {
   expect(getPlacesEnvironment({ GOOGLE_PLACES_API_KEY: ' secret ' })).toStrictEqual({
     googlePlacesApiKey: 'secret',
   });
   expect(getPlacesEnvironment({})).toBe(null);
+});
+
+test('evidence Details accepts hours and ratings without unrequested name or location fields', async () => {
+  const provider = new GooglePlacesProvider({
+    apiKey: 'test-key',
+    fetcher: async () =>
+      Response.json({
+        id: 'museum',
+        rating: 4.2,
+        utcOffsetMinutes: 480,
+        regularOpeningHours: { periods: [{ open: {} }] },
+      }),
+  });
+  const details = await provider.getDetails({ detail: 'evidence', externalPlaceId: 'museum' });
+  expect(details).toMatchObject({
+    rating: 4.2,
+    utcOffsetMinutes: 480,
+    name: '',
+    location: null,
+    openingPeriods: [{ open: { day: 0, hour: 0, minute: 0 }, close: null }],
+  });
+  await expect(
+    provider.getDetails({ detail: 'location', externalPlaceId: 'museum' }),
+  ).rejects.toThrow('provider_unavailable');
 });
 
 test('Google search uses location bias, a session token, and an explicit field mask', async () => {

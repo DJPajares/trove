@@ -9,6 +9,7 @@ import {
 } from '../src/services/ai-generation.js';
 import {
   abortActiveAiPlanningSession,
+  addOpeningEvidence,
   applyGroundingToDraft,
   assembleAiPlanningDraft,
   type AiPlanningPipelineOptions,
@@ -16,7 +17,12 @@ import {
 } from '../src/services/ai-planning-pipeline.js';
 import { groundableDraftPlaceIds } from '../src/services/ai-planning-draft-places.js';
 import { AiPlanningSessionError } from '../src/services/ai-planning-sessions.js';
-import { PlacesService, type PlacesProvider } from '../src/services/places.js';
+import {
+  PlacesService,
+  type PlacesProvider,
+  type ProviderPlaceDetails,
+} from '../src/services/places.js';
+import type { GroundedPlaceContext } from '../src/services/ai-place-grounding.js';
 import { RoutesService, type RoutesProvider } from '../src/services/routes.js';
 import { explicitModelProposal, missingDetailsProposal } from './fixtures/ai-planning.js';
 
@@ -38,6 +44,137 @@ const noProviders = {
   placesService: null,
   routesService: null,
 };
+
+test('search and Details evidence produce identical reusable score inputs without duplicate calls', async () => {
+  const proposal = explicitModelProposal();
+  const place: ProviderPlaceDetails = {
+    attributions: [{ provider: 'Data', providerUri: 'https://example.com' }],
+    category: 'things_to_do',
+    externalPlaceId: 'museum',
+    formattedAddress: null,
+    googleMapsUri: null,
+    location: { latitude: 35.7, longitude: 139.7 },
+    name: 'Museum',
+    openingPeriods: [{ open: { day: 0, hour: 0, minute: 0 }, close: null }],
+    primaryType: 'museum',
+    provider: 'google',
+    rating: 4.6,
+    rawTypes: ['museum'],
+    utcOffsetMinutes: 540,
+  };
+  let calls = 0;
+  const service = new PlacesService(
+    {
+      name: 'google',
+      search: async () => [],
+      async getDetails(request) {
+        calls += 1;
+        expect(request).toMatchObject({
+          detail: 'evidence',
+          externalPlaceId: 'museum',
+          languageCode: 'ja',
+          regionCode: 'JP',
+        });
+        return place;
+      },
+    },
+    () => NOW,
+  );
+  const context: GroundedPlaceContext = {
+    externalPlaceId: 'museum',
+    location: place.location!,
+    languageCode: 'ja',
+    regionCode: 'JP',
+  };
+  const live = assembleAiPlanningDraft(proposal, NOW);
+  const cached = structuredClone(live);
+  const enriched = {
+    ...context,
+    evidence: {
+      status: 'ok' as const,
+      provider: 'google' as const,
+      place,
+      freshness: { fetchedAt: NOW.toISOString(), source: 'live' as const },
+    },
+  };
+  const fromSearch = await addOpeningEvidence(
+    live,
+    proposal,
+    new Map([['candidate:museum', enriched]]),
+    service,
+  );
+  expect(calls).toBe(0);
+  const fromDetails = await addOpeningEvidence(
+    cached,
+    proposal,
+    new Map([['candidate:museum', context]]),
+    service,
+  );
+  expect(calls).toBe(1);
+  expect(fromSearch).toEqual(fromDetails);
+  expect(fromSearch.ratings.get('candidate:museum')).toBe(4.6);
+  expect(fromSearch.intervals.get('item:museum')).toEqual([{ startMinute: 0, endMinute: 1440 }]);
+  expect(live.evidence).toEqual(cached.evidence);
+
+  const missing = assembleAiPlanningDraft(proposal, NOW);
+  const unknown = await addOpeningEvidence(
+    missing,
+    proposal,
+    new Map([
+      [
+        'candidate:museum',
+        {
+          ...enriched,
+          evidence: { ...enriched.evidence, place: { ...place, rating: null, openingPeriods: [] } },
+        },
+      ],
+    ]),
+    service,
+  );
+  expect(calls).toBe(1);
+  expect(unknown.ratings.size).toBe(0);
+  expect(unknown.intervals.size).toBe(0);
+  expect(missing.evidence).toContainEqual(
+    expect.objectContaining({ kind: 'opening_hours', code: 'opening_hours_unavailable' }),
+  );
+
+  const flexible = structuredClone(proposal);
+  flexible.normalizedRequest.constraints = [];
+  flexible.items[1] = {
+    ...flexible.items[1]!,
+    constraintIds: [],
+    isAnchor: false,
+    priority: 'interested',
+    origin: 'model',
+  };
+  const closedDraft = assembleAiPlanningDraft(flexible, NOW);
+  const closed = await addOpeningEvidence(
+    closedDraft,
+    flexible,
+    new Map([
+      [
+        'candidate:museum',
+        {
+          ...enriched,
+          evidence: {
+            ...enriched.evidence,
+            place: {
+              ...place,
+              openingPeriods: [
+                { open: { day: 1, hour: 9, minute: 0 }, close: { day: 1, hour: 17, minute: 0 } },
+              ],
+            },
+          },
+        },
+      ],
+    ]),
+    service,
+  );
+  expect(calls).toBe(1);
+  expect(closedDraft.unscheduledItems.some((item) => item.id === 'item:museum')).toBe(true);
+  expect(closed.ratings.size).toBe(0);
+  expect(closed.intervals.size).toBe(0);
+});
 
 function customGrounding(proposal: AiPlannerModelProposal) {
   return proposal.places.map((candidate) => ({

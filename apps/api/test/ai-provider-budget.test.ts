@@ -33,7 +33,7 @@ test('the default planner budget admits exactly 50 concurrent outbound attempts'
 
   const results = await Promise.allSettled(
     Array.from({ length: AI_PLANNER_PROVIDER_CALL_LIMIT + 1 }, (_, index) =>
-      provider.textSearch({ textQuery: `Place ${index}` }),
+      provider.textSearch({ detail: 'location', textQuery: `Place ${index}` }),
     ),
   );
 
@@ -61,7 +61,7 @@ test('Places and Routes share one planner budget and emit safe AI usage metadata
     source: 'ai-planner',
   });
 
-  await places.textSearch({ textQuery: 'secret traveller wording' });
+  await places.textSearch({ detail: 'location', textQuery: 'secret traveller wording' });
   await routes.computeRoute({
     destination: { latitude: 1.31, longitude: 103.81 },
     mode: 'walk',
@@ -95,15 +95,15 @@ test('failed outbound attempts count, while rejected local inputs do not', async
     source: 'ai-planner',
   });
 
-  await expect(provider.textSearch({ textQuery: '  ' })).rejects.toThrow(
+  await expect(provider.textSearch({ detail: 'location', textQuery: '  ' })).rejects.toThrow(
     new PlaceProviderError('invalid_request'),
   );
-  await expect(provider.textSearch({ textQuery: 'Museum' })).rejects.toThrow(
+  await expect(provider.textSearch({ detail: 'location', textQuery: 'Museum' })).rejects.toThrow(
     new PlaceProviderError('provider_unavailable'),
   );
-  await expect(provider.textSearch({ textQuery: 'Museum again' })).rejects.toThrow(
-    new PlaceProviderError('budget_exhausted'),
-  );
+  await expect(
+    provider.textSearch({ detail: 'location', textQuery: 'Museum again' }),
+  ).rejects.toThrow(new PlaceProviderError('budget_exhausted'));
   expect(fetches).toBe(1);
   expect(budget.snapshot().used).toBe(1);
 });

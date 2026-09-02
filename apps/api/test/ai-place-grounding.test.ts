@@ -11,6 +11,7 @@ import {
   PlaceProviderError,
   type PlaceTextSearchProvider,
   type ProviderPlaceIdentity,
+  type ProviderPlaceSearchResult,
 } from '../src/services/places.js';
 
 const canonicalPlaceId = '8926bbe8-abae-470c-ab90-f33af1a8d168';
@@ -44,7 +45,7 @@ function candidate(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function setup(answer: ProviderPlaceIdentity[] | Error) {
+function setup(answer: ProviderPlaceSearchResult[] | Error) {
   let searches = 0;
   const queries: string[] = [];
   const provider: PlaceTextSearchProvider = {
@@ -93,6 +94,54 @@ test('a unique exact name and locality match becomes a canonical verified place'
   });
   expect(result.warnings).toStrictEqual([]);
   expect(resolutions).toStrictEqual([identity()]);
+});
+
+test('duplicate identity and scoring queries share the enriched search before either dispatches', async () => {
+  for (const reverse of [false, true]) {
+    const requests: string[] = [];
+    const resolutions: ProviderPlaceIdentity[] = [];
+    const now = new Date('2026-09-02T12:00:00Z');
+    const grounder = new AiPlaceGrounder(
+      {
+        name: 'google',
+        async textSearch(request) {
+          requests.push(request.detail);
+          return [{ ...identity(), evidence: { openingPeriods: [], rating: 4.8 } }];
+        },
+      },
+      {
+        async resolveProviderPlaceFromIdentity(value) {
+          resolutions.push(value);
+          return { id: canonicalPlaceId };
+        },
+      },
+      () => now,
+      null,
+    );
+    const candidates = [
+      candidate({ id: 'destination', detail: 'location' }),
+      candidate({ detail: 'evidence' }),
+    ];
+    const results = await grounder.groundCandidates(reverse ? candidates.reverse() : candidates);
+    expect(requests).toEqual(['evidence']);
+    for (const result of results) {
+      expect(result.context?.evidence).toMatchObject({
+        freshness: { fetchedAt: now.toISOString(), source: 'live' },
+        place: {
+          externalPlaceId: 'ChIJmuseum',
+          openingPeriods: [],
+          rating: 4.8,
+          attributions: identity().attributions,
+        },
+      });
+      expect(result.place).not.toHaveProperty('evidence');
+    }
+    for (const resolved of resolutions) {
+      expect(resolved).not.toHaveProperty('evidence');
+      expect(resolved).not.toHaveProperty('rating');
+      expect(resolved).not.toHaveProperty('openingPeriods');
+    }
+  }
 });
 
 test('unrelated names, locality disagreement, and no result remain unverified Custom Places', async () => {
@@ -358,6 +407,16 @@ test('a new run reuses the identity and original evidence without refreshing eit
     externalPlaceId: 'ChIJmuseum',
     placeId: canonicalPlaceId,
   });
+});
+
+test('requesting scoring evidence does not invalidate an existing identity-only mapping', async () => {
+  const { newGrounder, state } = cachedSetup();
+  const first = await newGrounder().groundCandidate(candidate({ detail: 'location' }));
+  const second = await newGrounder().groundCandidate(candidate({ detail: 'evidence' }));
+  expect(state.searches).toBe(1);
+  expect(state.resolutions).toBe(1);
+  expect(second.evidence).toEqual(first.evidence);
+  expect(second.context?.evidence).toBeUndefined();
 });
 
 test('completed unresolved and ambiguous outcomes are shared, with the current candidate note and IDs', async () => {

@@ -39,6 +39,7 @@ import {
   ItemTitle,
 } from '@/components/ui/item';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
+import { useVisibleKeys } from '@/hooks/use-visible-keys';
 import type { ScheduledPlaceUse } from '@/lib/itinerary/places';
 import {
   editorialSubjectKey,
@@ -125,11 +126,16 @@ export function TripPlacesPanel({
    * traveller's nickname: "Mum's favourite bakery" is a photograph of nothing.
    * Custom places do not ask at all, for the same reason.
    *
-   * Capped like the trips library, so a long list of places stays one request.
-   * Past the cap the branded fallback takes over.
+   * Only rows that have actually scrolled near the viewport ask for a photo,
+   * so a long list resolves progressively as the traveller scrolls rather
+   * than losing images past a fixed position. The cap stays as a backstop —
+   * it should rarely bind now that requests track the visible rows.
    */
+  const { observe: observeRow, visibleKeys: visibleTripPlaceIds } = useVisibleKeys();
   const editorialSubjects: EditorialSubject[] = tripPlaces
-    .filter((tripPlace) => tripPlace.place.kind === 'provider')
+    .filter(
+      (tripPlace) => tripPlace.place.kind === 'provider' && visibleTripPlaceIds.has(tripPlace.id),
+    )
     .flatMap((tripPlace) => {
       const providerName = resolveProviderPlaceName(tripPlace);
       if (!providerName) return [];
@@ -186,6 +192,7 @@ export function TripPlacesPanel({
             <Item
               className="relative gap-3 px-3 py-2.5 hover:bg-surface-hover"
               key={tripPlace.id}
+              ref={observeRow(tripPlace.id)}
               variant="outline"
             >
               {tripPlace.place.kind === 'custom' ? (

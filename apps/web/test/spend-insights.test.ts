@@ -382,6 +382,7 @@ function spent(
     category: null,
     currencyCode: 'EUR',
     itineraryDay: null,
+    itineraryItem: null,
     tripPlace: null,
     ...overrides,
   };
@@ -567,4 +568,36 @@ test('an uncategorised expense is reachable by the bucket it was put in', () => 
   expect(matchesSpendFilter(spent('1.00'), { kind: 'category', value: 'uncategorised' })).toBe(
     true,
   );
+});
+
+test('an expense added from an itinerary item counts toward that item place', () => {
+  const result = breakdown([
+    spent('30.00', { itineraryItem: { place: { id: 'p1' } } }),
+    spent('10.00', { tripPlace: { id: 'p1' } }),
+  ]);
+
+  expect(result.byPlace).toHaveLength(1);
+  expect(result.byPlace[0]).toMatchObject({ count: 2, key: 'p1' });
+  expect(result.byPlace[0]?.total.minorUnits).toBe(4000);
+});
+
+test('a place chosen by hand outranks the one the item came with', () => {
+  const result = breakdown([
+    spent('30.00', { itineraryItem: { place: { id: 'from-item' } }, tripPlace: { id: 'chosen' } }),
+  ]);
+
+  expect(result.byPlace.map((bucket) => bucket.key)).toStrictEqual(['chosen']);
+});
+
+test('a place filter reaches an expense that only its item names', () => {
+  const expense = spent('1.00', { itineraryItem: { place: { id: 'p1' } } });
+
+  expect(matchesSpendFilter(expense, { kind: 'place', value: 'p1' })).toBe(true);
+  expect(matchesSpendFilter(expense, { kind: 'place', value: 'p2' })).toBe(false);
+});
+
+test('an item with no place of its own leaves the expense out of the place view', () => {
+  const result = breakdown([spent('30.00', { itineraryItem: { place: null } })]);
+
+  expect(result.byPlace).toStrictEqual([]);
 });

@@ -82,12 +82,14 @@ export function ExpensesManager({
     if (quickAdd.localDate && /^\d{4}-\d{2}-\d{2}$/.test(quickAdd.localDate)) {
       draft.localDate = quickAdd.localDate;
     }
-    if (
-      quickAdd.itineraryItemId &&
-      data.itineraryItems.some((item) => item.id === quickAdd.itineraryItemId)
-    ) {
-      draft.itineraryItemId = quickAdd.itineraryItemId;
-    }
+    // Trip Mode's per-item "Add expense" names an itinerary item, which the form
+    // no longer offers as a field of its own. The item's place is the same answer
+    // to where the money went, so the link is carried across rather than dropped.
+    const quickAddPlaceId = quickAdd.itineraryItemId
+      ? (data.itineraryItems.find((item) => item.id === quickAdd.itineraryItemId)?.place?.id ??
+        null)
+      : null;
+    if (quickAddPlaceId) draft.tripPlaceId = quickAddPlaceId;
     setExpenseForm(draft);
     setFormError(null);
     setEditor({ kind: 'create', expense: null });
@@ -130,10 +132,6 @@ export function ExpensesManager({
     event.preventDefault();
     if (!hasValidMoney(expenseForm.amount, expenseForm.currencyCode)) {
       setFormError(t('amountCurrencyRequired'));
-      return;
-    }
-    if (expenseForm.localTime && !expenseForm.localDate) {
-      setFormError(t('dateRequiredForTime'));
       return;
     }
 
@@ -320,7 +318,6 @@ export function ExpensesManager({
         expenseForm={expenseForm}
         expenseToDelete={expenseToDelete}
         formError={formError}
-        itineraryItems={data.itineraryItems}
         onBudgetFieldChange={updateBudgetForm}
         onBudgetSubmit={handleBudgetSubmit}
         onClose={closeEditor}
@@ -329,7 +326,9 @@ export function ExpensesManager({
         onExpenseSubmit={handleExpenseSubmit}
         onExpenseToDeleteChange={setExpenseToDelete}
         saving={saving}
+        tripEndDate={trip?.endDate ?? ''}
         tripPlaces={data.tripPlaces}
+        tripStartDate={trip?.startDate ?? ''}
       />
     </section>
   );

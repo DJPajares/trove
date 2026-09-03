@@ -4,6 +4,20 @@ import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
 
+/**
+ * The column template every spending row shares.
+ *
+ * A fixed bar column is not enough on its own: put a variable-width amount after
+ * it and the bar slides left and right by however wide that amount happens to
+ * be, so no two rows line up. Fixing both columns is what makes the bars read as
+ * one chart rather than as a stack of unrelated widths.
+ *
+ * The bar is hidden below `sm` and `display: none` takes it out of grid flow, so
+ * the narrow breakpoint has exactly two items for its two columns.
+ */
+export const SPEND_ROW_GRID =
+  'grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_6rem_7rem]';
+
 export type SpendRankRow = {
   /** The tint the bar is filled with, as a complete Tailwind class. */
   barClassName: string;
@@ -59,13 +73,14 @@ export function SpendRankList({
               aria-label={rowLabel(row)}
               aria-pressed={active}
               className={cn(
-                'flex min-h-11 w-full items-center gap-3 rounded-[var(--radius-md)] px-2 py-1.5 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40',
+                SPEND_ROW_GRID,
+                'min-h-11 w-full items-center gap-3 rounded-[var(--radius-md)] px-2 py-1.5 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40',
                 active && 'bg-secondary',
               )}
               onClick={() => onSelect(row.id)}
               type="button"
             >
-              <span className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="flex min-w-0 items-center gap-2">
                 {row.icon ? (
                   <span className="shrink-0 text-muted-foreground [&_svg]:size-4">{row.icon}</span>
                 ) : null}
@@ -73,7 +88,7 @@ export function SpendRankList({
               </span>
               <span
                 aria-hidden="true"
-                className="hidden h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-muted sm:block"
+                className="hidden h-1.5 self-center overflow-hidden rounded-full bg-muted sm:block"
               >
                 <span
                   className={cn(
@@ -83,7 +98,7 @@ export function SpendRankList({
                   style={{ width: `${largest > 0 ? Math.round((row.share / largest) * 100) : 0}%` }}
                 />
               </span>
-              <span className="shrink-0 text-sm font-medium tabular-nums">{row.amount}</span>
+              <span className="text-right text-sm font-medium tabular-nums">{row.amount}</span>
             </button>
           </li>
         );

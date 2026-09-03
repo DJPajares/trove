@@ -40,7 +40,9 @@ export function SpendCurrencyList({
             <button
               aria-pressed={active}
               className={cn(
-                'flex min-h-11 w-full items-baseline justify-between gap-3 rounded-[var(--radius-md)] px-2 py-1.5 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40',
+                // No bar in this view, so one fixed column for the converted
+                // worth is all it takes to line the rows up.
+                'grid min-h-11 w-full grid-cols-[minmax(0,1fr)_9rem] items-baseline gap-3 rounded-[var(--radius-md)] px-2 py-1.5 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40',
                 active && 'bg-secondary',
               )}
               onClick={() => onSelect(row.paid.currencyCode)}
@@ -50,7 +52,7 @@ export function SpendCurrencyList({
                 {formatCurrencyAmount(locale, row.paid.amount, row.paid.currencyCode)}
               </span>
               {isReference ? null : (
-                <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
+                <span className="text-right text-sm text-muted-foreground tabular-nums">
                   {row.worth.minorUnits === null
                     ? t('breakdowns.currency.unpriced')
                     : t('breakdowns.currency.worth', {

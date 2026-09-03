@@ -8,7 +8,6 @@ import { CurrencyCombobox } from '@/components/currency-combobox';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import { DatePicker } from '@/components/date-picker';
 import { MoneyInput } from '@/components/money-input';
-import { TimeInput } from '@/components/time-input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -43,7 +42,6 @@ import type { Expense, ExpenseCategory, ExpensePlace } from '@/lib/expenses/api'
 import { resolveExpenseCategory } from '@/lib/expenses/categories';
 import {
   expenseTitle as resolveExpenseTitle,
-  itineraryItemLabel as resolveItemLabel,
   placeLabel as resolvePlaceLabel,
 } from '@/lib/expenses/labels';
 import type { BudgetForm, EditorState, ExpenseForm } from '@/lib/expenses/editor-state';
@@ -71,7 +69,6 @@ export function ExpenseEditorSheet({
   expenseForm,
   expenseToDelete,
   formError,
-  itineraryItems,
   onBudgetFieldChange,
   onBudgetSubmit,
   onClose,
@@ -80,7 +77,9 @@ export function ExpenseEditorSheet({
   onExpenseSubmit,
   onExpenseToDeleteChange,
   saving,
+  tripEndDate,
   tripPlaces,
+  tripStartDate,
 }: Readonly<{
   budgetForm: BudgetForm;
   deleting: boolean;
@@ -88,7 +87,6 @@ export function ExpenseEditorSheet({
   expenseForm: ExpenseForm;
   expenseToDelete: Expense | null;
   formError: string | null;
-  itineraryItems: Array<{ id: string; label: string | null; place: ExpensePlace | null }>;
   onBudgetFieldChange: <Key extends keyof BudgetForm>(key: Key, value: BudgetForm[Key]) => void;
   onBudgetSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
@@ -97,7 +95,9 @@ export function ExpenseEditorSheet({
   onExpenseSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onExpenseToDeleteChange: (expense: Expense | null) => void;
   saving: boolean;
+  tripEndDate: string;
   tripPlaces: ExpensePlace[];
+  tripStartDate: string;
 }>) {
   const t = useTranslations('expenses');
 
@@ -242,90 +242,50 @@ export function ExpenseEditorSheet({
                       <Chip value="none">{t('noCategory')}</Chip>
                     </ChipGroup>
                   </Field>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel>{t('date')}</FieldLabel>
-                      <DatePicker
-                        id="expense-date"
-                        label={t('date')}
-                        onChange={(value) => onExpenseFieldChange('localDate', value)}
-                        value={expenseForm.localDate}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="expense-time">{t('time')}</FieldLabel>
-                      <TimeInput
-                        id="expense-time"
-                        onValueChange={(value) => onExpenseFieldChange('localTime', value)}
-                        value={expenseForm.localTime}
-                      />
-                      <FieldDescription>{t('timeHint')}</FieldDescription>
-                    </Field>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel htmlFor="expense-place">{t('linkedPlace')}</FieldLabel>
-                      <Select
-                        onValueChange={(value) =>
-                          onExpenseFieldChange('tripPlaceId', value ?? 'none')
-                        }
-                        value={expenseForm.tripPlaceId}
-                      >
-                        <SelectTrigger id="expense-place" className="w-full">
-                          <SelectValue>
-                            {expenseForm.tripPlaceId === 'none'
-                              ? t('noLinkedPlace')
-                              : resolvePlaceLabel(
-                                  tripPlaces.find(
-                                    (place) => place.id === expenseForm.tripPlaceId,
-                                  ) ?? null,
-                                  t('unnamedPlace'),
-                                )}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">{t('noLinkedPlace')}</SelectItem>
-                          {tripPlaces.map((place) => (
-                            <SelectItem key={place.id} value={place.id}>
-                              {resolvePlaceLabel(place, t('unnamedPlace'))}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="expense-item">{t('linkedItem')}</FieldLabel>
-                      <Select
-                        onValueChange={(value) =>
-                          onExpenseFieldChange('itineraryItemId', value ?? 'none')
-                        }
-                        value={expenseForm.itineraryItemId}
-                      >
-                        <SelectTrigger id="expense-item" className="w-full">
-                          <SelectValue>
-                            {expenseForm.itineraryItemId === 'none'
-                              ? t('noLinkedItem')
-                              : (() => {
-                                  const item = itineraryItems.find(
-                                    (candidate) => candidate.id === expenseForm.itineraryItemId,
-                                  );
-                                  return item
-                                    ? resolveItemLabel(item, t('unnamedItem'))
-                                    : t('unnamedItem');
-                                })()}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">{t('noLinkedItem')}</SelectItem>
-                          {itineraryItems.map((item) => (
-                            <SelectItem key={item.id} value={item.id}>
-                              {resolveItemLabel(item, t('unnamedItem'))}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  </div>
+                  <Field>
+                    <FieldLabel>{t('date')}</FieldLabel>
+                    {/* Bounded by the trip so a date can only ever name a trip day.
+                        Still clearable: an expense with no date counts toward the
+                        trip total without claiming to belong to any one day. */}
+                    <DatePicker
+                      id="expense-date"
+                      label={t('date')}
+                      max={tripEndDate}
+                      min={tripStartDate}
+                      onChange={(value) => onExpenseFieldChange('localDate', value)}
+                      value={expenseForm.localDate}
+                    />
+                    <FieldDescription>{t('dateHint')}</FieldDescription>
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="expense-place">{t('linkedPlace')}</FieldLabel>
+                    <Select
+                      onValueChange={(value) =>
+                        onExpenseFieldChange('tripPlaceId', value ?? 'none')
+                      }
+                      value={expenseForm.tripPlaceId}
+                    >
+                      <SelectTrigger id="expense-place" className="w-full">
+                        <SelectValue>
+                          {expenseForm.tripPlaceId === 'none'
+                            ? t('noLinkedPlace')
+                            : resolvePlaceLabel(
+                                tripPlaces.find((place) => place.id === expenseForm.tripPlaceId) ??
+                                  null,
+                                t('unnamedPlace'),
+                              )}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">{t('noLinkedPlace')}</SelectItem>
+                        {tripPlaces.map((place) => (
+                          <SelectItem key={place.id} value={place.id}>
+                            {resolvePlaceLabel(place, t('unnamedPlace'))}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
                   <Field>
                     <FieldLabel htmlFor="expense-note">{t('note')}</FieldLabel>
                     <Textarea

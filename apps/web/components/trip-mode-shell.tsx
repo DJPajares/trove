@@ -423,13 +423,24 @@ export function TripModeShell({
     for (const { path } of tripModeViews) router.prefetch(`${basePath}${path}`);
   }, [contextTrip, itineraryStatus, router]);
 
+  /**
+   * Stepping the preview writes the URL itself rather than routing to it.
+   *
+   * Which day is being previewed is still part of where you are, so it still
+   * belongs in the address bar. But `router.replace` treats it as a
+   * destination: the App Router fetches a fresh RSC payload, the service worker
+   * takes it network-first, and only once that lands does `useSearchParams`
+   * move - which is when the request for the day actually starts. Next patches
+   * the history API to feed the router directly, so this arrives at the same
+   * place without asking the server what a query string means.
+   */
   function updatePreview(next: { date?: string; time?: string }) {
     if (!previewSelection) return;
     const params = new URLSearchParams(searchParams.toString());
     params.set('preview', '1');
     params.set('date', next.date ?? previewSelection.date);
     params.set('time', next.time ?? previewSelection.time);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    window.history.replaceState(null, '', `${pathname}?${params.toString()}`);
   }
 
   if (tripContext?.status === 'loading' || itineraryStatus === 'loading') {

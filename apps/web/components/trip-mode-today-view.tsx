@@ -164,10 +164,15 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     setUndoAction(null);
   }, [previewSelection?.date, previewSelection?.time]);
 
+  // The day the traveller asked for, not the one the server has echoed back yet.
+  // Preview steps through days the itinerary already holds in full, so the list
+  // turns over on the click and the context request catches up behind it. Live
+  // has no stepper: there, which day it is remains the server's answer.
+  const selectedDate = previewSelection?.date ?? context?.selectedDate ?? null;
   const day = useMemo(() => {
-    if (!context || !itinerary) return null;
-    return itinerary.days.find((candidate) => candidate.date === context.selectedDate) ?? null;
-  }, [context, itinerary]);
+    if (!selectedDate || !itinerary) return null;
+    return itinerary.days.find((candidate) => candidate.date === selectedDate) ?? null;
+  }, [itinerary, selectedDate]);
   const placeUse = useMemo(() => (itinerary ? scheduledPlaceUse(itinerary) : {}), [itinerary]);
   const reservationsByItem = useMemo(() => {
     const grouped = new Map<string, Reservation[]>();
@@ -204,9 +209,20 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     );
   }
 
+  const shownDate = selectedDate ?? context.selectedDate;
   const date = new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeZone: 'UTC' }).format(
-    new Date(`${context.selectedDate}T00:00:00.000Z`),
+    new Date(`${shownDate}T00:00:00.000Z`),
   );
+  // Which day this is, counted from the itinerary rather than waited for: the
+  // server says the same thing a moment later, and a heading that renumbers
+  // itself is the lag this screen is trying to stop showing.
+  const dayNumber = itinerary.days.findIndex((candidate) => candidate.id === day?.id) + 1 || 1;
+  // "Current" is the one thing here only the server can answer, and its answer
+  // is about the day it was asked for. While it is still about the last one,
+  // nothing on this day is current - which is truer than accenting a row
+  // because a request has not come back yet.
+  const currentItemId =
+    context.selectedDate === day?.date ? (context.currentOrRelevant?.itemId ?? null) : null;
   // The snapshot travels with the itinerary, including the copy held offline, so
   // these no longer depend on being online to name a Place or show its address.
   const snapshotFor = (item: ItineraryItem) => item.tripPlace?.place.snapshot ?? null;
@@ -238,7 +254,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     return `https://www.google.com/maps/dir/?${query.toString()}`;
   };
   const expenseHref = (itineraryItemId?: string) => {
-    const query = new URLSearchParams({ create: '1', date: context.selectedDate });
+    const query = new URLSearchParams({ create: '1', date: shownDate });
     if (itineraryItemId) query.set('itineraryItemId', itineraryItemId);
     return `/trips/${tripId}/expenses?${query.toString()}`;
   };
@@ -462,7 +478,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
             <h2 className="sr-only">{t('title')}</h2>
           )}
           <p className="text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
-            {day.name ? itineraryT('dayOption', { date, number: context.day?.number ?? 1 }) : date}
+            {day.name ? itineraryT('dayOption', { date, number: dayNumber }) : date}
           </p>
           <p className="mt-0.5 text-[length:var(--text-metadata)] leading-5 text-text-subtle">
             {t('timeZone', { timeZone: day.defaultTimeZone })}
@@ -581,7 +597,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
             const name = itemName(item);
             const location = itemLocation(item);
             const directions = directionsHref(item);
-            const isCurrent = context.currentOrRelevant?.itemId === item.id;
+            const isCurrent = currentItemId === item.id;
             const busy = mutatingItemId === item.id;
             const upcoming = item.travelStatus === 'upcoming';
             const completed = item.travelStatus === 'completed';
@@ -870,7 +886,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
       <TripModeMemoryDialog
         dayDate={date}
         dayId={day.id}
-        defaultItemId={context.currentOrRelevant?.itemId ?? null}
+        defaultItemId={currentItemId}
         items={day.items}
         onOpenChange={setMemoryOpen}
         onSaved={(queued) => {

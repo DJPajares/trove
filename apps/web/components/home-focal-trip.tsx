@@ -6,6 +6,8 @@ import { HomeWeatherInset, HomeWeatherInsetSkeleton } from '@/components/home-we
 import { TripDestinationActions } from '@/components/trip-destination-actions';
 import { TripItineraryCoverage } from '@/components/trip-itinerary-coverage';
 import { TripMedia } from '@/components/trip-media';
+import { TripReadinessBadge } from '@/components/trip-readiness-badge';
+import { TripReadinessPrompt } from '@/components/trip-readiness-prompt';
 import { Button } from '@/components/ui/button';
 import type { CompletedPromptKey } from '@/lib/home/completed-prompt';
 import type { HomeWeatherTarget } from '@/lib/home/weather';
@@ -80,7 +82,16 @@ export function HomeFocalTrip({
         <div className="relative flex min-h-[31rem] flex-col justify-end gap-4 p-5 text-white sm:min-h-[29rem] sm:p-7 lg:min-h-[31rem] lg:p-9">
           <div className="flex w-full flex-col gap-4 lg:max-w-3xl">
             <div className="space-y-1.5">
-              <p className="text-sm font-medium text-white/78">{t(stageLabels[trip.lifecycle])}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-medium text-white/78">
+                  {t(stageLabels[trip.lifecycle])}
+                </p>
+                <TripReadinessBadge
+                  lifecycle={trip.lifecycle}
+                  readiness={trip.planningReadiness}
+                  tone="onMedia"
+                />
+              </div>
               <h2
                 className="max-w-2xl text-3xl leading-[1.08] font-semibold tracking-[-0.035em] text-balance sm:text-4xl"
                 id="home-focal-heading"
@@ -98,9 +109,6 @@ export function HomeFocalTrip({
                 <div className="space-y-2">
                   <p className="text-lg font-medium">
                     {t('countdown', { count: daysUntilTripStart(trip) })}
-                  </p>
-                  <p className="text-sm text-white/78">
-                    {t(`readiness.${trip.planningReadiness}`)}
                   </p>
                   {trip.itineraryCoverage ? (
                     <TripItineraryCoverage coverage={trip.itineraryCoverage} inverse />
@@ -170,6 +178,8 @@ export function HomeFocalTrip({
                     }
               }
             />
+
+            <TripReadinessPrompt inverse trip={trip} />
 
             {promptKey ? (
               <div className="flex items-start justify-between gap-3 border-t border-white/20 pt-3">

@@ -6,6 +6,7 @@ import {
   CalendarClock,
   ChevronRight,
   CircleAlert,
+  CircleCheck,
   ClipboardCheck,
   Compass,
   Ellipsis,
@@ -13,6 +14,7 @@ import {
   MapPinned,
   Navigation,
   Pencil,
+  RotateCcw,
   ReceiptText,
   Share2,
   Sparkles,
@@ -36,6 +38,8 @@ import { useTripCreation } from '@/components/trip-creation-provider';
 import { useTripContext } from '@/components/trip-provider';
 import { TripShareDialog } from '@/components/trip-share-dialog';
 import { TripMedia } from '@/components/trip-media';
+import { TripReadinessBadge } from '@/components/trip-readiness-badge';
+import { TripReadinessPrompt } from '@/components/trip-readiness-prompt';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -76,6 +80,7 @@ import {
   type TripOverviewDestination,
 } from '@/lib/trips/navigation';
 import { tripDestinationSummary } from '@/lib/trips/summary';
+import { useTripReadiness } from '@/lib/trips/use-trip-readiness';
 import { queryKeys } from '@/lib/query/keys';
 
 /** The tools' icons. Which tools there are, and their order, is the navigation contract's. */
@@ -219,6 +224,12 @@ export function TripDetail({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const {
+    failedTripId: readinessFailedTripId,
+    pendingTripId: readinessPendingTripId,
+    setReadiness,
+  } = useTripReadiness();
+  const readinessPending = readinessPendingTripId !== null;
   // The same entry the Trip Info screen reads, so opening this overview after
   // editing trip info shows the edit without asking again.
   const tripInfoQuery = useQuery({
@@ -365,11 +376,14 @@ export function TripDetail({
                 {formatTripDateRange(trip.startDate, trip.endDate, locale)}
               </p>
             </div>
-            <TripLifecycleBadge
-              className="mb-0.5 shrink-0"
-              lifecycle={trip.lifecycle}
-              tone="onMedia"
-            />
+            <div className="mb-0.5 flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+              <TripLifecycleBadge lifecycle={trip.lifecycle} tone="onMedia" />
+              <TripReadinessBadge
+                lifecycle={trip.lifecycle}
+                readiness={trip.planningReadiness}
+                tone="onMedia"
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -414,6 +428,29 @@ export function TripDetail({
               <Share2 aria-hidden="true" />
               {share('action')}
             </DropdownMenuItem>
+            {/* Readiness was previously reachable only by opening the edit form
+                and expanding a panel, which is a long way round for a marker
+                the traveller is meant to flip as their plan settles. It stays
+                out of the menu once the trip is under way: by then the plan is
+                no longer the thing being declared done. */}
+            {trip.lifecycle === 'planning' ? (
+              <DropdownMenuItem
+                disabled={readinessPending}
+                onClick={() =>
+                  void setReadiness(
+                    trip,
+                    trip.planningReadiness === 'ready' ? 'in_progress' : 'ready',
+                  )
+                }
+              >
+                {trip.planningReadiness === 'ready' ? (
+                  <RotateCcw aria-hidden="true" />
+                ) : (
+                  <CircleCheck aria-hidden="true" />
+                )}
+                {t(trip.planningReadiness === 'ready' ? 'markInProgress' : 'markReady')}
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuLabel>{t('tripTools')}</DropdownMenuLabel>
@@ -439,6 +476,13 @@ export function TripDetail({
         <Alert role="alert" variant="destructive">
           <CircleAlert aria-hidden="true" />
           <AlertDescription>{deleteError}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {readinessFailedTripId === trip.id ? (
+        <Alert role="alert" variant="destructive">
+          <CircleAlert aria-hidden="true" />
+          <AlertDescription>{t('readinessPrompt.error')}</AlertDescription>
         </Alert>
       ) : null}
 
@@ -477,6 +521,8 @@ export function TripDetail({
       ) : planScoreEnabled ? (
         <TripDetailPlanScore tripId={trip.id} />
       ) : null}
+
+      <TripReadinessPrompt trip={trip} />
 
       <dl className="grid border-t border-border-subtle sm:grid-cols-2 sm:gap-x-8">
         <OverviewFact

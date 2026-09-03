@@ -17,6 +17,15 @@ const RECENTLY_COMPLETED_DAYS = 30;
 export const PAST_TRIPS_PREVIEW_COUNT = 4;
 
 /**
+ * How close departure has to be before an unmarked plan is worth mentioning.
+ *
+ * A week is the point where a trip stops being an idea and starts being
+ * logistics - early enough to still act on what is missing, late enough that
+ * the traveller is not nagged about a trip they have months to finish.
+ */
+const READINESS_NUDGE_DAYS = 7;
+
+/**
  * The calendar date in a given zone, as `YYYY-MM-DD`.
  *
  * This deliberately mirrors `getLocalDate` in
@@ -69,6 +78,28 @@ export function isRecentlyCompleted(trip: Trip, now = new Date()) {
   return daysSinceEnd >= 0 && daysSinceEnd <= RECENTLY_COMPLETED_DAYS;
 }
 
+export type ReadinessPromptKind = 'nudge' | 'suggest';
+
+/**
+ * What, if anything, to say to a traveller who has not marked a plan Ready.
+ *
+ * Trove only ever asks. Readiness is the traveller's own declaration - a full
+ * itinerary is evidence that the plan looks finished, not permission to
+ * declare it finished on their behalf (PRD section 6.2).
+ *
+ * A plan that looks complete gets the question rather than the reminder: being
+ * told a trip is close when it is also clearly ready would be pointing at the
+ * wrong thing.
+ */
+export function resolveReadinessPrompt(trip: Trip, now = new Date()): ReadinessPromptKind | null {
+  if (trip.lifecycle !== 'planning' || trip.planningReadiness !== 'in_progress') return null;
+
+  if (trip.itineraryCoverage?.percentage === 100) return 'suggest';
+  if (daysUntilTripStart(trip, now) <= READINESS_NUDGE_DAYS) return 'nudge';
+
+  return null;
+}
+
 type SelectPrimaryTripOptions = {
   /**
    * Whether a just-finished trip may still be the primary one. Home says yes -
@@ -113,8 +144,10 @@ export type TripLibraryGroups = {
   featured: Trip | null;
   /** Finished trips, most recent first. */
   past: Trip[];
-  /** Everything still ahead that the featured trip did not take. */
-  upcoming: Trip[];
+  /** Trips still ahead whose plan the traveller has not yet called done. */
+  upcomingInProgress: Trip[];
+  /** Trips still ahead that the traveller has marked Ready. */
+  upcomingReady: Trip[];
 };
 
 /**
@@ -135,9 +168,19 @@ export function groupTripsForLibrary(trips: Trip[], now = new Date()): TripLibra
       return left.startDate.localeCompare(right.startDate);
     });
 
+  // Readiness separates the list; it never reorders it. Partitioning an
+  // already-sorted list keeps each group in departure order, so a marker can
+  // never lift a trip above one that leaves sooner. An active trip stays with
+  // the unmarked ones whatever its readiness says: Ready is a planning-phase
+  // declaration, and that phase is over.
+  const isMarkedReady = (trip: Trip) =>
+    trip.lifecycle === 'planning' && trip.planningReadiness === 'ready';
+  const upcomingReady = upcoming.filter(isMarkedReady);
+  const upcomingInProgress = upcoming.filter((trip) => !isMarkedReady(trip));
+
   const past = trips
     .filter((trip) => trip.lifecycle === 'completed')
     .toSorted((left, right) => right.endDate.localeCompare(left.endDate));
 
-  return { featured, past, upcoming };
+  return { featured, past, upcomingInProgress, upcomingReady };
 }

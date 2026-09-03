@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { TripItineraryCoverage } from '@/components/trip-itinerary-coverage';
 import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
 import { TripMedia } from '@/components/trip-media';
+import { TripReadinessBadge } from '@/components/trip-readiness-badge';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import type { Trip } from '@/lib/trips/api';
@@ -48,10 +49,10 @@ export function TripListRow({ editorial, trip, variant = 'card' }: Readonly<Trip
             {trip.name}
           </h3>
           {!isArchive ? (
-            <TripLifecycleBadge
-              className="hidden shrink-0 sm:inline-flex"
-              lifecycle={trip.lifecycle}
-            />
+            <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
+              <TripLifecycleBadge lifecycle={trip.lifecycle} />
+              <TripReadinessBadge lifecycle={trip.lifecycle} readiness={trip.planningReadiness} />
+            </div>
           ) : null}
         </div>
         <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">

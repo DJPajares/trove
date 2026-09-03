@@ -216,6 +216,9 @@ async function resolveLeaveBy(input: {
     {
       itemIds: [input.currentItem.id, input.nextItem.id],
       languageCode: input.languageCode,
+      // One leg is read below. Asking for the whole day's chain around these
+      // two stops bought the base legs at either end and threw them away.
+      legs: 'between_items',
     },
     { ...input.services, source: 'trip-mode-context' },
   );

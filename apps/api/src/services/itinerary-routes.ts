@@ -415,7 +415,22 @@ export async function getItineraryDayRoutes(
   userId: string,
   tripId: string,
   itineraryDayId: string,
-  options: { includePolyline?: boolean; itemIds?: string[]; languageCode?: string } = {},
+  options: {
+    includePolyline?: boolean;
+    itemIds?: string[];
+    languageCode?: string;
+    /**
+     * Which legs the caller will actually read.
+     *
+     * `whole_day` is the chain a day view draws: out of the base, between the
+     * stops, and back again. `between_items` is for a caller that only wants
+     * the hop from one stop to the next - Trip Mode's leave-by asks about two
+     * items and reads exactly one leg. The day's ends are not computed and
+     * then dropped for it; they are never asked for, because a base costs a
+     * Place Details call to locate and a Routes call to reach.
+     */
+    legs?: 'between_items' | 'whole_day';
+  } = {},
   services: RouteServices = {},
 ): Promise<ItineraryDayRoutes> {
   const prisma = getPrismaClient();
@@ -471,13 +486,14 @@ export async function getItineraryDayRoutes(
     .filter((entry): entry is typeof entry & { point: RoutePoint } => entry.point !== null)
     .map(({ item, point }) => ({ mode: mapMode(item.travelModeToNext), point }));
 
-  const { arrival: inferredArrival, departure: inferredDeparture } = inferAccommodationBases(
-    day.accommodationReservations,
-    day.date,
-  );
-  const arrivalBaseTripPlace = day.dailyBaseTripPlace ?? inferredArrival;
-  const departureBaseTripPlace =
-    day.dailyBaseDepartureTripPlace ?? day.dailyBaseTripPlace ?? inferredDeparture;
+  const wholeDay = options.legs !== 'between_items';
+  const { arrival: inferredArrival, departure: inferredDeparture } = wholeDay
+    ? inferAccommodationBases(day.accommodationReservations, day.date)
+    : { arrival: null, departure: null };
+  const arrivalBaseTripPlace = wholeDay ? (day.dailyBaseTripPlace ?? inferredArrival) : null;
+  const departureBaseTripPlace = wholeDay
+    ? (day.dailyBaseDepartureTripPlace ?? day.dailyBaseTripPlace ?? inferredDeparture)
+    : null;
   const arrivalBase = arrivalBaseTripPlace
     ? await resolvePlace(arrivalBaseTripPlace.place, 'daily_base', arrivalBaseTripPlace.id)
     : null;
@@ -486,7 +502,7 @@ export async function getItineraryDayRoutes(
     : null;
   const isFirstDay = day.date.getTime() === trip.startDate.getTime();
   const startingLocationExpected =
-    !arrivalBaseTripPlace && isFirstDay && trip.startingPlace !== null;
+    wholeDay && !arrivalBaseTripPlace && isFirstDay && trip.startingPlace !== null;
   const startingLocation =
     startingLocationExpected && trip.startingPlace
       ? await resolvePlace(trip.startingPlace, 'starting_location', trip.startingPlace.id)

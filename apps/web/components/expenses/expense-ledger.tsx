@@ -18,7 +18,6 @@ import { formatCurrencyAmount } from '@/lib/currency/money';
 import type { CurrencyTotal, Expense, ExpensePlace } from '@/lib/expenses/api';
 import {
   expenseTitle as resolveExpenseTitle,
-  itineraryItemLabel as resolveItemLabel,
   placeLabel as resolvePlaceLabel,
 } from '@/lib/expenses/labels';
 import { matchesSpendFilter, type SpendFilter } from '@/lib/expenses/spend-insights';
@@ -77,8 +76,6 @@ export function ExpenseLedger({
 
   const expenseTitle = (expense: Expense) => resolveExpenseTitle(expense, t('untitledExpense'));
   const placeLabel = (place: ExpensePlace | null) => resolvePlaceLabel(place, t('unnamedPlace'));
-  const itemLabel = (item: { label: string | null; place: ExpensePlace | null }) =>
-    resolveItemLabel(item, t('unnamedItem'));
 
   /**
    * A day's summary is the sum of what is on screen, not of the whole day - a
@@ -115,9 +112,7 @@ export function ExpenseLedger({
           <span className="flex flex-wrap gap-x-2 gap-y-1">
             {expense.category ? <span>{t(`categories.${expense.category}`)}</span> : null}
             {expense.tripPlace ? <span>{placeLabel(expense.tripPlace)}</span> : null}
-            {expense.itineraryItem ? <span>{itemLabel(expense.itineraryItem)}</span> : null}
             {expense.localDate && !expense.itineraryDay ? <span>{expense.localDate}</span> : null}
-            {expense.localTime ? <span>{expense.localTime}</span> : null}
           </span>
           {!expense.itineraryDay && expense.localDate ? (
             <span className="mt-1 block">{t('unassignedDatedExpense')}</span>

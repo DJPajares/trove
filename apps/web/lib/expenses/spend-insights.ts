@@ -281,8 +281,21 @@ export type SpendExpense = {
   category: ExpenseCategory | null;
   currencyCode: string;
   itineraryDay: { id: string } | null;
+  itineraryItem: { place: { id: string } | null } | null;
   tripPlace: { id: string } | null;
 };
+
+/**
+ * The place an expense belongs to.
+ *
+ * An expense added from an itinerary item carries no place of its own, but the
+ * item it came from has one - and to a traveller those are the same answer to
+ * "where did this money go". Reading through to it is what lets the editor offer
+ * a single link field without the Place view losing rows.
+ */
+function placeIdOf(expense: SpendExpense): string | null {
+  return expense.tripPlace?.id ?? expense.itineraryItem?.place?.id ?? null;
+}
 
 export type SpendBucket<Key> = {
   count: number;
@@ -481,13 +494,7 @@ export function buildSpendBreakdown(input: {
         return { paid, share: shareOf(worth, total), worth };
       })
       .toSorted((left, right) => (right.worth.minorUnits ?? 0) - (left.worth.minorUnits ?? 0)),
-    byPlace: bucketBy(
-      expenses,
-      (expense) => expense.tripPlace?.id ?? null,
-      referenceCurrency,
-      board,
-      total,
-    ),
+    byPlace: bucketBy(expenses, placeIdOf, referenceCurrency, board, total),
     // Every trip day is here, including the ones nothing was spent on: a quiet
     // day is part of the shape of a trip, and hiding it makes the rest lie.
     days: dayTotals.map((day) => ({
@@ -524,6 +531,6 @@ export function matchesSpendFilter(expense: SpendExpense, filter: SpendFilter | 
     case 'day':
       return expense.itineraryDay?.id === filter.value;
     case 'place':
-      return expense.tripPlace?.id === filter.value;
+      return placeIdOf(expense) === filter.value;
   }
 }

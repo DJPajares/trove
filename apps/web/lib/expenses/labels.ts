@@ -9,14 +9,6 @@ export function placeLabel(place: ExpensePlace | null, fallback: string): string
   return place ? (place.name ?? place.snapshot?.name ?? fallback) : fallback;
 }
 
-/** An item named only by its Place has no label of its own to fall back on. */
-export function itineraryItemLabel(
-  item: { label: string | null; place: ExpensePlace | null },
-  fallback: string,
-): string {
-  return item.label ?? placeLabel(item.place, fallback);
-}
-
 export function expenseTitle(expense: Pick<Expense, 'title'>, fallback: string): string {
   return expense.title ?? fallback;
 }

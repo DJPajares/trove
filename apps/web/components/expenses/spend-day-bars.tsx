@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { formatMinorUnits } from '@/lib/currency/money';
 import type { DayRollup, SpendBreakdown } from '@/lib/expenses/spend-insights';
+import { SPEND_ROW_GRID } from '@/components/expenses/spend-rank-list';
 import { cn } from '@/lib/utils';
 
 /**
@@ -52,14 +53,15 @@ export function SpendDayBars({
           })}
           aria-pressed={active}
           className={cn(
-            'flex min-h-11 w-full items-center gap-3 rounded-[var(--radius-md)] px-2 py-1.5 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none',
+            SPEND_ROW_GRID,
+            'min-h-11 w-full items-center gap-3 rounded-[var(--radius-md)] px-2 py-1.5 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none',
             active && 'bg-secondary',
           )}
           disabled={spent === 0}
           onClick={() => onSelect(day.id)}
           type="button"
         >
-          <span className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="flex min-w-0 items-center gap-2">
             <span
               className={cn(
                 'min-w-0 truncate text-sm',
@@ -83,7 +85,7 @@ export function SpendDayBars({
           </span>
           <span
             aria-hidden="true"
-            className="hidden h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-muted sm:block"
+            className="hidden h-1.5 self-center overflow-hidden rounded-full bg-muted sm:block"
           >
             <span
               className={cn(
@@ -95,7 +97,7 @@ export function SpendDayBars({
           </span>
           <span
             className={cn(
-              'shrink-0 text-sm font-medium tabular-nums',
+              'text-right text-sm font-medium tabular-nums',
               spent === 0 && 'text-muted-foreground',
             )}
           >
@@ -110,11 +112,17 @@ export function SpendDayBars({
     <div className="space-y-3">
       <ul className="space-y-0.5">{breakdown.days.map(row)}</ul>
       {breakdown.offDay.count > 0 ? (
-        <div className="flex items-baseline justify-between gap-3 border-t border-border-subtle px-2 pt-3">
+        <div
+          className={cn(
+            SPEND_ROW_GRID,
+            'items-baseline gap-3 border-t border-border-subtle px-2 pt-3',
+          )}
+        >
           <p className="min-w-0 text-sm text-muted-foreground">
             {t('breakdowns.day.offDay', { count: breakdown.offDay.count })}
           </p>
-          <p className="shrink-0 text-sm font-medium tabular-nums">
+          <span aria-hidden="true" className="hidden sm:block" />
+          <p className="text-right text-sm font-medium tabular-nums">
             {money(breakdown.offDay.total.minorUnits)}
           </p>
         </div>

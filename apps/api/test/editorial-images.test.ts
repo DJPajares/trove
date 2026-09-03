@@ -6,6 +6,7 @@ import {
   EDITORIAL_IMAGE_MISS_TTL_MS,
 } from '../src/services/cached-editorial-images.js';
 import { resetEditorialImageBudget } from '../src/services/editorial-image-budget.js';
+import { editorialCoverFitScore } from '../src/services/editorial-image-matching.js';
 import {
   detailedEditorialPlaceType,
   editorialMatchScore,
@@ -15,6 +16,7 @@ import {
   EDITORIAL_IMAGE_RESOLUTION_VERSION,
   editorialSubjectKey,
   EditorialImageProviderError,
+  MAX_GENERIC_IMAGES,
   type EditorialImageProvider,
   type EditorialImageReference,
   type EditorialImageSubject,
@@ -301,7 +303,7 @@ test('an exact Pexels request asks for enough candidates to verify the place', a
   expect(getProviderCallCounts()['pexels:search']).toBe(1);
 });
 
-test('a shared generic Pexels request asks for only one representative candidate', async () => {
+test('a shared generic Pexels request asks for enough to fill the fallback pool', async () => {
   let capturedUrl = '';
   const provider = new PexelsEditorialImageProvider({
     apiKey: 'server-key',
@@ -314,7 +316,9 @@ test('a shared generic Pexels request asks for only one representative candidate
 
   await provider.search({ category: 'food_and_drink', kind: 'generic', name: 'bakery' });
 
-  expect(new URL(capturedUrl).searchParams.get('per_page')).toBe('1');
+  expect(Number(new URL(capturedUrl).searchParams.get('per_page'))).toBeGreaterThanOrEqual(
+    MAX_GENERIC_IMAGES,
+  );
 });
 
 test('a Pexels photo maps to a reference that can always be credited', async () => {
@@ -539,7 +543,12 @@ test('Pexels scores optional descriptions, names, titles, tags, and locations wi
   expect(fetches).toBe(1);
 });
 
-test('Pexels retains exactly one generic photograph even when the provider returns more', async () => {
+/**
+ * The pool is the whole point: every subject with no photograph of its own draws
+ * from it, so keeping one photograph is what put the same picture on every trip.
+ * It is still bounded - a pool is not a gallery.
+ */
+test('Pexels keeps a generic pool, bounded, rather than a single photograph', async () => {
   const photo = (id: number) => ({
     alt: `Bakery interior ${id}`,
     id,
@@ -548,15 +557,16 @@ test('Pexels retains exactly one generic photograph even when the provider retur
     src: { original: `https://images.example/${id}.jpg` },
     url: `https://www.pexels.com/photo/bakery-${id}/`,
   });
+  const photos = Array.from({ length: MAX_GENERIC_IMAGES + 4 }, (_, index) => photo(index + 1));
   const provider = new PexelsEditorialImageProvider({
     apiKey: 'server-key',
-    fetcher: async () => Response.json({ photos: [photo(1), photo(2), photo(3)] }),
+    fetcher: async () => Response.json({ photos }),
     hourlyBudget: 150,
   });
 
   expect(
     await provider.search({ category: 'food_and_drink', kind: 'generic', name: 'bakery' }),
-  ).toHaveLength(1);
+  ).toHaveLength(MAX_GENERIC_IMAGES);
 });
 
 test('the hourly budget stops requests before they leave the process', async () => {
@@ -826,7 +836,7 @@ test('same-name canonical places use cached locality and share one detailed-type
   expect(rows.get('generic:food_and_drink:bakery')?.images).toHaveLength(1);
 });
 
-test('fresh shared generic collections expose their provenance and defensively return one photo', async () => {
+test('fresh shared generic collections expose their provenance and return the whole pool', async () => {
   const now = new Date('2026-08-22T00:00:00.000Z');
   const exact = blankRow('things_to_do:hidden temple');
   rows.set(exact.subjectKey, {
@@ -844,7 +854,9 @@ test('fresh shared generic collections expose their provenance and defensively r
   );
 
   expect(result).toMatchObject({ matchKind: 'generic', status: 'ok' });
-  expect(result?.status === 'ok' && result.images).toHaveLength(1);
+  // Every photograph stored for the pool comes back, so a surface has something
+  // to choose between rather than one answer for everybody.
+  expect(result?.status === 'ok' && result.images).toHaveLength(3);
   expect(subjects).toHaveLength(0);
 });
 
@@ -1000,4 +1012,54 @@ test('the kill switch and a missing key are the same no-service answer', () => {
       source: 'editorial-images',
     }),
   ).not.toBeNull();
+});
+
+/**
+ * A trip's destination is not always a canonical Place: a Custom Place has no
+ * row to enrich from. Dropping the request there removed it from the answer
+ * entirely - no exact match and no fallback - so the surface rendered the
+ * branded placeholder for a trip that had a perfectly good pool to draw on.
+ */
+test('a request for a place with no cached row still reaches the shared fallback', async () => {
+  const { provider, subjects } = countingProvider((subject) =>
+    subject.kind === 'generic' ? [reference('shared-destination')] : [],
+  );
+  const service = new CachedEditorialImagesService(
+    provider,
+    () => new Date('2026-08-22T00:00:00.000Z'),
+  );
+
+  const [result] = await service.resolveMany(
+    [
+      {
+        placeId: '00000000-0000-4000-8000-00000000beef',
+        subject: { category: 'destination' as const, name: 'Hoi An' },
+        tripId: 'trip-a',
+      },
+    ],
+    owner,
+  );
+
+  expect(result).toMatchObject({ matchKind: 'generic', status: 'ok' });
+  expect(subjects.map((subject) => subject.name)).toStrictEqual(['Hoi An', 'travel destination']);
+});
+
+/**
+ * A cover is a wide band, so the frame that survives its crop is the one worth
+ * putting there. This orders equally relevant photographs and nothing else -
+ * relevance is still the first sort key in the provider.
+ */
+test('cover fit prefers a wide frame over a tall one, and size breaks the rest', () => {
+  const wide = editorialCoverFitScore({ height: 1_080, width: 1_920 });
+  const tall = editorialCoverFitScore({ height: 1_920, width: 1_080 });
+  const panorama = editorialCoverFitScore({ height: 400, width: 4_000 });
+  const small = editorialCoverFitScore({ height: 450, width: 800 });
+
+  expect(wide).toBeGreaterThan(tall);
+  expect(wide).toBeGreaterThan(panorama);
+  // Same shape, less resolution: a cover stretches, so the larger frame wins.
+  expect(wide).toBeGreaterThan(small);
+  // Nothing to judge is not a preference.
+  expect(editorialCoverFitScore({ height: null, width: null })).toBe(0);
+  expect(editorialCoverFitScore({ height: 0, width: 0 })).toBe(0);
 });

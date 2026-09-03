@@ -8,9 +8,10 @@ import type {
   EditorialImageReference,
   EditorialImageSubject,
 } from './editorial-images.js';
-import { EditorialImageProviderError } from './editorial-images.js';
+import { EditorialImageProviderError, MAX_GENERIC_IMAGES } from './editorial-images.js';
 import {
   buildEditorialSearchQuery,
+  editorialCoverFitScore,
   editorialMatchScore,
   supportedEditorialLocale,
 } from './editorial-image-matching.js';
@@ -21,9 +22,11 @@ const DEFAULT_BASE_URL = 'https://api.pexels.com';
 const DEFAULT_TIMEOUT_MS = 8_000;
 
 /**
- * An exact request asks for enough landscape candidates to verify the venue;
- * a generic request asks for one representative image. At most three verified
- * references are retained, with provider order breaking score ties.
+ * An exact request asks for enough landscape candidates to verify the venue; a
+ * generic request asks for enough to fill the shared fallback pool. At most
+ * three verified references are retained for a subject and eight for the pool,
+ * ordered by match score, then by how well each frame works as a cover, then by
+ * the order the provider returned them.
  */
 export const PEXELS_SEARCH_PARAMETERS = {
   orientation: 'landscape',
@@ -31,7 +34,7 @@ export const PEXELS_SEARCH_PARAMETERS = {
 } as const;
 
 const EXACT_CANDIDATE_COUNT = '15';
-const GENERIC_CANDIDATE_COUNT = '1';
+const GENERIC_CANDIDATE_COUNT = String(MAX_GENERIC_IMAGES * 2);
 
 type Fetcher = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
@@ -229,11 +232,16 @@ export class PexelsEditorialImageProvider implements EditorialImageProvider {
         }
         seenIds.add(reference.externalPhotoId);
         seenUrls.add(reference.sourceUrl);
-        return [{ position, reference, score }];
+        return [{ coverFit: editorialCoverFitScore(reference), position, reference, score }];
       })
-      .toSorted((left, right) => right.score - left.score || left.position - right.position)
+      .toSorted(
+        (left, right) =>
+          right.score - left.score ||
+          right.coverFit - left.coverFit ||
+          left.position - right.position,
+      )
       .map(({ reference }) => reference)
-      .slice(0, subject.kind === 'generic' ? 1 : 3);
+      .slice(0, subject.kind === 'generic' ? MAX_GENERIC_IMAGES : 3);
   }
 
   /**

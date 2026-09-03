@@ -6,6 +6,7 @@ import { ChevronDown, CircleAlert, MapPinned, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
+import { AiPlanningDraftCard } from '@/components/ai-planning-draft-card';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
 import { useTripCreation } from '@/components/trip-creation-provider';
@@ -86,6 +87,10 @@ export function TripsManager() {
         description={t('description')}
         title={t('title')}
       />
+
+      {/* Above the library and outside its loading states: a draft is reachable
+          on a traveller's very first visit, when there are no trips yet. */}
+      <AiPlanningDraftCard />
 
       {status === 'loading' ? (
         <PageState

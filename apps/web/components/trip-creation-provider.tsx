@@ -104,32 +104,37 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
     setOpen(true);
   }, [running, session?.status, takeoverPhase]);
 
-  // The handoff. A draft that arrived under the takeover gets a beat to land on,
-  // and the takeover stays mounted across the redirect so its own fade is what
-  // covers the review screen's first paint. A draft recovered on a cold load has
-  // no takeover to hand off from and goes straight through.
+  // The handoff, and only the handoff. A draft that arrived under the takeover
+  // gets a beat to land on, and the takeover stays mounted across the redirect
+  // so its own fade is what covers the review screen's first paint.
   //
-  // A draft is resumed once. Re-pinning on every navigation made the review screen
-  // inescapable — Trips and Home both bounced straight back — and turned any stale
-  // session into a fight with whatever redirect it was racing.
+  // A draft recovered on a cold load is deliberately left alone. Redirecting it
+  // made leaving a draft impossible to mean: the traveller walked away, and the
+  // next page load put them back. The Trips page carries the draft card that
+  // takes them back when they choose to go.
+  //
+  // Still once per draft, so the beat cannot replay on a later render.
   useEffect(() => {
-    if (session?.status !== 'reviewing' || resumedSessionId.current === session.id) return;
-    resumedSessionId.current = session.id;
-    const href = `/trips/ai/${session.id}`;
-    const navigate = () => {
-      handedOff.current = false;
-      setOpen(false);
-      setTakeoverPhase(null);
-      if (pathnameRef.current !== href) router.replace(href);
-    };
-
-    if (!handedOff.current) {
-      navigate();
+    if (
+      session?.status !== 'reviewing' ||
+      resumedSessionId.current === session.id ||
+      !handedOff.current
+    ) {
       return;
     }
+    resumedSessionId.current = session.id;
+    const href = `/trips/ai/${session.id}`;
 
     setTakeoverPhase('landing');
-    const timer = window.setTimeout(navigate, reducedMotion ? 0 : LANDING_HOLD_MS);
+    const timer = window.setTimeout(
+      () => {
+        handedOff.current = false;
+        setOpen(false);
+        setTakeoverPhase(null);
+        if (pathnameRef.current !== href) router.replace(href);
+      },
+      reducedMotion ? 0 : LANDING_HOLD_MS,
+    );
     return () => window.clearTimeout(timer);
   }, [reducedMotion, router, session?.id, session?.status]);
 

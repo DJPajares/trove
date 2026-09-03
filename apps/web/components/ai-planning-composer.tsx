@@ -2,6 +2,7 @@
 
 import { CircleAlert, CircleCheck, Sparkles, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import Link from 'next/link';
 import type { FormEvent } from 'react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -116,6 +117,16 @@ export function AiPlanningComposer({ lifecycle }: Readonly<{ lifecycle: AiPlanni
             <CircleCheck aria-hidden="true" />
             <AlertTitle>{t('reviewReadyTitle')}</AlertTitle>
             <AlertDescription>{t('reviewReadyDescription')}</AlertDescription>
+            {/* A traveller who opened this sheet looking for their draft has
+                found it. Give them the way back rather than the words alone. */}
+            <Button
+              nativeButton={false}
+              render={<Link href={`/trips/ai/${session.id}`} />}
+              size="sm"
+              variant="outline"
+            >
+              {t('reviewReadyAction')}
+            </Button>
           </Alert>
         ) : null}
 

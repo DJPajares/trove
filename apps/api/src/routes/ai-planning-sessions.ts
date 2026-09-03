@@ -29,6 +29,13 @@ export function registerAiPlanningSessionRoutes(app: FastifyInstance) {
     { preHandler: requireAuthenticatedUser },
     controllers.setDescription,
   );
+  // The draft itself is immutable. A name is session metadata, not part of
+  // the plan, so this reaches no provider and needs no fan-out limit.
+  app.patch(
+    '/ai/planning-sessions/:sessionId/name',
+    { preHandler: requireAuthenticatedUser },
+    controllers.setName,
+  );
   app.post(
     '/ai/planning-sessions/:sessionId/regenerate',
     { preHandler: requireAuthenticatedUser },

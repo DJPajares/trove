@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
   acknowledgeAiPlanningWarnings,
@@ -29,6 +30,7 @@ import {
   fetchAiPlanningSession,
   regenerateAiPlanningSession,
   setAiPlanningTripDescription,
+  setAiPlanningTripName,
   type AiPlanningSession,
   type AiPlanningDraft,
 } from '@/lib/ai-planning/api';
@@ -76,6 +78,8 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   const [regeneratePrompt, setRegeneratePrompt] = useState('');
   const [description, setDescription] = useState('');
   const [savingDescription, setSavingDescription] = useState(false);
+  const [name, setName] = useState('');
+  const [savingName, setSavingName] = useState(false);
   const sessionRef = useRef<AiPlanningSession | null>(null);
 
   // The draft is whatever generation produced, so the server copy is always the
@@ -95,6 +99,14 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   useEffect(() => {
     setDescription(session?.tripDescription ?? draftedDescription);
   }, [draftedDescription, session?.id, session?.tripDescription]);
+
+  // Same contract as the description: seeded from the session's own copy
+  // first, read through `session.draft` rather than `draft` state so it does
+  // not depend on effect ordering.
+  const draftedName = session?.draft?.trip.name ?? '';
+  useEffect(() => {
+    setName(session?.tripName ?? draftedName);
+  }, [draftedName, session?.id, session?.tripName]);
 
   useEffect(() => {
     if (!session?.appliedTripId) return;
@@ -119,16 +131,23 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
       draft
         ? [
             ...new Set(
-              activeAiPlanningAssumptions(draft).map((assumption) =>
-                t(
-                  `assumptionCodes.${assumption.code}`,
-                  aiPlanningAssumptionMessageValues(assumption, draft, locale),
+              activeAiPlanningAssumptions(draft)
+                // The suggested-name line is a nudge to check the model's guess;
+                // once the traveller has set their own it has nothing left to say.
+                .filter(
+                  (assumption) =>
+                    assumption.code !== 'trip_name_inferred' || session?.tripName === null,
+                )
+                .map((assumption) =>
+                  t(
+                    `assumptionCodes.${assumption.code}`,
+                    aiPlanningAssumptionMessageValues(assumption, draft, locale),
+                  ),
                 ),
-              ),
             ),
           ]
         : [],
-    [draft, locale, t],
+    [draft, locale, session?.tripName, t],
   );
   const dateFormatter = useMemo(
     () =>
@@ -164,6 +183,20 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
       setError(cause instanceof AiPlanningApiError ? cause.code : 'request_failed');
     } finally {
       setSavingDescription(false);
+    }
+  }
+
+  /** Same contract as `saveDescription`: session metadata beside the draft. */
+  async function saveName(next: string) {
+    if (!session || !reviewing || next === (session.tripName ?? draftedName)) return;
+    setSavingName(true);
+    setError(null);
+    try {
+      publish((await setAiPlanningTripName(session.id, next.trim() || null)).session);
+    } catch (cause) {
+      setError(cause instanceof AiPlanningApiError ? cause.code : 'request_failed');
+    } finally {
+      setSavingName(false);
     }
   }
 
@@ -294,7 +327,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
             className="mt-1 text-[length:var(--text-page-title)] font-semibold tracking-[-0.035em]"
             id="ai-review-title"
           >
-            {draft.trip.name}
+            {name || draft.trip.name}
           </h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">{t('description')}</p>
         </div>
@@ -321,11 +354,20 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
       >
         <div className="space-y-6">
           <section className="rounded-[var(--radius-xl)] border border-border bg-card p-4 shadow-[var(--shadow-surface)] sm:p-6">
-            <dl className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <dt className="text-sm text-muted-foreground">{t('tripName')}</dt>
-                <dd className="mt-1 font-medium">{draft.trip.name}</dd>
-              </div>
+            <Field>
+              <FieldLabel htmlFor="review-trip-name">{t('tripName')}</FieldLabel>
+              <Input
+                disabled={!reviewing || publishing}
+                id="review-trip-name"
+                onBlur={(event) => void saveName(event.target.value)}
+                onChange={(event) => setName(event.target.value)}
+                value={name}
+              />
+              <FieldDescription aria-live="polite">
+                {savingName ? t('nameSaving') : t('nameHint')}
+              </FieldDescription>
+            </Field>
+            <dl className="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
                 <dt className="text-sm text-muted-foreground">{t('partySize')}</dt>
                 <dd className="mt-1 font-medium">{draft.trip.partySize}</dd>

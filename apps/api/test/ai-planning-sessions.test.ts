@@ -18,6 +18,7 @@ import {
   recoverLatestAiPlanningSession,
   regenerateAiPlanningSession,
   setAiPlanningTripDescription,
+  setAiPlanningTripName,
 } from '../src/services/ai-planning-sessions.js';
 import {
   setAiPlanningTelemetrySink,
@@ -350,6 +351,11 @@ describe('planning-session routes', () => {
         url: `/ai/planning-sessions/${sessionId}/description`,
         payload: { description: 'A week in Tokyo' },
       },
+      {
+        method: 'PATCH',
+        url: `/ai/planning-sessions/${sessionId}/name`,
+        payload: { name: 'A week in Tokyo' },
+      },
       { method: 'POST', url: `/ai/planning-sessions/${sessionId}/regenerate`, payload: {} },
       {
         method: 'POST',
@@ -471,6 +477,11 @@ describe('planning-session reservations and recovery', () => {
     const calls = [
       () =>
         setAiPlanningTripDescription(OTHER_OWNER_ID, sessionId, 'Intruding description', {
+          now: () => NOW,
+          prisma: store.prisma,
+        }),
+      () =>
+        setAiPlanningTripName(OTHER_OWNER_ID, sessionId, 'Intruding name', {
           now: () => NOW,
           prisma: store.prisma,
         }),

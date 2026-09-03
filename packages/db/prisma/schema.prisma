@@ -954,6 +954,10 @@ model AiPlanningSession {
   /// Session metadata rather than part of the plan, so it never touches the
   /// immutable draft JSON and never moves draftRevision.
   tripDescription              String?                 @map("trip_description") @db.Text
+  /// Traveller-supplied trip name, carried to Trip.name on apply. Session
+  /// metadata rather than part of the plan, so it never touches the immutable
+  /// draft JSON and never moves draftRevision.
+  tripName                     String?                 @map("trip_name") @db.Text
   draft                        Json?                   @db.JsonB
   /// Plan Score for the draft, computed during generation from the evidence
   /// that run already fetched. Derived rather than part of the plan, so it

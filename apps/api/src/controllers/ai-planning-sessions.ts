@@ -11,6 +11,7 @@ import {
   recoverLatestAiPlanningSession,
   regenerateAiPlanningSession,
   setAiPlanningTripDescription,
+  setAiPlanningTripName,
 } from '../services/ai-planning-sessions.js';
 import {
   abortActiveAiPlanningSession,
@@ -29,6 +30,7 @@ const acknowledgementSchema = z.object({ revision: z.number().int().nonnegative(
 const descriptionSchema = z
   .object({ description: z.string().trim().max(2_000).nullable() })
   .strict();
+const nameSchema = z.object({ name: z.string().trim().max(120).nullable() }).strict();
 const emptyBodySchema = z.object({}).strict();
 const applySchema = z
   .object({
@@ -270,6 +272,23 @@ export function createAiPlanningSessionControllers(
             params.data.sessionId,
             body.data.description,
           ),
+        });
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
+
+    async setName(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = sessionParamsSchema.safeParse(request.params);
+      const body = nameSchema.safeParse(request.body);
+      if (!userId) return;
+      if (!params.success || !body.success) {
+        return reply.code(400).send({ code: 'invalid_planning_session_request' });
+      }
+      try {
+        return reply.send({
+          session: await setAiPlanningTripName(userId, params.data.sessionId, body.data.name),
         });
       } catch (error) {
         return handleError(reply, error);

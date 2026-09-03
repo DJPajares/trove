@@ -1078,14 +1078,48 @@
     "loadError": "We couldn't load these expenses",
     "loadErrorDescription": "Check your connection and try again.",
     "tryAgain": "Try again",
+    "spend": {
+      "totalLabel": "Spent so far",
+      "ofBudget": "of {budget}",
+      "noBudgetPrompt": "Set a budget to see whether you\u2019re on track.",
+      "verdict": {
+        "upcoming": {
+          "onTrack": "{amount} still to spend.",
+          "ahead": "{amount} still to spend.",
+          "over": "Your recorded spend is already {amount} over budget."
+        },
+        "underway": {
+          "onTrack": "On track \u2014 {amount} left.",
+          "ahead": "Running ahead \u2014 {spentPercent} of the budget, {tripPercent} of the way through.",
+          "over": "Over budget by {amount}."
+        },
+        "finished": {
+          "onTrack": "Finished {amount} under budget.",
+          "ahead": "Finished {amount} under budget.",
+          "over": "Finished {amount} over budget."
+        }
+      },
+      "pace": {
+        "perDay": "{amount} a day so far",
+        "perDayFinished": "{amount} a day across the trip",
+        "remainingPerDay": "{amount} a day for the {days, plural, one {# day} other {# days}} left"
+      },
+      "approximate": {
+        "rateDate": "Converted at reference rates published {date}.",
+        "stale": "These rates are from {date}, so this total is a rough one.",
+        "unavailable": "Exchange rates aren\u2019t available right now, so totals stay in the currencies you paid in.",
+        "unconvertible": "{count, plural, one {# amount} other {# amounts}} couldn\u2019t be converted, so it isn\u2019t included."
+      }
+    },
+    "a11y": {
+      "budgetBar": "{spent} spent of a {budget} budget, {spentPercent} used.",
+      "spendTotal": "Approximately {amount}, converted from {count, plural, one {# currency} other {# currencies}} at reference rates published {date}."
+    },
     "budget": "Budget",
     "budgetDescription": "Your intended trip spend.",
     "setBudget": "Set budget",
     "editBudget": "Edit budget",
     "budgetNotSet": "Not set",
-    "projectedCost": "Projected cost",
-    "projectedCostDescription": "Known planned costs from itinerary items and reservations.",
-    "noProjectedCost": "No planned costs yet",
     "actualSpend": "Actual spend",
     "actualSpendDescription": "Only recorded expenses are included.",
     "noActualSpend": "No recorded spend yet",
@@ -1094,7 +1128,6 @@
     "emptyDescription": "Add an amount and currency now. Details can follow when you have them.",
     "dayActualSpend": "Actual spend for {date}",
     "dayActualSummary": "Actual: {total}",
-    "dayProjectedSummary": "Projected: {total}",
     "tripLevelExpenses": "Trip-level expenses",
     "tripLevelExpensesDescription": "Undated expenses count toward the trip total, not a specific day.",
     "editExpense": "Edit {title}",

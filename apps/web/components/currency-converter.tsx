@@ -11,33 +11,11 @@ import { usePreferences } from '@/components/preferences-provider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
-import {
-  convertCurrencyAmount,
-  deriveRateFromBoard,
-  getRateBoardWithCache,
-  type CachedCurrencyRateBoard,
-} from '@/lib/currency/api';
-
-type BoardState = {
-  board: CachedCurrencyRateBoard | null;
-  status: 'loading' | 'ready' | 'unavailable';
-};
+import { convertCurrencyAmount, deriveRateFromBoard } from '@/lib/currency/api';
+import { formatCurrencyAmount } from '@/lib/currency/money';
+import { useRateBoard } from '@/hooks/use-rate-board';
 
 type CurrencyPair = { source: string; target: string };
-
-/**
- * Shared the same way the currency list is, so a remount — or React's
- * development double-effect — reuses one request rather than issuing another.
- */
-let boardPromise: ReturnType<typeof getRateBoardWithCache> | null = null;
-
-function loadRateBoard() {
-  boardPromise ??= getRateBoardWithCache().catch((error: unknown) => {
-    boardPromise = null;
-    throw error;
-  });
-  return boardPromise;
-}
 
 const recentPairsKey = 'trove:currency-recent-pairs:v1';
 const maxRecentPairs = 4;
@@ -52,18 +30,6 @@ function isCurrencyCode(value: string) {
 
 function validAmount(value: string) {
   return /^(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/.test(value);
-}
-
-function formatAmount(locale: string, amount: string, currencyCode: string) {
-  try {
-    return new Intl.NumberFormat(locale, {
-      currency: currencyCode,
-      currencyDisplay: 'code',
-      style: 'currency',
-    }).format(Number(amount));
-  } catch {
-    return `${currencyCode} ${amount}`;
-  }
 }
 
 function readRecentPairs(): CurrencyPair[] {
@@ -104,26 +70,9 @@ export function CurrencyConverter() {
   const [source, setSource] = useState('USD');
   const [target, setTarget] = useState('');
   const [recentPairs, setRecentPairs] = useState<CurrencyPair[]>([]);
-  const [{ board, status: boardStatus }, setBoardState] = useState<BoardState>({
-    board: null,
-    status: 'loading',
-  });
-
   // The whole day's board arrives once, so every later change is arithmetic:
   // no request per keystroke, and the page keeps working offline.
-  useEffect(() => {
-    let active = true;
-    void loadRateBoard()
-      .then((next) => {
-        if (active) setBoardState({ board: next, status: 'ready' });
-      })
-      .catch(() => {
-        if (active) setBoardState({ board: null, status: 'unavailable' });
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+  const { board, status: boardStatus } = useRateBoard();
 
   useEffect(() => {
     if (preferencesStatus !== 'loading') {
@@ -302,7 +251,7 @@ export function CurrencyConverter() {
         >
           <p className="text-sm font-medium text-muted-foreground">{t('result')}</p>
           <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums text-foreground">
-            {convertedAmount ? formatAmount(locale, convertedAmount, targetCode) : '—'}
+            {convertedAmount ? formatCurrencyAmount(locale, convertedAmount, targetCode) : '—'}
           </p>
           {detail ? <p className="mt-2 text-sm leading-5 text-muted-foreground">{detail}</p> : null}
         </div>

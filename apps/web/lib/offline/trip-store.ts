@@ -13,6 +13,7 @@ import type { ReservationsResponse } from '@/lib/reservations/api';
 import type { Task, TaskInput, TasksResponse } from '@/lib/tasks/api';
 import type { TripInfoEntry, TripInfoInput, TripInfoResponse } from '@/lib/trip-info/api';
 import type { Trip } from '@/lib/trips/api';
+import { sumByCurrency } from '@/lib/currency/money';
 import { applyItineraryDayMove } from '@/lib/itinerary/day-move';
 import { itemSortMinute, reslotItemByTime } from '@/lib/itinerary/item-order';
 import { PRIVATE_MEDIA_CACHES } from '@/lib/media/storage-cache-key';
@@ -1262,19 +1263,6 @@ function expenseFromOperation(
   };
 }
 
-function expenseTotals(expenses: Expense[]) {
-  const totals = new Map<string, number>();
-  for (const expense of expenses) {
-    const currencyCode = expense.currencyCode.trim().toUpperCase();
-    const amount = Number(expense.amount);
-    if (!currencyCode || !Number.isFinite(amount)) continue;
-    totals.set(currencyCode, (totals.get(currencyCode) ?? 0) + amount);
-  }
-  return [...totals.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([currencyCode, amount]) => ({ amount: amount.toFixed(2), currencyCode }));
-}
-
 function applyExpenseInput(data: ExpensesResponse, expense: Expense, input: ExpenseInput) {
   Object.assign(expense, input, { updatedAt: new Date().toISOString() });
   if (input.localDate !== undefined) {
@@ -1291,10 +1279,17 @@ function applyExpenseInput(data: ExpensesResponse, expense: Expense, input: Expe
   }
 }
 
+/**
+ * Recomputes what a mutation the API never saw has changed.
+ *
+ * This uses the same exact-cent summing as the server rather than its own
+ * arithmetic, so a total the traveller reaches offline and the same total
+ * recomputed on the server after sync agree to the cent.
+ */
 function refreshExpenseTotals(data: ExpensesResponse) {
-  data.actualSpend = expenseTotals(data.expenses);
+  data.actualSpend = sumByCurrency(data.expenses);
   for (const day of data.days) {
-    day.actualSpend = expenseTotals(
+    day.actualSpend = sumByCurrency(
       data.expenses.filter((expense) => expense.itineraryDay?.id === day.id),
     );
   }

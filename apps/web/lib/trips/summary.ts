@@ -22,10 +22,22 @@ export function tripDestinationSummary(trip: Trip) {
 export function tripEditorialSubject(trip: Trip): EditorialSubject | null {
   if (trip.coverPhotoUrl) return null;
 
-  const name = trip.destinations[0]?.name.trim() || trip.name.trim();
+  const destinationName = trip.destinations[0]?.name.trim();
+  const name = destinationName || trip.name.trim();
   if (!name) return null;
 
-  return { category: 'destination', name, tripId: trip.id };
+  // The destination's Place travels with its name, never without it. It keys the
+  // subject to that one Place - so two cities can never share a photograph - and
+  // it is what lets the resolver reach the address, types and language it has
+  // already cached, which is most of the difference between a picture of the
+  // city and a picture of nothing in particular. A trip falling back to its own
+  // name carries no Place: the two would describe different things.
+  return {
+    category: 'destination',
+    name,
+    ...(destinationName ? { placeId: trip.destinations[0]?.placeId } : {}),
+    tripId: trip.id,
+  };
 }
 
 /**

@@ -20,7 +20,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
-import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
+import {
+  editorialCoverImage,
+  editorialSubjectKey,
+  type EditorialSubject,
+} from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import {
   EDITORIAL_PREVIEW_DEBOUNCE_MS,
@@ -155,9 +159,10 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
       ? { category: 'destination', name: coverSubjectName, tripId: trip?.id }
       : null;
   const editorialImages = useEditorialImages(coverSubject ? [coverSubject] : []);
-  const coverEditorial = coverSubject
-    ? (editorialImages.get(editorialSubjectKey(coverSubject))?.[0] ?? null)
-    : null;
+  const coverEditorial =
+    coverSubject && trip
+      ? editorialCoverImage(editorialImages.get(editorialSubjectKey(coverSubject)), trip.id)
+      : null;
 
   function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [field]: value }));

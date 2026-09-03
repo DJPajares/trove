@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
 
 import { useEditorialImages } from '@/hooks/use-editorial-images';
-import { editorialSubjectKey } from '@/lib/media/editorial-images';
+import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { apiErrorStatus } from '@/lib/query/client';
 import { queryKeys } from '@/lib/query/keys';
@@ -67,7 +67,7 @@ export function TripProvider({
   const subject = trip ? tripEditorialSubject(trip) : null;
   const editorialImages = useEditorialImages(subject ? [subject] : []);
   const editorial = subject
-    ? (editorialImages.get(editorialSubjectKey(subject))?.[0] ?? null)
+    ? editorialCoverImage(editorialImages.get(editorialSubjectKey(subject)), trip?.id ?? tripId)
     : null;
 
   const refresh = useCallback(() => {

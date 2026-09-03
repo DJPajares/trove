@@ -13,6 +13,7 @@ vi.mock('@/lib/supabase/client', () => ({
 }));
 
 const {
+  editorialCoverImage,
   editorialSubjectKey,
   MAX_EDITORIAL_IMAGE_SUBJECTS,
   primaryEditorialImage,
@@ -143,14 +144,16 @@ test('an ordered collection already given this session is never asked for again'
   ).toStrictEqual(['1', '2', '3']);
 });
 
-test('generic provenance survives browser caching and never exposes multiple representative photos', async () => {
+test('generic provenance survives browser caching, and the whole pool comes with it', async () => {
   const fetchMock = vi.fn(async () => respond([image('place:place-a', 3, 'generic')]));
   vi.stubGlobal('fetch', fetchMock);
 
   const first = await resolveEditorialImages([{ name: 'Central', placeId: 'place-a' }]);
   const second = await resolveEditorialImages([{ name: 'Central', placeId: 'place-a' }]);
 
-  expect(first.get('place:place-a')).toHaveLength(1);
+  // The pool arrives whole so a surface can choose within it. Keeping one here
+  // is what left every subject drawing on the same photograph.
+  expect(first.get('place:place-a')).toHaveLength(3);
   expect(first.get('place:place-a')?.[0]?.matchKind).toBe('generic');
   expect(second.get('place:place-a')?.[0]?.matchKind).toBe('generic');
   expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -229,4 +232,43 @@ test('an outage is retried later, while a definitive absence is remembered', asy
   await resolveEditorialImages([{ name: 'Bergen' }]);
   await resolveEditorialImages([{ name: 'Bergen' }]);
   expect(empty).toHaveBeenCalledTimes(1);
+});
+
+function reference(externalPhotoId: string, matchKind: 'exact' | 'generic') {
+  return {
+    altText: null,
+    attribution,
+    dominantColor: '#2f4858',
+    externalPhotoId,
+    height: 800,
+    matchKind,
+    sourceUrl: `https://images.example/${externalPhotoId}/original.jpg`,
+    width: 1200,
+  };
+}
+
+test('an exact collection always shows its representative photograph', () => {
+  const images = ['1', '2', '3'].map((id) => reference(id, 'exact'));
+
+  expect(editorialCoverImage(images, 'trip-a')?.externalPhotoId).toBe('1');
+  expect(editorialCoverImage(images, 'trip-b')?.externalPhotoId).toBe('1');
+  expect(editorialCoverImage([], 'trip-a')).toBeNull();
+  expect(editorialCoverImage(undefined, 'trip-a')).toBeNull();
+});
+
+/**
+ * The shared pool is drawn from by every subject with no photograph of its own,
+ * so taking its first entry is what put one picture on every trip. A seed is
+ * what makes two of those trips look different without making either unstable.
+ */
+test('a shared fallback pool is drawn from by seed, stably and with spread', () => {
+  const images = Array.from({ length: 8 }, (_, index) => reference(String(index + 1), 'generic'));
+  const pick = (seed: string) => editorialCoverImage(images, seed)?.externalPhotoId;
+  const seeds = Array.from({ length: 40 }, (_, index) => `01a06400-0000-7000-8000-0000000${index}`);
+
+  expect(pick('trip-a')).toBe(pick('trip-a'));
+  expect(new Set(seeds.map(pick)).size).toBeGreaterThan(1);
+  expect(seeds.every((seed) => images.some((entry) => entry.externalPhotoId === pick(seed)))).toBe(
+    true,
+  );
 });

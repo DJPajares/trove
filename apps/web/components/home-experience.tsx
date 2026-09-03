@@ -31,7 +31,7 @@ import {
   type ItineraryItem,
   type TripModeContext,
 } from '@/lib/itinerary/api';
-import { editorialSubjectKey } from '@/lib/media/editorial-images';
+import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
 import { fetchSavedPlaces, type SavedPlace } from '@/lib/saved/api';
 import { fetchTrips, type Trip } from '@/lib/trips/api';
 import { selectPrimaryTrip } from '@/lib/trips/lifecycle';
@@ -135,12 +135,15 @@ export function HomeExperience() {
   );
   const editorialImages = useEditorialImages(editorialSubjects);
   const focalSubject = primary ? tripEditorialSubject(primary) : null;
-  const focalEditorial = focalSubject
-    ? (editorialImages.get(editorialSubjectKey(focalSubject))?.[0] ?? null)
-    : null;
+  const focalEditorial =
+    focalSubject && primary
+      ? editorialCoverImage(editorialImages.get(editorialSubjectKey(focalSubject)), primary.id)
+      : null;
   const editorialFor = (trip: Trip) => {
     const subject = tripEditorialSubject(trip);
-    return subject ? (editorialImages.get(editorialSubjectKey(subject))?.[0] ?? null) : null;
+    return subject
+      ? editorialCoverImage(editorialImages.get(editorialSubjectKey(subject)), trip.id)
+      : null;
   };
 
   /**

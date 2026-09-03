@@ -2,6 +2,7 @@ import { getPrismaClient } from '@trove/db';
 
 import {
   EDITORIAL_IMAGE_RESOLUTION_VERSION,
+  MAX_GENERIC_IMAGES,
   editorialSubjectKey,
   EditorialImagesService,
   type EditorialImageProvider,
@@ -98,7 +99,7 @@ function toReferences(row: CachedEditorialImageSetRow) {
     .toSorted((left, right) => left.position - right.position)
     .map(toReference)
     .filter((image): image is EditorialImageReference => image !== null)
-    .slice(0, row.subjectKey.startsWith('generic:') ? 1 : MAX_IMAGES_PER_SUBJECT);
+    .slice(0, row.subjectKey.startsWith('generic:') ? MAX_GENERIC_IMAGES : MAX_IMAGES_PER_SUBJECT);
 }
 
 /**
@@ -247,8 +248,11 @@ export class CachedEditorialImagesService extends EditorialImagesService {
     return requests.flatMap((request) => {
       if (request.placeIds.length === 0) return [request];
 
+      // An unknown place still deserves a photograph. Dropping the request here
+      // removed it from the answer entirely - no exact match and no fallback -
+      // which a Custom Place destination would hit every time.
       const place = byId.get(request.placeIds[0] ?? '');
-      if (!place) return [];
+      if (!place) return [request];
 
       const reference = place.providerRefs[0];
       const types = reference?.cachedTypes ?? [];
@@ -362,7 +366,12 @@ export class CachedEditorialImagesService extends EditorialImagesService {
   private async readRows(subjectKeys: string[]) {
     try {
       const rows = await getPrismaClient().editorialImageSet.findMany({
-        include: { images: { orderBy: { position: 'asc' }, take: MAX_IMAGES_PER_SUBJECT } },
+        include: {
+          images: {
+            orderBy: { position: 'asc' },
+            take: Math.max(MAX_IMAGES_PER_SUBJECT, MAX_GENERIC_IMAGES),
+          },
+        },
         where: { subjectKey: { in: subjectKeys } },
       });
 
@@ -467,7 +476,8 @@ export class CachedEditorialImagesService extends EditorialImagesService {
     }
 
     const now = this.now();
-    const maximumImages = request.subject.kind === 'generic' ? 1 : MAX_IMAGES_PER_SUBJECT;
+    const maximumImages =
+      request.subject.kind === 'generic' ? MAX_GENERIC_IMAGES : MAX_IMAGES_PER_SUBJECT;
     const images = (result.status === 'ok' ? result.images : existing).slice(0, maximumImages);
     const setData =
       images.length > 0

@@ -56,6 +56,18 @@ type EditorialImageResult =
 /** The API's own ceiling. A screen asking for more than this is a fan-out. */
 export const MAX_EDITORIAL_IMAGE_SUBJECTS = 25;
 
+/** Mirrors the API's shared fallback pool size. */
+export const MAX_GENERIC_IMAGES = 8;
+
+/**
+ * Mirrors the API's resolution version, and belongs in the query key for the
+ * same reason it exists on the server: an answer is only meaningful for the
+ * resolution that produced it. Photography is never refetched on a timer, so a
+ * client holding a persisted answer from an older resolution would keep showing
+ * it - which is how a widened fallback pool still rendered a single photograph.
+ */
+export const EDITORIAL_IMAGE_RESOLUTION_VERSION = 4;
+
 const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
 
 /**
@@ -106,6 +118,42 @@ export function resetEditorialImageCache() {
 /** The stable representative image used by every non-gallery surface. */
 export function primaryEditorialImage(images: readonly EditorialImageReference[] | undefined) {
   return images?.[0] ?? null;
+}
+
+/**
+ * Spreads a seed over a pool without clustering short ids. FNV-1a, because the
+ * only property needed is that two trip ids differing in one character land
+ * somewhere unrelated.
+ */
+function seedIndex(seed: string, length: number) {
+  let hash = 2_166_136_261;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16_777_619);
+  }
+  return Math.abs(hash) % length;
+}
+
+/**
+ * The photograph a cover should show.
+ *
+ * An exact match is a picture of the place, so it stays the first one - the
+ * representative image, the same for everybody, which is what makes editorial
+ * imagery deterministic. A generic answer is not a picture of anywhere: it is
+ * one draw from a pool shared by every subject with nothing of its own, and
+ * taking the first of those is why every trip wore the same photograph.
+ *
+ * The seed is what keeps the draw honest. A trip seeded on its own id shows the
+ * same photograph forever, while the trip beside it shows a different one.
+ */
+export function editorialCoverImage(
+  images: readonly EditorialImageReference[] | undefined,
+  seed: string,
+) {
+  if (!images?.length) return null;
+  if (images[0]?.matchKind !== 'generic') return images[0] ?? null;
+
+  return images[seedIndex(seed, images.length)] ?? null;
 }
 
 async function getAccessToken() {
@@ -176,7 +224,7 @@ export async function resolveEditorialImages(subjects: EditorialSubject[]) {
         const matchKind: EditorialImageMatchKind =
           image.matchKind === 'generic' ? 'generic' : 'exact';
         const references = image.images
-          .slice(0, matchKind === 'generic' ? 1 : image.images.length)
+          .slice(0, matchKind === 'generic' ? MAX_GENERIC_IMAGES : image.images.length)
           .map((reference) => ({ ...reference, matchKind }));
 
         resolvedImages.set(image.subjectKey, references);

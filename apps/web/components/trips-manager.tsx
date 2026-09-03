@@ -13,7 +13,7 @@ import { TripFeaturedCard } from '@/components/trip-featured-card';
 import { TripListRow } from '@/components/trip-list-row';
 import { TripShareDialog } from '@/components/trip-share-dialog';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
-import { editorialSubjectKey } from '@/lib/media/editorial-images';
+import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
 import { groupTripsForLibrary, PAST_TRIPS_PREVIEW_COUNT } from '@/lib/trips/lifecycle';
 import { libraryEditorialSubjects, tripEditorialSubject } from '@/lib/trips/summary';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -51,7 +51,9 @@ export function TripsManager() {
   const editorialImages = useEditorialImages(libraryEditorialSubjects(groupedTrips));
   const editorialFor = (trip: Trip) => {
     const subject = tripEditorialSubject(trip);
-    return subject ? (editorialImages.get(editorialSubjectKey(subject))?.[0] ?? null) : null;
+    return subject
+      ? editorialCoverImage(editorialImages.get(editorialSubjectKey(subject)), trip.id)
+      : null;
   };
 
   useEffect(() => {

@@ -40,7 +40,7 @@ import {
   updateItineraryDayExperienceRating,
   type Itinerary,
 } from '@/lib/itinerary/api';
-import { editorialSubjectKey } from '@/lib/media/editorial-images';
+import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import {
   fetchMemories,
@@ -313,9 +313,10 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   const subject =
     trip && !state.data?.storyCover?.url && !trip.coverPhotoUrl ? tripEditorialSubject(trip) : null;
   const editorialImages = useEditorialImages(subject ? [subject] : []);
-  const editorial = subject
-    ? (editorialImages.get(editorialSubjectKey(subject))?.[0] ?? null)
-    : null;
+  const editorial =
+    subject && trip
+      ? editorialCoverImage(editorialImages.get(editorialSubjectKey(subject)), trip.id)
+      : null;
 
   async function moveHighlight(memoryId: string, direction: -1 | 1) {
     if (!story) return;

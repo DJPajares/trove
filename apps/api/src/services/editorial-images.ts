@@ -3,7 +3,17 @@ import type { TrovePlaceCategory } from './places.js';
 
 export const EDITORIAL_IMAGE_PROVIDERS = ['pexels'] as const;
 export type EditorialImageProviderName = (typeof EDITORIAL_IMAGE_PROVIDERS)[number];
-export const EDITORIAL_IMAGE_RESOLUTION_VERSION = 3;
+export const EDITORIAL_IMAGE_RESOLUTION_VERSION = 4;
+
+/**
+ * How many photographs a shared fallback pool holds.
+ *
+ * A subject collection is three photographs of one place. This is not that: it
+ * is the pool every subject with no photograph of its own draws from, so its
+ * size is the only thing standing between "a trip we have no picture of" and
+ * "the same picture on every trip we have no picture of". One was the bug.
+ */
+export const MAX_GENERIC_IMAGES = 8;
 
 export type EditorialImageMatchKind = 'exact' | 'generic';
 

@@ -69,6 +69,7 @@ function reviewDraft(): AiPlanningDraft {
     trip: {
       dateAssumptionId: null,
       dateSource: 'user',
+      description: 'Two nights in Tokyo, built around one long dinner.',
       destinations: [],
       endDate: '2026-10-03',
       name: 'Tokyo review',

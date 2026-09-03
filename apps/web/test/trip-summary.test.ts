@@ -60,10 +60,14 @@ test('a trip the traveller gave a cover to asks for no photograph', () => {
 });
 
 test('a trip is pictured by its first destination, or failing that its own name', () => {
+  // The destination's Place travels with the name: it is what keys the subject
+  // to that one city, and what lets the resolver reach the address and types it
+  // has already cached rather than searching on a bare string.
   expect(
     tripEditorialSubject(trip({ destinations: [destination('Tokyo')], id: 'a' })),
-  ).toStrictEqual({ category: 'destination', name: 'Tokyo', tripId: 'a' });
+  ).toStrictEqual({ category: 'destination', name: 'Tokyo', placeId: 'p-0', tripId: 'a' });
 
+  // A trip with no destination has no Place to be pictured by, only its name.
   expect(tripEditorialSubject(trip({ id: 'b', name: 'Honeymoon' }))).toStrictEqual({
     category: 'destination',
     name: 'Honeymoon',

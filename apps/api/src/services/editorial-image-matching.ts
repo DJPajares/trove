@@ -370,3 +370,29 @@ export function editorialMatchScore(subject: EditorialImageSubject, photo: Edito
     (countryMatches ? 12 : 0)
   );
 }
+
+/**
+ * How well a photograph works as a cover, rather than how well it matches.
+ *
+ * A cover is a wide band across the top of a screen, so a frame near 16:9 keeps
+ * its subject when the crop takes the rest, and a taller one loses it. This is
+ * a tiebreak and only a tiebreak: it orders photographs that were equally
+ * relevant, which is exactly the case where "whatever the provider returned
+ * first" was arbitrary.
+ */
+const COVER_ASPECT_RATIO = 16 / 9;
+const COVER_MINIMUM_WIDTH = 1_600;
+
+export function editorialCoverFitScore(photo: { height?: number | null; width?: number | null }) {
+  const { height, width } = photo;
+  if (!width || !height || width <= 0 || height <= 0) return 0;
+
+  // Distance from the cover's shape, in either direction: a panorama is as hard
+  // to place in a fixed band as a portrait.
+  const ratio = width / height;
+  const drift = Math.abs(Math.log(ratio / COVER_ASPECT_RATIO));
+  const shape = Math.max(0, 10 - drift * 12);
+  const resolution = width >= COVER_MINIMUM_WIDTH ? 2 : 0;
+
+  return shape + resolution;
+}

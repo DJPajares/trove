@@ -1,3 +1,5 @@
+import { EDITORIAL_IMAGE_RESOLUTION_VERSION } from '@/lib/media/editorial-images';
+
 import type { TripModeContextRequestOptions } from '@/lib/itinerary/api';
 
 /**
@@ -18,10 +20,16 @@ export const queryKeys = {
   /**
    * Keyed by resolved subject keys rather than by the subjects themselves, so
    * two screens asking for the same photographs in a different order share one
-   * answer instead of billing the resolve endpoint twice.
+   * answer instead of billing the resolve endpoint twice. The resolution version
+   * rides along because this cache is never refetched on a timer: without it a
+   * client keeps serving an answer the server has already stopped agreeing with.
    */
   editorialImages: (subjectKeys: readonly string[]) =>
-    ['editorial-images', [...subjectKeys].sort().join(' ')] as const,
+    [
+      'editorial-images',
+      EDITORIAL_IMAGE_RESOLUTION_VERSION,
+      [...subjectKeys].sort().join(' '),
+    ] as const,
 
   expenses: (tripId: string) => ['expenses', tripId] as const,
   itinerary: (tripId: string) => ['itinerary', tripId] as const,

@@ -47,6 +47,11 @@ export function TripsManager() {
 
   const groupedTrips = useMemo(() => groupTripsForLibrary(trips), [trips]);
 
+  // Readiness only earns headings when it actually divides something: a
+  // traveller who has marked nothing Ready keeps the single flat list.
+  const readinessDividesTheList =
+    groupedTrips.upcomingReady.length > 0 && groupedTrips.upcomingInProgress.length > 0;
+
   // One request for the whole library, in priority order and capped, however
   // many trips a traveller has. Rows read from the answer; none of them ask.
   const editorialImages = useEditorialImages(libraryEditorialSubjects(groupedTrips));
@@ -135,7 +140,7 @@ export function TripsManager() {
             />
           ) : null}
 
-          {groupedTrips.upcoming.length ? (
+          {groupedTrips.upcomingReady.length > 0 || groupedTrips.upcomingInProgress.length > 0 ? (
             <section aria-labelledby="upcoming-trips-heading" className="space-y-4">
               <h2
                 className="text-[length:var(--text-section-title)] font-semibold tracking-[-0.02em] text-foreground"
@@ -143,11 +148,27 @@ export function TripsManager() {
               >
                 {t('sections.planning')}
               </h2>
-              <div className="grid gap-4 md:grid-cols-2">
-                {groupedTrips.upcoming.map((trip) => (
-                  <TripListRow editorial={editorialFor(trip)} key={trip.id} trip={trip} />
-                ))}
-              </div>
+              {(
+                [
+                  ['ready', groupedTrips.upcomingReady],
+                  ['inProgress', groupedTrips.upcomingInProgress],
+                ] as const
+              ).map(([group, trips]) =>
+                trips.length ? (
+                  <div className="space-y-3" key={group}>
+                    {readinessDividesTheList ? (
+                      <h3 className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+                        {t(`readinessGroups.${group}`)}
+                      </h3>
+                    ) : null}
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {trips.map((trip) => (
+                        <TripListRow editorial={editorialFor(trip)} key={trip.id} trip={trip} />
+                      ))}
+                    </div>
+                  </div>
+                ) : null,
+              )}
             </section>
           ) : null}
 

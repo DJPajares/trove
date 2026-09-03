@@ -372,7 +372,9 @@ Rules:
 - Trip Mode activation does not depend on Ready.
 - Preview Trip Mode is available regardless of readiness.
 - Plan Score does not automatically change readiness.
-- Lifecycle, readiness, and Plan Score are independent concepts.
+- Lifecycle and Plan Score never set readiness; only the traveller does.
+- Trove may suggest marking a plan Ready when the itinerary covers every trip day, and may point out an unmarked plan as departure approaches. Both only ask.
+- Readiness is shown wherever trips are listed, and groups the Trips library within its lifecycle sections. It never reorders trips past their own dates.
 
 ---
 

@@ -55,7 +55,7 @@ export function tripEditorialSubject(trip: Trip): EditorialSubject | null {
  * would be a second request for the same screen.
  */
 export function libraryEditorialSubjects(groups: TripLibraryGroups): EditorialSubject[] {
-  return [groups.featured, ...groups.upcoming, ...groups.past]
+  return [groups.featured, ...groups.upcomingReady, ...groups.upcomingInProgress, ...groups.past]
     .flatMap((trip) => (trip ? (tripEditorialSubject(trip) ?? []) : []))
     .slice(0, MAX_EDITORIAL_IMAGE_SUBJECTS);
 }

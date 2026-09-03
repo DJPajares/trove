@@ -177,6 +177,24 @@ export async function deleteTrip(tripId: string) {
 }
 
 /**
+ * Marks a plan done, or takes that mark back.
+ *
+ * Unlike visibility this rides the ordinary trip PATCH: readiness changes
+ * nothing about who can see the trip or what may be edited, so it needs no
+ * endpoint of its own - only a way to be set without opening the whole edit
+ * form.
+ */
+export async function updateTripReadiness(
+  tripId: string,
+  planningReadiness: Trip['planningReadiness'],
+) {
+  return tripRequest<{ trip: Trip }>(`/trips/${tripId}`, {
+    body: JSON.stringify({ planningReadiness }),
+    method: 'PATCH',
+  });
+}
+
+/**
  * Experience Rating is the traveller's own private reflection on the trip,
  * entered independently of Plan Score and never averaged from day ratings.
  */

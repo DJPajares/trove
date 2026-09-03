@@ -6,6 +6,8 @@ import { TripDestinationActions } from '@/components/trip-destination-actions';
 import { TripItineraryCoverage } from '@/components/trip-itinerary-coverage';
 import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
 import { TripMedia } from '@/components/trip-media';
+import { TripReadinessBadge } from '@/components/trip-readiness-badge';
+import { TripReadinessPrompt } from '@/components/trip-readiness-prompt';
 import { Button } from '@/components/ui/button';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
@@ -56,7 +58,10 @@ export function TripFeaturedCard({ editorial, onShare, trip }: Readonly<TripFeat
         </div>
 
         <div className="flex min-w-0 flex-col justify-center gap-4 p-5 sm:p-6 lg:p-8">
-          <TripLifecycleBadge className="w-fit" lifecycle={trip.lifecycle} />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <TripLifecycleBadge lifecycle={trip.lifecycle} />
+            <TripReadinessBadge lifecycle={trip.lifecycle} readiness={trip.planningReadiness} />
+          </div>
           <div className="space-y-2">
             <h2
               className="text-[length:var(--text-section-title)] leading-[1.12] font-semibold tracking-[-0.03em] text-balance text-foreground sm:text-3xl"
@@ -73,11 +78,6 @@ export function TripFeaturedCard({ editorial, onShare, trip }: Readonly<TripFeat
                 startDate: formatTripDate(trip.startDate, locale),
               })}
             </p>
-            {trip.lifecycle === 'planning' ? (
-              <p className="text-sm font-medium text-foreground">
-                {t(`readinessState.${trip.planningReadiness}`)}
-              </p>
-            ) : null}
           </div>
 
           {trip.lifecycle !== 'completed' && trip.itineraryCoverage ? (
@@ -108,6 +108,8 @@ export function TripFeaturedCard({ editorial, onShare, trip }: Readonly<TripFeat
                   }
             }
           />
+
+          <TripReadinessPrompt trip={trip} />
         </div>
       </div>
     </section>

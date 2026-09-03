@@ -35,10 +35,10 @@ test('the featured trip is never repeated in the group below it', () => {
     trip({ id: 'planning', lifecycle: 'planning', startDate: '2026-11-01' }),
   ];
 
-  const { featured, upcoming } = groupTripsForLibrary(trips);
+  const { featured, upcomingInProgress } = groupTripsForLibrary(trips);
 
   expect(featured?.id).toBe('active');
-  expect(upcoming.map((entry) => entry.id)).toStrictEqual(['planning']);
+  expect(upcomingInProgress.map((entry) => entry.id)).toStrictEqual(['planning']);
 });
 
 test('a trip being travelled sorts above one still being planned', () => {
@@ -49,7 +49,7 @@ test('a trip being travelled sorts above one still being planned', () => {
     trip({ id: 'planning-later', lifecycle: 'planning', startDate: '2026-12-01' }),
   ];
 
-  expect(groupTripsForLibrary(trips).upcoming.map((entry) => entry.id)).toStrictEqual([
+  expect(groupTripsForLibrary(trips).upcomingInProgress.map((entry) => entry.id)).toStrictEqual([
     'active-later',
     'planning-soon',
     'planning-later',
@@ -77,26 +77,78 @@ test('a library of only finished trips features none of them', () => {
     trip({ id: 'older', lifecycle: 'completed', endDate: '2025-04-02' }),
   ];
 
-  const { featured, past, upcoming } = groupTripsForLibrary(
+  const { featured, past, upcomingInProgress, upcomingReady } = groupTripsForLibrary(
     trips,
     new Date('2026-09-25T12:00:00.000Z'),
   );
 
   expect(featured).toBeNull();
-  expect(upcoming).toStrictEqual([]);
+  expect(upcomingInProgress).toStrictEqual([]);
+  expect(upcomingReady).toStrictEqual([]);
   expect(past.map((entry) => entry.id)).toStrictEqual(['just-back', 'older']);
 });
 
 test('a single trip is featured and leaves both groups empty', () => {
-  const { featured, past, upcoming } = groupTripsForLibrary([
+  const { featured, past, upcomingInProgress, upcomingReady } = groupTripsForLibrary([
     trip({ id: 'only', lifecycle: 'planning' }),
   ]);
 
   expect(featured?.id).toBe('only');
-  expect(upcoming).toStrictEqual([]);
+  expect(upcomingInProgress).toStrictEqual([]);
+  expect(upcomingReady).toStrictEqual([]);
   expect(past).toStrictEqual([]);
 });
 
 test('an empty library groups into nothing rather than failing', () => {
-  expect(groupTripsForLibrary([])).toStrictEqual({ featured: null, past: [], upcoming: [] });
+  expect(groupTripsForLibrary([])).toStrictEqual({
+    featured: null,
+    past: [],
+    upcomingInProgress: [],
+    upcomingReady: [],
+  });
+});
+
+test('readiness splits the upcoming trips without reordering them', () => {
+  const trips = [
+    trip({ id: 'featured', lifecycle: 'active', endDate: '2026-09-10' }),
+    trip({
+      id: 'ready-later',
+      lifecycle: 'planning',
+      planningReadiness: 'ready',
+      startDate: '2026-12-01',
+    }),
+    trip({ id: 'unready-soon', lifecycle: 'planning', startDate: '2026-10-01' }),
+    trip({
+      id: 'ready-soon',
+      lifecycle: 'planning',
+      planningReadiness: 'ready',
+      startDate: '2026-10-15',
+    }),
+    trip({ id: 'unready-later', lifecycle: 'planning', startDate: '2026-11-01' }),
+  ];
+
+  const { upcomingInProgress, upcomingReady } = groupTripsForLibrary(trips);
+
+  expect(upcomingReady.map((entry) => entry.id)).toStrictEqual(['ready-soon', 'ready-later']);
+  expect(upcomingInProgress.map((entry) => entry.id)).toStrictEqual([
+    'unready-soon',
+    'unready-later',
+  ]);
+});
+
+test('a trip already under way stays with the unmarked ones however it is marked', () => {
+  const trips = [
+    trip({ id: 'leading', lifecycle: 'active', endDate: '2026-09-10' }),
+    trip({
+      id: 'travelling',
+      lifecycle: 'active',
+      planningReadiness: 'ready',
+      endDate: '2026-09-30',
+    }),
+  ];
+
+  const { upcomingInProgress, upcomingReady } = groupTripsForLibrary(trips);
+
+  expect(upcomingReady).toStrictEqual([]);
+  expect(upcomingInProgress.map((entry) => entry.id)).toStrictEqual(['travelling']);
 });

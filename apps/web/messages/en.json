@@ -1112,8 +1112,38 @@
       }
     },
     "a11y": {
+      "dayBar": "{date}: {amount}, {percent} of the trip\u2019s spending.",
+      "categoryBar": "{category}: {amount} across {count, plural, one {# expense} other {# expenses}}, {percent} of the trip\u2019s spending.",
       "budgetBar": "{spent} spent of a {budget} budget, {spentPercent} used.",
       "spendTotal": "Approximately {amount}, converted from {count, plural, one {# currency} other {# currencies}} at reference rates published {date}."
+    },
+    "breakdowns": {
+      "label": "Where your money went",
+      "empty": "Nothing recorded yet.",
+      "tabs": {
+        "day": "By day",
+        "category": "By category",
+        "currency": "By currency",
+        "place": "By place"
+      },
+      "day": {
+        "today": "Today",
+        "outlier": "Big day",
+        "noSpend": "\u2014",
+        "offDay": "{count, plural, one {# expense} other {# expenses}} on no trip day"
+      },
+      "currency": {
+        "worth": "\u2248 {amount}",
+        "unpriced": "No rate available"
+      },
+      "place": {
+        "none": "No expenses are linked to a place yet.",
+        "more": "{count, plural, one {# more place} other {# more places}} not shown."
+      }
+    },
+    "filters": {
+      "clear": "Clear filter",
+      "noMatches": "No expenses match this filter."
     },
     "budget": "Budget",
     "budgetDescription": "Your intended trip spend.",

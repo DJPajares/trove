@@ -1721,6 +1721,7 @@ export function ItineraryManager({
                     <TripDayWeather
                       className="mt-1.5"
                       forecast={tripWeatherForDate(weather, selectedDay.date)}
+                      variant="detailed"
                     />
                     {selectedDay.notes ? (
                       <p className="mt-1.5 max-w-2xl whitespace-pre-wrap text-sm leading-6 text-text-subtle">

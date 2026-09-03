@@ -179,6 +179,74 @@ test('a day without a base falls back to its first stop, then to the trip', asyn
   expect(resolveDayWeatherLocation(day('d4', '2026-09-03'), null)).toBeNull();
 });
 
+test('an empty day borrows the nearest located day when no destination can answer', async () => {
+  const { resolveDayWeatherLocations } = await import('../src/services/trip-weather.js');
+  const destination = { ...TOKYO, timeZone: 'Asia/Tokyo' };
+  const days = [day('d1', '2026-09-03'), day('d2', '2026-09-04', { stop: SAPPORO })];
+
+  expect(
+    resolveDayWeatherLocations(days, destination)[0],
+    'a located destination answers first',
+  ).toEqual(destination);
+  expect(resolveDayWeatherLocations(days, null)[0]).toMatchObject({
+    latitude: SAPPORO.latitude,
+  });
+  expect(resolveDayWeatherLocations([day('d1', '2026-09-03')], null)).toEqual([null]);
+});
+
+test('a gap day wakes up where it went to sleep, not where the trip began', async () => {
+  const { resolveDayWeatherLocations } = await import('../src/services/trip-weather.js');
+  // The shape that made this rule necessary: day one is the bed at home, and
+  // the trip proper is somewhere else entirely.
+  const HOME = { latitude: 1.35, longitude: 103.82 };
+  const days = [
+    day('d1', '2026-09-03', { base: HOME }),
+    day('d2', '2026-09-04', { base: SAPPORO }),
+    day('d3', '2026-09-05'),
+    day('d4', '2026-09-06', { base: TOKYO }),
+  ];
+
+  const locations = resolveDayWeatherLocations(days, null);
+
+  expect(locations[2], 'the day before, not the first day').toMatchObject({
+    latitude: SAPPORO.latitude,
+  });
+});
+
+test('an empty day borrows the trip even when the destination was only named', async () => {
+  // What an AI-planned trip actually stores: "Hanoi, Vietnam" as a Place with a
+  // name and no latitude. The trip is plainly somewhere; only the destination
+  // cannot say where.
+  const namedDestination = {
+    ...providerPlace('destination', TOKYO),
+    customLatitude: null,
+    customLongitude: null,
+  };
+  stubPrisma({
+    ...createTrip([day('d1', '2026-09-03'), day('d2', '2026-09-04', { base: SAPPORO })], null),
+    destinations: [{ place: namedDestination, timeZone: 'Asia/Tokyo' }],
+  });
+  const { service } = await createService();
+
+  const weather = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+
+  expect(weather.days.map((entry) => entry.itineraryDayId)).toEqual(['d1', 'd2']);
+  expect(
+    weather.days.map((entry) => entry.temperatureMax),
+    'both days read Sapporo',
+  ).toEqual([20, 20]);
+});
+
+test('a trip with nothing located anywhere asks for nothing', async () => {
+  stubPrisma(createTrip([day('d1', '2026-09-03'), day('d2', '2026-09-04')], null));
+  const { batches, service } = await createService();
+
+  const weather = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+
+  expect(batches, 'nowhere to ask about is not a reason to ask').toHaveLength(0);
+  expect(weather.days).toEqual([]);
+});
+
 test('a trip with more cities than the cap still answers every day', async () => {
   const { MAX_WEATHER_LOCATIONS } = await import('../src/services/trip-weather.js');
   const days = Array.from({ length: MAX_WEATHER_LOCATIONS + 4 }, (_, index) =>

@@ -26,6 +26,7 @@ export const PROVIDER_CALL_SOURCES = [
   'screen-hydration',
   'trip-mode-context',
   'trip-places',
+  'weather',
   'test',
 ] as const;
 
@@ -48,6 +49,8 @@ export type ProviderCacheMissReason =
   | 'polyline_missing'
   | 'stale_editorial_image'
   | 'stale_grounding_mapping'
+  | 'incomplete_forecast'
+  | 'stale_forecast'
   | 'stale_leg'
   | 'stale_snapshot';
 
@@ -64,11 +67,12 @@ export type ProviderExpectedSku =
   | 'places-text-search-enterprise'
   | 'place-details-pro'
   | 'place-details-enterprise'
-  | 'routes-compute-routes-essentials';
+  | 'routes-compute-routes-essentials'
+  | 'weather-forecast-free';
 
 type ProviderEventBase = {
-  operation: 'computeRoute' | 'getDetails' | 'getRates' | 'search' | 'textSearch';
-  provider: 'frankfurter' | 'google' | 'pexels';
+  operation: 'computeRoute' | 'getDetails' | 'getForecast' | 'getRates' | 'search' | 'textSearch';
+  provider: 'frankfurter' | 'google' | 'open_meteo' | 'pexels';
   source: ProviderCallSource;
 };
 
@@ -82,7 +86,8 @@ export type ProviderCall = ProviderEventBase & {
     | '/v1/places/:placeId'
     | '/v1/places:autocomplete'
     | '/v1/places:searchText'
-    | '/v1/search';
+    | '/v1/search'
+    | '/v1/forecast';
   expectedSku: ProviderExpectedSku;
   includePolyline?: boolean;
   kind: 'outbound';
@@ -97,7 +102,8 @@ export type ProviderCacheEvent = ProviderEventBase & {
     | 'place-details'
     | 'place-evidence'
     | 'place-grounding'
-    | 'route';
+    | 'route'
+    | 'weather-forecast';
   failureCode?: 'NOT_FOUND' | 'UNUSABLE_LOCATION';
   includePolyline?: boolean;
   kind: 'cache_hit' | 'negative_cache_hit';

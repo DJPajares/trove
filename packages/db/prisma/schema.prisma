@@ -463,6 +463,53 @@ model TravelLegCache {
   @@schema("trove")
 }
 
+/// One coordinate's daily forecast, so a trip's day-by-day weather costs one
+/// provider call rather than one per day, per screen, per traveller.
+///
+/// Coordinates are the key, and they are rounded before they are written for
+/// the same reason `TravelLegCache` rounds: a key that cannot be read back by
+/// the value that wrote it is not a cache. Rounding also makes two stops in the
+/// same city share one snapshot, which is the whole saving on a dense day.
+///
+/// Temperatures are stored in celsius alone and converted on read, so a
+/// traveller's unit preference never doubles the number of rows the provider
+/// has to fill.
+model WeatherForecastSnapshot {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  provider  String   @default("open_meteo")
+  latitude  Decimal  @db.Decimal(9, 6)
+  longitude Decimal  @db.Decimal(9, 6)
+  timeZone  String   @map("time_zone")
+  fetchedAt DateTime @default(now()) @map("fetched_at") @db.Timestamptz(3)
+
+  days WeatherForecastSnapshotDay[]
+
+  @@unique([provider, latitude, longitude], name: "weather_forecast_snapshot_point")
+  @@index([fetchedAt])
+  @@map("weather_forecast_snapshots")
+  @@schema("trove")
+}
+
+/// One dated day inside a forecast snapshot.
+///
+/// A snapshot holds the provider's whole available window rather than the slice
+/// one trip asked for, so two trips passing through the same city share an
+/// answer instead of overwriting each other's narrower range.
+model WeatherForecastSnapshotDay {
+  snapshotId               String   @map("snapshot_id") @db.Uuid
+  date                     DateTime @db.Date
+  weatherCode              Int      @map("weather_code")
+  temperatureMaxCelsius    Decimal  @map("temperature_max_celsius") @db.Decimal(5, 2)
+  temperatureMinCelsius    Decimal  @map("temperature_min_celsius") @db.Decimal(5, 2)
+  precipitationProbability Int?     @map("precipitation_probability")
+
+  snapshot WeatherForecastSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@id([snapshotId, date])
+  @@map("weather_forecast_snapshot_days")
+  @@schema("trove")
+}
+
 /// One day's exchange rates from Frankfurter, always expressed against EUR.
 ///
 /// Frankfurter republishes once per working day, so asking it per conversion

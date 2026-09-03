@@ -207,22 +207,6 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   };
   const nextName = nextItem ? itemName(nextItem, t('placeFallback')) : null;
   const hasNext = Boolean(nextItem && nextName);
-  const weatherItem = nextItem ?? currentItem;
-  // One source for where the weather is. A provider Place's coordinates arrive
-  // with the itinerary now, so this no longer reconciles a live lookup against a
-  // separately keyed session cache to work out where the traveller is standing.
-  const weatherCoordinates = weatherItem?.tripPlace?.place.location;
-  const weatherLocation = weatherCoordinates
-    ? {
-        latitude: weatherCoordinates.latitude,
-        longitude: weatherCoordinates.longitude,
-        timeZone:
-          weatherCoordinates.timeZone ??
-          weatherItem?.timeZone ??
-          readyContext.day?.defaultTimeZone ??
-          readyContext.trip.referenceTimeZone,
-      }
-    : null;
   const route =
     readyContext.leaveBy?.destinationItemId === nextItem?.id ? readyContext.leaveBy : null;
   // The leg into the next item is owned by the current item. A flight has no
@@ -451,8 +435,8 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
 
       <TripWeatherContext
         isPreview={isPreview}
-        location={weatherLocation}
         selectedDate={readyContext.selectedDate}
+        tripId={tripId}
       />
 
       <TripModeTasksNotice />

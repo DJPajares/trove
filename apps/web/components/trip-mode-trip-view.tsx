@@ -29,6 +29,7 @@ import {
   TripModeTasksNotice,
   useTripModeTasks,
 } from '@/components/trip-mode-tasks';
+import { TripDayWeather } from '@/components/trip-day-weather';
 import { useTripContext } from '@/components/trip-provider';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -48,6 +49,7 @@ import type { Task, TasksResponse } from '@/lib/tasks/api';
 import { groupTasksByContext } from '@/lib/tasks/grouping';
 import { tripTasks } from '@/lib/tasks/trip-mode';
 import { fetchTripInfo } from '@/lib/trip-info/api';
+import { tripWeatherForDate, useTripWeather } from '@/lib/weather/use-trip-weather';
 import { cn } from '@/lib/utils';
 
 type Tool = {
@@ -141,6 +143,9 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
   const tripModeTasks = useTripModeTasks();
   const tripInfo = useTripResource(queryKeys.tripInfo(tripId), () => fetchTripInfo(tripId));
   const expenses = useTripResource(queryKeys.expenses(tripId), () => fetchExpenses(tripId));
+  // The same trip-wide answer Today and the day rail read, so an upcoming-day
+  // list costs nothing beyond what the traveller has already paid for once.
+  const { data: weather } = useTripWeather(tripId);
   const pinnedInfo = useMemo(
     () => tripInfo.data?.entries.filter((entry) => entry.isPinned).slice(0, 3) ?? [],
     [tripInfo.data],
@@ -418,6 +423,7 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
                             })}
                       </ItemDescription>
                     </ItemContent>
+                    <TripDayWeather forecast={tripWeatherForDate(weather, day.date)} />
                     <ChevronRight aria-hidden="true" className="size-4 text-muted-foreground" />
                   </Item>
                 ))}

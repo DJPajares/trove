@@ -32,6 +32,7 @@ import { useTripModePlaceDetails, useTripModePreview } from '@/components/trip-m
 import { useOnlineStatus } from '@/components/trip-sync-status';
 import { TripModeMemoryDialog } from '@/components/trip-mode-memory-dialog';
 import { TripModePendingMemories } from '@/components/trip-mode-pending-memories';
+import { TripWeatherContext } from '@/components/trip-weather-context';
 import {
   TripModeTaskDisclosure,
   TripModeTasksNotice,
@@ -485,6 +486,10 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
           </Button>
         </div>
       </header>
+
+      {/* Above the stops rather than beside them: the weather is what a
+          traveller checks before deciding how the day's list gets done. */}
+      <TripWeatherContext isPreview={isPreview} selectedDate={day.date} tripId={tripId} />
 
       <TripModeTasksNotice />
 

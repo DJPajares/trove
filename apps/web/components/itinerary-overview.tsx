@@ -4,10 +4,13 @@ import { ChevronRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 
+import { TripDayWeather } from '@/components/trip-day-weather';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import type { ItineraryDay, ItineraryItem } from '@/lib/itinerary/api';
 import { formatItineraryTimeRange } from '@/lib/itinerary/item-timing';
+import type { TripWeather } from '@/lib/weather/api';
+import { tripWeatherForDate } from '@/lib/weather/use-trip-weather';
 import {
   allOverviewDaysExpanded,
   initiallyExpandedOverviewDayIds,
@@ -22,6 +25,8 @@ type ItineraryOverviewProps = {
   onOpenDay: (dayId: string) => void;
   resolveItemName: (item: ItineraryItem) => string;
   timeFormat: '12h' | '24h';
+  /** The trip's forecast, read from the shared cache by the day workspace. */
+  weather: TripWeather | null;
 };
 
 /**
@@ -36,6 +41,7 @@ export function ItineraryOverview({
   onOpenDay,
   resolveItemName,
   timeFormat,
+  weather,
 }: Readonly<ItineraryOverviewProps>) {
   const t = useTranslations('itinerary');
   const [expandedDayIds, setExpandedDayIds] = useState(() => initiallyExpandedOverviewDayIds(days));
@@ -97,11 +103,14 @@ export function ItineraryOverview({
           const expanded = expandedDayIds.has(day.id);
           const dayDetails = (
             <div className="min-w-0">
-              <p className="text-xs font-medium text-muted-foreground">
-                {dayLabel}
-                <span aria-hidden="true"> · </span>
-                {t('dayItemCount', { count: day.items.length })}
-              </p>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <p className="text-xs font-medium text-muted-foreground">
+                  {dayLabel}
+                  <span aria-hidden="true"> · </span>
+                  {t('dayItemCount', { count: day.items.length })}
+                </p>
+                <TripDayWeather forecast={tripWeatherForDate(weather, day.date)} />
+              </div>
               <div className="mt-1 flex min-w-0 items-center gap-1">
                 <h3 className="min-w-0 flex-1 text-base leading-6 font-semibold text-foreground">
                   <button

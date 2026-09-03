@@ -1,6 +1,8 @@
 import { EDITORIAL_IMAGE_RESOLUTION_VERSION } from '@/lib/media/editorial-images';
+import { WEATHER_CONTRACT_VERSION } from '@/lib/weather/api';
 
 import type { TripModeContextRequestOptions } from '@/lib/itinerary/api';
+import type { TemperatureUnit } from '@/lib/profile/preferences';
 
 /**
  * Every query key in Trove, in one place.
@@ -94,6 +96,19 @@ export const queryKeys = {
       options.at ?? null,
       options.languageCode ?? null,
     ] as const,
+
+  /**
+   * One question about the whole trip, asked by Today, the day rail, the trip
+   * overview, the Now card and the home ribbon alike.
+   *
+   * The unit is in the key because it changes the numbers, and the contract
+   * version because this entry is written to disk and never refetched on a
+   * timer - without it a returning traveller keeps reading a shape the server
+   * has stopped producing. Nothing else varies: every surface asks the same
+   * question, so crossing between them reads the answer already in hand.
+   */
+  tripWeather: (tripId: string, temperatureUnit: TemperatureUnit) =>
+    ['trip-weather', tripId, WEATHER_CONTRACT_VERSION, temperatureUnit] as const,
 } as const;
 
 /**
@@ -125,6 +140,7 @@ export const PERSISTED_QUERY_ROOTS = new Set([
   'saved',
   'task-templates',
   'trip-places',
+  'trip-weather',
 ]);
 
 /** Roots scoped to a single trip, and the set `invalidateTripQueries` clears. */
@@ -140,6 +156,7 @@ export const TRIP_SCOPED_QUERY_ROOTS = [
   'trip-info',
   'trip-mode-context',
   'trip-places',
+  'trip-weather',
 ] as const;
 
 export type TripScopedQueryRoot = (typeof TRIP_SCOPED_QUERY_ROOTS)[number];

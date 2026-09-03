@@ -1,33 +1,22 @@
-import type { ItineraryItem, TripModeContext } from '@/lib/itinerary/api';
+import type { TripModeContext } from '@/lib/itinerary/api';
 import type { Trip } from '@/lib/trips/api';
-import type { CachedWeatherContext } from '@/lib/weather/api';
-
-export type HomeWeatherLocation = {
-  latitude: number;
-  longitude: number;
-  timeZone: string;
-};
+import type { TripWeather } from '@/lib/weather/api';
 
 export type HomeWeatherTarget = {
   date: string;
   kind: 'current' | 'forecast';
-  location: HomeWeatherLocation;
+  tripId: string;
 };
 
-function itemWeatherLocation(
-  item: ItineraryItem | null,
-  fallbackTimeZone: string,
-): HomeWeatherLocation | null {
-  const location = item?.tripPlace?.place.location;
-  if (!location) return null;
-
-  return {
-    latitude: location.latitude,
-    longitude: location.longitude,
-    timeZone: location.timeZone ?? item?.timeZone ?? fallbackTimeZone,
-  };
-}
-
+/**
+ * Which day of the focal trip the ribbon should speak about.
+ *
+ * The location that day sits at is no longer decided here: the server resolves
+ * it per day from the itinerary, which is the only place that knows a trip has
+ * moved on to another city. What is left is the question Home actually owns -
+ * whether the traveller wants to know about right now or about the day they
+ * leave.
+ */
 export function resolveHomeWeatherTarget(
   trip: Trip,
   context: TripModeContext | null,
@@ -35,28 +24,14 @@ export function resolveHomeWeatherTarget(
   if (trip.lifecycle === 'completed') return null;
 
   if (trip.lifecycle === 'planning') {
-    return trip.weatherLocation
-      ? { date: trip.startDate, kind: 'forecast', location: trip.weatherLocation }
-      : null;
+    return { date: trip.startDate, kind: 'forecast', tripId: trip.id };
   }
 
-  const currentItem =
-    context?.day?.items.find((item) => item.id === context.currentOrRelevant?.itemId) ?? null;
-  const nextItem = context?.day?.items.find((item) => item.id === context.nextItemId) ?? null;
-  const contextTimeZone = context?.day?.defaultTimeZone ?? trip.referenceTimeZone;
-  const location =
-    itemWeatherLocation(currentItem, contextTimeZone) ??
-    itemWeatherLocation(nextItem, contextTimeZone) ??
-    trip.weatherLocation ??
-    null;
-
-  return location
-    ? {
-        date: context?.selectedDate ?? trip.startDate,
-        kind: 'current',
-        location,
-      }
-    : null;
+  return {
+    date: context?.selectedDate ?? trip.startDate,
+    kind: 'current',
+    tripId: trip.id,
+  };
 }
 
 function localDate(now: Date, timeZone: string) {
@@ -70,35 +45,29 @@ function localDate(now: Date, timeZone: string) {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
+/**
+ * The reading to draw, and what it is honestly a reading of.
+ *
+ * A current reading is only ever current: it is served from the API's
+ * short-lived tier and never from the day snapshot, and the date still has to be
+ * today where the traveller is. Anything else is labelled a forecast, and a day
+ * the provider cannot reach yet says so rather than borrowing a nearby one.
+ */
 export function selectHomeWeatherReading(
-  data: CachedWeatherContext,
+  data: TripWeather,
   target: HomeWeatherTarget,
   now = new Date(),
 ) {
+  const forecast = data.days.find((day) => day.date === target.date) ?? null;
+  const timeZone = forecast?.location.timeZone ?? data.days[0]?.location.timeZone ?? 'UTC';
   const showCurrent =
-    target.kind === 'current' &&
-    target.date === localDate(now, target.location.timeZone) &&
-    data.current !== null;
+    target.kind === 'current' && data.current !== null && target.date === localDate(now, timeZone);
 
   if (showCurrent && data.current) {
     return { kind: 'current' as const, reading: data.current };
   }
 
-  const forecast = data.forecast.find((entry) => entry.date === target.date) ?? null;
   return forecast
     ? { kind: 'forecast' as const, reading: forecast }
     : { kind: 'out_of_range' as const, reading: null };
-}
-
-export function weatherConditionKey(code: number) {
-  if (code === 0) return 'clear';
-  if ([1, 2, 3].includes(code)) return 'cloudy';
-  if ([45, 48].includes(code)) return 'fog';
-  if ([51, 53, 55, 56, 57].includes(code)) return 'drizzle';
-  if ([61, 63, 65, 66, 67].includes(code)) return 'rain';
-  if ([71, 73, 75, 77].includes(code)) return 'snow';
-  if ([80, 81, 82].includes(code)) return 'showers';
-  if ([85, 86].includes(code)) return 'snowShowers';
-  if ([95, 96, 99].includes(code)) return 'thunderstorm';
-  return 'unknown';
 }

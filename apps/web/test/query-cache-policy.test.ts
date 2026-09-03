@@ -105,6 +105,7 @@ test('trip-scoped keys put the trip id directly after the root', () => {
     queryKeys.tripInfo('trip-1'),
     queryKeys.tripModeContext('trip-1', {}),
     queryKeys.tripPlaces('trip-1'),
+    queryKeys.tripWeather('trip-1', 'celsius'),
   ];
 
   for (const key of keys) {
@@ -161,6 +162,38 @@ test('a Plan Score input change clears that trip and no other', async () => {
 
   expect(client.getQueryState(queryKeys.planScore('trip-1'))?.isInvalidated).toBe(true);
   expect(client.getQueryState(queryKeys.planScore('trip-2'))?.isInvalidated).toBe(false);
+});
+
+/**
+ * Weather survives a reload and is not billable.
+ *
+ * Persisting it is what makes reopening Today, the day rail and the trip
+ * overview free rather than three requests. It stays out of the billable set on
+ * purpose: that set is Google Places and Routes spend, and putting a free
+ * provider in it would blunt what the set means - the hook carries its own stale
+ * time instead.
+ */
+test('trip weather persists across reloads without joining the billable roots', () => {
+  const key = queryKeys.tripWeather('trip-1', 'celsius');
+
+  expect(key[0]).toBe('trip-weather');
+  expect(PERSISTED_QUERY_ROOTS.has('trip-weather')).toBe(true);
+  expect(PROVIDER_BILLABLE_QUERY_ROOTS.has('trip-weather')).toBe(false);
+  expect(shouldDehydrateQuery({ queryKey: key, state: { status: 'success' } } as never)).toBe(true);
+});
+
+/**
+ * The entry is written to disk and never refetched on a timer, so a shape the
+ * server has stopped producing would otherwise be read back forever.
+ */
+test('trip weather keys separate contract versions and units, and nothing else', async () => {
+  const { WEATHER_CONTRACT_VERSION } = await import('../lib/weather/api.ts');
+  const key = queryKeys.tripWeather('trip-1', 'celsius');
+
+  expect(key).toContain(WEATHER_CONTRACT_VERSION);
+  expect(key).not.toEqual(queryKeys.tripWeather('trip-1', 'fahrenheit'));
+  // Every surface builds the same key, so crossing between them is a cache read.
+  expect(key).toEqual(queryKeys.tripWeather('trip-1', 'celsius'));
 });
 
 /** An itinerary edit still clears it, which is what it always did. */

@@ -32,6 +32,7 @@ import { ItineraryCreateItemSheet } from '@/components/itinerary-create-item-she
 import { PageState } from '@/components/page-state';
 import { ItineraryDayTimeline } from '@/components/itinerary-day-timeline';
 import { ItineraryOverview } from '@/components/itinerary-overview';
+import { TripDayWeather } from '@/components/trip-day-weather';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
 import { ItineraryPlacesDrawer } from '@/components/itinerary-places-drawer';
@@ -157,6 +158,7 @@ import {
 import { addTripPlace, type TripPlace } from '@/lib/trip-places/api';
 import { sortTripPlaces } from '@/lib/trip-places/sort';
 import { cn } from '@/lib/utils';
+import { tripWeatherForDate, useTripWeather } from '@/lib/weather/use-trip-weather';
 import {
   durationMinutesFromParts,
   durationParts,
@@ -304,6 +306,10 @@ export function ItineraryManager({
     queryKey: queryKeys.itinerary(tripId),
   });
   const itinerary = itineraryQuery.data ?? null;
+  // One answer for the whole trip. The day rail, the day header and the overview
+  // each read a day out of it rather than asking per day - that fan-out is the
+  // thing this endpoint exists to avoid.
+  const { data: weather } = useTripWeather(tripId);
   const itineraryView = useMemo(
     () =>
       resolveItineraryView(
@@ -1581,6 +1587,7 @@ export function ItineraryManager({
           onOpenDay={openDay}
           resolveItemName={itemName}
           timeFormat={preferences.timeFormat}
+          weather={weather}
         />
       ) : (
         <>
@@ -1675,8 +1682,11 @@ export function ItineraryManager({
                             </>
                           )}
                         </span>
-                        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                          {day.items.length}
+                        <span className="flex shrink-0 flex-col items-end gap-0.5">
+                          <span className="text-xs tabular-nums text-muted-foreground">
+                            {day.items.length}
+                          </span>
+                          <TripDayWeather forecast={tripWeatherForDate(weather, day.date)} />
                         </span>
                       </button>
                     );
@@ -1708,6 +1718,10 @@ export function ItineraryManager({
                         {formatDate(selectedDay.date, true)}
                       </h2>
                     )}
+                    <TripDayWeather
+                      className="mt-1.5"
+                      forecast={tripWeatherForDate(weather, selectedDay.date)}
+                    />
                     {selectedDay.notes ? (
                       <p className="mt-1.5 max-w-2xl whitespace-pre-wrap text-sm leading-6 text-text-subtle">
                         {selectedDay.notes}

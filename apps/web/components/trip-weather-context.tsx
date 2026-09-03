@@ -2,36 +2,17 @@
 
 import { CloudSun, RefreshCw } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState } from 'react';
 
 import { usePreferences } from '@/components/preferences-provider';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getWeather, type CachedWeatherContext } from '@/lib/weather/api';
-
-type WeatherLocation = {
-  latitude: number;
-  longitude: number;
-  timeZone: string;
-};
-
-type LoadState =
-  | { data: null; status: 'error' }
-  | { data: null; status: 'loading' }
-  | { data: CachedWeatherContext; status: 'ready' };
-
-function conditionKey(code: number) {
-  if (code === 0) return 'clear';
-  if ([1, 2, 3].includes(code)) return 'cloudy';
-  if ([45, 48].includes(code)) return 'fog';
-  if ([51, 53, 55, 56, 57].includes(code)) return 'drizzle';
-  if ([61, 63, 65, 66, 67].includes(code)) return 'rain';
-  if ([71, 73, 75, 77].includes(code)) return 'snow';
-  if ([80, 81, 82].includes(code)) return 'showers';
-  if ([85, 86].includes(code)) return 'snowShowers';
-  if ([95, 96, 99].includes(code)) return 'thunderstorm';
-  return 'unknown';
-}
+import { weatherConditionKey } from '@/lib/weather/conditions';
+import {
+  isDateForecastable,
+  isWeatherStale,
+  tripWeatherForDate,
+  useTripWeather,
+} from '@/lib/weather/use-trip-weather';
 
 function localDate(timeZone: string) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -44,47 +25,30 @@ function localDate(timeZone: string) {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
+/**
+ * The day's weather, at the size a traveller reads it standing up.
+ *
+ * Today and Now show the same strip about different days, and both take it from
+ * the one trip-wide answer rather than asking per screen. A current reading is
+ * only ever shown for the real local today on a live surface: Preview is
+ * stepping through a day that has not happened, and labelling a forecast "now"
+ * there would be a lie the rest of the screen cannot correct.
+ */
 export function TripWeatherContext({
   isPreview,
-  location,
   selectedDate,
+  tripId,
 }: Readonly<{
   isPreview: boolean;
-  location: WeatherLocation | null;
   selectedDate: string;
+  tripId: string;
 }>) {
   const t = useTranslations('tripMode.views.weather');
   const locale = useLocale();
   const { preferences } = usePreferences();
-  const [reloadKey, setReloadKey] = useState(0);
-  const [state, setState] = useState<LoadState>({ data: null, status: 'loading' });
+  const { data, refetch, status } = useTripWeather(tripId);
 
-  useEffect(() => {
-    if (!location) return;
-    const controller = new AbortController();
-    setState({ data: null, status: 'loading' });
-    void getWeather({
-      ...location,
-      signal: controller.signal,
-      temperatureUnit: preferences.temperatureUnit,
-    })
-      .then((data) => setState({ data, status: 'ready' }))
-      .catch((error) => {
-        if (!(error instanceof DOMException && error.name === 'AbortError')) {
-          setState({ data: null, status: 'error' });
-        }
-      });
-    return () => controller.abort();
-  }, [location, preferences.temperatureUnit, reloadKey]);
-
-  const selectedForecast = useMemo(
-    () => state.data?.forecast.find((forecast) => forecast.date === selectedDate) ?? null,
-    [selectedDate, state.data],
-  );
-
-  if (!location) return null;
-
-  if (state.status === 'loading') {
+  if (status === 'loading') {
     return (
       <section
         aria-busy="true"
@@ -103,7 +67,7 @@ export function TripWeatherContext({
     );
   }
 
-  if (state.status === 'error') {
+  if (status === 'error' || !data) {
     return (
       <section aria-live="polite" className="flex items-start gap-3 border-y border-border py-4">
         <CloudSun aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
@@ -113,23 +77,21 @@ export function TripWeatherContext({
             {t('unavailableDescription')}
           </p>
         </div>
-        <Button
-          aria-label={t('tryAgain')}
-          onClick={() => setReloadKey((value) => value + 1)}
-          size="icon-sm"
-          variant="ghost"
-        >
+        <Button aria-label={t('tryAgain')} onClick={refetch} size="icon-sm" variant="ghost">
           <RefreshCw aria-hidden="true" />
         </Button>
       </section>
     );
   }
 
-  const { data } = state;
-  const currentDate = localDate(location.timeZone);
+  const selectedForecast = tripWeatherForDate(data, selectedDate);
+  const timeZone = selectedForecast?.location.timeZone ?? data.days[0]?.location.timeZone ?? 'UTC';
   const current = data.current;
+  // An answer read off disk on a plane is worth showing, but it stops being
+  // "now" the moment it outlives its window.
+  const stale = isWeatherStale(data);
   const showCurrent = Boolean(
-    !isPreview && selectedDate === currentDate && data.source === 'live' && current,
+    !isPreview && !stale && current && selectedDate === localDate(timeZone),
   );
   const mainTemperature =
     showCurrent && current ? current.temperature : (selectedForecast?.temperatureMax ?? null);
@@ -141,11 +103,6 @@ export function TripWeatherContext({
     month: 'short',
     timeZone: 'UTC',
   }).format(new Date(`${selectedDate}T00:00:00.000Z`));
-  const fetchedAt = new Intl.DateTimeFormat(locale, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: location.timeZone,
-  }).format(new Date(data.fetchedAt));
 
   return (
     <section aria-labelledby="trip-weather-heading" className="border-y border-border py-4">
@@ -167,7 +124,7 @@ export function TripWeatherContext({
                 {formatTemperature(mainTemperature)}
               </p>
               <p className="text-sm text-muted-foreground">
-                {t(`condition.${conditionKey(condition.weatherCode)}`)}
+                {t(`condition.${weatherConditionKey(condition.weatherCode)}`)}
               </p>
               {showCurrent && current ? (
                 <p className="text-sm text-muted-foreground">
@@ -185,13 +142,21 @@ export function TripWeatherContext({
             </div>
           ) : (
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {isPreview ? t('forecastLater') : t('noForecast')}
+              {/* A day past the horizon has no forecast yet; a day inside it that
+              still has none has nowhere located to have weather about. */}
+              {isDateForecastable(data, selectedDate) ? t('noForecast') : t('forecastLater')}
             </p>
           )}
 
-          {data.source === 'cache' ? (
+          {stale ? (
             <p className="mt-2 text-xs leading-5 text-text-subtle">
-              {t(data.stale ? 'staleData' : 'savedData', { time: fetchedAt })}
+              {t('staleData', {
+                time: new Intl.DateTimeFormat(locale, {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                  timeZone,
+                }).format(new Date(data.fetchedAt)),
+              })}
             </p>
           ) : null}
           <a

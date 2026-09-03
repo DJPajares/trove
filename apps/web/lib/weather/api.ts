@@ -2,6 +2,15 @@ import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 import type { TemperatureUnit } from '@/lib/profile/preferences';
 
+/**
+ * Bumped whenever the shape below changes.
+ *
+ * The query cache is written to disk and never refetched on a timer, so without
+ * a version in the key a returning traveller keeps reading an answer the server
+ * has already stopped producing.
+ */
+export const WEATHER_CONTRACT_VERSION = 'v1';
+
 export type WeatherCurrentConditions = {
   apparentTemperature: number;
   isDay: boolean;
@@ -10,42 +19,45 @@ export type WeatherCurrentConditions = {
   weatherCode: number;
 };
 
-export type WeatherDailyForecast = {
+export type TripWeatherLocation = {
+  latitude: number;
+  longitude: number;
+  timeZone: string;
+};
+
+export type TripWeatherDay = {
   date: string;
+  itineraryDayId: string;
+  location: TripWeatherLocation;
   precipitationProbability: number | null;
   temperatureMax: number;
   temperatureMin: number;
   weatherCode: number;
 };
 
-export type WeatherContext = {
+/**
+ * A trip's weather, one day at a time.
+ *
+ * `days` carries only the days the provider could actually answer. A day past
+ * the horizon is absent rather than present and empty, so a surface can tell
+ * "not forecast yet" from "no weather here" without inspecting a temperature.
+ */
+export type TripWeather = {
   attribution: {
     label: string;
     url: string;
   };
   current: WeatherCurrentConditions | null;
-  forecast: WeatherDailyForecast[];
+  days: TripWeatherDay[];
   fetchedAt: string;
-  location: {
-    latitude: number;
-    longitude: number;
-    timeZone: string;
-  };
+  horizon: { endDate: string; startDate: string };
   provider: 'open_meteo';
   temperatureUnit: TemperatureUnit;
 };
 
-export type CachedWeatherContext = WeatherContext & {
-  source: 'cache' | 'live';
-  stale: boolean;
-};
-
-export type WeatherRequest = {
-  latitude: number;
-  longitude: number;
+export type TripWeatherRequest = {
   signal?: AbortSignal;
   temperatureUnit: TemperatureUnit;
-  timeZone: string;
 };
 
 export class WeatherApiError extends Error {
@@ -58,9 +70,6 @@ export class WeatherApiError extends Error {
 }
 
 const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
-const CACHE_MAX_AGE_MS = 6 * 60 * 60_000;
-const OFFLINE_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60_000;
-const cachePrefix = 'trove:weather:v1:';
 
 async function getAccessToken() {
   const supabase = createBrowserSupabaseClient();
@@ -70,65 +79,16 @@ async function getAccessToken() {
   return data.session.access_token;
 }
 
-function hasStorage() {
-  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
-}
-
-function cacheKey(input: Omit<WeatherRequest, 'signal'>) {
-  return [
-    cachePrefix,
-    input.latitude.toFixed(3),
-    input.longitude.toFixed(3),
-    input.timeZone,
-    input.temperatureUnit,
-  ].join(':');
-}
-
-function readCache(key: string, allowStale: boolean) {
-  if (!hasStorage()) return null;
-  try {
-    const value: unknown = JSON.parse(window.localStorage.getItem(key) ?? 'null');
-    if (!isWeatherContext(value)) return null;
-    const fetchedAt = new Date(value.fetchedAt).getTime();
-    const age = Date.now() - fetchedAt;
-    if (!Number.isFinite(fetchedAt) || age > OFFLINE_CACHE_MAX_AGE_MS) return null;
-    if (!allowStale && age > CACHE_MAX_AGE_MS) return null;
-    return { ...value, source: 'cache' as const, stale: age > CACHE_MAX_AGE_MS };
-  } catch {
-    return null;
-  }
-}
-
-function writeCache(key: string, value: WeatherContext) {
-  if (!hasStorage()) return;
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // A private browser session or full storage should not block Trip Mode.
-  }
-}
-
-function isWeatherContext(value: unknown): value is WeatherContext {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<WeatherContext>;
-  return (
-    candidate.provider === 'open_meteo' &&
-    (candidate.temperatureUnit === 'celsius' || candidate.temperatureUnit === 'fahrenheit') &&
-    typeof candidate.fetchedAt === 'string' &&
-    Array.isArray(candidate.forecast) &&
-    Boolean(candidate.attribution?.label) &&
-    Boolean(candidate.attribution?.url) &&
-    typeof candidate.location?.latitude === 'number' &&
-    typeof candidate.location?.longitude === 'number' &&
-    typeof candidate.location?.timeZone === 'string'
-  );
-}
-
-async function weatherRequest<T>(path: string, signal?: AbortSignal) {
+export async function getTripWeather(
+  tripId: string,
+  { signal, temperatureUnit }: TripWeatherRequest,
+): Promise<TripWeather> {
   const accessToken = await getAccessToken();
+  const query = new URLSearchParams({ temperatureUnit });
+
   let response: Response;
   try {
-    response = await fetch(`${apiUrl}${path}`, {
+    response = await fetch(`${apiUrl}/trips/${tripId}/weather?${query.toString()}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
       signal,
     });
@@ -136,6 +96,7 @@ async function weatherRequest<T>(path: string, signal?: AbortSignal) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
     throw new WeatherApiError('weather_unavailable', 503);
   }
+
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { code?: string };
     throw new WeatherApiError(
@@ -143,31 +104,6 @@ async function weatherRequest<T>(path: string, signal?: AbortSignal) {
       response.status,
     );
   }
-  return response.json() as Promise<T>;
-}
 
-export async function getWeather(input: WeatherRequest): Promise<CachedWeatherContext> {
-  const { signal, ...request } = input;
-  const key = cacheKey(request);
-  const offline = typeof navigator !== 'undefined' && !navigator.onLine;
-  const cached = readCache(key, offline);
-  if (offline) {
-    if (cached) return cached;
-    throw new WeatherApiError('weather_unavailable', 503);
-  }
-
-  const query = new URLSearchParams({
-    latitude: String(request.latitude),
-    longitude: String(request.longitude),
-    temperatureUnit: request.temperatureUnit,
-    timeZone: request.timeZone,
-  });
-  try {
-    const weather = await weatherRequest<WeatherContext>(`/weather?${query.toString()}`, signal);
-    writeCache(key, weather);
-    return { ...weather, source: 'live', stale: false };
-  } catch (error) {
-    if (cached) return cached;
-    throw error;
-  }
+  return response.json() as Promise<TripWeather>;
 }

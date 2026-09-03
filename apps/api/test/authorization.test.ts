@@ -97,6 +97,7 @@ test('trip-scoped reads reject another user and never query without an ownership
   const { listTripPlaces } = await import('../src/services/trip-places.js');
   const { listReservations } = await import('../src/services/reservations.js');
   const { getTrip } = await import('../src/services/trips.js');
+  const { TripWeatherService } = await import('../src/services/trip-weather.js');
 
   await assertDeniesCrossUserAccess('listItinerary', () =>
     listItinerary(INTRUDER_ID, OWNER_TRIP_ID),
@@ -111,6 +112,11 @@ test('trip-scoped reads reject another user and never query without an ownership
     listReservations(INTRUDER_ID, OWNER_TRIP_ID, null),
   );
   await assertDeniesCrossUserAccess('getTrip', () => getTrip(INTRUDER_ID, '', OWNER_TRIP_ID));
+  await assertDeniesCrossUserAccess('getTripWeather', () =>
+    new TripWeatherService().getTripWeather(INTRUDER_ID, OWNER_TRIP_ID, {
+      temperatureUnit: 'celsius',
+    }),
+  );
 });
 
 const OTHER_SESSION_ID = '00000000-0000-4000-8000-000000000001';

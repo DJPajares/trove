@@ -3,6 +3,11 @@ const DEFAULT_CACHE_TTL_MS = 10 * 60_000;
 const DEFAULT_TIMEOUT_MS = 8_000;
 const MAX_CACHE_ENTRIES = 200;
 
+export const WEATHER_ATTRIBUTION = {
+  label: 'Weather data by Open-Meteo.com',
+  url: 'https://open-meteo.com/',
+} as const;
+
 type Fetcher = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
 type OpenMeteoResponse = {
@@ -20,6 +25,8 @@ type OpenMeteoResponse = {
     time?: unknown[];
     weather_code?: unknown[];
   };
+  /** Present only on the second and later entries of a multi-point answer. */
+  location_id?: unknown;
   timezone?: unknown;
 };
 
@@ -46,6 +53,32 @@ export type WeatherDailyForecast = {
   temperatureMax: number;
   temperatureMin: number;
   weatherCode: number;
+};
+
+/** One coordinate the daily forecast is asked about. */
+export type WeatherPoint = {
+  latitude: number;
+  longitude: number;
+};
+
+/**
+ * One point's answer. Temperatures are celsius: the wire format is fixed so a
+ * traveller's unit preference never becomes part of a cache key.
+ */
+export type WeatherPointForecast = {
+  days: WeatherDailyForecast[];
+  location: {
+    latitude: number;
+    longitude: number;
+    timeZone: string;
+  };
+  point: WeatherPoint;
+};
+
+export type WeatherDailyForecastRequest = {
+  endDate: string;
+  points: readonly WeatherPoint[];
+  startDate: string;
 };
 
 export type WeatherContext = {
@@ -79,6 +112,7 @@ export class WeatherProviderError extends Error {
 }
 
 export interface WeatherProvider {
+  getDailyForecasts(input: WeatherDailyForecastRequest): Promise<WeatherPointForecast[]>;
   getWeather(input: WeatherRequest): Promise<Omit<WeatherContext, 'fetchedAt'>>;
 }
 
@@ -179,6 +213,53 @@ export class OpenMeteoWeatherProvider implements WeatherProvider {
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
+  /**
+   * Every point's daily forecast in one request.
+   *
+   * Open-Meteo takes comma-separated coordinates and answers with an array, so
+   * a trip crossing four cities costs the same single call as a trip that never
+   * leaves one. `start_date`/`end_date` apply to every point in the batch, and a
+   * date outside the served window is a hard 400 rather than a short answer -
+   * see `resolveForecastWindow`, which is what keeps this call legal.
+   */
+  async getDailyForecasts(input: WeatherDailyForecastRequest): Promise<WeatherPointForecast[]> {
+    if (!input.points.length) return [];
+
+    const url = new URL(this.baseUrl);
+    url.search = new URLSearchParams({
+      daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max',
+      end_date: input.endDate,
+      latitude: input.points.map((point) => String(point.latitude)).join(','),
+      longitude: input.points.map((point) => String(point.longitude)).join(','),
+      start_date: input.startDate,
+      temperature_unit: 'celsius',
+      timezone: 'auto',
+    }).toString();
+
+    const payload = await this.requestJson<OpenMeteoResponse | OpenMeteoResponse[]>(url);
+    // A single coordinate answers with an object; several answer with an array.
+    const entries = Array.isArray(payload) ? payload : [payload];
+    if (entries.length !== input.points.length) throw new WeatherProviderError('invalid_response');
+
+    return entries.map((entry, index) => {
+      // The first entry carries no `location_id`; later ones number themselves
+      // by request position. Trusting the index alone would silently hand one
+      // city's forecast to another if that ever changed.
+      const locationId = isFiniteNumber(entry.location_id) ? entry.location_id : 0;
+      const point = input.points[locationId];
+      if (!point || locationId !== index) throw new WeatherProviderError('invalid_response');
+
+      const timeZone = typeof entry.timezone === 'string' && entry.timezone ? entry.timezone : null;
+      if (!timeZone) throw new WeatherProviderError('invalid_response');
+
+      return {
+        days: mapForecast(entry.daily),
+        location: { latitude: point.latitude, longitude: point.longitude, timeZone },
+        point,
+      };
+    });
+  }
+
   async getWeather(input: WeatherRequest): Promise<Omit<WeatherContext, 'fetchedAt'>> {
     const url = new URL(this.baseUrl);
     url.search = new URLSearchParams({
@@ -191,6 +272,27 @@ export class OpenMeteoWeatherProvider implements WeatherProvider {
       timezone: input.timeZone,
     }).toString();
 
+    const payload = await this.requestJson<OpenMeteoResponse>(url);
+
+    const timeZone =
+      typeof payload.timezone === 'string' && payload.timezone ? payload.timezone : null;
+    if (!timeZone) throw new WeatherProviderError('invalid_response');
+
+    return {
+      attribution: WEATHER_ATTRIBUTION,
+      current: mapCurrent(payload.current),
+      forecast: mapForecast(payload.daily),
+      location: {
+        latitude: input.latitude,
+        longitude: input.longitude,
+        timeZone,
+      },
+      provider: 'open_meteo',
+      temperatureUnit: input.temperatureUnit,
+    };
+  }
+
+  private async requestJson<T>(url: URL): Promise<T> {
     let response: Response;
     try {
       response = await this.fetcher(url, {
@@ -209,32 +311,11 @@ export class OpenMeteoWeatherProvider implements WeatherProvider {
       );
     }
 
-    let payload: OpenMeteoResponse;
     try {
-      payload = (await response.json()) as OpenMeteoResponse;
+      return (await response.json()) as T;
     } catch (error) {
       throw new WeatherProviderError('invalid_response', { cause: error });
     }
-
-    const timeZone =
-      typeof payload.timezone === 'string' && payload.timezone ? payload.timezone : null;
-    if (!timeZone) throw new WeatherProviderError('invalid_response');
-
-    return {
-      attribution: {
-        label: 'Weather data by Open-Meteo.com',
-        url: 'https://open-meteo.com/',
-      },
-      current: mapCurrent(payload.current),
-      forecast: mapForecast(payload.daily),
-      location: {
-        latitude: input.latitude,
-        longitude: input.longitude,
-        timeZone,
-      },
-      provider: 'open_meteo',
-      temperatureUnit: input.temperatureUnit,
-    };
   }
 }
 

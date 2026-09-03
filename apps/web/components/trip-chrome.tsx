@@ -1,11 +1,13 @@
 'use client';
 
-import { ArrowLeft, ChevronDown, Ellipsis, Share2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, ChevronDown, Ellipsis, Pencil, Share2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
+import { TripForm } from '@/components/trip-form';
 import { TripMedia } from '@/components/trip-media';
 import { TripShareDialog } from '@/components/trip-share-dialog';
 import { useTripContext } from '@/components/trip-provider';
@@ -20,8 +22,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { resolveTripMediaSource, type TripMediaSource } from '@/lib/media/trip-media';
+import { ITINERARY_EDIT_QUERY_ROOTS, invalidateTripQueries } from '@/lib/query/trip-invalidation';
+import type { Trip } from '@/lib/trips/api';
 import {
   primaryTripDestinations,
   supportingTripDestinations,
@@ -46,6 +57,26 @@ const TripChromeContext = createContext<TripChromeSlots | null>(null);
 
 export function useTripChrome() {
   return useContext(TripChromeContext);
+}
+
+/**
+ * Whether a saved edit moved anything the plan below the chrome is built from.
+ *
+ * A new date range adds and removes itinerary days and pushes what no longer
+ * fits into Unscheduled, and destinations, the reference time zone and
+ * readiness each feed a screen or a score. Renaming a trip or swapping its
+ * cover feeds none of them — and the roots this gates are provider-billable, so
+ * a rename must not buy a fresh set of travel legs.
+ */
+function movesThePlan(before: Trip, after: Trip) {
+  return (
+    before.startDate !== after.startDate ||
+    before.endDate !== after.endDate ||
+    before.referenceTimeZone !== after.referenceTimeZone ||
+    before.planningReadiness !== after.planningReadiness ||
+    before.destinations.map((entry) => entry.name).join('\u0000') !==
+      after.destinations.map((entry) => entry.name).join('\u0000')
+  );
 }
 
 function emphasisClasses(destination: TripDestination, active: boolean) {
@@ -77,6 +108,7 @@ export function TripChrome({
   const t = useTranslations('trips');
   const share = useTranslations('trips.share');
   const locale = useLocale();
+  const queryClient = useQueryClient();
   const pathname = usePathname();
   const context = useTripContext();
   const trip = context?.trip ?? null;
@@ -87,6 +119,7 @@ export function TripChrome({
   const [coverMetaSlot, setCoverMetaSlot] = useState<HTMLElement | null>(null);
   const [coverSource, setCoverSource] = useState<TripMediaSource | null>(null);
   const [sharing, setSharing] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const currentSection = tripSectionFromPathname(pathname, tripId);
   const stickyNavigation = currentSection === 'itinerary';
@@ -113,6 +146,20 @@ export function TripChrome({
     new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
       new Date(`${value}T00:00:00.000Z`),
     );
+
+  // The saved trip goes straight back into the query the whole subtree reads,
+  // so the cover and the dates update without a second fetch. What the trip's
+  // own screens read is a separate question: the overview renders none of it and
+  // could stop at `setTrip`, but from here the itinerary is directly below.
+  function handleSaved(saved: Trip) {
+    const previous = trip;
+    context?.setTrip(saved);
+    setEditing(false);
+
+    if (previous && movesThePlan(previous, saved)) {
+      void invalidateTripQueries(queryClient, tripId, ITINERARY_EDIT_QUERY_ROOTS);
+    }
+  }
 
   const slots = useMemo<TripChromeSlots>(
     () => ({ actionsSlot, coverMetaSlot, descriptionSlot, setCoverSource }),
@@ -289,6 +336,10 @@ export function TripChrome({
                 {trip ? (
                   <>
                     <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setEditing(true)}>
+                      <Pencil aria-hidden="true" data-icon="inline-start" />
+                      {t('editTrip')}
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setSharing(true)}>
                       <Share2 aria-hidden="true" data-icon="inline-start" />
                       {share('action')}
@@ -304,16 +355,42 @@ export function TripChrome({
 
         {children}
 
-        {/* `setTrip` writes the new visibility straight back into the trip the
-            whole subtree already reads, so the switch reflects the saved state
-            without a second fetch. */}
+        {/* Both of these act on the trip rather than on any one screen, which
+            is why they hang off the chrome. Each writes its result straight
+            back into the trip the whole subtree already reads, so the change is
+            reflected without a second fetch. */}
         {trip ? (
-          <TripShareDialog
-            onOpenChange={setSharing}
-            onTripChange={(updated) => context?.setTrip(updated)}
-            open={sharing}
-            trip={trip}
-          />
+          <>
+            <TripShareDialog
+              onOpenChange={setSharing}
+              onTripChange={(updated) => context?.setTrip(updated)}
+              open={sharing}
+              trip={trip}
+            />
+
+            {/* Deleting is left to the overview. A trip deleted from inside one
+                of its own screens leaves the traveller standing on a route that
+                no longer resolves. */}
+            <Sheet onOpenChange={(open) => !open && setEditing(false)} open={editing}>
+              <SheetContent
+                className="w-full md:data-[side=right]:w-[min(44rem,calc(100%-0.5rem))]"
+                closeLabel={t('close')}
+              >
+                <SheetHeader className="border-b">
+                  <SheetTitle>{t('editTitle')}</SheetTitle>
+                  <SheetDescription>{t('editDescription')}</SheetDescription>
+                </SheetHeader>
+                {editing ? (
+                  <TripForm
+                    key={trip.id}
+                    onCancel={() => setEditing(false)}
+                    onSaved={handleSaved}
+                    trip={trip}
+                  />
+                ) : null}
+              </SheetContent>
+            </Sheet>
+          </>
         ) : null}
       </div>
     </TripChromeContext.Provider>

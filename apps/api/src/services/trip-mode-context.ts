@@ -320,27 +320,31 @@ export async function resolveTripModeContext(
     day.defaultTimeZone,
     at,
   );
-  const leaveBy = await resolveLeaveBy({
-    bufferSeconds: options.routeBufferSeconds ?? null,
-    contextAt: at,
-    currentItem: currentOrRelevant?.item ?? null,
-    dayId: day.id,
-    languageCode: options.languageCode,
-    nextItem,
-    services,
-    tripId: trip.id,
-    userId,
-  });
-
-  // Trip Mode renders the same Places the itinerary does, so it reads the same
-  // snapshots rather than re-resolving them on every tab.
-  const snapshots = await hydratePlaceSnapshots(
-    day.items.flatMap(
-      (item) =>
-        item.tripPlace?.place.providerRefs.map((reference) => reference.externalPlaceId) ?? [],
+  // Two independent questions, and both can reach the provider. Asked in
+  // series they add up; the leg and the snapshots know nothing about each
+  // other, so the request waits once for the slower of the two.
+  const [leaveBy, snapshots] = await Promise.all([
+    resolveLeaveBy({
+      bufferSeconds: options.routeBufferSeconds ?? null,
+      contextAt: at,
+      currentItem: currentOrRelevant?.item ?? null,
+      dayId: day.id,
+      languageCode: options.languageCode,
+      nextItem,
+      services,
+      tripId: trip.id,
+      userId,
+    }),
+    // Trip Mode renders the same Places the itinerary does, so it reads the same
+    // snapshots rather than re-resolving them on every tab.
+    hydratePlaceSnapshots(
+      day.items.flatMap(
+        (item) =>
+          item.tripPlace?.place.providerRefs.map((reference) => reference.externalPlaceId) ?? [],
+      ),
+      { languageCode: options.languageCode, source: 'trip-mode-context' },
     ),
-    { languageCode: options.languageCode, source: 'trip-mode-context' },
-  );
+  ]);
 
   return {
     ...base,

@@ -24,7 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { DatePicker } from '@/components/date-picker';
@@ -294,7 +294,6 @@ export function ItineraryManager({
   const tripDescription = useTripContext()?.trip?.description?.trim() ?? '';
   const locale = useLocale();
   const pathname = usePathname();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const requestedDayId = searchParams.get('day');
   const requestedView = searchParams.get('view');
@@ -409,46 +408,61 @@ export function ItineraryManager({
     await invalidateTripQueries(queryClient, tripId, ITINERARY_EDIT_QUERY_ROOTS);
   }, [queryClient, tripId]);
 
+  /**
+   * The URL records which day you are planning; it does not decide it.
+   *
+   * Which day you are on is still part of where you are, so a reload, a shared
+   * link and the back button all land on it. But `router.replace` treats that
+   * query string as a destination: the App Router fetches the route again and
+   * `useSearchParams` only moves once it lands. A fast run down the day rail
+   * therefore had two answers in flight at once - the click, and a URL still
+   * catching up - and the late one won, which is why the day kept changing
+   * after the traveller stopped clicking. Next patches the history API into the
+   * same router state, so this writes the address bar without asking the server
+   * what it means.
+   *
+   * `mirroredDayId` is how the effect below tells our own write from a real
+   * navigation. Only the latter may move the selection.
+   */
+  const mirroredDayId = useRef<string | null>(null);
+  const writeDayToUrl = useCallback(
+    (dayId: string | null, entry: 'push' | 'replace') => {
+      mirroredDayId.current = dayId;
+      const href = itineraryViewHref(pathname, searchParams.toString(), dayId);
+      if (entry === 'push') window.history.pushState(null, '', href);
+      else window.history.replaceState(null, '', href);
+    },
+    [pathname, searchParams],
+  );
+
   // The selected day follows the itinerary rather than the fetch, so a day that
   // survives an edit stays selected and a day that does not falls back to the
-  // first one.
+  // first one. It follows the URL too - but only when the URL moved on its own.
   useEffect(() => {
     if (!itinerary) return;
+    const navigated = requestedDayId !== mirroredDayId.current;
     setSelectedDayId((current) => {
-      const preferred = itineraryView.view === 'day' ? itineraryView.selectedDayId : current;
+      const preferred =
+        navigated && itineraryView.view === 'day' ? itineraryView.selectedDayId : current;
       return preferred && itinerary.days.some((day) => day.id === preferred)
         ? preferred
         : (itinerary.days[0]?.id ?? null);
     });
-  }, [itinerary, itineraryView]);
+  }, [itinerary, itineraryView, requestedDayId]);
 
   // A stale shared link is not a different view. Clean it back to the day the
   // itinerary actually opened on instead of leaving a day that is not there.
   useEffect(() => {
     if (!itinerary || !itineraryView.invalidRequestedDay) return;
-    router.replace(
-      itineraryViewHref(pathname, searchParams.toString(), itineraryView.selectedDayId),
-      {
-        scroll: false,
-      },
-    );
-  }, [
-    itinerary,
-    itineraryView.invalidRequestedDay,
-    itineraryView.selectedDayId,
-    pathname,
-    router,
-    searchParams,
-  ]);
+    writeDayToUrl(itineraryView.selectedDayId, 'replace');
+  }, [itinerary, itineraryView.invalidRequestedDay, itineraryView.selectedDayId, writeDayToUrl]);
 
-  // Which day you are planning is part of where you are, so a reload, a shared
-  // link, and the back button all land on the same day you left.
+  // Stepping between days is not a place you go back to; opening one is, and
+  // that is the one that pushes.
   useEffect(() => {
     if (activeView !== 'day' || !selectedDayId || requestedDayId === selectedDayId) return;
-    router.replace(itineraryViewHref(pathname, searchParams.toString(), selectedDayId), {
-      scroll: false,
-    });
-  }, [activeView, pathname, requestedDayId, router, searchParams, selectedDayId]);
+    writeDayToUrl(selectedDayId, 'replace');
+  }, [activeView, requestedDayId, selectedDayId, writeDayToUrl]);
 
   const selectedDay = useMemo(
     () => itinerary?.days.find((day) => day.id === selectedDayId) ?? null,
@@ -489,12 +503,25 @@ export function ItineraryManager({
    * Polylines are a second dimension of the same question, and a set fetched
    * with them answers a request without them too - so if the map has already
    * paid for this day, the list reuses that instead of buying it again.
+   *
+   * Asked as a query rather than read off the client, because this answer is
+   * part of the key below. `getQueryData` during render subscribes to nothing,
+   * so it used to flip on whatever unrelated re-render happened next - changing
+   * the key mid-flight, abandoning the request already paid for and buying the
+   * same day twice, which the map then redrew twice. `enabled: false` never
+   * fetches; it only watches the entry the map fills in.
    */
-  const polylineRoutesCached =
-    queryClient.getQueryData(
-      queryKeys.itineraryDayRoutes(tripId, selectedDay?.id ?? '', routeRevision, true, locale),
-    ) !== undefined;
-  const requestRoutePolylines = includeRoutePolylines || polylineRoutesCached;
+  const polylineRoutesQuery = useQuery({
+    enabled: false,
+    queryKey: queryKeys.itineraryDayRoutes(
+      tripId,
+      selectedDay?.id ?? '',
+      routeRevision,
+      true,
+      locale,
+    ),
+  });
+  const requestRoutePolylines = includeRoutePolylines || polylineRoutesQuery.data !== undefined;
 
   const routesQuery = useQuery({
     enabled: activeView === 'day' && selectedDay !== null && desktopMapLayout !== null,
@@ -1508,7 +1535,7 @@ export function ItineraryManager({
 
   function openDay(dayId: string) {
     setSelectedDayId(dayId);
-    router.push(itineraryViewHref(pathname, searchParams.toString(), dayId), { scroll: false });
+    writeDayToUrl(dayId, 'push');
   }
 
   function openOverviewItem(item: ItineraryItem) {
@@ -1519,7 +1546,7 @@ export function ItineraryManager({
 
   function changeItineraryView(value: string) {
     if (value === 'overview') {
-      router.push(itineraryViewHref(pathname, searchParams.toString(), null), { scroll: false });
+      writeDayToUrl(null, 'push');
       return;
     }
 

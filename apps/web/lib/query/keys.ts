@@ -18,6 +18,14 @@ export const queryKeys = {
   currencyRate: (base: string, quote: string) => ['currency', 'rate', base, quote] as const,
 
   /**
+   * The whole day's board, which is what makes converting a trip's spending one
+   * request rather than one per currency. It sits under `currency` so it
+   * inherits that root's twelve-hour stale time and its permission to persist -
+   * both of which already match the board's own cache window.
+   */
+  currencyRateBoard: () => ['currency', 'rate-board'] as const,
+
+  /**
    * Keyed by resolved subject keys rather than by the subjects themselves, so
    * two screens asking for the same photographs in a different order share one
    * answer instead of billing the resolve endpoint twice. The resolution version

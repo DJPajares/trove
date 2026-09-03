@@ -172,3 +172,21 @@ test('an itinerary edit still clears the Plan Score', async () => {
 
   expect(client.getQueryState(queryKeys.planScore('trip-1'))?.isInvalidated).toBe(true);
 });
+
+/**
+ * The board's root is what earns it the twelve-hour stale time and the right to
+ * survive a reload — both of which its own cache window already assumes. Named
+ * anywhere else it would be refetched on every mount and lost on every restart.
+ */
+test('the currency rate board is cached as a currency answer, not a trip one', () => {
+  const [root] = queryKeys.currencyRateBoard();
+
+  expect(root).toBe('currency');
+  expect(PERSISTED_QUERY_ROOTS.has(root)).toBe(true);
+  expect(
+    shouldDehydrateQuery({
+      queryKey: queryKeys.currencyRateBoard(),
+      state: { status: 'success' },
+    } as never),
+  ).toBe(true);
+});

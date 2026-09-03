@@ -1,31 +1,16 @@
 'use client';
 
-import { CircleAlert, Pencil, Plus, ReceiptText, Trash2, WalletCards } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { CircleAlert, Pencil, Plus, ReceiptText, WalletCards } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
-import { DatePicker } from '@/components/date-picker';
-import { CurrencyCombobox } from '@/components/currency-combobox';
 import { EditorialSection } from '@/components/editorial-section';
-import { MoneyInput } from '@/components/money-input';
+import { ExpenseEditorSheet } from '@/components/expenses/expense-editor-sheet';
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
-import { TimeInput } from '@/components/time-input';
 import { TripSectionHeader } from '@/components/trip-section-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
 import {
   Item,
   ItemActions,
@@ -36,22 +21,6 @@ import {
   ItemTitle,
 } from '@/components/ui/item';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
-import { Textarea } from '@/components/ui/textarea';
-import {
   createExpense,
   deleteExpense,
   fetchExpenses,
@@ -59,78 +28,26 @@ import {
   updateExpense,
   type CurrencyTotal,
   type Expense,
-  type ExpenseCategory,
   type ExpenseInput,
   type ExpensePlace,
 } from '@/lib/expenses/api';
+import { TripSpendPanel } from '@/components/expenses/trip-spend-panel';
+import { formatCurrencyAmount } from '@/lib/currency/money';
 import {
-  convertCurrencyAmount,
-  getCurrencyRate,
-  type CachedCurrencyRate,
-} from '@/lib/currency/api';
+  createBudgetForm,
+  createExpenseForm,
+  hasValidMoney,
+  type BudgetForm,
+  type EditorState,
+  type ExpenseForm,
+} from '@/lib/expenses/editor-state';
+import {
+  expenseTitle as resolveExpenseTitle,
+  itineraryItemLabel as resolveItemLabel,
+  placeLabel as resolvePlaceLabel,
+} from '@/lib/expenses/labels';
 import { queryKeys } from '@/lib/query/keys';
 import { useTripResource } from '@/lib/query/use-trip-resource';
-
-type EditorState =
-  | { kind: 'closed'; expense: null }
-  | { kind: 'create'; expense: null }
-  | { kind: 'edit'; expense: Expense }
-  | { kind: 'budget'; expense: null };
-
-type ExpenseForm = {
-  amount: string;
-  category: ExpenseCategory | 'none';
-  currencyCode: string;
-  itineraryItemId: string;
-  localDate: string;
-  localTime: string;
-  note: string;
-  title: string;
-  tripPlaceId: string;
-};
-
-type BudgetForm = { amount: string; currencyCode: string };
-
-const categories: ExpenseCategory[] = [
-  'food',
-  'transport',
-  'stay',
-  'activities',
-  'shopping',
-  'other',
-];
-
-function createExpenseForm(
-  expense: Expense | null,
-  budget: CurrencyTotal | null,
-  preferredCurrency: string | null = null,
-): ExpenseForm {
-  return {
-    amount: expense?.amount ?? '',
-    category: expense?.category ?? 'none',
-    currencyCode: expense?.currencyCode ?? preferredCurrency ?? budget?.currencyCode ?? '',
-    itineraryItemId: expense?.itineraryItem?.id ?? 'none',
-    localDate: expense?.localDate ?? '',
-    localTime: expense?.localTime ?? '',
-    note: expense?.note ?? '',
-    title: expense?.title ?? '',
-    tripPlaceId: expense?.tripPlace?.id ?? 'none',
-  };
-}
-
-function createBudgetForm(
-  budget: CurrencyTotal | null,
-  preferredCurrency: string | null = null,
-): BudgetForm {
-  return {
-    amount: budget?.amount ?? '',
-    currencyCode: budget?.currencyCode ?? preferredCurrency ?? '',
-  };
-}
-
-function hasValidMoney(amount: string, currencyCode: string) {
-  return /^(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/.test(amount) && /^[A-Za-z]{3}$/.test(currencyCode);
-}
 
 export function ExpensesManager({
   quickAdd,
@@ -153,8 +70,6 @@ export function ExpensesManager({
   const [saving, setSaving] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const homeCurrencyCode = preferredCurrency;
-  const [homeRates, setHomeRates] = useState<Record<string, CachedCurrencyRate>>({});
   const quickAddHandled = useRef<string | null>(null);
 
   useEffect(() => {
@@ -180,43 +95,6 @@ export function ExpensesManager({
     setFormError(null);
     setEditor({ kind: 'create', expense: null });
   }, [data, preferredCurrency, quickAdd]);
-
-  useEffect(() => {
-    if (!data || !homeCurrencyCode) {
-      setHomeRates({});
-      return;
-    }
-
-    let active = true;
-    const sourceCurrencies = [
-      ...new Set(
-        data.expenses
-          .map((expense) => expense.currencyCode.trim().toUpperCase())
-          .filter((currencyCode) => currencyCode !== homeCurrencyCode),
-      ),
-    ];
-
-    void Promise.all(
-      sourceCurrencies.map(async (currencyCode) => {
-        try {
-          return [currencyCode, await getCurrencyRate(currencyCode, homeCurrencyCode)] as const;
-        } catch {
-          return null;
-        }
-      }),
-    ).then((entries) => {
-      if (!active) return;
-      setHomeRates(
-        Object.fromEntries(
-          entries.filter((entry): entry is readonly [string, CachedCurrencyRate] => entry !== null),
-        ),
-      );
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [data, homeCurrencyCode]);
 
   function closeEditor() {
     setEditor({ kind: 'closed', expense: null });
@@ -332,20 +210,8 @@ export function ExpensesManager({
     }
   }
 
-  const currencyFormatter = useMemo(
-    () => (total: CurrencyTotal) => {
-      try {
-        return new Intl.NumberFormat(locale, {
-          currency: total.currencyCode,
-          currencyDisplay: 'code',
-          style: 'currency',
-        }).format(Number(total.amount));
-      } catch {
-        return `${total.currencyCode} ${total.amount}`;
-      }
-    },
-    [locale],
-  );
+  const currencyFormatter = (total: CurrencyTotal) =>
+    formatCurrencyAmount(locale, total.amount, total.currencyCode);
 
   if (status === 'loading') {
     return <PageState kind="loading" loadingShape="list" title={t('loading')} />;
@@ -376,7 +242,7 @@ export function ExpensesManager({
 
   const daySections = data.days
     .map((day) => ({ ...day, expenses: expensesByDay.get(day.id) ?? [] }))
-    .filter((day) => day.expenses.length > 0 || day.projectedCost.length > 0);
+    .filter((day) => day.expenses.length > 0);
 
   const dateOnly = (value: string) =>
     new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeZone: 'UTC' }).format(
@@ -386,31 +252,12 @@ export function ExpensesManager({
   const totals = (values: CurrencyTotal[], empty: string) =>
     values.length ? values.map(currencyFormatter).join(', ') : empty;
 
-  const expenseTitle = (expense: Expense) => expense.title ?? t('untitledExpense');
-
-  /**
-   * A provider Place has no name stored in Trove, so without this every one of them
-   * reads as "Unnamed place" and they become impossible to tell apart.
-   */
-  const placeLabel = (place: ExpensePlace | null, fallback: string) =>
-    place ? (place.name ?? place.snapshot?.name ?? fallback) : fallback;
-
-  // An item named only by its Place has no label of its own to fall back on.
+  const expenseTitle = (expense: Expense) => resolveExpenseTitle(expense, t('untitledExpense'));
+  const placeLabel = (place: ExpensePlace | null) => resolvePlaceLabel(place, t('unnamedPlace'));
   const itemLabel = (item: { label: string | null; place: ExpensePlace | null }) =>
-    item.label ?? placeLabel(item.place, t('unnamedItem'));
-
-  const homeCurrencyAmount = (expense: Expense) => {
-    const sourceCurrency = expense.currencyCode.trim().toUpperCase();
-    const rate = homeRates[sourceCurrency];
-    if (!homeCurrencyCode || sourceCurrency === homeCurrencyCode || !rate) return null;
-
-    const amount = convertCurrencyAmount(expense.amount, rate.rate);
-    return amount ? currencyFormatter({ amount, currencyCode: homeCurrencyCode }) : null;
-  };
+    resolveItemLabel(item, t('unnamedItem'));
 
   const renderExpense = (expense: Expense) => {
-    const convertedHomeAmount = homeCurrencyAmount(expense);
-
     return (
       <Item className="flex-nowrap px-3 py-3" key={expense.id}>
         <ItemMedia
@@ -429,20 +276,13 @@ export function ExpensesManager({
           <ItemDescription className="line-clamp-none">
             <span className="flex flex-wrap gap-x-2 gap-y-1">
               {expense.category ? <span>{t(`categories.${expense.category}`)}</span> : null}
-              {expense.tripPlace ? (
-                <span>{placeLabel(expense.tripPlace, t('unnamedPlace'))}</span>
-              ) : null}
+              {expense.tripPlace ? <span>{placeLabel(expense.tripPlace)}</span> : null}
               {expense.itineraryItem ? <span>{itemLabel(expense.itineraryItem)}</span> : null}
               {expense.localDate && !expense.itineraryDay ? <span>{expense.localDate}</span> : null}
               {expense.localTime ? <span>{expense.localTime}</span> : null}
             </span>
             {!expense.itineraryDay && expense.localDate ? (
               <span className="mt-1 block">{t('unassignedDatedExpense')}</span>
-            ) : null}
-            {convertedHomeAmount ? (
-              <span className="mt-1 block">
-                {t('approximateHome', { amount: convertedHomeAmount })}
-              </span>
             ) : null}
           </ItemDescription>
         </ItemContent>
@@ -480,39 +320,11 @@ export function ExpensesManager({
         </Alert>
       ) : null}
 
-      <section
-        aria-label={t('title', { trip: data.trip.name })}
-        className="border-y border-border py-5"
-      >
-        <dl className="grid gap-5 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-border">
-          <div className="space-y-1 sm:px-5 sm:first:pl-0">
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-sm font-medium">{t('budget')}</dt>
-              <Button onClick={openBudget} size="sm" variant="ghost">
-                {data.budget ? t('editBudget') : t('setBudget')}
-              </Button>
-            </div>
-            <dd className="text-lg font-semibold tracking-tight tabular-nums">
-              {data.budget ? currencyFormatter(data.budget) : t('budgetNotSet')}
-            </dd>
-            <p className="text-sm text-muted-foreground">{t('budgetDescription')}</p>
-          </div>
-          <div className="space-y-1 sm:px-5">
-            <dt className="text-sm font-medium">{t('projectedCost')}</dt>
-            <dd className="text-lg font-semibold tracking-tight tabular-nums">
-              {totals(data.projectedCost, t('noProjectedCost'))}
-            </dd>
-            <p className="text-sm text-muted-foreground">{t('projectedCostDescription')}</p>
-          </div>
-          <div className="space-y-1 sm:px-5 sm:last:pr-0">
-            <dt className="text-sm font-medium">{t('actualSpend')}</dt>
-            <dd className="text-lg font-semibold tracking-tight tabular-nums">
-              {totals(data.actualSpend, t('noActualSpend'))}
-            </dd>
-            <p className="text-sm text-muted-foreground">{t('actualSpendDescription')}</p>
-          </div>
-        </dl>
-      </section>
+      <TripSpendPanel
+        actualSpend={data.actualSpend}
+        budget={data.budget}
+        onEditBudget={openBudget}
+      />
 
       {data.expenses.length === 0 ? (
         <PageState
@@ -533,16 +345,9 @@ export function ExpensesManager({
           {daySections.map((day) => (
             <EditorialSection
               actions={
-                <div className="flex flex-wrap justify-end gap-x-3 gap-y-1 text-sm font-medium text-muted-foreground">
-                  <p>
-                    {t('dayActualSummary', { total: totals(day.actualSpend, t('noActualSpend')) })}
-                  </p>
-                  <p>
-                    {t('dayProjectedSummary', {
-                      total: totals(day.projectedCost, t('noProjectedCost')),
-                    })}
-                  </p>
-                </div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  {t('dayActualSummary', { total: totals(day.actualSpend, t('noActualSpend')) })}
+                </p>
               }
               key={day.id}
               title={dateOnly(day.date)}
@@ -567,288 +372,24 @@ export function ExpensesManager({
         </div>
       )}
 
-      <Sheet onOpenChange={(open) => !open && closeEditor()} open={editor.kind !== 'closed'}>
-        <SheetContent
-          className="w-full md:data-[side=right]:w-[min(42rem,calc(100%-0.5rem))]"
-          closeLabel={t('close')}
-        >
-          <SheetHeader className="border-b">
-            <SheetTitle>
-              {editor.kind === 'budget'
-                ? t('budgetTitle')
-                : editor.kind === 'edit'
-                  ? t('editTitle')
-                  : t('createTitle')}
-            </SheetTitle>
-            <SheetDescription>
-              {editor.kind === 'budget'
-                ? t('budgetDescriptionEditor')
-                : editor.kind === 'edit'
-                  ? t('editDescription')
-                  : t('createDescription')}
-            </SheetDescription>
-          </SheetHeader>
-
-          {editor.kind === 'budget' ? (
-            <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleBudgetSubmit}>
-              <div className="min-h-0 flex-1 overflow-y-auto p-5">
-                <FieldGroup>
-                  {formError ? (
-                    <Alert role="alert" variant="destructive">
-                      <CircleAlert aria-hidden="true" />
-                      <AlertDescription>{formError}</AlertDescription>
-                    </Alert>
-                  ) : null}
-                  <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem]">
-                    <Field>
-                      <FieldLabel htmlFor="budget-amount">{t('amount')}</FieldLabel>
-                      <MoneyInput
-                        id="budget-amount"
-                        onValueChange={(value) => updateBudgetForm('amount', value)}
-                        placeholder={t('amountPlaceholder')}
-                        value={budgetForm.amount}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="budget-currency">{t('currency')}</FieldLabel>
-                      <CurrencyCombobox
-                        aria-label={t('currency')}
-                        id="budget-currency"
-                        onValueChange={(value) => updateBudgetForm('currencyCode', value)}
-                        placeholder={t('currencyPlaceholder')}
-                        value={budgetForm.currencyCode}
-                      />
-                    </Field>
-                  </div>
-                </FieldGroup>
-              </div>
-              <SheetFooter>
-                <Button onClick={closeEditor} type="button" variant="outline">
-                  {t('cancel')}
-                </Button>
-                <Button disabled={saving} type="submit">
-                  {saving
-                    ? t('saving')
-                    : budgetForm.amount || budgetForm.currencyCode
-                      ? t('saveBudget')
-                      : t('clearBudget')}
-                </Button>
-              </SheetFooter>
-            </form>
-          ) : editor.kind !== 'closed' ? (
-            <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleExpenseSubmit}>
-              <div className="min-h-0 flex-1 overflow-y-auto p-5">
-                <FieldGroup>
-                  {formError ? (
-                    <Alert role="alert" variant="destructive">
-                      <CircleAlert aria-hidden="true" />
-                      <AlertDescription>{formError}</AlertDescription>
-                    </Alert>
-                  ) : null}
-                  <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem]">
-                    <Field>
-                      <FieldLabel htmlFor="expense-amount">{t('amount')}</FieldLabel>
-                      <MoneyInput
-                        id="expense-amount"
-                        onValueChange={(value) => updateExpenseForm('amount', value)}
-                        placeholder={t('amountPlaceholder')}
-                        required
-                        value={expenseForm.amount}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="expense-currency">{t('currency')}</FieldLabel>
-                      <CurrencyCombobox
-                        aria-label={t('currency')}
-                        id="expense-currency"
-                        onValueChange={(value) => updateExpenseForm('currencyCode', value)}
-                        placeholder={t('currencyPlaceholder')}
-                        required
-                        value={expenseForm.currencyCode}
-                      />
-                    </Field>
-                  </div>
-                  <Field>
-                    <FieldLabel htmlFor="expense-title">{t('expenseTitle')}</FieldLabel>
-                    <Input
-                      id="expense-title"
-                      maxLength={300}
-                      onChange={(event) => updateExpenseForm('title', event.target.value)}
-                      placeholder={t('expenseTitlePlaceholder')}
-                      value={expenseForm.title}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="expense-category">{t('category')}</FieldLabel>
-                    <Select
-                      onValueChange={(value) =>
-                        updateExpenseForm('category', (value ?? 'none') as ExpenseCategory | 'none')
-                      }
-                      value={expenseForm.category}
-                    >
-                      <SelectTrigger id="expense-category" className="w-full">
-                        <SelectValue>
-                          {expenseForm.category === 'none'
-                            ? t('noCategory')
-                            : t(`categories.${expenseForm.category}`)}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">{t('noCategory')}</SelectItem>
-                        {categories.map((category) => (
-                          <SelectItem key={category} value={category}>
-                            {t(`categories.${category}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel>{t('date')}</FieldLabel>
-                      <DatePicker
-                        id="expense-date"
-                        label={t('date')}
-                        onChange={(value) => updateExpenseForm('localDate', value)}
-                        value={expenseForm.localDate}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="expense-time">{t('time')}</FieldLabel>
-                      <TimeInput
-                        id="expense-time"
-                        onValueChange={(value) => updateExpenseForm('localTime', value)}
-                        value={expenseForm.localTime}
-                      />
-                      <FieldDescription>{t('timeHint')}</FieldDescription>
-                    </Field>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel htmlFor="expense-place">{t('linkedPlace')}</FieldLabel>
-                      <Select
-                        onValueChange={(value) => updateExpenseForm('tripPlaceId', value ?? 'none')}
-                        value={expenseForm.tripPlaceId}
-                      >
-                        <SelectTrigger id="expense-place" className="w-full">
-                          <SelectValue>
-                            {expenseForm.tripPlaceId === 'none'
-                              ? t('noLinkedPlace')
-                              : placeLabel(
-                                  data.tripPlaces.find(
-                                    (place) => place.id === expenseForm.tripPlaceId,
-                                  ) ?? null,
-                                  t('unnamedPlace'),
-                                )}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">{t('noLinkedPlace')}</SelectItem>
-                          {data.tripPlaces.map((place) => (
-                            <SelectItem key={place.id} value={place.id}>
-                              {placeLabel(place, t('unnamedPlace'))}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="expense-item">{t('linkedItem')}</FieldLabel>
-                      <Select
-                        onValueChange={(value) =>
-                          updateExpenseForm('itineraryItemId', value ?? 'none')
-                        }
-                        value={expenseForm.itineraryItemId}
-                      >
-                        <SelectTrigger id="expense-item" className="w-full">
-                          <SelectValue>
-                            {expenseForm.itineraryItemId === 'none'
-                              ? t('noLinkedItem')
-                              : (() => {
-                                  const item = data.itineraryItems.find(
-                                    (candidate) => candidate.id === expenseForm.itineraryItemId,
-                                  );
-                                  return item ? itemLabel(item) : t('unnamedItem');
-                                })()}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">{t('noLinkedItem')}</SelectItem>
-                          {data.itineraryItems.map((item) => (
-                            <SelectItem key={item.id} value={item.id}>
-                              {itemLabel(item)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  </div>
-                  <Field>
-                    <FieldLabel htmlFor="expense-note">{t('note')}</FieldLabel>
-                    <Textarea
-                      id="expense-note"
-                      maxLength={5_000}
-                      onChange={(event) => updateExpenseForm('note', event.target.value)}
-                      placeholder={t('notePlaceholder')}
-                      rows={3}
-                      value={expenseForm.note}
-                    />
-                  </Field>
-                </FieldGroup>
-              </div>
-              <SheetFooter>
-                {editor.kind === 'edit' ? (
-                  <Button
-                    className="sm:mr-auto"
-                    onClick={() => setExpenseToDelete(editor.expense)}
-                    type="button"
-                    variant="ghost"
-                  >
-                    <Trash2 aria-hidden="true" data-icon="inline-start" />
-                    {t('deleteExpense')}
-                  </Button>
-                ) : null}
-                <Button onClick={closeEditor} type="button" variant="outline">
-                  {t('cancel')}
-                </Button>
-                <Button disabled={saving} type="submit">
-                  {saving
-                    ? t('saving')
-                    : editor.kind === 'edit'
-                      ? t('saveChanges')
-                      : t('createExpense')}
-                </Button>
-              </SheetFooter>
-            </form>
-          ) : null}
-        </SheetContent>
-      </Sheet>
-
-      <AlertDialog
-        onOpenChange={(open) => !open && setExpenseToDelete(null)}
-        open={Boolean(expenseToDelete)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('deleteTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('deleteDescription', {
-                title: expenseToDelete ? expenseTitle(expenseToDelete) : '',
-              })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={deleting}
-              onClick={() => void handleDelete()}
-              variant="destructive"
-            >
-              {deleting ? t('deleting') : t('deleteExpense')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ExpenseEditorSheet
+        budgetForm={budgetForm}
+        deleting={deleting}
+        editor={editor}
+        expenseForm={expenseForm}
+        expenseToDelete={expenseToDelete}
+        formError={formError}
+        itineraryItems={data.itineraryItems}
+        onBudgetFieldChange={updateBudgetForm}
+        onBudgetSubmit={handleBudgetSubmit}
+        onClose={closeEditor}
+        onConfirmDelete={() => void handleDelete()}
+        onExpenseFieldChange={updateExpenseForm}
+        onExpenseSubmit={handleExpenseSubmit}
+        onExpenseToDeleteChange={setExpenseToDelete}
+        saving={saving}
+        tripPlaces={data.tripPlaces}
+      />
     </section>
   );
 }

@@ -277,6 +277,8 @@
         "backToTrips": "Back to trips",
         "saveForLater": "Save for later",
         "tripName": "Trip name",
+        "nameHint": "We drafted this from your request. Edit it, or leave it as is — it saves to the trip when you create it.",
+        "nameSaving": "Saving trip name…",
         "partySize": "Party size",
         "tripDescription": "Trip description",
         "descriptionHint": "We drafted this from your request. Edit it, or leave it as is — it saves to the trip when you create it.",

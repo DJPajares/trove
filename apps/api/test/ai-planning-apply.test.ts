@@ -30,6 +30,7 @@ type SessionState = {
   stage: string;
   status: string;
   tripDescription: string | null;
+  tripName: string | null;
   updatedAt: Date;
   warningsAcknowledgedAt: Date | null;
   warningsAcknowledgedRevision: number | null;
@@ -63,6 +64,7 @@ function makeSession(draft: AiPlannerDraft, overrides: Partial<SessionState> = {
     stage: 'REVIEWING',
     status: 'REVIEWING',
     tripDescription: null,
+    tripName: null,
     updatedAt: NOW,
     warningsAcknowledgedAt: null,
     warningsAcknowledgedRevision: null,
@@ -667,4 +669,21 @@ test('a trip applied from a draft written before descriptions existed keeps a nu
   await apply(store);
 
   expect(store.state.trips[0]).toMatchObject({ description: null });
+});
+
+/**
+ * A traveller renaming the trip during review works the same way as the
+ * description: the model's title is the floor, the traveller's own choice
+ * outranks it when set.
+ */
+test('a traveller-set trip name outranks the drafted one', async () => {
+  const draft = customPlaceDraft();
+
+  const drafted = createApplyStore(draft);
+  await apply(drafted);
+  expect(drafted.state.trips[0]).toMatchObject({ name: draft.trip.name.trim() });
+
+  const overridden = createApplyStore(draft, { session: { tripName: 'Our anniversary trip' } });
+  await apply(overridden);
+  expect(overridden.state.trips[0]).toMatchObject({ name: 'Our anniversary trip' });
 });

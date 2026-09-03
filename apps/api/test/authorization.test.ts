@@ -173,6 +173,7 @@ test('every AI planning entry point hides another user behind the not-found boun
     getAiPlanningSession,
     regenerateAiPlanningSession,
     setAiPlanningTripDescription,
+    setAiPlanningTripName,
   } = await import('../src/services/ai-planning-sessions.js');
   const { applyAiPlanningSession } = await import('../src/services/ai-planning-apply.js');
 
@@ -181,6 +182,9 @@ test('every AI planning entry point hides another user behind the not-found boun
   );
   await assertHidesAnotherUsersSession('setAiPlanningTripDescription', () =>
     setAiPlanningTripDescription(INTRUDER_ID, OTHER_SESSION_ID, 'intruding description'),
+  );
+  await assertHidesAnotherUsersSession('setAiPlanningTripName', () =>
+    setAiPlanningTripName(INTRUDER_ID, OTHER_SESSION_ID, 'intruding name'),
   );
   await assertHidesAnotherUsersSession('regenerateAiPlanningSession', () =>
     regenerateAiPlanningSession(INTRUDER_ID, OTHER_SESSION_ID, 'three days in Tokyo', 0, 'key'),

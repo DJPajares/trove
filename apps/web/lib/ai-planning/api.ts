@@ -122,6 +122,7 @@ export type AiPlanningSession = {
   stage: AiPlanningSessionStage;
   status: AiPlanningSessionStatus;
   tripDescription: string | null;
+  tripName: string | null;
   updatedAt: string;
   warningAcknowledgement: { acknowledgedAt: string; revision: number } | null;
 };
@@ -232,6 +233,17 @@ export function setAiPlanningTripDescription(sessionId: string, description: str
     `/ai/planning-sessions/${sessionId}/description`,
     {
       body: JSON.stringify({ description }),
+      method: 'PATCH',
+    },
+  );
+}
+
+/** The draft itself is immutable; a name is session metadata beside it. */
+export function setAiPlanningTripName(sessionId: string, name: string | null) {
+  return aiPlanningRequest<{ session: AiPlanningSession }>(
+    `/ai/planning-sessions/${sessionId}/name`,
+    {
+      body: JSON.stringify({ name }),
       method: 'PATCH',
     },
   );

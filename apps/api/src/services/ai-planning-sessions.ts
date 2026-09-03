@@ -53,6 +53,7 @@ type SessionRecord = {
   planScore: Prisma.JsonValue | null;
   status: string;
   tripDescription: string | null;
+  tripName: string | null;
   updatedAt: Date;
   warningsAcknowledgedAt: Date | null;
   warningsAcknowledgedRevision: number | null;
@@ -199,6 +200,7 @@ export function serializeAiPlanningSession(session: SessionRecord) {
     stage: session.stage.toLowerCase(),
     status: session.status.toLowerCase(),
     tripDescription: session.tripDescription,
+    tripName: session.tripName,
     updatedAt: session.updatedAt.toISOString(),
     warningAcknowledgement:
       session.warningsAcknowledgedRevision === null || !session.warningsAcknowledgedAt
@@ -460,6 +462,40 @@ export async function setAiPlanningTripDescription(
     await transaction.aiPlanningSession.updateMany({
       where: { id: sessionId, ownerId, status: 'REVIEWING' },
       data: { tripDescription: description?.trim() || null },
+    });
+    return transaction.aiPlanningSession.findFirstOrThrow({
+      where: { id: sessionId, ownerId },
+      include: sessionInclude,
+    });
+  });
+  if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
+  return serializeAiPlanningSession(session);
+}
+
+/**
+ * Same contract as `setAiPlanningTripDescription`: session metadata beside the
+ * draft, so it never moves `draftRevision` and never clears a warning
+ * acknowledgement. A regenerate still surfaces the model's fresh title
+ * whenever the traveller has not chosen their own.
+ */
+export async function setAiPlanningTripName(
+  ownerId: string,
+  sessionId: string,
+  name: string | null,
+  options: PlanningOptions = {},
+) {
+  const prisma = prismaFrom(options);
+  const now = nowFrom(options);
+  const session = await prisma.$transaction(async (transaction) => {
+    await ensureAndLockOwner(transaction, ownerId);
+    const found = await findOwnedSession(transaction, ownerId, sessionId);
+    if (await expireIfNeeded(transaction, found, now)) return SESSION_EXPIRED;
+    if (found.status !== 'REVIEWING' || !found.draft) {
+      throw new AiPlanningSessionError('session_not_reviewable', 409);
+    }
+    await transaction.aiPlanningSession.updateMany({
+      where: { id: sessionId, ownerId, status: 'REVIEWING' },
+      data: { tripName: name?.trim() || null },
     });
     return transaction.aiPlanningSession.findFirstOrThrow({
       where: { id: sessionId, ownerId },
@@ -879,6 +915,7 @@ export async function loadAiPlanningSessionForApplyInTransaction(
     sessionId: session.id,
     planScore: parseStoredPlanScore(session.planScore),
     tripDescription: session.tripDescription,
+    tripName: session.tripName,
     warningAcknowledged:
       session.warningsAcknowledgedRevision === expectedRevision &&
       session.warningsAcknowledgedAt !== null,

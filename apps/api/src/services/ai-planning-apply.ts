@@ -272,7 +272,10 @@ export async function applyAiPlanningSession(
         // never lands blank just because nobody typed in the review field.
         description: loaded.tripDescription ?? draft.trip.description,
         endDate: parseDateOnly(draft.trip.endDate),
-        name: draft.trip.name.trim(),
+        // The traveller's own title wins; the model's is the floor, so a trip
+        // never applies with an empty or unset name just because nobody typed
+        // one in.
+        name: (loaded.tripName ?? draft.trip.name).trim(),
         ownerId,
         partySize: draft.trip.partySize,
         planningReadiness: 'IN_PROGRESS',

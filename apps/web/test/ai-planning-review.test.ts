@@ -163,6 +163,7 @@ test('a review session with an initializing local draft stays in loading', () =>
     stage: 'reviewing' as const,
     status: 'reviewing' as const,
     tripDescription: null,
+    tripName: null,
     updatedAt: '2026-09-01T00:00:00.000Z',
     warningAcknowledgement: null,
   };
@@ -195,6 +196,7 @@ test('an applied session drops its draft so the review page cannot render one ag
     stage: 'reviewing' as const,
     status: 'reviewing' as const,
     tripDescription: null,
+    tripName: null,
     updatedAt: '2026-09-01T00:00:00.000Z',
     warningAcknowledgement: { acknowledgedAt: '2026-09-01T00:00:00.000Z', revision: 4 },
   };

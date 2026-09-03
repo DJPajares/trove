@@ -1,4 +1,6 @@
 import { deriveRateFromBoard, type CachedCurrencyRateBoard } from '@/lib/currency/api';
+import type { ExpenseCategory } from '@/lib/expenses/api';
+import type { SpendCategoryKey } from '@/lib/expenses/categories';
 import {
   fromMinorUnits,
   sumByCurrency,
@@ -266,3 +268,262 @@ export function resolveBudgetPosition(input: {
 
 /** Re-exported so callers converting for display need only this module. */
 export { fromMinorUnits };
+
+/**
+ * What a breakdown needs of an expense, and no more.
+ *
+ * Typed structurally rather than as the full `Expense` so a test can describe a
+ * case in five fields, and so this module never reaches the API client's
+ * runtime chain.
+ */
+export type SpendExpense = {
+  amount: string;
+  category: ExpenseCategory | null;
+  currencyCode: string;
+  itineraryDay: { id: string } | null;
+  tripPlace: { id: string } | null;
+};
+
+export type SpendBucket<Key> = {
+  count: number;
+  key: Key;
+  /** 0-1 of the trip's converted spending; 0 when that total is zero or unknown. */
+  share: number;
+  total: ConvertedTotal;
+};
+
+export type DayRollup = {
+  actual: ConvertedTotal;
+  date: string;
+  id: string;
+  /** 1-based, so a row can be called "Day 4" without the caller counting. */
+  index: number;
+  isOutlier: boolean;
+  isToday: boolean;
+  share: number;
+};
+
+export type CurrencyRollup = {
+  paid: CurrencyAmount;
+  share: number;
+  worth: ConvertedTotal;
+};
+
+export type SpendBreakdown = {
+  byCategory: SpendBucket<SpendCategoryKey>[];
+  byCurrency: CurrencyRollup[];
+  byPlace: SpendBucket<string>[];
+  days: DayRollup[];
+  /** Expenses on no trip day: undated ones, and ones dated outside the trip. */
+  offDay: { count: number; share: number; total: ConvertedTotal };
+  total: ConvertedTotal;
+};
+
+/**
+ * How far above a typical day counts as a day worth pointing at.
+ *
+ * Twice the median is legible in a sentence and survives the ordinary lumpiness
+ * of travel, where one hotel night dwarfs a week of lunches.
+ */
+const OUTLIER_MEDIAN_MULTIPLE = 2;
+
+/**
+ * The share of a trip a day has to carry before being called expensive.
+ *
+ * Without it, a trip whose typical day is a four-euro coffee flags a nine-euro
+ * lunch - twice the median, and worth nobody's attention.
+ */
+const OUTLIER_MINIMUM_SHARE = 0.05;
+
+/** Below this many spending days a median is describing noise. */
+const OUTLIER_MINIMUM_DAYS = 5;
+
+/** More than this and the callout stops being a callout. */
+const OUTLIER_LIMIT = 2;
+
+export function detectSpendOutlierDays(
+  days: ReadonlyArray<{ id: string; minorUnits: number }>,
+): string[] {
+  // Days with no spending would drag the median down and make an ordinary day
+  // look extreme, so the population is the days money was actually spent on.
+  const spending = days.filter((day) => day.minorUnits > 0);
+  if (spending.length < OUTLIER_MINIMUM_DAYS) return [];
+
+  const sorted = spending.map((day) => day.minorUnits).toSorted((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  const upper = sorted[middle] ?? 0;
+  const median = sorted.length % 2 === 0 ? ((sorted[middle - 1] ?? 0) + upper) / 2 : upper;
+  const total = sorted.reduce((sum, value) => sum + value, 0);
+  if (median <= 0 || total <= 0) return [];
+
+  return spending
+    .filter(
+      (day) =>
+        day.minorUnits >= OUTLIER_MEDIAN_MULTIPLE * median &&
+        day.minorUnits >= OUTLIER_MINIMUM_SHARE * total,
+    )
+    .toSorted((left, right) => right.minorUnits - left.minorUnits)
+    .slice(0, OUTLIER_LIMIT)
+    .map((day) => day.id);
+}
+
+function shareOf(part: ConvertedTotal, whole: ConvertedTotal) {
+  if (part.minorUnits === null || !whole.minorUnits || whole.minorUnits <= 0) return 0;
+  return Math.max(0, part.minorUnits / whole.minorUnits);
+}
+
+function bucketBy<Key>(
+  expenses: readonly SpendExpense[],
+  keyOf: (expense: SpendExpense) => Key | null,
+  referenceCurrency: string,
+  board: CachedCurrencyRateBoard | null,
+  total: ConvertedTotal,
+): SpendBucket<Key>[] {
+  const grouped = new Map<Key, SpendExpense[]>();
+
+  for (const expense of expenses) {
+    const key = keyOf(expense);
+    if (key === null) continue;
+    const values = grouped.get(key) ?? [];
+    values.push(expense);
+    grouped.set(key, values);
+  }
+
+  return [...grouped.entries()]
+    .map(([key, values]) => {
+      const converted = convertTotals(values, referenceCurrency, board);
+      return {
+        count: values.length,
+        key,
+        share: shareOf(converted, total),
+        total: converted,
+      };
+    })
+    .toSorted((left, right) => (right.total.minorUnits ?? 0) - (left.total.minorUnits ?? 0));
+}
+
+/**
+ * Every way of asking where a trip's money went, from one pass over the ledger.
+ *
+ * Every expense lands in exactly one day row or in `offDay`, so nothing a
+ * traveller recorded can go missing between the total at the top of the screen
+ * and the rows underneath it. That is the property worth protecting.
+ *
+ * Their converted sums can still differ from the headline by a cent, because
+ * each total is converted and rounded once rather than sharing one rounding.
+ * Reconciling that would mean spreading a rounding residue across rows, which is
+ * bookkeeping - and every figure here already says it is approximate.
+ */
+export function buildSpendBreakdown(input: {
+  board: CachedCurrencyRateBoard | null;
+  days: ReadonlyArray<{ date: string; id: string }>;
+  expenses: readonly SpendExpense[];
+  referenceCurrency: string;
+  /** Today in the trip's own timezone, or null when it is not the trip's concern. */
+  today: string | null;
+}): SpendBreakdown {
+  const { board, days, expenses, referenceCurrency, today } = input;
+  const total = convertTotals(expenses, referenceCurrency, board);
+  const byDayId = new Map<string, SpendExpense[]>();
+  const offDayExpenses: SpendExpense[] = [];
+  const tripDayIds = new Set(days.map((day) => day.id));
+
+  for (const expense of expenses) {
+    // The server resolves an expense's day through its own timezone rules, and
+    // the client has neither the item nor the place zone to reproduce them. So
+    // the day it already decided is the only day this trusts - but only if the
+    // trip still has that day. An expense left pointing at a day a later date
+    // edit removed would otherwise land in a bucket nothing reads, and vanish
+    // from both halves of the screen rather than showing up in one.
+    const dayId = expense.itineraryDay?.id;
+    if (!dayId || !tripDayIds.has(dayId)) {
+      offDayExpenses.push(expense);
+      continue;
+    }
+    const values = byDayId.get(dayId) ?? [];
+    values.push(expense);
+    byDayId.set(dayId, values);
+  }
+
+  const dayTotals = days.map((day, index) => ({
+    ...day,
+    actual: convertTotals(byDayId.get(day.id) ?? [], referenceCurrency, board),
+    index: index + 1,
+  }));
+
+  // A yen day must not out-rank a euro day because 8400 is more than 120, so a
+  // trip that is only partly priceable gets no outliers rather than wrong ones.
+  const fullyConvertible = dayTotals.every(
+    (day) => day.actual.minorUnits !== null && day.actual.unconvertible.length === 0,
+  );
+  const outliers = new Set(
+    fullyConvertible
+      ? detectSpendOutlierDays(
+          dayTotals.map((day) => ({ id: day.id, minorUnits: day.actual.minorUnits ?? 0 })),
+        )
+      : [],
+  );
+
+  const offDayTotal = convertTotals(offDayExpenses, referenceCurrency, board);
+  const paidByCurrency = sumByCurrency(expenses);
+
+  return {
+    byCategory: bucketBy<SpendCategoryKey>(
+      expenses,
+      (expense) => expense.category ?? 'uncategorised',
+      referenceCurrency,
+      board,
+      total,
+    ),
+    byCurrency: paidByCurrency
+      .map((paid) => {
+        const worth = convertTotals([paid], referenceCurrency, board);
+        return { paid, share: shareOf(worth, total), worth };
+      })
+      .toSorted((left, right) => (right.worth.minorUnits ?? 0) - (left.worth.minorUnits ?? 0)),
+    byPlace: bucketBy(
+      expenses,
+      (expense) => expense.tripPlace?.id ?? null,
+      referenceCurrency,
+      board,
+      total,
+    ),
+    // Every trip day is here, including the ones nothing was spent on: a quiet
+    // day is part of the shape of a trip, and hiding it makes the rest lie.
+    days: dayTotals.map((day) => ({
+      actual: day.actual,
+      date: day.date,
+      id: day.id,
+      index: day.index,
+      isOutlier: outliers.has(day.id),
+      isToday: today !== null && day.date === today,
+      share: shareOf(day.actual, total),
+    })),
+    offDay: {
+      count: offDayExpenses.length,
+      share: shareOf(offDayTotal, total),
+      total: offDayTotal,
+    },
+    total,
+  };
+}
+
+export type SpendFilter = {
+  kind: 'category' | 'currency' | 'day' | 'place';
+  value: string;
+};
+
+export function matchesSpendFilter(expense: SpendExpense, filter: SpendFilter | null): boolean {
+  if (!filter) return true;
+
+  switch (filter.kind) {
+    case 'category':
+      return (expense.category ?? 'uncategorised') === filter.value;
+    case 'currency':
+      return expense.currencyCode.trim().toUpperCase() === filter.value;
+    case 'day':
+      return expense.itineraryDay?.id === filter.value;
+    case 'place':
+      return expense.tripPlace?.id === filter.value;
+  }
+}

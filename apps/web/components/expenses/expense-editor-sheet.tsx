@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
 
 import { CurrencyCombobox } from '@/components/currency-combobox';
+import { Chip, ChipGroup } from '@/components/ui/chip';
 import { DatePicker } from '@/components/date-picker';
 import { MoneyInput } from '@/components/money-input';
 import { TimeInput } from '@/components/time-input';
@@ -39,6 +40,7 @@ import {
 } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import type { Expense, ExpenseCategory, ExpensePlace } from '@/lib/expenses/api';
+import { resolveExpenseCategory } from '@/lib/expenses/categories';
 import {
   expenseTitle as resolveExpenseTitle,
   itineraryItemLabel as resolveItemLabel,
@@ -213,32 +215,32 @@ export function ExpenseEditorSheet({
                     />
                   </Field>
                   <Field>
-                    <FieldLabel htmlFor="expense-category">{t('category')}</FieldLabel>
-                    <Select
-                      onValueChange={(value) =>
+                    <FieldLabel>{t('category')}</FieldLabel>
+                    {/* Six chips rather than a Select: on a phone, categorising an
+                        expense is one tap instead of three, and the tints match the
+                        bars the traveller reads them back on. */}
+                    <ChipGroup
+                      aria-label={t('category')}
+                      multiple={false}
+                      onValueChange={([value]) =>
                         onExpenseFieldChange(
                           'category',
                           (value ?? 'none') as ExpenseCategory | 'none',
                         )
                       }
-                      value={expenseForm.category}
+                      value={[expenseForm.category]}
                     >
-                      <SelectTrigger id="expense-category" className="w-full">
-                        <SelectValue>
-                          {expenseForm.category === 'none'
-                            ? t('noCategory')
-                            : t(`categories.${expenseForm.category}`)}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">{t('noCategory')}</SelectItem>
-                        {categories.map((category) => (
-                          <SelectItem key={category} value={category}>
+                      {categories.map((category) => {
+                        const { Icon } = resolveExpenseCategory(category);
+
+                        return (
+                          <Chip icon={<Icon aria-hidden="true" />} key={category} value={category}>
                             {t(`categories.${category}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                          </Chip>
+                        );
+                      })}
+                      <Chip value="none">{t('noCategory')}</Chip>
+                    </ChipGroup>
                   </Field>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Field>

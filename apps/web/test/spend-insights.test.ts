@@ -4,7 +4,10 @@ import type { CachedCurrencyRateBoard } from '../lib/currency/api.ts';
 import { sumByCurrency } from '../lib/currency/money.ts';
 import {
   budgetPerRemainingDay,
+  buildSpendBreakdown,
   convertTotals,
+  detectSpendOutlierDays,
+  matchesSpendFilter,
   resolveBudgetPosition,
   resolveReferenceCurrency,
   resolveTripPace,
@@ -366,4 +369,202 @@ test('a trip that came in under budget is not warned about its pace', () => {
       pace: { elapsedDays: 10, phase: 'finished', remainingDays: 0, totalDays: 10 },
     }).verdict,
   ).toBe('onTrack');
+});
+
+const REFERENCE_BOARD = board();
+
+function spent(
+  amount: string,
+  overrides: Partial<Parameters<typeof buildSpendBreakdown>[0]['expenses'][number]> = {},
+) {
+  return {
+    amount,
+    category: null,
+    currencyCode: 'EUR',
+    itineraryDay: null,
+    tripPlace: null,
+    ...overrides,
+  };
+}
+
+const TRIP_DAYS = [
+  { date: '2026-09-01', id: 'd1' },
+  { date: '2026-09-02', id: 'd2' },
+  { date: '2026-09-03', id: 'd3' },
+];
+
+function breakdown(
+  expenses: Parameters<typeof buildSpendBreakdown>[0]['expenses'],
+  today: string | null = null,
+) {
+  return buildSpendBreakdown({
+    board: REFERENCE_BOARD,
+    days: TRIP_DAYS,
+    expenses,
+    referenceCurrency: 'EUR',
+    today,
+  });
+}
+
+test('the day rows and the off-day bucket account for the whole trip', () => {
+  const result = breakdown([
+    spent('10.00', { itineraryDay: { id: 'd1' } }),
+    spent('25.50', { itineraryDay: { id: 'd3' } }),
+    spent('4.50'),
+  ]);
+  const counted =
+    result.days.reduce((sum, day) => sum + (day.actual.minorUnits ?? 0), 0) +
+    (result.offDay.total.minorUnits ?? 0);
+
+  expect(result.total.minorUnits).toBe(4000);
+  expect(counted).toBe(result.total.minorUnits);
+});
+
+test('a day the traveller spent nothing on is still part of the trip', () => {
+  const result = breakdown([spent('10.00', { itineraryDay: { id: 'd1' } })]);
+
+  expect(result.days).toHaveLength(3);
+  expect(result.days[1]).toMatchObject({ id: 'd2', share: 0 });
+  expect(result.days[1]?.actual.minorUnits).toBe(0);
+});
+
+test('an expense dated outside the trip is held aside rather than lost', () => {
+  const result = breakdown([
+    spent('10.00', { itineraryDay: { id: 'd1' } }),
+    spent('90.00', { itineraryDay: { id: 'not-a-trip-day' } }),
+  ]);
+
+  expect(result.offDay.count).toBe(1);
+  expect(result.offDay.total.minorUnits).toBe(9000);
+  expect(result.days.every((day) => (day.actual.minorUnits ?? 0) <= 1000)).toBe(true);
+});
+
+test('an expense with no category is bucketed rather than dropped', () => {
+  const result = breakdown([spent('10.00'), spent('5.00', { category: 'food' })]);
+
+  expect(result.byCategory.map((bucket) => bucket.key)).toStrictEqual(['uncategorised', 'food']);
+  expect(result.byCategory[0]?.total.minorUnits).toBe(1000);
+});
+
+test('shares describe the whole trip and never divide by nothing', () => {
+  const result = breakdown([
+    spent('75.00', { category: 'stay' }),
+    spent('25.00', { category: 'food' }),
+  ]);
+
+  expect(result.byCategory.map((bucket) => bucket.share)).toStrictEqual([0.75, 0.25]);
+
+  const empty = breakdown([]);
+  expect(empty.byCategory).toStrictEqual([]);
+  expect(empty.offDay.share).toBe(0);
+  expect(empty.days.every((day) => Number.isFinite(day.share))).toBe(true);
+});
+
+test('what was paid in each currency keeps its own amount beside its worth', () => {
+  const result = buildSpendBreakdown({
+    board: REFERENCE_BOARD,
+    days: TRIP_DAYS,
+    expenses: [spent('10.00'), spent('1600.00', { currencyCode: 'JPY' })],
+    referenceCurrency: 'EUR',
+    today: null,
+  });
+
+  expect(result.byCurrency.map((row) => row.paid)).toStrictEqual([
+    { amount: '10.00', currencyCode: 'EUR' },
+    { amount: '1600.00', currencyCode: 'JPY' },
+  ]);
+  expect(result.byCurrency[1]?.worth.minorUnits).toBe(1000);
+});
+
+test('today is marked only when the trip says it is today', () => {
+  const result = breakdown([spent('10.00', { itineraryDay: { id: 'd1' } })], '2026-09-02');
+
+  expect(result.days.map((day) => day.isToday)).toStrictEqual([false, true, false]);
+});
+
+const flatDays = (count: number, minorUnits: number) =>
+  Array.from({ length: count }, (_, index) => ({ id: `d${index}`, minorUnits }));
+
+test('a handful of days is not enough to call any of them unusual', () => {
+  expect(
+    detectSpendOutlierDays([...flatDays(3, 1000), { id: 'big', minorUnits: 90_000 }]),
+  ).toStrictEqual([]);
+});
+
+test('a trip that spent evenly has no unusual day to point at', () => {
+  expect(detectSpendOutlierDays(flatDays(8, 5000))).toStrictEqual([]);
+});
+
+test('the night in a ryokan is the day worth pointing at', () => {
+  expect(
+    detectSpendOutlierDays([...flatDays(6, 2000), { id: 'ryokan', minorUnits: 60_000 }]),
+  ).toStrictEqual(['ryokan']);
+});
+
+test('no more than two days are ever called out', () => {
+  expect(
+    detectSpendOutlierDays([
+      ...flatDays(6, 1000),
+      { id: 'a', minorUnits: 40_000 },
+      { id: 'b', minorUnits: 30_000 },
+      { id: 'c', minorUnits: 20_000 },
+    ]),
+  ).toStrictEqual(['a', 'b']);
+});
+
+test('twice a trivial median is still trivial', () => {
+  // Nine euro against a four-euro median is twice typical and worth nobody's
+  // attention, because it is a rounding error against the trip.
+  expect(
+    detectSpendOutlierDays([
+      ...flatDays(6, 400),
+      { id: 'lunch', minorUnits: 900 },
+      { id: 'flight', minorUnits: 50_000 },
+    ]),
+  ).toStrictEqual(['flight']);
+});
+
+test('days that could not all be priced are compared to none of each other', () => {
+  const result = buildSpendBreakdown({
+    board: REFERENCE_BOARD,
+    days: [...TRIP_DAYS, { date: '2026-09-04', id: 'd4' }, { date: '2026-09-05', id: 'd5' }],
+    expenses: [
+      spent('20.00', { itineraryDay: { id: 'd1' } }),
+      spent('20.00', { itineraryDay: { id: 'd2' } }),
+      spent('20.00', { itineraryDay: { id: 'd3' } }),
+      spent('20.00', { itineraryDay: { id: 'd4' } }),
+      // XTS is a reserved code the board carries no rate for.
+      spent('900.00', { currencyCode: 'XTS', itineraryDay: { id: 'd5' } }),
+    ],
+    referenceCurrency: 'EUR',
+    today: null,
+  });
+
+  expect(result.days.every((day) => !day.isOutlier)).toBe(true);
+});
+
+test('a filter of nothing keeps everything', () => {
+  expect(matchesSpendFilter(spent('1.00'), null)).toBe(true);
+});
+
+test('each filter keeps only what it names', () => {
+  const expense = spent('1.00', {
+    category: 'food',
+    currencyCode: 'jpy',
+    itineraryDay: { id: 'd1' },
+    tripPlace: { id: 'p1' },
+  });
+
+  expect(matchesSpendFilter(expense, { kind: 'category', value: 'food' })).toBe(true);
+  expect(matchesSpendFilter(expense, { kind: 'category', value: 'stay' })).toBe(false);
+  expect(matchesSpendFilter(expense, { kind: 'currency', value: 'JPY' })).toBe(true);
+  expect(matchesSpendFilter(expense, { kind: 'day', value: 'd1' })).toBe(true);
+  expect(matchesSpendFilter(expense, { kind: 'day', value: 'd2' })).toBe(false);
+  expect(matchesSpendFilter(expense, { kind: 'place', value: 'p1' })).toBe(true);
+});
+
+test('an uncategorised expense is reachable by the bucket it was put in', () => {
+  expect(matchesSpendFilter(spent('1.00'), { kind: 'category', value: 'uncategorised' })).toBe(
+    true,
+  );
 });

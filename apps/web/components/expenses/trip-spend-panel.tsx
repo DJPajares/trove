@@ -4,17 +4,15 @@ import { useLocale, useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
 import { SpendBudgetBar } from '@/components/expenses/spend-budget-bar';
-import { usePreferences } from '@/components/preferences-provider';
 import { useTripContext } from '@/components/trip-provider';
 import { Button } from '@/components/ui/button';
-import { useRateBoard } from '@/hooks/use-rate-board';
+import { useSpendReference } from '@/hooks/use-spend-reference';
 import { formatCurrencyAmount, formatMinorUnits } from '@/lib/currency/money';
 import type { CurrencyTotal } from '@/lib/expenses/api';
 import {
   budgetPerRemainingDay,
   convertTotals,
   resolveBudgetPosition,
-  resolveReferenceCurrency,
   resolveTripPace,
   spendPerDay,
   type ConvertedTotal,
@@ -48,26 +46,10 @@ export function TripSpendPanel({
 }>) {
   const t = useTranslations('expenses');
   const locale = useLocale();
-  const { preferredCurrency } = usePreferences();
   const trip = useTripContext()?.trip ?? null;
   const now = useNowTick(true);
 
-  // A trip spent entirely in one currency needs no rates, and asking for them
-  // anyway would bill a request to answer a question with no conversion in it.
-  const spendCurrencies = new Set(actualSpend.map((total) => total.currencyCode));
-  if (budget) spendCurrencies.add(budget.currencyCode);
-  const provisionalReference = preferredCurrency ?? budget?.currencyCode ?? null;
-  const needsRates = ![...spendCurrencies].every((code) => code === provisionalReference);
-  const { board, status: boardStatus } = useRateBoard(needsRates);
-
-  const canPrice = (code: string) =>
-    !board || code === board.base || Boolean(board.rates[code]) || !needsRates;
-  const reference = resolveReferenceCurrency({
-    budgetCurrency: budget?.currencyCode ?? null,
-    canPrice,
-    homeCurrency: preferredCurrency,
-    totals: actualSpend,
-  });
+  const { board, boardStatus, reference } = useSpendReference(actualSpend, budget);
 
   if (!reference) {
     return (

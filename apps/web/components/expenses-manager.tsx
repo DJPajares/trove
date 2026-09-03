@@ -1,10 +1,9 @@
 'use client';
 
-import { CircleAlert, Pencil, Plus, ReceiptText, WalletCards } from 'lucide-react';
+import { CircleAlert, Plus, WalletCards } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
-import { EditorialSection } from '@/components/editorial-section';
 import { ExpenseEditorSheet } from '@/components/expenses/expense-editor-sheet';
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
@@ -12,27 +11,22 @@ import { TripSectionHeader } from '@/components/trip-section-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemMedia,
-  ItemTitle,
-} from '@/components/ui/item';
-import {
   createExpense,
   deleteExpense,
   fetchExpenses,
   updateBudget,
   updateExpense,
-  type CurrencyTotal,
   type Expense,
   type ExpenseInput,
-  type ExpensePlace,
 } from '@/lib/expenses/api';
+import { ExpenseLedger } from '@/components/expenses/expense-ledger';
+import { SpendBreakdowns } from '@/components/expenses/spend-breakdowns';
 import { TripSpendPanel } from '@/components/expenses/trip-spend-panel';
-import { formatCurrencyAmount } from '@/lib/currency/money';
+import { useSpendReference } from '@/hooks/use-spend-reference';
+import { useTripContext } from '@/components/trip-provider';
+import { useNowTick } from '@/hooks/use-now-tick';
+import { buildSpendBreakdown, type SpendFilter } from '@/lib/expenses/spend-insights';
+import { getLocalDate } from '@/lib/trips/lifecycle';
 import {
   createBudgetForm,
   createExpenseForm,
@@ -41,11 +35,7 @@ import {
   type EditorState,
   type ExpenseForm,
 } from '@/lib/expenses/editor-state';
-import {
-  expenseTitle as resolveExpenseTitle,
-  itineraryItemLabel as resolveItemLabel,
-  placeLabel as resolvePlaceLabel,
-} from '@/lib/expenses/labels';
+import { placeLabel as resolvePlaceLabel } from '@/lib/expenses/labels';
 import { queryKeys } from '@/lib/query/keys';
 import { useTripResource } from '@/lib/query/use-trip-resource';
 
@@ -70,7 +60,14 @@ export function ExpensesManager({
   const [saving, setSaving] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [filter, setFilter] = useState<SpendFilter | null>(null);
   const quickAddHandled = useRef<string | null>(null);
+  const trip = useTripContext()?.trip ?? null;
+  const now = useNowTick(true);
+  // Resolved here as well as in the panel so the headline and the bars below it
+  // are always expressed in the same currency; react-query serves both from one
+  // board request.
+  const { board, reference } = useSpendReference(data?.actualSpend ?? [], data?.budget ?? null);
 
   useEffect(() => {
     if (!quickAdd) {
@@ -210,9 +207,6 @@ export function ExpensesManager({
     }
   }
 
-  const currencyFormatter = (total: CurrencyTotal) =>
-    formatCurrencyAmount(locale, total.amount, total.currencyCode);
-
   if (status === 'loading') {
     return <PageState kind="loading" loadingShape="list" title={t('loading')} />;
   }
@@ -228,77 +222,33 @@ export function ExpensesManager({
     );
   }
 
-  const expensesByDay = new Map<string, Expense[]>();
-  const unassignedExpenses: Expense[] = [];
-  for (const expense of data.expenses) {
-    if (expense.itineraryDay) {
-      const values = expensesByDay.get(expense.itineraryDay.id) ?? [];
-      values.push(expense);
-      expensesByDay.set(expense.itineraryDay.id, values);
-    } else {
-      unassignedExpenses.push(expense);
+  const breakdown = reference
+    ? buildSpendBreakdown({
+        board,
+        days: data.days,
+        expenses: data.expenses,
+        referenceCurrency: reference.code,
+        today: trip ? getLocalDate(now, trip.referenceTimeZone) : null,
+      })
+    : null;
+
+  const filterLabel = (() => {
+    if (!filter) return null;
+    if (filter.kind === 'currency') return filter.value;
+    if (filter.kind === 'category') {
+      return filter.value === 'uncategorised' ? t('noCategory') : t(`categories.${filter.value}`);
     }
-  }
-
-  const daySections = data.days
-    .map((day) => ({ ...day, expenses: expensesByDay.get(day.id) ?? [] }))
-    .filter((day) => day.expenses.length > 0);
-
-  const dateOnly = (value: string) =>
-    new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeZone: 'UTC' }).format(
-      new Date(`${value}T00:00:00.000Z`),
-    );
-
-  const totals = (values: CurrencyTotal[], empty: string) =>
-    values.length ? values.map(currencyFormatter).join(', ') : empty;
-
-  const expenseTitle = (expense: Expense) => resolveExpenseTitle(expense, t('untitledExpense'));
-  const placeLabel = (place: ExpensePlace | null) => resolvePlaceLabel(place, t('unnamedPlace'));
-  const itemLabel = (item: { label: string | null; place: ExpensePlace | null }) =>
-    resolveItemLabel(item, t('unnamedItem'));
-
-  const renderExpense = (expense: Expense) => {
-    return (
-      <Item className="flex-nowrap px-3 py-3" key={expense.id}>
-        <ItemMedia
-          className="size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
-          variant="icon"
-        >
-          <ReceiptText aria-hidden="true" />
-        </ItemMedia>
-        <ItemContent className="min-w-0 gap-1">
-          <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <ItemTitle className="min-w-0 truncate text-base">{expenseTitle(expense)}</ItemTitle>
-            <span className="shrink-0 text-base font-semibold tabular-nums">
-              {currencyFormatter({ amount: expense.amount, currencyCode: expense.currencyCode })}
-            </span>
-          </div>
-          <ItemDescription className="line-clamp-none">
-            <span className="flex flex-wrap gap-x-2 gap-y-1">
-              {expense.category ? <span>{t(`categories.${expense.category}`)}</span> : null}
-              {expense.tripPlace ? <span>{placeLabel(expense.tripPlace)}</span> : null}
-              {expense.itineraryItem ? <span>{itemLabel(expense.itineraryItem)}</span> : null}
-              {expense.localDate && !expense.itineraryDay ? <span>{expense.localDate}</span> : null}
-              {expense.localTime ? <span>{expense.localTime}</span> : null}
-            </span>
-            {!expense.itineraryDay && expense.localDate ? (
-              <span className="mt-1 block">{t('unassignedDatedExpense')}</span>
-            ) : null}
-          </ItemDescription>
-        </ItemContent>
-        <ItemActions className="shrink-0">
-          <Button
-            aria-label={t('editExpense', { title: expenseTitle(expense) })}
-            onClick={() => openEdit(expense)}
-            size="icon-sm"
-            variant="ghost"
-          >
-            <Pencil aria-hidden="true" />
-          </Button>
-        </ItemActions>
-      </Item>
-    );
-  };
+    if (filter.kind === 'day') {
+      const day = data.days.find((candidate) => candidate.id === filter.value);
+      return day
+        ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
+            new Date(`${day.date}T00:00:00.000Z`),
+          )
+        : null;
+    }
+    const place = data.tripPlaces.find((candidate) => candidate.id === filter.value);
+    return resolvePlaceLabel(place ?? null, t('unnamedPlace'));
+  })();
 
   return (
     <section className="space-y-7">
@@ -341,35 +291,26 @@ export function ExpensesManager({
           title={t('emptyTitle')}
         />
       ) : (
-        <div className="space-y-7">
-          {daySections.map((day) => (
-            <EditorialSection
-              actions={
-                <p className="text-sm font-medium text-muted-foreground">
-                  {t('dayActualSummary', { total: totals(day.actualSpend, t('noActualSpend')) })}
-                </p>
-              }
-              key={day.id}
-              title={dateOnly(day.date)}
-            >
-              {day.expenses.length ? (
-                <ItemGroup aria-label={t('expenseList')} variant="list">
-                  {day.expenses.map(renderExpense)}
-                </ItemGroup>
-              ) : null}
-            </EditorialSection>
-          ))}
-          {unassignedExpenses.length ? (
-            <EditorialSection
-              description={t('tripLevelExpensesDescription')}
-              title={t('tripLevelExpenses')}
-            >
-              <ItemGroup aria-label={t('tripLevelExpenses')} variant="list">
-                {unassignedExpenses.map(renderExpense)}
-              </ItemGroup>
-            </EditorialSection>
+        <>
+          {breakdown && reference ? (
+            <SpendBreakdowns
+              breakdown={breakdown}
+              currencyCode={reference.code}
+              filter={filter}
+              onFilterChange={setFilter}
+              tripPlaces={data.tripPlaces}
+            />
           ) : null}
-        </div>
+
+          <ExpenseLedger
+            days={data.days}
+            expenses={data.expenses}
+            filter={filter}
+            filterLabel={filterLabel}
+            onClearFilter={() => setFilter(null)}
+            onEdit={openEdit}
+          />
+        </>
       )}
 
       <ExpenseEditorSheet

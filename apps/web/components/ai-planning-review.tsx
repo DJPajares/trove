@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CircleAlert, MapPinned, Sparkles } from 'lucide-react';
+import { ArrowLeft, CircleAlert, MapPinned, Sparkles } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
@@ -275,6 +275,19 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   return (
     <section className="mx-auto max-w-7xl space-y-6 pb-28" aria-labelledby="ai-review-title">
       <motion.header className="border-b border-border pb-6" {...arrive(0)}>
+        {/* Leaving is not discarding. The session outlives this screen, so the
+            way out needs no confirmation - and the Trips page keeps the draft
+            reachable, which is the only reason this can be a plain exit. */}
+        <Button
+          className="-ml-3 mb-2 text-muted-foreground"
+          onClick={() => router.push('/trips')}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <ArrowLeft aria-hidden="true" data-icon="inline-start" />
+          {t('saveForLater')}
+        </Button>
         <div className="max-w-2xl">
           <p className="text-sm font-medium text-brand">{t('eyebrow')}</p>
           <h1

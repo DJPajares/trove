@@ -120,6 +120,42 @@ export function resolveDayWeatherLocation(
   return fallback;
 }
 
+/**
+ * Every day's location, including the days that have nothing to say for
+ * themselves.
+ *
+ * The trip's destination answers for an empty day first, because it is what the
+ * traveller said the trip was about. But a destination named rather than picked
+ * carries no coordinates - an AI-planned trip routinely arrives here with three
+ * of them and not a latitude between them - and a trip with no destinations at
+ * all is ordinary. So an empty day then borrows from the nearest day that is
+ * located, in days, rather than from the first one.
+ *
+ * Nearest matters more than it sounds. A trip's first located place is very
+ * often the bed the traveller left home from, half a continent from anywhere
+ * the trip actually goes: a blank New Zealand day would read 33° because the
+ * itinerary starts in Singapore. The day before is where they woke up, which is
+ * both nearer and the same reason the bed comes first above. Ties go to it.
+ */
+export function resolveDayWeatherLocations(
+  days: readonly WeatherDayRecord[],
+  destination: TripWeatherLocation | null,
+): (TripWeatherLocation | null)[] {
+  const own = days.map((day) => resolveDayWeatherLocation(day, null));
+
+  return own.map((location, index) => {
+    if (location) return location;
+    if (destination) return destination;
+
+    for (let distance = 1; distance < own.length; distance += 1) {
+      const nearest = own[index - distance] ?? own[index + distance];
+      if (nearest) return nearest;
+    }
+
+    return null;
+  });
+}
+
 async function findOwnedTrip(userId: string, tripId: string) {
   const trip = await getPrismaClient().trip.findFirst({
     include: tripInclude,
@@ -153,18 +189,23 @@ export class TripWeatherService {
     const trip = await findOwnedTrip(userId, tripId);
     const now = this.now();
 
-    const tripLocation = resolveTripWeatherLocation(
-      trip.destinations.map((destination) => ({
-        location: placeLocation(destination.place),
-        timeZone: destination.timeZone,
+    const destination = resolveTripWeatherLocation(
+      trip.destinations.map((entry) => ({
+        location: placeLocation(entry.place),
+        timeZone: entry.timeZone,
       })),
       trip.referenceTimeZone,
     );
 
-    const located = trip.itineraryDays.flatMap((day) => {
-      const location = resolveDayWeatherLocation(day, tripLocation);
+    const dayLocations = resolveDayWeatherLocations(trip.itineraryDays, destination);
+    const located = trip.itineraryDays.flatMap((day, index) => {
+      const location = dayLocations[index];
       return location ? [{ date: formatDateOnly(day.date), day, location }] : [];
     });
+
+    // The point every day can borrow from: the destination when the trip has a
+    // located one, and otherwise the first answer the days themselves gave.
+    const tripLocation = destination ?? located[0]?.location ?? null;
 
     const window = resolveForecastWindow(
       [...new Set(located.map((entry) => entry.location.timeZone))],

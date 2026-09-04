@@ -27,6 +27,12 @@ type PlanScorePanelProps = Readonly<{
   explanations: PlanScoreExplanationGroups;
   /** Per-factor breakdown for the day-scope chip row; absent at trip scope. */
   factors?: Record<PlanScoreFactorId, PlanScoreFactorOutcome>;
+  /**
+   * How deep the panel sits in the host route's outline. The explanation
+   * groups nest one level below it, so both move together and neither call
+   * site has to know that.
+   */
+  headingLevel?: 2 | 3;
   onRetry?: () => void;
   /** Focuses the itinerary item or Trip Place a suggestion points at. */
   onSelectReference?: (reference: string) => void;
@@ -182,11 +188,14 @@ function SuggestedAction({
 function ExplanationList({
   explanations,
   heading,
+  HeadingTag,
   onSelectReference,
   tone,
 }: Readonly<{
   explanations: PlanScoreExplanation[];
   heading: string;
+  /** One level below the panel's own heading, whatever the host route set it to. */
+  HeadingTag: 'h3' | 'h4';
   onSelectReference?: (reference: string) => void;
   tone: 'improve' | 'uncertain' | 'works';
 }>) {
@@ -196,7 +205,7 @@ function ExplanationList({
 
   return (
     <section className="space-y-1.5">
-      <h4 className="text-xs font-medium text-muted-foreground">{heading}</h4>
+      <HeadingTag className="text-xs font-medium text-muted-foreground">{heading}</HeadingTag>
       <ul className="space-y-1.5">
         {explanations.map((explanation, index) => (
           <li
@@ -246,6 +255,7 @@ export function PlanScorePanel({
   disabled,
   explanations,
   factors,
+  headingLevel = 3,
   onRetry,
   onSelectReference,
   score,
@@ -256,6 +266,8 @@ export function PlanScorePanel({
   const t = useTranslations('planScore');
   const [showDetails, setShowDetails] = useState(false);
   const detailsId = useId();
+  const PanelHeading = headingLevel === 2 ? 'h2' : 'h3';
+  const GroupHeading = headingLevel === 2 ? 'h3' : 'h4';
 
   const shell = cn('space-y-3 rounded-lg border border-border bg-card p-4', className);
 
@@ -278,10 +290,10 @@ export function PlanScorePanel({
   }
 
   const heading = (
-    <h3 className="flex items-center gap-2 text-sm font-medium">
+    <PanelHeading className="flex items-center gap-2 text-sm font-medium">
       <Sparkles aria-hidden="true" className="size-4 text-muted-foreground" />
       {title}
-    </h3>
+    </PanelHeading>
   );
 
   // Without a number there is nothing useful to say; listing what could not be
@@ -357,17 +369,20 @@ export function PlanScorePanel({
           <ExplanationList
             explanations={remainingImprovements}
             heading={t('worthImproving')}
+            HeadingTag={GroupHeading}
             onSelectReference={onSelectReference}
             tone="improve"
           />
           <ExplanationList
             explanations={explanations.whatWorks}
             heading={t('whatWorks')}
+            HeadingTag={GroupHeading}
             tone="works"
           />
           <ExplanationList
             explanations={explanations.uncertainty}
             heading={t('uncertainty')}
+            HeadingTag={GroupHeading}
             tone="uncertain"
           />
         </div>

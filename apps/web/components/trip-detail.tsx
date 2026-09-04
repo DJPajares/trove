@@ -122,6 +122,9 @@ function TripDetailPlanScore({ tripId }: Readonly<{ tripId: string }>) {
           worthImproving: [],
         }
       }
+      // The trip name is the only h1 here, so the panel sits at the top level
+      // of the route's outline alongside the trip-info section.
+      headingLevel={2}
       onRetry={planScore.retry}
       score={planScore.data?.score ?? null}
       scope="trip"
@@ -551,7 +554,10 @@ export function TripDetail({
         />
       </dl>
 
-      {trip.lifecycle !== 'completed' ? <OfflineReadyStatus tripId={trip.id} /> : null}
+      {/* A peer of the trip-info section below it, not a child of anything. */}
+      {trip.lifecycle !== 'completed' ? (
+        <OfflineReadyStatus headingLevel={2} tripId={trip.id} />
+      ) : null}
 
       {tripInfoStatus === 'loading' ? (
         <section

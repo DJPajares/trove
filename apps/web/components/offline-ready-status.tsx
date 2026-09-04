@@ -10,7 +10,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 
 import { useOnlineStatus } from '@/components/trip-sync-status';
 import {
@@ -125,6 +125,14 @@ function OfflineReadyDetails({
 }
 
 export type OfflineReadyStatusProps = {
+  headingId?: string;
+  /**
+   * How deep this block sits in the host route's outline. Separate from
+   * `variant` on purpose: the compact layout happens to be a level down today,
+   * but the two are not the same decision and conflating them is what made the
+   * level unfixable from the outside.
+   */
+  headingLevel?: 2 | 3;
   tripId: string;
   /**
    * `detailed` is the full account, for a surface whose subject is the trip's
@@ -135,9 +143,14 @@ export type OfflineReadyStatusProps = {
 };
 
 export function OfflineReadyStatus({
+  headingId,
+  headingLevel = 3,
   tripId,
   variant = 'detailed',
 }: Readonly<OfflineReadyStatusProps>) {
+  const Heading = headingLevel === 2 ? 'h2' : 'h3';
+  const generatedHeadingId = useId();
+  const resolvedHeadingId = headingId ?? generatedHeadingId;
   const t = useTranslations('tripMode.offlineReady');
   const online = useOnlineStatus();
   const [state, setState] = useState<ReadinessViewState>({
@@ -314,10 +327,10 @@ export function OfflineReadyStatus({
 
   if (isCompact) {
     return (
-      <section aria-labelledby="offline-ready-heading" className="border-t border-border pt-4">
-        <h3 className="sr-only" id="offline-ready-heading">
+      <section aria-labelledby={resolvedHeadingId} className="border-t border-border pt-4">
+        <Heading className="sr-only" id={resolvedHeadingId}>
           {t('title')}
-        </h3>
+        </Heading>
 
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
           <div className="min-w-0">
@@ -373,12 +386,12 @@ export function OfflineReadyStatus({
   }
 
   return (
-    <section aria-labelledby="offline-ready-heading" className="border-y border-border py-5">
+    <section aria-labelledby={resolvedHeadingId} className="border-y border-border py-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold" id="offline-ready-heading">
+          <Heading className="text-base font-semibold" id={resolvedHeadingId}>
             {t('title')}
-          </h3>
+          </Heading>
           <p className="mt-1 text-sm leading-6 text-muted-foreground">{t('description')}</p>
         </div>
         <StatusIcon aria-hidden="true" className={`mt-0.5 size-5 shrink-0 ${statusTone}`} />

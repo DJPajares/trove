@@ -163,6 +163,27 @@ test('hard commitments cannot move, become Unscheduled, or lose their supplied t
   expect(issueCodes(validateAiPlannerDraft(wrongDestination))).toContain('hard_constraint_changed');
 });
 
+test('an estimated exact time satisfies a traveller-supplied daypart only inside its window', () => {
+  const within = explicitDraft();
+  const constraint = within.normalizedRequest.constraints.find(
+    (entry) => entry.id === 'constraint:must-go',
+  );
+  const item = within.days[1]!.items.find((entry) => entry.id === 'item:museum');
+  if (!constraint || !item) throw new Error('Expected Must Go fixture.');
+
+  constraint.dayPart = 'afternoon';
+  item.schedule = { kind: 'exact', localTime: '13:15', source: 'model' };
+  expect(validateAiPlannerDraft(within).success).toBe(true);
+
+  const outside = structuredClone(within);
+  outside.days[1]!.items.find((entry) => entry.id === 'item:museum')!.schedule = {
+    kind: 'exact',
+    localTime: '18:00',
+    source: 'model',
+  };
+  expect(issueCodes(validateAiPlannerDraft(outside))).toContain('hard_constraint_changed');
+});
+
 test('contradictory exact commitments are rejected deterministically', () => {
   expect(issueCodes(validateAiPlannerDraft(contradictoryDraft()))).toContain(
     'conflicting_hard_constraints',
@@ -170,7 +191,7 @@ test('contradictory exact commitments are rejected deterministically', () => {
   expect(aiPlanningPrompts.contradictory).toContain('09:00');
 });
 
-test('model suggestions use day parts and AI-estimated durations', () => {
+test('raw model suggestions use day parts and AI-estimated durations', () => {
   const proposal = explicitModelProposal();
   proposal.items.push({
     blockType: 'activity',

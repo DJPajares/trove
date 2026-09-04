@@ -12,6 +12,7 @@ import {
   addOpeningEvidence,
   applyGroundingToDraft,
   assembleAiPlanningDraft,
+  assignAiPlannerSuggestedTimes,
   type AiPlanningPipelineOptions,
   runAiPlanningPipeline,
 } from '../src/services/ai-planning-pipeline.js';
@@ -281,6 +282,54 @@ function createHarness(output: unknown) {
 }
 
 describe('AI planning pipeline', () => {
+  test('turns feasible dayparts into ordered AI estimates and preserves fallbacks', () => {
+    const draft = assembleAiPlanningDraft(explicitModelProposal(), NOW);
+    const day = draft.days[1]!;
+
+    assignAiPlannerSuggestedTimes(
+      day,
+      new Map([['item:museum', [{ endMinute: 1020, startMinute: 780 }]]]),
+      new Map([['item:museum', 30]]),
+    );
+
+    expect(day.items[0]?.schedule).toStrictEqual({
+      kind: 'exact',
+      localTime: '09:00',
+      source: 'user',
+    });
+    expect(day.items[1]?.schedule).toStrictEqual({
+      kind: 'exact',
+      localTime: '13:00',
+      source: 'model',
+    });
+
+    const unsupported = assembleAiPlanningDraft(explicitModelProposal(), NOW).days[1]!;
+    unsupported.items = [
+      {
+        ...unsupported.items[1]!,
+        id: 'item:anytime',
+        schedule: { dayPart: 'anytime', kind: 'day_part' },
+      },
+    ];
+    assignAiPlannerSuggestedTimes(unsupported, new Map(), new Map());
+
+    expect(unsupported.items[0]?.schedule).toStrictEqual({
+      dayPart: 'anytime',
+      kind: 'day_part',
+    });
+
+    const closed = assembleAiPlanningDraft(explicitModelProposal(), NOW).days[1]!;
+    assignAiPlannerSuggestedTimes(
+      closed,
+      new Map([['item:museum', [{ endMinute: 720, startMinute: 480 }]]]),
+      new Map([['item:museum', 30]]),
+    );
+    expect(closed.items[1]?.schedule).toStrictEqual({
+      dayPart: 'afternoon',
+      kind: 'day_part',
+    });
+  });
+
   test('uses one structured model call and preserves hard commitments in the review draft', async () => {
     const harness = createHarness(explicitModelProposal());
 
@@ -303,6 +352,11 @@ describe('AI planning pipeline', () => {
       blockType: 'meeting',
       durationMinutes: 60,
       schedule: { kind: 'exact', localTime: '09:00', source: 'user' },
+    });
+    expect(harness.drafts[0]?.days[1]?.items[1]?.schedule).toStrictEqual({
+      kind: 'exact',
+      localTime: '12:00',
+      source: 'model',
     });
     expect(harness.drafts[0]?.trip).toMatchObject({
       endDate: '2026-10-04',
@@ -466,6 +520,9 @@ describe('AI planning pipeline', () => {
       ]),
     );
     expect(harness.drafts[0]?.days[1]?.items.map((item) => item.id)).toContain('item:museum');
+    expect(
+      harness.drafts[0]?.days[1]?.items.find((item) => item.id === 'item:museum')?.schedule,
+    ).toStrictEqual({ dayPart: 'afternoon', kind: 'day_part' });
   });
 
   test('unschedules a flexible suggestion that cannot fit verified opening hours', async () => {

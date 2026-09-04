@@ -167,6 +167,7 @@ export async function getItineraryDayTimeSuggestions(
           reservationCount: item._count.reservations,
           startInstant: overridden ? null : item.startInstant,
           timeSemantics: item.timeSemantics,
+          timeProvenance: overridden ? null : item.timeProvenance,
           timeZone: item.timeZone,
           tripPlaceId: item.tripPlaceId,
         };

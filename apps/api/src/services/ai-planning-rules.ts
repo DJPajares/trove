@@ -11,6 +11,7 @@ import {
   type AiPlannerNormalizedRequest,
 } from '@trove/types';
 
+import { dayPartWindow } from './day-part-windows.js';
 import { enumerateDateRange, formatDateOnly, parseDateOnly } from './trip-rules.js';
 
 export const AI_PLANNER_DEFAULT_PARTY_SIZE = 1;
@@ -271,6 +272,19 @@ function hasUserTimeConstraint(
   });
 }
 
+/** An estimated clock time may refine a supplied daypart without changing it. */
+function scheduleSatisfiesDayPart(
+  schedule: AiPlannerDraftItem['schedule'],
+  dayPart: NonNullable<AiPlannerConstraint['dayPart']>,
+) {
+  if (schedule.kind === 'day_part') return schedule.dayPart === dayPart;
+  if (dayPart === 'anytime') return true;
+
+  const window = dayPartWindow(dayPart.toUpperCase());
+  const start = minuteOfDay(schedule.localTime);
+  return Boolean(window && start >= window.startMinute && start < window.endMinute);
+}
+
 function hasUserDurationConstraint(
   item: Pick<AiPlannerDraftItem, 'constraintIds' | 'durationMinutes' | 'durationProvenance'>,
   constraints: ReadonlyMap<string, AiPlannerConstraint>,
@@ -375,6 +389,7 @@ function modelProposalRuleIssues(proposal: AiPlannerModelProposal) {
     });
     if (
       item.schedule.kind === 'exact' &&
+      item.schedule.source === 'user' &&
       (item.origin === 'model' || !hasUserTimeConstraint(item, constraints))
     ) {
       issues.push({
@@ -512,7 +527,7 @@ function hardConstraintIssues(draft: AiPlannerDraft, items: LocatedDraftItem[]) 
         if (
           !constraint.localTime &&
           constraint.dayPart &&
-          (item.schedule.kind !== 'day_part' || item.schedule.dayPart !== constraint.dayPart)
+          !scheduleSatisfiesDayPart(item.schedule, constraint.dayPart)
         ) {
           return false;
         }
@@ -696,6 +711,7 @@ function draftRuleIssues(draft: AiPlannerDraft) {
     });
     if (
       item.schedule.kind === 'exact' &&
+      item.schedule.source === 'user' &&
       (item.origin === 'model' || !hasUserTimeConstraint(item, constraints))
     ) {
       issues.push({ code: 'invented_exact_time', path: [...path, 'schedule'], subjectId: item.id });

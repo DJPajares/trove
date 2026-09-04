@@ -1062,6 +1062,7 @@ export async function createItineraryItem(
         priority: mapPriorityInput(input.priority ?? null),
         startInstant: schedule.startInstant,
         timeSemantics: schedule.timeSemantics,
+        timeProvenance: schedule.localStartTime ? 'USER_OWNED' : null,
         timeZone: timeZone.timeZone,
         timeZoneResolvedAt: new Date(),
         timeZoneSource: timeZone.source,
@@ -1180,6 +1181,9 @@ export async function updateItineraryItem(
         ...(input.priority !== undefined ? { priority: mapPriorityInput(input.priority) } : {}),
         startInstant: schedule.startInstant,
         timeSemantics: schedule.timeSemantics,
+        ...(input.schedule !== undefined
+          ? { timeProvenance: schedule.localStartTime ? ('USER_OWNED' as const) : null }
+          : {}),
         ...(shouldResolveTimeZone || !current.timeZone
           ? {
               timeZone: timeZone.timeZone,

@@ -109,6 +109,9 @@ function assertItemLocalTimeContext(item: Record<string, unknown>) {
   if (set === parts.length && (item.timeZone ?? null) === null) {
     throw new Error('itinerary_items_local_time_context');
   }
+  if (((item.localStartTime ?? null) === null) !== ((item.timeProvenance ?? null) === null)) {
+    throw new Error('itinerary_items_time_provenance_context');
+  }
 }
 
 function createApplyStore(
@@ -353,6 +356,7 @@ describe('AI planning Apply', () => {
       localStartTime: null,
       startInstant: null,
       timeSemantics: null,
+      timeProvenance: null,
     });
   });
 
@@ -371,6 +375,11 @@ describe('AI planning Apply', () => {
   test('atomically creates standard trip records and preserves reviewed provenance', async () => {
     const draft = customPlaceDraft();
     draft.days[0]!.dailyBasePlaceRefId = 'place:custom';
+    draft.days[1]!.items[1]!.schedule = {
+      kind: 'exact',
+      localTime: '13:00',
+      source: 'model',
+    };
     const store = createApplyStore(draft);
     const first = await apply(store);
 
@@ -384,11 +393,20 @@ describe('AI planning Apply', () => {
       'AI_ESTIMATED',
       'AI_ESTIMATED',
     ]);
+    expect(store.state.items.map((item) => item.timeProvenance)).toStrictEqual([
+      'USER_OWNED',
+      'AI_ESTIMATED',
+      null,
+    ]);
     expect(store.state.items.map((item) => item.position)).toStrictEqual([0, 1, 0]);
     expect(store.state.trips[0]).toMatchObject({ referenceTimeZone: 'Asia/Tokyo' });
     expect(store.state.items[0]).toMatchObject({
       localStartTime: new Date('1970-01-01T09:00:00.000Z'),
       timeZone: 'Asia/Tokyo',
+    });
+    expect(store.state.items[1]).toMatchObject({
+      localStartTime: new Date('1970-01-01T13:00:00.000Z'),
+      timeProvenance: 'AI_ESTIMATED',
     });
     expect(store.state.items.find((item) => item.itineraryDayId === undefined)).toMatchObject({
       customLabel: 'Quiet neighborhood viewpoint',

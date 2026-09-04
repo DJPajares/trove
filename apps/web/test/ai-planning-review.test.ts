@@ -41,7 +41,6 @@ function reviewDraft(): AiPlanningDraft {
     normalizedRequest: {},
     places: [
       {
-        attributions: [],
         id: 'place:verified',
         location: { latitude: 35.71, longitude: 139.77 },
         name: 'Verified museum',
@@ -57,7 +56,6 @@ function reviewDraft(): AiPlanningDraft {
         verification: 'unverified',
       },
       {
-        attributions: [],
         id: 'place:legacy',
         name: 'Older verified place',
         placeId: '00000000-0000-4000-8000-000000000021',

@@ -122,7 +122,6 @@ export function explicitModelProposal(): AiPlannerModelProposal {
 
 function verifiedPlace(id: string, name: string, placeId: string) {
   return {
-    attributions: [],
     id,
     name,
     placeId,

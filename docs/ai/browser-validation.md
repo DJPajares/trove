@@ -15,7 +15,7 @@ width, and record the result here before launch.
 | 5   | Reduced motion is respected                                                                                         | free         |
 | 6   | Neither width scrolls horizontally                                                                                  | free         |
 | 7   | Generate produces a draft, and refreshing mid-generation recovers the session                                       | **billable** |
-| 8   | Review shows the map, Google attribution, and unresolved Custom Places                                              | **billable** |
+| 8   | Review shows the map, Verified badges, the verified count, and unresolved Custom Places                             | **billable** |
 | 9   | Editing the draft, acknowledging a material warning, and Apply produce a Trip                                       | **billable** |
 | 10  | Retrying Apply returns the same Trip and creates no duplicate                                                       | **billable** |
 | 11  | Quota exhaustion, provider outage, and both kill switches degrade to the manual path                                | **billable** |

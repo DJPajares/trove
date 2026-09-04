@@ -452,7 +452,7 @@ AI-assisted trip creation is the first approved AI product capability. It is an 
 
 ### 7.6.4 Draft Review and Apply
 
-- The review uses the normal itinerary and map language and shows assumptions, Custom Places, unverified/not-checked evidence, conflicts, provider attribution, and material warnings.
+- The review uses the normal itinerary and map language and shows assumptions, Custom Places, unverified/not-checked evidence, conflicts, how much of the plan was verified, and material warnings. It names no provider: which service found a place is Trove's concern, and a traveller deciding whether to trust the plan only needs to know the place is real.
 - The draft shows a numeric Plan Score alongside its validation evidence. It is computed once the itinerary is final and its places are resolved, from the opening-hours, rating and route evidence that same run already fetched, and costs no additional provider request. Because the draft is immutable, the score stays valid for its whole life.
 - The draft is immutable. It is exactly what the run produced, and no surface may reorder, retime, replace, remove, or otherwise edit it. A traveller who wants a different plan uses Regenerate.
 - The one field a reviewed session accepts is an optional trip description. It is session metadata rather than part of the plan, carried to the Trip on Apply, and it neither advances the draft revision nor invalidates the draft's evidence.

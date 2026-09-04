@@ -302,11 +302,12 @@
           "anytime": "Anytime"
         },
         "duration": "{minutes} minutes",
-        "verifiedPlace": "Verified place",
+        "verifiedPlace": "Verified",
         "travelerSupplied": "Traveler-supplied",
         "aiSuggested": "AI suggestion",
-        "providerAttribution": "Place data",
-        "googleAttribution": "Google Maps",
+        "placesVerified": "{verified} of {total} places verified",
+        "noVerifiedPlacesTitle": "None of these places could be verified",
+        "noVerifiedPlacesHint": "You can still apply this plan, but the trip will open without map pins, travel times, or weather. Regenerating usually resolves it.",
         "customPlace": {
           "unverified": "Custom Place, not verified",
           "not_checked": "Custom Place, not checked"

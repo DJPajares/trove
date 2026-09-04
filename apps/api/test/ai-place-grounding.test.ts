@@ -78,7 +78,6 @@ test('a unique exact name and locality match becomes a canonical verified place'
   const result = await grounder.groundCandidate(candidate());
 
   expect(result.place).toStrictEqual({
-    attributions: [{ provider: 'Example Data', providerUri: 'https://example.com/source' }],
     id: 'candidate:museum',
     location: { latitude: 1.2966, longitude: 103.8485 },
     name: 'National Museum',
@@ -551,13 +550,19 @@ test('provider failures are retried in new runs and never become negative mappin
   }
 });
 
-test('attributed identities stay live and retain their provider credits', async () => {
+/**
+ * Attributed places were once kept off the cache so a hit could never serve one
+ * without its credits. Nothing renders those credits any more, so the rule only
+ * bought a second Text Search for the same place.
+ */
+test('an attributed identity is cached like any other and is not re-bought', async () => {
   const { newGrounder, state, entries } = cachedSetup([identity()]);
   await newGrounder().groundCandidate(candidate());
   const result = await newGrounder().groundCandidate(candidate());
-  expect(state.searches).toBe(2);
-  expect(entries.size).toBe(0);
-  expect(result.place).toMatchObject({ attributions: identity().attributions });
+  expect(state.searches).toBe(1);
+  expect(entries.size).toBe(1);
+  expect(result.place).toMatchObject({ resolution: 'verified' });
+  expect(result.place).not.toHaveProperty('attributions');
 });
 
 test('cache errors preserve live grounding and concurrent identical queries still search once', async () => {
@@ -584,14 +589,17 @@ test('a cached exact survivor cannot answer a broader name that would be ambiguo
   expect(second.evidence.code).toBe('place_ambiguous');
 });
 
-test('a later attributed snapshot cannot revive an older positive mapping', async () => {
+test('a mapping cannot claim a snapshot it never verified', async () => {
   const { newGrounder, state } = cachedSetup();
   await newGrounder().groundCandidate(candidate());
+  // The snapshot is refetched, but the write that would re-date the mapping is
+  // lost, so the stored mapping now points at a snapshot of its own age.
   state.reference!.cachedName = null;
   state.now = new Date(state.now.getTime() + 1_000);
-  state.answer = [identity()];
+  state.writeFails = true;
   await newGrounder().groundCandidate(candidate());
+  state.writeFails = false;
   const result = await newGrounder().groundCandidate(candidate());
   expect(state.searches).toBe(3);
-  expect(result.place).toMatchObject({ attributions: identity().attributions });
+  expect(result.place).toMatchObject({ resolution: 'verified' });
 });

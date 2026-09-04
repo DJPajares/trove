@@ -212,14 +212,24 @@ export const aiPlannerModelProposalSchema = z
 export const aiPlannerDraftPlaceSchema = z.discriminatedUnion('resolution', [
   z
     .object({
-      attributions: z.array(
-        z
-          .object({
-            provider: z.string().trim().min(1).max(200),
-            providerUri: z.url().nullable(),
-          })
-          .strict(),
-      ),
+      /**
+       * Legacy third-party provider credits. No surface has rendered them since
+       * the review card traded the per-place provider line for a Verified
+       * badge, and a cached grounding cannot reproduce them, so nothing writes
+       * this any more. The key stays declared because the draft schema is
+       * strict and every stored draft is re-parsed on read: dropping it
+       * outright would fail every in-flight session.
+       */
+      attributions: z
+        .array(
+          z
+            .object({
+              provider: z.string().trim().min(1).max(200),
+              providerUri: z.url().nullable(),
+            })
+            .strict(),
+        )
+        .optional(),
       id: identifierSchema,
       /** Draft-only map context. It is provider-derived and never client-editable. */
       location: z

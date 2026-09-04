@@ -114,10 +114,11 @@ test('review drafts distinguish verified Places, Custom Places, unchecked eviden
   expect(result.warnings).toContainEqual(expect.objectContaining({ material: true }));
 });
 
-test('verified draft places require explicit Google provenance and attribution shape', () => {
+test('verified draft places require explicit Google provenance', () => {
   const draft = explicitDraft();
   const verified = draft.places.find((place) => place.resolution === 'verified');
-  expect(verified).toMatchObject({ attributions: [], provider: 'google' });
+  expect(verified).toMatchObject({ provider: 'google' });
+  expect(verified).not.toHaveProperty('attributions');
 
   if (!verified || verified.resolution !== 'verified') throw new Error('verified fixture missing');
   const missingProvider = { ...verified } as Record<string, unknown>;
@@ -162,4 +163,20 @@ test('a draft stored before descriptions existed still parses, with a null descr
   expect(result.success).toBe(true);
   if (!result.success) throw new Error('Expected a pre-description draft to parse.');
   expect(result.data.trip.description).toBeNull();
+});
+
+/**
+ * Provider credits stopped being written once no surface drew them, but the
+ * draft schema is strict and every stored draft is re-parsed on read. A session
+ * generated before that change has to stay readable.
+ */
+test('a stored draft that still carries provider attributions stays readable', () => {
+  const draft = explicitDraft();
+  const index = draft.places.findIndex((place) => place.resolution === 'verified');
+  draft.places[index] = {
+    ...(draft.places[index] as Record<string, unknown>),
+    attributions: [{ provider: 'Example Data', providerUri: 'https://example.com/source' }],
+  } as (typeof draft.places)[number];
+
+  expect(parseAiPlannerDraft(draft).success).toBe(true);
 });

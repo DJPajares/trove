@@ -191,7 +191,7 @@ function cacheKey(request: PlaceTextSearchRequest, candidate: AiPlaceGroundingCa
 
 type GroundingIdentity = Pick<
   ProviderPlaceIdentity,
-  'attributions' | 'externalPlaceId' | 'formattedAddress' | 'location' | 'name'
+  'externalPlaceId' | 'formattedAddress' | 'location' | 'name'
 >;
 
 function eligibleMatches<T extends Pick<ProviderPlaceIdentity, 'name' | 'formattedAddress'>>(
@@ -232,7 +232,6 @@ function verified(
       subjectType: 'place',
     },
     place: {
-      attributions: identity.attributions,
       id: candidate.id,
       location: identity.location,
       name: identity.name,
@@ -351,7 +350,6 @@ export class AiPlaceGrounder {
       const location = toPlaceCoordinates(reference);
       if (!location || !reference.cachedName) return { reason: 'incomplete_snapshot' };
       const identity: GroundingIdentity = {
-        attributions: [],
         externalPlaceId: reference.externalPlaceId,
         formattedAddress: reference.cachedFormattedAddress ?? null,
         location,
@@ -449,16 +447,12 @@ export class AiPlaceGrounder {
       languageCode: candidate.languageCode,
     });
 
-    // The snapshot does not store third-party credits. Reusing an attributed
-    // result would drop them, so leave that result on the live path.
-    if (identity.attributions.length === 0) {
-      await this.writeCache(persistentKey, {
-        checkedAt,
-        outcome: 'verified',
-        externalPlaceId: identity.externalPlaceId,
-        placeId: canonical.id,
-      });
-    }
+    await this.writeCache(persistentKey, {
+      checkedAt,
+      outcome: 'verified',
+      externalPlaceId: identity.externalPlaceId,
+      placeId: canonical.id,
+    });
     const result = verified(candidate, identity, canonical.id, checkedAt);
     if (evidence && result.context) {
       result.context.evidence = {

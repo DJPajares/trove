@@ -218,7 +218,6 @@ function verifiedGrounding(proposal: AiPlannerModelProposal) {
       subjectType: 'place' as const,
     },
     place: {
-      attributions: [],
       id: candidate.id,
       name: candidate.name,
       placeId: `00000000-0000-4000-8000-${(200 + index).toString().padStart(12, '0')}`,

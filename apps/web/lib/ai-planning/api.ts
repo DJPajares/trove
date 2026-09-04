@@ -55,7 +55,6 @@ export type AiPlanningDraft = {
   normalizedRequest: unknown;
   places: Array<
     | {
-        attributions: Array<{ provider: string; providerUri: string | null }>;
         id: string;
         location?: { latitude: number; longitude: number };
         name: string;

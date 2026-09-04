@@ -350,7 +350,7 @@ export function TripChrome({
             </DropdownMenu>
           </div>
 
-          <div ref={setDescriptionSlot} />
+          <div ref={setDescriptionSlot} className="py-4" />
         </header>
 
         {children}

@@ -7,6 +7,7 @@ import { useTripChrome } from '@/components/trip-chrome';
 import type { TripMediaSource } from '@/lib/media/trip-media';
 import type { TripSection } from '@/lib/trips/navigation';
 import { cn } from '@/lib/utils';
+import { Card, CardContent } from './ui/card';
 
 export type { TripSection };
 
@@ -66,20 +67,24 @@ export function TripSectionHeader({
       {coverMeta && chrome.coverMetaSlot ? createPortal(coverMeta, chrome.coverMetaSlot) : null}
       {description && chrome.descriptionSlot
         ? createPortal(
-            <p
-              className={cn(
-                'max-w-[var(--layout-reading)] text-sm leading-[1.55] text-pretty text-muted-foreground',
-                // Standing guidance is worth its rows on a wide screen and worth
-                // fewer than none on a phone, where it sits between the traveller
-                // and their own plan. Their own description is not guidance.
-                currentSection === 'itinerary' && !descriptionIsOwnContent && 'hidden sm:block',
-                // A description has no length Trove controls, and this header is
-                // not where a long one belongs.
-                descriptionIsOwnContent && 'line-clamp-3 whitespace-pre-line',
-              )}
-            >
-              {description}
-            </p>,
+            <Card size="sm" className="bg-transparent">
+              <CardContent>
+                <p
+                  className={cn(
+                    'max-w-(--layout-reading) text-sm leading-[1.55] text-pretty text-muted-foreground',
+                    // Standing guidance is worth its rows on a wide screen and worth
+                    // fewer than none on a phone, where it sits between the traveller
+                    // and their own plan. Their own description is not guidance.
+                    currentSection === 'itinerary' && !descriptionIsOwnContent && 'hidden sm:block',
+                    // A description has no length Trove controls, and this header is
+                    // not where a long one belongs.
+                    descriptionIsOwnContent && 'line-clamp-3 whitespace-pre-line',
+                  )}
+                >
+                  {description}
+                </p>
+              </CardContent>
+            </Card>,
             chrome.descriptionSlot,
           )
         : null}

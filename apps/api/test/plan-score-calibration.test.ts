@@ -454,6 +454,7 @@ test('respects the item time zone when deriving local start times', () => {
               reservationCount: 1,
               startInstant: new Date('2026-09-01T16:00:00.000Z'),
               timeSemantics: 'AUTHORITATIVE_INSTANT',
+              timeProvenance: null,
               timeZone,
               tripPlaceId: null,
             },

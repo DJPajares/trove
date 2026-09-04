@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { PageState } from '@/components/page-state';
 import { PlanScorePanel } from '@/components/plan-score-panel';
+import { usePreferences } from '@/components/preferences-provider';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -48,6 +49,7 @@ import {
 } from '@/lib/ai-planning/presentation';
 import { motionDuration, motionEase } from '@/lib/motion';
 import { queryKeys } from '@/lib/query/keys';
+import { formatSegmentedTime } from '@/lib/time/time-segments';
 import type { Trip } from '@/lib/trips/api';
 
 const ACTIVE_SESSION_POLL_MS = 1_500;
@@ -59,6 +61,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   const general = useTranslations('trips.aiPlanning');
   const planScoreCopy = useTranslations('planScore');
   const locale = useLocale();
+  const { preferences } = usePreferences();
   const reducedMotion = useReducedMotion();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -469,13 +472,19 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                           <p className="font-medium">{item.label}</p>
                           <p className="mt-1 text-sm text-muted-foreground">
                             {item.schedule.kind === 'exact'
-                              ? item.schedule.localTime
+                              ? formatSegmentedTime(
+                                  item.schedule.localTime,
+                                  locale,
+                                  preferences.timeFormat,
+                                ).text
                               : t(`dayParts.${item.schedule.dayPart}`)}{' '}
                             · {t('duration', { minutes: item.durationMinutes })}
                           </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {item.origin === 'user' ? t('travelerSupplied') : t('aiSuggested')}
-                          </p>
+                          {item.origin === 'user' ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {t('travelerSupplied')}
+                            </p>
+                          ) : null}
                           {/* Which provider found a place is Trove's problem, not
                               the traveller's. What they are deciding here is
                               whether to trust the plan, and for that the only
@@ -486,11 +495,11 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                                 <CircleCheck aria-hidden="true" />
                                 {t('verifiedPlace')}
                               </Badge>
-                            ) : (
+                            ) : place.verification === 'not_checked' ? (
                               <p className="mt-1 text-xs text-muted-foreground">
-                                {t(`customPlace.${place.verification}`)}
+                                {t('customPlace.not_checked')}
                               </p>
-                            )
+                            ) : null
                           ) : null}
                         </div>
                       </li>

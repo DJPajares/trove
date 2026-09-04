@@ -201,6 +201,11 @@ function itemData(input: {
           ? floatingLocalTimeToInstant(input.dayDate, exactTime, timeZone.timeZone)
           : null,
       timeSemantics: exactTime ? ('FLOATING_LOCAL' as const) : null,
+      timeProvenance: exactTime
+        ? item.schedule.kind === 'exact' && item.schedule.source === 'model'
+          ? ('AI_ESTIMATED' as const)
+          : ('USER_OWNED' as const)
+        : null,
       timeZone: timeZone.timeZone,
       timeZoneResolvedAt: input.now,
       timeZoneSource: timeZone.source,

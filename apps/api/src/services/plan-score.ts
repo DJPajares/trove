@@ -411,6 +411,7 @@ function toPlanScoreDayRecord(
       localStartTime: Date | null;
       startInstant: Date | null;
       timeSemantics: string | null;
+      timeProvenance: string | null;
       timeZone: string | null;
       tripPlaceId: string | null;
     }>;
@@ -433,6 +434,7 @@ function toPlanScoreDayRecord(
       reservationCount: item._count.reservations,
       startInstant: item.startInstant,
       timeSemantics: item.timeSemantics,
+      timeProvenance: item.timeProvenance,
       timeZone: item.timeZone,
       tripPlaceId: item.tripPlaceId,
     })),
@@ -487,6 +489,7 @@ type PlanScoreTripRows = {
       position: number;
       startInstant: Date | null;
       timeSemantics: string | null;
+      timeProvenance: string | null;
       timeZone: string | null;
       travelModeToNext: string | null;
       tripPlaceId: string | null;

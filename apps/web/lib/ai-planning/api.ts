@@ -18,7 +18,7 @@ export type AiPlanningDraftItem = {
   priority: 'interested' | 'maybe' | 'must_go' | null;
   schedule:
     | { dayPart: 'afternoon' | 'anytime' | 'evening' | 'morning'; kind: 'day_part' }
-    | { kind: 'exact'; localTime: string; source: 'user' };
+    | { kind: 'exact'; localTime: string; source: 'model' | 'user' };
 };
 
 export type AiPlanningDraft = {

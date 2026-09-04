@@ -170,6 +170,14 @@ enum ItineraryTimeSemantics {
   @@schema("trove")
 }
 
+enum ItineraryTimeProvenance {
+  USER_OWNED   @map("user_owned")
+  AI_ESTIMATED @map("ai_estimated")
+
+  @@map("itinerary_time_provenance")
+  @@schema("trove")
+}
+
 enum ItineraryTravelStatus {
   UPCOMING  @map("upcoming")
   COMPLETED @map("completed")
@@ -914,6 +922,7 @@ model ItineraryItem {
   localEndTime            DateTime?                   @map("local_end_time") @db.Time(0)
   startInstant            DateTime?                   @map("start_instant") @db.Timestamptz(3)
   timeSemantics           ItineraryTimeSemantics?     @map("time_semantics")
+  timeProvenance          ItineraryTimeProvenance?    @map("time_provenance")
   timeZone                String?                     @map("time_zone")
   timeZoneSource          ItemTimeZoneSource?         @map("time_zone_source")
   timeZoneResolvedAt      DateTime?                   @map("time_zone_resolved_at") @db.Timestamptz(3)

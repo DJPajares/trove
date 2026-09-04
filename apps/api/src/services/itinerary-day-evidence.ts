@@ -30,6 +30,7 @@ export type ItineraryDayItemRecord = {
   reservationCount: number;
   startInstant: Date | null;
   timeSemantics: string | null;
+  timeProvenance: string | null;
   timeZone: string | null;
   tripPlaceId: string | null;
 };
@@ -133,21 +134,25 @@ export function toDayEvidenceItems(
               minutes: item.durationMinutes,
               source: item.durationProvenance === 'AI_ESTIMATED' ? 'ESTIMATED' : 'USER_OWNED',
             },
-      // FLOATING_LOCAL is the exact-clock-time case (see `scheduleData`'s
-      // `local_time` branch): the traveller picked a real start, not just a
-      // daypart, so it is as much a commitment as a reservation or an
-      // AUTHORITATIVE_INSTANT would be — and nothing ever writes the latter.
+      // AI-planned exact starts remain movable estimates. A traveller-owned
+      // local time, a reservation, or an authoritative instant is fixed.
       fixed:
         item.reservationCount > 0 ||
         item.timeSemantics === 'AUTHORITATIVE_INSTANT' ||
-        item.timeSemantics === 'FLOATING_LOCAL',
+        (item.timeSemantics === 'FLOATING_LOCAL' && item.timeProvenance !== 'AI_ESTIMATED'),
       id: item.id,
       inboundTravel:
         travelMinutes === null ? null : { minutes: travelMinutes, source: 'FRESH_PROVIDER' },
       openingHours,
-      start: startMinutes === null ? null : { minutes: startMinutes, source: 'USER_OWNED' },
-      // Exact and coarse timings are mutually exclusive: an exact start is what
-      // the traveller actually committed to, so it always wins.
+      start:
+        startMinutes === null
+          ? null
+          : {
+              minutes: startMinutes,
+              source: item.timeProvenance === 'AI_ESTIMATED' ? 'ESTIMATED' : 'USER_OWNED',
+            },
+      // Exact and coarse timings are mutually exclusive, regardless of whether
+      // the exact start came from the traveller or the AI planning pass.
       startWindow:
         startMinutes !== null || !window
           ? null

@@ -65,6 +65,11 @@ import { openingIntervalsForWeekday, weekdayForLocalDate } from './place-opening
 import type { PlaceDetailsResult, PlaceTextSearchProvider, PlacesService } from './places.js';
 import type { RoutesService } from './routes.js';
 import { rememberPlaceEvidence } from './cached-places.js';
+import {
+  DEFAULT_DAY_START_MINUTE,
+  SUGGESTED_TIME_ROUNDING_MINUTES,
+  suggestItemStart,
+} from './itinerary-time-suggestions-rules.js';
 import { enumerateDateRange } from './trip-rules.js';
 
 type GenerationGateway = {
@@ -549,7 +554,7 @@ function feasibilityItem(
       minutes: item.durationMinutes,
       source: item.durationProvenance === 'user_owned' ? 'USER_OWNED' : 'ESTIMATED',
     },
-    fixed: item.schedule.kind === 'exact',
+    fixed: item.schedule.kind === 'exact' && item.schedule.source === 'user',
     id: item.id,
     inboundTravel:
       inboundTravelMinutes === null
@@ -560,7 +565,10 @@ function feasibilityItem(
       : { status: 'UNKNOWN' },
     start:
       item.schedule.kind === 'exact'
-        ? { minutes: minuteOfDay(item.schedule.localTime), source: 'USER_OWNED' }
+        ? {
+            minutes: minuteOfDay(item.schedule.localTime),
+            source: item.schedule.source === 'user' ? 'USER_OWNED' : 'ESTIMATED',
+          }
         : null,
     startWindow: window
       ? {
@@ -570,6 +578,51 @@ function feasibilityItem(
         }
       : null,
   };
+}
+
+function localTimeFromMinutes(minutes: number) {
+  const hours = Math.floor(minutes / 60) % 24;
+  return `${String(hours).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Refines the model's coarse dayparts only after the evidence pass has described
+ * the day. The pure suggester may qualify a result with caveats, but it only
+ * returns `ok` when something beyond the generic day start supports the time.
+ */
+export function assignAiPlannerSuggestedTimes(
+  day: AiPlannerDraft['days'][number],
+  intervals: Map<string, PlanScoreInterval[]>,
+  inbound: Map<string, number | null>,
+) {
+  const evidenceItems = day.items.map((item) =>
+    feasibilityItem(item, intervals.get(item.id) ?? null, inbound.get(item.id) ?? null),
+  );
+
+  day.items.forEach((item, index) => {
+    if (item.schedule.kind !== 'day_part') return;
+
+    const suggestion = suggestItemStart({
+      commitments: [],
+      dayStartMinute: DEFAULT_DAY_START_MINUTE,
+      items: evidenceItems,
+      roundingMinutes: SUGGESTED_TIME_ROUNDING_MINUTES,
+      targetItemId: item.id,
+    });
+    if (suggestion.status !== 'ok') return;
+
+    item.schedule = {
+      kind: 'exact',
+      localTime: localTimeFromMinutes(suggestion.startMinute),
+      source: 'model',
+    };
+    day.items[index] = item;
+    evidenceItems[index] = feasibilityItem(
+      item,
+      intervals.get(item.id) ?? null,
+      inbound.get(item.id) ?? null,
+    );
+  });
 }
 
 export async function addOpeningEvidence(
@@ -789,6 +842,8 @@ async function addRouteEvidence(
         });
       }
     }
+
+    assignAiPlannerSuggestedTimes(day, intervals, inbound);
 
     const feasibility = evaluateFeasibility({
       commitments: [],

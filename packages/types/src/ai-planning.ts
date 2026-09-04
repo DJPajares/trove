@@ -97,18 +97,35 @@ export const aiPlannerAssumptionSchema = z
   })
   .strict();
 
-const itemScheduleSchema = z.discriminatedUnion('kind', [
-  z
-    .object({
-      dayPart: dayPartSchema,
-      kind: z.literal('day_part'),
-    })
-    .strict(),
+const dayPartScheduleSchema = z
+  .object({
+    dayPart: dayPartSchema,
+    kind: z.literal('day_part'),
+  })
+  .strict();
+
+const userExactScheduleSchema = z
+  .object({
+    kind: z.literal('exact'),
+    localTime: localTimeSchema,
+    source: z.literal('user'),
+  })
+  .strict();
+
+/** The provider may only echo an exact time the traveller supplied. */
+const proposalItemScheduleSchema = z.discriminatedUnion('kind', [
+  dayPartScheduleSchema,
+  userExactScheduleSchema,
+]);
+
+/** Application scheduling may refine a daypart into an estimated local time. */
+const draftItemScheduleSchema = z.discriminatedUnion('kind', [
+  dayPartScheduleSchema,
   z
     .object({
       kind: z.literal('exact'),
       localTime: localTimeSchema,
-      source: z.literal('user'),
+      source: z.enum(['user', 'model']),
     })
     .strict(),
 ]);
@@ -124,7 +141,6 @@ const itemFields = {
   notes: noteSchema,
   origin: z.enum(['user', 'model']),
   priority: prioritySchema,
-  schedule: itemScheduleSchema,
 } as const;
 
 export const aiPlannerCandidatePlaceSchema = z
@@ -147,6 +163,7 @@ export const aiPlannerProposalItemSchema = z
       .max(AI_PLANNER_MAX_DAYS - 1)
       .nullable(),
     destinationIntentId: identifierSchema.nullable(),
+    schedule: proposalItemScheduleSchema,
   })
   .strict();
 
@@ -233,6 +250,7 @@ export const aiPlannerDraftItemSchema = z
   .object({
     ...itemFields,
     placeRefId: identifierSchema.nullable(),
+    schedule: draftItemScheduleSchema,
   })
   .strict();
 

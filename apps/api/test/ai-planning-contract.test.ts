@@ -21,6 +21,26 @@ test('version 1 request, model proposal, and reviewed draft contracts parse', ()
   expect(parseAiPlannerDraft(explicitDraft()).success).toBe(true);
 });
 
+test('version 1 drafts accept application-estimated exact times but model proposals do not', () => {
+  const draft = explicitDraft();
+  draft.days[1]!.items[1]!.schedule = {
+    kind: 'exact',
+    localTime: '13:15',
+    source: 'model',
+  };
+  expect(parseAiPlannerDraft(draft).success).toBe(true);
+
+  const proposal = explicitModelProposal() as unknown as {
+    items: Array<{ schedule: unknown }>;
+  };
+  proposal.items[1]!.schedule = {
+    kind: 'exact',
+    localTime: '13:15',
+    source: 'model',
+  };
+  expect(parseAiPlannerModelProposal(proposal).success).toBe(false);
+});
+
 test('unknown contract versions are rejected before shape validation', () => {
   const request = { ...explicitNormalizedRequest(), schemaVersion: 2 };
   const result = parseAiPlannerNormalizedRequest(request);

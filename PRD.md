@@ -436,7 +436,7 @@ AI-assisted trip creation is the first approved AI product capability. It is an 
 - When dates are missing, the model selects only a **3-, 5-, or 7-day** trip-length tier. Application code then assigns that duration beginning on the next Friday that is at least 14 calendar days after generation. The model does not invent exact dates outside this rule.
 - When destination is missing, the model may infer a destination from the prompt, Profile home location, season, and selected trip length. The inferred destination and rationale are disclosed.
 - Default pace is balanced: two to three anchor activities on a full day, with lighter arrival and departure days.
-- Exact times are retained only when the traveller explicitly supplies them. Other activities use Morning/Afternoon/Evening/Anytime and an AI-estimated duration.
+- Traveller-supplied exact times are retained as fixed commitments. Other activities begin with Morning/Afternoon/Evening/Anytime intent, then Trove assigns an estimated exact local time when its deterministic timing pass can find a feasible placement from the itinerary order, duration, and available opening-hours/route evidence. When it cannot, the original daypart remains the honest fallback.
 - Work, meetings, supplied transport, and intentional free time use normal itinerary items/blocks rather than new record types.
 - User-supplied fixed commitments, Must Go requirements, exact times, and other declared hard constraints outrank suggestions. Final validation may reorder flexible suggestions or move them to **Unscheduled**, but it must not move a fixed commitment.
 - A generated trip may span at most 14 inclusive days and contain at most 24 provider-backed real-place items. Custom labels/blocks do not bypass feasibility rules, and repeated references to the same real Place do not justify provider-call fan-out.
@@ -1766,10 +1766,10 @@ For the initial MVP, evaluated evidence receives these reliability values:
 
 - 100: explicit user-owned timing/reservation data or fresh provider/route evidence;
 - 75: permitted cached provider/route evidence that is not stale;
-- 50: an `AI_ESTIMATED` duration, another normal/estimated duration, or coarse daypart evidence;
+- 50: an `AI_ESTIMATED` duration, an AI-estimated exact start, another normal/estimated duration, or coarse daypart evidence;
 - 25: stale evidence that remains safe to use with a visible stale qualification.
 
-An `AI_ESTIMATED` duration stays at the estimated-evidence reliability level until the traveller edits it. That edit promotes its provenance to `USER_OWNED`, after which it receives the user-owned reliability level where the duration is used. Merely applying an AI draft does not promote the estimate.
+An `AI_ESTIMATED` duration or exact start stays movable and at the estimated-evidence reliability level until the traveller edits that value. The edit promotes the changed value's provenance to `USER_OWNED`, after which it receives the user-owned reliability level where it is used. Merely applying an AI draft does not promote either estimate.
 
 Evidence too stale or incomplete to support the factor is `unknown` and affects completeness rather than receiving a misleading confidence value. Factor confidence is the mean reliability of the evidence used by that factor. Day confidence is the applicable-factor-weighted mean of evaluated factor confidence values.
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CircleAlert, MapPinned, Sparkles } from 'lucide-react';
+import { ArrowLeft, CircleAlert, CircleCheck, MapPinned, Sparkles } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
@@ -11,6 +11,7 @@ import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { PageState } from '@/components/page-state';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -149,6 +150,20 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
         : [],
     [draft, locale, session?.tripName, t],
   );
+  /**
+   * How much of the plan stands on a place the provider could actually find.
+   *
+   * A plan that verified most of its places is ordinary and says so quietly.
+   * One that verified none of them is a trip that will open with no map, no
+   * travel times and no weather, and nothing else on this screen would tell the
+   * traveller that before they applied it. It informs rather than blocks: PRD
+   * 7.6.3 is explicit that an unresolved place does not prevent Apply.
+   */
+  const placeVerification = useMemo(() => {
+    const total = draft?.places.length ?? 0;
+    const verified = draft?.places.filter((place) => place.resolution === 'verified').length ?? 0;
+    return { none: total > 0 && verified === 0, total, verified };
+  }, [draft]);
   const dateFormatter = useMemo(
     () =>
       new Intl.DateTimeFormat(locale, {
@@ -340,6 +355,13 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
           <AlertDescription>{t('regeneratingHint')}</AlertDescription>
         </Alert>
       ) : null}
+      {placeVerification.none ? (
+        <Alert role="status" variant="warning">
+          <CircleAlert aria-hidden="true" />
+          <AlertTitle>{t('noVerifiedPlacesTitle')}</AlertTitle>
+          <AlertDescription>{t('noVerifiedPlacesHint')}</AlertDescription>
+        </Alert>
+      ) : null}
       {error ? (
         <Alert role="alert" variant="destructive">
           <CircleAlert aria-hidden="true" />
@@ -414,6 +436,14 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                 {t('itinerary')}
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">{t('itineraryDescription')}</p>
+              {placeVerification.total ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t('placesVerified', {
+                    total: placeVerification.total,
+                    verified: placeVerification.verified,
+                  })}
+                </p>
+              ) : null}
             </div>
             {draft.days.map((day, dayIndex) => (
               <article
@@ -446,36 +476,21 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                           <p className="mt-1 text-xs text-muted-foreground">
                             {item.origin === 'user' ? t('travelerSupplied') : t('aiSuggested')}
                           </p>
+                          {/* Which provider found a place is Trove's problem, not
+                              the traveller's. What they are deciding here is
+                              whether to trust the plan, and for that the only
+                              thing that matters is that the place is real. */}
                           {place ? (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {place.resolution === 'verified'
-                                ? t('verifiedPlace')
-                                : t(`customPlace.${place.verification}`)}
-                            </p>
-                          ) : null}
-                          {place?.resolution === 'verified' ? (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {t('providerAttribution')}:{' '}
-                              {place.attributions.length
-                                ? place.attributions.map((attribution, index) =>
-                                    attribution.providerUri ? (
-                                      <a
-                                        className="underline underline-offset-2"
-                                        href={attribution.providerUri}
-                                        key={`${attribution.provider}-${index}`}
-                                        rel="noreferrer"
-                                        target="_blank"
-                                      >
-                                        {attribution.provider}
-                                      </a>
-                                    ) : (
-                                      <span key={`${attribution.provider}-${index}`}>
-                                        {attribution.provider}
-                                      </span>
-                                    ),
-                                  )
-                                : t('googleAttribution')}
-                            </p>
+                            place.resolution === 'verified' ? (
+                              <Badge className="mt-1.5" size="sm" variant="success">
+                                <CircleCheck aria-hidden="true" />
+                                {t('verifiedPlace')}
+                              </Badge>
+                            ) : (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {t(`customPlace.${place.verification}`)}
+                              </p>
+                            )
                           ) : null}
                         </div>
                       </li>

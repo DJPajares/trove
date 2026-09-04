@@ -21,9 +21,13 @@ type TripSectionHeaderProps = {
   description?: string;
   /**
    * Whether `description` is the traveller's own words rather than Trove's
-   * standing guidance. Guidance earns its rows on a wide screen and fewer than
-   * none on a phone; what a traveller wrote about their own trip is worth the
-   * rows everywhere.
+   * standing guidance.
+   *
+   * This decides where the sentence lands, not just how it looks. Guidance is
+   * about the screen and belongs below the nav row, where it earns its rows on
+   * a wide screen and fewer than none on a phone. The traveller's own account
+   * is about the trip, so it goes against the cover that names it and is worth
+   * the rows everywhere.
    */
   descriptionIsOwnContent?: boolean;
 };
@@ -64,18 +68,27 @@ export function TripSectionHeader({
     <>
       {actions && chrome.actionsSlot ? createPortal(actions, chrome.actionsSlot) : null}
       {coverMeta && chrome.coverMetaSlot ? createPortal(coverMeta, chrome.coverMetaSlot) : null}
-      {description && chrome.descriptionSlot
+      {description && descriptionIsOwnContent && chrome.tripDescriptionSlot
+        ? createPortal(
+            // The same prose the trip's own screen and the shared itinerary
+            // give it, so a traveller meets their description once, in one
+            // voice. The clamp is this screen's only addition: a description
+            // has no length Trove controls, and the plan must stay near the top.
+            <p className="max-w-[var(--layout-reading)] text-base leading-[1.6] text-pretty whitespace-pre-line text-muted-foreground line-clamp-3">
+              {description}
+            </p>,
+            chrome.tripDescriptionSlot,
+          )
+        : null}
+      {description && !descriptionIsOwnContent && chrome.descriptionSlot
         ? createPortal(
             <p
               className={cn(
                 'max-w-[var(--layout-reading)] text-sm leading-[1.55] text-pretty text-muted-foreground',
                 // Standing guidance is worth its rows on a wide screen and worth
                 // fewer than none on a phone, where it sits between the traveller
-                // and their own plan. Their own description is not guidance.
-                currentSection === 'itinerary' && !descriptionIsOwnContent && 'hidden sm:block',
-                // A description has no length Trove controls, and this header is
-                // not where a long one belongs.
-                descriptionIsOwnContent && 'line-clamp-3 whitespace-pre-line',
+                // and their own plan.
+                currentSection === 'itinerary' && 'hidden sm:block',
               )}
             >
               {description}

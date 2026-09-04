@@ -46,8 +46,17 @@ import { cn } from '@/lib/utils';
 type TripChromeSlots = {
   /** Where a screen renders the actions that belong to it, above the nav row. */
   actionsSlot: HTMLElement | null;
-  /** Where a screen renders the standing guidance that sits below the nav row. */
+  /**
+   * Where a screen renders the standing guidance that sits below the nav row.
+   *
+   * Guidance describes the screen, so it belongs with the screen's own row.
+   * What the traveller wrote describes the trip and goes to
+   * `tripDescriptionSlot` instead — the two read as the same kind of sentence
+   * and are not, which is how one of them ended up orphaned here.
+   */
   descriptionSlot: HTMLElement | null;
+  /** Where a screen renders the trip's own description, directly under the cover. */
+  tripDescriptionSlot: HTMLElement | null;
   /** Where a screen renders a control onto the cover itself. */
   coverMetaSlot: HTMLElement | null;
   setCoverSource: (source: TripMediaSource | null) => void;
@@ -116,6 +125,7 @@ export function TripChrome({
 
   const [actionsSlot, setActionsSlot] = useState<HTMLElement | null>(null);
   const [descriptionSlot, setDescriptionSlot] = useState<HTMLElement | null>(null);
+  const [tripDescriptionSlot, setTripDescriptionSlot] = useState<HTMLElement | null>(null);
   const [coverMetaSlot, setCoverMetaSlot] = useState<HTMLElement | null>(null);
   const [coverSource, setCoverSource] = useState<TripMediaSource | null>(null);
   const [sharing, setSharing] = useState(false);
@@ -162,8 +172,8 @@ export function TripChrome({
   }
 
   const slots = useMemo<TripChromeSlots>(
-    () => ({ actionsSlot, coverMetaSlot, descriptionSlot, setCoverSource }),
-    [actionsSlot, coverMetaSlot, descriptionSlot],
+    () => ({ actionsSlot, coverMetaSlot, descriptionSlot, setCoverSource, tripDescriptionSlot }),
+    [actionsSlot, coverMetaSlot, descriptionSlot, tripDescriptionSlot],
   );
 
   return (
@@ -242,6 +252,13 @@ export function TripChrome({
               <ArrowLeft aria-hidden="true" className="size-4" />
             </Link>
           </section>
+
+          {/* The trip in its own words, against the cover that names it. It is
+            about the trip rather than the screen, so it sits above the nav row
+            rather than below it — the same place trip detail and the shared
+            itinerary already put it. Below the row it read as a stray line
+            between the tabs and the screen's own controls. */}
+          <div className="empty:hidden" ref={setTripDescriptionSlot} />
 
           {/* Held open at one control's height — the same 44px minimum every
             touch target in Trove gets — so a screen filling it on the frame
@@ -350,7 +367,9 @@ export function TripChrome({
             </DropdownMenu>
           </div>
 
-          <div ref={setDescriptionSlot} />
+          {/* A screen that has no guidance to give, or whose trip speaks for
+            itself above, must not leave a row's gap behind. */}
+          <div className="empty:hidden" ref={setDescriptionSlot} />
         </header>
 
         {children}

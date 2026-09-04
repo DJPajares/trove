@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CalendarClock,
   CheckCircle2,
@@ -508,11 +508,13 @@ export function ItineraryManager({
    * part of the key below. `getQueryData` during render subscribes to nothing,
    * so it used to flip on whatever unrelated re-render happened next - changing
    * the key mid-flight, abandoning the request already paid for and buying the
-   * same day twice, which the map then redrew twice. `enabled: false` never
-   * fetches; it only watches the entry the map fills in.
+   * same day twice, which the map then redrew twice. `skipToken` is how v5
+   * spells a query that never fetches and only watches the entry the map
+   * fills in - `enabled: false` says the same thing, but leaves the query
+   * without a function, which logs an error per render.
    */
   const polylineRoutesQuery = useQuery({
-    enabled: false,
+    queryFn: skipToken,
     queryKey: queryKeys.itineraryDayRoutes(
       tripId,
       selectedDay?.id ?? '',

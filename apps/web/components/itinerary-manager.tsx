@@ -36,6 +36,7 @@ import { TripDayWeather } from '@/components/trip-day-weather';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
 import { ItineraryPlacesDrawer } from '@/components/itinerary-places-drawer';
+import { LocatePlaceDialog } from '@/components/locate-place-dialog';
 import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { useRegisterPrimaryAction } from '@/components/primary-action-provider';
@@ -171,7 +172,11 @@ import {
   normalizeItineraryPlaceQuery,
 } from '@/lib/itinerary/item-editor';
 import { queryKeys } from '@/lib/query/keys';
-import { ITINERARY_EDIT_QUERY_ROOTS, invalidateTripQueries } from '@/lib/query/trip-invalidation';
+import {
+  ITINERARY_EDIT_QUERY_ROOTS,
+  invalidateTripQueries,
+  PLACE_LOCATION_QUERY_ROOTS,
+} from '@/lib/query/trip-invalidation';
 
 type EditorState =
   | { dayId: null; item: null; mode: 'closed' }
@@ -640,6 +645,11 @@ export function ItineraryManager({
    * traveller's nickname, exactly as the Places list does.
    */
   const [detailsPlace, setDetailsPlace] = useState<ItineraryTripPlace | null>(null);
+  const [locatePlace, setLocatePlace] = useState<ItineraryTripPlace | null>(null);
+
+  /** Only a Custom Place with nowhere to be can be given somewhere to be. */
+  const canLocate = (tripPlace: ItineraryTripPlace) =>
+    tripPlace.place.kind === 'custom' && !tripPlace.place.location;
   const detailsProviderName =
     detailsPlace && detailsPlace.place.kind === 'provider'
       ? (detailsPlace.place.snapshot?.name ?? detailsPlace.place.providerLabel)
@@ -2066,6 +2076,7 @@ export function ItineraryManager({
                           };
                         }}
                         resolveItem={(item) => ({
+                          detailed: Boolean(item.tripPlace),
                           located: Boolean(item.tripPlace && placeLocation(item.tripPlace)),
                           mapsHref: item.tripPlace
                             ? googleMapsPlaceHref(item.tripPlace.place)
@@ -3040,10 +3051,33 @@ export function ItineraryManager({
           meta={detailsMeta(detailsPlace)}
           name={placeName(detailsPlace) ?? t('providerPlace')}
           officialName={detailsPlace.customName?.trim() ? detailsProviderName : null}
+          onLocate={
+            canLocate(detailsPlace)
+              ? () => {
+                  setLocatePlace(detailsPlace);
+                  setDetailsPlace(null);
+                }
+              : undefined
+          }
           onOpenChange={(open) => !open && setDetailsPlace(null)}
           place={detailsPlace.place}
         />
       ) : null}
+
+      <LocatePlaceDialog
+        onLocated={async () => {
+          await invalidateTripQueries(queryClient, tripId, PLACE_LOCATION_QUERY_ROOTS);
+        }}
+        onOpenChange={(open) => !open && setLocatePlace(null)}
+        place={
+          locatePlace
+            ? {
+                id: locatePlace.place.id,
+                name: placeName(locatePlace) ?? t('providerPlace'),
+              }
+            : null
+        }
+      />
     </section>
   );
 }

@@ -261,12 +261,61 @@ export function createCustomPlace(input: { name: string; note?: string | null })
 }
 
 /**
- * A custom Place belongs to the traveller who made it, so renaming it changes the
- * Place itself rather than only what one trip calls it.
+ * A custom Place belongs to the traveller who made it, so renaming it - or giving
+ * it the coordinates it never resolved - changes the Place itself rather than
+ * only what one trip calls it. Saved and Trip Places point at the same row, so
+ * one repair reaches every surface at once.
+ *
+ * Omitting `timeZone` inside a location leaves the stored zone alone; passing
+ * `location: null` clears the location and its zone together.
  */
-export function updateCustomPlace(placeId: string, input: { name?: string; note?: string | null }) {
+export function updateCustomPlace(
+  placeId: string,
+  input: {
+    location?: { latitude: number; longitude: number; timeZone?: string | null } | null;
+    name?: string;
+    note?: string | null;
+  },
+) {
   return savedRequest<{ place: CanonicalPlace }>(`/places/custom/${placeId}`, {
     body: JSON.stringify(input),
     method: 'PATCH',
   });
+}
+
+/** Where a Custom Place might be, as the traveller has to choose between them. */
+export type PlaceLocationCandidate = {
+  address: string | null;
+  externalPlaceId: string;
+  latitude: number;
+  longitude: number;
+  name: string;
+};
+
+export type PlaceLocationCandidatesResult = {
+  candidates: PlaceLocationCandidate[];
+  status: 'empty' | 'ok';
+};
+
+/**
+ * One Text Search, bought because the traveller asked to locate this place.
+ *
+ * Deliberately not debounced by its callers the way place search is: each call
+ * costs a provider request, so it runs on an explicit submit rather than on
+ * typing. The server answers the same wording from memory for a few minutes, so
+ * a retry costs nothing.
+ */
+export function fetchPlaceLocationCandidates(
+  placeId: string,
+  query?: string,
+  signal?: AbortSignal,
+) {
+  return savedRequest<PlaceLocationCandidatesResult>(
+    `/places/custom/${placeId}/location-candidates`,
+    {
+      body: JSON.stringify(query?.trim() ? { query: query.trim() } : {}),
+      method: 'POST',
+      signal,
+    },
+  );
 }

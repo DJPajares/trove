@@ -67,7 +67,7 @@ export type CanonicalIdentityResolver = {
   ): Promise<{ id: string }>;
 };
 
-function normalizeIdentityText(value: string) {
+export function normalizeIdentityText(value: string) {
   return value
     .normalize('NFKD')
     .replace(/\p{Mark}/gu, '')

@@ -58,6 +58,8 @@ export type CanonicalPlaceRecord = {
 
 export interface CanonicalPlaceRepository {
   backfillProviderLabel(placeId: string, label: ProviderPlaceLabel): Promise<CanonicalPlaceRecord>;
+  /** The name a Place the caller owns is known by, or null if it is not theirs. */
+  findOwnedCustomPlaceName(userId: string, placeId: string): Promise<string | null>;
   createCustomPlace(userId: string, input: CustomPlaceCreate): Promise<CanonicalPlaceRecord>;
   createProviderPlace(
     provider: PlaceProviderName,
@@ -105,6 +107,33 @@ function normalizeNote(note: string | null | undefined) {
   return note?.trim() || null;
 }
 
+/**
+ * The columns a custom-place edit writes, and only those.
+ *
+ * Pulled out of the repository because the time-zone rule is the subtle part and
+ * deserves to be assertable without a database: clearing a location clears its
+ * zone, but giving a place coordinates must not. A Place created without
+ * coordinates can still carry a zone, and the serializer only exposes one inside
+ * `location` - so it is invisible to a client that has never seen the place
+ * located, and a caller repairing that place would drop a zone it never knew
+ * about.
+ */
+export function customPlaceUpdateData(input: CustomPlaceUpdate) {
+  return {
+    ...(input.location !== undefined
+      ? {
+          customLatitude: input.location?.latitude ?? null,
+          customLongitude: input.location?.longitude ?? null,
+          ...(input.location === null || input.location.timeZone !== undefined
+            ? { customTimeZone: input.location?.timeZone?.trim() || null }
+            : {}),
+        }
+      : {}),
+    ...(input.name !== undefined ? { customName: input.name.trim() } : {}),
+    ...(input.note !== undefined ? { customNote: normalizeNote(input.note) } : {}),
+  };
+}
+
 function normalizeLabel(label: ProviderPlaceLabel | undefined) {
   return {
     providerAddress: label?.address?.trim() || null,
@@ -142,6 +171,14 @@ function toPlaceRecord(place: {
 }
 
 class PrismaCanonicalPlaceRepository implements CanonicalPlaceRepository {
+  async findOwnedCustomPlaceName(userId: string, placeId: string) {
+    const place = await getPrismaClient().place.findFirst({
+      where: { id: placeId, kind: 'CUSTOM', ownerId: userId },
+      select: { customName: true },
+    });
+    return place?.customName ?? null;
+  }
+
   async findByProviderRef(provider: PlaceProviderName, externalPlaceId: string) {
     const reference = await getPrismaClient().placeProviderRef.findUnique({
       where: {
@@ -263,17 +300,7 @@ class PrismaCanonicalPlaceRepository implements CanonicalPlaceRepository {
     return getPrismaClient().$transaction(async (transaction) => {
       const result = await transaction.place.updateMany({
         where: { id: placeId, kind: 'CUSTOM', ownerId: userId },
-        data: {
-          ...(input.location !== undefined
-            ? {
-                customLatitude: input.location?.latitude ?? null,
-                customLongitude: input.location?.longitude ?? null,
-                customTimeZone: input.location?.timeZone?.trim() || null,
-              }
-            : {}),
-          ...(input.name !== undefined ? { customName: input.name.trim() } : {}),
-          ...(input.note !== undefined ? { customNote: normalizeNote(input.note) } : {}),
-        },
+        data: customPlaceUpdateData(input),
       });
 
       if (result.count === 0) {
@@ -418,6 +445,16 @@ export class CanonicalPlacesService {
       address: place.providerAddress ? null : label?.address,
       name: place.providerLabel ? null : label?.name,
     });
+  }
+
+  /**
+   * What a Custom Place the caller owns is called, and nothing else.
+   *
+   * The one read behind the locate lookup: it both authorises the request and
+   * supplies the wording searched when the traveller offers none.
+   */
+  async findOwnedCustomPlaceName(userId: string, placeId: string) {
+    return this.repository.findOwnedCustomPlaceName(userId, placeId);
   }
 
   async createCustomPlace(userId: string, input: CustomPlaceCreate) {

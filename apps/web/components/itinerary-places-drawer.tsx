@@ -189,6 +189,7 @@ export function ItineraryPlacesDrawer({
                 busyPlaceId={addingId}
                 onAddToDay={(tripPlace) => void addToDay(tripPlace)}
                 onEditPlace={setEditPlace}
+                onPlaceLocated={places.placeLocated}
                 onPriorityChange={(tripPlace, priority) =>
                   void places.setPriority(tripPlace, priority)
                 }

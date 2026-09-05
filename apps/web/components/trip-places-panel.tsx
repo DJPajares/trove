@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Ellipsis,
   Eye,
+  MapPin,
   MapPinned,
   MapPinOff,
   Pencil,
@@ -13,6 +14,7 @@ import {
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
+import { LocatePlaceDialog } from '@/components/locate-place-dialog';
 import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
 import { PlaceMedia } from '@/components/place-media';
 import { Badge } from '@/components/ui/badge';
@@ -62,6 +64,11 @@ type TripPlacesPanelProps = {
   busyPlaceId?: string | null;
   onAddToDay?: (tripPlace: TripPlace) => void;
   onEditPlace: (tripPlace: TripPlace) => void;
+  /**
+   * Reloads the trip's places and everything downstream of a Place's location
+   * once one has been located. Supplied by the host, which owns the query cache.
+   */
+  onPlaceLocated: () => Promise<void> | void;
   onPriorityChange: (tripPlace: TripPlace, priority: TripPlacePriority | null) => void;
   onRemove: (tripPlace: TripPlace) => void;
   formatUsageDates?: (dates: string[]) => string;
@@ -83,6 +90,7 @@ export function TripPlacesPanel({
   busyPlaceId,
   onAddToDay,
   onEditPlace,
+  onPlaceLocated,
   onPriorityChange,
   onRemove,
   formatUsageDates,
@@ -91,6 +99,10 @@ export function TripPlacesPanel({
 }: Readonly<TripPlacesPanelProps>) {
   const t = useTranslations('tripPlaces');
   const mediaTranslations = useTranslations('media');
+  // The locate copy belongs to the Place, not to this list, so it says the same
+  // thing here as it does in the details sheet this row opens.
+  const locateTranslations = useTranslations('placeDetail');
+  const [locatePlace, setLocatePlace] = useState<TripPlace | null>(null);
 
   const placeName = (tripPlace: TripPlace) =>
     resolveTripPlaceName(tripPlace, {
@@ -103,6 +115,10 @@ export function TripPlacesPanel({
       custom: t('customPlaceDescription'),
       provider: t('providerDetailsUnavailable'),
     });
+
+  /** Only a Custom Place with nowhere to be can be given somewhere to be. */
+  const canLocate = (tripPlace: TripPlace) =>
+    tripPlace.place.kind === 'custom' && !tripPlace.place.location;
 
   /** Only worth its own line once the traveller's name has taken the title. */
   const officialName = (tripPlace: TripPlace) =>
@@ -333,6 +349,15 @@ export function TripPlacesPanel({
                       <Pencil aria-hidden="true" />
                       {t('editPlaceAction')}
                     </DropdownMenuItem>
+                    {/* A place the planner could not resolve is repairable rather
+                        than permanently unmappable, but only a Custom Place has
+                        coordinates of its own to be given. */}
+                    {canLocate(tripPlace) ? (
+                      <DropdownMenuItem onClick={() => setLocatePlace(tripPlace)}>
+                        <MapPin aria-hidden="true" />
+                        {locateTranslations('locate.action')}
+                      </DropdownMenuItem>
+                    ) : null}
                     <DropdownMenuItem onClick={() => onRemove(tripPlace)} variant="destructive">
                       <Trash2 aria-hidden="true" />
                       {t('removeAction')}
@@ -351,10 +376,26 @@ export function TripPlacesPanel({
           meta={detailsMeta(detailsPlace)}
           name={placeName(detailsPlace)}
           officialName={officialName(detailsPlace)}
+          onLocate={
+            canLocate(detailsPlace)
+              ? () => {
+                  // One dialog for both entry points, so the sheet steps aside
+                  // rather than stacking a dialog on top of itself.
+                  setLocatePlace(detailsPlace);
+                  setDetailsPlace(null);
+                }
+              : undefined
+          }
           onOpenChange={(open) => !open && setDetailsPlace(null)}
           place={detailsPlace.place}
         />
       ) : null}
+
+      <LocatePlaceDialog
+        onLocated={onPlaceLocated}
+        onOpenChange={(open) => !open && setLocatePlace(null)}
+        place={locatePlace ? { id: locatePlace.place.id, name: placeName(locatePlace) } : null}
+      />
     </>
   );
 }

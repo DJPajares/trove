@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 
 import { createPlacesControllers } from '../controllers/places.js';
 import { createCanonicalPlacesService } from '../services/canonical-places.js';
+import { createPlaceLocationCandidatesService } from '../services/place-location-candidates.js';
 import { createPlacesService } from '../services/places-runtime.js';
 import { requireAuthenticatedUser } from '../services/request-auth.js';
 import { PROVIDER_SEARCH_RATE_LIMIT } from './rate-limits.js';
@@ -16,6 +17,7 @@ export function registerPlacesRoutes(app: FastifyInstance) {
       source: 'places-autocomplete',
     }),
     createCanonicalPlacesService(),
+    createPlaceLocationCandidatesService({ environment: process.env, source: 'place-locate' }),
   );
 
   app.post(
@@ -39,5 +41,12 @@ export function registerPlacesRoutes(app: FastifyInstance) {
     '/places/custom/:placeId',
     { preHandler: requireAuthenticatedUser },
     controllers.updateCustomPlace,
+  );
+  // Repairing a Custom Place that never resolved costs one Text Search, bought
+  // only when the traveller asks. Rate limited for the same reason search is.
+  app.post(
+    '/places/custom/:placeId/location-candidates',
+    { config: PROVIDER_SEARCH_RATE_LIMIT, preHandler: requireAuthenticatedUser },
+    controllers.locationCandidates,
   );
 }

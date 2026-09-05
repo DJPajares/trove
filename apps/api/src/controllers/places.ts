@@ -6,7 +6,12 @@ import {
   createCanonicalPlacesService,
   type CanonicalPlacesService,
 } from '../services/canonical-places.js';
-import { PLACE_PROVIDERS, type PlacesService } from '../services/places.js';
+import type { PlaceLocationCandidatesService } from '../services/place-location-candidates.js';
+import {
+  PLACE_PROVIDERS,
+  type PlacesService,
+  type PlacesUnavailableCode,
+} from '../services/places.js';
 
 const languageCodeSchema = z
   .string()
@@ -92,6 +97,20 @@ const customPlaceUpdateSchema = z
 
 const customPlaceParamsSchema = z.object({ placeId: z.uuid() }).strict();
 
+/**
+ * The wording the lookup is run on. Optional: a place already carries the name
+ * the planner gave it, and that is the query worth trying first. A traveller who
+ * knows the name was the problem retypes it here rather than editing the place
+ * and searching again.
+ */
+const placeLocationCandidatesSchema = z
+  .object({
+    languageCode: languageCodeSchema.optional(),
+    query: z.string().trim().min(1).max(200).optional(),
+    regionCode: regionCodeSchema.optional(),
+  })
+  .strict();
+
 function sendConfigurationMissing(reply: FastifyReply) {
   return reply.code(500).send({
     code: 'configuration_missing',
@@ -100,14 +119,17 @@ function sendConfigurationMissing(reply: FastifyReply) {
   });
 }
 
+/** One mapping, so two provider-backed routes cannot disagree about a refusal. */
+function unavailableStatusCode(code: PlacesUnavailableCode) {
+  return code === 'invalid_request' ? 400 : code === 'configuration_missing' ? 500 : 503;
+}
+
 function sendServiceResult(
   reply: FastifyReply,
   result: Awaited<ReturnType<PlacesService['search']>>,
 ) {
   if (result.status === 'unavailable') {
-    const statusCode =
-      result.code === 'invalid_request' ? 400 : result.code === 'configuration_missing' ? 500 : 503;
-    return reply.code(statusCode).send(result);
+    return reply.code(unavailableStatusCode(result.code)).send(result);
   }
 
   return reply.send(result);
@@ -125,6 +147,7 @@ function getAuthenticatedUserId(request: FastifyRequest, reply: FastifyReply) {
 export function createPlacesControllers(
   placesService: PlacesService | null,
   canonicalPlacesService: CanonicalPlacesService = createCanonicalPlacesService(),
+  placeLocationCandidatesService: PlaceLocationCandidatesService | null = null,
 ) {
   return {
     async createCustomPlace(request: FastifyRequest, reply: FastifyReply) {
@@ -138,6 +161,49 @@ export function createPlacesControllers(
 
       const place = await canonicalPlacesService.createCustomPlace(userId, parsed.data);
       return reply.code(201).send({ place });
+    },
+
+    /**
+     * Where one Custom Place might be, bought once because a traveller asked.
+     *
+     * Scoped to a Place the caller owns rather than taking a free-text query, so
+     * every billed request is attached to something they are actually looking at.
+     * It reads nothing and writes nothing: the traveller picks a candidate and
+     * the existing custom-place update stores the coordinates.
+     */
+    async locationCandidates(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getAuthenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const parsedParams = customPlaceParamsSchema.safeParse(request.params);
+      const parsedBody = placeLocationCandidatesSchema.safeParse(request.body ?? {});
+      if (!parsedParams.success || !parsedBody.success) {
+        return reply.code(400).send({ code: 'invalid_place_location_request' });
+      }
+
+      const placeName = await canonicalPlacesService.findOwnedCustomPlaceName(
+        userId,
+        parsedParams.data.placeId,
+      );
+      if (!placeName) {
+        return reply.code(404).send({ code: 'place_not_found' });
+      }
+
+      if (!placeLocationCandidatesService) {
+        return sendConfigurationMissing(reply);
+      }
+
+      const result = await placeLocationCandidatesService.find({
+        languageCode: parsedBody.data.languageCode,
+        regionCode: parsedBody.data.regionCode,
+        textQuery: parsedBody.data.query ?? placeName,
+      });
+
+      if (result.status === 'unavailable') {
+        return reply.code(unavailableStatusCode(result.code)).send(result);
+      }
+
+      return reply.send(result);
     },
 
     async resolveProviderPlace(request: FastifyRequest, reply: FastifyReply) {

@@ -4,7 +4,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 
 import { queryKeys } from '@/lib/query/keys';
-import { invalidateTripQueries, PLAN_SCORE_INPUT_QUERY_ROOTS } from '@/lib/query/trip-invalidation';
+import {
+  invalidateTripQueries,
+  PLACE_LOCATION_QUERY_ROOTS,
+  PLAN_SCORE_INPUT_QUERY_ROOTS,
+} from '@/lib/query/trip-invalidation';
 
 import {
   fetchTripPlaces,
@@ -103,6 +107,18 @@ export function useTripPlaces(tripId: string) {
   );
 
   /**
+   * A Place that has just been given coordinates for the first time.
+   *
+   * The Place row is shared, so this cannot be patched into one cache entry: the
+   * pin, the day's legs, the forecast and the score were all computed as though
+   * the place were nowhere, and three of those refetch on nothing but an
+   * invalidation. Cheaper to re-ask than to reason about which of them noticed.
+   */
+  const placeLocated = useCallback(async () => {
+    await invalidateTripQueries(queryClient, tripId, PLACE_LOCATION_QUERY_ROOTS);
+  }, [queryClient, tripId]);
+
+  /**
    * Removal is refused while the itinerary still schedules the Place. The caller
    * gets the reference count so it can say how many, rather than only that it failed.
    */
@@ -135,6 +151,7 @@ export function useTripPlaces(tripId: string) {
   return {
     clearError: useCallback(() => setError(null), []),
     error,
+    placeLocated,
     places,
     refresh,
     remove,

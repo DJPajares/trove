@@ -47,3 +47,20 @@ export const ITINERARY_EDIT_QUERY_ROOTS: readonly TripScopedQueryRoot[] = [
  * to the itinerary's own invalidation.
  */
 export const PLAN_SCORE_INPUT_QUERY_ROOTS: readonly TripScopedQueryRoot[] = ['plan-score'];
+
+/**
+ * The roots giving a Place coordinates invalidates.
+ *
+ * A place that was never located contributed no pin, no leg, no forecast point
+ * and no score input, so filling it in changes all four at once. Three of these
+ * are provider-billable and refetch on nothing but this, which is why the list
+ * is written out rather than left to the default.
+ */
+export const PLACE_LOCATION_QUERY_ROOTS: readonly TripScopedQueryRoot[] = [
+  'itinerary',
+  'itinerary-day-routes',
+  'plan-score',
+  'trip-mode-context',
+  'trip-places',
+  'trip-weather',
+];

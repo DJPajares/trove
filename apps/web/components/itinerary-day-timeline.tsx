@@ -48,6 +48,13 @@ const stopTitleClassName =
 
 /** What a stop needs in order to render, resolved by the manager that owns the day. */
 export type TimelineStopView = {
+  /**
+   * Whether the stop is backed by a Place at all, and so has details to open.
+   * Separate from `located`: a Custom Place the planner could not resolve has
+   * nothing on the map and is exactly the stop worth opening, because that is
+   * where it can be given somewhere to be. A plain custom label has neither.
+   */
+  detailed: boolean;
   located: boolean;
   mapsHref: string | null;
   name: string;
@@ -73,7 +80,8 @@ export type ItineraryDayTimelineProps = {
   onViewBaseDetails: (tripPlaceId: string) => void;
   onViewItemDetails: (item: ItineraryItem) => void;
   organizingItemId: string | null;
-  resolveBase: (tripPlaceId: string) => Omit<TimelineStopView, 'mapsHref'> | null;
+  // A base is always a Trip Place, so it always has details worth opening.
+  resolveBase: (tripPlaceId: string) => Omit<TimelineStopView, 'detailed' | 'mapsHref'> | null;
   resolveItem: (item: ItineraryItem) => TimelineStopView;
   routesStale: boolean;
   savingRouteOwner: string | null;
@@ -199,18 +207,14 @@ export function ItineraryDayTimeline({
               }
               selected={base.selected}
               title={
-                base.located ? (
-                  <button
-                    aria-label={t('viewDetailsFor', { name: base.name })}
-                    className={stopTitleClassName}
-                    onClick={() => onViewBaseDetails(entry.tripPlaceId)}
-                    type="button"
-                  >
-                    {base.name}
-                  </button>
-                ) : (
-                  base.name
-                )
+                <button
+                  aria-label={t('viewDetailsFor', { name: base.name })}
+                  className={stopTitleClassName}
+                  onClick={() => onViewBaseDetails(entry.tripPlaceId)}
+                  type="button"
+                >
+                  {base.name}
+                </button>
               }
             />
           );
@@ -372,7 +376,7 @@ export function ItineraryDayTimeline({
             selected={view.selected}
             tabIndex={-1}
             title={
-              view.located ? (
+              view.detailed ? (
                 <button
                   aria-label={t('viewDetailsFor', { name: view.name })}
                   className={stopTitleClassName}

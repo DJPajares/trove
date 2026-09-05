@@ -374,6 +374,7 @@ Rules:
 - Plan Score does not automatically change readiness.
 - Lifecycle and Plan Score never set readiness; only the traveller does.
 - Trove may suggest marking a plan Ready when the itinerary covers every trip day, and may point out an unmarked plan as departure approaches. Both only ask.
+- Trip preparedness, like itinerary coverage, may be shown to the traveller and may inform what Trove asks. Neither ever sets readiness on its own.
 - Readiness is shown wherever trips are listed, and groups the Trips library within its lifecycle sections. It never reorders trips past their own dates.
 
 ---
@@ -570,6 +571,38 @@ least one scheduled itinerary item; it does not judge the quality of the plan.
 - Coverage is independent from trip lifecycle, manual readiness, and Plan
   Score. It must never change any of them.
 - Completed-trip surfaces omit coverage.
+
+### Trip preparedness
+
+Home and Trips may show **trip preparedness** as a compact informational
+measure for trips still being planned. This is the "planning progress" concept
+the rule above reserves; it is defined here and nowhere else, and no second
+one may be introduced beside it.
+
+Where itinerary coverage asks whether a day has anything on it, preparedness
+asks whether the traveller has done the two things a trip cannot leave
+without: knowing what they are doing, and knowing where they are sleeping.
+
+- `daysPlanned`: trip days containing at least one itinerary item assigned to
+  that day. The same measure as coverage's `plannedDays`, reused rather than
+  redefined.
+- `daysWithStay`: trip days with a resolvable base - a daily base, a daily
+  base departure, or an accommodation reservation covering that day. It
+  resolves the same way the itinerary's own routing resolves a day's base, so
+  the measure and the itinerary can never disagree.
+- The two components carry equal weight.
+- `percentage`: of the two marks available per trip day, the share actually
+  made.
+- A single-day trip has no night to cover, so the stay component does not
+  apply and preparedness is `daysPlanned` alone. A component that does not
+  apply leaves the denominator rather than scoring zero.
+- Preparedness is advisory. It is independent from trip lifecycle, manual
+  readiness, and Plan Score, and must never change any of them.
+- Preparedness is not readiness and must never be labelled as it. Readiness is
+  the traveller's own declaration; preparedness only describes what is on the
+  plan.
+- Planning-phase surfaces show it. Trips marked Ready, active trips, and
+  completed trips omit it.
 
 ## 9.3 Active Trip
 

@@ -4,18 +4,19 @@ import { useLocale, useTranslations } from 'next-intl';
 import { ExperienceRatingSummary } from '@/components/experience-rating-field';
 import { HomeWeatherInset, HomeWeatherInsetSkeleton } from '@/components/home-weather-inset';
 import { TripDestinationActions } from '@/components/trip-destination-actions';
-import { TripItineraryCoverage } from '@/components/trip-itinerary-coverage';
 import { TripMedia } from '@/components/trip-media';
+import { TripProgress } from '@/components/trip-progress';
 import { TripReadinessBadge } from '@/components/trip-readiness-badge';
 import { TripReadinessPrompt } from '@/components/trip-readiness-prompt';
 import { Button } from '@/components/ui/button';
 import type { CompletedPromptKey } from '@/lib/home/completed-prompt';
 import type { HomeWeatherTarget } from '@/lib/home/weather';
+import type { TripModeContext } from '@/lib/itinerary/api';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import type { Trip } from '@/lib/trips/api';
 import { formatTripDate } from '@/lib/trips/format';
-import { daysUntilTripStart } from '@/lib/trips/lifecycle';
+import { daysUntilTripStart, resolveCountdown } from '@/lib/trips/lifecycle';
 import { primaryTripDestinations } from '@/lib/trips/navigation';
 import { tripDestinationSummary } from '@/lib/trips/summary';
 
@@ -31,6 +32,8 @@ export type HomeFocalTripProps = {
   onDismissPrompt: (tripId: string) => void;
   promptKey: CompletedPromptKey | null;
   trip: Trip;
+  /** Already fetched by Home for the active trip; never fetched again here. */
+  tripModeContext?: TripModeContext | null;
   /** True while Home is still working out whether there is weather to show. */
   weatherPending?: boolean;
   weatherTarget: HomeWeatherTarget | null;
@@ -42,6 +45,7 @@ export function HomeFocalTrip({
   onDismissPrompt,
   promptKey,
   trip,
+  tripModeContext = null,
   weatherPending = false,
   weatherTarget,
 }: Readonly<HomeFocalTripProps>) {
@@ -108,11 +112,9 @@ export function HomeFocalTrip({
               <div className="w-full max-w-xl space-y-3 md:max-w-xs">
                 <div className="space-y-2">
                   <p className="text-lg font-medium">
-                    {t('countdown', { count: daysUntilTripStart(trip) })}
+                    {t('countdown', resolveCountdown(daysUntilTripStart(trip)))}
                   </p>
-                  {trip.itineraryCoverage ? (
-                    <TripItineraryCoverage coverage={trip.itineraryCoverage} inverse />
-                  ) : null}
+                  <TripProgress inverse trip={trip} />
                 </div>
                 <div className="md:absolute md:right-7 md:bottom-7 md:w-[25rem]">
                   {weatherTarget ? (
@@ -133,9 +135,7 @@ export function HomeFocalTrip({
                       ? t(nextItem.upcoming ? 'nextItem' : 'currentItem', { name: nextItem.label })
                       : t('noNextItem')}
                   </p>
-                  {trip.itineraryCoverage ? (
-                    <TripItineraryCoverage coverage={trip.itineraryCoverage} inverse />
-                  ) : null}
+                  <TripProgress inverse trip={trip} tripModeContext={tripModeContext} />
                 </div>
                 <div className="md:absolute md:right-9 md:bottom-9 md:w-[25rem]">
                   {weatherTarget ? (

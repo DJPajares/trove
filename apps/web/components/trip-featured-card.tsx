@@ -3,12 +3,13 @@ import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { TripDestinationActions } from '@/components/trip-destination-actions';
-import { TripItineraryCoverage } from '@/components/trip-itinerary-coverage';
 import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
 import { TripMedia } from '@/components/trip-media';
+import { TripProgress } from '@/components/trip-progress';
 import { TripReadinessBadge } from '@/components/trip-readiness-badge';
 import { TripReadinessPrompt } from '@/components/trip-readiness-prompt';
 import { Button } from '@/components/ui/button';
+import type { TripModeContext } from '@/lib/itinerary/api';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import type { Trip } from '@/lib/trips/api';
@@ -21,9 +22,16 @@ export type TripFeaturedCardProps = {
   /** Opens the share dialog the library owns, so one dialog serves every card. */
   onShare: () => void;
   trip: Trip;
+  /** Fetched by the library for the featured trip only, and only when active. */
+  tripModeContext?: TripModeContext | null;
 };
 
-export function TripFeaturedCard({ editorial, onShare, trip }: Readonly<TripFeaturedCardProps>) {
+export function TripFeaturedCard({
+  editorial,
+  onShare,
+  trip,
+  tripModeContext = null,
+}: Readonly<TripFeaturedCardProps>) {
   const t = useTranslations('trips');
   const share = useTranslations('trips.share');
   const mediaTranslations = useTranslations('media');
@@ -80,9 +88,7 @@ export function TripFeaturedCard({ editorial, onShare, trip }: Readonly<TripFeat
             </p>
           </div>
 
-          {trip.lifecycle !== 'completed' && trip.itineraryCoverage ? (
-            <TripItineraryCoverage coverage={trip.itineraryCoverage} />
-          ) : null}
+          <TripProgress trip={trip} tripModeContext={tripModeContext} />
 
           <TripDestinationActions
             className="flex-nowrap"

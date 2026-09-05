@@ -19,6 +19,15 @@ export type ItineraryCoverage = {
   totalDays: number;
 };
 
+export type TripPreparedness = {
+  daysPlanned: number;
+  daysWithStay: number;
+  percentage: number;
+  /** False for a single-day trip, where there is no night to cover. */
+  stayApplicable: boolean;
+  totalDays: number;
+};
+
 export type TripWeatherLocation = {
   latitude: number;
   longitude: number;
@@ -139,6 +148,56 @@ export function calculateItineraryCoverage(
   return {
     percentage: totalDays === 0 ? 0 : Math.round((plannedDays / totalDays) * 100),
     plannedDays,
+    totalDays,
+  };
+}
+
+/**
+ * Preparedness answers a different question to coverage: not whether a day has
+ * anything on it, but whether the traveller has done the two things a trip
+ * cannot leave without - knowing what they are doing, and knowing where they
+ * are sleeping (PRD section 9.2).
+ *
+ * The two components are weighted equally, and because both are day ratios
+ * over the same trip they share one denominator: of the two marks available
+ * per trip day, how many are made. A single-day trip has no night to cover, so
+ * the stay component leaves the denominator rather than scoring zero - the
+ * same applicability rule Plan Score uses, for the same reason.
+ *
+ * This is advisory only. It never sets readiness, which is the traveller's own
+ * declaration, and it is not the same thing as Plan Score, which judges
+ * whether a plan is any good rather than whether it is filled in.
+ */
+export function calculateTripPreparedness(
+  startDate: string,
+  endDate: string,
+  days: readonly { date: Date | string; hasStay: boolean; scheduledItemCount: number }[],
+): TripPreparedness {
+  const tripDates = enumerateDateRange(startDate, endDate);
+  const tripDateSet = new Set(tripDates);
+  const withinTrip = days.filter((day) =>
+    tripDateSet.has(typeof day.date === 'string' ? day.date : formatDateOnly(day.date)),
+  );
+  const countDates = (predicate: (day: (typeof withinTrip)[number]) => boolean) =>
+    new Set(
+      withinTrip
+        .filter(predicate)
+        .map((day) => (typeof day.date === 'string' ? day.date : formatDateOnly(day.date))),
+    ).size;
+
+  const totalDays = tripDates.length;
+  const daysPlanned = countDates((day) => day.scheduledItemCount > 0);
+  const daysWithStay = countDates((day) => day.hasStay);
+  const stayApplicable = totalDays > 1;
+
+  const marks = daysPlanned + (stayApplicable ? daysWithStay : 0);
+  const possible = totalDays * (stayApplicable ? 2 : 1);
+
+  return {
+    daysPlanned,
+    daysWithStay,
+    percentage: possible === 0 ? 0 : Math.round((marks / possible) * 100),
+    stayApplicable,
     totalDays,
   };
 }

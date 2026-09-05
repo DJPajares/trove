@@ -2035,7 +2035,7 @@
     "nextItem": "{name} is the next useful stop.",
     "currentItem": "Right now: {name}.",
     "noNextItem": "Your schedule is clear for now.",
-    "countdown": "{count, plural, =0 {Starts today} one {Starts in # day} other {Starts in # days}}",
+    "countdown": "{unit, select, day {{count, plural, =0 {Starts today} one {Starts in # day} other {Starts in # days}}} week {{count, plural, one {Starts in # week} other {Starts in # weeks}}} other {{count, plural, one {Starts in # month} other {Starts in # months}}}}",
     "weather": {
       "current": "Current weather",
       "forecast": "Forecast for {date}",
@@ -2521,6 +2521,38 @@
       "afternoon": "Afternoon",
       "evening": "Evening",
       "anytime": "Anytime"
+    }
+  },
+  "tripProgress": {
+    "preparedness": {
+      "label": "Trip preparedness",
+      "value": "{percentage}%",
+      "announcement": "{percentage} percent ready: {daysPlanned} of {totalDays} days planned, {daysWithStay} of {totalDays} with somewhere to stay",
+      "announcementPlannedOnly": "{percentage} percent ready: {daysPlanned} of {totalDays} days planned"
+    },
+    "departure": {
+      "label": "Departure",
+      "announcement": "{countdown}, {percentage} percent of the way through the final month"
+    },
+    "leg": {
+      "label": "Next stop",
+      "distance": "{value} {unit}",
+      "distanceUnknown": "Distance unknown",
+      "announcementLocated": "{percentage} percent of the way to {name}, {distance} by {mode}",
+      "announcementUnlocated": "{name} is {distance} away by {mode}",
+      "locate": "Show my position",
+      "locating": "Finding you",
+      "locationDenied": "Location is off, so the marker stays at the last stop.",
+      "mode": {
+        "drive": "car",
+        "flight": "air",
+        "transit": "transit",
+        "walk": "foot"
+      },
+      "unit": {
+        "km": "km",
+        "mi": "mi"
+      }
     }
   }
 }

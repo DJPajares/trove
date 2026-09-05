@@ -15,7 +15,7 @@ import {
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
@@ -24,6 +24,7 @@ import { usePreferences } from '@/components/preferences-provider';
 import { useTripModeData } from '@/components/trip-mode-data';
 import { useTripModePlaceDetails, useTripModePreview } from '@/components/trip-mode-shell';
 import { useOnlineStatus } from '@/components/trip-sync-status';
+import { useTravellerPosition } from '@/hooks/use-traveller-position';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -35,6 +36,7 @@ import {
 } from '@/lib/itinerary/api';
 import { dayStopNumbers, resolveDailyBases } from '@/lib/itinerary/day-sequence';
 import { itineraryDayRouteRevision } from '@/lib/itinerary/routes';
+import { haversineMeters } from '@/lib/maps/haversine';
 import {
   buildItineraryMapPoints,
   type ItineraryMapLocation,
@@ -47,24 +49,8 @@ type RouteState =
   | { data: null; status: 'error' | 'idle' | 'loading' }
   | { data: ItineraryDayRoutes; status: 'idle' };
 
-type DeviceLocation = ItineraryMapLocation & { accuracyMeters: number | null };
-type LocationStatus = 'denied' | 'idle' | 'loading' | 'ready' | 'unavailable' | 'unsupported';
-
 const NEARBY_PLACE_LIMIT = 8;
 const NEARBY_RADIUS_METERS = 25_000;
-
-function distanceMeters(a: ItineraryMapLocation, b: ItineraryMapLocation) {
-  const toRadians = (value: number) => (value * Math.PI) / 180;
-  const earthRadiusMeters = 6_371_000;
-  const latitudeDelta = toRadians(b.latitude - a.latitude);
-  const longitudeDelta = toRadians(b.longitude - a.longitude);
-  const latitudeA = toRadians(a.latitude);
-  const latitudeB = toRadians(b.latitude);
-  const haversine =
-    Math.sin(latitudeDelta / 2) ** 2 +
-    Math.cos(latitudeA) * Math.cos(latitudeB) * Math.sin(longitudeDelta / 2) ** 2;
-  return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
-}
 
 function MapSkeleton({ label }: Readonly<{ label: string }>) {
   return (
@@ -93,18 +79,12 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
   const { context, itinerary, refresh, status } = useTripModeData();
   const { openPlaceDetails } = useTripModePlaceDetails();
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
-  const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle');
-  const [deviceLocation, setDeviceLocation] = useState<DeviceLocation | null>(null);
+  const {
+    position: deviceLocation,
+    request: requestLocation,
+    status: locationStatus,
+  } = useTravellerPosition({ enabled: !isPreview });
   const clearMapSelection = useCallback(() => setSelectedPointId(null), []);
-
-  useEffect(() => {
-    if (isPreview) {
-      setDeviceLocation(null);
-      setLocationStatus('idle');
-      return;
-    }
-    if (!('geolocation' in navigator)) setLocationStatus('unsupported');
-  }, [isPreview]);
 
   const day = useMemo(() => {
     if (!context || !itinerary) return null;
@@ -248,7 +228,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
   const nearbyPoints = allMapPoints
     .filter((point) => point.kind === 'considered' && nearbyAnchors.length > 0)
     .map((point) => ({
-      distance: Math.min(...nearbyAnchors.map((anchor) => distanceMeters(point, anchor))),
+      distance: Math.min(...nearbyAnchors.map((anchor) => haversineMeters(point, anchor))),
       point,
     }))
     .filter(({ distance }) => distance <= NEARBY_RADIUS_METERS)
@@ -275,31 +255,6 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
       totalSegmentCount: 0,
     },
   };
-  function requestLocation() {
-    if (!navigator.geolocation) {
-      setLocationStatus('unsupported');
-      return;
-    }
-    setLocationStatus('loading');
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setDeviceLocation({
-          accuracyMeters: Number.isFinite(position.coords.accuracy)
-            ? position.coords.accuracy
-            : null,
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
-        setLocationStatus('ready');
-      },
-      (error) => {
-        setDeviceLocation(null);
-        setLocationStatus(error.code === error.PERMISSION_DENIED ? 'denied' : 'unavailable');
-      },
-      { enableHighAccuracy: false, maximumAge: 60_000, timeout: 10_000 },
-    );
-  }
-
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">

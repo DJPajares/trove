@@ -40,6 +40,18 @@ export type Trip = {
   startDate: string;
   startingLocation: { isOverride: boolean; name: string; placeId: string } | null;
   startingLocationOverride: string | null;
+  /**
+   * How much of what a trip needs is actually on the plan (PRD section 9.2).
+   * Optional so snapshots written before WDL-270 remain readable offline -
+   * absent means "not known", which is a different thing to zero.
+   */
+  tripPreparedness?: {
+    daysPlanned: number;
+    daysWithStay: number;
+    percentage: number;
+    stayApplicable: boolean;
+    totalDays: number;
+  };
   updatedAt: string;
   /**
    * `public` means anyone with `/shared/<id>` can read the itinerary. Optional so

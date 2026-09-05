@@ -14,6 +14,7 @@ import { TripFeaturedCard } from '@/components/trip-featured-card';
 import { TripListRow } from '@/components/trip-list-row';
 import { TripShareDialog } from '@/components/trip-share-dialog';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
+import { fetchTripModeContext } from '@/lib/itinerary/api';
 import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
 import { groupTripsForLibrary, PAST_TRIPS_PREVIEW_COUNT } from '@/lib/trips/lifecycle';
 import { libraryEditorialSubjects, tripEditorialSubject } from '@/lib/trips/summary';
@@ -46,6 +47,18 @@ export function TripsManager() {
   const sharingTrip = trips.find((trip) => trip.id === sharingTripId) ?? null;
 
   const groupedTrips = useMemo(() => groupTripsForLibrary(trips), [trips]);
+
+  // Only the featured card draws the leg to the next stop, and only a trip
+  // actually under way has one. The key and its options match Home's, so a
+  // traveller moving between the two screens re-reads one answer rather than
+  // buying a second - this endpoint can reach Routes.
+  const featuredActiveTripId =
+    groupedTrips.featured?.lifecycle === 'active' ? groupedTrips.featured.id : null;
+  const tripModeContextQuery = useQuery({
+    enabled: featuredActiveTripId !== null,
+    queryFn: ({ signal }) => fetchTripModeContext(featuredActiveTripId as string, { signal }),
+    queryKey: queryKeys.tripModeContext(featuredActiveTripId ?? '', {}),
+  });
 
   // Readiness only earns headings when it actually divides something: a
   // traveller who has marked nothing Ready keeps the single flat list.
@@ -137,6 +150,7 @@ export function TripsManager() {
               editorial={editorialFor(groupedTrips.featured)}
               onShare={() => setSharingTripId(groupedTrips.featured?.id ?? null)}
               trip={groupedTrips.featured}
+              tripModeContext={tripModeContextQuery.data ?? null}
             />
           ) : null}
 

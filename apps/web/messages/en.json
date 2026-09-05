@@ -2536,13 +2536,14 @@
     },
     "leg": {
       "label": "Next stop",
-      "distance": "{value} {unit}",
+      "distanceEstimate": "about {value} {unit}",
       "distanceUnknown": "Distance unknown",
-      "announcementLocated": "{percentage} percent of the way to {name}, {distance} by {mode}",
-      "announcementUnlocated": "{name} is {distance} away by {mode}",
+      "unnamedPlace": "A place on this trip",
+      "announcementLocated": "{percentage} percent of the way from {origin} to {destination}, {distance} by {mode}",
+      "announcementUnlocated": "{origin} to {destination}, {distance} by {mode}",
       "locate": "Show my position",
       "locating": "Finding you",
-      "locationDenied": "Location is off, so the marker stays at the last stop.",
+      "locationDenied": "Location is off, so this shows the two stops without your position.",
       "mode": {
         "drive": "car",
         "flight": "air",
@@ -2550,7 +2551,9 @@
         "walk": "foot"
       },
       "unit": {
+        "ft": "ft",
         "km": "km",
+        "m": "m",
         "mi": "mi"
       }
     }

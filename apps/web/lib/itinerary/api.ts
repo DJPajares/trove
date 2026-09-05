@@ -1,3 +1,4 @@
+import { resolveOfflineTripModeLeg } from '@/lib/itinerary/trip-mode-leg';
 import type { PlaceSnapshot } from '@/lib/saved/api';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import {
@@ -187,6 +188,20 @@ export type ItineraryDayMoveInput = {
   targetItineraryDayId: string;
 };
 
+export type TripModeLegEndpoint = {
+  coordinate: { latitude: number; longitude: number } | null;
+  id: string;
+  kind: 'daily_base' | 'itinerary_item';
+  /** Null when nothing has named the Place; the surface owns the fallback. */
+  name: string | null;
+};
+
+export type TripModeLeg = {
+  destination: TripModeLegEndpoint;
+  mode: RouteTravelMode;
+  origin: TripModeLegEndpoint;
+};
+
 export type TripModeContext = {
   contextAt: string;
   contextSource: 'live' | 'preview';
@@ -214,6 +229,15 @@ export type TripModeContext = {
     routeDurationSeconds: number;
     targetStartAt: string;
   } | null;
+  /**
+   * The hop the traveller is on, as two places rather than as a route.
+   *
+   * Separate from `leaveBy` on purpose: that one needs a routed duration and so
+   * only ever spans two stops Trove paid to measure between, which leaves the
+   * morning leg out of the daily base and the evening leg back to it with
+   * nothing to draw. Both ends here come from coordinates already stored.
+   */
+  leg: TripModeLeg | null;
   nextItemId: string | null;
   selectedDate: string;
   state: 'current' | 'free_time' | 'no_day' | 'no_next_item' | 'relevant';
@@ -502,6 +526,11 @@ export function offlineTripModeContext(
         }
       : null,
     leaveBy: null,
+    leg: resolveOfflineTripModeLeg({
+      day,
+      nextItemId: next?.id ?? null,
+      tripPlaces: itinerary.tripPlaces,
+    }),
     nextItemId: next?.id ?? null,
     selectedDate,
     state: day

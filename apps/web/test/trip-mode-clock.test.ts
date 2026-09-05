@@ -49,6 +49,7 @@ function context(overrides: Partial<TripModeContext> = {}): TripModeContext {
       number: 1,
     },
     leaveBy: null,
+    leg: null,
     nextItemId: null,
     selectedDate: '2026-09-05',
     state: 'free_time',

@@ -6,6 +6,7 @@ import { placeProviderRefInclude, serializeCanonicalPlace } from './place-serial
 import { createAuthenticatedSupabaseClient } from './supabase-auth.js';
 import {
   calculateItineraryCoverage,
+  calculateTripPreparedness,
   deriveTripLifecycle,
   enumerateDateRange,
   formatDateOnly,
@@ -64,7 +65,15 @@ const tripInclude = {
   },
   itineraryDays: {
     orderBy: { date: 'asc' as const },
-    select: { _count: { select: { items: true } }, date: true },
+    select: {
+      // Both base columns and the reservation count are what `hasStay` reads;
+      // they mirror the base-resolution chain in `itinerary-routes.ts`, so
+      // preparedness and the itinerary's own routing cannot disagree.
+      _count: { select: { accommodationReservations: true, items: true } },
+      dailyBaseDepartureTripPlaceId: true,
+      dailyBaseTripPlaceId: true,
+      date: true,
+    },
   },
   owner: { include: { homePlace: true } },
   startingPlace: true,
@@ -116,14 +125,16 @@ async function serializeTrip(
   const startDate = formatDateOnly(trip.startDate);
   const endDate = formatDateOnly(trip.endDate);
   const effectiveStartingPlace = trip.startingPlace ?? trip.owner.homePlace;
-  const itineraryCoverage = calculateItineraryCoverage(
-    startDate,
-    endDate,
-    (trip.itineraryDays ?? []).map((day) => ({
-      date: day.date,
-      scheduledItemCount: day._count.items,
-    })),
-  );
+  const itineraryDays = (trip.itineraryDays ?? []).map((day) => ({
+    date: day.date,
+    hasStay:
+      day.dailyBaseTripPlaceId !== null ||
+      day.dailyBaseDepartureTripPlaceId !== null ||
+      day._count.accommodationReservations > 0,
+    scheduledItemCount: day._count.items,
+  }));
+  const itineraryCoverage = calculateItineraryCoverage(startDate, endDate, itineraryDays);
+  const tripPreparedness = calculateTripPreparedness(startDate, endDate, itineraryDays);
   const weatherLocation = resolveTripWeatherLocation(
     trip.destinations.map((destination) => ({
       location: serializeCanonicalPlace({
@@ -168,6 +179,7 @@ async function serializeTrip(
         }
       : null,
     startingLocationOverride: trip.startingPlace?.customName ?? null,
+    tripPreparedness,
     updatedAt: trip.updatedAt.toISOString(),
     visibility: mapVisibility(trip.visibility),
     weatherLocation,

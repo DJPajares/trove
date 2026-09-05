@@ -252,6 +252,7 @@ export function HomeExperience() {
           onDismissPrompt={dismissCompletedPrompt}
           promptKey={selectCompletedPrompt(primary, dismissedPrompts)}
           trip={primary}
+          tripModeContext={tripModeContext}
           weatherPending={primary.lifecycle === 'active' && tripModeContextStatus !== 'ready'}
           weatherTarget={weatherTarget}
         />

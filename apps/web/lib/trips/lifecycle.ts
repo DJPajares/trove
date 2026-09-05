@@ -71,6 +71,50 @@ export function daysUntilTripStart(trip: Trip, now = new Date()) {
   );
 }
 
+/**
+ * How close departure has to be before the wait is worth drawing as a bar.
+ *
+ * A percentage needs a denominator, and "how far through the wait are you" has
+ * no honest one - a trip booked a year out is not 3% ready to leave. Thirty
+ * days is the span where departure stops being a date and starts being a
+ * countdown, so the bar covers that and nothing before it.
+ */
+export const DEPARTURE_APPROACH_DAYS = 30;
+
+export type TripCountdown = { unit: 'day' | 'month' | 'week'; value: number };
+
+/**
+ * A countdown in the largest unit that still says something useful.
+ *
+ * "Starts in 400 days" is a number, not an answer. Days carry the last week,
+ * where each one matters; weeks carry the next couple of months, where the
+ * traveller is thinking in weekends; months carry everything beyond.
+ */
+export function resolveCountdown(days: number): TripCountdown {
+  const remaining = Math.max(0, days);
+
+  if (remaining < 7) return { unit: 'day', value: remaining };
+  if (remaining < 70) return { unit: 'week', value: Math.round(remaining / 7) };
+
+  return { unit: 'month', value: Math.round(remaining / 30) };
+}
+
+/**
+ * How far through the final approach a trip is, as a percentage.
+ *
+ * `null` beyond the window: a bar that sits empty for eleven months is not
+ * information, it is furniture.
+ */
+export function departureApproach(trip: Trip, now = new Date()) {
+  const days = daysUntilTripStart(trip, now);
+  if (days > DEPARTURE_APPROACH_DAYS) return null;
+
+  return Math.min(
+    100,
+    Math.max(0, ((DEPARTURE_APPROACH_DAYS - days) / DEPARTURE_APPROACH_DAYS) * 100),
+  );
+}
+
 /** Whether a finished trip is recent enough to still lead Home. */
 export function isRecentlyCompleted(trip: Trip, now = new Date()) {
   const daysSinceEnd = calendarDayDistance(trip.endDate, getLocalDate(now, trip.referenceTimeZone));

@@ -3,23 +3,19 @@
 import {
   ArrowRight,
   CalendarDays,
-  CarFront,
   ChevronRight,
   ClipboardCheck,
   Clock3,
   Compass,
   ExternalLink,
-  Footprints,
   ListChecks,
   MapPin,
-  Plane,
   Route,
   Sparkles,
-  TramFront,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
@@ -36,8 +32,10 @@ import { TripWeatherContext } from '@/components/trip-weather-context';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNowTick } from '@/hooks/use-now-tick';
-import type { ItineraryItem, RouteTravelMode } from '@/lib/itinerary/api';
+import type { ItineraryItem } from '@/lib/itinerary/api';
+import { formatDistanceValue } from '@/lib/itinerary/format-distance';
 import { formatItineraryTimeRange } from '@/lib/itinerary/item-timing';
+import { TravelModeIcon } from '@/lib/itinerary/travel-mode';
 import type { Reservation } from '@/lib/reservations/api';
 import { defaultTripModeTaskContext, nowTaskGroups } from '@/lib/tasks/trip-mode';
 
@@ -74,13 +72,6 @@ function directionsHref(item: ItineraryItem, name: string) {
   const query = new URLSearchParams({ api: '1', destination });
   if (externalPlaceId) query.set('destination_place_id', externalPlaceId);
   return `https://www.google.com/maps/dir/?${query.toString()}`;
-}
-
-function travelIcon(mode: RouteTravelMode): ReactNode {
-  if (mode === 'flight') return <Plane aria-hidden="true" />;
-  if (mode === 'walk') return <Footprints aria-hidden="true" />;
-  if (mode === 'transit') return <TramFront aria-hidden="true" />;
-  return <CarFront aria-hidden="true" />;
 }
 
 function TripModeNowSkeleton({ label }: Readonly<{ label: string }>) {
@@ -198,13 +189,11 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
     }).format(remainder);
     return remainder ? `${hourText} ${minuteText}` : hourText;
   };
-  const formatDistance = (meters: number) => {
-    const value = preferences.distanceUnit === 'mi' ? meters / 1609.344 : meters / 1000;
-    const amount = new Intl.NumberFormat(locale, {
-      maximumFractionDigits: value < 10 ? 1 : 0,
-    }).format(value);
-    return t('distance', { unit: t(`unit.${preferences.distanceUnit}`), value: amount });
-  };
+  const formatDistance = (meters: number) =>
+    t('distance', {
+      unit: t(`unit.${preferences.distanceUnit}`),
+      value: formatDistanceValue(meters, preferences.distanceUnit, locale),
+    });
   const nextName = nextItem ? itemName(nextItem, t('placeFallback')) : null;
   const hasNext = Boolean(nextItem && nextName);
   const route =
@@ -368,7 +357,9 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
           {route ? (
             <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border pt-4 text-sm text-muted-foreground">
               <span className="inline-flex items-center gap-2">
-                <span className="[&_svg]:size-4">{travelIcon(route.mode)}</span>
+                <span className="[&_svg]:size-4">
+                  <TravelModeIcon mode={route.mode} />
+                </span>
                 {t('travelEstimate', {
                   duration: formatDuration(route.routeDurationSeconds),
                   mode: t(`travelMode.${route.mode}`),

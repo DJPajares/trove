@@ -1,8 +1,7 @@
 'use client';
 
-import { CarFront, Footprints, Plane, Route, TramFront } from 'lucide-react';
+import { Route } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import type { ReactNode } from 'react';
 
 import { RouteTimelineRow } from '@/components/timeline-row';
 import {
@@ -17,17 +16,12 @@ import type {
   ItineraryRouteSegment,
   RouteTravelMode,
 } from '@/lib/itinerary/api';
+import { formatDistanceValue } from '@/lib/itinerary/format-distance';
 import { routePresentationState } from '@/lib/itinerary/route-presentation';
+import { TravelModeIcon } from '@/lib/itinerary/travel-mode';
 import { cn } from '@/lib/utils';
 
 type RouteLoadStatus = 'error' | 'idle' | 'loading';
-
-function modeIcon(mode: RouteTravelMode): ReactNode {
-  if (mode === 'flight') return <Plane aria-hidden="true" />;
-  if (mode === 'transit') return <TramFront aria-hidden="true" />;
-  if (mode === 'walk') return <Footprints aria-hidden="true" />;
-  return <CarFront aria-hidden="true" />;
-}
 
 function formatDuration(seconds: number, locale: string) {
   const minutes = Math.max(0, Math.round(seconds / 60));
@@ -45,13 +39,6 @@ function formatDuration(seconds: number, locale: string) {
     unitDisplay: 'short',
   }).format(hours);
   return remainingMinutes ? `${hourValue} ${minuteFormatter.format(remainingMinutes)}` : hourValue;
-}
-
-function formatDistance(meters: number, distanceUnit: 'km' | 'mi', locale: string) {
-  const value = distanceUnit === 'mi' ? meters / 1609.344 : meters / 1000;
-  return new Intl.NumberFormat(locale, {
-    maximumFractionDigits: value < 10 ? 1 : 0,
-  }).format(value);
 }
 
 export function ItineraryRouteSummary({
@@ -118,7 +105,7 @@ export function ItineraryRouteSummary({
           <span className="tabular-nums text-muted-foreground">
             {t(partial ? 'knownDistance' : 'distance', {
               unit: t(`units.${distanceUnit}`),
-              value: formatDistance(summary.distanceMeters, distanceUnit, locale),
+              value: formatDistanceValue(summary.distanceMeters, distanceUnit, locale),
             })}
           </span>
         ) : null}
@@ -199,7 +186,7 @@ export function ItineraryRouteSegmentRow({
   // they are never dressed up as current ones.
   const metricsLabel = isAvailable
     ? t(stale ? 'segmentCachedMetrics' : 'segmentEstimateMetrics', {
-        distance: formatDistance(segment.distanceMeters!, distanceUnit, locale),
+        distance: formatDistanceValue(segment.distanceMeters!, distanceUnit, locale),
         duration: formatDuration(segment.durationSeconds!, locale),
         unit: t(`units.${distanceUnit}`),
       })
@@ -229,7 +216,7 @@ export function ItineraryRouteSegmentRow({
           >
             <SelectValue>
               <span className="inline-flex items-center">
-                {modeIcon(segment.mode)}
+                <TravelModeIcon mode={segment.mode} />
                 <span className="sr-only">{t(`mode.${segment.mode}`)}</span>
               </span>
             </SelectValue>
@@ -246,7 +233,7 @@ export function ItineraryRouteSegmentRow({
             {(['drive', 'transit', 'walk', 'flight'] as const).map((mode) => (
               <SelectItem key={mode} value={mode}>
                 <span className="inline-flex items-center gap-2">
-                  {modeIcon(mode)}
+                  <TravelModeIcon mode={mode} />
                   {t(`mode.${mode}`)}
                 </span>
               </SelectItem>

@@ -30,6 +30,17 @@ type ItemPhase = 'current_day_part' | 'current_exact' | 'flexible' | 'future' | 
 
 const FINAL_UNTIMED_DURATION_MINUTES = 60;
 
+/**
+ * How early a leave-by time asks a traveller to go.
+ *
+ * Without it leave-by means "step out at the exact moment that lands you there
+ * as it begins", which is a departure nobody actually wants to be told: it has
+ * no room for finding the door, waiting to cross, or a bus that is a minute
+ * late. Five minutes is small enough not to feel like padding and large enough
+ * to absorb the walk to the street.
+ */
+export const LEAVE_BY_BUFFER_SECONDS = 5 * 60;
+
 /** A Trip Place read only for its name and coordinates, never re-resolved. */
 const legBaseInclude = { include: { place: { include: placeProviderRefInclude } } } as const;
 
@@ -479,7 +490,7 @@ export async function resolveTripModeContext(
   // other, so the request waits once for the slower of the two.
   const [leaveBy, snapshots] = await Promise.all([
     resolveLeaveBy({
-      bufferSeconds: options.routeBufferSeconds ?? null,
+      bufferSeconds: options.routeBufferSeconds ?? LEAVE_BY_BUFFER_SECONDS,
       contextAt: at,
       currentItem: currentOrRelevant?.item ?? null,
       dayId: day.id,

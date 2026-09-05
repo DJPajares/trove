@@ -352,6 +352,14 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
                       readyContext.trip.referenceTimeZone,
                   )}
                 </p>
+                {/* The time already has the slack folded in, so it says so
+                    rather than reading as a travel estimate that is running
+                    slow. */}
+                {route.bufferSeconds ? (
+                  <p className="mt-1 text-xs leading-5 text-text-subtle">
+                    {t('leaveByBuffer', { minutes: Math.round(route.bufferSeconds / 60) })}
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </div>

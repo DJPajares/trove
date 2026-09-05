@@ -628,6 +628,7 @@
         "freeTimeDescription": "Nothing is scheduled right now. Your next plan is ready below.",
         "nextLabel": "Next",
         "leaveByLabel": "Leave by",
+        "leaveByBuffer": "{minutes, plural, one {Includes # minute of slack.} other {Includes # minutes of slack.}}",
         "travelEstimate": "{duration} by {mode}",
         "travelMode": {
           "drive": "car",

@@ -91,6 +91,7 @@ export class CachedWeatherService {
   ): Promise<Map<string, CachedPointForecast>> {
     const answers = new Map<string, CachedPointForecast>();
     const stale: WeatherPoint[] = [];
+    const storedForStale = new Map<string, CachedPointForecast>();
 
     for (const point of points) {
       const cached = await this.readSnapshot(point, window);
@@ -105,6 +106,7 @@ export class CachedWeatherService {
         answers.set(weatherPointKey(point), cached.forecast);
         continue;
       }
+      if (cached.stored) storedForStale.set(weatherPointKey(point), cached.stored);
       stale.push(point);
     }
 
@@ -119,11 +121,31 @@ export class CachedWeatherService {
     });
 
     // One request for every stale point, not one per point.
-    const fetched = await this.provider.getDailyForecasts({
-      endDate: window.endDate,
-      points: stale,
-      startDate: window.startDate,
-    });
+    let fetched;
+    try {
+      fetched = await this.provider.getDailyForecasts({
+        endDate: window.endDate,
+        points: stale,
+        startDate: window.startDate,
+      });
+    } catch (error) {
+      // A refused forecast is not a refused trip. Yesterday's answer for the
+      // same place is worth more than nothing, and the surfaces already say how
+      // old what they are showing is - so the stored snapshot stands in.
+      //
+      // With nothing stored for any of them there is genuinely nothing to show,
+      // and the caller should hear why rather than receive a silent blank.
+      let servedAny = false;
+      for (const point of stale) {
+        const fallback = storedForStale.get(weatherPointKey(point));
+        if (!fallback) continue;
+        answers.set(weatherPointKey(point), fallback);
+        servedAny = true;
+      }
+      if (!servedAny) throw error;
+
+      return answers;
+    }
     const fetchedAt = this.now();
 
     for (const forecast of fetched) {
@@ -139,7 +161,17 @@ export class CachedWeatherService {
     window: ForecastWindow,
   ): Promise<
     | { forecast: CachedPointForecast; kind: 'hit' }
-    | { kind: 'miss'; reason: ProviderCacheMissReason }
+    | {
+        kind: 'miss';
+        reason: ProviderCacheMissReason;
+        /**
+         * The snapshot that was not good enough to serve outright. A stale or
+         * window-short forecast is still the best answer available when the
+         * provider then refuses to give a better one, so it is carried rather
+         * than dropped.
+         */
+        stored: CachedPointForecast | null;
+      }
   > {
     let snapshot;
 
@@ -150,13 +182,10 @@ export class CachedWeatherService {
       });
     } catch {
       // A cache that cannot be read is a slow path, never a failed request.
-      return { kind: 'miss', reason: 'cache_read_failed' };
+      return { kind: 'miss', reason: 'cache_read_failed', stored: null };
     }
 
-    if (!snapshot) return { kind: 'miss', reason: 'missing_snapshot' };
-    if (this.now().getTime() - snapshot.fetchedAt.getTime() > WEATHER_FORECAST_TTL_MS) {
-      return { kind: 'miss', reason: 'stale_forecast' };
-    }
+    if (!snapshot) return { kind: 'miss', reason: 'missing_snapshot', stored: null };
 
     const days = snapshot.days.map((day) => ({
       date: toDateOnly(day.date),
@@ -166,26 +195,29 @@ export class CachedWeatherService {
       weatherCode: day.weatherCode,
     }));
 
+    const stored: CachedPointForecast = {
+      days,
+      fetchedAt: snapshot.fetchedAt,
+      location: {
+        latitude: toNumber(snapshot.latitude),
+        longitude: toNumber(snapshot.longitude),
+        timeZone: snapshot.timeZone,
+      },
+      point,
+    };
+
+    if (this.now().getTime() - snapshot.fetchedAt.getTime() > WEATHER_FORECAST_TTL_MS) {
+      return { kind: 'miss', reason: 'stale_forecast', stored };
+    }
+
     // A snapshot written before midnight in this zone still looks fresh but has
     // lost the far end of the window. Serving it would quietly shorten the trip.
     const covered = days.filter((day) => isWithinForecastWindow(day.date, window));
     if (!covered.length || covered[covered.length - 1]!.date < window.endDate) {
-      return { kind: 'miss', reason: 'incomplete_forecast' };
+      return { kind: 'miss', reason: 'incomplete_forecast', stored };
     }
 
-    return {
-      forecast: {
-        days,
-        fetchedAt: snapshot.fetchedAt,
-        location: {
-          latitude: toNumber(snapshot.latitude),
-          longitude: toNumber(snapshot.longitude),
-          timeZone: snapshot.timeZone,
-        },
-        point,
-      },
-      kind: 'hit',
-    };
+    return { forecast: stored, kind: 'hit' };
   }
 
   private async writeSnapshot(forecast: WeatherPointForecast, fetchedAt: Date) {

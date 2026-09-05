@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from 'vitest';
 
-import type { WeatherDailyForecast } from '../src/services/weather.js';
+import { WeatherProviderError, type WeatherDailyForecast } from '../src/services/weather.js';
 
 const WINDOW = { endDate: '2026-09-06', startDate: '2026-09-03' };
 const NOW = new Date('2026-09-03T09:00:00.000Z');
@@ -192,4 +192,54 @@ test('a mixed batch fetches only the points that are missing', async () => {
   await service.getForecasts([TOKYO, { latitude: 43.06, longitude: 141.35 }], WINDOW);
 
   expect(calls).toEqual([{ points: 1 }, { points: 1 }]);
+});
+
+function createFailingProvider() {
+  const calls: number[] = [];
+
+  return {
+    calls,
+    provider: {
+      async getDailyForecasts({ points }: { points: readonly unknown[] }) {
+        calls.push(points.length);
+        throw new WeatherProviderError('invalid_request', {
+          reason: "Parameter 'end_date' is out of allowed range from 2026-06-04 to 2026-09-20",
+        });
+      },
+      async getWeather() {
+        throw new Error('the daily cache must not ask for current conditions');
+      },
+    },
+  };
+}
+
+test('a refused forecast falls back to the snapshot already stored', async () => {
+  const { CachedWeatherService } = await import('../src/services/cached-weather.js');
+  const { provider } = createProvider(['2026-09-03', '2026-09-04', '2026-09-05', '2026-09-06']);
+
+  // Warm the cache, then come back long enough later that the snapshot has aged
+  // out of the freshness window and the service would ordinarily refetch.
+  await new CachedWeatherService(provider, () => NOW, 'weather').getForecasts([TOKYO], WINDOW);
+
+  const later = new Date(NOW.getTime() + 4 * 60 * 60 * 1_000);
+  const failing = createFailingProvider();
+  const answers = await new CachedWeatherService(
+    failing.provider,
+    () => later,
+    'weather',
+  ).getForecasts([TOKYO], WINDOW);
+
+  expect(failing.calls, 'the provider is still asked before falling back').toHaveLength(1);
+  expect([...answers.values()][0]!.days).toHaveLength(4);
+  // The answer is honestly dated, so the surfaces can say how old it is.
+  expect([...answers.values()][0]!.fetchedAt).toEqual(NOW);
+});
+
+test('a refused forecast with nothing stored says so rather than going quiet', async () => {
+  const { CachedWeatherService } = await import('../src/services/cached-weather.js');
+  const failing = createFailingProvider();
+
+  await expect(
+    new CachedWeatherService(failing.provider, () => NOW, 'weather').getForecasts([TOKYO], WINDOW),
+  ).rejects.toThrow();
 });

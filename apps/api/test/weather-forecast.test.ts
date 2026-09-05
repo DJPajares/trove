@@ -29,10 +29,43 @@ function jsonResponse(body: unknown, status = 200) {
 test('the forecast window covers today plus the provider horizon', () => {
   const window = resolveForecastWindow(['Asia/Tokyo'], NOW);
 
-  // 15:00Z on 3 September is already 4 September in Tokyo.
+  // 15:00Z on 3 September is already 4 September in Tokyo, so the window opens
+  // on Tokyo's today. It does not close on Tokyo's today plus the horizon: the
+  // provider counts from its own, which is still the 3rd, and answers a request
+  // for the 19th by rejecting the whole batch. Whichever end comes first binds.
   expect(window.startDate).toBe('2026-09-04');
-  expect(window.endDate).toBe('2026-09-19');
+  expect(window.endDate).toBe('2026-09-18');
   expect(WEATHER_FORECAST_HORIZON_DAYS).toBe(15);
+});
+
+test('a zone east of UTC cannot ask past the provider’s own last day', () => {
+  // The shape that took weather down in production: every trip day in one
+  // eastward zone, read after the zone had rolled over but before UTC had.
+  // Measured from local time alone this ends on the 19th, which is a day the
+  // provider does not have and answers with a 400 for the entire trip.
+  for (const timeZone of ['Asia/Singapore', 'Asia/Bangkok', 'Pacific/Auckland']) {
+    const window = resolveForecastWindow([timeZone], NOW);
+
+    expect(window.endDate).toBe('2026-09-18');
+  }
+});
+
+test('before the rollover the local and provider horizons agree', () => {
+  // Earlier the same UTC day, Singapore still shares UTC's date, so nothing is
+  // clamped and the window is the full fortnight from today.
+  const window = resolveForecastWindow(['Asia/Singapore'], new Date('2026-09-03T01:00:00.000Z'));
+
+  expect(window.startDate).toBe('2026-09-03');
+  expect(window.endDate).toBe('2026-09-18');
+});
+
+test('a zone west of UTC keeps its own earlier start', () => {
+  // The clamp only ever moves the end. A zone behind UTC opens the window on
+  // its own yesterday, which the provider serves months of.
+  const window = resolveForecastWindow(['Pacific/Honolulu'], NOW);
+
+  expect(window.startDate).toBe('2026-09-03');
+  expect(window.endDate).toBe('2026-09-18');
 });
 
 test('a mixed-zone window ends at the earliest zone horizon, not the latest', () => {

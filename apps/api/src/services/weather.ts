@@ -98,17 +98,44 @@ export type WeatherContext = {
   temperatureUnit: TemperatureUnit;
 };
 
+/**
+ * The provider's own account of a rejection, if it gave one.
+ *
+ * Reading the body can itself fail - a truncated response, a gateway's HTML -
+ * and a diagnostic that throws is worse than one that says nothing, so every
+ * failure here is simply no reason.
+ */
+async function readProviderReason(response: Response) {
+  try {
+    const body = (await response.json()) as { reason?: unknown };
+    return typeof body.reason === 'string' ? body.reason : null;
+  } catch {
+    return null;
+  }
+}
+
 export type WeatherProviderErrorCode =
   'invalid_request' | 'invalid_response' | 'provider_unavailable';
 
 export class WeatherProviderError extends Error {
   constructor(
     public readonly code: WeatherProviderErrorCode,
-    options?: ErrorOptions,
+    options?: ErrorOptions & {
+      /**
+       * What the provider said, when it said anything. Open-Meteo answers a
+       * rejection with its own explanation - the allowed date range, a
+       * coordinate out of bounds - and dropping it is what turned this into a
+       * 400 with no cause in the logs.
+       */
+      reason?: string | null;
+    },
   ) {
     super(code, options);
     this.name = 'WeatherProviderError';
+    this.reason = options?.reason ?? null;
   }
+
+  public readonly reason: string | null;
 }
 
 export interface WeatherProvider {
@@ -308,6 +335,7 @@ export class OpenMeteoWeatherProvider implements WeatherProvider {
         response.status === 400 || response.status === 422
           ? 'invalid_request'
           : 'provider_unavailable',
+        { reason: await readProviderReason(response) },
       );
     }
 

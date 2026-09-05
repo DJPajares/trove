@@ -42,8 +42,19 @@ export function resolveForecastWindow(
   // zone whose horizon runs out first. Measuring from the latest would push the
   // request one day past what the earliest zone allows, and the provider
   // rejects the whole batch rather than trimming it.
+  const localEnd = shiftDate(earliestToday, WEATHER_FORECAST_HORIZON_DAYS);
+
+  // The provider's horizon is anchored to its own today, which is UTC's - not
+  // the traveller's. Every zone east of UTC reaches tomorrow first, so from
+  // about 16:00 UTC a Singapore or Auckland trip measured only from local time
+  // asks for a day the provider does not have yet, and the whole batch comes
+  // back 400. Whichever end arrives first is the one that binds.
+  const providerEnd = shiftDate(getLocalDate(now, 'UTC'), WEATHER_FORECAST_HORIZON_DAYS);
+
+  // The start needs no such guard: a zone west of UTC asks for yesterday at the
+  // earliest, and the provider serves months of past days.
   return {
-    endDate: shiftDate(earliestToday, WEATHER_FORECAST_HORIZON_DAYS),
+    endDate: localEnd < providerEnd ? localEnd : providerEnd,
     startDate: earliestToday,
   };
 }

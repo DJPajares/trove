@@ -60,7 +60,10 @@ import {
   type ProviderUsageEvent,
 } from '../src/services/provider-usage.js';
 import type { RouteEstimate, RouteRequest, RoutesProvider } from '../src/services/routes.js';
-import { resolveTripModeContext } from '../src/services/trip-mode-context.js';
+import {
+  LEAVE_BY_BUFFER_SECONDS,
+  resolveTripModeContext,
+} from '../src/services/trip-mode-context.js';
 
 /**
  * These tests exist because nothing else in the suite can fail when a code path
@@ -725,6 +728,15 @@ test("Trip Mode reuses the Itinerary screen's cached snapshot when it forwards t
     context.leaveBy,
     'sanity check: leaveBy should have resolved a route between the items',
   ).toBeTruthy();
+
+  // Leaving at the exact moment that lands you there as it starts is a
+  // departure nobody wants to be told, so the time carries a standing slack.
+  const leaveBy = context.leaveBy!;
+  expect(leaveBy.bufferSeconds).toBe(LEAVE_BY_BUFFER_SECONDS);
+  expect(new Date(leaveBy.at).getTime()).toBe(
+    new Date(leaveBy.targetStartAt).getTime() -
+      (leaveBy.routeDurationSeconds + LEAVE_BY_BUFFER_SECONDS) * 1_000,
+  );
 });
 
 test('an evidence request never reads the snapshot, which cannot carry ratings or hours', async () => {

@@ -126,3 +126,42 @@ test('a caller reading one leg does not pay for the day it did not ask about', a
   expect(routes.segments[0]?.origin.id).toBe('museum');
   expect(routes.segments[0]?.destination.id).toBe('lunch');
 });
+
+test('a pair asked for in reverse is routed the way the caller asked, not by position', async () => {
+  const { getItineraryDayRoutes } = await import('../src/services/itinerary-routes.js');
+  stubPrisma();
+  const { resolvePlace, routed, routesService } = createSpies();
+
+  // The stop that is current can sit later in the day's list than the one that
+  // is next - a flexible stop carries no start time to keep the two in step. So
+  // the caller names the pair in the order it means to travel it.
+  const routes = await getItineraryDayRoutes(
+    'owner',
+    'trip',
+    'day-1',
+    { itemIds: ['lunch', 'museum'], legs: 'between_items' },
+    { resolvePlace, routesService } as never,
+  );
+
+  expect(routes.segments).toHaveLength(1);
+  expect(routed, 'still one billable route').toHaveLength(1);
+  expect(routes.segments[0]?.origin.id, 'the stop the caller is leaving').toBe('lunch');
+  expect(routes.segments[0]?.destination.id, 'the stop the caller is heading to').toBe('museum');
+});
+
+test('a pair asked for in position order is unaffected', async () => {
+  const { getItineraryDayRoutes } = await import('../src/services/itinerary-routes.js');
+  stubPrisma();
+  const { resolvePlace, routesService } = createSpies();
+
+  const routes = await getItineraryDayRoutes(
+    'owner',
+    'trip',
+    'day-1',
+    { itemIds: ['museum', 'lunch'], legs: 'between_items' },
+    { resolvePlace, routesService } as never,
+  );
+
+  expect(routes.segments[0]?.origin.id).toBe('museum');
+  expect(routes.segments[0]?.destination.id).toBe('lunch');
+});

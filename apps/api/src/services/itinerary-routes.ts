@@ -469,10 +469,23 @@ export async function getItineraryDayRoutes(
   const resolvePlace =
     services.resolvePlace ??
     createPlaceResolver(routesService ? placesService : null, options.languageCode, source);
-  const placedItems = day.items.filter(
+  const located = day.items.filter(
     (item): item is typeof item & { tripPlace: NonNullable<typeof item.tripPlace> } =>
       item.tripPlace !== null,
   );
+
+  // A whole-day request is building the day's chain, so position is the order.
+  // A `between_items` caller is naming an ordered *pair* - "the hop from this
+  // stop to that one" - and position is not that: a flexible stop carries no
+  // start time, so the stop that is current can sit later in the list than the
+  // one that is next. Re-sorting those two by position built the leg backwards,
+  // which the caller then failed to recognise and dropped.
+  const requestedOrder = options.legs === 'between_items' ? options.itemIds : undefined;
+  const placedItems = requestedOrder
+    ? located.toSorted(
+        (left, right) => requestedOrder.indexOf(left.id) - requestedOrder.indexOf(right.id),
+      )
+    : located;
 
   const itemPoints = await mapWithConcurrency(
     placedItems,

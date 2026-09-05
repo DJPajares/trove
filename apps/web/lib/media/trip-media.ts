@@ -12,7 +12,7 @@ export type TripMediaSource =
 export type PlaceMediaSource =
   { kind: 'editorial'; reference: EditorialImageReference } | { kind: 'fallback' };
 
-export type TripMediaVariant = 'card' | 'cover' | 'hero' | 'thumbnail';
+export type TripMediaVariant = 'banner' | 'card' | 'cover' | 'hero' | 'thumbnail';
 
 type ResolveTripMediaSourceInput = {
   coverUrl?: string | null;

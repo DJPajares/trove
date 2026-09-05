@@ -17,6 +17,7 @@ const frameVariants = cva(
   {
     variants: {
       variant: {
+        banner: 'h-24 rounded-[var(--radius-lg)] sm:h-28',
         card: 'aspect-[4/3] rounded-[var(--radius-xl)]',
         cover: 'h-[var(--trip-cover-height)] rounded-[var(--radius-2xl)]',
         hero: 'aspect-[4/5] rounded-[var(--radius-2xl)] sm:aspect-[2/1]',

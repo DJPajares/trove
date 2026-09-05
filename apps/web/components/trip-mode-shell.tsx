@@ -351,6 +351,7 @@ export function TripModeShell({
   const searchParams = useSearchParams();
   const tripContext = useTripContext();
   const contextTrip = tripContext?.trip ?? null;
+  const editorial = tripContext?.editorial ?? null;
   const {
     data: itinerary,
     refresh: refreshItinerary,
@@ -467,15 +468,16 @@ export function TripModeShell({
             {t('exit')}
           </Button>
 
-          <div className="flex items-center gap-3 sm:gap-4">
-            <TripMedia
-              alt=""
-              className="size-11 shrink-0 shadow-[var(--shadow-control)] sm:size-16"
-              sizes="64px"
-              source={resolveTripMediaSource({ coverUrl: contextTrip?.coverPhotoUrl })}
-              variant="thumbnail"
-            />
-            <div className="min-w-0 flex-1" aria-hidden="true">
+          <TripMedia
+            alt=""
+            className="w-full shadow-[var(--shadow-control)]"
+            sizes="(max-width: 1200px) 100vw, 1152px"
+            source={resolveTripMediaSource({ coverUrl: contextTrip?.coverPhotoUrl, editorial })}
+            variant="banner"
+          />
+
+          <div className="flex items-center gap-3 sm:gap-4" aria-hidden="true">
+            <div className="min-w-0 flex-1">
               <Skeleton className="h-[length:var(--text-metadata)] w-20" />
               <Skeleton className="mt-0.5 h-[calc(var(--text-section-title)*1.15)] w-3/5 max-w-xs" />
               <Skeleton className="mt-0.5 h-[length:var(--text-metadata)] w-2/5 max-w-48" />
@@ -594,17 +596,22 @@ export function TripModeShell({
                 {t('exit')}
               </Button>
 
+              {/* A photo, not a hero: a full-bleed cover like Planning's would
+              buy the same weeks-away trip a bigger picture than the day the
+              traveller is actually living. Tall enough to read as a real
+              photo, short enough that it costs one row on a 390x844 screen. */}
+              <TripMedia
+                alt=""
+                className="w-full shadow-[var(--shadow-control)]"
+                sizes="(max-width: 1200px) 100vw, 1152px"
+                source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
+                variant="banner"
+              />
+
               {/* On a phone the trip's name is orientation, not the headline: the
               traveller came for what is happening now, and a 390x844 viewport
               only has so many rows before the itinerary has to appear. */}
               <div className="flex items-center gap-3 sm:gap-4">
-                <TripMedia
-                  alt=""
-                  className="size-11 shrink-0 shadow-[var(--shadow-control)] sm:size-16"
-                  sizes="64px"
-                  source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl })}
-                  variant="thumbnail"
-                />
                 <div className="min-w-0 flex-1">
                   <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
                     {previewSelection ? t('preview.label') : t('label')}

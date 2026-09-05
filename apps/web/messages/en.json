@@ -51,7 +51,7 @@
   "profile": {
     "eyebrow": "Your account",
     "title": "Profile and travel settings",
-    "description": "Keep your defaults close so every trip starts in the right place.",
+    "description": "Set these once, and every new trip starts pointed the right way.",
     "profileSection": "Profile",
     "preferencesSection": "Travel preferences",
     "photoSection": "Profile photo",
@@ -166,7 +166,7 @@
     "coverEditorialHint": "Until you add your own photo, Trove shows a travel photograph of {name}.",
     "eyebrow": "Your journeys",
     "title": "Trips",
-    "description": "Create the shape of a trip now, then add the detail when you are ready.",
+    "description": "Rough out where you're headed. The details can come later.",
     "newTrip": "New trip",
     "createFirstTrip": "Create your first trip",
     "loading": "Loading your trips…",
@@ -903,7 +903,7 @@
   },
   "tripInfo": {
     "title": "Trip info for {trip}",
-    "description": "Keep the travel details you need to retrieve quickly, in one private place.",
+    "description": "Wi-Fi passwords, confirmation numbers, anything you'd hate to hunt for later — all in one spot.",
     "backToTrips": "Trips",
     "addEntry": "Add info",
     "addFirstEntry": "Add the first entry",
@@ -956,7 +956,7 @@
   },
   "reservations": {
     "title": "Reservations for {trip}",
-    "description": "Keep bookings, stays, and travel logistics private and easy to retrieve.",
+    "description": "Every confirmation and booking, in one place you can actually find again.",
     "backToTrips": "Trips",
     "addReservation": "Add reservation",
     "addFirstReservation": "Add the first reservation",
@@ -1074,7 +1074,7 @@
   },
   "expenses": {
     "title": "Expenses for {trip}",
-    "description": "Record what you actually spend, while keeping the plan and budget clearly separate.",
+    "description": "What you actually spent, kept apart from what you planned to.",
     "backToTrips": "Trips",
     "addExpense": "Add expense",
     "addFirstExpense": "Add your first expense",
@@ -1215,14 +1215,14 @@
   },
   "tools": {
     "title": "Tools",
-    "description": "Simple utilities for the travel details you need to compare or reuse.",
+    "description": "A couple of small tools that save you from redoing the same thing twice.",
     "currencyUseCase": "Check a price or compare costs while you plan.",
     "taskTemplatesUseCase": "Keep packing lists and repeatable tasks ready for every trip.",
     "openTool": "Open {tool}"
   },
   "currency": {
     "title": "Currency",
-    "description": "Convert a reference amount without changing the original currency you recorded.",
+    "description": "See what it comes to elsewhere — what you recorded stays exactly as you entered it.",
     "amount": "Amount",
     "amountPlaceholder": "100.00",
     "from": "From",
@@ -1296,7 +1296,7 @@
   },
   "itinerary": {
     "title": "Itinerary for {trip}",
-    "description": "See the shape of your whole trip, then open a day when you want to plan it.",
+    "description": "The whole trip at a glance. Open any day to start filling it in.",
     "backToTrips": "Trips",
     "tripPlaces": "Trip places",
     "tripTasks": "Tasks",
@@ -1626,7 +1626,7 @@
   },
   "tasks": {
     "title": "Tasks for {trip}",
-    "description": "Keep small travel details close to the day or place they support.",
+    "description": "The small stuff, attached to the day or place it actually matters for.",
     "backToItinerary": "Itinerary",
     "templates": "Templates",
     "addTask": "Add task",
@@ -1696,7 +1696,7 @@
   },
   "taskTemplates": {
     "title": "Task templates",
-    "description": "Save a few reusable travel checklists, then apply them to the trip where they are useful.",
+    "description": "Build a checklist once. Use it on every trip that needs it.",
     "newTemplate": "New template",
     "createFirst": "Create a template",
     "loading": "Loading your templates…",
@@ -1740,7 +1740,7 @@
     "eyebrow": "Trip planning",
     "title": "Places for {trip}",
     "titleLoading": "Trip places",
-    "description": "Collect the places you are considering before you put anything on the itinerary.",
+    "description": "Everywhere you're considering, before any of it lands on the calendar.",
     "backToTrips": "Trips",
     "addPlace": "Add place",
     "addFirstPlace": "Add your first place",
@@ -1843,7 +1843,7 @@
   "saved": {
     "eyebrow": "Your place library",
     "title": "Saved places",
-    "description": "Keep the places worth returning to, ready for a future trip when you need them.",
+    "description": "Spots worth remembering, saved until a trip actually needs them.",
     "addPlace": "Add place",
     "addFirstPlace": "Save your first place",
     "loading": "Loading your saved places…",
@@ -2001,20 +2001,20 @@
     "states": {
       "active": {
         "title": "Under way",
-        "description": "Keep the next useful detail close, then step into Trip Mode when you need it."
+        "description": "You're away. Trip Mode has what's next — the rest can wait."
       },
       "planning": {
         "title": "Coming up",
-        "description": "Keep planning at your own pace. Trove keeps the practical details within reach."
+        "description": "Still taking shape. Come back to it whenever the mood strikes."
       },
       "completed": {
         "title": "Looking back",
-        "description": "Your trip is complete. Revisit the itinerary whenever you want.",
-        "tripDescription": "{startDate} to {endDate}. The itinerary is still here whenever you need it."
+        "description": "That one's behind you now — the itinerary's still here if you want to relive it.",
+        "tripDescription": "{startDate} to {endDate}. The itinerary's yours to revisit, whenever you like."
       },
       "empty": {
         "title": "Home",
-        "description": "Start a trip when the dates are clear, or keep places for later while the idea is still forming."
+        "description": "Nothing on the books yet. Start a trip once the dates settle, or save places while the idea's still forming."
       }
     },
     "activeLabel": "Active trip",
@@ -2048,7 +2048,7 @@
     },
     "destinationOpen": "Destination still open",
     "startTitle": "Start with the trip, not every detail",
-    "startDescription": "A name and travel dates are enough to begin. You can build the rest when it becomes useful.",
+    "startDescription": "A name and rough dates are all it takes — everything else can wait.",
     "createTrip": "Create trip",
     "viewSavedPlaces": "View Saved Places",
     "savedPlacesTitle": "Saved Places",

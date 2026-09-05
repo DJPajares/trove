@@ -136,6 +136,7 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
 
           <TripPlacesPanel
             onEditPlace={setEditPlace}
+            onPlaceLocated={places.placeLocated}
             onPriorityChange={(tripPlace, priority) => void places.setPriority(tripPlace, priority)}
             onRemove={setRemovingPlace}
             tripPlaces={sortedPlaces}

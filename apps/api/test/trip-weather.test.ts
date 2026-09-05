@@ -247,6 +247,22 @@ test('a trip with nothing located anywhere asks for nothing', async () => {
   expect(weather.days).toEqual([]);
 });
 
+test('locating one place is enough to give a silent trip its weather back', async () => {
+  // The other half of the test above, and the point of the repair path: an
+  // AI-applied trip whose places all arrived without coordinates says nothing at
+  // all, and giving one of them a location is what makes every day answerable -
+  // the located day for itself, the rest by borrowing it.
+  stubPrisma(
+    createTrip([day('d1', '2026-09-03'), day('d2', '2026-09-04', { stop: SAPPORO })], null),
+  );
+  const { batches, service } = await createService();
+
+  const weather = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+
+  expect(batches[0], 'one located place, one place asked about').toHaveLength(1);
+  expect(weather.days.map((entry) => entry.itineraryDayId)).toEqual(['d1', 'd2']);
+});
+
 test('a trip with more cities than the cap still answers every day', async () => {
   const { MAX_WEATHER_LOCATIONS } = await import('../src/services/trip-weather.js');
   const days = Array.from({ length: MAX_WEATHER_LOCATIONS + 4 }, (_, index) =>

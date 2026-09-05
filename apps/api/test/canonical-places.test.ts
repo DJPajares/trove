@@ -7,6 +7,7 @@ import {
   type CanonicalPlaceRecord,
   type CanonicalPlaceRepository,
   CanonicalPlacesService,
+  customPlaceUpdateData,
   type CustomPlaceCreate,
   type CustomPlaceUpdate,
   type ProviderPlaceLabel,
@@ -165,6 +166,12 @@ class MemoryCanonicalPlaceRepository implements CanonicalPlaceRepository {
     throw new Error('place_not_found');
   }
 
+  async findOwnedCustomPlaceName(userId: string, placeId: string) {
+    await Promise.resolve();
+    const place = this.customPlaces.get(placeId);
+    return place && place.ownerId === userId ? place.customName : null;
+  }
+
   async createCustomPlace(userId: string, input: CustomPlaceCreate) {
     const place: CanonicalPlaceRecord = {
       customLatitude: input.location?.latitude ?? null,
@@ -187,18 +194,9 @@ class MemoryCanonicalPlaceRepository implements CanonicalPlaceRepository {
     const place = this.customPlaces.get(placeId);
     if (!place || place.ownerId !== userId) return null;
 
-    const updated: CanonicalPlaceRecord = {
-      ...place,
-      ...(input.location !== undefined
-        ? {
-            customLatitude: input.location?.latitude ?? null,
-            customLongitude: input.location?.longitude ?? null,
-            customTimeZone: input.location?.timeZone ?? null,
-          }
-        : {}),
-      ...(input.name !== undefined ? { customName: input.name } : {}),
-      ...(input.note !== undefined ? { customNote: input.note } : {}),
-    };
+    // The same column shaping the Prisma repository writes, so this stand-in
+    // cannot quietly disagree with it about which columns an edit touches.
+    const updated: CanonicalPlaceRecord = { ...place, ...customPlaceUpdateData(input) };
     this.customPlaces.set(placeId, updated);
     return updated;
   }
@@ -484,4 +482,37 @@ test('a snapshot that has aged out is refreshed the next time the Place is added
   await service.resolveProviderPlace('google', 'ChIJmuseum');
 
   expect(calls.map((call) => call.externalPlaceId)).toStrictEqual(['ChIJmuseum', 'ChIJmuseum']);
+});
+
+test('locating a Place that never resolved fills its coordinates without dropping its time zone', () => {
+  // A Custom Place the AI planner applied: named, zoned by its country, and
+  // nowhere at all. The zone is invisible to a client until a location exists,
+  // so the repair sends coordinates and nothing else.
+  expect(
+    customPlaceUpdateData({ location: { latitude: 21.0285, longitude: 105.8542 } }),
+  ).toStrictEqual({ customLatitude: 21.0285, customLongitude: 105.8542 });
+
+  // A traveller who does know the zone still sets it.
+  expect(
+    customPlaceUpdateData({
+      location: { latitude: 21.0285, longitude: 105.8542, timeZone: ' Asia/Ho_Chi_Minh ' },
+    }),
+  ).toStrictEqual({
+    customLatitude: 21.0285,
+    customLongitude: 105.8542,
+    customTimeZone: 'Asia/Ho_Chi_Minh',
+  });
+
+  // Taking a location away takes its zone with it: a zone with no coordinates
+  // behind it is not something any surface can act on.
+  expect(customPlaceUpdateData({ location: null })).toStrictEqual({
+    customLatitude: null,
+    customLongitude: null,
+    customTimeZone: null,
+  });
+
+  // An edit that never mentions a location leaves all three columns alone.
+  expect(customPlaceUpdateData({ name: '  Hoan Kiem Lake  ' })).toStrictEqual({
+    customName: 'Hoan Kiem Lake',
+  });
 });

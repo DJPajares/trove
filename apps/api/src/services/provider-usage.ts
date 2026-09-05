@@ -19,6 +19,7 @@ export const PROVIDER_CALL_SOURCES = [
   'itinerary',
   'itinerary-routes',
   'itinerary-time-suggestions',
+  'place-locate',
   'place-resolution',
   'places-autocomplete',
   'plan-score',

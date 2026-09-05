@@ -1,6 +1,6 @@
 'use client';
 
-import { ExternalLink, XIcon } from 'lucide-react';
+import { ExternalLink, MapPin, XIcon } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { PlacePhotoCarousel } from '@/components/place-photo-carousel';
@@ -31,6 +31,12 @@ type PlaceDetailsSheetProps = {
   name: string;
   /** The provider's name for the place, when the traveller has renamed it. */
   officialName?: string | null;
+  /**
+   * Offered only by a surface that can repair a Custom Place that never resolved
+   * its coordinates. Absent everywhere else, which is what keeps this sheet free
+   * of any action it cannot pay for.
+   */
+  onLocate?: () => void;
   onOpenChange: (open: boolean) => void;
   place: CanonicalPlace;
 };
@@ -53,6 +59,7 @@ export function PlaceDetailsSheet({
   meta = [],
   name,
   officialName,
+  onLocate,
   onOpenChange,
   place,
 }: Readonly<PlaceDetailsSheetProps>) {
@@ -151,16 +158,26 @@ export function PlaceDetailsSheet({
           ) : null}
         </div>
 
-        {mapsHref ? (
+        {/* A Custom Place has no Google listing to link out to, so this footer
+            used to be empty for exactly the places most in need of an action. */}
+        {mapsHref || onLocate ? (
           <SheetFooter>
-            <Button
-              nativeButton={false}
-              render={<a href={mapsHref} rel="noreferrer" target="_blank" />}
-              variant="outline"
-            >
-              <ExternalLink aria-hidden="true" data-icon="inline-start" />
-              {t('googleMaps')}
-            </Button>
+            {onLocate ? (
+              <Button onClick={onLocate} variant="outline">
+                <MapPin aria-hidden="true" data-icon="inline-start" />
+                {t('locate.action')}
+              </Button>
+            ) : null}
+            {mapsHref ? (
+              <Button
+                nativeButton={false}
+                render={<a href={mapsHref} rel="noreferrer" target="_blank" />}
+                variant="outline"
+              >
+                <ExternalLink aria-hidden="true" data-icon="inline-start" />
+                {t('googleMaps')}
+              </Button>
+            ) : null}
           </SheetFooter>
         ) : null}
 

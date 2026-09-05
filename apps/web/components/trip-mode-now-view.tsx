@@ -19,6 +19,7 @@ import { useMemo, useState } from 'react';
 
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
+import { TripLegBar } from '@/components/trip-leg-bar';
 import { TripModeMemoryDialog } from '@/components/trip-mode-memory-dialog';
 import { useTripModeData } from '@/components/trip-mode-data';
 import { useTripModePreview } from '@/components/trip-mode-shell';
@@ -203,6 +204,10 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   // than an estimate that has not arrived yet.
   const nextLegIsFlight = currentItem?.travelModeToNext === 'flight';
   const directions = online && nextItem && nextName ? directionsHref(nextItem, nextName) : null;
+  // The two stops themselves. It draws the morning out of the daily base and
+  // the evening back to it, which is most of a day and all of what a routed
+  // estimate cannot reach.
+  const legBar = readyContext.leg ? <TripLegBar context={readyContext} /> : null;
   const selectedDayId = readyContext.day?.id;
   const reservationDate = (reservation: Reservation) =>
     reservation.localDate ??
@@ -372,15 +377,21 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
                 <span className="w-full text-xs text-text-subtle">{t('googleAttribution')}</span>
               ) : null}
             </div>
-          ) : (
+          ) : nextLegIsFlight ? (
             <p className="mt-4 border-t border-border pt-4 text-sm leading-6 text-muted-foreground">
-              {nextLegIsFlight
-                ? t('routeFlight')
-                : nextItem.startInstant
-                  ? t('routeUnavailable')
-                  : t('timingFlexible')}
+              {t('routeFlight')}
+            </p>
+          ) : !nextItem.startInstant ? (
+            <p className="mt-4 border-t border-border pt-4 text-sm leading-6 text-muted-foreground">
+              {t('timingFlexible')}
+            </p>
+          ) : readyContext.leg ? null : (
+            <p className="mt-4 border-t border-border pt-4 text-sm leading-6 text-muted-foreground">
+              {t('routeUnavailable')}
             </p>
           )}
+
+          {legBar ? <div className="mt-4 border-t border-border pt-4">{legBar}</div> : null}
 
           {directions ? (
             <div className="mt-4">
@@ -403,25 +414,34 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
           ) : null}
         </section>
       ) : (
-        <PageState
-          actions={
-            <Button
-              nativeButton={false}
-              render={<Link href={withPreviewHref(`/trips/${tripId}/mode/today`)} />}
-            >
-              {t('openToday')}
-            </Button>
-          }
-          className="py-4"
-          description={
-            readyContext.state === 'no_day'
-              ? t('noDayDescription', { date })
-              : t('noNextDescription')
-          }
-          headingLevel={2}
-          icon={<Clock3 aria-hidden="true" />}
-          title={readyContext.state === 'no_day' ? t('noDayTitle') : t('noNextTitle')}
-        />
+        <div className="space-y-4">
+          <PageState
+            actions={
+              <Button
+                nativeButton={false}
+                render={<Link href={withPreviewHref(`/trips/${tripId}/mode/today`)} />}
+              >
+                {t('openToday')}
+              </Button>
+            }
+            className="py-4"
+            description={
+              readyContext.state === 'no_day'
+                ? t('noDayDescription', { date })
+                : t('noNextDescription')
+            }
+            headingLevel={2}
+            icon={<Clock3 aria-hidden="true" />}
+            title={readyContext.state === 'no_day' ? t('noDayTitle') : t('noNextTitle')}
+          />
+          {/* Nothing left to reach is not nothing left to do: the way back to
+              where the day started is still a leg the traveller is on. */}
+          {legBar ? (
+            <div className="rounded-[var(--radius-xl)] border border-border bg-card p-4 shadow-[var(--shadow-surface)] sm:p-6">
+              {legBar}
+            </div>
+          ) : null}
+        </div>
       )}
 
       <TripWeatherContext

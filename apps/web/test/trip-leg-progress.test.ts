@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 
+import { formatEstimatedDistance } from '../lib/itinerary/format-distance.ts';
 import { legProgressFraction } from '../lib/itinerary/leg-progress.ts';
 import { haversineMeters } from '../lib/maps/haversine.ts';
 
@@ -50,4 +51,19 @@ test('a zero-length leg reads as arrived rather than dividing by zero', () => {
 
   expect(fraction).toBe(1);
   expect(Number.isNaN(fraction)).toBe(false);
+});
+
+test('a walk between two stops in one courtyard reads in metres, not as nought', () => {
+  expect(formatEstimatedDistance(6, 'km', 'en-GB')).toEqual({ unit: 'm', value: '10' });
+  expect(formatEstimatedDistance(340, 'km', 'en-GB')).toEqual({ unit: 'm', value: '340' });
+});
+
+test('a kilometre or more keeps the larger unit', () => {
+  expect(formatEstimatedDistance(1_000, 'km', 'en-GB')).toEqual({ unit: 'km', value: '1' });
+  expect(formatEstimatedDistance(135_000, 'km', 'en-GB')).toEqual({ unit: 'km', value: '135' });
+});
+
+test('imperial drops to feet only for the shortest legs', () => {
+  expect(formatEstimatedDistance(6, 'mi', 'en-GB')).toEqual({ unit: 'ft', value: '20' });
+  expect(formatEstimatedDistance(1_609, 'mi', 'en-GB')).toEqual({ unit: 'mi', value: '1' });
 });

@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 
 import {
+  preferExplicitLocalDate,
   projectedCostTotals,
   resolveExpenseTimeZone,
   totalByCurrency,
@@ -25,6 +26,18 @@ test('keeps expense timezone resolution stable and contextual', () => {
       tripTimeZone: 'UTC',
     }),
   ).toStrictEqual({ source: 'ITINERARY_DAY', timeZone: 'Asia/Singapore' });
+});
+
+test("an explicit expense date always wins over a linked item's own day", () => {
+  expect(preferExplicitLocalDate('2026-09-10', '2026-09-05')).toBe('2026-09-10');
+});
+
+test("a scheduled item's day carries over when the expense named no date of its own", () => {
+  expect(preferExplicitLocalDate(null, '2026-09-05')).toBe('2026-09-05');
+});
+
+test('an expense with neither an explicit date nor a scheduled item stays dateless', () => {
+  expect(preferExplicitLocalDate(null, null)).toBeNull();
 });
 
 test('groups actual spend by original currency without conversion', () => {

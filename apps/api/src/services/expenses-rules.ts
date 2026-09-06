@@ -5,6 +5,18 @@ export type ExpenseTimeZoneResolution = {
   timeZone: string;
 };
 
+/**
+ * The date an expense should record when it names a scheduled itinerary item.
+ * A date given explicitly always wins - the item's own day only fills in when
+ * nobody separately named a date for the expense itself.
+ */
+export function preferExplicitLocalDate(
+  explicitLocalDate: string | null,
+  scheduledItemLocalDate: string | null,
+): string | null {
+  return explicitLocalDate ?? scheduledItemLocalDate;
+}
+
 export function resolveExpenseTimeZone(input: {
   itineraryDayTimeZone: string | null;
   itineraryItemTimeZone: string | null;

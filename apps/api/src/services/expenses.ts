@@ -1,6 +1,11 @@
 import { getPrismaClient, type Prisma } from '@trove/db';
 
-import { totalByCurrency, projectedCostTotals, resolveExpenseTimeZone } from './expenses-rules.js';
+import {
+  preferExplicitLocalDate,
+  totalByCurrency,
+  projectedCostTotals,
+  resolveExpenseTimeZone,
+} from './expenses-rules.js';
 import { formatLocalTime, parseLocalTime } from './itinerary-rules.js';
 import { placeProviderRefInclude, serializePlaceReference } from './place-serializer.js';
 import { formatDateOnly } from './trip-rules.js';
@@ -199,7 +204,7 @@ async function findItineraryItem(
   if (!itineraryItemId) return null;
   const item = await transaction.itineraryItem.findFirst({
     where: { id: itineraryItemId, tripId },
-    include: { itineraryDay: { select: { defaultTimeZone: true } } },
+    include: { itineraryDay: { select: { date: true, defaultTimeZone: true, id: true } } },
   });
   if (!item) throw new ExpenseNotFoundError('itinerary_item_not_found');
   return item;
@@ -225,7 +230,17 @@ function dateTimeData(input: {
   tripPlace: Awaited<ReturnType<typeof findTripPlace>>;
   tripTimeZone: string;
 }) {
-  if (!input.localDate) {
+  // A scheduled item already has a day. An expense that names one earns that
+  // day for free when nobody separately named a date - an explicit date always
+  // wins, and an item with no day of its own (unscheduled) has none to lend.
+  const scheduledItemDay = input.localDate ? null : (input.itineraryItem?.itineraryDay ?? null);
+  const itineraryDay = input.itineraryDay ?? scheduledItemDay;
+  const localDate = preferExplicitLocalDate(
+    input.localDate,
+    scheduledItemDay ? formatDateOnly(scheduledItemDay.date) : null,
+  );
+
+  if (!localDate) {
     if (input.localTime) throw new ExpenseValidationError('invalid_expense_time');
     return {
       itineraryDayId: null,
@@ -239,15 +254,15 @@ function dateTimeData(input: {
 
   try {
     const resolution = resolveExpenseTimeZone({
-      itineraryDayTimeZone: input.itineraryDay?.defaultTimeZone ?? null,
+      itineraryDayTimeZone: itineraryDay?.defaultTimeZone ?? null,
       itineraryItemTimeZone:
         input.itineraryItem?.timeZone ?? input.itineraryItem?.itineraryDay?.defaultTimeZone ?? null,
       tripPlaceTimeZone: input.tripPlace?.place.customTimeZone ?? null,
       tripTimeZone: input.tripTimeZone,
     });
     return {
-      itineraryDayId: input.itineraryDay?.id ?? null,
-      localDate: parseDateOnly(input.localDate),
+      itineraryDayId: itineraryDay?.id ?? null,
+      localDate: parseDateOnly(localDate),
       localTime: input.localTime ? parseLocalTime(input.localTime) : null,
       timeZone: resolution.timeZone,
       timeZoneResolvedAt: new Date(),

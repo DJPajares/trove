@@ -306,22 +306,27 @@ test('the day zone and the trip zone are read independently', () => {
   );
 });
 
-test("an item's own zone contributes a boundary the day's zone would miss", () => {
-  // The day runs on Singapore time, but this item sits in Tokyo — an hour
-  // ahead — so it turns overdue at Tokyo midnight, 15:00Z, not 16:00Z.
-  const found = nextTripModeBoundary(
-    context({
-      day: {
-        date: '2026-09-05',
-        defaultTimeZone: timeZone,
-        id: 'day',
-        items: [item({ dayPart: 'evening', timeZone: 'Asia/Tokyo' })],
-        name: null,
-        number: 1,
-      },
-    }),
-    new Date('2026-09-05T14:30:00.000Z'),
+test("the traveller's own clock is what turns the day over", () => {
+  // Trip Mode runs on one clock: the traveller's. This day was planned in
+  // Singapore, so left alone it turns over at Singapore midnight...
+  const day = {
+    date: '2026-09-05',
+    defaultTimeZone: timeZone,
+    id: 'day',
+    items: [item({ dayPart: 'evening' })],
+    name: null,
+    number: 1,
+  };
+  const at = new Date('2026-09-05T14:30:00.000Z');
+
+  expect(nextTripModeBoundary(context({ day }), at)).toStrictEqual(
+    new Date('2026-09-05T16:00:00.000Z'),
   );
 
-  expect(found).toStrictEqual(new Date('2026-09-05T15:00:00.000Z'));
+  // ...but a traveller reading it in Tokyo, an hour ahead, gets there first.
+  // An item's own planned zone no longer contributes a boundary of its own:
+  // what matters is the clock the traveller is actually looking at.
+  expect(nextTripModeBoundary(context({ day }), at, 'Asia/Tokyo')).toStrictEqual(
+    new Date('2026-09-05T15:00:00.000Z'),
+  );
 });

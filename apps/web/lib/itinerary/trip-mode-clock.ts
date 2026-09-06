@@ -1,4 +1,10 @@
-import { localDateInTimeZone, localPreviewInstant, type TripModeContext } from './api';
+import {
+  localDateInTimeZone,
+  localPreviewInstant,
+  travellerItemStart,
+  type ItineraryItem,
+  type TripModeContext,
+} from './api';
 
 /**
  * Minutes from local midnight where the day changes character. Mirrors
@@ -40,29 +46,42 @@ function nextLocalMinute(now: Date, timeZone: string, minute: number) {
  * turning over, and local midnight rolling the day. Returns null when nothing
  * ahead can change the answer.
  */
-export function nextTripModeBoundary(context: TripModeContext, now: Date): Date | null {
+export function nextTripModeBoundary(
+  context: TripModeContext,
+  now: Date,
+  /**
+   * The clock Trip Mode is being read on - the traveller's own, matching what
+   * the server was asked. Passed in rather than read from the environment so
+   * this stays a pure rule; Preview has no traveller standing in it, so it
+   * falls back to the day's own zone.
+   */
+  clockTimeZone?: string,
+): Date | null {
   const candidates: Date[] = [];
-  // An item with no instant is phased against the local clock in its own zone,
-  // falling back to the day's, so each zone in play has to be watched.
-  const phaseZones = new Set([context.day?.defaultTimeZone ?? context.trip.referenceTimeZone]);
-  const scheduledItems = (context.day?.items ?? []).filter(
-    (item) => item.travelStatus === 'upcoming' && item.startInstant,
-  );
+  const clockZone =
+    (context.contextSource === 'preview' ? null : clockTimeZone) ??
+    context.day?.defaultTimeZone ??
+    context.trip.referenceTimeZone;
+  const dayDate = context.day?.date ?? context.selectedDate;
+  const startOf = (item: ItineraryItem) => travellerItemStart(item, dayDate, clockZone);
+
+  const upcoming = (context.day?.items ?? []).filter((item) => item.travelStatus === 'upcoming');
   const latestScheduledStart = Math.max(
-    ...scheduledItems.map((item) => new Date(item.startInstant!).getTime()),
+    ...upcoming.flatMap((item) => {
+      const start = startOf(item);
+      return start === null ? [] : [start];
+    }),
   );
 
-  for (const item of context.day?.items ?? []) {
-    if (item.travelStatus !== 'upcoming') continue;
-    if (item.timeZone) phaseZones.add(item.timeZone);
-    if (!item.startInstant) continue;
+  for (const item of upcoming) {
+    const start = startOf(item);
+    if (start === null) continue;
 
-    const start = new Date(item.startInstant);
-    candidates.push(start);
+    candidates.push(new Date(start));
     if (item.durationMinutes) {
-      candidates.push(new Date(start.getTime() + item.durationMinutes * 60_000));
-    } else if (start.getTime() === latestScheduledStart) {
-      candidates.push(new Date(start.getTime() + 60 * 60_000));
+      candidates.push(new Date(start + item.durationMinutes * 60_000));
+    } else if (start === latestScheduledStart) {
+      candidates.push(new Date(start + 60 * 60_000));
     }
   }
 
@@ -70,13 +89,11 @@ export function nextTripModeBoundary(context: TripModeContext, now: Date): Date 
 
   // A daypart turnover moves an item between morning, afternoon and evening;
   // midnight is what flips one to overdue.
-  for (const zone of phaseZones) {
-    for (const minute of [0, ...DAY_PART_BOUNDARY_MINUTES]) {
-      candidates.push(nextLocalMinute(now, zone, minute));
-    }
+  for (const minute of [0, ...DAY_PART_BOUNDARY_MINUTES]) {
+    candidates.push(nextLocalMinute(now, clockZone, minute));
   }
-  // Midnight in the trip's reference zone is separately what rolls `selectedDate`.
-  candidates.push(nextLocalMinute(now, context.trip.referenceTimeZone, 0));
+  // Midnight on the traveller's clock is separately what rolls `selectedDate`.
+  candidates.push(nextLocalMinute(now, clockZone, 0));
 
   const ahead = candidates
     .filter((candidate) => Number.isFinite(candidate.getTime()) && candidate > now)

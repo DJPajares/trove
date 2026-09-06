@@ -2030,7 +2030,8 @@ The fallback must be persisted/resolved deterministically so lifecycle does not 
 - A trip day resolves its default local timezone in this order: explicit Daily Base, applicable Accommodation, first ordered located itinerary item with a resolvable timezone, then the trip reference timezone.
 - Exact-time items without a more specific timezone use the applicable day timezone.
 - Cross-timezone transport must preserve separate local departure and arrival times/timezones.
-- Home, Trip Mode, Today, notifications, and date-driven lifecycle behavior must not rely on device timezone alone when a more authoritative trip/day/item timezone exists.
+- Home, notifications, and date-driven lifecycle behavior must not rely on device timezone alone when a more authoritative trip/day/item timezone exists. Trip lifecycle in particular stays on the trip reference timezone, so a trip does not change phase because its owner boarded a plane.
+- **Trip Mode is the exception, and deliberately so.** It answers "what do I need right now", which is a question about where the traveller is standing rather than where the trip was planned. It therefore runs on the device's timezone: the day it shows, which stop is current, the day parts, and the leave-by time are all measured against the traveller's own clock. A floating local plan is re-grounded against that clock, because a stop written as 09:00 means nine in the morning where the traveller actually is. An authoritative instant is never re-grounded - a flight leaves when it leaves.
 
 ### Other Dated Records
 

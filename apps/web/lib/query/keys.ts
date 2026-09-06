@@ -86,7 +86,10 @@ export const queryKeys = {
    */
   tripModeContext: (
     tripId: string,
-    options: Pick<TripModeContextRequestOptions, 'at' | 'date' | 'languageCode' | 'time'>,
+    options: Pick<
+      TripModeContextRequestOptions,
+      'at' | 'clockTimeZone' | 'date' | 'languageCode' | 'time'
+    >,
   ) =>
     [
       'trip-mode-context',
@@ -95,6 +98,10 @@ export const queryKeys = {
       options.time ?? null,
       options.at ?? null,
       options.languageCode ?? null,
+      // The clock the answer was computed on. A traveller who lands somewhere
+      // new is asking a different question, and this root never refetches on a
+      // timer, so without it they would keep the answer from the last country.
+      options.clockTimeZone ?? null,
     ] as const,
 
   /**

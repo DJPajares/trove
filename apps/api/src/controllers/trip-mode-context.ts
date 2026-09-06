@@ -13,6 +13,8 @@ const itemParamsSchema = z.object({ itemId: z.uuid(), tripId: z.uuid() }).strict
 const contextQuerySchema = z
   .object({
     at: z.string().datetime({ offset: true }).optional(),
+    /** The traveller's own zone, which is the clock Trip Mode runs on. */
+    clockTimeZone: z.string().trim().min(1).max(64).optional(),
     date: z.string().date().optional(),
     languageCode: z.string().trim().min(2).max(35).optional(),
     time: z
@@ -70,6 +72,7 @@ export function createTripModeContextControllers() {
         return reply.send(
           await resolveTripModeContext(userId, params.data.tripId, {
             at: query.data.at ? new Date(query.data.at) : undefined,
+            clockTimeZone: query.data.clockTimeZone,
             languageCode: query.data.languageCode,
             preview:
               query.data.date && query.data.time

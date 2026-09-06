@@ -33,6 +33,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import {
+  deviceTimeZone,
   fetchItinerary,
   type ItineraryTripPlace,
   type TripModeContextRequestOptions,
@@ -394,12 +395,21 @@ export function TripModeShell({
     () => (isPreview && previewDate ? { date: previewDate, time: previewTime } : null),
     [isPreview, previewDate, previewTime],
   );
+  // Read once per render rather than per call, so every request in a render
+  // asks about the same clock.
+  const clockTimeZone = deviceTimeZone();
   const contextOptions = useCallback<TripModePreviewContextValue['contextOptions']>(
     (signal) =>
       previewSelection
-        ? { date: previewSelection.date, languageCode: locale, signal, time: previewSelection.time }
-        : { languageCode: locale, signal },
-    [locale, previewSelection],
+        ? {
+            clockTimeZone,
+            date: previewSelection.date,
+            languageCode: locale,
+            signal,
+            time: previewSelection.time,
+          }
+        : { clockTimeZone, languageCode: locale, signal },
+    [clockTimeZone, locale, previewSelection],
   );
   const withPreviewHref = useCallback<TripModePreviewContextValue['withPreviewHref']>(
     (href) =>

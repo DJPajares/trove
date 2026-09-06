@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useSyncExternalStore, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import { useTripChrome } from '@/components/trip-chrome';
@@ -30,6 +30,22 @@ type TripSectionHeaderProps = {
 };
 
 /**
+ * Whether there is room for standing guidance, matching Tailwind's `sm`.
+ *
+ * This was a `hidden sm:block` on the paragraph, which hid the words and left
+ * the card they sat in - a bordered, padded box with nothing inside it. The
+ * breakpoint has to be a real condition rather than a class so the card is
+ * never rendered at all, which is also what lets the slot collapse.
+ */
+const WIDE_ENOUGH_FOR_GUIDANCE = '(min-width: 40rem)';
+
+function subscribeToGuidanceViewport(onChange: () => void) {
+  const query = window.matchMedia(WIDE_ENOUGH_FOR_GUIDANCE);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+}
+
+/**
  * The part of a trip's header that belongs to the screen rather than the trip.
  *
  * The cover and the navigation row moved to `TripChrome`, which the section
@@ -51,6 +67,14 @@ export function TripSectionHeader({
 }: Readonly<TripSectionHeaderProps>) {
   const chrome = useTripChrome();
   const setCoverSource = chrome?.setCoverSource;
+  const wideEnoughForGuidance = useSyncExternalStore(
+    subscribeToGuidanceViewport,
+    () => window.matchMedia(WIDE_ENOUGH_FOR_GUIDANCE).matches,
+    // The server cannot know the viewport. Guessing narrow matches the mobile
+    // first stylesheet: the card appears on the first client render rather than
+    // flashing away on it.
+    () => false,
+  );
 
   useEffect(() => {
     if (!setCoverSource) return;
@@ -61,21 +85,25 @@ export function TripSectionHeader({
 
   if (!chrome) return null;
 
+  // Standing guidance is worth its rows on a wide screen and worth fewer than
+  // none on a phone, where it sits between the traveller and their own plan.
+  // Their own description is not guidance, and is worth the rows everywhere.
+  const showsDescription = Boolean(
+    description &&
+    (descriptionIsOwnContent || currentSection !== 'itinerary' || wideEnoughForGuidance),
+  );
+
   return (
     <>
       {actions && chrome.actionsSlot ? createPortal(actions, chrome.actionsSlot) : null}
       {coverMeta && chrome.coverMetaSlot ? createPortal(coverMeta, chrome.coverMetaSlot) : null}
-      {description && chrome.descriptionSlot
+      {showsDescription && chrome.descriptionSlot
         ? createPortal(
             <Card size="sm" className="bg-transparent">
               <CardContent>
                 <p
                   className={cn(
                     'max-w-(--layout-reading) text-sm leading-[1.55] text-pretty text-muted-foreground',
-                    // Standing guidance is worth its rows on a wide screen and worth
-                    // fewer than none on a phone, where it sits between the traveller
-                    // and their own plan. Their own description is not guidance.
-                    currentSection === 'itinerary' && !descriptionIsOwnContent && 'hidden sm:block',
                     // A description has no length Trove controls, and this header is
                     // not where a long one belongs.
                     descriptionIsOwnContent && 'line-clamp-3 whitespace-pre-line',

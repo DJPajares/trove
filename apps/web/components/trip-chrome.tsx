@@ -349,9 +349,21 @@ export function TripChrome({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-
-          <div ref={setDescriptionSlot} className="py-4" />
         </header>
+
+        {/* Outside the header on purpose. Inside it the guidance carried its own
+            padding on top of the section's rhythm, which read as more space
+            above it than below. Out here it is spaced by the same rule as
+            everything else in the section.
+
+            `mt-7` restores that rule's own top half on a phone, where the header
+            is flattened to `contents` so the navigation can stick to the whole
+            section: the rhythm is a trailing margin, and a header with no box
+            has nowhere to put one. It matches the `space-y-7` above.
+
+            `empty:hidden` is what keeps a screen with nothing to say from
+            reserving a row for it - margin included. */}
+        <div ref={setDescriptionSlot} className="mt-7 empty:hidden md:mt-0" />
 
         {children}
 

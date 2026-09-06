@@ -27,6 +27,7 @@ import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { selectCompletedPrompt } from '@/lib/home/completed-prompt';
 import { resolveHomeWeatherTarget } from '@/lib/home/weather';
 import {
+  deviceTimeZone,
   fetchTripModeContext,
   type ItineraryItem,
   type TripModeContext,
@@ -154,10 +155,14 @@ export function HomeExperience() {
    * Trip Mode reads the same key, so walking from Home into Trip Mode reuses
    * this answer instead of buying it twice.
    */
+  // Trip Mode runs on the traveller's own clock, and these surfaces show the
+  // same answer, so they have to ask the same question.
+  const clockTimeZone = deviceTimeZone();
   const tripModeContextQuery = useQuery({
     enabled: primaryTripId !== null,
-    queryFn: ({ signal }) => fetchTripModeContext(primaryTripId as string, { signal }),
-    queryKey: queryKeys.tripModeContext(primaryTripId ?? '', {}),
+    queryFn: ({ signal }) =>
+      fetchTripModeContext(primaryTripId as string, { clockTimeZone, signal }),
+    queryKey: queryKeys.tripModeContext(primaryTripId ?? '', { clockTimeZone }),
   });
 
   const tripModeContext = tripModeContextQuery.data ?? null;

@@ -1,7 +1,11 @@
 import { getPrismaClient, type Prisma } from '@trove/db';
 
 import { DAY_PART_ORDER, dayPartIndexForHour } from './day-part-windows.js';
-import { floatingLocalTimeToInstant, formatInstantInTimeZone } from './itinerary-rules.js';
+import {
+  floatingLocalTimeToInstant,
+  formatInstantInTimeZone,
+  formatLocalTime,
+} from './itinerary-rules.js';
 import { getItineraryDayRoutes } from './itinerary-routes.js';
 import {
   itineraryItemInclude,
@@ -13,7 +17,7 @@ import { hydratePlaceSnapshots } from './place-data.js';
 import { placeProviderRefInclude, serializeCanonicalPlace } from './place-serializer.js';
 import type { PlacesService } from './places.js';
 import type { RouteTravelMode, RoutesService } from './routes.js';
-import { formatDateOnly, getLocalDate, parseDateOnly } from './trip-rules.js';
+import { formatDateOnly, getLocalDate, isValidIanaTimeZone, parseDateOnly } from './trip-rules.js';
 
 export type ItineraryTravelStatus = 'completed' | 'skipped' | 'upcoming';
 
@@ -23,7 +27,13 @@ type ContextItemRecord = Prisma.ItineraryItemGetPayload<{
 
 type ContextScheduleItem = Pick<
   ContextItemRecord,
-  'dayPart' | 'durationMinutes' | 'id' | 'startInstant' | 'timeZone'
+  | 'dayPart'
+  | 'durationMinutes'
+  | 'id'
+  | 'localStartTime'
+  | 'startInstant'
+  | 'timeSemantics'
+  | 'timeZone'
 >;
 
 type ItemPhase = 'current_day_part' | 'current_exact' | 'flexible' | 'future' | 'overdue';
@@ -188,6 +198,16 @@ export function resolveTripModeLeg(input: {
 
 export type TripModeContextOptions = {
   at?: Date;
+  /**
+   * The clock Trip Mode runs on: the traveller's own device zone.
+   *
+   * A trip carries a reference zone for its lifecycle, which deliberately does
+   * not move when its owner flies. What is happening *now* is the opposite
+   * question - it is entirely about where the traveller is standing - so Trip
+   * Mode asks the device rather than the trip. Falls back to the trip's zone
+   * when a caller cannot say (an older client, or a scheduled job).
+   */
+  clockTimeZone?: string;
   languageCode?: string;
   preview?: { date: string; time: string };
   routeBufferSeconds?: number | null;
@@ -232,15 +252,53 @@ function compareLocalDate(localDate: string, itemDate: string) {
   return 'same_day' as const;
 }
 
+/**
+ * When a stop happens, on the clock the traveller is actually reading.
+ *
+ * A floating local time is a promise about a wall clock, not about an instant:
+ * a stop written as 09:00 means nine in the morning wherever the traveller is
+ * standing when they get there. The instant stored beside it was ground in
+ * whichever zone the day happened to resolve to when it was planned - which,
+ * for a trip created from another country, is not where anybody ends up. So
+ * Trip Mode re-grounds the entered time against the traveller's own clock and
+ * ignores the stored one.
+ *
+ * An authoritative instant is the opposite promise and is left alone. A flight
+ * leaves when it leaves, whatever the passenger's phone says, and PRD section
+ * 32.1 requires cross-timezone transport to keep its own times.
+ */
+export function travellerItemStart(
+  item: ContextScheduleItem,
+  itemDate: string,
+  clockTimeZone: string,
+): number | null {
+  if (item.timeSemantics !== 'AUTHORITATIVE_INSTANT') {
+    const localStartTime = formatLocalTime(item.localStartTime);
+    if (localStartTime) {
+      try {
+        return floatingLocalTimeToInstant(itemDate, localStartTime, clockTimeZone).getTime();
+      } catch {
+        // A local time that does not exist in this zone - the hour a clock
+        // skips going into daylight saving. The stored instant is the only
+        // answer left, and a wrong hour beats no stop at all.
+        return item.startInstant?.getTime() ?? null;
+      }
+    }
+  }
+
+  return item.startInstant?.getTime() ?? null;
+}
+
 function resolveItemPhase(
   item: ContextScheduleItem,
   itemDate: string,
-  dayTimeZone: string,
+  clockTimeZone: string,
   at: Date,
   scheduledStarts: readonly number[],
 ): ItemPhase {
-  if (item.startInstant) {
-    const start = item.startInstant.getTime();
+  const travellerStart = travellerItemStart(item, itemDate, clockTimeZone);
+  if (travellerStart !== null) {
+    const start = travellerStart;
     const now = at.getTime();
     if (now < start) return 'future';
     const nextScheduledStart = scheduledStarts.find((candidate) => candidate > start);
@@ -253,8 +311,10 @@ function resolveItemPhase(
     return 'overdue';
   }
 
-  const timeZone = item.timeZone ?? dayTimeZone;
-  const local = formatInstantInTimeZone(at, timeZone);
+  // An untimed stop is phased against the same clock: which day part the
+  // traveller is in is a fact about where they are, not about where the trip
+  // was planned from.
+  const local = formatInstantInTimeZone(at, clockTimeZone);
   const datePhase = compareLocalDate(local.date, itemDate);
   if (datePhase !== 'same_day') return datePhase;
 
@@ -291,11 +351,12 @@ function selectCurrentOrRelevant<T extends ContextScheduleItem>(
   return null;
 }
 
-function futureStart(item: ContextScheduleItem, itemDate: string, dayTimeZone: string) {
-  if (item.startInstant) return item.startInstant.getTime();
+function futureStart(item: ContextScheduleItem, itemDate: string, clockTimeZone: string) {
+  const travellerStart = travellerItemStart(item, itemDate, clockTimeZone);
+  if (travellerStart !== null) return travellerStart;
   if (!item.dayPart || item.dayPart === 'ANYTIME') return Number.POSITIVE_INFINITY;
   const hour = item.dayPart === 'MORNING' ? '00' : item.dayPart === 'AFTERNOON' ? '12' : '17';
-  return floatingLocalTimeToInstant(itemDate, `${hour}:00`, item.timeZone ?? dayTimeZone).getTime();
+  return floatingLocalTimeToInstant(itemDate, `${hour}:00`, clockTimeZone).getTime();
 }
 
 function selectNextItem<T extends ContextScheduleItem>(
@@ -303,13 +364,13 @@ function selectNextItem<T extends ContextScheduleItem>(
   phases: ReadonlyMap<string, ItemPhase>,
   currentOrRelevant: ReturnType<typeof selectCurrentOrRelevant<T>>,
   itemDate: string,
-  dayTimeZone: string,
+  clockTimeZone: string,
 ) {
   const future = items
     .filter((item) => phases.get(item.id) === 'future')
     .toSorted(
       (left, right) =>
-        futureStart(left, itemDate, dayTimeZone) - futureStart(right, itemDate, dayTimeZone),
+        futureStart(left, itemDate, clockTimeZone) - futureStart(right, itemDate, clockTimeZone),
     )[0];
   if (future) return future;
 
@@ -328,28 +389,35 @@ function selectNextItem<T extends ContextScheduleItem>(
 export function resolveTripModeItemSelection<T extends ContextScheduleItem>(
   items: readonly T[],
   itemDate: string,
-  dayTimeZone: string,
+  clockTimeZone: string,
   at: Date,
 ) {
+  // Measured on the traveller's clock, like everything else here, so a stop's
+  // place in the day's running order matches the one they are living.
   const scheduledStarts = items
-    .flatMap((item) => (item.startInstant ? [item.startInstant.getTime()] : []))
+    .flatMap((item) => {
+      const start = travellerItemStart(item, itemDate, clockTimeZone);
+      return start === null ? [] : [start];
+    })
     .toSorted((left, right) => left - right);
   const phases = new Map(
     items.map((item) => [
       item.id,
-      resolveItemPhase(item, itemDate, dayTimeZone, at, scheduledStarts),
+      resolveItemPhase(item, itemDate, clockTimeZone, at, scheduledStarts),
     ]),
   );
   const currentOrRelevant = selectCurrentOrRelevant(items, phases);
-  const nextItem = selectNextItem(items, phases, currentOrRelevant, itemDate, dayTimeZone);
+  const nextItem = selectNextItem(items, phases, currentOrRelevant, itemDate, clockTimeZone);
 
   return { currentOrRelevant, nextItem };
 }
 
 async function resolveLeaveBy(input: {
   bufferSeconds: number | null;
+  clockTimeZone: string;
   contextAt: Date;
   currentItem: ContextItemRecord | null;
+  dayDate: string;
   dayId: string;
   languageCode?: string;
   nextItem: ContextItemRecord | null;
@@ -357,11 +425,18 @@ async function resolveLeaveBy(input: {
   tripId: string;
   userId: string;
 }) {
+  // The same clock the rest of Trip Mode runs on, so "leave by" and the stop it
+  // is about cannot disagree about when that stop is.
+  const targetStart =
+    input.nextItem === null
+      ? null
+      : travellerItemStart(input.nextItem, input.dayDate, input.clockTimeZone);
+
   if (
     !input.currentItem?.tripPlaceId ||
     !input.nextItem?.tripPlaceId ||
-    !input.nextItem.startInstant ||
-    input.nextItem.startInstant <= input.contextAt
+    targetStart === null ||
+    targetStart <= input.contextAt.getTime()
   ) {
     return null;
   }
@@ -389,9 +464,7 @@ async function resolveLeaveBy(input: {
   if (segment?.status !== 'ok' || segment.durationSeconds === null) return null;
 
   const bufferSeconds = Math.max(0, Math.floor(input.bufferSeconds ?? 0));
-  const leaveAt = new Date(
-    input.nextItem.startInstant.getTime() - (segment.durationSeconds + bufferSeconds) * 1_000,
-  );
+  const leaveAt = new Date(targetStart - (segment.durationSeconds + bufferSeconds) * 1_000);
 
   return {
     at: leaveAt.toISOString(),
@@ -402,7 +475,7 @@ async function resolveLeaveBy(input: {
     originItemId: input.currentItem.id,
     provider: segment.provider,
     routeDurationSeconds: segment.durationSeconds,
-    targetStartAt: input.nextItem.startInstant.toISOString(),
+    targetStartAt: new Date(targetStart).toISOString(),
   };
 }
 
@@ -426,7 +499,12 @@ export async function resolveTripModeContext(
   if (!trip) throw new ItineraryNotFoundError('trip_not_found');
 
   let at = options.at ?? new Date();
-  const selectedDate = options.preview?.date ?? getLocalDate(at, trip.referenceTimeZone);
+  const clockTimeZone =
+    options.clockTimeZone && isValidIanaTimeZone(options.clockTimeZone)
+      ? options.clockTimeZone
+      : trip.referenceTimeZone;
+  // Which day the traveller is living, on their clock rather than the trip's.
+  const selectedDate = options.preview?.date ?? getLocalDate(at, clockTimeZone);
   const day = await prisma.itineraryDay.findFirst({
     where: { date: parseDateOnly(selectedDate), tripId: trip.id },
     include: {
@@ -442,11 +520,9 @@ export async function resolveTripModeContext(
   });
   if (options.preview) {
     try {
-      at = floatingLocalTimeToInstant(
-        options.preview.date,
-        options.preview.time,
-        day?.defaultTimeZone ?? trip.referenceTimeZone,
-      );
+      // Preview asks "what would this day look like at this time" - the same
+      // clock the live view uses, so stepping through a day matches living it.
+      at = floatingLocalTimeToInstant(options.preview.date, options.preview.time, clockTimeZone);
     } catch {
       throw new TripModeContextValidationError('invalid_preview_time');
     }
@@ -482,7 +558,7 @@ export async function resolveTripModeContext(
   const { currentOrRelevant, nextItem } = resolveTripModeItemSelection(
     activeItems,
     dayDate,
-    day.defaultTimeZone,
+    clockTimeZone,
     at,
   );
   // Two independent questions, and both can reach the provider. Asked in
@@ -491,7 +567,9 @@ export async function resolveTripModeContext(
   const [leaveBy, snapshots] = await Promise.all([
     resolveLeaveBy({
       bufferSeconds: options.routeBufferSeconds ?? LEAVE_BY_BUFFER_SECONDS,
+      clockTimeZone,
       contextAt: at,
+      dayDate,
       currentItem: currentOrRelevant?.item ?? null,
       dayId: day.id,
       languageCode: options.languageCode,

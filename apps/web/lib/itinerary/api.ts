@@ -250,10 +250,46 @@ export type TripModeContext = {
   };
 };
 
+/** The traveller's own zone, which is the clock Trip Mode runs on. */
+type TripModeClock = { clockTimeZone?: string };
+
 export type TripModeContextRequestOptions =
-  | { at: string; date?: never; languageCode?: string; signal?: AbortSignal; time?: never }
-  | { at?: never; date: string; languageCode?: string; signal?: AbortSignal; time: string }
-  | { at?: never; date?: never; languageCode?: string; signal?: AbortSignal; time?: never };
+  | ({
+      at: string;
+      date?: never;
+      languageCode?: string;
+      signal?: AbortSignal;
+      time?: never;
+    } & TripModeClock)
+  | ({
+      at?: never;
+      date: string;
+      languageCode?: string;
+      signal?: AbortSignal;
+      time: string;
+    } & TripModeClock)
+  | ({
+      at?: never;
+      date?: never;
+      languageCode?: string;
+      signal?: AbortSignal;
+      time?: never;
+    } & TripModeClock);
+
+/**
+ * Where the traveller actually is, as the browser understands it.
+ *
+ * Trip Mode measures "now" against this rather than against the trip's own
+ * reference zone: a trip planned from Singapore and travelled in New Zealand
+ * should read nine in the morning when the phone says nine in the morning.
+ */
+export function deviceTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export type ItineraryItemInput = {
   customLabel?: string | null;
@@ -408,28 +444,48 @@ function dayPartIndex(value: ItineraryDayPart | null) {
   return null;
 }
 
+/**
+ * When a stop happens, on the clock the traveller is actually reading.
+ *
+ * The server answers this too, in `travellerItemStart`; this is its client
+ * twin, used by the offline context and the refresh clock. A floating local
+ * time is a promise about a wall clock, so it is re-ground against the
+ * traveller's own zone rather than read from an instant that was ground
+ * wherever the trip happened to be planned. An authoritative instant - a
+ * flight - is the opposite promise and is left alone.
+ */
+export function travellerItemStart(
+  item: Pick<ItineraryItem, 'localStartTime' | 'startInstant' | 'timeSemantics'>,
+  itemDate: string,
+  clockTimeZone: string,
+): number | null {
+  if (item.localStartTime && item.timeSemantics !== 'authoritative_instant') {
+    return localPreviewInstant(itemDate, item.localStartTime, clockTimeZone).getTime();
+  }
+  if (item.startInstant) return new Date(item.startInstant).getTime();
+  if (!item.localStartTime) return null;
+
+  return localPreviewInstant(itemDate, item.localStartTime, clockTimeZone).getTime();
+}
+
 export function offlineTripModeContext(
   itinerary: Itinerary,
   options: TripModeContextRequestOptions,
 ): TripModeContext {
   const requestedAt = options.at ? new Date(options.at) : new Date();
-  const selectedDate =
-    options.date ?? localDateInTimeZone(itinerary.trip.referenceTimeZone, requestedAt);
+  // The traveller's own clock, exactly as the server uses it, so going offline
+  // never changes which stop Trip Mode says you are on.
+  // Supplied by the caller rather than read from the environment, so the
+  // offline answer is the same rule the server applied, not a second guess.
+  const contextTimeZone = options.clockTimeZone ?? itinerary.trip.referenceTimeZone;
+  const selectedDate = options.date ?? localDateInTimeZone(contextTimeZone, requestedAt);
   const day = itinerary.days.find((candidate) => candidate.date === selectedDate) ?? null;
   const activeItems = day?.items.filter((item) => item.travelStatus === 'upcoming') ?? [];
-  const contextTimeZone = day?.defaultTimeZone ?? itinerary.trip.referenceTimeZone;
   const at = options.date
     ? localPreviewInstant(options.date, options.time, contextTimeZone)
     : requestedAt;
-  const itemStart = (item: ItineraryItem) => {
-    if (item.startInstant) return new Date(item.startInstant).getTime();
-    if (!item.localStartTime || !day) return null;
-    return localPreviewInstant(
-      day.date,
-      item.localStartTime,
-      item.timeZone ?? contextTimeZone,
-    ).getTime();
-  };
+  const itemStart = (item: ItineraryItem) =>
+    day ? travellerItemStart(item, day.date, contextTimeZone) : null;
   const scheduledStarts = activeItems
     .flatMap((item) => {
       const start = itemStart(item);
@@ -447,7 +503,7 @@ export function offlineTripModeContext(
       return at.getTime() < end ? ('current_exact' as const) : ('overdue' as const);
     }
 
-    const itemTimeZone = item.timeZone ?? contextTimeZone;
+    const itemTimeZone = contextTimeZone;
     const itemLocalDate = localDateInTimeZone(itemTimeZone, at);
     if (itemLocalDate < selectedDate) return 'future' as const;
     if (itemLocalDate > selectedDate) return 'overdue' as const;
@@ -481,7 +537,7 @@ export function offlineTripModeContext(
     const itemPart = dayPartIndex(item.dayPart);
     if (itemPart === null) return Number.POSITIVE_INFINITY;
     const time = itemPart === 0 ? '00:00' : itemPart === 1 ? '12:00' : '17:00';
-    return localPreviewInstant(selectedDate, time, item.timeZone ?? contextTimeZone).getTime();
+    return localPreviewInstant(selectedDate, time, contextTimeZone).getTime();
   };
   const future = activeItems
     .filter((_, index) => phases[index] === 'future')
@@ -573,6 +629,7 @@ export async function fetchTripModeContext(
   if (options.date) query.set('date', options.date);
   if (options.time) query.set('time', options.time);
   if (options.languageCode) query.set('languageCode', options.languageCode);
+  if (options.clockTimeZone) query.set('clockTimeZone', options.clockTimeZone);
   const suffix = query.size ? `?${query.toString()}` : '';
   try {
     return await itineraryRequest<TripModeContext>(`/trips/${tripId}/trip-mode/context${suffix}`, {

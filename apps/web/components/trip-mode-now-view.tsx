@@ -33,7 +33,7 @@ import { TripWeatherContext } from '@/components/trip-weather-context';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNowTick } from '@/hooks/use-now-tick';
-import type { ItineraryItem } from '@/lib/itinerary/api';
+import { deviceTimeZone, type ItineraryItem } from '@/lib/itinerary/api';
 import { formatDistanceValue } from '@/lib/itinerary/format-distance';
 import { formatItineraryTimeRange } from '@/lib/itinerary/item-timing';
 import { TravelModeIcon } from '@/lib/itinerary/travel-mode';
@@ -139,7 +139,16 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   const readyContext = context;
-  const nowZone = readyContext.day?.defaultTimeZone ?? readyContext.trip.referenceTimeZone;
+  // The traveller's own clock. A trip keeps a reference zone for its lifecycle,
+  // which deliberately does not move when its owner flies - but what time it is
+  // right now is a question about where they are standing, not where the trip
+  // was planned. Preview keeps the trip's zone, since nobody is standing in the
+  // day being previewed.
+  const nowZone = isPreview
+    ? (readyContext.day?.defaultTimeZone ?? readyContext.trip.referenceTimeZone)
+    : (deviceTimeZone() ??
+      readyContext.day?.defaultTimeZone ??
+      readyContext.trip.referenceTimeZone);
   const date = new Intl.DateTimeFormat(locale, {
     dateStyle: 'full',
     timeZone: 'UTC',
@@ -156,8 +165,9 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
       return formatItineraryTimeRange(item, locale, preferences.timeFormat);
     }
     if (item.startInstant) {
-      const timeZone =
-        item.timeZone ?? readyContext.day?.defaultTimeZone ?? readyContext.trip.referenceTimeZone;
+      // An instant is shown on the clock the traveller is reading, the same one
+      // the rest of Trip Mode measures against.
+      const timeZone = nowZone;
       const start = timeFormat(item.startInstant, timeZone);
       if (!item.durationMinutes) return start;
 
@@ -345,12 +355,10 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
                   {t('leaveByLabel')}
                 </p>
                 <p className="mt-1 text-2xl leading-tight font-semibold tracking-[-0.02em] text-foreground tabular-nums">
-                  {timeFormat(
-                    route.at,
-                    nextItem.timeZone ??
-                      readyContext.day?.defaultTimeZone ??
-                      readyContext.trip.referenceTimeZone,
-                  )}
+                  {/* Computed against the traveller's clock, so it is read on
+                      it too - otherwise "leave by" and the stop it is about
+                      would name the same instant in two different hours. */}
+                  {timeFormat(route.at, nowZone)}
                 </p>
                 {/* The time already has the slack folded in, so it says so
                     rather than reading as a travel estimate that is running

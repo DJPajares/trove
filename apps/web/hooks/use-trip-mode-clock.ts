@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-import type { TripModeContext } from '@/lib/itinerary/api';
+import { deviceTimeZone, type TripModeContext } from '@/lib/itinerary/api';
 import { nextTripModeBoundary, refreshDelayMs } from '@/lib/itinerary/trip-mode-clock';
 
 /**
@@ -28,7 +28,7 @@ export function useTripModeClock(input: { context: TripModeContext | null; enabl
     if (!enabled || !context) return;
 
     // The moment this answer stops holding.
-    const staleAt = nextTripModeBoundary(context, new Date(context.contextAt));
+    const staleAt = nextTripModeBoundary(context, new Date(context.contextAt), deviceTimeZone());
     const refresh = () => setRefreshKey((current) => current + 1);
     let timer: number | undefined;
 

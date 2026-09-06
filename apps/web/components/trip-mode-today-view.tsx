@@ -66,6 +66,7 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  deviceTimeZone,
   organizeItineraryItem,
   type ItineraryItem,
   type ItineraryScheduleInput,
@@ -481,7 +482,11 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
             {day.name ? itineraryT('dayOption', { date, number: dayNumber }) : date}
           </p>
           <p className="mt-0.5 text-[length:var(--text-metadata)] leading-5 text-text-subtle">
-            {t('timeZone', { timeZone: day.defaultTimeZone })}
+            {/* The clock these times are read on, which for a traveller who
+                has flown is theirs rather than the one the day was planned in. */}
+            {t('timeZone', {
+              timeZone: isPreview ? day.defaultTimeZone : (deviceTimeZone() ?? day.defaultTimeZone),
+            })}
           </p>
         </div>
         {/* Adding to the day is the one action worth a control of its own here;

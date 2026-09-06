@@ -142,3 +142,23 @@ test('offline explicit instants select the trip-local date rather than the machi
   expect(result.contextSource).toBe('preview');
   expect(result.currentOrRelevant?.itemId).toBe('late');
 });
+
+test('offline reads the traveller’s clock when the caller supplies one', () => {
+  // 21:00Z is 9am in New Zealand and 5am in Singapore, where this trip was
+  // planned. Both are the same calendar day; they disagree about the hour.
+  const at = '2026-09-05T21:00:00.000Z';
+  const trip = itinerary([item('hobbiton', '09:00'), item('lunch', '12:00')]);
+  trip.days[0]!.date = '2026-09-06';
+  trip.trip.endDate = '2026-09-07';
+
+  const onTheTrip = offlineTripModeContext(trip, { at });
+  const onTheTraveller = offlineTripModeContext(trip, { at, clockTimeZone: 'Pacific/Auckland' });
+
+  // On the trip's clock it is barely dawn, so the 9am stop has not begun.
+  expect(onTheTrip.currentOrRelevant).toBeNull();
+  expect(onTheTrip.nextItemId).toBe('hobbiton');
+
+  // On the traveller's, they are standing in it.
+  expect(onTheTraveller.currentOrRelevant).toMatchObject({ itemId: 'hobbiton', kind: 'current' });
+  expect(onTheTraveller.nextItemId).toBe('lunch');
+});

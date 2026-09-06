@@ -14,7 +14,7 @@ import { TripFeaturedCard } from '@/components/trip-featured-card';
 import { TripListRow } from '@/components/trip-list-row';
 import { TripShareDialog } from '@/components/trip-share-dialog';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
-import { fetchTripModeContext } from '@/lib/itinerary/api';
+import { deviceTimeZone, fetchTripModeContext } from '@/lib/itinerary/api';
 import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
 import { groupTripsForLibrary, PAST_TRIPS_PREVIEW_COUNT } from '@/lib/trips/lifecycle';
 import { libraryEditorialSubjects, tripEditorialSubject } from '@/lib/trips/summary';
@@ -54,10 +54,14 @@ export function TripsManager() {
   // buying a second - this endpoint can reach Routes.
   const featuredActiveTripId =
     groupedTrips.featured?.lifecycle === 'active' ? groupedTrips.featured.id : null;
+  // Trip Mode runs on the traveller's own clock, and these surfaces show the
+  // same answer, so they have to ask the same question.
+  const clockTimeZone = deviceTimeZone();
   const tripModeContextQuery = useQuery({
     enabled: featuredActiveTripId !== null,
-    queryFn: ({ signal }) => fetchTripModeContext(featuredActiveTripId as string, { signal }),
-    queryKey: queryKeys.tripModeContext(featuredActiveTripId ?? '', {}),
+    queryFn: ({ signal }) =>
+      fetchTripModeContext(featuredActiveTripId as string, { clockTimeZone, signal }),
+    queryKey: queryKeys.tripModeContext(featuredActiveTripId ?? '', { clockTimeZone }),
   });
 
   // Readiness only earns headings when it actually divides something: a

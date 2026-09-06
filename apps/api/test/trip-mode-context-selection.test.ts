@@ -6,16 +6,24 @@ type ScheduledItem = {
   dayPart: 'AFTERNOON' | 'ANYTIME' | 'EVENING' | 'MORNING' | null;
   durationMinutes: number | null;
   id: string;
+  localStartTime: Date | null;
   startInstant: Date | null;
+  timeSemantics: 'AUTHORITATIVE_INSTANT' | 'FLOATING_LOCAL' | null;
   timeZone: string | null;
 };
 
+/**
+ * A stop known only by its instant. With no entered local time there is nothing
+ * to re-ground, so these exercise the instant path exactly as they always did.
+ */
 function item(id: string, start: string | null, overrides: Partial<ScheduledItem> = {}) {
   return {
     dayPart: null,
     durationMinutes: null,
     id,
+    localStartTime: null,
     startInstant: start ? new Date(start) : null,
+    timeSemantics: null,
     timeZone: 'Asia/Singapore',
     ...overrides,
   } satisfies ScheduledItem;
@@ -111,4 +119,72 @@ test('expired scheduled items do not displace a flexible itinerary item', () => 
     kind: 'relevant',
     reason: 'itinerary_order',
   });
+});
+
+/** A stop the traveller entered as a wall-clock time, the way most are. */
+function floatingItem(id: string, localTime: string, overrides: Partial<ScheduledItem> = {}) {
+  const [hour = 0, minute = 0] = localTime.split(':').map(Number);
+
+  return {
+    dayPart: null,
+    durationMinutes: null,
+    id,
+    localStartTime: new Date(Date.UTC(1970, 0, 1, hour, minute)),
+    // Ground in Singapore, the way a trip created there stores it: 09:00 local
+    // becomes 01:00Z, which is one in the afternoon in New Zealand.
+    startInstant: new Date(`2026-09-06T${String(hour - 8).padStart(2, '0')}:00:00.000Z`),
+    timeSemantics: 'FLOATING_LOCAL' as const,
+    timeZone: 'Asia/Singapore',
+    ...overrides,
+  } satisfies ScheduledItem;
+}
+
+test('a stop written as 9am is current at 9am where the traveller is', () => {
+  const items = [floatingItem('hobbiton', '09:00'), floatingItem('lunch', '12:00')];
+  // 21:00Z on the 5th is 9am on the 6th in New Zealand.
+  const at = new Date('2026-09-05T21:00:00.000Z');
+
+  const onTheTravellersClock = resolveTripModeItemSelection(
+    items,
+    '2026-09-06',
+    'Pacific/Auckland',
+    at,
+  );
+
+  expect(onTheTravellersClock.currentOrRelevant).toMatchObject({
+    item: { id: 'hobbiton' },
+    kind: 'current',
+  });
+  expect(onTheTravellersClock.nextItem).toMatchObject({ id: 'lunch' });
+});
+
+test('the same moment read on the trip’s own clock is still hours early', () => {
+  const items = [floatingItem('hobbiton', '09:00'), floatingItem('lunch', '12:00')];
+  const at = new Date('2026-09-05T21:00:00.000Z');
+
+  // The zone the trip was created in says it is only 5am, so nothing has begun.
+  // This is what the traveller was seeing while standing at the stop.
+  const onTheTripsClock = resolveTripModeItemSelection(items, '2026-09-06', 'Asia/Singapore', at);
+
+  expect(onTheTripsClock.currentOrRelevant).toBeNull();
+  expect(onTheTripsClock.nextItem).toMatchObject({ id: 'hobbiton' });
+});
+
+test('a flight keeps the instant it was given, whatever the phone says', () => {
+  const departure = floatingItem('flight', '09:00', {
+    startInstant: new Date('2026-09-06T01:00:00.000Z'),
+    timeSemantics: 'AUTHORITATIVE_INSTANT',
+  });
+
+  // 9am in New Zealand is 21:00Z the day before - well before the 01:00Z
+  // departure, which an authoritative instant must not be re-grounded away from.
+  const result = resolveTripModeItemSelection(
+    [departure],
+    '2026-09-06',
+    'Pacific/Auckland',
+    new Date('2026-09-05T21:00:00.000Z'),
+  );
+
+  expect(result.currentOrRelevant).toBeNull();
+  expect(result.nextItem).toMatchObject({ id: 'flight' });
 });

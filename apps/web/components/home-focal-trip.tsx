@@ -116,7 +116,7 @@ export function HomeFocalTrip({
                   </p>
                   <TripProgress inverse trip={trip} />
                 </div>
-                <div className="md:absolute md:right-7 md:bottom-7 md:w-[25rem]">
+                <div className="md:absolute md:right-7 md:bottom-7 md:w-[25rem] lg:right-9 lg:bottom-9">
                   {weatherTarget ? (
                     <HomeWeatherInset target={weatherTarget} />
                   ) : weatherPending ? (
@@ -137,7 +137,7 @@ export function HomeFocalTrip({
                   </p>
                   <TripProgress inverse trip={trip} tripModeContext={tripModeContext} />
                 </div>
-                <div className="md:absolute md:right-9 md:bottom-9 md:w-[25rem]">
+                <div className="md:absolute md:right-7 md:bottom-7 md:w-[25rem] lg:right-9 lg:bottom-9">
                   {weatherTarget ? (
                     <HomeWeatherInset target={weatherTarget} />
                   ) : weatherPending ? (

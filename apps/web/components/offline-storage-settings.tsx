@@ -133,7 +133,10 @@ export function OfflineStorageSettings() {
   }
 
   return (
-    <Card className="gap-0 py-0" id="offline-storage">
+    <Card
+      className="scroll-mt-[calc(var(--safe-top)+var(--header-height)+1rem)] gap-0 py-0"
+      id="offline-storage"
+    >
       <EditorialSection
         className="p-5 sm:p-6"
         description={t('description')}

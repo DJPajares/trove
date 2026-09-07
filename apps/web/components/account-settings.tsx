@@ -27,7 +27,10 @@ export function PrivacySecuritySettings() {
   const t = useTranslations('privacySecurity');
 
   return (
-    <Card className="gap-0 py-0" id="privacy-security">
+    <Card
+      className="scroll-mt-[calc(var(--safe-top)+var(--header-height)+1rem)] gap-0 py-0"
+      id="privacy-security"
+    >
       <EditorialSection
         className="p-5 sm:p-6"
         description={t('description')}
@@ -101,7 +104,10 @@ export function AccountSettings() {
   }
 
   return (
-    <Card className="gap-0 py-0" id="account">
+    <Card
+      className="scroll-mt-[calc(var(--safe-top)+var(--header-height)+1rem)] gap-0 py-0"
+      id="account"
+    >
       <EditorialSection
         className="p-5 sm:p-6"
         description={t('description')}

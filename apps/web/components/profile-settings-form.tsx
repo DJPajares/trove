@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { CircleAlert } from 'lucide-react';
+import { CircleAlert, Palette, SlidersHorizontal, UserRound } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useId, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
@@ -9,6 +9,7 @@ import type { ChangeEvent, FormEvent } from 'react';
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
 import { CurrencyCombobox } from '@/components/currency-combobox';
+import { EditorialSection } from '@/components/editorial-section';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -21,31 +22,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { removeProfilePhoto, type Profile, uploadProfilePhoto } from '@/lib/profile/api';
-import { getPreferenceDefaults, type ProfilePreferences } from '@/lib/profile/preferences';
+import { removeProfilePhoto, uploadProfilePhoto } from '@/lib/profile/api';
+import {
+  getProfileSettingsFormState,
+  haveSavedProfileSettingsChanged,
+  normalizeSavedProfileSettings,
+  type ProfileSettingsFormState,
+  type SavedProfileSettings,
+} from '@/lib/profile/settings-form';
 import { cn } from '@/lib/utils';
-
-type FormState = ProfilePreferences & {
-  displayName: string;
-  homeCurrencyCode: string;
-  homeLocation: string;
-};
-
-function getFormState(profile: Profile, locale: string): FormState {
-  const defaults = getPreferenceDefaults(locale);
-
-  return {
-    ...defaults,
-    appearance: profile.appearance ?? defaults.appearance,
-    dateFormat: profile.dateFormat ?? defaults.dateFormat,
-    distanceUnit: profile.distanceUnit ?? defaults.distanceUnit,
-    displayName: profile.displayName ?? '',
-    homeCurrencyCode: profile.homeCurrencyCode ?? '',
-    homeLocation: profile.homeLocation ?? '',
-    temperatureUnit: profile.temperatureUnit ?? defaults.temperatureUnit,
-    timeFormat: profile.timeFormat ?? defaults.timeFormat,
-  };
-}
 
 export function ProfileSettingsForm({ locale }: { locale: string }) {
   const t = useTranslations('profile');
@@ -57,14 +42,17 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
     setAppearance,
     status: preferencesStatus,
   } = usePreferences();
-  const [form, setForm] = useState<FormState | null>(null);
+  const [form, setForm] = useState<ProfileSettingsFormState | null>(null);
+  const [savedBaseline, setSavedBaseline] = useState<SavedProfileSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'loading' | 'saving' | 'saved'>('loading');
   const [photoBusy, setPhotoBusy] = useState(false);
 
   useEffect(() => {
     if (profile && !form) {
-      setForm(getFormState(profile, locale));
+      const initialForm = getProfileSettingsFormState(profile, locale);
+      setForm(initialForm);
+      setSavedBaseline(normalizeSavedProfileSettings(initialForm));
       setStatus('idle');
     } else if (preferencesStatus === 'unavailable' && !profile) {
       setError(t('loadError'));
@@ -80,21 +68,23 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
     );
   }, [preferences.appearance]);
 
-  function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
+  function updateField<K extends keyof ProfileSettingsFormState>(
+    field: K,
+    value: ProfileSettingsFormState[K],
+  ) {
     setForm((current) => (current ? { ...current, [field]: value } : current));
     setStatus('idle');
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!form) return;
+    if (!form || !savedBaseline || !haveSavedProfileSettingsChanged(form, savedBaseline)) return;
 
     setError(null);
     setStatus('saving');
 
     try {
       const nextProfile = await saveProfileChanges({
-        appearance: form.appearance,
         dateFormat: form.dateFormat,
         distanceUnit: form.distanceUnit,
         displayName: form.displayName.trim() || null,
@@ -103,7 +93,11 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
         temperatureUnit: form.temperatureUnit,
         timeFormat: form.timeFormat,
       });
-      setForm(getFormState(nextProfile, locale));
+      const savedForm = getProfileSettingsFormState(nextProfile, locale);
+      setForm((current) =>
+        current ? { ...savedForm, appearance: current.appearance } : savedForm,
+      );
+      setSavedBaseline(normalizeSavedProfileSettings(savedForm));
       setStatus('saved');
     } catch {
       setError(t('saveError'));
@@ -163,6 +157,8 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
     );
   }
 
+  const isDirty = savedBaseline ? haveSavedProfileSettingsChanged(form, savedBaseline) : false;
+
   return (
     <form className="space-y-6" onSubmit={handleSubmit}>
       {error ? (
@@ -177,159 +173,204 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
         </Alert>
       ) : null}
 
-      <Card className="gap-0 py-0">
-        <FieldSet className="gap-5 p-5 sm:p-6">
-          <FieldLegend className="text-lg leading-6 font-semibold tracking-tight">
-            {t('profileSection')}
-          </FieldLegend>
-          <div className="grid gap-6 sm:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="profile-display-name">{t('displayName')}</FieldLabel>
-              <Input
-                aria-describedby="profile-display-name-hint"
-                id="profile-display-name"
-                maxLength={100}
-                onChange={(event) => updateField('displayName', event.target.value)}
-                value={form.displayName}
-              />
-              <FieldDescription id="profile-display-name-hint">
-                {t('displayNameHint')}
-              </FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="profile-home-location">{t('homeLocation')}</FieldLabel>
-              <Input
-                aria-describedby="profile-home-location-hint"
-                id="profile-home-location"
-                maxLength={200}
-                onChange={(event) => updateField('homeLocation', event.target.value)}
-                value={form.homeLocation}
-              />
-              <FieldDescription id="profile-home-location-hint">
-                {t('homeLocationHint')}
-              </FieldDescription>
-            </Field>
-            <Field className="sm:max-w-xs">
-              <FieldLabel htmlFor="profile-home-currency">{t('homeCurrency')}</FieldLabel>
-              <CurrencyCombobox
-                aria-describedby="profile-home-currency-hint"
-                aria-label={t('homeCurrency')}
-                id="profile-home-currency"
-                onValueChange={(value) => updateField('homeCurrencyCode', value)}
-                placeholder={t('homeCurrencyPlaceholder')}
-                value={form.homeCurrencyCode}
-              />
-              <FieldDescription id="profile-home-currency-hint">
-                {t('homeCurrencyHint')}
-              </FieldDescription>
-            </Field>
-          </div>
-        </FieldSet>
-
-        <FieldSet className="gap-5 border-t p-5 sm:p-6">
-          <FieldLegend className="text-lg leading-6 font-semibold tracking-tight">
-            {t('photoSection')}
-          </FieldLegend>
-          <div className="flex flex-wrap items-center gap-5">
-            <div className="flex size-20 items-center justify-center overflow-hidden rounded-full bg-secondary text-2xl font-semibold text-secondary-foreground">
-              {profile?.avatarUrl ? (
-                <Image
-                  alt={t('photoAlt')}
-                  className="size-full object-cover"
-                  height={80}
-                  src={profile.avatarUrl}
-                  unoptimized
-                  width={80}
-                />
-              ) : (
-                form.displayName.slice(0, 1).toUpperCase() || '?'
-              )}
-            </div>
-            <div className="space-y-2">
-              {/* The input this wraps is `sr-only`, so it is focusable but has
-                  no ring of its own to show; the label wears it instead. */}
-              <label
-                className={cn(
-                  buttonVariants({ size: 'default' }),
-                  'focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/40',
-                  photoBusy ? 'pointer-events-none opacity-50' : 'cursor-pointer',
-                )}
-              >
-                <span aria-disabled={photoBusy}>
-                  {profile?.avatarPath ? t('changePhoto') : t('choosePhoto')}
-                </span>
+      <Card
+        className="scroll-mt-[calc(var(--safe-top)+var(--header-height)+1rem)] gap-0 py-0"
+        id="profile"
+      >
+        <EditorialSection
+          className="p-5 sm:p-6"
+          description={t('profileSectionDescription')}
+          headingId="profile-settings-heading"
+          icon={<UserRound aria-hidden="true" />}
+          title={t('profileSection')}
+        >
+          <FieldSet className="mt-6 gap-6">
+            <FieldLegend className="sr-only">{t('profileSection')}</FieldLegend>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="profile-display-name">{t('displayName')}</FieldLabel>
                 <Input
-                  accept="image/jpeg,image/png,image/webp"
-                  className="sr-only"
-                  disabled={photoBusy}
-                  onChange={handlePhotoChange}
-                  type="file"
+                  aria-describedby="profile-display-name-hint"
+                  id="profile-display-name"
+                  maxLength={100}
+                  onChange={(event) => updateField('displayName', event.target.value)}
+                  value={form.displayName}
                 />
-              </label>
-              {profile?.avatarPath ? (
-                <Button
-                  disabled={photoBusy}
-                  onClick={handlePhotoRemove}
-                  type="button"
-                  variant="outline"
-                >
-                  {t('removePhoto')}
-                </Button>
-              ) : null}
-              <p className="text-xs text-muted-foreground">{t('photoHint')}</p>
+                <FieldDescription id="profile-display-name-hint">
+                  {t('displayNameHint')}
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="profile-home-location">{t('homeLocation')}</FieldLabel>
+                <Input
+                  aria-describedby="profile-home-location-hint"
+                  id="profile-home-location"
+                  maxLength={200}
+                  onChange={(event) => updateField('homeLocation', event.target.value)}
+                  value={form.homeLocation}
+                />
+                <FieldDescription id="profile-home-location-hint">
+                  {t('homeLocationHint')}
+                </FieldDescription>
+              </Field>
+              <Field className="sm:max-w-xs">
+                <FieldLabel htmlFor="profile-home-currency">{t('homeCurrency')}</FieldLabel>
+                <CurrencyCombobox
+                  aria-describedby="profile-home-currency-hint"
+                  aria-label={t('homeCurrency')}
+                  id="profile-home-currency"
+                  onValueChange={(value) => updateField('homeCurrencyCode', value)}
+                  placeholder={t('homeCurrencyPlaceholder')}
+                  value={form.homeCurrencyCode}
+                />
+                <FieldDescription id="profile-home-currency-hint">
+                  {t('homeCurrencyHint')}
+                </FieldDescription>
+              </Field>
             </div>
-          </div>
-        </FieldSet>
 
-        <FieldSet className="gap-5 border-t p-5 sm:p-6">
-          <FieldLegend className="text-lg leading-6 font-semibold tracking-tight">
-            {t('preferencesSection')}
-          </FieldLegend>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            <SelectField
-              label={t('distanceUnit')}
-              onChange={(value) => updateField('distanceUnit', value as FormState['distanceUnit'])}
-              options={[
-                ['km', t('kilometers')],
-                ['mi', t('miles')],
-              ]}
-              value={form.distanceUnit}
-            />
-            <SelectField
-              label={t('temperatureUnit')}
-              onChange={(value) =>
-                updateField('temperatureUnit', value as FormState['temperatureUnit'])
-              }
-              options={[
-                ['celsius', t('celsius')],
-                ['fahrenheit', t('fahrenheit')],
-              ]}
-              value={form.temperatureUnit}
-            />
-            <SelectField
-              label={t('timeFormat')}
-              onChange={(value) => updateField('timeFormat', value as FormState['timeFormat'])}
-              options={[
-                ['12h', t('hour12')],
-                ['24h', t('hour24')],
-              ]}
-              value={form.timeFormat}
-            />
-            <SelectField
-              label={t('dateFormat')}
-              onChange={(value) => updateField('dateFormat', value as FormState['dateFormat'])}
-              options={[
-                ['mdy', t('monthDayYear')],
-                ['dmy', t('dayMonthYear')],
-                ['ymd', t('yearMonthDay')],
-              ]}
-              value={form.dateFormat}
-            />
+            <div className="border-t border-border-subtle pt-5">
+              <p className="text-sm font-medium text-foreground">{t('photoSection')}</p>
+              <div className="mt-3 flex flex-wrap items-center gap-4 sm:gap-5">
+                <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary text-2xl font-semibold text-secondary-foreground">
+                  {profile?.avatarUrl ? (
+                    <Image
+                      alt={t('photoAlt')}
+                      className="size-full object-cover"
+                      height={80}
+                      src={profile.avatarUrl}
+                      unoptimized
+                      width={80}
+                    />
+                  ) : (
+                    form.displayName.slice(0, 1).toUpperCase() || '?'
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    {/* The input is screen-reader only, so its label carries the focus ring. */}
+                    <label
+                      className={cn(
+                        buttonVariants({ size: 'default' }),
+                        'focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/40',
+                        photoBusy ? 'pointer-events-none opacity-50' : 'cursor-pointer',
+                      )}
+                    >
+                      <span aria-disabled={photoBusy}>
+                        {profile?.avatarPath ? t('changePhoto') : t('choosePhoto')}
+                      </span>
+                      <Input
+                        accept="image/jpeg,image/png,image/webp"
+                        className="sr-only size-px!"
+                        disabled={photoBusy}
+                        onChange={handlePhotoChange}
+                        type="file"
+                      />
+                    </label>
+                    {profile?.avatarPath ? (
+                      <Button
+                        disabled={photoBusy}
+                        onClick={handlePhotoRemove}
+                        type="button"
+                        variant="outline"
+                      >
+                        {t('removePhoto')}
+                      </Button>
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t('photoHint')}</p>
+                </div>
+              </div>
+            </div>
+          </FieldSet>
+        </EditorialSection>
+      </Card>
+
+      <Card
+        className="scroll-mt-[calc(var(--safe-top)+var(--header-height)+1rem)] gap-0 py-0"
+        id="travel-preferences"
+      >
+        <EditorialSection
+          className="p-5 sm:p-6"
+          description={t('preferencesSectionDescription')}
+          headingId="travel-preferences-heading"
+          icon={<SlidersHorizontal aria-hidden="true" />}
+          title={t('preferencesSection')}
+        >
+          <FieldSet className="mt-6 gap-6">
+            <FieldLegend className="sr-only">{t('preferencesSection')}</FieldLegend>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <SelectField
+                label={t('distanceUnit')}
+                onChange={(value) =>
+                  updateField('distanceUnit', value as ProfileSettingsFormState['distanceUnit'])
+                }
+                options={[
+                  ['km', t('kilometers')],
+                  ['mi', t('miles')],
+                ]}
+                value={form.distanceUnit}
+              />
+              <SelectField
+                label={t('temperatureUnit')}
+                onChange={(value) =>
+                  updateField(
+                    'temperatureUnit',
+                    value as ProfileSettingsFormState['temperatureUnit'],
+                  )
+                }
+                options={[
+                  ['celsius', t('celsius')],
+                  ['fahrenheit', t('fahrenheit')],
+                ]}
+                value={form.temperatureUnit}
+              />
+              <SelectField
+                label={t('timeFormat')}
+                onChange={(value) =>
+                  updateField('timeFormat', value as ProfileSettingsFormState['timeFormat'])
+                }
+                options={[
+                  ['12h', t('hour12')],
+                  ['24h', t('hour24')],
+                ]}
+                value={form.timeFormat}
+              />
+              <SelectField
+                label={t('dateFormat')}
+                onChange={(value) =>
+                  updateField('dateFormat', value as ProfileSettingsFormState['dateFormat'])
+                }
+                options={[
+                  ['mdy', t('monthDayYear')],
+                  ['dmy', t('dayMonthYear')],
+                  ['ymd', t('yearMonthDay')],
+                ]}
+                value={form.dateFormat}
+              />
+            </div>
+          </FieldSet>
+        </EditorialSection>
+      </Card>
+
+      <Card
+        className="scroll-mt-[calc(var(--safe-top)+var(--header-height)+1rem)] gap-0 py-0"
+        id="appearance"
+      >
+        <EditorialSection
+          className="p-5 sm:p-6"
+          description={t('appearanceSectionDescription')}
+          headingId="appearance-settings-heading"
+          icon={<Palette aria-hidden="true" />}
+          title={t('appearanceSection')}
+        >
+          <FieldSet className="mt-6 max-w-sm">
+            <FieldLegend className="sr-only">{t('appearanceSection')}</FieldLegend>
             <SelectField
               label={t('appearance')}
               onChange={(value) => {
-                const appearance = value as FormState['appearance'];
-                updateField('appearance', appearance);
+                const appearance = value as ProfileSettingsFormState['appearance'];
+                setForm((current) => (current ? { ...current, appearance } : current));
                 setAppearance(appearance);
               }}
               options={[
@@ -338,12 +379,12 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
               ]}
               value={form.appearance}
             />
-          </div>
-        </FieldSet>
+          </FieldSet>
+        </EditorialSection>
       </Card>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button disabled={status === 'saving'} type="submit">
+        <Button disabled={status === 'saving' || !isDirty} type="submit">
           {status === 'saving' ? t('saving') : t('save')}
         </Button>
         {status === 'saved' ? (

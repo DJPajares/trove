@@ -26,6 +26,24 @@ export function invalidateTripQueries(
 }
 
 /**
+ * Drops a trip's cached reads outright, for a trip that no longer exists.
+ *
+ * Invalidating a deleted trip only buys a round of 404s and leaves the stale
+ * successful data sitting behind them, so a delete removes instead. The one key
+ * `trip-detail` already cleared - `['trip', id]` - is the only trip-scoped root
+ * that never reaches disk; these are the ones that do.
+ */
+export function removeTripQueries(
+  queryClient: QueryClient,
+  tripId: string,
+  roots: readonly TripScopedQueryRoot[] = TRIP_SCOPED_QUERY_ROOTS,
+) {
+  for (const root of roots) {
+    queryClient.removeQueries({ queryKey: [root, tripId] });
+  }
+}
+
+/**
  * The roots an itinerary edit invalidates.
  *
  * Editing an item moves what Trip Mode considers "now", changes the leg chain

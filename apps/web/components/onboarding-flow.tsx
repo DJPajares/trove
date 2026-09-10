@@ -8,6 +8,7 @@ import type { FormEvent } from 'react';
 
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
+import { CountryCombobox } from '@/components/country-combobox';
 import { CurrencyCombobox } from '@/components/currency-combobox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -22,8 +23,8 @@ import {
 
 type FormValues = {
   displayName: string;
+  homeCountryCode: string;
   homeCurrencyCode: string;
-  homeLocation: string;
 };
 
 const stepIcons: Record<OnboardingStep, typeof UserRound> = {
@@ -52,8 +53,8 @@ export function OnboardingFlow() {
     }
     setForm({
       displayName: profile.displayName ?? '',
+      homeCountryCode: profile.homeCountryCode ?? '',
       homeCurrencyCode: profile.homeCurrencyCode ?? '',
-      homeLocation: profile.homeLocation ?? '',
     });
     setStep(firstIncompleteStep(profile));
   }, [profile, router, step]);
@@ -75,12 +76,12 @@ export function OnboardingFlow() {
 
     const trimmed = {
       displayName: form.displayName.trim(),
+      homeCountryCode: form.homeCountryCode.trim().toUpperCase(),
       homeCurrencyCode: form.homeCurrencyCode.trim().toUpperCase(),
-      homeLocation: form.homeLocation.trim(),
     };
     if (
       (step === 'name' && !trimmed.displayName) ||
-      (step === 'location' && !trimmed.homeLocation) ||
+      (step === 'location' && !trimmed.homeCountryCode) ||
       (step === 'currency' && !trimmed.homeCurrencyCode)
     ) {
       return;
@@ -94,8 +95,8 @@ export function OnboardingFlow() {
         setForm({ ...form, displayName: trimmed.displayName });
         setStep('location');
       } else if (step === 'location') {
-        await saveProfileChanges({ homeLocation: trimmed.homeLocation });
-        setForm({ ...form, homeLocation: trimmed.homeLocation });
+        await saveProfileChanges({ homeCountryCode: trimmed.homeCountryCode });
+        setForm({ ...form, homeCountryCode: trimmed.homeCountryCode });
         setStep('currency');
       } else {
         await saveProfileChanges({ homeCurrencyCode: trimmed.homeCurrencyCode });
@@ -167,14 +168,14 @@ export function OnboardingFlow() {
           {step === 'location' ? (
             <Field>
               <FieldLabel htmlFor="onboarding-location">{t('location.label')}</FieldLabel>
-              <Input
+              <CountryCombobox
                 aria-describedby="onboarding-location-hint"
-                autoFocus
+                aria-label={t('location.label')}
                 id="onboarding-location"
-                maxLength={200}
-                onChange={(event) => setForm({ ...form, homeLocation: event.target.value })}
+                onValueChange={(value) => setForm({ ...form, homeCountryCode: value })}
+                placeholder={t('location.placeholder')}
                 required
-                value={form.homeLocation}
+                value={form.homeCountryCode}
               />
               <FieldDescription id="onboarding-location-hint">
                 {t('location.hint')}

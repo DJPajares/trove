@@ -90,6 +90,27 @@ export function isTripModeAvailable(lifecycle: Trip['lifecycle'], isPreview: boo
 }
 
 /**
+ * The same destinations, with Trip Mode moved to the front while it is live.
+ *
+ * The contract's own order never moves - navigation that rearranges itself
+ * between visits costs more than it gives. A focal card is not navigation: it
+ * offers the one thing the traveller is doing right now, and during a trip that
+ * is Trip Mode rather than the planning screen. Preview is not that, so a trip
+ * that has not started keeps the contract's order.
+ */
+export function withLiveTripModeFirst(
+  destinations: TripDestination[],
+  lifecycle: Trip['lifecycle'],
+): TripDestination[] {
+  if (!isTripModeAvailable(lifecycle, false)) return destinations;
+
+  const mode = destinations.find((destination) => destination.section === 'mode');
+  if (!mode) return destinations;
+
+  return [mode, ...destinations.filter((destination) => destination !== mode)];
+}
+
+/**
  * Projects the stable three-experience navigation contract into the overview's
  * one-primary, two-secondary composition. The source list remains the single
  * place that owns lifecycle routing, labels and Preview parameters.

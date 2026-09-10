@@ -8,6 +8,7 @@ import type { ChangeEvent, FormEvent } from 'react';
 
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
+import { CountryCombobox } from '@/components/country-combobox';
 import { CurrencyCombobox } from '@/components/currency-combobox';
 import { EditorialSection } from '@/components/editorial-section';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -88,8 +89,8 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
         dateFormat: form.dateFormat,
         distanceUnit: form.distanceUnit,
         displayName: form.displayName.trim() || null,
+        homeCountryCode: form.homeCountryCode.trim().toUpperCase() || null,
         homeCurrencyCode: form.homeCurrencyCode.trim().toUpperCase() || null,
-        homeLocation: form.homeLocation.trim() || null,
         temperatureUnit: form.temperatureUnit,
         timeFormat: form.timeFormat,
       });
@@ -201,16 +202,17 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
                 </FieldDescription>
               </Field>
               <Field>
-                <FieldLabel htmlFor="profile-home-location">{t('homeLocation')}</FieldLabel>
-                <Input
-                  aria-describedby="profile-home-location-hint"
-                  id="profile-home-location"
-                  maxLength={200}
-                  onChange={(event) => updateField('homeLocation', event.target.value)}
-                  value={form.homeLocation}
+                <FieldLabel htmlFor="profile-home-country">{t('homeCountry')}</FieldLabel>
+                <CountryCombobox
+                  aria-describedby="profile-home-country-hint"
+                  aria-label={t('homeCountry')}
+                  id="profile-home-country"
+                  onValueChange={(value) => updateField('homeCountryCode', value)}
+                  placeholder={t('homeCountryPlaceholder')}
+                  value={form.homeCountryCode}
                 />
-                <FieldDescription id="profile-home-location-hint">
-                  {t('homeLocationHint')}
+                <FieldDescription id="profile-home-country-hint">
+                  {t('homeCountryHint')}
                 </FieldDescription>
               </Field>
               <Field className="sm:max-w-xs">

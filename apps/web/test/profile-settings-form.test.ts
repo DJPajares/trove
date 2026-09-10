@@ -11,8 +11,8 @@ const saved: ProfileSettingsFormState = {
   dateFormat: 'dmy',
   distanceUnit: 'km',
   displayName: 'Aroha Ngata',
+  homeCountryCode: 'NZ',
   homeCurrencyCode: 'NZD',
-  homeLocation: 'Wellington',
   temperatureUnit: 'celsius',
   timeFormat: '24h',
 };
@@ -28,8 +28,8 @@ test('personal fields compare their normalized values', () => {
   const padded = {
     ...saved,
     displayName: '  Aroha Ngata  ',
+    homeCountryCode: ' nz ',
     homeCurrencyCode: ' nzd ',
-    homeLocation: ' Wellington ',
   };
 
   expect(haveSavedProfileSettingsChanged(padded, baseline)).toBe(false);

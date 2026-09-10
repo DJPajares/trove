@@ -230,7 +230,7 @@ function createApplyStore(
     },
     profile: {
       async findUniqueOrThrow() {
-        return { homePlace: null, id: OWNER_ID };
+        return { homeTimeZone: null, id: OWNER_ID };
       },
       async upsert() {
         return { id: OWNER_ID };

@@ -3,7 +3,8 @@ import { getAllCountries } from 'countries-and-timezones';
 export type TripLifecycle = 'active' | 'completed' | 'planning';
 
 export type TimeZoneCandidate = {
-  placeId: string;
+  /** Null for a candidate that is not a Place, such as the profile's home country. */
+  placeId: string | null;
   timeZone: string | null;
 };
 

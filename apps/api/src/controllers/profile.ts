@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { timeZoneForCountry } from '@trove/types';
 import { z } from 'zod';
 
 import { getBearerToken } from '../services/request-auth.js';
@@ -15,6 +16,13 @@ const profileUpdateSchema = z
     dateFormat: z.enum(['dmy', 'mdy', 'ymd']).nullable().optional(),
     displayName: z.string().trim().max(100).nullable().optional(),
     distanceUnit: z.enum(['km', 'mi']).nullable().optional(),
+    homeCountryCode: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .refine((code) => timeZoneForCountry(code) !== null, { error: 'unknown_country_code' })
+      .nullable()
+      .optional(),
     homeCurrencyCode: z
       .string()
       .trim()
@@ -22,7 +30,6 @@ const profileUpdateSchema = z
       .regex(/^[A-Z]{3}$/)
       .nullable()
       .optional(),
-    homeLocation: z.string().trim().max(200).nullable().optional(),
     temperatureUnit: z.enum(['celsius', 'fahrenheit']).nullable().optional(),
     timeFormat: z.enum(['12h', '24h']).nullable().optional(),
   })

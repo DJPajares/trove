@@ -161,12 +161,21 @@ function isHardItem(item: AiPlannerDraftItem, proposal: AiPlannerModelProposal) 
   );
 }
 
+/**
+ * Where the traveller is coming from, for the planner's prompt.
+ *
+ * The profile holds a country rather than a city now, so this is coarser than
+ * it was. English is right here: the prompt is read by a model, not shown to
+ * the traveller, and the model reasons about a country by its English name.
+ */
 async function loadHomeLocation(ownerId: string) {
   const profile = await getPrismaClient().profile.findUnique({
     where: { id: ownerId },
-    select: { homePlace: { select: { customName: true } } },
+    select: { homeCountryCode: true },
   });
-  return profile?.homePlace?.customName?.trim() || null;
+  if (!profile?.homeCountryCode) return null;
+
+  return new Intl.DisplayNames('en', { type: 'region' }).of(profile.homeCountryCode) ?? null;
 }
 
 function unavailableGrounding(

@@ -75,7 +75,7 @@ const tripInclude = {
       date: true,
     },
   },
-  owner: { include: { homePlace: true } },
+  owner: true,
   startingPlace: true,
 } as const;
 
@@ -124,7 +124,7 @@ async function serializeTrip(
 ) {
   const startDate = formatDateOnly(trip.startDate);
   const endDate = formatDateOnly(trip.endDate);
-  const effectiveStartingPlace = trip.startingPlace ?? trip.owner.homePlace;
+  const effectiveStartingPlace = trip.startingPlace;
   const itineraryDays = (trip.itineraryDays ?? []).map((day) => ({
     date: day.date,
     hasStay:
@@ -252,6 +252,15 @@ function toTimeZoneCandidate(place: { customTimeZone: string | null; id: string 
   return place ? { placeId: place.id, timeZone: place.customTimeZone } : null;
 }
 
+/**
+ * The traveller's home as a time zone candidate. It is a country rather than a
+ * place, so it names no place id - the trip records the zone without pointing
+ * at a row that does not exist.
+ */
+function toProfileHomeCandidate(profile: { homeTimeZone: string | null }) {
+  return profile.homeTimeZone ? { placeId: null, timeZone: profile.homeTimeZone } : null;
+}
+
 export async function listTrips(userId: string, accessToken: string) {
   const trips = await getPrismaClient().trip.findMany({
     where: { ownerId: userId },
@@ -280,7 +289,6 @@ export async function createTrip(userId: string, accessToken: string, input: Tri
   const tripId = await prisma.$transaction(async (transaction) => {
     const profile = await transaction.profile.findUniqueOrThrow({
       where: { id: userId },
-      include: { homePlace: true },
     });
     const destinations = await Promise.all(
       (input.destinations ?? []).map((destination) =>
@@ -302,7 +310,7 @@ export async function createTrip(userId: string, accessToken: string, input: Tri
       })),
       deviceTimeZone: input.deviceTimeZone ?? 'UTC',
       explicitTimeZone: input.referenceTimeZone,
-      profileHome: toTimeZoneCandidate(profile.homePlace),
+      profileHome: toProfileHomeCandidate(profile),
       startingLocation: toTimeZoneCandidate(startingPlace),
     });
     const trip = await transaction.trip.create({
@@ -402,7 +410,7 @@ export async function updateTrip(
               ? current.referenceTimeZone
               : (input.deviceTimeZone ?? current.referenceTimeZone),
           explicitTimeZone: input.referenceTimeZone,
-          profileHome: toTimeZoneCandidate(current.owner.homePlace),
+          profileHome: toProfileHomeCandidate(current.owner),
           startingLocation: toTimeZoneCandidate(startingPlace),
         })
       : {

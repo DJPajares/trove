@@ -47,16 +47,17 @@ export function TripHourlyWeather({
   // The provider already answered in the day's own zone, so the string is a
   // wall clock. Reading it back as UTC keeps that hour intact rather than
   // shifting it into whatever zone this device happens to be in.
-  const hourOptions = {
+  const is12Hour = preferences.timeFormat === '12h';
+  const formatter = new Intl.DateTimeFormat(locale, {
     hour: 'numeric',
-    hour12: preferences.timeFormat === '12h',
+    hour12: is12Hour,
+    // On a 24-hour clock "09" standing over "13°C" is just another number in a
+    // column of numbers; the minutes are what make it read as a time. A
+    // 12-hour clock has AM and PM doing that job already, and "9 AM" earns its
+    // place in a narrow cell where "9:00 AM" does not.
+    ...(is12Hour ? {} : { minute: '2-digit' }),
     timeZone: 'UTC',
-  } as const;
-  const formatter = new Intl.DateTimeFormat(locale, hourOptions);
-  // A column of bare hours reads fine under a heading that says what they are.
-  // Read aloud, "09" alone could be anything, so the announced form keeps the
-  // minutes that make it a time.
-  const spokenFormatter = new Intl.DateTimeFormat(locale, { ...hourOptions, minute: '2-digit' });
+  });
 
   return (
     <ul
@@ -66,9 +67,7 @@ export function TripHourlyWeather({
       {readings.map((hour) => {
         const Icon = weatherConditionIcon(hour.weatherCode);
         const condition = t(`condition.${weatherConditionKey(hour.weatherCode)}`);
-        const at = new Date(`${hour.time}:00.000Z`);
-        const time = formatter.format(at);
-        const spokenTime = spokenFormatter.format(at);
+        const time = formatter.format(new Date(`${hour.time}:00.000Z`));
         const temperature = `${Math.round(hour.temperature)}${unit}`;
         const probability = hour.precipitationProbability;
         const showPrecipitation = probability !== null && probability >= NOTABLE_PRECIPITATION;
@@ -78,13 +77,8 @@ export function TripHourlyWeather({
             <span
               aria-label={
                 showPrecipitation
-                  ? t('hourCellWithPrecipitation', {
-                      condition,
-                      probability,
-                      temperature,
-                      time: spokenTime,
-                    })
-                  : t('hourCell', { condition, temperature, time: spokenTime })
+                  ? t('hourCellWithPrecipitation', { condition, probability, temperature, time })
+                  : t('hourCell', { condition, temperature, time })
               }
               className="flex w-12 flex-col items-center gap-1"
               role="img"

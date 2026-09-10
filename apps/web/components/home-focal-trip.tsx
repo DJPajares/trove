@@ -17,7 +17,7 @@ import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import type { Trip } from '@/lib/trips/api';
 import { formatTripDate } from '@/lib/trips/format';
 import { daysUntilTripStart, resolveCountdown } from '@/lib/trips/lifecycle';
-import { primaryTripDestinations } from '@/lib/trips/navigation';
+import { primaryTripDestinations, withLiveTripModeFirst } from '@/lib/trips/navigation';
 import { tripDestinationSummary } from '@/lib/trips/summary';
 
 const stageLabels: Record<Trip['lifecycle'], string> = {
@@ -167,7 +167,10 @@ export function HomeFocalTrip({
             ) : null}
 
             <TripDestinationActions
-              destinations={primaryTripDestinations(trip.id, trip.lifecycle, trip.startDate)}
+              destinations={withLiveTripModeFirst(
+                primaryTripDestinations(trip.id, trip.lifecycle, trip.startDate),
+                trip.lifecycle,
+              )}
               inverse
               labelOverrides={
                 trip.lifecycle === 'completed'

@@ -127,3 +127,14 @@ export async function removePreparedTrip(tripId: string) {
   const { userId } = await getOfflineAuthContext();
   await removeTripOfflineData(userId, tripId);
 }
+
+/**
+ * Clears a trip the server has already deleted.
+ *
+ * Unlike removing a downloaded copy, this discards the trip's queued mutations
+ * rather than refusing: there is no longer a trip to send them to.
+ */
+export async function discardTripOfflineData(tripId: string) {
+  const { userId } = await getOfflineAuthContext();
+  await removeTripOfflineData(userId, tripId, { discardPendingMutations: true });
+}

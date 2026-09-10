@@ -3,8 +3,8 @@ import { getPreferenceDefaults, type ProfilePreferences } from './preferences';
 
 export type ProfileSettingsFormState = ProfilePreferences & {
   displayName: string;
+  homeCountryCode: string;
   homeCurrencyCode: string;
-  homeLocation: string;
 };
 
 export type SavedProfileSettings = Omit<ProfileSettingsFormState, 'appearance'>;
@@ -21,8 +21,8 @@ export function getProfileSettingsFormState(
     dateFormat: profile.dateFormat ?? defaults.dateFormat,
     distanceUnit: profile.distanceUnit ?? defaults.distanceUnit,
     displayName: profile.displayName ?? '',
+    homeCountryCode: profile.homeCountryCode ?? '',
     homeCurrencyCode: profile.homeCurrencyCode ?? '',
-    homeLocation: profile.homeLocation ?? '',
     temperatureUnit: profile.temperatureUnit ?? defaults.temperatureUnit,
     timeFormat: profile.timeFormat ?? defaults.timeFormat,
   };
@@ -35,8 +35,8 @@ export function normalizeSavedProfileSettings(
     dateFormat: settings.dateFormat,
     distanceUnit: settings.distanceUnit,
     displayName: settings.displayName.trim(),
+    homeCountryCode: settings.homeCountryCode.trim().toUpperCase(),
     homeCurrencyCode: settings.homeCurrencyCode.trim().toUpperCase(),
-    homeLocation: settings.homeLocation.trim(),
     temperatureUnit: settings.temperatureUnit,
     timeFormat: settings.timeFormat,
   };

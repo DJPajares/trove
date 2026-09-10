@@ -1,9 +1,18 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPrismaClient } from '@trove/db';
+import { timeZoneForCountry } from '@trove/types';
 
 import { createAuthenticatedSupabaseClient } from './supabase-auth.js';
 
 export const PROFILE_PHOTOS_BUCKET = 'profile-photos';
+
+/** A home country Trove has no time zone for, which the request schema rejects first. */
+export class UnknownCountryError extends Error {
+  constructor() {
+    super('unknown_country_code');
+    this.name = 'UnknownCountryError';
+  }
+}
 
 export type ProfileAppearance = 'dark' | 'light';
 
@@ -13,8 +22,8 @@ export type ProfileUpdate = {
   dateFormat?: 'dmy' | 'mdy' | 'ymd' | null;
   displayName?: string | null;
   distanceUnit?: 'km' | 'mi' | null;
+  homeCountryCode?: string | null;
   homeCurrencyCode?: string | null;
-  homeLocation?: string | null;
   temperatureUnit?: 'celsius' | 'fahrenheit' | null;
   timeFormat?: '12h' | '24h' | null;
 };
@@ -27,8 +36,9 @@ type ProfilePersistenceUpdate = {
   dateFormat?: 'DAY_MONTH_YEAR' | 'MONTH_DAY_YEAR' | 'YEAR_MONTH_DAY' | null;
   displayName?: string | null;
   distanceUnit?: 'KILOMETERS' | 'MILES' | null;
+  homeCountryCode?: string | null;
   homeCurrencyCode?: string | null;
-  homePlaceId?: string | null;
+  homeTimeZone?: string | null;
   temperatureUnit?: 'CELSIUS' | 'FAHRENHEIT' | null;
   timeFormat?: 'HOUR_12' | 'HOUR_24' | null;
 };
@@ -89,7 +99,6 @@ async function findOrCreateProfile(userId: string) {
     where: { id: userId },
     create: { id: userId },
     update: {},
-    include: { homePlace: true },
   });
 }
 
@@ -113,8 +122,9 @@ function serializeProfile(profile: ProfileRecord, avatarUrl: string | null) {
     dateFormat: mapProfileValue(profile.dateFormat),
     displayName: profile.displayName,
     distanceUnit: mapProfileValue(profile.distanceUnit),
+    homeCountryCode: profile.homeCountryCode?.trim() || null,
     homeCurrencyCode: profile.homeCurrencyCode?.trim() || null,
-    homeLocation: profile.homePlace?.customName ?? null,
+    homeTimeZone: profile.homeTimeZone,
     id: profile.id,
     temperatureUnit: mapProfileValue(profile.temperatureUnit),
     timeFormat: mapProfileValue(profile.timeFormat),
@@ -137,71 +147,53 @@ export async function updateProfile(userId: string, accessToken: string, changes
     update: {},
   });
 
-  const profile = await prisma.$transaction(async (transaction) => {
-    const homeLocation = changes.homeLocation?.trim() || null;
-    let homePlaceId: string | null | undefined;
+  // A home country is only ever stored alongside the zone it implies, so the
+  // two can never disagree and no reader has to resolve one from the other.
+  const homeCountry =
+    changes.homeCountryCode === undefined
+      ? undefined
+      : (() => {
+          const code = changes.homeCountryCode?.trim().toUpperCase() || null;
+          if (!code) return { homeCountryCode: null, homeTimeZone: null };
 
-    if (changes.homeLocation !== undefined) {
-      if (!homeLocation) {
-        homePlaceId = null;
-      } else {
-        const existingPlace = await transaction.place.findFirst({
-          where: {
-            customName: homeLocation,
-            kind: 'CUSTOM',
-            ownerId: userId,
-          },
-        });
+          const timeZone = timeZoneForCountry(code);
+          if (!timeZone) throw new UnknownCountryError();
 
-        const homePlace =
-          existingPlace ??
-          (await transaction.place.create({
-            data: {
-              customName: homeLocation,
-              kind: 'CUSTOM',
-              ownerId: userId,
-            },
-          }));
+          return { homeCountryCode: code, homeTimeZone: timeZone };
+        })();
 
-        homePlaceId = homePlace.id;
-      }
-    }
+  const profileUpdate: ProfilePersistenceUpdate = {
+    ...(changes.appearance !== undefined
+      ? { appearance: changes.appearance === null ? null : toAppearance(changes.appearance) }
+      : {}),
+    ...(changes.avatarPath !== undefined ? { avatarPath: changes.avatarPath } : {}),
+    ...(changes.dateFormat !== undefined
+      ? { dateFormat: changes.dateFormat === null ? null : toDateFormat(changes.dateFormat) }
+      : {}),
+    ...(changes.displayName !== undefined ? { displayName: changes.displayName } : {}),
+    ...(changes.distanceUnit !== undefined
+      ? {
+          distanceUnit: changes.distanceUnit === null ? null : toDistanceUnit(changes.distanceUnit),
+        }
+      : {}),
+    ...homeCountry,
+    ...(changes.homeCurrencyCode !== undefined
+      ? { homeCurrencyCode: changes.homeCurrencyCode }
+      : {}),
+    ...(changes.temperatureUnit !== undefined
+      ? {
+          temperatureUnit:
+            changes.temperatureUnit === null ? null : toTemperatureUnit(changes.temperatureUnit),
+        }
+      : {}),
+    ...(changes.timeFormat !== undefined
+      ? { timeFormat: changes.timeFormat === null ? null : toTimeFormat(changes.timeFormat) }
+      : {}),
+  };
 
-    const profileUpdate: ProfilePersistenceUpdate = {
-      ...(changes.appearance !== undefined
-        ? { appearance: changes.appearance === null ? null : toAppearance(changes.appearance) }
-        : {}),
-      ...(changes.avatarPath !== undefined ? { avatarPath: changes.avatarPath } : {}),
-      ...(changes.dateFormat !== undefined
-        ? { dateFormat: changes.dateFormat === null ? null : toDateFormat(changes.dateFormat) }
-        : {}),
-      ...(changes.displayName !== undefined ? { displayName: changes.displayName } : {}),
-      ...(changes.distanceUnit !== undefined
-        ? {
-            distanceUnit:
-              changes.distanceUnit === null ? null : toDistanceUnit(changes.distanceUnit),
-          }
-        : {}),
-      ...(changes.homeCurrencyCode !== undefined
-        ? { homeCurrencyCode: changes.homeCurrencyCode }
-        : {}),
-      ...(homePlaceId !== undefined ? { homePlaceId } : {}),
-      ...(changes.temperatureUnit !== undefined
-        ? {
-            temperatureUnit:
-              changes.temperatureUnit === null ? null : toTemperatureUnit(changes.temperatureUnit),
-          }
-        : {}),
-      ...(changes.timeFormat !== undefined
-        ? { timeFormat: changes.timeFormat === null ? null : toTimeFormat(changes.timeFormat) }
-        : {}),
-    };
-
-    return transaction.profile.update({
-      where: { id: userId },
-      data: profileUpdate,
-      include: { homePlace: true },
-    });
+  const profile = await prisma.profile.update({
+    where: { id: userId },
+    data: profileUpdate,
   });
 
   const supabase = createAuthenticatedSupabaseClient(accessToken);

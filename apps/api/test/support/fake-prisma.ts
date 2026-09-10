@@ -132,7 +132,7 @@ function hydrate(name: ModelName, row: Row): Row {
         .map((memory) => ({
           photos: store.memoryPhoto.filter((photo) => photo.memoryId === memory.id),
         })),
-      owner: { homePlace: null },
+      owner: { homeTimeZone: null },
       startingPlace: null,
       storyCoverPhoto:
         store.memoryPhoto.find((photo) => photo.id === row.storyCoverMemoryPhotoId) ?? null,

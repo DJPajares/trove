@@ -8,6 +8,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./dist/index.js"
+    },
+    "./countries": {
+      "types": "./src/countries.ts",
+      "import": "./dist/countries.js"
     }
   },
   "scripts": {

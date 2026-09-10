@@ -200,6 +200,9 @@ importers:
       '@tanstack/react-query-persist-client':
         specifier: 5.102.8
         version: 5.102.8(@tanstack/react-query@5.102.8(react@19.2.8))(react@19.2.8)
+      '@trove/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1

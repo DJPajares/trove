@@ -66,8 +66,9 @@
     "photoSection": "Profile photo",
     "displayName": "Name",
     "displayNameHint": "This name is shown on your Trove profile.",
-    "homeLocation": "Home location",
-    "homeLocationHint": "Used as the starting point when a trip has no starting location.",
+    "homeCountry": "Home country",
+    "homeCountryPlaceholder": "Choose a country",
+    "homeCountryHint": "Sets your home time zone, so Trip Mode can tell you what time it is back home.",
     "homeCurrency": "Home currency",
     "homeCurrencyPlaceholder": "Choose a currency",
     "homeCurrencyHint": "Used as the default for new costs and conversions.",
@@ -115,6 +116,11 @@
     "today": "Today"
   },
   "travelInputs": {
+    "country": {
+      "open": "Open {label}",
+      "clear": "Clear {label}",
+      "empty": "No countries match this search."
+    },
     "currency": {
       "loading": "Loading currencies…",
       "open": "Open {label}",
@@ -623,6 +629,7 @@
         "label": "Now",
         "title": "Now",
         "localTime": "It's {time} in {timeZone}",
+        "homeTime": "{time} back home in {timeZone}",
         "loading": "Checking your trip…",
         "loadError": "We couldn't load your current trip context",
         "loadErrorDescription": "Check your connection and try again.",
@@ -2138,9 +2145,10 @@
     },
     "location": {
       "title": "Where do you call home?",
-      "description": "Trove uses this as your default starting point for new trips.",
-      "label": "Home location",
-      "hint": "A city is enough, e.g. Singapore."
+      "description": "Trove uses this to tell you what time it is back home while you travel.",
+      "label": "Home country",
+      "placeholder": "Choose a country",
+      "hint": "Your country is enough."
     },
     "currency": {
       "title": "What's your home currency?",

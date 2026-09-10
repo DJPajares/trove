@@ -315,7 +315,10 @@ model Profile {
   id                          String                  @id @db.Uuid
   displayName                 String?                 @map("display_name")
   avatarPath                  String?                 @map("avatar_path")
-  homePlaceId                 String?                 @map("home_place_id") @db.Uuid
+  homeCountryCode             String?                 @map("home_country_code") @db.Char(2)
+  /// Derived from `homeCountryCode` when it is saved, never sent by a client.
+  /// A country that spans several zones resolves to the one most of it lives in.
+  homeTimeZone                String?                 @map("home_time_zone")
   homeCurrencyCode            String?                 @map("home_currency_code") @db.Char(3)
   distanceUnit                ProfileDistanceUnit?    @map("distance_unit")
   temperatureUnit             ProfileTemperatureUnit? @map("temperature_unit")
@@ -329,7 +332,6 @@ model Profile {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   authUser                    AuthUser                     @relation(fields: [id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  homePlace                   Place?                       @relation("ProfileHomePlace", fields: [homePlaceId], references: [id], onDelete: SetNull)
   ownedPlaces                 Place[]                      @relation("PlaceOwner")
   ownedTrips                  Trip[]                       @relation("TripOwner")
   createdTrips                Trip[]                       @relation("TripCreator")
@@ -343,7 +345,6 @@ model Profile {
   aiPlanningSessions          AiPlanningSession[]
   aiGenerationRuns            AiGenerationRun[]
 
-  @@index([homePlaceId])
   @@map("profiles")
   @@schema("trove")
 }
@@ -369,7 +370,6 @@ model Place {
 
   owner                    Profile?           @relation("PlaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   editorialImageSet        EditorialImageSet? @relation("PlaceEditorialImageSet", fields: [editorialImageSetId], references: [id], onDelete: SetNull)
-  homeForProfiles          Profile[]          @relation("ProfileHomePlace")
   providerRefs             PlaceProviderRef[]
   savedPlaces              SavedPlace[]
   tripPlaces               TripPlace[]

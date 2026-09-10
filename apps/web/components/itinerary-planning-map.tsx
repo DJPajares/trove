@@ -368,7 +368,7 @@ export function ItineraryPlanningMap({
   if (!hasGoogleMapsConfiguration()) {
     return (
       <PageState
-        className="min-h-[28rem] justify-center rounded-none border-0 bg-muted/35"
+        className="min-h-[28rem] justify-center rounded-none border-0 bg-muted/35 px-6 py-8 sm:px-8"
         description={t('configurationDescription')}
         headingLevel={2}
         icon={<MapPinned aria-hidden="true" />}
@@ -390,14 +390,14 @@ export function ItineraryPlanningMap({
       />
       {status === 'loading' ? (
         <PageState
-          className="absolute inset-0 z-[1] justify-center rounded-none border-0 bg-muted/80"
+          className="absolute inset-0 z-[1] justify-center rounded-none border-0 bg-muted/80 px-6 sm:px-8"
           kind="loading"
           title={t('loading')}
         />
       ) : null}
       {status === 'error' ? (
         <PageState
-          className="absolute inset-0 z-[1] justify-center rounded-none border-0 bg-muted/90"
+          className="absolute inset-0 z-[1] justify-center rounded-none border-0 bg-muted/90 px-6 py-8 sm:px-8"
           description={t('unavailableDescription')}
           headingLevel={2}
           icon={<MapPinned aria-hidden="true" />}

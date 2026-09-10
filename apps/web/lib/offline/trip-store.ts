@@ -669,7 +669,47 @@ export async function clearAllOfflineTripData() {
   announceChange();
 }
 
-export async function removeTripOfflineData(userId: string, tripId: string) {
+type TripOfflineTeardown = {
+  documentKeys: IDBValidKey[];
+  mediaKeys: IDBValidKey[];
+  mutationKeys: IDBValidKey[];
+  tripId: string;
+};
+
+/**
+ * Everything these trips own across the offline stores, read in one pass.
+ *
+ * Every request is issued in the same tick and awaited together: an IndexedDB
+ * transaction commits the moment it runs out of pending work, so reads spread
+ * across separate awaits would find it closed partway through.
+ */
+async function readTripTeardowns(userId: string, tripIds: string[]) {
+  const database = await openDatabase();
+  const transaction = database.transaction(
+    [MUTATION_STORE, DOCUMENT_STORE, MEMORY_MEDIA_STORE],
+    'readonly',
+  );
+  const mutationStore = transaction.objectStore(MUTATION_STORE);
+  const documentStore = transaction.objectStore(DOCUMENT_STORE);
+  const mediaStore = transaction.objectStore(MEMORY_MEDIA_STORE);
+
+  return Promise.all(
+    tripIds.map(async (tripId) => {
+      const range = IDBKeyRange.only([userId, tripId]);
+      const [mutationKeys, documentKeys, mediaKeys] = await Promise.all([
+        requestResult<IDBValidKey[]>(mutationStore.index('by-user-trip').getAllKeys(range)),
+        requestResult<IDBValidKey[]>(documentStore.index('by-user-trip').getAllKeys(range)),
+        requestResult<IDBValidKey[]>(mediaStore.index('by-user-trip').getAllKeys(range)),
+      ]);
+
+      return { documentKeys, mediaKeys, mutationKeys, tripId } satisfies TripOfflineTeardown;
+    }),
+  );
+}
+
+async function deleteTripRecords(userId: string, teardowns: TripOfflineTeardown[]) {
+  if (!teardowns.length) return;
+
   const database = await openDatabase();
   const transaction = database.transaction(
     [SNAPSHOT_STORE, MUTATION_STORE, DOCUMENT_STORE, MEMORY_MEDIA_STORE],
@@ -679,40 +719,132 @@ export async function removeTripOfflineData(userId: string, tripId: string) {
   const mutationStore = transaction.objectStore(MUTATION_STORE);
   const documentStore = transaction.objectStore(DOCUMENT_STORE);
   const mediaStore = transaction.objectStore(MEMORY_MEDIA_STORE);
-  const pendingCount = await requestResult(
-    mutationStore.index('by-user-trip').count(IDBKeyRange.only([userId, tripId])),
+
+  for (const teardown of teardowns) {
+    snapshotStore.delete(snapshotKey(userId, teardown.tripId));
+    for (const key of teardown.mutationKeys) mutationStore.delete(key);
+    for (const key of teardown.documentKeys) documentStore.delete(key);
+    for (const key of teardown.mediaKeys) mediaStore.delete(key);
+  }
+
+  await transactionDone(transaction);
+}
+
+/** Drops these trips' cached pages in one pass rather than one pass per trip. */
+async function purgeTripPageCaches(tripIds: string[]) {
+  if (!tripIds.length || !('caches' in window)) return;
+
+  const prefixes = tripIds.map((tripId) => `/trips/${tripId}/`);
+  const cacheNames = await caches.keys();
+  await Promise.all(
+    cacheNames
+      .filter((cacheName) => cacheName.includes('trove-pwa-trip-mode'))
+      .map(async (cacheName) => {
+        const cache = await caches.open(cacheName);
+        const requests = await cache.keys();
+        await Promise.all(
+          requests
+            .filter((request) => {
+              const { pathname } = new URL(request.url);
+              return prefixes.some((prefix) => pathname.startsWith(prefix));
+            })
+            .map((request) => cache.delete(request)),
+        );
+      }),
   );
-  if (pendingCount > 0) {
+}
+
+export async function removeTripOfflineData(
+  userId: string,
+  tripId: string,
+  { discardPendingMutations = false }: { discardPendingMutations?: boolean } = {},
+) {
+  // One id in, one teardown out; the fallback is only here because an index
+  // read cannot prove that to the type checker.
+  const teardown = (await readTripTeardowns(userId, [tripId]))[0] ?? {
+    documentKeys: [],
+    mediaKeys: [],
+    mutationKeys: [],
+    tripId,
+  };
+
+  // Removing a downloaded copy must not lose work this device has not sent yet.
+  // A trip the server has already deleted is the other case: there is nothing
+  // left to send it to, so the queue goes with it.
+  if (!discardPendingMutations && teardown.mutationKeys.length > 0) {
     throw new Error('offline_changes_pending');
   }
-  snapshotStore.delete(snapshotKey(userId, tripId));
-  const documentKeys = await requestResult<IDBValidKey[]>(
-    documentStore.index('by-user-trip').getAllKeys(IDBKeyRange.only([userId, tripId])),
-  );
-  for (const key of documentKeys) documentStore.delete(key);
-  const mediaKeys = await requestResult<IDBValidKey[]>(
-    mediaStore.index('by-user-trip').getAllKeys(IDBKeyRange.only([userId, tripId])),
-  );
-  for (const key of mediaKeys) mediaStore.delete(key);
-  await transactionDone(transaction);
 
-  if ('caches' in window) {
-    const cacheNames = await caches.keys();
-    await Promise.all(
-      cacheNames
-        .filter((cacheName) => cacheName.includes('trove-pwa-trip-mode'))
-        .map(async (cacheName) => {
-          const cache = await caches.open(cacheName);
-          const requests = await cache.keys();
-          await Promise.all(
-            requests
-              .filter((request) => new URL(request.url).pathname.startsWith(`/trips/${tripId}/`))
-              .map((request) => cache.delete(request)),
-          );
-        }),
-    );
-  }
+  await deleteTripRecords(userId, [teardown]);
+  await purgeTripPageCaches([tripId]);
   announceChange();
+}
+
+/**
+ * Which offline trips the authoritative list says are gone.
+ *
+ * Deleting a trip on one device leaves its snapshot, documents, media and
+ * cached pages behind on every other one, where they keep showing up in the
+ * offline lists and keep being refetched into 404s. The server's own list is
+ * the only thing that knows they are gone.
+ */
+export function orphanedTripIds(
+  offlineTripIds: readonly string[],
+  liveTripIds: readonly string[],
+): string[] {
+  const live = new Set(liveTripIds);
+
+  return offlineTripIds.filter((tripId) => !live.has(tripId));
+}
+
+/**
+ * Of the trips the server no longer lists, the ones safe to drop.
+ *
+ * A trip with queued mutations is kept: the list may simply predate work this
+ * device has not managed to send, and losing that is worse than keeping a stale
+ * copy one round longer. It is dropped on the next list once the queue drains.
+ */
+export function tripsSafeToPrune(
+  candidates: readonly { hasPendingMutations: boolean; tripId: string }[],
+): string[] {
+  return candidates
+    .filter((candidate) => !candidate.hasPendingMutations)
+    .map((candidate) => candidate.tripId);
+}
+
+/**
+ * Drops the offline copies of trips the server no longer has, and returns the
+ * trip ids actually pruned.
+ */
+export async function pruneOrphanedTripSnapshots(userId: string, liveTripIds: string[]) {
+  const snapshots = await listTripSnapshots(userId);
+  const orphanIds = orphanedTripIds(
+    snapshots.map((snapshot) => snapshot.tripId),
+    liveTripIds,
+  );
+
+  if (!orphanIds.length) return [];
+
+  const teardowns = await readTripTeardowns(userId, orphanIds);
+  const prunedIds = new Set(
+    tripsSafeToPrune(
+      teardowns.map((teardown) => ({
+        hasPendingMutations: teardown.mutationKeys.length > 0,
+        tripId: teardown.tripId,
+      })),
+    ),
+  );
+
+  if (!prunedIds.size) return [];
+
+  await deleteTripRecords(
+    userId,
+    teardowns.filter((teardown) => prunedIds.has(teardown.tripId)),
+  );
+  await purgeTripPageCaches([...prunedIds]);
+  announceChange();
+
+  return [...prunedIds];
 }
 
 function documentKey(userId: string, tripId: string, attachmentId: string) {

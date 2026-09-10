@@ -252,7 +252,6 @@ export async function applyAiPlanningSession(
 
     const profile = await transaction.profile.findUniqueOrThrow({
       where: { id: ownerId },
-      include: { homePlace: true },
     });
     const places = await materializePlaces(transaction, ownerId, draft);
     const destinations = draft.trip.destinations.map((destination) => ({
@@ -265,9 +264,7 @@ export async function applyAiPlanningSession(
     const tripTimeZone = resolveTripTimeZone({
       destinations: destinations.map((place) => ({ placeId: place.id, timeZone: place.timeZone })),
       deviceTimeZone,
-      profileHome: profile.homePlace
-        ? { placeId: profile.homePlace.id, timeZone: profile.homePlace.customTimeZone }
-        : null,
+      profileHome: profile.homeTimeZone ? { placeId: null, timeZone: profile.homeTimeZone } : null,
       startingLocation: null,
     });
     const trip = await transaction.trip.create({

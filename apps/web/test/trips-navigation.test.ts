@@ -10,6 +10,7 @@ import {
   tripSectionLabelKey,
   type TripSection,
   visibleTripNavigationDestinations,
+  withLiveTripModeFirst,
 } from '../lib/trips/navigation.ts';
 
 const TRIP = 'trip-japan';
@@ -230,4 +231,31 @@ test('every section can say its own name, including the ones no menu lists', () 
   // left describing itself as "More".
   expect(tripSectionLabelKey('places')).toBe('places');
   expect(tripSectionLabelKey('info')).toBe('tripInfo');
+});
+
+test('a focal card leads with Trip Mode only while the trip is live', () => {
+  const sectionsFor = (lifecycle: 'active' | 'completed' | 'planning') =>
+    withLiveTripModeFirst(primaryTripDestinations(TRIP, lifecycle, START), lifecycle).map(
+      (destination) => destination.section,
+    );
+
+  expect(sectionsFor('active')).toEqual(['mode', 'itinerary', 'memories']);
+  // Preview is a rehearsal, not the thing the traveller is doing, so the
+  // contract's own order stands.
+  expect(sectionsFor('planning')).toEqual(['itinerary', 'mode', 'memories']);
+  expect(sectionsFor('completed')).toEqual(['itinerary', 'mode', 'memories']);
+});
+
+test('reordering a focal card does not move the navigation contract itself', () => {
+  const contract = primaryTripDestinations(TRIP, 'active', START);
+  const reordered = withLiveTripModeFirst(contract, 'active');
+
+  expect(contract.map((destination) => destination.section)).toEqual([
+    'itinerary',
+    'mode',
+    'memories',
+  ]);
+  // The same destinations, and the same objects - only the order differs.
+  expect(reordered).toHaveLength(contract.length);
+  expect(reordered.every((destination) => contract.includes(destination))).toBe(true);
 });

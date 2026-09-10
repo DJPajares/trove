@@ -1,6 +1,7 @@
 import { createBrowserSupabaseClient, getBrowserSession } from '@/lib/supabase/client';
 import {
   getRememberedOfflineUser,
+  pruneOrphanedTripSnapshots,
   readTripSnapshot,
   rememberOfflineUser,
   saveTripSnapshot,
@@ -145,7 +146,20 @@ async function tripRequest<T>(path: string, init?: RequestInit) {
 }
 
 export async function fetchTrips() {
-  return tripRequest<{ trips: Trip[] }>('/trips');
+  const { userId } = await getAuthContext();
+  const result = await tripRequest<{ trips: Trip[] }>('/trips');
+  // Reaching here means the server answered, so this list is authoritative and
+  // anything held offline that is missing from it has been deleted - here or on
+  // another device. Offline calls throw above and never get this far.
+  //
+  // Pruning is housekeeping, not part of the answer: it must not delay the list
+  // or fail it.
+  void pruneOrphanedTripSnapshots(
+    userId,
+    result.trips.map((trip) => trip.id),
+  ).catch(() => undefined);
+
+  return result;
 }
 
 export async function fetchTrip(tripId: string) {

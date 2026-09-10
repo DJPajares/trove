@@ -10,14 +10,16 @@ export type Profile = {
   dateFormat: 'dmy' | 'mdy' | 'ymd' | null;
   displayName: string | null;
   distanceUnit: 'km' | 'mi' | null;
+  homeCountryCode: string | null;
   homeCurrencyCode: string | null;
-  homeLocation: string | null;
+  /** Derived by the server from the home country; never sent back. */
+  homeTimeZone: string | null;
   id: string;
   temperatureUnit: 'celsius' | 'fahrenheit' | null;
   timeFormat: '12h' | '24h' | null;
 };
 
-export type ProfileUpdate = Partial<Omit<Profile, 'avatarUrl' | 'id'>>;
+export type ProfileUpdate = Partial<Omit<Profile, 'avatarUrl' | 'homeTimeZone' | 'id'>>;
 
 const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
 

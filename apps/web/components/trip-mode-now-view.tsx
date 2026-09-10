@@ -96,7 +96,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   const tasksT = useTranslations('tripMode.tasks');
   const [memoryOpen, setMemoryOpen] = useState(false);
   const locale = useLocale();
-  const { preferences } = usePreferences();
+  const { preferences, profile } = usePreferences();
   const online = useOnlineStatus();
   const { isPreview, withPreviewHref } = useTripModePreview();
   const { context, refresh, reservations: loadedReservations, status } = useTripModeData();
@@ -149,6 +149,12 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
     : (deviceTimeZone() ??
       readyContext.day?.defaultTimeZone ??
       readyContext.trip.referenceTimeZone);
+  const clockAt = isPreview ? readyContext.contextAt : now.toISOString();
+  // What time it is where the traveller left. Worth a line only while it is a
+  // different answer from the clock above - at home, or on a trip that never
+  // crossed a zone, it would just say the same thing twice.
+  const homeZone =
+    profile?.homeTimeZone && profile.homeTimeZone !== nowZone ? profile.homeTimeZone : null;
   const date = new Intl.DateTimeFormat(locale, {
     dateStyle: 'full',
     timeZone: 'UTC',
@@ -254,10 +260,18 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
             phone's own. It costs one line, and it is the line that says so. */}
         <p className="mt-0.5 text-[length:var(--text-metadata)] leading-5 text-text-subtle tabular-nums">
           {t('localTime', {
-            time: timeFormat(isPreview ? readyContext.contextAt : now.toISOString(), nowZone),
+            time: timeFormat(clockAt, nowZone),
             timeZone: nowZone,
           })}
         </p>
+        {homeZone ? (
+          <p className="text-[length:var(--text-metadata)] leading-5 text-text-subtle tabular-nums">
+            {t('homeTime', {
+              time: timeFormat(clockAt, homeZone),
+              timeZone: homeZone,
+            })}
+          </p>
+        ) : null}
       </div>
 
       {readyContext.day ? (

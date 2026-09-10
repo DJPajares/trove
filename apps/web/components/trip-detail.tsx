@@ -81,7 +81,9 @@ import {
 } from '@/lib/trips/navigation';
 import { tripDestinationSummary } from '@/lib/trips/summary';
 import { useTripReadiness } from '@/lib/trips/use-trip-readiness';
+import { discardTripOfflineData } from '@/lib/offline/trip-preparation';
 import { queryKeys } from '@/lib/query/keys';
+import { removeTripQueries } from '@/lib/query/trip-invalidation';
 
 /** The tools' icons. Which tools there are, and their order, is the navigation contract's. */
 const supportingIcons: Record<
@@ -326,6 +328,11 @@ export function TripDetail({
           : current,
       );
       queryClient.removeQueries({ queryKey: queryKeys.trip(trip.id) });
+      removeTripQueries(queryClient, trip.id);
+      // The trip is gone from the server, so its offline copy is no longer a
+      // copy of anything. A storage failure here must not turn a delete that
+      // succeeded into an error the traveller has to act on.
+      await discardTripOfflineData(trip.id).catch(() => undefined);
       setConfirmingDelete(false);
       setEditing(false);
       // The route the traveller is standing on no longer exists, so it must not

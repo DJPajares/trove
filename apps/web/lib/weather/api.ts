@@ -9,13 +9,27 @@ import type { TemperatureUnit } from '@/lib/profile/preferences';
  * a version in the key a returning traveller keeps reading an answer the server
  * has already stopped producing.
  */
-export const WEATHER_CONTRACT_VERSION = 'v1';
+export const WEATHER_CONTRACT_VERSION = 'v2';
 
 export type WeatherCurrentConditions = {
   apparentTemperature: number;
   isDay: boolean;
   observedAt: string;
   temperature: number;
+  weatherCode: number;
+};
+
+/**
+ * One hour of the day, in the traveller's unit and the day's own zone.
+ *
+ * `time` is the provider's local-time string - `2026-09-11T15:00`, minute
+ * precision, no zone - so the day an hour belongs to is readable from the value
+ * without another field to trust.
+ */
+export type WeatherHourlyForecast = {
+  precipitationProbability: number | null;
+  temperature: number;
+  time: string;
   weatherCode: number;
 };
 
@@ -51,6 +65,12 @@ export type TripWeather = {
   days: TripWeatherDay[];
   fetchedAt: string;
   horizon: { endDate: string; startDate: string };
+  /**
+   * The next stretch of hours where the traveller is today, empty whenever
+   * `current` is - both come from the same live reading and neither means
+   * anything without it.
+   */
+  hours: WeatherHourlyForecast[];
   provider: 'open_meteo';
   temperatureUnit: TemperatureUnit;
 };

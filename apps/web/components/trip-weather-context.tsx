@@ -4,6 +4,7 @@ import { CloudSun, RefreshCw } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { usePreferences } from '@/components/preferences-provider';
+import { TripHourlyWeather } from '@/components/trip-hourly-weather';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { weatherConditionKey } from '@/lib/weather/conditions';
@@ -119,47 +120,57 @@ export function TripWeatherContext({
           <h3 className="mt-1 font-semibold text-foreground" id="trip-weather-heading">
             {showCurrent ? t('today') : t('forDate', { date: formattedDate })}
           </h3>
-
-          {mainTemperature !== null && condition ? (
-            <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <p className="text-2xl font-semibold tracking-[-0.02em] text-foreground tabular-nums">
-                {formatTemperature(mainTemperature)}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {t(`condition.${weatherConditionKey(condition.weatherCode)}`)}
-              </p>
-              {showCurrent && current ? (
-                <p className="text-sm text-muted-foreground">
-                  {t('feelsLike', { temperature: formatTemperature(current.apparentTemperature) })}
-                </p>
-              ) : null}
-              {selectedForecast ? (
-                <p className="text-sm text-muted-foreground">
-                  {t('range', {
-                    high: formatTemperature(selectedForecast.temperatureMax),
-                    low: formatTemperature(selectedForecast.temperatureMin),
-                  })}
-                </p>
-              ) : null}
-            </div>
-          ) : (
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {/* A day past the horizon has no forecast yet; a day inside it that
-              still has none has nowhere located to have weather about. */}
-              {isDateForecastable(data, selectedDate) ? t('noForecast') : t('forecastLater')}
-            </p>
-          )}
-
-          <a
-            className="mt-2 inline-flex text-xs text-text-subtle underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            href={data.attribution.url}
-            rel="noreferrer"
-            target="_blank"
-          >
-            {data.attribution.label}
-          </a>
         </div>
       </div>
+
+      {/* The readings run the full width rather than sitting in the column
+      beside the icon. Indenting them past a 40px tile bought nothing and cost
+      the hourly strip the end of its own day. */}
+      {mainTemperature !== null && condition ? (
+        <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <p className="text-2xl font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+            {formatTemperature(mainTemperature)}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {t(`condition.${weatherConditionKey(condition.weatherCode)}`)}
+          </p>
+          {showCurrent && current ? (
+            <p className="text-sm text-muted-foreground">
+              {t('feelsLike', { temperature: formatTemperature(current.apparentTemperature) })}
+            </p>
+          ) : null}
+          {selectedForecast ? (
+            <p className="text-sm text-muted-foreground">
+              {t('range', {
+                high: formatTemperature(selectedForecast.temperatureMax),
+                low: formatTemperature(selectedForecast.temperatureMin),
+              })}
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">
+          {/* A day past the horizon has no forecast yet; a day inside it that
+          still has none has nowhere located to have weather about. */}
+          {isDateForecastable(data, selectedDate) ? t('noForecast') : t('forecastLater')}
+        </p>
+      )}
+
+      {/* Only ever the day being stood in: the hours come from the same live
+      reading as `current`, and mean nothing once that reading is too old to be
+      now, or on a day the traveller has not reached yet. */}
+      {showCurrent ? (
+        <TripHourlyWeather date={selectedDate} hours={data.hours} timeZone={timeZone} />
+      ) : null}
+
+      <a
+        className="mt-3 inline-flex text-xs text-text-subtle underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        href={data.attribution.url}
+        rel="noreferrer"
+        target="_blank"
+      >
+        {data.attribution.label}
+      </a>
     </section>
   );
 }

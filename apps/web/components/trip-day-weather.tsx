@@ -5,19 +5,13 @@ import { useTranslations } from 'next-intl';
 
 import { usePreferences } from '@/components/preferences-provider';
 import { cn } from '@/lib/utils';
-import { weatherConditionIcon, weatherConditionKey } from '@/lib/weather/conditions';
+import {
+  NOTABLE_PRECIPITATION,
+  weatherConditionIcon,
+  weatherConditionKey,
+} from '@/lib/weather/conditions';
 
 import type { TripWeatherDay } from '@/lib/weather/api';
-
-/**
- * Below this a probability is not a forecast, it is a rounding error.
- *
- * The provider answers every day with a number, and drawing "10%" down forty
- * rows teaches the eye to skip the column that exists to make it stop. A
- * traveller changes plans somewhere around a third, so that is where the
- * droplet appears.
- */
-const NOTABLE_PRECIPITATION = 30;
 
 /**
  * One day's weather, small enough to sit beside a date.

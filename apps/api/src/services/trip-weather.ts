@@ -12,6 +12,7 @@ import {
   WeatherService,
   type TemperatureUnit,
   type WeatherCurrentConditions,
+  type WeatherHourlyForecast,
   type WeatherPoint,
 } from './weather.js';
 import { isWithinForecastWindow, resolveForecastWindow } from './weather-window.js';
@@ -52,6 +53,12 @@ export type TripWeather = {
   days: TripWeatherDay[];
   fetchedAt: string;
   horizon: { endDate: string; startDate: string };
+  /**
+   * The next stretch of hours where the traveller is today, empty whenever
+   * `current` is - the two come from the same live reading and mean nothing
+   * apart from it.
+   */
+  hours: WeatherHourlyForecast[];
   provider: 'open_meteo';
   temperatureUnit: TemperatureUnit;
 };
@@ -262,39 +269,48 @@ export class TripWeatherService {
       });
     }
 
+    const live = await this.readNow(days, tripLocation, options.temperatureUnit, now);
+
     return {
       attribution: WEATHER_ATTRIBUTION,
-      current: await this.readCurrent(days, tripLocation, options.temperatureUnit, now),
+      current: live.current,
       days,
       fetchedAt: (oldestFetchedAt ?? now).toISOString(),
       horizon: window,
+      hours: live.hours,
       provider: 'open_meteo',
       temperatureUnit: options.temperatureUnit,
     };
   }
 
   /**
-   * Current conditions never come from the daily snapshot. That snapshot may be
-   * three hours old, and PRD 11 is explicit that cached weather must not be
-   * presented as the weather right now, so this reads the short-lived tier and
-   * returns nothing rather than something stale.
+   * What is true right now, and the hours just after it.
+   *
+   * Neither ever comes from the daily snapshot. That snapshot may be three
+   * hours old, and PRD 11 is explicit that cached weather must not be presented
+   * as the weather right now, so this reads the short-lived tier and returns
+   * nothing rather than something stale. The hours ride along on the same
+   * request: they answer the question the day's high and low cannot - whether
+   * the rain arrives before the afternoon is over - and cost nothing extra to
+   * ask for.
    *
    * It only runs when today is a day of this trip. A trip that starts in March
    * has no "right now" to report, and asking anyway would spend a request on an
    * answer no surface would draw.
    */
-  private async readCurrent(
+  private async readNow(
     days: readonly TripWeatherDay[],
     fallback: TripWeatherLocation | null,
     temperatureUnit: TemperatureUnit,
     now: Date,
-  ) {
+  ): Promise<{ current: WeatherCurrentConditions | null; hours: WeatherHourlyForecast[] }> {
+    const nothing = { current: null, hours: [] };
     const anchor = fallback ?? days[0]?.location ?? null;
-    if (!anchor) return null;
+    if (!anchor) return nothing;
 
     const today = getLocalDate(now, anchor.timeZone);
     const location = days.find((day) => day.date === today)?.location ?? null;
-    if (!location) return null;
+    if (!location) return nothing;
 
     try {
       const weather = await this.currentConditions.getWeather({
@@ -303,11 +319,11 @@ export class TripWeatherService {
         temperatureUnit,
         timeZone: location.timeZone,
       });
-      return weather.current;
+      return { current: weather.current, hours: weather.hours ?? [] };
     } catch {
       // A fortnight of forecasts is worth serving even when the reading for this
       // minute is not.
-      return null;
+      return nothing;
     }
   }
 }

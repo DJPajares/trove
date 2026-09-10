@@ -25,6 +25,12 @@ type OpenMeteoResponse = {
     time?: unknown[];
     weather_code?: unknown[];
   };
+  hourly?: {
+    precipitation_probability?: unknown[];
+    temperature_2m?: unknown[];
+    time?: unknown[];
+    weather_code?: unknown[];
+  };
   /** Present only on the second and later entries of a multi-point answer. */
   location_id?: unknown;
   timezone?: unknown;
@@ -52,6 +58,19 @@ export type WeatherDailyForecast = {
   precipitationProbability: number | null;
   temperatureMax: number;
   temperatureMin: number;
+  weatherCode: number;
+};
+
+/**
+ * One hour of the day, in the unit and zone the reading was asked for.
+ *
+ * `time` is the provider's own local-time string - minute precision, no zone -
+ * which is what makes the day it belongs to readable from the value itself.
+ */
+export type WeatherHourlyForecast = {
+  precipitationProbability: number | null;
+  temperature: number;
+  time: string;
   weatherCode: number;
 };
 
@@ -89,6 +108,7 @@ export type WeatherContext = {
   current: WeatherCurrentConditions | null;
   forecast: WeatherDailyForecast[];
   fetchedAt: string;
+  hours: WeatherHourlyForecast[];
   location: {
     latitude: number;
     longitude: number;
@@ -229,6 +249,55 @@ function mapForecast(daily: OpenMeteoResponse['daily']): WeatherDailyForecast[] 
   return forecast;
 }
 
+/**
+ * The next stretch of hours, or nothing at all.
+ *
+ * Unlike the daily forecast, an absent or unusable hourly block is not an
+ * error: it rides along on the request that answers "right now", and losing the
+ * shape of the afternoon is never a reason to lose the current temperature too.
+ * A malformed entry still throws, because a wrong hour is worse than no hour.
+ */
+function mapHourly(hourly: OpenMeteoResponse['hourly']): WeatherHourlyForecast[] {
+  if (
+    !hourly ||
+    !Array.isArray(hourly.time) ||
+    !Array.isArray(hourly.temperature_2m) ||
+    !Array.isArray(hourly.weather_code) ||
+    !Array.isArray(hourly.precipitation_probability)
+  ) {
+    return [];
+  }
+
+  if (
+    hourly.time.length !== hourly.temperature_2m.length ||
+    hourly.time.length !== hourly.weather_code.length ||
+    hourly.time.length !== hourly.precipitation_probability.length
+  ) {
+    throw new WeatherProviderError('invalid_response');
+  }
+
+  return hourly.time.map((time, index) => {
+    const temperature = hourly.temperature_2m?.[index];
+    const precipitation = hourly.precipitation_probability?.[index];
+    const weatherCode = hourly.weather_code?.[index];
+    if (
+      !isDateTime(time) ||
+      !isFiniteNumber(temperature) ||
+      !isWeatherCode(weatherCode) ||
+      (precipitation !== null && precipitation !== undefined && !isFiniteNumber(precipitation))
+    ) {
+      throw new WeatherProviderError('invalid_response');
+    }
+
+    return {
+      precipitationProbability: isFiniteNumber(precipitation) ? precipitation : null,
+      temperature,
+      time,
+      weatherCode,
+    };
+  });
+}
+
 export class OpenMeteoWeatherProvider implements WeatherProvider {
   private readonly baseUrl: string;
   private readonly fetcher: Fetcher;
@@ -293,6 +362,12 @@ export class OpenMeteoWeatherProvider implements WeatherProvider {
       current: 'temperature_2m,apparent_temperature,weather_code,is_day',
       daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max',
       forecast_days: '16',
+      // Bounded to the stretch a traveller can still act on. `forecast_hours`
+      // moves the reference from the current day to the current hour, so this
+      // is the next 24 hours rather than 384 of them, and it leaves the daily
+      // series above governed by `forecast_days`.
+      forecast_hours: '24',
+      hourly: 'temperature_2m,weather_code,precipitation_probability',
       latitude: String(input.latitude),
       longitude: String(input.longitude),
       temperature_unit: input.temperatureUnit,
@@ -309,6 +384,7 @@ export class OpenMeteoWeatherProvider implements WeatherProvider {
       attribution: WEATHER_ATTRIBUTION,
       current: mapCurrent(payload.current),
       forecast: mapForecast(payload.daily),
+      hours: mapHourly(payload.hourly),
       location: {
         latitude: input.latitude,
         longitude: input.longitude,

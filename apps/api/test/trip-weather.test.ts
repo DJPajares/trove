@@ -333,3 +333,54 @@ test('a trip that belongs to someone else is not found', async () => {
     service.getTripWeather('intruder', 'trip', { temperatureUnit: 'celsius' }),
   ).rejects.toMatchObject({ message: 'trip_not_found' });
 });
+
+test('the hours of today ride along on the current reading', async () => {
+  const { TripWeatherService } = await import('../src/services/trip-weather.js');
+  const stub = createForecasts();
+  // 09:00Z is already the evening of the 3rd in Tokyo, so this day is today.
+  stubPrisma(createTrip([day('d1', '2026-09-03', { base: TOKYO })]));
+
+  const weather = await new TripWeatherService(
+    stub.forecasts as never,
+    {
+      async getWeather() {
+        return {
+          current: {
+            apparentTemperature: 20,
+            isDay: true,
+            observedAt: '2026-09-03T18:00',
+            temperature: 21,
+            weatherCode: 1,
+          },
+          hours: [
+            {
+              precipitationProbability: 40,
+              temperature: 21,
+              time: '2026-09-03T18:00',
+              weatherCode: 61,
+            },
+          ],
+        };
+      },
+    } as never,
+    () => NOW,
+  ).getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+
+  expect(weather.current?.temperature).toBe(21);
+  expect(weather.hours).toStrictEqual([
+    { precipitationProbability: 40, temperature: 21, time: '2026-09-03T18:00', weatherCode: 61 },
+  ]);
+});
+
+test('a day the traveller has not reached has no hours either', async () => {
+  const stub = createForecasts();
+  stubPrisma(createTrip([day('d1', '2026-09-05', { base: TOKYO })]));
+  const { service } = await createService({ forecasts: stub.forecasts });
+
+  const weather = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+
+  // The hours mean nothing apart from the reading they came with, so they are
+  // absent for exactly the same reason `current` is.
+  expect(weather.current).toBeNull();
+  expect(weather.hours).toStrictEqual([]);
+});

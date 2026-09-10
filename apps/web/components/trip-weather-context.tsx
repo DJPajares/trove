@@ -8,8 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { weatherConditionKey } from '@/lib/weather/conditions';
 import {
+  isCurrentReadingStale,
   isDateForecastable,
-  isWeatherStale,
   tripWeatherForDate,
   useTripWeather,
 } from '@/lib/weather/use-trip-weather';
@@ -46,7 +46,7 @@ export function TripWeatherContext({
   const t = useTranslations('tripMode.views.weather');
   const locale = useLocale();
   const { preferences } = usePreferences();
-  const { data, refetch, status } = useTripWeather(tripId);
+  const { data, dataUpdatedAt, refetch, status } = useTripWeather(tripId);
 
   if (status === 'loading') {
     return (
@@ -88,8 +88,10 @@ export function TripWeatherContext({
   const timeZone = selectedForecast?.location.timeZone ?? data.days[0]?.location.timeZone ?? 'UTC';
   const current = data.current;
   // An answer read off disk on a plane is worth showing, but it stops being
-  // "now" the moment it outlives its window.
-  const stale = isWeatherStale(data);
+  // "now" the moment it outlives its window. Dropping back to the day's
+  // forecast is the whole of that correction: the heading stops saying now and
+  // starts naming the day, which is more use than a sentence about caching.
+  const stale = isCurrentReadingStale(dataUpdatedAt);
   const showCurrent = Boolean(
     !isPreview && !stale && current && selectedDate === localDate(timeZone),
   );
@@ -148,17 +150,6 @@ export function TripWeatherContext({
             </p>
           )}
 
-          {stale ? (
-            <p className="mt-2 text-xs leading-5 text-text-subtle">
-              {t('staleData', {
-                time: new Intl.DateTimeFormat(locale, {
-                  dateStyle: 'medium',
-                  timeStyle: 'short',
-                  timeZone,
-                }).format(new Date(data.fetchedAt)),
-              })}
-            </p>
-          ) : null}
           <a
             className="mt-2 inline-flex text-xs text-text-subtle underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             href={data.attribution.url}

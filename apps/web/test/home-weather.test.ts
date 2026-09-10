@@ -96,3 +96,55 @@ test('a reading is never current when the server sent no current conditions', ()
     selectHomeWeatherReading(withoutCurrent, target, new Date('2026-09-11T10:00:00.000Z')).kind,
   ).toBe('forecast');
 });
+
+test('an active trip with no context asks about today, not the day it started', () => {
+  // Falling back to the start date meant that on day three of a trip Home asked
+  // about a day the forecast window no longer covers, and drew a blank while
+  // Trip Mode, one tap away, showed the weather.
+  expect(resolveHomeWeatherTarget(trip, null, new Date('2026-09-11T10:00:00.000Z'))).toStrictEqual({
+    date: '2026-09-11',
+    kind: 'current',
+    tripId: 'trip-id',
+  });
+});
+
+test('a today outside the trip is pulled back inside it', () => {
+  expect(resolveHomeWeatherTarget(trip, null, new Date('2026-09-20T10:00:00.000Z'))?.date).toBe(
+    '2026-09-12',
+  );
+});
+
+test('an answer too old to be current shows the day forecast rather than nothing', () => {
+  const target = resolveHomeWeatherTarget(trip, context())!;
+  const reading = selectHomeWeatherReading(
+    weather,
+    target,
+    new Date('2026-09-11T10:00:00.000Z'),
+    false,
+  );
+  expect(reading.kind).toBe('forecast');
+  expect(reading.reading?.weatherCode).toBe(2);
+});
+
+test('a day with no forecast of its own borrows the soonest day that has one', () => {
+  // The first day of a trip is routinely one the itinerary cannot place yet, so
+  // the ribbon names the day it is actually showing instead of saying nothing.
+  const reading = selectHomeWeatherReading(weather, {
+    date: '2026-09-10',
+    kind: 'forecast',
+    tripId: 'trip-id',
+  });
+  expect(reading.kind).toBe('forecast');
+  expect(reading.date).toBe('2026-09-11');
+});
+
+test('a trip the window cannot reach at all is still out of range', () => {
+  const empty = { ...weather, current: null, days: [] } as TripWeather;
+  const reading = selectHomeWeatherReading(empty, {
+    date: '2026-12-01',
+    kind: 'forecast',
+    tripId: 'trip-id',
+  });
+  expect(reading.kind).toBe('out_of_range');
+  expect(reading.date).toBe('2026-12-01');
+});

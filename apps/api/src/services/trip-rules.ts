@@ -1,5 +1,7 @@
 import { getAllCountries } from 'countries-and-timezones';
 
+import { timeZoneForCountry } from '@trove/types/countries';
+
 export type TripLifecycle = 'active' | 'completed' | 'planning';
 
 export type TimeZoneCandidate = {
@@ -46,12 +48,34 @@ function normalizeCountryName(value: string) {
     .toLocaleLowerCase('en');
 }
 
-const countryPrimaryTimeZones = new Map(
-  Object.values(getAllCountries()).map((country) => [
-    normalizeCountryName(country.name),
-    country.timezones.find(isValidIanaTimeZone) ?? null,
-  ]),
-);
+const englishCountryNames = new Intl.DisplayNames(['en'], { type: 'region' });
+
+/**
+ * `countries-and-timezones` matches a country *name*; it cannot say which of a
+ * country's zones is the main one, because its per-country list is alphabetical
+ * rather than ordered by primacy - its first entry for the United States is
+ * America/Adak and for Australia is Antarctica/Macquarie. So the name matching
+ * comes from the library and the zone comes from the curated map.
+ *
+ * That map is keyed for a home-country dropdown, so it omits Antarctica and
+ * four uninhabited territories. Those are still destinations a traveller can
+ * name, so they keep falling back to the library's list.
+ *
+ * The library carries one name per country and it is the formal one, which
+ * leaves "United States" unmatched. Each country's English display name is
+ * registered alongside it so the everyday form resolves too.
+ */
+const countryPrimaryTimeZones = new Map<string, string>();
+
+for (const country of Object.values(getAllCountries())) {
+  const timeZone = timeZoneForCountry(country.id) ?? country.timezones.find(isValidIanaTimeZone);
+
+  if (!timeZone) continue;
+
+  for (const name of [country.name, englishCountryNames.of(country.id)]) {
+    if (name) countryPrimaryTimeZones.set(normalizeCountryName(name), timeZone);
+  }
+}
 
 /**
  * An explicitly named country supplies a deterministic timezone without a

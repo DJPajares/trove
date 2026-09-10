@@ -179,6 +179,31 @@ test('uses a named country to infer a destination timezone without guessing bare
   expect(resolveCountryPrimaryTimeZone('Auckland, Somewhere unknown')).toBeNull();
 });
 
+test('gives a multi-zone country the zone most of it lives in', () => {
+  expect(resolveCountryPrimaryTimeZone('United States of America')).toBe('America/New_York');
+  expect(resolveCountryPrimaryTimeZone('Australia')).toBe('Australia/Sydney');
+  expect(resolveCountryPrimaryTimeZone('Canada')).toBe('America/Toronto');
+  expect(resolveCountryPrimaryTimeZone('Russia')).toBe('Europe/Moscow');
+  expect(resolveCountryPrimaryTimeZone('Brazil')).toBe('America/Sao_Paulo');
+  expect(resolveCountryPrimaryTimeZone('Mexico')).toBe('America/Mexico_City');
+  expect(resolveCountryPrimaryTimeZone('Sydney, Australia')).toBe('Australia/Sydney');
+  expect(resolveCountryPrimaryTimeZone('Toronto, Ontario, Canada')).toBe('America/Toronto');
+});
+
+test('resolves the everyday country name alongside the formal one', () => {
+  expect(resolveCountryPrimaryTimeZone('United States')).toBe('America/New_York');
+  expect(resolveCountryPrimaryTimeZone('New York, United States')).toBe('America/New_York');
+  expect(resolveCountryPrimaryTimeZone('Cape Verde')).toBe('Atlantic/Cape_Verde');
+  expect(resolveCountryPrimaryTimeZone('Cabo Verde')).toBe('Atlantic/Cape_Verde');
+});
+
+test('falls back to the library for countries the home-country map omits', () => {
+  expect(resolveCountryPrimaryTimeZone('Antarctica')).toBe('Antarctica/Casey');
+  expect(resolveCountryPrimaryTimeZone('South Georgia and the South Sandwich Islands')).toBe(
+    'Atlantic/South_Georgia',
+  );
+});
+
 test('keeps explicit and Place-specific timezones ahead of country inference', () => {
   const countryTimeZone = resolveCountryPrimaryTimeZone('New Zealand');
 

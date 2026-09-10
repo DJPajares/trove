@@ -17,11 +17,13 @@
  * Country *names* are deliberately absent: they belong to `Intl.DisplayNames`
  * in the reader's own locale, not to a hard-coded table.
  *
- * The API's `resolveCountryPrimaryTimeZone` answers a different question - what
- * zone a freely typed destination *name* implies - and keeps using
- * `countries-and-timezones` for the name matching. That library cannot answer
- * this one: its per-country zone list is alphabetical, so its first entry for
- * the US is America/Adak and for Australia is Antarctica/Macquarie.
+ * The API's `resolveCountryPrimaryTimeZone` answers a related question - what
+ * zone a freely typed destination *name* implies - and reads its zones from
+ * here, using `countries-and-timezones` only to match the name. That library
+ * cannot supply the zone: its per-country list is alphabetical, so its first
+ * entry for the US is America/Adak and for Australia is Antarctica/Macquarie.
+ * The five countries this map omits are still destinations, so that caller
+ * falls back to the library's list for them.
  */
 export const COUNTRY_TIME_ZONES: Readonly<Record<string, string>> = {
   AD: 'Europe/Andorra',

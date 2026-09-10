@@ -9,7 +9,11 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { selectHomeWeatherReading, type HomeWeatherTarget } from '@/lib/home/weather';
 import { weatherConditionKey } from '@/lib/weather/conditions';
-import { isWeatherStale, useTripWeather } from '@/lib/weather/use-trip-weather';
+import {
+  isCurrentReadingStale,
+  isDateForecastable,
+  useTripWeather,
+} from '@/lib/weather/use-trip-weather';
 
 const weatherRibbonClassName =
   'rounded-[var(--radius-lg)] border border-media-fallback-foreground/18 bg-neutral-950/58 p-3 text-media-fallback-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.08)] backdrop-blur-sm supports-[backdrop-filter]:bg-neutral-950/52 [@media(prefers-reduced-transparency:reduce)]:bg-neutral-950/92 [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none';
@@ -19,17 +23,15 @@ export function HomeWeatherInset({ target }: Readonly<{ target: HomeWeatherTarge
   const conditionT = useTranslations('tripMode.views.weather');
   const locale = useLocale();
   const { preferences } = usePreferences();
-  const { data, refetch, status } = useTripWeather(target.tripId);
+  const { data, dataUpdatedAt, refetch, status } = useTripWeather(target.tripId);
 
+  // An answer read off disk stops being "now" the moment it outlives its
+  // window, but it is still the best forecast this trip has.
+  const stale = isCurrentReadingStale(dataUpdatedAt);
   const reading = useMemo(
-    () => (data ? selectHomeWeatherReading(data, target) : null),
-    [data, target],
+    () => (data ? selectHomeWeatherReading(data, target, new Date(), !stale) : null),
+    [data, stale, target],
   );
-  const formattedDate = new Intl.DateTimeFormat(locale, {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  }).format(new Date(`${target.date}T00:00:00.000Z`));
 
   if (status === 'loading') {
     return <HomeWeatherInsetSkeleton label={t('loading')} />;
@@ -56,15 +58,20 @@ export function HomeWeatherInset({ target }: Readonly<{ target: HomeWeatherTarge
   }
 
   const unit = conditionT(`unit.${preferences.temperatureUnit}`);
-  const stale = isWeatherStale(data);
-  // An answer read off disk stops being "now" the moment it outlives its window.
-  const showCurrent = reading?.kind === 'current' && !stale;
+  const showCurrent = reading?.kind === 'current';
   const temperature = showCurrent
     ? reading.reading.temperature
     : reading?.kind === 'forecast'
       ? reading.reading.temperatureMax
       : null;
   const weatherCode = reading?.reading?.weatherCode;
+  // The day the reading is actually about, which is not always the day asked
+  // for: a first day the itinerary cannot place borrows the soonest one it can.
+  const formattedDate = new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  }).format(new Date(`${reading?.date ?? target.date}T00:00:00.000Z`));
 
   return (
     <section className={weatherRibbonClassName}>
@@ -106,11 +113,12 @@ export function HomeWeatherInset({ target }: Readonly<{ target: HomeWeatherTarge
               ) : null}
             </div>
           ) : (
-            <p className="mt-1 text-sm text-media-fallback-foreground/82">{t('outOfRange')}</p>
+            <p className="mt-1 text-sm text-media-fallback-foreground/82">
+              {/* A day past the horizon has no forecast yet; a day inside it
+              that still has none has nowhere located to have weather about. */}
+              {isDateForecastable(data, target.date) ? t('noForecast') : t('outOfRange')}
+            </p>
           )}
-          {stale ? (
-            <p className="mt-1 text-xs text-media-fallback-foreground/64">{t('stale')}</p>
-          ) : null}
         </div>
       </div>
     </section>

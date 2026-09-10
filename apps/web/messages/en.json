@@ -694,7 +694,6 @@
         "dayPrecipitation": "{probability}%",
         "forecastLater": "Weather for this day will be available closer to your trip.",
         "noForecast": "A forecast is not available for this day.",
-        "staleData": "Cached weather from {time}. Treat it as past context, not current conditions.",
         "unavailableTitle": "Weather is unavailable right now",
         "unavailableDescription": "Your trip details are still available. Try again when you have a connection.",
         "tryAgain": "Try weather again",
@@ -2057,9 +2056,9 @@
       "current": "Current weather",
       "forecast": "Forecast for {date}",
       "loading": "Loading weather",
+      "noForecast": "A forecast is not available for this day.",
       "outOfRange": "A forecast will appear closer to departure.",
       "source": "Open-Meteo",
-      "stale": "Saved weather may be out of date",
       "tryAgain": "Try weather again",
       "unavailable": "Weather is unavailable right now."
     },

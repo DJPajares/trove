@@ -12,6 +12,16 @@ import {
 import type { LucideIcon } from 'lucide-react';
 
 /**
+ * Below this a probability is not a forecast, it is a rounding error.
+ *
+ * The provider answers every day and every hour with a number, and drawing
+ * "10%" down forty rows teaches the eye to skip the column that exists to make
+ * it stop. A traveller changes plans somewhere around a third, so that is where
+ * the droplet appears.
+ */
+export const NOTABLE_PRECIPITATION = 30;
+
+/**
  * A WMO code narrowed to the handful of conditions worth naming.
  *
  * The provider distinguishes light from moderate freezing drizzle. A traveller

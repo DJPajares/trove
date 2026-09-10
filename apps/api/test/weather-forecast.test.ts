@@ -188,3 +188,92 @@ test('an out-of-range date range surfaces as an invalid request', async () => {
     }),
   ).rejects.toMatchObject({ code: 'invalid_request' });
 });
+
+function hourlyBlock(times: string[]) {
+  return {
+    precipitation_probability: times.map(() => 40),
+    temperature_2m: times.map(() => 18),
+    time: times,
+    weather_code: times.map(() => 61),
+  };
+}
+
+function currentBlock() {
+  return {
+    apparent_temperature: 11,
+    is_day: 1,
+    temperature_2m: 13,
+    time: '2026-09-11T09:15',
+    weather_code: 0,
+  };
+}
+
+async function readWeather(body: Record<string, unknown>) {
+  const requests: string[] = [];
+  const provider = new OpenMeteoWeatherProvider({
+    fetcher: async (input) => {
+      requests.push(String(input));
+      return jsonResponse({
+        current: currentBlock(),
+        daily: dailyBlock(['2026-09-11']),
+        timezone: 'Pacific/Auckland',
+        ...body,
+      });
+    },
+  });
+
+  const weather = await provider.getWeather({
+    latitude: -36.85,
+    longitude: 174.76,
+    temperatureUnit: 'celsius',
+    timeZone: 'Pacific/Auckland',
+  });
+
+  return { requests, weather };
+}
+
+test('the current reading also asks for the hours just after it', async () => {
+  const { requests, weather } = await readWeather({
+    hourly: hourlyBlock(['2026-09-11T09:00', '2026-09-11T10:00']),
+  });
+
+  expect(requests[0]).toContain('hourly=temperature_2m%2Cweather_code%2Cprecipitation_probability');
+  // The hourly series is bounded to the stretch still worth acting on, while
+  // the daily one keeps its own sixteen days.
+  expect(requests[0]).toContain('forecast_hours=24');
+  expect(requests[0]).toContain('forecast_days=16');
+  expect(weather.hours).toStrictEqual([
+    {
+      precipitationProbability: 40,
+      temperature: 18,
+      time: '2026-09-11T09:00',
+      weatherCode: 61,
+    },
+    {
+      precipitationProbability: 40,
+      temperature: 18,
+      time: '2026-09-11T10:00',
+      weatherCode: 61,
+    },
+  ]);
+});
+
+test('an answer with no hours still carries the current reading', async () => {
+  // The hours ride along on the request that answers "right now". Losing the
+  // shape of the afternoon must never cost the temperature as well.
+  const { weather } = await readWeather({});
+
+  expect(weather.hours).toStrictEqual([]);
+  expect(weather.current?.temperature).toBe(13);
+});
+
+test('an hourly block that does not line up is refused', async () => {
+  const misaligned = {
+    ...hourlyBlock(['2026-09-11T09:00', '2026-09-11T10:00']),
+    temperature_2m: [18],
+  };
+
+  await expect(readWeather({ hourly: misaligned })).rejects.toMatchObject({
+    code: 'invalid_response',
+  });
+});

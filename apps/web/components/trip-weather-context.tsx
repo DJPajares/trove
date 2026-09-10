@@ -4,6 +4,7 @@ import { CloudSun, RefreshCw } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { usePreferences } from '@/components/preferences-provider';
+import { TripHourlyWeather } from '@/components/trip-hourly-weather';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { weatherConditionKey } from '@/lib/weather/conditions';
@@ -149,6 +150,13 @@ export function TripWeatherContext({
               {isDateForecastable(data, selectedDate) ? t('noForecast') : t('forecastLater')}
             </p>
           )}
+
+          {/* Only ever the day being stood in: the hours come from the same
+          live reading as `current`, and mean nothing once that reading is too
+          old to be now, or on a day the traveller has not reached yet. */}
+          {showCurrent ? (
+            <TripHourlyWeather date={selectedDate} hours={data.hours} timeZone={timeZone} />
+          ) : null}
 
           <a
             className="mt-2 inline-flex text-xs text-text-subtle underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"

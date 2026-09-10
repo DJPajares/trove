@@ -14,7 +14,7 @@ import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import type { Trip } from '@/lib/trips/api';
 import { formatTripDate } from '@/lib/trips/format';
-import { primaryTripDestinations } from '@/lib/trips/navigation';
+import { primaryTripDestinations, withLiveTripModeFirst } from '@/lib/trips/navigation';
 import { tripDestinationSummary } from '@/lib/trips/summary';
 
 export type TripFeaturedCardProps = {
@@ -92,7 +92,10 @@ export function TripFeaturedCard({
 
           <TripDestinationActions
             className="flex-nowrap"
-            destinations={primaryTripDestinations(trip.id, trip.lifecycle, trip.startDate)}
+            destinations={withLiveTripModeFirst(
+              primaryTripDestinations(trip.id, trip.lifecycle, trip.startDate),
+              trip.lifecycle,
+            )}
             extra={
               <Button
                 aria-label={t('overview')}

@@ -9,10 +9,11 @@ import {
   ImagePlus,
   MapPin,
   Plus,
+  RefreshCw,
   Trash2,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 
 import { TripMedia } from '@/components/trip-media';
@@ -123,6 +124,8 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
   const [detailsOpen, setDetailsOpen] = useState(() => hasOptionalTripDetails(trip));
   const [pendingDetailsFocus, setPendingDetailsFocus] = useState(false);
   const [status, setStatus] = useState<'idle' | 'saving'>('idle');
+  /** Set before React can re-render, so a second tap has something to hit. */
+  const savingRef = useRef(false);
   const [pendingShrink, setPendingShrink] = useState<PendingShrink | null>(null);
   const deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -294,6 +297,7 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (savingRef.current) return;
     setError(null);
     setDateError(null);
     let input = buildInput(form.coverPhotoPath);
@@ -307,6 +311,7 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
       return;
     }
 
+    savingRef.current = true;
     setStatus('saving');
 
     let uploadedPath: string | null = null;
@@ -337,12 +342,20 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
           : t('saveError'),
       );
     } finally {
+      // Released even on the way to the confirmation dialog, which is the one
+      // path that leaves here still meaning to save.
+      savingRef.current = false;
       setStatus('idle');
     }
   }
 
   async function confirmDateShrink() {
-    if (!pendingShrink) return;
+    // A disabled button only stops the click that comes after React has
+    // re-rendered, and two taps land faster than that. This is the one save
+    // that unschedules items, so the guard against sending it twice is a value
+    // written now rather than a prop applied later.
+    if (!pendingShrink || savingRef.current) return;
+    savingRef.current = true;
     setStatus('saving');
     setError(null);
 
@@ -355,11 +368,13 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
       setPendingShrink(null);
       setError(t('saveError'));
     } finally {
+      savingRef.current = false;
       setStatus('idle');
     }
   }
 
   async function cancelDateShrink() {
+    if (savingRef.current) return;
     if (pendingShrink?.uploadedPath) {
       await removeTripCover(pendingShrink.uploadedPath).catch(() => undefined);
     }
@@ -709,6 +724,17 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
               {t('cancel')}
             </Button>
             <Button disabled={status === 'saving'} type="submit">
+              {/* Moving a trip re-dates every day of it and every time on those
+                  days, which on a long trip is long enough that a label going
+                  grey reads as a screen that has stopped rather than one that
+                  is working. */}
+              {status === 'saving' ? (
+                <RefreshCw
+                  aria-hidden="true"
+                  className="animate-spin motion-reduce:animate-none"
+                  data-icon="inline-start"
+                />
+              ) : null}
               {status === 'saving' ? t('saving') : trip ? t('saveChanges') : t('createTrip')}
             </Button>
           </div>
@@ -717,7 +743,12 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
 
       <AlertDialog
         open={Boolean(pendingShrink)}
-        onOpenChange={(open) => !open && void cancelDateShrink()}
+        // Not dismissable mid-save: the request that is unscheduling items is
+        // already away, and letting Escape run the cancel path would only make
+        // the screen disagree with what the server is doing.
+        onOpenChange={(open) => {
+          if (!open && status !== 'saving') void cancelDateShrink();
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -727,15 +758,26 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => void cancelDateShrink()}>
+            <AlertDialogCancel
+              disabled={status === 'saving'}
+              onClick={() => void cancelDateShrink()}
+            >
               {t('keepDates')}
             </AlertDialogCancel>
             <AlertDialogAction
+              disabled={status === 'saving'}
               onClick={() => void confirmDateShrink()}
               type="button"
               variant="destructive"
             >
-              {t('moveToUnscheduled')}
+              {status === 'saving' ? (
+                <RefreshCw
+                  aria-hidden="true"
+                  className="animate-spin motion-reduce:animate-none"
+                  data-icon="inline-start"
+                />
+              ) : null}
+              {status === 'saving' ? t('movingDates') : t('moveToUnscheduled')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

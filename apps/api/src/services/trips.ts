@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { getPrismaClient, type Prisma } from '@trove/db';
+import { getPrismaClient, Prisma } from '@trove/db';
 
 import { floatingLocalTimeToInstant, formatLocalTime } from './itinerary-rules.js';
 import { MEMORY_PHOTOS_BUCKET } from './memories.js';
@@ -219,6 +219,8 @@ async function recomputeItemInstants(transaction: Prisma.TransactionClient, trip
     },
   });
 
+  const rows: Prisma.Sql[] = [];
+
   for (const item of timedItems) {
     if (!item.itineraryDay) continue;
     const localTime = formatLocalTime(item.localStartTime);
@@ -233,8 +235,25 @@ async function recomputeItemInstants(transaction: Prisma.TransactionClient, trip
       startInstant = null;
     }
 
-    await transaction.itineraryItem.update({ data: { startInstant }, where: { id: item.id } });
+    // Postgres reads the column's type from the first tuple, and the first item
+    // of a trip is as likely as any other to be the one with no instant, so
+    // every row says what it is rather than leaving it to be inferred.
+    rows.push(Prisma.sql`(${item.id}::uuid, ${startInstant}::timestamptz)`);
   }
+
+  if (!rows.length) return;
+
+  // One statement rather than one per item. Each instant was worked out above
+  // and none of them depend on each other, so the only thing the old loop was
+  // buying was a round trip apiece - and a fortnight of well-planned days is
+  // hundreds of them, in series, inside a transaction the traveller is waiting
+  // on.
+  await transaction.$executeRaw(Prisma.sql`
+    UPDATE "trove"."itinerary_items" AS item
+    SET "start_instant" = source.instant
+    FROM (VALUES ${Prisma.join(rows)}) AS source(id, instant)
+    WHERE item."id" = source.id
+  `);
 }
 
 function normalizeTripDates(startDate: string, endDate: string) {

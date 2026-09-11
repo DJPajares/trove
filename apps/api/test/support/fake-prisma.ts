@@ -307,10 +307,31 @@ function createModel(name: ModelName) {
   };
 }
 
+/**
+ * The one raw statement the services issue: setting many items' start instants
+ * at once.
+ *
+ * A `Prisma.Sql` carries its parameters in order, so the pairs can be read back
+ * without parsing SQL - which is the point, since this stands in for a database
+ * rather than pretending to be one. What it cannot check is that the statement
+ * itself is valid; that is what running the move against a real Postgres is for.
+ */
+async function applyRawStartInstants(statement: unknown) {
+  const values = (statement as { values?: unknown[] })?.values ?? [];
+
+  for (let index = 0; index + 1 < values.length; index += 2) {
+    const row = store.itineraryItem.find((candidate) => candidate.id === values[index]);
+    if (row) row.startInstant = values[index + 1] as Row['startInstant'];
+  }
+
+  return values.length / 2;
+}
+
 export function createFakePrismaClient(): Record<string, unknown> {
   const models = Object.fromEntries(MODELS.map((name) => [name, createModel(name)]));
   return {
     ...models,
+    $executeRaw: applyRawStartInstants,
     $transaction: async (operations: unknown) =>
       typeof operations === 'function'
         ? (operations as (client: unknown) => unknown)(createFakePrismaClient())

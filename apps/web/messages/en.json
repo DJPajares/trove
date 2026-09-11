@@ -439,6 +439,7 @@
     "dateShrinkDescription": "The new dates remove {count, plural, one {one planned item} other {# planned items}}. Nothing will be deleted; affected items will move to Unscheduled.",
     "keepDates": "Keep current dates",
     "moveToUnscheduled": "Move and update dates",
+    "movingDates": "Moving dates…",
     "deleteTitle": "Delete this trip?",
     "deleteDescription": "{name} and its planning data will be permanently removed.",
     "deleteTrip": "Delete trip",

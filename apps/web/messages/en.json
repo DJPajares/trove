@@ -113,7 +113,8 @@
     "previousMonth": "Previous month",
     "nextMonth": "Next month",
     "clear": "Clear",
-    "today": "Today"
+    "today": "Today",
+    "todayDate": "Today, {date}"
   },
   "travelInputs": {
     "country": {
@@ -1359,7 +1360,10 @@
     "distanceHelp": "Show routes, travel times, and distances.",
     "dayMove": {
       "action": "Move day plan",
+      "swapAction": "Swap with another day",
       "title": "Move this day plan",
+      "swapTitle": "Swap this day plan with another",
+      "swapConfirm": "Swap plans",
       "description": "Move {count, plural, one {# itinerary item} other {# itinerary items}} from {day}.",
       "targetLabel": "Destination day",
       "targetPlaceholder": "Choose another day",

@@ -81,6 +81,14 @@ function DatePicker({
     () => new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric' }),
     [locale],
   );
+  // The calendar names every day in full when it is read aloud, and says of one
+  // of them that it is today. That sentence is the only thing carrying today to
+  // a reader who cannot see the ring, so it is built here rather than left to
+  // the library's own hardcoded English.
+  const spokenDateFormatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { dateStyle: 'full' }),
+    [locale],
+  );
   const disabledDays = useMemo<Matcher[] | undefined>(() => {
     const matchers: Matcher[] = [];
     if (minDate) matchers.push({ before: minDate });
@@ -164,6 +172,10 @@ function DatePicker({
           defaultMonth={selectedDate ?? minDate ?? today}
           disabled={disabledDays}
           labels={{
+            labelDayButton: (date, modifiers) =>
+              modifiers.today
+                ? t('todayDate', { date: spokenDateFormatter.format(date) })
+                : spokenDateFormatter.format(date),
             labelNext: () => t('nextMonth'),
             labelPrevious: () => t('previousMonth'),
           }}

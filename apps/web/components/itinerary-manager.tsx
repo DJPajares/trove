@@ -2,6 +2,7 @@
 
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  ArrowLeftRight,
   CalendarClock,
   CheckCircle2,
   ChevronDown,
@@ -495,6 +496,17 @@ export function ItineraryManager({
     () => itinerary?.days.find((day) => day.id === dayMoveTargetId) ?? null,
     [dayMoveTargetId, itinerary],
   );
+  /**
+   * What the dialog will actually do, which is not always what it was opened
+   * for: a day with nothing on it has nothing to trade back, so swapping onto
+   * one is a move, and saying otherwise would promise something that does not
+   * happen. `handleDayMove` sends the same answer.
+   *
+   * Until a day has been chosen there is nothing to correct, so the dialog goes
+   * on saying what it was opened to do.
+   */
+  const effectiveDayMoveStrategy =
+    dayMoveTarget && !dayMoveTarget.items.length ? 'append' : dayMoveStrategy;
   const routeRevision = itineraryDayRouteRevision(selectedDay);
   const includeRoutePolylines = planningMapVisible;
   /**
@@ -1496,11 +1508,11 @@ export function ItineraryManager({
     }
   }
 
-  function openDayMove(day: ItineraryDay) {
+  function openDayMove(day: ItineraryDay, strategy: 'append' | 'swap' = 'append') {
     setDaySettingsOpen(false);
     setDayMoveSourceId(day.id);
     setDayMoveTargetId('');
-    setDayMoveStrategy('append');
+    setDayMoveStrategy(strategy);
     setDayMoveError(null);
   }
 
@@ -1968,14 +1980,28 @@ export function ItineraryManager({
                             {selectedDay.notes ? t('editDayNote') : t('addDayNote')}
                           </Button>
                           {selectedDay.items.length ? (
-                            <Button
-                              className="mt-2 w-full justify-start px-3"
-                              onClick={() => openDayMove(selectedDay)}
-                              variant="outline"
-                            >
-                              <CalendarClock aria-hidden="true" data-icon="inline-start" />
-                              {t('dayMove.action')}
-                            </Button>
+                            <>
+                              <Button
+                                className="mt-2 w-full justify-start px-3"
+                                onClick={() => openDayMove(selectedDay)}
+                                variant="outline"
+                              >
+                                <CalendarClock aria-hidden="true" data-icon="inline-start" />
+                                {t('dayMove.action')}
+                              </Button>
+                              {/* The same dialog, opened already knowing the
+                              answer. Swapping was only ever reachable as a
+                              second question asked after choosing a day, which
+                              is not where anyone goes looking for it. */}
+                              <Button
+                                className="mt-2 w-full justify-start px-3"
+                                onClick={() => openDayMove(selectedDay, 'swap')}
+                                variant="outline"
+                              >
+                                <ArrowLeftRight aria-hidden="true" data-icon="inline-start" />
+                                {t('dayMove.swapAction')}
+                              </Button>
+                            </>
                           ) : null}
                         </div>
                       </PopoverContent>
@@ -2800,7 +2826,11 @@ export function ItineraryManager({
           {dayMoveSource ? (
             <form className="space-y-6" onSubmit={handleDayMove}>
               <DialogHeader>
-                <DialogTitle>{t('dayMove.title')}</DialogTitle>
+                <DialogTitle>
+                  {effectiveDayMoveStrategy === 'swap'
+                    ? t('dayMove.swapTitle')
+                    : t('dayMove.title')}
+                </DialogTitle>
                 <DialogDescription>
                   {t('dayMove.description', {
                     count: dayMoveSource.items.length,
@@ -2819,8 +2849,10 @@ export function ItineraryManager({
                   </FieldLabel>
                   <Select
                     onValueChange={(value) => {
+                      // The strategy is not reset here. It is now how the
+                      // dialog was opened, and a traveller who asked to swap
+                      // has not changed their mind by naming the other day.
                       setDayMoveTargetId(value ?? '');
-                      setDayMoveStrategy('append');
                       setDayMoveError(null);
                     }}
                     value={dayMoveTargetId}
@@ -2908,7 +2940,11 @@ export function ItineraryManager({
                   {t('cancel')}
                 </Button>
                 <Button disabled={movingDay || !dayMoveTarget} type="submit">
-                  {movingDay ? t('dayMove.moving') : t('dayMove.confirm')}
+                  {movingDay
+                    ? t('dayMove.moving')
+                    : effectiveDayMoveStrategy === 'swap'
+                      ? t('dayMove.swapConfirm')
+                      : t('dayMove.confirm')}
                 </Button>
               </DialogFooter>
             </form>

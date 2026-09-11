@@ -16,6 +16,7 @@ import {
 } from '@/lib/offline/trip-store';
 import { getOfflineAuthContext } from '@/lib/offline/trip-sync';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import { compressImage, memoryPhotoTarget } from '@/lib/media/compress-image';
 import { forgetCachedMediaUrls } from '@/lib/media/storage-cache-key';
 
 import {
@@ -266,29 +267,62 @@ export function setStoryCoverPhoto(tripId: string, memoryPhotoId: string | null)
 }
 
 type PlannedPhoto = {
+  /** Named as `uploadMemoryPhotoObject` names it: after compression these are no longer a File. */
+  body: Blob;
   clientPhotoId: string;
   contentType: string;
-  file: File;
   fileName: string;
   path: string;
   sizeBytes: number;
 };
 
-function planPhotos(userId: string, tripId: string, clientMemoryId: string, files: File[]) {
-  return files.map((file) => {
+/**
+ * Decides everything a photo needs before it is either uploaded or queued:
+ * where it will be stored, and what bytes will go there.
+ *
+ * Compressing here rather than at upload time is what makes the offline path
+ * correct. `queueCapture` writes `body` straight into IndexedDB and the sync in
+ * `lib/offline/trip-sync.ts` replays that blob without ever seeing the original
+ * File again, so compression anywhere later would leave queued photos at full
+ * size and leave the recorded `sizeBytes` describing bytes nobody stored.
+ * Compressing at replay time would be worse still: a retry would produce
+ * different bytes each time for a path written with `upsert`, which is exactly
+ * the guarantee that path exists to provide.
+ *
+ * Validation stays on the original file. `compressImage` falls back to the
+ * source bytes for anything it cannot decode, so checking the original is what
+ * keeps `stored <= picked <= bucket limit` true even when the fallback fires.
+ *
+ * One photo at a time, deliberately: a 12 MP bitmap is ~48 MB of live pixels,
+ * and a handful decoded at once is how an older phone loses the tab mid-capture.
+ */
+async function planPhotos(
+  userId: string,
+  tripId: string,
+  clientMemoryId: string,
+  files: File[],
+): Promise<PlannedPhoto[]> {
+  const planned: PlannedPhoto[] = [];
+
+  for (const file of files) {
     if (!isAllowedMemoryPhoto(file.type, file.size)) {
       throw new MemoriesApiError('invalid_memory_photo', 400);
     }
     const clientPhotoId = crypto.randomUUID();
-    return {
+    const prepared = await compressImage(file, memoryPhotoTarget);
+    planned.push({
+      body: prepared.body,
       clientPhotoId,
-      contentType: file.type,
-      file,
-      fileName: file.name,
-      path: memoryPhotoPath(userId, tripId, clientMemoryId, clientPhotoId, file.name),
-      sizeBytes: file.size,
-    } satisfies PlannedPhoto;
-  });
+      contentType: prepared.contentType,
+      fileName: prepared.fileName,
+      // From the prepared name, not the picked one: the stored object takes its
+      // extension from here, and a re-encoded photo is no longer a .jpg.
+      path: memoryPhotoPath(userId, tripId, clientMemoryId, clientPhotoId, prepared.fileName),
+      sizeBytes: prepared.sizeBytes,
+    });
+  }
+
+  return planned;
 }
 
 async function assertMediaCapacity(userId: string, incomingBytes: number) {
@@ -336,6 +370,8 @@ async function queueCapture(
   photos: PlannedPhoto[],
   includeCreate: boolean,
 ) {
+  // These are already compressed, so the ceiling counts what the device will
+  // really hold rather than what the traveller happened to pick.
   await assertMediaCapacity(
     userId,
     photos.reduce((total, photo) => total + photo.sizeBytes, 0),
@@ -369,7 +405,7 @@ async function queueCapture(
   const media = photos.map(
     (photo) =>
       ({
-        blob: photo.file,
+        blob: photo.body,
         clientMemoryId,
         clientPhotoId: photo.clientPhotoId,
         createdAt: new Date().toISOString(),
@@ -400,7 +436,7 @@ async function uploadPlannedPhoto(tripId: string, memoryId: string, photo: Plann
   const uploaded = await uploadMemoryPhotoObject(
     supabase,
     photo.path,
-    photo.file,
+    photo.body,
     photo.contentType,
   );
   if (!uploaded) throw new MemoriesApiError('memory_photo_upload_failed', 503);
@@ -435,7 +471,7 @@ async function uploadPlannedPhoto(tripId: string, memoryId: string, photo: Plann
 export async function captureMemory(tripId: string, input: MemoryInput, files: File[]) {
   const auth = await getOfflineAuthContext();
   const clientMemoryId = crypto.randomUUID();
-  const photos = planPhotos(auth.userId, tripId, clientMemoryId, files);
+  const photos = await planPhotos(auth.userId, tripId, clientMemoryId, files);
   const capture = { ...input, capturedAt: input.capturedAt ?? new Date().toISOString() };
   const offline = typeof navigator !== 'undefined' && !navigator.onLine;
 
@@ -479,7 +515,7 @@ export async function captureMemory(tripId: string, input: MemoryInput, files: F
  */
 export async function addMemoryPhotos(tripId: string, memoryId: string, files: File[]) {
   const auth = await getOfflineAuthContext();
-  const photos = planPhotos(auth.userId, tripId, memoryId, files);
+  const photos = await planPhotos(auth.userId, tripId, memoryId, files);
   const offline = typeof navigator !== 'undefined' && !navigator.onLine;
 
   if (offline || !auth.accessToken) {

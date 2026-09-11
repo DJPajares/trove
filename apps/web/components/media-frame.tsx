@@ -57,21 +57,26 @@ export function BrandedFallback({
       aria-hidden={alt ? undefined : 'true'}
       aria-label={alt || undefined}
       className={cn(
-        'absolute inset-0 grid place-items-center overflow-hidden text-media-fallback-foreground',
+        '@container/fallback absolute inset-0 grid place-items-center overflow-hidden text-media-fallback-foreground',
         gradientClassName,
       )}
       role={alt ? 'img' : undefined}
     >
+      {/* Light from above rather than a shape on the field. What was here
+          before was a circle four-fifths the width of the frame, pushed off the
+          bottom-right corner in a colour no category owned - at a card's size it
+          read as half a photograph that had failed to load, which is the one
+          thing a fallback must never look like. A wash has no edge to be caught
+          clipping, and it says the same thing at every size. */}
       <span
         aria-hidden="true"
-        className="absolute -right-[18%] -bottom-[28%] size-[78%] rounded-full border border-media-fallback-foreground/15 bg-accent/45"
+        className="absolute inset-0 bg-[radial-gradient(125%_90%_at_50%_8%,oklch(1_0_0/0.14),transparent_70%)]"
       />
-      <span
-        aria-hidden="true"
-        className="absolute top-[12%] left-[10%] h-px w-[42%] -rotate-12 bg-media-fallback-foreground/24"
-      />
-      <span className="relative grid size-12 place-items-center rounded-[var(--radius-lg)] border border-media-fallback-foreground/18 bg-media-fallback-foreground/10 shadow-[inset_0_1px_0_oklch(1_0_0/0.16)]">
-        <Icon aria-hidden="true" className="size-5" strokeWidth={1.75} />
+      {/* Sized from the smaller edge of the frame, so one tile serves a 56px
+          thumbnail and a full-width cover. It was a fixed 48px before, which is
+          most of a thumbnail and a speck on a hero. */}
+      <span className="relative grid aspect-square w-[clamp(1.5rem,26cqmin,3.5rem)] place-items-center rounded-[26%] border border-media-fallback-foreground/20 bg-media-fallback-foreground/12 shadow-[inset_0_1px_0_oklch(1_0_0/0.18)]">
+        <Icon aria-hidden="true" className="size-1/2" strokeWidth={1.75} />
       </span>
     </span>
   );

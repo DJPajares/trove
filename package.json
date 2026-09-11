@@ -2,7 +2,7 @@
   "name": "trove",
   "version": "0.0.0",
   "private": true,
-  "packageManager": "pnpm@12.3.4",
+  "packageManager": "pnpm@12.4.1",
   "engines": {
     "node": ">=24.0.0",
     "pnpm": ">=11.0.0"
@@ -37,7 +37,7 @@
   },
   "devDependencies": {
     "husky": "^9.1.7",
-    "lint-staged": "^17.5.0",
+    "lint-staged": "^17.5.1",
     "oxlint": "^1.82.0",
     "prettier": "^3.9.6",
     "turbo": "^2.10.12",

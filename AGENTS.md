@@ -75,9 +75,9 @@ For each Linear-backed task:
 5. Implement only the task scope.
 6. Run focused validation.
 7. Perform a concise self-review.
-8. Create or update the Git branch.
+8. Create or update the Git branch, named with the issue's own `gitBranchName`.
 9. Commit and push.
-10. Open a GitHub Pull Request.
+10. Open a GitHub Pull Request whose description contains `Fixes <issue-id>`.
 11. Link the PR to the Linear issue.
 12. Move the issue to `In Review`.
 13. Identify the next unblocked suggested task.
@@ -141,6 +141,12 @@ Example:
 - Never auto-merge.
 - Human approval is required before merge.
 - Mark the Linear issue `Done` only after the relevant PR is merged, unless the issue is explicitly non-code work.
+- Give the branch the `gitBranchName` Linear returns with the issue, and put
+  `Fixes <issue-id>` in the PR description. Linear closes an issue when a PR it
+  recognises as linked is merged, and it recognises one by the branch name or by
+  that phrase - not by an attachment added through the API. A PR carrying only an
+  attachment and a markdown link leaves its issue sitting in `In Review` after
+  the merge, to be closed by hand.
 
 ## Completion Response
 

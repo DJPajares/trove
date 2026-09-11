@@ -12,13 +12,20 @@ export type TravellerPositionStatus =
   'denied' | 'idle' | 'loading' | 'ready' | 'unavailable' | 'unsupported';
 
 /**
- * Deliberately modest: one fix, cached for a minute, low accuracy. Trove asks
- * where the traveller is to place a marker, not to navigate for them, and a
- * high-accuracy fix costs battery on exactly the device least able to spare it.
+ * Deliberately modest: one fix, low accuracy. Trove asks where the traveller is
+ * to place a marker, not to navigate for them, and a high-accuracy fix costs
+ * battery on exactly the device least able to spare it.
+ *
+ * `maximumAge` is nought, though, so the one fix is a current one. Accepting a
+ * minute-old position meant opening the map after walking a block put the
+ * marker where the traveller had been, which is worse than no marker: it is
+ * confidently wrong, and nothing on the screen says it is a minute stale. A
+ * position read at low accuracy is usually answered from wifi rather than the
+ * satellites, so asking for it afresh is cheap.
  */
 const POSITION_OPTIONS: PositionOptions = {
   enableHighAccuracy: false,
-  maximumAge: 60_000,
+  maximumAge: 0,
   timeout: 10_000,
 };
 

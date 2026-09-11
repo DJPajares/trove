@@ -221,6 +221,23 @@ export async function updateTripReadiness(
 }
 
 /**
+ * Moves a trip along the calendar without opening the edit form.
+ *
+ * Both dates are sent together and shifted by the same amount, which is what
+ * the server reads as a move rather than a resize: the itinerary is re-dated
+ * and carried across instead of being rebuilt around the new range.
+ */
+export async function updateTripDates(
+  tripId: string,
+  dates: Readonly<{ endDate: string; startDate: string }>,
+) {
+  return tripRequest<{ trip: Trip }>(`/trips/${tripId}`, {
+    body: JSON.stringify(dates),
+    method: 'PATCH',
+  });
+}
+
+/**
  * Experience Rating is the traveller's own private reflection on the trip,
  * entered independently of Plan Score and never averaged from day ratings.
  */

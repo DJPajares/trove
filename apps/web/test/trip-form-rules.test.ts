@@ -6,6 +6,7 @@ import {
   hasOptionalTripDetails,
   isValidPartySize,
   moveTripRange,
+  shiftTripDates,
 } from '../lib/trips/form.ts';
 
 function trip(overrides: Partial<Trip> = {}): Trip {
@@ -121,5 +122,46 @@ test('a range that cannot be read is not guessed at', () => {
   expect(moveTripRange({ endDate: '', startDate: '' }, '2026-09-22')).toEqual({
     endDate: '',
     startDate: '2026-09-22',
+  });
+});
+
+test('shifting a trip moves both ends by the same number of days', () => {
+  expect(shiftTripDates({ endDate: '2026-09-21', startDate: '2026-09-15' }, 7)).toEqual({
+    endDate: '2026-09-28',
+    startDate: '2026-09-22',
+  });
+  expect(shiftTripDates({ endDate: '2026-09-21', startDate: '2026-09-15' }, -7)).toEqual({
+    endDate: '2026-09-14',
+    startDate: '2026-09-08',
+  });
+});
+
+test('a shift counts days, not dates, across month and year boundaries', () => {
+  expect(shiftTripDates({ endDate: '2026-10-02', startDate: '2026-09-30' }, 1)).toEqual({
+    endDate: '2026-10-03',
+    startDate: '2026-10-01',
+  });
+  expect(shiftTripDates({ endDate: '2026-01-02', startDate: '2025-12-31' }, -1)).toEqual({
+    endDate: '2026-01-01',
+    startDate: '2025-12-30',
+  });
+});
+
+test('a shift over a leap day lands a day later than the calendar reads', () => {
+  // 2028 has a 29 February, so a week from the 26th is 4 March.
+  expect(shiftTripDates({ endDate: '2028-02-27', startDate: '2028-02-26' }, 7)).toEqual({
+    endDate: '2028-03-05',
+    startDate: '2028-03-04',
+  });
+});
+
+test('a trip that is not going anywhere is left alone', () => {
+  expect(shiftTripDates({ endDate: '2026-09-21', startDate: '2026-09-15' }, 0)).toEqual({
+    endDate: '2026-09-21',
+    startDate: '2026-09-15',
+  });
+  expect(shiftTripDates({ endDate: '', startDate: '' }, 7)).toEqual({
+    endDate: '',
+    startDate: '',
   });
 });

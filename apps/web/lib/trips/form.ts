@@ -57,6 +57,8 @@ export function editorialCoverSubjectName(destinations: readonly string[]) {
   return candidate.length >= MIN_EDITORIAL_SUBJECT_LENGTH ? candidate : '';
 }
 
+const DAY_MS = 24 * 60 * 60 * 1_000;
+
 /**
  * The same trip, starting on a different day.
  *
@@ -80,8 +82,33 @@ export function moveTripRange(
     return { endDate: range.endDate, startDate: nextStartDate };
   }
 
+  return shiftTripDates(range, Math.round((to - from) / DAY_MS));
+}
+
+/**
+ * The whole trip, however many days over.
+ *
+ * Both ends move together, so the trip keeps its length and the plan inside it
+ * keeps its shape - which is what makes this a move rather than a resize, and
+ * what lets the server carry the itinerary across without asking anything.
+ *
+ * The arithmetic is done at UTC midnight, where a day is always a day. Doing it
+ * in the reader's own zone would lose or gain an hour twice a year and land the
+ * trip on the wrong date for it.
+ */
+export function shiftTripDates(
+  range: Readonly<{ endDate: string; startDate: string }>,
+  days: number,
+) {
+  const start = Date.parse(`${range.startDate}T00:00:00.000Z`);
+  const end = Date.parse(`${range.endDate}T00:00:00.000Z`);
+
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    return { endDate: range.endDate, startDate: range.startDate };
+  }
+
   return {
-    endDate: new Date(end + (to - from)).toISOString().slice(0, 10),
-    startDate: nextStartDate,
+    endDate: new Date(end + days * DAY_MS).toISOString().slice(0, 10),
+    startDate: new Date(start + days * DAY_MS).toISOString().slice(0, 10),
   };
 }

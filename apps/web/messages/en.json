@@ -150,6 +150,15 @@
     "previewTripMode": "Preview",
     "destinations": "Destinations",
     "editTrip": "Edit trip",
+    "moveDates": {
+      "action": "Move dates",
+      "dayEarlier": "A day earlier",
+      "dayLater": "A day later",
+      "weekEarlier": "A week earlier",
+      "weekLater": "A week later",
+      "moving": "Moving the trip and its plan…",
+      "error": "We couldn't move this trip. Try again."
+    },
     "tripActions": "Trip actions",
     "tripExperiences": "Trip experiences",
     "experienceDescription": {

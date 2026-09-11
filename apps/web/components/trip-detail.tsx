@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   CalendarClock,
+  CalendarSync,
   ChevronRight,
   CircleAlert,
   CircleCheck,
@@ -14,6 +15,7 @@ import {
   MapPinned,
   Navigation,
   Pencil,
+  RefreshCw,
   RotateCcw,
   ReceiptText,
   Share2,
@@ -60,6 +62,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuLinkItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -80,6 +85,7 @@ import {
   type TripOverviewDestination,
 } from '@/lib/trips/navigation';
 import { tripDestinationSummary } from '@/lib/trips/summary';
+import { useTripDateMove } from '@/lib/trips/use-trip-date-move';
 import { useTripReadiness } from '@/lib/trips/use-trip-readiness';
 import { discardTripOfflineData } from '@/lib/offline/trip-preparation';
 import { queryKeys } from '@/lib/query/keys';
@@ -234,6 +240,12 @@ export function TripDetail({
     pendingTripId: readinessPendingTripId,
     setReadiness,
   } = useTripReadiness();
+  const {
+    failedTripId: dateMoveFailedTripId,
+    moveTripDates,
+    pendingTripId: dateMovePendingTripId,
+  } = useTripDateMove();
+  const movingDates = dateMovePendingTripId !== null;
   const readinessPending = readinessPendingTripId !== null;
   // The same entry the Trip Info screen reads, so opening this overview after
   // editing trip info shows the edit without asking again.
@@ -423,13 +435,44 @@ export function TripDetail({
               />
             }
           >
-            <Ellipsis aria-hidden="true" />
+            {/* The menu closes the moment a date is chosen, so without this the
+                only sign the trip is moving would be the trip eventually
+                changing underneath the traveller. */}
+            {movingDates ? (
+              <RefreshCw aria-hidden="true" className="animate-spin motion-reduce:animate-none" />
+            ) : (
+              <Ellipsis aria-hidden="true" />
+            )}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-52" sideOffset={8}>
             <DropdownMenuItem onClick={() => setEditing(true)}>
               <Pencil aria-hidden="true" />
               {t('editTrip')}
             </DropdownMenuItem>
+            {/* Shifting a trip is otherwise a trip through the edit form to a
+                date field, which is a lot of steps for "a week later". The plan
+                comes along on its own: both ends move by the same amount, so
+                the trip keeps its length and nothing has to be unscheduled. */}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger disabled={movingDates}>
+                <CalendarSync aria-hidden="true" />
+                {t('moveDates.action')}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {(
+                  [
+                    ['dayEarlier', -1],
+                    ['dayLater', 1],
+                    ['weekEarlier', -7],
+                    ['weekLater', 7],
+                  ] as const
+                ).map(([key, days]) => (
+                  <DropdownMenuItem key={key} onClick={() => void moveTripDates(trip, days)}>
+                    {t(`moveDates.${key}`)}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
             {/* Sharing sits with editing rather than among the tools: both are
                 things done to the trip itself, and this menu is the one the
                 overview offers. It is also the first stop from a trip in the
@@ -486,6 +529,19 @@ export function TripDetail({
         <Alert role="alert" variant="destructive">
           <CircleAlert aria-hidden="true" />
           <AlertDescription>{deleteError}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {/* Announced rather than only drawn: the menu that started this has
+          already closed, and a spinner on a button says nothing out loud. */}
+      <span aria-live="polite" className="sr-only">
+        {movingDates ? t('moveDates.moving') : ''}
+      </span>
+
+      {dateMoveFailedTripId === trip.id ? (
+        <Alert role="alert" variant="destructive">
+          <CircleAlert aria-hidden="true" />
+          <AlertDescription>{t('moveDates.error')}</AlertDescription>
         </Alert>
       ) : null}
 

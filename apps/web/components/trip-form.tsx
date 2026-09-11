@@ -26,7 +26,7 @@ import {
   editorialSubjectKey,
   type EditorialSubject,
 } from '@/lib/media/editorial-images';
-import { invalidateTripQueries, TRIP_DATE_QUERY_ROOTS } from '@/lib/query/trip-invalidation';
+import { removeTripQueries, TRIP_DATE_QUERY_ROOTS } from '@/lib/query/trip-invalidation';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import {
   EDITORIAL_PREVIEW_DEBOUNCE_MS,
@@ -275,11 +275,18 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
     if (previousPath && previousPath !== result.trip.coverPhotoPath) {
       await removeTripCover(previousPath).catch(() => undefined);
     }
-    // Only when the calendar actually moved. Half of what this clears refetches
-    // on nothing else, so doing it after every rename would put a Google bill
-    // on correcting a typo.
+    // Dropped rather than invalidated. An invalidated entry is only refetched
+    // while something is watching it, and this form is opened from the trip
+    // overview as often as from the itinerary - where nothing is - so marking it
+    // stale left the itinerary tab drawing the plan from before the move. These
+    // answers are not stale anyway, they are wrong, so there is nothing worth
+    // showing while a refetch runs.
+    //
+    // Only when the calendar actually moved. Half of what this drops is asked
+    // again at a provider's expense, so doing it after every rename would put a
+    // Google bill on correcting a typo.
     if (movedDates) {
-      await invalidateTripQueries(queryClient, result.trip.id, TRIP_DATE_QUERY_ROOTS);
+      removeTripQueries(queryClient, result.trip.id, TRIP_DATE_QUERY_ROOTS);
     }
     setPendingShrink(null);
     onSaved(result.trip);

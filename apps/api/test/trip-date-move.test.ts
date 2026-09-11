@@ -165,3 +165,59 @@ test('changing only the end date still resizes rather than moving', async () => 
     [DAYS[1], '2026-09-02'],
   ]);
 });
+
+test('a trip moved and lengthened in one edit keeps its plan and gains empty days', async () => {
+  seed();
+
+  // A week later and two days longer. Neither a pure move nor a pure resize -
+  // the case that used to match neither and so emptied the whole itinerary.
+  await updateTrip(OWNER, '', TRIP, { endDate: '2026-09-12', startDate: '2026-09-08' });
+
+  expect(dayShape().map((row) => [row.id, row.date, row.name])).toStrictEqual([
+    [DAYS[0], '2026-09-08', 'Arrival'],
+    [DAYS[1], '2026-09-09', 'Temples'],
+    [DAYS[2], '2026-09-10', 'Departure'],
+    // The two the trip gained, at its end, with nothing on them yet.
+    [
+      store.itineraryDay.find((row) => (row.date as Date).toISOString().startsWith('2026-09-11'))
+        ?.id,
+      '2026-09-11',
+      undefined,
+    ],
+    [
+      store.itineraryDay.find((row) => (row.date as Date).toISOString().startsWith('2026-09-12'))
+        ?.id,
+      '2026-09-12',
+      undefined,
+    ],
+  ]);
+  // Nothing was asked about and nothing was unscheduled.
+  expect(store.itineraryItem[0]?.itineraryDayId).toBe(DAYS[1]);
+});
+
+test('a trip moved and shortened drops only its tail', async () => {
+  seed();
+
+  await updateTrip(OWNER, '', TRIP, {
+    confirmDateShrink: true,
+    endDate: '2026-09-09',
+    startDate: '2026-09-08',
+  });
+
+  expect(dayShape().map((row) => [row.id, row.date])).toStrictEqual([
+    [DAYS[0], '2026-09-08'],
+    [DAYS[1], '2026-09-09'],
+  ]);
+  // Day two travelled with the trip, so the item it carries is still on it.
+  expect(store.itineraryItem[0]?.itineraryDayId).toBe(DAYS[1]);
+});
+
+test('lengthening a moved trip never asks to unschedule anything', async () => {
+  seed();
+
+  // No `confirmDateShrink`. Nothing is being dropped, so nothing should ask -
+  // this call throwing is the regression being guarded against.
+  await expect(
+    updateTrip(OWNER, '', TRIP, { endDate: '2026-09-12', startDate: '2026-09-08' }),
+  ).resolves.toBeDefined();
+});

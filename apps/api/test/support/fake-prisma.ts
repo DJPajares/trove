@@ -251,6 +251,20 @@ function createModel(name: ModelName) {
       store[name].push(row);
       return hydrate(name, row);
     },
+    createMany: async (args: { data: Row[] }) => {
+      for (const data of args.data) {
+        if (name === 'itineraryDay') assertUniqueDayDate(null, data);
+        nextRowId += 1;
+        store[name].push({
+          createdAt: new Date(),
+          highlightPosition: null,
+          id: `${name}-${nextRowId}`,
+          updatedAt: new Date(),
+          ...data,
+        });
+      }
+      return { count: args.data.length };
+    },
     delete: async (args: { where: { id: string } }) => {
       const row = store[name].find((candidate) => candidate.id === args.where.id);
       if (!row) throw new Error(`${name}_not_found`);

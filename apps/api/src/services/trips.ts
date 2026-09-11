@@ -468,18 +468,24 @@ export async function updateTrip(
       select: { id: true, date: true, _count: { select: { items: true } } },
     });
 
-    // A trip that keeps its length has not been resized, it has been moved, and
-    // the plan inside it should go along. Re-anchoring the existing days here,
-    // before the reconciliation below, is what turns "delete seven days and
-    // make seven more" into "the same seven days, a week later" - and it leaves
-    // that reconciliation with nothing to do, so every other kind of date edit
-    // still behaves exactly as it did.
+    // The plan is anchored to the day the trip begins: day one stays day one.
+    // Re-anchoring the existing days here, before the reconciliation below,
+    // turns "delete seven days and make seven more" into "the same seven days, a
+    // week later" - and whatever length the trip gained or lost is then settled
+    // at its end by the reconciliation, unchanged.
+    //
+    // Requiring both ends to move together would have been the narrower rule,
+    // but it leaves a trip moved *and* lengthened in one edit matching neither
+    // case, which is how "a week later, and a day longer" used to empty the
+    // whole itinerary into Unscheduled. The cost of anchoring on the start is
+    // that pulling the start date earlier on its own carries the plan back with
+    // it and leaves the blank days at the end rather than the beginning - and
+    // that only happens if both fields are edited deliberately, since choosing a
+    // start date takes the end date with it.
     const offsetDays = dayOffset(formatDateOnly(current.startDate), startDate);
-    const isMove =
-      offsetDays !== 0 && dayOffset(formatDateOnly(current.endDate), endDate) === offsetDays;
     const dayDates = new Map(itineraryDays.map((day) => [day.id, formatDateOnly(day.date)]));
 
-    if (isMove) {
+    if (offsetDays !== 0) {
       // One day at a time, in the order that keeps every intermediate state
       // unique: a trip nudged a single day forward has its whole range overlap
       // its old one, and `@@unique([tripId, date])` is checked per row.

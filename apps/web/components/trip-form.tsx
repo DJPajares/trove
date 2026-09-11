@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowDown,
   ArrowUp,
@@ -25,12 +26,14 @@ import {
   editorialSubjectKey,
   type EditorialSubject,
 } from '@/lib/media/editorial-images';
+import { invalidateTripQueries, TRIP_DATE_QUERY_ROOTS } from '@/lib/query/trip-invalidation';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import {
   EDITORIAL_PREVIEW_DEBOUNCE_MS,
   editorialCoverSubjectName,
   hasOptionalTripDetails,
   isValidPartySize,
+  moveTripRange,
 } from '@/lib/trips/form';
 import {
   AlertDialog,
@@ -108,6 +111,7 @@ function createInitialForm(trip: Trip | null): FormState {
 }
 
 export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
+  const queryClient = useQueryClient();
   const t = useTranslations('trips');
   const [form, setForm] = useState(() => createInitialForm(trip));
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -174,6 +178,22 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
   function updateFields(changes: Partial<FormState>) {
     setForm((current) => ({ ...current, ...changes }));
     setError(null);
+  }
+
+  /**
+   * Picking a new start date on an existing trip moves it rather than resizing
+   * it: the end date follows, and the itinerary inside keeps its shape. A trip
+   * being created has no plan to protect and no length to preserve yet, so
+   * there the two dates stay the independent fields they have always been.
+   */
+  function updateStartDate(value: string) {
+    if (!trip) {
+      updateField('startDate', value);
+      return;
+    }
+
+    updateFields(moveTripRange(form, value));
+    setDateError(null);
   }
 
   function updateDestination(index: number, value: string) {
@@ -248,10 +268,18 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
 
   async function finishSave(input: TripInput) {
     const previousPath = trip?.coverPhotoPath ?? null;
+    const movedDates =
+      Boolean(trip) && (trip?.startDate !== input.startDate || trip?.endDate !== input.endDate);
     const result = trip ? await saveTrip(trip.id, input) : await createTrip(input);
 
     if (previousPath && previousPath !== result.trip.coverPhotoPath) {
       await removeTripCover(previousPath).catch(() => undefined);
+    }
+    // Only when the calendar actually moved. Half of what this clears refetches
+    // on nothing else, so doing it after every rename would put a Google bill
+    // on correcting a typo.
+    if (movedDates) {
+      await invalidateTripQueries(queryClient, result.trip.id, TRIP_DATE_QUERY_ROOTS);
     }
     setPendingShrink(null);
     onSaved(result.trip);
@@ -357,7 +385,7 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
             className={trip ? undefined : 'gap-1.5 px-2 text-sm'}
             id="trip-start-date"
             label={t('startDate')}
-            onChange={(value) => updateField('startDate', value)}
+            onChange={updateStartDate}
             required
             value={form.startDate}
           />

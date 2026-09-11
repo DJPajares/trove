@@ -67,6 +67,24 @@ export const ITINERARY_EDIT_QUERY_ROOTS: readonly TripScopedQueryRoot[] = [
 export const PLAN_SCORE_INPUT_QUERY_ROOTS: readonly TripScopedQueryRoot[] = ['plan-score'];
 
 /**
+ * The roots moving or resizing a trip's dates invalidates.
+ *
+ * The itinerary's days are dated, the Plan Score digest reads those dates, Trip
+ * Mode decides which day is today from them, and a forecast window is the trip's
+ * range - so all four answer differently afterwards, and two of them refetch on
+ * nothing but this. `itinerary-day-routes` is deliberately absent: a leg is
+ * between two places on a day that kept its id, so moving the calendar under it
+ * changes nothing, and asking again would be a Google bill for the same answer.
+ */
+export const TRIP_DATE_QUERY_ROOTS: readonly TripScopedQueryRoot[] = [
+  'itinerary',
+  'plan-score',
+  'trip',
+  'trip-mode-context',
+  'trip-weather',
+];
+
+/**
  * The roots giving a Place coordinates invalidates.
  *
  * A place that was never located contributed no pin, no leg, no forecast point

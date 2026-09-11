@@ -56,3 +56,32 @@ export function editorialCoverSubjectName(destinations: readonly string[]) {
 
   return candidate.length >= MIN_EDITORIAL_SUBJECT_LENGTH ? candidate : '';
 }
+
+/**
+ * The same trip, starting on a different day.
+ *
+ * The start date says when a trip is; the end date says how long it is. So
+ * moving the start carries the end along with it, and the plan inside keeps the
+ * shape it already had. Editing the end date is the other question - how long -
+ * and is left alone.
+ *
+ * A range that cannot be read is not guessed at: the new start stands and the
+ * end is left for the form's own validation to object to.
+ */
+export function moveTripRange(
+  range: Readonly<{ endDate: string; startDate: string }>,
+  nextStartDate: string,
+) {
+  const from = Date.parse(`${range.startDate}T00:00:00.000Z`);
+  const to = Date.parse(`${nextStartDate}T00:00:00.000Z`);
+  const end = Date.parse(`${range.endDate}T00:00:00.000Z`);
+
+  if (!Number.isFinite(from) || !Number.isFinite(to) || !Number.isFinite(end) || end < from) {
+    return { endDate: range.endDate, startDate: nextStartDate };
+  }
+
+  return {
+    endDate: new Date(end + (to - from)).toISOString().slice(0, 10),
+    startDate: nextStartDate,
+  };
+}

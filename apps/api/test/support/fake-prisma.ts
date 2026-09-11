@@ -163,6 +163,29 @@ function assertNoBlockingReference(name: ModelName, row: Row) {
   }
 }
 
+/**
+ * `@@unique([tripId, date])` on itinerary days, checked per row the way Postgres
+ * checks it rather than at the end of a statement.
+ *
+ * A trip nudged one day forward has its new range overlap its old one almost
+ * entirely, so a shift that rewrites the days in the wrong order collides
+ * halfway through. Without this the fake store would accept it and the mistake
+ * would only appear in production.
+ */
+function assertUniqueDayDate(row: Row | null, next: Row) {
+  const tripId = (next.tripId ?? row?.tripId) as string | undefined;
+  const date = (next.date ?? row?.date) as Date | undefined;
+  if (!tripId || !date) return;
+
+  const taken = store.itineraryDay.some(
+    (candidate) =>
+      candidate !== row &&
+      candidate.tripId === tripId &&
+      (candidate.date as Date | undefined)?.getTime() === date.getTime(),
+  );
+  if (taken) throw new Error('itinerary_days_trip_id_date_key');
+}
+
 /** Reassigns rather than splices, so a cascade can iterate the array it is emptying. */
 function removeRow(name: ModelName, row: Row) {
   store[name] = store[name].filter((candidate) => candidate !== row);
@@ -216,6 +239,7 @@ function createModel(name: ModelName) {
       return { _max: max };
     },
     create: async (args: { data: Row }) => {
+      if (name === 'itineraryDay') assertUniqueDayDate(null, args.data);
       nextRowId += 1;
       const row: Row = {
         createdAt: new Date(),
@@ -257,6 +281,7 @@ function createModel(name: ModelName) {
     update: async (args: { data: Row; where: { id: string } }) => {
       const row = store[name].find((candidate) => candidate.id === args.where.id);
       if (!row) throw new Error(`${name}_not_found`);
+      if (name === 'itineraryDay') assertUniqueDayDate(row, args.data);
       Object.assign(row, args.data, { updatedAt: new Date() });
       return hydrate(name, row);
     },

@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 
 import {
   calculateItineraryCoverage,
+  dayOffset,
   deriveTripLifecycle,
   enumerateDateRange,
   getDateRangeChanges,
@@ -9,6 +10,7 @@ import {
   resolveCountryPrimaryTimeZone,
   resolveTripWeatherLocation,
   resolveTripTimeZone,
+  shiftDateOnly,
 } from '../src/services/trip-rules.js';
 
 test('calculates itinerary coverage at zero, partial, and full day presence', () => {
@@ -232,4 +234,21 @@ test('keeps explicit and Place-specific timezones ahead of country inference', (
     sourcePlaceId: 'new-zealand-place',
     timeZone: 'Pacific/Chatham',
   });
+});
+
+test('shifts a date across month, year, and leap-day boundaries', () => {
+  expect(shiftDateOnly('2026-09-28', 3)).toBe('2026-10-01');
+  expect(shiftDateOnly('2026-01-02', -3)).toBe('2025-12-30');
+  // 2028 is a leap year, so a week from the 26th lands on the 4th, not the 5th.
+  expect(shiftDateOnly('2028-02-26', 7)).toBe('2028-03-04');
+  expect(shiftDateOnly('2026-09-15', 0)).toBe('2026-09-15');
+});
+
+test('measures the signed distance between two dates in whole days', () => {
+  expect(dayOffset('2026-09-15', '2026-09-22')).toBe(7);
+  expect(dayOffset('2026-09-22', '2026-09-15')).toBe(-7);
+  expect(dayOffset('2026-09-15', '2026-09-15')).toBe(0);
+  // Daylight saving moves the clocks inside this range in most of Europe; a
+  // date-only distance must not notice.
+  expect(dayOffset('2026-10-24', '2026-10-26')).toBe(2);
 });

@@ -91,8 +91,13 @@ function Calendar({
           'relative isolate rounded-r-[var(--cell-radius)] bg-secondary/70 after:absolute after:inset-y-0 after:left-0 after:w-4 after:bg-secondary/70',
           defaultClassNames.range_end,
         ),
+        // Terracotta rather than another tint of the primary hue: a calendar
+        // showing a trip shades its days `bg-primary/10` through `/30`, and a
+        // primary ring at a quarter opacity over the darkest of those was a
+        // ring nobody could see. This is the one full-strength hue the system
+        // sanctions at rest, and it survives on top of the shading.
         today: cn(
-          'rounded-[var(--cell-radius)] text-primary ring-1 ring-inset ring-primary/25 data-[selected=true]:text-primary-foreground',
+          'rounded-[var(--cell-radius)] text-accent-strong ring-2 ring-inset ring-accent-strong/55 data-[selected=true]:text-primary-foreground',
           defaultClassNames.today,
         ),
         outside: cn(
@@ -161,11 +166,12 @@ function CalendarDayButton({
     <Button
       {...props}
       className={cn(
-        'relative isolate z-10 flex aspect-square size-auto w-full min-w-(--cell-size) flex-col gap-1 rounded-[var(--cell-radius)] border-0 text-sm leading-none font-normal group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-3 group-data-[focused=true]/day:ring-ring/50 data-[range-end=true]:rounded-[var(--cell-radius)] data-[range-end=true]:bg-primary data-[range-end=true]:text-primary-foreground data-[range-middle=true]:rounded-none data-[range-middle=true]:bg-secondary/70 data-[range-middle=true]:text-foreground data-[range-start=true]:rounded-[var(--cell-radius)] data-[range-start=true]:bg-primary data-[range-start=true]:text-primary-foreground data-[selected-single=true]:bg-primary data-[selected-single=true]:font-semibold data-[selected-single=true]:text-primary-foreground dark:hover:text-foreground [&>span]:text-xs [&>span]:opacity-70',
+        'relative isolate z-10 flex aspect-square size-auto w-full min-w-(--cell-size) flex-col gap-1 rounded-[var(--cell-radius)] border-0 text-sm leading-none font-normal group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-3 group-data-[focused=true]/day:ring-ring/50 data-[range-end=true]:rounded-[var(--cell-radius)] data-[range-end=true]:bg-primary data-[range-end=true]:text-primary-foreground data-[range-middle=true]:rounded-none data-[range-middle=true]:bg-secondary/70 data-[range-middle=true]:text-foreground data-[range-start=true]:rounded-[var(--cell-radius)] data-[range-start=true]:bg-primary data-[range-start=true]:text-primary-foreground data-[selected-single=true]:bg-primary data-[selected-single=true]:font-semibold data-[selected-single=true]:text-primary-foreground data-[today=true]:font-semibold dark:hover:text-foreground [&>span]:text-xs [&>span]:opacity-70',
         defaultClassNames.day_button,
         className,
       )}
       data-day={day.date.toLocaleDateString(locale?.code)}
+      data-today={modifiers.today}
       data-range-end={modifiers.range_end}
       data-range-middle={modifiers.range_middle}
       data-range-start={modifiers.range_start}

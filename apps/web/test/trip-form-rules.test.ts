@@ -5,6 +5,7 @@ import {
   editorialCoverSubjectName,
   hasOptionalTripDetails,
   isValidPartySize,
+  moveTripRange,
 } from '../lib/trips/form.ts';
 
 function trip(overrides: Partial<Trip> = {}): Trip {
@@ -83,4 +84,42 @@ test('a half-typed destination asks for nothing', () => {
   expect(editorialCoverSubjectName(['Ky'])).toBe('');
   expect(editorialCoverSubjectName(['  '])).toBe('');
   expect(editorialCoverSubjectName(['Kyo'])).toBe('Kyo');
+});
+
+test('moving the start date carries the end date with it', () => {
+  // The trip is not being made shorter or longer, it is happening later.
+  expect(moveTripRange({ endDate: '2026-09-21', startDate: '2026-09-15' }, '2026-09-22')).toEqual({
+    endDate: '2026-09-28',
+    startDate: '2026-09-22',
+  });
+});
+
+test('a trip moved earlier keeps its length too', () => {
+  expect(moveTripRange({ endDate: '2026-09-21', startDate: '2026-09-15' }, '2026-09-08')).toEqual({
+    endDate: '2026-09-14',
+    startDate: '2026-09-08',
+  });
+});
+
+test('a move across a month boundary counts days, not dates', () => {
+  expect(moveTripRange({ endDate: '2026-09-30', startDate: '2026-09-28' }, '2026-10-30')).toEqual({
+    endDate: '2026-11-01',
+    startDate: '2026-10-30',
+  });
+});
+
+test('a single-day trip stays a single day', () => {
+  expect(moveTripRange({ endDate: '2026-09-15', startDate: '2026-09-15' }, '2026-12-01')).toEqual({
+    endDate: '2026-12-01',
+    startDate: '2026-12-01',
+  });
+});
+
+test('a range that cannot be read is not guessed at', () => {
+  // The form's own validation owns this case; inventing an end date here would
+  // only bury the thing the traveller needs to see.
+  expect(moveTripRange({ endDate: '', startDate: '' }, '2026-09-22')).toEqual({
+    endDate: '',
+    startDate: '2026-09-22',
+  });
 });

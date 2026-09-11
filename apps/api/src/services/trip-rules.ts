@@ -120,6 +120,18 @@ export function formatDateOnly(value: Date) {
   return value.toISOString().slice(0, 10);
 }
 
+/** The same calendar date, `days` later or - for a negative offset - earlier. */
+export function shiftDateOnly(date: string, days: number) {
+  const shifted = parseDateOnly(date);
+  shifted.setUTCDate(shifted.getUTCDate() + days);
+  return formatDateOnly(shifted);
+}
+
+/** How many whole days separate two dates, signed from `from` to `to`. */
+export function dayOffset(from: string, to: string) {
+  return Math.round((parseDateOnly(to).getTime() - parseDateOnly(from).getTime()) / 86_400_000);
+}
+
 export function enumerateDateRange(startDate: string, endDate: string) {
   const start = parseDateOnly(startDate);
   const end = parseDateOnly(endDate);

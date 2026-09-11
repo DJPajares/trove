@@ -1,12 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPrismaClient, type Prisma } from '@trove/db';
 
+import { floatingLocalTimeToInstant, formatLocalTime } from './itinerary-rules.js';
 import { MEMORY_PHOTOS_BUCKET } from './memories.js';
 import { placeProviderRefInclude, serializeCanonicalPlace } from './place-serializer.js';
 import { createAuthenticatedSupabaseClient } from './supabase-auth.js';
 import {
   calculateItineraryCoverage,
   calculateTripPreparedness,
+  dayOffset,
   deriveTripLifecycle,
   enumerateDateRange,
   formatDateOnly,
@@ -16,6 +18,7 @@ import {
   resolveCountryPrimaryTimeZone,
   resolveTripWeatherLocation,
   resolveTripTimeZone,
+  shiftDateOnly,
 } from './trip-rules.js';
 
 export const TRIP_COVERS_BUCKET = 'trip-covers';
@@ -191,6 +194,47 @@ async function findOwnedTrip(userId: string, tripId: string) {
     where: { id: tripId, ownerId: userId },
     include: tripInclude,
   });
+}
+
+/**
+ * Re-derives the absolute instant of every timed item from the day it now sits
+ * on.
+ *
+ * `startInstant` is a materialised answer to "when, exactly" - built once from
+ * the day's date, the item's local time and its zone. Move the day and the
+ * stored instant still points at the old calendar date, so it has to be worked
+ * out again. An item whose local time does not exist on the new date, because
+ * the clocks went forward through it, has no instant to give: that is recorded
+ * as nothing rather than allowed to fail the move, since the time of day the
+ * traveller wrote down is still the truth.
+ */
+async function recomputeItemInstants(transaction: Prisma.TransactionClient, tripId: string) {
+  const timedItems = await transaction.itineraryItem.findMany({
+    where: { tripId, itineraryDayId: { not: null }, localStartTime: { not: null } },
+    select: {
+      id: true,
+      localStartTime: true,
+      timeZone: true,
+      itineraryDay: { select: { date: true, defaultTimeZone: true } },
+    },
+  });
+
+  for (const item of timedItems) {
+    if (!item.itineraryDay) continue;
+    const localTime = formatLocalTime(item.localStartTime);
+    if (!localTime) continue;
+
+    const date = formatDateOnly(item.itineraryDay.date);
+    const timeZone = item.timeZone ?? item.itineraryDay.defaultTimeZone;
+    let startInstant: Date | null = null;
+    try {
+      startInstant = floatingLocalTimeToInstant(date, localTime, timeZone);
+    } catch {
+      startInstant = null;
+    }
+
+    await transaction.itineraryItem.update({ data: { startInstant }, where: { id: item.id } });
+  }
 }
 
 function normalizeTripDates(startDate: string, endDate: string) {
@@ -423,13 +467,45 @@ export async function updateTrip(
       where: { tripId },
       select: { id: true, date: true, _count: { select: { items: true } } },
     });
-    const dateChanges = getDateRangeChanges(
-      itineraryDays.map((day) => formatDateOnly(day.date)),
-      startDate,
-      endDate,
-    );
+
+    // A trip that keeps its length has not been resized, it has been moved, and
+    // the plan inside it should go along. Re-anchoring the existing days here,
+    // before the reconciliation below, is what turns "delete seven days and
+    // make seven more" into "the same seven days, a week later" - and it leaves
+    // that reconciliation with nothing to do, so every other kind of date edit
+    // still behaves exactly as it did.
+    const offsetDays = dayOffset(formatDateOnly(current.startDate), startDate);
+    const isMove =
+      offsetDays !== 0 && dayOffset(formatDateOnly(current.endDate), endDate) === offsetDays;
+    const dayDates = new Map(itineraryDays.map((day) => [day.id, formatDateOnly(day.date)]));
+
+    if (isMove) {
+      // One day at a time, in the order that keeps every intermediate state
+      // unique: a trip nudged a single day forward has its whole range overlap
+      // its old one, and `@@unique([tripId, date])` is checked per row.
+      const ordered = [...itineraryDays].sort((left, right) =>
+        offsetDays > 0
+          ? right.date.getTime() - left.date.getTime()
+          : left.date.getTime() - right.date.getTime(),
+      );
+
+      for (const day of ordered) {
+        const movedDate = shiftDateOnly(dayDates.get(day.id) as string, offsetDays);
+        dayDates.set(day.id, movedDate);
+        await transaction.itineraryDay.update({
+          data: { date: parseDateOnly(movedDate) },
+          where: { id: day.id },
+        });
+      }
+
+      await recomputeItemInstants(transaction, tripId);
+    }
+
+    const dateChanges = getDateRangeChanges([...dayDates.values()], startDate, endDate);
     const removedDateSet = new Set(dateChanges.removedDates);
-    const removedDays = itineraryDays.filter((day) => removedDateSet.has(formatDateOnly(day.date)));
+    const removedDays = itineraryDays.filter((day) =>
+      removedDateSet.has(dayDates.get(day.id) as string),
+    );
     const affectedItemCount = removedDays.reduce((count, day) => count + day._count.items, 0);
 
     if (affectedItemCount > 0 && !input.confirmDateShrink) {

@@ -26,6 +26,15 @@ const chipVariants = cva(
 
 export type TripFactChipsProps = {
   className?: string;
+  /**
+   * How the facts are set out.
+   *
+   * `chips` gives each one its own pill, for a surface where they sit over a
+   * photograph and need their own ground. `stats` runs them together as one
+   * rule-divided strip, which is what a profile's numbers look like and what
+   * stops a hero reading as a tag cloud. Same facts, same wording, either way.
+   */
+  layout?: 'chips' | 'stats';
   /** Rendered ahead of the derived facts, for a surface that leads with dates. */
   leading?: ReactNode;
   tone?: 'onMedia' | 'surface';
@@ -47,6 +56,7 @@ export type TripFactChipsProps = {
  */
 export function TripFactChips({
   className,
+  layout = 'chips',
   leading,
   tone = 'surface',
   trip,
@@ -69,15 +79,27 @@ export function TripFactChips({
   }
 
   const icons = { days: CalendarDays, span: Route, travellers: Users } as const;
+  const stats = layout === 'stats';
+  const itemClassName = stats
+    ? 'inline-flex items-center gap-1.5 px-3.5 text-sm font-medium whitespace-nowrap text-foreground tabular-nums first:ps-0 last:pe-0 [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-text-subtle'
+    : chipVariants({ tone });
 
   return (
-    <ul className={cn('flex flex-wrap items-center gap-2', className)} data-slot="trip-fact-chips">
-      {leading ? <li className={chipVariants({ tone })}>{leading}</li> : null}
+    <ul
+      className={cn(
+        stats
+          ? 'flex flex-wrap items-center justify-center divide-x divide-border-subtle'
+          : 'flex flex-wrap items-center gap-2',
+        className,
+      )}
+      data-slot="trip-fact-chips"
+    >
+      {leading ? <li className={itemClassName}>{leading}</li> : null}
       {facts.map((fact) => {
         const Icon = icons[fact.kind];
 
         return (
-          <li className={chipVariants({ tone })} key={fact.kind}>
+          <li className={itemClassName} key={fact.kind}>
             <Icon aria-hidden="true" />
             {fact.kind === 'span' ? (
               <>

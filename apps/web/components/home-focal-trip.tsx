@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { ExperienceRatingSummary } from '@/components/experience-rating-field';
 import { TripDestinationActions } from '@/components/trip-destination-actions';
 import { TripFactChips } from '@/components/trip-fact-chips';
+import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
 import { TripMedia } from '@/components/trip-media';
 import { TripProgress } from '@/components/trip-progress';
 import { TripReadinessBadge } from '@/components/trip-readiness-badge';
@@ -23,12 +24,6 @@ import { daysUntilTripStart, resolveCountdown } from '@/lib/trips/lifecycle';
 import { primaryTripDestinations, withLiveTripModeFirst } from '@/lib/trips/navigation';
 import { tripDestinationSummary } from '@/lib/trips/summary';
 
-const stageLabels: Record<Trip['lifecycle'], string> = {
-  active: 'activeLabel',
-  completed: 'completedLabel',
-  planning: 'planningLabel',
-};
-
 export type HomeFocalTripProps = {
   editorial: EditorialImageReference | null;
   nextItem: { label: string; upcoming: boolean } | null;
@@ -40,12 +35,16 @@ export type HomeFocalTripProps = {
 };
 
 /**
- * The one trip Home leads with, as a photograph first.
+ * The one trip Home leads with, composed the way an app introduces a subject:
+ * a round photograph, a name, a line of context, its numbers, its actions.
  *
- * The weather used to live in the corner of this card. It sits at the top of
- * the page now, beside the greeting, which is both where a traveller looks for
- * it and what frees the card's lower half for the trip's own facts - how long,
- * how far, how many - stated as chips rather than buried in a sentence.
+ * The photograph is a real circle at a fixed size rather than a shape stretched
+ * to hold the copy. Two earlier passes put the text on the picture, which meant
+ * the picture's shape was decided by how long the copy happened to be - an oval
+ * on a phone, a band on a desktop - with rectangles floating on it. Making the
+ * circle its own object fixes that as geometry rather than as tuning, and it
+ * takes the contrast problem with it: every line below sits on the page in the
+ * page's own ink, so there is no scrim left to get wrong.
  */
 export function HomeFocalTrip({
   editorial,
@@ -60,12 +59,13 @@ export function HomeFocalTrip({
   const locale = useLocale();
   const shouldReduceMotion = useReducedMotion();
   const destinations = tripDestinationSummary(trip);
+  const dateRange = formatTripDateRange(trip.startDate, trip.endDate, locale);
 
   return (
     <motion.section
       animate={{ opacity: 1, y: 0 }}
       aria-labelledby="home-focal-heading"
-      className="relative isolate flex min-h-[33rem] flex-col justify-end overflow-hidden rounded-[var(--radius-2xl)] border border-border-subtle bg-surface-media p-5 text-white shadow-[var(--shadow-card)] sm:min-h-[31rem] sm:p-7 lg:min-h-[34rem] lg:p-9"
+      className="flex flex-col items-center gap-5 py-2 text-center"
       initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
       transition={
         shouldReduceMotion
@@ -73,111 +73,104 @@ export function HomeFocalTrip({
           : { duration: motionDuration.standard, ease: motionEase }
       }
     >
-      <TripMedia
-        alt={
-          editorial
-            ? mediaTranslations('alt.tripEditorial', { name: destinations ?? trip.name })
-            : ''
-        }
-        className="absolute inset-0 -z-10 h-full w-full rounded-none"
-        preload
-        sizes="(max-width: 1023px) 100vw, 1024px"
-        source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
-        variant="hero"
-      />
-      {/* The top is lighter than it was, so more of the photograph survives;
-          below that the ramp holds its old weight. A pale photograph - a map,
-          a bright sky - is the case that decides this, and the copy sitting
-          from about a third of the way down has to stay legible over one. */}
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(10,20,15,0.16)_0%,rgba(10,20,15,0.40)_38%,rgba(8,18,13,0.94)_100%)]"
-      />
+      <div className="relative">
+        {/* The hairline matters on a pale photograph against a pale page: without
+            it a bright sky has no edge and the circle stops being a circle. */}
+        <div className="size-44 overflow-hidden rounded-full shadow-[var(--shadow-elevated)] ring-1 ring-black/5 sm:size-52 lg:size-60 dark:ring-white/10">
+          <TripMedia
+            alt={
+              editorial
+                ? mediaTranslations('alt.tripEditorial', { name: destinations ?? trip.name })
+                : ''
+            }
+            className="h-full w-full rounded-none"
+            preload
+            sizes="(max-width: 639px) 11rem, (max-width: 1023px) 13rem, 15rem"
+            source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
+            variant="thumbnail"
+          />
+        </div>
+        {/* Over the rim, with the page's own colour ringing it, so the badge
+            punches a gap out of the photograph rather than sitting on it.
+            `onMedia` rather than the default tone: half of this badge is on the
+            photograph, and the default fill is a tenth of a tint meant for a
+            known page surface - over an arbitrary image its contrast is
+            whatever the image happens to be, which in dark mode was nothing. */}
+        <TripLifecycleBadge
+          className="absolute -bottom-2 left-1/2 -translate-x-1/2 ring-4 ring-background"
+          lifecycle={trip.lifecycle}
+          tone="onMedia"
+        />
+      </div>
 
-      <div className="flex w-full flex-col gap-4 lg:max-w-3xl">
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-white/82 uppercase">
-              {destinations ?? t('destinationOpen')}
-            </p>
-            <span aria-hidden="true" className="text-white/40">
-              ·
-            </span>
-            <p className="text-[length:var(--text-metadata)] font-medium text-white/72">
-              {t(stageLabels[trip.lifecycle])}
-            </p>
-            <TripReadinessBadge
-              lifecycle={trip.lifecycle}
-              readiness={trip.planningReadiness}
-              tone="onMedia"
-            />
-          </div>
+      <div className="flex w-full max-w-[34rem] flex-col items-center gap-4">
+        <div className="space-y-1.5">
           <h2
-            className="max-w-2xl text-[length:var(--text-page-title)] leading-[1.04] font-semibold tracking-[-0.035em] text-balance md:text-[length:var(--text-immersive-title)] md:leading-[1.02]"
+            className="text-[length:var(--text-page-title)] leading-[1.06] font-semibold tracking-[-0.035em] text-balance text-foreground md:text-[length:var(--text-immersive-title)] md:leading-[1.02]"
             id="home-focal-heading"
           >
             {trip.name}
           </h2>
-          <TripFactChips
-            className="pt-1"
-            leading={
-              <span className="tabular-nums">
-                {formatTripDateRange(trip.startDate, trip.endDate, locale)}
-              </span>
-            }
-            tone="onMedia"
-            trip={trip}
-          />
+          {/* A trip that has not picked a destination yet simply says its dates.
+              The line it used to carry instead - "Destination still open" -
+              filled the space without telling the traveller anything. */}
+          <p className="text-sm text-muted-foreground">
+            {destinations ? (
+              <>
+                {destinations} <span aria-hidden="true">·</span>{' '}
+              </>
+            ) : null}
+            <span className="tabular-nums">{dateRange}</span>
+          </p>
+          <TripReadinessBadge lifecycle={trip.lifecycle} readiness={trip.planningReadiness} />
         </div>
 
         {trip.lifecycle === 'planning' ? (
-          <div className="w-full max-w-xl space-y-2">
-            <p className="text-lg font-medium">
+          <div className="flex w-full flex-col items-center gap-3">
+            <p className="text-lg font-medium text-foreground">
               {t('countdown', resolveCountdown(daysUntilTripStart(trip)))}
             </p>
-            <TripProgress inverse trip={trip} />
+            <TripProgress className="w-full max-w-xs" trip={trip} />
           </div>
         ) : null}
 
         {trip.lifecycle === 'active' ? (
-          <div className="w-full max-w-xl space-y-2">
-            <p className="text-[length:var(--text-metadata)] font-medium text-white/78">
-              {t('nextUp')}
-            </p>
-            <p className="text-base leading-6">
+          <div className="flex w-full flex-col items-center gap-3">
+            <p className="text-base leading-6 text-balance text-muted-foreground">
               {nextItem
                 ? t(nextItem.upcoming ? 'nextItem' : 'currentItem', { name: nextItem.label })
                 : t('noNextItem')}
             </p>
-            <TripProgress inverse trip={trip} tripModeContext={tripModeContext} />
+            <TripProgress
+              className="w-full max-w-xs"
+              trip={trip}
+              tripModeContext={tripModeContext}
+            />
           </div>
         ) : null}
 
         {trip.lifecycle === 'completed' ? (
-          <div className="space-y-3">
-            <p className="max-w-xl text-sm leading-6 text-white/78">
-              {t('states.completed.tripDescription', {
+          <div className="flex flex-col items-center gap-3">
+            <p className="text-sm leading-6 text-balance text-muted-foreground">
+              {t('completedTripDescription', {
                 endDate: formatTripDate(trip.endDate, locale),
                 startDate: formatTripDate(trip.startDate, locale),
               })}
             </p>
             {trip.experienceRating === null ? null : (
-              <ExperienceRatingSummary
-                className="text-white"
-                label={t('yourRating')}
-                rating={trip.experienceRating}
-                tone="onImage"
-              />
+              <ExperienceRatingSummary label={t('yourRating')} rating={trip.experienceRating} />
             )}
           </div>
         ) : null}
 
+        <TripFactChips className="border-y border-border-subtle py-3" layout="stats" trip={trip} />
+
         <TripDestinationActions
+          className="justify-center"
           destinations={withLiveTripModeFirst(
             primaryTripDestinations(trip.id, trip.lifecycle, trip.startDate),
             trip.lifecycle,
           )}
-          inverse
           labelOverrides={
             trip.lifecycle === 'completed'
               ? { memories: t('viewMemories') }
@@ -191,14 +184,14 @@ export function HomeFocalTrip({
           }
         />
 
-        <TripReadinessPrompt inverse trip={trip} />
+        <TripReadinessPrompt className="w-full justify-center text-center" trip={trip} />
 
         {promptKey ? (
-          <div className="flex items-start justify-between gap-3 border-t border-white/20 pt-3">
-            <p className="text-sm leading-6 text-white/75">{t(promptKey)}</p>
+          <div className="flex w-full items-center justify-center gap-2 border-t border-border-subtle pt-3">
+            <p className="text-sm leading-6 text-balance text-muted-foreground">{t(promptKey)}</p>
             <Button
               aria-label={t('dismissPrompt')}
-              className="text-white hover:bg-white/15 hover:text-white"
+              className="shrink-0"
               onClick={() => onDismissPrompt(trip.id)}
               size="icon-sm"
               variant="ghost"

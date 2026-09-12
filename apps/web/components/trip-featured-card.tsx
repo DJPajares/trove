@@ -1,4 +1,4 @@
-import { Info, Share2 } from 'lucide-react';
+import { Share2 } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 
@@ -41,7 +41,7 @@ export function TripFeaturedCard({
   return (
     <section
       aria-labelledby="featured-trip-heading"
-      className="overflow-hidden rounded-[var(--radius-2xl)] border border-border-subtle bg-card shadow-[var(--shadow-card)]"
+      className="group relative isolate overflow-hidden rounded-[var(--radius-2xl)] border border-border-subtle bg-card shadow-[var(--shadow-card)] transition-[border-color,box-shadow] duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:border-border-strong hover:shadow-[var(--shadow-elevated)] motion-reduce:transition-none"
     >
       <div className="grid lg:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
         <div className="relative min-w-0">
@@ -55,7 +55,7 @@ export function TripFeaturedCard({
           />
           <Button
             aria-label={share('action')}
-            className="absolute top-3 right-3 size-10 rounded-full border border-media-fallback-foreground/18 bg-neutral-950/58 text-media-fallback-foreground shadow-sm backdrop-blur-sm hover:bg-neutral-950/78 hover:text-media-fallback-foreground"
+            className="absolute top-3 right-3 z-10 size-10 rounded-full border border-media-fallback-foreground/18 bg-neutral-950/58 text-media-fallback-foreground shadow-sm backdrop-blur-sm hover:bg-neutral-950/78 hover:text-media-fallback-foreground"
             onClick={onShare}
             size="icon"
             type="button"
@@ -71,15 +71,26 @@ export function TripFeaturedCard({
             <TripReadinessBadge lifecycle={trip.lifecycle} readiness={trip.planningReadiness} />
           </div>
           <div className="space-y-2">
+            {/* The card opens the trip, but the card cannot be a link: it
+                already holds a share button and three destination buttons. The
+                name is the link, and it stretches its own hit area over the
+                whole card - the pattern every other clickable row in Trove
+                uses - so a tap on the card lands on the overview while the
+                controls stay above it and the keyboard still reaches each one. */}
             <h2
               className="text-[length:var(--text-section-title)] leading-[1.12] font-semibold tracking-[-0.03em] text-balance text-foreground sm:text-3xl"
               id="featured-trip-heading"
             >
-              {trip.name}
+              <Link
+                className="rounded-[var(--radius-sm)] outline-none after:absolute after:inset-0 after:rounded-[inherit] group-hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+                href={`/trips/${trip.id}`}
+              >
+                {trip.name}
+              </Link>
             </h2>
-            <p className="text-sm text-muted-foreground">
-              {tripDestinationSummary(trip) ?? t('destinationOpen')}
-            </p>
+            {tripDestinationSummary(trip) ? (
+              <p className="text-sm text-muted-foreground">{tripDestinationSummary(trip)}</p>
+            ) : null}
             <p className="text-sm text-muted-foreground tabular-nums">
               {t('dateRange', {
                 endDate: formatTripDate(trip.endDate, locale),
@@ -91,23 +102,11 @@ export function TripFeaturedCard({
           <TripProgress trip={trip} tripModeContext={tripModeContext} />
 
           <TripDestinationActions
-            className="flex-nowrap"
+            className="relative z-10 flex-nowrap"
             destinations={withLiveTripModeFirst(
               primaryTripDestinations(trip.id, trip.lifecycle, trip.startDate),
               trip.lifecycle,
             )}
-            extra={
-              <Button
-                aria-label={t('overview')}
-                className="shrink-0"
-                nativeButton={false}
-                render={<Link href={`/trips/${trip.id}`} />}
-                size="icon"
-                variant="ghost"
-              >
-                <Info aria-hidden="true" />
-              </Button>
-            }
             labelOverrides={
               trip.lifecycle === 'completed'
                 ? { memories: t('viewMemories') }
@@ -118,7 +117,7 @@ export function TripFeaturedCard({
             }
           />
 
-          <TripReadinessPrompt trip={trip} />
+          <TripReadinessPrompt className="relative z-10" trip={trip} />
         </div>
       </div>
     </section>

@@ -213,15 +213,30 @@ export function HomeExperience() {
   const nextItem = nextItemName
     ? { label: nextItemName, upcoming: Boolean(tripModeContext?.nextItemId) }
     : null;
-  const stage = primary?.lifecycle ?? 'empty';
   const weatherTarget =
     primary && !(primary.lifecycle === 'active' && tripModeContextStatus !== 'ready')
       ? resolveHomeWeatherTarget(primary, tripModeContext)
       : null;
+  /**
+   * What the weather pill calls the place it is reporting on.
+   *
+   * The first destination that has coordinates, because that is the one the
+   * server measures: `resolveTripWeatherLocation` walks the destinations in
+   * order and takes the first located one. Reading the same rule here means the
+   * label and the reading cannot name different places.
+   *
+   * Null rather than the trip's name when it has no destination yet. "A Quick
+   * New Zealand Getaway" is not somewhere it can be 16 degrees, and a line that
+   * looks like a place has to be one.
+   */
+  const weatherLocationLabel =
+    primary?.destinations.find((destination) => destination.location)?.name.trim() ||
+    primary?.destinations[0]?.name.trim() ||
+    null;
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-9">
-      <HomeGreeting description={t(`states.${stage}.description`)} weatherTarget={weatherTarget} />
+      <HomeGreeting locationLabel={weatherLocationLabel} weatherTarget={weatherTarget} />
 
       {primary ? (
         <HomeFocalTrip

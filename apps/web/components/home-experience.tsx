@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { EditorialSection } from '@/components/editorial-section';
 import { ExperienceRatingSummary } from '@/components/experience-rating-field';
 import { HomeFocalTrip } from '@/components/home-focal-trip';
-import { HomeGreeting } from '@/components/home-greeting';
+import { HomeNowStrip } from '@/components/home-now-strip';
 import { HomeTripDeck } from '@/components/home-trip-deck';
 import { PageState } from '@/components/page-state';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -17,7 +17,6 @@ import { useTripCreation } from '@/components/trip-creation-provider';
 import { Button } from '@/components/ui/button';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { selectCompletedPrompt } from '@/lib/home/completed-prompt';
-import { resolveHomeWeatherTarget } from '@/lib/home/weather';
 import {
   deviceTimeZone,
   fetchTripModeContext,
@@ -208,40 +207,36 @@ export function HomeExperience() {
     .filter((trip) => trip.lifecycle === 'completed')
     .toSorted((left, right) => right.endDate.localeCompare(left.endDate))[0];
 
+  /**
+   * What the trip's day actually says, or nothing while it is still being asked.
+   *
+   * The line this feeds used to read "Your schedule is clear for now" whenever
+   * a name could not be found - including while the context was still loading,
+   * and for an item that simply has no label - so it claimed a clear schedule
+   * that was not clear. The server already distinguishes those cases; Home now
+   * reads the distinction instead of collapsing it.
+   */
   const nextItemId = tripModeContext?.nextItemId ?? tripModeContext?.currentOrRelevant?.itemId;
   const nextItemName = itemLabelFor(tripModeContext, nextItemId);
-  const nextItem = nextItemName
-    ? { label: nextItemName, upcoming: Boolean(tripModeContext?.nextItemId) }
-    : null;
-  const weatherTarget =
-    primary && !(primary.lifecycle === 'active' && tripModeContextStatus !== 'ready')
-      ? resolveHomeWeatherTarget(primary, tripModeContext)
-      : null;
-  /**
-   * What the weather pill calls the place it is reporting on.
-   *
-   * The first destination that has coordinates, because that is the one the
-   * server measures: `resolveTripWeatherLocation` walks the destinations in
-   * order and takes the first located one. Reading the same rule here means the
-   * label and the reading cannot name different places.
-   *
-   * Null rather than the trip's name when it has no destination yet. "A Quick
-   * New Zealand Getaway" is not somewhere it can be 16 degrees, and a line that
-   * looks like a place has to be one.
-   */
-  const weatherLocationLabel =
-    primary?.destinations.find((destination) => destination.location)?.name.trim() ||
-    primary?.destinations[0]?.name.trim() ||
-    null;
-
+  const nextUp =
+    tripModeContextStatus !== 'ready' || !tripModeContext
+      ? null
+      : nextItemName
+        ? {
+            kind: tripModeContext.nextItemId ? ('next' as const) : ('current' as const),
+            label: nextItemName,
+          }
+        : tripModeContext.state === 'no_next_item'
+          ? { kind: 'nothingScheduled' as const, label: null }
+          : null;
   return (
     <div className="mx-auto w-full max-w-5xl space-y-9">
-      <HomeGreeting locationLabel={weatherLocationLabel} weatherTarget={weatherTarget} />
+      <HomeNowStrip />
 
       {primary ? (
         <HomeFocalTrip
           editorial={focalEditorial}
-          nextItem={nextItem}
+          nextUp={nextUp}
           onDismissPrompt={dismissCompletedPrompt}
           promptKey={selectCompletedPrompt(primary, dismissedPrompts)}
           trip={primary}
@@ -256,7 +251,9 @@ export function HomeExperience() {
             </Button>
           }
           description={t('startDescription')}
-          headingLevel={2}
+          // With no trip there is no trip name, so this is the page's heading.
+          // The greeting that used to hold it said nothing and is gone.
+          headingLevel={1}
           icon={<MapPinned aria-hidden="true" />}
           kind="empty"
           scope="section"

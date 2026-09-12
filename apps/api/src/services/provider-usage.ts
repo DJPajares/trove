@@ -63,6 +63,7 @@ export type ProviderExpectedSku =
    */
   | 'currency-rates-free'
   | 'editorial-images-free'
+  | 'geocoding-free'
   | 'places-autocomplete-requests'
   | 'places-text-search-pro'
   | 'places-text-search-enterprise'

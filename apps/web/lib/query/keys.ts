@@ -116,6 +116,21 @@ export const queryKeys = {
    */
   tripWeather: (tripId: string, temperatureUnit: TemperatureUnit) =>
     ['trip-weather', tripId, WEATHER_CONTRACT_VERSION, temperatureUnit] as const,
+
+  /**
+   * The weather where the traveller is, keyed by a rounded coordinate.
+   *
+   * Rounded because a position that moves twenty metres is the same weather,
+   * and an unrounded key would buy a fresh forecast for every GPS jitter.
+   */
+  locationWeather: (latitude: number, longitude: number, temperatureUnit: TemperatureUnit) =>
+    [
+      'location-weather',
+      latitude.toFixed(2),
+      longitude.toFixed(2),
+      WEATHER_CONTRACT_VERSION,
+      temperatureUnit,
+    ] as const,
 } as const;
 
 /**

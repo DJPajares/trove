@@ -126,28 +126,47 @@ export function TripWeatherContext({
       {/* The readings run the full width rather than sitting in the column
       beside the icon. Indenting them past a 40px tile bought nothing and cost
       the hourly strip the end of its own day. */}
+      {/* The reading is the link to where it came from.
+          Only the reading: the hourly strip below is a list a traveller scrolls
+          and taps along, and a link stretched over that would turn every hour
+          into a trip off the site. The credit the visible label used to carry
+          rides in the accessible name and the tooltip instead. */}
       {mainTemperature !== null && condition ? (
-        <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <p className="text-2xl font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+        <a
+          aria-label={t('readingLabel', {
+            condition: t(`condition.${weatherConditionKey(condition.weatherCode)}`),
+            source: data.attribution.label,
+            temperature: formatTemperature(mainTemperature),
+          })}
+          className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[var(--radius-sm)] outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
+          href={data.attribution.url}
+          rel="noreferrer"
+          target="_blank"
+          title={data.attribution.label}
+        >
+          <p
+            aria-hidden="true"
+            className="text-2xl font-semibold tracking-[-0.02em] text-foreground tabular-nums"
+          >
             {formatTemperature(mainTemperature)}
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p aria-hidden="true" className="text-sm text-muted-foreground">
             {t(`condition.${weatherConditionKey(condition.weatherCode)}`)}
           </p>
           {showCurrent && current ? (
-            <p className="text-sm text-muted-foreground">
+            <p aria-hidden="true" className="text-sm text-muted-foreground">
               {t('feelsLike', { temperature: formatTemperature(current.apparentTemperature) })}
             </p>
           ) : null}
           {selectedForecast ? (
-            <p className="text-sm text-muted-foreground">
+            <p aria-hidden="true" className="text-sm text-muted-foreground">
               {t('range', {
                 high: formatTemperature(selectedForecast.temperatureMax),
                 low: formatTemperature(selectedForecast.temperatureMin),
               })}
             </p>
           ) : null}
-        </div>
+        </a>
       ) : (
         <p className="mt-3 text-sm leading-6 text-muted-foreground">
           {/* A day past the horizon has no forecast yet; a day inside it that
@@ -162,15 +181,6 @@ export function TripWeatherContext({
       {showCurrent ? (
         <TripHourlyWeather date={selectedDate} hours={data.hours} timeZone={timeZone} />
       ) : null}
-
-      <a
-        className="mt-3 inline-flex text-xs text-text-subtle underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        href={data.attribution.url}
-        rel="noreferrer"
-        target="_blank"
-      >
-        {data.attribution.label}
-      </a>
     </section>
   );
 }

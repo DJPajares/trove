@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation';
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
+import { TripCountries } from '@/components/trip-countries';
 import { TripForm } from '@/components/trip-form';
 import { TripMedia } from '@/components/trip-media';
 import { TripShareDialog } from '@/components/trip-share-dialog';
@@ -75,7 +76,10 @@ function movesThePlan(before: Trip, after: Trip) {
     before.referenceTimeZone !== after.referenceTimeZone ||
     before.planningReadiness !== after.planningReadiness ||
     before.destinations.map((entry) => entry.name).join('\u0000') !==
-      after.destinations.map((entry) => entry.name).join('\u0000')
+      after.destinations.map((entry) => entry.name).join('\u0000') ||
+    // The header names the country now, so an edit that changes only that has
+    // to reach it - otherwise the chrome keeps showing the old one.
+    (before.countries ?? []).join('\u0000') !== (after.countries ?? []).join('\u0000')
   );
 }
 
@@ -223,6 +227,20 @@ export function TripChrome({
               {/* The name and the dates are the only part of this that waits on
                 the trip, and they wait inside boxes the right size, so the
                 answer arriving never moves anything below. */}
+              {/* The same eyebrow the trip's overview carries, so the country
+                  does not disappear the moment a traveller moves from Overview
+                  into the planner. A trip from before the field existed keeps
+                  the space rather than showing an empty line. */}
+              {trip ? (
+                trip.countries?.length ? (
+                  <TripCountries
+                    className="block text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase"
+                    countries={trip.countries}
+                  />
+                ) : null
+              ) : (
+                <Skeleton className="h-[length:var(--text-metadata)] w-24" />
+              )}
               {trip ? (
                 <h1
                   className="text-[length:var(--text-page-title)] leading-[1.06] font-semibold tracking-[-0.035em] text-balance text-foreground"

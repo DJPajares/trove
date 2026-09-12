@@ -1,6 +1,5 @@
-import { COUNTRY_CODES } from '@trove/types/countries';
-
 import { MAX_EDITORIAL_IMAGE_SUBJECTS, type EditorialSubject } from '@/lib/media/editorial-images';
+import { isKnownCountry, namedCountryLine } from '@/lib/trips/countries';
 
 import type { Trip } from './api';
 import type { TripLibraryGroups } from './lifecycle';
@@ -13,6 +12,25 @@ export function tripDestinationSummary(trip: Trip) {
 }
 
 /**
+ * Where a trip goes, as one line - "🇯🇵 Japan · Kyoto, Tokyo".
+ *
+ * The country leads because it is what the traveller declared, and every trip
+ * has one; the destinations follow because they say where inside that country
+ * rather than somewhere else. A trip from before the field existed shows its
+ * destinations alone, and one with neither returns null so the surface renders
+ * no line at all - an empty "where" is the "Destination still open" mistake
+ * again.
+ */
+export function tripWhereLine(trip: Trip, locale: string): string | null {
+  const countries = namedCountryLine(trip.countries, locale);
+  const destinations = tripDestinationSummary(trip);
+
+  if (!countries) return destinations;
+
+  return destinations ? `${countries} · ${destinations}` : countries;
+}
+
+/**
  * The English name of a country code, for asking a photograph about it.
  *
  * English rather than the reader's locale on purpose: the subject is matched
@@ -21,10 +39,9 @@ export function tripDestinationSummary(trip: Trip) {
  * the name, so no country list is hard-coded here.
  */
 function countryEditorialName(code: string | undefined): string | null {
-  // A code Trove does not know is dropped before `Intl.DisplayNames` sees it:
-  // CLDR answers an unrecognised region with "Unknown Region", which would ask
-  // for a photograph of nothing under a caption promising a country.
-  if (!code || !COUNTRY_CODES.includes(code)) return null;
+  // A code Trove does not know is dropped before `Intl.DisplayNames` sees it,
+  // which would otherwise ask for a photograph of "Unknown Region".
+  if (!isKnownCountry(code)) return null;
 
   try {
     const name = new Intl.DisplayNames(['en'], { type: 'region' }).of(code);

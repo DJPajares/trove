@@ -10,7 +10,8 @@ import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import type { Trip } from '@/lib/trips/api';
 import { formatTripDate } from '@/lib/trips/format';
-import { tripDestinationSummary } from '@/lib/trips/summary';
+import { namedCountryLine } from '@/lib/trips/countries';
+import { tripWhereLine } from '@/lib/trips/summary';
 import { cn } from '@/lib/utils';
 
 export type TripListRowProps = {
@@ -24,6 +25,8 @@ export function TripListRow({ editorial, trip, variant = 'card' }: Readonly<Trip
   const mediaTranslations = useTranslations('media');
   const locale = useLocale();
   const subjectName = trip.destinations[0]?.name ?? trip.name;
+  const countries = namedCountryLine(trip.countries, locale);
+  const whereLine = tripWhereLine(trip, locale);
   const isArchive = variant === 'archive';
 
   return (
@@ -55,10 +58,18 @@ export function TripListRow({ editorial, trip, variant = 'card' }: Readonly<Trip
             </div>
           ) : null}
         </div>
-        {tripDestinationSummary(trip) ? (
+        {/* Where the trip goes, country first: it is the thing the traveller
+            declared, and a row this narrow can only lead with one of them. The
+            destinations follow on the same line when there are any, because
+            they say where inside that country rather than somewhere else. */}
+        {whereLine ? (
           <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
-            <MapPin aria-hidden="true" className="size-3.5 shrink-0" />
-            {tripDestinationSummary(trip)}
+            {/* The flag is already the pin. A row that leads with one does not
+                need the other, and two location glyphs in a line this small
+                read as clutter rather than as emphasis - but a bare "Tokyo"
+                still wants something saying it is a place. */}
+            {countries ? null : <MapPin aria-hidden="true" className="size-3.5 shrink-0" />}
+            <span className="truncate">{whereLine}</span>
           </p>
         ) : null}
         <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground tabular-nums">

@@ -38,6 +38,8 @@ export type PublicItinerary = {
     notes: string | null;
   }>;
   trip: {
+    /** ISO 3166-1 alpha-2. Where the trip goes, which a shared plan may say. */
+    countries: string[];
     /** The traveller's own framing of the trip, deliberately shared. */
     description: string | null;
     endDate: string;
@@ -76,6 +78,8 @@ const publicItemInclude = {
  * shapes mean the public one only ever grows on purpose. The trip's description
  * is one such deliberate growth: it is the traveller's own account of the trip,
  * written to be read, and a shared itinerary without it opens on a bare title.
+ * The countries it visits are another: a shared plan that does not say where it
+ * goes makes its reader work the answer out from the stops.
  */
 export async function listPublicItinerary(
   tripId: string,
@@ -87,6 +91,7 @@ export async function listPublicItinerary(
     // visibility is what stands in for one.
     where: { id: tripId, visibility: 'PUBLIC' },
     select: {
+      countries: true,
       description: true,
       endDate: true,
       id: true,
@@ -134,6 +139,7 @@ export async function listPublicItinerary(
       notes: day.notes,
     })),
     trip: {
+      countries: trip.countries,
       description: trip.description,
       endDate: formatDateOnly(trip.endDate),
       id: trip.id,

@@ -49,6 +49,8 @@ import type { Task, TasksResponse } from '@/lib/tasks/api';
 import { groupTasksByContext } from '@/lib/tasks/grouping';
 import { tripTasks } from '@/lib/tasks/trip-mode';
 import { fetchTripInfo } from '@/lib/trip-info/api';
+import { namedCountryLine } from '@/lib/trips/countries';
+import { tripDestinationSummary } from '@/lib/trips/summary';
 import { tripWeatherForDate, useTripWeather } from '@/lib/weather/use-trip-weather';
 import { cn } from '@/lib/utils';
 
@@ -207,6 +209,8 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
     ? itinerary.tripPlaces.find((place) => place.id === selectedDay.dailyBaseTripPlaceId)
     : null;
   const tripDescription = trip.description?.trim() ?? '';
+  const countries = namedCountryLine(trip.countries, locale);
+  const destinations = tripDestinationSummary(trip);
   const notes = [
     ...(selectedDay?.notes
       ? [
@@ -306,12 +310,20 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
           </div>
           <div>
             <dt className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-              {t('destinations')}
+              {t('where')}
             </dt>
+            {/* The country the trip declared, with the destinations underneath
+                it rather than beside it: a traveller in Trip Mode is already
+                somewhere, and the country is the line that orients them. The
+                cell no longer has a "still open" state to fall back to, because
+                every trip names a country now. */}
             <dd className="mt-1.5 text-sm font-medium text-foreground">
-              {trip.destinations.length
-                ? trip.destinations.map((destination) => destination.name).join(', ')
-                : t('destinationsOpen')}
+              {countries ?? destinations ?? trip.name}
+              {countries && destinations ? (
+                <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                  {destinations}
+                </span>
+              ) : null}
             </dd>
           </div>
           <div>

@@ -7,6 +7,7 @@ import {
   libraryEditorialSubjects,
   tripDestinationSummary,
   tripEditorialSubject,
+  tripWhereLine,
 } from '../lib/trips/summary.ts';
 
 function destination(name: string, position = 0): TripDestination {
@@ -45,6 +46,24 @@ test('destinations read as one line, and their absence reads as nothing', () => 
     ),
   ).toBe('Tokyo, Kyoto');
   expect(tripDestinationSummary(trip({ id: 'a' }))).toBeNull();
+});
+
+test('where a trip goes reads country first, destinations after', () => {
+  expect(
+    tripWhereLine(trip({ countries: ['JP'], destinations: [destination('Kyoto')], id: 'a' }), 'en'),
+  ).toBe('🇯🇵 Japan · Kyoto');
+
+  // A trip that named only its country says only that.
+  expect(tripWhereLine(trip({ countries: ['JP'], id: 'b' }), 'en')).toBe('🇯🇵 Japan');
+
+  // A trip from before countries were asked for still says its destinations.
+  expect(tripWhereLine(trip({ destinations: [destination('Kyoto')], id: 'c' }), 'en')).toBe(
+    'Kyoto',
+  );
+
+  // Neither is null rather than an empty string, so the surface renders no line
+  // at all instead of an empty one.
+  expect(tripWhereLine(trip({ id: 'd' }), 'en')).toBeNull();
 });
 
 test('a trip the traveller gave a cover to asks for no photograph', () => {

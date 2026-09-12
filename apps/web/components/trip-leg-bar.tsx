@@ -128,6 +128,31 @@ export function TripLegBar({ className, context, inverse = false }: Readonly<Tri
         <Endpoint located={originPoint !== null} tone={tone} />
         <div className="relative min-w-0 flex-1">
           <div className={cn('h-1 rounded-full', tone.track, MODE_LINE[leg.mode])} />
+          {/* While the device is being asked, a highlight sweeps the line the
+              way the route-pending bar sweeps the top of the screen: the same
+              keyframe, the same easing, so waiting reads the same everywhere in
+              Trove. It is a layer above the track rather than a replacement for
+              it, because the dots and dashes say how the traveller is
+              travelling and that is still true while they are being found.
+
+              Only while locating. In `idle` nothing has been asked for yet, and
+              a line moving then would be motion with no work behind it. It
+              clips against its own box rather than the wrapper's, which also
+              holds the marker - a `size-6` circle over a `h-1` track, sliced in
+              half by an `overflow-hidden` one level up. */}
+          {status === 'loading' ? (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 overflow-hidden rounded-full"
+            >
+              <span
+                className={cn(
+                  'block h-full w-2/5 animate-[trove-route-progress_1.1s_var(--ease-standard)_infinite] rounded-full motion-reduce:animate-none',
+                  tone.fill,
+                )}
+              />
+            </span>
+          ) : null}
           {/* Absent rather than parked at nought: a marker sitting on the origin
               dot would claim the traveller is standing there, which is the one
               thing an unknown position cannot say. */}

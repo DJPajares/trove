@@ -15,7 +15,7 @@ import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import type { Trip } from '@/lib/trips/api';
 import { formatTripDate } from '@/lib/trips/format';
 import { primaryTripDestinations, withLiveTripModeFirst } from '@/lib/trips/navigation';
-import { tripDestinationSummary } from '@/lib/trips/summary';
+import { tripWhereLine } from '@/lib/trips/summary';
 
 export type TripFeaturedCardProps = {
   editorial: EditorialImageReference | null;
@@ -37,6 +37,7 @@ export function TripFeaturedCard({
   const mediaTranslations = useTranslations('media');
   const locale = useLocale();
   const subjectName = trip.destinations[0]?.name ?? trip.name;
+  const whereLine = tripWhereLine(trip, locale);
 
   return (
     <section
@@ -88,9 +89,9 @@ export function TripFeaturedCard({
                 {trip.name}
               </Link>
             </h2>
-            {tripDestinationSummary(trip) ? (
-              <p className="text-sm text-muted-foreground">{tripDestinationSummary(trip)}</p>
-            ) : null}
+            {/* Country first, destinations after: the same order every other
+                trip surface reads in. */}
+            {whereLine ? <p className="text-sm text-muted-foreground">{whereLine}</p> : null}
             <p className="text-sm text-muted-foreground tabular-nums">
               {t('dateRange', {
                 endDate: formatTripDate(trip.endDate, locale),

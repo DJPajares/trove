@@ -11,7 +11,13 @@ export type TimeZoneCandidate = {
 };
 
 export type TripTimeZoneResolution = {
-  source: 'DESTINATION' | 'DEVICE_FALLBACK' | 'EXPLICIT' | 'PROFILE_HOME' | 'STARTING_LOCATION';
+  source:
+    | 'COUNTRY'
+    | 'DESTINATION'
+    | 'DEVICE_FALLBACK'
+    | 'EXPLICIT'
+    | 'PROFILE_HOME'
+    | 'STARTING_LOCATION';
   sourcePlaceId: string | null;
   timeZone: string;
 };
@@ -313,6 +319,8 @@ export function deriveTripLifecycle(
 }
 
 export function resolveTripTimeZone(input: {
+  /** The trip's declared countries, ISO 3166-1 alpha-2, in the traveller's order. */
+  countries?: readonly string[];
   destinations: TimeZoneCandidate[];
   deviceTimeZone: string;
   explicitTimeZone?: string | null;
@@ -333,6 +341,24 @@ export function resolveTripTimeZone(input: {
       sourcePlaceId: destination.placeId,
       timeZone: destination.timeZone,
     };
+  }
+
+  /**
+   * A declared country, before the trip falls back to where the traveller lives.
+   *
+   * It sits under the destination because a city is more specific than the
+   * country holding it, and above the starting location because where a trip
+   * goes says more about its clock than where it set off from. The lookup is
+   * the same offline table the profile's home country uses - no provider, no
+   * guess, and exact where the destination rung is only ever a string match.
+   *
+   * The first country, for the same reason the destination rung takes the
+   * first destination: a trip spanning several is read by the one it leads with.
+   */
+  const country = input.countries?.map((code) => timeZoneForCountry(code)).find(Boolean);
+
+  if (country) {
+    return { source: 'COUNTRY', sourcePlaceId: null, timeZone: country };
   }
 
   if (input.startingLocation?.timeZone && isValidIanaTimeZone(input.startingLocation.timeZone)) {

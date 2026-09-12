@@ -102,6 +102,7 @@ function mapVisibility(value: string) {
 
 function mapTimeZoneSource(value: string) {
   const values: Record<string, string> = {
+    COUNTRY: 'country',
     DESTINATION: 'destination',
     DEVICE_FALLBACK: 'device_fallback',
     EXPLICIT: 'explicit',
@@ -393,6 +394,7 @@ export async function createTrip(userId: string, accessToken: string, input: Tri
       ? await findOrCreateCustomPlace(transaction, userId, input.startingLocation)
       : null;
     const timeZone = resolveTripTimeZone({
+      countries: input.countries,
       destinations: destinations.map((place) => ({
         placeId: place.id,
         timeZone: place.customTimeZone,
@@ -486,11 +488,13 @@ export async function updateTrip(
           ? await findOrCreateCustomPlace(transaction, userId, input.startingLocation)
           : null;
     const shouldResolveTimeZone =
+      input.countries !== undefined ||
       input.destinations !== undefined ||
       input.startingLocation !== undefined ||
       input.referenceTimeZone !== undefined;
     const timeZone = shouldResolveTimeZone
       ? resolveTripTimeZone({
+          countries: input.countries ?? current.countries,
           destinations: destinations.map((place) => ({
             placeId: place.id,
             timeZone: place.customTimeZone,

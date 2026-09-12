@@ -1,0 +1,13 @@
+-- A trip's declared country can answer for its time zone.
+--
+-- The resolver's DESTINATION rung is fed by string-matching a country name out
+-- of whatever free text a traveller typed as a destination, which is why the
+-- placeholder read "Kyoto, Japan" and why a bare "Kyoto" resolved to nothing.
+-- A trip now declares its countries as ISO codes, and a code maps to a zone
+-- offline and exactly - so the resolver gains a rung between the destination and
+-- the starting location, and it needs a name of its own to report honestly.
+--
+-- Added after 'destination' so the type's order matches the schema's. Adding an
+-- enum value inside a transaction is allowed here because nothing in this
+-- migration goes on to use it.
+ALTER TYPE "trove"."trip_time_zone_source" ADD VALUE IF NOT EXISTS 'country' AFTER 'destination';

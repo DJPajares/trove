@@ -59,6 +59,7 @@ enum TripUserRole {
 enum TripTimeZoneSource {
   EXPLICIT          @map("explicit")
   DESTINATION       @map("destination")
+  COUNTRY           @map("country")
   STARTING_LOCATION @map("starting_location")
   PROFILE_HOME      @map("profile_home")
   DEVICE_FALLBACK   @map("device_fallback")

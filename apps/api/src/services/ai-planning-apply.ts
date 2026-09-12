@@ -265,12 +265,6 @@ export async function applyAiPlanningSession(
     if (new Set(destinations.map((place) => place.id)).size !== destinations.length) {
       throw new AiPlanningSessionError('draft_invalid', 409);
     }
-    const tripTimeZone = resolveTripTimeZone({
-      destinations: destinations.map((place) => ({ placeId: place.id, timeZone: place.timeZone })),
-      deviceTimeZone,
-      profileHome: profile.homeTimeZone ? { placeId: null, timeZone: profile.homeTimeZone } : null,
-      startingLocation: null,
-    });
     /**
      * An applied trip names its countries from what its destinations say.
      *
@@ -288,6 +282,13 @@ export async function applyAiPlanningSession(
           .filter((code): code is string => code !== null),
       ),
     ];
+    const tripTimeZone = resolveTripTimeZone({
+      countries,
+      destinations: destinations.map((place) => ({ placeId: place.id, timeZone: place.timeZone })),
+      deviceTimeZone,
+      profileHome: profile.homeTimeZone ? { placeId: null, timeZone: profile.homeTimeZone } : null,
+      startingLocation: null,
+    });
     const trip = await transaction.trip.create({
       data: {
         countries,

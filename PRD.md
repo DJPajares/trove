@@ -414,6 +414,12 @@ a trip is created, and when its countries are saved.
 - Destinations remain free text and optional. They say where inside a country a
   traveller is going; the country field says which countries, declared rather
   than inferred from those strings.
+- Destinations are added after a trip exists, not while it is being created:
+  the declared country is enough to place a new trip.
+- A trip's reference time zone comes from its declared country when no
+  destination resolves one, rather than from parsing a destination string. The
+  declared country is also what an editorial photograph pictures a trip by when
+  it has no destination and no cover of its own.
 
 ## 7.4 Starting Location
 

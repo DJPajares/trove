@@ -165,6 +165,45 @@ test('resolves reference timezone in the PRD fallback order', () => {
   });
 });
 
+test('resolves the declared country below a destination and above the starting location', () => {
+  const common = {
+    countries: ['JP', 'KR'],
+    deviceTimeZone: 'Asia/Singapore',
+    destinations: [{ placeId: 'destination-resolved', timeZone: 'Europe/Rome' }],
+    profileHome: { placeId: 'home', timeZone: 'Australia/Sydney' },
+    startingLocation: { placeId: 'start', timeZone: 'Europe/Paris' },
+  };
+
+  // A destination that resolves still wins: it says where inside a country the
+  // traveller actually is.
+  expect(resolveTripTimeZone(common)).toStrictEqual({
+    source: 'DESTINATION',
+    sourcePlaceId: 'destination-resolved',
+    timeZone: 'Europe/Rome',
+  });
+  // With no destination the first declared country answers, in the order the
+  // traveller picked - not the place they are leaving from.
+  expect(resolveTripTimeZone({ ...common, destinations: [] })).toStrictEqual({
+    source: 'COUNTRY',
+    sourcePlaceId: null,
+    timeZone: 'Asia/Tokyo',
+  });
+  // A country Trove has no zone for is skipped rather than failing the trip.
+  expect(
+    resolveTripTimeZone({ ...common, countries: ['ZZ', 'KR'], destinations: [] }),
+  ).toStrictEqual({
+    source: 'COUNTRY',
+    sourcePlaceId: null,
+    timeZone: 'Asia/Seoul',
+  });
+  // A trip from before countries were asked for falls through untouched.
+  expect(resolveTripTimeZone({ ...common, countries: [], destinations: [] })).toStrictEqual({
+    source: 'STARTING_LOCATION',
+    sourcePlaceId: 'start',
+    timeZone: 'Europe/Paris',
+  });
+});
+
 test('accepts IANA timezone identifiers and safely rejects invalid values', () => {
   expect(isValidIanaTimeZone('Asia/Singapore')).toBe(true);
   expect(isValidIanaTimeZone('UTC')).toBe(true);

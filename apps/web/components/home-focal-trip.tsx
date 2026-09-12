@@ -24,9 +24,18 @@ import { daysUntilTripStart, resolveCountdown } from '@/lib/trips/lifecycle';
 import { primaryTripDestinations, withLiveTripModeFirst } from '@/lib/trips/navigation';
 import { tripDestinationSummary } from '@/lib/trips/summary';
 
+/**
+ * What the trip's day says right now, or null when it says nothing worth a line.
+ *
+ * Null covers both "still loading" and "no day at all", because neither is a
+ * fact about the traveller's schedule and both used to render as one.
+ */
+export type HomeNextUp =
+  { kind: 'current' | 'next'; label: string } | { kind: 'nothingScheduled'; label: null };
+
 export type HomeFocalTripProps = {
   editorial: EditorialImageReference | null;
-  nextItem: { label: string; upcoming: boolean } | null;
+  nextUp: HomeNextUp | null;
   onDismissPrompt: (tripId: string) => void;
   promptKey: CompletedPromptKey | null;
   trip: Trip;
@@ -48,7 +57,7 @@ export type HomeFocalTripProps = {
  */
 export function HomeFocalTrip({
   editorial,
-  nextItem,
+  nextUp,
   onDismissPrompt,
   promptKey,
   trip,
@@ -105,12 +114,12 @@ export function HomeFocalTrip({
 
       <div className="flex w-full max-w-[34rem] flex-col items-center gap-4">
         <div className="space-y-1.5">
-          <h2
+          <h1
             className="text-[length:var(--text-page-title)] leading-[1.06] font-semibold tracking-[-0.035em] text-balance text-foreground md:text-[length:var(--text-immersive-title)] md:leading-[1.02]"
             id="home-focal-heading"
           >
             {trip.name}
-          </h2>
+          </h1>
           {/* A trip that has not picked a destination yet simply says its dates.
               The line it used to carry instead - "Destination still open" -
               filled the space without telling the traveller anything. */}
@@ -136,11 +145,13 @@ export function HomeFocalTrip({
 
         {trip.lifecycle === 'active' ? (
           <div className="flex w-full flex-col items-center gap-3">
-            <p className="text-base leading-6 text-balance text-muted-foreground">
-              {nextItem
-                ? t(nextItem.upcoming ? 'nextItem' : 'currentItem', { name: nextItem.label })
-                : t('noNextItem')}
-            </p>
+            {nextUp ? (
+              <p className="text-base leading-6 text-balance text-muted-foreground">
+                {nextUp.kind === 'nothingScheduled'
+                  ? t('nothingScheduled')
+                  : t(nextUp.kind === 'next' ? 'nextItem' : 'currentItem', { name: nextUp.label })}
+              </p>
+            ) : null}
             <TripProgress
               className="w-full max-w-xs"
               trip={trip}

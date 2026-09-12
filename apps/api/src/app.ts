@@ -27,6 +27,7 @@ import { registerTripPlacesRoutes } from './routes/trip-places.js';
 import { registerTripInfoRoutes } from './routes/trip-info.js';
 import { registerSavedPlacesRoutes } from './routes/saved-places.js';
 import { registerTasksRoutes } from './routes/tasks.js';
+import { registerLocationWeatherRoutes } from './routes/location-weather.js';
 import { registerTripWeatherRoutes } from './routes/trip-weather.js';
 
 function originMatches(allowedOrigin: string, origin: string) {
@@ -149,6 +150,7 @@ export function buildApp() {
     registerAuthenticationRoutes(instance);
     registerAiPlanningSessionRoutes(instance);
     registerCurrencyRoutes(instance);
+    registerLocationWeatherRoutes(instance);
     registerTripWeatherRoutes(instance);
     registerPlacesRoutes(instance);
     registerEditorialImageRoutes(instance);

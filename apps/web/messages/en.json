@@ -339,6 +339,8 @@
         "emptyDay": "Nothing is scheduled for this day yet.",
         "mapLabel": "Verified places map",
         "mapUnavailable": "Verified Places with coordinates will appear on the map. Custom Places never receive an invented pin.",
+        "mapPlaceCount": "{count, plural, one {# verified place} other {# verified places}} ready to map.",
+        "showMap": "Show map",
         "regenerate": "Regenerate plan",
         "regenerateDescription": "Change destinations or dates here. The current draft remains until a new plan succeeds.",
         "regenerateAction": "Regenerate",

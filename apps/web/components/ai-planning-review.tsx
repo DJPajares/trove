@@ -78,6 +78,12 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   const [operation, setOperation] = useState<ReviewOperation>('idle');
   const [error, setError] = useState<string | null>(null);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
+  // Google bills a Dynamic Map per instantiation, and this screen is one the
+  // traveller leaves and returns to while a draft sits waiting. Mounting the map
+  // on arrival would charge for that loop, so the map is bought on request and
+  // then kept: regenerate swaps the draft in place without unmounting, so nobody
+  // pays twice for a map they already opened.
+  const [mapRevealed, setMapRevealed] = useState(false);
   const [confirmApply, setConfirmApply] = useState(false);
   const [regeneratePrompt, setRegeneratePrompt] = useState('');
   const [description, setDescription] = useState('');
@@ -539,7 +545,12 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
             className="overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card"
             aria-label={t('mapLabel')}
           >
-            {selectedMapPoints.length ? (
+            {!selectedMapPoints.length ? (
+              <div className="p-6 text-sm text-muted-foreground">
+                <MapPinned aria-hidden="true" className="mb-3 size-5 text-brand" />
+                {t('mapUnavailable')}
+              </div>
+            ) : mapRevealed ? (
               <ItineraryPlanningMap
                 onClearSelection={() => setSelectedPointId(null)}
                 onSelectPoint={(point) => setSelectedPointId(point.id)}
@@ -548,9 +559,20 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                 selectedPointId={selectedPointId}
               />
             ) : (
-              <div className="p-6 text-sm text-muted-foreground">
+              <div className="p-6">
                 <MapPinned aria-hidden="true" className="mb-3 size-5 text-brand" />
-                {t('mapUnavailable')}
+                <p className="text-sm text-muted-foreground">
+                  {t('mapPlaceCount', { count: selectedMapPoints.length })}
+                </p>
+                <Button
+                  className="mt-3"
+                  onClick={() => setMapRevealed(true)}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  {t('showMap')}
+                </Button>
               </div>
             )}
           </section>

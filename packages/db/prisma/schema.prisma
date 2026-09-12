@@ -649,7 +649,7 @@ model Trip {
   /// Declared rather than inferred: the time zone resolver used to guess this
   /// by matching country names out of free-text destinations.
   /// Empty on trips created before it was asked for, which stay usable as they are.
-  countries                      String[]              @db.Char(2)
+  countries                      String[]              @default([]) @db.Char(2)
   startDate                      DateTime              @map("start_date") @db.Date
   endDate                        DateTime              @map("end_date") @db.Date
   partySize                      Int                   @default(1) @map("party_size")

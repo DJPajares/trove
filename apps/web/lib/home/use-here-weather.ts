@@ -10,6 +10,8 @@ import { queryKeys } from '@/lib/query/keys';
 import { getLocationWeather } from '@/lib/weather/api';
 
 export type HereWeather = {
+  /** Where the reading came from, so the strip can link back to it. */
+  attribution: { label: string; url: string };
   city: string | null;
   condition: number;
   temperature: number;
@@ -61,15 +63,17 @@ export function useHereWeather() {
     staleTime: 24 * 60 * 60 * 1_000,
   });
 
-  const current = query.data?.current;
-  if (!current) return { status: query.isPending ? 'loading' : 'error', weather: null } as const;
+  const data = query.data;
+  if (!data?.current)
+    return { status: query.isPending ? 'loading' : 'error', weather: null } as const;
 
   return {
     status: 'ready',
     weather: {
-      city: query.data?.place?.name ?? cityFromTimeZone(timeZone),
-      condition: current.weatherCode,
-      temperature: current.temperature,
+      attribution: data.attribution,
+      city: data.place?.name ?? cityFromTimeZone(timeZone),
+      condition: data.current.weatherCode,
+      temperature: data.current.temperature,
     },
   } as const;
 }

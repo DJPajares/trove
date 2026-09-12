@@ -77,3 +77,29 @@ and provide the production session/direct `DIRECT_URL` on port `5432`. Run
 `prisma migrate deploy` and never prints the connection string.
 
 Do not run `prisma db pull` against Supabase-managed schemas or add `auth`/`storage` to the Prisma datasource.
+
+## Hand-written migrations
+
+Some migrations here are hand-written rather than generated, because
+`migrate dev` needs a TTY and an isolated shadow database. A hand-written
+migration has to express **exactly** what `schema.prisma` declares, and nothing
+more.
+
+`migrate dev` does not compare the database to the schema. It replays the
+migrations directory onto a shadow database and compares *that* to the schema,
+so any gap between the two becomes a correcting migration it writes for you,
+silently, on someone else's machine. A column added as
+`NOT NULL DEFAULT '{}'` whose field carries no `@default([])` is such a gap: the
+next `migrate dev` generates a migration to drop the default.
+
+If one of those corrections is created and then deleted, its directory is left
+empty and Prisma refuses to run at all:
+
+```
+Error: P3015  Could not find the migration file at migration.sql.
+```
+
+Deleting the directory is only half the repair — the migration is still recorded
+as applied in `_prisma_migrations`, and whatever statement it ran is still in
+effect. Reconcile the schema with the migration first, or the next run writes it
+again.

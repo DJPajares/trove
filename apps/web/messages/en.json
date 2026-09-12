@@ -704,6 +704,8 @@
         "today": "Today",
         "forDate": "Forecast for {date}",
         "feelsLike": "Feels like {temperature}",
+        "readingLabel": "{condition}, {temperature}. {source}",
+        "readingLabelWithPlace": "{condition} in {place}, {temperature}. {source}",
         "range": "High {high}, low {low}",
         "dayRange": "<lead>{high}</lead> / {low}",
         "dayBadge": "{condition}, high {high}, low {low}",
@@ -2058,8 +2060,7 @@
     "nothingScheduled": "Nothing scheduled today.",
     "countdown": "{unit, select, day {{count, plural, =0 {Starts today} one {Starts in # day} other {Starts in # days}}} week {{count, plural, one {Starts in # week} other {Starts in # weeks}}} other {{count, plural, one {Starts in # month} other {Starts in # months}}}}",
     "weather": {
-      "loading": "Loading weather",
-      "source": "Open-Meteo"
+      "loading": "Loading weather"
     },
     "startTitle": "Start with the trip, not every detail",
     "startDescription": "A name and rough dates are all it takes — everything else can wait.",

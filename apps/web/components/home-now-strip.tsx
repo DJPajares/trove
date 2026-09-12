@@ -45,22 +45,36 @@ export function HomeNowStrip() {
 
       {weather && Icon ? (
         <>
-          <p className="flex items-center gap-2">
+          {/* The reading is the link to where it came from. `conditions.ts` is
+              explicit that the icon carries no meaning on its own, so the
+              condition rides in the accessible name alongside the credit the
+              visible label used to carry. */}
+          <a
+            // Without a city the sentence has nothing to be "in", so it drops
+            // the clause rather than standing in something that is not a place.
+            aria-label={conditionT(weather.city ? 'readingLabelWithPlace' : 'readingLabel', {
+              condition: conditionT(`condition.${weatherConditionKey(weather.condition)}`),
+              place: weather.city ?? '',
+              source: weather.attribution.label,
+              temperature: `${Math.round(weather.temperature)}${unit}`,
+            })}
+            className="flex items-center gap-2 rounded-[var(--radius-sm)] outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
+            href={weather.attribution.url}
+            rel="noreferrer"
+            target="_blank"
+            title={weather.attribution.label}
+          >
             <Icon aria-hidden="true" className="size-5 shrink-0 text-brand" />
             {weather.city ? (
-              <span className="font-semibold text-foreground">{weather.city}</span>
+              <span aria-hidden="true" className="font-semibold text-foreground">
+                {weather.city}
+              </span>
             ) : null}
-            <span className="text-muted-foreground tabular-nums">
+            <span aria-hidden="true" className="text-muted-foreground tabular-nums">
               {Math.round(weather.temperature)}
               {unit}
             </span>
-            {/* `conditions.ts` is explicit that the icon carries no meaning on
-                its own, so dropping the visible word moves the condition into
-                the accessible name rather than losing it. */}
-            <span className="sr-only">
-              {conditionT(`condition.${weatherConditionKey(weather.condition)}`)}
-            </span>
-          </p>
+          </a>
           <span aria-hidden="true" className="text-border-strong">
             ·
           </span>
@@ -68,19 +82,6 @@ export function HomeNowStrip() {
       ) : null}
 
       <p className="text-muted-foreground tabular-nums">{today}</p>
-
-      {/* Open-Meteo's reading, credited where it is read. The strip is small, so
-          the credit is small; it is the same obligation either way. */}
-      {weather ? (
-        <a
-          className="shrink-0 rounded-sm text-[0.6875rem] text-text-subtle underline-offset-4 transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:outline-none motion-reduce:transition-none"
-          href="https://open-meteo.com/"
-          rel="noreferrer"
-          target="_blank"
-        >
-          {t('weather.source')}
-        </a>
-      ) : null}
     </div>
   );
 }

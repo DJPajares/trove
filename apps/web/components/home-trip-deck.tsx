@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 
+import { TripCountries } from '@/components/trip-countries';
 import { TripFactChips } from '@/components/trip-fact-chips';
 import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
 import { TripMedia } from '@/components/trip-media';
@@ -138,7 +139,17 @@ export function HomeTripDeck({ editorialFor, trips }: Readonly<HomeTripDeckProps
               />
 
               <div className="flex items-center justify-between gap-2">
-                {destinations ? (
+                {/* The strip a card behind shows is the only part of it ever
+                    seen, so it names the country rather than the destinations:
+                    a flag and a country read at a glance where a list of place
+                    names does not. A trip from before countries were asked for
+                    falls back to what it does have. */}
+                {trip.countries?.length ? (
+                  <TripCountries
+                    className="min-w-0 truncate text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-white/85 uppercase"
+                    countries={trip.countries}
+                  />
+                ) : destinations ? (
                   <p className="min-w-0 truncate text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-white/85 uppercase">
                     {destinations}
                   </p>

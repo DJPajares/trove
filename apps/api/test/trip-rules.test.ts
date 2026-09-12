@@ -8,6 +8,7 @@ import {
   getDateRangeChanges,
   isValidIanaTimeZone,
   resolveCountryPrimaryTimeZone,
+  resolveDestinationCountryCode,
   resolveTripWeatherLocation,
   resolveTripTimeZone,
   shiftDateOnly,
@@ -251,4 +252,22 @@ test('measures the signed distance between two dates in whole days', () => {
   // Daylight saving moves the clocks inside this range in most of Europe; a
   // date-only distance must not notice.
   expect(dayOffset('2026-10-24', '2026-10-26')).toBe(2);
+});
+
+test('a named country in a destination resolves to its code', () => {
+  expect(resolveDestinationCountryCode('Vietnam')).toBe('VN');
+  expect(resolveDestinationCountryCode('Hanoi, Vietnam')).toBe('VN');
+  // The library carries the formal name, so the everyday one is registered too.
+  expect(resolveDestinationCountryCode('United States')).toBe('US');
+});
+
+/**
+ * The same restraint the time zone resolver shows: a bare city is ambiguous, so
+ * it stays unresolved rather than being guessed at. An AI-applied trip lands
+ * with no country instead of the wrong one.
+ */
+test('a bare city names no country', () => {
+  expect(resolveDestinationCountryCode('Hanoi')).toBeNull();
+  expect(resolveDestinationCountryCode('Springfield')).toBeNull();
+  expect(resolveDestinationCountryCode('')).toBeNull();
 });

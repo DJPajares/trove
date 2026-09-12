@@ -41,6 +41,21 @@ export function isValidPartySize(value: string) {
 }
 
 /**
+ * Whether a trip has named where in the world it goes.
+ *
+ * A trip must declare at least one country. It lives beside the party-size rule
+ * for the same reason: the form asks this twice - once to reject a submission
+ * and once to say which field to put the cursor in - and two copies of the
+ * question would eventually answer it differently.
+ *
+ * Blank codes are not countries. The picker cannot produce one, but form state
+ * is rehydrated from a trip that predates the field, so the guard is real.
+ */
+export function hasTripCountries(countries: readonly string[]) {
+  return countries.some((code) => code.trim().length > 0);
+}
+
+/**
  * What a half-typed form should ask a photograph for, or nothing yet.
  *
  * Only a destination is asked about. A trip's name is whatever the traveller

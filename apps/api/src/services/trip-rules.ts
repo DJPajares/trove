@@ -66,6 +66,16 @@ const englishCountryNames = new Intl.DisplayNames(['en'], { type: 'region' });
  * registered alongside it so the everyday form resolves too.
  */
 const countryPrimaryTimeZones = new Map<string, string>();
+/**
+ * The same names, pointing at the country itself rather than its zone.
+ *
+ * Built in the same pass because it answers the same question from the same
+ * evidence: AI-applied trips are created outside the request schema that makes
+ * a country mandatory, so they name their countries from what the draft's
+ * destinations say. Only codes the curated map knows are registered - a code
+ * the rest of Trove will not store is no use to an apply either.
+ */
+const countryCodesByName = new Map<string, string>();
 
 for (const country of Object.values(getAllCountries())) {
   const timeZone = timeZoneForCountry(country.id) ?? country.timezones.find(isValidIanaTimeZone);
@@ -73,7 +83,11 @@ for (const country of Object.values(getAllCountries())) {
   if (!timeZone) continue;
 
   for (const name of [country.name, englishCountryNames.of(country.id)]) {
-    if (name) countryPrimaryTimeZones.set(normalizeCountryName(name), timeZone);
+    if (!name) continue;
+    countryPrimaryTimeZones.set(normalizeCountryName(name), timeZone);
+    if (timeZoneForCountry(country.id)) {
+      countryCodesByName.set(normalizeCountryName(name), country.id);
+    }
   }
 }
 
@@ -91,6 +105,23 @@ export function resolveCountryPrimaryTimeZone(destination: string) {
   if (!countrySuffix || countrySuffix === destination) return null;
 
   return countryPrimaryTimeZones.get(normalizeCountryName(countrySuffix)) ?? null;
+}
+
+/**
+ * The country a freely typed destination names, or null when it names none.
+ *
+ * Reads the same way `resolveCountryPrimaryTimeZone` does - the whole string
+ * first, then the part after the last comma - so "Hanoi, Vietnam" resolves and
+ * a bare "Hanoi" stays unresolved rather than being guessed at.
+ */
+export function resolveDestinationCountryCode(destination: string) {
+  const exact = countryCodesByName.get(normalizeCountryName(destination));
+  if (exact) return exact;
+
+  const suffix = destination.split(',').at(-1);
+  if (!suffix || suffix === destination) return null;
+
+  return countryCodesByName.get(normalizeCountryName(suffix)) ?? null;
 }
 
 export function isValidIanaTimeZone(value: string) {

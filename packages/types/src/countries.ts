@@ -274,6 +274,32 @@ export const COUNTRY_TIME_ZONES: Readonly<Record<string, string>> = {
 /** Every country code Trove will accept as a home country. */
 export const COUNTRY_CODES: readonly string[] = Object.keys(COUNTRY_TIME_ZONES);
 
+/** The first regional indicator, which is where the flag alphabet starts. */
+const REGIONAL_INDICATOR_A = 0x1f1e6;
+const LETTER_A = 'A'.codePointAt(0)!;
+
+/**
+ * A country's flag, built from its own two letters.
+ *
+ * A flag emoji is not a character of its own - it is the country's code written
+ * in the regional indicator alphabet, which is why 243 flags need no assets, no
+ * dependency and no network. It also means the fallback is benign: a platform
+ * that renders no flags (Windows, in every browser) shows the two letters
+ * instead, which beside the country's name is still the country.
+ *
+ * Returns an empty string for a code Trove does not know, so a caller can
+ * render it without a guard and get nothing rather than a pair of stray
+ * letters.
+ */
+export function countryFlagEmoji(code: string): string {
+  const normalized = code.trim().toUpperCase();
+  if (!COUNTRY_TIME_ZONES[normalized]) return '';
+
+  return String.fromCodePoint(
+    ...[...normalized].map((letter) => REGIONAL_INDICATOR_A + letter.codePointAt(0)! - LETTER_A),
+  );
+}
+
 /**
  * The home time zone a country implies, or null when the code is not one Trove
  * knows. Case-insensitive, so a client may send either casing.

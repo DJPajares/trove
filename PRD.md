@@ -384,10 +384,18 @@ Rules:
 ## 7.1 Required Fields
 
 - Trip name
+- Country or countries
 - Start date
 - End date
 
 Start/end dates are inclusive and end date cannot precede start date.
+
+At least one country is required. A trip that cannot say which country it is in
+cannot be pictured, grouped, or given a time zone without guessing, and the
+guess was previously made by matching country names out of whatever free text a
+traveller happened to type into a destination. Trips created before this was
+asked for keep no country and remain fully usable; the requirement applies when
+a trip is created, and when its countries are saved.
 
 ## 7.2 Optional Fields
 
@@ -401,7 +409,11 @@ Start/end dates are inclusive and end date cannot precede start date.
 
 - Zero, one, or multiple destinations are allowed.
 - Destinations may represent cities, regions, or countries.
-- A trip may span multiple countries without creating separate trips.
+- A trip may span multiple countries without creating separate trips, which is
+  why the required country field takes several.
+- Destinations remain free text and optional. They say where inside a country a
+  traveller is going; the country field says which countries, declared rather
+  than inferred from those strings.
 
 ## 7.4 Starting Location
 

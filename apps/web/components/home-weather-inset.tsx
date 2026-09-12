@@ -125,6 +125,84 @@ export function HomeWeatherInset({ target }: Readonly<{ target: HomeWeatherTarge
   );
 }
 
+const weatherPillClassName =
+  'inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface-raised py-1.5 pr-3 pl-2.5 shadow-[var(--shadow-control)]';
+
+/**
+ * The trip's weather at a glance, for the top of Home.
+ *
+ * The same reading the inset draws, compressed to what a traveller actually
+ * reads at the top of a screen: how warm it is and what the sky is doing. The
+ * inset itself still exists for the surfaces with room to say more.
+ *
+ * Weather is supplementary here, so a failure renders nothing rather than
+ * putting an error and a retry button beside a greeting - the same judgement
+ * Home already makes about a Trip Mode context that would not load. The
+ * Open-Meteo credit rides along regardless: the reading is theirs wherever it
+ * is shown, and a smaller surface is not a reason to stop saying so.
+ */
+export function HomeWeatherPill({ target }: Readonly<{ target: HomeWeatherTarget }>) {
+  const t = useTranslations('home.weather');
+  const conditionT = useTranslations('tripMode.views.weather');
+  const { preferences } = usePreferences();
+  const { data, dataUpdatedAt, status } = useTripWeather(target.tripId);
+
+  const stale = isCurrentReadingStale(dataUpdatedAt);
+  const reading = useMemo(
+    () => (data ? selectHomeWeatherReading(data, target, new Date(), !stale) : null),
+    [data, stale, target],
+  );
+
+  if (status === 'loading') return <HomeWeatherPillSkeleton label={t('loading')} />;
+  if (status === 'error' || !data) return null;
+
+  const temperature =
+    reading?.kind === 'current'
+      ? reading.reading.temperature
+      : reading?.kind === 'forecast'
+        ? reading.reading.temperatureMax
+        : null;
+  const weatherCode = reading?.reading?.weatherCode;
+  if (temperature === null || weatherCode === undefined) return null;
+
+  const unit = conditionT(`unit.${preferences.temperatureUnit}`);
+
+  return (
+    <section
+      aria-label={reading?.kind === 'current' ? t('current') : t('forecast', { date: target.date })}
+      className={weatherPillClassName}
+    >
+      <CloudSun aria-hidden="true" className="size-5 shrink-0 text-brand" />
+      <p className="text-base leading-none font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+        {Math.round(temperature)}
+        {unit}
+      </p>
+      <p className="text-[length:var(--text-metadata)] leading-none text-muted-foreground">
+        {conditionT(`condition.${weatherConditionKey(weatherCode)}`)}
+      </p>
+      <a
+        className="shrink-0 rounded-sm text-[0.6875rem] leading-none text-text-subtle underline-offset-4 transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:outline-none motion-reduce:transition-none"
+        href={data.attribution.url}
+        rel="noreferrer"
+        target="_blank"
+      >
+        {t('source')}
+      </a>
+    </section>
+  );
+}
+
+/** The pill's shape, held while the reading is on its way. */
+export function HomeWeatherPillSkeleton({ label }: Readonly<{ label: string }>) {
+  return (
+    <section aria-busy="true" aria-label={label} className={weatherPillClassName} role="status">
+      <Skeleton className="size-5 rounded-full" />
+      <Skeleton className="h-4 w-10" />
+      <Skeleton className="h-3 w-16" />
+    </section>
+  );
+}
+
 /**
  * The inset's box, at the size it will be.
  *

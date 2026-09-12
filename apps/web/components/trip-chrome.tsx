@@ -180,27 +180,52 @@ export function TripChrome({
           className={cn(stickyNavigation && 'contents md:block', 'space-y-5')}
           data-slot="trip-chrome"
         >
+          {/* The overview draws the same cover and the same sheet at the same
+            sizes. Any change to one shape belongs in both, or the cover
+            resizes under the traveller as they open a section. */}
           <section
             aria-labelledby="trip-section-cover-heading"
-            className="relative isolate -mx-[var(--gutter-inline-start)] -mt-8 md:mx-0 md:mt-0"
+            className="-mx-[var(--gutter-inline-start)] -mt-8 md:mx-0 md:mt-0"
           >
-            <TripMedia
-              alt={trip ? t('coverImageAlt', { name: trip.name }) : ''}
-              className="rounded-none md:rounded-[var(--radius-2xl)]"
-              preload
-              sizes="(max-width: 1023px) 100vw, 1024px"
-              source={
-                coverSource ?? resolveTripMediaSource({ coverUrl: trip?.coverPhotoUrl, editorial })
-              }
-              variant="cover"
-            />
-            <div className="pointer-events-none absolute inset-0 flex flex-col justify-end gap-2 rounded-none bg-gradient-to-t from-surface-overlay from-20% via-surface-overlay/55 to-transparent p-5 md:rounded-[var(--radius-2xl)] md:p-7">
-              {/* The name and the dates are the only part of the cover that waits
-                on the trip, and they wait inside boxes the right size, so the
+            <div className="relative isolate">
+              <TripMedia
+                alt={trip ? t('coverImageAlt', { name: trip.name }) : ''}
+                className="rounded-none md:rounded-t-[var(--radius-2xl)] md:rounded-b-none"
+                preload
+                sizes="(max-width: 1023px) 100vw, 1024px"
+                source={
+                  coverSource ??
+                  resolveTripMediaSource({ coverUrl: trip?.coverPhotoUrl, editorial })
+                }
+                variant="cover"
+              />
+              <div className="pointer-events-none absolute inset-0 rounded-none bg-gradient-to-t from-surface-overlay/85 from-0% to-transparent to-42% md:rounded-t-[var(--radius-2xl)]">
+                {/* A screen's own control on the cover, such as Memories' rating,
+                  sits out of flow above the sheet's curve. In flow it would push
+                  whatever shares its row, so the name would sit at a different
+                  height depending on whether a screen has put a control here.
+                  Positioned instead, it never moves anything at all. */}
+                <div
+                  className="pointer-events-auto absolute right-5 bottom-11 empty:hidden md:right-7 md:bottom-14"
+                  ref={setCoverMetaSlot}
+                />
+              </div>
+              <Link
+                aria-label={t('backToTrips')}
+                className="absolute top-[max(1rem,var(--safe-top))] left-[max(1rem,var(--safe-left))] z-10 flex size-10 items-center justify-center rounded-full border border-media-fallback-foreground/18 bg-neutral-950/58 text-media-fallback-foreground backdrop-blur-sm outline-none transition-colors hover:bg-neutral-950/78 focus-visible:ring-3 focus-visible:ring-ring/50"
+                href="/trips"
+              >
+                <ArrowLeft aria-hidden="true" className="size-4" />
+              </Link>
+            </div>
+
+            <div className="relative -mt-8 space-y-1.5 rounded-t-[var(--trip-sheet-radius)] bg-background px-[var(--gutter-inline-start)] pt-6 md:-mt-10 md:px-7 md:pt-7">
+              {/* The name and the dates are the only part of this that waits on
+                the trip, and they wait inside boxes the right size, so the
                 answer arriving never moves anything below. */}
               {trip ? (
                 <h1
-                  className="text-[length:var(--text-page-title)] leading-[1.08] font-semibold tracking-[-0.035em] text-pretty text-media-fallback-foreground"
+                  className="text-[length:var(--text-page-title)] leading-[1.06] font-semibold tracking-[-0.035em] text-balance text-foreground"
                   id="trip-section-cover-heading"
                 >
                   {trip.name}
@@ -208,11 +233,11 @@ export function TripChrome({
               ) : (
                 <div aria-busy="true" aria-live="polite" role="status">
                   <span className="sr-only">{t('titleLoading')}</span>
-                  <Skeleton className="h-[calc(var(--text-page-title)*1.08)] w-3/5 max-w-sm bg-media-fallback-foreground/20" />
+                  <Skeleton className="h-[calc(var(--text-page-title)*1.06)] w-3/5 max-w-sm" />
                 </div>
               )}
               {trip ? (
-                <p className="text-[length:var(--text-metadata)] font-medium text-media-fallback-foreground/85 tabular-nums">
+                <p className="text-[length:var(--text-metadata)] font-medium text-muted-foreground tabular-nums">
                   {t('dateRange', {
                     endDate: formatDate(trip.endDate),
                     startDate: formatDate(trip.startDate),
@@ -221,26 +246,9 @@ export function TripChrome({
                   {t(`lifecycle.${trip.lifecycle}`)}
                 </p>
               ) : (
-                <Skeleton className="h-[length:var(--text-metadata)] w-2/5 max-w-56 bg-media-fallback-foreground/20" />
+                <Skeleton className="h-[length:var(--text-metadata)] w-2/5 max-w-56" />
               )}
-              {/* A screen's own control on the cover, such as Memories' rating, sits
-                out of flow at the corner the overview seats its lifecycle badge in.
-                In flow, a control taller than the date line would push the whole
-                bottom-anchored title/date block up, so the name would sit at a
-                different height depending on whether a screen has put a control
-                here. Positioned instead, it never moves the text at all. */}
-              <div
-                className="pointer-events-auto absolute right-5 bottom-5 empty:hidden md:right-7 md:bottom-7"
-                ref={setCoverMetaSlot}
-              />
             </div>
-            <Link
-              aria-label={t('backToTrips')}
-              className="absolute top-[max(1rem,var(--safe-top))] left-[max(1rem,var(--safe-left))] z-10 flex size-10 items-center justify-center rounded-full border border-media-fallback-foreground/18 bg-neutral-950/58 text-media-fallback-foreground backdrop-blur-sm outline-none transition-colors hover:bg-neutral-950/78 focus-visible:ring-3 focus-visible:ring-ring/50"
-              href="/trips"
-            >
-              <ArrowLeft aria-hidden="true" className="size-4" />
-            </Link>
           </section>
 
           {/* Held open at one control's height — the same 44px minimum every

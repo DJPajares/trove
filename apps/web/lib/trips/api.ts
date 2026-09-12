@@ -12,6 +12,15 @@ import { forgetCachedMediaPath } from '@/lib/media/storage-cache-key';
 
 export type TripDestination = {
   id: string;
+  /**
+   * Where the destination is, when Trove already knows.
+   *
+   * Optional so snapshots written before this existed remain readable offline -
+   * and null for a destination whose Place has no coordinates yet. Both mean
+   * "not known", which is why the surfaces that measure a trip's span drop a
+   * destination rather than guessing at one.
+   */
+  location?: { latitude: number; longitude: number } | null;
   name: string;
   placeId: string;
   position: number;

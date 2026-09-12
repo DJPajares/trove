@@ -146,8 +146,10 @@
   },
   "trips": {
     "continuePlanning": "Continue planning",
-    "openTripMode": "Open Trip Mode",
+    "continueTrip": "Continue trip",
     "previewTripMode": "Preview",
+    "spanDistance": "~{value} {unit}",
+    "spanDistanceLabel": "About {value} {unit} between destinations, in a straight line",
     "destinations": "Destinations",
     "editTrip": "Edit trip",
     "moveDates": {
@@ -2033,29 +2035,31 @@
     "loadError": "We couldn't load Home",
     "loadErrorDescription": "Check your connection and try again.",
     "tryAgain": "Try again",
+    "greeting": {
+      "morning": "Good morning",
+      "afternoon": "Good afternoon",
+      "evening": "Good evening",
+      "named": "{greeting}, {name}"
+    },
     "states": {
       "active": {
-        "title": "Under way",
         "description": "You're away. Trip Mode has what's next — the rest can wait."
       },
       "planning": {
-        "title": "Coming up",
         "description": "Still taking shape. Come back to it whenever the mood strikes."
       },
       "completed": {
-        "title": "Looking back",
         "description": "That one's behind you now — the itinerary's still here if you want to relive it.",
         "tripDescription": "{startDate} to {endDate}. The itinerary's yours to revisit, whenever you like."
       },
       "empty": {
-        "title": "Home",
-        "description": "Nothing on the books yet. Start a trip once the dates settle, or save places while the idea's still forming."
+        "description": "Nothing on the books yet. Start a trip once the dates settle."
       }
     },
     "activeLabel": "Active trip",
     "planningLabel": "Next trip",
     "completedLabel": "Recently completed",
-    "openTripMode": "Open Trip Mode",
+    "continueTrip": "Continue trip",
     "continuePlanning": "Continue planning",
     "previewTripMode": "Preview",
     "viewTrip": "View trip",
@@ -2085,11 +2089,9 @@
     "startTitle": "Start with the trip, not every detail",
     "startDescription": "A name and rough dates are all it takes — everything else can wait.",
     "createTrip": "Create trip",
-    "viewSavedPlaces": "View Saved Places",
-    "savedPlacesTitle": "Saved Places",
-    "savedPlaceFallback": "Saved place",
-    "savedPlaceDescription": "Saved for later",
-    "otherTripsTitle": "Other trips",
+    "otherTripsTitle": "Also on the map",
+    "tripDeckPosition": "Trip {current} of {total}",
+    "goToTrip": "Go to trip {current}",
     "viewTrips": "View all trips",
     "pastTripTitle": "A past trip",
     "pastTripDescription": "Revisit {name} whenever you want to look back at the plan."

@@ -19,19 +19,34 @@ export function TripDetailSkeleton({ label }: Readonly<{ label: string }>) {
   return (
     <article aria-busy="true" aria-live="polite" className="w-full space-y-8" role="status">
       <span className="sr-only">{label}</span>
-      <section className="relative isolate -mx-[var(--gutter-inline-start)] -mt-8 md:mx-0 md:mt-0">
-        <TripMedia alt="" source={{ kind: 'fallback' }} variant="cover" />
-        <div className="pointer-events-none absolute inset-0 flex flex-col justify-end rounded-none bg-gradient-to-t from-surface-overlay from-10% via-surface-overlay/66 to-transparent p-5 sm:p-8 md:rounded-[var(--radius-2xl)]">
-          <Skeleton className="h-[length:var(--text-metadata)] w-36 bg-media-fallback-foreground/20" />
-          <Skeleton className="mt-1 h-[calc(var(--text-page-title)*1.08*2)] w-4/5 max-w-sm bg-media-fallback-foreground/20" />
-          <Skeleton className="mt-1 h-[length:var(--text-metadata)] w-2/5 max-w-40 bg-media-fallback-foreground/20" />
+      <section className="-mx-[var(--gutter-inline-start)] -mt-8 md:mx-0 md:mt-0">
+        <div className="relative isolate">
+          <TripMedia
+            alt=""
+            className="rounded-none md:rounded-t-[var(--radius-2xl)] md:rounded-b-none"
+            source={{ kind: 'fallback' }}
+            variant="cover"
+          />
+          <div className="pointer-events-none absolute inset-0 rounded-none bg-gradient-to-t from-surface-overlay/85 from-0% to-transparent to-42% md:rounded-t-[var(--radius-2xl)]" />
+          <span
+            aria-hidden="true"
+            className="absolute top-[max(1rem,var(--safe-top))] left-[max(1rem,var(--safe-left))] z-10 flex size-10 items-center justify-center rounded-full border border-media-fallback-foreground/18 bg-neutral-950/58 text-media-fallback-foreground backdrop-blur-sm"
+          >
+            <ArrowLeft aria-hidden="true" className="size-4" />
+          </span>
         </div>
-        <span
-          aria-hidden="true"
-          className="absolute top-[max(1rem,var(--safe-top))] left-[max(1rem,var(--safe-left))] z-10 flex size-10 items-center justify-center rounded-full border border-media-fallback-foreground/18 bg-neutral-950/58 text-media-fallback-foreground backdrop-blur-sm"
-        >
-          <ArrowLeft aria-hidden="true" className="size-4" />
-        </span>
+
+        {/* The sheet, at the height the eyebrow, the name and the chip row will
+            fill, so the curve and everything under it stay put. */}
+        <div className="relative -mt-8 rounded-t-[var(--trip-sheet-radius)] bg-background px-[var(--gutter-inline-start)] pt-6 md:-mt-10 md:px-7 md:pt-7">
+          <Skeleton className="h-[length:var(--text-metadata)] w-36" />
+          <Skeleton className="mt-1.5 h-[calc(var(--text-page-title)*1.06)] w-4/5 max-w-sm md:h-[calc(var(--text-immersive-title)*1.02)]" />
+          <div className="mt-4 flex gap-2">
+            <Skeleton className="h-8 w-36 rounded-full" />
+            <Skeleton className="h-8 w-20 rounded-full" />
+            <Skeleton className="hidden h-8 w-24 rounded-full sm:block" />
+          </div>
+        </div>
       </section>
 
       {/* The primary action and the two experience tiles, in the shape and at

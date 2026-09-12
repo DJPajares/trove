@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bookmark, ChevronRight, CircleAlert, MapPinned, Plus } from 'lucide-react';
+import { ChevronRight, CircleAlert, MapPinned, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
@@ -9,20 +9,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { EditorialSection } from '@/components/editorial-section';
 import { ExperienceRatingSummary } from '@/components/experience-rating-field';
 import { HomeFocalTrip } from '@/components/home-focal-trip';
-import { PageHeader } from '@/components/page-header';
+import { HomeGreeting } from '@/components/home-greeting';
+import { HomeTripDeck } from '@/components/home-trip-deck';
 import { PageState } from '@/components/page-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTripCreation } from '@/components/trip-creation-provider';
-import { TripListRow } from '@/components/trip-list-row';
 import { Button } from '@/components/ui/button';
-import {
-  Item,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemMedia,
-  ItemTitle,
-} from '@/components/ui/item';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { selectCompletedPrompt } from '@/lib/home/completed-prompt';
 import { resolveHomeWeatherTarget } from '@/lib/home/weather';
@@ -33,16 +25,10 @@ import {
   type TripModeContext,
 } from '@/lib/itinerary/api';
 import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
-import { fetchSavedPlaces, type SavedPlace } from '@/lib/saved/api';
 import { fetchTrips, type Trip } from '@/lib/trips/api';
 import { selectPrimaryTrip } from '@/lib/trips/lifecycle';
 import { tripEditorialSubject } from '@/lib/trips/summary';
 import { queryKeys } from '@/lib/query/keys';
-
-type HomeData = {
-  savedPlaces: SavedPlace[];
-  trips: Trip[];
-};
 
 type HomeStatus = 'error' | 'idle' | 'loading';
 
@@ -67,17 +53,14 @@ function itemLabel(item: ItineraryItem) {
   return item.customLabel ?? item.customLocation?.label ?? item.tripPlace?.place.name ?? null;
 }
 
-const EMPTY_SAVED_PLACES: SavedPlace[] = [];
 const EMPTY_TRIPS: Trip[] = [];
 
 export function HomeExperience() {
   const t = useTranslations('home');
   const { latestCreatedTrip, openCreateTrip } = useTripCreation();
   const queryClient = useQueryClient();
-  // Both lists are shared with the Trips library and Saved Places, so arriving
-  // at Home from either costs nothing.
+  // Shared with the Trips library, so arriving at Home from it costs nothing.
   const tripsQuery = useQuery({ queryFn: fetchTrips, queryKey: queryKeys.trips() });
-  const savedQuery = useQuery({ queryFn: fetchSavedPlaces, queryKey: queryKeys.savedPlaces() });
   const [dismissedPrompts, setDismissedPrompts] = useState<string[]>([]);
 
   useEffect(() => {
@@ -96,13 +79,7 @@ export function HomeExperience() {
     });
   }
 
-  // Saved Places are supplementary here: failing to load them leaves the
-  // section empty rather than turning Home into an error screen, which is what
-  // the original `.catch` on that request meant.
-  const data: HomeData = {
-    savedPlaces: savedQuery.data?.savedPlaces ?? EMPTY_SAVED_PLACES,
-    trips: tripsQuery.data?.trips ?? EMPTY_TRIPS,
-  };
+  const trips = tripsQuery.data?.trips ?? EMPTY_TRIPS;
   const status: HomeStatus = tripsQuery.isPending ? 'loading' : tripsQuery.error ? 'error' : 'idle';
 
   useEffect(() => {
@@ -114,15 +91,13 @@ export function HomeExperience() {
     );
   }, [latestCreatedTrip, queryClient]);
 
-  const primary = useMemo(() => selectPrimaryTrip(data.trips), [data.trips]);
+  const primary = useMemo(() => selectPrimaryTrip(trips), [trips]);
   // Only a trip actually under way has a "now" worth asking about.
   const primaryTripId = primary?.lifecycle === 'active' ? primary.id : null;
 
-  const shownSavedPlaces = useMemo(() => data.savedPlaces.slice(0, 3), [data.savedPlaces]);
-
   const otherTrips = useMemo(
-    () => (primary ? data.trips.filter((trip) => trip.id !== primary.id).slice(0, 3) : []),
-    [data.trips, primary],
+    () => (primary ? trips.filter((trip) => trip.id !== primary.id).slice(0, 3) : []),
+    [primary, trips],
   );
   const shownTrips = useMemo(
     () => (primary ? [primary, ...otherTrips] : otherTrips),
@@ -175,13 +150,12 @@ export function HomeExperience() {
       : 'ready';
 
   if (status === 'loading') {
-    // Home is a page header, one tall card, and the sections beneath it, so that
-    // is what waits here — at the card's real height, inside the same measure. A
-    // 4:3 block beside a column of bars was a picture of a different screen.
+    // Home is a greeting, one tall card, and the deck beneath it, so that is
+    // what waits here — at the card's real height, inside the same measure.
     //
-    // The header waits as bars rather than as real copy: its title and
-    // description are keyed off the focal trip's lifecycle, which is exactly
-    // what has not arrived yet.
+    // The greeting waits as bars rather than as real copy: the name comes with
+    // the profile and the line beneath it is keyed off the focal trip's
+    // lifecycle, which is exactly what has not arrived yet.
     return (
       <div
         aria-busy="true"
@@ -190,26 +164,29 @@ export function HomeExperience() {
         role="status"
       >
         <span className="sr-only">{t('loading')}</span>
-        <div aria-hidden="true">
-          <Skeleton className="h-[calc(var(--text-page-title)*1.08)] w-2/3 max-w-sm" />
-          {/* Each bar sits in a line box the height of the real description's
-              leading, so the header keeps its height when the copy arrives. */}
-          <div className="mt-3 max-w-[var(--layout-reading)]">
-            <div className="flex h-[1.65rem] items-center">
-              <Skeleton className="h-4 w-full" />
-            </div>
-            <div className="flex h-[1.65rem] items-center">
-              <Skeleton className="h-4 w-4/5" />
+        <div aria-hidden="true" className="flex flex-col gap-4 sm:flex-row sm:justify-between">
+          <div className="min-w-0 pe-[3.25rem] sm:pe-0">
+            <Skeleton className="h-[calc(var(--text-page-title)*1.08)] w-2/3 max-w-sm" />
+            {/* Each bar sits in a line box the height of the real description's
+                leading, so the greeting keeps its height when the copy arrives. */}
+            <div className="mt-2 max-w-[var(--layout-reading)]">
+              <div className="flex h-[1.65rem] items-center">
+                <Skeleton className="h-4 w-full" />
+              </div>
+              <div className="flex h-[1.65rem] items-center">
+                <Skeleton className="h-4 w-4/5" />
+              </div>
             </div>
           </div>
+          <Skeleton className="h-9 w-44 shrink-0 rounded-full sm:mt-1" />
         </div>
-        <div aria-hidden="true" className="space-y-3">
-          <Skeleton className="min-h-[31rem] w-full rounded-[var(--radius-2xl)] sm:min-h-[29rem] lg:min-h-[31rem]" />
-        </div>
+        <Skeleton className="min-h-[33rem] w-full rounded-[var(--radius-2xl)] sm:min-h-[31rem] lg:min-h-[34rem]" />
         <div aria-hidden="true" className="space-y-4">
-          <Skeleton className="h-5 w-40" />
-          <Skeleton className="h-16 w-full rounded-[var(--radius-lg)]" />
-          <Skeleton className="h-16 w-full rounded-[var(--radius-lg)]" />
+          <Skeleton className="h-7 w-44" />
+          <div className="flex gap-4">
+            <Skeleton className="h-[17rem] w-[86%] shrink-0 rounded-[var(--radius-2xl)] sm:w-[58%] lg:w-[38%]" />
+            <Skeleton className="hidden h-[17rem] w-[58%] shrink-0 rounded-[var(--radius-2xl)] sm:block lg:w-[38%]" />
+          </div>
         </div>
       </div>
     );
@@ -227,7 +204,7 @@ export function HomeExperience() {
     );
   }
 
-  const recentCompleted = data.trips
+  const recentCompleted = trips
     .filter((trip) => trip.lifecycle === 'completed')
     .toSorted((left, right) => right.endDate.localeCompare(left.endDate))[0];
 
@@ -244,11 +221,7 @@ export function HomeExperience() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-9">
-      <PageHeader
-        description={t(`states.${stage}.description`)}
-        headingId="home-heading"
-        title={t(`states.${stage}.title`)}
-      />
+      <HomeGreeting description={t(`states.${stage}.description`)} weatherTarget={weatherTarget} />
 
       {primary ? (
         <HomeFocalTrip
@@ -258,22 +231,14 @@ export function HomeExperience() {
           promptKey={selectCompletedPrompt(primary, dismissedPrompts)}
           trip={primary}
           tripModeContext={tripModeContext}
-          weatherPending={primary.lifecycle === 'active' && tripModeContextStatus !== 'ready'}
-          weatherTarget={weatherTarget}
         />
       ) : (
         <PageState
           actions={
-            <>
-              <Button onClick={openCreateTrip}>
-                <Plus aria-hidden="true" data-icon="inline-start" />
-                {t('createTrip')}
-              </Button>
-              <Button nativeButton={false} render={<Link href="/saved" />} variant="outline">
-                <Bookmark aria-hidden="true" data-icon="inline-start" />
-                {t('viewSavedPlaces')}
-              </Button>
-            </>
+            <Button onClick={openCreateTrip}>
+              <Plus aria-hidden="true" data-icon="inline-start" />
+              {t('createTrip')}
+            </Button>
           }
           description={t('startDescription')}
           headingLevel={2}
@@ -284,69 +249,7 @@ export function HomeExperience() {
         />
       )}
 
-      {data.savedPlaces.length ? (
-        <EditorialSection
-          actions={
-            <Button nativeButton={false} render={<Link href="/saved" />} size="sm" variant="ghost">
-              {t('viewSavedPlaces')}
-              <ChevronRight aria-hidden="true" data-icon="inline-end" />
-            </Button>
-          }
-          density="compact"
-          headerLayout="inline"
-          title={t('savedPlacesTitle')}
-          treatment="ruled"
-        >
-          <ItemGroup aria-label={t('savedPlacesTitle')} variant="list">
-            {shownSavedPlaces.map((savedPlace) => (
-              <Item className="min-h-16 px-3 py-3" key={savedPlace.id} variant="default">
-                <ItemMedia className="bg-secondary text-secondary-foreground" variant="icon">
-                  <Bookmark aria-hidden="true" className="size-4" />
-                </ItemMedia>
-                <ItemContent className="min-w-0">
-                  <ItemTitle className="truncate">
-                    {savedPlace.place.name ??
-                      savedPlace.place.snapshot?.name ??
-                      savedPlace.place.providerLabel ??
-                      t('savedPlaceFallback')}
-                  </ItemTitle>
-                  <ItemDescription className="line-clamp-1">
-                    {savedPlace.note ?? savedPlace.place.note ?? t('savedPlaceDescription')}
-                  </ItemDescription>
-                </ItemContent>
-              </Item>
-            ))}
-          </ItemGroup>
-        </EditorialSection>
-      ) : null}
-
-      {otherTrips.length ? (
-        <section aria-labelledby="other-trips-heading" className="space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <h2
-              className="min-w-0 text-[length:var(--text-section-title)] font-semibold tracking-[-0.02em] text-foreground"
-              id="other-trips-heading"
-            >
-              {t('otherTripsTitle')}
-            </h2>
-            <Button
-              className="shrink-0"
-              nativeButton={false}
-              render={<Link href="/trips" />}
-              size="sm"
-              variant="ghost"
-            >
-              {t('viewTrips')}
-              <ChevronRight aria-hidden="true" data-icon="inline-end" />
-            </Button>
-          </div>
-          <div className="grid gap-3">
-            {otherTrips.map((trip) => (
-              <TripListRow editorial={editorialFor(trip)} key={trip.id} trip={trip} />
-            ))}
-          </div>
-        </section>
-      ) : null}
+      {otherTrips.length ? <HomeTripDeck editorialFor={editorialFor} trips={otherTrips} /> : null}
 
       {!primary && recentCompleted ? (
         <EditorialSection density="compact" title={t('pastTripTitle')} treatment="ruled">

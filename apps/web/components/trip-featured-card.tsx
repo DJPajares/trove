@@ -113,7 +113,7 @@ export function TripFeaturedCard({
                 ? { memories: t('viewMemories') }
                 : {
                     itinerary: t('continuePlanning'),
-                    mode: t(trip.lifecycle === 'active' ? 'openTripMode' : 'previewTripMode'),
+                    mode: t(trip.lifecycle === 'active' ? 'continueTrip' : 'previewTripMode'),
                   }
             }
           />

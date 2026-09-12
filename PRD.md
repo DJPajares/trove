@@ -540,8 +540,11 @@ Home is contextual and should show the most relevant current state.
 Prioritize:
 
 - Create Trip,
-- recently Saved Places,
 - previous Memories.
+
+Saved Places are not surfaced on Home. They have a destination of their own in
+global navigation, and a list of them here competed with the one thing this
+state exists to offer.
 
 ## 9.2 Upcoming/Planning Trip
 
@@ -610,7 +613,7 @@ Prioritize:
 
 - current trip,
 - next itinerary item,
-- Open Trip Mode.
+- Trip Mode, offered as continuing the trip rather than opening a mode.
 
 Other trips remain accessible.
 

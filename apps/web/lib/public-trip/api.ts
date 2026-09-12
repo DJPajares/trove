@@ -22,6 +22,11 @@ export type PublicItineraryDay = {
 export type PublicItinerary = {
   days: PublicItineraryDay[];
   trip: {
+    /**
+     * ISO 3166-1 alpha-2, in the order the traveller picked them. Optional
+     * because a plan shared before trips declared one is still readable.
+     */
+    countries?: string[];
     /** The traveller's own framing of the trip, shared along with the plan. */
     description: string | null;
     endDate: string;

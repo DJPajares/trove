@@ -54,6 +54,7 @@ function providerRef(overrides: Record<string, unknown> = {}) {
 
 function tripFixture(visibility: 'PRIVATE' | 'PUBLIC') {
   return {
+    countries: ['JP'],
     description: 'Cherry blossom season, finally.',
     endDate: new Date('2026-05-03T00:00:00.000Z'),
     id: visibility === 'PUBLIC' ? PUBLIC_TRIP_ID : PRIVATE_TRIP_ID,
@@ -131,6 +132,7 @@ test('a shared trip renders its days in travel order', async () => {
   // Exhaustive on purpose: this asserts what a stranger with the link is let
   // see, so a field added to the public trip shape has to be added here too.
   expect(itinerary.trip).toStrictEqual({
+    countries: ['JP'],
     description: 'Cherry blossom season, finally.',
     endDate: '2026-05-03',
     id: PUBLIC_TRIP_ID,

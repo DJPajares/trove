@@ -1,8 +1,9 @@
 'use client';
 
-import { countryFlagEmoji } from '@trove/types/countries';
 import { useLocale } from 'next-intl';
 import { useMemo } from 'react';
+
+import { namedCountries } from '@/lib/trips/countries';
 
 export type TripCountriesProps = {
   className?: string;
@@ -24,15 +25,7 @@ export type TripCountriesProps = {
  */
 export function TripCountries({ className, countries }: Readonly<TripCountriesProps>) {
   const locale = useLocale();
-  const named = useMemo(() => {
-    const displayNames = new Intl.DisplayNames(locale, { type: 'region' });
-
-    return countries.flatMap((code) => {
-      const name = displayNames.of(code);
-
-      return name && name !== code ? [{ code, flag: countryFlagEmoji(code), name }] : [];
-    });
-  }, [countries, locale]);
+  const named = useMemo(() => namedCountries(countries, locale), [countries, locale]);
 
   if (!named.length) return null;
 

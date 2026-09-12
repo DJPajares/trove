@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 
 import { Button } from '@/components/ui/button';
 import { formatItineraryTimeRange } from '@/lib/itinerary/item-timing';
+import { namedCountries } from '@/lib/trips/countries';
 import type { PublicItinerary as PublicItineraryData } from '@/lib/public-trip/api';
 
 type PublicItineraryProps = {
@@ -33,6 +34,7 @@ export async function PublicItinerary({ itinerary, locale }: Readonly<PublicItin
     year: 'numeric',
   });
   const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00.000Z`));
+  const countries = namedCountries(itinerary.trip.countries, locale);
 
   return (
     <div className="flex flex-col gap-6">
@@ -43,6 +45,20 @@ export async function PublicItinerary({ itinerary, locale }: Readonly<PublicItin
         <h1 className="text-[length:var(--text-page-title)] leading-[1.08] font-semibold tracking-[-0.035em] text-pretty">
           {itinerary.trip.name}
         </h1>
+        {/* Rendered from the shared helper rather than through `TripCountries`,
+            which is a client component: a flag and a country name are not worth
+            giving up this page's "ships no JavaScript". */}
+        {countries.length ? (
+          <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
+            {countries.map((country, index) => (
+              <span key={country.code}>
+                {index > 0 ? <span aria-hidden="true">{' · '}</span> : null}
+                <span aria-hidden="true">{country.flag} </span>
+                {country.name}
+              </span>
+            ))}
+          </p>
+        ) : null}
         <p className="text-[length:var(--text-metadata)] font-medium text-muted-foreground tabular-nums">
           {t('dateRange', {
             endDate: formatDate(itinerary.trip.endDate),

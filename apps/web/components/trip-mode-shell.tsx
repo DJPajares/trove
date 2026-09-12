@@ -24,6 +24,7 @@ import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-deta
 import { usePreferences } from '@/components/preferences-provider';
 import { TimeInput } from '@/components/time-input';
 import { PlanScorePanel } from '@/components/plan-score-panel';
+import { TripCountries } from '@/components/trip-countries';
 import { TripModeDataProvider } from '@/components/trip-mode-data';
 import { TripSyncStatus } from '@/components/trip-sync-status';
 import { TripMedia } from '@/components/trip-media';
@@ -629,11 +630,23 @@ export function TripModeShell({
                   <h1 className="mt-0.5 break-words text-[length:var(--text-section-title)] leading-[1.15] font-semibold tracking-[-0.025em] text-foreground sm:text-[length:var(--text-page-title)] sm:leading-[1.08]">
                     {trip.name}
                   </h1>
-                  <p className="mt-0.5 text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
-                    {t('dateRange', {
-                      endDate: formatDate(trip.endDate),
-                      startDate: formatDate(trip.startDate),
-                    })}
+                  {/* The country rides the date line rather than the eyebrow,
+                      which already says TRIP MODE - and keeping it to three
+                      rows means the loading skeleton above still matches, so
+                      the header does not jump as the trip arrives. */}
+                  <p className="mt-0.5 text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground">
+                    {trip.countries?.length ? (
+                      <>
+                        <TripCountries countries={trip.countries} />{' '}
+                        <span aria-hidden="true">·</span>{' '}
+                      </>
+                    ) : null}
+                    <span className="tabular-nums">
+                      {t('dateRange', {
+                        endDate: formatDate(trip.endDate),
+                        startDate: formatDate(trip.startDate),
+                      })}
+                    </span>
                   </p>
                 </div>
                 <Button

@@ -213,7 +213,6 @@ export function HomeExperience() {
   const nextItem = nextItemName
     ? { label: nextItemName, upcoming: Boolean(tripModeContext?.nextItemId) }
     : null;
-  const stage = primary?.lifecycle ?? 'empty';
   const weatherTarget =
     primary && !(primary.lifecycle === 'active' && tripModeContextStatus !== 'ready')
       ? resolveHomeWeatherTarget(primary, tripModeContext)
@@ -221,7 +220,7 @@ export function HomeExperience() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-9">
-      <HomeGreeting description={t(`states.${stage}.description`)} weatherTarget={weatherTarget} />
+      <HomeGreeting weatherTarget={weatherTarget} />
 
       {primary ? (
         <HomeFocalTrip

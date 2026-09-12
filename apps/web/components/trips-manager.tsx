@@ -108,7 +108,6 @@ export function TripsManager() {
             {t('newTrip')}
           </Button>
         }
-        description={t('description')}
         title={t('title')}
       />
 

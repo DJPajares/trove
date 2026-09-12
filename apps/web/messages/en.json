@@ -185,7 +185,6 @@
     "travellerCount": "{count, plural, one {# traveller} other {# travellers}}",
     "travellers": "Travellers",
     "viewTripLabel": "Open {name}",
-    "overview": "Trip overview",
     "showAllPast": "{count, plural, one {Show # past trip} other {Show all # past trips}}",
     "showFewerPast": "Show fewer",
     "moreDetails": "More details",
@@ -193,7 +192,6 @@
     "coverEditorialHint": "Until you add your own photo, Trove shows a travel photograph of {name}.",
     "eyebrow": "Your journeys",
     "title": "Trips",
-    "description": "Rough out where you're headed. The details can come later.",
     "newTrip": "New trip",
     "createFirstTrip": "Create your first trip",
     "loading": "Loading your trips…",
@@ -2041,21 +2039,7 @@
       "evening": "Good evening",
       "named": "{greeting}, {name}"
     },
-    "states": {
-      "active": {
-        "description": "You're away. Trip Mode has what's next — the rest can wait."
-      },
-      "planning": {
-        "description": "Still taking shape. Come back to it whenever the mood strikes."
-      },
-      "completed": {
-        "description": "That one's behind you now — the itinerary's still here if you want to relive it.",
-        "tripDescription": "{startDate} to {endDate}. The itinerary's yours to revisit, whenever you like."
-      },
-      "empty": {
-        "description": "Nothing on the books yet. Start a trip once the dates settle."
-      }
-    },
+    "completedTripDescription": "{startDate} to {endDate}. The itinerary's yours to revisit, whenever you like.",
     "activeLabel": "Active trip",
     "planningLabel": "Next trip",
     "completedLabel": "Recently completed",
@@ -2091,6 +2075,7 @@
     "createTrip": "Create trip",
     "otherTripsTitle": "Also on the map",
     "tripDeckPosition": "Trip {current} of {total}",
+    "showTrip": "Show {name}",
     "goToTrip": "Go to trip {current}",
     "viewTrips": "View all trips",
     "pastTripTitle": "A past trip",

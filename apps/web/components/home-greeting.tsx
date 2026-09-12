@@ -22,8 +22,6 @@ export function greetingKey(now = new Date()): 'afternoon' | 'evening' | 'mornin
 }
 
 export type HomeGreetingProps = {
-  /** The contextual line beneath, keyed off the focal trip's stage. */
-  description: string;
   weatherTarget: HomeWeatherTarget | null;
 };
 
@@ -41,7 +39,7 @@ export type HomeGreetingProps = {
  * the alternative - holding the greeting back until after mount - trades a
  * warning for a flash of nothing at the top of the page.
  */
-export function HomeGreeting({ description, weatherTarget }: Readonly<HomeGreetingProps>) {
+export function HomeGreeting({ weatherTarget }: Readonly<HomeGreetingProps>) {
   const t = useTranslations('home');
   const { profile } = usePreferences();
   const name = profile?.displayName?.trim();
@@ -60,9 +58,6 @@ export function HomeGreeting({ description, weatherTarget }: Readonly<HomeGreeti
         >
           {name ? t('greeting.named', { greeting, name }) : greeting}
         </h1>
-        <p className="mt-2 max-w-[var(--layout-reading)] text-base leading-[1.65] text-pretty text-muted-foreground">
-          {description}
-        </p>
       </div>
 
       {weatherTarget ? (

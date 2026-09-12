@@ -156,7 +156,7 @@ export function HomeFocalTrip({
         {trip.lifecycle === 'completed' ? (
           <div className="space-y-3">
             <p className="max-w-xl text-sm leading-6 text-white/78">
-              {t('states.completed.tripDescription', {
+              {t('completedTripDescription', {
                 endDate: formatTripDate(trip.endDate, locale),
                 startDate: formatTripDate(trip.startDate, locale),
               })}

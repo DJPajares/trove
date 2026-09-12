@@ -21,7 +21,6 @@ export default async function TripsLoading() {
             {t('newTrip')}
           </Button>
         }
-        description={t('description')}
         title={t('title')}
       />
       <PageState

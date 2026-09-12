@@ -2034,10 +2034,8 @@
     "loadErrorDescription": "Check your connection and try again.",
     "tryAgain": "Try again",
     "greeting": {
-      "morning": "Good morning",
-      "afternoon": "Good afternoon",
-      "evening": "Good evening",
-      "named": "{greeting}, {name}"
+      "hi": "Hi, {name}",
+      "fallback": "Hi there"
     },
     "completedTripDescription": "{startDate} to {endDate}. The itinerary's yours to revisit, whenever you like.",
     "activeLabel": "Active trip",
@@ -2063,11 +2061,8 @@
       "current": "Current weather",
       "forecast": "Forecast for {date}",
       "loading": "Loading weather",
-      "noForecast": "A forecast is not available for this day.",
-      "outOfRange": "A forecast will appear closer to departure.",
-      "source": "Open-Meteo",
-      "tryAgain": "Try weather again",
-      "unavailable": "Weather is unavailable right now."
+      "pillLabel": "{when} for {place}: {condition}, {temperature}. {source}",
+      "pillLabelNoPlace": "{when}: {condition}, {temperature}. {source}"
     },
     "destinationOpen": "Destination still open",
     "startTitle": "Start with the trip, not every detail",

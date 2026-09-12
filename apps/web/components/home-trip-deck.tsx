@@ -22,6 +22,15 @@ const PEEK_REM = 2.75;
 const INSET_REM = 0.75;
 /** Past this the pile stops reading as a deck and starts reading as noise. */
 const MAX_VISIBLE_DEPTH = 2;
+/**
+ * How far off true each card behind sits.
+ *
+ * Small on purpose: the tilt is what stops the stack reading as one card with
+ * stripes above it, and the displacement it buys grows with the card's width -
+ * about 3px at a phone's width and 10px across a desktop column - so an angle
+ * that reads well on the wide one is already a slant on the narrow one.
+ */
+const TILT_DEG = 1.5;
 
 export type HomeTripDeckProps = {
   editorialFor: (trip: Trip) => EditorialImageReference | null;
@@ -94,7 +103,7 @@ export function HomeTripDeck({ editorialFor, trips }: Readonly<HomeTripDeckProps
 
           return (
             <div
-              className="group absolute bottom-0 flex flex-col justify-between overflow-hidden rounded-[var(--radius-2xl)] border border-border-subtle bg-surface-media p-4 shadow-[var(--shadow-card)] transition-[transform,left,right,opacity] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none"
+              className="group absolute bottom-0 flex flex-col justify-between overflow-hidden rounded-[var(--radius-2xl)] bg-surface-media p-4 shadow-[var(--shadow-card)] transition-[transform,left,right,opacity] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none"
               key={trip.id}
               style={{
                 height: `${CARD_HEIGHT_REM}rem`,
@@ -102,7 +111,7 @@ export function HomeTripDeck({ editorialFor, trips }: Readonly<HomeTripDeckProps
                 opacity: buried ? 0 : 1,
                 pointerEvents: buried ? 'none' : undefined,
                 right: `${depth * INSET_REM}rem`,
-                transform: `translateY(-${depth * PEEK_REM}rem)`,
+                transform: `translateY(-${depth * PEEK_REM}rem) rotate(${depth * -TILT_DEG}deg)`,
                 zIndex: total - depth,
               }}
             >

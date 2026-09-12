@@ -80,6 +80,29 @@ test('a trip is pictured by its first destination, or failing that its own name'
   ).toStrictEqual({ category: 'destination', name: 'Honeymoon', tripId: 'c' });
 });
 
+test('a trip without a destination is pictured by the country it declares', () => {
+  // The name is in English rather than the reader's locale on purpose: the
+  // subject is matched server-side against English names, so every reader must
+  // ask the same question and be shown the same photograph.
+  expect(
+    tripEditorialSubject(trip({ countries: ['JP'], id: 'a', name: "Mum's 60th" })),
+  ).toStrictEqual({ category: 'destination', name: 'Japan', tripId: 'a' });
+
+  // A destination still wins - it is more specific than the country holding it,
+  // and it carries a Place the resolver can use.
+  expect(
+    tripEditorialSubject(
+      trip({ countries: ['JP'], destinations: [destination('Kyoto')], id: 'b' }),
+    ),
+  ).toStrictEqual({ category: 'destination', name: 'Kyoto', placeId: 'p-0', tripId: 'b' });
+
+  // A code that names no country falls through to the trip's own name rather
+  // than asking for a photograph of "ZZ".
+  expect(
+    tripEditorialSubject(trip({ countries: ['ZZ'], id: 'c', name: 'Honeymoon' })),
+  ).toStrictEqual({ category: 'destination', name: 'Honeymoon', tripId: 'c' });
+});
+
 test('a nameless trip asks for nothing rather than for an empty query', () => {
   expect(tripEditorialSubject(trip({ id: 'a', name: '  ' }))).toBeNull();
 });

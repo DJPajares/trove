@@ -55,7 +55,12 @@ export type Trip = {
   planningReadiness: 'in_progress' | 'ready';
   referenceTimeZone: string;
   referenceTimeZoneSource:
-    'destination' | 'device_fallback' | 'explicit' | 'profile_home' | 'starting_location';
+    | 'country'
+    | 'destination'
+    | 'device_fallback'
+    | 'explicit'
+    | 'profile_home'
+    | 'starting_location';
   startDate: string;
   startingLocation: { isOverride: boolean; name: string; placeId: string } | null;
   startingLocationOverride: string | null;

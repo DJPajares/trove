@@ -1,3 +1,5 @@
+import { COUNTRY_CODES } from '@trove/types/countries';
+
 import { MAX_EDITORIAL_IMAGE_SUBJECTS, type EditorialSubject } from '@/lib/media/editorial-images';
 
 import type { Trip } from './api';
@@ -11,19 +13,46 @@ export function tripDestinationSummary(trip: Trip) {
 }
 
 /**
+ * The English name of a country code, for asking a photograph about it.
+ *
+ * English rather than the reader's locale on purpose: the subject is matched
+ * server-side against English names, so a French reader and an English one must
+ * ask the same question and get the same photograph. `Intl.DisplayNames` owns
+ * the name, so no country list is hard-coded here.
+ */
+function countryEditorialName(code: string | undefined): string | null {
+  // A code Trove does not know is dropped before `Intl.DisplayNames` sees it:
+  // CLDR answers an unrecognised region with "Unknown Region", which would ask
+  // for a photograph of nothing under a caption promising a country.
+  if (!code || !COUNTRY_CODES.includes(code)) return null;
+
+  try {
+    const name = new Intl.DisplayNames(['en'], { type: 'region' }).of(code);
+
+    return name && name !== code ? name : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * What a trip should ask a photograph for, or null when it needs none.
  *
  * A trip the traveller gave a cover to is already answered, so it is dropped
  * here rather than at each call site: this is the single place that decides a
  * screen's editorial batch, and keeping it small is what keeps a list of trips
- * to one request. A trip without a destination falls back to its own name,
- * which is the only other thing it can honestly be pictured by.
+ * to one request.
+ *
+ * Without a destination the trip is pictured by the country it declares, and
+ * only then by its own name - a name is the weakest rung, because a trip called
+ * "Mum's 60th" gets a literal photograph of that under a caption promising
+ * travel, while a trip to Japan can always be pictured by Japan.
  */
 export function tripEditorialSubject(trip: Trip): EditorialSubject | null {
   if (trip.coverPhotoUrl) return null;
 
   const destinationName = trip.destinations[0]?.name.trim();
-  const name = destinationName || trip.name.trim();
+  const name = destinationName || countryEditorialName(trip.countries?.[0]) || trip.name.trim();
   if (!name) return null;
 
   // The destination's Place travels with its name, never without it. It keys the

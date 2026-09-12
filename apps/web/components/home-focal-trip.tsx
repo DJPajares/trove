@@ -5,6 +5,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { ExperienceRatingSummary } from '@/components/experience-rating-field';
+import { TripCountries } from '@/components/trip-countries';
 import { TripDestinationActions } from '@/components/trip-destination-actions';
 import { TripFactChips } from '@/components/trip-fact-chips';
 import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
@@ -124,7 +125,11 @@ export function HomeFocalTrip({
               The line it used to carry instead - "Destination still open" -
               filled the space without telling the traveller anything. */}
           <p className="text-sm text-muted-foreground">
-            {destinations ? (
+            {trip.countries?.length ? (
+              <>
+                <TripCountries countries={trip.countries} /> <span aria-hidden="true">·</span>{' '}
+              </>
+            ) : destinations ? (
               <>
                 {destinations} <span aria-hidden="true">·</span>{' '}
               </>

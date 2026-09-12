@@ -32,6 +32,7 @@ import { ExperienceRatingSummary } from '@/components/experience-rating-field';
 import { OfflineReadyStatus } from '@/components/offline-ready-status';
 import { PageState } from '@/components/page-state';
 import { PlanScorePanel } from '@/components/plan-score-panel';
+import { TripCountries } from '@/components/trip-countries';
 import { TripForm } from '@/components/trip-form';
 import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
 import { TripDetailSkeleton } from '@/components/trip-detail-skeleton';
@@ -409,7 +410,16 @@ export function TripDetail({
         </div>
 
         <div className="relative -mt-8 rounded-t-[var(--trip-sheet-radius)] bg-background px-[var(--gutter-inline-start)] pt-6 md:-mt-10 md:px-7 md:pt-7">
-          {destinations ? (
+          {/* The countries a trip declares are what it is, so they lead. A trip
+              from before the field existed falls back to the destinations it
+              does have, and one with neither says nothing rather than filling
+              the space. */}
+          {trip.countries?.length ? (
+            <TripCountries
+              className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase"
+              countries={trip.countries}
+            />
+          ) : destinations ? (
             <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
               {destinations}
             </p>

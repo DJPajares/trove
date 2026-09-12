@@ -7,7 +7,6 @@ import {
   ChevronDown,
   CircleAlert,
   ImagePlus,
-  MapPin,
   Plus,
   RefreshCw,
   Trash2,
@@ -499,38 +498,6 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
               />
               <FieldDescription id="trip-countries-hint">{t('countriesHint')}</FieldDescription>
             </Field>
-            {!trip ? (
-              <Field>
-                <FieldLabel
-                  className="w-full items-center justify-between"
-                  htmlFor="trip-primary-destination"
-                >
-                  <span>{t('primaryDestination')}</span>
-                  <span className="text-xs font-normal text-muted-foreground">{t('optional')}</span>
-                </FieldLabel>
-                <div className="relative">
-                  <MapPin
-                    aria-hidden="true"
-                    className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                  />
-                  <Input
-                    aria-describedby="trip-primary-destination-hint"
-                    autoComplete="off"
-                    className="pl-10"
-                    id="trip-primary-destination"
-                    maxLength={200}
-                    onChange={(event) =>
-                      updateField('destinations', event.target.value ? [event.target.value] : [])
-                    }
-                    placeholder={t('primaryDestinationPlaceholder')}
-                    value={form.destinations[0] ?? ''}
-                  />
-                </div>
-                <FieldDescription id="trip-primary-destination-hint">
-                  {t('primaryDestinationHint')}
-                </FieldDescription>
-              </Field>
-            ) : null}
           </section>
 
           {trip ? (

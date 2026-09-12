@@ -209,7 +209,6 @@
     "tripListLabel": "Your trips",
     "editTripLabel": "Edit {name}",
     "dateRange": "{startDate} to {endDate}",
-    "destinationOpen": "Destination open",
     "createTitle": "Create a trip",
     "createDescription": "Start with the essentials. The rest can wait.",
     "aiPlanning": {
@@ -2038,9 +2037,6 @@
       "fallback": "Hi there"
     },
     "completedTripDescription": "{startDate} to {endDate}. The itinerary's yours to revisit, whenever you like.",
-    "activeLabel": "Active trip",
-    "planningLabel": "Next trip",
-    "completedLabel": "Recently completed",
     "continueTrip": "Continue trip",
     "continuePlanning": "Continue planning",
     "previewTripMode": "Preview",
@@ -2064,7 +2060,6 @@
       "pillLabel": "{when} for {place}: {condition}, {temperature}. {source}",
       "pillLabelNoPlace": "{when}: {condition}, {temperature}. {source}"
     },
-    "destinationOpen": "Destination still open",
     "startTitle": "Start with the trip, not every detail",
     "startDescription": "A name and rough dates are all it takes — everything else can wait.",
     "createTrip": "Create trip",

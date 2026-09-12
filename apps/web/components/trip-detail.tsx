@@ -409,9 +409,11 @@ export function TripDetail({
         </div>
 
         <div className="relative -mt-8 rounded-t-[var(--trip-sheet-radius)] bg-background px-[var(--gutter-inline-start)] pt-6 md:-mt-10 md:px-7 md:pt-7">
-          <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
-            {destinations ?? t('destinationOpen')}
-          </p>
+          {destinations ? (
+            <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
+              {destinations}
+            </p>
+          ) : null}
           <h1
             className="mt-1.5 text-[length:var(--text-page-title)] leading-[1.06] font-semibold tracking-[-0.035em] text-balance text-foreground md:text-[length:var(--text-immersive-title)] md:leading-[1.02]"
             id="trip-detail-heading"

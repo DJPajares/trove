@@ -138,9 +138,13 @@ export function HomeTripDeck({ editorialFor, trips }: Readonly<HomeTripDeckProps
               />
 
               <div className="flex items-center justify-between gap-2">
-                <p className="min-w-0 truncate text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-white/85 uppercase">
-                  {destinations ?? t('destinationOpen')}
-                </p>
+                {destinations ? (
+                  <p className="min-w-0 truncate text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-white/85 uppercase">
+                    {destinations}
+                  </p>
+                ) : (
+                  <span />
+                )}
                 <div className="flex shrink-0 items-center gap-1.5">
                   <TripLifecycleBadge lifecycle={trip.lifecycle} tone="onMedia" />
                   <TripReadinessBadge

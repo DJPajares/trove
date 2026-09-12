@@ -20,10 +20,9 @@ export type HomeGreetingProps = {
  * once here and again on the card below it. The trip keeps that job; this
  * says hello.
  *
- * Two words rather than a time of day, at section rather than page scale.
- * "Good evening, <name>" ran to two lines on a phone, and even shortened it
- * cannot share a row with the weather at page-title size. It does not need to
- * be the biggest thing here: the trip's own name is, one section down, and a
+ * Two words rather than a time of day, at section rather than page scale,
+ * with the weather stacked beneath rather than set beside it. It does not need
+ * to be the biggest thing here: the trip's own name is, one section down, and a
  * greeting that competes with it is a greeting shouting.
  *
  * Dropping the hour also drops the one thing on this line that could not be
@@ -36,12 +35,12 @@ export function HomeGreeting({ locationLabel, weatherTarget }: Readonly<HomeGree
   const name = profile?.displayName?.trim();
 
   return (
-    // The floating Search/Account stack is pinned to the top right of every
-    // signed-in viewport. On mobile it has no header to sit in, so the row has
-    // to end before it rather than run underneath it.
-    <div className="flex items-center justify-between gap-4 pe-[3.25rem] sm:pe-0">
+    <div className="flex flex-col items-start gap-3">
+      {/* The floating Search/Account stack is pinned to the top right of every
+          signed-in viewport, and on mobile it has no header to sit in. Only
+          this line runs under it - the weather sits below that band. */}
       <h1
-        className="min-w-0 truncate text-[length:var(--text-section-title)] leading-[1.2] font-semibold tracking-[-0.025em] text-foreground"
+        className="max-w-full truncate pe-[3.25rem] text-[length:var(--text-section-title)] leading-[1.2] font-semibold tracking-[-0.025em] text-foreground sm:pe-0"
         id="home-heading"
       >
         {name ? t('greeting.hi', { name }) : t('greeting.fallback')}

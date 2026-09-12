@@ -55,10 +55,12 @@ export function TripListRow({ editorial, trip, variant = 'card' }: Readonly<Trip
             </div>
           ) : null}
         </div>
-        <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
-          <MapPin aria-hidden="true" className="size-3.5 shrink-0" />
-          {tripDestinationSummary(trip) ?? t('destinationOpen')}
-        </p>
+        {tripDestinationSummary(trip) ? (
+          <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+            <MapPin aria-hidden="true" className="size-3.5 shrink-0" />
+            {tripDestinationSummary(trip)}
+          </p>
+        ) : null}
         <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground tabular-nums">
           <CalendarDays aria-hidden="true" className="size-3.5 shrink-0" />
           {t('dateRange', {

@@ -88,9 +88,9 @@ export function TripFeaturedCard({
                 {trip.name}
               </Link>
             </h2>
-            <p className="text-sm text-muted-foreground">
-              {tripDestinationSummary(trip) ?? t('destinationOpen')}
-            </p>
+            {tripDestinationSummary(trip) ? (
+              <p className="text-sm text-muted-foreground">{tripDestinationSummary(trip)}</p>
+            ) : null}
             <p className="text-sm text-muted-foreground tabular-nums">
               {t('dateRange', {
                 endDate: formatTripDate(trip.endDate, locale),

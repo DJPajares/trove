@@ -26,6 +26,8 @@ export const TRIP_COVERS_BUCKET = 'trip-covers';
 export type TripDestinationInput = { name: string };
 
 export type TripCreate = {
+  /** ISO 3166-1 alpha-2, already validated and de-duplicated by the controller. */
+  countries?: string[];
   coverPhotoPath?: string | null;
   description?: string | null;
   destinations?: TripDestinationInput[];
@@ -179,6 +181,7 @@ async function serializeTrip(
   );
 
   return {
+    countries: trip.countries,
     coverPhotoPath: trip.coverPhotoPath,
     coverPhotoUrl: await createCoverUrl(supabase, trip.coverPhotoPath),
     createdAt: trip.createdAt.toISOString(),
@@ -401,6 +404,7 @@ export async function createTrip(userId: string, accessToken: string, input: Tri
     });
     const trip = await transaction.trip.create({
       data: {
+        countries: input.countries ?? [],
         coverPhotoPath: input.coverPhotoPath ?? null,
         creatorId: userId,
         description: input.description?.trim() || null,
@@ -640,6 +644,7 @@ export async function updateTrip(
     await transaction.trip.update({
       where: { id: tripId },
       data: {
+        ...(input.countries !== undefined ? { countries: input.countries } : {}),
         ...(input.coverPhotoPath !== undefined ? { coverPhotoPath: input.coverPhotoPath } : {}),
         ...(input.description !== undefined
           ? { description: input.description?.trim() || null }

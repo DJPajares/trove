@@ -28,11 +28,13 @@ import {
   type EditorialSubject,
 } from '@/lib/media/editorial-images';
 import { removeTripQueries, TRIP_DATE_QUERY_ROOTS } from '@/lib/query/trip-invalidation';
+import { CountryMultiCombobox } from '@/components/country-multi-combobox';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import {
   EDITORIAL_PREVIEW_DEBOUNCE_MS,
   editorialCoverSubjectName,
   hasOptionalTripDetails,
+  hasTripCountries,
   isValidPartySize,
   moveTripRange,
 } from '@/lib/trips/form';
@@ -70,6 +72,7 @@ type TripFormProps = {
 };
 
 type FormState = {
+  countries: string[];
   coverPhotoPath: string | null;
   description: string;
   destinations: string[];
@@ -98,6 +101,7 @@ function createInitialForm(trip: Trip | null): FormState {
   const today = getToday();
 
   return {
+    countries: trip?.countries ?? [],
     coverPhotoPath: trip?.coverPhotoPath ?? null,
     description: trip?.description ?? '',
     destinations: trip?.destinations.map((destination) => destination.name) ?? [],
@@ -242,6 +246,10 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
       setError(t('nameRequired'));
       return null;
     }
+    if (!hasTripCountries(form.countries)) {
+      setError(t('countriesRequired'));
+      return null;
+    }
     if (!form.startDate || !form.endDate || form.endDate < form.startDate) {
       setDateError(t('dateRangeError'));
       return null;
@@ -252,6 +260,7 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
     }
 
     return {
+      countries: form.countries,
       coverPhotoPath,
       description: form.description.trim() || null,
       destinations: form.destinations
@@ -477,6 +486,19 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
                 <FieldDescription>{t('tripDescriptionHint')}</FieldDescription>
               </Field>
             ) : null}
+            <Field>
+              <FieldLabel htmlFor="trip-countries">{t('countries')}</FieldLabel>
+              <CountryMultiCombobox
+                aria-describedby="trip-countries-hint"
+                aria-label={t('countries')}
+                id="trip-countries"
+                onValueChange={(countries) => updateField('countries', countries)}
+                placeholder={t('countriesPlaceholder')}
+                required
+                value={form.countries}
+              />
+              <FieldDescription id="trip-countries-hint">{t('countriesHint')}</FieldDescription>
+            </Field>
             {!trip ? (
               <Field>
                 <FieldLabel

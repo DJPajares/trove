@@ -1,0 +1,13 @@
+-- A trip declares the countries it visits.
+--
+-- Trove held no country anywhere except the profile's home country, so the trip
+-- time zone resolver inferred one by matching country names out of free-text
+-- destination strings. That guess is only as good as what the traveller typed,
+-- and it has nothing to say about a trip with no destinations at all.
+--
+-- An array rather than a join table: the only order that matters is the one the
+-- traveller picked, and an array defaults to '{}' so no existing row needs a
+-- backfill. Empty means "never asked for", which is exactly what is true of every
+-- trip that already exists - they stay usable, and the requirement applies from
+-- here on, at the point a trip is created or its countries are saved.
+ALTER TABLE "trove"."trips" ADD COLUMN "countries" CHAR(2)[] NOT NULL DEFAULT '{}';

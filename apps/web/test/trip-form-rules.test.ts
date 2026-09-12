@@ -4,6 +4,7 @@ import type { Trip } from '../lib/trips/api.ts';
 import {
   editorialCoverSubjectName,
   hasOptionalTripDetails,
+  hasTripCountries,
   isValidPartySize,
   moveTripRange,
   shiftTripDates,
@@ -164,4 +165,19 @@ test('a trip that is not going anywhere is left alone', () => {
     endDate: '',
     startDate: '',
   });
+});
+
+test('a trip has named where it goes once it carries a country', () => {
+  expect(hasTripCountries(['NZ'])).toBe(true);
+  expect(hasTripCountries(['VN', 'TH'])).toBe(true);
+});
+
+/**
+ * The picker cannot produce a blank, but form state is rehydrated from trips
+ * that predate the field, so an empty list and a list of nothing both arrive.
+ */
+test('a trip with no country has not', () => {
+  expect(hasTripCountries([])).toBe(false);
+  expect(hasTripCountries([''])).toBe(false);
+  expect(hasTripCountries(['  '])).toBe(false);
 });

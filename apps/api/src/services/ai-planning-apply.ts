@@ -15,6 +15,7 @@ import {
   isValidIanaTimeZone,
   parseDateOnly,
   resolveCountryPrimaryTimeZone,
+  resolveDestinationCountryCode,
   resolveTripTimeZone,
 } from './trip-rules.js';
 
@@ -27,6 +28,8 @@ type ApplyOptions = {
 
 type AppliedPlace = {
   id: string;
+  /** The draft's own name for the place, which is what names its country. */
+  name: string;
   timeZone: string | null;
 };
 
@@ -121,6 +124,7 @@ async function materializePlaces(
       }
       places.set(refId, {
         id: stored.id,
+        name: draftPlace.name,
         timeZone: placeTimeZone({
           customTimeZone: stored.customTimeZone,
           draftPlace,
@@ -141,7 +145,7 @@ async function materializePlaces(
       },
       select: { id: true },
     });
-    places.set(refId, { id: created.id, timeZone });
+    places.set(refId, { id: created.id, name: draftPlace.name, timeZone });
   }
 
   return places;
@@ -267,8 +271,26 @@ export async function applyAiPlanningSession(
       profileHome: profile.homeTimeZone ? { placeId: null, timeZone: profile.homeTimeZone } : null,
       startingLocation: null,
     });
+    /**
+     * An applied trip names its countries from what its destinations say.
+     *
+     * This path creates a trip without going through the request schema that
+     * makes countries mandatory, so the requirement cannot be enforced here -
+     * the traveller never filled in a form. Deriving is the honest middle: a
+     * destination that names a country resolves, a bare city does not, and a
+     * draft that yields nothing lands empty rather than failing an apply the
+     * traveller has already paid for with their quota.
+     */
+    const countries = [
+      ...new Set(
+        destinations
+          .map((destination) => resolveDestinationCountryCode(destination.name))
+          .filter((code): code is string => code !== null),
+      ),
+    ];
     const trip = await transaction.trip.create({
       data: {
+        countries,
         creatorId: ownerId,
         // The traveller's own words win; the model's are the floor, so a trip
         // never lands blank just because nobody typed in the review field.

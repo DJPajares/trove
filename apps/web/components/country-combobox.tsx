@@ -1,10 +1,10 @@
 'use client';
 
 import { Combobox as ComboboxPrimitive } from '@base-ui/react';
-import { COUNTRY_CODES } from '@trove/types/countries';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, type ComponentProps } from 'react';
 
+import { useCountries, type Country } from '@/hooks/use-countries';
 import { cn } from '@/lib/utils';
 import {
   Combobox,
@@ -14,32 +14,6 @@ import {
   ComboboxItem,
   ComboboxList,
 } from './ui/combobox';
-
-type Country = {
-  code: string;
-  name: string;
-};
-
-/**
- * The countries, named in the reader's own language.
- *
- * `Intl.DisplayNames` owns the names, so nothing here is a hard-coded string
- * and the list sorts by the name the reader actually sees rather than by an
- * English one. A code the runtime cannot name is dropped rather than shown as
- * two letters nobody can search for.
- */
-function useCountries(locale: string): Country[] {
-  return useMemo(() => {
-    const displayNames = new Intl.DisplayNames(locale, { type: 'region' });
-    const collator = new Intl.Collator(locale);
-
-    return COUNTRY_CODES.flatMap((code) => {
-      const name = displayNames.of(code);
-
-      return name && name !== code ? [{ code, name }] : [];
-    }).sort((left, right) => collator.compare(left.name, right.name));
-  }, [locale]);
-}
 
 type CountryComboboxProps = {
   'aria-describedby'?: string;
@@ -115,6 +89,7 @@ export function CountryCombobox({
               key={item.code}
               value={item}
             >
+              <span aria-hidden="true">{item.flag}</span>
               {item.name}
             </ComboboxItem>
           )}

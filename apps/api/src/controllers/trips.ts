@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { timeZoneForCountry } from '@trove/types/countries';
 import { z } from 'zod';
 
 import { getBearerToken } from '../services/request-auth.js';
@@ -18,6 +19,25 @@ import {
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const timeZoneSchema = z.string().trim().min(1).max(100);
 const destinationSchema = z.object({ name: z.string().trim().min(1).max(200) }).strict();
+/**
+ * The countries a trip visits.
+ *
+ * The allow-list is the same lookup the profile's home country uses, so a code
+ * Trove cannot turn into a time zone is a code it will not store. The cap is
+ * generous because the field is a fact about the trip rather than an itinerary:
+ * a rail trip across Europe is allowed to name a dozen.
+ */
+const countriesSchema = z
+  .array(
+    z
+      .string()
+      .trim()
+      .toUpperCase()
+      .refine((code) => timeZoneForCountry(code) !== null, { error: 'unknown_country_code' }),
+  )
+  .min(1, { error: 'countries_required' })
+  .max(20)
+  .transform((codes) => [...new Set(codes)]);
 const tripFields = {
   coverPhotoPath: z.string().trim().max(512).nullable().optional(),
   destinations: z
@@ -39,6 +59,7 @@ const tripFields = {
       });
     })
     .optional(),
+  countries: countriesSchema,
   description: z.string().trim().max(5_000).nullable().optional(),
   deviceTimeZone: timeZoneSchema.optional(),
   endDate: dateSchema,
@@ -54,6 +75,7 @@ const tripUpdateSchema = z
   .object({
     coverPhotoPath: tripFields.coverPhotoPath,
     confirmDateShrink: z.boolean().optional(),
+    countries: tripFields.countries.optional(),
     description: tripFields.description,
     destinations: tripFields.destinations,
     deviceTimeZone: tripFields.deviceTimeZone,

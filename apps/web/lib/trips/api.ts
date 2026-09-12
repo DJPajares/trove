@@ -28,6 +28,14 @@ export type TripDestination = {
 };
 
 export type Trip = {
+  /**
+   * The countries the trip visits, ISO 3166-1 alpha-2.
+   *
+   * Optional so snapshots written before trips declared one remain readable
+   * offline, and empty on every trip created before it was asked for - those
+   * stay usable exactly as they are.
+   */
+  countries?: string[];
   coverPhotoPath: string | null;
   coverPhotoUrl: string | null;
   createdAt: string;
@@ -75,6 +83,7 @@ export type Trip = {
 
 export type TripInput = {
   confirmDateShrink?: boolean;
+  countries: string[];
   coverPhotoPath?: string | null;
   description: string | null;
   destinations: Array<{ name: string }>;

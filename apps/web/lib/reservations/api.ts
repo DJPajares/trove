@@ -1,3 +1,4 @@
+import { compressImage, reservationImageTarget } from '@/lib/media/compress-image';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import {
   listOfflineReservationDocuments,
@@ -285,23 +286,29 @@ export async function uploadReservationDocument(tripId: string, reservationId: s
     throw new ReservationsApiError('invalid_document', 400);
   }
   const { supabase, userId } = await getAuthContext();
-  const extension = file.name.split('.').pop()?.toLowerCase() || 'file';
+  // A PDF passes straight through `compressImage`; only an image is re-encoded,
+  // and a boarding pass keeps the highest quality of any surface because its
+  // small print is the whole point of keeping it.
+  const prepared = await compressImage(file, reservationImageTarget);
+  const extension = prepared.fileName.split('.').pop()?.toLowerCase() || 'file';
   const path = `${userId}/${tripId}/${reservationId}/${crypto.randomUUID()}.${extension}`;
-  const { error } = await supabase.storage.from(reservationDocumentsBucket).upload(path, file, {
-    cacheControl: '3600',
-    contentType: file.type,
-    upsert: false,
-  });
+  const { error } = await supabase.storage
+    .from(reservationDocumentsBucket)
+    .upload(path, prepared.body, {
+      cacheControl: '3600',
+      contentType: prepared.contentType,
+      upsert: false,
+    });
   if (error) throw new ReservationsApiError('document_upload_failed', 500);
   try {
     return await reservationRequest<{ attachment: ReservationAttachment }>(
       `/trips/${tripId}/reservations/${reservationId}/attachments`,
       {
         body: JSON.stringify({
-          contentType: file.type,
-          fileName: file.name,
+          contentType: prepared.contentType,
+          fileName: prepared.fileName,
           path,
-          sizeBytes: file.size,
+          sizeBytes: prepared.sizeBytes,
         }),
         method: 'POST',
       },

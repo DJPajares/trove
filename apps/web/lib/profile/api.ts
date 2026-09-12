@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import { avatarTarget, compressImage } from '@/lib/media/compress-image';
 import { forgetCachedMediaPath } from '@/lib/media/storage-cache-key';
 
 export type Profile = {
@@ -76,11 +77,13 @@ export async function uploadProfilePhoto(file: File) {
     throw new Error('invalid_profile_photo');
   }
 
-  const extension = file.type === 'image/jpeg' ? 'jpg' : file.type.slice('image/'.length);
+  const prepared = await compressImage(file, avatarTarget);
+  const extension =
+    prepared.contentType === 'image/jpeg' ? 'jpg' : prepared.contentType.slice('image/'.length);
   const path = `${userId}/avatar-${crypto.randomUUID()}.${extension}`;
-  const { error } = await supabase.storage.from('profile-photos').upload(path, file, {
+  const { error } = await supabase.storage.from('profile-photos').upload(path, prepared.body, {
     cacheControl: '3600',
-    contentType: file.type,
+    contentType: prepared.contentType,
     upsert: false,
   });
 

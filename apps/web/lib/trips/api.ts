@@ -7,6 +7,7 @@ import {
   saveTripSnapshot,
   setOfflineApiReachable,
 } from '@/lib/offline/trip-store';
+import { compressImage, tripCoverTarget } from '@/lib/media/compress-image';
 import { forgetCachedMediaPath } from '@/lib/media/storage-cache-key';
 
 export type TripDestination = {
@@ -272,11 +273,16 @@ export async function uploadTripCover(file: File) {
     throw new TripApiError('invalid_trip_cover', 400);
   }
 
-  const extension = file.type === 'image/jpeg' ? 'jpg' : file.type.slice('image/'.length);
+  // The picked file is what the guard above judges; the prepared one is what
+  // gets stored. `compressImage` returns the original bytes when it cannot do
+  // better, so the prepared file is never the larger of the two.
+  const prepared = await compressImage(file, tripCoverTarget);
+  const extension =
+    prepared.contentType === 'image/jpeg' ? 'jpg' : prepared.contentType.slice('image/'.length);
   const path = `${userId}/cover-${crypto.randomUUID()}.${extension}`;
-  const { error } = await supabase.storage.from('trip-covers').upload(path, file, {
+  const { error } = await supabase.storage.from('trip-covers').upload(path, prepared.body, {
     cacheControl: '3600',
-    contentType: file.type,
+    contentType: prepared.contentType,
     upsert: false,
   });
 

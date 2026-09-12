@@ -138,14 +138,43 @@ async function serializeTrip(
   }));
   const itineraryCoverage = calculateItineraryCoverage(startDate, endDate, itineraryDays);
   const tripPreparedness = calculateTripPreparedness(startDate, endDate, itineraryDays);
-  const weatherLocation = resolveTripWeatherLocation(
-    trip.destinations.map((destination) => ({
-      location: serializeCanonicalPlace({
-        ...destination.place,
-        providerRefs: destination.place.providerRefs ?? [],
-      }).location,
+
+  /**
+   * One pass over the destinations, feeding both the weather location and the
+   * serialized destinations.
+   *
+   * Their coordinates were already being resolved here for weather; the trip's
+   * own screens now draw on them too, to state how far apart a trip's stops
+   * are. Resolving them twice would be two passes over the same records for the
+   * same answer - and the coordinates are read from the Place rows this query
+   * already loaded, so neither pass reaches a provider.
+   */
+  const destinations = trip.destinations.map((destination) => {
+    const { location } = serializeCanonicalPlace({
+      ...destination.place,
+      providerRefs: destination.place.providerRefs ?? [],
+    });
+
+    return {
+      // Weather keeps the whole canonical location, whose own time zone is one
+      // of the fallbacks it resolves a reading against. The payload below takes
+      // the coordinates alone: they answer how far apart the stops are, and a
+      // second copy of the zone there would be a field nothing reads.
+      location,
       timeZone: destination.timeZone,
-    })),
+      serialized: {
+        id: destination.id,
+        location: location ? { latitude: location.latitude, longitude: location.longitude } : null,
+        name: destination.place.customName ?? '',
+        placeId: destination.placeId,
+        position: destination.position,
+        timeZone: destination.timeZone,
+      },
+    };
+  });
+
+  const weatherLocation = resolveTripWeatherLocation(
+    destinations.map(({ location, timeZone }) => ({ location, timeZone })),
     trip.referenceTimeZone,
   );
 
@@ -154,13 +183,7 @@ async function serializeTrip(
     coverPhotoUrl: await createCoverUrl(supabase, trip.coverPhotoPath),
     createdAt: trip.createdAt.toISOString(),
     description: trip.description,
-    destinations: trip.destinations.map((destination) => ({
-      id: destination.id,
-      name: destination.place.customName ?? '',
-      placeId: destination.placeId,
-      position: destination.position,
-      timeZone: destination.timeZone,
-    })),
+    destinations: destinations.map(({ serialized }) => serialized),
     endDate,
     experienceNote: trip.experienceNote,
     experienceRating: trip.experienceRating,

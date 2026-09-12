@@ -20,7 +20,6 @@ import {
   ReceiptText,
   Share2,
   Sparkles,
-  Users,
   WalletCards,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -36,6 +35,7 @@ import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripForm } from '@/components/trip-form';
 import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
 import { TripDetailSkeleton } from '@/components/trip-detail-skeleton';
+import { TripFactChips } from '@/components/trip-fact-chips';
 import { useTripCreation } from '@/components/trip-creation-provider';
 import { useTripContext } from '@/components/trip-provider';
 import { TripShareDialog } from '@/components/trip-share-dialog';
@@ -323,7 +323,7 @@ export function TripDetail({
     trip.lifecycle === 'planning'
       ? t('continuePlanning')
       : trip.lifecycle === 'active'
-        ? t('openTripMode')
+        ? t('continueTrip')
         : t('viewMemories');
 
   async function handleDelete() {
@@ -358,47 +358,46 @@ export function TripDetail({
 
   return (
     <article className="mx-auto w-full max-w-5xl space-y-7">
+      {/*
+        The cover, and the sheet that rides up over it.
+
+        The title used to float on the scrim. Moving it into the sheet gives the
+        photograph its whole frame back and puts the trip's name on the surface
+        the rest of the page is written on, which is where it can carry chips
+        beside it without fighting whatever the photograph is doing underneath.
+        `trip-chrome` draws the same two shapes at the same sizes, so the cover
+        does not change height or curve when the traveller opens a section.
+      */}
       <section
         aria-labelledby="trip-detail-heading"
-        className="relative isolate -mx-[var(--gutter-inline-start)] -mt-8 md:mx-0 md:mt-0"
+        className="-mx-[var(--gutter-inline-start)] -mt-8 md:mx-0 md:mt-0"
       >
-        <TripMedia
-          alt={
-            editorial
-              ? mediaTranslations('alt.tripEditorial', { name: destinations ?? trip.name })
-              : ''
-          }
-          // The page's Largest Contentful Paint by a distance.
-          preload
-          className="rounded-none md:rounded-[var(--radius-2xl)]"
-          sizes="(max-width: 1023px) 100vw, 1024px"
-          source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
-          variant="cover"
-        />
-        <Link
-          aria-label={t('backToTrips')}
-          className="absolute top-[max(1rem,var(--safe-top))] left-[max(1rem,var(--safe-left))] z-10 flex size-10 items-center justify-center rounded-full border border-media-fallback-foreground/18 bg-neutral-950/58 text-media-fallback-foreground backdrop-blur-sm outline-none transition-colors hover:bg-neutral-950/78 focus-visible:ring-3 focus-visible:ring-ring/50"
-          href="/trips"
-        >
-          <ArrowLeft aria-hidden="true" className="size-4" />
-        </Link>
-        <div className="pointer-events-none absolute inset-0 flex flex-col justify-end rounded-none bg-gradient-to-t from-surface-overlay from-20% via-surface-overlay/55 to-transparent p-5 md:rounded-[var(--radius-2xl)] md:p-7">
-          <div className="flex items-end justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-media-fallback-foreground/85 uppercase">
-                {destinations ?? t('destinationOpen')}
-              </p>
-              <h1
-                className="mt-1 text-[length:var(--text-page-title)] leading-[1.08] font-semibold tracking-[-0.035em] text-pretty text-media-fallback-foreground md:text-4xl"
-                id="trip-detail-heading"
-              >
-                {trip.name}
-              </h1>
-              <p className="mt-1 text-[length:var(--text-metadata)] font-medium text-media-fallback-foreground/85 tabular-nums">
-                {formatTripDateRange(trip.startDate, trip.endDate, locale)}
-              </p>
-            </div>
-            <div className="mb-0.5 flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+        <div className="relative isolate">
+          <TripMedia
+            alt={
+              editorial
+                ? mediaTranslations('alt.tripEditorial', { name: destinations ?? trip.name })
+                : ''
+            }
+            // The page's Largest Contentful Paint by a distance.
+            preload
+            className="rounded-none md:rounded-t-[var(--radius-2xl)] md:rounded-b-none"
+            sizes="(max-width: 1023px) 100vw, 1024px"
+            source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
+            variant="cover"
+          />
+          <Link
+            aria-label={t('backToTrips')}
+            className="absolute top-[max(1rem,var(--safe-top))] left-[max(1rem,var(--safe-left))] z-10 flex size-10 items-center justify-center rounded-full border border-media-fallback-foreground/18 bg-neutral-950/58 text-media-fallback-foreground backdrop-blur-sm outline-none transition-colors hover:bg-neutral-950/78 focus-visible:ring-3 focus-visible:ring-ring/50"
+            href="/trips"
+          >
+            <ArrowLeft aria-hidden="true" className="size-4" />
+          </Link>
+          {/* Only the foot of the cover is darkened now: the sheet carries the
+              text, so the scrim is here to keep the badges legible and to stop
+              the curve meeting a bright edge. */}
+          <div className="pointer-events-none absolute inset-0 flex flex-col justify-end rounded-none bg-gradient-to-t from-surface-overlay/85 from-0% to-transparent to-42% p-5 md:rounded-t-[var(--radius-2xl)] md:p-7">
+            <div className="flex flex-wrap items-center justify-end gap-1.5 pb-6 md:pb-8">
               <TripLifecycleBadge lifecycle={trip.lifecycle} tone="onMedia" />
               <TripReadinessBadge
                 lifecycle={trip.lifecycle}
@@ -407,6 +406,27 @@ export function TripDetail({
               />
             </div>
           </div>
+        </div>
+
+        <div className="relative -mt-8 rounded-t-[var(--trip-sheet-radius)] bg-background px-[var(--gutter-inline-start)] pt-6 md:-mt-10 md:px-7 md:pt-7">
+          <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
+            {destinations ?? t('destinationOpen')}
+          </p>
+          <h1
+            className="mt-1.5 text-[length:var(--text-page-title)] leading-[1.06] font-semibold tracking-[-0.035em] text-balance text-foreground md:text-[length:var(--text-immersive-title)] md:leading-[1.02]"
+            id="trip-detail-heading"
+          >
+            {trip.name}
+          </h1>
+          <TripFactChips
+            className="mt-4"
+            leading={
+              <span className="tabular-nums">
+                {formatTripDateRange(trip.startDate, trip.endDate, locale)}
+              </span>
+            }
+            trip={trip}
+          />
         </div>
       </section>
 
@@ -590,21 +610,11 @@ export function TripDetail({
 
       <TripReadinessPrompt trip={trip} />
 
+      {/* Destinations and travellers are chips under the title now. They were
+          being said twice on this screen even before that - once in the cover's
+          kicker and again here - and a fact list is for what the header has no
+          room to say, not for repeating what it just did. */}
       <dl className="grid border-t border-border-subtle sm:grid-cols-2 sm:gap-x-8">
-        <OverviewFact
-          Icon={MapPinned}
-          label={t('destinations')}
-          value={
-            trip.destinations.length
-              ? trip.destinations.map((destination) => destination.name).join(', ')
-              : t('destinationOpen')
-          }
-        />
-        <OverviewFact
-          Icon={Users}
-          label={t('travellers')}
-          value={t('travellerCount', { count: trip.partySize })}
-        />
         <OverviewFact
           Icon={ClipboardCheck}
           label={t('planningReadiness')}

@@ -9,7 +9,7 @@ import type { TemperatureUnit } from '@/lib/profile/preferences';
  * a version in the key a returning traveller keeps reading an answer the server
  * has already stopped producing.
  */
-export const WEATHER_CONTRACT_VERSION = 'v3';
+export const WEATHER_CONTRACT_VERSION = 'v4';
 
 export type WeatherCurrentConditions = {
   apparentTemperature: number;
@@ -72,13 +72,13 @@ export type TripWeather = {
    */
   hours: WeatherHourlyForecast[];
   /**
-   * Where those hours are - wherever the traveller is today. A surface drawing
-   * some other day of the trip compares this against that day's own location
-   * before showing an hourly reading, because a trip that moves on tomorrow
-   * would otherwise read this city's rain against the next city's afternoon.
-   * Null whenever `hours` is empty.
+   * Which trip day those hours describe - today, wherever the traveller is. A
+   * surface drawing some other day of the trip checks this before showing an
+   * hourly reading, because a trip that moves on tomorrow would otherwise read
+   * this city's rain against the next city's afternoon. Null whenever `hours`
+   * is empty.
    */
-  hoursLocation: { latitude: number; longitude: number; timeZone: string } | null;
+  hoursDate: string | null;
   provider: 'open_meteo';
   temperatureUnit: TemperatureUnit;
 };

@@ -59,13 +59,17 @@ export type TripWeather = {
    */
   hours: WeatherHourlyForecast[];
   /**
-   * Where those hours are, which is wherever the traveller is today. It travels
-   * with them because it is the only way a surface can tell whether an hour
-   * belongs to the day it is drawing: a trip that moves on tomorrow would
-   * otherwise read this city's rain against the next city's afternoon, which
-   * PRD 21.1 calls fabricating a forecast. Null whenever `hours` is empty.
+   * Which trip day those hours describe - today, wherever the traveller is.
+   *
+   * A surface drawing some other day compares against this before showing an
+   * hour, because a trip that moves on tomorrow would otherwise read this
+   * city's rain against the next city's afternoon, which PRD 21.1 calls
+   * fabricating a forecast. It is the day rather than a coordinate because a
+   * day past `MAX_WEATHER_LOCATIONS` carries the trip's fallback location
+   * rather than its own: comparing coordinates would then quietly hand today's
+   * hours to a city the traveller is not in. Null whenever `hours` is empty.
    */
-  hoursLocation: TripWeatherLocation | null;
+  hoursDate: string | null;
   provider: 'open_meteo';
   temperatureUnit: TemperatureUnit;
 };
@@ -276,7 +280,7 @@ export class TripWeatherService {
       });
     }
 
-    const live = await this.readNow(days, tripLocation, options.temperatureUnit, now);
+    const live = await this.readNow(days, options.temperatureUnit, now);
 
     return {
       attribution: WEATHER_ATTRIBUTION,
@@ -285,7 +289,7 @@ export class TripWeatherService {
       fetchedAt: (oldestFetchedAt ?? now).toISOString(),
       horizon: window,
       hours: live.hours,
-      hoursLocation: live.location,
+      hoursDate: live.date,
       provider: 'open_meteo',
       temperatureUnit: options.temperatureUnit,
     };
@@ -308,30 +312,34 @@ export class TripWeatherService {
    */
   private async readNow(
     days: readonly TripWeatherDay[],
-    fallback: TripWeatherLocation | null,
     temperatureUnit: TemperatureUnit,
     now: Date,
   ): Promise<{
     current: WeatherCurrentConditions | null;
+    date: string | null;
     hours: WeatherHourlyForecast[];
-    location: TripWeatherLocation | null;
   }> {
-    const nothing = { current: null, hours: [], location: null };
-    const anchor = fallback ?? days[0]?.location ?? null;
-    if (!anchor) return nothing;
+    const nothing = { current: null, date: null, hours: [] };
 
-    const today = getLocalDate(now, anchor.timeZone);
-    const location = days.find((day) => day.date === today)?.location ?? null;
-    if (!location) return nothing;
+    // Each day is asked whether it is today in its own zone, rather than one
+    // zone being asked what day it is everywhere. The trip's anchor is its
+    // destination or its first located place - routinely the airport the
+    // traveller left from, on another continent - so for several hours every
+    // night that anchor named a date the traveller was not living, and on the
+    // last day of a trip it named one that does not exist. A traveller mid-
+    // flight across the dateline can satisfy two days at once; the earlier one
+    // wins, being the day they have not finished yet.
+    const today = days.find((day) => day.date === getLocalDate(now, day.location.timeZone));
+    if (!today) return nothing;
 
     try {
       const weather = await this.currentConditions.getWeather({
-        latitude: location.latitude,
-        longitude: location.longitude,
+        latitude: today.location.latitude,
+        longitude: today.location.longitude,
         temperatureUnit,
-        timeZone: location.timeZone,
+        timeZone: today.location.timeZone,
       });
-      return { current: weather.current, hours: weather.hours ?? [], location };
+      return { current: weather.current, date: today.date, hours: weather.hours ?? [] };
     } catch {
       // A fortnight of forecasts is worth serving even when the reading for this
       // minute is not.

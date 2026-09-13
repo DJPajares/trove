@@ -339,16 +339,35 @@ body {
   height: 0;
 }
 
-.interaction-scrollbar:hover,
-.interaction-scrollbar:focus-within,
+/* `:has(:focus-visible)` rather than `:focus-within`: a tapped control inside a
+   strip keeps focus, so `:focus-within` left the scrollbar sitting there after
+   every tap - most visibly on Trip Mode's day strip, where changing the date
+   meant the bar never went away again. A keyboard user tabbing the same
+   controls still gets it, which is the whole point of showing it at all. */
+.interaction-scrollbar:focus-visible,
+.interaction-scrollbar:has(:focus-visible),
 .interaction-scrollbar:active {
   scrollbar-width: thin;
 }
 
-.interaction-scrollbar:hover::-webkit-scrollbar,
-.interaction-scrollbar:focus-within::-webkit-scrollbar,
+.interaction-scrollbar:focus-visible::-webkit-scrollbar,
+.interaction-scrollbar:has(:focus-visible)::-webkit-scrollbar,
 .interaction-scrollbar:active::-webkit-scrollbar {
   height: 0.375rem;
+}
+
+/* Hover only where a pointer can actually hover. A tap on a touchscreen leaves
+   Chrome's emulated hover on whatever it landed on until the next tap goes
+   somewhere else, which strands the same bar by the other route - and a phone
+   is where this strip is mostly read. */
+@media (hover: hover) {
+  .interaction-scrollbar:hover {
+    scrollbar-width: thin;
+  }
+
+  .interaction-scrollbar:hover::-webkit-scrollbar {
+    height: 0.375rem;
+  }
 }
 
 /* Cuts the concave dip into the top edge of the mobile bottom bar so the create

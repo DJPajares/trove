@@ -83,6 +83,7 @@ import { cn } from '@/lib/utils';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { useVisibleKeys } from '@/hooks/use-visible-keys';
 import {
+  editorialCoverImage,
   editorialSubjectKey,
   MAX_EDITORIAL_IMAGE_SUBJECTS,
   type EditorialSubject,
@@ -90,7 +91,11 @@ import {
 import { PlaceMedia } from '@/components/place-media';
 import { dayLocality } from '@/lib/itinerary/day-place';
 import { resolvePlaceMediaSource } from '@/lib/media/trip-media';
-import { resolveProviderPlaceName } from '@/lib/trip-places/place-name';
+import {
+  resolveItineraryItemPlaceName,
+  resolvePlacePhotoName,
+  resolveTripPlaceName,
+} from '@/lib/trip-places/place-name';
 
 type UndoAction =
   | { itemId: string; kind: 'organize'; itineraryDayId: string; position: number }
@@ -234,7 +239,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   const editorialSubjects: EditorialSubject[] = (day?.items ?? [])
     .filter((item) => item.tripPlace && visibleItemIds.has(item.id))
     .flatMap((item) => {
-      const providerName = item.tripPlace ? resolveProviderPlaceName(item.tripPlace) : null;
+      const providerName = item.tripPlace ? resolvePlacePhotoName(item.tripPlace) : null;
       if (!providerName || !item.tripPlace) return [];
 
       return [
@@ -248,31 +253,35 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     .slice(0, MAX_EDITORIAL_IMAGE_SUBJECTS);
   const editorialImages = useEditorialImages(editorialSubjects);
   /**
-   * A photograph of this stop, or nothing.
+   * A photograph for this stop's tile, whatever kind the provider found.
    *
-   * Exact matches only. When the provider cannot find the place it answers from
-   * a pool keyed on the place's type, and that pool is not a photograph of
-   * anywhere near it: asked for Whakarewarewa Forest Park it offers Qutub Minar
-   * in Delhi, and for The Shire's Rest Cafe a restaurant in Spain. Beside the
-   * name of a real place that is not decoration, it is the wrong continent.
+   * At 56px beside a name a photograph reads as decoration and fills the column,
+   * so a generic match earns its place here. The hero does not take one: the
+   * same picture across the top of the day, under the words naming the day, is
+   * a claim rather than decoration - and the generic pool answered
+   * Whakarewarewa Forest Park with Qutub Minar in Delhi.
    *
-   * So a stop Trove cannot picture shows the branded tile for its category
-   * instead - a green field and a leaf beside a forest park, which says what
-   * kind of place it is without pretending to be a picture of it.
+   * Seeded on the Place, because every subject with nothing of its own draws
+   * from one shared pool: taking the first of it gave a day of stops a column
+   * of the same photograph, which reads as a rendering fault rather than as
+   * decoration. An exact match is unaffected - it is a picture of the place and
+   * stays the representative one.
    */
   const editorialFor = (item: ItineraryItem) => {
-    const providerName = item.tripPlace ? resolveProviderPlaceName(item.tripPlace) : null;
+    const providerName = item.tripPlace ? resolvePlacePhotoName(item.tripPlace) : null;
     if (!providerName || !item.tripPlace) return null;
 
-    const image = editorialImages.get(
-      editorialSubjectKey({
-        category: item.tripPlace.place.snapshot?.category,
-        name: providerName,
-        placeId: item.tripPlace.place.id,
-      }),
-    )?.[0];
-
-    return image?.matchKind === 'exact' ? image : null;
+    const placeId = item.tripPlace.place.id;
+    return editorialCoverImage(
+      editorialImages.get(
+        editorialSubjectKey({
+          category: item.tripPlace.place.snapshot?.category,
+          name: providerName,
+          placeId,
+        }),
+      ),
+      placeId,
+    );
   };
 
   const currentItemId =
@@ -346,17 +355,41 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   // The snapshot travels with the itinerary, including the copy held offline, so
   // these no longer depend on being online to name a Place or show its address.
   const snapshotFor = (item: ItineraryItem) => item.tripPlace?.place.snapshot ?? null;
-  const itemName = (item: ItineraryItem) =>
-    item.customLabel ??
-    item.tripPlace?.place.name ??
-    snapshotFor(item)?.name ??
-    item.tripPlace?.place.providerLabel ??
-    t('itemFallback');
+  /**
+   * What a stop is called, through the one chain the rest of the app uses.
+   *
+   * This used to have its own copy, and that copy skipped `tripPlace.customName`
+   * - the name a traveller gives a stop through "Name it". `place.name` is the
+   * *Place's* own name and is null for every Google-backed one, so their name
+   * was dropped and Google's shown instead.
+   */
+  const itemName = (item: ItineraryItem) => resolveItineraryItemPlaceName(item, t('itemFallback'));
   const itemLocation = (item: ItineraryItem) =>
     item.customLocation?.label ??
     snapshotFor(item)?.address ??
     item.tripPlace?.place.providerAddress ??
     null;
+  /**
+   * The place a labelled stop refers to.
+   *
+   * A stop the traveller named - "Breakfast before the drive" - says nothing
+   * about which door to walk through, and the place behind it went unmentioned
+   * anywhere on the row: the title was the label and the line beneath it was the
+   * street address alone. So when the title is the item's own label, the place
+   * leads that line and the address follows it.
+   *
+   * A stop with no label of its own is already titled by its place, and so is
+   * one whose label repeats it - which is most of an AI-planned day, where the
+   * label is written as the place's own name. Neither says it twice.
+   */
+  const itemPlace = (item: ItineraryItem) => {
+    const label = item.customLabel?.trim();
+    if (!label || !item.tripPlace) return null;
+
+    const name = resolveTripPlaceName(item.tripPlace, { custom: '', provider: '' }).trim();
+    if (!name || name.localeCompare(label, locale, { sensitivity: 'accent' }) === 0) return null;
+    return name;
+  };
   const itemSchedule = (item: ItineraryItem) =>
     item.localStartTime
       ? formatItineraryTimeRange(item, locale, preferences.timeFormat)
@@ -590,7 +623,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
    * It costs no request of its own: the batch above has already resolved every
    * stop.
    */
-  const heroItem = (day?.items ?? []).find((item) => editorialFor(item));
+  const heroItem = (day?.items ?? []).find((item) => editorialFor(item)?.matchKind === 'exact');
   const heroEditorial = heroItem ? editorialFor(heroItem) : null;
   const heroShown = Boolean(heroEditorial && heroTitle);
 
@@ -606,11 +639,12 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
 
     return {
       located: Boolean(tripPlace.place.location),
-      name:
-        tripPlace.place.name ??
-        tripPlace.place.snapshot?.name ??
-        tripPlace.place.providerLabel ??
-        t('itemFallback'),
+      // The same chain the stops use, so an accommodation the traveller renamed
+      // is not called by Google's name at the head and foot of every day.
+      name: resolveTripPlaceName(tripPlace, {
+        custom: t('itemFallback'),
+        provider: t('itemFallback'),
+      }),
       tripPlace,
     };
   };
@@ -634,9 +668,16 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                   ref={active ? activeDayChipRef : undefined}
                   className={cn(
                     'flex min-h-14 w-18 flex-col items-center justify-center gap-0.5 rounded-[var(--radius-md)] border px-1 text-[length:var(--text-metadata)] leading-4 whitespace-nowrap outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none',
+                    // Three states in two strengths of one colour, rather than a
+                    // shape stuck on a chip: the day being read is filled, the
+                    // day being lived is outlined in the same brand, and every
+                    // other day is quiet. On today's own chip the fill said it
+                    // already, so the mark that used to sit there said it twice.
                     active
                       ? 'border-brand bg-brand text-primary-foreground'
-                      : 'border-border-subtle text-muted-foreground hover:bg-surface-hover hover:text-foreground',
+                      : isContextDay
+                        ? 'border-brand font-semibold text-brand hover:bg-surface-hover'
+                        : 'border-border-subtle text-muted-foreground hover:bg-surface-hover hover:text-foreground',
                   )}
                   onClick={() =>
                     isPreview
@@ -651,17 +692,9 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                   <span className={cn('tabular-nums', active ? 'text-primary-foreground/85' : '')}>
                     {dayChipDate(candidate.date)}
                   </span>
-                  {/* The day the traveller is actually in keeps a mark, so
-                      finding the way back is not a counting exercise. */}
-                  {isContextDay ? (
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        'h-1 w-1 rounded-full',
-                        active ? 'bg-primary-foreground' : 'bg-brand',
-                      )}
-                    />
-                  ) : null}
+                  {/* The outline says "today" to anyone who can see it; this
+                      says it to everyone else. */}
+                  {isContextDay ? <span className="sr-only">{t('dayStripToday')}</span> : null}
                 </button>
               </li>
             );
@@ -844,6 +877,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
             const { item } = entry;
             const name = itemName(item);
             const location = itemLocation(item);
+            const place = itemPlace(item);
             const directions = directionsHref(item);
             const isCurrent = currentItemId === item.id;
             const busy = mutatingItemId === item.id;
@@ -989,10 +1023,16 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                       <span className="font-medium text-brand tabular-nums">
                         {itemSchedule(item)}
                       </span>
-                      {location ? (
+                      {place || location ? (
                         <span className="inline-flex min-w-0 items-start gap-1.5">
                           <MapPin aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-                          <span className="min-w-0">{location}</span>
+                          <span className="min-w-0">
+                            {place ? (
+                              <span className="font-medium text-foreground">{place}</span>
+                            ) : null}
+                            {place && location ? <span aria-hidden="true"> · </span> : null}
+                            {location}
+                          </span>
                         </span>
                       ) : null}
                     </span>

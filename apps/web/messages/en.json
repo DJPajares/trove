@@ -751,6 +751,7 @@
         "tryAgain": "Try again",
         "timeZone": "Local timezone: {timeZone}",
         "dayStripLabel": "Trip days",
+        "dayStripToday": "Today",
         "heroLocality": "Your day in {place}",
         "heroStops": "{count, plural, one {# stop planned} other {# stops planned}}",
         "addItem": "Add item",

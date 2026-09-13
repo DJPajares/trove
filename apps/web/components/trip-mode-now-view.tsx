@@ -40,20 +40,20 @@ import { TravelModeIcon } from '@/lib/itinerary/travel-mode';
 import { cn } from '@/lib/utils';
 import type { Reservation } from '@/lib/reservations/api';
 import { defaultTripModeTaskContext, nowTaskGroups } from '@/lib/tasks/trip-mode';
+import { resolveItineraryItemPlaceName, resolveTripPlaceName } from '@/lib/trip-places/place-name';
 
 function providerId(item: ItineraryItem | null) {
   return item?.tripPlace?.place.providerRefs.find((ref) => ref.provider === 'google')
     ?.externalPlaceId;
 }
 
+/**
+ * What a stop is called, through the one chain the rest of the app uses. Its own
+ * copy skipped `tripPlace.customName`, so a stop the traveller had named showed
+ * Google's name instead of theirs.
+ */
 function itemName(item: ItineraryItem, fallback: string) {
-  return (
-    item.customLabel ??
-    item.tripPlace?.place.name ??
-    item.tripPlace?.place.snapshot?.name ??
-    item.tripPlace?.place.providerLabel ??
-    fallback
-  );
+  return resolveItineraryItemPlaceName(item, fallback);
 }
 
 function itemLocation(item: ItineraryItem) {
@@ -62,6 +62,42 @@ function itemLocation(item: ItineraryItem) {
     item.tripPlace?.place.snapshot?.address ??
     item.tripPlace?.place.providerAddress ??
     null
+  );
+}
+
+/**
+ * The place a labelled stop refers to.
+ *
+ * "Breakfast before the drive" is a plan, not a door. When the traveller's own
+ * label is the title, the place it stands for leads the line beneath it and the
+ * address follows. A stop with no label is already titled by its place, and so
+ * is one whose label repeats it - which is most of an AI-planned day.
+ */
+function itemPlace(item: ItineraryItem, locale: string) {
+  const label = item.customLabel?.trim();
+  if (!label || !item.tripPlace) return null;
+
+  const name = resolveTripPlaceName(item.tripPlace, { custom: '', provider: '' }).trim();
+  if (!name || name.localeCompare(label, locale, { sensitivity: 'accent' }) === 0) return null;
+  return name;
+}
+
+/** Where a stop is: the place it refers to, then the street it is on. */
+function ItemWhere({ item }: Readonly<{ item: ItineraryItem }>) {
+  const locale = useLocale();
+  const place = itemPlace(item, locale);
+  const location = itemLocation(item);
+  if (!place && !location) return null;
+
+  return (
+    <span className="inline-flex min-w-0 items-start gap-2">
+      <MapPin aria-hidden="true" className="mt-1 size-4 shrink-0" />
+      <span className="min-w-0">
+        {place ? <span className="font-medium text-foreground">{place}</span> : null}
+        {place && location ? <span aria-hidden="true"> · </span> : null}
+        {location}
+      </span>
+    </span>
   );
 }
 
@@ -329,12 +365,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
               <Clock3 aria-hidden="true" className="size-4 shrink-0" />
               {formatSchedule(currentItem)}
             </span>
-            {itemLocation(currentItem) ? (
-              <span className="inline-flex min-w-0 items-start gap-2">
-                <MapPin aria-hidden="true" className="mt-1 size-4 shrink-0" />
-                <span className="min-w-0">{itemLocation(currentItem)}</span>
-              </span>
-            ) : null}
+            <ItemWhere item={currentItem} />
           </div>
           <p className="mt-2 text-xs leading-5 text-text-subtle">{t('locationDisclaimer')}</p>
         </section>
@@ -399,12 +430,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
                   <Clock3 aria-hidden="true" className="size-4 shrink-0" />
                   {formatSchedule(nextItem)}
                 </span>
-                {itemLocation(nextItem) ? (
-                  <span className="inline-flex min-w-0 items-start gap-2">
-                    <MapPin aria-hidden="true" className="mt-1 size-4 shrink-0" />
-                    <span className="min-w-0">{itemLocation(nextItem)}</span>
-                  </span>
-                ) : null}
+                <ItemWhere item={nextItem} />
               </div>
             </div>
 

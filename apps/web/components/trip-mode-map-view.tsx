@@ -5,8 +5,9 @@ import {
   BedDouble,
   CalendarDays,
   CircleAlert,
-  Eye,
+  Compass,
   ExternalLink,
+  Eye,
   LocateFixed,
   MapPin,
   Navigation,
@@ -124,7 +125,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
         actions={<Button onClick={() => void refresh()}>{t('tryAgain')}</Button>}
         description={t('loadErrorDescription')}
         headingLevel={2}
-        icon={<CircleAlert aria-hidden="true" />}
+        icon={<Compass aria-hidden="true" />}
         kind="error"
         title={t('loadError')}
       />

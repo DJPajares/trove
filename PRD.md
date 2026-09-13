@@ -223,9 +223,9 @@ On mobile, where the signed-in shell has no header, the floating control yields 
 
 The Tools launcher introduces Currency and Task Templates through short purpose-led summaries and links to their independent pages. It never embeds every tool interface into one screen.
 
-Trip Mode must not replace global navigation.
+Trip Mode may introduce its own Now / Today / Map / Trip navigation, and on mobile that navigation takes the bottom bar for the duration: two navigations stacked on one phone screen is one too many, and the traveller's thumb can only reach the lower one. The global bar and its Create action step aside while a Trip Mode route is open, and return the moment it is left.
 
-Trip Mode may introduce its own Now / Today / Map / Trip navigation, but the user must retain a clear way to leave Trip Mode and reach the stable global navigation on every supported form factor.
+Trip Mode must not become the only way out. Wherever it replaces the global bar it must carry a permanent, visible Exit that returns to the trip it belongs to, from which the stable global navigation is one further tap — on every supported form factor. On desktop and tablet, where there is no thumb zone to compete for, the global navigation stays where it is and Trip Mode's own navigation sits beneath its header.
 
 ### Trip Navigation
 
@@ -1242,7 +1242,9 @@ Trip Mode operates on the same underlying trip/itinerary data as planning. It mu
 
 Trip Mode eligibility is date-derived for the selected owned trip using the lifecycle/timezone rules in Sections 6 and 32.1. Ready/In Progress does not gate Trip Mode.
 
-Global navigation must remain reachable while Trip Mode provides its own Now / Today / Map / Trip navigation.
+Global navigation must remain reachable while Trip Mode provides its own Now / Today / Map / Trip navigation, under the terms in Section 5.
+
+Trip Mode is read standing up, one-handed, outdoors, often while walking. Its chrome is therefore held to what a traveller cannot supply themselves: the way out, the trip's name as a quiet anchor, and the local time. A trip's cover photograph, its country and its date range belong to the surfaces that introduce a trip, not to the one that runs it — on a phone they cost most of the first screen, and the answer to "what do I need right now" must not begin below the fold.
 
 ## 20.1 Views
 
@@ -1276,6 +1278,8 @@ Current/next determination should use:
 
 Missing timing/location data must produce an honest fallback rather than fabricated precision.
 
+Where a leave-by time exists it is stated as time remaining rather than as a clock reading, with the absolute time kept alongside it. A traveller reads the countdown and puts the phone away; a clock reading asks them to do the arithmetic first.
+
 Contextual Tasks in Now:
 
 - show separate **Here** and **Next** groups for tasks attached to the current and destination itinerary items,
@@ -1284,6 +1288,8 @@ Contextual Tasks in Now:
 - quick-add attaches to current stop, then next stop, then current day, then the trip.
 
 ### Today
+
+Today opens on the day being lived, scrolled to the stop in progress rather than to the start of the day, and offers every other day of the trip without leaving Trip Mode. Reading another day never moves the traveller's own "now": no item outside the current day is ever marked as happening.
 
 Allow:
 
@@ -1306,6 +1312,8 @@ Contextual Tasks in Today:
 - the Today header provides day-prefilled task quick-add.
 
 ### Map
+
+The map is the view. It fills the screen it is given, with the day's route summary, stops, base and location controls carried over it rather than stacked above it.
 
 Show where available:
 

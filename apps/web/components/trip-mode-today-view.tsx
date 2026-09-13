@@ -6,17 +6,17 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
-  CircleAlert,
   ClipboardCheck,
+  Compass,
   Ellipsis,
   ExternalLink,
+  ListChecks,
   MapPin,
   Pencil,
   Plus,
   RotateCcw,
   SkipForward,
   StickyNote,
-  ListChecks,
   WalletCards,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -253,7 +253,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
         actions={<Button onClick={() => void refresh()}>{t('tryAgain')}</Button>}
         description={t('loadErrorDescription')}
         headingLevel={2}
-        icon={<CircleAlert aria-hidden="true" />}
+        icon={<Compass aria-hidden="true" />}
         kind="error"
         title={t('loadError')}
       />

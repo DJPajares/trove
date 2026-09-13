@@ -6,8 +6,8 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  CircleAlert,
   ClipboardCheck,
+  Compass,
   Info,
   MapPinned,
   ReceiptText,
@@ -193,7 +193,7 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
         }
         description={t('loadErrorDescription')}
         headingLevel={2}
-        icon={<CircleAlert aria-hidden="true" />}
+        icon={<Compass aria-hidden="true" />}
         kind="error"
         title={t('loadError')}
       />
@@ -551,32 +551,43 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
             headingLevel={3}
             title={t('tripTools')}
           >
-            <ItemGroup variant="list">
+            {/* Tiles rather than a list, the same shape the trip's own
+                overview uses for the same six places - so stepping out of Trip
+                Mode into Places or Reservations looks like the app a traveller
+                came from rather than a settings screen. */}
+            <div className="grid grid-cols-2 gap-3">
               {tools.map(({ descriptionKey, href, icon: Icon, key }) => (
-                <Item key={key} render={<Link href={href} />} size="sm">
-                  <ItemMedia variant="icon">
-                    <Icon aria-hidden="true" className="text-brand" />
-                  </ItemMedia>
-                  <ItemContent>
-                    <ItemTitle>{t(`tools.${key}`)}</ItemTitle>
-                    <ItemDescription>
-                      {key === 'places'
-                        ? t('tools.placesDescription', { count: itinerary.tripPlaces.length })
-                        : key === 'reservations' && supportingCounts.reservations !== null
-                          ? t('tools.reservationsCount', {
-                              count: supportingCounts.reservations,
-                            })
-                          : key === 'expenses' && supportingCounts.expenses !== null
-                            ? t('tools.expensesCount', { count: supportingCounts.expenses })
-                            : key === 'notes'
-                              ? t('tools.notesCount', { count: notes.length })
-                              : t(`tools.${descriptionKey}`)}
-                    </ItemDescription>
-                  </ItemContent>
-                  <ChevronRight aria-hidden="true" className="size-4 text-muted-foreground" />
-                </Item>
+                <Link
+                  className="group flex min-h-28 flex-col justify-between rounded-[var(--radius-xl)] border border-border-subtle bg-card p-3.5 shadow-[var(--shadow-control)] outline-none transition-[background-color,border-color,box-shadow,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:border-border-strong hover:bg-surface-hover hover:shadow-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:transition-none"
+                  href={href}
+                  key={key}
+                >
+                  <Icon aria-hidden="true" className="size-5 text-brand" />
+                  <span>
+                    <span className="block font-semibold text-foreground">{t(`tools.${key}`)}</span>
+                    <span className="mt-0.5 flex items-center gap-1 text-[length:var(--text-metadata)] leading-5 text-muted-foreground">
+                      <span className="min-w-0 truncate">
+                        {key === 'places'
+                          ? t('tools.placesDescription', { count: itinerary.tripPlaces.length })
+                          : key === 'reservations' && supportingCounts.reservations !== null
+                            ? t('tools.reservationsCount', {
+                                count: supportingCounts.reservations,
+                              })
+                            : key === 'expenses' && supportingCounts.expenses !== null
+                              ? t('tools.expensesCount', { count: supportingCounts.expenses })
+                              : key === 'notes'
+                                ? t('tools.notesCount', { count: notes.length })
+                                : t(`tools.${descriptionKey}`)}
+                      </span>
+                      <ChevronRight
+                        aria-hidden="true"
+                        className="size-3.5 shrink-0 text-text-subtle transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
+                      />
+                    </span>
+                  </span>
+                </Link>
               ))}
-            </ItemGroup>
+            </div>
           </EditorialSection>
 
           {/* Preparing the device is housekeeping, not travelling: it closes the

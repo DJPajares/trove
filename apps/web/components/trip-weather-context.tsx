@@ -1,13 +1,14 @@
 'use client';
 
 import { CloudSun, RefreshCw } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import { usePreferences } from '@/components/preferences-provider';
 import { TripHourlyWeather } from '@/components/trip-hourly-weather';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { weatherConditionKey } from '@/lib/weather/conditions';
+import { weatherConditionIcon, weatherConditionKey } from '@/lib/weather/conditions';
+import { selectHourlyReadings } from '@/lib/weather/hourly';
 import {
   isCurrentReadingStale,
   isDateForecastable,
@@ -45,7 +46,6 @@ export function TripWeatherContext({
   tripId: string;
 }>) {
   const t = useTranslations('tripMode.views.weather');
-  const locale = useLocale();
   const { preferences } = usePreferences();
   const { data, dataUpdatedAt, refetch, status } = useTripWeather(tripId);
 
@@ -90,96 +90,109 @@ export function TripWeatherContext({
   const current = data.current;
   // An answer read off disk on a plane is worth showing, but it stops being
   // "now" the moment it outlives its window. Dropping back to the day's
-  // forecast is the whole of that correction: the heading stops saying now and
-  // starts naming the day, which is more use than a sentence about caching.
+  // forecast is the whole of that correction.
   const stale = isCurrentReadingStale(dataUpdatedAt);
-  const showCurrent = Boolean(
-    !isPreview && !stale && current && selectedDate === localDate(timeZone),
+  const isToday = selectedDate === localDate(timeZone);
+  const showCurrent = Boolean(!isPreview && !stale && current && isToday);
+  /**
+   * Whether the hours in hand are this day's hours.
+   *
+   * They are fetched for one place - wherever the traveller is today - so a
+   * trip that moves on tomorrow would otherwise read this city's rain against
+   * the next city's afternoon. PRD 21.1 calls that fabricating a forecast, so a
+   * day somewhere else keeps the daily summary instead.
+   */
+  const hoursBelongHere = Boolean(
+    data.hours.length &&
+    data.hoursLocation &&
+    selectedForecast &&
+    data.hoursLocation.timeZone === selectedForecast.location.timeZone &&
+    Math.abs(data.hoursLocation.latitude - selectedForecast.location.latitude) < 0.05 &&
+    Math.abs(data.hoursLocation.longitude - selectedForecast.location.longitude) < 0.05,
   );
-  const mainTemperature =
-    showCurrent && current ? current.temperature : (selectedForecast?.temperatureMax ?? null);
+  // Selected here rather than inside the strip, because whether there are any
+  // hours for this day is what decides if the hours are the answer at all. A
+  // day past the hourly window has none, and must fall back to its summary
+  // rather than to a bare high and low.
+  const hourReadings =
+    !isPreview && !stale && hoursBelongHere
+      ? selectHourlyReadings(data.hours, { date: selectedDate, timeZone })
+      : [];
+  const showHours = hourReadings.length > 0;
   const condition = showCurrent && current ? current : selectedForecast;
+  const DayIcon = weatherConditionIcon(condition?.weatherCode ?? 0);
   const unit = t(`unit.${preferences.temperatureUnit}`);
   const formatTemperature = (value: number) => `${Math.round(value)}${unit}`;
-  const formattedDate = new Intl.DateTimeFormat(locale, {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  }).format(new Date(`${selectedDate}T00:00:00.000Z`));
 
   return (
     <section aria-labelledby="trip-weather-heading" className="border-y border-border py-4">
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-secondary text-secondary-foreground">
-          <CloudSun aria-hidden="true" className="size-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-            {showCurrent ? t('now') : t('forecast')}
-          </p>
-          <h3 className="mt-1 font-semibold text-foreground" id="trip-weather-heading">
-            {showCurrent ? t('today') : t('forDate', { date: formattedDate })}
-          </h3>
-        </div>
-      </div>
+      <h3 className="sr-only" id="trip-weather-heading">
+        {showCurrent ? t('now') : t('forecast')}
+      </h3>
 
-      {/* The readings run the full width rather than sitting in the column
-      beside the icon. Indenting them past a 40px tile bought nothing and cost
-      the hourly strip the end of its own day. */}
-      {/* The reading is the link to where it came from.
-          Only the reading: the hourly strip below is a list a traveller scrolls
-          and taps along, and a link stretched over that would turn every hour
-          into a trip off the site. The credit the visible label used to carry
-          rides in the accessible name and the tooltip instead. */}
-      {mainTemperature !== null && condition ? (
+      {/* The hours lead. The panel used to spend three lines - an eyebrow saying
+          WEATHER FORECAST, a heading restating a date already at the top of the
+          screen, and a whole day's high and low - before saying anything a
+          traveller standing outside at five in the afternoon could act on. What
+          they want is whether it rains before dinner, and that is the strip. */}
+      {showHours ? (
+        <TripHourlyWeather
+          attribution={data.attribution}
+          current={showCurrent ? current : null}
+          readings={hourReadings}
+          temperatureUnit={preferences.temperatureUnit}
+        />
+      ) : condition && selectedForecast ? (
+        // No hours for this day, so the day itself is the answer: one line, the
+        // condition and the range, still linking to where it came from.
         <a
           aria-label={t('readingLabel', {
             condition: t(`condition.${weatherConditionKey(condition.weatherCode)}`),
             source: data.attribution.label,
-            temperature: formatTemperature(mainTemperature),
+            temperature: formatTemperature(selectedForecast.temperatureMax),
           })}
-          className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[var(--radius-sm)] outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[var(--radius-sm)] outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
           href={data.attribution.url}
           rel="noreferrer"
           target="_blank"
           title={data.attribution.label}
         >
+          <DayIcon aria-hidden="true" className="size-5 shrink-0 text-brand" />
           <p
             aria-hidden="true"
-            className="text-2xl font-semibold tracking-[-0.02em] text-foreground tabular-nums"
+            className="text-xl font-semibold tracking-[-0.02em] text-foreground tabular-nums"
           >
-            {formatTemperature(mainTemperature)}
+            {formatTemperature(
+              showCurrent && current ? current.temperature : selectedForecast.temperatureMax,
+            )}
           </p>
           <p aria-hidden="true" className="text-sm text-muted-foreground">
             {t(`condition.${weatherConditionKey(condition.weatherCode)}`)}
           </p>
-          {showCurrent && current ? (
-            <p aria-hidden="true" className="text-sm text-muted-foreground">
-              {t('feelsLike', { temperature: formatTemperature(current.apparentTemperature) })}
-            </p>
-          ) : null}
-          {selectedForecast ? (
-            <p aria-hidden="true" className="text-sm text-muted-foreground">
-              {t('range', {
-                high: formatTemperature(selectedForecast.temperatureMax),
-                low: formatTemperature(selectedForecast.temperatureMin),
-              })}
-            </p>
-          ) : null}
+          <p aria-hidden="true" className="text-sm text-muted-foreground tabular-nums">
+            {t('range', {
+              high: formatTemperature(selectedForecast.temperatureMax),
+              low: formatTemperature(selectedForecast.temperatureMin),
+            })}
+          </p>
         </a>
       ) : (
-        <p className="mt-3 text-sm leading-6 text-muted-foreground">
+        <p className="text-sm leading-6 text-muted-foreground">
           {/* A day past the horizon has no forecast yet; a day inside it that
           still has none has nowhere located to have weather about. */}
           {isDateForecastable(data, selectedDate) ? t('noForecast') : t('forecastLater')}
         </p>
       )}
 
-      {/* Only ever the day being stood in: the hours come from the same live
-      reading as `current`, and mean nothing once that reading is too old to be
-      now, or on a day the traveller has not reached yet. */}
-      {showCurrent ? (
-        <TripHourlyWeather date={selectedDate} hours={data.hours} timeZone={timeZone} />
+      {/* The day's shape, demoted to the quiet line it is. It is context for the
+          hours above, not the headline it used to be. */}
+      {showHours && selectedForecast ? (
+        <p className="mt-2.5 text-[length:var(--text-metadata)] leading-5 text-text-subtle tabular-nums">
+          {t('range', {
+            high: formatTemperature(selectedForecast.temperatureMax),
+            low: formatTemperature(selectedForecast.temperatureMin),
+          })}
+        </p>
       ) : null}
     </section>
   );

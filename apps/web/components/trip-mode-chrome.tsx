@@ -9,7 +9,7 @@ import { NavActiveIndicator } from '@/components/nav-active-indicator';
 import { usePreferences } from '@/components/preferences-provider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNowTick } from '@/hooks/use-now-tick';
-import { cityFromTimeZone } from '@/lib/home/here';
+import { useHereWeather } from '@/lib/home/use-here-weather';
 import { isNavigationPathActive } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 
@@ -104,6 +104,11 @@ export function TripModeTabBar({
  * standing is the one fact on this screen they cannot supply themselves, and it
  * was previously body copy three sections down.
  *
+ * The place under it is where the device says they are, resolved to a real
+ * name by the server. It used to be read off the IANA zone, which named a
+ * region rather than a place - so a traveller in Whangarei was told Auckland.
+ * With no shared position there is no name, and the clock stands alone.
+ *
  * In Preview the clock would be a fiction, so it gives way to the Preview mark:
  * nobody is standing in a day that has not happened.
  */
@@ -122,7 +127,13 @@ export function TripModeTopBar({
   const locale = useLocale();
   const { preferences } = usePreferences();
   const now = useNowTick(!isPreview);
-  const city = cityFromTimeZone(timeZone ?? undefined);
+  // Where the traveller actually is, not the city their time zone is named
+  // after - Pacific/Auckland said "Auckland" to everyone in New Zealand. The
+  // reading is already being fetched for the strip on Home, so this is the same
+  // query rather than a second one, and it is null rather than a guess whenever
+  // location has not been shared.
+  const { weather } = useHereWeather();
+  const city = isPreview ? null : (weather?.city ?? null);
   const clock =
     timeZone && !isPreview
       ? new Intl.DateTimeFormat(locale, {

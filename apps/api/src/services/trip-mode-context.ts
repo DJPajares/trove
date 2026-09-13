@@ -14,7 +14,11 @@ import {
   serializeItineraryItem,
 } from './itineraries.js';
 import { hydratePlaceSnapshots } from './place-data.js';
-import { placeProviderRefInclude, serializeCanonicalPlace } from './place-serializer.js';
+import {
+  placeProviderRefInclude,
+  resolveCanonicalPlaceName,
+  serializeCanonicalPlace,
+} from './place-serializer.js';
 import type { PlacesService } from './places.js';
 import type { RouteTravelMode, RoutesService } from './routes.js';
 import { formatDateOnly, getLocalDate, isValidIanaTimeZone, parseDateOnly } from './trip-rules.js';
@@ -94,14 +98,6 @@ function toEndpointCoordinate(place: ReturnType<typeof serializeCanonicalPlace>)
 }
 
 /**
- * The name chain the timeline and the map already read, said once more here so
- * a stop is called the same thing on the bar as it is in the day's list.
- */
-function placeName(place: ReturnType<typeof serializeCanonicalPlace>) {
-  return place.name ?? place.snapshot?.name ?? place.providerLabel ?? null;
-}
-
-/**
  * Whether the two ends are the same place, which is not a leg but a standstill.
  *
  * A traveller sleeping at the last stop they visited has nowhere left to go,
@@ -131,7 +127,7 @@ function itemEndpoint(item: ContextItemRecord): TripModeLegEndpoint | null {
     coordinate: toEndpointCoordinate(place),
     id: item.id,
     kind: 'itinerary_item',
-    name: item.customLabel ?? item.tripPlace.customName ?? placeName(place),
+    name: item.customLabel ?? item.tripPlace.customName ?? resolveCanonicalPlaceName(place),
   };
 }
 
@@ -143,7 +139,7 @@ function baseEndpoint(tripPlace: LegBaseRecord | null): TripModeLegEndpoint | nu
     coordinate: toEndpointCoordinate(place),
     id: tripPlace.id,
     kind: 'daily_base',
-    name: tripPlace.customName ?? placeName(place),
+    name: tripPlace.customName ?? resolveCanonicalPlaceName(place),
   };
 }
 

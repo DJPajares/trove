@@ -404,6 +404,24 @@ body {
   --nav-notch-shape: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 64'><path fill='black' d='M0 0H29.404A13 13 0 0 1 42.053 10A39 39 0 0 0 117.947 10A13 13 0 0 1 130.596 0H160V64H0Z'/></svg>");
 }
 
+/* The signed-in shell reserves the foot of every mobile page for the bottom bar
+   and its create action. Trip Mode's own bar takes that place instead, and the
+   global one stands down for it - so without this the reservation is held for
+   something that is not there, and every Trip Mode view ends about 150px above
+   its own tab bar.
+
+   `:has()` rather than a prop because `AppShell` is a server component with no
+   pathname to read, and an element selector outranks `md:py-12` outright rather
+   than depending on which utility Tailwind happens to emit last. Above `lg:`
+   Trip Mode's bar is in the flow like any other content and the shell's own
+   padding is correct again. */
+@media (width < 64rem) {
+  main:has([data-slot='trip-mode-shell']) {
+    padding-top: var(--safe-top);
+    padding-bottom: 0;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

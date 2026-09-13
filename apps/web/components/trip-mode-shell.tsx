@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarDays, ChevronLeft, ChevronRight, Compass, Eye } from 'lucide-react';
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Compass, Eye } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -19,6 +19,7 @@ import { TripModeDataProvider } from '@/components/trip-mode-data';
 import { TripSyncStatus } from '@/components/trip-sync-status';
 import { TripModeTasksProvider } from '@/components/trip-mode-tasks';
 import { useTripContext } from '@/components/trip-provider';
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import {
@@ -34,6 +35,7 @@ import { queryKeys } from '@/lib/query/keys';
 import { useTripResource } from '@/lib/query/use-trip-resource';
 import { resolveProviderPlaceName, resolveTripPlaceName } from '@/lib/trip-places/place-name';
 import { isTripModeAvailable } from '@/lib/trips/navigation';
+import { cn } from '@/lib/utils';
 
 type PreviewSelection = { date: string; time: string };
 
@@ -200,6 +202,7 @@ function TripModePreviewSummary({
   const t = useTranslations('tripMode');
   const locale = useLocale();
   const { preferences } = usePreferences();
+  const [controlsOpen, setControlsOpen] = useState(false);
 
   const dateLabel = new Intl.DateTimeFormat(locale, {
     day: 'numeric',
@@ -217,24 +220,46 @@ function TripModePreviewSummary({
   const summary = t('preview.summary', { date: dateLabel, time: timeLabel });
 
   return (
-    <div className="border-y border-accent-strong/35 bg-accent-strong/8">
-      <div className="flex items-center gap-2.5 px-3 py-2.5 sm:gap-3 sm:px-4">
+    // Which day is being previewed is worth one line; the controls that change
+    // it are worth a row only while they are being used. Open they cost about
+    // 300px, which on the map was most of the map.
+    <Collapsible
+      className="-mx-[var(--gutter-inline-start)] border-y border-accent-strong/35 bg-accent-strong/8"
+      onOpenChange={setControlsOpen}
+      open={controlsOpen}
+    >
+      <div className="flex items-center gap-2.5 px-[var(--gutter-inline-start)] py-2 sm:gap-3">
         <Eye aria-hidden="true" className="size-4 shrink-0 text-accent-strong" />
         <p className="min-w-0 flex-1 text-sm leading-5 font-medium text-pretty text-foreground">
           {summary}
         </p>
+        <CollapsibleTrigger
+          className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-[var(--radius-md)] px-2 text-[length:var(--text-metadata)] font-medium text-accent-strong outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+          render={<button type="button" />}
+        >
+          {t(controlsOpen ? 'preview.hideControls' : 'preview.showControls')}
+          <ChevronDown
+            aria-hidden="true"
+            className={cn(
+              'size-3.5 transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none',
+              controlsOpen && 'rotate-180',
+            )}
+          />
+        </CollapsibleTrigger>
       </div>
-      <div className="border-t border-accent-strong/25 px-3 py-4 sm:px-4">
-        <TripModePreviewControls
-          activityCounts={activityCounts}
-          endDate={endDate}
-          idPrefix="trip-mode-preview-controls"
-          onChange={onChange}
-          selection={selection}
-          startDate={startDate}
-        />
-      </div>
-    </div>
+      <CollapsiblePanel>
+        <div className="border-t border-accent-strong/25 px-[var(--gutter-inline-start)] py-4">
+          <TripModePreviewControls
+            activityCounts={activityCounts}
+            endDate={endDate}
+            idPrefix="trip-mode-preview-controls"
+            onChange={onChange}
+            selection={selection}
+            startDate={startDate}
+          />
+        </div>
+      </CollapsiblePanel>
+    </Collapsible>
   );
 }
 
@@ -413,11 +438,11 @@ export function TripModeShell({
           tripName={null}
         />
 
+        <TripModeTabBar tripId={tripId} />
+
         <div className="min-h-[min(32rem,55dvh)] pt-6 pb-[calc(var(--bottom-bar-height)+var(--safe-bottom)+1rem)] sm:pt-8 lg:pb-8">
           <ContentSkeleton shape="timeline" />
         </div>
-
-        <TripModeTabBar tripId={tripId} />
       </section>
     );
   }
@@ -520,6 +545,11 @@ export function TripModeShell({
               tripName={trip.name}
             />
 
+            {/* Fixed to the foot of a phone, in the thumb's reach; a plain row
+                under the bar on a desktop, which has no thumb zone to aim at.
+                Ordered here so that row lands where a reader looks for it. */}
+            <TripModeTabBar tripId={trip.id} withPreviewHref={withPreviewHref} />
+
             {previewSelection ? (
               <TripModePreviewSummary
                 activityCounts={activityCounts}
@@ -547,8 +577,6 @@ export function TripModeShell({
             {planScoreEnabled && previewSelection ? (
               <TripModePreviewPlanScore date={previewSelection.date} tripId={trip.id} />
             ) : null}
-
-            <TripModeTabBar tripId={trip.id} withPreviewHref={withPreviewHref} />
           </section>
 
           {detailsPlace ? (

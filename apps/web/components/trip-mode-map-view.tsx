@@ -21,11 +21,11 @@ import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
+import { TripModeMapSheet } from '@/components/trip-mode-map-sheet';
 import { useTripModeData } from '@/components/trip-mode-data';
 import { useTripModePlaceDetails, useTripModePreview } from '@/components/trip-mode-shell';
 import { useOnlineStatus } from '@/components/trip-sync-status';
 import { useTravellerPosition } from '@/hooks/use-traveller-position';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -255,113 +255,51 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
       totalSegmentCount: 0,
     },
   };
+  // Which of these sentences applies is the whole distinction between a planned
+  // map and a live one, so exactly one of them is always on screen.
+  const locationNotice = isPreview
+    ? { icon: Eye, text: t('previewLocation'), tone: 'info' as const }
+    : !online
+      ? { icon: CircleAlert, text: t('offlineMap'), tone: 'warning' as const }
+      : locationStatus === 'ready'
+        ? { icon: LocateFixed, text: t('locationShown'), tone: 'info' as const }
+        : locationStatus === 'denied' || locationStatus === 'unavailable'
+          ? {
+              icon: CircleAlert,
+              text: locationStatus === 'denied' ? t('locationDenied') : t('locationUnavailable'),
+              tone: 'muted' as const,
+            }
+          : null;
+  const NoticeIcon = locationNotice?.icon;
+
   return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          {day.name ? (
-            <h2 className="text-base font-semibold tracking-tight sm:text-lg">{day.name}</h2>
-          ) : (
-            <h2 className="sr-only">{t('title')}</h2>
-          )}
-          <p className="text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
-            {day.name ? itineraryT('dayOption', { date, number: context.day?.number ?? 1 }) : date}
-          </p>
-          {/* Which of these two sentences shows is the whole distinction between
-              a planned map and a live one, so it stays visible either way. */}
-          <p className="mt-0.5 max-w-[var(--layout-reading)] text-[length:var(--text-metadata)] leading-5 text-pretty text-text-subtle">
-            {t(isPreview ? 'previewDescription' : 'description')}
-          </p>
-        </div>
-        {!isPreview && online && locationStatus !== 'unsupported' ? (
-          <Button
-            disabled={locationStatus === 'loading'}
-            onClick={requestLocation}
-            variant={locationStatus === 'ready' ? 'secondary' : 'outline'}
-          >
-            <LocateFixed aria-hidden="true" data-icon="inline-start" />
-            {locationStatus === 'loading'
-              ? t('locating')
-              : locationStatus === 'ready'
-                ? t('updateLocation')
-                : t('useLocation')}
-          </Button>
-        ) : null}
+    <div className="space-y-4 lg:space-y-6">
+      <header className="min-w-0">
+        <h2 className="sr-only">{day.name ?? t('title')}</h2>
+        <p className="text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
+          {day.name ? itineraryT('dayOption', { date, number: context.day?.number ?? 1 }) : date}
+        </p>
+        {/* The explanation moves to `lg:`, where there is room for it. On a
+            phone it was three lines of prose standing between a traveller and
+            the map they opened. */}
+        <p className="mt-0.5 hidden max-w-[var(--layout-reading)] text-[length:var(--text-metadata)] leading-5 text-pretty text-text-subtle lg:block">
+          {t(isPreview ? 'previewDescription' : 'description')}
+        </p>
       </header>
 
-      {isPreview ? (
-        <Alert variant="info">
-          <Eye aria-hidden="true" />
-          <AlertDescription>{t('previewLocation')}</AlertDescription>
-        </Alert>
-      ) : locationStatus === 'ready' ? (
-        <Alert variant="info">
-          <LocateFixed aria-hidden="true" />
-          <AlertDescription>{t('locationShown')}</AlertDescription>
-        </Alert>
-      ) : locationStatus === 'denied' || locationStatus === 'unavailable' ? (
-        <Alert>
-          <CircleAlert aria-hidden="true" />
-          <AlertDescription>
-            {locationStatus === 'denied' ? t('locationDenied') : t('locationUnavailable')}
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      {!online ? (
-        <Alert variant="warning">
-          <CircleAlert aria-hidden="true" />
-          <AlertDescription>{t('offlineMap')}</AlertDescription>
-        </Alert>
-      ) : null}
-
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+      {/* The map is the view. On a phone it fills what is left of the screen
+          between the two bars, with the day riding over it on a sheet; at `lg:`
+          it goes back to being a card beside a rail, which that width has room
+          for. One map either way - a second instance is a second charge. */}
+      <div className="relative -mx-[var(--gutter-inline-start)] h-[68dvh] min-h-[22rem] overflow-hidden lg:static lg:mx-0 lg:grid lg:h-auto lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-6 lg:overflow-visible">
         <section
           aria-label={t('mapSectionLabel')}
-          className="min-w-0 overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card shadow-[var(--shadow-surface)]"
+          className="absolute inset-0 lg:static lg:min-w-0 lg:overflow-hidden lg:rounded-[var(--radius-xl)] lg:border lg:border-border lg:bg-card lg:shadow-[var(--shadow-surface)]"
         >
-          <ItineraryRouteSummary
-            data={routeState.status === 'loading' ? null : routeSummaryData}
-            distanceUnit={preferences.distanceUnit}
-            locale={locale}
-            status={routeState.status}
-          />
-          <ul
-            aria-label={t('legendLabel')}
-            className="flex flex-wrap gap-x-4 gap-y-2 border-b border-border px-4 py-3 text-xs text-muted-foreground sm:px-6"
-          >
-            <li className="inline-flex items-center gap-2">
-              <span aria-hidden="true" className="size-3 rounded-full bg-primary" />
-              {t('legend.planned')}
-            </li>
-            {baseTripPlace ? (
-              <li className="inline-flex items-center gap-2">
-                <span
-                  aria-hidden="true"
-                  className="size-3 rounded-[var(--radius-xs)] border-2 border-primary"
-                />
-                {t('legend.base')}
-              </li>
-            ) : null}
-            {nearbyPoints.length ? (
-              <li className="inline-flex items-center gap-2">
-                <span aria-hidden="true" className="size-3 rounded-full border-2 border-primary" />
-                {t('legend.tripPlaces')}
-              </li>
-            ) : null}
-            {deviceLocation ? (
-              <li className="inline-flex items-center gap-2">
-                <span
-                  aria-hidden="true"
-                  className="size-3 rounded-full bg-status-info ring-2 ring-status-info/25"
-                />
-                {t('legend.device')}
-              </li>
-            ) : null}
-          </ul>
           {online ? (
             <ItineraryPlanningMap
               ariaLabel={t('interactiveMapLabel')}
+              className="h-full lg:h-auto"
               currentLocation={deviceLocation}
               onClearSelection={clearMapSelection}
               onSelectPoint={(point) => setSelectedPointId(point.id)}
@@ -379,7 +317,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
               selectedPointId={selectedPointId}
             />
           ) : (
-            <div className="flex min-h-72 items-center justify-center bg-surface-sunken px-6 text-center">
+            <div className="flex h-full min-h-72 items-center justify-center bg-surface-sunken px-6 text-center">
               <div className="max-w-sm">
                 <MapPin aria-hidden="true" className="mx-auto size-6 text-brand" />
                 <p className="mt-3 font-medium text-foreground">{t('offlineMapTitle')}</p>
@@ -391,7 +329,87 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
           )}
         </section>
 
-        <aside aria-label={t('dayContextLabel')} className="space-y-6">
+        <TripModeMapSheet>
+          {/* How far and how long is what the map is usually opened to answer,
+              so it is the part of the sheet visible without opening it. */}
+          <div className="-mx-[var(--gutter-inline-start)] border-b border-border-subtle lg:mx-0 lg:rounded-[var(--radius-xl)] lg:border lg:bg-card lg:shadow-[var(--shadow-surface)]">
+            <ItineraryRouteSummary
+              data={routeState.status === 'loading' ? null : routeSummaryData}
+              distanceUnit={preferences.distanceUnit}
+              locale={locale}
+              status={routeState.status}
+            />
+            {locationNotice && NoticeIcon ? (
+              <p
+                className={cn(
+                  'flex items-start gap-2 border-t border-border-subtle px-4 py-2.5 text-xs leading-5 sm:px-6',
+                  locationNotice.tone === 'info'
+                    ? 'text-status-info'
+                    : locationNotice.tone === 'warning'
+                      ? 'text-status-warning'
+                      : 'text-muted-foreground',
+                )}
+              >
+                <NoticeIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                {locationNotice.text}
+              </p>
+            ) : null}
+            {!isPreview && online && locationStatus !== 'unsupported' ? (
+              <div className="border-t border-border-subtle px-4 py-2.5 sm:px-6">
+                <Button
+                  className="w-full sm:w-auto"
+                  disabled={locationStatus === 'loading'}
+                  onClick={requestLocation}
+                  size="sm"
+                  variant={locationStatus === 'ready' ? 'secondary' : 'outline'}
+                >
+                  <LocateFixed aria-hidden="true" data-icon="inline-start" />
+                  {locationStatus === 'loading'
+                    ? t('locating')
+                    : locationStatus === 'ready'
+                      ? t('updateLocation')
+                      : t('useLocation')}
+                </Button>
+              </div>
+            ) : null}
+            <ul
+              aria-label={t('legendLabel')}
+              className="flex flex-wrap gap-x-4 gap-y-2 border-t border-border-subtle px-4 py-3 text-xs text-muted-foreground sm:px-6"
+            >
+              <li className="inline-flex items-center gap-2">
+                <span aria-hidden="true" className="size-3 rounded-full bg-primary" />
+                {t('legend.planned')}
+              </li>
+              {baseTripPlace ? (
+                <li className="inline-flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="size-3 rounded-[var(--radius-xs)] border-2 border-primary"
+                  />
+                  {t('legend.base')}
+                </li>
+              ) : null}
+              {nearbyPoints.length ? (
+                <li className="inline-flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="size-3 rounded-full border-2 border-primary"
+                  />
+                  {t('legend.tripPlaces')}
+                </li>
+              ) : null}
+              {deviceLocation ? (
+                <li className="inline-flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="size-3 rounded-full bg-status-info ring-2 ring-status-info/25"
+                  />
+                  {t('legend.device')}
+                </li>
+              ) : null}
+            </ul>
+          </div>
+
           {baseTripPlace ? (
             <section className="border-b border-border pb-5">
               <div className="flex items-start gap-3">
@@ -514,7 +532,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
             <Navigation aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
             {t('directionsHandoff')}
           </p>
-        </aside>
+        </TripModeMapSheet>
       </div>
     </div>
   );

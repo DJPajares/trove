@@ -488,6 +488,8 @@
     "preview": {
       "label": "Trip Mode Preview",
       "badge": "Preview",
+      "showControls": "Change",
+      "hideControls": "Done",
       "date": "Trip day",
       "previousDay": "Previous day",
       "nextDay": "Next day",
@@ -856,6 +858,8 @@
         "interactiveMapLabel": "Interactive map for today's route and places",
         "stopNumber": "Stop {number}",
         "legendLabel": "Map marker guide",
+        "sheetExpand": "Show the day",
+        "sheetCollapse": "Hide the day",
         "legend": {
           "planned": "Planned stops",
           "base": "Day base",

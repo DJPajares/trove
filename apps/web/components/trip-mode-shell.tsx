@@ -41,6 +41,7 @@ type TripModePreviewContextValue = {
   contextOptions: (signal?: AbortSignal) => TripModeContextRequestOptions;
   isPreview: boolean;
   previewSelection: PreviewSelection | null;
+  updatePreview: (next: { date?: string; time?: string }) => void;
   withPreviewHref: (href: string) => string;
 };
 
@@ -48,6 +49,7 @@ const TripModePreviewContext = createContext<TripModePreviewContextValue>({
   contextOptions: (signal) => ({ signal }),
   isPreview: false,
   previewSelection: null,
+  updatePreview: () => undefined,
   withPreviewHref: (href) => href,
 });
 
@@ -350,14 +352,29 @@ export function TripModeShell({
         : href,
     [previewSelection],
   );
+  const updatePreview = useCallback(
+    (next: { date?: string; time?: string }) => {
+      if (!previewSelection) return;
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('preview', '1');
+      params.set('date', next.date ?? previewSelection.date);
+      params.set('time', next.time ?? previewSelection.time);
+      window.history.replaceState(null, '', `${pathname}?${params.toString()}`);
+    },
+    [pathname, previewSelection, searchParams],
+  );
+
   const previewContext = useMemo<TripModePreviewContextValue>(
     () => ({
       contextOptions,
       isPreview: Boolean(previewSelection),
       previewSelection,
+      // Views step the previewed day too - Today's day strip does - and they
+      // must step it the same fast way the banner's own arrows do.
+      updatePreview,
       withPreviewHref,
     }),
-    [contextOptions, previewSelection, withPreviewHref],
+    [contextOptions, previewSelection, updatePreview, withPreviewHref],
   );
 
   useEffect(() => {
@@ -377,14 +394,6 @@ export function TripModeShell({
    * the history API to feed the router directly, so this arrives at the same
    * place without asking the server what a query string means.
    */
-  function updatePreview(next: { date?: string; time?: string }) {
-    if (!previewSelection) return;
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('preview', '1');
-    params.set('date', next.date ?? previewSelection.date);
-    params.set('time', next.time ?? previewSelection.time);
-    window.history.replaceState(null, '', `${pathname}?${params.toString()}`);
-  }
 
   if (tripContext?.status === 'loading' || itineraryStatus === 'loading') {
     // The shell's own frame, at the size it will be: the way out, the four

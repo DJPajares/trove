@@ -1,6 +1,7 @@
 import { getPrismaClient } from '@trove/db';
 
 import { floatingLocalTimeToInstant, formatLocalTime } from './itinerary-rules.js';
+import { resolveItineraryItemName } from './place-serializer.js';
 import { resolveTripModeContext } from './trip-mode-context.js';
 import { deriveTripLifecycle, formatDateOnly } from './trip-rules.js';
 
@@ -136,14 +137,6 @@ function reservationCandidate(
   };
 }
 
-function itineraryItemLabel(item: {
-  customLabel: string | null;
-  customLocation: { label: string } | null;
-  tripPlace: { place: { name: string | null } } | null;
-}) {
-  return item.customLabel ?? item.customLocation?.label ?? item.tripPlace?.place.name ?? null;
-}
-
 async function leaveByCandidate(
   userId: string,
   trip: { id: string; name: string },
@@ -161,7 +154,13 @@ async function leaveByCandidate(
     return {
       eventAt,
       kind: 'LEAVE_BY',
-      label: itineraryItemLabel(destination) ?? trip.name,
+      // The stop being left for, named the way every other Trip Mode surface
+      // names it. This chain used to stop at the Place's own `name`, which is
+      // the traveller's custom name and null for every Google-backed stop - so
+      // an ordinary stop fell through to the trip's title and the notification
+      // read "Leave for <trip> in <trip>". The trip stays as the last resort
+      // for a stop that genuinely has no name at all.
+      label: resolveItineraryItemName(destination) ?? trip.name,
       sourceId: destination.id,
       sourceVersion: [
         context.leaveBy.targetStartAt,

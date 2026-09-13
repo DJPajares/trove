@@ -159,3 +159,51 @@ export function serializePlaceReference(
     snapshot: toPlaceSnapshot(resolveReference(tripPlace.place, options), options.now),
   };
 }
+
+/**
+ * What a Place is called, in the order a traveller would answer it.
+ *
+ * The Place's own `name` is the traveller's custom name and is null for every
+ * provider-backed Place, so a chain that stops there names nothing at all for
+ * an ordinary Google stop. The snapshot Trove stored when the Place was added
+ * carries the provider's name, and `providerLabel` is what is left when even
+ * that has not been fetched.
+ *
+ * Shared because this chain had drifted into four separate copies, and the one
+ * in the notification builder had stopped a step early - which is how a push
+ * notification came to name a trip twice instead of the stop it was about.
+ */
+export function resolveCanonicalPlaceName(place: {
+  name: string | null;
+  providerLabel?: string | null;
+  snapshot?: { name?: string | null } | null;
+}) {
+  return place.name ?? place.snapshot?.name ?? place.providerLabel ?? null;
+}
+
+/**
+ * What an itinerary item is called.
+ *
+ * The traveller's own label for this stop wins, then the name they gave the
+ * Trip Place, then whatever the Place itself is called. A custom location
+ * carries only a label, and an item with no Place at all has nothing else.
+ */
+export function resolveItineraryItemName(item: {
+  customLabel: string | null;
+  customLocation?: { label: string } | null;
+  tripPlace?: {
+    customName?: string | null;
+    place: {
+      name: string | null;
+      providerLabel?: string | null;
+      snapshot?: { name?: string | null } | null;
+    };
+  } | null;
+}) {
+  if (item.customLabel) return item.customLabel;
+  if (item.tripPlace) {
+    return item.tripPlace.customName ?? resolveCanonicalPlaceName(item.tripPlace.place);
+  }
+
+  return item.customLocation?.label ?? null;
+}

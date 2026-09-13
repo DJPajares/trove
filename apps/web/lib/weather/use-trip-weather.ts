@@ -7,18 +7,6 @@ import { queryKeys } from '@/lib/query/keys';
 import { getTripWeather, type TripWeather } from '@/lib/weather/api';
 
 /**
- * How long an answer is held before it is worth asking again.
- *
- * With `refetchOnMount` and `refetchOnReconnect` turned back on for this one
- * query, this is the entire refresh policy: opening a weather surface, or
- * coming back online, past a day asks again, and everything inside the day -
- * Today, the day rail, the trip overview, Home - reads the answer already in
- * hand. Open-Meteo bills nothing and the API answers most of these from its own
- * snapshot, so the occasional refetch costs a request rather than money.
- */
-const WEATHER_REFETCH_AFTER_MS = 24 * 60 * 60 * 1_000;
-
-/**
  * How long a reading may still be called "now".
  *
  * Matches the API's forecast snapshot window. Past it the traveller is reading
@@ -28,6 +16,24 @@ const WEATHER_REFETCH_AFTER_MS = 24 * 60 * 60 * 1_000;
  * forecast, which the heading already says it is.
  */
 const WEATHER_CURRENT_MAX_AGE_MS = 3 * 60 * 60 * 1_000;
+
+/**
+ * How long an answer is held before it is worth asking again.
+ *
+ * The same three hours, and that is the point. This used to be a day, which
+ * quietly broke the surfaces it was meant to serve: between three hours and
+ * twenty-four the app held a reading it refused to present as current - the
+ * rule directly above - while `refetchOnMount` declined to replace it, because
+ * a query is only refetched on mount once it is stale. So for most of every day
+ * Trip Mode showed a daily high instead of the hour it was standing in, with an
+ * hourly forecast sitting unused in the payload.
+ *
+ * Tying the two together means the data stops being fresh at the same moment it
+ * stops counting as now. Open-Meteo bills nothing and the API answers most of
+ * these from its own three-hour snapshot, so the extra asking costs a request
+ * rather than money.
+ */
+const WEATHER_REFETCH_AFTER_MS = WEATHER_CURRENT_MAX_AGE_MS;
 
 export type TripWeatherQuery = {
   data: TripWeather | null;

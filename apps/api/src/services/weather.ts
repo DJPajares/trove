@@ -364,9 +364,15 @@ export class OpenMeteoWeatherProvider implements WeatherProvider {
       forecast_days: '16',
       // Bounded to the stretch a traveller can still act on. `forecast_hours`
       // moves the reference from the current day to the current hour, so this
-      // is the next 24 hours rather than 384 of them, and it leaves the daily
-      // series above governed by `forecast_days`.
-      forecast_hours: '24',
+      // is the next week rather than the daily series' full sixteen, and it
+      // leaves that series governed by `forecast_days`.
+      //
+      // A week rather than a day because Trip Mode reads the hours for whichever
+      // day a traveller is looking at, not only the one they are standing in.
+      // It stops at a week because an hour-by-hour forecast further out than
+      // that is a number with no forecast behind it, and PRD 21.1 forbids
+      // dressing one up as an answer.
+      forecast_hours: '168',
       hourly: 'temperature_2m,weather_code,precipitation_probability',
       latitude: String(input.latitude),
       longitude: String(input.longitude),

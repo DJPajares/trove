@@ -54,11 +54,18 @@ export type TripWeather = {
   fetchedAt: string;
   horizon: { endDate: string; startDate: string };
   /**
-   * The next stretch of hours where the traveller is today, empty whenever
-   * `current` is - the two come from the same live reading and mean nothing
-   * apart from it.
+   * The next week of hours, empty whenever `current` is - the two come from the
+   * same live reading and mean nothing apart from it.
    */
   hours: WeatherHourlyForecast[];
+  /**
+   * Where those hours are, which is wherever the traveller is today. It travels
+   * with them because it is the only way a surface can tell whether an hour
+   * belongs to the day it is drawing: a trip that moves on tomorrow would
+   * otherwise read this city's rain against the next city's afternoon, which
+   * PRD 21.1 calls fabricating a forecast. Null whenever `hours` is empty.
+   */
+  hoursLocation: TripWeatherLocation | null;
   provider: 'open_meteo';
   temperatureUnit: TemperatureUnit;
 };
@@ -278,6 +285,7 @@ export class TripWeatherService {
       fetchedAt: (oldestFetchedAt ?? now).toISOString(),
       horizon: window,
       hours: live.hours,
+      hoursLocation: live.location,
       provider: 'open_meteo',
       temperatureUnit: options.temperatureUnit,
     };
@@ -303,8 +311,12 @@ export class TripWeatherService {
     fallback: TripWeatherLocation | null,
     temperatureUnit: TemperatureUnit,
     now: Date,
-  ): Promise<{ current: WeatherCurrentConditions | null; hours: WeatherHourlyForecast[] }> {
-    const nothing = { current: null, hours: [] };
+  ): Promise<{
+    current: WeatherCurrentConditions | null;
+    hours: WeatherHourlyForecast[];
+    location: TripWeatherLocation | null;
+  }> {
+    const nothing = { current: null, hours: [], location: null };
     const anchor = fallback ?? days[0]?.location ?? null;
     if (!anchor) return nothing;
 
@@ -319,7 +331,7 @@ export class TripWeatherService {
         temperatureUnit,
         timeZone: location.timeZone,
       });
-      return { current: weather.current, hours: weather.hours ?? [] };
+      return { current: weather.current, hours: weather.hours ?? [], location };
     } catch {
       // A fortnight of forecasts is worth serving even when the reading for this
       // minute is not.

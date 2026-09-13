@@ -427,7 +427,7 @@ export function TripModeShell({
     return (
       <section
         aria-busy="true"
-        className="mx-auto w-full max-w-6xl"
+        className="mx-auto flex min-h-[100dvh] w-full max-w-6xl flex-col"
         data-slot="trip-mode-shell"
         role="status"
       >
@@ -440,7 +440,7 @@ export function TripModeShell({
 
         <TripModeTabBar tripId={tripId} />
 
-        <div className="min-h-[min(32rem,55dvh)] pt-6 pb-[calc(var(--bottom-bar-height)+var(--safe-bottom)+1rem)] sm:pt-8 lg:pb-8">
+        <div className="flex min-h-[min(32rem,55dvh)] flex-1 flex-col pt-6 pb-[calc(var(--bottom-bar-height)+var(--safe-bottom)+1rem)] sm:pt-8 lg:pb-8">
           <ContentSkeleton shape="timeline" />
         </div>
       </section>
@@ -533,7 +533,10 @@ export function TripModeShell({
         tripId={trip.id}
       >
         <TripModeTasksProvider tripId={trip.id}>
-          <section className="mx-auto w-full max-w-6xl" data-slot="trip-mode-shell">
+          <section
+            className="mx-auto flex min-h-[100dvh] w-full max-w-6xl flex-col"
+            data-slot="trip-mode-shell"
+          >
             <TripModeTopBar
               isPreview={Boolean(previewSelection)}
               timeZone={
@@ -565,7 +568,10 @@ export function TripModeShell({
             {/* The view starts where the bar ends. The padding at the foot is
                 the tab bar's own height plus the safe area, so the last row of
                 any view can still be reached above it. */}
-            <div className="min-h-[min(32rem,55dvh)] pt-5 pb-[calc(var(--bottom-bar-height)+var(--safe-bottom)+1rem)] sm:pt-6 lg:pb-8">
+            {/* `flex-1` rather than a `dvh` guess: a view that wants the rest
+                of the screen gets exactly what the bars leave it, and gets it
+                right again when the preview banner opens above. */}
+            <div className="flex min-h-[min(32rem,55dvh)] flex-1 flex-col pt-5 pb-[calc(var(--bottom-bar-height)+var(--safe-bottom)+1rem)] sm:pt-6 lg:pb-8">
               <TripModePlaceDetailsContext.Provider value={placeDetailsContext}>
                 {children}
               </TripModePlaceDetailsContext.Provider>

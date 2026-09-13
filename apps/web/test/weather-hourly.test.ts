@@ -49,11 +49,12 @@ test('steps by two, because a day is not read an hour at a time', () => {
   ]);
 });
 
-test('keeps only the day it was asked about', () => {
-  // The provider answers 24 hours from now, which runs past midnight into a
-  // different day of the trip. Those hours are not today's shape.
+test('the end of a day rolls into the next morning', () => {
+  // 10:00Z is 22:00 in Auckland. What is left of today is one or two cells, and
+  // a row that short says less than the temperature beside it - so it carries
+  // on into the hours a traveller is actually asking about by then.
   const readings = selectHourlyReadings(
-    hours([...daySpan('2026-09-11', 22, 23), ...daySpan('2026-09-12', 0, 3)]),
+    hours([...daySpan('2026-09-11', 22, 23), ...daySpan('2026-09-12', 0, 8)]),
     {
       date: '2026-09-11',
       now: new Date('2026-09-11T10:00:00.000Z'),
@@ -61,18 +62,43 @@ test('keeps only the day it was asked about', () => {
     },
   );
 
-  expect(readings.every((reading) => reading.time.startsWith('2026-09-11'))).toBe(true);
+  expect(readings.map((reading) => reading.time)).toStrictEqual([
+    '2026-09-11T22:00',
+    '2026-09-12T00:00',
+    '2026-09-12T02:00',
+    '2026-09-12T04:00',
+    '2026-09-12T06:00',
+  ]);
 });
 
-test('a day that is over has nothing left to say', () => {
-  // 11:30 UTC is 23:30 in Auckland, past the last hour the day holds.
-  const readings = selectHourlyReadings(hours(daySpan('2026-09-11', 9, 23)), {
-    date: '2026-09-11',
-    now: new Date('2026-09-11T11:30:00.000Z'),
+test('a day with enough left in it stays inside its own day', () => {
+  // Three cells is enough to be a shape rather than a leftover, so tomorrow is
+  // not borrowed from.
+  const readings = selectHourlyReadings(
+    hours([...daySpan('2026-09-11', 18, 23), ...daySpan('2026-09-12', 0, 4)]),
+    {
+      date: '2026-09-11',
+      now: new Date('2026-09-11T06:00:00.000Z'),
+      timeZone: ZONE,
+    },
+  );
+
+  expect(readings.every((reading) => reading.time.startsWith('2026-09-11'))).toBe(true);
+  expect(readings).toHaveLength(3);
+});
+
+test('a day the traveller has not reached yet is read whole', () => {
+  // Nothing about it is behind them, so it starts where the day starts rather
+  // than where they are standing.
+  const readings = selectHourlyReadings(hours(daySpan('2026-09-13', 0, 23)), {
+    date: '2026-09-13',
+    now: new Date('2026-09-11T03:30:00.000Z'),
     timeZone: ZONE,
   });
 
-  expect(readings).toHaveLength(1);
+  expect(readings[0]?.time).toBe('2026-09-13T00:00');
+  expect(readings.at(-1)?.time).toBe('2026-09-13T22:00');
+  expect(readings).toHaveLength(12);
 });
 
 test('the hour the traveller is standing in still counts', () => {

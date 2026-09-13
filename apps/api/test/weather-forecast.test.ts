@@ -238,9 +238,11 @@ test('the current reading also asks for the hours just after it', async () => {
   });
 
   expect(requests[0]).toContain('hourly=temperature_2m%2Cweather_code%2Cprecipitation_probability');
-  // The hourly series is bounded to the stretch still worth acting on, while
-  // the daily one keeps its own sixteen days.
-  expect(requests[0]).toContain('forecast_hours=24');
+  // The hourly series is bounded to the stretch still worth acting on - a week,
+  // because Trip Mode reads the hours for whichever day is being looked at and
+  // an hour-by-hour forecast further out than that has no forecast behind it -
+  // while the daily one keeps its own sixteen days.
+  expect(requests[0]).toContain('forecast_hours=168');
   expect(requests[0]).toContain('forecast_days=16');
   expect(weather.hours).toStrictEqual([
     {

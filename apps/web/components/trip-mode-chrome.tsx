@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname } from 'next/navigation';
 
+import { NavActiveIndicator } from '@/components/nav-active-indicator';
 import { usePreferences } from '@/components/preferences-provider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNowTick } from '@/hooks/use-now-tick';
@@ -50,7 +51,9 @@ export function TripModeTabBar({
       data-slot="trip-mode-tabs"
       data-translucent-surface
     >
-      <ul className="mx-auto grid w-full max-w-6xl grid-cols-4 px-[var(--gutter-inline-start)] lg:gap-1 lg:p-1">
+      {/* `pt-2` is load-bearing: the active mark hangs from the bar's top edge
+          by cancelling exactly this padding. */}
+      <ul className="mx-auto grid w-full max-w-6xl grid-cols-4 px-[var(--gutter-inline-start)] pt-2 lg:gap-1 lg:p-1">
         {tripModeViews.map(({ icon: Icon, key, path }) => {
           const href = `${basePath}${path}`;
           // Now owns the bare path, so prefix matching would light it up on
@@ -63,13 +66,20 @@ export function TripModeTabBar({
               <Link
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex min-h-[3.25rem] flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-2 py-2 text-[length:var(--text-metadata)] font-medium outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none lg:min-h-11 lg:flex-row lg:gap-1.5 lg:py-1.5',
+                  'relative isolate flex min-h-[3.25rem] flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-2 pt-1.5 pb-2 text-[length:var(--text-metadata)] font-medium outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none lg:min-h-11 lg:flex-row lg:gap-1.5 lg:py-1.5',
                   active
-                    ? 'text-brand lg:bg-secondary lg:text-secondary-foreground'
+                    ? 'font-semibold text-brand lg:bg-secondary lg:font-medium lg:text-secondary-foreground'
                     : 'text-muted-foreground hover:text-foreground lg:hover:bg-surface-hover',
                 )}
                 href={withPreviewHref(href)}
               >
+                {/* Colour alone cannot carry this: brand against muted measures
+                    1.20:1, so the selected tab dissolves into its neighbours in
+                    greyscale. The mark is the second channel WCAG 1.4.1 asks
+                    for, exactly as the app's main bar does it. At `lg:` the
+                    filled pill is already that channel, so the mark stands
+                    down. */}
+                {active ? <NavActiveIndicator className="lg:hidden" /> : null}
                 <Icon aria-hidden="true" className="size-5 lg:size-4" />
                 <span>{t(`views.${key}.label`)}</span>
               </Link>

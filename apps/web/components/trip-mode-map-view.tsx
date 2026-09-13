@@ -274,8 +274,8 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
   const NoticeIcon = locationNotice?.icon;
 
   return (
-    <div className="space-y-4 lg:space-y-6">
-      <header className="min-w-0">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 lg:block lg:space-y-6">
+      <header className="min-w-0 shrink-0">
         <h2 className="sr-only">{day.name ?? t('title')}</h2>
         <p className="text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
           {day.name ? itineraryT('dayOption', { date, number: context.day?.number ?? 1 }) : date}
@@ -292,7 +292,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
           between the two bars, with the day riding over it on a sheet; at `lg:`
           it goes back to being a card beside a rail, which that width has room
           for. One map either way - a second instance is a second charge. */}
-      <div className="relative -mx-[var(--gutter-inline-start)] h-[68dvh] min-h-[22rem] overflow-hidden lg:static lg:mx-0 lg:grid lg:h-auto lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-6 lg:overflow-visible">
+      <div className="relative -mx-[var(--gutter-inline-start)] min-h-[22rem] flex-1 overflow-hidden lg:static lg:mx-0 lg:grid lg:min-h-0 lg:flex-none lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-6 lg:overflow-visible">
         <section
           aria-label={t('mapSectionLabel')}
           className="absolute inset-0 lg:static lg:min-w-0 lg:overflow-hidden lg:rounded-[var(--radius-xl)] lg:border lg:border-border lg:bg-card lg:shadow-[var(--shadow-surface)]"

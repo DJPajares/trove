@@ -34,10 +34,16 @@ export function TripModeMapSheet({ children }: Readonly<{ children: ReactNode }>
 
   return (
     <motion.section
-      animate={{ height: expanded ? '92%' : '12.5rem' }}
       aria-label={t('dayContextLabel')}
-      className="absolute inset-x-0 bottom-0 z-[2] flex flex-col overflow-hidden rounded-t-[var(--trip-sheet-radius)] border-t border-border-subtle bg-background shadow-[var(--shadow-overlay)] lg:static lg:h-auto lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none"
-      // The rail owns its own height; only the sheet is animated.
+      className={cn(
+        // `max-height` rather than `height`, and in CSS rather than through
+        // motion: a percentage height never resolved here, so the sheet stayed
+        // at its collapsed size however often it was asked to open. A cap lets
+        // the sheet be exactly as tall as it needs and never taller, which is
+        // also what stops short content leaving a band of empty background.
+        'absolute inset-x-0 bottom-0 z-[2] flex flex-col overflow-hidden rounded-t-[var(--trip-sheet-radius)] border-t border-border-subtle bg-background shadow-[var(--shadow-overlay)] transition-[max-height] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none lg:static lg:max-h-none lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none',
+        expanded ? 'max-h-[92%]' : 'max-h-50',
+      )}
       drag={reducedMotion ? false : 'y'}
       dragConstraints={{ bottom: 0, top: 0 }}
       dragElastic={0.12}

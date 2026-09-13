@@ -1,3 +1,5 @@
+import { cn } from '@/lib/utils';
+
 /**
  * The mobile bar's current-page mark.
  *
@@ -12,13 +14,19 @@
  * centre, and columns two and four sit close enough to that on a 320px screen that a
  * wider mark would overhang the curve.
  *
- * Shared so every mobile destination uses the same current-page mark.
+ * Shared so every mobile destination uses the same current-page mark. `className`
+ * is for a bar that marks itself some other way at a wider size - Trip Mode's tabs
+ * become a filled pill at `lg:`, which is its own second channel, and two marks at
+ * once would be one too many.
  */
-export function NavActiveIndicator() {
+export function NavActiveIndicator({ className }: Readonly<{ className?: string }> = {}) {
   return (
     <span
       aria-hidden="true"
-      className="absolute -top-2 left-1/2 h-[3px] w-6 -translate-x-1/2 rounded-b-full bg-brand"
+      className={cn(
+        'absolute -top-2 left-1/2 h-[3px] w-6 -translate-x-1/2 rounded-b-full bg-brand',
+        className,
+      )}
     />
   );
 }

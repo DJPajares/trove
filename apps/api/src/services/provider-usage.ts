@@ -65,6 +65,7 @@ export type ProviderExpectedSku =
   | 'editorial-images-free'
   | 'geocoding-free'
   | 'places-autocomplete-requests'
+  | 'reverse-geocoding-free'
   | 'places-text-search-pro'
   | 'places-text-search-enterprise'
   | 'place-details-pro'
@@ -74,7 +75,7 @@ export type ProviderExpectedSku =
 
 type ProviderEventBase = {
   operation: 'computeRoute' | 'getDetails' | 'getForecast' | 'getRates' | 'search' | 'textSearch';
-  provider: 'frankfurter' | 'google' | 'open_meteo' | 'pexels';
+  provider: 'big_data_cloud' | 'frankfurter' | 'google' | 'open_meteo' | 'pexels';
   source: ProviderCallSource;
 };
 
@@ -89,7 +90,8 @@ export type ProviderCall = ProviderEventBase & {
     | '/v1/places:autocomplete'
     | '/v1/places:searchText'
     | '/v1/search'
-    | '/v1/forecast';
+    | '/v1/forecast'
+    | '/data/reverse-geocode-client';
   expectedSku: ProviderExpectedSku;
   includePolyline?: boolean;
   kind: 'outbound';
@@ -104,6 +106,7 @@ export type ProviderCacheEvent = ProviderEventBase & {
     | 'place-details'
     | 'place-evidence'
     | 'place-grounding'
+    | 'reverse-geocode'
     | 'route'
     | 'weather-forecast';
   failureCode?: 'NOT_FOUND' | 'UNUSABLE_LOCATION';

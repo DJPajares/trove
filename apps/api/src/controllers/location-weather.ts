@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
+import { resolvePlaceName } from '../services/reverse-geocode.js';
 import { resolveTimeZonePlace } from '../services/time-zone-places.js';
 import { isValidIanaTimeZone } from '../services/trip-rules.js';
 import { WeatherProviderError, type WeatherService } from '../services/weather.js';
@@ -43,14 +44,9 @@ export function createLocationWeatherControllers(weatherService: WeatherService)
          * Coordinates when the traveller has shared them, and otherwise the
          * city the zone is named after.
          *
-         * Trove never prompts for location, so most visits arrive with a zone
-         * and nothing else. Resolving that to a point is what lets Home answer
-         * at all rather than showing a blank where the weather goes.
-         *
-         * `place` is returned alongside so the client does not have to name the
-         * location itself. It is null when coordinates were given: the zone's
-         * city is not necessarily the city those coordinates are in, and a name
-         * the reading cannot vouch for is better left to the caller.
+         * Resolving the zone to a point is what lets Home answer at all for a
+         * traveller who has declined location rather than showing a blank where
+         * the weather goes.
          */
         const place = latitude === undefined ? await resolveTimeZonePlace(timeZone) : null;
         if (latitude === undefined && !place) {
@@ -64,7 +60,25 @@ export function createLocationWeatherControllers(weatherService: WeatherService)
           timeZone,
         });
 
-        return reply.send({ ...weather, place: place && { name: place.name } });
+        /**
+         * The name goes back with the reading, because the client cannot work
+         * it out. It used to be left to the caller, which meant falling back to
+         * the city in the IANA zone - so a traveller in Whangarei read
+         * "Auckland" over Whangarei's own temperature.
+         *
+         * With coordinates, the name is the place those coordinates are
+         * actually in. Without them it is the zone's own city, which names the
+         * region the reading came from - the client decides whether that is
+         * worth showing, and Home does not, because it would read as a claim
+         * about the traveller. Either way it is null rather than a guess when
+         * nothing resolves.
+         */
+        const name =
+          latitude === undefined
+            ? (place?.name ?? null)
+            : await resolvePlaceName(latitude, longitude!);
+
+        return reply.send({ ...weather, place: name ? { name } : null });
       } catch (error) {
         if (error instanceof WeatherProviderError) {
           if (error.code === 'invalid_request') {

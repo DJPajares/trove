@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 
 import { usePreferences } from '@/components/preferences-provider';
 import { useTravellerPosition } from '@/hooks/use-traveller-position';
-import { cityFromTimeZone } from '@/lib/home/here';
 import { deviceTimeZone } from '@/lib/itinerary/api';
 import { queryKeys } from '@/lib/query/keys';
 import { getLocationWeather } from '@/lib/weather/api';
@@ -20,25 +19,23 @@ export type HereWeather = {
 /**
  * What it is like where the traveller is standing.
  *
- * Two sources, in the order of what they cost the traveller. A position they
- * have already agreed to share is read silently and used as-is. Everyone else -
- * which is most visits, because Trove never prompts for location - is answered
- * from the device's own time zone, which the server turns into the city the
- * zone is named after.
+ * Home asks for location once, the first time it draws this, because the whole
+ * claim of the strip is that it is about where you are - and without a position
+ * it can only be about the time zone, which is a region the size of a country.
+ * A refusal is remembered and never asked again.
  *
- * That name is an approximation and the mismatch runs one way: with a shared
- * position the reading is exactly where the traveller is while the name is
- * still the zone's city, so someone in Hamilton reads "Auckland" over Hamilton's
- * temperature. The alternative was a billable reverse geocode on a screen that
- * renders every session, which AGENTS.md rules out for good reason.
+ * With a position, both halves are true: the reading is taken at those
+ * coordinates and the server names the place they are actually in. Without one,
+ * the reading is the zone's city and it is labelled as nothing at all - PRD 21.1
+ * forbids fabricating a current physical location, and "Auckland" over
+ * Whangarei's weather was exactly that.
  */
 export function useHereWeather() {
   const { preferences } = usePreferences();
   const temperatureUnit = preferences.temperatureUnit;
   const timeZone = deviceTimeZone();
-  // Probes an already-granted permission and prompts for nothing. A traveller
-  // who has never shared their location simply falls through to the zone.
-  const { position } = useTravellerPosition();
+  // Asks once, then never again. A granted permission is still read silently.
+  const { position } = useTravellerPosition({ askOnce: true });
 
   const query = useQuery({
     enabled: Boolean(timeZone),
@@ -71,7 +68,12 @@ export function useHereWeather() {
     status: 'ready',
     weather: {
       attribution: data.attribution,
-      city: data.place?.name ?? cityFromTimeZone(timeZone),
+      // Only named when the device said where it was. The server can still put
+      // a name to the zone it fell back to, but that names the region the
+      // reading came from rather than the traveller - and "Auckland" over a
+      // traveller in Whangarei is the claim PRD 21.1 forbids. Without a
+      // position the strip shows the reading and says nothing about where.
+      city: position ? (data.place?.name ?? null) : null,
       condition: data.current.weatherCode,
       temperature: data.current.temperature,
     },

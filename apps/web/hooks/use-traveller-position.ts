@@ -41,7 +41,36 @@ const POSITION_OPTIONS: PositionOptions = {
  * Pass `enabled: false` for Preview, where a real position would be answering a
  * question about a day the traveller is not living.
  */
-export function useTravellerPosition({ enabled = true }: { enabled?: boolean } = {}) {
+/**
+ * Remembers that the traveller has been asked, so a decline is never a nag.
+ *
+ * Per device rather than per account: the permission it tracks is the browser's,
+ * and the browser is the thing that would show the prompt again.
+ */
+const ASKED_KEY = 'trove.location-asked';
+
+function hasBeenAsked() {
+  try {
+    return window.localStorage.getItem(ASKED_KEY) === '1';
+  } catch {
+    // A browser that refuses storage is one that would be asked on every visit,
+    // so it is treated as already asked rather than prompted forever.
+    return true;
+  }
+}
+
+function rememberAsked() {
+  try {
+    window.localStorage.setItem(ASKED_KEY, '1');
+  } catch {
+    // Nothing to do: the guard above already fails closed.
+  }
+}
+
+export function useTravellerPosition({
+  askOnce = false,
+  enabled = true,
+}: { askOnce?: boolean; enabled?: boolean } = {}) {
   const [position, setPosition] = useState<TravellerPosition | null>(null);
   const [status, setStatus] = useState<TravellerPositionStatus>('idle');
   const mounted = useRef(true);
@@ -103,6 +132,14 @@ export function useTravellerPosition({ enabled = true }: { enabled?: boolean } =
         if (cancelled || !mounted.current) return;
         if (result.state === 'granted') read();
         if (result.state === 'denied') setStatus('denied');
+        // The one prompt Trove raises on its own, and only where a surface has
+        // said it is worth raising. `prompt` means the traveller has neither
+        // agreed nor refused; once asked, the answer stands either way and the
+        // question is not put again.
+        if (result.state === 'prompt' && askOnce && !hasBeenAsked()) {
+          rememberAsked();
+          read();
+        }
       })
       .catch(() => {
         // A refused probe is not a refused permission; leave the tap available.
@@ -111,7 +148,7 @@ export function useTravellerPosition({ enabled = true }: { enabled?: boolean } =
     return () => {
       cancelled = true;
     };
-  }, [enabled, read]);
+  }, [askOnce, enabled, read]);
 
   return { position, request: read, status };
 }

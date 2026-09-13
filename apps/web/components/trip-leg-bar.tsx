@@ -184,15 +184,26 @@ export function TripLegBar({ className, context, inverse = false }: Readonly<Tri
           {status === 'denied' ? (
             <p>{t('locationDenied')}</p>
           ) : (
-            <Button
-              className={cn('h-auto p-0 text-xs', inverse && 'text-white/85')}
-              disabled={status === 'loading'}
-              onClick={request}
-              size="sm"
-              variant="link"
-            >
-              {status === 'loading' ? t('locating') : t('locate')}
-            </Button>
+            <>
+              {/* The line above is already sweeping while this waits, so the
+                  label has nothing left to add by changing - it would only make
+                  the traveller re-read the control to learn what the motion
+                  already told them. The sentence it used to say is announced
+                  instead, the way the route-pending bar announces its own. */}
+              <Button
+                aria-busy={status === 'loading'}
+                className={cn('h-auto p-0 text-xs', inverse && 'text-white/85')}
+                disabled={status === 'loading'}
+                onClick={request}
+                size="sm"
+                variant="link"
+              >
+                {t('locate')}
+              </Button>
+              <span aria-live="polite" className="sr-only" role="status">
+                {status === 'loading' ? t('locating') : ''}
+              </span>
+            </>
           )}
         </div>
       ) : null}

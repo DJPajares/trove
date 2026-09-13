@@ -330,20 +330,25 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
           )}
         </section>
 
-        <TripModeMapSheet>
-          {/* How far and how long is what the map is usually opened to answer,
-              so it is the part of the sheet visible without opening it. */}
-          <div className="-mx-[var(--gutter-inline-start)] border-b border-border-subtle lg:mx-0 lg:rounded-[var(--radius-xl)] lg:border lg:bg-card lg:shadow-[var(--shadow-surface)]">
-            <ItineraryRouteSummary
-              data={routeState.status === 'loading' ? null : routeSummaryData}
-              distanceUnit={preferences.distanceUnit}
-              locale={locale}
-              status={routeState.status}
-            />
+        <TripModeMapSheet
+          peek={
+            /* How far and how long is what the map is usually opened to answer,
+               so it is the one thing worth seeing without opening the sheet. */
+            <div className="-mx-[var(--gutter-inline-start)] lg:mx-0 lg:rounded-[var(--radius-xl)] lg:border lg:border-border-subtle lg:bg-card lg:shadow-[var(--shadow-surface)]">
+              <ItineraryRouteSummary
+                data={routeState.status === 'loading' ? null : routeSummaryData}
+                distanceUnit={preferences.distanceUnit}
+                locale={locale}
+                status={routeState.status}
+              />
+            </div>
+          }
+        >
+          <div className="-mx-[var(--gutter-inline-start)] border-y border-border-subtle lg:mx-0 lg:rounded-[var(--radius-xl)] lg:border lg:bg-card lg:shadow-[var(--shadow-surface)]">
             {locationNotice && NoticeIcon ? (
               <p
                 className={cn(
-                  'flex items-start gap-2 border-t border-border-subtle px-4 py-2.5 text-xs leading-5 sm:px-6',
+                  'flex items-start gap-2 px-4 py-2.5 text-xs leading-5 sm:px-6',
                   locationNotice.tone === 'info'
                     ? 'text-status-info'
                     : locationNotice.tone === 'warning'
@@ -357,20 +362,38 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
             ) : null}
             {!isPreview && online && locationStatus !== 'unsupported' ? (
               <div className="border-t border-border-subtle px-4 py-2.5 sm:px-6">
+                {/* The label holds still and the icon carries the wait. A
+                    control that renames itself mid-tap makes the traveller
+                    re-read it to find out whether anything happened; a spinning
+                    icon says the same thing without moving the words. The
+                    sentence the label used to swap to is still announced, out
+                    of sight, below. */}
                 <Button
+                  aria-busy={locationStatus === 'loading'}
+                  aria-describedby="trip-mode-map-location-status"
                   className="w-full sm:w-auto"
                   disabled={locationStatus === 'loading'}
                   onClick={requestLocation}
                   size="sm"
                   variant={locationStatus === 'ready' ? 'secondary' : 'outline'}
                 >
-                  <LocateFixed aria-hidden="true" data-icon="inline-start" />
-                  {locationStatus === 'loading'
-                    ? t('locating')
-                    : locationStatus === 'ready'
-                      ? t('updateLocation')
-                      : t('useLocation')}
+                  <LocateFixed
+                    aria-hidden="true"
+                    className={cn(
+                      locationStatus === 'loading' && 'animate-spin motion-reduce:animate-none',
+                    )}
+                    data-icon="inline-start"
+                  />
+                  {locationStatus === 'ready' ? t('updateLocation') : t('useLocation')}
                 </Button>
+                <p
+                  aria-live="polite"
+                  className="sr-only"
+                  id="trip-mode-map-location-status"
+                  role="status"
+                >
+                  {locationStatus === 'loading' ? t('locating') : ''}
+                </p>
               </div>
             ) : null}
             <ul

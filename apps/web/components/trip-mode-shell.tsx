@@ -427,7 +427,7 @@ export function TripModeShell({
     return (
       <section
         aria-busy="true"
-        className="mx-auto flex min-h-[100dvh] w-full max-w-6xl flex-col"
+        className="mx-auto flex min-h-[calc(100dvh-var(--safe-top))] w-full max-w-6xl flex-col lg:min-h-0"
         data-slot="trip-mode-shell"
         role="status"
       >
@@ -534,7 +534,7 @@ export function TripModeShell({
       >
         <TripModeTasksProvider tripId={trip.id}>
           <section
-            className="mx-auto flex min-h-[100dvh] w-full max-w-6xl flex-col"
+            className="mx-auto flex min-h-[calc(100dvh-var(--safe-top))] w-full max-w-6xl flex-col lg:min-h-0"
             data-slot="trip-mode-shell"
           >
             <TripModeTopBar

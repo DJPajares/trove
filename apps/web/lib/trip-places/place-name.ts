@@ -35,6 +35,22 @@ export function resolveProviderPlaceName(tripPlace: NameableTripPlace) {
 }
 
 /**
+ * The name a Place should ask a photograph for, or null when it should not ask.
+ *
+ * Never the traveller's own name for it: "Mum's favourite bakery" is a
+ * photograph of nothing, and the nickname is exactly what a stock library will
+ * match to something absurd. A custom Place does ask, under the name it was
+ * created with - an AI-planned trip fills those with real place names like
+ * "Hanoi Old Quarter", which match well - and a nickname that matches nothing
+ * falls back to the branded tile, which is what it showed anyway.
+ */
+export function resolvePlacePhotoName(tripPlace: NameableTripPlace) {
+  if (tripPlace.place.kind === 'custom') return tripPlace.place.name?.trim() || null;
+
+  return resolveProviderPlaceName(tripPlace);
+}
+
+/**
  * One name for a trip Place, resolved the same way everywhere it appears.
  *
  * The traveller's own name wins. Failing that a custom Place carries its name and

@@ -222,13 +222,39 @@ function mapForecast(daily: OpenMeteoResponse['daily']): WeatherDailyForecast[] 
     throw new WeatherProviderError('invalid_response');
   }
 
-  const forecast = daily.time.map((date, index) => {
+  /**
+   * A day the provider has not worked out yet is dropped, not thrown.
+   *
+   * The far end of a sixteen-day series routinely arrives as nulls - the
+   * sixteenth day is computed some hours after the fifteenth - and treating
+   * that as a malformed response threw away everything else in it. The hourly
+   * block and the current reading ride on this same request, so one unready day
+   * nobody asked about took the whole afternoon's forecast down with it, and
+   * intermittently, depending on the hour it was asked.
+   *
+   * A null is the provider saying "not yet", which the payload's own horizon
+   * already expresses. A *malformed* entry - a string where a number belongs, a
+   * date that is not one - is still an error, because a wrong day is worse than
+   * a missing one.
+   */
+  const forecast = daily.time.flatMap((date, index) => {
     const maximum = daily.temperature_2m_max?.[index];
     const minimum = daily.temperature_2m_min?.[index];
     const precipitation = daily.precipitation_probability_max?.[index];
     const weatherCode = daily.weather_code?.[index];
+
+    if (!isDate(date)) throw new WeatherProviderError('invalid_response');
     if (
-      !isDate(date) ||
+      maximum === null ||
+      maximum === undefined ||
+      minimum === null ||
+      minimum === undefined ||
+      weatherCode === null ||
+      weatherCode === undefined
+    ) {
+      return [];
+    }
+    if (
       !isFiniteNumber(maximum) ||
       !isFiniteNumber(minimum) ||
       !isWeatherCode(weatherCode) ||
@@ -236,13 +262,16 @@ function mapForecast(daily: OpenMeteoResponse['daily']): WeatherDailyForecast[] 
     ) {
       throw new WeatherProviderError('invalid_response');
     }
-    return {
-      date,
-      precipitationProbability: isFiniteNumber(precipitation) ? precipitation : null,
-      temperatureMax: maximum,
-      temperatureMin: minimum,
-      weatherCode,
-    };
+
+    return [
+      {
+        date,
+        precipitationProbability: isFiniteNumber(precipitation) ? precipitation : null,
+        temperatureMax: maximum,
+        temperatureMin: minimum,
+        weatherCode,
+      },
+    ];
   });
 
   if (!forecast.length) throw new WeatherProviderError('invalid_response');
@@ -276,12 +305,24 @@ function mapHourly(hourly: OpenMeteoResponse['hourly']): WeatherHourlyForecast[]
     throw new WeatherProviderError('invalid_response');
   }
 
-  return hourly.time.map((time, index) => {
+  // An hour the provider has not worked out yet is dropped for the same reason
+  // a day is, and on the same terms: a null is "not yet", a wrong shape is an
+  // error.
+  return hourly.time.flatMap((time, index) => {
     const temperature = hourly.temperature_2m?.[index];
     const precipitation = hourly.precipitation_probability?.[index];
     const weatherCode = hourly.weather_code?.[index];
+
+    if (!isDateTime(time)) throw new WeatherProviderError('invalid_response');
     if (
-      !isDateTime(time) ||
+      temperature === null ||
+      temperature === undefined ||
+      weatherCode === null ||
+      weatherCode === undefined
+    ) {
+      return [];
+    }
+    if (
       !isFiniteNumber(temperature) ||
       !isWeatherCode(weatherCode) ||
       (precipitation !== null && precipitation !== undefined && !isFiniteNumber(precipitation))
@@ -289,12 +330,14 @@ function mapHourly(hourly: OpenMeteoResponse['hourly']): WeatherHourlyForecast[]
       throw new WeatherProviderError('invalid_response');
     }
 
-    return {
-      precipitationProbability: isFiniteNumber(precipitation) ? precipitation : null,
-      temperature,
-      time,
-      weatherCode,
-    };
+    return [
+      {
+        precipitationProbability: isFiniteNumber(precipitation) ? precipitation : null,
+        temperature,
+        time,
+        weatherCode,
+      },
+    ];
   });
 }
 

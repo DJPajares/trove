@@ -384,3 +384,119 @@ test('a day the traveller has not reached has no hours either', async () => {
   expect(weather.current).toBeNull();
   expect(weather.hours).toStrictEqual([]);
 });
+
+test('today is the day it is where the traveller is standing, not at the destination', async () => {
+  // The shape that took the hourly strip down on a live New Zealand trip. The
+  // itinerary was anchored on Asia/Singapore - an AI-planned trip picks up the
+  // zone of wherever it was planned - while every day of it was in Auckland. At
+  // this moment Singapore is still on the 3rd and Auckland is already on the
+  // 4th, so anchoring on the trip read the hours for the day before the one the
+  // traveller had woken up in, every night, for the hours between the two
+  // midnights. On the last day of a trip it asked for a day that did not exist
+  // and the strip simply vanished.
+  const { TripWeatherService } = await import('../src/services/trip-weather.js');
+  const asked: { latitude: number; timeZone: string }[] = [];
+  const auckland = { latitude: -36.85, longitude: 174.76 };
+
+  stubPrisma({
+    destinations: [
+      {
+        place: providerPlace('singapore', { latitude: 1.35, longitude: 103.82 }),
+        timeZone: 'Asia/Singapore',
+      },
+    ],
+    id: 'trip',
+    itineraryDays: [
+      day('d1', '2026-09-03', { base: auckland }),
+      day('d2', '2026-09-04', { base: auckland }),
+    ],
+    referenceTimeZone: 'Asia/Singapore',
+  });
+
+  const weather = await new TripWeatherService(
+    {
+      async getForecasts(points: readonly WeatherPoint[]) {
+        const { weatherPointKey } = await import('../src/services/cached-weather.js');
+        return new Map(
+          points.map((point) => [
+            weatherPointKey(point),
+            {
+              days: ['2026-09-03', '2026-09-04'].map<WeatherDailyForecast>((date) => ({
+                date,
+                precipitationProbability: 40,
+                temperatureMax: 16,
+                temperatureMin: 12,
+                weatherCode: 3,
+              })),
+              fetchedAt: NOW,
+              location: { ...point, timeZone: 'Pacific/Auckland' },
+              point,
+            },
+          ]),
+        );
+      },
+    } as never,
+    {
+      async getWeather(request: { latitude: number; timeZone: string }) {
+        asked.push({ latitude: request.latitude, timeZone: request.timeZone });
+        return {
+          current: {
+            apparentTemperature: 11,
+            isDay: false,
+            observedAt: '2026-09-04T01:00',
+            temperature: 13,
+            weatherCode: 3,
+          },
+          hours: [],
+        };
+      },
+    } as never,
+    // 13:00Z: 21:00 on the 3rd in Singapore, 01:00 on the 4th in Auckland.
+    () => new Date('2026-09-03T13:00:00.000Z'),
+  ).getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+
+  expect(weather.hoursDate).toBe('2026-09-04');
+  expect(asked).toStrictEqual([{ latitude: auckland.latitude, timeZone: 'Pacific/Auckland' }]);
+});
+
+test('the day the hours describe is named, so another day cannot borrow them', async () => {
+  const { TripWeatherService } = await import('../src/services/trip-weather.js');
+  const stub = createForecasts();
+  stubPrisma(
+    createTrip([
+      day('d1', '2026-09-03', { base: TOKYO }),
+      day('d2', '2026-09-04', { base: TOKYO }),
+    ]),
+  );
+
+  const weather = await new TripWeatherService(
+    stub.forecasts as never,
+    {
+      async getWeather() {
+        return {
+          current: {
+            apparentTemperature: 20,
+            isDay: true,
+            observedAt: '2026-09-03T18:00',
+            temperature: 21,
+            weatherCode: 1,
+          },
+          hours: [
+            {
+              precipitationProbability: 40,
+              temperature: 21,
+              time: '2026-09-03T18:00',
+              weatherCode: 61,
+            },
+          ],
+        };
+      },
+    } as never,
+    () => NOW,
+  ).getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+
+  // Both days sit at the same coordinate, so a surface comparing locations
+  // would show tomorrow this evening's rain. The date cannot be mistaken.
+  expect(weather.hoursDate).toBe('2026-09-03');
+  expect(weather.days.map((entry) => entry.date)).toEqual(['2026-09-03', '2026-09-04']);
+});

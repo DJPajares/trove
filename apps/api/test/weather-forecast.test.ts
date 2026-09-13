@@ -279,3 +279,51 @@ test('an hourly block that does not line up is refused', async () => {
     code: 'invalid_response',
   });
 });
+
+test('a day the provider has not worked out yet is dropped, not thrown', async () => {
+  // The sixteenth day of a sixteen-day series arrives as nulls for some hours
+  // after the fifteenth is ready. Treating that as a malformed response threw
+  // the whole payload away - and the current reading and a week of hourly data
+  // ride on this same request, so one unready day nobody asked about took the
+  // afternoon's forecast down with it, intermittently, depending on the hour.
+  const { weather } = await readWeather({
+    daily: {
+      precipitation_probability_max: [20, 38],
+      temperature_2m_max: [24, null],
+      temperature_2m_min: [16, null],
+      time: ['2026-09-11', '2026-09-12'],
+      weather_code: [3, null],
+    },
+    hourly: hourlyBlock(['2026-09-11T09:00', '2026-09-11T10:00']),
+  });
+
+  expect(weather.current).not.toBeNull();
+  expect(weather.hours).toHaveLength(2);
+});
+
+test('an hour the provider has not worked out yet is dropped too', async () => {
+  const { weather } = await readWeather({
+    hourly: {
+      precipitation_probability: [40, 40],
+      temperature_2m: [18, null],
+      time: ['2026-09-11T09:00', '2026-09-11T10:00'],
+      weather_code: [61, null],
+    },
+  });
+
+  expect(weather.hours?.map((hour) => hour.time)).toStrictEqual(['2026-09-11T09:00']);
+});
+
+test('a malformed entry is still an error, because a wrong day is worse than a missing one', async () => {
+  await expect(
+    readWeather({
+      daily: {
+        precipitation_probability_max: [20],
+        temperature_2m_max: ['warm'],
+        temperature_2m_min: [16],
+        time: ['2026-09-11'],
+        weather_code: [3],
+      },
+    }),
+  ).rejects.toMatchObject({ code: 'invalid_response' });
+});

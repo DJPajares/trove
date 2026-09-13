@@ -111,15 +111,15 @@ export function TripWeatherContext({
    * trip that moves on tomorrow would otherwise read this city's rain against
    * the next city's afternoon. PRD 21.1 calls that fabricating a forecast, so a
    * day somewhere else keeps the daily summary instead.
+   *
+   * The server names the day rather than the coordinate it read. Comparing
+   * coordinates looked stricter and was in fact looser both ways: a day past
+   * the location cap carries the trip's fallback coordinate rather than its
+   * own, which matched today's and handed a city the traveller is not in
+   * today's rain, while a provider grid cell shifting between the daily and
+   * live tiers failed the match on the one day it should always pass.
    */
-  const hoursBelongHere = Boolean(
-    data.hours.length &&
-    data.hoursLocation &&
-    selectedForecast &&
-    data.hoursLocation.timeZone === selectedForecast.location.timeZone &&
-    Math.abs(data.hoursLocation.latitude - selectedForecast.location.latitude) < 0.05 &&
-    Math.abs(data.hoursLocation.longitude - selectedForecast.location.longitude) < 0.05,
-  );
+  const hoursBelongHere = Boolean(data.hours.length && data.hoursDate === selectedDate);
   // Selected here rather than inside the strip, because whether there are any
   // hours for this day is what decides if the hours are the answer at all. A
   // day past the hourly window has none, and must fall back to its summary

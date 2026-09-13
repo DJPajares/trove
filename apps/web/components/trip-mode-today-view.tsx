@@ -6,22 +6,22 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
-  CircleAlert,
   ClipboardCheck,
+  Compass,
   Ellipsis,
   ExternalLink,
+  ListChecks,
   MapPin,
   Pencil,
   Plus,
   RotateCcw,
   SkipForward,
   StickyNote,
-  ListChecks,
   WalletCards,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { PageState } from '@/components/page-state';
 import { ItineraryCreateItemSheet } from '@/components/itinerary-create-item-sheet';
@@ -137,7 +137,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   const locale = useLocale();
   const { preferences } = usePreferences();
   const online = useOnlineStatus();
-  const { isPreview, previewSelection } = useTripModePreview();
+  const { isPreview, previewSelection, updatePreview } = useTripModePreview();
   const {
     context,
     itinerary,
@@ -152,6 +152,20 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The day being read, when it is not the day being lived.
+   *
+   * Trip Mode was anchored to the server's answer for "today" with no way to
+   * look at tomorrow, so checking what the morning holds meant leaving the mode
+   * entirely. This is a reading position only: `currentItemId` is still cleared
+   * whenever the viewed day is not the context's own, so nothing on another day
+   * is ever accented as happening now.
+   *
+   * Null means "follow the traveller" - the default, and what a new day
+   * silently returns to.
+   */
+  const [viewedDate, setViewedDate] = useState<string | null>(null);
+  const activeDayChipRef = useRef<HTMLButtonElement | null>(null);
   const [createItemOpen, setCreateItemOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [pendingMemoriesKey, setPendingMemoriesKey] = useState(0);
@@ -169,7 +183,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   // Preview steps through days the itinerary already holds in full, so the list
   // turns over on the click and the context request catches up behind it. Live
   // has no stepper: there, which day it is remains the server's answer.
-  const selectedDate = previewSelection?.date ?? context?.selectedDate ?? null;
+  const selectedDate = previewSelection?.date ?? viewedDate ?? context?.selectedDate ?? null;
   const day = useMemo(() => {
     if (!selectedDate || !itinerary) return null;
     return itinerary.days.find((candidate) => candidate.date === selectedDate) ?? null;
@@ -186,14 +200,50 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     return grouped;
   }, [reservations]);
 
+  // "Current" is the one thing here only the server can answer, and its answer
+  // is about the day it was asked for. While it is still about the last one,
+  // nothing on this day is current - which is truer than accenting a row
+  // because a request has not come back yet.
+  //
+  // Resolved above the guards below because the scroll effect reads it, and a
+  // hook may not sit after an early return.
+  const currentItemId =
+    context?.selectedDate === day?.date ? (context?.currentOrRelevant?.itemId ?? null) : null;
+
+  // Day 9 of a 17-day trip is off the end of the strip on a phone, so the strip
+  // is scrolled to wherever the traveller actually is rather than parked at day
+  // one. `nearest` vertically, so bringing a chip into view never also moves the
+  // page.
   useEffect(() => {
-    if (!day || !window.location.hash.startsWith('#trip-mode-item-')) return;
+    activeDayChipRef.current?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [selectedDate]);
+
+  /**
+   * Land on the stop the traveller asked about, or failing that on the one they
+   * are living.
+   *
+   * A hash wins because it is an explicit request - the Map hands off that way.
+   * Otherwise a day that is under way opens at its current row rather than at
+   * breakfast, which on a long day is several screens of scrolling to reach the
+   * only row that matters.
+   *
+   * Focus moves only for the hash: an unasked-for scroll should not also take
+   * the keyboard somewhere the traveller did not point it.
+   */
+  useEffect(() => {
+    if (!day) return;
+    const hash = window.location.hash.startsWith('#trip-mode-item-')
+      ? window.location.hash.slice(1)
+      : null;
+    const target = hash ?? (currentItemId ? `trip-mode-item-${currentItemId}` : null);
+    if (!target) return;
+
     window.requestAnimationFrame(() => {
-      const element = document.getElementById(window.location.hash.slice(1));
+      const element = document.getElementById(target);
       element?.scrollIntoView({ block: 'center' });
-      element?.focus({ preventScroll: true });
+      if (hash) element?.focus({ preventScroll: true });
     });
-  }, [day]);
+  }, [currentItemId, day]);
 
   if (status === 'loading') return <TodaySkeleton label={t('loading')} />;
 
@@ -203,7 +253,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
         actions={<Button onClick={() => void refresh()}>{t('tryAgain')}</Button>}
         description={t('loadErrorDescription')}
         headingLevel={2}
-        icon={<CircleAlert aria-hidden="true" />}
+        icon={<Compass aria-hidden="true" />}
         kind="error"
         title={t('loadError')}
       />
@@ -218,12 +268,13 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   // server says the same thing a moment later, and a heading that renumbers
   // itself is the lag this screen is trying to stop showing.
   const dayNumber = itinerary.days.findIndex((candidate) => candidate.id === day?.id) + 1 || 1;
-  // "Current" is the one thing here only the server can answer, and its answer
-  // is about the day it was asked for. While it is still about the last one,
-  // nothing on this day is current - which is truer than accenting a row
-  // because a request has not come back yet.
-  const currentItemId =
-    context.selectedDate === day?.date ? (context.currentOrRelevant?.itemId ?? null) : null;
+  // Short enough for a chip: "13 Sep" rather than the full sentence the
+  // header below already carries.
+  const dayChipDate = (value: string) =>
+    new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(
+      new Date(`${value}T00:00:00.000Z`),
+    );
+
   // The snapshot travels with the itinerary, including the copy held offline, so
   // these no longer depend on being online to name a Place or show its address.
   const snapshotFor = (item: ItineraryItem) => item.tripPlace?.place.snapshot ?? null;
@@ -471,10 +522,64 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
 
   return (
     <div className="space-y-6">
+      {/* Every day of the trip, reachable without leaving Trip Mode. Today was
+          pinned to the server's answer for "now", so a traveller wondering what
+          the morning held had to go back to Planning to find out. The strip is
+          a reading position, not a claim about where anyone is. */}
+      <nav aria-label={t('dayStripLabel')} className="-mx-[var(--gutter-inline-start)]">
+        <ul className="interaction-scrollbar flex snap-x snap-mandatory gap-2 overflow-x-auto px-[var(--gutter-inline-start)] pb-1">
+          {itinerary.days.map((candidate, index) => {
+            const active = candidate.date === day.date;
+            const isContextDay = candidate.date === context.selectedDate;
+
+            return (
+              <li className="snap-start" key={candidate.id}>
+                <button
+                  aria-current={active ? 'true' : undefined}
+                  ref={active ? activeDayChipRef : undefined}
+                  className={cn(
+                    'flex min-h-14 w-18 flex-col items-center justify-center gap-0.5 rounded-[var(--radius-md)] border px-1 text-[length:var(--text-metadata)] leading-4 whitespace-nowrap outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none',
+                    active
+                      ? 'border-brand bg-brand text-primary-foreground'
+                      : 'border-border-subtle text-muted-foreground hover:bg-surface-hover hover:text-foreground',
+                  )}
+                  onClick={() =>
+                    isPreview
+                      ? updatePreview({ date: candidate.date })
+                      : setViewedDate(candidate.date)
+                  }
+                  type="button"
+                >
+                  <span className="font-semibold tabular-nums">
+                    {itineraryT('dayNumber', { number: index + 1 })}
+                  </span>
+                  <span className={cn('tabular-nums', active ? 'text-primary-foreground/85' : '')}>
+                    {dayChipDate(candidate.date)}
+                  </span>
+                  {/* The day the traveller is actually in keeps a mark, so
+                      finding the way back is not a counting exercise. */}
+                  {isContextDay ? (
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'h-1 w-1 rounded-full',
+                        active ? 'bg-primary-foreground' : 'bg-brand',
+                      )}
+                    />
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           {day.name ? (
-            <h2 className="text-base font-semibold tracking-tight sm:text-lg">{day.name}</h2>
+            <h2 className="text-[length:var(--text-section-title)] leading-[1.18] font-semibold tracking-[-0.022em] text-pretty">
+              {day.name}
+            </h2>
           ) : (
             <h2 className="sr-only">{t('title')}</h2>
           )}

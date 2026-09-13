@@ -487,6 +487,9 @@
     "label": "Trip Mode",
     "preview": {
       "label": "Trip Mode Preview",
+      "badge": "Preview",
+      "showControls": "Change",
+      "hideControls": "Done",
       "date": "Trip day",
       "previousDay": "Previous day",
       "nextDay": "Next day",
@@ -495,7 +498,7 @@
       "summary": "Preview · {date} · {time}"
     },
     "navigation": "Trip Mode navigation",
-    "exit": "Exit Trip Mode",
+    "exit": "Exit",
     "backToTrips": "Back to Trips",
     "openPlanning": "Open planning",
     "dateRange": "{startDate} to {endDate}",
@@ -657,6 +660,10 @@
         "freeTimeDescription": "Nothing is scheduled right now. Your next plan is ready below.",
         "nextLabel": "Next",
         "leaveByLabel": "Leave by",
+        "leaveNow": "Leave now",
+        "leaveInMinutes": "Leave in {minutes, plural, one {# min} other {# min}}",
+        "leaveInHours": "Leave in {hours}h {minutes}m",
+        "leaveByAt": "by {time}",
         "leaveByBuffer": "{minutes, plural, one {Includes # minute of slack.} other {Includes # minutes of slack.}}",
         "travelEstimate": "{duration} by {mode}",
         "travelMode": {
@@ -740,6 +747,7 @@
         "loadErrorDescription": "Check your connection and try again.",
         "tryAgain": "Try again",
         "timeZone": "Local timezone: {timeZone}",
+        "dayStripLabel": "Trip days",
         "addItem": "Add item",
         "expense": "Expense",
         "addExpense": "Add expense",
@@ -850,6 +858,8 @@
         "interactiveMapLabel": "Interactive map for today's route and places",
         "stopNumber": "Stop {number}",
         "legendLabel": "Map marker guide",
+        "sheetExpand": "Show the day",
+        "sheetCollapse": "Hide the day",
         "legend": {
           "planned": "Planned stops",
           "base": "Day base",

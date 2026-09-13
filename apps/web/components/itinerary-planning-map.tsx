@@ -24,6 +24,12 @@ import { cn } from '@/lib/utils';
 
 type ItineraryPlanningMapProps = {
   ariaLabel?: string;
+  /**
+   * Lets a surface that owns its own height say so. Trip Mode's map fills the
+   * screen between its two bars rather than standing at a fixed 28rem inside a
+   * scrolling column.
+   */
+  className?: string;
   currentLocation?: {
     accuracyMeters: number | null;
     latitude: number;
@@ -108,6 +114,7 @@ function currentLocationContent() {
 
 export function ItineraryPlanningMap({
   ariaLabel,
+  className,
   currentLocation = null,
   onAddToDay,
   onClearSelection,
@@ -356,7 +363,10 @@ export function ItineraryPlanningMap({
   if (!points.length && !currentLocation) {
     return (
       <PageState
-        className="min-h-[28rem] justify-center rounded-none border-0 bg-muted/35 px-6 py-8 sm:px-8"
+        className={cn(
+          'min-h-[28rem] justify-center rounded-none border-0 bg-muted/35 px-6 py-8 sm:px-8',
+          className,
+        )}
         description={t('emptyDescription')}
         headingLevel={2}
         icon={<MapPinned aria-hidden="true" />}
@@ -368,7 +378,10 @@ export function ItineraryPlanningMap({
   if (!hasGoogleMapsConfiguration()) {
     return (
       <PageState
-        className="min-h-[28rem] justify-center rounded-none border-0 bg-muted/35 px-6 py-8 sm:px-8"
+        className={cn(
+          'min-h-[28rem] justify-center rounded-none border-0 bg-muted/35 px-6 py-8 sm:px-8',
+          className,
+        )}
         description={t('configurationDescription')}
         headingLevel={2}
         icon={<MapPinned aria-hidden="true" />}
@@ -381,7 +394,12 @@ export function ItineraryPlanningMap({
   return (
     // `isolate` keeps the overlays below in this box's own stacking context, so
     // their z-index is a local decision rather than a global one.
-    <div className="relative isolate min-h-[28rem] overflow-hidden bg-muted/40 lg:min-h-[34rem]">
+    <div
+      className={cn(
+        'relative isolate min-h-[28rem] overflow-hidden bg-muted/40 lg:min-h-[34rem]',
+        className,
+      )}
+    >
       <div
         aria-label={ariaLabel ?? t('label')}
         className="absolute inset-0"

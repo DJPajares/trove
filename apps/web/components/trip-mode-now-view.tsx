@@ -37,6 +37,7 @@ import { deviceTimeZone, type ItineraryItem } from '@/lib/itinerary/api';
 import { formatDistanceValue } from '@/lib/itinerary/format-distance';
 import { formatItineraryTimeRange } from '@/lib/itinerary/item-timing';
 import { TravelModeIcon } from '@/lib/itinerary/travel-mode';
+import { cn } from '@/lib/utils';
 import type { Reservation } from '@/lib/reservations/api';
 import { defaultTripModeTaskContext, nowTaskGroups } from '@/lib/tasks/trip-mode';
 
@@ -215,6 +216,31 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   const hasNext = Boolean(nextItem && nextName);
   const route =
     readyContext.leaveBy?.destinationItemId === nextItem?.id ? readyContext.leaveBy : null;
+  /**
+   * How long is left, not what the clock will say.
+   *
+   * "Leave by 14:05" makes a traveller do arithmetic against a watch they have
+   * to find first; "Leave in 12 min" is the same fact already answered. The
+   * absolute time stays beneath it, because it is the one that survives the
+   * screen being put away.
+   *
+   * Re-read from the same instant the rest of the view is drawn at, so it ticks
+   * with the minute in live mode and stands still in preview.
+   */
+  const leaveInMinutes = route
+    ? Math.round((new Date(route.at).getTime() - new Date(clockAt).getTime()) / 60_000)
+    : null;
+  const leaveCountdown =
+    leaveInMinutes === null
+      ? null
+      : leaveInMinutes <= 0
+        ? t('leaveNow')
+        : leaveInMinutes < 60
+          ? t('leaveInMinutes', { minutes: leaveInMinutes })
+          : t('leaveInHours', {
+              hours: Math.floor(leaveInMinutes / 60),
+              minutes: leaveInMinutes % 60,
+            });
   // The leg into the next item is owned by the current item. A flight has no
   // leave-by because Trove never estimates one, which is a different thing to say
   // than an estimate that has not arrived yet.
@@ -243,29 +269,21 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
 
   return (
     <div className="space-y-6">
+      {/* Where the day is, in one line. The clock that used to sit here in
+          three has moved to the bar above, where it is visible from every view
+          rather than only from this one - and where it does not stand between
+          a traveller and the answer they opened Trip Mode for. */}
       <div>
-        {readyContext.day?.name ? (
-          <h2 className="text-base font-semibold tracking-tight sm:text-lg">
-            {readyContext.day.name}
-          </h2>
-        ) : (
-          <h2 className="sr-only">{t('title')}</h2>
-        )}
+        <h2 className="sr-only">{readyContext.day?.name ?? t('title')}</h2>
         <p className="text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
           {readyContext.day?.name
             ? itineraryT('dayOption', { date, number: readyContext.day.number })
             : date}
         </p>
-        {/* Naming the zone is what keeps a planned clock from reading as the
-            phone's own. It costs one line, and it is the line that says so. */}
-        <p className="mt-0.5 text-[length:var(--text-metadata)] leading-5 text-text-subtle tabular-nums">
-          {t('localTime', {
-            time: timeFormat(clockAt, nowZone),
-            timeZone: nowZone,
-          })}
-        </p>
+        {/* Home time earns its line only when it is a different answer - and
+            only here, because the bar above is about where you are standing. */}
         {homeZone ? (
-          <p className="text-[length:var(--text-metadata)] leading-5 text-text-subtle tabular-nums">
+          <p className="mt-0.5 text-[length:var(--text-metadata)] leading-5 text-text-subtle tabular-nums">
             {t('homeTime', {
               time: timeFormat(clockAt, homeZone),
               timeZone: homeZone,
@@ -293,13 +311,15 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
       {currentItem && readyContext.currentOrRelevant ? (
         <section
           aria-labelledby="trip-mode-current-heading"
-          className="border-y border-border py-4"
+          className="border-b border-border pb-5"
         >
           <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
             {t(`currentKind.${readyContext.currentOrRelevant.kind}`)}
           </p>
+          {/* Where the traveller is standing is the answer this screen exists
+              to give, so it is set like one. */}
           <h3
-            className="mt-1.5 text-[length:var(--text-section-title)] leading-[1.18] font-semibold tracking-[-0.022em] text-pretty text-foreground"
+            className="mt-1.5 text-[length:var(--text-page-title)] leading-[1.06] font-semibold tracking-[-0.035em] text-balance text-foreground"
             id="trip-mode-current-heading"
           >
             {itemName(currentItem, t('placeFallback'))}
@@ -341,6 +361,31 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
             <ArrowRight aria-hidden="true" className="size-4" />
             {t('nextLabel')}
           </div>
+          {/* The loudest thing on the card, and above the stop rather than
+              beside it: a traveller reads this one number and puts the phone
+              away. It appears only when a route actually answered - the
+              branches below say which kind of silence it is otherwise. */}
+          {route && leaveCountdown ? (
+            <p className="mt-3 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+              <span
+                className={cn(
+                  'text-[length:var(--text-page-title)] leading-[1.06] font-semibold tracking-[-0.035em] tabular-nums',
+                  leaveInMinutes !== null && leaveInMinutes <= 0
+                    ? 'text-accent-strong'
+                    : 'text-foreground',
+                )}
+              >
+                {leaveCountdown}
+              </span>
+              {/* Computed against the traveller's clock, so it is read on it
+                  too - otherwise "leave by" and the stop it is about would name
+                  the same instant in two different hours. */}
+              <span className="text-[length:var(--text-metadata)] font-medium text-muted-foreground tabular-nums">
+                {t('leaveByAt', { time: timeFormat(route.at, nowZone) })}
+              </span>
+            </p>
+          ) : null}
+
           <div className="mt-3 grid gap-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
             <div className="min-w-0">
               <h3
@@ -363,26 +408,12 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
               </div>
             </div>
 
-            {route ? (
-              <div className="md:min-w-44 md:border-l md:border-border md:pl-6">
-                <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-                  {t('leaveByLabel')}
-                </p>
-                <p className="mt-1 text-2xl leading-tight font-semibold tracking-[-0.02em] text-foreground tabular-nums">
-                  {/* Computed against the traveller's clock, so it is read on
-                      it too - otherwise "leave by" and the stop it is about
-                      would name the same instant in two different hours. */}
-                  {timeFormat(route.at, nowZone)}
-                </p>
-                {/* The time already has the slack folded in, so it says so
-                    rather than reading as a travel estimate that is running
-                    slow. */}
-                {route.bufferSeconds ? (
-                  <p className="mt-1 text-xs leading-5 text-text-subtle">
-                    {t('leaveByBuffer', { minutes: Math.round(route.bufferSeconds / 60) })}
-                  </p>
-                ) : null}
-              </div>
+            {/* The countdown already has the slack folded in, so it says so
+                rather than reading as a travel estimate that is running slow. */}
+            {route?.bufferSeconds ? (
+              <p className="text-xs leading-5 text-text-subtle md:min-w-44 md:border-l md:border-border md:pl-6">
+                {t('leaveByBuffer', { minutes: Math.round(route.bufferSeconds / 60) })}
+              </p>
             ) : null}
           </div>
 

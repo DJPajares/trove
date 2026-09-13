@@ -1,16 +1,6 @@
 'use client';
 
-import {
-  ArrowLeft,
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Clock3,
-  Compass,
-  Eye,
-  Map,
-  MapPinned,
-} from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Compass, Eye } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -24,14 +14,12 @@ import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-deta
 import { usePreferences } from '@/components/preferences-provider';
 import { TimeInput } from '@/components/time-input';
 import { PlanScorePanel } from '@/components/plan-score-panel';
-import { TripCountries } from '@/components/trip-countries';
+import { TripModeTabBar, TripModeTopBar, tripModeViews } from '@/components/trip-mode-chrome';
 import { TripModeDataProvider } from '@/components/trip-mode-data';
 import { TripSyncStatus } from '@/components/trip-sync-status';
-import { TripMedia } from '@/components/trip-media';
 import { TripModeTasksProvider } from '@/components/trip-mode-tasks';
 import { useTripContext } from '@/components/trip-provider';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import {
   deviceTimeZone,
@@ -44,10 +32,8 @@ import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editoria
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import { queryKeys } from '@/lib/query/keys';
 import { useTripResource } from '@/lib/query/use-trip-resource';
-import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import { resolveProviderPlaceName, resolveTripPlaceName } from '@/lib/trip-places/place-name';
 import { isTripModeAvailable } from '@/lib/trips/navigation';
-import { cn } from '@/lib/utils';
 
 type PreviewSelection = { date: string; time: string };
 
@@ -95,60 +81,6 @@ type TripModeShellProps = {
   planScoreEnabled: boolean;
   tripId: string;
 };
-
-const tripModeViews = [
-  { icon: Clock3, key: 'now', path: '' },
-  { icon: CalendarDays, key: 'today', path: '/today' },
-  { icon: Map, key: 'map', path: '/map' },
-  { icon: MapPinned, key: 'trip', path: '/trip' },
-] as const;
-
-/**
- * The four views, which depend on nothing but the trip's id. Sharing this
- * between the loading state and the loaded shell is what stops the row moving
- * when the trip arrives.
- */
-function TripModeNavigationFrame({
-  tripId,
-  withPreviewHref = (href: string) => href,
-}: Readonly<{ tripId: string; withPreviewHref?: (href: string) => string }>) {
-  const t = useTranslations('tripMode');
-  const pathname = usePathname();
-  const basePath = `/trips/${tripId}/mode`;
-
-  return (
-    <nav
-      aria-label={t('navigation')}
-      className="sticky top-[calc(var(--safe-top)+var(--header-offset)+0.75rem)] z-[calc(var(--layer-sticky)-1)] -mx-1 rounded-[var(--radius-lg)] border border-border bg-background/95 p-1 shadow-[var(--shadow-control)] backdrop-blur supports-[backdrop-filter]:bg-background/88"
-      data-translucent-surface
-    >
-      <ul className="grid grid-cols-4 gap-1">
-        {tripModeViews.map(({ icon: Icon, key, path }) => {
-          const href = `${basePath}${path}`;
-          const active = pathname === href;
-
-          return (
-            <li key={key}>
-              <Link
-                aria-current={active ? 'page' : undefined}
-                className={cn(
-                  'flex min-h-11 items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-2 py-1.5 text-xs font-medium outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 sm:text-sm',
-                  active
-                    ? 'bg-secondary text-secondary-foreground'
-                    : 'text-muted-foreground hover:bg-surface-hover hover:text-foreground',
-                )}
-                href={withPreviewHref(href)}
-              >
-                <Icon aria-hidden="true" className="size-4" />
-                <span>{t(`views.${key}.label`)}</span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
-  );
-}
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
@@ -353,7 +285,6 @@ export function TripModeShell({
   const searchParams = useSearchParams();
   const tripContext = useTripContext();
   const contextTrip = tripContext?.trip ?? null;
-  const editorial = tripContext?.editorial ?? null;
   const {
     data: itinerary,
     refresh: refreshItinerary,
@@ -458,49 +389,26 @@ export function TripModeShell({
   if (tripContext?.status === 'loading' || itineraryStatus === 'loading') {
     // The shell's own frame, at the size it will be: the way out, the four
     // views and the box the view lands in are all knowable from the trip's id
-    // alone, so only the trip's name and dates wait — and they wait in place.
+    // alone, so only the trip's name waits — and it waits in place.
     return (
       <section
         aria-busy="true"
-        className="mx-auto w-full max-w-6xl space-y-5 sm:space-y-6"
+        className="mx-auto w-full max-w-6xl"
         data-slot="trip-mode-shell"
         role="status"
       >
         <span className="sr-only">{t('loading')}</span>
-        <header className="space-y-3 sm:space-y-5">
-          <Button
-            className="-ml-2 text-muted-foreground hover:text-foreground"
-            nativeButton={false}
-            render={<Link href="/trips" />}
-            size="sm"
-            variant="ghost"
-          >
-            <ArrowLeft aria-hidden="true" data-icon="inline-start" />
-            {t('exit')}
-          </Button>
+        <TripModeTopBar
+          timeZone={deviceTimeZone() ?? contextTrip?.referenceTimeZone ?? null}
+          tripId={tripId}
+          tripName={null}
+        />
 
-          <TripMedia
-            alt=""
-            className="w-full shadow-[var(--shadow-control)]"
-            sizes="(max-width: 1200px) 100vw, 1152px"
-            source={resolveTripMediaSource({ coverUrl: contextTrip?.coverPhotoUrl, editorial })}
-            variant="banner"
-          />
-
-          <div className="flex items-center gap-3 sm:gap-4" aria-hidden="true">
-            <div className="min-w-0 flex-1">
-              <Skeleton className="h-[length:var(--text-metadata)] w-20" />
-              <Skeleton className="mt-0.5 h-[calc(var(--text-section-title)*1.15)] w-3/5 max-w-xs" />
-              <Skeleton className="mt-0.5 h-[length:var(--text-metadata)] w-2/5 max-w-48" />
-            </div>
-          </div>
-        </header>
-
-        <TripModeNavigationFrame tripId={tripId} />
-
-        <div className="min-h-[min(32rem,55dvh)] border-t border-border pt-6 sm:pt-8">
+        <div className="min-h-[min(32rem,55dvh)] pt-6 pb-[calc(var(--bottom-bar-height)+var(--safe-bottom)+1rem)] sm:pt-8 lg:pb-8">
           <ContentSkeleton shape="timeline" />
         </div>
+
+        <TripModeTabBar tripId={tripId} />
       </section>
     );
   }
@@ -591,74 +499,17 @@ export function TripModeShell({
         tripId={trip.id}
       >
         <TripModeTasksProvider tripId={trip.id}>
-          <section
-            className="mx-auto w-full max-w-6xl space-y-5 sm:space-y-6"
-            data-slot="trip-mode-shell"
-          >
-            <header className="space-y-3 sm:space-y-5">
-              <Button
-                className="-ml-2 text-muted-foreground hover:text-foreground"
-                nativeButton={false}
-                render={<Link href="/trips" />}
-                size="sm"
-                variant="ghost"
-              >
-                <ArrowLeft aria-hidden="true" data-icon="inline-start" />
-                {t('exit')}
-              </Button>
-
-              {/* A photo, not a hero: a full-bleed cover like Planning's would
-              buy the same weeks-away trip a bigger picture than the day the
-              traveller is actually living. Tall enough to read as a real
-              photo, short enough that it costs one row on a 390x844 screen. */}
-              <TripMedia
-                alt=""
-                className="w-full shadow-[var(--shadow-control)]"
-                sizes="(max-width: 1200px) 100vw, 1152px"
-                source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
-                variant="banner"
-              />
-
-              {/* On a phone the trip's name is orientation, not the headline: the
-              traveller came for what is happening now, and a 390x844 viewport
-              only has so many rows before the itinerary has to appear. */}
-              <div className="flex items-center gap-3 sm:gap-4">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
-                    {previewSelection ? t('preview.label') : t('label')}
-                  </p>
-                  <h1 className="mt-0.5 break-words text-[length:var(--text-section-title)] leading-[1.15] font-semibold tracking-[-0.025em] text-foreground sm:text-[length:var(--text-page-title)] sm:leading-[1.08]">
-                    {trip.name}
-                  </h1>
-                  {/* The country rides the date line rather than the eyebrow,
-                      which already says TRIP MODE - and keeping it to three
-                      rows means the loading skeleton above still matches, so
-                      the header does not jump as the trip arrives. */}
-                  <p className="mt-0.5 text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground">
-                    {trip.countries?.length ? (
-                      <>
-                        <TripCountries countries={trip.countries} />{' '}
-                        <span aria-hidden="true">·</span>{' '}
-                      </>
-                    ) : null}
-                    <span className="tabular-nums">
-                      {t('dateRange', {
-                        endDate: formatDate(trip.endDate),
-                        startDate: formatDate(trip.startDate),
-                      })}
-                    </span>
-                  </p>
-                </div>
-                <Button
-                  className="hidden shrink-0 sm:inline-flex"
-                  nativeButton={false}
-                  render={<Link href={`/trips/${trip.id}/itinerary`} />}
-                  variant="outline"
-                >
-                  {t('openPlanning')}
-                </Button>
-              </div>
-            </header>
+          <section className="mx-auto w-full max-w-6xl" data-slot="trip-mode-shell">
+            <TripModeTopBar
+              isPreview={Boolean(previewSelection)}
+              timeZone={
+                previewSelection
+                  ? trip.referenceTimeZone
+                  : (deviceTimeZone() ?? trip.referenceTimeZone)
+              }
+              tripId={trip.id}
+              tripName={trip.name}
+            />
 
             {previewSelection ? (
               <TripModePreviewSummary
@@ -672,9 +523,10 @@ export function TripModeShell({
 
             <TripSyncStatus tripId={trip.id} />
 
-            <TripModeNavigationFrame tripId={trip.id} withPreviewHref={withPreviewHref} />
-
-            <div className="min-h-[min(32rem,55dvh)] border-t border-border pt-6 sm:pt-8">
+            {/* The view starts where the bar ends. The padding at the foot is
+                the tab bar's own height plus the safe area, so the last row of
+                any view can still be reached above it. */}
+            <div className="min-h-[min(32rem,55dvh)] pt-5 pb-[calc(var(--bottom-bar-height)+var(--safe-bottom)+1rem)] sm:pt-6 lg:pb-8">
               <TripModePlaceDetailsContext.Provider value={placeDetailsContext}>
                 {children}
               </TripModePlaceDetailsContext.Provider>
@@ -686,6 +538,8 @@ export function TripModeShell({
             {planScoreEnabled && previewSelection ? (
               <TripModePreviewPlanScore date={previewSelection.date} tripId={trip.id} />
             ) : null}
+
+            <TripModeTabBar tripId={trip.id} withPreviewHref={withPreviewHref} />
           </section>
 
           {detailsPlace ? (

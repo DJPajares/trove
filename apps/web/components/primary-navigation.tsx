@@ -12,7 +12,11 @@ import { usePrimaryAction } from '@/components/primary-action-provider';
 import { useTripCreation } from '@/components/trip-creation-provider';
 import { Button } from '@/components/ui/button';
 import { navigationTransition } from '@/lib/motion';
-import { isNavigationPathActive, primaryNavigationDestinations } from '@/lib/navigation';
+import {
+  isNavigationPathActive,
+  isTripModePath,
+  primaryNavigationDestinations,
+} from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 
 type NavigationItem = {
@@ -44,6 +48,10 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
     icon: icons[key],
     label: t(key),
   }));
+
+  // Trip Mode owns the bottom of the screen while a traveller is in it. The
+  // desktop rail stays: there is no thumb zone to compete for up there.
+  if (variant === 'mobile' && isTripModePath(pathname)) return null;
 
   if (variant === 'desktop') {
     return (

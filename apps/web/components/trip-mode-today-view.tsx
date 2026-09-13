@@ -682,8 +682,8 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
             <PlaceMedia
               alt=""
               category={heroItem?.tripPlace?.place.snapshot?.category}
-              className="h-36 w-full rounded-none sm:h-44"
-              sizes="(max-width: 640px) 100vw, 40rem"
+              className="h-36 w-full rounded-none sm:h-44 lg:h-64"
+              sizes="(max-width: 72rem) 100vw, 72rem"
               source={resolvePlaceMediaSource({ editorial: heroEditorial })}
               variant="banner"
             />

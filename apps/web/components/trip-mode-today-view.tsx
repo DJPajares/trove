@@ -80,6 +80,17 @@ import { scheduledPlaceUse } from '@/lib/itinerary/places';
 import type { Reservation } from '@/lib/reservations/api';
 import { tasksForItem, todayTaskRollup } from '@/lib/tasks/trip-mode';
 import { cn } from '@/lib/utils';
+import { useEditorialImages } from '@/hooks/use-editorial-images';
+import { useVisibleKeys } from '@/hooks/use-visible-keys';
+import {
+  editorialSubjectKey,
+  MAX_EDITORIAL_IMAGE_SUBJECTS,
+  type EditorialSubject,
+} from '@/lib/media/editorial-images';
+import { PlaceMedia } from '@/components/place-media';
+import { dayLocality } from '@/lib/itinerary/day-place';
+import { resolvePlaceMediaSource } from '@/lib/media/trip-media';
+import { resolveProviderPlaceName } from '@/lib/trip-places/place-name';
 
 type UndoAction =
   | { itemId: string; kind: 'organize'; itineraryDayId: string; position: number }
@@ -207,6 +218,63 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   //
   // Resolved above the guards below because the scroll effect reads it, and a
   // hook may not sit after an early return.
+  /**
+   * A photograph for each stop the traveller can see.
+   *
+   * Asked for under the provider's name for the place, never the traveller's
+   * nickname - "Mum's favourite bakery" is a photograph of nothing - and only
+   * for rows near the viewport, so a seventeen-stop day resolves as it is
+   * scrolled rather than losing its tail to the cap.
+   *
+   * This is the free track. Editorial photography is decorative, hotlinked and
+   * cached for ninety days; a Google Places photo would be billable per render
+   * and is what `resolvePlaceMediaSource` has no member for.
+   */
+  const { observe: observeStop, visibleKeys: visibleItemIds } = useVisibleKeys();
+  const editorialSubjects: EditorialSubject[] = (day?.items ?? [])
+    .filter((item) => item.tripPlace && visibleItemIds.has(item.id))
+    .flatMap((item) => {
+      const providerName = item.tripPlace ? resolveProviderPlaceName(item.tripPlace) : null;
+      if (!providerName || !item.tripPlace) return [];
+
+      return [
+        {
+          category: item.tripPlace.place.snapshot?.category,
+          name: providerName,
+          placeId: item.tripPlace.place.id,
+        },
+      ];
+    })
+    .slice(0, MAX_EDITORIAL_IMAGE_SUBJECTS);
+  const editorialImages = useEditorialImages(editorialSubjects);
+  /**
+   * A photograph of this stop, or nothing.
+   *
+   * Exact matches only. When the provider cannot find the place it answers from
+   * a pool keyed on the place's type, and that pool is not a photograph of
+   * anywhere near it: asked for Whakarewarewa Forest Park it offers Qutub Minar
+   * in Delhi, and for The Shire's Rest Cafe a restaurant in Spain. Beside the
+   * name of a real place that is not decoration, it is the wrong continent.
+   *
+   * So a stop Trove cannot picture shows the branded tile for its category
+   * instead - a green field and a leaf beside a forest park, which says what
+   * kind of place it is without pretending to be a picture of it.
+   */
+  const editorialFor = (item: ItineraryItem) => {
+    const providerName = item.tripPlace ? resolveProviderPlaceName(item.tripPlace) : null;
+    if (!providerName || !item.tripPlace) return null;
+
+    const image = editorialImages.get(
+      editorialSubjectKey({
+        category: item.tripPlace.place.snapshot?.category,
+        name: providerName,
+        placeId: item.tripPlace.place.id,
+      }),
+    )?.[0];
+
+    return image?.matchKind === 'exact' ? image : null;
+  };
+
   const currentItemId =
     context?.selectedDate === day?.date ? (context?.currentOrRelevant?.itemId ?? null) : null;
 
@@ -499,6 +567,33 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   // Legs are left out here: Trip Mode never asked the API for route segments,
   // and a day list is not worth a new round of them.
   const entries = buildDaySequence({ bases: resolveDailyBases({ day }), items: day.items });
+  /**
+   * What to call the day, in the order that is true.
+   *
+   * The traveller's own title wins. Failing that the town the day is mostly
+   * spent in, which is read from addresses already in hand - almost no day is
+   * ever named by anyone, so without this rung the hero would be blank on
+   * nearly all of them. Failing both, nothing: the date is already on screen
+   * and inventing a title for a day is how a mockup ends up saying
+   * "Discovering local gems in a curated the North Drive".
+   */
+  const dayLocalityName = dayLocality(
+    (day?.items ?? []).map((item) => item.tripPlace?.place.snapshot?.address ?? null),
+  );
+  const heroTitle =
+    day?.name?.trim() || (dayLocalityName ? t('heroLocality', { place: dayLocalityName }) : null);
+  /**
+   * The day is pictured by its first stop that has a photograph of itself. A
+   * day whose stops Trove cannot picture simply has no hero - the date below
+   * already says what day it is.
+   *
+   * It costs no request of its own: the batch above has already resolved every
+   * stop.
+   */
+  const heroItem = (day?.items ?? []).find((item) => editorialFor(item));
+  const heroEditorial = heroItem ? editorialFor(heroItem) : null;
+  const heroShown = Boolean(heroEditorial && heroTitle);
+
   const dailyTasks = todayTaskRollup({
     date: day.date,
     dayId: day.id,
@@ -574,14 +669,52 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
         </ul>
       </nav>
 
+      {/* The day as a place rather than a date. The photograph sits inset
+          within the card rather than bleeding to its edge, which is what makes
+          it read as a framed print instead of a banner. It appears only when
+          there is both something to show and something true to call it. */}
+      {heroShown ? (
+        <section
+          aria-labelledby="trip-mode-day-hero-heading"
+          className="rounded-[var(--radius-2xl)] border border-border-subtle bg-card p-2 shadow-[var(--shadow-card)]"
+        >
+          <div className="relative isolate overflow-hidden rounded-[var(--radius-xl)]">
+            <PlaceMedia
+              alt=""
+              category={heroItem?.tripPlace?.place.snapshot?.category}
+              className="h-36 w-full rounded-none sm:h-44"
+              sizes="(max-width: 640px) 100vw, 40rem"
+              source={resolvePlaceMediaSource({ editorial: heroEditorial })}
+              variant="banner"
+            />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 bg-gradient-to-t from-surface-overlay/85 from-0% to-transparent to-42%"
+            />
+            <h2
+              className="absolute inset-x-0 bottom-0 p-3 text-[length:var(--text-section-title)] leading-[1.18] font-semibold tracking-[-0.022em] text-balance text-white"
+              id="trip-mode-day-hero-heading"
+            >
+              {heroTitle}
+            </h2>
+          </div>
+          <p className="px-1 pt-2 pb-0.5 text-[length:var(--text-metadata)] leading-5 text-text-subtle">
+            {day.notes?.trim() || t('heroStops', { count: day.items.length })}
+          </p>
+        </section>
+      ) : null}
+
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          {day.name ? (
+          {/* The hero above is the day's heading when it is there, so this one
+              steps back to being the date rather than saying the same words a
+              second time. */}
+          {day.name && !heroShown ? (
             <h2 className="text-[length:var(--text-section-title)] leading-[1.18] font-semibold tracking-[-0.022em] text-pretty">
               {day.name}
             </h2>
           ) : (
-            <h2 className="sr-only">{t('title')}</h2>
+            <h2 className="sr-only">{day.name ?? t('title')}</h2>
           )}
           <p className="text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
             {day.name ? itineraryT('dayOption', { date, number: dayNumber }) : date}
@@ -615,7 +748,12 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
 
       {/* Above the stops rather than beside them: the weather is what a
           traveller checks before deciding how the day's list gets done. */}
-      <TripWeatherContext isPreview={isPreview} selectedDate={day.date} tripId={tripId} />
+      <TripWeatherContext
+        isPreview={isPreview}
+        selectedDate={day.date}
+        tripId={tripId}
+        variant="card"
+      />
 
       <TripModeTasksNotice />
 
@@ -682,7 +820,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                   marker={
                     <TimelineMarker
                       label={t('stopNumber', { number: entry.stopNumber })}
-                      variant={base.located ? 'base' : 'base-unlocated'}
+                      variant={base.located ? 'base-wide' : 'base-wide-unlocated'}
                     >
                       {entry.stopNumber}
                     </TimelineMarker>
@@ -903,11 +1041,32 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                 id={`trip-mode-item-${item.id}`}
                 key={item.id}
                 marker={
+                  /* The stop, as its own photograph. A place with none shows
+                     the branded tile for its category, which is a designed
+                     object rather than a hole - so the column reads evenly
+                     whether or not a day's stops happen to be photogenic. The
+                     number moves to the corner, because the day is still read
+                     by it. */
                   <TimelineMarker
                     label={t('stopNumber', { number: entry.stopNumber })}
-                    variant={item.tripPlace?.place.location ? 'stop' : 'stop-unlocated'}
+                    variant="photo"
                   >
-                    {entry.stopNumber}
+                    <span className="block" ref={observeStop(item.id)}>
+                      <PlaceMedia
+                        alt=""
+                        category={item.tripPlace?.place.snapshot?.category}
+                        className="size-14 rounded-[var(--radius-md)]"
+                        sizes="3.5rem"
+                        source={resolvePlaceMediaSource({ editorial: editorialFor(item) })}
+                        variant="thumbnail"
+                      />
+                    </span>
+                    {/* Inside the tile rather than hung off its corner, so the
+                        number costs the title none of its width and never sits
+                        between the photograph and the words. */}
+                    <span className="pointer-events-none absolute start-1 bottom-1 grid size-5 place-items-center rounded-full bg-neutral-950/65 text-[0.6875rem] leading-none font-semibold text-white backdrop-blur-sm tabular-nums">
+                      {entry.stopNumber}
+                    </span>
                   </TimelineMarker>
                 }
                 meta={

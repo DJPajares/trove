@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { weatherConditionIcon, weatherConditionKey } from '@/lib/weather/conditions';
 import { selectHourlyReadings } from '@/lib/weather/hourly';
+import { cn } from '@/lib/utils';
 import {
   isCurrentReadingStale,
   isDateForecastable,
@@ -40,23 +41,32 @@ export function TripWeatherContext({
   isPreview,
   selectedDate,
   tripId,
+  variant = 'ruled',
 }: Readonly<{
   isPreview: boolean;
   selectedDate: string;
   tripId: string;
+  /**
+   * `card` for the day view, which is built of cards; `ruled` for Now, whose
+   * sections are separated by hairlines rather than boxes.
+   */
+  variant?: 'card' | 'ruled';
 }>) {
   const t = useTranslations('tripMode.views.weather');
+
+  // One frame for every state below, so a forecast that fails to load sits in
+  // the same box the reading would have.
+  const frameClassName =
+    variant === 'card'
+      ? 'rounded-[var(--radius-2xl)] border border-border-subtle bg-card p-4 shadow-[var(--shadow-control)]'
+      : 'border-y border-border py-4';
+
   const { preferences } = usePreferences();
   const { data, dataUpdatedAt, refetch, status } = useTripWeather(tripId);
 
   if (status === 'loading') {
     return (
-      <section
-        aria-busy="true"
-        aria-label={t('loading')}
-        className="border-y border-border py-4"
-        role="status"
-      >
+      <section aria-busy="true" aria-label={t('loading')} className={frameClassName} role="status">
         <div className="flex items-center gap-3">
           <Skeleton className="size-10 rounded-[var(--radius-md)]" />
           <div className="space-y-2">
@@ -70,7 +80,7 @@ export function TripWeatherContext({
 
   if (status === 'error' || !data) {
     return (
-      <section aria-live="polite" className="flex items-start gap-3 border-y border-border py-4">
+      <section aria-live="polite" className={cn('flex items-start gap-3', frameClassName)}>
         <CloudSun aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <h3 className="font-medium text-foreground">{t('unavailableTitle')}</h3>
@@ -125,7 +135,7 @@ export function TripWeatherContext({
   const formatTemperature = (value: number) => `${Math.round(value)}${unit}`;
 
   return (
-    <section aria-labelledby="trip-weather-heading" className="border-y border-border py-4">
+    <section aria-labelledby="trip-weather-heading" className={frameClassName}>
       <h3 className="sr-only" id="trip-weather-heading">
         {showCurrent ? t('now') : t('forecast')}
       </h3>

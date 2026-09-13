@@ -650,11 +650,17 @@ export function ItineraryManager({
   /**
    * The place whose details are open, and the one photograph that goes with it.
    *
-   * The itinerary asks for no photography of its own - its rows are numbered
-   * markers, not thumbnails - so the subject list is empty until someone opens a
-   * place, and `useEditorialImages` sends nothing for an empty list. Opening one
-   * place asks for one subject, under the provider's name for it rather than the
+   * Planning asks for no photography of its own - its rows are numbered markers,
+   * not thumbnails - so the subject list is empty until someone opens a place,
+   * and `useEditorialImages` sends nothing for an empty list. Opening one place
+   * asks for one subject, under the provider's name for it rather than the
    * traveller's nickname, exactly as the Places list does.
+   *
+   * Trip Mode's day does carry a photograph on every row, and the two are not
+   * in disagreement. This is a dense editing surface, where a column of
+   * pictures is noise between the traveller and the thing they came to change.
+   * That one is read standing up, deciding which of these is the place in front
+   * of them, where a picture is the fastest answer there is.
    */
   const [detailsPlace, setDetailsPlace] = useState<ItineraryTripPlace | null>(null);
   const [locatePlace, setLocatePlace] = useState<ItineraryTripPlace | null>(null);

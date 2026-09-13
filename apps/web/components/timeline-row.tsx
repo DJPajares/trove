@@ -34,13 +34,41 @@ const markerVariants = cva(
         /** A stop with no location has no pin to match, and says so by not looking like one. */
         'stop-unlocated':
           'size-10 rounded-full border border-border bg-muted text-sm text-muted-foreground',
+        /**
+         * The stop as its own photograph.
+         *
+         * No fill and no type colour, because what sits inside is a picture
+         * rather than a number - the number moves to a badge on its corner so
+         * the day can still be read by it. `relative` anchors that badge.
+         */
+        photo: 'relative size-14 rounded-[var(--radius-md)] text-sm text-foreground',
+        /**
+         * A base standing in a timeline that shows photographs.
+         *
+         * It keeps the squared outline that says "base" rather than becoming a
+         * picture, and only grows to the tile's width - otherwise the rail
+         * jogs eight pixels sideways every time the day starts or ends.
+         */
+        'base-wide':
+          'size-14 rounded-[var(--radius-md)] border-2 border-primary bg-card text-sm text-primary',
+        /** The same, for a base with nothing to point at on the map. */
+        'base-wide-unlocated':
+          'size-14 rounded-[var(--radius-md)] border-2 border-border bg-muted text-sm text-muted-foreground',
       },
     },
     defaultVariants: { variant: 'stop' },
   },
 );
 
-export type TimelineMarkerVariant = 'base' | 'base-unlocated' | 'leg' | 'stop' | 'stop-unlocated';
+export type TimelineMarkerVariant =
+  | 'base'
+  | 'base-unlocated'
+  | 'base-wide'
+  | 'base-wide-unlocated'
+  | 'leg'
+  | 'photo'
+  | 'stop'
+  | 'stop-unlocated';
 
 export function TimelineMarker({
   children,
@@ -48,7 +76,14 @@ export function TimelineMarker({
   variant,
 }: Readonly<{ children?: ReactNode; label?: string; variant: TimelineMarkerVariant }>) {
   return (
-    <span className={markerVariants({ variant })}>
+    <span
+      className={markerVariants({ variant })}
+      // The row's own grid reads this to widen the column it sits in, so a
+      // timeline that shows no photographs is untouched by the ones that do.
+      data-slot={
+        variant.startsWith('base-wide') || variant === 'photo' ? 'timeline-media' : undefined
+      }
+    >
       {label ? <span className="sr-only">{label}</span> : null}
       {children ? <span aria-hidden="true">{children}</span> : null}
     </span>
@@ -89,7 +124,9 @@ const rowVariants = cva(
   // `relative` so a row whose title claims the whole row - the stops and bases
   // of a day, which open their place when clicked - has something for that
   // claim to resolve against. Nothing else here is positioned.
-  'group/timeline-row relative grid grid-cols-[2.5rem_minmax(0,1fr)_auto] gap-x-3 px-3',
+  // The marker column widens only for a row carrying a photograph, so every
+  // other timeline in the app keeps the template it has always had.
+  'group/timeline-row relative grid grid-cols-[2.5rem_minmax(0,1fr)_auto] gap-x-3 px-3 has-[[data-slot=timeline-media]]:grid-cols-[3.5rem_minmax(0,1fr)_auto]',
   {
     variants: {
       tone: {

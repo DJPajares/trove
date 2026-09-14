@@ -749,13 +749,6 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
           <p className="text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
             {day.name ? itineraryT('dayOption', { date, number: dayNumber }) : date}
           </p>
-          <p className="mt-0.5 text-[length:var(--text-metadata)] leading-5 text-text-subtle">
-            {/* The clock these times are read on, which for a traveller who
-                has flown is theirs rather than the one the day was planned in. */}
-            {t('timeZone', {
-              timeZone: isPreview ? day.defaultTimeZone : (deviceTimeZone() ?? day.defaultTimeZone),
-            })}
-          </p>
         </div>
         {/* Adding to the day is the one action worth a control of its own here;
             the rest of what a day collects lives under the row it belongs to. */}

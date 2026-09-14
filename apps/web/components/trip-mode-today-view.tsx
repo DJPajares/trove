@@ -692,9 +692,6 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                   <span className={cn('tabular-nums', active ? 'text-primary-foreground/85' : '')}>
                     {dayChipDate(candidate.date)}
                   </span>
-                  {/* The outline says "today" to anyone who can see it; this
-                      says it to everyone else. */}
-                  {isContextDay ? <span className="sr-only">{t('dayStripToday')}</span> : null}
                 </button>
               </li>
             );

@@ -115,11 +115,6 @@ export function ItineraryRouteSummary({
           on a phone they cost one row instead of four, which is four rows of
           the day the traveller gets to see instead. */}
       <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
-        {status === 'error' || summary?.status === 'unavailable' ? (
-          <span className="text-muted-foreground">{t('unavailable')}</span>
-        ) : partial ? (
-          <span className="text-muted-foreground">{t('partial')}</span>
-        ) : null}
         {data?.source === 'cache' ? (
           <span className="text-status-warning">
             {t('cachedRoute', {

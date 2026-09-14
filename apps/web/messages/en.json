@@ -1510,7 +1510,6 @@
       "travelTimeUnavailable": "Travel estimate unavailable",
       "noLocalTravel": "No local travel on this day",
       "unavailable": "Route estimates are unavailable. Your itinerary remains usable.",
-      "partial": "Some stops do not have enough location data. Totals include known routes only.",
       "cachedRoute": "Cached route from {date}. Check current conditions before relying on it.",
       "walkingBeta": "Walking routes are in beta and may not include clear pedestrian paths.",
       "googleAttribution": "Estimated with Google Maps",

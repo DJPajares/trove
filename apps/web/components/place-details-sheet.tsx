@@ -95,7 +95,6 @@ export function PlaceDetailsSheet({
           )}`,
         }
       : null,
-    place.location?.timeZone ? { label: t('timeZone'), value: place.location.timeZone } : null,
     place.note ? { label: t('note'), value: place.note } : null,
     ...meta,
     // Provider data is stored dated rather than live, so the sheet says how old

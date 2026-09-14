@@ -292,7 +292,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
           between the two bars, with the day riding over it on a sheet; at `lg:`
           it goes back to being a card beside a rail, which that width has room
           for. One map either way - a second instance is a second charge. */}
-      <div className="relative -mx-[var(--gutter-inline-start)] min-h-[22rem] flex-1 overflow-hidden lg:static lg:mx-0 lg:grid lg:min-h-0 lg:flex-none lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-6 lg:overflow-visible">
+      <div className="flex -mx-[var(--gutter-inline-start)] min-h-[22rem] flex-1 overflow-hidden lg:static lg:mx-0 lg:grid lg:min-h-0 lg:flex-none lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-6 lg:overflow-visible">
         <section
           aria-label={t('mapSectionLabel')}
           className="absolute inset-0 lg:static lg:min-w-0 lg:overflow-hidden lg:rounded-[var(--radius-xl)] lg:border lg:border-border lg:bg-card lg:shadow-[var(--shadow-surface)]"

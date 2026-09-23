@@ -1,4 +1,10 @@
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import { readTripWeatherHistory, writeTripWeatherHistory } from '@/lib/offline/trip-store';
+import {
+  mergeArchivedTripWeather,
+  restoreArchivedTripWeather,
+  type ArchivedTripWeatherDay,
+} from '@/lib/weather/history';
 
 import type { TemperatureUnit } from '@/lib/profile/preferences';
 
@@ -34,8 +40,6 @@ export type WeatherHourlyForecast = {
 };
 
 export type TripWeatherLocation = {
-  latitude: number;
-  longitude: number;
   timeZone: string;
 };
 
@@ -52,9 +56,10 @@ export type TripWeatherDay = {
 /**
  * A trip's weather, one day at a time.
  *
- * `days` carries only the days the provider could actually answer. A day past
- * the horizon is absent rather than present and empty, so a surface can tell
- * "not forecast yet" from "no weather here" without inspecting a temperature.
+ * `days` carries current provider answers plus daily forecasts retained locally
+ * after their itinerary dates pass. A missing date inside the horizon means no
+ * located weather was available; a missing date before it means no forecast
+ * was retained on this device.
  */
 export type TripWeather = {
   attribution: {
@@ -99,19 +104,23 @@ export class WeatherApiError extends Error {
 
 const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
 
-async function getAccessToken() {
+async function getAuthContext() {
   const supabase = createBrowserSupabaseClient();
   if (!supabase) throw new WeatherApiError('supabase_not_configured', 500);
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session) throw new WeatherApiError('not_authenticated', 401);
-  return data.session.access_token;
+  return { accessToken: data.session.access_token, userId: data.session.user.id };
+}
+
+async function getAccessToken() {
+  return (await getAuthContext()).accessToken;
 }
 
 export async function getTripWeather(
   tripId: string,
   { signal, temperatureUnit }: TripWeatherRequest,
 ): Promise<TripWeather> {
-  const accessToken = await getAccessToken();
+  const { accessToken, userId } = await getAuthContext();
   const query = new URLSearchParams({ temperatureUnit });
 
   let response: Response;
@@ -133,7 +142,27 @@ export async function getTripWeather(
     );
   }
 
-  return response.json() as Promise<TripWeather>;
+  const weather = (await response.json()) as TripWeather;
+  let archived: ArchivedTripWeatherDay[] = [];
+  let historyRead = true;
+  try {
+    archived = await readTripWeatherHistory(userId, tripId);
+  } catch {
+    // Private storage is an optimisation. Weather remains available if it is
+    // disabled or unavailable in this browser.
+    historyRead = false;
+  }
+
+  const history = mergeArchivedTripWeather(archived, weather.days, temperatureUnit);
+  if (historyRead) {
+    try {
+      await writeTripWeatherHistory(userId, tripId, history);
+    } catch {
+      // A storage failure must not hide the forecast that just arrived.
+    }
+  }
+
+  return { ...weather, days: restoreArchivedTripWeather(history, temperatureUnit) };
 }
 
 export type LocationWeather = {

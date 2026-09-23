@@ -721,6 +721,7 @@
         "hourCell": "{time}, {condition}, {temperature}",
         "hourCellWithPrecipitation": "{time}, {condition}, {temperature}, {probability}% chance of precipitation",
         "forecastLater": "Weather for this day will be available closer to your trip.",
+        "pastForecastUnavailable": "No forecast was saved for this past day.",
         "noForecast": "A forecast is not available for this day.",
         "unavailableTitle": "Weather is unavailable right now",
         "unavailableDescription": "Your trip details are still available. Try again when you have a connection.",

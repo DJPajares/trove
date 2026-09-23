@@ -3,8 +3,8 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 
-import { queryKeys } from '@/lib/query/keys';
 import { type Trip, updateTripReadiness } from '@/lib/trips/api';
+import { cacheSavedTrip } from '@/lib/trips/cache';
 
 /**
  * Setting a plan Ready from wherever the traveller happens to be looking.
@@ -28,17 +28,7 @@ export function useTripReadiness() {
       try {
         const { trip: saved } = await updateTripReadiness(trip.id, planningReadiness);
 
-        queryClient.setQueryData(queryKeys.trip(saved.id), { trip: saved });
-        queryClient.setQueryData(queryKeys.trips(), (current: { trips: Trip[] } | undefined) =>
-          current
-            ? {
-                ...current,
-                trips: current.trips.map((candidate) =>
-                  candidate.id === saved.id ? saved : candidate,
-                ),
-              }
-            : current,
-        );
+        cacheSavedTrip(queryClient, saved);
       } catch {
         setFailedTripId(trip.id);
       } finally {

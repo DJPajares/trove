@@ -3,9 +3,9 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 
-import { queryKeys } from '@/lib/query/keys';
 import { removeTripQueries, TRIP_DATE_QUERY_ROOTS } from '@/lib/query/trip-invalidation';
 import { updateTripDates, type Trip } from '@/lib/trips/api';
+import { cacheSavedTrip } from '@/lib/trips/cache';
 import { shiftTripDates } from '@/lib/trips/form';
 
 /**
@@ -38,17 +38,7 @@ export function useTripDateMove() {
       try {
         const { trip: saved } = await updateTripDates(trip.id, shiftTripDates(trip, days));
 
-        queryClient.setQueryData(queryKeys.trip(saved.id), { trip: saved });
-        queryClient.setQueryData(queryKeys.trips(), (current: { trips: Trip[] } | undefined) =>
-          current
-            ? {
-                ...current,
-                trips: current.trips.map((candidate) =>
-                  candidate.id === saved.id ? saved : candidate,
-                ),
-              }
-            : current,
-        );
+        cacheSavedTrip(queryClient, saved);
         removeTripQueries(queryClient, saved.id, TRIP_DATE_QUERY_ROOTS);
       } catch {
         setFailedTripId(trip.id);

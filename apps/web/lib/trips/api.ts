@@ -97,7 +97,7 @@ export type TripInput = {
   name: string;
   partySize: number;
   planningReadiness: 'in_progress' | 'ready';
-  referenceTimeZone: string | null;
+  referenceTimeZone?: string | null;
   startDate: string;
   startingLocation: string | null;
 };

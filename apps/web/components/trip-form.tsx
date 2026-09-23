@@ -36,6 +36,7 @@ import {
   hasTripCountries,
   isValidPartySize,
   moveTripRange,
+  tripTimeZoneInput,
 } from '@/lib/trips/form';
 import {
   AlertDialog,
@@ -79,7 +80,6 @@ type FormState = {
   name: string;
   partySize: string;
   planningReadiness: 'in_progress' | 'ready';
-  referenceTimeZone: string;
   startDate: string;
   startingLocation: string;
 };
@@ -108,7 +108,6 @@ function createInitialForm(trip: Trip | null): FormState {
     name: trip?.name ?? '',
     partySize: String(trip?.partySize ?? 1),
     planningReadiness: trip?.planningReadiness ?? 'in_progress',
-    referenceTimeZone: trip?.referenceTimeZoneSource === 'explicit' ? trip.referenceTimeZone : '',
     startDate: trip?.startDate ?? today,
     startingLocation: trip?.startingLocationOverride ?? '',
   };
@@ -266,12 +265,19 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
         .map((name) => name.trim())
         .filter(Boolean)
         .map((name) => ({ name })),
-      deviceTimeZone,
+      ...tripTimeZoneInput(
+        trip,
+        {
+          countries: form.countries,
+          destinations: form.destinations,
+          startingLocation: form.startingLocation,
+        },
+        deviceTimeZone,
+      ),
       endDate: form.endDate,
       name: form.name.trim(),
       partySize,
       planningReadiness: form.planningReadiness,
-      referenceTimeZone: form.referenceTimeZone || null,
       startDate: form.startDate,
       startingLocation: form.startingLocation.trim() || null,
     };
@@ -666,13 +672,11 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
                   </CollapsibleTrigger>
                   <CollapsiblePanel>
                     <TripOptionalDetails
-                      deviceTimeZone={deviceTimeZone}
                       onChange={updateFields}
                       trip={trip}
                       values={{
                         partySize: form.partySize,
                         planningReadiness: form.planningReadiness,
-                        referenceTimeZone: form.referenceTimeZone,
                         startingLocation: form.startingLocation,
                       }}
                     />

@@ -8,6 +8,7 @@ import {
   isValidPartySize,
   moveTripRange,
   shiftTripDates,
+  tripTimeZoneInput,
 } from '../lib/trips/form.ts';
 
 function trip(overrides: Partial<Trip> = {}): Trip {
@@ -39,11 +40,11 @@ function trip(overrides: Partial<Trip> = {}): Trip {
 test('a new trip has nothing hidden, so the panel stays closed', () => {
   expect(hasOptionalTripDetails(null)).toBe(false);
   expect(hasOptionalTripDetails(trip())).toBe(false);
+  expect(hasOptionalTripDetails(trip({ referenceTimeZoneSource: 'explicit' }))).toBe(false);
 });
 
 test('anything the traveller already filled in opens the panel', () => {
   expect(hasOptionalTripDetails(trip({ startingLocationOverride: 'Manila' }))).toBe(true);
-  expect(hasOptionalTripDetails(trip({ referenceTimeZoneSource: 'explicit' }))).toBe(true);
   expect(hasOptionalTripDetails(trip({ partySize: 2 }))).toBe(true);
   expect(hasOptionalTripDetails(trip({ planningReadiness: 'ready' }))).toBe(true);
 });
@@ -56,6 +57,46 @@ test('whitespace is not content', () => {
 // optional panel open behind it.
 test('a description is not what this panel holds', () => {
   expect(hasOptionalTripDetails(trip({ description: 'Cherry blossom season' }))).toBe(false);
+});
+
+test('new trips use the device timezone fallback without a manual override', () => {
+  expect(
+    tripTimeZoneInput(
+      null,
+      { countries: ['JP'], destinations: ['Tokyo'], startingLocation: '' },
+      'Asia/Singapore',
+    ),
+  ).toEqual({ deviceTimeZone: 'Asia/Singapore' });
+});
+
+test('an existing explicit timezone survives edits until trip location changes', () => {
+  const existingTrip = trip({
+    countries: ['JP'],
+    destinations: [
+      { id: 'tokyo', name: 'Tokyo', placeId: 'tokyo-place', position: 0, timeZone: null },
+    ],
+    referenceTimeZone: 'Asia/Tokyo',
+    referenceTimeZoneSource: 'explicit',
+  });
+  const unchangedLocation = {
+    countries: ['JP'],
+    destinations: ['Tokyo'],
+    startingLocation: '',
+  };
+
+  expect(tripTimeZoneInput(existingTrip, unchangedLocation, 'Asia/Singapore')).toEqual({
+    deviceTimeZone: 'Asia/Singapore',
+    referenceTimeZone: 'Asia/Tokyo',
+  });
+  expect(
+    tripTimeZoneInput(existingTrip, { ...unchangedLocation, countries: ['JP', 'KR'] }, 'UTC'),
+  ).toEqual({ deviceTimeZone: 'UTC' });
+  expect(
+    tripTimeZoneInput(existingTrip, { ...unchangedLocation, destinations: ['Osaka'] }, 'UTC'),
+  ).toEqual({ deviceTimeZone: 'UTC' });
+  expect(
+    tripTimeZoneInput(existingTrip, { ...unchangedLocation, startingLocation: 'Seoul' }, 'UTC'),
+  ).toEqual({ deviceTimeZone: 'UTC' });
 });
 
 test('a travel party is a whole number of people, at least one', () => {

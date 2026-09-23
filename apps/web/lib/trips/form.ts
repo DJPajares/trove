@@ -1,4 +1,4 @@
-import type { Trip } from './api';
+import type { Trip, TripInput } from './api';
 
 /** Below this a name is still being typed, not yet a subject worth asking about. */
 export const MIN_EDITORIAL_SUBJECT_LENGTH = 3;
@@ -20,10 +20,56 @@ export function hasOptionalTripDetails(trip: Trip | null) {
 
   return Boolean(
     trip.startingLocationOverride?.trim() ||
-    trip.referenceTimeZoneSource === 'explicit' ||
     trip.partySize > 1 ||
     trip.planningReadiness === 'ready',
   );
+}
+
+type TripLocationFormValues = {
+  countries: readonly string[];
+  destinations: readonly string[];
+  startingLocation: string;
+};
+
+function normalizedLocationName(value: string | null | undefined) {
+  return value?.trim().toLocaleLowerCase('en') ?? '';
+}
+
+function sameOrderedValues(left: readonly string[], right: readonly string[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+/**
+ * The trip form no longer exposes the reference time-zone override. Keep an
+ * existing explicit choice when the trip's location inputs are unchanged, and
+ * let the server resolve it again when those inputs move.
+ */
+export function tripTimeZoneInput(
+  trip: Trip | null,
+  values: TripLocationFormValues,
+  deviceTimeZone: string,
+): Pick<TripInput, 'deviceTimeZone' | 'referenceTimeZone'> {
+  const sameCountries = sameOrderedValues(
+    (trip?.countries ?? []).map((country) => country.trim().toUpperCase()),
+    values.countries.map((country) => country.trim().toUpperCase()),
+  );
+  const sameDestinations = sameOrderedValues(
+    (trip?.destinations ?? []).map((destination) => normalizedLocationName(destination.name)),
+    values.destinations.map(normalizedLocationName),
+  );
+  const sameStartingLocation =
+    normalizedLocationName(trip?.startingLocationOverride) ===
+    normalizedLocationName(values.startingLocation);
+  const preserveExplicitTimeZone =
+    trip?.referenceTimeZoneSource === 'explicit' &&
+    sameCountries &&
+    sameDestinations &&
+    sameStartingLocation;
+
+  return {
+    deviceTimeZone,
+    ...(preserveExplicitTimeZone ? { referenceTimeZone: trip.referenceTimeZone } : {}),
+  };
 }
 
 /**

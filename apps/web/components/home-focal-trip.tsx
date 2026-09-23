@@ -70,6 +70,8 @@ export function HomeFocalTrip({
   const shouldReduceMotion = useReducedMotion();
   const destinations = tripDestinationSummary(trip);
   const dateRange = formatTripDateRange(trip.startDate, trip.endDate, locale);
+  const countdown =
+    trip.lifecycle === 'planning' ? resolveCountdown(daysUntilTripStart(trip)) : null;
 
   return (
     <motion.section
@@ -100,14 +102,13 @@ export function HomeFocalTrip({
             variant="thumbnail"
           />
         </div>
-        {/* Over the rim, with the page's own colour ringing it, so the badge
-            punches a gap out of the photograph rather than sitting on it.
+        {/* Over the rim, with a solid fill to separate it from the photograph.
             `onMedia` rather than the default tone: half of this badge is on the
             photograph, and the default fill is a tenth of a tint meant for a
             known page surface - over an arbitrary image its contrast is
             whatever the image happens to be, which in dark mode was nothing. */}
         <TripLifecycleBadge
-          className="absolute -bottom-2 left-1/2 -translate-x-1/2 ring-4 ring-background"
+          className="absolute -bottom-2 left-1/2 -translate-x-1/2"
           lifecycle={trip.lifecycle}
           tone="onMedia"
         />
@@ -139,10 +140,10 @@ export function HomeFocalTrip({
           <TripReadinessBadge lifecycle={trip.lifecycle} readiness={trip.planningReadiness} />
         </div>
 
-        {trip.lifecycle === 'planning' ? (
+        {countdown ? (
           <div className="flex w-full flex-col items-center gap-3">
             <p className="text-lg font-medium text-foreground">
-              {t('countdown', resolveCountdown(daysUntilTripStart(trip)))}
+              {t('countdown', { count: countdown.value, unit: countdown.unit })}
             </p>
             <TripProgress className="w-full max-w-xs" trip={trip} />
           </div>

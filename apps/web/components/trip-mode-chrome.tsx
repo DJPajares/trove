@@ -172,7 +172,7 @@ export function TripModeTopBar({
       )}
 
       {isPreview ? (
-        <p className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-accent-strong/35 bg-accent-strong/8 px-2.5 py-1 text-[length:var(--text-metadata)] font-semibold tracking-[0.06em] text-accent-strong uppercase">
+        <p className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-accent-strong/8 px-2.5 py-1 text-[length:var(--text-metadata)] font-semibold tracking-[0.06em] text-accent-strong uppercase">
           <Eye aria-hidden="true" className="size-3.5" />
           {t('preview.badge')}
         </p>

@@ -19,11 +19,12 @@ function ChipGroup<Value extends string>({
 }
 
 const chipVariants = cva(
-  'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium whitespace-nowrap outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50 data-[pressed]:border-transparent data-[pressed]:bg-brand/15 data-[pressed]:text-brand',
+  'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50 data-[pressed]:bg-brand/15 data-[pressed]:text-brand',
   {
     variants: {
       variant: {
-        default: 'border-border text-muted-foreground hover:bg-surface-hover hover:text-foreground',
+        default:
+          'bg-surface-raised text-muted-foreground hover:bg-surface-hover hover:text-foreground',
       },
     },
     defaultVariants: { variant: 'default' },

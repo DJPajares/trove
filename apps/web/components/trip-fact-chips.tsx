@@ -16,8 +16,8 @@ const chipVariants = cva(
       tone: {
         // The scrim below is dark in both themes, so this pair does not flip -
         // the same reasoning the badges' own onMedia tone follows.
-        onMedia: 'border border-white/22 bg-white/14 text-white backdrop-blur-sm',
-        surface: 'border border-border-subtle bg-surface-raised text-muted-foreground',
+        onMedia: 'bg-white/14 text-white backdrop-blur-sm',
+        surface: 'bg-surface-raised text-muted-foreground',
       },
     },
     defaultVariants: { tone: 'surface' },

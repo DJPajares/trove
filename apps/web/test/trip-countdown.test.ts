@@ -1,5 +1,7 @@
+import { createTranslator } from 'next-intl';
 import { expect, test } from 'vitest';
 
+import messages from '../messages/en.json';
 import type { Trip } from '../lib/trips/api.ts';
 import {
   DEPARTURE_APPROACH_DAYS,
@@ -53,6 +55,19 @@ test('anything further out counts in months', () => {
 
 test('a past start date never counts backwards', () => {
   expect(resolveCountdown(-5)).toEqual({ unit: 'day', value: 0 });
+});
+
+test.each([
+  [0, 'Starts today'],
+  [1, 'Starts in 1 day'],
+  [6, 'Starts in 6 days'],
+  [7, 'Starts in 1 week'],
+  [70, 'Starts in 2 months'],
+] as const)('the Home countdown formats %i days away', (days, expected) => {
+  const t = createTranslator({ locale: 'en', messages, namespace: 'home' });
+  const countdown = resolveCountdown(days);
+
+  expect(t('countdown', { count: countdown.value, unit: countdown.unit })).toBe(expected);
 });
 
 test('the bar is absent beyond the final approach', () => {

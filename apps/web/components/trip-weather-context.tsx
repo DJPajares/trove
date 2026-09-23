@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { weatherConditionIcon, weatherConditionKey } from '@/lib/weather/conditions';
 import { selectHourlyReadings } from '@/lib/weather/hourly';
+import { dateIsBeforeForecastWindow } from '@/lib/weather/history';
 import { cn } from '@/lib/utils';
 import {
   isCurrentReadingStale,
@@ -96,7 +97,11 @@ export function TripWeatherContext({
   }
 
   const selectedForecast = tripWeatherForDate(data, selectedDate);
-  const timeZone = selectedForecast?.location.timeZone ?? data.days[0]?.location.timeZone ?? 'UTC';
+  const timeZone =
+    selectedForecast?.location.timeZone ??
+    data.days.find((day) => day.date >= data.horizon.startDate)?.location.timeZone ??
+    data.days[0]?.location.timeZone ??
+    'UTC';
   const current = data.current;
   // An answer read off disk on a plane is worth showing, but it stops being
   // "now" the moment it outlives its window. Dropping back to the day's
@@ -188,9 +193,13 @@ export function TripWeatherContext({
         </a>
       ) : (
         <p className="text-sm leading-6 text-muted-foreground">
-          {/* A day past the horizon has no forecast yet; a day inside it that
-          still has none has nowhere located to have weather about. */}
-          {isDateForecastable(data, selectedDate) ? t('noForecast') : t('forecastLater')}
+          {/* A past day cannot receive a new forecast; a day inside the window
+          without one has nowhere located to have weather about. */}
+          {dateIsBeforeForecastWindow(data.horizon, selectedDate)
+            ? t('pastForecastUnavailable')
+            : isDateForecastable(data, selectedDate)
+              ? t('noForecast')
+              : t('forecastLater')}
         </p>
       )}
 

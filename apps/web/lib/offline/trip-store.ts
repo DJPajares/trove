@@ -13,18 +13,20 @@ import type { ReservationsResponse } from '@/lib/reservations/api';
 import type { Task, TaskInput, TasksResponse } from '@/lib/tasks/api';
 import type { TripInfoEntry, TripInfoInput, TripInfoResponse } from '@/lib/trip-info/api';
 import type { Trip } from '@/lib/trips/api';
+import type { ArchivedTripWeatherDay } from '@/lib/weather/history';
 import { sumByCurrency } from '@/lib/currency/money';
 import { applyItineraryDayMove } from '@/lib/itinerary/day-move';
 import { itemSortMinute, reslotItemByTime } from '@/lib/itinerary/item-order';
 import { PRIVATE_MEDIA_CACHES } from '@/lib/media/storage-cache-key';
 
 const DATABASE_NAME = 'trove-offline';
-const DATABASE_VERSION = 4;
+const DATABASE_VERSION = 5;
 const SNAPSHOT_STORE = 'trip-snapshots';
 const MUTATION_STORE = 'mutations';
 const DOCUMENT_STORE = 'reservation-documents';
 const MEMORY_MEDIA_STORE = 'memory-media';
 const QUERY_CACHE_STORE = 'query-cache';
+const WEATHER_HISTORY_STORE = 'trip-weather-history';
 const LAST_OFFLINE_USER_KEY = 'trove.last-offline-user';
 const OFFLINE_SNAPSHOT_STALE_AFTER_MS = 14 * 24 * 60 * 60 * 1_000;
 
@@ -63,6 +65,14 @@ export function getRememberedOfflineUser() {
 }
 
 export type OfflineMutationState = 'conflict' | 'failed' | 'pending';
+
+type TripWeatherHistoryRecord = {
+  key: string;
+  days: ArchivedTripWeatherDay[];
+  tripId: string;
+  userId: string;
+  version: 1;
+};
 
 export type OfflineMutationOperation =
   | {
@@ -314,6 +324,11 @@ function openDatabase() {
         if (!database.objectStoreNames.contains(QUERY_CACHE_STORE)) {
           database.createObjectStore(QUERY_CACHE_STORE, { keyPath: 'key' });
         }
+        if (!database.objectStoreNames.contains(WEATHER_HISTORY_STORE)) {
+          const store = database.createObjectStore(WEATHER_HISTORY_STORE, { keyPath: 'key' });
+          store.createIndex('by-user', 'userId');
+          store.createIndex('by-user-trip', ['userId', 'tripId']);
+        }
       },
       { once: true },
     );
@@ -341,6 +356,37 @@ export async function readTripSnapshot(userId: string, tripId: string) {
   return requestResult<OfflineTripSnapshot | undefined>(
     transaction.objectStore(SNAPSHOT_STORE).get(snapshotKey(userId, tripId)),
   );
+}
+
+function tripWeatherHistoryKey(userId: string, tripId: string) {
+  return `${userId}:${tripId}`;
+}
+
+export async function readTripWeatherHistory(userId: string, tripId: string) {
+  const database = await openDatabase();
+  const transaction = database.transaction(WEATHER_HISTORY_STORE, 'readonly');
+  const record = await requestResult<TripWeatherHistoryRecord | undefined>(
+    transaction.objectStore(WEATHER_HISTORY_STORE).get(tripWeatherHistoryKey(userId, tripId)),
+  );
+
+  return record?.version === 1 && Array.isArray(record.days) ? record.days : [];
+}
+
+export async function writeTripWeatherHistory(
+  userId: string,
+  tripId: string,
+  days: ArchivedTripWeatherDay[],
+) {
+  const database = await openDatabase();
+  const transaction = database.transaction(WEATHER_HISTORY_STORE, 'readwrite');
+  transaction.objectStore(WEATHER_HISTORY_STORE).put({
+    days,
+    key: tripWeatherHistoryKey(userId, tripId),
+    tripId,
+    userId,
+    version: 1,
+  } satisfies TripWeatherHistoryRecord);
+  await transactionDone(transaction);
 }
 
 async function writeSnapshot(snapshot: OfflineTripSnapshot) {
@@ -569,6 +615,17 @@ export async function listTripSnapshots(userId: string) {
   return snapshots.toSorted((left, right) => right.savedAt.localeCompare(left.savedAt));
 }
 
+async function listTripWeatherHistory(userId: string) {
+  const database = await openDatabase();
+  const transaction = database.transaction(WEATHER_HISTORY_STORE, 'readonly');
+  return requestResult<TripWeatherHistoryRecord[]>(
+    transaction
+      .objectStore(WEATHER_HISTORY_STORE)
+      .index('by-user')
+      .getAll(IDBKeyRange.only(userId)),
+  );
+}
+
 export async function listUserMutations(userId: string, tripId?: string) {
   const database = await openDatabase();
   const transaction = database.transaction(MUTATION_STORE, 'readonly');
@@ -638,7 +695,14 @@ export async function clearAllOfflineTripData() {
   try {
     const database = await openDatabase();
     const transaction = database.transaction(
-      [SNAPSHOT_STORE, MUTATION_STORE, DOCUMENT_STORE, MEMORY_MEDIA_STORE, QUERY_CACHE_STORE],
+      [
+        SNAPSHOT_STORE,
+        MUTATION_STORE,
+        DOCUMENT_STORE,
+        MEMORY_MEDIA_STORE,
+        QUERY_CACHE_STORE,
+        WEATHER_HISTORY_STORE,
+      ],
       'readwrite',
     );
     transaction.objectStore(SNAPSHOT_STORE).clear();
@@ -646,6 +710,7 @@ export async function clearAllOfflineTripData() {
     transaction.objectStore(DOCUMENT_STORE).clear();
     transaction.objectStore(MEMORY_MEDIA_STORE).clear();
     transaction.objectStore(QUERY_CACHE_STORE).clear();
+    transaction.objectStore(WEATHER_HISTORY_STORE).clear();
     await transactionDone(transaction);
   } catch {
     // Continue clearing the user marker and private route caches.
@@ -673,6 +738,7 @@ type TripOfflineTeardown = {
   documentKeys: IDBValidKey[];
   mediaKeys: IDBValidKey[];
   mutationKeys: IDBValidKey[];
+  weatherHistoryKeys: IDBValidKey[];
   tripId: string;
 };
 
@@ -686,45 +752,60 @@ type TripOfflineTeardown = {
 async function readTripTeardowns(userId: string, tripIds: string[]) {
   const database = await openDatabase();
   const transaction = database.transaction(
-    [MUTATION_STORE, DOCUMENT_STORE, MEMORY_MEDIA_STORE],
+    [MUTATION_STORE, DOCUMENT_STORE, MEMORY_MEDIA_STORE, WEATHER_HISTORY_STORE],
     'readonly',
   );
   const mutationStore = transaction.objectStore(MUTATION_STORE);
   const documentStore = transaction.objectStore(DOCUMENT_STORE);
   const mediaStore = transaction.objectStore(MEMORY_MEDIA_STORE);
+  const weatherHistoryStore = transaction.objectStore(WEATHER_HISTORY_STORE);
 
   return Promise.all(
     tripIds.map(async (tripId) => {
       const range = IDBKeyRange.only([userId, tripId]);
-      const [mutationKeys, documentKeys, mediaKeys] = await Promise.all([
+      const [mutationKeys, documentKeys, mediaKeys, weatherHistoryKeys] = await Promise.all([
         requestResult<IDBValidKey[]>(mutationStore.index('by-user-trip').getAllKeys(range)),
         requestResult<IDBValidKey[]>(documentStore.index('by-user-trip').getAllKeys(range)),
         requestResult<IDBValidKey[]>(mediaStore.index('by-user-trip').getAllKeys(range)),
+        requestResult<IDBValidKey[]>(weatherHistoryStore.index('by-user-trip').getAllKeys(range)),
       ]);
 
-      return { documentKeys, mediaKeys, mutationKeys, tripId } satisfies TripOfflineTeardown;
+      return {
+        documentKeys,
+        mediaKeys,
+        mutationKeys,
+        tripId,
+        weatherHistoryKeys,
+      } satisfies TripOfflineTeardown;
     }),
   );
 }
 
-async function deleteTripRecords(userId: string, teardowns: TripOfflineTeardown[]) {
+async function deleteTripRecords(
+  userId: string,
+  teardowns: TripOfflineTeardown[],
+  { deleteWeatherHistory = false }: { deleteWeatherHistory?: boolean } = {},
+) {
   if (!teardowns.length) return;
 
   const database = await openDatabase();
-  const transaction = database.transaction(
-    [SNAPSHOT_STORE, MUTATION_STORE, DOCUMENT_STORE, MEMORY_MEDIA_STORE],
-    'readwrite',
-  );
+  const stores = [SNAPSHOT_STORE, MUTATION_STORE, DOCUMENT_STORE, MEMORY_MEDIA_STORE];
+  if (deleteWeatherHistory) stores.push(WEATHER_HISTORY_STORE);
+  const transaction = database.transaction(stores, 'readwrite');
   const snapshotStore = transaction.objectStore(SNAPSHOT_STORE);
   const mutationStore = transaction.objectStore(MUTATION_STORE);
   const documentStore = transaction.objectStore(DOCUMENT_STORE);
   const mediaStore = transaction.objectStore(MEMORY_MEDIA_STORE);
+  const weatherHistoryStore = deleteWeatherHistory
+    ? transaction.objectStore(WEATHER_HISTORY_STORE)
+    : null;
 
   for (const teardown of teardowns) {
     snapshotStore.delete(snapshotKey(userId, teardown.tripId));
     for (const key of teardown.mutationKeys) mutationStore.delete(key);
     for (const key of teardown.documentKeys) documentStore.delete(key);
     for (const key of teardown.mediaKeys) mediaStore.delete(key);
+    for (const key of teardown.weatherHistoryKeys) weatherHistoryStore?.delete(key);
   }
 
   await transactionDone(transaction);
@@ -766,6 +847,7 @@ export async function removeTripOfflineData(
     mediaKeys: [],
     mutationKeys: [],
     tripId,
+    weatherHistoryKeys: [],
   };
 
   // Removing a downloaded copy must not lose work this device has not sent yet.
@@ -775,7 +857,7 @@ export async function removeTripOfflineData(
     throw new Error('offline_changes_pending');
   }
 
-  await deleteTripRecords(userId, [teardown]);
+  await deleteTripRecords(userId, [teardown], { deleteWeatherHistory: discardPendingMutations });
   await purgeTripPageCaches([tripId]);
   announceChange();
 }
@@ -817,9 +899,17 @@ export function tripsSafeToPrune(
  * trip ids actually pruned.
  */
 export async function pruneOrphanedTripSnapshots(userId: string, liveTripIds: string[]) {
-  const snapshots = await listTripSnapshots(userId);
+  const [snapshots, weatherHistory] = await Promise.all([
+    listTripSnapshots(userId),
+    listTripWeatherHistory(userId),
+  ]);
   const orphanIds = orphanedTripIds(
-    snapshots.map((snapshot) => snapshot.tripId),
+    [
+      ...new Set([
+        ...snapshots.map((snapshot) => snapshot.tripId),
+        ...weatherHistory.map((entry) => entry.tripId),
+      ]),
+    ],
     liveTripIds,
   );
 
@@ -840,6 +930,7 @@ export async function pruneOrphanedTripSnapshots(userId: string, liveTripIds: st
   await deleteTripRecords(
     userId,
     teardowns.filter((teardown) => prunedIds.has(teardown.tripId)),
+    { deleteWeatherHistory: true },
   );
   await purgeTripPageCaches([...prunedIds]);
   announceChange();

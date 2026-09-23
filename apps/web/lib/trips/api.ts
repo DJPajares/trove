@@ -91,15 +91,15 @@ export type TripInput = {
   countries: string[];
   coverPhotoPath?: string | null;
   description: string | null;
-  destinations: Array<{ name: string }>;
+  destinations?: Array<{ name: string }>;
   deviceTimeZone: string;
   endDate: string;
   name: string;
   partySize: number;
   planningReadiness: 'in_progress' | 'ready';
-  referenceTimeZone: string | null;
+  referenceTimeZone?: string | null;
   startDate: string;
-  startingLocation: string | null;
+  startingLocation?: string | null;
 };
 
 export class TripApiError extends Error {

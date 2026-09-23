@@ -1,29 +1,45 @@
-import type { Trip } from './api';
+import type { Trip, TripInput } from './api';
 
 /** Below this a name is still being typed, not yet a subject worth asking about. */
 export const MIN_EDITORIAL_SUBJECT_LENGTH = 3;
 
-/** Long enough that typing a city name settles into one request, short enough to feel immediate. */
-export const EDITORIAL_PREVIEW_DEBOUNCE_MS = 500;
-
 /**
  * Whether an existing trip carries anything in its optional half.
  *
- * Anything a traveller set themselves must never become something they have to
- * go looking for, so a trip that already holds any of these opens the panel
- * rather than hiding them behind a control the traveller never closed. The
+ * Existing traveller count or readiness choices keep the panel open rather
+ * than hiding them behind a control the traveller never closed. The
  * description is deliberately absent: it is asked for in the form's main body
  * now, so it never lands behind this disclosure.
  */
 export function hasOptionalTripDetails(trip: Trip | null) {
   if (!trip) return false;
 
-  return Boolean(
-    trip.startingLocationOverride?.trim() ||
-    trip.referenceTimeZoneSource === 'explicit' ||
-    trip.partySize > 1 ||
-    trip.planningReadiness === 'ready',
-  );
+  return trip.partySize > 1 || trip.planningReadiness === 'ready';
+}
+
+/**
+ * The trip form no longer exposes the reference time-zone override. Keep an
+ * existing explicit choice when countries are unchanged, and let the server
+ * resolve it again when they change. Destinations and starting location are
+ * omitted from updates so the server preserves their existing values.
+ */
+export function tripTimeZoneInput(
+  trip: Trip | null,
+  countries: readonly string[],
+  deviceTimeZone: string,
+): Pick<TripInput, 'deviceTimeZone' | 'referenceTimeZone'> {
+  const existingCountries = trip?.countries ?? [];
+  const preserveExplicitTimeZone =
+    trip?.referenceTimeZoneSource === 'explicit' &&
+    existingCountries.length === countries.length &&
+    existingCountries.every(
+      (country, index) => country.trim().toUpperCase() === countries[index]?.trim().toUpperCase(),
+    );
+
+  return {
+    deviceTimeZone,
+    ...(preserveExplicitTimeZone ? { referenceTimeZone: trip.referenceTimeZone } : {}),
+  };
 }
 
 /**
@@ -56,7 +72,8 @@ export function hasTripCountries(countries: readonly string[]) {
 }
 
 /**
- * What a half-typed form should ask a photograph for, or nothing yet.
+ * The first saved destination that makes a useful cover-photo subject, or
+ * nothing when there is no destination worth searching for.
  *
  * Only a destination is asked about. A trip's name is whatever the traveller
  * felt like calling it - "Mum's 60th", "Round two" - and a photography search

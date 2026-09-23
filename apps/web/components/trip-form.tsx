@@ -1,16 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  ArrowDown,
-  ArrowUp,
-  ChevronDown,
-  CircleAlert,
-  ImagePlus,
-  Plus,
-  RefreshCw,
-  Trash2,
-} from 'lucide-react';
+import { ChevronDown, CircleAlert, ImagePlus, RefreshCw, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
@@ -30,12 +21,12 @@ import { removeTripQueries, TRIP_DATE_QUERY_ROOTS } from '@/lib/query/trip-inval
 import { CountryMultiCombobox } from '@/components/country-multi-combobox';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import {
-  EDITORIAL_PREVIEW_DEBOUNCE_MS,
   editorialCoverSubjectName,
   hasOptionalTripDetails,
   hasTripCountries,
   isValidPartySize,
   moveTripRange,
+  tripTimeZoneInput,
 } from '@/lib/trips/form';
 import {
   AlertDialog,
@@ -74,14 +65,11 @@ type FormState = {
   countries: string[];
   coverPhotoPath: string | null;
   description: string;
-  destinations: string[];
   endDate: string;
   name: string;
   partySize: string;
   planningReadiness: 'in_progress' | 'ready';
-  referenceTimeZone: string;
   startDate: string;
-  startingLocation: string;
 };
 
 type PendingShrink = {
@@ -103,14 +91,11 @@ function createInitialForm(trip: Trip | null): FormState {
     countries: trip?.countries ?? [],
     coverPhotoPath: trip?.coverPhotoPath ?? null,
     description: trip?.description ?? '',
-    destinations: trip?.destinations.map((destination) => destination.name) ?? [],
     endDate: trip?.endDate ?? today,
     name: trip?.name ?? '',
     partySize: String(trip?.partySize ?? 1),
     planningReadiness: trip?.planningReadiness ?? 'in_progress',
-    referenceTimeZone: trip?.referenceTimeZoneSource === 'explicit' ? trip.referenceTimeZone : '',
     startDate: trip?.startDate ?? today,
-    startingLocation: trip?.startingLocationOverride ?? '',
   };
 }
 
@@ -146,23 +131,10 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
     setPendingDetailsFocus(false);
   }, [detailsOpen, pendingDetailsFocus]);
 
-  // What the cover should show while an existing trip is being edited. The
-  // draft settles before it is asked about, so typing a city name costs one
-  // request rather than one per keystroke.
-  const draftSubjectName = editorialCoverSubjectName(form.destinations);
-  const [coverSubjectName, setCoverSubjectName] = useState(draftSubjectName);
-
-  useEffect(() => {
-    if (!draftSubjectName) {
-      setCoverSubjectName('');
-      return;
-    }
-    const timer = setTimeout(
-      () => setCoverSubjectName(draftSubjectName),
-      EDITORIAL_PREVIEW_DEBOUNCE_MS,
-    );
-    return () => clearTimeout(timer);
-  }, [draftSubjectName]);
+  // Keep the saved first destination as the default cover-photo subject.
+  const coverSubjectName = editorialCoverSubjectName(
+    trip?.destinations.map((destination) => destination.name) ?? [],
+  );
 
   const coverSubject: EditorialSubject | null =
     trip && coverSubjectName
@@ -200,25 +172,6 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
 
     updateFields(moveTripRange(form, value));
     setDateError(null);
-  }
-
-  function updateDestination(index: number, value: string) {
-    setForm((current) => ({
-      ...current,
-      destinations: current.destinations.map((destination, position) =>
-        position === index ? value : destination,
-      ),
-    }));
-  }
-
-  function moveDestination(index: number, direction: -1 | 1) {
-    setForm((current) => {
-      const destinations = [...current.destinations];
-      const target = index + direction;
-      if (target < 0 || target >= destinations.length) return current;
-      [destinations[index], destinations[target]] = [destinations[target]!, destinations[index]!];
-      return { ...current, destinations };
-    });
   }
 
   function handleCoverChange(event: ChangeEvent<HTMLInputElement>) {
@@ -262,18 +215,12 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
       countries: form.countries,
       coverPhotoPath,
       description: form.description.trim() || null,
-      destinations: form.destinations
-        .map((name) => name.trim())
-        .filter(Boolean)
-        .map((name) => ({ name })),
-      deviceTimeZone,
+      ...tripTimeZoneInput(trip, form.countries, deviceTimeZone),
       endDate: form.endDate,
       name: form.name.trim(),
       partySize,
       planningReadiness: form.planningReadiness,
-      referenceTimeZone: form.referenceTimeZone || null,
       startDate: form.startDate,
-      startingLocation: form.startingLocation.trim() || null,
     };
   }
 
@@ -502,95 +449,6 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
 
           {trip ? (
             <>
-              <section
-                aria-labelledby="trip-destinations-heading"
-                className="space-y-4 border-t pt-7"
-              >
-                <div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between sm:gap-4">
-                  <div>
-                    <h3 className="font-medium" id="trip-destinations-heading">
-                      {t('destinationsTitle')}
-                    </h3>
-                    <FieldDescription>{t('destinationsDescription')}</FieldDescription>
-                  </div>
-                  <Button
-                    onClick={() =>
-                      setForm((current) => ({
-                        ...current,
-                        destinations: [...current.destinations, ''],
-                      }))
-                    }
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                  >
-                    <Plus aria-hidden="true" data-icon="inline-start" />
-                    {t('addDestination')}
-                  </Button>
-                </div>
-                {form.destinations.length ? (
-                  <div className="space-y-3">
-                    {form.destinations.map((destination, index) => (
-                      <div
-                        className="flex items-center gap-2"
-                        key={`${index}-${form.destinations.length}`}
-                      >
-                        <span className="w-5 text-center text-xs tabular-nums text-muted-foreground">
-                          {index + 1}
-                        </span>
-                        <Input
-                          aria-label={t('destinationLabel', { number: index + 1 })}
-                          maxLength={200}
-                          onChange={(event) => updateDestination(index, event.target.value)}
-                          placeholder={t('destinationPlaceholder')}
-                          value={destination}
-                        />
-                        <div className="flex shrink-0">
-                          <Button
-                            aria-label={t('moveDestinationUp')}
-                            disabled={index === 0}
-                            onClick={() => moveDestination(index, -1)}
-                            size="icon-sm"
-                            type="button"
-                            variant="ghost"
-                          >
-                            <ArrowUp aria-hidden="true" />
-                          </Button>
-                          <Button
-                            aria-label={t('moveDestinationDown')}
-                            disabled={index === form.destinations.length - 1}
-                            onClick={() => moveDestination(index, 1)}
-                            size="icon-sm"
-                            type="button"
-                            variant="ghost"
-                          >
-                            <ArrowDown aria-hidden="true" />
-                          </Button>
-                          <Button
-                            aria-label={t('removeDestination')}
-                            onClick={() =>
-                              setForm((current) => ({
-                                ...current,
-                                destinations: current.destinations.filter(
-                                  (_, position) => position !== index,
-                                ),
-                              }))
-                            }
-                            size="icon-sm"
-                            type="button"
-                            variant="ghost"
-                          >
-                            <Trash2 aria-hidden="true" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">{t('noDestinations')}</p>
-                )}
-              </section>
-
               <section aria-labelledby="trip-cover-heading" className="space-y-4 border-t pt-7">
                 <div>
                   <h3 className="font-medium" id="trip-cover-heading">
@@ -666,14 +524,10 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
                   </CollapsibleTrigger>
                   <CollapsiblePanel>
                     <TripOptionalDetails
-                      deviceTimeZone={deviceTimeZone}
                       onChange={updateFields}
-                      trip={trip}
                       values={{
                         partySize: form.partySize,
                         planningReadiness: form.planningReadiness,
-                        referenceTimeZone: form.referenceTimeZone,
-                        startingLocation: form.startingLocation,
                       }}
                     />
                   </CollapsiblePanel>

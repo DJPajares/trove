@@ -34,8 +34,7 @@ export function TripReadinessBadge({
   return (
     <Badge
       className={cn(
-        tone === 'onMedia' &&
-          'border border-white/22 bg-status-success/85 text-white shadow-sm backdrop-blur-sm',
+        tone === 'onMedia' && 'bg-status-success/85 text-white shadow-sm backdrop-blur-sm',
         className,
       )}
       variant="success"

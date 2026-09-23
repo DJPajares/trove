@@ -666,17 +666,14 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                   aria-current={active ? 'true' : undefined}
                   ref={active ? activeDayChipRef : undefined}
                   className={cn(
-                    'flex min-h-14 w-18 flex-col items-center justify-center gap-0.5 rounded-[var(--radius-md)] border px-1 text-[length:var(--text-metadata)] leading-4 whitespace-nowrap outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none',
-                    // Three states in two strengths of one colour, rather than a
-                    // shape stuck on a chip: the day being read is filled, the
-                    // day being lived is outlined in the same brand, and every
-                    // other day is quiet. On today's own chip the fill said it
-                    // already, so the mark that used to sit there said it twice.
+                    'flex min-h-14 w-18 flex-col items-center justify-center gap-0.5 rounded-[var(--radius-md)] px-1 text-[length:var(--text-metadata)] leading-4 whitespace-nowrap outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none',
+                    // The day being read is filled, the day being lived gets a
+                    // softer brand fill, and every other day stays quiet.
                     active
-                      ? 'border-brand bg-brand text-primary-foreground'
+                      ? 'bg-brand text-primary-foreground'
                       : isContextDay
-                        ? 'border-brand font-semibold text-brand hover:bg-surface-hover'
-                        : 'border-border-subtle text-muted-foreground hover:bg-surface-hover hover:text-foreground',
+                        ? 'bg-brand/12 font-semibold text-brand hover:bg-brand/18'
+                        : 'bg-surface-raised text-muted-foreground hover:bg-surface-hover hover:text-foreground',
                   )}
                   onClick={() =>
                     isPreview

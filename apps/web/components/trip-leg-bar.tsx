@@ -23,12 +23,12 @@ import { cn } from '@/lib/utils';
  * pattern paints in `--track-ink` rather than the track's own 25%, because dots
  * cover about a third of a line and would otherwise all but vanish.
  */
-const MODE_LINE: Record<RouteTravelMode, string> = {
+const MODE_PATTERN: Record<RouteTravelMode, string> = {
   drive: '',
   flight: '',
   transit:
-    'bg-transparent bg-[repeating-linear-gradient(90deg,currentColor_0_7px,transparent_7px_12px)] text-(--track-ink)',
-  walk: 'bg-transparent bg-[repeating-linear-gradient(90deg,currentColor_0_3px,transparent_3px_8px)] text-(--track-ink)',
+    'bg-transparent bg-[repeating-linear-gradient(90deg,currentColor_0_7px,transparent_7px_12px)]',
+  walk: 'bg-transparent bg-[repeating-linear-gradient(90deg,currentColor_0_3px,transparent_3px_8px)]',
 };
 
 function endpointCoordinate(endpoint: TripModeLegEndpoint) {
@@ -127,7 +127,25 @@ export function TripLegBar({ className, context, inverse = false }: Readonly<Tri
       >
         <Endpoint located={originPoint !== null} tone={tone} />
         <div className="relative min-w-0 flex-1">
-          <div className={cn('h-1 rounded-full', tone.track, MODE_LINE[leg.mode])} />
+          <div
+            className={cn(
+              'h-1 rounded-full text-(--track-ink)',
+              tone.track,
+              MODE_PATTERN[leg.mode],
+            )}
+          />
+          {fraction === null ? null : (
+            <span
+              aria-hidden="true"
+              className={cn(
+                'pointer-events-none absolute top-0 left-0 h-1 rounded-full',
+                tone.fill,
+                MODE_PATTERN[leg.mode],
+                inverse ? 'text-primary-on-media' : 'text-primary',
+              )}
+              style={{ width: `${percentage}%` }}
+            />
+          )}
           {/* While the device is being asked, a highlight sweeps the line the
               way the route-pending bar sweeps the top of the screen: the same
               keyframe, the same easing, so waiting reads the same everywhere in
@@ -179,31 +197,28 @@ export function TripLegBar({ className, context, inverse = false }: Readonly<Tri
         <span className="min-w-0 truncate text-right">{destinationName}</span>
       </div>
 
-      {fraction === null && status !== 'unsupported' && context.contextSource === 'live' ? (
+      {fraction === null ? (
+        <span aria-live="polite" className="sr-only" role="status">
+          {status === 'loading' ? t('locating') : ''}
+        </span>
+      ) : null}
+
+      {fraction === null &&
+      status !== 'unsupported' &&
+      status !== 'loading' &&
+      context.contextSource === 'live' ? (
         <div className={cn('mt-1.5 text-xs', tone.ink)}>
           {status === 'denied' ? (
             <p>{t('locationDenied')}</p>
           ) : (
-            <>
-              {/* The line above is already sweeping while this waits, so the
-                  label has nothing left to add by changing - it would only make
-                  the traveller re-read the control to learn what the motion
-                  already told them. The sentence it used to say is announced
-                  instead, the way the route-pending bar announces its own. */}
-              <Button
-                aria-busy={status === 'loading'}
-                className={cn('h-auto p-0 text-xs', inverse && 'text-white/85')}
-                disabled={status === 'loading'}
-                onClick={request}
-                size="sm"
-                variant="link"
-              >
-                {t('locate')}
-              </Button>
-              <span aria-live="polite" className="sr-only" role="status">
-                {status === 'loading' ? t('locating') : ''}
-              </span>
-            </>
+            <Button
+              className={cn('h-auto p-0 text-xs', inverse && 'text-white/85')}
+              onClick={request}
+              size="sm"
+              variant="link"
+            >
+              {t('locate')}
+            </Button>
           )}
         </div>
       ) : null}

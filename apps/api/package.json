@@ -17,21 +17,21 @@
     "typecheck": "../../node_modules/.bin/tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {
-    "@ai-sdk/google-vertex": "5.0.79",
+    "@ai-sdk/google-vertex": "5.0.89",
     "@fastify/cors": "11.3.0",
     "@fastify/rate-limit": "^11.2.0",
-    "@supabase/supabase-js": "^2.116.0",
+    "@supabase/supabase-js": "^2.117.0",
     "@trove/db": "workspace:*",
     "@trove/types": "workspace:*",
-    "ai": "7.0.97",
+    "ai": "7.0.109",
     "countries-and-timezones": "^3.10.0",
-    "dotenv": "^17.4.2",
-    "fastify": "^5.12.3",
-    "zod": "4.6.2"
+    "dotenv": "^18.0.2",
+    "fastify": "^5.12.5",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@trove/config": "workspace:*",
-    "@types/node": "^26.5.1",
-    "tsx": "^4.23.13"
+    "@types/node": "^26.6.2",
+    "tsx": "^4.23.15"
   }
 }

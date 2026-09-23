@@ -9,6 +9,7 @@ import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { apiErrorStatus } from '@/lib/query/client';
 import { queryKeys } from '@/lib/query/keys';
 import { fetchTrip, type Trip } from '@/lib/trips/api';
+import { cacheSavedTrip } from '@/lib/trips/cache';
 import { tripEditorialSubject } from '@/lib/trips/summary';
 
 export type TripLoadStatus = 'error' | 'loading' | 'missing' | 'ready';
@@ -76,9 +77,9 @@ export function TripProvider({
 
   const replaceTrip = useCallback(
     (saved: Trip) => {
-      queryClient.setQueryData(queryKeys.trip(tripId), { trip: saved });
+      cacheSavedTrip(queryClient, saved);
     },
-    [queryClient, tripId],
+    [queryClient],
   );
 
   const value = useMemo<TripContextValue>(

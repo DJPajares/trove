@@ -91,7 +91,7 @@ export type TripInput = {
   countries: string[];
   coverPhotoPath?: string | null;
   description: string | null;
-  destinations: Array<{ name: string }>;
+  destinations?: Array<{ name: string }>;
   deviceTimeZone: string;
   endDate: string;
   name: string;
@@ -99,7 +99,7 @@ export type TripInput = {
   planningReadiness: 'in_progress' | 'ready';
   referenceTimeZone?: string | null;
   startDate: string;
-  startingLocation: string | null;
+  startingLocation?: string | null;
 };
 
 export class TripApiError extends Error {

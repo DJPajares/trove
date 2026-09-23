@@ -9,18 +9,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { Trip } from '@/lib/trips/api';
 
 export type TripOptionalDetailsValues = {
   partySize: string;
   planningReadiness: 'in_progress' | 'ready';
-  startingLocation: string;
 };
 
 type TripOptionalDetailsProps = {
   /** The form owns this state; these fields only report changes back to it. */
   onChange: (changes: Partial<TripOptionalDetailsValues>) => void;
-  trip: Trip | null;
   values: TripOptionalDetailsValues;
 };
 
@@ -30,11 +27,7 @@ type TripOptionalDetailsProps = {
  * This is a child rather than inline markup so the disclosure that holds it can
  * leave it unmounted until a traveller opens it.
  */
-export function TripOptionalDetails({
-  onChange,
-  trip,
-  values,
-}: Readonly<TripOptionalDetailsProps>) {
+export function TripOptionalDetails({ onChange, values }: Readonly<TripOptionalDetailsProps>) {
   const t = useTranslations('trips');
 
   return (
@@ -77,24 +70,6 @@ export function TripOptionalDetails({
           <FieldDescription>{t('readinessHint')}</FieldDescription>
         </Field>
       </div>
-
-      <Field>
-        <FieldLabel htmlFor="trip-starting-location">{t('startingLocation')}</FieldLabel>
-        <Input
-          id="trip-starting-location"
-          maxLength={200}
-          onChange={(event) => onChange({ startingLocation: event.target.value })}
-          placeholder={
-            trip?.startingLocation?.isOverride ? undefined : t('startingLocationPlaceholder')
-          }
-          value={values.startingLocation}
-        />
-        <FieldDescription>
-          {trip?.startingLocation && !trip.startingLocation.isOverride
-            ? t('startingLocationHome', { location: trip.startingLocation.name })
-            : t('startingLocationHint')}
-        </FieldDescription>
-      </Field>
     </div>
   );
 }

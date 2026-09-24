@@ -9,7 +9,7 @@ Trove is a personal travel companion for collecting places, planning trips, usin
 Trove is in active implementation, with AI-assisted itinerary planning now part
 of the Plan experience alongside manual trip creation.
 
-The product definition and implementation workflow are already established. Development is managed through Linear and delivered through GitHub pull requests.
+The current approved scope is defined in `PRD.md`, including AI creation and read-only itinerary sharing. Scope is not a claim that every requirement or launch gate is complete. Linear tracks implementation and known gaps; changes are delivered through human-reviewed GitHub pull requests.
 
 ## Source of Truth
 
@@ -50,7 +50,7 @@ The product definition and implementation workflow are already established. Deve
 - pnpm
 - Turborepo
 
-## Planned Repository Structure
+## Repository Structure
 
 ```text
 trove/
@@ -67,8 +67,7 @@ trove/
 └── README.md
 ```
 
-The application structure is implemented incrementally through the Foundation
-and feature tasks tracked in Linear.
+The web/API monorepo is established. Feature work and follow-up corrections are tracked in Linear.
 
 ## Development Workflow
 
@@ -366,9 +365,11 @@ Use `--category`, `--place-id`, `--cursor`, or `--all` to narrow or resume a run
 Production reconciliation loads `.env.production`; active refresh also requires
 `PEXELS_API_KEY` in that file.
 
-## PWA Foundation
+## PWA and Offline Support
 
-Trove registers its Serwist service worker only in production. It precaches the static application shell and the `~offline` fallback page; it does not cache Trip Mode, maps, API responses, or queued travel data. During `next dev`, Trove removes a prior Trove service-worker registration and its `trove-pwa-*` caches for the current origin to avoid stale-cache confusion.
+Trove registers its Serwist service worker in production builds. Offline preparation caches trip pages and stores the full itinerary and supporting snapshots locally, with durable queues for supported travel edits and Memory uploads. Selected reservation documents are downloaded explicitly. The service worker also handles shell/media caching; live maps and fresh provider data are not guaranteed offline. See `PRD.md` section 28 for the required read/write and readiness contract.
+
+Offline readiness is per user and device. Loading one screen is not proof the whole trip is prepared, and the implementation's presence is not a substitute for validating its full offline contract. During `next dev`, Trove removes prior Trove service-worker registrations and its `trove-pwa-*` caches for the current origin to avoid stale-cache confusion; use a production build for service-worker validation.
 
 ## Dev Server Cache
 
@@ -385,7 +386,7 @@ pnpm --filter web dev:reset
 
 That clears only the Turbopack dev cache, leaving the rest of `.next` intact.
 
-## Delivery Order
+## Original Delivery Sequence
 
 1. Foundation
 2. Plan
@@ -394,14 +395,13 @@ That clears only the Turbopack dev cache, leaving the rest of `.next` intact.
 5. Polish
 6. Plan Score
 7. Memories
+8. AI-assisted trip creation
 
-Plan Score and Memories are intentionally implemented late, after the core planning and travel flows are stable.
+This sequence records dependency intent rather than current progress. Plan Score, Memories, and AI creation build on the shared planning/travel foundation.
 
-## Current Phase
+## Current Work
 
-**Foundation**
-
-Implementation begins with the accepted Foundation tasks in the Trove Linear project.
+Trove has planning, travel, supporting, scoring, Memories, and AI surfaces. Use the Trove Linear project for the next unblocked task and known gaps, and the PRD for expected behavior. Historical validation notes do not establish that current production launch gates have passed.
 
 ## Repository
 

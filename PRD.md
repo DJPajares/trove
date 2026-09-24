@@ -5,6 +5,10 @@
 **Category:** Travel Companion  
 **Core philosophy:** **Plan it. Live it. Remember it.**
 
+This document defines the current approved product, including the original MVP and approved extensions. It is a requirements contract, not a claim that every requirement has shipped or passed launch validation. Linear tracks implementation, dependencies, and known gaps; README and operational runbooks describe setup and delivery. Implementation differences do not silently amend this contract.
+
+Section 36 summarizes current scope. Section 37 preserves the original delivery sequence as dependency guidance. References to MVP rules elsewhere retain those baseline rules unless a narrower, explicit extension is stated.
+
 ---
 
 # 1. Product Overview
@@ -29,6 +33,27 @@ Trove is not only an itinerary planner. It is designed to remain useful before, 
 - Make travel-critical information available offline.
 - Keep future features compatible with the existing product model rather than creating parallel systems.
 - Avoid engagement mechanics that make travelling feel like work.
+- Keep the traveller in control: suggestions, scores, and inferred context never silently change their plan or declare them ready.
+- Preserve private user content and distinguish planned, estimated, and actually recorded information.
+- Make uncertainty and unavailable information understandable without inventing precision or requiring a fully filled-in plan.
+
+## 1.2 Target Users
+
+Trove primarily serves independent travellers managing their own leisure or mixed-purpose trips, including one person organizing a trip for companions. It supports short outings and multi-day, multi-destination travel without requiring a different product model.
+
+The traveller wants a useful plan and easy access to travel details, not a travel-management job. A sparse itinerary, staying with friends, overnight transport, and time deliberately left open are valid. Party size describes the trip; it does not grant companions accounts or editing rights.
+
+Group collaboration, business travel administration, and public destination discovery are not baseline workflows.
+
+## 1.3 Major User Journeys
+
+1. **Collect:** save a provider-backed or Custom Place for later, optionally organize it into collections, and reuse it in a trip without losing the global Saved relationship.
+2. **Create:** enter the minimum trip details manually, or generate an AI draft, review assumptions and warnings, then Apply. Both paths lead to the same ordinary Trip.
+3. **Plan:** gather Trip Places, schedule repeatable stops or label-only blocks, arrange days, and add reservations, tasks, notes, and costs only when useful. Preview rehearses this same plan; explicit edits are real edits.
+4. **Prepare and share:** inspect the plan, optionally declare it Ready, prepare its full offline copy, and explicitly enable a read-only itinerary link when useful. These are independent actions.
+5. **Travel:** use Trip Mode for the current stop, next action, directions, and relevant supporting information. Complete, skip, or change the plan; capture expenses and Memories with minimal interruption.
+6. **Recover connectivity:** continue supported work from the prepared trip, keep queued changes through reloads, and synchronize without duplicates or silent loss. Resolve ambiguous conflicts explicitly.
+7. **Remember:** revisit the completed trip through private Memories, correct captured context, curate Highlights, and optionally rate the actual experience. An uncompleted plan item is not evidence that a visit happened.
 
 ---
 
@@ -43,16 +68,18 @@ Trove is not only an itinerary planner. It is designed to remain useful before, 
 - Allow users to preview Trip Mode before travel.
 - Provide contextual route, timing, weather, task, reservation, and expense information.
 - Preserve completed journeys through lightweight Memories.
-- Add AI-assisted trip creation after the core planning/travel flows are stable while remaining extensible for further AI, social, booking, discovery, translation, and native-app features.
+- Offer bounded AI-assisted trip creation with a complete manual path, while remaining extensible for further AI, social, booking, discovery, translation, and native-app features.
 
-## 2.2 Non-Goals for Initial Release
+## 2.2 Non-Goals for the Current Product
 
-The initial release does not aim to provide:
+The current approved scope does not provide:
 
 - social networking,
 - real-time collaboration,
 - public profiles,
-- AI itinerary generation,
+- assistant chat or autonomous replanning,
+- business travel administration,
+- a separate Travel Wallet,
 - booking/purchasing,
 - full offline turn-by-turn navigation,
 - automatic email parsing,
@@ -63,7 +90,7 @@ The initial release does not aim to provide:
 - native iOS/Android apps,
 - full multilingual UI.
 
-AI-assisted trip creation is an approved post-MVP roadmap phase defined in Section 7.6. It remains outside the initial release described by this non-goal list.
+AI-assisted trip creation (Section 7.6) and owner-enabled read-only itinerary links (Section 8.2) are approved extensions to the original MVP. Neither authorizes the broader AI, collaboration, or discovery workflows deferred here.
 
 ---
 
@@ -99,7 +126,7 @@ AI-assisted trip creation is an approved post-MVP roadmap phase defined in Secti
 - pnpm
 - Turborepo
 
-## 3.5 Suggested Monorepo Structure
+## 3.5 Monorepo Structure
 
 ```text
 trove/
@@ -138,7 +165,7 @@ The Fastify API should remain reusable by web and future native clients.
 ## 3.7 AI Provider Direction
 
 - AI-assisted trip creation uses a server-only, provider-neutral generation boundary. Planner domain contracts, persistence, and clients must not depend on a provider-specific request or response shape.
-- Vertex AI with `gemini-3.1-flash-lite` is the development configuration while Google Cloud trial credits are available. This is an environment choice, not a permanent product dependency.
+- Vertex AI is the initial provider integration. Model identifiers, credentials, and development-credit arrangements belong in deployment configuration and the AI runbook, not in the product contract.
 - Provider and model selection, timeouts, token budgets, availability, and budget controls are configuration-driven so changing provider/model does not change the planner contract or review UI.
 - Local development may use Google Application Default Credentials. Deployed environments use server credentials managed outside source control. Credentials and provider authorization data never reach a browser bundle.
 - Each user-initiated **Generate** or **Regenerate** action dispatches exactly one app-level model call. Provider grounding and deterministic validation are bounded non-model operations and do not create a conversational/follow-up loop.
@@ -245,7 +272,7 @@ Trip lifecycle changes emphasis only. All three core destinations remain present
 
 - **Planning:** Itinerary leads. Trip Mode is offered as Preview, opening at the first day.
 - **Active:** Trip Mode leads.
-- **Completed:** Memories leads.
+- **Completed:** Memories leads. Trip Mode remains reachable as Preview, opening at the first day.
 
 Whenever the current screen is not one of the three core experiences, its name must remain visible in the navigation so the user can always tell where they are. That includes screens reached from somewhere other than the menu, such as Places opened directly.
 
@@ -296,6 +323,7 @@ Rules:
 - Only each photograph's **reference** is stored: one unsized source URL, attribution metadata, intrinsic dimensions, provider alt text, and a dominant colour used as a loading placeholder. Responsive display URLs are derived at render time. Image bytes are never copied into Trove Storage, which stays user-owned media only.
 - A stored collection is dated and re-resolved once stale, in the same spirit as 11.7. Fresh collections are read from Trove's database and never call the editorial provider.
 - Attribution metadata is required whenever an image URL is returned, even where an authenticated surface intentionally does not render a visible credit. Public editorial surfaces may render the provider credit in their own layout; authenticated Home, Trips, and place details do not show photo-credit captions.
+- Source permissions and attribution requirements must be compatible with this design. A hidden caption preference is not permission to omit attribution that a provider requires; use a compatible source or the branded fallback.
 - Provider alt text is treated as a photographic description of the editorial image, not as factual information about the destination or Place. Place details may show it beneath the active photograph with that distinction clear.
 - A subject with no photograph of its own draws on a **shared fallback pool**: photographs of its category rather than of it, resolved once and shared by every subject and every traveller. The pool is not a subject collection and is not bound by the three-photograph limit or the first-photograph rule — a surface picks from it by a stable seed of its own, so one trip keeps its photograph for life while the trip beside it shows a different one. A pool of one is what makes every trip look identical, which is the failure this exists to prevent.
 - A global kill switch disables the service. Every surface degrades to the branded fallback, and so does an unreachable provider, an exhausted rate limit, or a subject with no photograph and an empty pool.
@@ -311,27 +339,52 @@ Trove
 ├── Home
 ├── Trips
 │   └── Trip
-│       ├── Overview
-│       ├── Plan
-│       │   ├── Itinerary
-│       │   ├── Places
-│       │   ├── Reservations
-│       │   ├── Tasks
-│       │   └── Notes
-│       ├── Trip Mode
-│       ├── Expenses
-│       ├── Trip Info
-│       └── Memories
+│       ├── Overview (summary and entry points)
+│       ├── Itinerary — Plan it.
+│       │   └── Trip Places (contextual workspace)
+│       ├── Trip Mode — Live it. (or Preview)
+│       ├── Memories — Remember it.
+│       └── Supporting tools
+│           ├── Tasks
+│           ├── Reservations / Accommodation
+│           ├── Expenses
+│           └── Trip Info
 ├── Saved
 └── Tools
     ├── Currency
-    ├── Travel Wallet (optional)
     └── Task Templates
 ```
 
-Travel Wallet is optional for the initial MVP if scope or security complexity becomes too large.
+The three core experiences have stable navigation under Section 4.5. Overview summarizes the trip; it is not a fourth core experience. Notes live with their context, not in a separate Notes destination. An enabled read-only itinerary link is a limited public projection of the same plan, not another owned trip.
 
 Tools is the fourth stable global navigation destination. Its launcher provides one clear route to each tool without turning the page into a combined utilities dashboard.
+
+## 5.1 Core Concepts
+
+| Concept | Meaning and boundary |
+| --- | --- |
+| Trip | One owned journey with inclusive dates, a description, and a shared planning/travel/memory context. |
+| Place | An internal identity for a provider-backed location or a private Custom Place; it is not a visit. |
+| Saved Place | A user's global relationship to a Place for reuse across trips. |
+| Trip Place | A trip's working relationship to a Place, whether scheduled or only being considered. |
+| Itinerary item / stop | One occurrence of a Place or a label-only block, assigned to a day or Unscheduled. Repeated visits remain distinct. |
+| Reservation | A record of a booking or logistics, optionally linked to a stop; it does not itself schedule a stop or record actual spend. |
+| Memory | Private user-authored media or text about the experience, with correctable captured context. |
+| Trip description | The traveller's framing of the trip; distinct from contextual reminders and from the post-trip story summary. |
+
+## 5.2 Independent Trip Signals
+
+| Signal | Question it answers |
+| --- | --- |
+| Lifecycle | Is the trip before, within, or after its dates in its reference timezone? |
+| Manual readiness | Has the traveller declared the plan Ready? |
+| Itinerary coverage | How many trip days contain a scheduled item? |
+| Trip preparedness | How much activity/base context is recorded? It does not judge actual preparedness. |
+| Ready Offline | Is the full required trip payload available on this device, and how fresh is it? |
+| Plan Score | How does the plan evaluate against the available evidence? |
+| Experience Rating | How did the traveller rate the actual experience? |
+
+None substitutes for another. A Ready plan can be unavailable offline; an offline-ready trip can be sparsely planned; a high Plan Score does not predict enjoyment.
 
 ---
 
@@ -354,9 +407,17 @@ Rules:
 - Before the local start date: Planning.
 - From the local start date through the local end date, inclusive: Active.
 - After the local end date: Completed.
-- If a trip date change would remove one or more itinerary days that contain items, Trove must require confirmation before applying the date change.
-- On confirmation, itinerary items from removed/out-of-range days are moved to **Unscheduled** with all item data and relationships preserved; they are never silently deleted.
-- Expanding the trip date range creates the additional empty itinerary days. Items on dates that remain inside the new range keep their assigned dates.
+
+### Changing Trip Dates
+
+The plan is anchored to the start date: **Day 1 stays Day 1**. Moving the start shifts existing planning days by the same calendar-day offset. In the trip editor, changing the start carries the end with it to preserve duration unless the traveller also changes the end. Changing duration adds or removes days at the end, after any shift. Moving earlier and keeping the old end therefore appends empty days rather than prepending them.
+
+- Retained planning days preserve their items, order, names, notes, explicit bases, and timezone context. Floating local plans preserve their local times; derived instants are recomputed under Section 32.1. A daylight-saving gap is surfaced for correction rather than silently choosing a different time.
+- Bookings, authoritative transport instants, recorded expenses, captured Memories, and Experience Ratings keep their real-world dates. Existing Task due dates also stay fixed unless explicitly edited; an undated task may follow its planning attachment. Moving a plan must not move a flight, rewrite history, or infer new accommodation coverage from an old day association.
+- Show records left outside the trip range or inconsistent with their moved planning attachment in their relevant supporting/history view. Preserve them for correction; do not hide or silently retime them.
+- Before shortening a trip with affected content, show the impact and require confirmation. Items on removed days move to **Unscheduled**, preserving their metadata, execution state, Place relationships, and supporting records. Extending adds empty days.
+- Day-only notes must be reassigned to a retained day or explicitly discarded before removal; a generic date-change confirmation is not consent to delete them. Day ratings and captured history remain accessible under their original dates even when those dates leave the itinerary range.
+- Removing a day must not delete its Tasks, Reservations, Expenses, or Memories. Preserve their dated context and detach invalid planning links. Removing the day assignment from a floating item clears its derived scheduled instant; it does not clear an authoritative event instant.
 
 ## 6.2 Planning Readiness
 
@@ -375,7 +436,7 @@ Rules:
 - Lifecycle and Plan Score never set readiness; only the traveller does.
 - Trove may suggest marking a plan Ready when the itinerary covers every trip day, and may point out an unmarked plan as departure approaches. Both only ask.
 - Trip preparedness, like itinerary coverage, may be shown to the traveller and may inform what Trove asks. Neither ever sets readiness on its own.
-- Readiness is shown wherever trips are listed, and groups the Trips library within its lifecycle sections. It never reorders trips past their own dates.
+- Planning trips marked Ready show that marker wherever trips are listed. The Planning section may group Ready and In Progress trips, ordered by date within each group; readiness never moves a trip into another lifecycle section.
 
 ---
 
@@ -390,12 +451,7 @@ Rules:
 
 Start/end dates are inclusive and end date cannot precede start date.
 
-At least one country is required. A trip that cannot say which country it is in
-cannot be pictured, grouped, or given a time zone without guessing, and the
-guess was previously made by matching country names out of whatever free text a
-traveller happened to type into a destination. Trips created before this was
-asked for keep no country and remain fully usable; the requirement applies when
-a trip is created, and when its countries are saved.
+At least one country is required on every creation path, including AI Apply, and when countries are explicitly saved. Store declared countries as ordered ISO country codes rather than relying on parsing free-text destination names. A country's timezone is a fallback, not proof of the exact timezone of every stop. Legacy trips without countries remain usable without a forced migration or a new requirement on unrelated edits.
 
 ## 7.2 Optional Fields
 
@@ -403,7 +459,7 @@ a trip is created, and when its countries are saved.
 - Cover photo
 - Travel party size
 - Starting location override
-- Notes
+- Description
 
 ## 7.3 Destinations
 
@@ -414,8 +470,7 @@ a trip is created, and when its countries are saved.
 - Destinations remain free text and optional. They say where inside a country a
   traveller is going; the country field says which countries, declared rather
   than inferred from those strings.
-- Destinations are added after a trip exists, not while it is being created:
-  the declared country is enough to place a new trip.
+- Manual creation asks for countries and leaves destinations for later. AI creation may include reviewed destinations when applying the draft.
 - A trip's reference time zone comes from its declared country when no
   destination resolves one, rather than from parsing a destination string. The
   declared country is also what an editorial photograph pictures a trip by when
@@ -471,15 +526,17 @@ AI-assisted trip creation is the first approved AI product capability. It is an 
 
 ### 7.6.4 Draft Review and Apply
 
-- The review uses the normal itinerary and map language and shows assumptions, Custom Places, unverified/not-checked evidence, conflicts, how much of the plan was verified, and material warnings. It names no provider: which service found a place is Trove's concern, and a traveller deciding whether to trust the plan only needs to know the place is real.
-- The draft shows a numeric Plan Score alongside its validation evidence. It is computed once the itinerary is final and its places are resolved, from the opening-hours, rating and route evidence that same run already fetched, and costs no additional provider request. Because the draft is immutable, the score stays valid for its whole life.
+- The review uses the normal itinerary and map language and shows assumptions, Custom Places, unverified/not-checked evidence, conflicts, how much of the plan was verified, and material warnings. Verification means the place's identity was resolved; it is not a guarantee of hours, route feasibility, or availability. Provider names need not be part of the decision copy, but required source attribution remains available under Section 11.
+- The draft evaluates Plan Score from the opening-hours, rating, and route evidence that the same run already fetched, with no additional provider requests for scoring. The shared thresholds in Section 29 determine whether a number is shown; insufficient evidence withholds it. The result is a generation-time assessment. An immutable plan does not make its evidence permanently fresh: retain its evidence/evaluation timestamps and apply the age limits in Section 29.5.
 - The draft is immutable. It is exactly what the run produced, and no surface may reorder, retime, replace, remove, or otherwise edit it. A traveller who wants a different plan uses Regenerate.
-- The one field a reviewed session accepts is an optional trip description. It is session metadata rather than part of the plan, carried to the Trip on Apply, and it neither advances the draft revision nor invalidates the draft's evidence.
+- Review accepts trip title and optional description overrides as session metadata. They persist across reloads and Regenerate, carry to the Trip on Apply, and do not change the draft revision or its warning acknowledgement. Clearing a title override restores the generated title. Neither field edits the itinerary.
+- Review must also resolve the required country metadata before Apply. Inferred countries are disclosed as assumptions; the traveller can supply or correct them without a new model call. Countries cannot be silently omitted or invented. A correction does not rewrite the immutable stops or dates; it invalidates any assessment dependent on the previous country/timezone context and requires acknowledgement of affected warnings before Apply. Correcting metadata is not a way to relocate the generated itinerary; that requires Regenerate or ordinary editing after Apply.
 - Regenerate consumes the normal model quota and preserves the previous valid draft if it fails.
 - Material warnings require explicit acknowledgement before Apply. Non-material unresolved places remain allowed.
 - Apply is authenticated, atomic, revision-safe, and idempotent. A failure creates no partial records, and concurrent/repeated successful requests resolve to the same applied Trip.
 - Apply may create only the reviewed **Trip, destinations, Daily Bases, Trip Places, Custom Places, and itinerary items**. It must not create Saved Place relationships, reservations, Tasks, Notes, Expenses, budgets, Memories, notifications, bookings, or other trip records.
 - Applied records use the existing domain models, ownership rules, and editing surfaces. An AI-created Trip is an ordinary Trove Trip after Apply.
+- Reusing the draft's score on Apply preserves the original evidence age and estimates' provenance. Apply never resets the score's freshness clock; expired evidence cannot become a fresh numeric score on the new Trip. A stale assessment does not by itself prevent Apply once its limitations and material warnings are acknowledged.
 
 ### 7.6.5 Sessions, Quotas, Retention, and Recovery
 
@@ -487,8 +544,9 @@ AI-assisted trip creation is the first approved AI product capability. It is an 
 - Generation is synchronous from the traveller's perspective but resumable: refreshing the client recovers the same session, current stage, and latest valid revision rather than starting another run.
 - A failed initial Generate creates no Trip. A failed Regenerate preserves the prior valid draft and revision.
 - A content-free `AiGenerationRun` records provider, model, token counts, latency, result/error classification, and timestamps for quota and operations. It stores no prompt or model output.
-- Each account may dispatch at most **five** Generate/Regenerate model runs in a rolling 24-hour window. Reads, setting the trip description, warning acknowledgement, Cancel, and Apply do not consume this quota.
+- Each account may dispatch at most **five** Generate/Regenerate model runs in a rolling 24-hour window. Reads, correcting review metadata, warning acknowledgement, Cancel, and Apply do not consume this quota.
 - Unapplied planning sessions expire after seven days. Apply or Cancel immediately removes the raw prompt and draft; expiry cleanup removes them no later than the retention boundary.
+- Expired sessions cannot be read or applied. Retention covers private session metadata and derived review content as well as the prompt/draft; only the applied Trip's ordinary content and content-free operational/idempotency records may survive terminal-session cleanup. A cleanup schedule must meet these bounds rather than extending them implicitly.
 - Content-free generation-run telemetry is retained for 30 days, then deleted. Ownership, cross-user isolation, and deletion follow the private-data rules in Section 33.3.
 - Initial launch is available to all signed-in users after security, privacy, quality, cost, and browser-validation gates pass. It is not a cohort-only feature, but global and budget kill switches remain mandatory.
 
@@ -503,9 +561,9 @@ Existing and manually created itinerary durations are `USER_OWNED`. Editing an `
 
 ---
 
-# 8. Trip Ownership & Future Sharing Foundations
+# 8. Trip Ownership & Sharing
 
-Initial MVP behavior is **private, owner-only trips**.
+Trips are **private by default and edited only by their owner**. Read-only itinerary links in Section 8.2 are the sole approved public exception; they do not expose the whole Trip.
 
 The data model may remain future-ready for:
 
@@ -526,7 +584,7 @@ Future-ready concepts may include:
 - attribution,
 - user-to-trip relationship.
 
-These fields/relationships must not require MVP collaboration, sharing, discovery, or public-itinerary workflows to be implemented.
+Future-ready fields do not authorize additional collaboration, discovery, or sharing workflows beyond Section 8.2.
 
 ## 8.1 Future Saved vs Copied Itinerary Behavior
 
@@ -545,7 +603,27 @@ This subsection describes **future functionality only**.
 
 A future read-only saved itinerary must not run the user's personal Trip Mode directly; it must be copied into an owned trip first.
 
-Shared With Me, collaborators, saved itineraries, Copy to My Trips, public visibility, attribution UI, and related sharing workflows are deferred from the MVP.
+Shared With Me, collaborators, saved itineraries, Copy to My Trips, public discovery, and source-attribution UI remain deferred.
+
+## 8.2 Read-Only Itinerary Links
+
+An owner may explicitly enable a link so companions can read the plan without an account. Anyone who receives the link can read its limited contents and pass it on; it is not an invitation restricted to named people. Sharing stays off by default, is not enabled by copying a URL, and grants no editing rights.
+
+The public projection contains only:
+
+- trip name, description, countries, and inclusive dates;
+- scheduled days' dates, names, and notes;
+- scheduled stops' names, addresses/custom location text, dayparts, local start/end times, durations, and notes, including scheduled Custom Places and label-only blocks.
+
+It excludes Saved and Trip Place collections, Unscheduled items, costs/budgets/Expenses, priority, completion/skip state, provider IDs and coordinates, Tasks, Reservations and their documents, Trip Info, Memories, Experience Ratings, private media, and account details. Shared notes and addresses may contain personal information; the owner must see what will be disclosed before enabling sharing. While enabled, the link reflects subsequent edits to these shared fields.
+
+Rules:
+
+- Enabling and disabling sharing require server confirmation and are not queued offline. A failed change must not be presented as successful.
+- After revocation, subsequent public reads must be denied, including through application/CDN caches. Private, revoked, missing, and deleted trips produce the same unavailable response. Revocation cannot recall a copy already viewed or saved by a recipient.
+- Public reads use only the allowlisted projection and permitted stored Place context; they cannot trigger billable provider calls or expose authenticated endpoints. Missing or expired provider detail degrades to available context.
+- The page is excluded from indexing and discovery. It offers no maps, Trip Mode, copying into an owned Trip, collaborator management, expiry, or recipient permissions in the current scope.
+- Private Custom Places remain owner-owned. Sharing a scheduled stop's name/address/notes exposes only that projection, not access to its underlying private Place record.
 
 ---
 
@@ -575,7 +653,7 @@ Prioritize:
 - Preview Trip Mode,
 - relevant preparation/offline readiness when useful.
 
-Do not introduce a separate generic "planning progress" score or status unless it is explicitly defined as a future product concept.
+The following coverage measures are the only defined planning-progress indicators. Do not add another generic score or status beside them.
 
 ### Itinerary coverage
 
@@ -596,13 +674,9 @@ least one scheduled itinerary item; it does not judge the quality of the plan.
 ### Trip preparedness
 
 Home and Trips may show **trip preparedness** as a compact informational
-measure for trips still being planned. This is the "planning progress" concept
-the rule above reserves; it is defined here and nowhere else, and no second
-one may be introduced beside it.
+measure for trips still being planned. It describes recorded activity/base coverage, not whether the traveller is prepared to depart.
 
-Where itinerary coverage asks whether a day has anything on it, preparedness
-asks whether the traveller has done the two things a trip cannot leave
-without: knowing what they are doing, and knowing where they are sleeping.
+Where itinerary coverage counts days with items, preparedness also counts days with a recorded base. A base is not proof of a booked hotel or a night covered. Flexible days, stays with friends, and overnight transport do not require artificial items or accommodation entries to satisfy this measure. Low coverage never blocks travel or manual Ready.
 
 - `daysPlanned`: trip days containing at least one itinerary item assigned to
   that day. The same measure as coverage's `plannedDays`, reused rather than
@@ -615,7 +689,7 @@ without: knowing what they are doing, and knowing where they are sleeping.
 - `percentage`: of the two marks available per trip day, the share actually
   made.
 - A single-day trip has no night to cover, so the stay component does not
-  apply and preparedness is `daysPlanned` alone. A component that does not
+  apply and preparedness uses only the planned-days percentage. A component that does not
   apply leaves the denominator rather than scoring zero.
 - Preparedness is advisory. It is independent from trip lifecycle, manual
   readiness, and Plan Score, and must never change any of them.
@@ -743,7 +817,7 @@ The provider remains the source for mutable data such as:
 - website,
 - provider categories.
 
-This data should be fetched/refreshed as needed and only cached according to provider rules.
+This evidence is resolved on demand for a surface or calculation that needs it, not persisted as a permanent Trove-owned dataset. Any transient reuse must remain within provider permissions and retain its original age. Stored derived assessments follow their own expiry rules and must not become a back door for retaining raw mutable evidence.
 
 Trove-owned data includes:
 
@@ -763,7 +837,7 @@ Mutable provider data must not be treated as permanent canonical Trove truth.
 
 ## 11.5 Photos
 
-Use the current provider photo URL/reference obtained through current provider data.
+When a functional Place surface uses provider photos, use the current provider photo URL/reference obtained through current provider data and preserve required attribution. Google Places photos are not a decorative source for trip covers or generic thumbnails.
 
 Do not permanently copy provider photos into Trove Storage.
 
@@ -784,12 +858,21 @@ If future provider ID changes create possible duplicates, use careful matching/m
 
 ## 11.7 Provider Data Offline/Freshness Rules
 
+- Trove may retain dated snapshots of durable Place display/location data and travel legs already requested by a user, subject to provider permission. The internal maximum is 30 days; shorter provider-specific limits take precedence. Fresh permitted snapshots should be reused, and stale snapshots refreshed on demand rather than through blanket background fetching.
 - Provider-backed Places may use only provider-permitted cached display/location data for the offline experience.
 - Cached provider-derived data is a snapshot, not canonical truth, and should retain source/freshness or last-updated context where relevant.
 - Stale data must not be presented as guaranteed current data when freshness materially affects a decision.
 - When connectivity returns, Trove should refresh/re-resolve mutable provider data where appropriate.
 - Trove must not promise permanent/full offline Google Places or Google Maps data.
 - If provider-derived detail is unavailable offline, Trove should preserve understandable Trove-owned itinerary/relationship context rather than fabricate missing provider information.
+
+## 11.8 Provider Cost and Attribution Boundaries
+
+- Request the least expensive fields sufficient for the surface or calculation. Identity/location-only use must not fetch hours, ratings, or photos merely because a richer response is available.
+- Bound fan-out across trips, days, and repeated Places. Reuse permitted evidence within one operation; navigation and background refresh must not repeatedly purchase the same data without a product need.
+- Preserve source/freshness metadata and required attribution. Editorial imagery follows Section 4.8 separately; its hidden credit captions do not waive attribution requirements for functional provider data.
+- Provider outages, quotas, or kill switches must degrade enrichment without preventing access to Trove-owned plans or manual editing. Public itinerary reads never dispatch billable provider requests.
+- Internal cache durations and UI preferences never override provider permissions. Do not claim that every field from a provider has the same caching or attribution allowance.
 
 ---
 
@@ -824,6 +907,10 @@ Custom Places should work in:
 A Custom Place with usable location data may also appear on Maps and participate in routing.
 
 A locationless Custom Place remains valid and usable elsewhere, but it is not mappable/routable until location information is added.
+
+The traveller may locate or correct a Custom Place later from its details. They can enter location information or explicitly request a lookup and choose a candidate. Ambiguous matches are presented for selection; failure leaves the Place unchanged and does not trigger retries on every visit. No bulk background resolution is implied.
+
+Locating updates the owned Custom Place's location without silently converting it into a shared canonical provider Place. Existing Saved, Trip Place, itinerary, and Memory relationships keep their identity; affected maps and routes use the corrected location. Provider-derived lookup data remains subject to Section 11 even when used to locate a Custom Place.
 
 ---
 
@@ -914,6 +1001,7 @@ Sources:
 - A plain custom-label itinerary item has no required Place or Trip Place relationship.
 - Creating a Trip Place or place-backed itinerary item does not automatically create a global Saved relationship.
 - Removing an itinerary item does not remove its Trip Place or Saved relationship.
+- Repeated visits to the same Place are separate itinerary items sharing one Trip Place. Completing, skipping, or attaching a Task to one visit does not affect the others.
 - A Trip Place referenced by itinerary items must not be silently deleted underneath those items. The user must first resolve/remove those itinerary references, or Trove must preserve the Trip Place relationship required by them.
 
 ---
@@ -991,7 +1079,7 @@ Each date between the inclusive trip start/end dates produces a day in the itine
 
 Each day uses the deterministic local timezone rules in Section 32.1.
 
-Trip-date-change behavior is authoritative in Section 6.1. If removed/out-of-range days contain itinerary items, Trove requires confirmation and moves those items to **Unscheduled** while preserving their data and relationships.
+Trip-date-change behavior is authoritative in Section 6.1: moving the start preserves ordinal planning days, then duration changes are reconciled at the end. Removal requires the content-preservation and confirmation rules there.
 
 ## 17.2 Minimum Item
 
@@ -1025,6 +1113,7 @@ The itinerary is the primary planning workspace and should stay readable before 
 Optional:
 
 - exact time,
+- explicit end time,
 - Morning / Afternoon / Evening / Anytime,
 - duration,
 - notes,
@@ -1035,6 +1124,8 @@ Optional:
 - linked actual Expense(s),
 - priority,
 - custom location.
+
+An explicit end time requires an exact start and defines the duration; conflicting end-time and duration values cannot both be authoritative. A same-day end must follow its start. Overnight/cross-timezone transport uses explicit departure and arrival dates/timezones under Section 19.2 rather than guessing that an earlier clock time means tomorrow.
 
 ## 17.4 Reordering
 
@@ -1048,6 +1139,8 @@ Support:
 - unschedule.
 
 Drag-and-drop must not be the only mechanism.
+
+Deleting a stop does not delete linked Reservations, Tasks, Expenses, or Memories. Detach the removed stop link, preserve the records and their own dated context, and keep them reachable in the relevant trip views. Duplication creates another planning occurrence; it does not duplicate bookings, actual expenses, captured Memories, or completion/skip history.
 
 ## 17.5 Unscheduled
 
@@ -1097,7 +1190,7 @@ When the required route/location data is available, the MVP daily route summary 
 
 If route/location data is incomplete, show the available item count and an honest unavailable/partial state for travel time or distance rather than fabricating values.
 
-This later contributes to Plan Score.
+This contributes to Plan Score when enough evidence exists.
 
 ## 18.3 Map Integration
 
@@ -1242,7 +1335,7 @@ Trip Mode operates on the same underlying trip/itinerary data as planning. It mu
 
 Trip Mode eligibility is date-derived for the selected owned trip using the lifecycle/timezone rules in Sections 6 and 32.1. Ready/In Progress does not gate Trip Mode.
 
-Global navigation must remain reachable while Trip Mode provides its own Now / Today / Map / Trip navigation, under the terms in Section 5.
+Global navigation must remain reachable while Trip Mode provides its own Now / Today / Map / Trip navigation, under the terms in Section 4.5.
 
 Trip Mode is read standing up, one-handed, outdoors, often while walking. Its chrome is therefore held to what a traveller cannot supply themselves: the way out, the trip's name as a quiet anchor, and the local time. A trip's cover photograph, its country and its date range belong to the surfaces that introduce a trip, not to the one that runs it — on a phone they cost most of the first screen, and the answer to "what do I need right now" must not begin below the fold.
 
@@ -1271,7 +1364,7 @@ Prioritize:
 
 Current/next determination should use:
 
-- local trip/day/item time,
+- the live traveller clock or selected Preview clock defined in Section 32.1, preserving authoritative item instants,
 - exact time/daypart when available,
 - itinerary order,
 - completed/skipped state.
@@ -1336,7 +1429,7 @@ Provide quick access to:
 - Expenses,
 - Notes,
 - Trip Info,
-- Travel Wallet where retained/available.
+- selected reservation documents.
 
 The Trip view places a dedicated Tasks section immediately after the summary. Trip-level tasks are expanded and prominent. Completed trip-level tasks remain reopenable in collapsed secondary content. Day- and stop-specific tasks remain accessible through one collapsed **Tasks by day and place** disclosure, grouped in itinerary order. The section provides trip-prefilled quick-add and a path to the full Tasks screen; Tasks are not repeated in the generic Trip tools list.
 
@@ -1344,14 +1437,14 @@ The Trip view places a dedicated Tasks section immediately after the summary. Tr
 
 # 21. Preview Trip Mode
 
-Every upcoming owned trip may open the real Trip Mode UI in a clearly labelled **Preview** state, regardless of In Progress / Ready status.
+Every planning or completed owned trip may open the real Trip Mode UI in a clearly labelled **Preview** state, regardless of In Progress / Ready status. Active trips use live Trip Mode by default. Preview never changes the trip's lifecycle or pretends a completed journey is live.
 
 Users may select:
 
 - trip day,
 - simulated point/time of day.
 
-The active Preview surface exposes direct controls for trip day and local time, so neither value sits behind a generic Edit action.
+The active Preview surface exposes direct controls for trip day and local time, so neither value sits behind a generic Edit action. The selected time is interpreted in that day's resolved timezone, not the device timezone used for live Trip Mode.
 
 Preview reuses the same Now / Today / Map / Trip components and the same underlying itinerary as live Trip Mode. It does not create a sandbox/copy.
 
@@ -1388,6 +1481,17 @@ Changes made explicitly in Preview update the actual itinerary.
 Provide immediate Undo where practical for the action just performed.
 
 Undo is for explicit preview edits; Preview is not a separate reversible sandbox for all trip changes.
+
+## 21.3 Weather Context
+
+Weather supports planning and travel across Home, Itinerary, and Trip Mode. It is contextual information, not a separate planning or disruption engine.
+
+- Distinguish current conditions, a forecast for a named date/hour and location, and an archived forecast saved for a past trip day. An archived forecast records what was predicted, not what actually happened, and must never become an observed-weather claim in Memories.
+- Prefer the relevant day's located base, then a located stop, then useful trip context. If a nearby day or trip location supplies a fallback, disclose that location rather than imply a precise forecast for an unlocated stop. Do not infer physical location from a timezone name.
+- Show hourly evidence only for the date/location it describes. Browsing another day or Preview must not reuse today's conditions as that day's forecast. Dates outside the available forecast horizon have an honest unavailable state.
+- Evidence age is measured from its source observation or forecast retrieval, not from when a client reloaded a cached response. Current conditions that are too old become unavailable as current; a dated forecast may remain useful with its original date, location, and freshness context.
+- Retain available forecasts for past trip days as archived forecasts. Do not fabricate an archive for days that were never fetched, and do not let later date/location edits relabel an old forecast as evidence for a different day or place.
+- Offline/provider failure preserves useful dated cached forecasts with honest context. Freshness details may be progressively disclosed; no stale reading may be presented as current. Weather failure never hides the itinerary or triggers automatic replanning.
 
 ---
 
@@ -1521,11 +1625,12 @@ Notes are contextual.
 
 Possible contexts:
 
-- trip,
 - day,
-- Place,
+- owned Custom Place or the user's Saved/Trip Place relationship,
 - itinerary item,
 - reservation.
+
+The trip itself has a Description for its purpose and framing, not a second trip-level Notes field. Practical trip-wide reference information belongs in Trip Info. Notes on shared provider-backed Places must remain private relationship content, never shared canonical Place data. Day and scheduled-item notes are included only in an explicitly enabled itinerary link under Section 8.2.
 
 Do not build a generic global Notes application.
 
@@ -1559,15 +1664,14 @@ Pinned Trip Info should surface in Trip Overview and Trip Mode.
 
 # 26. Tools
 
-Initial MVP Tools:
+Current Tools:
 
 - Currency
 - Task Templates
-- Travel Wallet only if retained in MVP
 
 No global Notes tool.
 
-## 26.1 Travel Wallet
+## 26.1 Travel Wallet — Deferred
 
 Potential documents:
 
@@ -1578,11 +1682,11 @@ Potential documents:
 - flight confirmation,
 - booking document.
 
-Travel Wallet is **MVP-optional and the first candidate for deferral** if scope/security complexity is too large.
+Travel Wallet is explicitly outside the current baseline. A separate passport/visa/insurance document library requires a future scoped product and security decision; it is not an optional implementation choice within another task.
+
+Reservation attachments remain in scope under Section 19.1, including explicit selection for offline use under Section 28. These do not depend on or imply a global Wallet.
 
 Core planning, Trip Mode, offline travel, and Memories must not depend on Travel Wallet.
-
-Sensitive information must remain private by default. Offline availability for retained Travel Wallet documents must be explicit rather than automatically downloading every document.
 
 ---
 
@@ -1605,7 +1709,7 @@ Additional MVP triggers may include:
 - upcoming trip,
 - current/forecast weather that could affect an immediate planned action when reliable data exists,
 - known timing issue,
-- minimal post-trip Memory/Experience Rating prompt.
+- a minimal invitation to revisit post-trip Memories, without soliciting an Experience Rating.
 
 Do not add:
 
@@ -1617,6 +1721,15 @@ Core functionality must remain available even if notifications are disabled/unav
 
 Notification permission should be requested contextually after user intent/usefulness is established, not automatically during first-run onboarding.
 
+### Delivery and Event Validity
+
+- Required reminders must support delivery while the Trove page/PWA is closed on supported platforms, with permission granted and connectivity available. Foreground polling alone does not satisfy this requirement. Platform restrictions, delivery delays, and offline devices mean exact-time delivery and offline alarms are not guaranteed.
+- Provide in-app notifications plus optional browser/PWA delivery, global controls, and per-trip mute. Denial or lack of background support is visible in notification settings and leaves the in-app experience usable.
+- Use the underlying event's persisted timezone/instant, not the receiving device's timezone. The live Trip Mode clock exception does not silently retime Task or Reservation reminders.
+- Revalidate an event before dispatch: completed Tasks, removed/cancelled events, completed/skipped stops, muted trips, and events no longer actionable must not produce reminders. Schedule edits replace the obsolete reminder; reconnecting must not deliver a backlog of expired alarms.
+- Deduplicate each event reminder across retries. A material event change may produce a replacement reminder, not repeated messages for unchanged data.
+- Use known event and route evidence. Background delivery is not authorization for unbounded provider polling, live traffic monitoring, or automatic replanning.
+
 Advanced disruption monitoring, traffic-aware replanning, weather-driven replanning, live flight monitoring, and broader travel intelligence remain future features.
 
 ---
@@ -1627,7 +1740,7 @@ Offline support is core.
 
 ## 28.1 Guaranteed Offline Experience
 
-After a trip has been loaded/prepared for offline use, Trove must preserve the Trove-owned data required for the supported travel experience, including where implemented:
+After successful preparation for offline use, Trove must preserve the following supported travel information. Merely visiting one trip screen does not guarantee the full trip is prepared:
 
 - Trip Mode shell and core Now/Today/Trip content,
 - the **entire trip itinerary from start date through end date**,
@@ -1640,11 +1753,13 @@ After a trip has been loaded/prepared for offline use, Trove must preserve the T
 - queued Memories/photos,
 - cached currency rates,
 - previously fetched route information where provider terms permit,
-- selected Travel Wallet/reservation documents only when explicitly marked/selected for offline use and the feature is retained.
+- reservation documents explicitly selected and successfully downloaded for offline use.
 
 Provider-derived cached data must follow the provider/freshness rules in Section 11.7.
 
 Critical itinerary/place information must remain understandable without live map tiles or fresh provider calls.
+
+Preparation must report incomplete or failed downloads and unavailable local storage; it cannot claim Ready when the required payload is missing. Local copies are device-specific and may be removed by browser/OS storage clearing. Re-check availability rather than treating a past successful preparation as a permanent guarantee.
 
 ## 28.2 Offline Editing & Sync Contract
 
@@ -1661,14 +1776,20 @@ The sync system must:
 - keep failed operations visible/retryable rather than silently dropping them,
 - preserve queued changes across ordinary app/PWA reloads.
 
-Supported domains include, as they are implemented:
+The offline write contract is:
 
-- itinerary item create, complete/skip, reorder/move, time/daypart edits, and delete/unschedule,
-- tasks,
-- expenses,
-- notes,
-- Memories/media queue,
-- Trip Info.
+| Domain | Supported offline writes |
+| --- | --- |
+| Itinerary | Create label-only items or use already available Trip Places; complete/skip and undo; reorder/move; edit local timing/daypart/duration and item notes; delete/unschedule. |
+| Day context | Edit day name and note; move/swap planning contents between existing days without retiming real-world records. |
+| Tasks | Create, edit, complete/reopen, and delete within the prepared trip. |
+| Expenses | Create, edit, and delete while preserving original amount/currency and dated context. |
+| Trip Info | Create, edit, and delete. |
+| Memories | Capture note-only or photo Memories, queue media upload, and delete/cancel queued captures without uploading them later. |
+
+Offline support does not imply provider search/grounding, AI generation or Apply, new routing, reservation editing/document download, public-share changes, or trip creation/date-range changes/deletion. Those require connectivity; cached reads remain available. Other contextual notes are readable when prepared, but write support is limited to the domains above. Post-trip Memory curation beyond capture/deletion requires connectivity.
+
+Synchronization requires a valid server session; loss of authorization pauses the queue without losing local work or leaking it to another account. If the cloud trip has been deleted, do not recreate it by replaying queued edits. Explain the conflict and require an explicit decision before discarding pending work.
 
 ## 28.3 Offline Maps & Provider Data
 
@@ -1698,7 +1819,7 @@ The minimum Trove-owned payload required for **Ready** is:
 - every itinerary day and itinerary item for the full trip date range,
 - Trip Place identity plus permitted location/display context needed to understand those items,
 - applicable Daily Base/Accommodation context,
-- implemented travel-critical Reservations, Tasks, Notes, and pinned Trip Info included in the offline contract,
+- travel-critical Reservations, Tasks, Notes, and pinned Trip Info included in the offline contract,
 - previously loaded Expense records for the trip plus the ability to queue new Expense entries.
 
 Selected documents are required only when the user has explicitly selected them for offline use. Provider-derived route/weather/currency/place enrichment may affect freshness (`Stale`) but must not make otherwise complete Trove-owned itinerary data disappear.
@@ -1719,7 +1840,7 @@ A Ready indicator must not claim data is current when provider-cached content is
 
 # 29. Plan Score
 
-Implement late, after planning and route behavior is stable.
+Plan Score is part of the current product and depends on stable planning and route behavior.
 
 Scale:
 
@@ -1892,7 +2013,11 @@ Trove may prefill an editable field with a deterministic proposal the user expli
 
 Relevant itinerary/order/time/place/route/reservation/provider-evidence changes invalidate/recalculate affected results.
 
-A computed result is stored and reused. It is keyed by a digest of every Trove-owned input the rubric reads, so an itinerary, order, timing, place, reservation or Must Go change invalidates it without a separate trigger. Provider evidence cannot be keyed that way — opening hours and ratings move under a plan nobody edited, and are never persisted — so a stored result also expires on age, and is recomputed once a day at the latest. A rubric change invalidates every stored result.
+A computed result is stored and reused. It is keyed by a digest of every Trove-owned input the rubric reads, so an itinerary, order, timing, place, reservation or Must Go change invalidates it without a separate trigger. Provider evidence cannot be keyed that way — opening hours and ratings move under a plan nobody edited, and are never persisted — so a stored result also expires after at most 24 hours. A rubric change invalidates every stored result.
+
+Age is measured from the original evaluation/evidence timestamps, never from a cache read or AI Apply. An expired result is not a current score: when online, recompute on the next request using permitted fresh evidence; when unavailable, show a dated stale assessment or withhold the number. This is demand-driven expiry, not a requirement to call providers daily for every idle trip.
+
+An immutable AI draft retains its original generation-time assessment without buying new evidence merely because review is reopened. Once that assessment expires, it is labelled stale rather than current. Regenerate may produce new evidence within the normal run cap; after Apply the ordinary trip's recalculation rules apply. Reuse across Apply preserves timestamps and requires matching scoring inputs.
 
 Plan Score remains independent from lifecycle, manual Ready status, Trip Mode availability, Preview availability, and Experience Rating.
 
@@ -1925,7 +2050,7 @@ Rules:
 
 # 31. Memories
 
-Implement last, after planning/travel flows are mature.
+Memories are part of the current product and build on the shared planning/travel context.
 
 Core principle:
 
@@ -1991,6 +2116,8 @@ Curation must remain reachable, including by keyboard and screen reader, without
 
 The Trip Story should derive from the user's actual trip, itinerary context, notes, highlights, Places, and user-uploaded photos.
 
+Planned stops are context, not proof of a visit. Do not mark an activity completed, invent a Memory, or imply that archived forecast weather was observed merely because the trip dates have passed. Records kept from dates outside a later-edited itinerary remain accessible by their captured dates under Section 6.1.
+
 Sparse trips must remain valid and should not be padded with fabricated events, provider photos treated as Memories, or fictional narrative. A trip with few Memories, or none, must still read as an intentional page.
 
 Users must be able to:
@@ -2047,11 +2174,14 @@ Resolve it without adding a new required creation field, using the first availab
 
 1. an explicitly resolved trip timezone if later corrected/available,
 2. first resolvable trip destination,
-3. trip Starting Location,
-4. Profile home location,
-5. device timezone captured as the final fallback when the trip is created/first resolved.
+3. the deterministic default timezone of the first declared country that has one,
+4. trip Starting Location,
+5. Profile home location,
+6. device timezone captured as the final fallback when the trip is created/first resolved.
 
 The fallback must be persisted/resolved deterministically so lifecycle does not change merely because the user later opens the same trip from another device timezone.
+
+A country may contain multiple timezones. Its configured default is an explicit fallback, not an assertion that all its destinations use that zone. More specific resolved location context takes precedence. Timezone resolution must not require another creation field or a provider call for every stop on every read; unresolved locations remain honestly on their documented fallback.
 
 ### Day and Item Timezones
 
@@ -2060,7 +2190,8 @@ The fallback must be persisted/resolved deterministically so lifecycle does not 
 - Exact-time items without a more specific timezone use the applicable day timezone.
 - Cross-timezone transport must preserve separate local departure and arrival times/timezones.
 - Home, notifications, and date-driven lifecycle behavior must not rely on device timezone alone when a more authoritative trip/day/item timezone exists. Trip lifecycle in particular stays on the trip reference timezone, so a trip does not change phase because its owner boarded a plane.
-- **Trip Mode is the exception, and deliberately so.** It answers "what do I need right now", which is a question about where the traveller is standing rather than where the trip was planned. It therefore runs on the device's timezone: the day it shows, which stop is current, the day parts, and the leave-by time are all measured against the traveller's own clock. A floating local plan is re-grounded against that clock, because a stop written as 09:00 means nine in the morning where the traveller actually is. An authoritative instant is never re-grounded - a flight leaves when it leaves.
+- **Live Trip Mode is the exception, and deliberately so.** It answers "what do I need right now" against the device's timezone: its current day, stop phases, dayparts, and leave-by time use the traveller's clock. Floating local plans are re-grounded for this live calculation only; stored plan times and lifecycle are unchanged. The device timezone is clock context, not proof of physical location. An authoritative instant is never re-grounded — a flight leaves when it leaves. Offline live calculations follow the same rule.
+- **Preview** uses the selected trip day and simulated local time in that day's resolved timezone. It does not adopt the device timezone or alter stored timestamps. Browsing a different day in live Today is not Preview and does not move the traveller's current moment to that day.
 
 ### Other Dated Records
 
@@ -2069,7 +2200,7 @@ All dated MVP records must persist or resolve a deterministic timezone rather th
 - **Tasks:** inherit from attached itinerary item, then trip day, then trip reference timezone. Re-resolve when the user changes the Task's due date/time or attachment context.
 - **Expenses:** inherit from linked itinerary item/Place/day where available, otherwise the trip reference timezone. Persist the resolved timezone used to assign the Expense to a local day. Re-resolve only when the user changes its date/time or linked day/item/Place context.
 - **Memories:** inherit from capture/associated item/Place/day context, otherwise the trip reference timezone, and persist that timezone with the captured timestamp. Re-resolve only when the user explicitly corrects the Memory's time/day/Place context.
-- **Notifications:** use the timezone of the underlying dated source record/event they represent.
+- **Notifications:** use the timezone of the underlying dated source record/event they represent. A leave-by reminder uses the item's planned location/day context; when the device clock differs, live Trip Mode must distinguish its traveller-clock calculation from that scheduled reminder rather than silently rescheduling the event.
 
 ### Timezone Stability and Re-resolution
 
@@ -2077,7 +2208,7 @@ Persisted timezone context must not change merely because the user opens Trove f
 
 Re-resolution is scoped to the affected level:
 
-- **Trip reference timezone:** re-resolve when the user changes the destination/Starting Location currently supplying that timezone or explicitly corrects the trip timezone.
+- **Trip reference timezone:** re-resolve when the user changes the destination, ordered countries, or Starting Location supplying that timezone, adds a more authoritative location source, or explicitly corrects the trip timezone. Preserve an existing explicit correction on unrelated edits. An explicit correction is supported context, not a required field in the trip editor.
 - **Day default timezone:** re-resolve when that day's explicit Daily Base, applicable Accommodation, or first ordered located itinerary-item fallback changes.
 - **Itinerary/reservation/logistics record:** re-resolve when the user changes that record's local date/time, linked Place/location, or assigned day.
 - **Task, Expense, and Memory:** follow the domain-specific triggers under **Other Dated Records**. A later change to a trip/day default does not reinterpret a timezone already persisted on one of these records unless the user changes that record's own date/time or attachment/link context.
@@ -2132,14 +2263,20 @@ Default:
 
 All user data is private by default.
 
-For the owner-only MVP:
+For private application data:
 
 - authenticated owners alone may read or mutate their private trips and user-owned relationships/content;
 - this includes Saved relationships, Trip Places, user-owned Custom Places, itinerary data, reservations, uploaded documents, Tasks, Notes, Trip Info, Expenses, Experience Ratings, Memories, and uploaded media;
 - private uploaded files/media must enforce the same ownership boundary;
 - shared canonical/provider Place identity or public provider data must never expose another user's private Saved/Trip relationships, notes, trip information, Memories, or other private content.
 
-Future sharing/collaboration may intentionally expand authorization later and must be explicit.
+The only approved public exception is the owner-enabled, allowlisted itinerary projection in Section 8.2. It never grants general access to the Trip, underlying private records, or uploaded media. Further sharing/collaboration requires an explicit future decision.
+
+### Deletion Boundaries
+
+Deleting a Trip requires explicit confirmation naming that its itinerary, supporting records, Memories, and private trip media will be removed. Revoke its public projection and remove private files as well as database records; incomplete media cleanup must be retried rather than silently abandoned. Global Saved relationships, their collections, and shared canonical Place identities are not deleted with the Trip.
+
+Removing an itinerary item, day, Saved relationship, or Trip Place is narrower than deleting a Trip and follows Sections 6.1, 14.2, 15.1, and 17.4. Independently owned supporting/history records survive removal of a planning link. Local-copy removal is separate from cloud deletion.
 
 ## 33.4 Offline Storage
 
@@ -2152,6 +2289,8 @@ Users should be able to:
 
 Deleting local offline content must not delete the cloud trip.
 
+Removing a local copy must first synchronize pending work or obtain explicit confirmation to discard it. A deleted cloud trip must not leave a usable public link or be silently recreated by another device's queue. A disconnected device cannot discover remote deletion until reconnecting; clear its obsolete copy once deletion is known while surfacing any pending-work conflict.
+
 Explicit sign-out must remove locally accessible private authenticated data, including selected offline documents and authentication/session material. If unsynchronized local changes exist, Trove must warn that signing out will discard those unsynced local changes before completing sign-out. Cloud data is not deleted.
 
 Offline local data must remain scoped to the authenticated Trove user and must not be exposed when a different user signs in on the same device.
@@ -2160,7 +2299,7 @@ Offline local data must remain scoped to the authenticated Trove user and must n
 
 # 34. Onboarding
 
-Onboarding is accepted but should be implemented later in the initial development cycle.
+Onboarding is part of the current product and collects only the essentials needed to enter it.
 
 Keep it short:
 
@@ -2178,7 +2317,7 @@ Do not initially ask for detailed travel preferences, destination interests, tra
 
 # 35. Future Features Register
 
-These are recorded for future brainstorming and are intentionally not deeply specified. They are **not MVP requirements** unless another section explicitly states a narrower MVP capability.
+These are recorded for future brainstorming and are intentionally not deeply specified. They are **outside the current baseline** unless another section explicitly states a narrower approved capability.
 
 ## 35.1 Further AI
 
@@ -2197,14 +2336,14 @@ AI-assisted trip creation does not authorize assistant chat, autonomous post-App
 Future purpose:
 
 - collaborative planning,
-- sharing,
+- collaboration/invitation-based sharing beyond the read-only links in Section 8.2,
 - Shared With Me,
 - saved itineraries from others,
 - copying trips,
 - comments/recommendations,
 - possible traveller profiles.
 
-The MVP may keep future-ready ownership/source/visibility fields but does not implement these workflows.
+The model may keep future-ready ownership/source/visibility fields without implementing these workflows. Read-only link sharing is already defined in Section 8.2 and does not imply them.
 
 ## 35.3 Where to Go When / Discovery
 
@@ -2264,9 +2403,9 @@ Future features should extend existing Trove concepts rather than create paralle
 
 ---
 
-# 36. MVP Scope
+# 36. Current Approved Scope
 
-This section is the authoritative high-level MVP scope summary. Detailed behavior remains defined by the relevant feature sections above.
+This section is the authoritative high-level scope summary, combining the original MVP with approved extensions. Detailed behavior remains defined by the relevant feature sections above. Inclusion is a requirement, not evidence of implementation or production validation; Linear owns delivery status.
 
 ## 36.1 Core Identity
 
@@ -2291,22 +2430,25 @@ This section is the authoritative high-level MVP scope summary. Detailed behavio
 - Trip Info
 - lightweight Expenses
 - Currency
-- basic Weather context
-- Notifications
+- current, forecast, and archived Weather context
+- contextual Notifications, including closed-app reminders on supported platforms
 - Offline support
-- optional Travel Wallet
+- reservation attachments and explicitly selected offline documents
 - Profile/Settings
 - onboarding
 - responsive/accessibility/PWA polish
 
-## 36.3 Approved Post-MVP Roadmap
+## 36.3 Approved Extensions to the Original MVP
 
 - AI-assisted trip creation defined in Section 7.6
+- read-only itinerary links defined in Section 8.2
 
 ## 36.4 Deferred
 
 - AI-dependent product features beyond Section 7.6
-- social/collaboration/sharing workflows
+- social/collaboration/invitation workflows beyond Section 8.2
+- separate Travel Wallet
+- business travel administration
 - public discovery
 - booking/purchasing
 - additional-language/translation features
@@ -2320,9 +2462,9 @@ This section is the authoritative high-level MVP scope summary. Detailed behavio
 
 ---
 
-# 37. Development Order
+# 37. Delivery History and Dependency Guidance
 
-This section is the authoritative implementation sequence.
+This records the original phased delivery approach, not the current backlog or an instruction to rebuild shipped features. Linear is authoritative for current tasks, status, and dependencies. Preserve the intent: shared planning/travel foundations support later scoring, Memories, and AI; feature presence does not establish that every acceptance or launch gate has passed.
 
 ## Phase 1 — Foundation
 
@@ -2365,7 +2507,6 @@ This section is the authoritative implementation sequence.
 - Currency
 - basic Weather context
 - supporting-feature integration into Trip Mode/offline
-- Travel Wallet only if retained in MVP
 
 ## Phase 5 — Polish
 
@@ -2381,11 +2522,11 @@ This section is the authoritative implementation sequence.
 
 ## Phase 6 — Plan Score
 
-Implement only after core planning/route behavior is stable.
+Depends on stable core planning/route behavior.
 
 ## Phase 7 — Memories
 
-Implement last.
+Originally sequenced after the core planning/travel and scoring foundations.
 
 Includes:
 
@@ -2400,7 +2541,7 @@ Includes:
 
 ## Phase 8 — AI-Assisted Trip Creation
 
-Implement only after the core planning, travel, Plan Score, and Memories flows are stable.
+Originally sequenced after the core planning, travel, Plan Score, and Memories flows were stable. These dependencies remain relevant when changing shared behavior.
 
 Sequence:
 
@@ -2412,32 +2553,33 @@ Sequence:
 6. one-call generation, grounding, scheduling, and validation pipeline;
 7. atomic/idempotent Apply into standard Trove models;
 8. AI-first composer with complete manual fallback;
-9. draft itinerary/map review, essential editing, warning acknowledgement, and confirmation;
+9. immutable draft itinerary/map review, editable trip metadata, warning acknowledgement, and confirmation;
 10. security, privacy, cost, quality, operational, responsive, accessibility, and launch gates.
 
 ---
 
-# 38. Initial Testing Strategy
+# 38. Testing Strategy
 
-During early development:
+Validate the changed product behavior and its important invariants:
 
-- do not prioritize broad unit-test coverage before core features are stable,
+- use focused unit tests for business rules, scoring, authorization, and data integrity rather than incidental implementation details,
 - do not add E2E tests unless explicitly requested,
+- verify user-facing workflows in the built-in browser, including applicable offline, responsive, accessibility, and failure states,
 - still run appropriate:
   - linting,
   - type checking,
   - build validation,
   - focused manual or automated checks for the changed functionality.
 
-Testing strategy may be expanded once core flows stabilize.
+For documentation-only changes, validate consistency, references, formatting, and scenario walkthroughs. Do not report product, provider, deployment, or browser gates as passed when only the specification was reviewed. AGENTS.md owns the execution workflow.
 
 ---
 
-# 39. Success Criteria for the Initial Product
+# 39. Product Success Criteria
 
-The initial Trove experience is successful when a user can:
+The Trove experience is successful when a traveller can:
 
-1. create a trip with minimal required information,
+1. create a trip manually with minimal required information or review and apply an AI draft without losing the manual fallback,
 2. save global Places,
 3. add Places to a specific trip,
 4. build and reorganize a day-by-day itinerary,
@@ -2448,8 +2590,10 @@ The initial Trove experience is successful when a user can:
 9. retrieve reservations/tasks/Trip Info and other supporting travel context,
 10. track Budget / Projected Cost / Actual Spend without conflating them,
 11. find their own Trove information through Global Search,
-12. receive only contextual/actionable notifications when enabled,
+12. receive contextual/actionable reminders when enabled, including with the app closed on supported connected platforms,
 13. see a trustworthy Plan Score when sufficient evidence exists,
-14. complete the journey and later preserve it through private Memories and Experience Rating.
+14. complete the journey and later preserve it through private Memories and Experience Rating,
+15. share only the intended read-only itinerary and revoke subsequent access,
+16. move or shorten a plan without silently changing bookings or losing recorded history.
 
 The product must remain understandable without requiring the user to learn a complex travel-management system.

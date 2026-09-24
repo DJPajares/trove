@@ -163,13 +163,6 @@ Use:
 - Model: `<recommended model + reasoning level/platform>`
 - Reason: `<one short sentence>`
 
-### Usage
-Report token/quota percentages usage.
-
-Examples:
-- `5-hour limit: 22.50%`
-- `Weekly limit: 5.93%`
-
 ## Context Efficiency
 
 - Read only relevant PRD sections.

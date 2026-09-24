@@ -6,7 +6,7 @@ Trove is a travel companion built around:
 
 > **Plan it. Live it. Remember it.**
 
-The approved product requirements live in `PRD.md` once generated. Linear is the implementation task source of truth.
+The current approved product requirements live in `PRD.md`. Linear is the implementation task source of truth; shipped behavior and task status do not silently amend the product contract.
 
 ## Working Rules
 
@@ -40,14 +40,14 @@ The approved product requirements live in `PRD.md` once generated. Linear is the
 - Trove owns application identity and user relationships; external providers enrich data.
 - Google Places data is resolved on demand. Do not pre-mine Google Places into Trove.
 - Mutable provider data such as ratings, hours, photos, and descriptions should not become permanent Trove-owned copies.
-- A Place a user has already reached for may keep a dated snapshot of its durable provider data — name, address, coordinates, types — for up to 30 days, refreshed once stale. Travel legs are cached the same way. This is not pre-mining: nothing is fetched that a user did not ask for. Ask for the cheap field mask (`detail: 'location'`) unless a surface genuinely renders the mutable half.
+- A Place a user has already reached for may keep a dated snapshot of its durable provider data — name, address, coordinates, types — for up to 30 days, only where provider permissions allow, refreshed once stale. Travel legs follow the same permission-first rule; 30 days is an internal maximum, not blanket permission for every field. This is not pre-mining: nothing is fetched that a user did not ask for. Ask for the cheap field mask (`detail: 'location'`) unless a surface genuinely renders the mutable half.
 - Provider requests cost real money per call. Before adding one to a code path, check what fans out around it: a per-day call inside a per-trip loop is how a development week became a $300 bill.
-- Editorial imagery and Google Places data are separate tracks. Editorial imagery is decorative, free, hotlinked, cached by reference with its attribution metadata, and safe to resolve on demand. Do not render editorial-image credits on authenticated trip surfaces. Google Places data is functional, billable, never pre-mined, and its mutable fields are never cached. A decorative surface never reaches for the latter.
+- Editorial imagery and Google Places data are separate tracks. Editorial imagery is decorative, free, hotlinked, cached by reference with its attribution metadata, and resolved on demand under its provider permissions. Do not render editorial-image credits on authenticated trip surfaces; choose sources whose attribution requirements can be met by that design. Google Places data is functional, billable, never pre-mined, and its mutable fields are never durably cached. Any permitted transient reuse retains its original age. A decorative surface never reaches for the latter.
 - Saved Places and Trip Places are independent relationships to the same Place.
 - Removing a Saved Place must not remove it from Trip Places, and vice versa.
 - Future social/shared itineraries must preserve ownership, attribution, visibility, and source-trip relationships.
 - Trip Mode remains separate from global navigation and supports Preview before travel.
-- Plan Score and Memories are implemented late, after the core planning/travel flows are stable.
+- Plan Score and Memories build on stable core planning/travel flows; they are part of the current product, not deferred features.
 
 ## Linear Workflow
 
@@ -162,13 +162,6 @@ Use:
 - Linear: `<next suggested task link>`
 - Model: `<recommended model + reasoning level/platform>`
 - Reason: `<one short sentence>`
-
-### Usage
-Report token/quota percentages usage.
-
-Examples:
-- `5-hour limit: 22.50%`
-- `Weekly limit: 5.93%`
 
 ## Context Efficiency
 

@@ -3,6 +3,26 @@ import { expect, test } from 'vitest';
 import type { Memory, MemoryTripPlace } from '../lib/memories/api.ts';
 import { buildTripStory, placeName, providerPlaceId } from '../lib/memories/story.ts';
 
+test('dated reflections form chapters without manufacturing Memories', () => {
+  const story = buildTripStory(
+    [],
+    [
+      { date: '2026-09-03', rating: null, note: 'Quiet afternoon' },
+      { date: '2026-09-01', rating: 4, note: null },
+    ],
+  );
+  expect(story.days.map((day) => day.date)).toStrictEqual(['2026-09-01', '2026-09-03']);
+  expect(story.days[0]?.experience?.rating).toBe(4);
+  expect(story.days[1]?.experience?.note).toBe('Quiet afternoon');
+  expect(story.memoryCount).toBe(0);
+  expect(story.photoCount).toBe(0);
+  expect(story.days.every((day) => day.memories.length === 0)).toBe(true);
+});
+
+test('old cached responses without reflections still build their original story', () => {
+  expect(buildTripStory([]).days).toStrictEqual([]);
+});
+
 const YOYOGI: MemoryTripPlace = {
   id: 'trip-place-yoyogi',
   kind: 'provider',

@@ -9,6 +9,21 @@ vi.mock('@/lib/supabase/client', () => ({
 
 const { deleteTrip, saveTrip } = await import('../lib/trips/api.ts');
 
+test('shrink errors retain the reviewed impact and revision', async () => {
+  const impact = { revision: 'revision', removedDays: [], retainedDays: [] };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({
+      ok: false,
+      status: 409,
+      json: async () => ({ code: 'trip_date_shrink_confirmation_required', impact }),
+    })),
+  );
+  await expect(saveTrip('trip', {} as Parameters<typeof saveTrip>[1])).rejects.toMatchObject({
+    impact,
+  });
+});
+
 beforeEach(() => {
   vi.stubGlobal('navigator', { onLine: true });
 });

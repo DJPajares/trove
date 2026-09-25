@@ -32,6 +32,11 @@ export function registerItineraryRoutes(app: FastifyInstance) {
     providerBacked,
     timeSuggestionControllers.getDayTimeSuggestions,
   );
+  app.patch(
+    '/trips/:tripId/day-experiences/:date',
+    authenticated,
+    controllers.updateDatedExperienceRating,
+  );
   app.post('/trips/:tripId/itinerary/items', authenticated, controllers.createItem);
   app.post(
     '/trips/:tripId/itinerary/days/:itineraryDayId/move',

@@ -17,7 +17,7 @@ export function selectCompletedPrompt(
   if (!trip || trip.lifecycle !== 'completed') return null;
   if (dismissedTripIds.includes(trip.id)) return null;
 
-  const hasMemories = trip.memoryCount > 0;
+  const hasMemories = trip.hasStoryContent ?? trip.memoryCount > 0;
   // A rating of zero is a rating. Testing for absence rather than falsiness is
   // the difference between "not rated yet" and "rated it poorly".
   const hasRating = trip.experienceRating !== null;

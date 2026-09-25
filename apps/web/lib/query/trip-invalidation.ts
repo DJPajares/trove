@@ -83,6 +83,7 @@ export const PLAN_SCORE_INPUT_QUERY_ROOTS: readonly TripScopedQueryRoot[] = ['pl
  * had before.
  */
 export const TRIP_DATE_QUERY_ROOTS: readonly TripScopedQueryRoot[] = [
+  'memories',
   'itinerary',
   'plan-score',
   'trip-mode-context',

@@ -9,6 +9,7 @@ import {
   getTrip,
   listTrips,
   TripDateShrinkConfirmationError,
+  TripDateConflictError,
   TripDateMoveInvalidLocalTimeError,
   TripNotFoundError,
   TripValidationError,
@@ -76,6 +77,20 @@ const tripUpdateSchema = z
   .object({
     coverPhotoPath: tripFields.coverPhotoPath,
     confirmDateShrink: z.boolean().optional(),
+    shrinkRevision: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
+    noteResolutions: z
+      .array(
+        z.discriminatedUnion('action', [
+          z.object({ dayId: z.uuid(), action: z.literal('discard') }).strict(),
+          z
+            .object({ dayId: z.uuid(), action: z.literal('append'), targetDayId: z.uuid() })
+            .strict(),
+        ]),
+      )
+      .optional(),
     countries: tripFields.countries.optional(),
     description: tripFields.description,
     destinations: tripFields.destinations,
@@ -111,12 +126,14 @@ function getRequestContext(request: FastifyRequest, reply: FastifyReply) {
 }
 
 function handleTripError(error: unknown, reply: FastifyReply) {
+  if (error instanceof TripDateConflictError) return reply.code(409).send({ code: error.message });
   if (error instanceof TripNotFoundError) {
     return reply.code(404).send({ code: error.message });
   }
   if (error instanceof TripDateShrinkConfirmationError) {
     return reply.code(409).send({
       affectedItemCount: error.affectedItemCount,
+      impact: error.impact,
       code: error.message,
     });
   }

@@ -6,7 +6,7 @@ installFakePrismaClient();
 
 const { removeTripPlace, TripPlaceReferencedError } =
   await import('../src/services/trip-places.js');
-const { updateTrip } = await import('../src/services/trips.js');
+const { updateTrip, TripDateShrinkConfirmationError } = await import('../src/services/trips.js');
 
 const OWNER = 'owner-user-id';
 const TRIP = 'trip-kansai';
@@ -148,8 +148,19 @@ test('shortening a trip keeps the tasks, expenses, and Memories filed on a dropp
   store.expense.push({ id: 'expense-dinner', itineraryDayId: LAST_DAY, tripId: TRIP });
   store.memory.push({ id: 'memory-lanterns', itineraryDayId: LAST_DAY, tripId: TRIP });
 
+  const impact = await updateTrip(OWNER, '', TRIP, { endDate: '2026-09-01' }).catch(
+    (error: unknown) => {
+      if (error instanceof TripDateShrinkConfirmationError) return error.impact;
+      throw error;
+    },
+  );
+  if (!('revision' in impact)) throw new Error('Expected shrink review');
   await updateTrip(OWNER, '', TRIP, {
     confirmDateShrink: true,
+    shrinkRevision: impact.revision,
+    noteResolutions: impact.removedDays
+      .filter((day) => day.notes?.trim())
+      .map((day) => ({ dayId: day.id, action: 'discard' })),
     endDate: '2026-09-01',
     startDate: '2026-09-01',
   });

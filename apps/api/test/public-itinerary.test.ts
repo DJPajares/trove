@@ -61,6 +61,7 @@ function tripFixture(visibility: 'PRIVATE' | 'PUBLIC') {
     name: 'Kyoto in spring',
     startDate: new Date('2026-05-01T00:00:00.000Z'),
     visibility,
+    dayExperiences: [{ date: new Date('2026-05-01'), rating: 1, note: 'Private reflection' }],
     itineraryDays: [
       {
         date: new Date('2026-05-01T00:00:00.000Z'),

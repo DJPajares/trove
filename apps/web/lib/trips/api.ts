@@ -1,3 +1,4 @@
+import type { DayNoteResolution, TripShrinkImpact } from '@trove/types';
 import { createBrowserSupabaseClient, getBrowserSession } from '@/lib/supabase/client';
 import {
   getRememberedOfflineUser,
@@ -50,6 +51,7 @@ export type Trip = {
   itineraryCoverage?: { percentage: number; plannedDays: number; totalDays: number };
   lifecycle: 'active' | 'completed' | 'planning';
   memoryCount: number;
+  hasStoryContent?: boolean;
   name: string;
   partySize: number;
   planningReadiness: 'in_progress' | 'ready';
@@ -88,6 +90,8 @@ export type Trip = {
 
 export type TripInput = {
   confirmDateShrink?: boolean;
+  shrinkRevision?: string;
+  noteResolutions?: DayNoteResolution[];
   countries: string[];
   coverPhotoPath?: string | null;
   description: string | null;
@@ -113,6 +117,7 @@ export class TripApiError extends Error {
       localTime: string;
       targetDate: string;
     },
+    public readonly impact?: TripShrinkImpact,
   ) {
     super(code);
   }
@@ -162,6 +167,7 @@ async function tripRequest<T>(path: string, init?: RequestInit) {
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as {
       affectedItemCount?: number;
+      impact?: TripShrinkImpact;
       code?: string;
       itemId?: string;
       itemLabel?: string | null;
@@ -183,6 +189,7 @@ async function tripRequest<T>(path: string, init?: RequestInit) {
             targetDate: body.targetDate,
           }
         : undefined,
+      body.impact,
     );
   }
 

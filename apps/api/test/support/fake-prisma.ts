@@ -2,6 +2,7 @@ export type Row = Record<string, unknown>;
 export type Where = Record<string, unknown> | undefined;
 
 export type ModelName =
+  | 'dayExperience'
   | 'expense'
   | 'itineraryDay'
   | 'itineraryItem'
@@ -14,6 +15,7 @@ export type ModelName =
   | 'tripPlace';
 
 const MODELS: ModelName[] = [
+  'dayExperience',
   'expense',
   'itineraryDay',
   'itineraryItem',
@@ -57,6 +59,8 @@ function matches(row: Row, where: Where): boolean {
     if (value && typeof value === 'object' && 'not' in value) {
       return row[key] !== (value as { not: unknown }).not;
     }
+    if (row[key] instanceof Date && value instanceof Date)
+      return (row[key] as Date).getTime() === value.getTime();
     return row[key] === value;
   });
 }
@@ -121,11 +125,16 @@ function hydrate(name: ModelName, row: Row): Row {
       ),
     };
   }
+  if (name === 'reservation') return { ...row, accommodationDays: row.accommodationDays ?? [] };
   if (name === 'tripPlace') return hydrateTripPlace(row) as Row;
   if (name === 'trip') {
     return {
       ...row,
-      _count: { memories: store.memory.filter((memory) => memory.tripId === row.id).length },
+      _count: {
+        memories: store.memory.filter((memory) => memory.tripId === row.id).length,
+        dayExperiences: store.dayExperience.filter((entry) => entry.tripId === row.id).length,
+      },
+      dayExperiences: store.dayExperience.filter((entry) => entry.tripId === row.id),
       destinations: [],
       memories: store.memory
         .filter((memory) => memory.tripId === row.id)
@@ -332,10 +341,26 @@ export function createFakePrismaClient(): Record<string, unknown> {
   return {
     ...models,
     $executeRaw: applyRawStartInstants,
-    $transaction: async (operations: unknown) =>
-      typeof operations === 'function'
-        ? (operations as (client: unknown) => unknown)(createFakePrismaClient())
-        : Promise.all(operations as Promise<unknown>[]),
+    $transaction: async (operations: unknown) => {
+      const before = structuredClone(store);
+      const originals = Object.fromEntries(
+        MODELS.map((name) => [name, [...store[name]]]),
+      ) as Record<ModelName, Row[]>;
+      try {
+        return await (typeof operations === 'function'
+          ? (operations as (client: unknown) => unknown)(createFakePrismaClient())
+          : Promise.all(operations as Promise<unknown>[]));
+      } catch (error) {
+        for (const name of MODELS) {
+          store[name] = originals[name];
+          for (const [index, row] of store[name].entries()) {
+            for (const key of Object.keys(row)) delete row[key];
+            Object.assign(row, before[name][index]);
+          }
+        }
+        throw error;
+      }
+    },
   };
 }
 

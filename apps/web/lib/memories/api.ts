@@ -1,3 +1,4 @@
+import type { DayExperience } from '@trove/types';
 import type { PlaceSnapshot } from '@/lib/saved/api';
 import { canUseSupportingOfflineFallback } from '@/lib/offline/supporting-sync';
 import {
@@ -74,7 +75,11 @@ export type MemoryTripPlace = {
 
 export type StoryCover = { photoId: string; url: string | null };
 
-export type MemoriesResponse = { memories: Memory[]; storyCover: StoryCover | null };
+export type MemoriesResponse = {
+  memories: Memory[];
+  storyCover: StoryCover | null;
+  dayExperiences?: DayExperience[];
+};
 
 export type MemoryInput = {
   capturedAt?: string;
@@ -607,4 +612,16 @@ export async function discardPendingMemory(tripId: string, clientMemoryId: strin
 export async function discardPendingMemoryPhoto(tripId: string, clientPhotoId: string) {
   const auth = await getOfflineAuthContext();
   await removePendingMemoryPhoto(auth.userId, tripId, clientPhotoId);
+}
+
+export function updateDatedExperienceRating(
+  tripId: string,
+  date: string,
+  rating: number | null,
+  note: string | null,
+) {
+  return memoryRequest<DayExperience>(`/trips/${tripId}/day-experiences/${date}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ rating, note }),
+  });
 }

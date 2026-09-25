@@ -28,16 +28,8 @@ import {
   moveTripRange,
   tripTimeZoneInput,
 } from '@/lib/trips/form';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { TripShrinkReview } from '@/components/trip-shrink-review';
+import type { DayNoteResolution, TripShrinkImpact } from '@trove/types';
 import { DatePicker } from '@/components/date-picker';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -73,7 +65,8 @@ type FormState = {
 };
 
 type PendingShrink = {
-  affectedItemCount: number;
+  impact: TripShrinkImpact;
+  feedback: string | null;
   input: TripInput;
   uploadedPath: string | null;
 };
@@ -300,10 +293,12 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
     } catch (saveError) {
       if (
         saveError instanceof TripApiError &&
-        saveError.code === 'trip_date_shrink_confirmation_required'
+        saveError.code === 'trip_date_shrink_confirmation_required' &&
+        saveError.impact
       ) {
         setPendingShrink({
-          affectedItemCount: saveError.affectedItemCount ?? 0,
+          impact: saveError.impact,
+          feedback: null,
           input,
           uploadedPath,
         });
@@ -326,7 +321,7 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
     }
   }
 
-  async function confirmDateShrink() {
+  async function confirmDateShrink(noteResolutions: DayNoteResolution[]) {
     // A disabled button only stops the click that comes after React has
     // re-rendered, and two taps land faster than that. This is the one save
     // that unschedules items, so the guard against sending it twice is a value
@@ -337,8 +332,25 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
     setError(null);
 
     try {
-      await finishSave({ ...pendingShrink.input, confirmDateShrink: true });
+      await finishSave({
+        ...pendingShrink.input,
+        confirmDateShrink: true,
+        shrinkRevision: pendingShrink.impact.revision,
+        noteResolutions,
+      });
     } catch (saveError) {
+      if (saveError instanceof TripApiError && saveError.impact) {
+        setPendingShrink({
+          ...pendingShrink,
+          impact: saveError.impact,
+          feedback: t('shrink.changed'),
+        });
+        return;
+      }
+      if (saveError instanceof TripApiError && saveError.code === 'trip_date_conflict') {
+        setPendingShrink({ ...pendingShrink, feedback: t('shrink.conflict') });
+        return;
+      }
       if (pendingShrink.uploadedPath) {
         await removeTripCover(pendingShrink.uploadedPath).catch(() => undefined);
       }
@@ -606,47 +618,16 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
         </SheetFooter>
       </form>
 
-      <AlertDialog
-        open={Boolean(pendingShrink)}
-        // Not dismissable mid-save: the request that is unscheduling items is
-        // already away, and letting Escape run the cancel path would only make
-        // the screen disagree with what the server is doing.
-        onOpenChange={(open) => {
-          if (!open && status !== 'saving') void cancelDateShrink();
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('dateShrinkTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('dateShrinkDescription', { count: pendingShrink?.affectedItemCount ?? 0 })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              disabled={status === 'saving'}
-              onClick={() => void cancelDateShrink()}
-            >
-              {t('keepDates')}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={status === 'saving'}
-              onClick={() => void confirmDateShrink()}
-              type="button"
-              variant="destructive"
-            >
-              {status === 'saving' ? (
-                <RefreshCw
-                  aria-hidden="true"
-                  className="animate-spin motion-reduce:animate-none"
-                  data-icon="inline-start"
-                />
-              ) : null}
-              {status === 'saving' ? t('movingDates') : t('moveToUnscheduled')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {pendingShrink ? (
+        <TripShrinkReview
+          key={pendingShrink.impact.revision}
+          impact={pendingShrink.impact}
+          feedback={pendingShrink.feedback}
+          busy={status === 'saving'}
+          onCancel={() => void cancelDateShrink()}
+          onConfirm={(resolutions) => void confirmDateShrink(resolutions)}
+        />
+      ) : null}
     </>
   );
 }

@@ -1,3 +1,4 @@
+import type { DayExperience } from '@trove/types';
 import type { Memory, MemoryTripPlace } from './api';
 
 /**
@@ -9,6 +10,7 @@ import type { Memory, MemoryTripPlace } from './api';
 
 export type StoryDay = {
   date: string;
+  experience?: DayExperience;
   memories: Memory[];
   photoCount: number;
 };
@@ -60,7 +62,7 @@ function byHighlightPosition(left: Memory, right: Memory) {
   return left.highlightPosition - right.highlightPosition;
 }
 
-export function buildTripStory(memories: Memory[]): TripStory {
+export function buildTripStory(memories: Memory[], experiences: DayExperience[] = []): TripStory {
   const ordered = [...memories].sort(byCapturedLocal);
 
   const dayGroups = new Map<string, Memory[]>();
@@ -88,10 +90,19 @@ export function buildTripStory(memories: Memory[]): TripStory {
     });
   }
 
+  for (const experience of experiences) {
+    if (experience.rating !== null || experience.note) {
+      if (!dayGroups.has(experience.date)) dayGroups.set(experience.date, []);
+    }
+  }
+
   return {
     days: [...dayGroups.entries()]
       .map(([date, dayMemories]) => ({
         date,
+        ...(experiences.find((entry) => entry.date === date)
+          ? { experience: experiences.find((entry) => entry.date === date) }
+          : {}),
         memories: dayMemories,
         photoCount: photoTotal(dayMemories),
       }))

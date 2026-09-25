@@ -4,7 +4,8 @@ import { installFakePrismaClient, resetStore, store } from './support/fake-prism
 
 installFakePrismaClient();
 
-const { TripDateMoveInvalidLocalTimeError, updateTrip } = await import('../src/services/trips.js');
+const { TripDateMoveInvalidLocalTimeError, TripDateShrinkConfirmationError, updateTrip } =
+  await import('../src/services/trips.js');
 
 const OWNER = 'owner-user-id';
 const TRIP = 'trip-kansai';
@@ -90,10 +91,26 @@ function dayShape() {
     .toSorted((left, right) => left.date.localeCompare(right.date));
 }
 
+async function reviewedUpdate(input: Parameters<typeof updateTrip>[3]) {
+  try {
+    return await updateTrip(OWNER, '', TRIP, input);
+  } catch (error) {
+    if (!(error instanceof TripDateShrinkConfirmationError)) throw error;
+    return updateTrip(OWNER, '', TRIP, {
+      ...input,
+      confirmDateShrink: true,
+      shrinkRevision: error.impact.revision,
+      noteResolutions: error.impact.removedDays
+        .filter((day) => day.notes?.trim())
+        .map((day) => ({ dayId: day.id, action: 'discard' })),
+    });
+  }
+}
+
 test('a trip moved a week later takes its itinerary with it', async () => {
   seed();
 
-  await updateTrip(OWNER, '', TRIP, { endDate: '2026-09-10', startDate: '2026-09-08' });
+  await reviewedUpdate({ endDate: '2026-09-10', startDate: '2026-09-08' });
 
   // The same three day rows, still carrying their names and notes, still in
   // order - not three replacements with the content stripped out.
@@ -109,7 +126,7 @@ test('a move never asks to put anything in Unscheduled', async () => {
   seed();
 
   // No `confirmDateShrink`: nothing is being dropped, so nothing should ask.
-  await updateTrip(OWNER, '', TRIP, { endDate: '2026-10-03', startDate: '2026-10-01' });
+  await reviewedUpdate({ endDate: '2026-10-03', startDate: '2026-10-01' });
 
   expect(store.itineraryItem[0]?.itineraryDayId).toBe(DAYS[1]);
   expect(store.itineraryDay.length).toBe(3);
@@ -121,7 +138,7 @@ test('a one-day shift does not collide with the day already on that date', async
   // The new range overlaps the old one everywhere but its ends, so every day
   // moves onto a date another day still holds. Rewriting them in the wrong
   // order breaks `@@unique([tripId, date])` partway through.
-  await updateTrip(OWNER, '', TRIP, { endDate: '2026-09-04', startDate: '2026-09-02' });
+  await reviewedUpdate({ endDate: '2026-09-04', startDate: '2026-09-02' });
 
   expect(dayShape().map((row) => [row.id, row.date])).toStrictEqual([
     [DAYS[0], '2026-09-02'],
@@ -133,7 +150,7 @@ test('a one-day shift does not collide with the day already on that date', async
 test('a trip moved earlier collides just as readily, and does not', async () => {
   seed();
 
-  await updateTrip(OWNER, '', TRIP, { endDate: '2026-09-02', startDate: '2026-08-31' });
+  await reviewedUpdate({ endDate: '2026-09-02', startDate: '2026-08-31' });
 
   expect(dayShape().map((row) => [row.id, row.date])).toStrictEqual([
     [DAYS[0], '2026-08-31'],
@@ -145,7 +162,7 @@ test('a trip moved earlier collides just as readily, and does not', async () => 
 test('a timed item keeps its local time and gets a new instant', async () => {
   seed();
 
-  await updateTrip(OWNER, '', TRIP, { endDate: '2026-09-10', startDate: '2026-09-08' });
+  await reviewedUpdate({ endDate: '2026-09-10', startDate: '2026-09-08' });
 
   const item = store.itineraryItem[0]!;
   // 08:30 in Tokyo on the ninth, not the second: the wall clock the traveller
@@ -160,7 +177,7 @@ test('a move with a new trip reference zone uses that zone for inheriting floati
   const departure = seedAuthoritativeItem();
   const originalDepartureInstant = departure.startInstant.toISOString();
 
-  await updateTrip(OWNER, '', TRIP, {
+  await reviewedUpdate({
     endDate: '2026-09-10',
     referenceTimeZone: 'America/New_York',
     startDate: '2026-09-08',
@@ -199,7 +216,7 @@ test.each([
   store.expense.push(expense);
   store.memory.push(memory);
 
-  await updateTrip(OWNER, '', TRIP, {
+  await reviewedUpdate({
     confirmDateShrink: true,
     endDate,
     startDate: '2026-09-08',
@@ -222,7 +239,7 @@ test('an authoritative item on a removed tail day keeps its instant when unsched
   const departure = seedAuthoritativeItem(DAYS[2]);
   const originalInstant = departure.startInstant.toISOString();
 
-  await updateTrip(OWNER, '', TRIP, {
+  await reviewedUpdate({
     confirmDateShrink: true,
     endDate: '2026-09-09',
     startDate: '2026-09-08',
@@ -252,7 +269,7 @@ test('a daylight-saving gap rejects the move before changing days or instants', 
   } satisfies Partial<InstanceType<typeof TripDateMoveInvalidLocalTimeError>>);
 
   const skipped = store.itineraryItem[0]!;
-  expect(skipped.startInstant).toBe(originalInstant);
+  expect(skipped.startInstant).toStrictEqual(originalInstant);
   expect((skipped.localStartTime as Date).toISOString().slice(11, 16)).toBe('02:30');
   expect(dayShape().map((row) => row.date)).toStrictEqual([
     '2026-09-01',
@@ -264,7 +281,7 @@ test('a daylight-saving gap rejects the move before changing days or instants', 
 test('changing only the end date still resizes rather than moving', async () => {
   seed();
 
-  await updateTrip(OWNER, '', TRIP, { confirmDateShrink: true, endDate: '2026-09-02' });
+  await reviewedUpdate({ confirmDateShrink: true, endDate: '2026-09-02' });
 
   // Day one stays where it is and the dropped day's row is gone - the existing
   // behaviour, untouched.
@@ -279,7 +296,7 @@ test('a trip moved and lengthened in one edit keeps its plan and gains empty day
 
   // A week later and two days longer. Neither a pure move nor a pure resize -
   // the case that used to match neither and so emptied the whole itinerary.
-  await updateTrip(OWNER, '', TRIP, { endDate: '2026-09-12', startDate: '2026-09-08' });
+  await reviewedUpdate({ endDate: '2026-09-12', startDate: '2026-09-08' });
 
   expect(dayShape().map((row) => [row.id, row.date, row.name])).toStrictEqual([
     [DAYS[0], '2026-09-08', 'Arrival'],
@@ -306,7 +323,7 @@ test('a trip moved and lengthened in one edit keeps its plan and gains empty day
 test('a trip moved and shortened drops only its tail', async () => {
   seed();
 
-  await updateTrip(OWNER, '', TRIP, {
+  await reviewedUpdate({
     confirmDateShrink: true,
     endDate: '2026-09-09',
     startDate: '2026-09-08',

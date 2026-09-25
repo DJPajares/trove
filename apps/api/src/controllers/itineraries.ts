@@ -13,6 +13,7 @@ import {
   organizeItineraryItem,
   setItineraryDayBase,
   updateItineraryDayExperienceRating,
+  updateDatedExperienceRating,
   updateItineraryDayName,
   updateItineraryDayNote,
   updateItineraryItem,
@@ -321,6 +322,31 @@ export function createItineraryControllers() {
             params.data.tripId,
             params.data.itineraryDayId,
             body.data.name,
+          ),
+        );
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
+
+    async updateDatedExperienceRating(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = z
+        .object({ tripId: z.uuid(), date: z.iso.date() })
+        .strict()
+        .safeParse(request.params);
+      const body = dayExperienceRatingSchema.safeParse(request.body);
+      if (!userId) return;
+      if (!params.success || !body.success)
+        return reply.code(400).send({ code: 'invalid_experience_rating' });
+      try {
+        return reply.send(
+          await updateDatedExperienceRating(
+            userId,
+            params.data.tripId,
+            params.data.date,
+            body.data.rating,
+            body.data.note,
           ),
         );
       } catch (error) {

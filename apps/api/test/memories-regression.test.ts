@@ -488,11 +488,11 @@ test('Experience Rating is entered per target and never averaged or inferred', a
   // Not the 3 an average of the day ratings would produce.
   const rated = await updateTripExperienceRating(OWNER, '', TRIP, 4, 'Worth every hour');
   expect(rated.experienceRating).toBe(4);
-  expect(store.itineraryDay.map((day) => day.experienceRating)).toStrictEqual([5, 1]);
+  expect(store.dayExperience.map((day) => day.rating)).toStrictEqual([5, 1]);
 
   const cleared = await updateTripExperienceRating(OWNER, '', TRIP, null, null);
   expect(cleared.experienceRating).toBe(null);
-  expect(store.itineraryDay.map((day) => day.experienceRating)).toStrictEqual([5, 1]);
+  expect(store.dayExperience.map((day) => day.rating)).toStrictEqual([5, 1]);
 
   // Capture asks for no rating, and a Memory carries none of its own.
   const memory = await createMemory(OWNER, TRIP, { note: 'No rating asked for' }, null);

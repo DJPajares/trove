@@ -466,6 +466,29 @@
       "error": "We couldn't update this trip. Try again.",
       "nudge": "{count, plural, =0 {This trip starts today and the plan is still in progress.} one {This trip starts in # day and the plan is still in progress.} other {This trip starts in # days and the plan is still in progress.}}",
       "suggest": "Every day of this trip has something planned."
+    },
+    "shrink": {
+      "title": "Review shorter trip",
+      "description": "These planning days will be removed. Choose what to do with each day note before saving.",
+      "appendTo": "Append to {date}",
+      "discard": "Discard this note",
+      "choose": "Choose where to keep this note",
+      "noteDecision": "Note from {date}",
+      "preview": "Combined notes for {date}",
+      "tooLong": "Combined notes exceed 5,000 characters. Choose another day or edit the notes before shortening.",
+      "preserved": "Ratings and captured dates stay in your history. Base assignments are removed; their Places and reservations remain. Supporting records are kept with invalid day links removed.",
+      "items": "{count, plural, one {# stop moves to Unscheduled} other {# stops move to Unscheduled}}",
+      "bases": "{count, plural, one {# base assignment removed} other {# base assignments removed}}",
+      "tasks": "{count, plural, one {# task kept} other {# tasks kept}}",
+      "reservations": "{count, plural, one {# reservation kept} other {# reservations kept}}",
+      "expenses": "{count, plural, one {# expense kept} other {# expenses kept}}",
+      "memories": "{count, plural, one {# Memory kept} other {# Memories kept}}",
+      "reflection": "Day rating and reflection stay on their original date.",
+      "cancel": "Keep current dates",
+      "confirm": "Save shorter trip",
+      "saving": "Saving…",
+      "changed": "The trip changed while this review was open. Review the updated details and choose note destinations again.",
+      "conflict": "The trip changed while saving. Close this review and try again to see the latest details."
     }
   },
   "tripMode": {
@@ -1119,7 +1142,7 @@
     "spend": {
       "totalLabel": "Spent so far",
       "ofBudget": "of {budget}",
-      "noBudgetPrompt": "Set a budget to see whether you\u2019re on track.",
+      "noBudgetPrompt": "Set a budget to see whether you’re on track.",
       "verdict": {
         "upcoming": {
           "onTrack": "{amount} still to spend.",
@@ -1127,8 +1150,8 @@
           "over": "Your recorded spend is already {amount} over budget."
         },
         "underway": {
-          "onTrack": "On track \u2014 {amount} left.",
-          "ahead": "Running ahead \u2014 {spentPercent} of the budget, {tripPercent} of the way through.",
+          "onTrack": "On track — {amount} left.",
+          "ahead": "Running ahead — {spentPercent} of the budget, {tripPercent} of the way through.",
           "over": "Over budget by {amount}."
         },
         "finished": {
@@ -1145,13 +1168,13 @@
       "approximate": {
         "rateDate": "Converted at reference rates published {date}.",
         "stale": "These rates are from {date}, so this total is a rough one.",
-        "unavailable": "Exchange rates aren\u2019t available right now, so totals stay in the currencies you paid in.",
-        "unconvertible": "{count, plural, one {# amount} other {# amounts}} couldn\u2019t be converted, so it isn\u2019t included."
+        "unavailable": "Exchange rates aren’t available right now, so totals stay in the currencies you paid in.",
+        "unconvertible": "{count, plural, one {# amount} other {# amounts}} couldn’t be converted, so it isn’t included."
       }
     },
     "a11y": {
-      "dayBar": "{date}: {amount}, {percent} of the trip\u2019s spending.",
-      "categoryBar": "{category}: {amount} across {count, plural, one {# expense} other {# expenses}}, {percent} of the trip\u2019s spending.",
+      "dayBar": "{date}: {amount}, {percent} of the trip’s spending.",
+      "categoryBar": "{category}: {amount} across {count, plural, one {# expense} other {# expenses}}, {percent} of the trip’s spending.",
       "budgetBar": "{spent} spent of a {budget} budget, {spentPercent} used.",
       "spendTotal": "Approximately {amount}, converted from {count, plural, one {# currency} other {# currencies}} at reference rates published {date}."
     },
@@ -1167,11 +1190,11 @@
       "day": {
         "today": "Today",
         "outlier": "Big day",
-        "noSpend": "\u2014",
+        "noSpend": "—",
         "offDay": "{count, plural, one {# expense} other {# expenses}} on no trip day"
       },
       "currency": {
-        "worth": "\u2248 {amount}",
+        "worth": "≈ {amount}",
         "unpriced": "No rate available"
       },
       "place": {
@@ -1303,10 +1326,10 @@
       "queryPlaceholder": "Name, and the town or city",
       "queryHint": "Adding the town or city usually settles it.",
       "search": "Search",
-      "searching": "Searching\u2026",
+      "searching": "Searching…",
       "resultsHeading": "Matches",
       "use": "This one",
-      "saving": "Saving\u2026",
+      "saving": "Saving…",
       "noMatches": "No matches for that. Try the full name, or add the town or city.",
       "unavailable": "Place search is unavailable right now. Try again shortly.",
       "saveError": "We couldn't save that location. Try again."

@@ -35,11 +35,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
-import {
-  fetchItinerary,
-  updateItineraryDayExperienceRating,
-  type Itinerary,
-} from '@/lib/itinerary/api';
+import { fetchItinerary } from '@/lib/itinerary/api';
 import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import {
@@ -49,9 +45,9 @@ import {
   type Memory,
   type MemoryPhoto,
   type MemoryTripPlace,
-  type StoryCover,
 } from '@/lib/memories/api';
 import { selectPhotoLayout } from '@/lib/memories/photo-layout';
+import { updateDatedExperienceRating } from '@/lib/memories/api';
 import { buildTripStory, placeName, type StoryPlace, type TripStory } from '@/lib/memories/story';
 import { updateTripExperienceRating } from '@/lib/trips/api';
 import { tripEditorialSubject } from '@/lib/trips/summary';
@@ -62,7 +58,7 @@ type LoadState =
   | { data: null; status: 'error' }
   | { data: null; status: 'loading' }
   | {
-      data: { memories: Memory[]; storyCover: StoryCover | null };
+      data: MemoriesResponse;
       status: 'ready';
     };
 
@@ -72,7 +68,7 @@ type EditorState =
   | { memory: Memory; mode: 'edit' };
 
 /** Which target the rating dialog is collecting for, held by id so it stays current. */
-type RatingEditor = { itineraryDayId: string; kind: 'day' } | { kind: 'trip' } | null;
+type RatingEditor = { date: string; kind: 'day' } | { kind: 'trip' } | null;
 
 /**
  * `null` reads the whole story. Anything else narrows it to Highlights, to one
@@ -274,6 +270,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   const state: LoadState = memoriesQuery.data
     ? {
         data: {
+          dayExperiences: memoriesQuery.data.dayExperiences ?? [],
           memories: memoriesQuery.data.memories,
           storyCover: memoriesQuery.data.storyCover,
         },
@@ -304,7 +301,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
   }, [queryClient, tripId]);
 
   const story: TripStory | null = useMemo(
-    () => (state.data ? buildTripStory(state.data.memories) : null),
+    () => (state.data ? buildTripStory(state.data.memories, state.data.dayExperiences) : null),
     [state.data],
   );
 
@@ -349,26 +346,13 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
     tripContext?.setTrip(result.trip);
   }
 
-  async function saveDayRating(itineraryDayId: string, rating: number | null, note: string | null) {
-    const result = await updateItineraryDayExperienceRating(tripId, itineraryDayId, rating, note);
-    // The itinerary entry is shared, so the rating shows up on the itinerary
-    // screen and in Trip Mode without any of them refetching.
-    queryClient.setQueryData(queryKeys.itinerary(tripId), (current: Itinerary | undefined) =>
-      current
-        ? {
-            ...current,
-            days: current.days.map((day) =>
-              day.id === itineraryDayId
-                ? {
-                    ...day,
-                    experienceNote: result.experienceNote,
-                    experienceRating: result.experienceRating,
-                  }
-                : day,
-            ),
-          }
-        : current,
-    );
+  async function saveDayRating(date: string, rating: number | null, note: string | null) {
+    await updateDatedExperienceRating(tripId, date, rating, note);
+    await Promise.all([
+      refresh(),
+      queryClient.invalidateQueries({ queryKey: queryKeys.itinerary(tripId) }),
+      tripContext?.refresh(),
+    ]);
   }
 
   // The story and the trip are fetched in parallel by different owners now, so
@@ -440,7 +424,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
 
   const visibleDays = story.days
     .map((day) => ({ ...day, memories: day.memories.filter(matchesLens) }))
-    .filter((day) => day.memories.length);
+    .filter((day) => day.memories.length || (lens === null && day.experience));
 
   const lensOptions: LensOption[] = [
     { count: story.memoryCount, id: null, label: t('lensAll') },
@@ -566,7 +550,13 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
 
   const ratingDay =
     ratingEditor?.kind === 'day'
-      ? (itinerary?.days.find((day) => day.id === ratingEditor.itineraryDayId) ?? null)
+      ? {
+          date: ratingEditor.date,
+          ...(state.data.dayExperiences?.find((entry) => entry.date === ratingEditor.date) ?? {
+            rating: null,
+            note: null,
+          }),
+        }
       : null;
 
   const dialogs = (
@@ -615,10 +605,10 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
       {ratingDay ? (
         <ExperienceRatingDialog
           description={t('dayRatingDescription', { date: dateOnly(ratingDay.date) })}
-          initialNote={ratingDay.experienceNote}
-          initialRating={ratingDay.experienceRating}
+          initialNote={ratingDay.note}
+          initialRating={ratingDay.rating}
           onOpenChange={(open) => !open && setRatingEditor(null)}
-          onSave={(rating, note) => saveDayRating(ratingDay.id, rating, note)}
+          onSave={(rating, note) => saveDayRating(ratingDay.date, rating, note)}
           open
           title={t('dayRatingTitle')}
         />
@@ -632,7 +622,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
     </p>
   );
 
-  if (!story.memoryCount) {
+  if (!story.days.length) {
     return (
       <section className="space-y-7">
         {header}
@@ -701,14 +691,19 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
                 >
                   {dateOnly(day.date)}
                 </h2>
-                {itineraryDay ? (
+                {itineraryDay || day.experience ? (
                   <span className="ml-auto shrink-0">
-                    {ratingAffordance(t('rateDay'), itineraryDay.experienceRating, () =>
-                      setRatingEditor({ itineraryDayId: itineraryDay.id, kind: 'day' }),
+                    {ratingAffordance(t('rateDay'), day.experience?.rating ?? null, () =>
+                      setRatingEditor({ date: day.date, kind: 'day' }),
                     )}
                   </span>
                 ) : null}
               </div>
+              {day.experience?.note ? (
+                <p className="mt-4 whitespace-pre-wrap break-words text-sm leading-6">
+                  {day.experience.note}
+                </p>
+              ) : null}
               <div className="mt-5 space-y-8">
                 {day.memories.map((memory) => (
                   <MemoryEntry

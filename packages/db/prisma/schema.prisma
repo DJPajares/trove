@@ -640,6 +640,7 @@ model EditorialImage {
 }
 
 model Trip {
+  dayExperiences                 DayExperience[]
   id                             String                @id @default(uuid(7)) @db.Uuid
   ownerId                        String                @map("owner_id") @db.Uuid
   creatorId                      String?               @map("creator_id") @db.Uuid
@@ -873,6 +874,21 @@ model TripPlace {
   @@schema("trove")
 }
 
+model DayExperience {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tripId    String   @map("trip_id") @db.Uuid
+  date      DateTime @db.Date
+  rating    Int?
+  note      String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, date])
+  @@map("day_experiences")
+  @@schema("trove")
+}
+
 model ItineraryDay {
   id                               String            @id @default(uuid(7)) @db.Uuid
   tripId                           String            @map("trip_id") @db.Uuid
@@ -881,8 +897,6 @@ model ItineraryDay {
   dailyBaseTripPlaceId             String?           @map("daily_base_trip_place_id") @db.Uuid
   dailyBaseDepartureTripPlaceId    String?           @map("daily_base_departure_trip_place_id") @db.Uuid
   notes                            String?           @db.Text
-  experienceRating                 Int?              @map("experience_rating")
-  experienceNote                   String?           @map("experience_note") @db.Text
   routeStartTravelMode             RouteTravelMode   @default(DRIVE) @map("route_start_travel_mode")
   defaultTimeZone                  String            @map("default_time_zone")
   defaultTimeZoneSource            DayTimeZoneSource @map("default_time_zone_source")

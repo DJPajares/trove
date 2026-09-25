@@ -16,7 +16,7 @@ import {
   type PlaceSerializerOptions,
   serializeCanonicalPlace,
 } from './place-serializer.js';
-import { formatDateOnly, isValidIanaTimeZone } from './trip-rules.js';
+import { formatDateOnly, isValidIanaTimeZone, parseDateOnly } from './trip-rules.js';
 
 export type ItineraryScheduleInput =
   | { kind: 'none' }
@@ -68,6 +68,7 @@ export class ItineraryNotFoundError extends Error {
 export class ItineraryValidationError extends Error {
   constructor(
     public readonly code:
+      | 'invalid_experience_rating'
       | 'invalid_itinerary_item'
       | 'invalid_itinerary_day_move'
       | 'invalid_local_end_time'
@@ -439,6 +440,7 @@ export async function listItinerary(userId: string, tripId: string, languageCode
       name: true,
       referenceTimeZone: true,
       startDate: true,
+      dayExperiences: true,
       itineraryDays: {
         include: {
           dailyBaseTripPlace: true,
@@ -478,8 +480,12 @@ export async function listItinerary(userId: string, tripId: string, languageCode
       defaultTimeZoneSourceTripPlaceId: day.defaultTimeZoneSourceTripPlaceId,
       dailyBaseDepartureTripPlaceId: day.dailyBaseDepartureTripPlaceId,
       dailyBaseTripPlaceId: day.dailyBaseTripPlaceId,
-      experienceNote: day.experienceNote,
-      experienceRating: day.experienceRating,
+      experienceNote:
+        trip.dayExperiences.find((entry) => formatDateOnly(entry.date) === formatDateOnly(day.date))
+          ?.note ?? null,
+      experienceRating:
+        trip.dayExperiences.find((entry) => formatDateOnly(entry.date) === formatDateOnly(day.date))
+          ?.rating ?? null,
       id: day.id,
       items: day.items.map((item) => serializeItineraryItem(item, options)),
       name: day.name,
@@ -990,23 +996,65 @@ export async function updateItineraryDayExperienceRating(
   note: string | null | undefined,
 ) {
   const prisma = getPrismaClient();
-  const result = await prisma.$transaction(async (transaction) => {
-    await findOwnedTrip(transaction, userId, tripId);
-    const day = await findDay(transaction, tripId, itineraryDayId);
-    return transaction.itineraryDay.update({
-      where: { id: day.id },
-      data: {
-        experienceRating: rating,
-        ...(note === undefined ? {} : { experienceNote: note?.trim() || null }),
-      },
-      select: { experienceNote: true, experienceRating: true, id: true },
+  return prisma.$transaction(
+    async (transaction) => {
+      await findOwnedTrip(transaction, userId, tripId);
+      const day = await findDay(transaction, tripId, itineraryDayId);
+      const result = await writeDayExperience(transaction, tripId, day.date, rating, note);
+      return { id: day.id, experienceRating: result.rating, experienceNote: result.note };
+    },
+    { isolationLevel: 'Serializable' },
+  );
+}
+
+async function writeDayExperience(
+  transaction: Prisma.TransactionClient,
+  tripId: string,
+  date: Date,
+  rating: number | null,
+  note: string | null | undefined,
+) {
+  const existing = await transaction.dayExperience.findFirst({ where: { tripId, date } });
+  const nextNote = note === undefined ? (existing?.note ?? null) : note?.trim() || null;
+  if (rating === null && !nextNote) {
+    await transaction.dayExperience.deleteMany({ where: { tripId, date } });
+  } else if (existing) {
+    await transaction.dayExperience.update({
+      where: { id: existing.id },
+      data: { rating, note: nextNote },
     });
-  });
-  return {
-    experienceNote: result.experienceNote,
-    experienceRating: result.experienceRating,
-    id: result.id,
-  };
+  } else {
+    await transaction.dayExperience.create({ data: { tripId, date, rating, note: nextNote } });
+  }
+  return { date: formatDateOnly(date), rating, note: nextNote };
+}
+
+export async function updateDatedExperienceRating(
+  userId: string,
+  tripId: string,
+  date: string,
+  rating: number | null,
+  note: string | null | undefined,
+) {
+  let parsed: Date;
+  try {
+    parsed = parseDateOnly(date);
+  } catch {
+    throw new ItineraryValidationError('invalid_experience_rating');
+  }
+  const prisma = getPrismaClient();
+  return prisma.$transaction(
+    async (transaction) => {
+      await findOwnedTrip(transaction, userId, tripId);
+      const [day, existing] = await Promise.all([
+        transaction.itineraryDay.findFirst({ where: { tripId, date: parsed } }),
+        transaction.dayExperience.findFirst({ where: { tripId, date: parsed } }),
+      ]);
+      if (!day && !existing) throw new ItineraryNotFoundError('itinerary_day_not_found');
+      return writeDayExperience(transaction, tripId, parsed, rating, note);
+    },
+    { isolationLevel: 'Serializable' },
+  );
 }
 
 export async function createItineraryItem(

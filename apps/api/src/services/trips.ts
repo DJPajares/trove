@@ -1,3 +1,5 @@
+import { reassignedDayNotes, type DayNoteResolution, type TripShrinkImpact } from '@trove/types';
+import { hasShrinkContent, tripShrinkImpact } from './trip-shrink.js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPrismaClient, Prisma } from '@trove/db';
 
@@ -41,7 +43,17 @@ export type TripCreate = {
   startingLocation?: string | null;
 };
 
-export type TripUpdate = Partial<TripCreate> & { confirmDateShrink?: boolean };
+export type TripUpdate = Partial<TripCreate> & {
+  confirmDateShrink?: boolean;
+  shrinkRevision?: string;
+  noteResolutions?: DayNoteResolution[];
+};
+
+export class TripDateConflictError extends Error {
+  constructor() {
+    super('trip_date_conflict');
+  }
+}
 
 export class TripNotFoundError extends Error {
   constructor() {
@@ -50,13 +62,24 @@ export class TripNotFoundError extends Error {
 }
 
 export class TripValidationError extends Error {
-  constructor(public readonly code: 'invalid_date' | 'invalid_date_range' | 'invalid_time_zone') {
+  constructor(
+    public readonly code:
+      | 'invalid_date'
+      | 'invalid_date_range'
+      | 'invalid_time_zone'
+      | 'invalid_note_resolution'
+      | 'note_resolution_required'
+      | 'reassigned_notes_too_long',
+  ) {
     super(code);
   }
 }
 
 export class TripDateShrinkConfirmationError extends Error {
-  constructor(public readonly affectedItemCount: number) {
+  constructor(
+    public readonly affectedItemCount: number,
+    public readonly impact: TripShrinkImpact,
+  ) {
     super('trip_date_shrink_confirmation_required');
   }
 }
@@ -74,7 +97,7 @@ export class TripDateMoveInvalidLocalTimeError extends Error {
 
 const tripInclude = {
   // Lets completed-trip surfaces offer Memories only when there are some to open.
-  _count: { select: { memories: true } },
+  _count: { select: { memories: true, dayExperiences: true } },
   destinations: {
     include: { place: { include: placeProviderRefInclude } },
     orderBy: { position: 'asc' as const },
@@ -206,6 +229,7 @@ async function serializeTrip(
     itineraryCoverage,
     lifecycle: deriveTripLifecycle(startDate, endDate, trip.referenceTimeZone, now),
     memoryCount: trip._count.memories,
+    hasStoryContent: trip._count.memories > 0 || trip._count.dayExperiences > 0,
     name: trip.name,
     partySize: trip.partySize,
     planningReadiness: mapReadiness(trip.planningReadiness),
@@ -492,239 +516,291 @@ export async function updateTrip(
   const prisma = getPrismaClient();
   assertTimeZone(input.referenceTimeZone);
 
-  await prisma.$transaction(async (transaction) => {
-    const current = await transaction.trip.findFirst({
-      where: { id: tripId, ownerId: userId },
-      include: tripInclude,
-    });
-    if (!current) throw new TripNotFoundError();
+  await prisma
+    .$transaction(
+      async (transaction) => {
+        const current = await transaction.trip.findFirst({
+          where: { id: tripId, ownerId: userId },
+          include: tripInclude,
+        });
+        if (!current) throw new TripNotFoundError();
 
-    const startDate = input.startDate ?? formatDateOnly(current.startDate);
-    const endDate = input.endDate ?? formatDateOnly(current.endDate);
-    const { end, start } = normalizeTripDates(startDate, endDate);
-    const itineraryDays = await transaction.itineraryDay.findMany({
-      where: { tripId },
-      select: { id: true, date: true, _count: { select: { items: true } } },
-    });
+        const startDate = input.startDate ?? formatDateOnly(current.startDate);
+        const endDate = input.endDate ?? formatDateOnly(current.endDate);
+        const { end, start } = normalizeTripDates(startDate, endDate);
+        const itineraryDays = await transaction.itineraryDay.findMany({
+          where: { tripId },
+          select: {
+            id: true,
+            date: true,
+            name: true,
+            notes: true,
+            updatedAt: true,
+            dailyBaseTripPlaceId: true,
+            dailyBaseDepartureTripPlaceId: true,
+            _count: { select: { items: true } },
+          },
+        });
 
-    // The plan is anchored to the day the trip begins: day one stays day one.
-    // Re-anchoring the existing days here, before the reconciliation below,
-    // turns "delete seven days and make seven more" into "the same seven days, a
-    // week later" - and whatever length the trip gained or lost is then settled
-    // at its end by the reconciliation, unchanged.
-    //
-    // Requiring both ends to move together would have been the narrower rule,
-    // but it leaves a trip moved *and* lengthened in one edit matching neither
-    // case, which is how "a week later, and a day longer" used to empty the
-    // whole itinerary into Unscheduled. The cost of anchoring on the start is
-    // that pulling the start date earlier on its own carries the plan back with
-    // it and leaves the blank days at the end rather than the beginning - and
-    // that only happens if both fields are edited deliberately, since choosing a
-    // start date takes the end date with it.
-    const offsetDays = dayOffset(formatDateOnly(current.startDate), startDate);
-    const targetDates = new Map(
-      itineraryDays.map((day) => {
-        const currentDate = formatDateOnly(day.date);
-        return [
-          day.id,
-          offsetDays === 0 ? currentDate : shiftDateOnly(currentDate, offsetDays),
-        ] as const;
-      }),
-    );
-    const dateChanges = getDateRangeChanges([...targetDates.values()], startDate, endDate);
-    const removedDateSet = new Set(dateChanges.removedDates);
-    const removedDays = itineraryDays.filter((day) =>
-      removedDateSet.has(targetDates.get(day.id) as string),
-    );
-    const affectedItemCount = removedDays.reduce((count, day) => count + day._count.items, 0);
+        // The plan is anchored to the day the trip begins: day one stays day one.
+        // Re-anchoring the existing days here, before the reconciliation below,
+        // turns "delete seven days and make seven more" into "the same seven days, a
+        // week later" - and whatever length the trip gained or lost is then settled
+        // at its end by the reconciliation, unchanged.
+        //
+        // Requiring both ends to move together would have been the narrower rule,
+        // but it leaves a trip moved *and* lengthened in one edit matching neither
+        // case, which is how "a week later, and a day longer" used to empty the
+        // whole itinerary into Unscheduled. The cost of anchoring on the start is
+        // that pulling the start date earlier on its own carries the plan back with
+        // it and leaves the blank days at the end rather than the beginning - and
+        // that only happens if both fields are edited deliberately, since choosing a
+        // start date takes the end date with it.
+        const offsetDays = dayOffset(formatDateOnly(current.startDate), startDate);
+        const targetDates = new Map(
+          itineraryDays.map((day) => {
+            const currentDate = formatDateOnly(day.date);
+            return [
+              day.id,
+              offsetDays === 0 ? currentDate : shiftDateOnly(currentDate, offsetDays),
+            ] as const;
+          }),
+        );
+        const dateChanges = getDateRangeChanges([...targetDates.values()], startDate, endDate);
+        const removedDateSet = new Set(dateChanges.removedDates);
+        const removedDays = itineraryDays.filter((day) =>
+          removedDateSet.has(targetDates.get(day.id) as string),
+        );
+        const affectedItemCount = removedDays.reduce((count, day) => count + day._count.items, 0);
 
-    if (affectedItemCount > 0 && !input.confirmDateShrink) {
-      throw new TripDateShrinkConfirmationError(affectedItemCount);
-    }
-
-    const destinations = input.destinations
-      ? await Promise.all(
-          input.destinations.map((destination) =>
-            findOrCreateCustomPlace(
+        const impact = removedDays.length
+          ? await tripShrinkImpact(
               transaction,
-              userId,
-              destination.name,
-              resolveCountryPrimaryTimeZone(destination.name),
-            ),
-          ),
-        )
-      : current.destinations.map((destination) => destination.place);
-    const startingPlace =
-      input.startingLocation === undefined
-        ? current.startingPlace
-        : input.startingLocation?.trim()
-          ? await findOrCreateCustomPlace(transaction, userId, input.startingLocation)
+              tripId,
+              current.updatedAt,
+              itineraryDays,
+              targetDates,
+              removedDays.map((day) => day.id),
+              startDate,
+              endDate,
+            )
           : null;
-    const shouldResolveTimeZone =
-      input.countries !== undefined ||
-      input.destinations !== undefined ||
-      input.startingLocation !== undefined ||
-      input.referenceTimeZone !== undefined;
-    const timeZone = shouldResolveTimeZone
-      ? resolveTripTimeZone({
-          countries: input.countries ?? current.countries,
-          destinations: destinations.map((place) => ({
-            placeId: place.id,
-            timeZone: place.customTimeZone,
-          })),
-          deviceTimeZone:
-            current.referenceTimeZoneSource === 'DEVICE_FALLBACK'
-              ? current.referenceTimeZone
-              : (input.deviceTimeZone ?? current.referenceTimeZone),
-          explicitTimeZone: input.referenceTimeZone,
-          profileHome: toProfileHomeCandidate(current.owner),
-          startingLocation: toTimeZoneCandidate(startingPlace),
-        })
-      : {
-          source: current.referenceTimeZoneSource,
-          sourcePlaceId: current.referenceTimeZoneSourcePlaceId,
-          timeZone: current.referenceTimeZone,
-        };
+        let mergedNotes = new Map<string, string>();
+        if (impact && hasShrinkContent(impact)) {
+          if (!input.confirmDateShrink || input.shrinkRevision !== impact.revision) {
+            throw new TripDateShrinkConfirmationError(affectedItemCount, impact);
+          }
+          try {
+            mergedNotes = reassignedDayNotes(impact, input.noteResolutions ?? []);
+          } catch (error) {
+            throw new TripValidationError(
+              (error as Error).message as
+                | 'invalid_note_resolution'
+                | 'note_resolution_required'
+                | 'reassigned_notes_too_long',
+            );
+          }
+        }
 
-    const movedFloatingInstants =
-      offsetDays === 0
-        ? []
-        : await deriveMovedFloatingInstants(
-            transaction,
-            tripId,
-            targetDates,
-            itineraryDays
-              .filter((day) => !removedDateSet.has(targetDates.get(day.id) as string))
-              .map((day) => day.id),
-            shouldResolveTimeZone ? timeZone.timeZone : null,
+        const destinations = input.destinations
+          ? await Promise.all(
+              input.destinations.map((destination) =>
+                findOrCreateCustomPlace(
+                  transaction,
+                  userId,
+                  destination.name,
+                  resolveCountryPrimaryTimeZone(destination.name),
+                ),
+              ),
+            )
+          : current.destinations.map((destination) => destination.place);
+        const startingPlace =
+          input.startingLocation === undefined
+            ? current.startingPlace
+            : input.startingLocation?.trim()
+              ? await findOrCreateCustomPlace(transaction, userId, input.startingLocation)
+              : null;
+        const shouldResolveTimeZone =
+          input.countries !== undefined ||
+          input.destinations !== undefined ||
+          input.startingLocation !== undefined ||
+          input.referenceTimeZone !== undefined;
+        const timeZone = shouldResolveTimeZone
+          ? resolveTripTimeZone({
+              countries: input.countries ?? current.countries,
+              destinations: destinations.map((place) => ({
+                placeId: place.id,
+                timeZone: place.customTimeZone,
+              })),
+              deviceTimeZone:
+                current.referenceTimeZoneSource === 'DEVICE_FALLBACK'
+                  ? current.referenceTimeZone
+                  : (input.deviceTimeZone ?? current.referenceTimeZone),
+              explicitTimeZone: input.referenceTimeZone,
+              profileHome: toProfileHomeCandidate(current.owner),
+              startingLocation: toTimeZoneCandidate(startingPlace),
+            })
+          : {
+              source: current.referenceTimeZoneSource,
+              sourcePlaceId: current.referenceTimeZoneSourcePlaceId,
+              timeZone: current.referenceTimeZone,
+            };
+
+        const movedFloatingInstants =
+          offsetDays === 0
+            ? []
+            : await deriveMovedFloatingInstants(
+                transaction,
+                tripId,
+                targetDates,
+                itineraryDays
+                  .filter((day) => !removedDateSet.has(targetDates.get(day.id) as string))
+                  .map((day) => day.id),
+                shouldResolveTimeZone ? timeZone.timeZone : null,
+              );
+
+        if (offsetDays !== 0) {
+          // One day at a time, in the order that keeps every intermediate state
+          // unique: a trip nudged a single day forward has its whole range overlap
+          // its old one, and `@@unique([tripId, date])` is checked per row.
+          const ordered = [...itineraryDays].sort((left, right) =>
+            offsetDays > 0
+              ? right.date.getTime() - left.date.getTime()
+              : left.date.getTime() - right.date.getTime(),
           );
 
-    if (offsetDays !== 0) {
-      // One day at a time, in the order that keeps every intermediate state
-      // unique: a trip nudged a single day forward has its whole range overlap
-      // its old one, and `@@unique([tripId, date])` is checked per row.
-      const ordered = [...itineraryDays].sort((left, right) =>
-        offsetDays > 0
-          ? right.date.getTime() - left.date.getTime()
-          : left.date.getTime() - right.date.getTime(),
-      );
+          for (const day of ordered) {
+            await transaction.itineraryDay.update({
+              data: { date: parseDateOnly(targetDates.get(day.id) as string) },
+              where: { id: day.id },
+            });
+          }
+        }
 
-      for (const day of ordered) {
-        await transaction.itineraryDay.update({
-          data: { date: parseDateOnly(targetDates.get(day.id) as string) },
-          where: { id: day.id },
-        });
-      }
-    }
+        for (const day of impact?.retainedDays ?? []) {
+          const notes = mergedNotes.get(day.id);
+          if (notes !== undefined && notes !== (day.notes ?? '')) {
+            await transaction.itineraryDay.update({ where: { id: day.id }, data: { notes } });
+          }
+        }
+        const removedDayIds = removedDays.map((day) => day.id);
+        if (removedDayIds.length) {
+          if (affectedItemCount > 0) {
+            const [removedItems, unscheduledPositions] = await Promise.all([
+              transaction.itineraryItem.findMany({
+                where: { tripId, itineraryDayId: { in: removedDayIds } },
+                select: { id: true, itineraryDay: { select: { date: true } }, position: true },
+                orderBy: [{ itineraryDay: { date: 'asc' } }, { position: 'asc' }],
+              }),
+              transaction.itineraryItem.aggregate({
+                where: { tripId, itineraryDayId: null },
+                _max: { position: true },
+              }),
+            ]);
+            const firstUnscheduledPosition = (unscheduledPositions._max.position ?? -1) + 1;
 
-    const removedDayIds = removedDays.map((day) => day.id);
-    if (removedDayIds.length) {
-      if (affectedItemCount > 0) {
-        const [removedItems, unscheduledPositions] = await Promise.all([
-          transaction.itineraryItem.findMany({
-            where: { tripId, itineraryDayId: { in: removedDayIds } },
-            select: { id: true, itineraryDay: { select: { date: true } }, position: true },
-            orderBy: [{ itineraryDay: { date: 'asc' } }, { position: 'asc' }],
-          }),
-          transaction.itineraryItem.aggregate({
-            where: { tripId, itineraryDayId: null },
-            _max: { position: true },
-          }),
-        ]);
-        const firstUnscheduledPosition = (unscheduledPositions._max.position ?? -1) + 1;
+            for (const [index, item] of removedItems.entries()) {
+              await transaction.itineraryItem.update({
+                where: { id: item.id },
+                data: {
+                  itineraryDayId: null,
+                  position: firstUnscheduledPosition + index,
+                },
+              });
+            }
+          }
+          // Memories, tasks, and expenses outlive the day they were filed against;
+          // detach before removal so a shorter trip never discards them.
+          const detached = {
+            data: { itineraryDayId: null },
+            where: { itineraryDayId: { in: removedDayIds }, tripId },
+          } as const;
+          await transaction.memory.updateMany(detached);
+          await transaction.task.updateMany(detached);
+          await transaction.expense.updateMany(detached);
+          await transaction.itineraryDay.deleteMany({
+            where: { id: { in: removedDayIds }, tripId },
+          });
+        }
 
-        for (const [index, item] of removedItems.entries()) {
-          await transaction.itineraryItem.update({
-            where: { id: item.id },
+        if (dateChanges.missingDates.length) {
+          await transaction.itineraryDay.createMany({
+            data: dateChanges.missingDates.map((date) => ({
+              date: parseDateOnly(date),
+              defaultTimeZone: timeZone.timeZone,
+              defaultTimeZoneSource: 'TRIP_REFERENCE',
+              tripId,
+            })),
+          });
+        }
+
+        await writeMovedFloatingInstants(transaction, movedFloatingInstants);
+
+        if (input.destinations !== undefined) {
+          await transaction.tripDestination.deleteMany({ where: { tripId } });
+          if (destinations.length) {
+            await transaction.tripDestination.createMany({
+              data: destinations.map((place, position) => ({
+                placeId: place.id,
+                position,
+                timeZone: place.customTimeZone,
+                timeZoneResolvedAt: place.customTimeZone ? new Date() : null,
+                tripId,
+              })),
+            });
+          }
+        }
+
+        if (shouldResolveTimeZone) {
+          // Existing day defaults that still inherit the trip reference must move
+          // before a later item creation snapshots that day default. Explicit daily
+          // bases and location-derived defaults intentionally remain untouched.
+          await transaction.itineraryDay.updateMany({
+            where: { defaultTimeZoneSource: 'TRIP_REFERENCE', tripId },
             data: {
-              itineraryDayId: null,
-              position: firstUnscheduledPosition + index,
+              defaultTimeZone: timeZone.timeZone,
+              defaultTimeZoneResolvedAt: new Date(),
             },
           });
         }
-      }
-      // Memories, tasks, and expenses outlive the day they were filed against;
-      // detach before removal so a shorter trip never discards them.
-      const detached = {
-        data: { itineraryDayId: null },
-        where: { itineraryDayId: { in: removedDayIds }, tripId },
-      } as const;
-      await transaction.memory.updateMany(detached);
-      await transaction.task.updateMany(detached);
-      await transaction.expense.updateMany(detached);
-      await transaction.itineraryDay.deleteMany({ where: { id: { in: removedDayIds }, tripId } });
-    }
 
-    if (dateChanges.missingDates.length) {
-      await transaction.itineraryDay.createMany({
-        data: dateChanges.missingDates.map((date) => ({
-          date: parseDateOnly(date),
-          defaultTimeZone: timeZone.timeZone,
-          defaultTimeZoneSource: 'TRIP_REFERENCE',
-          tripId,
-        })),
-      });
-    }
-
-    await writeMovedFloatingInstants(transaction, movedFloatingInstants);
-
-    if (input.destinations !== undefined) {
-      await transaction.tripDestination.deleteMany({ where: { tripId } });
-      if (destinations.length) {
-        await transaction.tripDestination.createMany({
-          data: destinations.map((place, position) => ({
-            placeId: place.id,
-            position,
-            timeZone: place.customTimeZone,
-            timeZoneResolvedAt: place.customTimeZone ? new Date() : null,
-            tripId,
-          })),
+        await transaction.trip.update({
+          where: { id: tripId },
+          data: {
+            ...(input.countries !== undefined ? { countries: input.countries } : {}),
+            ...(input.coverPhotoPath !== undefined ? { coverPhotoPath: input.coverPhotoPath } : {}),
+            ...(input.description !== undefined
+              ? { description: input.description?.trim() || null }
+              : {}),
+            endDate: end,
+            ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+            ...(input.partySize !== undefined ? { partySize: input.partySize } : {}),
+            ...(input.planningReadiness !== undefined
+              ? { planningReadiness: input.planningReadiness === 'ready' ? 'READY' : 'IN_PROGRESS' }
+              : {}),
+            ...(shouldResolveTimeZone
+              ? {
+                  referenceTimeZone: timeZone.timeZone,
+                  referenceTimeZoneResolvedAt: new Date(),
+                  referenceTimeZoneSource: timeZone.source,
+                  referenceTimeZoneSourcePlaceId: timeZone.sourcePlaceId,
+                }
+              : {}),
+            startDate: start,
+            ...(input.startingLocation !== undefined
+              ? { startingPlaceId: startingPlace?.id ?? null }
+              : {}),
+          },
         });
-      }
-    }
-
-    if (shouldResolveTimeZone) {
-      // Existing day defaults that still inherit the trip reference must move
-      // before a later item creation snapshots that day default. Explicit daily
-      // bases and location-derived defaults intentionally remain untouched.
-      await transaction.itineraryDay.updateMany({
-        where: { defaultTimeZoneSource: 'TRIP_REFERENCE', tripId },
-        data: {
-          defaultTimeZone: timeZone.timeZone,
-          defaultTimeZoneResolvedAt: new Date(),
-        },
-      });
-    }
-
-    await transaction.trip.update({
-      where: { id: tripId },
-      data: {
-        ...(input.countries !== undefined ? { countries: input.countries } : {}),
-        ...(input.coverPhotoPath !== undefined ? { coverPhotoPath: input.coverPhotoPath } : {}),
-        ...(input.description !== undefined
-          ? { description: input.description?.trim() || null }
-          : {}),
-        endDate: end,
-        ...(input.name !== undefined ? { name: input.name.trim() } : {}),
-        ...(input.partySize !== undefined ? { partySize: input.partySize } : {}),
-        ...(input.planningReadiness !== undefined
-          ? { planningReadiness: input.planningReadiness === 'ready' ? 'READY' : 'IN_PROGRESS' }
-          : {}),
-        ...(shouldResolveTimeZone
-          ? {
-              referenceTimeZone: timeZone.timeZone,
-              referenceTimeZoneResolvedAt: new Date(),
-              referenceTimeZoneSource: timeZone.source,
-              referenceTimeZoneSourcePlaceId: timeZone.sourcePlaceId,
-            }
-          : {}),
-        startDate: start,
-        ...(input.startingLocation !== undefined
-          ? { startingPlaceId: startingPlace?.id ?? null }
-          : {}),
       },
+      { isolationLevel: 'Serializable' },
+    )
+    .catch((error: unknown) => {
+      if (typeof error === 'object' && error && 'code' in error && error.code === 'P2034') {
+        throw new TripDateConflictError();
+      }
+      throw error;
     });
-  });
 
   return getTrip(userId, accessToken, tripId);
 }

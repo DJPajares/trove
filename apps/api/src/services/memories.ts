@@ -262,6 +262,13 @@ export async function listMemories(userId: string, tripId: string, accessToken: 
   const supabase = accessToken ? createAuthenticatedSupabaseClient(accessToken) : null;
 
   return {
+    dayExperiences: (
+      await prisma.dayExperience.findMany({ where: { tripId }, orderBy: { date: 'asc' } })
+    ).map((entry) => ({
+      date: formatDateOnly(entry.date),
+      rating: entry.rating,
+      note: entry.note,
+    })),
     memories: await Promise.all(memories.map((memory) => serializeMemory(memory, supabase))),
     storyCover: await serializeStoryCover(trip, supabase),
   };

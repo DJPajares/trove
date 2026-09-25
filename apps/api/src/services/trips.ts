@@ -61,6 +61,17 @@ export class TripDateShrinkConfirmationError extends Error {
   }
 }
 
+export class TripDateMoveInvalidLocalTimeError extends Error {
+  constructor(
+    public readonly itemId: string,
+    public readonly itemLabel: string | null,
+    public readonly targetDate: string,
+    public readonly localTime: string,
+  ) {
+    super('trip_date_move_invalid_local_time');
+  }
+}
+
 const tripInclude = {
   // Lets completed-trip surfaces offer Memories only when there are some to open.
   _count: { select: { memories: true } },
@@ -223,51 +234,73 @@ async function findOwnedTrip(userId: string, tripId: string) {
   });
 }
 
-/**
- * Re-derives the absolute instant of every timed item from the day it now sits
- * on.
- *
- * `startInstant` is a materialised answer to "when, exactly" - built once from
- * the day's date, the item's local time and its zone. Move the day and the
- * stored instant still points at the old calendar date, so it has to be worked
- * out again. An item whose local time does not exist on the new date, because
- * the clocks went forward through it, has no instant to give: that is recorded
- * as nothing rather than allowed to fail the move, since the time of day the
- * traveller wrote down is still the truth.
- */
-async function recomputeItemInstants(transaction: Prisma.TransactionClient, tripId: string) {
+/** Preflight only retained floating plans, before any day or item is written. */
+async function deriveMovedFloatingInstants(
+  transaction: Prisma.TransactionClient,
+  tripId: string,
+  targetDates: Map<string, string>,
+  retainedDayIds: string[],
+  updatedReferenceTimeZone: string | null,
+) {
+  if (!retainedDayIds.length) return [];
   const timedItems = await transaction.itineraryItem.findMany({
-    where: { tripId, itineraryDayId: { not: null }, localStartTime: { not: null } },
+    where: {
+      tripId,
+      itineraryDayId: { in: retainedDayIds },
+      localStartTime: { not: null },
+      timeSemantics: 'FLOATING_LOCAL',
+    },
     select: {
+      customLabel: true,
       id: true,
+      itineraryDayId: true,
       localStartTime: true,
       timeZone: true,
-      itineraryDay: { select: { date: true, defaultTimeZone: true } },
+      itineraryDay: { select: { defaultTimeZone: true, defaultTimeZoneSource: true } },
+      tripPlace: { select: { place: { select: { customName: true, providerLabel: true } } } },
     },
   });
 
   const rows: Prisma.Sql[] = [];
 
   for (const item of timedItems) {
-    if (!item.itineraryDay) continue;
+    if (!item.itineraryDayId || !item.itineraryDay) continue;
     const localTime = formatLocalTime(item.localStartTime);
     if (!localTime) continue;
 
-    const date = formatDateOnly(item.itineraryDay.date);
-    const timeZone = item.timeZone ?? item.itineraryDay.defaultTimeZone;
-    let startInstant: Date | null = null;
+    const date = targetDates.get(item.itineraryDayId);
+    if (!date) continue;
+    const timeZone =
+      item.timeZone ??
+      (item.itineraryDay.defaultTimeZoneSource === 'TRIP_REFERENCE' && updatedReferenceTimeZone
+        ? updatedReferenceTimeZone
+        : item.itineraryDay.defaultTimeZone);
+    if (!isValidIanaTimeZone(timeZone)) throw new TripValidationError('invalid_time_zone');
+    let startInstant: Date;
     try {
       startInstant = floatingLocalTimeToInstant(date, localTime, timeZone);
     } catch {
-      startInstant = null;
+      throw new TripDateMoveInvalidLocalTimeError(
+        item.id,
+        item.customLabel ??
+          item.tripPlace?.place.customName ??
+          item.tripPlace?.place.providerLabel ??
+          null,
+        date,
+        localTime,
+      );
     }
 
-    // Postgres reads the column's type from the first tuple, and the first item
-    // of a trip is as likely as any other to be the one with no instant, so
-    // every row says what it is rather than leaving it to be inferred.
     rows.push(Prisma.sql`(${item.id}::uuid, ${startInstant}::timestamptz)`);
   }
 
+  return rows;
+}
+
+async function writeMovedFloatingInstants(
+  transaction: Prisma.TransactionClient,
+  rows: Prisma.Sql[],
+) {
   if (!rows.length) return;
 
   // One statement rather than one per item. Each instant was worked out above
@@ -469,6 +502,46 @@ export async function updateTrip(
     const startDate = input.startDate ?? formatDateOnly(current.startDate);
     const endDate = input.endDate ?? formatDateOnly(current.endDate);
     const { end, start } = normalizeTripDates(startDate, endDate);
+    const itineraryDays = await transaction.itineraryDay.findMany({
+      where: { tripId },
+      select: { id: true, date: true, _count: { select: { items: true } } },
+    });
+
+    // The plan is anchored to the day the trip begins: day one stays day one.
+    // Re-anchoring the existing days here, before the reconciliation below,
+    // turns "delete seven days and make seven more" into "the same seven days, a
+    // week later" - and whatever length the trip gained or lost is then settled
+    // at its end by the reconciliation, unchanged.
+    //
+    // Requiring both ends to move together would have been the narrower rule,
+    // but it leaves a trip moved *and* lengthened in one edit matching neither
+    // case, which is how "a week later, and a day longer" used to empty the
+    // whole itinerary into Unscheduled. The cost of anchoring on the start is
+    // that pulling the start date earlier on its own carries the plan back with
+    // it and leaves the blank days at the end rather than the beginning - and
+    // that only happens if both fields are edited deliberately, since choosing a
+    // start date takes the end date with it.
+    const offsetDays = dayOffset(formatDateOnly(current.startDate), startDate);
+    const targetDates = new Map(
+      itineraryDays.map((day) => {
+        const currentDate = formatDateOnly(day.date);
+        return [
+          day.id,
+          offsetDays === 0 ? currentDate : shiftDateOnly(currentDate, offsetDays),
+        ] as const;
+      }),
+    );
+    const dateChanges = getDateRangeChanges([...targetDates.values()], startDate, endDate);
+    const removedDateSet = new Set(dateChanges.removedDates);
+    const removedDays = itineraryDays.filter((day) =>
+      removedDateSet.has(targetDates.get(day.id) as string),
+    );
+    const affectedItemCount = removedDays.reduce((count, day) => count + day._count.items, 0);
+
+    if (affectedItemCount > 0 && !input.confirmDateShrink) {
+      throw new TripDateShrinkConfirmationError(affectedItemCount);
+    }
+
     const destinations = input.destinations
       ? await Promise.all(
           input.destinations.map((destination) =>
@@ -513,27 +586,18 @@ export async function updateTrip(
           timeZone: current.referenceTimeZone,
         };
 
-    const itineraryDays = await transaction.itineraryDay.findMany({
-      where: { tripId },
-      select: { id: true, date: true, _count: { select: { items: true } } },
-    });
-
-    // The plan is anchored to the day the trip begins: day one stays day one.
-    // Re-anchoring the existing days here, before the reconciliation below,
-    // turns "delete seven days and make seven more" into "the same seven days, a
-    // week later" - and whatever length the trip gained or lost is then settled
-    // at its end by the reconciliation, unchanged.
-    //
-    // Requiring both ends to move together would have been the narrower rule,
-    // but it leaves a trip moved *and* lengthened in one edit matching neither
-    // case, which is how "a week later, and a day longer" used to empty the
-    // whole itinerary into Unscheduled. The cost of anchoring on the start is
-    // that pulling the start date earlier on its own carries the plan back with
-    // it and leaves the blank days at the end rather than the beginning - and
-    // that only happens if both fields are edited deliberately, since choosing a
-    // start date takes the end date with it.
-    const offsetDays = dayOffset(formatDateOnly(current.startDate), startDate);
-    const dayDates = new Map(itineraryDays.map((day) => [day.id, formatDateOnly(day.date)]));
+    const movedFloatingInstants =
+      offsetDays === 0
+        ? []
+        : await deriveMovedFloatingInstants(
+            transaction,
+            tripId,
+            targetDates,
+            itineraryDays
+              .filter((day) => !removedDateSet.has(targetDates.get(day.id) as string))
+              .map((day) => day.id),
+            shouldResolveTimeZone ? timeZone.timeZone : null,
+          );
 
     if (offsetDays !== 0) {
       // One day at a time, in the order that keeps every intermediate state
@@ -546,26 +610,11 @@ export async function updateTrip(
       );
 
       for (const day of ordered) {
-        const movedDate = shiftDateOnly(dayDates.get(day.id) as string, offsetDays);
-        dayDates.set(day.id, movedDate);
         await transaction.itineraryDay.update({
-          data: { date: parseDateOnly(movedDate) },
+          data: { date: parseDateOnly(targetDates.get(day.id) as string) },
           where: { id: day.id },
         });
       }
-
-      await recomputeItemInstants(transaction, tripId);
-    }
-
-    const dateChanges = getDateRangeChanges([...dayDates.values()], startDate, endDate);
-    const removedDateSet = new Set(dateChanges.removedDates);
-    const removedDays = itineraryDays.filter((day) =>
-      removedDateSet.has(dayDates.get(day.id) as string),
-    );
-    const affectedItemCount = removedDays.reduce((count, day) => count + day._count.items, 0);
-
-    if (affectedItemCount > 0 && !input.confirmDateShrink) {
-      throw new TripDateShrinkConfirmationError(affectedItemCount);
     }
 
     const removedDayIds = removedDays.map((day) => day.id);
@@ -616,6 +665,8 @@ export async function updateTrip(
         })),
       });
     }
+
+    await writeMovedFloatingInstants(transaction, movedFloatingInstants);
 
     if (input.destinations !== undefined) {
       await transaction.tripDestination.deleteMany({ where: { tripId } });

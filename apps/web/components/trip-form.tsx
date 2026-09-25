@@ -250,6 +250,26 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
     onSaved(result.trip);
   }
 
+  function showDateMoveError(saveError: unknown) {
+    if (
+      !(saveError instanceof TripApiError) ||
+      saveError.code !== 'trip_date_move_invalid_local_time' ||
+      !saveError.invalidMovedTime
+    ) {
+      return false;
+    }
+
+    const { itemLabel, localTime, targetDate } = saveError.invalidMovedTime;
+    setDateError(
+      t('dateMoveInvalidLocalTime', {
+        date: targetDate,
+        item: itemLabel ?? t('dateMoveUnnamedStop'),
+        time: localTime,
+      }),
+    );
+    return true;
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (savingRef.current) return;
@@ -291,11 +311,13 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
       }
 
       if (uploadedPath) await removeTripCover(uploadedPath).catch(() => undefined);
-      setError(
-        saveError instanceof TripApiError && saveError.code === 'trip_cover_upload_failed'
-          ? t('coverError')
-          : t('saveError'),
-      );
+      if (!showDateMoveError(saveError)) {
+        setError(
+          saveError instanceof TripApiError && saveError.code === 'trip_cover_upload_failed'
+            ? t('coverError')
+            : t('saveError'),
+        );
+      }
     } finally {
       // Released even on the way to the confirmation dialog, which is the one
       // path that leaves here still meaning to save.
@@ -316,12 +338,12 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
 
     try {
       await finishSave({ ...pendingShrink.input, confirmDateShrink: true });
-    } catch {
+    } catch (saveError) {
       if (pendingShrink.uploadedPath) {
         await removeTripCover(pendingShrink.uploadedPath).catch(() => undefined);
       }
       setPendingShrink(null);
-      setError(t('saveError'));
+      if (!showDateMoveError(saveError)) setError(t('saveError'));
     } finally {
       savingRef.current = false;
       setStatus('idle');

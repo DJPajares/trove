@@ -399,6 +399,8 @@
     "startDate": "Start date",
     "endDate": "End date",
     "dateRangeError": "End date must be the same as or later than the start date.",
+    "dateMoveInvalidLocalTime": "{item} is planned for {time} on {date}, but that local time does not exist there. Change the stop's time before moving the trip.",
+    "dateMoveUnnamedStop": "A stop",
     "tripDescription": "Description",
     "tripDescriptionPlaceholder": "What this trip is — the occasion, the shape of it, why you’re going",
     "tripDescriptionHint": "Shown on the trip, while you travel, and to anyone you share the trip with.",

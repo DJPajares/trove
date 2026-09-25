@@ -9,6 +9,7 @@ import {
   getTrip,
   listTrips,
   TripDateShrinkConfirmationError,
+  TripDateMoveInvalidLocalTimeError,
   TripNotFoundError,
   TripValidationError,
   updateTrip,
@@ -117,6 +118,15 @@ function handleTripError(error: unknown, reply: FastifyReply) {
     return reply.code(409).send({
       affectedItemCount: error.affectedItemCount,
       code: error.message,
+    });
+  }
+  if (error instanceof TripDateMoveInvalidLocalTimeError) {
+    return reply.code(400).send({
+      code: error.message,
+      itemId: error.itemId,
+      itemLabel: error.itemLabel,
+      localTime: error.localTime,
+      targetDate: error.targetDate,
     });
   }
   if (error instanceof TripValidationError) {

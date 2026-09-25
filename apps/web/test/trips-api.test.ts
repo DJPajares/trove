@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
+import type { TripApiError } from '../lib/trips/api.ts';
+
 vi.mock('@/lib/supabase/client', () => ({
   createBrowserSupabaseClient: () => ({}),
   getBrowserSession: async () => ({ access_token: 'token', user: { id: 'user-1' } }),
 }));
 
-const { deleteTrip } = await import('../lib/trips/api.ts');
+const { deleteTrip, saveTrip } = await import('../lib/trips/api.ts');
 
 beforeEach(() => {
   vi.stubGlobal('navigator', { onLine: true });
@@ -29,4 +31,32 @@ test('deleting a trip does not label an empty request body as JSON', async () =>
       method: 'DELETE',
     }),
   );
+});
+
+test('date-move validation keeps the affected stop context for the form', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({
+      ok: false,
+      status: 400,
+      json: async () => ({
+        code: 'trip_date_move_invalid_local_time',
+        itemId: 'stop-1',
+        itemLabel: 'Morning train',
+        localTime: '02:30',
+        targetDate: '2026-09-27',
+      }),
+    })),
+  );
+
+  await expect(saveTrip('trip-1', {} as Parameters<typeof saveTrip>[1])).rejects.toMatchObject({
+    code: 'trip_date_move_invalid_local_time',
+    invalidMovedTime: {
+      itemId: 'stop-1',
+      itemLabel: 'Morning train',
+      localTime: '02:30',
+      targetDate: '2026-09-27',
+    },
+    status: 400,
+  } satisfies Partial<TripApiError>);
 });

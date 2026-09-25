@@ -4,7 +4,7 @@ import { installFakePrismaClient, resetStore, store } from './support/fake-prism
 
 installFakePrismaClient();
 
-const { updateTrip } = await import('../src/services/trips.js');
+const { TripDateMoveInvalidLocalTimeError, updateTrip } = await import('../src/services/trips.js');
 
 const OWNER = 'owner-user-id';
 const TRIP = 'trip-kansai';
@@ -57,9 +57,26 @@ function seed() {
     localStartTime: new Date('1970-01-01T08:30:00.000Z'),
     position: 0,
     startInstant: new Date('2026-09-01T23:30:00.000Z'),
+    timeSemantics: 'FLOATING_LOCAL',
     timeZone: 'Asia/Tokyo',
     tripId: TRIP,
   });
+}
+
+function seedAuthoritativeItem(itineraryDayId: string = DAYS[1]) {
+  const item = {
+    customLabel: 'Booked departure',
+    id: `item-departure-${itineraryDayId}`,
+    itineraryDayId,
+    localStartTime: new Date('1970-01-01T18:00:00.000Z'),
+    position: 1,
+    startInstant: new Date('2026-09-02T09:00:00.000Z'),
+    timeSemantics: 'AUTHORITATIVE_INSTANT',
+    timeZone: 'Asia/Tokyo',
+    tripId: TRIP,
+  };
+  store.itineraryItem.push(item);
+  return item;
 }
 
 function dayShape() {
@@ -137,20 +154,111 @@ test('a timed item keeps its local time and gets a new instant', async () => {
   expect((item.startInstant as Date).toISOString()).toBe('2026-09-08T23:30:00.000Z');
 });
 
-test('an hour the clocks skip leaves the instant unanswered rather than failing', async () => {
+test('a move with a new trip reference zone uses that zone for inheriting floating times', async () => {
+  seed();
+  store.itineraryItem[0]!.timeZone = null;
+  const departure = seedAuthoritativeItem();
+  const originalDepartureInstant = departure.startInstant.toISOString();
+
+  await updateTrip(OWNER, '', TRIP, {
+    endDate: '2026-09-10',
+    referenceTimeZone: 'America/New_York',
+    startDate: '2026-09-08',
+  });
+
+  expect(store.itineraryItem[0]?.startInstant).toStrictEqual(new Date('2026-09-09T12:30:00.000Z'));
+  expect(departure.startInstant.toISOString()).toBe(originalDepartureInstant);
+  expect(departure.timeZone).toBe('Asia/Tokyo');
+});
+
+test.each([
+  { endDate: '2026-09-10', label: 'move' },
+  { endDate: '2026-09-12', label: 'move and extend' },
+  { endDate: '2026-09-09', label: 'move and shorten' },
+])('a $label preserves authoritative and supporting-record dates', async ({ endDate }) => {
+  seed();
+  const departure = seedAuthoritativeItem();
+  const originalInstant = departure.startInstant.toISOString();
+  const reservation = {
+    flightDepartureInstant: new Date('2026-09-02T09:00:00.000Z'),
+    id: 'reservation-flight',
+    tripId: TRIP,
+  };
+  const expense = {
+    id: 'expense-ticket',
+    localDate: new Date('2026-09-02T00:00:00.000Z'),
+    tripId: TRIP,
+  };
+  const memory = {
+    capturedInstant: new Date('2026-09-02T11:00:00.000Z'),
+    capturedLocalDate: new Date('2026-09-02T00:00:00.000Z'),
+    id: 'memory-departure',
+    tripId: TRIP,
+  };
+  store.reservation.push(reservation);
+  store.expense.push(expense);
+  store.memory.push(memory);
+
+  await updateTrip(OWNER, '', TRIP, {
+    confirmDateShrink: true,
+    endDate,
+    startDate: '2026-09-08',
+  });
+
+  expect(departure.startInstant.toISOString()).toBe(originalInstant);
+  expect(departure.localStartTime.toISOString().slice(11, 16)).toBe('18:00');
+  expect(store.itineraryItem[0]?.startInstant).toStrictEqual(new Date('2026-09-08T23:30:00.000Z'));
+  expect(store.itineraryItem[0]?.localStartTime).toStrictEqual(
+    new Date('1970-01-01T08:30:00.000Z'),
+  );
+  expect(reservation.flightDepartureInstant.toISOString()).toBe(originalInstant);
+  expect(expense.localDate.toISOString()).toBe('2026-09-02T00:00:00.000Z');
+  expect(memory.capturedInstant.toISOString()).toBe('2026-09-02T11:00:00.000Z');
+  expect(memory.capturedLocalDate.toISOString()).toBe('2026-09-02T00:00:00.000Z');
+});
+
+test('an authoritative item on a removed tail day keeps its instant when unscheduled', async () => {
+  seed();
+  const departure = seedAuthoritativeItem(DAYS[2]);
+  const originalInstant = departure.startInstant.toISOString();
+
+  await updateTrip(OWNER, '', TRIP, {
+    confirmDateShrink: true,
+    endDate: '2026-09-09',
+    startDate: '2026-09-08',
+  });
+
+  expect(departure.itineraryDayId).toBeNull();
+  expect(departure.startInstant.toISOString()).toBe(originalInstant);
+});
+
+test('a daylight-saving gap rejects the move before changing days or instants', async () => {
   seed();
   // Auckland jumps from 02:00 to 03:00 on 27 September 2026, so 02:30 that day
-  // never happens. The move must still land.
+  // never happens. The edit must fail without moving the trip.
   store.trip[0]!.referenceTimeZone = 'Pacific/Auckland';
   for (const row of store.itineraryDay) row.defaultTimeZone = 'Pacific/Auckland';
   store.itineraryItem[0]!.timeZone = 'Pacific/Auckland';
   store.itineraryItem[0]!.localStartTime = new Date('1970-01-01T02:30:00.000Z');
+  const originalInstant = store.itineraryItem[0]!.startInstant;
 
-  await updateTrip(OWNER, '', TRIP, { endDate: '2026-09-28', startDate: '2026-09-26' });
+  await expect(
+    updateTrip(OWNER, '', TRIP, { endDate: '2026-09-28', startDate: '2026-09-26' }),
+  ).rejects.toMatchObject({
+    itemId: 'item-breakfast',
+    itemLabel: 'Breakfast',
+    localTime: '02:30',
+    targetDate: '2026-09-27',
+  } satisfies Partial<InstanceType<typeof TripDateMoveInvalidLocalTimeError>>);
 
   const skipped = store.itineraryItem[0]!;
-  expect(skipped.startInstant).toBeNull();
+  expect(skipped.startInstant).toBe(originalInstant);
   expect((skipped.localStartTime as Date).toISOString().slice(11, 16)).toBe('02:30');
+  expect(dayShape().map((row) => row.date)).toStrictEqual([
+    '2026-09-01',
+    '2026-09-02',
+    '2026-09-03',
+  ]);
 });
 
 test('changing only the end date still resizes rather than moving', async () => {

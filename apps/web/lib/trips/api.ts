@@ -107,6 +107,12 @@ export class TripApiError extends Error {
     public readonly code: string,
     public readonly status: number,
     public readonly affectedItemCount?: number,
+    public readonly invalidMovedTime?: {
+      itemId: string;
+      itemLabel: string | null;
+      localTime: string;
+      targetDate: string;
+    },
   ) {
     super(code);
   }
@@ -157,11 +163,26 @@ async function tripRequest<T>(path: string, init?: RequestInit) {
     const body = (await response.json().catch(() => ({}))) as {
       affectedItemCount?: number;
       code?: string;
+      itemId?: string;
+      itemLabel?: string | null;
+      localTime?: string;
+      targetDate?: string;
     };
     throw new TripApiError(
       body.code ?? `trip_request_failed_${response.status}`,
       response.status,
       body.affectedItemCount,
+      body.code === 'trip_date_move_invalid_local_time' &&
+        body.itemId &&
+        body.localTime &&
+        body.targetDate
+        ? {
+            itemId: body.itemId,
+            itemLabel: body.itemLabel ?? null,
+            localTime: body.localTime,
+            targetDate: body.targetDate,
+          }
+        : undefined,
     );
   }
 

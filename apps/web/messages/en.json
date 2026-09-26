@@ -502,7 +502,6 @@
       "previousDay": "Previous day",
       "nextDay": "Next day",
       "time": "Local time",
-      "timeDescription": "Uses the selected day's timezone. Route times are estimates, not future traffic.",
       "summary": "Preview · {date} · {time}"
     },
     "navigation": "Trip Mode navigation",

@@ -153,15 +153,21 @@ function TripModePreviewControls({
           </Button>
           <DatePicker
             activityCounts={activityCounts}
-            className="min-w-0 flex-1"
+            className="flex-1"
             clearable={false}
             id={`${idPrefix}-date`}
             label={t('preview.date')}
             max={endDate}
             min={startDate}
             onChange={(date) => date && onChange({ date })}
-            required
             value={selection.date}
+            required
+          />
+          <TimeInput
+            id={`${idPrefix}-time`}
+            onValueChange={(time) => time && onChange({ time })}
+            value={selection.time}
+            required
           />
           <Button
             aria-label={t('preview.nextDay')}
@@ -173,16 +179,6 @@ function TripModePreviewControls({
             <ChevronRight aria-hidden="true" />
           </Button>
         </div>
-      </Field>
-      <Field className="min-w-0">
-        <FieldLabel htmlFor={`${idPrefix}-time`}>{t('preview.time')}</FieldLabel>
-        <TimeInput
-          id={`${idPrefix}-time`}
-          onValueChange={(time) => time && onChange({ time })}
-          required
-          value={selection.time}
-        />
-        <FieldDescription>{t('preview.timeDescription')}</FieldDescription>
       </Field>
     </div>
   );

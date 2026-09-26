@@ -1,6 +1,6 @@
 'use client';
 
-import { Clock3, X } from 'lucide-react';
+import { Clock3 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import {
   useEffect,
@@ -514,22 +514,6 @@ export function TimeInput({
         type="text"
         value={segmentedDraft ? segmentedDraft.text : displayValue}
       />
-      {value ? (
-        <Button
-          aria-label={t('clear')}
-          className="absolute inset-y-1 right-10"
-          disabled={disabled}
-          onClick={() => {
-            clearDraft();
-            selectTime('');
-          }}
-          size="icon-sm"
-          type="button"
-          variant="ghost"
-        >
-          <X aria-hidden="true" />
-        </Button>
-      ) : null}
       {mobile ? (
         <>
           <Button

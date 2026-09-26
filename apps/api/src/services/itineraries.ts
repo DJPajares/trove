@@ -10,7 +10,7 @@ import {
   resolveItemTimeZone,
 } from './itinerary-rules.js';
 import { unlinkItineraryItemReferences } from './itinerary-item-deletion.js';
-import { hydratePlaceSnapshots } from './place-data.js';
+import { hydratePlaceSnapshots, resolvedPlaceTimeZone } from './place-data.js';
 import {
   placeProviderRefInclude,
   type PlaceSerializerOptions,
@@ -170,15 +170,14 @@ function serializeTripPlace(
   tripPlace: NonNullable<ItineraryItemRecord['tripPlace']>,
   options: PlaceSerializerOptions = {},
 ) {
+  const place = serializeCanonicalPlace(tripPlace.place, options);
   return {
     customName: tripPlace.customName,
     id: tripPlace.id,
     note: tripPlace.note,
     place: {
-      ...serializeCanonicalPlace(tripPlace.place, options),
-      // The day's local-time maths needs an IANA zone, which only a Custom
-      // Place carries; a provider snapshot holds a UTC offset, not a zone.
-      timeZone: tripPlace.place.customTimeZone,
+      ...place,
+      timeZone: place.location?.timeZone ?? null,
     },
     priority: mapPriority(tripPlace.priority),
   };
@@ -273,7 +272,7 @@ async function findTripPlace(
   if (!tripPlaceId) return null;
   const tripPlace = await transaction.tripPlace.findFirst({
     where: { id: tripPlaceId, tripId },
-    include: { place: true },
+    include: { place: { include: placeProviderRefInclude } },
   });
   if (!tripPlace) throw new ItineraryValidationError('trip_place_not_found');
   return tripPlace;
@@ -373,16 +372,16 @@ export async function refreshDayDefaultTimeZone(
   const day = await transaction.itineraryDay.findFirst({
     where: { id: itineraryDayId, tripId },
     include: {
-      dailyBaseTripPlace: { include: { place: true } },
+      dailyBaseTripPlace: { include: { place: { include: placeProviderRefInclude } } },
       items: {
         where: excludeItemId ? { id: { not: excludeItemId } } : undefined,
-        include: { tripPlace: { include: { place: true } } },
+        include: { tripPlace: { include: { place: { include: placeProviderRefInclude } } } },
         orderBy: { position: 'asc' },
       },
       accommodationReservations: {
         include: {
           reservation: {
-            include: { tripPlace: { include: { place: true } } },
+            include: { tripPlace: { include: { place: { include: placeProviderRefInclude } } } },
           },
         },
       },
@@ -393,12 +392,14 @@ export async function refreshDayDefaultTimeZone(
 
   const resolution = resolveDayTimeZone({
     accommodations: day.accommodationReservations.map(({ reservation }) => ({
-      timeZone: reservation.tripPlace?.place.customTimeZone ?? null,
+      timeZone: reservation.tripPlace?.place
+        ? resolvedPlaceTimeZone(reservation.tripPlace.place)
+        : null,
       tripPlaceId: reservation.tripPlaceId,
     })),
     dailyBase: day.dailyBaseTripPlace
       ? {
-          timeZone: day.dailyBaseTripPlace.place.customTimeZone,
+          timeZone: resolvedPlaceTimeZone(day.dailyBaseTripPlace.place),
           tripPlaceId: day.dailyBaseTripPlace.id,
         }
       : null,
@@ -406,7 +407,7 @@ export async function refreshDayDefaultTimeZone(
       customLocationTimeZone: item.customLocationTimeZone,
       id: item.id,
       tripPlaceId: item.tripPlaceId,
-      tripPlaceTimeZone: item.tripPlace?.place.customTimeZone ?? null,
+      tripPlaceTimeZone: item.tripPlace?.place ? resolvedPlaceTimeZone(item.tripPlace.place) : null,
     })),
     tripTimeZone: day.trip.referenceTimeZone,
   });
@@ -686,7 +687,9 @@ export async function moveItineraryDayPlan(
           findDay(transaction, tripId, sourceDayId),
           findDay(transaction, tripId, input.targetItineraryDayId),
         ]);
-        const itemInclude = { tripPlace: { include: { place: true } } } as const;
+        const itemInclude = {
+          tripPlace: { include: { place: { include: placeProviderRefInclude } } },
+        } as const;
         const [sourceItems, targetItems] = await Promise.all([
           transaction.itineraryItem.findMany({
             where: { itineraryDayId: sourceDay.id, tripId },
@@ -756,7 +759,9 @@ export async function moveItineraryDayPlan(
             ? resolveItemTimeZone({
                 customLocationTimeZone: item.customLocationTimeZone,
                 dayTimeZone: day.defaultTimeZone,
-                tripPlaceTimeZone: item.tripPlace?.place.customTimeZone ?? null,
+                tripPlaceTimeZone: item.tripPlace?.place
+                  ? resolvedPlaceTimeZone(item.tripPlace.place)
+                  : null,
               })
             : null;
           const schedule =
@@ -861,7 +866,9 @@ export async function organizeItineraryItem(
       ? resolveItemTimeZone({
           customLocationTimeZone: current.customLocationTimeZone,
           dayTimeZone: targetDay.defaultTimeZone,
-          tripPlaceTimeZone: targetTripPlace?.place.customTimeZone ?? null,
+          tripPlaceTimeZone: targetTripPlace?.place
+            ? resolvedPlaceTimeZone(targetTripPlace.place)
+            : null,
         })
       : null;
     const schedule =
@@ -1106,7 +1113,7 @@ export async function createItineraryItem(
     const timeZone = resolveItemTimeZone({
       customLocationTimeZone: customLocation.timeZone,
       dayTimeZone: day.defaultTimeZone,
-      tripPlaceTimeZone: tripPlace?.place.customTimeZone ?? null,
+      tripPlaceTimeZone: tripPlace?.place ? resolvedPlaceTimeZone(tripPlace.place) : null,
     });
     const position =
       (
@@ -1207,7 +1214,7 @@ export async function updateItineraryItem(
       ? resolveItemTimeZone({
           customLocationTimeZone: customLocation.timeZone,
           dayTimeZone: current.itineraryDay.defaultTimeZone,
-          tripPlaceTimeZone: tripPlace?.place.customTimeZone ?? null,
+          tripPlaceTimeZone: tripPlace?.place ? resolvedPlaceTimeZone(tripPlace.place) : null,
         })
       : {
           source: current.timeZoneSource ?? ('DAY_DEFAULT' as const),

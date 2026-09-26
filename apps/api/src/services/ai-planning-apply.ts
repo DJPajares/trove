@@ -19,6 +19,7 @@ import {
   resolveTripTimeZone,
 } from './trip-rules.js';
 import { normalizeReviewedCountries } from './ai-planning-countries.js';
+import { resolvedPlaceTimeZone } from './place-data.js';
 
 type ApplyPrisma = ReturnType<typeof getPrismaClient>;
 
@@ -74,12 +75,22 @@ function tripPlaceReferenceIds(draft: AiPlannerDraft) {
 }
 
 function placeTimeZone(input: {
-  customTimeZone: string | null;
+  place: {
+    customTimeZone: string | null;
+    kind: 'CUSTOM' | 'PROVIDER';
+    providerRefs: Array<{
+      cachedAt: Date | null;
+      cachedLatitude: { toNumber(): number } | null;
+      cachedLongitude: { toNumber(): number } | null;
+      externalPlaceId: string;
+      provider: 'GOOGLE';
+    }>;
+  };
   draftPlace: AiPlannerDraftPlace;
   providerAddress: string | null;
 }) {
   return (
-    input.customTimeZone ??
+    resolvedPlaceTimeZone(input.place) ??
     resolveCountryPrimaryTimeZone(input.providerAddress ?? '') ??
     resolveCountryPrimaryTimeZone(input.draftPlace.name)
   );
@@ -106,6 +117,7 @@ async function materializePlaces(
       kind: true,
       ownerId: true,
       providerAddress: true,
+      providerRefs: true,
     },
   });
   const storedById = new Map(storedVerified.map((place) => [place.id, place]));
@@ -127,7 +139,7 @@ async function materializePlaces(
         id: stored.id,
         name: draftPlace.name,
         timeZone: placeTimeZone({
-          customTimeZone: stored.customTimeZone,
+          place: stored,
           draftPlace,
           providerAddress: stored.providerAddress,
         }),

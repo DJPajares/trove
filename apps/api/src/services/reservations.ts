@@ -3,6 +3,8 @@ import { getPrismaClient, type Prisma } from '@trove/db';
 
 import { formatInstantInTimeZone, formatLocalTime, parseLocalTime } from './itinerary-rules.js';
 import { refreshDayDefaultTimeZone } from './itineraries.js';
+import { resolvedPlaceTimeZone } from './place-data.js';
+import { placeProviderRefInclude } from './place-serializer.js';
 import { createAuthenticatedSupabaseClient } from './supabase-auth.js';
 import { formatDateOnly, isValidIanaTimeZone } from './trip-rules.js';
 
@@ -189,7 +191,7 @@ async function findTripPlace(
   if (!tripPlaceId) return null;
   const tripPlace = await transaction.tripPlace.findFirst({
     where: { id: tripPlaceId, tripId },
-    include: { place: true },
+    include: { place: { include: placeProviderRefInclude } },
   });
   if (!tripPlace) throw new ReservationNotFoundError('trip_place_not_found');
   return tripPlace;
@@ -235,7 +237,9 @@ function resolveTimeZone(input: {
   tripPlace: Awaited<ReturnType<typeof findTripPlace>>;
   tripTimeZone: string;
 }) {
-  const tripPlaceTimeZone = input.tripPlace?.place.customTimeZone;
+  const tripPlaceTimeZone = input.tripPlace?.place
+    ? resolvedPlaceTimeZone(input.tripPlace.place)
+    : null;
   if (tripPlaceTimeZone && isValidIanaTimeZone(tripPlaceTimeZone)) {
     return { source: 'TRIP_PLACE' as const, timeZone: tripPlaceTimeZone };
   }

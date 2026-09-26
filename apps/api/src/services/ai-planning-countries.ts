@@ -2,6 +2,7 @@ import type { AiPlannerDraft } from '@trove/types';
 import { timeZoneForCountry } from '@trove/types/countries';
 import type { Prisma } from '@trove/db';
 
+import { resolvedPlaceTimeZone } from './place-data.js';
 import {
   resolveCountryPrimaryTimeZone,
   resolveDestinationCountryCode,
@@ -47,7 +48,13 @@ export async function countryCorrectionChangesTimeContext(
   const [storedPlaces, profile] = await Promise.all([
     transaction.place.findMany({
       where: { id: { in: verifiedIds } },
-      select: { customTimeZone: true, id: true, providerAddress: true },
+      select: {
+        customTimeZone: true,
+        id: true,
+        kind: true,
+        providerAddress: true,
+        providerRefs: true,
+      },
     }),
     transaction.profile.findUnique({ where: { id: ownerId }, select: { homeTimeZone: true } }),
   ]);
@@ -57,7 +64,7 @@ export async function countryCorrectionChangesTimeContext(
       const provider = place.resolution === 'verified' ? stored.get(place.placeId) : null;
       return [
         place.id,
-        provider?.customTimeZone ??
+        (provider ? resolvedPlaceTimeZone(provider) : null) ??
           resolveCountryPrimaryTimeZone(provider?.providerAddress ?? '') ??
           resolveCountryPrimaryTimeZone(place.name),
       ] as const;

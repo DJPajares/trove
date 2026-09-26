@@ -7,6 +7,7 @@ import {
   deriveCapturedLocal,
   resolveMemoryTimeZone,
 } from './memories-rules.js';
+import { resolvedPlaceTimeZone } from './place-data.js';
 import { placeProviderRefInclude, serializePlaceReference } from './place-serializer.js';
 import { createAuthenticatedSupabaseClient } from './supabase-auth.js';
 import { formatDateOnly } from './trip-rules.js';
@@ -137,7 +138,12 @@ async function resolveContext(
     context.tripPlaceId
       ? transaction.tripPlace.findFirst({
           where: { id: context.tripPlaceId, tripId },
-          select: { id: true, place: { select: { customTimeZone: true } } },
+          select: {
+            id: true,
+            place: {
+              select: { customTimeZone: true, kind: true, providerRefs: true },
+            },
+          },
         })
       : null,
   ]);
@@ -149,7 +155,7 @@ async function resolveContext(
   return resolveMemoryTimeZone({
     itineraryDayTimeZone: day?.defaultTimeZone ?? null,
     itineraryItemTimeZone: item?.timeZone ?? null,
-    tripPlaceTimeZone: tripPlace?.place.customTimeZone ?? null,
+    tripPlaceTimeZone: tripPlace?.place ? resolvedPlaceTimeZone(tripPlace.place) : null,
     tripTimeZone,
   });
 }

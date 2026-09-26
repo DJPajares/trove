@@ -1,7 +1,8 @@
 import { getPrismaClient } from '@trove/db';
 
-import { hydratePlaceSnapshot, isSnapshotFresh, type PlaceSnapshotSource } from './place-data.js';
+import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
 import { normalizePlaceLanguageCode } from './place-language.js';
+import { hydratePlaceSnapshot, isSnapshotFresh, type PlaceSnapshotSource } from './place-data.js';
 import {
   type CanonicalPlace,
   placeProviderRefInclude,
@@ -239,6 +240,7 @@ class PrismaCanonicalPlaceRepository implements CanonicalPlaceRepository {
         cachedName: identity.name,
         cachedPrimaryType: identity.primaryType,
         cachedTypes: identity.rawTypes,
+        cachedTimeZone: timeZoneAtCoordinates(identity.location),
         cachedUtcOffsetMinutes: identity.utcOffsetMinutes,
         detailsFailedAt: null,
         detailsFailureCode: null,

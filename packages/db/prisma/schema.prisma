@@ -413,6 +413,9 @@ model PlaceProviderRef {
   cachedTypes            String[]  @default([]) @map("cached_types")
   cachedGoogleMapsUri    String?   @map("cached_google_maps_uri") @db.Text
   cachedUtcOffsetMinutes Int?      @map("cached_utc_offset_minutes")
+  /// Derived from the cached coordinates using offline timezone boundaries.
+  /// It has the same freshness/permission boundary as the location snapshot.
+  cachedTimeZone         String?   @map("cached_time_zone")
   /// The language the snapshot was fetched in. A name is language-specific, so
   /// a snapshot may only answer a request asking for the same language.
   cachedLanguageCode     String?   @map("cached_language_code")

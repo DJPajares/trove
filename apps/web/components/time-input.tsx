@@ -467,7 +467,7 @@ export function TimeInput({
         {...props}
         ref={inputRef}
         aria-invalid={ariaInvalid || invalid || undefined}
-        className={cn('pr-18 tabular-nums', className)}
+        className={cn('tabular-nums', className)}
         disabled={disabled}
         id={id}
         onBlur={(event) => {

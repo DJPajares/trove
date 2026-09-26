@@ -7,7 +7,7 @@
   ],
   "functions": {
     "api/index.mjs": {
-      "includeFiles": "node_modules/geo-tz/data/timezones-1970.geojson.geo.dat"
+      "includeFiles": "dist/services/data/timezones-1970.geojson.geo.dat"
     }
   },
   "outputDirectory": "dist",

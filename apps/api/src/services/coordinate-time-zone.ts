@@ -1,7 +1,23 @@
-import { find as findTimeZones } from 'geo-tz';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import type { PlaceCoordinates } from './places.js';
 import { isValidIanaTimeZone } from './trip-rules.js';
+
+// The geo-tz boundary file is copied beside this built service so Vercel can
+// package a project-owned file instead of following pnpm's dependency symlink.
+const bundledDataDirectory = join(dirname(fileURLToPath(import.meta.url)), 'data');
+if (
+  !process.env.GEO_TZ_DATA_PATH &&
+  existsSync(join(bundledDataDirectory, 'timezones-1970.geojson.geo.dat'))
+) {
+  process.env.GEO_TZ_DATA_PATH = bundledDataDirectory;
+}
+
+// geo-tz reads GEO_TZ_DATA_PATH during module initialization, so load it only
+// after selecting the bundled path above.
+const { find: findTimeZones } = await import('geo-tz');
 
 // geo-tz caches boundary fragments. Cache the small final answer too, because
 // one Place can appear in several items, a day base, and a reservation at once.

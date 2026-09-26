@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -46,11 +46,16 @@ test('the deployment build compiles every workspace package the API needs at run
   }
 });
 
-test('the API function carries the offline timezone boundary data it reads at runtime', () => {
+test('the API function carries a project-owned copy of timezone boundary data', () => {
   const { functions } = readJson<{
     functions: Record<string, { includeFiles?: string }>;
   }>('vercel.json');
   const boundaryData = functions['api/index.mjs']?.includeFiles;
-  expect(boundaryData).toBe('node_modules/geo-tz/data/timezones-1970.geojson.geo.dat');
-  expect(existsSync(resolve(apiRoot, boundaryData!))).toBe(true);
+  const buildScript = readFileSync(resolve(apiRoot, 'package.json'), 'utf8');
+  const copyScript = readFileSync(resolve(apiRoot, 'scripts/copy-geo-tz-data.mjs'), 'utf8');
+
+  expect(boundaryData).toBe('dist/services/data/timezones-1970.geojson.geo.dat');
+  expect(boundaryData).not.toContain('node_modules');
+  expect(buildScript).toContain('scripts/copy-geo-tz-data.mjs');
+  expect(copyScript).toContain('copyFile');
 });

@@ -15,7 +15,7 @@ import {
   type AiPlanningSession,
 } from './api';
 import { isAiPlanningPromptValid, isAiPlanningSessionGenerating } from './presentation';
-import { releasesMirroredAiPlanningSession } from './review';
+import { isAiPlanningSessionExpired, releasesMirroredAiPlanningSession } from './review';
 
 import { queryKeys } from '@/lib/query/keys';
 
@@ -73,10 +73,33 @@ export function useAiPlanningLifecycle(enabled: boolean) {
     refetchInterval: activeSession ? ACTIVE_SESSION_POLL_MS : false,
   });
 
-  const publishSession = useCallback((next: AiPlanningSession | null) => {
-    if (next && cancelledSessionIds.current.has(next.id)) return;
-    setSession(next);
-  }, []);
+  const discardExpiredSession = useCallback(
+    (expiredSessionId: string) => {
+      setSession(null);
+      setPromptValue('');
+      promptTouched.current = false;
+      pendingPlanningAttempt.current = null;
+      queryClient.setQueryData(queryKeys.aiPlanningSession(expiredSessionId), { session: null });
+      queryClient.setQueryData(queryKeys.aiPlanningRecovery(), { session: null });
+      setRequestError('session_expired');
+      // The local cutoff is immediate. A connected read triggers the server's
+      // request-time scrub instead of waiting for the maintenance sweep.
+      void fetchAiPlanningSession(expiredSessionId).catch(() => undefined);
+    },
+    [queryClient],
+  );
+
+  const publishSession = useCallback(
+    (next: AiPlanningSession | null) => {
+      if (next && cancelledSessionIds.current.has(next.id)) return;
+      if (next && isAiPlanningSessionExpired(next)) {
+        discardExpiredSession(next.id);
+        return;
+      }
+      setSession(next);
+    },
+    [discardExpiredSession],
+  );
 
   const recover = useCallback(async () => {
     const result = await recoveryQuery.refetch();
@@ -85,11 +108,33 @@ export function useAiPlanningLifecycle(enabled: boolean) {
 
   useEffect(() => {
     if (!recoveredSession || cancelledSessionIds.current.has(recoveredSession.id)) return;
+    if (isAiPlanningSessionExpired(recoveredSession)) {
+      discardExpiredSession(recoveredSession.id);
+      return;
+    }
     setSession(recoveredSession);
     // A recovered prompt is the traveller's own words coming back to them, but
     // it must never overwrite words they are in the middle of typing.
     if (!promptTouched.current) setPromptValue(recoveredSession.prompt ?? '');
-  }, [recoveredSession]);
+  }, [discardExpiredSession, recoveredSession]);
+
+  useEffect(() => {
+    if (!session) return;
+    const checkExpiry = () => {
+      if (isAiPlanningSessionExpired(session)) discardExpiredSession(session.id);
+    };
+    const timer = window.setTimeout(
+      checkExpiry,
+      Math.max(0, Math.min(Date.parse(session.expiresAt) - Date.now(), 2_147_483_647)),
+    );
+    window.addEventListener('focus', checkExpiry);
+    document.addEventListener('visibilitychange', checkExpiry);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('focus', checkExpiry);
+      document.removeEventListener('visibilitychange', checkExpiry);
+    };
+  }, [discardExpiredSession, session]);
 
   // The seeding above only copies recovery in. This copies it *out* again: when
   // recovery drops the session this hook was following — Apply empties that cache

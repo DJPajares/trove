@@ -42,6 +42,7 @@ import {
   aiPlanningReviewPageState,
   appliedAiPlanningSession,
   buildAiPlanningReviewMapPoints,
+  isAiPlanningSessionExpired,
 } from '@/lib/ai-planning/review';
 import {
   aiPlanningErrorMessageKey,
@@ -90,33 +91,70 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   const [savingDescription, setSavingDescription] = useState(false);
   const [name, setName] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [clock, setClock] = useState(() => Date.now());
   const sessionRef = useRef<AiPlanningSession | null>(null);
+  const expired = Boolean(session && isAiPlanningSessionExpired(session, clock));
+  const serverExpired =
+    sessionQuery.error instanceof AiPlanningApiError &&
+    sessionQuery.error.code === 'session_expired';
+
+  useEffect(() => {
+    if (!session || session.status === 'applied') return;
+    const refreshClock = () => setClock(Date.now());
+    window.addEventListener('focus', refreshClock);
+    document.addEventListener('visibilitychange', refreshClock);
+    const delay = Math.max(0, Date.parse(session.expiresAt) - Date.now());
+    const timer = window.setTimeout(refreshClock, Math.min(delay, 2_147_483_647));
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('focus', refreshClock);
+      document.removeEventListener('visibilitychange', refreshClock);
+    };
+  }, [session?.expiresAt, session?.status, clock]);
+
+  useEffect(() => {
+    if (!expired && !serverExpired) return;
+    sessionRef.current = null;
+    setDraft(null);
+    setRegeneratePrompt('');
+    setDescription('');
+    setName('');
+    setConfirmApply(false);
+    queryClient.setQueryData(queryKeys.aiPlanningSession(sessionId), { session: null });
+    queryClient.setQueryData(queryKeys.aiPlanningRecovery(), { session: null });
+    setError('session_expired');
+    // A locally cached draft becomes inaccessible at the deadline even while
+    // offline. When connected, the GET also asks the API to scrub it now.
+    if (expired && !serverExpired) void sessionQuery.refetch();
+  }, [expired, queryClient, serverExpired, sessionId, sessionQuery.refetch]);
 
   // The draft is whatever generation produced, so the server copy is always the
   // truth and there is nothing local to reconcile against it.
   useEffect(() => {
-    sessionRef.current = session;
-    if (!session?.draft) return;
+    sessionRef.current = expired || serverExpired ? null : session;
+    if (expired || !session?.draft) return;
     setDraft(session.draft);
     setRegeneratePrompt(session.prompt ?? '');
-  }, [session?.draft, session?.draftRevision, session?.prompt]);
+  }, [expired, serverExpired, session?.draft, session?.draftRevision, session?.prompt]);
 
   // The model drafts a description and the traveller's edit overrides it, so the
   // field is seeded from the session's own copy first. It reads through
   // `session.draft` rather than the `draft` state so it does not depend on which
   // of the two effects ran first.
-  const draftedDescription = session?.draft?.trip.description ?? '';
+  const draftedDescription = expired ? '' : (session?.draft?.trip.description ?? '');
   useEffect(() => {
-    setDescription(session?.tripDescription ?? draftedDescription);
-  }, [draftedDescription, session?.id, session?.tripDescription]);
+    setDescription(
+      expired || serverExpired ? '' : (session?.tripDescription ?? draftedDescription),
+    );
+  }, [draftedDescription, expired, serverExpired, session?.id, session?.tripDescription]);
 
   // Same contract as the description: seeded from the session's own copy
   // first, read through `session.draft` rather than `draft` state so it does
   // not depend on effect ordering.
-  const draftedName = session?.draft?.trip.name ?? '';
+  const draftedName = expired ? '' : (session?.draft?.trip.name ?? '');
   useEffect(() => {
-    setName(session?.tripName ?? draftedName);
-  }, [draftedName, session?.id, session?.tripName]);
+    setName(expired || serverExpired ? '' : (session?.tripName ?? draftedName));
+  }, [draftedName, expired, serverExpired, session?.id, session?.tripName]);
 
   useEffect(() => {
     if (!session?.appliedTripId) return;
@@ -124,7 +162,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   }, [router, session?.appliedTripId]);
 
   const publishing = operation !== 'idle';
-  const reviewing = session?.status === 'reviewing';
+  const reviewing = !expired && !serverExpired && session?.status === 'reviewing';
   const materialWarnings = draft?.warnings.filter((warning) => warning.material) ?? [];
   const warningsAcknowledged =
     session?.warningAcknowledgement?.revision === session?.draftRevision &&
@@ -238,7 +276,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   }
 
   async function regenerate() {
-    if (!session || publishing || !regeneratePrompt.trim()) return;
+    if (!session || expired || serverExpired || publishing || !regeneratePrompt.trim()) return;
     setOperation('regenerating');
     setError(null);
     try {
@@ -283,6 +321,10 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
       const deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
       const result = await applyAiPlanningSession(saved.id, saved.draftRevision, deviceTimeZone);
       const applied = appliedAiPlanningSession(saved, result.trip.id);
+      setDraft(null);
+      setRegeneratePrompt('');
+      setDescription('');
+      setName('');
       sessionRef.current = applied;
       queryClient.setQueryData(queryKeys.aiPlanningSession(sessionId), { session: applied });
       // Recovery must be emptied, not just refreshed: the server drops an
@@ -312,7 +354,10 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
       : { delay, duration: motionDuration.standard, ease: motionEase },
   });
 
-  const pageState = aiPlanningReviewPageState(session, draft, sessionQuery.isPending);
+  const pageState =
+    expired || serverExpired
+      ? 'error'
+      : aiPlanningReviewPageState(session, draft, sessionQuery.isPending);
   if (pageState === 'loading' || pageState === 'redirecting') {
     return <PageState kind="loading" loadingShape="text" scope="page" title={t('loading')} />;
   }

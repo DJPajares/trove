@@ -8,6 +8,10 @@ import {
   getAiPlanningDispatchLimit,
 } from '../environment.js';
 import type { AiGenerationErrorCode, AiGenerationMetadata } from './ai-generation.js';
+import {
+  AI_PLANNING_PRIVATE_CONTENT_SCRUB,
+  AI_PLANNING_PRIVATE_CONTENT_WHERE,
+} from './ai-planning-retention.js';
 import { validateAiPlannerDraft } from './ai-planning-rules.js';
 import { parseStoredPlanScore, type TripPlanScore } from './plan-score.js';
 import {
@@ -185,25 +189,26 @@ const sessionInclude = {
 } as const;
 
 export function serializeAiPlanningSession(session: SessionRecord) {
+  const terminal = ['APPLIED', 'CANCELLED', 'EXPIRED'].includes(session.status);
   return {
     appliedTripId: session.appliedTripId,
     createdAt: session.createdAt.toISOString(),
-    draft: session.draft,
+    draft: terminal ? null : session.draft,
     draftRevision: session.draftRevision,
     expiresAt: session.expiresAt.toISOString(),
     id: session.id,
-    lastSafeError: session.lastErrorCode,
-    pendingRunId: session.runs[0]?.id ?? null,
-    planScore: parseStoredPlanScore(session.planScore),
-    prompt: session.rawPrompt,
+    lastSafeError: terminal ? null : session.lastErrorCode,
+    pendingRunId: terminal ? null : (session.runs[0]?.id ?? null),
+    planScore: terminal ? null : parseStoredPlanScore(session.planScore),
+    prompt: terminal ? null : session.rawPrompt,
     schemaVersion: session.schemaVersion,
     stage: session.stage.toLowerCase(),
     status: session.status.toLowerCase(),
-    tripDescription: session.tripDescription,
-    tripName: session.tripName,
+    tripDescription: terminal ? null : session.tripDescription,
+    tripName: terminal ? null : session.tripName,
     updatedAt: session.updatedAt.toISOString(),
     warningAcknowledgement:
-      session.warningsAcknowledgedRevision === null || !session.warningsAcknowledgedAt
+      terminal || session.warningsAcknowledgedRevision === null || !session.warningsAcknowledgedAt
         ? null
         : {
             acknowledgedAt: session.warningsAcknowledgedAt.toISOString(),
@@ -229,22 +234,25 @@ async function scrubExpiredSession(
   sessionId: string,
   now: Date,
 ) {
+  const expired = await transaction.aiPlanningSession.updateMany({
+    where: {
+      id: sessionId,
+      ownerId,
+      expiresAt: { lte: now },
+      status: { in: [...ACTIVE_STATUSES] },
+    },
+    data: {
+      ...AI_PLANNING_PRIVATE_CONTENT_SCRUB,
+      stage: 'COMPLETE',
+      status: 'EXPIRED',
+    },
+  });
+  if (expired.count !== 1) return false;
   await transaction.aiGenerationRun.updateMany({
     where: { ownerId, result: 'PENDING', sessionId },
     data: { completedAt: now, result: 'CANCELLED' },
   });
-  await transaction.aiPlanningSession.updateMany({
-    where: { id: sessionId, ownerId },
-    data: {
-      draft: Prisma.DbNull,
-      lastErrorCode: null,
-      rawPrompt: null,
-      stage: 'COMPLETE',
-      status: 'EXPIRED',
-      warningsAcknowledgedAt: null,
-      warningsAcknowledgedRevision: null,
-    },
-  });
+  return true;
 }
 
 async function expireIfNeeded(
@@ -252,8 +260,24 @@ async function expireIfNeeded(
   session: { expiresAt: Date; id: string; ownerId: string; status: string },
   now: Date,
 ) {
-  if (session.status !== 'EXPIRED' && session.expiresAt > now) return false;
+  if (session.status === 'EXPIRED') {
+    await transaction.aiPlanningSession.updateMany({
+      where: { id: session.id, ownerId: session.ownerId, ...AI_PLANNING_PRIVATE_CONTENT_WHERE },
+      data: AI_PLANNING_PRIVATE_CONTENT_SCRUB,
+    });
+    return true;
+  }
+  if (session.status === 'APPLIED' || session.status === 'CANCELLED') {
+    await transaction.aiPlanningSession.updateMany({
+      where: { id: session.id, ownerId: session.ownerId, ...AI_PLANNING_PRIVATE_CONTENT_WHERE },
+      data: AI_PLANNING_PRIVATE_CONTENT_SCRUB,
+    });
+    return session.expiresAt <= now;
+  }
+  if (session.expiresAt > now) return false;
   await scrubExpiredSession(transaction, session.ownerId, session.id, now);
+  // A concurrent maintenance sweep can win the conditional update. The
+  // previously loaded row is still expired and must never be serialized.
   return true;
 }
 
@@ -288,10 +312,12 @@ export async function createAiPlanningSession(
       select: { sessionId: true },
     });
     if (existing) {
-      return transaction.aiPlanningSession.findFirstOrThrow({
+      const replay = await transaction.aiPlanningSession.findFirstOrThrow({
         where: { id: existing.sessionId, ownerId },
         include: sessionInclude,
       });
+      if (await expireIfNeeded(transaction, replay, now)) return SESSION_EXPIRED;
+      return replay;
     }
 
     // The run inherits both `sessionId` and `ownerId` from the parent session
@@ -314,6 +340,7 @@ export async function createAiPlanningSession(
     });
   });
 
+  if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
   return serializeAiPlanningSession(session);
 }
 
@@ -326,6 +353,14 @@ async function expireOwnedSessions(prisma: PlanningPrisma, ownerId: string, now:
     for (const session of expired) {
       await scrubExpiredSession(transaction, ownerId, session.id, now);
     }
+    await transaction.aiPlanningSession.updateMany({
+      where: {
+        ownerId,
+        status: { in: ['APPLIED', 'CANCELLED', 'EXPIRED'] },
+        ...AI_PLANNING_PRIVATE_CONTENT_WHERE,
+      },
+      data: AI_PLANNING_PRIVATE_CONTENT_SCRUB,
+    });
   });
 }
 
@@ -356,6 +391,7 @@ export async function getAiPlanningSession(
   const prisma = prismaFrom(options);
   const now = nowFrom(options);
   const session = await prisma.$transaction(async (transaction) => {
+    await ensureAndLockOwner(transaction, ownerId);
     const found = await findOwnedSession(transaction, ownerId, sessionId);
     if (await expireIfNeeded(transaction, found, now)) return SESSION_EXPIRED;
     return found;
@@ -560,13 +596,9 @@ export async function cancelAiPlanningSession(
       await transaction.aiPlanningSession.update({
         where: { id: sessionId },
         data: {
-          draft: Prisma.DbNull,
-          lastErrorCode: null,
-          rawPrompt: null,
+          ...AI_PLANNING_PRIVATE_CONTENT_SCRUB,
           stage: 'COMPLETE',
           status: 'CANCELLED',
-          warningsAcknowledgedAt: null,
-          warningsAcknowledgedRevision: null,
         },
       });
     }
@@ -895,8 +927,12 @@ export async function loadAiPlanningSessionForApplyInTransaction(
   const session = await findOwnedSession(transaction, ownerId, sessionId);
 
   // Applied is a terminal idempotent result. It remains recoverable after the
-  // draft retention window because the content has already been scrubbed.
+  // draft retention window; old rows are scrubbed before returning that reference.
   if (session.appliedTripId) {
+    await transaction.aiPlanningSession.updateMany({
+      where: { id: session.id, ownerId, ...AI_PLANNING_PRIVATE_CONTENT_WHERE },
+      data: AI_PLANNING_PRIVATE_CONTENT_SCRUB,
+    });
     return { kind: 'applied' as const, sessionId: session.id, tripId: session.appliedTripId };
   }
 

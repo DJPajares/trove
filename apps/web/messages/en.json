@@ -1465,6 +1465,7 @@
     "duplicateItem": "Duplicate {name}",
     "deleteItem": "Delete item",
     "organizeError": "We couldn't update that item. Try again.",
+    "duplicateUnconfirmed": "We couldn't confirm whether the copy was added. Try Duplicate again; it won't add another copy.",
     "dailyBaseError": "We couldn't update the daily base. Try again.",
     "timeZoneConsequence": "The local date and time stayed the same. The corresponding instant changed for the updated timezone.",
     "providerPlaceLoading": "Loading place details…",

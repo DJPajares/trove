@@ -24,6 +24,7 @@ const languageQuerySchema = z
   .object({ languageCode: z.string().trim().min(2).max(35).optional() })
   .strict();
 const itemParamsSchema = z.object({ itemId: z.uuid(), tripId: z.uuid() }).strict();
+const duplicateItemSchema = z.object({ clientItemId: z.uuid().optional() }).strict();
 const dayParamsSchema = z.object({ itineraryDayId: z.uuid(), tripId: z.uuid() }).strict();
 const moveDaySchema = z
   .object({
@@ -186,11 +187,18 @@ export function createItineraryControllers() {
     async duplicateItem(request: FastifyRequest, reply: FastifyReply) {
       const userId = getUserId(request, reply);
       const params = itemParamsSchema.safeParse(request.params);
+      const body = duplicateItemSchema.safeParse(request.body ?? {});
       if (!userId) return;
-      if (!params.success) return reply.code(400).send({ code: 'invalid_itinerary_item' });
+      if (!params.success || !body.success)
+        return reply.code(400).send({ code: 'invalid_itinerary_item' });
       try {
-        await duplicateItineraryItem(userId, params.data.tripId, params.data.itemId);
-        return reply.code(201).send();
+        const result = await duplicateItineraryItem(
+          userId,
+          params.data.tripId,
+          params.data.itemId,
+          body.data.clientItemId,
+        );
+        return reply.code(result.created ? 201 : 200).send({ itemId: result.itemId });
       } catch (error) {
         return handleError(reply, error);
       }

@@ -917,10 +917,14 @@ export async function moveItineraryDayPlan(
   }
 }
 
-export function duplicateItineraryItem(tripId: string, itemId: string) {
-  return itineraryRequest<void>(`/trips/${tripId}/itinerary/items/${itemId}/duplicate`, {
-    method: 'POST',
-  });
+export function duplicateItineraryItem(tripId: string, itemId: string, clientItemId: string) {
+  return itineraryRequest<{ itemId: string }>(
+    `/trips/${tripId}/itinerary/items/${itemId}/duplicate`,
+    {
+      body: JSON.stringify({ clientItemId }),
+      method: 'POST',
+    },
+  );
 }
 
 export function setItineraryDayBase(

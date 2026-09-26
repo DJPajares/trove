@@ -3,6 +3,7 @@ import type { AiPlannerDraft } from '@trove/types';
 import { describe, expect, test } from 'vitest';
 
 import { applyAiPlanningSession } from '../src/services/ai-planning-apply.js';
+import { cleanupAiPlanningRetention } from '../src/services/ai-planning-retention.js';
 import {
   setAiPlanningTelemetrySink,
   type AiPlanningTelemetryEvent,
@@ -74,8 +75,11 @@ function makeSession(draft: AiPlannerDraft, overrides: Partial<SessionState> = {
 
 function matches(value: unknown, expected: unknown) {
   if (expected === undefined) return true;
-  if (expected && typeof expected === 'object' && 'in' in expected) {
-    return (expected.in as unknown[]).includes(value);
+  if (expected && typeof expected === 'object') {
+    if ('in' in expected) return (expected.in as unknown[]).includes(value);
+    if ('lte' in expected) return value instanceof Date && value <= (expected.lte as Date);
+    if ('gt' in expected) return value instanceof Date && value > (expected.gt as Date);
+    if ('not' in expected) return value !== expected.not;
   }
   return value === expected;
 }
@@ -145,10 +149,26 @@ function createApplyStore(
   let transactionTail = Promise.resolve();
   let idCounter = 100;
   const id = () => `00000000-0000-4000-8000-${String(idCounter++).padStart(12, '0')}`;
+  const sessionMatches = (session: SessionState, where: Record<string, any> = {}) =>
+    matches(session.id, where.id) &&
+    matches(session.ownerId, where.ownerId) &&
+    matches(session.status, where.status) &&
+    matches(session.draftRevision, where.draftRevision) &&
+    matches(session.appliedTripId, where.appliedTripId) &&
+    matches(session.expiresAt, where.expiresAt) &&
+    (!where.OR ||
+      where.OR.some((clause: Record<string, unknown>) =>
+        Object.entries(clause).every(([key, filter]) =>
+          matches((session as unknown as Record<string, unknown>)[key], filter),
+        ),
+      ));
 
   const transactionFor = (working: ApplyState) => ({
     $queryRaw: async () => [],
     aiGenerationRun: {
+      async deleteMany() {
+        return { count: 0 };
+      },
       async updateMany({ where, data }: any) {
         const matching = working.runs.filter(
           (run) =>
@@ -161,22 +181,15 @@ function createApplyStore(
       },
     },
     aiPlanningSession: {
+      async count({ where }: any) {
+        return working.sessions.filter((session) => sessionMatches(session, where)).length;
+      },
       async findFirst({ where }: any) {
-        const session = working.sessions.find(
-          (candidate) =>
-            matches(candidate.id, where.id) && matches(candidate.ownerId, where.ownerId),
-        );
+        const session = working.sessions.find((candidate) => sessionMatches(candidate, where));
         return session ? { ...session, runs: [] } : null;
       },
       async updateMany({ where, data }: any) {
-        const matching = working.sessions.filter(
-          (session) =>
-            matches(session.id, where.id) &&
-            matches(session.ownerId, where.ownerId) &&
-            matches(session.status, where.status) &&
-            matches(session.draftRevision, where.draftRevision) &&
-            matches(session.appliedTripId, where.appliedTripId),
-        );
+        const matching = working.sessions.filter((session) => sessionMatches(session, where));
         matching.forEach((session) => {
           for (const [key, value] of Object.entries(data)) {
             if ((key === 'draft' || key === 'planScore') && value === Prisma.DbNull) {
@@ -312,18 +325,60 @@ function createApplyStore(
 
 function apply(
   store: ReturnType<typeof createApplyStore>,
-  overrides: { ownerId?: string; revision?: number } = {},
+  overrides: { now?: Date; ownerId?: string; revision?: number } = {},
 ) {
   return applyAiPlanningSession(
     overrides.ownerId ?? OWNER_ID,
     SESSION_ID,
     overrides.revision ?? 1,
     'Asia/Singapore',
-    { now: () => NOW, prisma: store.prisma as never },
+    { now: () => overrides.now ?? NOW, prisma: store.prisma as never },
   );
 }
 
 describe('AI planning Apply', () => {
+  test('Apply and expiry cleanup serialize without a partial Trip or retained review content', async () => {
+    for (const sweepFirst of [false, true]) {
+      const store = createApplyStore(customPlaceDraft(), {
+        session: {
+          expiresAt: NOW,
+          tripName: 'Private reviewed title',
+          tripDescription: 'Private reviewed description',
+          planScore: emptyPlanScore(),
+        },
+      });
+      const runApply = () => apply(store, { now: new Date(NOW.getTime() - 1) });
+      const runSweep = () =>
+        store.prisma.$transaction((transaction) =>
+          cleanupAiPlanningRetention({ now: NOW, prisma: transaction as never }),
+        );
+      const [first, second] = await Promise.allSettled(
+        sweepFirst ? [runSweep(), runApply()] : [runApply(), runSweep()],
+      );
+      expect(store.state.sessions[0]).toMatchObject({
+        draft: null,
+        rawPrompt: null,
+        tripName: null,
+        tripDescription: null,
+        planScore: null,
+      });
+      if (sweepFirst) {
+        expect(first.status).toBe('fulfilled');
+        expect(second).toMatchObject({
+          status: 'rejected',
+          reason: expect.objectContaining({ code: 'session_expired' }),
+        });
+        expect(store.state.trips).toHaveLength(0);
+        expect(store.state.sessions[0]?.status).toBe('EXPIRED');
+      } else {
+        expect(first.status).toBe('fulfilled');
+        expect(second.status).toBe('fulfilled');
+        expect(store.state.trips).toHaveLength(1);
+        expect(store.state.sessions[0]?.status).toBe('APPLIED');
+      }
+    }
+  });
+
   test('an unscheduled exact time is dropped rather than written without an instant', async () => {
     // No date exists to resolve the instant against, and the schema cannot hold
     // a local time on its own, so the time is not carried onto the row.

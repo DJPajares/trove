@@ -47,13 +47,13 @@ export function TripModeTabBar({
   return (
     <nav
       aria-label={t('navigation')}
-      className="fixed inset-x-0 bottom-0 z-[var(--layer-sticky)] border-t border-border-subtle bg-background/95 pb-[var(--safe-bottom)] backdrop-blur supports-[backdrop-filter]:bg-background/88 lg:sticky lg:top-[calc(var(--safe-top)+var(--header-offset)+3.25rem)] lg:mx-auto lg:mt-3 lg:w-full lg:max-w-6xl lg:rounded-[var(--radius-lg)] lg:border lg:bg-background/95 lg:pb-0"
+      className="fixed inset-x-0 bottom-0 z-[var(--layer-sticky)] border-t border-border-subtle bg-background/95 pb-[var(--safe-bottom)] backdrop-blur supports-[backdrop-filter]:bg-background/88 lg:sticky lg:top-[calc(var(--safe-top)+var(--header-offset)+3.25rem)] lg:mx-auto lg:w-full lg:max-w-6xl lg:rounded-[var(--radius-lg)] lg:border lg:bg-background/95 lg:pb-0"
       data-slot="trip-mode-tabs"
       data-translucent-surface
     >
       {/* `pt-2` is load-bearing: the active mark hangs from the bar's top edge
           by cancelling exactly this padding. */}
-      <ul className="mx-auto grid w-full max-w-6xl grid-cols-4 px-[var(--gutter-inline-start)] pt-2 lg:gap-1 lg:p-1">
+      <ul className="mx-auto grid w-full max-w-6xl grid-cols-4 px-[var(--gutter-inline-start)] lg:gap-1 lg:p-1">
         {tripModeViews.map(({ icon: Icon, key, path }) => {
           const href = `${basePath}${path}`;
           // Now owns the bare path, so prefix matching would light it up on

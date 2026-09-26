@@ -530,7 +530,7 @@ export function TripModeShell({
       >
         <TripModeTasksProvider tripId={trip.id}>
           <section
-            className="mx-auto flex min-h-[calc(100dvh-var(--safe-top))] w-full max-w-6xl flex-col lg:min-h-0"
+            className="mx-auto flex min-h-[calc(100dvh-var(--safe-top))] w-full max-w-6xl flex-col lg:min-h-0 gap-2"
             data-slot="trip-mode-shell"
           >
             <TripModeTopBar

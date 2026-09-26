@@ -45,11 +45,14 @@ type SessionState = {
   expiresAt: Date;
   id: string;
   lastErrorCode: string | null;
+  planScore: unknown;
   ownerId: string;
   rawPrompt: string | null;
   schemaVersion: number;
   stage: string;
   status: string;
+  tripDescription: string | null;
+  tripName: string | null;
   updatedAt: Date;
   warningsAcknowledgedAt: Date | null;
   warningsAcknowledgedRevision: number | null;
@@ -118,8 +121,8 @@ function createPlanningStore() {
     for (const [key, value] of Object.entries(data)) {
       if (key === 'draftRevision' && value && typeof value === 'object' && 'increment' in value) {
         session.draftRevision += Number((value as { increment: number }).increment);
-      } else if (key === 'draft' && value === Prisma.DbNull) {
-        session.draft = null;
+      } else if ((key === 'draft' || key === 'planScore') && value === Prisma.DbNull) {
+        (session as unknown as Record<string, unknown>)[key] = null;
       } else if (value !== undefined) {
         (session as unknown as Record<string, unknown>)[key] = value;
       }
@@ -149,11 +152,14 @@ function createPlanningStore() {
           expiresAt: data.expiresAt,
           id,
           lastErrorCode: null,
+          planScore: null,
           ownerId: data.ownerId,
           rawPrompt: data.rawPrompt,
           schemaVersion: 1,
           stage: 'PENDING' in data ? data.stage : 'CREATED',
           status: 'PENDING',
+          tripDescription: null,
+          tripName: null,
           updatedAt: NOW,
           warningsAcknowledgedAt: null,
           warningsAcknowledgedRevision: null,
@@ -302,11 +308,14 @@ function makeSession(id: string, overrides: Partial<SessionState> = {}): Session
     expiresAt: new Date(NOW.getTime() + 60_000),
     id,
     lastErrorCode: null,
+    planScore: null,
     ownerId: OWNER_ID,
     rawPrompt: 'Plan Tokyo',
     schemaVersion: 1,
     stage: 'CREATED',
     status: 'PENDING',
+    tripDescription: null,
+    tripName: null,
     updatedAt: NOW,
     warningsAcknowledgedAt: null,
     warningsAcknowledgedRevision: null,
@@ -448,6 +457,9 @@ describe('planning-session reservations and recovery', () => {
       draft: explicitDraft(),
       draftRevision: 1,
       expiresAt: new Date(NOW.getTime() - 1),
+      tripName: 'Private title',
+      tripDescription: 'Private description',
+      planScore: { score: 80 },
       status: 'REVIEWING',
     });
     store.addRun(makeRun('00000000-0000-4000-8000-000000000031', sessionId), session);
@@ -458,8 +470,81 @@ describe('planning-session reservations and recovery', () => {
     await expect(
       getAiPlanningSession(OWNER_ID, sessionId, { now: () => NOW, prisma: store.prisma }),
     ).rejects.toMatchObject({ code: 'session_expired', statusCode: 410 });
-    expect(session).toMatchObject({ draft: null, rawPrompt: null, status: 'EXPIRED' });
+    expect(session).toMatchObject({
+      draft: null,
+      rawPrompt: null,
+      tripName: null,
+      tripDescription: null,
+      planScore: null,
+      status: 'EXPIRED',
+    });
     expect(store.runs.values().next().value).toMatchObject({ result: 'CANCELLED' });
+  });
+
+  test('Generate replay cannot return a session at its exact expiry, even before cron', async () => {
+    const store = createPlanningStore();
+    const key = '00000000-0000-4000-8000-000000000039';
+    const first = await createAiPlanningSession(OWNER_ID, 'Private prompt', key, {
+      now: () => NOW,
+      prisma: store.prisma,
+    });
+    const session = store.sessions.get(first.id)!;
+    session.tripName = 'Private title';
+    session.tripDescription = 'Private description';
+    session.planScore = { score: 80 };
+    await expect(
+      createAiPlanningSession(OWNER_ID, 'retry', key, {
+        now: () => session.expiresAt,
+        prisma: store.prisma,
+      }),
+    ).rejects.toMatchObject({ code: 'session_expired', statusCode: 410 });
+    expect(session).toMatchObject({
+      draft: null,
+      rawPrompt: null,
+      tripName: null,
+      tripDescription: null,
+      planScore: null,
+      status: 'EXPIRED',
+    });
+    expect(store.sessions).toHaveLength(1);
+  });
+
+  test('legacy applied rows are scrubbed on access and no longer readable at expiry', async () => {
+    const store = createPlanningStore();
+    const sessionId = '00000000-0000-4000-8000-000000000038';
+    const session = makeSession(sessionId, {
+      appliedTripId: '00000000-0000-4000-8000-000000000099',
+      draft: explicitDraft(),
+      rawPrompt: 'Private prompt',
+      tripName: 'Private title',
+      tripDescription: 'Private description',
+      planScore: { score: 80 },
+      status: 'APPLIED',
+    });
+    store.sessions.set(sessionId, session);
+    await expect(
+      getAiPlanningSession(OWNER_ID, sessionId, { now: () => NOW, prisma: store.prisma }),
+    ).resolves.toMatchObject({
+      appliedTripId: session.appliedTripId,
+      draft: null,
+      prompt: null,
+      tripName: null,
+      tripDescription: null,
+      planScore: null,
+    });
+    expect(session).toMatchObject({
+      draft: null,
+      rawPrompt: null,
+      tripName: null,
+      tripDescription: null,
+      planScore: null,
+    });
+    await expect(
+      getAiPlanningSession(OWNER_ID, sessionId, {
+        now: () => session.expiresAt,
+        prisma: store.prisma,
+      }),
+    ).rejects.toMatchObject({ code: 'session_expired', statusCode: 410 });
   });
 
   test('every session-targeting mutation returns the same 404 for another owner', async () => {
@@ -816,6 +901,9 @@ describe('dispatch quota and lifecycle completion', () => {
     const session = makeSession(sessionId, {
       draft: explicitDraft(),
       draftRevision: 1,
+      tripName: 'Private title',
+      tripDescription: 'Private description',
+      planScore: { score: 80 },
       status: 'REVIEWING',
       warningsAcknowledgedAt: NOW,
       warningsAcknowledgedRevision: 1,
@@ -827,6 +915,9 @@ describe('dispatch quota and lifecycle completion', () => {
     expect(session).toMatchObject({
       draft: null,
       rawPrompt: null,
+      tripName: null,
+      tripDescription: null,
+      planScore: null,
       status: 'CANCELLED',
       warningsAcknowledgedAt: null,
       warningsAcknowledgedRevision: null,

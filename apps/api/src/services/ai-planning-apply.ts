@@ -9,6 +9,7 @@ import {
   AiPlanningSessionError,
   loadAiPlanningSessionForApplyInTransaction,
 } from './ai-planning-sessions.js';
+import { AI_PLANNING_PRIVATE_CONTENT_SCRUB } from './ai-planning-retention.js';
 import { recordAiPlanningApplyCompleted } from './ai-planning-telemetry.js';
 import {
   enumerateDateRange,
@@ -483,13 +484,9 @@ export async function applyAiPlanningSession(
       },
       data: {
         appliedTripId: trip.id,
-        draft: Prisma.DbNull,
-        lastErrorCode: null,
-        rawPrompt: null,
+        ...AI_PLANNING_PRIVATE_CONTENT_SCRUB,
         stage: 'COMPLETE',
         status: 'APPLIED',
-        warningsAcknowledgedAt: null,
-        warningsAcknowledgedRevision: null,
       },
     });
     if (applied.count !== 1) throw new AiPlanningSessionError('draft_conflict', 409);

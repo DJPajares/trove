@@ -4,14 +4,20 @@ import type { AiPlanningDraft, AiPlanningDraftItem, AiPlanningSession } from './
 
 export type AiPlanningReviewPageState = 'error' | 'loading' | 'redirecting' | 'reviewing';
 
+export function isAiPlanningSessionExpired(session: AiPlanningSession, now = Date.now()): boolean {
+  return session.status !== 'applied' && Date.parse(session.expiresAt) <= now;
+}
+
 export function aiPlanningReviewPageState(
   session: AiPlanningSession | null,
   draft: AiPlanningDraft | null,
   queryPending: boolean,
+  now = Date.now(),
 ): AiPlanningReviewPageState {
   if (queryPending) return 'loading';
   if (!session) return 'error';
   if (session.appliedTripId || session.status === 'applied') return 'redirecting';
+  if (isAiPlanningSessionExpired(session, now)) return 'error';
   if (session.status === 'pending' || session.status === 'generating') {
     return draft ? 'reviewing' : 'loading';
   }
@@ -103,7 +109,7 @@ export function buildAiPlanningReviewMapPoints(draft: AiPlanningDraft): Itinerar
 
 /**
  * Mirrors what Apply just committed on the server: the session is applied, its
- * draft is gone, and the warning acknowledgement went with it. Writing this into
+ * private review content is gone. Writing this into
  * the session cache before navigating keeps the review page from rendering a
  * draft the server no longer holds.
  */
@@ -115,8 +121,13 @@ export function appliedAiPlanningSession(
     ...session,
     appliedTripId: tripId,
     draft: null,
+    lastSafeError: null,
+    planScore: null,
+    prompt: null,
     stage: 'complete',
     status: 'applied',
+    tripDescription: null,
+    tripName: null,
     warningAcknowledgement: null,
   };
 }

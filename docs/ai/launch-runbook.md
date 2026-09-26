@@ -29,15 +29,21 @@ that changes what travellers see.
 
 `apps/api/vercel.json` schedules `GET /maintenance/ai-planning-retention` daily
 at 03:00 UTC. The route authenticates with `CRON_SECRET` and **refuses every
-caller when that variable is unset**, so retention silently stops if it is
-missing.
+caller when that variable is unset**. Missing credentials leave physical cleanup
+pending and must be visible in operations.
 
 1. Set `CRON_SECRET` on `trove-api` (Production, and Preview if you want the job
    exercised there).
 2. After the first scheduled run, confirm the log line `ai planning retention`
-   with its three counts.
-3. Windows enforced: 7-day session content, 30-day generation runs. Both are
-   pinned in `apps/api/test/ai-planning-retention.test.ts`.
+   with expiry, scrub, generation-run, and overdue counts. A nonzero
+   `remainingOverdueSessions` or a 503 means cleanup is incomplete; investigate
+   and rerun the guarded endpoint. Never log session content.
+3. The API denies review access at the exact seven-day cutoff and scrubs an
+   expired session on access. The daily job physically scrubs untouched sessions
+   on its next successful run; a Vercel delay or outage can make that later than
+   seven days. Generation-run telemetry has a separate 30-day deletion window.
+   Clock-controlled tests cover the access and query boundaries; confirm the
+   deployed cron and alert separately.
 
 ## 3. Dashboards
 
@@ -65,8 +71,9 @@ Build:
    `kind = draft_assembled`, and the `warningCounts` breakdown.
 7. **Apply integrity** — `kind = apply_completed` split by `outcome`; `replayed`
    is the idempotency path and is healthy, `rejected` split by `code` is not.
-8. **Cleanup health** — presence and counts of the daily
-   `ai planning retention` line.
+8. **Cleanup health** — presence of the daily `ai planning retention` line,
+   `overdueSessionsAtStart`, `oldestOverdueAgeSeconds`, and
+   `remainingOverdueSessions`. Alert on a missing or failed sweep.
 
 ## 4. Alerts
 
@@ -81,6 +88,7 @@ Build:
 | Google spend         | planner-sourced `google provider request` volume above the agreed daily ceiling           | Set `TROVE_GOOGLE_PROVIDERS_DISABLED=1`; the planner degrades to Custom Places                                                                                                                               |
 | Cap violations       | `warningCounts.provider_cap_reached` rising                                               | Investigate fan-out before raising any cap                                                                                                                                                                   |
 | Cleanup failure      | No `ai planning retention` line in 26 h                                                   | Check `CRON_SECRET` and the cron run in Vercel                                                                                                                                                               |
+| Overdue review data  | `remainingOverdueSessions > 0` or a failed retention response                             | Restore maintenance access, rerun the guarded sweep, and confirm the remaining count reaches zero                                                                                                            |
 | Apply integrity      | `kind = apply_completed, outcome = rejected` above baseline                               | Read the `code` split; `draft_conflict` and `warnings_not_acknowledged` are expected, others are not                                                                                                         |
 
 ## 5. Kill-switch drill

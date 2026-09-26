@@ -1,3 +1,4 @@
+import { Prisma } from '@trove/db';
 import { expect, test, vi } from 'vitest';
 
 import {
@@ -23,9 +24,11 @@ test('expires active sessions, scrubs terminal content, and deletes old content-
     .mockResolvedValueOnce({ count: 2 })
     .mockResolvedValueOnce({ count: 1 });
   const deleteMany = vi.fn().mockResolvedValue({ count: 4 });
+  const count = vi.fn().mockResolvedValueOnce(3).mockResolvedValueOnce(0);
+  const findFirst = vi.fn().mockResolvedValue({ expiresAt: new Date('2026-08-29T12:00:00.000Z') });
   const prisma = {
     aiGenerationRun: { deleteMany },
-    aiPlanningSession: { updateMany },
+    aiPlanningSession: { count, findFirst, updateMany },
   } as unknown as AiPlanningRetentionStore;
   const now = new Date('2026-08-30T12:00:00.000Z');
 
@@ -33,12 +36,22 @@ test('expires active sessions, scrubs terminal content, and deletes old content-
     deletedGenerationRuns: 4,
     expiredSessions: 2,
     scrubbedTerminalSessions: 1,
+    overdueSessionsAtStart: 3,
+    oldestOverdueAgeSeconds: 86_400,
+    remainingOverdueSessions: 0,
   });
 
   expect(updateMany).toHaveBeenNthCalledWith(
     1,
     expect.objectContaining({
-      data: expect.objectContaining({ rawPrompt: null, stage: 'COMPLETE', status: 'EXPIRED' }),
+      data: expect.objectContaining({
+        rawPrompt: null,
+        tripName: null,
+        tripDescription: null,
+        planScore: Prisma.DbNull,
+        stage: 'COMPLETE',
+        status: 'EXPIRED',
+      }),
       where: {
         expiresAt: { lte: now },
         status: { in: ['FAILED', 'GENERATING', 'PENDING', 'REVIEWING'] },
@@ -48,7 +61,12 @@ test('expires active sessions, scrubs terminal content, and deletes old content-
   expect(updateMany).toHaveBeenNthCalledWith(
     2,
     expect.objectContaining({
-      data: expect.objectContaining({ rawPrompt: null }),
+      data: expect.objectContaining({
+        rawPrompt: null,
+        tripName: null,
+        tripDescription: null,
+        planScore: Prisma.DbNull,
+      }),
       where: expect.objectContaining({
         status: { in: ['APPLIED', 'CANCELLED', 'EXPIRED'] },
       }),
@@ -56,6 +74,15 @@ test('expires active sessions, scrubs terminal content, and deletes old content-
   );
   expect(deleteMany).toHaveBeenCalledWith({
     where: { createdAt: { lte: aiGenerationRunCutoff(now) } },
+  });
+  expect(count).toHaveBeenCalledWith({
+    where: expect.objectContaining({
+      OR: expect.arrayContaining([
+        { tripName: { not: null } },
+        { tripDescription: { not: null } },
+        { planScore: { not: Prisma.DbNull } },
+      ]),
+    }),
   });
 });
 
@@ -70,13 +97,15 @@ test('the retention windows are the seven- and thirty-day boundaries the PRD set
 test('cleanup boundaries include the moment they name and exclude anything newer', async () => {
   const updateMany = vi.fn().mockResolvedValue({ count: 0 });
   const deleteMany = vi.fn().mockResolvedValue({ count: 0 });
+  const count = vi.fn().mockResolvedValue(0);
+  const findFirst = vi.fn().mockResolvedValue(null);
   const now = new Date('2026-08-30T12:00:00.000Z');
 
   await cleanupAiPlanningRetention({
     now,
     prisma: {
       aiGenerationRun: { deleteMany },
-      aiPlanningSession: { updateMany },
+      aiPlanningSession: { count, findFirst, updateMany },
     } as unknown as AiPlanningRetentionStore,
   });
 

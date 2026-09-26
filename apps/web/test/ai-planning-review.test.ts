@@ -155,24 +155,27 @@ test('a review session with an initializing local draft stays in loading', () =>
     id: 'session:review',
     lastSafeError: null,
     pendingRunId: null,
-    planScore: null,
+    planScore: { score: 80 } as AiPlanningSession['planScore'],
     prompt: 'Tokyo',
     schemaVersion: 1,
     stage: 'reviewing' as const,
     status: 'reviewing' as const,
-    tripDescription: null,
-    tripName: null,
+    tripDescription: 'Private description',
+    tripName: 'Private title',
     updatedAt: '2026-09-01T00:00:00.000Z',
     warningAcknowledgement: null,
   };
 
-  expect(aiPlanningReviewPageState(session, null, false)).toBe('loading');
-  expect(aiPlanningReviewPageState(session, draft, false)).toBe('reviewing');
+  const beforeExpiry = Date.parse('2026-09-07T23:59:59.999Z');
+  expect(aiPlanningReviewPageState(session, null, false, beforeExpiry)).toBe('loading');
+  expect(aiPlanningReviewPageState(session, draft, false, beforeExpiry)).toBe('reviewing');
+  expect(aiPlanningReviewPageState(session, draft, false, beforeExpiry + 1)).toBe('error');
   expect(
     aiPlanningReviewPageState(
       { ...session, status: 'applied', appliedTripId: 'trip:1' },
       null,
       false,
+      beforeExpiry,
     ),
   ).toBe('redirecting');
 });
@@ -188,13 +191,13 @@ test('an applied session drops its draft so the review page cannot render one ag
     id: 'session:review',
     lastSafeError: null,
     pendingRunId: null,
-    planScore: null,
+    planScore: { score: 80 } as AiPlanningSession['planScore'],
     prompt: 'Tokyo',
     schemaVersion: 1,
     stage: 'reviewing' as const,
     status: 'reviewing' as const,
-    tripDescription: null,
-    tripName: null,
+    tripDescription: 'Private description',
+    tripName: 'Private title',
     updatedAt: '2026-09-01T00:00:00.000Z',
     warningAcknowledgement: { acknowledgedAt: '2026-09-01T00:00:00.000Z', revision: 4 },
   };
@@ -206,8 +209,12 @@ test('an applied session drops its draft so the review page cannot render one ag
     draft: null,
     draftRevision: 4,
     id: 'session:review',
+    planScore: null,
+    prompt: null,
     stage: 'complete',
     status: 'applied',
+    tripDescription: null,
+    tripName: null,
     warningAcknowledgement: null,
   });
   expect(session.draft).toBe(draft);

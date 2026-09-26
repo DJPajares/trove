@@ -179,8 +179,9 @@ function createApplyStore(
         );
         matching.forEach((session) => {
           for (const [key, value] of Object.entries(data)) {
-            if (key === 'draft' && value === Prisma.DbNull) session.draft = null;
-            else (session as unknown as Record<string, unknown>)[key] = value;
+            if ((key === 'draft' || key === 'planScore') && value === Prisma.DbNull) {
+              (session as unknown as Record<string, unknown>)[key] = null;
+            } else (session as unknown as Record<string, unknown>)[key] = value;
           }
         });
         return { count: matching.length };
@@ -380,7 +381,13 @@ describe('AI planning Apply', () => {
       localTime: '13:00',
       source: 'model',
     };
-    const store = createApplyStore(draft);
+    const store = createApplyStore(draft, {
+      session: {
+        tripName: 'Private reviewed title',
+        tripDescription: 'Private reviewed description',
+        planScore: emptyPlanScore(),
+      },
+    });
     const first = await apply(store);
 
     expect(store.state.trips).toHaveLength(1);
@@ -429,13 +436,24 @@ describe('AI planning Apply', () => {
       appliedTripId: first.tripId,
       draft: null,
       rawPrompt: null,
+      tripName: null,
+      tripDescription: null,
+      planScore: null,
       stage: 'COMPLETE',
       status: 'APPLIED',
     });
 
     store.state.sessions[0]!.expiresAt = new Date(NOW.getTime() - 1);
+    store.state.sessions[0]!.tripName = 'Legacy retained title';
+    store.state.sessions[0]!.tripDescription = 'Legacy retained description';
+    store.state.sessions[0]!.planScore = emptyPlanScore();
     const retry = await apply(store, { revision: 999 });
     expect(retry).toStrictEqual(first);
+    expect(store.state.sessions[0]).toMatchObject({
+      tripName: null,
+      tripDescription: null,
+      planScore: null,
+    });
     expect(store.state.trips).toHaveLength(1);
     expect(store.state.items).toHaveLength(3);
   });

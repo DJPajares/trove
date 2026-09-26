@@ -38,9 +38,21 @@ export async function aiPlanningRetentionController(request: FastifyRequest, rep
     return reply.code(401).send({ code: 'unauthorized' });
   }
 
-  // The report is three counts. Nothing it can carry describes what was removed.
-  const report = await cleanupAiPlanningRetention();
+  let report;
+  try {
+    report = await cleanupAiPlanningRetention();
+  } catch {
+    request.log.error({ kind: 'ai_planning_retention' }, 'ai planning retention failed');
+    return reply.code(503).send({ code: 'retention_failed' });
+  }
   request.log.info({ ...report, kind: 'ai_planning_retention' }, 'ai planning retention');
+  if (report.remainingOverdueSessions > 0) {
+    request.log.error(
+      { kind: 'ai_planning_retention', remainingOverdueSessions: report.remainingOverdueSessions },
+      'ai planning retention left overdue content',
+    );
+    return reply.code(503).send(report);
+  }
 
   return reply.send(report);
 }

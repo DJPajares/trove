@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import { afterEach, expect, test, vi } from 'vitest';
 
 import { registerMaintenanceRoutes } from '../src/routes/maintenance.js';
+import { cleanupAiPlanningRetention } from '../src/services/ai-planning-retention.js';
 
 const SECRET = 'a-long-scheduler-secret-value';
 
@@ -10,6 +11,9 @@ vi.mock('../src/services/ai-planning-retention.js', () => ({
     deletedGenerationRuns: 3,
     expiredSessions: 2,
     scrubbedTerminalSessions: 1,
+    overdueSessionsAtStart: 2,
+    oldestOverdueAgeSeconds: 60,
+    remainingOverdueSessions: 0,
   })),
 }));
 
@@ -24,6 +28,15 @@ vi.mock('../src/services/trip-media-cleanup.js', () => ({
 }));
 
 afterEach(() => {
+  vi.mocked(cleanupAiPlanningRetention).mockReset();
+  vi.mocked(cleanupAiPlanningRetention).mockResolvedValue({
+    deletedGenerationRuns: 3,
+    expiredSessions: 2,
+    scrubbedTerminalSessions: 1,
+    overdueSessionsAtStart: 2,
+    oldestOverdueAgeSeconds: 60,
+    remainingOverdueSessions: 0,
+  });
   delete process.env.CRON_SECRET;
   delete process.env.SUPABASE_SECRET_KEY;
 });
@@ -68,12 +81,36 @@ test('retention cleanup runs only for the scheduler and stays closed without a s
   const accepted = await inject({ authorization: `Bearer ${SECRET}` });
   expect(accepted.statusCode).toBe(200);
 
-  // Three counts, and nothing that describes what was removed.
+  // Counts and age only; nothing that describes what was removed.
   expect(accepted.json()).toStrictEqual({
     deletedGenerationRuns: 3,
     expiredSessions: 2,
     scrubbedTerminalSessions: 1,
+    overdueSessionsAtStart: 2,
+    oldestOverdueAgeSeconds: 60,
+    remainingOverdueSessions: 0,
   });
+});
+
+test('retention failures and remaining overdue content fail visibly without exposing content', async () => {
+  process.env.CRON_SECRET = SECRET;
+  vi.mocked(cleanupAiPlanningRetention).mockRejectedValueOnce(new Error('private prompt'));
+  const failed = await inject({ authorization: `Bearer ${SECRET}` });
+  expect(failed.statusCode).toBe(503);
+  expect(failed.json()).toStrictEqual({ code: 'retention_failed' });
+  expect(failed.body).not.toContain('private prompt');
+
+  vi.mocked(cleanupAiPlanningRetention).mockResolvedValueOnce({
+    deletedGenerationRuns: 0,
+    expiredSessions: 0,
+    scrubbedTerminalSessions: 0,
+    overdueSessionsAtStart: 1,
+    oldestOverdueAgeSeconds: 3600,
+    remainingOverdueSessions: 1,
+  });
+  const incomplete = await inject({ authorization: `Bearer ${SECRET}` });
+  expect(incomplete.statusCode).toBe(503);
+  expect(incomplete.json().remainingOverdueSessions).toBe(1);
 });
 
 test('media cleanup requires scheduler auth and a server-only Storage key', async () => {

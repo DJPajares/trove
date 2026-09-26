@@ -264,6 +264,21 @@ export function getAuthenticationEnvironment(
   return { publishableKey, url };
 }
 
+/** Server-only Storage credential. Never expose this through an API response. */
+export function getStorageCleanupEnvironment(
+  environment: Record<string, string | undefined> = process.env,
+) {
+  const url = environment.SUPABASE_URL;
+  const secretKey = environment.SUPABASE_SECRET_KEY?.trim();
+  if (!url || !secretKey) return null;
+  try {
+    new URL(url);
+    return { url, secretKey };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Scheduled maintenance runs as a Vercel Cron request rather than as a signed-in
  * user, so it authenticates with a shared secret instead of a Supabase session.

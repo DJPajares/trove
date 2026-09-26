@@ -26,6 +26,9 @@ Set these in `trove-api` for Preview and Production:
 - `DATABASE_URL` — Supavisor transaction-pooler URL with `schema=trove`.
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_SECRET_KEY` — API-only key with broad Storage access, used only for
+  retryable removal of private trip covers, Memory photos, and reservation
+  documents after a trip is deleted. Never configure it on the web project.
 - `TROVE_WEB_ORIGINS` — comma-separated web origins allowed to call the API. Include
   `https://trove.wndrhive.com` and the narrowly scoped
   preview pattern `https://trove-git-*-djpajares-projects.vercel.app`.
@@ -40,10 +43,11 @@ Set these in `trove-api` for Preview and Production:
   set either to `1` to stop all AI provider construction and requests.
 - `CRON_SECRET` — shared secret for scheduled maintenance. Vercel Cron presents
   it as `Authorization: Bearer <value>` to
-  `/maintenance/ai-planning-retention`, which runs daily at 03:00 UTC and
-  enforces the 7-day session and 30-day generation-run retention windows. The
-  route refuses every caller while this is unset, so retention stops running if
-  it is missing.
+  `/maintenance/ai-planning-retention` (daily at 03:00 UTC) and
+  `/maintenance/trip-media-cleanup` (daily at 03:10 UTC). The latter reports
+  attempted, removed, pending, and oldest-pending-age counts without file paths.
+  Both routes refuse callers while the secret is unset. Cron schedules are not
+  exact execution-time guarantees.
 
 Before launching AI-assisted trip creation to signed-in users, work through
 [`docs/ai/launch-runbook.md`](../../docs/ai/launch-runbook.md): production Vertex

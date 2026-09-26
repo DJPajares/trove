@@ -1297,3 +1297,24 @@ model MemoryPhoto {
   @@map("memory_photos")
   @@schema("trove")
 }
+
+/// A private, durable obligation to remove a file after its owning trip is gone.
+/// No FK to Trip or Profile: their deletion must not discard unfinished cleanup.
+model TripMediaCleanup {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  ownerId       String    @map("owner_id") @db.Uuid
+  tripId        String    @map("trip_id") @db.Uuid
+  bucket        String
+  path          String
+  attemptCount  Int       @default(0) @map("attempt_count")
+  nextAttemptAt DateTime  @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
+  leaseUntil    DateTime? @map("lease_until") @db.Timestamptz(3)
+  leaseToken    String?   @map("lease_token") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([bucket, path])
+  @@index([nextAttemptAt, leaseUntil])
+  @@index([tripId])
+  @@map("trip_media_cleanup")
+  @@schema("trove")
+}

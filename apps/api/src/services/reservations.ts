@@ -870,7 +870,11 @@ export async function addReservationAttachment(
   }
   const prisma = getPrismaClient();
   await prisma.$transaction(async (transaction) => {
-    await findOwnedTrip(transaction, userId, tripId);
+    // Serialize media registration with trip deletion's inventory and cascade.
+    const locked = await transaction.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM trove.trips WHERE id = ${tripId}::uuid AND owner_id = ${userId}::uuid FOR UPDATE
+    `;
+    if (!locked.length) throw new ReservationNotFoundError('trip_not_found');
     const reservation = await transaction.reservation.findFirst({
       where: { id: reservationId, tripId },
     });

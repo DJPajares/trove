@@ -441,7 +441,7 @@ test('removing a Trip Place keeps the Memory captured there and its resolved tim
   }).toStrictEqual({ note: 'Under the ginkgo', timeZone: 'Asia/Tokyo', tripPlace: null });
 });
 
-test('deleting a trip takes its Memories and their private media with it', async () => {
+test('deleting a trip retains a durable obligation to remove its private media', async () => {
   seed();
   const memory = await createMemory(OWNER, TRIP, { note: 'Last night out' }, null);
   const photo = await addMemoryPhoto(
@@ -452,28 +452,14 @@ test('deleting a trip takes its Memories and their private media with it', async
     null,
   );
 
-  const storageRequests: Array<{ body: string; url: string }> = [];
-  const realFetch = globalThis.fetch;
-  globalThis.fetch = (async (input: unknown, init?: { body?: unknown }) => {
-    storageRequests.push({ body: String(init?.body ?? ''), url: String(input) });
-    return new Response('[]', { headers: { 'content-type': 'application/json' }, status: 200 });
-  }) as typeof globalThis.fetch;
-
-  try {
-    await deleteTrip(OWNER, 'access-token', TRIP);
-  } finally {
-    globalThis.fetch = realFetch;
-  }
+  await deleteTrip(OWNER, 'access-token', TRIP);
 
   expect(store.memory).toStrictEqual([]);
   expect(store.memoryPhoto).toStrictEqual([]);
-  // The traveller's photos must not outlive the trip in private Storage.
-  const removal = storageRequests.find((request) => request.url.includes('memory-photos'));
-  expect(
-    removal,
-    `expected a memory-photos removal, got ${JSON.stringify(storageRequests)}`,
-  ).toBeTruthy();
-  expect(removal!.body.includes(photo.id) || removal!.body.includes('last-night.jpg')).toBeTruthy();
+  expect(store.tripMediaCleanup).toMatchObject([
+    { bucket: 'memory-photos', ownerId: OWNER, tripId: TRIP },
+  ]);
+  expect(String(store.tripMediaCleanup[0]?.path)).toContain(photo.fileName);
 });
 
 test('Experience Rating is entered per target and never averaged or inferred', async () => {

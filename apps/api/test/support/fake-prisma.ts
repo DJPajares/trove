@@ -10,8 +10,10 @@ export type ModelName =
   | 'memoryPhoto'
   | 'place'
   | 'reservation'
+  | 'reservationAttachment'
   | 'task'
   | 'trip'
+  | 'tripMediaCleanup'
   | 'tripPlace';
 
 const MODELS: ModelName[] = [
@@ -23,8 +25,10 @@ const MODELS: ModelName[] = [
   'memoryPhoto',
   'place',
   'reservation',
+  'reservationAttachment',
   'task',
   'trip',
+  'tripMediaCleanup',
   'tripPlace',
 ];
 
@@ -53,6 +57,12 @@ function matches(row: Row, where: Where): boolean {
     }
     if (value && typeof value === 'object' && 'in' in value) {
       return (value as { in: unknown[] }).in.includes(row[key]);
+    }
+    if (value && typeof value === 'object' && 'lte' in value) {
+      return (row[key] as Date).getTime() <= (value as { lte: Date }).lte.getTime();
+    }
+    if (value && typeof value === 'object' && 'lt' in value) {
+      return (row[key] as Date).getTime() < (value as { lt: Date }).lt.getTime();
     }
     // `not` excludes one row from a set, which is how a reorder reads the
     // siblings of the item being placed.
@@ -125,7 +135,14 @@ function hydrate(name: ModelName, row: Row): Row {
       ),
     };
   }
-  if (name === 'reservation') return { ...row, accommodationDays: row.accommodationDays ?? [] };
+  if (name === 'reservation')
+    return {
+      ...row,
+      accommodationDays: row.accommodationDays ?? [],
+      attachments: store.reservationAttachment.filter(
+        (attachment) => attachment.reservationId === row.id,
+      ),
+    };
   if (name === 'tripPlace') return hydrateTripPlace(row) as Row;
   if (name === 'trip') {
     return {
@@ -136,6 +153,9 @@ function hydrate(name: ModelName, row: Row): Row {
       },
       dayExperiences: store.dayExperience.filter((entry) => entry.tripId === row.id),
       destinations: [],
+      itineraryDays: store.itineraryDay
+        .filter((day) => day.tripId === row.id)
+        .map((day) => hydrate('itineraryDay', day)),
       memories: store.memory
         .filter((memory) => memory.tripId === row.id)
         .map((memory) => ({
@@ -212,6 +232,14 @@ function removeRow(name: ModelName, row: Row) {
     for (const memory of store.memory) {
       if (memory.tripId === row.id) removeRow('memory', memory);
     }
+    for (const reservation of store.reservation) {
+      if (reservation.tripId === row.id) removeRow('reservation', reservation);
+    }
+  }
+  if (name === 'reservation') {
+    for (const attachment of store.reservationAttachment) {
+      if (attachment.reservationId === row.id) removeRow('reservationAttachment', attachment);
+    }
   }
 }
 
@@ -260,8 +288,15 @@ function createModel(name: ModelName) {
       store[name].push(row);
       return hydrate(name, row);
     },
-    createMany: async (args: { data: Row[] }) => {
+    createMany: async (args: { data: Row[]; skipDuplicates?: boolean }) => {
+      let count = 0;
       for (const data of args.data) {
+        if (
+          name === 'tripMediaCleanup' &&
+          args.skipDuplicates &&
+          store[name].some((row) => row.bucket === data.bucket && row.path === data.path)
+        )
+          continue;
         if (name === 'itineraryDay') assertUniqueDayDate(null, data);
         nextRowId += 1;
         store[name].push({
@@ -269,10 +304,14 @@ function createModel(name: ModelName) {
           highlightPosition: null,
           id: `${name}-${nextRowId}`,
           updatedAt: new Date(),
+          ...(name === 'tripMediaCleanup'
+            ? { attemptCount: 0, nextAttemptAt: new Date(), leaseToken: null, leaseUntil: null }
+            : {}),
           ...data,
         });
+        count += 1;
       }
-      return { count: args.data.length };
+      return { count };
     },
     delete: async (args: { where: { id: string } }) => {
       const row = store[name].find((candidate) => candidate.id === args.where.id);
@@ -288,8 +327,13 @@ function createModel(name: ModelName) {
       for (const row of rows) removeRow(name, row);
       return { count: rows.length };
     },
-    findFirst: async (args: { where?: Where } = {}) => {
-      const row = store[name].find((candidate) => matches(candidate, args.where));
+    count: async (args: { where?: Where } = {}) =>
+      store[name].filter((row) => matches(row, args.where)).length,
+    findFirst: async (args: { orderBy?: unknown; where?: Where } = {}) => {
+      const row = sortRows(
+        store[name].filter((candidate) => matches(candidate, args.where)),
+        args.orderBy,
+      )[0];
       return row ? hydrate(name, row) : null;
     },
     findFirstOrThrow: async (args: { where?: Where } = {}) => {
@@ -297,9 +341,11 @@ function createModel(name: ModelName) {
       if (!row) throw new Error(`${name}_not_found`);
       return hydrate(name, row);
     },
-    findMany: async (args: { orderBy?: unknown; where?: Where } = {}) => {
+    findMany: async (args: { orderBy?: unknown; take?: number; where?: Where } = {}) => {
       const rows = store[name].filter((row) => matches(row, args.where));
-      return sortRows(rows, args.orderBy).map((row) => hydrate(name, row));
+      return sortRows(rows, args.orderBy)
+        .slice(0, args.take)
+        .map((row) => hydrate(name, row));
     },
     update: async (args: { data: Row; where: { id: string } }) => {
       const row = store[name].find((candidate) => candidate.id === args.where.id);
@@ -340,6 +386,12 @@ export function createFakePrismaClient(): Record<string, unknown> {
   const models = Object.fromEntries(MODELS.map((name) => [name, createModel(name)]));
   return {
     ...models,
+    $queryRaw: async (_statement: unknown, tripId: unknown, ownerId: unknown) => {
+      const row = store.trip.find(
+        (candidate) => candidate.id === tripId && candidate.ownerId === ownerId,
+      );
+      return row ? [{ id: row.id }] : [];
+    },
     $executeRaw: applyRawStartInstants,
     $transaction: async (operations: unknown) => {
       const before = structuredClone(store);

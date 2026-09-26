@@ -987,6 +987,10 @@ model AiPlanningSession {
   /// metadata rather than part of the plan, so it never touches the immutable
   /// draft JSON and never moves draftRevision.
   tripName                     String?                 @map("trip_name") @db.Text
+  /// Traveller-confirmed ordered country codes for this draft revision.
+  reviewedCountries            String[]                @default([]) @map("reviewed_countries") @db.Char(2)
+  countriesReviewedRevision    Int?                    @map("countries_reviewed_revision")
+  countryContextChanged        Boolean                 @default(false) @map("country_context_changed")
   draft                        Json?                   @db.JsonB
   /// Plan Score for the draft, computed during generation from the evidence
   /// that run already fetched. Derived rather than part of the plan, so it

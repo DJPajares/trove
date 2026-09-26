@@ -32,6 +32,9 @@ type SessionState = {
   status: string;
   tripDescription: string | null;
   tripName: string | null;
+  reviewedCountries: string[];
+  countriesReviewedRevision: number | null;
+  countryContextChanged: boolean;
   updatedAt: Date;
   warningsAcknowledgedAt: Date | null;
   warningsAcknowledgedRevision: number | null;
@@ -66,6 +69,9 @@ function makeSession(draft: AiPlannerDraft, overrides: Partial<SessionState> = {
     status: 'REVIEWING',
     tripDescription: null,
     tripName: null,
+    reviewedCountries: ['JP'],
+    countriesReviewedRevision: 1,
+    countryContextChanged: false,
     updatedAt: NOW,
     warningsAcknowledgedAt: null,
     warningsAcknowledgedRevision: null,
@@ -337,6 +343,28 @@ function apply(
 }
 
 describe('AI planning Apply', () => {
+  test('requires confirmed countries and preserves their reviewed order', async () => {
+    const unreviewed = createApplyStore(explicitDraft(), {
+      session: { countriesReviewedRevision: null, reviewedCountries: [] },
+    });
+    await expect(apply(unreviewed)).rejects.toMatchObject({ code: 'countries_not_reviewed' });
+    expect(unreviewed.state.trips).toHaveLength(0);
+
+    const invalid = createApplyStore(explicitDraft(), {
+      session: { reviewedCountries: ['XX'] },
+    });
+    await expect(apply(invalid)).rejects.toMatchObject({ code: 'invalid_countries' });
+    expect(invalid.state.trips).toHaveLength(0);
+
+    const reviewed = createApplyStore(explicitDraft(), {
+      session: { reviewedCountries: ['KR', 'JP'] },
+    });
+    await apply(reviewed);
+    await apply(reviewed);
+    expect(reviewed.state.trips).toHaveLength(1);
+    expect(reviewed.state.trips[0]?.countries).toStrictEqual(['KR', 'JP']);
+  });
+
   test('Apply and expiry cleanup serialize without a partial Trip or retained review content', async () => {
     for (const sweepFirst of [false, true]) {
       const store = createApplyStore(customPlaceDraft(), {
@@ -361,6 +389,9 @@ describe('AI planning Apply', () => {
         tripName: null,
         tripDescription: null,
         planScore: null,
+        reviewedCountries: [],
+        countriesReviewedRevision: null,
+        countryContextChanged: false,
       });
       if (sweepFirst) {
         expect(first.status).toBe('fulfilled');

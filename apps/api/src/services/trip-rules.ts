@@ -75,11 +75,9 @@ const countryPrimaryTimeZones = new Map<string, string>();
 /**
  * The same names, pointing at the country itself rather than its zone.
  *
- * Built in the same pass because it answers the same question from the same
- * evidence: AI-applied trips are created outside the request schema that makes
- * a country mandatory, so they name their countries from what the draft's
- * destinations say. Only codes the curated map knows are registered - a code
- * the rest of Trove will not store is no use to an apply either.
+ * Built in the same pass because AI review can suggest countries named in the
+ * immutable destination labels. The traveller must confirm or correct those
+ * suggestions before Apply; only codes Trove accepts are useful here.
  */
 const countryCodesByName = new Map<string, string>();
 

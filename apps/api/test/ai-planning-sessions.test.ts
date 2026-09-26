@@ -19,12 +19,14 @@ import {
   regenerateAiPlanningSession,
   setAiPlanningTripDescription,
   setAiPlanningTripName,
+  setAiPlanningCountries,
 } from '../src/services/ai-planning-sessions.js';
 import {
   setAiPlanningTelemetrySink,
   type AiPlanningTelemetryEvent,
 } from '../src/services/ai-planning-telemetry.js';
 import { emptyPlanScore, explicitDraft } from './fixtures/ai-planning.js';
+import { suggestedDraftCountries } from '../src/services/ai-planning-countries.js';
 
 const OWNER_ID = '00000000-0000-4000-8000-000000000001';
 const OTHER_OWNER_ID = '00000000-0000-4000-8000-000000000002';
@@ -53,6 +55,9 @@ type SessionState = {
   status: string;
   tripDescription: string | null;
   tripName: string | null;
+  reviewedCountries: string[];
+  countriesReviewedRevision: number | null;
+  countryContextChanged: boolean;
   updatedAt: Date;
   warningsAcknowledgedAt: Date | null;
   warningsAcknowledgedRevision: number | null;
@@ -140,7 +145,11 @@ function createPlanningStore() {
       queries.push(query);
       return Promise.resolve([{ id: OWNER_ID }]);
     },
-    profile: { upsert: async () => ({ id: OWNER_ID }) },
+    profile: {
+      upsert: async () => ({ id: OWNER_ID }),
+      findUnique: async () => ({ homeTimeZone: null }),
+    },
+    place: { findMany: async () => [] },
     aiPlanningSession: {
       async create({ data }: { data: Record<string, any> }) {
         const id = uuid(sessionCounter++);
@@ -160,6 +169,9 @@ function createPlanningStore() {
           status: 'PENDING',
           tripDescription: null,
           tripName: null,
+          reviewedCountries: [],
+          countriesReviewedRevision: null,
+          countryContextChanged: false,
           updatedAt: NOW,
           warningsAcknowledgedAt: null,
           warningsAcknowledgedRevision: null,
@@ -316,6 +328,9 @@ function makeSession(id: string, overrides: Partial<SessionState> = {}): Session
     status: 'PENDING',
     tripDescription: null,
     tripName: null,
+    reviewedCountries: [],
+    countriesReviewedRevision: null,
+    countryContextChanged: false,
     updatedAt: NOW,
     warningsAcknowledgedAt: null,
     warningsAcknowledgedRevision: null,
@@ -364,6 +379,11 @@ describe('planning-session routes', () => {
         method: 'PATCH',
         url: `/ai/planning-sessions/${sessionId}/name`,
         payload: { name: 'A week in Tokyo' },
+      },
+      {
+        method: 'PATCH',
+        url: `/ai/planning-sessions/${sessionId}/countries`,
+        payload: { countries: ['JP'], expectedRevision: 1 },
       },
       { method: 'POST', url: `/ai/planning-sessions/${sessionId}/regenerate`, payload: {} },
       {
@@ -645,6 +665,101 @@ describe('planning-session reservations and recovery', () => {
 });
 
 describe('review session safety', () => {
+  test('country suggestions use only named destination countries in their draft order', () => {
+    const draft = explicitDraft();
+    expect(suggestedDraftCountries(draft)).toStrictEqual([]);
+    draft.places.find((place) => place.id === 'place:tokyo')!.name = 'Tokyo, Japan';
+    expect(suggestedDraftCountries(draft)).toStrictEqual(['JP']);
+    draft.places.find((place) => place.id === 'place:museum')!.name = 'Seoul, South Korea';
+    draft.trip.destinations.push({
+      id: 'draft-destination:seoul',
+      placeRefId: 'place:museum',
+      destinationIntentId: null,
+      assumptionId: null,
+      source: 'model',
+    });
+    expect(suggestedDraftCountries(draft)).toStrictEqual(['JP', 'KR']);
+  });
+
+  test('country confirmation is owner-scoped, revision-checked, and separate from the draft', async () => {
+    const store = createPlanningStore();
+    const sessionId = '00000000-0000-4000-8000-000000000160';
+    const draft = explicitDraft();
+    const score = emptyPlanScore();
+    store.sessions.set(
+      sessionId,
+      makeSession(sessionId, {
+        draft,
+        draftRevision: 2,
+        planScore: score,
+        stage: 'REVIEWING',
+        status: 'REVIEWING',
+        warningsAcknowledgedAt: NOW,
+        warningsAcknowledgedRevision: 2,
+      }),
+    );
+    const options = { now: () => NOW, prisma: store.prisma };
+    await expect(
+      setAiPlanningCountries(OTHER_OWNER_ID, sessionId, ['JP'], 2, options),
+    ).rejects.toMatchObject({ code: 'session_not_found' });
+    await expect(
+      setAiPlanningCountries(OWNER_ID, sessionId, ['XX'], 2, options),
+    ).rejects.toMatchObject({ code: 'invalid_countries' });
+    await expect(
+      setAiPlanningCountries(OWNER_ID, sessionId, ['JP'], 1, options),
+    ).rejects.toMatchObject({ code: 'draft_conflict' });
+
+    const reviewed = await setAiPlanningCountries(
+      OWNER_ID,
+      sessionId,
+      ['jp', 'KR', 'JP'],
+      2,
+      options,
+    );
+    expect(reviewed).toMatchObject({
+      countryContextChanged: true,
+      countriesReviewedRevision: 2,
+      draftRevision: 2,
+      planScore: null,
+      reviewedCountries: ['JP', 'KR'],
+      suggestedCountries: [],
+      warningAcknowledgement: null,
+    });
+    expect(store.sessions.get(sessionId)?.draft).toEqual(draft);
+    expect(store.runs.size).toBe(0);
+    await acknowledgeAiPlanningWarnings(OWNER_ID, sessionId, 2, options);
+    const replay = await setAiPlanningCountries(OWNER_ID, sessionId, ['JP', 'KR'], 2, options);
+    expect(replay.warningAcknowledgement?.revision).toBe(2);
+  });
+
+  test('a country correction leaves score and acknowledgement intact when located destinations fix the timezone', async () => {
+    const store = createPlanningStore();
+    const sessionId = '00000000-0000-4000-8000-000000000161';
+    const draft = explicitDraft();
+    draft.places.find((place) => place.id === 'place:tokyo')!.name = 'Tokyo, Japan';
+    const score = emptyPlanScore();
+    store.sessions.set(
+      sessionId,
+      makeSession(sessionId, {
+        draft,
+        draftRevision: 1,
+        planScore: score,
+        stage: 'REVIEWING',
+        status: 'REVIEWING',
+        warningsAcknowledgedAt: NOW,
+        warningsAcknowledgedRevision: 1,
+      }),
+    );
+    const reviewed = await setAiPlanningCountries(OWNER_ID, sessionId, ['KR'], 1, {
+      now: () => NOW,
+      prisma: store.prisma,
+    });
+    expect(reviewed.suggestedCountries).toStrictEqual(['JP']);
+    expect(reviewed.countryContextChanged).toBe(false);
+    expect(reviewed.planScore).toEqual(score);
+    expect(reviewed.warningAcknowledgement?.revision).toBe(1);
+  });
+
   test('warning acknowledgement is revision-exact', async () => {
     const store = createPlanningStore();
     const sessionId = '00000000-0000-4000-8000-000000000062';
@@ -819,6 +934,8 @@ describe('dispatch quota and lifecycle completion', () => {
     const session = makeSession(sessionId, {
       draft,
       draftRevision: 1,
+      reviewedCountries: ['JP'],
+      countriesReviewedRevision: 1,
       stage: 'GENERATING',
       status: 'GENERATING',
     });
@@ -828,7 +945,13 @@ describe('dispatch quota and lifecycle completion', () => {
       now: () => NOW,
       prisma: store.prisma,
     });
-    expect(session).toMatchObject({ draft, draftRevision: 1, status: 'REVIEWING' });
+    expect(session).toMatchObject({
+      draft,
+      draftRevision: 1,
+      status: 'REVIEWING',
+      reviewedCountries: ['JP'],
+      countriesReviewedRevision: 1,
+    });
     expect(run).toMatchObject({ errorCode: 'provider_unavailable', result: 'FAILED' });
   });
 
@@ -844,7 +967,13 @@ describe('dispatch quota and lifecycle completion', () => {
     const store = createPlanningStore();
     const sessionId = '00000000-0000-4000-8000-000000000150';
     const runId = '00000000-0000-4000-8000-000000000151';
-    const session = makeSession(sessionId, { stage: 'GENERATING', status: 'GENERATING' });
+    const session = makeSession(sessionId, {
+      stage: 'GENERATING',
+      status: 'GENERATING',
+      reviewedCountries: ['JP'],
+      countriesReviewedRevision: 0,
+      countryContextChanged: true,
+    });
     const run = makeRun(runId, sessionId, { dispatchedAt: NOW });
     store.addRun(run, session);
     await completeAiPlanningRunSuccess(
@@ -858,7 +987,13 @@ describe('dispatch quota and lifecycle completion', () => {
         prisma: store.prisma,
       },
     );
-    expect(session).toMatchObject({ draftRevision: 1, status: 'REVIEWING' });
+    expect(session).toMatchObject({
+      draftRevision: 1,
+      status: 'REVIEWING',
+      reviewedCountries: [],
+      countriesReviewedRevision: null,
+      countryContextChanged: false,
+    });
     await expect(
       completeAiPlanningRunSuccess(OWNER_ID, runId, explicitDraft(), emptyPlanScore(), metadata, {
         now: () => NOW,

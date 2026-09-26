@@ -2086,7 +2086,8 @@
     "otherTripsTitle": "Also on the map",
     "tripDeckPosition": "Trip {current} of {total}",
     "showTrip": "Show {name}",
-    "goToTrip": "Go to trip {current}",
+    "previousTrip": "Previous trip",
+    "nextTrip": "Next trip",
     "viewTrips": "View all trips",
     "pastTripTitle": "A past trip",
     "pastTripDescription": "Revisit {name} whenever you want to look back at the plan."

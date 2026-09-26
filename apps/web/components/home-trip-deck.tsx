@@ -1,5 +1,6 @@
 'use client';
 
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
@@ -9,6 +10,7 @@ import { TripFactChips } from '@/components/trip-fact-chips';
 import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
 import { TripMedia } from '@/components/trip-media';
 import { TripReadinessBadge } from '@/components/trip-readiness-badge';
+import { Button } from '@/components/ui/button';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import type { Trip } from '@/lib/trips/api';
@@ -64,32 +66,45 @@ export function HomeTripDeck({ editorialFor, trips }: Readonly<HomeTripDeckProps
   }
 
   return (
-    // The handler sits on the section rather than on the stack: the dots are a
-    // sibling of the cards, and arrows pressed with a dot focused are exactly
-    // the ones a traveller expects to move the deck. Nothing here is focusable
-    // that is not already a card or a dot, so this adds no tab stop.
     <section
       aria-labelledby="other-trips-heading"
-      className="space-y-4"
-      onKeyDown={(event) => {
-        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-        event.preventDefault();
-        goTo(activeIndex + (event.key === 'ArrowLeft' ? -1 : 1));
-      }}
+      className="mx-auto w-full space-y-4 lg:max-w-[44rem]"
     >
-      <div className="flex items-center justify-between gap-4">
-        <h2
-          className="min-w-0 text-[length:var(--text-section-title)] leading-[1.18] font-semibold tracking-[-0.022em] text-foreground"
-          id="other-trips-heading"
-        >
-          {t('otherTripsTitle')}
-        </h2>
-        <Link
-          className="shrink-0 rounded-[var(--radius-sm)] text-sm font-medium text-brand underline-offset-4 transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:underline focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none motion-reduce:transition-none"
-          href="/trips"
-        >
-          {t('viewTrips')}
-        </Link>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-4">
+          <h2
+            className="min-w-0 text-[length:var(--text-section-title)] leading-[1.18] font-semibold tracking-[-0.022em] text-foreground"
+            id="other-trips-heading"
+          >
+            {t('otherTripsTitle')}
+          </h2>
+          <Link
+            className="shrink-0 rounded-[var(--radius-sm)] text-sm font-medium text-brand underline-offset-4 transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:underline focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none motion-reduce:transition-none"
+            href="/trips"
+          >
+            {t('viewTrips')}
+          </Link>
+        </div>
+        {total > 1 ? (
+          <div className="flex justify-end gap-1">
+            <Button
+              aria-label={t('previousTrip')}
+              onClick={() => goTo(activeIndex - 1)}
+              size="icon-sm"
+              variant="ghost"
+            >
+              <ChevronLeft aria-hidden="true" />
+            </Button>
+            <Button
+              aria-label={t('nextTrip')}
+              onClick={() => goTo(activeIndex + 1)}
+              size="icon-sm"
+              variant="ghost"
+            >
+              <ChevronRight aria-hidden="true" />
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       <div
@@ -204,8 +219,10 @@ export function HomeTripDeck({ editorialFor, trips }: Readonly<HomeTripDeckProps
               {depth === 0 ? null : (
                 <button
                   aria-label={t('showTrip', { name: trip.name })}
+                  aria-hidden={buried ? true : undefined}
                   className="absolute inset-0 z-10 cursor-pointer rounded-[inherit] outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
                   onClick={() => goTo(index)}
+                  tabIndex={buried ? -1 : undefined}
                   type="button"
                 />
               )}
@@ -215,28 +232,9 @@ export function HomeTripDeck({ editorialFor, trips }: Readonly<HomeTripDeckProps
       </div>
 
       {total > 1 ? (
-        <div className="flex items-center justify-center gap-2">
-          {trips.map((trip, index) => (
-            <button
-              aria-current={index === activeIndex}
-              aria-label={t('goToTrip', { current: index + 1 })}
-              className="rounded-full p-1.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
-              key={trip.id}
-              onClick={() => goTo(index)}
-              type="button"
-            >
-              <span
-                aria-hidden="true"
-                className={`block h-1.5 rounded-full transition-[width,background-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none ${
-                  index === activeIndex ? 'w-3.5 bg-brand' : 'w-1.5 bg-border-strong'
-                }`}
-              />
-            </button>
-          ))}
-          <p aria-live="polite" className="sr-only">
-            {t('tripDeckPosition', { current: activeIndex + 1, total })}
-          </p>
-        </div>
+        <p aria-live="polite" className="sr-only">
+          {t('tripDeckPosition', { current: activeIndex + 1, total })}
+        </p>
       ) : null}
     </section>
   );

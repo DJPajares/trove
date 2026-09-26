@@ -21,7 +21,7 @@ import { TripModeTasksProvider } from '@/components/trip-mode-tasks';
 import { useTripContext } from '@/components/trip-provider';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
+import { Field, FieldLabel } from '@/components/ui/field';
 import {
   deviceTimeZone,
   fetchItinerary,

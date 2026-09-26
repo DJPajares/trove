@@ -36,6 +36,11 @@ export function registerAiPlanningSessionRoutes(app: FastifyInstance) {
     { preHandler: requireAuthenticatedUser },
     controllers.setName,
   );
+  app.patch(
+    '/ai/planning-sessions/:sessionId/countries',
+    { preHandler: requireAuthenticatedUser },
+    controllers.setCountries,
+  );
   app.post(
     '/ai/planning-sessions/:sessionId/regenerate',
     { preHandler: requireAuthenticatedUser },

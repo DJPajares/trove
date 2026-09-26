@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
+import { CountryMultiCombobox } from '@/components/country-multi-combobox';
 import { PageState } from '@/components/page-state';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { usePreferences } from '@/components/preferences-provider';
@@ -33,6 +34,7 @@ import {
   regenerateAiPlanningSession,
   setAiPlanningTripDescription,
   setAiPlanningTripName,
+  setAiPlanningCountries,
   type AiPlanningSession,
   type AiPlanningDraft,
 } from '@/lib/ai-planning/api';
@@ -91,6 +93,8 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   const [savingDescription, setSavingDescription] = useState(false);
   const [name, setName] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [countries, setCountries] = useState<string[]>([]);
+  const [savingCountries, setSavingCountries] = useState(false);
   const [clock, setClock] = useState(() => Date.now());
   const sessionRef = useRef<AiPlanningSession | null>(null);
   const expired = Boolean(session && isAiPlanningSessionExpired(session, clock));
@@ -119,6 +123,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
     setRegeneratePrompt('');
     setDescription('');
     setName('');
+    setCountries([]);
     setConfirmApply(false);
     queryClient.setQueryData(queryKeys.aiPlanningSession(sessionId), { session: null });
     queryClient.setQueryData(queryKeys.aiPlanningRecovery(), { session: null });
@@ -131,11 +136,14 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   // The draft is whatever generation produced, so the server copy is always the
   // truth and there is nothing local to reconcile against it.
   useEffect(() => {
-    sessionRef.current = expired || serverExpired ? null : session;
     if (expired || !session?.draft) return;
     setDraft(session.draft);
     setRegeneratePrompt(session.prompt ?? '');
   }, [expired, serverExpired, session?.draft, session?.draftRevision, session?.prompt]);
+
+  useEffect(() => {
+    sessionRef.current = expired || serverExpired ? null : session;
+  }, [expired, serverExpired, session]);
 
   // The model drafts a description and the traveller's edit overrides it, so the
   // field is seeded from the session's own copy first. It reads through
@@ -156,6 +164,24 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
     setName(expired || serverExpired ? '' : (session?.tripName ?? draftedName));
   }, [draftedName, expired, serverExpired, session?.id, session?.tripName]);
 
+  const countrySeed =
+    session && session.countriesReviewedRevision === session.draftRevision
+      ? session.reviewedCountries
+      : (session?.suggestedCountries ?? []);
+  const reviewedCountryKey = session?.reviewedCountries.join(',') ?? '';
+  const suggestedCountryKey = session?.suggestedCountries.join(',') ?? '';
+  useEffect(() => {
+    setCountries(expired || serverExpired ? [] : countrySeed);
+  }, [
+    expired,
+    serverExpired,
+    session?.id,
+    session?.draftRevision,
+    session?.countriesReviewedRevision,
+    reviewedCountryKey,
+    suggestedCountryKey,
+  ]);
+
   useEffect(() => {
     if (!session?.appliedTripId) return;
     router.replace(`/trips/${session.appliedTripId}`);
@@ -166,9 +192,16 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   const materialWarnings = draft?.warnings.filter((warning) => warning.material) ?? [];
   const warningsAcknowledged =
     session?.warningAcknowledgement?.revision === session?.draftRevision &&
-    materialWarnings.length > 0;
+    (materialWarnings.length > 0 || session?.countryContextChanged);
+  const countriesConfirmed =
+    session?.countriesReviewedRevision === session?.draftRevision &&
+    countries.join(',') === session?.reviewedCountries.join(',');
   const canApply = Boolean(
-    reviewing && draft && (!materialWarnings.length || warningsAcknowledged),
+    reviewing &&
+    draft &&
+    countriesConfirmed &&
+    !savingCountries &&
+    (!(materialWarnings.length || session?.countryContextChanged) || warningsAcknowledged),
   );
   const selectedMapPoints = useMemo(
     () => (draft ? buildAiPlanningReviewMapPoints(draft) : []),
@@ -228,10 +261,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
     queryClient.setQueryData(queryKeys.aiPlanningRecovery(), { session: next });
   }
 
-  /**
-   * The only write a reviewed session accepts. It is session metadata beside the
-   * draft, so it needs no revision and cannot invalidate the plan.
-   */
+  /** Description is session metadata beside the immutable draft. */
   async function saveDescription(next: string) {
     // Comparing against the seeded value, not just the stored one: a first blur
     // on an untouched field would otherwise save the model's own words back as
@@ -259,6 +289,22 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
       setError(cause instanceof AiPlanningApiError ? cause.code : 'request_failed');
     } finally {
       setSavingName(false);
+    }
+  }
+
+  async function confirmCountries() {
+    if (!session || !reviewing || publishing || savingCountries || !countries.length) return;
+    setSavingCountries(true);
+    setError(null);
+    try {
+      publish((await setAiPlanningCountries(session.id, countries, session.draftRevision)).session);
+    } catch (cause) {
+      setError(cause instanceof AiPlanningApiError ? cause.code : 'request_failed');
+      if (cause instanceof AiPlanningApiError && cause.code === 'draft_conflict') {
+        void sessionQuery.refetch();
+      }
+    } finally {
+      setSavingCountries(false);
     }
   }
 
@@ -312,9 +358,16 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
       }
       const latestMaterialWarnings = saved.draft.warnings.filter((warning) => warning.material);
       const latestWarningsAcknowledged =
-        !latestMaterialWarnings.length ||
+        (!latestMaterialWarnings.length && !saved.countryContextChanged) ||
         saved.warningAcknowledgement?.revision === saved.draftRevision;
       if (!latestWarningsAcknowledged) {
+        setConfirmApply(false);
+        return;
+      }
+      if (
+        saved.countriesReviewedRevision !== saved.draftRevision ||
+        countries.join(',') !== saved.reviewedCountries.join(',')
+      ) {
         setConfirmApply(false);
         return;
       }
@@ -325,6 +378,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
       setRegeneratePrompt('');
       setDescription('');
       setName('');
+      setCountries([]);
       sessionRef.current = applied;
       queryClient.setQueryData(queryKeys.aiPlanningSession(sessionId), { session: applied });
       // Recovery must be emptied, not just refreshed: the server drops an
@@ -442,6 +496,41 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
               <FieldDescription aria-live="polite">
                 {savingName ? t('nameSaving') : t('nameHint')}
               </FieldDescription>
+            </Field>
+            <Field className="mt-4">
+              <FieldLabel htmlFor="review-trip-countries">{t('countries')}</FieldLabel>
+              <CountryMultiCombobox
+                aria-label={t('countries')}
+                disabled={!reviewing || publishing || savingCountries}
+                id="review-trip-countries"
+                onValueChange={setCountries}
+                placeholder={t('countriesPlaceholder')}
+                required
+                value={countries}
+              />
+              <FieldDescription>
+                {session.suggestedCountries.length
+                  ? t('countriesSuggested')
+                  : t('countriesMissing')}
+              </FieldDescription>
+              {!countries.length ? (
+                <p className="text-sm text-destructive">{t('countriesRequired')}</p>
+              ) : null}
+              {countriesConfirmed ? (
+                <p className="text-sm text-muted-foreground" role="status">
+                  {t('countriesConfirmed')}
+                </p>
+              ) : (
+                <Button
+                  disabled={!reviewing || publishing || savingCountries || !countries.length}
+                  onClick={() => void confirmCountries()}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  {savingCountries ? t('countriesSaving') : t('countriesConfirm')}
+                </Button>
+              )}
             </Field>
             <dl className="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
@@ -586,6 +675,12 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
               title={planScoreCopy('title')}
             />
           ) : null}
+          {session.countryContextChanged ? (
+            <Alert variant="warning">
+              <CircleAlert aria-hidden="true" />
+              <AlertDescription>{t('countryTimeZoneWarning')}</AlertDescription>
+            </Alert>
+          ) : null}
           <section
             className="overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card"
             aria-label={t('mapLabel')}
@@ -650,18 +745,23 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
         </aside>
       </motion.div>
 
-      {materialWarnings.length ? (
+      {materialWarnings.length || session.countryContextChanged ? (
         <Alert role="alert" variant="warning">
           <CircleAlert aria-hidden="true" />
           <AlertTitle>{t('materialWarnings')}</AlertTitle>
           <AlertDescription>
             {warningsAcknowledged ? t('warningsAcknowledged') : t('warningsNeedAcknowledgement')}
           </AlertDescription>
-          <p className="text-sm text-muted-foreground">
-            {t('warningAffects', {
-              count: materialWarnings.reduce((total, warning) => total + warning.itemIds.length, 0),
-            })}
-          </p>
+          {materialWarnings.length ? (
+            <p className="text-sm text-muted-foreground">
+              {t('warningAffects', {
+                count: materialWarnings.reduce(
+                  (total, warning) => total + warning.itemIds.length,
+                  0,
+                ),
+              })}
+            </p>
+          ) : null}
           {!warningsAcknowledged ? (
             <Button
               disabled={!reviewing || publishing}

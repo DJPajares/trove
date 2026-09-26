@@ -116,6 +116,10 @@ export type AiPlanningSession = {
   pendingRunId: string | null;
   /** Scored during generation from evidence that run already fetched. */
   planScore: TripPlanScore | null;
+  countryContextChanged: boolean;
+  countriesReviewedRevision: number | null;
+  reviewedCountries: string[];
+  suggestedCountries: string[];
   prompt: string | null;
   schemaVersion: number;
   stage: AiPlanningSessionStage;
@@ -245,6 +249,17 @@ export function setAiPlanningTripName(sessionId: string, name: string | null) {
       body: JSON.stringify({ name }),
       method: 'PATCH',
     },
+  );
+}
+
+export function setAiPlanningCountries(
+  sessionId: string,
+  countries: string[],
+  expectedRevision: number,
+) {
+  return aiPlanningRequest<{ session: AiPlanningSession }>(
+    `/ai/planning-sessions/${sessionId}/countries`,
+    { body: JSON.stringify({ countries, expectedRevision }), method: 'PATCH' },
   );
 }
 

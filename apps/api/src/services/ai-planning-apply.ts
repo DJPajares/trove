@@ -16,9 +16,9 @@ import {
   isValidIanaTimeZone,
   parseDateOnly,
   resolveCountryPrimaryTimeZone,
-  resolveDestinationCountryCode,
   resolveTripTimeZone,
 } from './trip-rules.js';
+import { normalizeReviewedCountries } from './ai-planning-countries.js';
 
 type ApplyPrisma = ReturnType<typeof getPrismaClient>;
 
@@ -29,7 +29,7 @@ type ApplyOptions = {
 
 type AppliedPlace = {
   id: string;
-  /** The draft's own name for the place, which is what names its country. */
+  /** The draft's own place name, retained when materializing a destination. */
   name: string;
   timeZone: string | null;
 };
@@ -251,7 +251,15 @@ export async function applyAiPlanningSession(
     }
 
     const { draft } = loaded;
-    if (draft.warnings.some((warning) => warning.material) && !loaded.warningAcknowledged) {
+    if (!loaded.countriesReviewed) {
+      throw new AiPlanningSessionError('countries_not_reviewed', 409);
+    }
+    const countries = normalizeReviewedCountries(loaded.reviewedCountries);
+    if (!countries) throw new AiPlanningSessionError('invalid_countries', 400);
+    if (
+      (draft.warnings.some((warning) => warning.material) || loaded.countryContextChanged) &&
+      !loaded.warningAcknowledged
+    ) {
       throw new AiPlanningSessionError('warnings_not_acknowledged', 409);
     }
 
@@ -266,23 +274,6 @@ export async function applyAiPlanningSession(
     if (new Set(destinations.map((place) => place.id)).size !== destinations.length) {
       throw new AiPlanningSessionError('draft_invalid', 409);
     }
-    /**
-     * An applied trip names its countries from what its destinations say.
-     *
-     * This path creates a trip without going through the request schema that
-     * makes countries mandatory, so the requirement cannot be enforced here -
-     * the traveller never filled in a form. Deriving is the honest middle: a
-     * destination that names a country resolves, a bare city does not, and a
-     * draft that yields nothing lands empty rather than failing an apply the
-     * traveller has already paid for with their quota.
-     */
-    const countries = [
-      ...new Set(
-        destinations
-          .map((destination) => resolveDestinationCountryCode(destination.name))
-          .filter((code): code is string => code !== null),
-      ),
-    ];
     const tripTimeZone = resolveTripTimeZone({
       countries,
       destinations: destinations.map((place) => ({ placeId: place.id, timeZone: place.timeZone })),

@@ -13,6 +13,11 @@ import {
   AI_PLANNING_PRIVATE_CONTENT_WHERE,
 } from './ai-planning-retention.js';
 import { validateAiPlannerDraft } from './ai-planning-rules.js';
+import {
+  countryCorrectionChangesTimeContext,
+  normalizeReviewedCountries,
+  suggestedDraftCountries,
+} from './ai-planning-countries.js';
 import { parseStoredPlanScore, type TripPlanScore } from './plan-score.js';
 import {
   recordAiPlanningDispatchRejected,
@@ -58,6 +63,9 @@ type SessionRecord = {
   status: string;
   tripDescription: string | null;
   tripName: string | null;
+  reviewedCountries: string[];
+  countriesReviewedRevision: number | null;
+  countryContextChanged: boolean;
   updatedAt: Date;
   warningsAcknowledgedAt: Date | null;
   warningsAcknowledgedRevision: number | null;
@@ -73,6 +81,8 @@ export type AiPlanningSessionErrorCode =
   | 'draft_provenance_immutable'
   | 'idempotency_key_required'
   | 'invalid_time_zone'
+  | 'invalid_countries'
+  | 'countries_not_reviewed'
   | 'place_unresolved'
   | 'provider_unavailable'
   | 'invalid_prompt'
@@ -190,6 +200,7 @@ const sessionInclude = {
 
 export function serializeAiPlanningSession(session: SessionRecord) {
   const terminal = ['APPLIED', 'CANCELLED', 'EXPIRED'].includes(session.status);
+  const draft = terminal || !session.draft ? null : validateAiPlannerDraft(session.draft);
   return {
     appliedTripId: session.appliedTripId,
     createdAt: session.createdAt.toISOString(),
@@ -199,7 +210,12 @@ export function serializeAiPlanningSession(session: SessionRecord) {
     id: session.id,
     lastSafeError: terminal ? null : session.lastErrorCode,
     pendingRunId: terminal ? null : (session.runs[0]?.id ?? null),
-    planScore: terminal ? null : parseStoredPlanScore(session.planScore),
+    planScore:
+      terminal || session.countryContextChanged ? null : parseStoredPlanScore(session.planScore),
+    countryContextChanged: terminal ? false : session.countryContextChanged,
+    countriesReviewedRevision: terminal ? null : session.countriesReviewedRevision,
+    reviewedCountries: terminal ? [] : session.reviewedCountries,
+    suggestedCountries: draft?.success ? suggestedDraftCountries(draft.data) : [],
     prompt: terminal ? null : session.rawPrompt,
     schemaVersion: session.schemaVersion,
     stage: session.stage.toLowerCase(),
@@ -215,6 +231,64 @@ export function serializeAiPlanningSession(session: SessionRecord) {
             revision: session.warningsAcknowledgedRevision,
           },
   };
+}
+
+/** Review metadata is separate from the immutable draft and generation quota. */
+export async function setAiPlanningCountries(
+  ownerId: string,
+  sessionId: string,
+  countriesInput: readonly string[],
+  expectedRevision: number,
+  options: PlanningOptions = {},
+) {
+  const countries = normalizeReviewedCountries(countriesInput);
+  if (!countries) throw new AiPlanningSessionError('invalid_countries', 400);
+  const prisma = prismaFrom(options);
+  const now = nowFrom(options);
+  const session = await prisma.$transaction(async (transaction) => {
+    await ensureAndLockOwner(transaction, ownerId);
+    const found = await findOwnedSession(transaction, ownerId, sessionId);
+    if (await expireIfNeeded(transaction, found, now)) return SESSION_EXPIRED;
+    if (found.status !== 'REVIEWING' || !found.draft) {
+      throw new AiPlanningSessionError('session_not_reviewable', 409);
+    }
+    if (found.draftRevision !== expectedRevision) {
+      throw new AiPlanningSessionError('draft_conflict', 409);
+    }
+    const draft = parseStoredDraft(found.draft);
+    const countryContextChanged = await countryCorrectionChangesTimeContext(
+      transaction,
+      ownerId,
+      draft,
+      countries,
+    );
+    const changed = found.reviewedCountries.join(',') !== countries.join(',');
+    const clearAcknowledgement =
+      countryContextChanged &&
+      (changed ||
+        !found.countryContextChanged ||
+        found.countriesReviewedRevision !== expectedRevision);
+    await transaction.aiPlanningSession.updateMany({
+      where: { draftRevision: expectedRevision, id: sessionId, ownerId, status: 'REVIEWING' },
+      data: {
+        reviewedCountries: countries,
+        countriesReviewedRevision: expectedRevision,
+        countryContextChanged,
+        ...(clearAcknowledgement
+          ? {
+              warningsAcknowledgedAt: null,
+              warningsAcknowledgedRevision: null,
+            }
+          : {}),
+      },
+    });
+    return transaction.aiPlanningSession.findFirstOrThrow({
+      where: { id: sessionId, ownerId },
+      include: sessionInclude,
+    });
+  });
+  if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
+  return serializeAiPlanningSession(session);
 }
 
 async function ensureAndLockOwner(transaction: PlanningTransaction, ownerId: string) {
@@ -831,6 +905,9 @@ export async function completeAiPlanningRunSuccess(
       data: {
         draft: validated.data as unknown as Prisma.InputJsonValue,
         draftRevision: { increment: 1 },
+        reviewedCountries: [],
+        countriesReviewedRevision: null,
+        countryContextChanged: false,
         lastErrorCode: null,
         planScore: planScore as unknown as Prisma.InputJsonValue,
         schemaVersion: AI_PLANNER_SCHEMA_VERSION,
@@ -949,7 +1026,10 @@ export async function loadAiPlanningSessionForApplyInTransaction(
     draft: parseStoredDraft(session.draft),
     kind: 'reviewable' as const,
     sessionId: session.id,
-    planScore: parseStoredPlanScore(session.planScore),
+    planScore: session.countryContextChanged ? null : parseStoredPlanScore(session.planScore),
+    reviewedCountries: session.reviewedCountries,
+    countriesReviewed: session.countriesReviewedRevision === expectedRevision,
+    countryContextChanged: session.countryContextChanged,
     tripDescription: session.tripDescription,
     tripName: session.tripName,
     warningAcknowledged:

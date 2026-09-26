@@ -23,6 +23,10 @@ export function aiPlanningErrorMessageKey(code: string | null | undefined) {
     case 'configuration_missing':
     case 'content_filtered':
     case 'invalid_prompt':
+    case 'invalid_countries':
+    case 'countries_not_reviewed':
+    case 'draft_conflict':
+    case 'warnings_not_acknowledged':
     case 'invalid_response':
     case 'place_unresolved':
     case 'provider_unavailable':

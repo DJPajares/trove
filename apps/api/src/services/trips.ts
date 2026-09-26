@@ -5,6 +5,8 @@ import { getPrismaClient, Prisma } from '@trove/db';
 
 import { floatingLocalTimeToInstant, formatLocalTime } from './itinerary-rules.js';
 import { MEMORY_PHOTOS_BUCKET } from './memories.js';
+import { RESERVATION_DOCUMENTS_BUCKET } from './reservations.js';
+import { attemptNewTripMediaCleanup } from './trip-media-cleanup.js';
 import { placeProviderRefInclude, serializeCanonicalPlace } from './place-serializer.js';
 import { createAuthenticatedSupabaseClient } from './supabase-auth.js';
 import {
@@ -866,37 +868,49 @@ export async function updateTripExperienceRating(
   return getTrip(userId, accessToken, tripId);
 }
 
-/** Storage removes a bounded number of objects per request. */
-const STORAGE_REMOVE_BATCH = 100;
-
-export async function deleteTrip(userId: string, accessToken: string, tripId: string) {
+export async function deleteTrip(userId: string, _accessToken: string, tripId: string) {
   const prisma = getPrismaClient();
-  const trip = await prisma.trip.findFirst({
-    where: { id: tripId, ownerId: userId },
-    select: {
-      coverPhotoPath: true,
-      // Deleting the trip cascades its Memories away; the traveller's own photos
-      // must leave private storage with them rather than outliving the trip.
-      memories: { select: { photos: { select: { path: true } } } },
-    },
+  const deleted = await prisma.$transaction(async (transaction) => {
+    // Media registration takes this same lock, so the path inventory and
+    // cascade deletion cannot straddle a concurrent attachment insert.
+    const locked = await transaction.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM trove.trips WHERE id = ${tripId}::uuid AND owner_id = ${userId}::uuid FOR UPDATE
+    `;
+    if (!locked.length) return false;
+    const [trip, reservations] = await Promise.all([
+      transaction.trip.findFirst({
+        where: { id: tripId, ownerId: userId },
+        select: {
+          coverPhotoPath: true,
+          memories: { select: { photos: { select: { path: true } } } },
+        },
+      }),
+      transaction.reservation.findMany({
+        where: { tripId },
+        select: { attachments: { select: { path: true } } },
+      }),
+    ]);
+    if (!trip) return false;
+    const media = [
+      ...(trip.coverPhotoPath ? [{ bucket: TRIP_COVERS_BUCKET, path: trip.coverPhotoPath }] : []),
+      ...trip.memories.flatMap((memory) =>
+        memory.photos.map((photo) => ({ bucket: MEMORY_PHOTOS_BUCKET, path: photo.path })),
+      ),
+      ...reservations.flatMap((reservation) =>
+        reservation.attachments.map((attachment) => ({
+          bucket: RESERVATION_DOCUMENTS_BUCKET,
+          path: attachment.path,
+        })),
+      ),
+    ];
+    if (media.length) {
+      await transaction.tripMediaCleanup.createMany({
+        data: media.map((entry) => ({ ...entry, ownerId: userId, tripId })),
+        skipDuplicates: true,
+      });
+    }
+    await transaction.trip.delete({ where: { id: tripId } });
+    return media.length > 0;
   });
-  if (!trip) throw new TripNotFoundError();
-
-  await prisma.trip.delete({ where: { id: tripId } });
-
-  const memoryPhotoPaths = trip.memories.flatMap((memory) =>
-    memory.photos.map((photo) => photo.path),
-  );
-  if (!trip.coverPhotoPath && !memoryPhotoPaths.length) return;
-
-  const supabase = createAuthenticatedSupabaseClient(accessToken);
-  if (!supabase) return;
-  if (trip.coverPhotoPath) {
-    await supabase.storage.from(TRIP_COVERS_BUCKET).remove([trip.coverPhotoPath]);
-  }
-  for (let index = 0; index < memoryPhotoPaths.length; index += STORAGE_REMOVE_BATCH) {
-    await supabase.storage
-      .from(MEMORY_PHOTOS_BUCKET)
-      .remove(memoryPhotoPaths.slice(index, index + STORAGE_REMOVE_BATCH));
-  }
+  if (deleted) await attemptNewTripMediaCleanup(tripId);
 }

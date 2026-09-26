@@ -479,7 +479,11 @@ export async function addMemoryPhoto(
 
   const prisma = getPrismaClient();
   const photo = await prisma.$transaction(async (transaction) => {
-    await findOwnedTrip(transaction, userId, tripId);
+    // Serialize media registration with trip deletion's inventory and cascade.
+    const locked = await transaction.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM trove.trips WHERE id = ${tripId}::uuid AND owner_id = ${userId}::uuid FOR UPDATE
+    `;
+    if (!locked.length) throw new MemoryNotFoundError('trip_not_found');
     const memory = await transaction.memory.findFirst({ where: { id: memoryId, tripId } });
     if (!memory) throw new MemoryNotFoundError('memory_not_found');
 

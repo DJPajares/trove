@@ -285,9 +285,13 @@ decorative editorial imagery, not Google Places data. Use
   `.env.production` used by production database operations.
 - `TROVE_PLAN_SCORE_DISABLED=1` is the server-side Plan Score kill switch. Keep
   the API and web values aligned when disabling that feature.
-- `CRON_SECRET` belongs in the API environment and authenticates the daily
-  AI-planning retention cleanup. Without it the maintenance route refuses every
-  caller, so retention stops running - set it in `trove-api` before launch.
+- `SUPABASE_SECRET_KEY` belongs only in the API environment. It has broad
+  Supabase Storage access and is used to remove queued private trip covers,
+  Memory photos, and reservation documents after trip deletion. Never expose it
+  through the web app or a `NEXT_PUBLIC_` variable.
+- `CRON_SECRET` belongs in the API environment and authenticates both daily
+  maintenance routes: AI-planning retention and private trip-media cleanup.
+  Without it the routes refuse every caller, so retries stop running.
 - The API `PORT` is optional and defaults to `3001`.
 
 Never commit `.env`, `.env.local`, `.env.production`, or any provider key. If a
@@ -341,6 +345,16 @@ pnpm db:migrate:prod
 ```
 
 Never commit credentials or place a production connection string in shell history.
+
+For the private trip-media cleanup rollout, apply the committed migration first.
+Then configure `SUPABASE_SECRET_KEY` and `CRON_SECRET` on `trove-api`, deploy the
+API with its daily cron, and verify the guarded
+`/maintenance/trip-media-cleanup` response reports a healthy `pending` count and
+`oldestPendingAgeSeconds`. The route accepts `Authorization: Bearer <CRON_SECRET>`
+and returns 503 while the Storage key is missing; queued paths remain intact.
+The immediate post-delete attempt is best effort, and daily cron execution is
+not an exact-time guarantee. Production migration and deployment require human
+approval.
 
 ## Editorial Image Reconciliation
 

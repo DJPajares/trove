@@ -1,7 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "pnpm --filter @trove/types build && pnpm --filter @trove/db build && pnpm --filter @trove/api build",
-  "crons": [{ "path": "/maintenance/ai-planning-retention", "schedule": "0 3 * * *" }],
+  "crons": [
+    { "path": "/maintenance/ai-planning-retention", "schedule": "0 3 * * *" },
+    { "path": "/maintenance/trip-media-cleanup", "schedule": "10 3 * * *" }
+  ],
   "outputDirectory": "dist",
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
 }

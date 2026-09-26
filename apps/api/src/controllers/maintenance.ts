@@ -3,6 +3,10 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { getMaintenanceEnvironment } from '../environment.js';
 import { cleanupAiPlanningRetention } from '../services/ai-planning-retention.js';
+import {
+  createStorageCleanupClient,
+  processTripMediaCleanup,
+} from '../services/trip-media-cleanup.js';
 import { getBearerToken } from '../services/request-auth.js';
 
 /**
@@ -38,5 +42,15 @@ export async function aiPlanningRetentionController(request: FastifyRequest, rep
   const report = await cleanupAiPlanningRetention();
   request.log.info({ ...report, kind: 'ai_planning_retention' }, 'ai planning retention');
 
+  return reply.send(report);
+}
+
+export async function tripMediaCleanupController(request: FastifyRequest, reply: FastifyReply) {
+  if (!getMaintenanceEnvironment()) return reply.code(503).send({ code: 'configuration_missing' });
+  if (!isScheduler(request)) return reply.code(401).send({ code: 'unauthorized' });
+  const client = createStorageCleanupClient();
+  if (!client) return reply.code(503).send({ code: 'storage_cleanup_configuration_missing' });
+  const report = await processTripMediaCleanup({ client });
+  request.log.info({ ...report, kind: 'trip_media_cleanup' }, 'trip media cleanup');
   return reply.send(report);
 }

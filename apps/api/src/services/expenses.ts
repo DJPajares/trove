@@ -7,6 +7,7 @@ import {
   resolveExpenseTimeZone,
 } from './expenses-rules.js';
 import { formatLocalTime, parseLocalTime } from './itinerary-rules.js';
+import { resolvedPlaceTimeZone } from './place-data.js';
 import { placeProviderRefInclude, serializePlaceReference } from './place-serializer.js';
 import { formatDateOnly } from './trip-rules.js';
 
@@ -190,7 +191,7 @@ async function findTripPlace(
   if (!tripPlaceId) return null;
   const tripPlace = await transaction.tripPlace.findFirst({
     where: { id: tripPlaceId, tripId },
-    include: { place: true },
+    include: { place: { include: placeProviderRefInclude } },
   });
   if (!tripPlace) throw new ExpenseNotFoundError('trip_place_not_found');
   return tripPlace;
@@ -257,7 +258,9 @@ function dateTimeData(input: {
       itineraryDayTimeZone: itineraryDay?.defaultTimeZone ?? null,
       itineraryItemTimeZone:
         input.itineraryItem?.timeZone ?? input.itineraryItem?.itineraryDay?.defaultTimeZone ?? null,
-      tripPlaceTimeZone: input.tripPlace?.place.customTimeZone ?? null,
+      tripPlaceTimeZone: input.tripPlace?.place
+        ? resolvedPlaceTimeZone(input.tripPlace.place)
+        : null,
       tripTimeZone: input.tripTimeZone,
     });
     return {

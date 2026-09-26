@@ -5,6 +5,7 @@ import { getPrismaClient, Prisma } from '@trove/db';
 
 import { floatingLocalTimeToInstant, formatLocalTime } from './itinerary-rules.js';
 import { MEMORY_PHOTOS_BUCKET } from './memories.js';
+import { resolvedPlaceTimeZone } from './place-data.js';
 import { RESERVATION_DOCUMENTS_BUCKET } from './reservations.js';
 import { attemptNewTripMediaCleanup } from './trip-media-cleanup.js';
 import { placeProviderRefInclude, serializeCanonicalPlace } from './place-serializer.js';
@@ -117,7 +118,7 @@ const tripInclude = {
     },
   },
   owner: true,
-  startingPlace: true,
+  startingPlace: { include: placeProviderRefInclude },
 } as const;
 
 type TripRecord = Awaited<ReturnType<typeof findOwnedTrip>>;
@@ -397,8 +398,10 @@ async function findOrCreateCustomPlace(
   });
 }
 
-function toTimeZoneCandidate(place: { customTimeZone: string | null; id: string } | null) {
-  return place ? { placeId: place.id, timeZone: place.customTimeZone } : null;
+function toTimeZoneCandidate(
+  place: { customTimeZone: string | null; id: string; kind: 'CUSTOM' | 'PROVIDER' } | null,
+) {
+  return place ? { placeId: place.id, timeZone: resolvedPlaceTimeZone(place) } : null;
 }
 
 /**
@@ -456,7 +459,7 @@ export async function createTrip(userId: string, accessToken: string, input: Tri
       countries: input.countries,
       destinations: destinations.map((place) => ({
         placeId: place.id,
-        timeZone: place.customTimeZone,
+        timeZone: resolvedPlaceTimeZone(place),
       })),
       deviceTimeZone: input.deviceTimeZone ?? 'UTC',
       explicitTimeZone: input.referenceTimeZone,
@@ -484,13 +487,16 @@ export async function createTrip(userId: string, accessToken: string, input: Tri
 
     if (destinations.length) {
       await transaction.tripDestination.createMany({
-        data: destinations.map((place, position) => ({
-          placeId: place.id,
-          position,
-          timeZone: place.customTimeZone,
-          timeZoneResolvedAt: place.customTimeZone ? new Date() : null,
-          tripId: trip.id,
-        })),
+        data: destinations.map((place, position) => {
+          const destinationTimeZone = resolvedPlaceTimeZone(place);
+          return {
+            placeId: place.id,
+            position,
+            timeZone: destinationTimeZone,
+            timeZoneResolvedAt: destinationTimeZone ? new Date() : null,
+            tripId: trip.id,
+          };
+        }),
       });
     }
 
@@ -632,7 +638,7 @@ export async function updateTrip(
               countries: input.countries ?? current.countries,
               destinations: destinations.map((place) => ({
                 placeId: place.id,
-                timeZone: place.customTimeZone,
+                timeZone: resolvedPlaceTimeZone(place),
               })),
               deviceTimeZone:
                 current.referenceTimeZoneSource === 'DEVICE_FALLBACK'
@@ -742,13 +748,16 @@ export async function updateTrip(
           await transaction.tripDestination.deleteMany({ where: { tripId } });
           if (destinations.length) {
             await transaction.tripDestination.createMany({
-              data: destinations.map((place, position) => ({
-                placeId: place.id,
-                position,
-                timeZone: place.customTimeZone,
-                timeZoneResolvedAt: place.customTimeZone ? new Date() : null,
-                tripId,
-              })),
+              data: destinations.map((place, position) => {
+                const destinationTimeZone = resolvedPlaceTimeZone(place);
+                return {
+                  placeId: place.id,
+                  position,
+                  timeZone: destinationTimeZone,
+                  timeZoneResolvedAt: destinationTimeZone ? new Date() : null,
+                  tripId,
+                };
+              }),
             });
           }
         }

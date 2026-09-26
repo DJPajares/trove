@@ -45,3 +45,17 @@ test('the deployment build compiles every workspace package the API needs at run
     expect(position, `${name} must be built before @trove/api`).toBeLessThan(apiBuildPosition);
   }
 });
+
+test('the API function carries a project-owned copy of timezone boundary data', () => {
+  const { functions } = readJson<{
+    functions: Record<string, { includeFiles?: string }>;
+  }>('vercel.json');
+  const boundaryData = functions['api/index.mjs']?.includeFiles;
+  const buildScript = readFileSync(resolve(apiRoot, 'package.json'), 'utf8');
+  const copyScript = readFileSync(resolve(apiRoot, 'scripts/copy-geo-tz-data.mjs'), 'utf8');
+
+  expect(boundaryData).toBe('dist/services/data/timezones-1970.geojson.geo.dat');
+  expect(boundaryData).not.toContain('node_modules');
+  expect(buildScript).toContain('scripts/copy-geo-tz-data.mjs');
+  expect(copyScript).toContain('copyFile');
+});

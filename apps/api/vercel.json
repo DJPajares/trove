@@ -5,6 +5,11 @@
     { "path": "/maintenance/ai-planning-retention", "schedule": "0 3 * * *" },
     { "path": "/maintenance/trip-media-cleanup", "schedule": "10 3 * * *" }
   ],
+  "functions": {
+    "api/index.mjs": {
+      "includeFiles": "dist/services/data/timezones-1970.geojson.geo.dat"
+    }
+  },
   "outputDirectory": "dist",
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
 }

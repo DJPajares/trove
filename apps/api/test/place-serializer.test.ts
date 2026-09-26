@@ -51,7 +51,11 @@ test('a provider Place carries the coordinates its snapshot resolved', () => {
   const place = serializeCanonicalPlace(providerPlace(), { now: NOW });
 
   // This is the whole point: a map pin no longer waits on a provider request.
-  expect(place.location).toStrictEqual({ latitude: 1.2966, longitude: 103.8485, timeZone: null });
+  expect(place.location).toStrictEqual({
+    latitude: 1.2966,
+    longitude: 103.8485,
+    timeZone: 'Asia/Singapore',
+  });
   expect(place.snapshot?.name).toBe('National Museum of Singapore');
   expect(place.snapshot?.address).toBe('93 Stamford Rd, Singapore 178897');
   expect(place.snapshot?.category).toBe('things_to_do');
@@ -67,13 +71,13 @@ test('the provider name stays out of the Trove-owned name field', () => {
   expect(place.snapshot?.name).toBe('National Museum of Singapore');
 });
 
-test("a provider Place's time zone stays null rather than being invented", () => {
-  const place = serializeCanonicalPlace(providerPlace(), { now: NOW });
+test('a provider Place resolves an IANA zone instead of treating its offset as one', () => {
+  const place = serializeCanonicalPlace(
+    providerPlace({ providerRefs: [providerRef({ cachedTimeZone: 'Asia/Singapore' })] }),
+    { now: NOW },
+  );
 
-  // The snapshot holds a UTC offset, not an IANA zone. The itinerary does
-  // DST-correct local-time maths with this field, so a fixed offset would
-  // silently shift times twice a year.
-  expect(place.location?.timeZone).toBe(null);
+  expect(place.location?.timeZone).toBe('Asia/Singapore');
   expect(place.snapshot?.utcOffsetMinutes).toBe(480);
 });
 
@@ -110,6 +114,7 @@ test('a snapshot past its 30-day life still renders, and says it is stale', () =
 
   expect(place.snapshot?.name).toBe('National Museum of Singapore');
   expect(place.snapshot?.stale).toBe(true);
+  expect(place.location?.timeZone).toBe(null);
 });
 
 test('a Custom Place is unchanged: its own coordinates, its own name, no snapshot', () => {

@@ -1,6 +1,7 @@
 import {
   type PlaceSnapshot,
   type PlaceSnapshotSource,
+  resolvedPlaceTimeZone,
   toPlaceCoordinates,
   toPlaceSnapshot,
 } from './place-data.js';
@@ -113,18 +114,19 @@ export function serializeCanonicalPlace(
 
   const customLatitude = toNumber(place.customLatitude);
   const customLongitude = toNumber(place.customLongitude);
+  const timeZone = resolvedPlaceTimeZone(
+    { ...place, providerRefs: reference ? [{ ...reference, provider: 'GOOGLE' }] : [] },
+    options.now,
+  );
   const customLocation =
     customLatitude === null || customLongitude === null
       ? null
-      : { latitude: customLatitude, longitude: customLongitude, timeZone: place.customTimeZone };
+      : { latitude: customLatitude, longitude: customLongitude, timeZone };
 
-  // A provider Place's coordinates come from its snapshot. The time zone stays
-  // null: the snapshot carries a UTC offset, not an IANA zone, and the itinerary
-  // does DST-correct local-time maths with this field.
+  // The provider's offset cannot represent daylight-saving transitions. Resolve
+  // an IANA zone from its recent coordinate snapshot without another API call.
   const providerCoordinates = toPlaceCoordinates(reference);
-  const providerLocation = providerCoordinates
-    ? { ...providerCoordinates, timeZone: place.customTimeZone }
-    : null;
+  const providerLocation = providerCoordinates ? { ...providerCoordinates, timeZone } : null;
 
   return {
     id: place.id,

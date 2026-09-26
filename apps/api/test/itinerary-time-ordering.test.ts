@@ -162,6 +162,70 @@ test('creating a timed item slots it into the day rather than appending', async 
   expect(dayOrder('day')).toStrictEqual(['08:00', '09:00', '14:00']);
 });
 
+test('provider-backed stops persist precise local instants across trip and day timezones', async () => {
+  seedDay('trip', 'day', 'user');
+  const locations = [
+    { id: 'phoenix', latitude: 33.4484, longitude: -112.074 },
+    { id: 'new-york', latitude: 40.7128, longitude: -74.006 },
+  ];
+  for (const location of locations) {
+    store.place.push({
+      customLatitude: null,
+      customLongitude: null,
+      customName: null,
+      customNote: null,
+      customTimeZone: null,
+      id: location.id,
+      kind: 'PROVIDER',
+      providerAddress: null,
+      providerLabel: location.id,
+      providerRefs: [
+        {
+          cachedAt: new Date(),
+          cachedLatitude: location.latitude,
+          cachedLongitude: location.longitude,
+          cachedTimeZone: null,
+          externalPlaceId: location.id,
+          provider: 'GOOGLE',
+        },
+      ],
+    });
+    store.tripPlace.push({
+      customName: null,
+      id: `trip-${location.id}`,
+      note: null,
+      placeId: location.id,
+      priority: null,
+      tripId: 'trip',
+    });
+  }
+
+  const phoenix = await createItineraryItem('user', 'trip', {
+    itineraryDayId: 'day',
+    tripPlaceId: 'trip-phoenix',
+    schedule: { kind: 'exact', localTime: '09:00' },
+  });
+  const newYork = await createItineraryItem('user', 'trip', {
+    itineraryDayId: 'day',
+    tripPlaceId: 'trip-new-york',
+    schedule: { kind: 'exact', localTime: '10:00' },
+  });
+
+  expect(phoenix).toMatchObject({
+    localStartTime: '09:00',
+    startInstant: '2026-09-05T16:00:00.000Z',
+    timeZone: 'America/Phoenix',
+    timeZoneSource: 'place',
+  });
+  expect(newYork).toMatchObject({
+    localStartTime: '10:00',
+    startInstant: '2026-09-05T14:00:00.000Z',
+    timeZone: 'America/New_York',
+    timeZoneSource: 'place',
+  });
+  expect(store.itineraryDay[0]?.defaultTimeZone).toBe('America/Phoenix');
+});
+
 test('creating an untimed item still appends', async () => {
   seedDay('trip', 'day', 'user');
   seedItem('trip', 'day', '08:00', 0, '08:00');

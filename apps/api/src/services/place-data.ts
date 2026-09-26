@@ -1,6 +1,7 @@
 import { getPrismaClient } from '@trove/db';
 
 import { PLACE_CACHE_TTL_MS } from './cached-places.js';
+import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
 import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
 import { categorizePlaceTypes } from './place-categories.js';
 import { getActivePlaceDetailsFailure } from './place-details-failures.js';
@@ -17,6 +18,7 @@ import type {
   ProviderPlaceDetails,
   TrovePlaceCategory,
 } from './places.js';
+import { isValidIanaTimeZone } from './trip-rules.js';
 
 /**
  * How many missing or expired snapshots one request will refresh before serving
@@ -92,6 +94,7 @@ export type PlaceSnapshotSource = {
   cachedName?: string | null;
   cachedPrimaryType?: string | null;
   cachedTypes?: string[];
+  cachedTimeZone?: string | null;
   cachedUtcOffsetMinutes?: number | null;
   detailsFailedAt?: Date | null;
   detailsFailureCode?: string | null;
@@ -99,6 +102,30 @@ export type PlaceSnapshotSource = {
 };
 
 type DecimalLike = number | { toNumber(): number };
+
+type TimeZonePlace = {
+  customTimeZone: string | null;
+  kind: 'CUSTOM' | 'PROVIDER';
+  providerRefs?: readonly (PlaceSnapshotSource & { provider: 'GOOGLE' })[];
+};
+
+/** Explicit correction wins; a recent provider coordinate supplies precision. */
+export function resolvedPlaceTimeZone(place: TimeZonePlace, now: Date = new Date()): string | null {
+  if (place.customTimeZone && isValidIanaTimeZone(place.customTimeZone)) {
+    return place.customTimeZone;
+  }
+  if (place.kind !== 'PROVIDER') return null;
+  const reference = place.providerRefs?.find((entry) => entry.provider === 'GOOGLE');
+  if (!reference?.cachedAt || now.getTime() - reference.cachedAt.getTime() > PLACE_CACHE_TTL_MS) {
+    return null;
+  }
+  const coordinates = toPlaceCoordinates(reference);
+  if (!coordinates) return null;
+  if (reference.cachedTimeZone && isValidIanaTimeZone(reference.cachedTimeZone)) {
+    return reference.cachedTimeZone;
+  }
+  return timeZoneAtCoordinates(coordinates);
+}
 
 export type PlaceHydrationOptions = {
   languageCode?: string;
@@ -196,6 +223,7 @@ function toSnapshotSource(
     cachedName: place.name,
     cachedPrimaryType: place.primaryType,
     cachedTypes: place.rawTypes,
+    cachedTimeZone: place.location ? timeZoneAtCoordinates(place.location) : null,
     cachedUtcOffsetMinutes: place.utcOffsetMinutes,
     externalPlaceId: place.externalPlaceId,
   };

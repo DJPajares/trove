@@ -1,5 +1,6 @@
 import { getPrismaClient } from '@trove/db';
 
+import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
 import { categorizePlaceTypes } from './place-categories.js';
 import {
   getActivePlaceDetailsFailure,
@@ -289,6 +290,7 @@ export class CachedPlacesService extends PlacesService {
           cachedName: place.name,
           cachedPrimaryType: place.primaryType,
           cachedTypes: place.rawTypes,
+          cachedTimeZone: timeZoneAtCoordinates(place.location),
           cachedUtcOffsetMinutes: place.utcOffsetMinutes,
           detailsFailedAt: null,
           detailsFailureCode: null,

@@ -277,6 +277,8 @@ function createModel(name: ModelName) {
     },
     create: async (args: { data: Row }) => {
       if (name === 'itineraryDay') assertUniqueDayDate(null, args.data);
+      if (args.data.id && store[name].some((row) => row.id === args.data.id))
+        throw new Error(`${name}_duplicate_id`);
       nextRowId += 1;
       const row: Row = {
         createdAt: new Date(),
@@ -297,6 +299,10 @@ function createModel(name: ModelName) {
           store[name].some((row) => row.bucket === data.bucket && row.path === data.path)
         )
           continue;
+        if (data.id && store[name].some((row) => row.id === data.id)) {
+          if (args.skipDuplicates) continue;
+          throw new Error(`${name}_duplicate_id`);
+        }
         if (name === 'itineraryDay') assertUniqueDayDate(null, data);
         nextRowId += 1;
         store[name].push({
@@ -339,6 +345,17 @@ function createModel(name: ModelName) {
     findFirstOrThrow: async (args: { where?: Where } = {}) => {
       const row = store[name].find((candidate) => matches(candidate, args.where));
       if (!row) throw new Error(`${name}_not_found`);
+      return hydrate(name, row);
+    },
+    findUnique: async (args: { where: { id: string }; select?: Record<string, boolean> }) => {
+      const row = store[name].find((candidate) => candidate.id === args.where.id);
+      if (!row) return null;
+      if (args.select)
+        return Object.fromEntries(
+          Object.entries(args.select)
+            .filter(([, selected]) => selected)
+            .map(([field]) => [field, row[field]]),
+        );
       return hydrate(name, row);
     },
     findMany: async (args: { orderBy?: unknown; take?: number; where?: Where } = {}) => {

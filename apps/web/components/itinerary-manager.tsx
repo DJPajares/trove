@@ -140,6 +140,10 @@ import { useOnlineStatus } from '@/components/trip-sync-status';
 import { useCompactItinerary } from '@/hooks/use-compact-itinerary';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { buildDaySequence, dayStopNumbers, resolveDailyBases } from '@/lib/itinerary/day-sequence';
+import {
+  DuplicateAttemptTracker,
+  refreshedItineraryContainsCopy,
+} from '@/lib/itinerary/duplicate-attempt';
 import { scheduledPlaceUse } from '@/lib/itinerary/places';
 import { itineraryDayRouteRevision } from '@/lib/itinerary/routes';
 import { itineraryViewHref, resolveItineraryView } from '@/lib/itinerary/view';
@@ -392,6 +396,7 @@ export function ItineraryManager({
   const currentPlaceQuery = useRef('');
   const [selectingPlace, setSelectingPlace] = useState(false);
   const [organizingItemId, setOrganizingItemId] = useState<string | null>(null);
+  const duplicateAttempts = useRef(new DuplicateAttemptTracker());
   const [mobileView, setMobileView] = useState<'list' | 'map'>('list');
   const [planningMapMounted, setPlanningMapMounted] = useState(false);
   const [selectedMapPointId, setSelectedMapPointId] = useState<string | null>(null);
@@ -1384,13 +1389,34 @@ export function ItineraryManager({
   }
 
   async function handleDuplicate(item: ItineraryItem) {
+    const clientItemId = duplicateAttempts.current.begin(item.id);
+    if (!clientItemId) return;
     setOrganizingItemId(item.id);
     setError(null);
+    let mutationConfirmed = false;
     try {
-      await duplicateItineraryItem(tripId, item.id);
+      const result = await duplicateItineraryItem(tripId, item.id, clientItemId);
+      if (result.itemId !== clientItemId) throw new Error('unexpected_duplicate_item_id');
+      mutationConfirmed = true;
       await refresh();
-    } catch {
-      setError(t('organizeError'));
+      const updated = queryClient.getQueryData<Itinerary>(queryKeys.itinerary(tripId));
+      if (!refreshedItineraryContainsCopy(updated, clientItemId)) {
+        throw new Error('duplicate_not_visible_after_refresh');
+      }
+      duplicateAttempts.current.complete(item.id);
+    } catch (error) {
+      if (
+        !mutationConfirmed &&
+        error instanceof ItineraryApiError &&
+        error.status >= 400 &&
+        error.status < 500
+      ) {
+        duplicateAttempts.current.complete(item.id);
+        setError(t('organizeError'));
+      } else {
+        duplicateAttempts.current.failed(item.id);
+        setError(t('duplicateUnconfirmed'));
+      }
     } finally {
       setOrganizingItemId(null);
     }

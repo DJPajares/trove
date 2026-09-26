@@ -290,7 +290,10 @@ export function ItineraryDayTimeline({
                     <Pencil aria-hidden="true" />
                     {t('itemMenu.edit')}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onDuplicateItem(item)}>
+                  <DropdownMenuItem
+                    disabled={organizingItemId === item.id}
+                    onClick={() => onDuplicateItem(item)}
+                  >
                     <Copy aria-hidden="true" />
                     {t('itemMenu.duplicate')}
                   </DropdownMenuItem>

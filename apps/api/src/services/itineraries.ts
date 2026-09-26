@@ -895,10 +895,24 @@ export async function organizeItineraryItem(
   });
 }
 
-export async function duplicateItineraryItem(userId: string, tripId: string, itemId: string) {
+export async function duplicateItineraryItem(
+  userId: string,
+  tripId: string,
+  itemId: string,
+  clientItemId?: string,
+) {
   const prisma = getPrismaClient();
-  await prisma.$transaction(async (transaction) => {
+  return prisma.$transaction(async (transaction) => {
     await findOwnedTrip(transaction, userId, tripId);
+    if (clientItemId) {
+      const existing = await transaction.itineraryItem.findUnique({
+        where: { id: clientItemId },
+        select: { id: true, tripId: true },
+      });
+      if (existing?.tripId === tripId && clientItemId !== itemId)
+        return { created: false, itemId: existing.id };
+      if (existing) throw new ItineraryValidationError('invalid_itinerary_item');
+    }
     const current = await transaction.itineraryItem.findFirst({ where: { id: itemId, tripId } });
     if (!current) throw new ItineraryNotFoundError('itinerary_item_not_found');
     const maxPosition = await transaction.itineraryItem.aggregate({
@@ -906,13 +920,25 @@ export async function duplicateItineraryItem(userId: string, tripId: string, ite
       _max: { position: true },
     });
     const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...copy } = current;
-    await transaction.itineraryItem.create({
-      data: {
-        ...copy,
-        position: (maxPosition._max.position ?? -1) + 1,
-        travelStatus: 'UPCOMING',
-      },
+    const data = {
+      ...copy,
+      position: (maxPosition._max.position ?? -1) + 1,
+      travelStatus: 'UPCOMING' as const,
+    };
+    if (!clientItemId) {
+      const created = await transaction.itineraryItem.create({ data });
+      return { created: true, itemId: created.id };
+    }
+    const result = await transaction.itineraryItem.createMany({
+      data: [{ ...data, id: clientItemId }],
+      skipDuplicates: true,
     });
+    const existing = await transaction.itineraryItem.findUnique({
+      where: { id: clientItemId },
+      select: { id: true, tripId: true },
+    });
+    if (existing?.tripId !== tripId) throw new ItineraryValidationError('invalid_itinerary_item');
+    return { created: result.count === 1, itemId: clientItemId };
   });
 }
 

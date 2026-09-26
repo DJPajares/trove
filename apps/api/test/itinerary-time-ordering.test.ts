@@ -1,5 +1,6 @@
-import { beforeEach, expect, test } from 'vitest';
+import { beforeEach, expect, test, vi } from 'vitest';
 
+import { createItineraryControllers } from '../src/controllers/itineraries.js';
 import {
   createItineraryItem,
   duplicateItineraryItem,
@@ -280,4 +281,93 @@ test('duplicating an item preserves its explicit end time', async () => {
 
   const duplicate = store.itineraryItem.find((item) => item.id !== 'museum');
   expect(duplicate).toMatchObject({ durationMinutes: 90, localEndTime: parseLocalTime('10:30') });
+});
+
+test('a keyed duplicate returns the same copy on replay and leaves supporting records on the original', async () => {
+  seedDay('trip', 'day', 'user');
+  seedItem('trip', 'day', 'museum', 0, '09:00');
+  const original = store.itineraryItem[0]!;
+  original.travelStatus = 'VISITED';
+  original.notes = 'Ask for a guide';
+  store.task.push({ id: 'task', tripId: 'trip', itineraryItemId: 'museum' });
+  store.reservation.push({ id: 'reservation', tripId: 'trip', itineraryItemId: 'museum' });
+  store.expense.push({ id: 'expense', tripId: 'trip', itineraryItemId: 'museum' });
+  store.memory.push({ id: 'memory', tripId: 'trip', itineraryItemId: 'museum' });
+
+  const first = await duplicateItineraryItem('user', 'trip', 'museum', 'copy-id');
+  const replay = await duplicateItineraryItem('user', 'trip', 'museum', 'copy-id');
+
+  expect(first).toStrictEqual({ created: true, itemId: 'copy-id' });
+  expect(replay).toStrictEqual({ created: false, itemId: 'copy-id' });
+  expect(store.itineraryItem).toHaveLength(2);
+  expect(store.itineraryItem[1]).toMatchObject({
+    customLabel: 'museum',
+    notes: 'Ask for a guide',
+    travelStatus: 'UPCOMING',
+  });
+  for (const model of [store.task, store.reservation, store.expense, store.memory]) {
+    expect(model[0]?.itineraryItemId).toBe('museum');
+  }
+});
+
+test('concurrent keyed duplicate submissions create only one stop', async () => {
+  seedDay('trip', 'day', 'user');
+  seedItem('trip', 'day', 'museum', 0, '09:00');
+
+  const results = await Promise.all([
+    duplicateItineraryItem('user', 'trip', 'museum', 'copy-id'),
+    duplicateItineraryItem('user', 'trip', 'museum', 'copy-id'),
+  ]);
+
+  expect(results.map((result) => result.created).sort()).toStrictEqual([false, true]);
+  expect(store.itineraryItem).toHaveLength(2);
+});
+
+test('a duplicate ID from another trip or the original item is rejected', async () => {
+  seedDay('trip', 'day', 'user');
+  seedItem('trip', 'day', 'museum', 0, '09:00');
+  seedDay('other', 'other-day', 'other-user');
+  seedItem('other', 'other-day', 'other-copy', 0, '09:00');
+
+  await expect(duplicateItineraryItem('user', 'trip', 'museum', 'other-copy')).rejects.toThrow(
+    'invalid_itinerary_item',
+  );
+  await expect(duplicateItineraryItem('user', 'trip', 'museum', 'museum')).rejects.toThrow(
+    'invalid_itinerary_item',
+  );
+  expect(store.itineraryItem).toHaveLength(2);
+});
+
+test('duplicate endpoint returns JSON with 201 on creation and 200 on replay', async () => {
+  const tripId = '00000000-0000-4000-8000-000000000001';
+  const dayId = '00000000-0000-4000-8000-000000000002';
+  const itemId = '00000000-0000-4000-8000-000000000003';
+  const clientItemId = '00000000-0000-4000-8000-000000000004';
+  seedDay(tripId, dayId, 'user');
+  seedItem(tripId, dayId, itemId, 0, '09:00');
+  const codes: number[] = [];
+  const reply = {
+    code: vi.fn((code: number) => {
+      codes.push(code);
+      return reply;
+    }),
+    send: vi.fn((body: unknown) => body),
+  };
+  const request = {
+    authUserId: 'user',
+    body: { clientItemId },
+    params: { tripId, itemId },
+  };
+  const controller = createItineraryControllers().duplicateItem;
+
+  await controller(request as never, reply as never);
+  await controller(request as never, reply as never);
+
+  expect(codes).toStrictEqual([201, 200]);
+  expect(reply.send).toHaveBeenNthCalledWith(1, { itemId: clientItemId });
+  expect(reply.send).toHaveBeenNthCalledWith(2, { itemId: clientItemId });
+
+  await controller({ ...request, body: undefined } as never, reply as never);
+  expect(codes[2]).toBe(201); // An API-first rollout still supports older clients.
+  expect(reply.send).toHaveBeenNthCalledWith(3, { itemId: expect.any(String) });
 });

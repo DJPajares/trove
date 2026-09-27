@@ -34,7 +34,8 @@ Set these in `trove-api` for Preview and Production:
   preview pattern `https://trove-git-*-djpajares-projects.vercel.app`.
 - `TROVE_AI_PROVIDER` — `vertex`.
 - `TROVE_AI_MODEL` — the approved Vertex model identifier.
-- `TROVE_AI_TIMEOUT_MS` and `TROVE_AI_MAX_OUTPUT_TOKENS` — bounded request limits.
+- `TROVE_AI_THINKING_LEVEL` — `low`, `medium` (default), or `high` for Gemini 3.8 Flash. Remove the obsolete `TROVE_AI_THINKING_BUDGET_TOKENS` key when updating a deployment.
+- `TROVE_AI_TIMEOUT_MS` and `TROVE_AI_MAX_OUTPUT_TOKENS` — bounded request limits (defaults `120000` and `16384`).
 - `GOOGLE_VERTEX_PROJECT` and `GOOGLE_VERTEX_LOCATION`.
 - `GOOGLE_VERTEX_CLIENT_EMAIL` and `GOOGLE_VERTEX_PRIVATE_KEY` — server-only
   service-account credentials; set both or neither. Preserve private-key

@@ -25,24 +25,23 @@ type EditorialImagesEnvironment = {
 };
 
 export const DEFAULT_AI_PROVIDER = 'vertex' as const;
-export const DEFAULT_AI_MODEL = 'gemini-3.1-flash-lite';
+export const DEFAULT_AI_MODEL = 'gemini-3.8-flash';
 export const DEFAULT_AI_LOCATION = 'global';
-export const DEFAULT_AI_TIMEOUT_MS = 60_000;
-export const DEFAULT_AI_MAX_OUTPUT_TOKENS = 8_192;
-/**
- * Reasoning tokens are drawn from the same allowance as the answer, so an
- * uncapped thinking model can spend the budget before finishing its JSON and
- * return a truncated response. Zero is deliberately not the default: pro models
- * reject `thinking_budget: 0` outright.
- */
-export const DEFAULT_AI_THINKING_BUDGET_TOKENS = 1_024;
+export const DEFAULT_AI_TIMEOUT_MS = 120_000;
+export const DEFAULT_AI_MAX_OUTPUT_TOKENS = 16_384;
+export const DEFAULT_AI_THINKING_LEVEL = 'medium' as const;
 export const DEFAULT_AI_PLANNING_DISPATCH_LIMIT = 5;
 
 const MIN_AI_TIMEOUT_MS = 1_000;
 const MAX_AI_TIMEOUT_MS = 300_000;
 const MAX_AI_OUTPUT_TOKENS = 65_536;
-const MAX_AI_THINKING_BUDGET_TOKENS = 24_576;
 const MAX_AI_PLANNING_DISPATCH_LIMIT = 1_000;
+
+type AiThinkingLevel = 'low' | 'medium' | 'high';
+
+function isAiThinkingLevel(value: string): value is AiThinkingLevel {
+  return value === 'low' || value === 'medium' || value === 'high';
+}
 
 type AiUnavailableCode =
   'ai_budget_disabled' | 'ai_disabled' | 'configuration_invalid' | 'configuration_missing';
@@ -57,7 +56,7 @@ export type AvailableAiEnvironment = {
     location: string;
     model: string;
     project: string;
-    thinkingBudgetTokens: number;
+    thinkingLevel: AiThinkingLevel;
   };
 };
 
@@ -131,12 +130,7 @@ export function getAiGenerationEnvironment(
     1,
     MAX_AI_OUTPUT_TOKENS,
   );
-  const thinkingBudgetTokens = parseBoundedInteger(
-    environment.TROVE_AI_THINKING_BUDGET_TOKENS,
-    DEFAULT_AI_THINKING_BUDGET_TOKENS,
-    0,
-    MAX_AI_THINKING_BUDGET_TOKENS,
-  );
+  const thinkingLevel = environment.TROVE_AI_THINKING_LEVEL?.trim() || DEFAULT_AI_THINKING_LEVEL;
   const safeTimeoutMs = timeoutMs ?? DEFAULT_AI_TIMEOUT_MS;
   const safeMaxOutputTokens = maxOutputTokens ?? DEFAULT_AI_MAX_OUTPUT_TOKENS;
 
@@ -158,7 +152,7 @@ export function getAiGenerationEnvironment(
     };
   }
 
-  if (timeoutMs === null || maxOutputTokens === null || thinkingBudgetTokens === null) {
+  if (timeoutMs === null || maxOutputTokens === null || !isAiThinkingLevel(thinkingLevel)) {
     return {
       code: 'configuration_invalid',
       maxOutputTokens: safeMaxOutputTokens,
@@ -174,7 +168,7 @@ export function getAiGenerationEnvironment(
   const clientEmail = environment.GOOGLE_VERTEX_CLIENT_EMAIL?.trim();
   const privateKey = environment.GOOGLE_VERTEX_PRIVATE_KEY?.trim();
 
-  if (provider !== DEFAULT_AI_PROVIDER || model.length > 120) {
+  if (provider !== DEFAULT_AI_PROVIDER || model.length > 120 || /^gemini-2\.5(?:-|$)/.test(model)) {
     return {
       code: 'configuration_invalid',
       maxOutputTokens,
@@ -223,7 +217,7 @@ export function getAiGenerationEnvironment(
       location,
       model,
       project,
-      thinkingBudgetTokens,
+      thinkingLevel,
     },
   };
 }

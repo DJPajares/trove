@@ -201,12 +201,12 @@ not enough. Verify with `pnpm --filter @trove/api ai:verify`, or check that
 | Environment key | Description | Sample values |
 | --- | --- | --- |
 | `TROVE_AI_PROVIDER` | Provider adapter. Only `vertex` is currently supported. | `vertex` |
-| `TROVE_AI_MODEL` | Vertex model ID. Use an available model from [Vertex AI Model Garden](https://cloud.google.com/vertex-ai/generative-ai/docs/model-garden/explore-models). | `gemini-3.1-flash-lite` (default), `gemini-<supported-model>` |
+| `TROVE_AI_MODEL` | Vertex model ID. Gemini 2.5 overrides are no longer supported. Use an available model from [Vertex AI Model Garden](https://cloud.google.com/vertex-ai/generative-ai/docs/model-garden/explore-models). | `gemini-3.8-flash` (default), `gemini-<supported-model>` |
 | `GOOGLE_VERTEX_PROJECT` | Required Google Cloud project ID with Vertex AI enabled. Find it in the [Google Cloud project selector](https://console.cloud.google.com/projectselector/home/dashboard). | `trove-prod`, `my-gcp-project` |
 | `GOOGLE_VERTEX_LOCATION` | Vertex AI location/endpoint. `global` is the default; regional support depends on the selected model. | `global`, `us-central1`, `<supported-region>` |
-| `TROVE_AI_TIMEOUT_MS` | Per-request timeout in milliseconds. Valid range: `1,000–300,000`. | `60000` (default), `120000`, `300000` |
-| `TROVE_AI_MAX_OUTPUT_TOKENS` | Maximum generated tokens. Reasoning tokens count against this same allowance. Valid range: `1–65,536`. | `8192` (default), `16384`, `65536` |
-| `TROVE_AI_THINKING_BUDGET_TOKENS` | Caps the reasoning tokens a thinking model may spend out of `TROVE_AI_MAX_OUTPUT_TOKENS`. Leave too little for the answer and the response is truncated mid-JSON. Valid range: `0–24,576`, but Pro models reject `0`. | `1024` (default), `2048`, `4096` |
+| `TROVE_AI_TIMEOUT_MS` | Per-request timeout in milliseconds. Valid range: `1,000–300,000`. | `120000` (default), `60000`, `300000` |
+| `TROVE_AI_MAX_OUTPUT_TOKENS` | Maximum generated tokens. Reasoning tokens count against this same allowance. Valid range: `1–65,536`. | `16384` (default), `8192`, `65536` |
+| `TROVE_AI_THINKING_LEVEL` | Gemini 3.8 Flash reasoning level. Valid values: `low`, `medium`, `high`; `minimal` is unsupported. | `medium` (default), `low`, `high` |
 | `GOOGLE_VERTEX_CLIENT_EMAIL` | Service-account email. Set it together with the private key. Both may be left blank only when a Google ADC source is discoverable on the host. | `vertex-runtime@my-gcp-project.iam.gserviceaccount.com`, *(blank)* |
 | `GOOGLE_VERTEX_PRIVATE_KEY` | Service-account private key. Preserve escaped `\\n` line breaks and never commit it. | `"<private-key-with-escaped-newlines>"`, *(blank)* |
 | `TROVE_AI_DISABLED` | Emergency global AI stop. | *(blank)*, `1`, `true` |

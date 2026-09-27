@@ -4,7 +4,7 @@ import {
   DEFAULT_AI_LOCATION,
   DEFAULT_AI_MAX_OUTPUT_TOKENS,
   DEFAULT_AI_MODEL,
-  DEFAULT_AI_THINKING_BUDGET_TOKENS,
+  DEFAULT_AI_THINKING_LEVEL,
   DEFAULT_AI_TIMEOUT_MS,
   getAiGenerationEnvironment,
 } from '../src/environment.js';
@@ -22,7 +22,7 @@ test('Vertex uses discoverable ADC and bounded generation settings', () => {
       location: DEFAULT_AI_LOCATION,
       model: DEFAULT_AI_MODEL,
       project: 'trove-dev',
-      thinkingBudgetTokens: DEFAULT_AI_THINKING_BUDGET_TOKENS,
+      thinkingLevel: DEFAULT_AI_THINKING_LEVEL,
     },
   });
 });
@@ -36,8 +36,9 @@ test('Vertex accepts explicit server credentials and configuration overrides', (
         GOOGLE_VERTEX_PRIVATE_KEY: 'line-one\\nline-two',
         GOOGLE_VERTEX_PROJECT: 'trove-preview',
         TROVE_AI_MAX_OUTPUT_TOKENS: '4096',
-        TROVE_AI_MODEL: 'gemini-test',
+        TROVE_AI_MODEL: 'gemini-3.8-flash',
         TROVE_AI_PROVIDER: 'vertex',
+        TROVE_AI_THINKING_LEVEL: 'high',
         TROVE_AI_TIMEOUT_MS: '45000',
       },
       () => false,
@@ -50,9 +51,9 @@ test('Vertex accepts explicit server credentials and configuration overrides', (
     vertex: {
       credentials: { clientEmail: 'ai@example.test', privateKey: 'line-one\nline-two' },
       location: 'us-central1',
-      model: 'gemini-test',
+      model: 'gemini-3.8-flash',
       project: 'trove-preview',
-      thinkingBudgetTokens: DEFAULT_AI_THINKING_BUDGET_TOKENS,
+      thinkingLevel: 'high',
     },
   });
 });
@@ -87,6 +88,8 @@ test.each([
   [{}, 'configuration_missing'],
   [{ GOOGLE_VERTEX_PROJECT: 'trove', TROVE_AI_PROVIDER: 'other' }, 'configuration_invalid'],
   [{ GOOGLE_VERTEX_PROJECT: 'trove', TROVE_AI_TIMEOUT_MS: '999' }, 'configuration_invalid'],
+  [{ GOOGLE_VERTEX_PROJECT: 'trove', TROVE_AI_MODEL: 'gemini-2.5-pro' }, 'configuration_invalid'],
+  [{ GOOGLE_VERTEX_PROJECT: 'trove', TROVE_AI_THINKING_LEVEL: 'minimal' }, 'configuration_invalid'],
   [
     { GOOGLE_VERTEX_PROJECT: 'trove', TROVE_AI_MAX_OUTPUT_TOKENS: '65537' },
     'configuration_invalid',
@@ -102,28 +105,13 @@ test.each([
   });
 });
 
-test('the reasoning budget is configurable and bounded', () => {
-  // Reasoning shares the output allowance, so an unbounded value would let the
-  // model spend the whole budget before finishing its answer.
-  expect(
-    getAiGenerationEnvironment(
-      { GOOGLE_VERTEX_PROJECT: 'trove-dev', TROVE_AI_THINKING_BUDGET_TOKENS: '2048' },
-      () => true,
-    ),
-  ).toMatchObject({ status: 'available', vertex: { thinkingBudgetTokens: 2048 } });
-
-  // Zero is a legal value here; it is the provider that rejects it for pro models.
-  expect(
-    getAiGenerationEnvironment(
-      { GOOGLE_VERTEX_PROJECT: 'trove-dev', TROVE_AI_THINKING_BUDGET_TOKENS: '0' },
-      () => true,
-    ),
-  ).toMatchObject({ status: 'available', vertex: { thinkingBudgetTokens: 0 } });
-
-  expect(
-    getAiGenerationEnvironment(
-      { GOOGLE_VERTEX_PROJECT: 'trove-dev', TROVE_AI_THINKING_BUDGET_TOKENS: '99999' },
-      () => true,
-    ),
-  ).toMatchObject({ code: 'configuration_invalid', status: 'unavailable' });
+test('the thinking level accepts only supported Gemini 3.8 Flash values', () => {
+  for (const level of ['low', 'medium', 'high']) {
+    expect(
+      getAiGenerationEnvironment(
+        { GOOGLE_VERTEX_PROJECT: 'trove-dev', TROVE_AI_THINKING_LEVEL: level },
+        () => true,
+      ),
+    ).toMatchObject({ status: 'available', vertex: { thinkingLevel: level } });
+  }
 });

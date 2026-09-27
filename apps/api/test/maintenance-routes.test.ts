@@ -3,6 +3,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 
 import { registerMaintenanceRoutes } from '../src/routes/maintenance.js';
 import { cleanupAiPlanningRetention } from '../src/services/ai-planning-retention.js';
+import { dispatchNotifications } from '../src/services/web-push.js';
 
 const SECRET = 'a-long-scheduler-secret-value';
 
@@ -27,6 +28,20 @@ vi.mock('../src/services/trip-media-cleanup.js', () => ({
   })),
 }));
 
+vi.mock('../src/services/web-push.js', () => ({
+  getPushEnvironment: vi.fn(() => (process.env.TROVE_VAPID_PRIVATE_KEY ? {} : null)),
+  dispatchNotifications: vi.fn(async () => ({
+    accepted: 1,
+    attempted: 1,
+    deadSubscriptions: 0,
+    dueSources: 1,
+    rateLimited: 0,
+    skipped: 0,
+    pending: 0,
+    oldestPendingAgeSeconds: null,
+  })),
+}));
+
 afterEach(() => {
   vi.mocked(cleanupAiPlanningRetention).mockReset();
   vi.mocked(cleanupAiPlanningRetention).mockResolvedValue({
@@ -39,17 +54,20 @@ afterEach(() => {
   });
   delete process.env.CRON_SECRET;
   delete process.env.SUPABASE_SECRET_KEY;
+  delete process.env.TROVE_NOTIFICATION_DISPATCH_SECRET;
+  delete process.env.TROVE_VAPID_PRIVATE_KEY;
 });
 
 async function inject(
   headers: Record<string, string> = {},
   path = '/maintenance/ai-planning-retention',
+  method: 'GET' | 'POST' = 'GET',
 ) {
   const app = Fastify();
   registerMaintenanceRoutes(app);
   const response = await app.inject({
     headers,
-    method: 'GET',
+    method,
     url: path,
   });
   await app.close();
@@ -90,6 +108,24 @@ test('retention cleanup runs only for the scheduler and stays closed without a s
     oldestOverdueAgeSeconds: 60,
     remainingOverdueSessions: 0,
   });
+});
+
+test('push dispatch requires its own secret and configured VAPID credentials', async () => {
+  const path = '/maintenance/notification-dispatch';
+  const headers = { authorization: `Bearer ${SECRET}` };
+  expect((await inject(headers, path, 'POST')).statusCode).toBe(503);
+  process.env.CRON_SECRET = SECRET;
+  process.env.TROVE_NOTIFICATION_DISPATCH_SECRET = 'different-dispatch-secret';
+  process.env.TROVE_VAPID_PRIVATE_KEY = 'configured';
+  expect((await inject(headers, path, 'POST')).statusCode).toBe(401);
+  const accepted = await inject(
+    { authorization: 'Bearer different-dispatch-secret' },
+    path,
+    'POST',
+  );
+  expect(accepted.statusCode).toBe(200);
+  expect(accepted.json()).toMatchObject({ accepted: 1, pending: 0 });
+  expect(dispatchNotifications).toHaveBeenCalledTimes(1);
 });
 
 test('retention failures and remaining overdue content fail visibly without exposing content', async () => {

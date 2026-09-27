@@ -19,6 +19,8 @@ import {
   storageCacheKey,
   USER_MEDIA_CACHE,
 } from '@/lib/media/storage-cache-key';
+import { readPushAccount } from '@/lib/notifications/push-account';
+import { shouldShowPush } from '@/lib/notifications/push-payload';
 
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
@@ -27,6 +29,33 @@ declare global {
 }
 
 declare const self: ServiceWorkerGlobalScope;
+
+self.addEventListener('push', (event) => {
+  event.waitUntil(
+    (async () => {
+      if (!event.data) return;
+      let payload: unknown;
+      try {
+        payload = event.data.json();
+      } catch {
+        return;
+      }
+      let activeOwner: string | null;
+      try {
+        activeOwner = await readPushAccount();
+      } catch {
+        return;
+      }
+      if (!shouldShowPush(payload, activeOwner)) return;
+      await self.registration.showNotification(payload.title, {
+        body: payload.body,
+        icon: '/icons/trove-192.png',
+        tag: payload.tag,
+        data: { ownerId: payload.ownerId, url: payload.url },
+      });
+    })(),
+  );
+});
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
@@ -41,11 +70,17 @@ self.addEventListener('notificationclick', (event) => {
     self.location.origin,
   ).toString();
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clients) => {
-      const matchingClient = clients.find((client) => client.url === url);
-      if (matchingClient && 'focus' in matchingClient) return matchingClient.focus();
-      return self.clients.openWindow(url);
-    }),
+    (async () => {
+      const activeOwner = await readPushAccount().catch(() => null);
+      if (!activeOwner || activeOwner !== event.notification.data?.ownerId) return;
+      return self.clients
+        .matchAll({ type: 'window', includeUncontrolled: true })
+        .then(async (clients) => {
+          const matchingClient = clients.find((client) => client.url === url);
+          if (matchingClient && 'focus' in matchingClient) return matchingClient.focus();
+          return self.clients.openWindow(url);
+        });
+    })(),
   );
 });
 

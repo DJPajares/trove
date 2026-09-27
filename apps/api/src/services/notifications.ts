@@ -1,8 +1,9 @@
-import { getPrismaClient } from '@trove/db';
+import { getPrismaClient, type Prisma } from '@trove/db';
 
 import { floatingLocalTimeToInstant, formatLocalTime } from './itinerary-rules.js';
+import { isSnapshotFresh, toPlaceCoordinates } from './place-data.js';
 import { resolveItineraryItemName } from './place-serializer.js';
-import { resolveTripModeContext } from './trip-mode-context.js';
+import { resolveTripModeItemSelection, LEAVE_BY_BUFFER_SECONDS } from './trip-mode-context.js';
 import { deriveTripLifecycle, formatDateOnly } from './trip-rules.js';
 
 const TASK_LEAD_MS = 60 * 60 * 1_000;
@@ -10,7 +11,7 @@ const RESERVATION_LEAD_MS = 2 * 60 * 60 * 1_000;
 const LEAVE_BY_LEAD_MS = 45 * 60 * 1_000;
 const RECENT_EVENT_MS = 30 * 60 * 1_000;
 
-type NotificationCandidate = {
+export type NotificationCandidate = {
   eventAt: Date;
   kind: 'LEAVE_BY' | 'RESERVATION_UPCOMING' | 'TASK_DUE';
   label: string;
@@ -20,6 +21,29 @@ type NotificationCandidate = {
   tripId: string;
   tripName: string;
 };
+
+const pushLeaveByInclude = {
+  trip: {
+    select: {
+      id: true,
+      name: true,
+      ownerId: true,
+      startDate: true,
+      endDate: true,
+      referenceTimeZone: true,
+    },
+  },
+  itineraryDay: {
+    include: {
+      items: {
+        where: { travelStatus: 'UPCOMING' as const },
+        orderBy: { position: 'asc' as const },
+        include: { tripPlace: { include: { place: { include: { providerRefs: true } } } } },
+      },
+    },
+  },
+} as const;
+type PushLeaveByItem = Prisma.ItineraryItemGetPayload<{ include: typeof pushLeaveByInclude }>;
 
 export type NotificationSettingsInput = {
   browserEnabled?: boolean;
@@ -41,7 +65,7 @@ function isUniqueConstraintError(error: unknown) {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
 }
 
-function taskCandidate(
+export function taskCandidate(
   task: {
     dueDate: Date | null;
     dueLocalTime: Date | null;
@@ -66,7 +90,7 @@ function taskCandidate(
       kind: 'TASK_DUE',
       label: task.label,
       sourceId: task.id,
-      sourceVersion: `${task.updatedAt.toISOString()}:${eventAt.toISOString()}`,
+      sourceVersion: `${eventAt.toISOString()}:${task.dueTimeZone}:${task.label}:${trip.name}`,
       timeZone: task.dueTimeZone,
       tripId: trip.id,
       tripName: trip.name,
@@ -107,7 +131,7 @@ function reservationEvent(reservation: {
   }
 }
 
-function reservationCandidate(
+export function reservationCandidate(
   reservation: {
     flightDepartureInstant: Date | null;
     flightDepartureLocalDate: Date | null;
@@ -130,54 +154,17 @@ function reservationCandidate(
     kind: 'RESERVATION_UPCOMING',
     label: reservation.title,
     sourceId: reservation.id,
-    sourceVersion: `${reservation.updatedAt.toISOString()}:${event.eventAt.toISOString()}`,
+    sourceVersion: `${event.eventAt.toISOString()}:${event.timeZone}:${reservation.title}:${trip.name}`,
     timeZone: event.timeZone,
     tripId: trip.id,
     tripName: trip.name,
   };
 }
 
-async function leaveByCandidate(
+export async function upsertCandidate(
   userId: string,
-  trip: { id: string; name: string },
-  now: Date,
-): Promise<NotificationCandidate | null> {
-  try {
-    const context = await resolveTripModeContext(userId, trip.id, { at: now });
-    if (!context.leaveBy || !context.day) return null;
-    const eventAt = new Date(context.leaveBy.at);
-    if (!inNotificationWindow(eventAt, now, LEAVE_BY_LEAD_MS)) return null;
-    const destination = context.day.items.find(
-      (item) => item.id === context.leaveBy?.destinationItemId,
-    );
-    if (!destination) return null;
-    return {
-      eventAt,
-      kind: 'LEAVE_BY',
-      // The stop being left for, named the way every other Trip Mode surface
-      // names it. This chain used to stop at the Place's own `name`, which is
-      // the traveller's custom name and null for every Google-backed stop - so
-      // an ordinary stop fell through to the trip's title and the notification
-      // read "Leave for <trip> in <trip>". The trip stays as the last resort
-      // for a stop that genuinely has no name at all.
-      label: resolveItineraryItemName(destination) ?? trip.name,
-      sourceId: destination.id,
-      sourceVersion: [
-        context.leaveBy.targetStartAt,
-        context.leaveBy.originItemId,
-        context.leaveBy.routeDurationSeconds,
-        context.leaveBy.mode,
-      ].join(':'),
-      timeZone: destination.timeZone ?? context.day.defaultTimeZone,
-      tripId: trip.id,
-      tripName: trip.name,
-    };
-  } catch {
-    return null;
-  }
-}
-
-async function upsertCandidate(userId: string, candidate: NotificationCandidate) {
+  candidate: NotificationCandidate,
+): Promise<Prisma.NotificationGetPayload<object>> {
   const prisma = getPrismaClient();
   const key = {
     ownerId_kind_sourceId: {
@@ -205,20 +192,17 @@ async function upsertCandidate(userId: string, candidate: NotificationCandidate)
       if (!isUniqueConstraintError(error)) {
         throw error;
       }
-      return prisma.notification.update({
-        where: key,
-        data: {
-          browserDeliveredAt: null,
-          eventAt: candidate.eventAt,
-          readAt: null,
-          sourceVersion: candidate.sourceVersion,
-          timeZone: candidate.timeZone,
-          tripId: candidate.tripId,
-        },
-      });
+      return upsertCandidate(userId, candidate);
     }
   }
 
+  if (
+    current.sourceVersion === candidate.sourceVersion &&
+    current.eventAt.getTime() === candidate.eventAt.getTime() &&
+    current.timeZone === candidate.timeZone &&
+    current.tripId === candidate.tripId
+  )
+    return current;
   return prisma.notification.update({
     where: { id: current.id },
     data: {
@@ -231,6 +215,231 @@ async function upsertCandidate(userId: string, candidate: NotificationCandidate)
         : { browserDeliveredAt: null, readAt: null }),
     },
   });
+}
+
+/** Due-source scan for dispatch. All source queries are bounded and indexed; the
+ * exact local-time and status rules are the same functions as the in-app read. */
+export async function listDueNotificationCandidates(now = new Date()) {
+  const prisma = getPrismaClient();
+  const floor = new Date(now.getTime() - 2 * 24 * 60 * 60_000);
+  const ceiling = new Date(now.getTime() + 2 * 24 * 60 * 60_000);
+  const activeTrip = {
+    owner: {
+      notificationsEnabled: true,
+      browserNotificationsEnabled: true,
+      pushSubscriptions: { some: {} },
+    },
+    notificationPreferences: { none: { muted: true } },
+  } as const;
+  const [tasks, reservations, timedItems] = await Promise.all([
+    prisma.task.findMany({
+      where: {
+        completedAt: null,
+        dueDate: { gte: floor, lte: ceiling },
+        dueLocalTime: { not: null },
+        trip: activeTrip,
+      },
+      include: { trip: { select: { id: true, name: true, ownerId: true } } },
+      orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
+      take: 500,
+    }),
+    prisma.reservation.findMany({
+      where: {
+        trip: activeTrip,
+        OR: [
+          { flightDepartureInstant: { gte: floor, lte: ceiling } },
+          {
+            flightDepartureLocalDate: { gte: floor, lte: ceiling },
+            flightDepartureLocalTime: { not: null },
+          },
+          { localDate: { gte: floor, lte: ceiling }, localTime: { not: null } },
+        ],
+      },
+      include: { trip: { select: { id: true, name: true, ownerId: true } } },
+      orderBy: { id: 'asc' },
+      take: 500,
+    }),
+    prisma.itineraryItem.findMany({
+      where: {
+        travelStatus: 'UPCOMING',
+        startInstant: { gt: now, lte: new Date(now.getTime() + 8 * 60 * 60_000) },
+        itineraryDayId: { not: null },
+        trip: activeTrip,
+      },
+      include: pushLeaveByInclude,
+      orderBy: [{ startInstant: 'asc' }, { id: 'asc' }],
+      take: 500,
+    }),
+  ]);
+
+  const due = (candidate: NotificationCandidate | null, lead: number, ownerId: string) =>
+    candidate && candidate.eventAt > now && now.getTime() >= candidate.eventAt.getTime() - lead
+      ? { candidate, ownerId }
+      : null;
+  const candidates = [
+    ...tasks.map((task) =>
+      due(taskCandidate(task, task.trip, now), TASK_LEAD_MS, task.trip.ownerId),
+    ),
+    ...reservations.map((reservation) =>
+      due(
+        reservationCandidate(reservation, reservation.trip, now),
+        RESERVATION_LEAD_MS,
+        reservation.trip.ownerId,
+      ),
+    ),
+  ].filter((value): value is NonNullable<typeof value> => value !== null);
+
+  for (const item of timedItems) {
+    const candidate = await cachedLeaveByCandidate(item, now);
+    const result = due(candidate, LEAVE_BY_LEAD_MS, item.trip.ownerId);
+    if (result) candidates.push(result);
+  }
+  return candidates.toSorted(
+    (left, right) => left.candidate.eventAt.getTime() - right.candidate.eventAt.getTime(),
+  );
+}
+
+async function cachedLeaveByCandidate(
+  item: PushLeaveByItem,
+  now: Date,
+): Promise<NotificationCandidate | null> {
+  const day = item.itineraryDay;
+  if (!day || !item.startInstant) return null;
+  if (
+    deriveTripLifecycle(
+      formatDateOnly(item.trip.startDate),
+      formatDateOnly(item.trip.endDate),
+      item.trip.referenceTimeZone,
+      now,
+    ) !== 'active'
+  )
+    return null;
+  const selection = resolveTripModeItemSelection(
+    day.items,
+    formatDateOnly(day.date),
+    day.defaultTimeZone,
+    now,
+  );
+  if (selection.nextItem?.id !== item.id || !selection.currentOrRelevant) return null;
+  const origin = selection.currentOrRelevant.item;
+  const target = selection.nextItem;
+  if (!origin.tripPlace || !target.tripPlace) return null;
+  const originCoordinate = cachedCoordinates(origin.tripPlace.place, now);
+  const destinationCoordinate = cachedCoordinates(target.tripPlace.place, now);
+  if (!originCoordinate || !destinationCoordinate || origin.travelModeToNext === 'FLIGHT')
+    return null;
+  const coordinate = (value: number) => Math.round(value * 1e6) / 1e6;
+  const leg = await getPrismaClient().travelLegCache.findUnique({
+    where: {
+      travel_leg_cache_leg: {
+        originLatitude: coordinate(originCoordinate.latitude),
+        originLongitude: coordinate(originCoordinate.longitude),
+        destinationLatitude: coordinate(destinationCoordinate.latitude),
+        destinationLongitude: coordinate(destinationCoordinate.longitude),
+        mode: origin.travelModeToNext,
+      },
+    },
+  });
+  if (!leg || now.getTime() - leg.fetchedAt.getTime() > 30 * 24 * 60 * 60_000) return null;
+  const eventAt = new Date(
+    item.startInstant.getTime() - (leg.durationSeconds + LEAVE_BY_BUFFER_SECONDS) * 1_000,
+  );
+  const place = target.tripPlace?.place;
+  const label =
+    resolveItineraryItemName({
+      customLabel: target.customLabel,
+      customLocation: target.customLocation ? { label: target.customLocation } : null,
+      tripPlace:
+        target.tripPlace && place
+          ? {
+              customName: target.tripPlace.customName,
+              place: {
+                name: place.customName,
+                providerLabel: place.providerLabel,
+                snapshot: {
+                  name: place.providerRefs.find((reference) => reference.provider === 'GOOGLE')
+                    ?.cachedName,
+                },
+              },
+            }
+          : null,
+    }) ?? item.trip.name;
+  return {
+    eventAt,
+    kind: 'LEAVE_BY',
+    label,
+    sourceId: item.id,
+    sourceVersion: `${item.startInstant.toISOString()}:${origin.id}:${leg.durationSeconds}:${origin.travelModeToNext.toLowerCase()}:${label}:${item.trip.name}`,
+    timeZone: item.timeZone ?? day.defaultTimeZone,
+    tripId: item.tripId,
+    tripName: item.trip.name,
+  };
+}
+
+/** Fresh, targeted revalidation immediately before a send. No provider path exists here. */
+export async function currentDueCandidate(
+  candidate: NotificationCandidate,
+  ownerId: string,
+  now: Date,
+) {
+  const prisma = getPrismaClient();
+  const trip = await prisma.trip.findFirst({
+    where: {
+      id: candidate.tripId,
+      ownerId,
+      owner: { notificationsEnabled: true, browserNotificationsEnabled: true },
+      notificationPreferences: { none: { ownerId, muted: true } },
+    },
+    select: { id: true, name: true },
+  });
+  if (!trip) return null;
+  let current: NotificationCandidate | null = null;
+  let lead = 0;
+  if (candidate.kind === 'TASK_DUE') {
+    const task = await prisma.task.findFirst({
+      where: { id: candidate.sourceId, tripId: trip.id, completedAt: null },
+    });
+    current = task ? taskCandidate(task, trip, now) : null;
+    lead = TASK_LEAD_MS;
+  } else if (candidate.kind === 'RESERVATION_UPCOMING') {
+    const reservation = await prisma.reservation.findFirst({
+      where: { id: candidate.sourceId, tripId: trip.id },
+    });
+    current = reservation ? reservationCandidate(reservation, trip, now) : null;
+    lead = RESERVATION_LEAD_MS;
+  } else {
+    const item = await prisma.itineraryItem.findFirst({
+      where: { id: candidate.sourceId, tripId: trip.id, travelStatus: 'UPCOMING' },
+      include: pushLeaveByInclude,
+    });
+    current = item ? await cachedLeaveByCandidate(item, now) : null;
+    lead = LEAVE_BY_LEAD_MS;
+  }
+  return current &&
+    current.eventAt > now &&
+    now.getTime() >= current.eventAt.getTime() - lead &&
+    current.sourceVersion === candidate.sourceVersion &&
+    current.eventAt.getTime() === candidate.eventAt.getTime()
+    ? current
+    : null;
+}
+
+function cachedCoordinates(
+  place: {
+    customLatitude: { toNumber(): number } | null;
+    customLongitude: { toNumber(): number } | null;
+    providerRefs: Array<Parameters<typeof isSnapshotFresh>[0] & { provider: string }>;
+  },
+  now: Date,
+) {
+  if (place.customLatitude && place.customLongitude) {
+    return {
+      latitude: place.customLatitude.toNumber(),
+      longitude: place.customLongitude.toNumber(),
+    };
+  }
+  const reference = place.providerRefs.find((value) => value.provider === 'GOOGLE');
+  return reference && isSnapshotFresh(reference, { now }) ? toPlaceCoordinates(reference) : null;
 }
 
 function actionPath(kind: NotificationCandidate['kind'], tripId: string) {
@@ -331,17 +540,29 @@ export async function listNotifications(userId: string, now = new Date()) {
     }
   }
 
-  const activeTrips = trips.filter(
-    (trip) =>
-      deriveTripLifecycle(
-        formatDateOnly(trip.startDate),
-        formatDateOnly(trip.endDate),
-        trip.referenceTimeZone,
-        now,
-      ) === 'active',
-  );
-  const leaveBy = await Promise.all(activeTrips.map((trip) => leaveByCandidate(userId, trip, now)));
-  candidates.push(...leaveBy.filter((candidate) => candidate !== null));
+  const timedItems = await prisma.itineraryItem.findMany({
+    where: {
+      trip: {
+        ownerId: userId,
+        notificationPreferences: { none: { ownerId: userId, muted: true } },
+      },
+      travelStatus: 'UPCOMING',
+      itineraryDayId: { not: null },
+      startInstant: {
+        gte: new Date(now.getTime() - 8 * 60 * 60_000),
+        lte: new Date(now.getTime() + 8 * 60 * 60_000),
+      },
+    },
+    include: pushLeaveByInclude,
+    orderBy: [{ startInstant: 'asc' }, { id: 'asc' }],
+    take: 500,
+  });
+  for (const item of timedItems) {
+    const candidate = await cachedLeaveByCandidate(item, now);
+    if (candidate && inNotificationWindow(candidate.eventAt, now, LEAVE_BY_LEAD_MS)) {
+      candidates.push(candidate);
+    }
+  }
 
   const records = await Promise.all(
     candidates.map((candidate) => upsertCandidate(userId, candidate)),
@@ -375,17 +596,24 @@ export async function listNotifications(userId: string, now = new Date()) {
 export async function updateNotificationSettings(userId: string, input: NotificationSettingsInput) {
   await getProfileSettings(userId);
   const enabled = input.browserEnabled ? true : input.enabled;
-  const profile = await getPrismaClient().profile.update({
-    where: { id: userId },
-    data: {
-      ...(enabled === undefined ? {} : { notificationsEnabled: enabled }),
-      ...(input.browserEnabled === undefined
-        ? enabled === false
-          ? { browserNotificationsEnabled: false }
-          : {}
-        : { browserNotificationsEnabled: input.browserEnabled }),
-    },
-    select: { browserNotificationsEnabled: true, notificationsEnabled: true },
+  const prisma = getPrismaClient();
+  const profile = await prisma.$transaction(async (tx) => {
+    const updated = await tx.profile.update({
+      where: { id: userId },
+      data: {
+        ...(enabled === undefined ? {} : { notificationsEnabled: enabled }),
+        ...(input.browserEnabled === undefined
+          ? enabled === false
+            ? { browserNotificationsEnabled: false }
+            : {}
+          : { browserNotificationsEnabled: input.browserEnabled }),
+      },
+      select: { browserNotificationsEnabled: true, notificationsEnabled: true },
+    });
+    if (!updated.browserNotificationsEnabled || !updated.notificationsEnabled) {
+      await tx.pushSubscription.deleteMany({ where: { ownerId: userId } });
+    }
+    return updated;
   });
   return serializeSettings(profile);
 }

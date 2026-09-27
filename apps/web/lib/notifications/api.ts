@@ -67,6 +67,37 @@ export function fetchNotifications() {
   return notificationRequest<NotificationsResponse>('/notifications');
 }
 
+export function fetchPushConfig() {
+  return notificationRequest<{ available: boolean; publicKey: string | null }>(
+    '/notifications/push-config',
+  );
+}
+
+export function registerPushSubscription(subscription: PushSubscriptionJSON, locale: string) {
+  return notificationRequest<{ id: string }>('/notifications/push-subscription', {
+    method: 'PUT',
+    body: JSON.stringify({
+      endpoint: subscription.endpoint,
+      keys: subscription.keys,
+      locale,
+    }),
+  });
+}
+
+export function removePushSubscription(endpoint: string) {
+  return notificationRequest<void>('/notifications/push-subscription', {
+    method: 'DELETE',
+    body: JSON.stringify({ endpoint }),
+  });
+}
+
+export function fetchPushSubscriptionStatus(endpoint: string) {
+  return notificationRequest<{ registered: boolean }>('/notifications/push-subscription/status', {
+    method: 'POST',
+    body: JSON.stringify({ endpoint }),
+  });
+}
+
 export function saveNotificationSettings(changes: Partial<NotificationSettings>) {
   return notificationRequest<{ settings: NotificationSettings }>('/notifications/preferences', {
     body: JSON.stringify(changes),

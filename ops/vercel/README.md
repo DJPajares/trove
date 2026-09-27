@@ -48,6 +48,13 @@ Set these in `trove-api` for Preview and Production:
   attempted, removed, pending, and oldest-pending-age counts without file paths.
   Both routes refuse callers while the secret is unset. Cron schedules are not
   exact execution-time guarantees.
+- `TROVE_VAPID_PUBLIC_KEY`, `TROVE_VAPID_PRIVATE_KEY`, and
+  `TROVE_VAPID_SUBJECT` — API-only Web Push credentials. The public key is
+  returned by an authenticated API endpoint; the private key stays on the API.
+- `TROVE_NOTIFICATION_DISPATCH_SECRET` — separate secret for Supabase Cron's
+  one-minute `POST /maintenance/notification-dispatch`. Do not reuse
+  `CRON_SECRET` or expose it to the web project. See
+  [`docs/notifications/dispatch-runbook.md`](../../docs/notifications/dispatch-runbook.md).
 
 Before launching AI-assisted trip creation to signed-in users, work through
 [`docs/ai/launch-runbook.md`](../../docs/ai/launch-runbook.md): production Vertex

@@ -1,0 +1,14 @@
+{
+  "task_due": {
+    "title": "Task due soon",
+    "body": "{label} for {trip} is due at {time}."
+  },
+  "reservation_upcoming": {
+    "title": "Reservation coming up",
+    "body": "{label} for {trip} starts at {time}."
+  },
+  "leave_by": {
+    "title": "Time to leave",
+    "body": "Leave for {label} in {trip}. Your route is based on the latest available estimate."
+  }
+}

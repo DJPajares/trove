@@ -9,30 +9,34 @@ import { useNotifications } from '@/components/notifications-provider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-
-type PermissionState = NotificationPermission | 'unsupported';
-
-function browserPermission(): PermissionState {
-  if (typeof Notification === 'undefined') return 'unsupported';
-  return Notification.permission;
-}
+import {
+  backgroundPushStatus,
+  clearLocalPush,
+  disableBackgroundPush,
+  enableBackgroundPush,
+  type BackgroundPushStatus,
+} from '@/lib/notifications/push';
 
 export function NotificationSettings() {
   const t = useTranslations('notifications.settings');
-  const { settings, status, updateSettings } = useNotifications();
+  const { refresh, settings, status, updateSettings } = useNotifications();
   const [saving, setSaving] = useState<'browser' | 'enabled' | null>(null);
   const [error, setError] = useState(false);
-  const [permission, setPermission] = useState<PermissionState>('default');
+  const [pushStatus, setPushStatus] = useState<BackgroundPushStatus>('off');
 
   useEffect(() => {
-    setPermission(browserPermission());
-  }, []);
+    void backgroundPushStatus(settings.browserEnabled).then(setPushStatus);
+  }, [settings.browserEnabled]);
 
   async function setEnabled(enabled: boolean) {
     setError(false);
     setSaving('enabled');
     try {
       await updateSettings({ enabled });
+      if (!enabled) {
+        await clearLocalPush();
+        setPushStatus('off');
+      }
     } catch {
       setError(true);
     } finally {
@@ -45,17 +49,17 @@ export function NotificationSettings() {
     setSaving('browser');
     try {
       if (enabled) {
-        if (typeof Notification === 'undefined') {
-          setPermission('unsupported');
-          return;
-        }
-        const nextPermission = await Notification.requestPermission();
-        setPermission(nextPermission);
-        if (nextPermission !== 'granted') return;
+        await enableBackgroundPush(settings.browserEnabled);
+      } else {
+        await disableBackgroundPush();
       }
-      await updateSettings({ browserEnabled: enabled });
+      await refresh();
+      setPushStatus(await backgroundPushStatus(enabled));
     } catch {
       setError(true);
+      setPushStatus(
+        await backgroundPushStatus(settings.browserEnabled).catch(() => 'unavailable' as const),
+      );
     } finally {
       setSaving(null);
     }
@@ -81,45 +85,51 @@ export function NotificationSettings() {
         ) : null}
 
         <div className="mt-6 border-y border-border">
-          <label
-            className="flex cursor-pointer items-start justify-between gap-5 py-4"
-            htmlFor="trove-notifications-enabled"
-          >
-            <span>
+          <div className="flex items-start justify-between gap-5 py-4">
+            <span id="trove-notifications-enabled-label">
               <span className="block text-sm font-medium text-foreground">{t('inAppLabel')}</span>
               <span className="mt-1 block text-xs leading-5 text-muted-foreground">
                 {t('inAppDescription')}
               </span>
             </span>
             <Switch
+              aria-labelledby="trove-notifications-enabled-label"
               checked={settings.enabled}
               disabled={saving !== null || status === 'loading' || status === 'unavailable'}
               id="trove-notifications-enabled"
               onCheckedChange={(checked) => void setEnabled(checked)}
             />
-          </label>
+          </div>
 
-          <label
-            className="flex cursor-pointer items-start justify-between gap-5 border-t border-border py-4"
-            htmlFor="trove-browser-notifications-enabled"
-          >
-            <span>
+          <div className="flex items-start justify-between gap-5 border-t border-border py-4">
+            <span id="trove-browser-notifications-enabled-label">
               <span className="block text-sm font-medium text-foreground">{t('browserLabel')}</span>
               <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                {permission === 'denied'
+                {pushStatus === 'denied'
                   ? t('permissionDenied')
-                  : permission === 'unsupported'
+                  : pushStatus === 'unsupported'
                     ? t('unsupported')
-                    : t('browserDescription')}
+                    : pushStatus === 'unavailable'
+                      ? t('unavailable')
+                      : pushStatus === 'configured'
+                        ? t('configured')
+                        : t('browserDescription')}
               </span>
             </span>
             <Switch
-              checked={settings.browserEnabled && permission === 'granted'}
-              disabled={!settings.enabled || saving !== null || permission === 'unsupported'}
+              aria-labelledby="trove-browser-notifications-enabled-label"
+              checked={pushStatus === 'configured'}
+              disabled={
+                !settings.enabled ||
+                saving !== null ||
+                pushStatus === 'unsupported' ||
+                pushStatus === 'unavailable' ||
+                pushStatus === 'denied'
+              }
               id="trove-browser-notifications-enabled"
               onCheckedChange={(checked) => void setBrowserEnabled(checked)}
             />
-          </label>
+          </div>
         </div>
 
         <p className="mt-4 text-xs leading-5 text-text-subtle">{t('privacyNote')}</p>

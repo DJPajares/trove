@@ -9,18 +9,54 @@ import {
   resolveTripTimeZone,
 } from './trip-rules.js';
 
-/** Suggestions come only from country names in the immutable destination labels. */
-export function suggestedDraftCountries(draft: AiPlannerDraft): string[] {
+type StoredDestinationPlace = { id: string; providerAddress: string | null };
+
+/** Provider addresses already resolved for this draft take precedence over labels. */
+export function suggestedDraftCountries(
+  draft: AiPlannerDraft,
+  storedPlaces: readonly StoredDestinationPlace[] = [],
+): string[] {
   const places = new Map(draft.places.map((place) => [place.id, place]));
+  const addresses = new Map(storedPlaces.map((place) => [place.id, place.providerAddress]));
   return [
     ...new Set(
       draft.trip.destinations.flatMap((destination) => {
-        const name = places.get(destination.placeRefId)?.name;
-        const code = name ? resolveDestinationCountryCode(name) : null;
+        const place = places.get(destination.placeRefId);
+        const address = place?.resolution === 'verified' ? addresses.get(place.placeId) : null;
+        const code =
+          (address ? resolveDestinationCountryCode(address) : null) ??
+          (place ? resolveDestinationCountryCode(place.name) : null);
         return code ? [code] : [];
       }),
     ),
   ];
+}
+
+/** Reads only already stored Place addresses; no provider lookup or draft mutation. */
+export async function suggestedDraftCountriesFromStoredPlaces(
+  draft: AiPlannerDraft,
+  prisma: Pick<Prisma.TransactionClient, 'place'>,
+): Promise<string[]> {
+  const places = new Map(draft.places.map((place) => [place.id, place]));
+  const ids = [
+    ...new Set(
+      draft.trip.destinations.flatMap((destination) => {
+        const place = places.get(destination.placeRefId);
+        return place?.resolution === 'verified' ? [place.placeId] : [];
+      }),
+    ),
+  ];
+  if (!ids.length) return suggestedDraftCountries(draft);
+  try {
+    const stored = await prisma.place.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, providerAddress: true },
+    });
+    return suggestedDraftCountries(draft, stored);
+  } catch {
+    // Country selection remains available when the optional address read fails.
+    return suggestedDraftCountries(draft);
+  }
 }
 
 export function normalizeReviewedCountries(input: readonly string[]): string[] | null {
@@ -37,8 +73,7 @@ export async function countryCorrectionChangesTimeContext(
   draft: AiPlannerDraft,
   reviewedCountries: readonly string[],
 ) {
-  const suggestedCountries = suggestedDraftCountries(draft);
-  if (suggestedCountries.join(',') === reviewedCountries.join(',')) return false;
+  if (suggestedDraftCountries(draft).join(',') === reviewedCountries.join(',')) return false;
 
   const verifiedIds = [
     ...new Set(
@@ -58,6 +93,8 @@ export async function countryCorrectionChangesTimeContext(
     }),
     transaction.profile.findUnique({ where: { id: ownerId }, select: { homeTimeZone: true } }),
   ]);
+  const suggestedCountries = suggestedDraftCountries(draft, storedPlaces);
+  if (suggestedCountries.join(',') === reviewedCountries.join(',')) return false;
   const stored = new Map(storedPlaces.map((place) => [place.id, place]));
   const zones = new Map(
     draft.places.map((place) => {

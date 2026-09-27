@@ -17,6 +17,7 @@ import {
   countryCorrectionChangesTimeContext,
   normalizeReviewedCountries,
   suggestedDraftCountries,
+  suggestedDraftCountriesFromStoredPlaces,
 } from './ai-planning-countries.js';
 import { parseStoredPlanScore, type TripPlanScore } from './plan-score.js';
 import {
@@ -243,6 +244,22 @@ export function serializeAiPlanningSession(session: SessionRecord) {
   };
 }
 
+async function serializeAiPlanningSessionWithCountries(
+  session: SessionRecord,
+  prisma: PlanningPrisma,
+) {
+  const serialized = serializeAiPlanningSession(session);
+  if (!serialized.draft || !['REVIEWING', 'FAILED'].includes(session.status)) {
+    return serialized;
+  }
+  const draft = validateAiPlannerDraft(serialized.draft);
+  if (!draft.success) return serialized;
+  return {
+    ...serialized,
+    suggestedCountries: await suggestedDraftCountriesFromStoredPlaces(draft.data, prisma),
+  };
+}
+
 /** Review metadata is separate from the immutable draft and generation quota. */
 export async function setAiPlanningCountries(
   ownerId: string,
@@ -298,7 +315,7 @@ export async function setAiPlanningCountries(
     });
   });
   if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
-  return serializeAiPlanningSession(session);
+  return serializeAiPlanningSessionWithCountries(session, prisma);
 }
 
 async function ensureAndLockOwner(transaction: PlanningTransaction, ownerId: string) {
@@ -472,7 +489,7 @@ export async function createAiPlanningSession(
   });
 
   if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
-  return serializeAiPlanningSession(session);
+  return serializeAiPlanningSessionWithCountries(session, prisma);
 }
 
 async function expireOwnedSessions(prisma: PlanningPrisma, ownerId: string, now: Date) {
@@ -516,7 +533,7 @@ export async function recoverLatestAiPlanningSession(
     include: sessionInclude,
     orderBy: { updatedAt: 'desc' },
   });
-  return session ? serializeAiPlanningSession(session) : null;
+  return session ? serializeAiPlanningSessionWithCountries(session, prisma) : null;
 }
 
 export async function getAiPlanningSession(
@@ -536,7 +553,7 @@ export async function getAiPlanningSession(
     return found;
   });
   if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
-  return serializeAiPlanningSession(session);
+  return serializeAiPlanningSessionWithCountries(session, prisma);
 }
 
 export async function regenerateAiPlanningSession(
@@ -607,7 +624,7 @@ export async function regenerateAiPlanningSession(
   });
 
   if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
-  return serializeAiPlanningSession(session);
+  return serializeAiPlanningSessionWithCountries(session, prisma);
 }
 
 function parseStoredDraft(value: Prisma.JsonValue | null) {
@@ -647,7 +664,7 @@ export async function setAiPlanningTripDescription(
     });
   });
   if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
-  return serializeAiPlanningSession(session);
+  return serializeAiPlanningSessionWithCountries(session, prisma);
 }
 
 /**
@@ -681,7 +698,7 @@ export async function setAiPlanningTripName(
     });
   });
   if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
-  return serializeAiPlanningSession(session);
+  return serializeAiPlanningSessionWithCountries(session, prisma);
 }
 
 export async function acknowledgeAiPlanningWarnings(
@@ -713,7 +730,7 @@ export async function acknowledgeAiPlanningWarnings(
     });
   });
   if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
-  return serializeAiPlanningSession(session);
+  return serializeAiPlanningSessionWithCountries(session, prisma);
 }
 
 export async function cancelAiPlanningSession(
@@ -750,7 +767,7 @@ export async function cancelAiPlanningSession(
     });
   });
   if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
-  return serializeAiPlanningSession(session);
+  return serializeAiPlanningSessionWithCountries(session, prisma);
 }
 
 type ClaimDispatchResult = {

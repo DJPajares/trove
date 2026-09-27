@@ -6,8 +6,21 @@ import {
   DEFAULT_AI_MODEL,
   DEFAULT_AI_THINKING_LEVEL,
   DEFAULT_AI_TIMEOUT_MS,
+  getAiPlanningDispatchLimit,
   getAiGenerationEnvironment,
 } from '../src/environment.js';
+
+test.each([
+  [{}, 5],
+  [{ TROVE_AI_PLANNING_DISPATCH_LIMIT: '0' }, 0],
+  [{ TROVE_AI_PLANNING_DISPATCH_LIMIT: '1' }, 1],
+  [{ TROVE_AI_PLANNING_DISPATCH_LIMIT: '1000' }, 1000],
+  [{ TROVE_AI_PLANNING_DISPATCH_LIMIT: '-1' }, 5],
+  [{ TROVE_AI_PLANNING_DISPATCH_LIMIT: '1001' }, 5],
+  [{ TROVE_AI_PLANNING_DISPATCH_LIMIT: '1.5' }, 5],
+])('reads the AI planning dispatch limit from %o', (environment, expected) => {
+  expect(getAiPlanningDispatchLimit(environment)).toBe(expected);
+});
 
 test('Vertex uses discoverable ADC and bounded generation settings', () => {
   expect(

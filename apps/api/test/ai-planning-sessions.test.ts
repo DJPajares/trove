@@ -447,6 +447,43 @@ describe('planning-session reservations and recovery', () => {
     });
   });
 
+  test('reports unlimited availability when the per-traveller limit is zero', async () => {
+    const store = createPlanningStore();
+    const sessionId = '00000000-0000-4000-8000-000000000012';
+    for (let index = 0; index < 7; index += 1) {
+      const runId = `00000000-0000-4000-8000-${String(index + 720).padStart(12, '0')}`;
+      store.runs.set(
+        runId,
+        makeRun(runId, sessionId, { dispatchedAt: new Date(NOW.getTime() - index * 1_000) }),
+      );
+    }
+
+    await expect(
+      getAiPlanningAvailability(OWNER_ID, {
+        environment: { ...AVAILABLE_ENVIRONMENT, TROVE_AI_PLANNING_DISPATCH_LIMIT: '0' },
+        now: () => NOW,
+        prisma: store.prisma,
+      }),
+    ).resolves.toStrictEqual({
+      code: null,
+      remainingDispatches: null,
+      retryAt: null,
+      status: 'available',
+    });
+
+    await expect(
+      getAiPlanningAvailability(OWNER_ID, {
+        environment: {
+          ...AVAILABLE_ENVIRONMENT,
+          TROVE_AI_DISABLED: 'true',
+          TROVE_AI_PLANNING_DISPATCH_LIMIT: '0',
+        },
+        now: () => NOW,
+        prisma: store.prisma,
+      }),
+    ).resolves.toMatchObject({ code: 'ai_disabled', status: 'unavailable' });
+  });
+
   test('trims prompts, enforces 10,000 characters, and reuses create idempotency keys', async () => {
     const store = createPlanningStore();
     const key = '00000000-0000-4000-8000-000000000020';
@@ -791,6 +828,30 @@ describe('review session safety', () => {
 });
 
 describe('dispatch quota and lifecycle completion', () => {
+  test('zero disables the rolling per-traveller cap for dispatch claims', async () => {
+    const store = createPlanningStore();
+    for (let index = 0; index < 5; index += 1) {
+      const sessionId = `00000000-0000-4000-8000-${String(65 + index).padStart(12, '0')}`;
+      const runId = `00000000-0000-4000-8000-${String(75 + index).padStart(12, '0')}`;
+      store.addRun(
+        makeRun(runId, sessionId, { dispatchedAt: NOW, result: 'SUCCEEDED' }),
+        makeSession(sessionId, { status: 'REVIEWING' }),
+      );
+    }
+    const sessionId = '00000000-0000-4000-8000-000000000070';
+    const runId = '00000000-0000-4000-8000-000000000080';
+    store.addRun(makeRun(runId, sessionId), makeSession(sessionId));
+
+    await expect(
+      claimAiPlanningDispatch(OWNER_ID, runId, {
+        environment: { ...AVAILABLE_ENVIRONMENT, TROVE_AI_PLANNING_DISPATCH_LIMIT: '0' },
+        now: () => NOW,
+        prisma: store.prisma,
+      }),
+    ).resolves.toMatchObject({ runId, sessionId });
+    expect([...store.runs.values()].filter((run) => run.dispatchedAt)).toHaveLength(6);
+  });
+
   test('serializes six concurrent claims so only five consume the rolling quota', async () => {
     const store = createPlanningStore();
     const claims = Array.from({ length: 6 }, (_, index) => {

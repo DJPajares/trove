@@ -88,9 +88,9 @@ export function AiPlanningComposer({ lifecycle }: Readonly<{ lifecycle: AiPlanni
           </div>
         </section>
 
-        {availability?.status === 'available' ? (
+        {availability?.status === 'available' && availability.remainingDispatches !== null ? (
           <p className="text-sm text-muted-foreground" role="status">
-            {t('availability', { count: availability.remainingDispatches ?? 0 })}
+            {t('availability', { count: availability.remainingDispatches })}
           </p>
         ) : null}
         {availability?.status === 'quota_exhausted' ? (

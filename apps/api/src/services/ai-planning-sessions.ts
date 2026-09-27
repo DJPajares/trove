@@ -156,6 +156,14 @@ export async function getAiPlanningAvailability(
   const prisma = prismaFrom(options);
   const now = nowFrom(options);
   const dispatchLimit = getAiPlanningDispatchLimit(options.environment);
+  if (dispatchLimit === 0) {
+    return {
+      code: null,
+      remainingDispatches: null,
+      retryAt: null,
+      status: 'available',
+    };
+  }
   const cutoff = new Date(now.getTime() - AI_PLANNING_DISPATCH_WINDOW_MS);
   const [dispatched, oldest] = await Promise.all([
     prisma.aiGenerationRun.count({ where: { dispatchedAt: { gt: cutoff }, ownerId } }),
@@ -848,20 +856,24 @@ export async function claimAiPlanningDispatch(
     }
 
     const dispatchLimit = getAiPlanningDispatchLimit(options.environment);
-    const cutoff = new Date(now.getTime() - AI_PLANNING_DISPATCH_WINDOW_MS);
-    const dispatched = await transaction.aiGenerationRun.count({
-      where: { dispatchedAt: { gt: cutoff }, ownerId },
-    });
-    if (dispatched >= dispatchLimit) {
-      const oldest = await transaction.aiGenerationRun.findFirst({
+    if (dispatchLimit > 0) {
+      const cutoff = new Date(now.getTime() - AI_PLANNING_DISPATCH_WINDOW_MS);
+      const dispatched = await transaction.aiGenerationRun.count({
         where: { dispatchedAt: { gt: cutoff }, ownerId },
-        orderBy: { dispatchedAt: 'asc' },
-        select: { dispatchedAt: true },
       });
-      return {
-        kind: 'quota' as const,
-        retryAt: new Date((oldest?.dispatchedAt ?? now).getTime() + AI_PLANNING_DISPATCH_WINDOW_MS),
-      };
+      if (dispatched >= dispatchLimit) {
+        const oldest = await transaction.aiGenerationRun.findFirst({
+          where: { dispatchedAt: { gt: cutoff }, ownerId },
+          orderBy: { dispatchedAt: 'asc' },
+          select: { dispatchedAt: true },
+        });
+        return {
+          kind: 'quota' as const,
+          retryAt: new Date(
+            (oldest?.dispatchedAt ?? now).getTime() + AI_PLANNING_DISPATCH_WINDOW_MS,
+          ),
+        };
+      }
     }
 
     const deadlineAt = new Date(now.getTime() + configuration.timeoutMs + 30_000);

@@ -233,7 +233,7 @@ export function getAiPlanningDispatchLimit(
     parseBoundedInteger(
       environment.TROVE_AI_PLANNING_DISPATCH_LIMIT,
       DEFAULT_AI_PLANNING_DISPATCH_LIMIT,
-      1,
+      0,
       MAX_AI_PLANNING_DISPATCH_LIMIT,
     ) ?? DEFAULT_AI_PLANNING_DISPATCH_LIMIT
   );

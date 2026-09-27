@@ -91,6 +91,7 @@ export type AiPlanningSessionErrorCode =
   | 'quota_exceeded'
   | 'regenerate_required'
   | 'run_already_claimed'
+  | 'schedule_conflict'
   | 'session_busy'
   | 'session_expired'
   | 'session_not_found'
@@ -211,6 +212,11 @@ const sessionInclude = {
 export function serializeAiPlanningSession(session: SessionRecord) {
   const terminal = ['APPLIED', 'CANCELLED', 'EXPIRED'].includes(session.status);
   const draft = terminal || !session.draft ? null : validateAiPlannerDraft(session.draft);
+  const timingConflict =
+    draft && !draft.success && draft.issues.some((issue) => issue.code === 'overlapping_items');
+  const readableDraft = timingConflict
+    ? validateAiPlannerDraft(session.draft, { allowExactTimeOverlaps: true })
+    : draft;
   return {
     appliedTripId: session.appliedTripId,
     createdAt: session.createdAt.toISOString(),
@@ -219,14 +225,16 @@ export function serializeAiPlanningSession(session: SessionRecord) {
     deadlineAt: terminal ? null : (session.runs[0]?.deadlineAt?.toISOString() ?? null),
     expiresAt: session.expiresAt.toISOString(),
     id: session.id,
-    lastSafeError: terminal ? null : session.lastErrorCode,
+    lastSafeError: terminal ? null : timingConflict ? 'schedule_conflict' : session.lastErrorCode,
     pendingRunId: terminal ? null : (session.runs[0]?.id ?? null),
     planScore:
-      terminal || session.countryContextChanged ? null : parseStoredPlanScore(session.planScore),
+      terminal || session.countryContextChanged || timingConflict
+        ? null
+        : parseStoredPlanScore(session.planScore),
     countryContextChanged: terminal ? false : session.countryContextChanged,
     countriesReviewedRevision: terminal ? null : session.countriesReviewedRevision,
     reviewedCountries: terminal ? [] : session.reviewedCountries,
-    suggestedCountries: draft?.success ? suggestedDraftCountries(draft.data) : [],
+    suggestedCountries: readableDraft?.success ? suggestedDraftCountries(readableDraft.data) : [],
     prompt: terminal ? null : session.rawPrompt,
     schemaVersion: session.schemaVersion,
     stage: session.stage.toLowerCase(),
@@ -252,7 +260,7 @@ async function serializeAiPlanningSessionWithCountries(
   if (!serialized.draft || !['REVIEWING', 'FAILED'].includes(session.status)) {
     return serialized;
   }
-  const draft = validateAiPlannerDraft(serialized.draft);
+  const draft = validateAiPlannerDraft(serialized.draft, { allowExactTimeOverlaps: true });
   if (!draft.success) return serialized;
   return {
     ...serialized,
@@ -282,7 +290,7 @@ export async function setAiPlanningCountries(
     if (found.draftRevision !== expectedRevision) {
       throw new AiPlanningSessionError('draft_conflict', 409);
     }
-    const draft = parseStoredDraft(found.draft);
+    const draft = parseStoredDraft(found.draft, true);
     const countryContextChanged = await countryCorrectionChangesTimeContext(
       transaction,
       ownerId,
@@ -627,9 +635,14 @@ export async function regenerateAiPlanningSession(
   return serializeAiPlanningSessionWithCountries(session, prisma);
 }
 
-function parseStoredDraft(value: Prisma.JsonValue | null) {
-  const validated = validateAiPlannerDraft(value);
-  if (!validated.success) throw new AiPlanningSessionError('draft_invalid', 400);
+function parseStoredDraft(value: Prisma.JsonValue | null, allowExactTimeOverlaps = false) {
+  const validated = validateAiPlannerDraft(value, { allowExactTimeOverlaps });
+  if (!validated.success) {
+    const timingConflict = validated.issues.some((issue) =>
+      ['overlapping_items', 'conflicting_hard_constraints'].includes(issue.code),
+    );
+    throw new AiPlanningSessionError(timingConflict ? 'schedule_conflict' : 'draft_invalid', 400);
+  }
   return validated.data;
 }
 

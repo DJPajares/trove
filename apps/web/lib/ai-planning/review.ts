@@ -4,6 +4,55 @@ import type { AiPlanningDraft, AiPlanningDraftItem, AiPlanningSession } from './
 
 export type AiPlanningReviewPageState = 'error' | 'loading' | 'redirecting' | 'reviewing';
 
+export function aiPlanningCountriesReviewed(session: AiPlanningSession, countries: string[]) {
+  return (
+    session.countriesReviewedRevision === session.draftRevision &&
+    countries.join(',') === session.reviewedCountries.join(',')
+  );
+}
+
+/** A save may publish only into the revision and selection that requested it. */
+export function aiPlanningCountrySaveIsCurrent(
+  requested: AiPlanningSession,
+  current: AiPlanningSession | null,
+  requestedCountries: string[],
+  visibleCountries: string[],
+) {
+  return (
+    current?.id === requested.id &&
+    current.draftRevision === requested.draftRevision &&
+    current.status === 'reviewing' &&
+    requestedCountries.join(',') === visibleCountries.join(',')
+  );
+}
+
+/** Apply approves visible suggestions, then rechecks warnings revealed by saving. */
+export async function prepareAiPlanningCountriesForApply(
+  session: AiPlanningSession,
+  countries: string[],
+  save: (session: AiPlanningSession, countries: string[]) => Promise<AiPlanningSession | null>,
+) {
+  if (!session.draft || session.status !== 'reviewing' || !countries.length) return null;
+  const saved = aiPlanningCountriesReviewed(session, countries)
+    ? session
+    : await save(session, countries);
+  if (
+    !saved?.draft ||
+    saved.id !== session.id ||
+    saved.draftRevision !== session.draftRevision ||
+    saved.status !== 'reviewing' ||
+    !aiPlanningCountriesReviewed(saved, countries)
+  )
+    return null;
+  const requiresAcknowledgement =
+    saved.countryContextChanged || saved.draft.warnings.some((warning) => warning.material);
+  return {
+    canApply:
+      !requiresAcknowledgement || saved.warningAcknowledgement?.revision === saved.draftRevision,
+    session: saved,
+  };
+}
+
 export function isAiPlanningSessionExpired(session: AiPlanningSession, now = Date.now()): boolean {
   return session.status !== 'applied' && Date.parse(session.expiresAt) <= now;
 }

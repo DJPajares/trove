@@ -290,6 +290,131 @@ function createHarness(output: unknown) {
 }
 
 describe('AI planning pipeline', () => {
+  test('keeps a night flight and leaves arrival-dependent suggestions unscheduled', () => {
+    const proposal = explicitModelProposal();
+    proposal.normalizedRequest.constraints.push({
+      date: '2026-10-02',
+      dayPart: 'evening',
+      destinationIntentId: 'destination:tokyo',
+      durationMinutes: null,
+      id: 'constraint:night-flight',
+      kind: 'transport',
+      label: 'Flight to Tokyo at night',
+      localTime: null,
+      priority: null,
+      source: 'user',
+      strength: 'hard',
+    });
+    proposal.items.push(
+      {
+        ...proposal.items[0]!,
+        blockType: 'transport',
+        candidatePlaceId: null,
+        constraintIds: ['constraint:night-flight'],
+        dayIndex: 0,
+        durationMinutes: 180,
+        durationProvenance: 'ai_estimated',
+        id: 'item:night-flight',
+        label: 'Flight to Tokyo at night',
+        schedule: { dayPart: 'evening', kind: 'day_part' },
+      },
+      {
+        ...proposal.items[1]!,
+        constraintIds: [],
+        dayIndex: 0,
+        id: 'item:hotel',
+        label: 'Hotel check-in suggestion',
+        origin: 'model',
+        priority: null,
+        schedule: { dayPart: 'evening', kind: 'day_part' },
+      },
+    );
+    const draft = assembleAiPlanningDraft(proposal, NOW);
+    expect(draft.days[0]?.items.map((item) => item.id)).toStrictEqual(['item:night-flight']);
+    expect(draft.unscheduledItems.map((item) => item.id)).toContain('item:hotel');
+    expect(draft.warnings).toContainEqual(
+      expect.objectContaining({ code: 'arrival_time_unknown', itemIds: ['item:hotel'] }),
+    );
+    expect(draft.days[1]?.items[0]?.id).toBe('item:meeting');
+  });
+
+  test('an exact night departure still leaves arrival time unknown', () => {
+    const proposal = explicitModelProposal();
+    proposal.normalizedRequest.constraints.push({
+      date: '2026-10-02',
+      dayPart: null,
+      destinationIntentId: 'destination:tokyo',
+      durationMinutes: null,
+      id: 'constraint:night-flight',
+      kind: 'transport',
+      label: 'Flight to Tokyo',
+      localTime: '21:00',
+      priority: null,
+      source: 'user',
+      strength: 'hard',
+    });
+    proposal.items.push(
+      {
+        ...proposal.items[0]!,
+        blockType: 'transport',
+        candidatePlaceId: null,
+        constraintIds: ['constraint:night-flight'],
+        dayIndex: 0,
+        id: 'item:night-flight',
+        label: 'Flight to Tokyo',
+        schedule: { kind: 'exact', localTime: '21:00', source: 'user' },
+      },
+      {
+        ...proposal.items[1]!,
+        constraintIds: [],
+        dayIndex: 0,
+        id: 'item:hotel',
+        label: 'Hotel check-in',
+        origin: 'model',
+        priority: null,
+      },
+    );
+    const draft = assembleAiPlanningDraft(proposal, NOW);
+    expect(draft.days[0]?.items.map((item) => item.id)).toStrictEqual(['item:night-flight']);
+    expect(draft.unscheduledItems.map((item) => item.id)).toContain('item:hotel');
+  });
+
+  test('estimated exact visits occupy their duration for later suggestions', () => {
+    const draft = assembleAiPlanningDraft(explicitModelProposal(), NOW);
+    const day = draft.days[1]!;
+    day.items = [
+      {
+        ...day.items[1]!,
+        id: 'item:lunch',
+        origin: 'model',
+        priority: null,
+        constraintIds: [],
+        durationMinutes: 60,
+      },
+      {
+        ...day.items[1]!,
+        id: 'item:beach',
+        origin: 'model',
+        priority: null,
+        constraintIds: [],
+        durationMinutes: 120,
+      },
+    ];
+    const unavailable = assignAiPlannerSuggestedTimes(
+      day,
+      new Map([
+        ['item:lunch', [{ startMinute: 720, endMinute: 1080 }]],
+        ['item:beach', [{ startMinute: 720, endMinute: 1080 }]],
+      ]),
+      new Map(),
+    );
+    expect(unavailable).toStrictEqual([]);
+    expect(day.items.map((item) => item.schedule)).toStrictEqual([
+      { kind: 'exact', localTime: '12:00', source: 'model' },
+      { kind: 'exact', localTime: '13:00', source: 'model' },
+    ]);
+  });
+
   test('turns feasible dayparts into ordered AI estimates and preserves fallbacks', () => {
     const draft = assembleAiPlanningDraft(explicitModelProposal(), NOW);
     const day = draft.days[1]!;
@@ -327,15 +452,53 @@ describe('AI planning pipeline', () => {
     });
 
     const closed = assembleAiPlanningDraft(explicitModelProposal(), NOW).days[1]!;
-    assignAiPlannerSuggestedTimes(
-      closed,
-      new Map([['item:museum', [{ endMinute: 720, startMinute: 480 }]]]),
-      new Map([['item:museum', 30]]),
-    );
+    expect(
+      assignAiPlannerSuggestedTimes(
+        closed,
+        new Map([['item:museum', [{ endMinute: 720, startMinute: 480 }]]]),
+        new Map([['item:museum', 30]]),
+      ),
+    ).toStrictEqual(['item:museum']);
     expect(closed.items[1]?.schedule).toStrictEqual({
       dayPart: 'afternoon',
       kind: 'day_part',
     });
+  });
+
+  test('conflicting traveller work and meeting times return a recoverable schedule error', async () => {
+    const proposal = explicitModelProposal();
+    const meeting = proposal.normalizedRequest.constraints.find(
+      (entry) => entry.kind === 'meeting',
+    )!;
+    proposal.normalizedRequest.constraints.push({
+      ...meeting,
+      id: 'constraint:work',
+      kind: 'work',
+      label: 'Work commitment',
+      localTime: '09:30',
+    });
+    proposal.items.push({
+      ...proposal.items.find((entry) => entry.blockType === 'meeting')!,
+      blockType: 'work',
+      constraintIds: ['constraint:work'],
+      id: 'item:work',
+      label: 'Work commitment',
+      schedule: { kind: 'exact', localTime: '09:30', source: 'user' },
+    });
+    const original = structuredClone(proposal);
+    const harness = createHarness(proposal);
+    await runAiPlanningPipeline(OWNER_ID, RUN_ID, {
+      clock: () => NOW,
+      gateway: harness.gateway,
+      groundCandidates: async (input) => customGrounding(input),
+      lifecycle: harness.lifecycle,
+      loadHomeLocation: async () => 'Singapore',
+      providerContext: noProviders,
+    });
+    expect(harness.calls).toBe(1);
+    expect(harness.drafts).toStrictEqual([]);
+    expect(harness.failures).toContainEqual({ code: 'schedule_conflict', metadata: METADATA });
+    expect(proposal).toStrictEqual(original);
   });
 
   test('uses one structured model call and preserves hard commitments in the review draft', async () => {

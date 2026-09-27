@@ -32,6 +32,7 @@ export type AiPlannerRuleIssueCode =
   | 'invented_exact_time'
   | 'missing_assumption'
   | 'missing_duration_tier'
+  | 'overlapping_items'
   | 'too_many_days'
   | 'too_many_real_place_items'
   | 'unsupported_schema_version';
@@ -697,6 +698,31 @@ function draftRuleIssues(draft: AiPlannerDraft) {
         });
       }
     });
+    const timed = day.items.flatMap((item, itemIndex) =>
+      item.schedule.kind === 'exact'
+        ? [
+            {
+              end: minuteOfDay(item.schedule.localTime) + item.durationMinutes,
+              item,
+              itemIndex,
+              start: minuteOfDay(item.schedule.localTime),
+            },
+          ]
+        : [],
+    );
+    for (let left = 0; left < timed.length; left += 1) {
+      for (let right = left + 1; right < timed.length; right += 1) {
+        const a = timed[left]!;
+        const b = timed[right]!;
+        if (a.start < b.end && b.start < a.end) {
+          issues.push({
+            code: 'overlapping_items',
+            path: ['days', dayIndex, 'items', b.itemIndex, 'schedule'],
+            subjectId: `${a.item.id}:${b.item.id}`,
+          });
+        }
+      }
+    }
   });
 
   items.forEach(({ item, path }) => {
@@ -795,7 +821,10 @@ function draftRuleIssues(draft: AiPlannerDraft) {
   return issues;
 }
 
-export function validateAiPlannerDraft(value: unknown): AiPlannerValidationResult<AiPlannerDraft> {
+export function validateAiPlannerDraft(
+  value: unknown,
+  options: { allowExactTimeOverlaps?: boolean } = {},
+): AiPlannerValidationResult<AiPlannerDraft> {
   const parsed = parseAiPlannerDraft(value);
   if (!parsed.success) {
     return {
@@ -804,6 +833,8 @@ export function validateAiPlannerDraft(value: unknown): AiPlannerValidationResul
     };
   }
 
-  const issues = draftRuleIssues(parsed.data);
+  const issues = draftRuleIssues(parsed.data).filter(
+    (issue) => !options.allowExactTimeOverlaps || issue.code !== 'overlapping_items',
+  );
   return issues.length > 0 ? { issues, success: false } : { data: parsed.data, success: true };
 }

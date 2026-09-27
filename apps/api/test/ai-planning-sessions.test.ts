@@ -14,6 +14,7 @@ import {
   createAiPlanningSession,
   getAiPlanningAvailability,
   getAiPlanningSession,
+  loadReviewableAiPlanningSessionForApply,
   normalizeAiPlanningPrompt,
   recoverLatestAiPlanningSession,
   regenerateAiPlanningSession,
@@ -818,6 +819,38 @@ describe('review session safety', () => {
     await acknowledgeAiPlanningWarnings(OWNER_ID, sessionId, 2, options);
     const replay = await setAiPlanningCountries(OWNER_ID, sessionId, ['JP', 'KR'], 2, options);
     expect(replay.warningAcknowledgement?.revision).toBe(2);
+  });
+
+  test('older overlapping drafts remain reviewable and country-editable but cannot be applied', async () => {
+    const store = createPlanningStore();
+    const sessionId = '00000000-0000-4000-8000-000000000162';
+    const draft = explicitDraft();
+    const day = draft.days[1]!;
+    day.items[1]!.schedule = { kind: 'exact', localTime: '09:30', source: 'model' };
+    draft.places.find((place) => place.id === 'place:tokyo')!.name = 'Tokyo, Japan';
+    store.sessions.set(
+      sessionId,
+      makeSession(sessionId, {
+        draft,
+        draftRevision: 1,
+        planScore: emptyPlanScore(),
+        stage: 'REVIEWING',
+        status: 'REVIEWING',
+      }),
+    );
+    const options = { now: () => NOW, prisma: store.prisma };
+    const reviewed = await getAiPlanningSession(OWNER_ID, sessionId, options);
+    expect(reviewed).toMatchObject({
+      draft,
+      lastSafeError: 'schedule_conflict',
+      planScore: null,
+      suggestedCountries: ['JP'],
+    });
+    await setAiPlanningCountries(OWNER_ID, sessionId, ['JP'], 1, options);
+    await expect(
+      loadReviewableAiPlanningSessionForApply(OWNER_ID, sessionId, 1, options),
+    ).rejects.toMatchObject({ code: 'schedule_conflict' });
+    expect(store.sessions.get(sessionId)?.draft).toStrictEqual(draft);
   });
 
   test('a country correction leaves score and acknowledgement intact when located destinations fix the timezone', async () => {

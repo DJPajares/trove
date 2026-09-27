@@ -14,6 +14,7 @@ import type { AiPlanningSessionErrorCode } from './ai-planning-sessions.js';
  * widening the surface without anyone noticing.
  */
 export const AI_PLANNING_TELEMETRY_WARNING_CODES = [
+  'arrival_time_unknown',
   'arrives_after_fixed_start',
   'balanced_pace_limit',
   'opening_hours_not_checked',
@@ -29,6 +30,7 @@ export const AI_PLANNING_TELEMETRY_WARNING_CODES = [
   'real_place_item_cap_reached',
   'route_not_checked',
   'route_not_found',
+  'schedule_conflict',
   'tight_transition',
   'work_block_conflict',
 ] as const;

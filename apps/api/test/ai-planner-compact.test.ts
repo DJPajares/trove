@@ -72,6 +72,7 @@ describe('compact planner contract', () => {
 
   test('aligns recurring work to calendar weekdays and separates turnaround from visit duration', () => {
     const compact = compactModelProposal(explicitModelProposal());
+    compact.omittedOptionalDestinations = ['Sapa'];
     compact.normalizedRequest.datePreference = {
       kind: 'exact',
       startDate: '2026-11-04',
@@ -182,6 +183,10 @@ describe('compact planner contract', () => {
       proposal.normalizedRequest.constraints.filter((entry) => entry.label.startsWith('Suit')),
     ).toHaveLength(2);
     expect(proposal.assumptions.map((entry) => entry.code)).toContain('date_year_inferred');
+    expect(proposal.assumptions.map((entry) => entry.code)).toContain(
+      'optional_destination_omitted',
+    );
+    expect(validateAiPlannerModelProposal(proposal).success).toBe(true);
     const draft = assembleAiPlanningDraft(proposal, NOW);
     expect(draft.unscheduledItems.map((item) => item.label)).toContain('Morning shopping');
     const validated = validateAiPlannerDraft(draft);

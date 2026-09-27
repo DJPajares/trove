@@ -94,7 +94,15 @@ function valuesMatch(value: unknown, filter: unknown): boolean {
   return value === filter;
 }
 
-function createPlanningStore() {
+function createPlanningStore(
+  storedPlaces: {
+    customTimeZone: string | null;
+    id: string;
+    kind: 'PROVIDER';
+    providerAddress: string | null;
+    providerRefs: [];
+  }[] = [],
+) {
   const sessions = new Map<string, SessionState>();
   const runs = new Map<string, RunState>();
   const queries: unknown[] = [];
@@ -151,7 +159,10 @@ function createPlanningStore() {
       upsert: async () => ({ id: OWNER_ID }),
       findUnique: async () => ({ homeTimeZone: null }),
     },
-    place: { findMany: async () => [] },
+    place: {
+      findMany: async ({ where }: { where: { id: { in: string[] } } }) =>
+        storedPlaces.filter((place) => where.id.in.includes(place.id)),
+    },
     aiPlanningSession: {
       async create({ data }: { data: Record<string, any> }) {
         const id = uuid(sessionCounter++);
@@ -717,6 +728,45 @@ describe('review session safety', () => {
       source: 'model',
     });
     expect(suggestedDraftCountries(draft)).toStrictEqual(['JP', 'KR']);
+  });
+
+  test('a verified bare-city destination suggests its stored country without confirming it', async () => {
+    const draft = explicitDraft();
+    const destination = draft.places.find((place) => place.id === 'place:tokyo')!;
+    if (destination.resolution !== 'verified') throw new Error('expected a verified destination');
+    destination.name = 'Da Nang';
+    const store = createPlanningStore([
+      {
+        customTimeZone: null,
+        id: destination.placeId,
+        kind: 'PROVIDER',
+        providerAddress: 'Da Nang, Hai Chau, Da Nang, Vietnam',
+        providerRefs: [],
+      },
+    ]);
+    const sessionId = '00000000-0000-4000-8000-000000000161';
+    store.sessions.set(
+      sessionId,
+      makeSession(sessionId, {
+        draft,
+        draftRevision: 1,
+        stage: 'REVIEWING',
+        status: 'REVIEWING',
+      }),
+    );
+
+    const review = await getAiPlanningSession(OWNER_ID, sessionId, {
+      now: () => NOW,
+      prisma: store.prisma,
+    });
+    expect(review.suggestedCountries).toStrictEqual(['VN']);
+    expect(review.reviewedCountries).toStrictEqual([]);
+    const confirmed = await setAiPlanningCountries(OWNER_ID, sessionId, ['VN'], 1, {
+      now: () => NOW,
+      prisma: store.prisma,
+    });
+    expect(confirmed.countryContextChanged).toBe(false);
+    expect(confirmed.suggestedCountries).toStrictEqual(['VN']);
   });
 
   test('country confirmation is owner-scoped, revision-checked, and separate from the draft', async () => {

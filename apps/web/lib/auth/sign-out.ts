@@ -1,4 +1,5 @@
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import { clearPushForSignOut } from '@/lib/notifications/push';
 
 type LocalPrivateDataClearer = () => Promise<void> | void;
 
@@ -18,6 +19,7 @@ export async function signOutFromTrove() {
       return;
     }
 
+    await clearPushForSignOut().catch(() => undefined);
     const { error } = await supabase.auth.signOut({ scope: 'local' });
 
     if (error) {

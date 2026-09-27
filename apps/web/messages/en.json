@@ -2143,10 +2143,12 @@
       "inAppLabel": "In-app notifications",
       "inAppDescription": "Show actionable reminders in Trove. This does not affect core trip features.",
       "browserLabel": "Browser notifications",
-      "browserDescription": "Allow this browser to show the same reminders outside the open Trove tab.",
+      "browserDescription": "Enable background reminders on this device, including after Trove closes.",
+      "configured": "Background reminders are configured on this device. Delivery requires a connection and is best effort.",
+      "unavailable": "Background reminders are temporarily unavailable. In-app reminders remain available.",
       "permissionDenied": "Browser permission is blocked. Change the site permission in your browser to enable it.",
-      "unsupported": "This browser does not support notifications. In-app reminders remain available.",
-      "privacyNote": "Notification content is derived from your private trip data and stays scoped to your account.",
+      "unsupported": "Background reminders need a supported browser or installed app. In-app reminders remain available.",
+      "privacyNote": "Browser notifications can show trip names, item details, and times on your lock screen. Enable them only on a device you trust.",
       "saveError": "Trove could not update notification settings. Try again."
     },
     "trip": {

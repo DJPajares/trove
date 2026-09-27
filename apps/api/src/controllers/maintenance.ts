@@ -8,6 +8,7 @@ import {
   processTripMediaCleanup,
 } from '../services/trip-media-cleanup.js';
 import { getBearerToken } from '../services/request-auth.js';
+import { dispatchNotifications, getPushEnvironment } from '../services/web-push.js';
 
 /**
  * Vercel Cron authenticates by sending `Authorization: Bearer $CRON_SECRET`, so
@@ -65,4 +66,25 @@ export async function tripMediaCleanupController(request: FastifyRequest, reply:
   const report = await processTripMediaCleanup({ client });
   request.log.info({ ...report, kind: 'trip_media_cleanup' }, 'trip media cleanup');
   return reply.send(report);
+}
+
+export async function notificationDispatchController(request: FastifyRequest, reply: FastifyReply) {
+  const secret = process.env.TROVE_NOTIFICATION_DISPATCH_SECRET?.trim();
+  if (!secret || !getPushEnvironment())
+    return reply.code(503).send({ code: 'configuration_missing' });
+  const presented = getBearerToken(request.headers.authorization);
+  if (!presented) return reply.code(401).send({ code: 'unauthorized' });
+  const expected = Buffer.from(secret);
+  const actual = Buffer.from(presented);
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+    return reply.code(401).send({ code: 'unauthorized' });
+  }
+  try {
+    const report = await dispatchNotifications();
+    request.log.info({ ...report, kind: 'notification_dispatch' }, 'notification dispatch');
+    return reply.send(report);
+  } catch {
+    request.log.error({ kind: 'notification_dispatch' }, 'notification dispatch failed');
+    return reply.code(503).send({ code: 'notification_dispatch_failed' });
+  }
 }

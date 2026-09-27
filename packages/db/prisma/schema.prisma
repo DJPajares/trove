@@ -302,6 +302,16 @@ enum NotificationKind {
   @@schema("trove")
 }
 
+enum PushDeliveryState {
+  PENDING   @map("pending")
+  ATTEMPTED @map("attempted")
+  ACCEPTED  @map("accepted")
+  RETRYABLE @map("retryable")
+
+  @@map("push_delivery_state")
+  @@schema("trove")
+}
+
 /// Supabase owns this table. Prisma Client may reference its primary key, but
 /// Prisma Migrate excludes it through `tables.external` in prisma.config.ts.
 model AuthUser {
@@ -342,6 +352,7 @@ model Profile {
   collectionPlaces            SavedCollectionPlace[]
   taskTemplates               TaskTemplate[]
   notifications               Notification[]
+  pushSubscriptions           PushSubscription[]
   tripNotificationPreferences TripNotificationPreference[]
   aiPlanningSessions          AiPlanningSession[]
   aiGenerationRuns            AiGenerationRun[]
@@ -751,13 +762,60 @@ model Notification {
   createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  owner Profile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  trip  Trip    @relation(fields: [tripId, ownerId], references: [id, ownerId], onDelete: Cascade)
+  owner          Profile        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  trip           Trip           @relation(fields: [tripId, ownerId], references: [id, ownerId], onDelete: Cascade)
+  pushDeliveries PushDelivery[]
 
+  @@unique([id, ownerId])
   @@unique([ownerId, kind, sourceId])
   @@index([ownerId, readAt, eventAt])
   @@index([tripId, eventAt])
   @@map("notifications")
+  @@schema("trove")
+}
+
+/// A browser's encrypted Web Push destination. Never exposed to browser SQL roles.
+model PushSubscription {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  ownerId   String   @map("owner_id") @db.Uuid
+  endpoint  String   @unique @db.Text
+  p256dh    String   @db.Text
+  auth      String   @db.Text
+  locale    String   @default("en")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner      Profile        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  deliveries PushDelivery[]
+
+  @@unique([id, ownerId])
+  @@index([ownerId])
+  @@map("push_subscriptions")
+  @@schema("trove")
+}
+
+/// One durable send decision per browser and material event version.
+model PushDelivery {
+  id             String            @id @default(uuid(7)) @db.Uuid
+  ownerId        String            @map("owner_id") @db.Uuid
+  subscriptionId String            @map("subscription_id") @db.Uuid
+  notificationId String            @map("notification_id") @db.Uuid
+  sourceVersion  String            @map("source_version")
+  state          PushDeliveryState @default(PENDING)
+  attempts       Int               @default(0)
+  nextAttemptAt  DateTime?         @map("next_attempt_at") @db.Timestamptz(3)
+  attemptedAt    DateTime?         @map("attempted_at") @db.Timestamptz(3)
+  acceptedAt     DateTime?         @map("accepted_at") @db.Timestamptz(3)
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  subscription PushSubscription @relation(fields: [subscriptionId, ownerId], references: [id, ownerId], onDelete: Cascade)
+  notification Notification     @relation(fields: [notificationId, ownerId], references: [id, ownerId], onDelete: Cascade)
+
+  @@unique([subscriptionId, notificationId, sourceVersion])
+  @@index([state, nextAttemptAt])
+  @@index([ownerId, createdAt])
+  @@map("push_deliveries")
   @@schema("trove")
 }
 

@@ -1,16 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useTranslations } from 'next-intl';
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  type ReactNode,
-} from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from 'react';
 
 import {
   fetchNotifications,
@@ -21,6 +12,7 @@ import {
   type TroveNotification,
 } from '@/lib/notifications/api';
 import { apiErrorStatus } from '@/lib/query/client';
+import { clearPushForDifferentAccount } from '@/lib/notifications/push';
 import { queryKeys } from '@/lib/query/keys';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
@@ -47,19 +39,9 @@ type NotificationsContextValue = {
 
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
 
-function formatEventTime(notification: TroveNotification) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: notification.timeZone,
-  }).format(new Date(notification.eventAt));
-}
-
 export function NotificationsProvider({ children }: Readonly<{ children: ReactNode }>) {
-  const t = useTranslations('notifications');
   const queryClient = useQueryClient();
   const queryKey = queryKeys.notifications();
-  const deliveryInFlight = useRef(new Set<string>());
 
   const query = useQuery({
     queryFn: fetchNotifications,
@@ -111,10 +93,12 @@ export function NotificationsProvider({ children }: Readonly<{ children: ReactNo
       const userId = session?.user.id ?? null;
       if (knownUserId === undefined) {
         knownUserId = userId;
+        void clearPushForDifferentAccount(userId);
         return;
       }
       if (userId === knownUserId) return;
       knownUserId = userId;
+      void clearPushForDifferentAccount(userId);
       void refresh();
     }).data.subscription;
 
@@ -123,61 +107,6 @@ export function NotificationsProvider({ children }: Readonly<{ children: ReactNo
       subscription?.unsubscribe();
     };
   }, [refresh]);
-
-  useEffect(() => {
-    if (
-      !settings.browserEnabled ||
-      typeof Notification === 'undefined' ||
-      Notification.permission !== 'granted'
-    ) {
-      return;
-    }
-
-    for (const notification of notifications) {
-      if (notification.browserDeliveredAt || deliveryInFlight.current.has(notification.id)) {
-        continue;
-      }
-      deliveryInFlight.current.add(notification.id);
-      void (async () => {
-        const title = t(`kinds.${notification.kind}.title`);
-        const options: NotificationOptions = {
-          body: t(`kinds.${notification.kind}.body`, {
-            label: notification.label,
-            time: formatEventTime(notification),
-            trip: notification.trip.name,
-          }),
-          data: { url: notification.actionPath },
-          icon: '/icons/trove-192.png',
-          tag: `trove-${notification.id}`,
-        };
-
-        try {
-          const registration =
-            'serviceWorker' in navigator
-              ? await navigator.serviceWorker.getRegistration()
-              : undefined;
-          if (registration?.active) {
-            await registration.showNotification(title, options);
-          } else {
-            new Notification(title, options);
-          }
-          await markNotification(notification.id, { browserDelivered: true });
-          write((current) => ({
-            ...current,
-            notifications: current.notifications.map((item) =>
-              item.id === notification.id
-                ? { ...item, browserDeliveredAt: new Date().toISOString() }
-                : item,
-            ),
-          }));
-        } catch {
-          // Browser delivery is supplementary. In-app notifications remain available.
-        } finally {
-          deliveryInFlight.current.delete(notification.id);
-        }
-      })();
-    }
-  }, [notifications, settings.browserEnabled, t, write]);
 
   const value = useMemo<NotificationsContextValue>(
     () => ({

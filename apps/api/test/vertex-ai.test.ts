@@ -14,9 +14,9 @@ import {
 const configuration = {
   credentials: null,
   location: 'global',
-  model: 'gemini-3.1-flash-lite',
+  model: 'gemini-3.8-flash',
   project: 'trove-test',
-  thinkingBudgetTokens: 512,
+  thinkingLevel: 'medium' as const,
 };
 const schema = z.object({ destination: z.string() });
 
@@ -209,9 +209,7 @@ test('the Vertex adapter still enforces the caller schema over the relaxed one',
   ).rejects.toMatchObject({ code: 'invalid_response' });
 });
 
-test("the Vertex adapter caps the model's reasoning budget", async () => {
-  // Reasoning is billed against maxOutputTokens, so leaving it uncapped lets a
-  // thinking model spend the allowance before finishing its JSON.
+test('the Vertex adapter sends the configured thinking level', async () => {
   let seen: unknown;
   const model = new MockLanguageModelV4({
     doGenerate: async (options) => {
@@ -228,7 +226,7 @@ test("the Vertex adapter caps the model's reasoning budget", async () => {
 
   await provider.generateStructured(request());
 
-  expect(seen).toMatchObject({ google: { thinkingConfig: { thinkingBudget: 512 } } });
+  expect(seen).toMatchObject({ google: { thinkingConfig: { thinkingLevel: 'medium' } } });
 });
 
 test('the Vertex adapter rejects malformed structured output with a safe code', async () => {

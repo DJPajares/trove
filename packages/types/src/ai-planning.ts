@@ -84,8 +84,10 @@ export const aiPlannerAssumptionSchema = z
   .object({
     code: z.enum([
       'dates_defaulted',
+      'date_year_inferred',
       'destination_inferred',
       'interest_inferred',
+      'optional_destination_omitted',
       'pace_defaulted',
       'party_size_defaulted',
       'trip_name_inferred',

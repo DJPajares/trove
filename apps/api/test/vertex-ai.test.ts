@@ -77,7 +77,9 @@ test('the Vertex adapter requests schema-constrained output and maps usage', asy
   const signal = new AbortController().signal;
 
   await expect(provider.generateStructured(request(signal))).resolves.toStrictEqual({
+    finishReason: 'stop',
     output: { destination: 'Kyoto' },
+    reasoningTokens: null,
     usage: { inputTokens: 10, outputTokens: 4, totalTokens: 14 },
   });
   expect(model.doGenerateCalls).toHaveLength(1);

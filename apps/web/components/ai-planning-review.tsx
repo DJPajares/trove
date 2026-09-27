@@ -55,7 +55,8 @@ import { queryKeys } from '@/lib/query/keys';
 import { formatSegmentedTime } from '@/lib/time/time-segments';
 import type { Trip } from '@/lib/trips/api';
 
-const ACTIVE_SESSION_POLL_MS = 1_500;
+const INITIAL_SESSION_POLL_MS = 3_000;
+const LATER_SESSION_POLL_MS = 5_000;
 
 type ReviewOperation = 'acknowledging' | 'applying' | 'idle' | 'regenerating';
 
@@ -71,12 +72,35 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   const sessionQuery = useQuery({
     queryFn: () => fetchAiPlanningSession(sessionId),
     queryKey: queryKeys.aiPlanningSession(sessionId),
-    refetchInterval: (query) =>
-      query.state.data?.session && isAiPlanningSessionGenerating(query.state.data.session.status)
-        ? ACTIVE_SESSION_POLL_MS
-        : false,
   });
   const session = sessionQuery.data?.session ?? null;
+  useEffect(() => {
+    if (!session || !isAiPlanningSessionGenerating(session.status)) return;
+    let current = true;
+    let timer: number | undefined;
+    const startedAt = Date.now();
+    const poll = async () => {
+      try {
+        await sessionQuery.refetch();
+      } catch {
+        // The query keeps its own error state; polling can resume on recovery.
+      } finally {
+        if (current) {
+          const interval =
+            Date.now() - startedAt < 30_000 ? INITIAL_SESSION_POLL_MS : LATER_SESSION_POLL_MS;
+          const untilDeadline = session.deadlineAt
+            ? Date.parse(session.deadlineAt) - Date.now()
+            : interval;
+          timer = window.setTimeout(poll, Math.max(1_000, Math.min(interval, untilDeadline)));
+        }
+      }
+    };
+    timer = window.setTimeout(poll, INITIAL_SESSION_POLL_MS);
+    return () => {
+      current = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [session?.deadlineAt, session?.id, session?.status, sessionQuery.refetch]);
   const [draft, setDraft] = useState<AiPlanningDraft | null>(null);
   const [operation, setOperation] = useState<ReviewOperation>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -189,6 +213,7 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
 
   const publishing = operation !== 'idle';
   const reviewing = !expired && !serverExpired && session?.status === 'reviewing';
+  const visibleError = error ?? (publishing ? null : session?.lastSafeError);
   const materialWarnings = draft?.warnings.filter((warning) => warning.material) ?? [];
   const warningsAcknowledged =
     session?.warningAcknowledgement?.revision === session?.draftRevision &&
@@ -470,10 +495,10 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
           <AlertDescription>{t('noVerifiedPlacesHint')}</AlertDescription>
         </Alert>
       ) : null}
-      {error ? (
+      {visibleError ? (
         <Alert role="alert" variant="destructive">
           <CircleAlert aria-hidden="true" />
-          <AlertTitle>{general(`errors.${aiPlanningErrorMessageKey(error)}`)}</AlertTitle>
+          <AlertTitle>{general(`errors.${aiPlanningErrorMessageKey(visibleError)}`)}</AlertTitle>
           <AlertDescription>{t('errorHint')}</AlertDescription>
         </Alert>
       ) : null}

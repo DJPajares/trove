@@ -44,7 +44,11 @@ import {
   runAiPlanningPipeline,
   type AiPlanningPipelineOptions,
 } from '../src/services/ai-planning-pipeline.js';
-import { explicitModelProposal, missingDetailsProposal } from './fixtures/ai-planning.js';
+import {
+  compactModelProposal,
+  explicitModelProposal,
+  missingDetailsProposal,
+} from './fixtures/ai-planning.js';
 import { PlacesService } from '../src/services/places.js';
 import { RoutesService } from '../src/services/routes.js';
 import {
@@ -1748,6 +1752,7 @@ test('six venues use one Places call each, with persisted identity and transient
     async claim(_ownerId, runId) {
       return {
         baseDraftRevision: 0,
+        deadlineAt: new Date('2026-09-02T12:01:00Z'),
         model: 'test',
         prompt: 'Tokyo trip',
         provider: 'vertex',
@@ -1767,7 +1772,7 @@ test('six venues use one Places call each, with persisted identity and transient
   const gateway: NonNullable<AiPlanningPipelineOptions['gateway']> = {
     async generateStructured<OUTPUT>() {
       return {
-        output: proposal as OUTPUT,
+        output: compactModelProposal(proposal) as OUTPUT,
         metadata: {
           inputTokens: 1,
           outputTokens: 1,

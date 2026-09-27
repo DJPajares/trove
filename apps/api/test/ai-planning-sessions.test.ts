@@ -67,6 +67,7 @@ type RunState = {
   baseDraftRevision: number;
   completedAt: Date | null;
   createdAt: Date;
+  deadlineAt: Date | null;
   dispatchedAt: Date | null;
   errorCode: string | null;
   id: string;
@@ -108,7 +109,7 @@ function createPlanningStore() {
       .filter((run) => run.sessionId === sessionId && run.result === 'PENDING')
       .toSorted((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
       .slice(0, 1)
-      .map(({ id }) => ({ id }));
+      .map(({ deadlineAt, id }) => ({ deadlineAt, id }));
   const withRuns = (session: SessionState) => ({ ...session, runs: pendingRuns(session.id) });
   const sessionMatches = (session: SessionState, where: Record<string, unknown> = {}) =>
     valuesMatch(session.id, where.id) &&
@@ -121,7 +122,8 @@ function createPlanningStore() {
     valuesMatch(run.ownerId, where.ownerId) &&
     valuesMatch(run.sessionId, where.sessionId) &&
     valuesMatch(run.result, where.result) &&
-    valuesMatch(run.dispatchedAt, where.dispatchedAt);
+    valuesMatch(run.dispatchedAt, where.dispatchedAt) &&
+    valuesMatch(run.deadlineAt, where.deadlineAt);
   const applySessionData = (session: SessionState, data: Record<string, unknown>) => {
     for (const [key, value] of Object.entries(data)) {
       if (key === 'draftRevision' && value && typeof value === 'object' && 'increment' in value) {
@@ -183,6 +185,7 @@ function createPlanningStore() {
             ...data.runs.create,
             completedAt: null,
             createdAt: NOW,
+            deadlineAt: null,
             dispatchedAt: null,
             errorCode: null,
             id: runId,
@@ -242,6 +245,7 @@ function createPlanningStore() {
           ...data,
           completedAt: null,
           createdAt: NOW,
+          deadlineAt: null,
           dispatchedAt: null,
           errorCode: null,
           id,
@@ -268,11 +272,7 @@ function createPlanningStore() {
           );
         }
         const run = matching[0];
-        return run
-          ? where.id
-            ? { ...run, session: sessions.get(run.sessionId)! }
-            : { dispatchedAt: run.dispatchedAt }
-          : null;
+        return run ? (where.id ? { ...run, session: sessions.get(run.sessionId)! } : run) : null;
       },
       async findUnique({ where }: any) {
         const key = where.ownerId_idempotencyKey;
@@ -343,6 +343,7 @@ function makeRun(id: string, sessionId: string, overrides: Partial<RunState> = {
     baseDraftRevision: 0,
     completedAt: null,
     createdAt: NOW,
+    deadlineAt: null,
     dispatchedAt: null,
     errorCode: null,
     id,
@@ -953,6 +954,82 @@ describe('dispatch quota and lifecycle completion', () => {
       countriesReviewedRevision: 1,
     });
     expect(run).toMatchObject({ errorCode: 'provider_unavailable', result: 'FAILED' });
+  });
+
+  test('an overdue run becomes terminal and a late success cannot publish its draft', async () => {
+    const store = createPlanningStore();
+    const sessionId = '00000000-0000-4000-8000-000000000142';
+    const runId = '00000000-0000-4000-8000-000000000143';
+    const session = makeSession(sessionId, { stage: 'GROUNDING', status: 'GENERATING' });
+    const run = makeRun(runId, sessionId, {
+      deadlineAt: new Date(NOW.getTime() - 1),
+      dispatchedAt: new Date(NOW.getTime() - 90_000),
+    });
+    store.addRun(run, session);
+
+    const read = await getAiPlanningSession(OWNER_ID, sessionId, {
+      now: () => NOW,
+      prisma: store.prisma,
+    });
+    expect(read).toMatchObject({
+      deadlineAt: null,
+      draft: null,
+      lastSafeError: 'timeout',
+      status: 'failed',
+    });
+    expect(run).toMatchObject({
+      errorCode: 'timeout',
+      failureStage: 'grounding',
+      result: 'FAILED',
+    });
+    await expect(
+      completeAiPlanningRunSuccess(
+        OWNER_ID,
+        runId,
+        explicitDraft(),
+        emptyPlanScore(),
+        {
+          inputTokens: 10,
+          latencyMs: 50,
+          model: 'gemini-test',
+          outputTokens: 20,
+          provider: 'vertex',
+          totalTokens: 30,
+        },
+        { now: () => NOW, prisma: store.prisma },
+      ),
+    ).rejects.toMatchObject({ code: 'draft_conflict' });
+    expect(session.draft).toBeNull();
+  });
+
+  test('an overdue regeneration keeps the previous valid draft', async () => {
+    const store = createPlanningStore();
+    const sessionId = '00000000-0000-4000-8000-000000000144';
+    const runId = '00000000-0000-4000-8000-000000000145';
+    const draft = explicitDraft();
+    const session = makeSession(sessionId, {
+      draft,
+      draftRevision: 1,
+      stage: 'VALIDATING',
+      status: 'GENERATING',
+    });
+    const run = makeRun(runId, sessionId, {
+      baseDraftRevision: 1,
+      deadlineAt: new Date(NOW.getTime() - 1),
+      dispatchedAt: new Date(NOW.getTime() - 90_000),
+    });
+    store.addRun(run, session);
+    const read = await getAiPlanningSession(OWNER_ID, sessionId, {
+      now: () => NOW,
+      prisma: store.prisma,
+    });
+    expect(read).toMatchObject({
+      draft,
+      draftRevision: 1,
+      lastSafeError: 'timeout',
+      status: 'reviewing',
+    });
+    expect(run).toMatchObject({ errorCode: 'timeout', result: 'FAILED' });
   });
 
   test('successful completion increments once and cancellation prevents resurrection', async () => {

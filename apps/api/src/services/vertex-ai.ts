@@ -127,6 +127,8 @@ function mapVertexError(error: unknown) {
     return new AiGenerationProviderError(
       error.finishReason === 'content-filter' ? 'content_filtered' : 'invalid_response',
       mapUsage(error.usage),
+      error.finishReason,
+      error.usage?.outputTokenDetails?.reasoningTokens ?? null,
     );
   }
 
@@ -210,7 +212,12 @@ export class VertexAiGenerationProvider implements AiGenerationProvider {
         },
       });
 
-      return { output: result.output, usage: mapUsage(result.totalUsage) };
+      return {
+        finishReason: result.finishReason,
+        output: result.output,
+        reasoningTokens: result.totalUsage?.outputTokenDetails?.reasoningTokens ?? null,
+        usage: mapUsage(result.totalUsage),
+      };
     } catch (error) {
       throw mapVertexError(error);
     }

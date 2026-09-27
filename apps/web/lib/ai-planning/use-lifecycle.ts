@@ -19,7 +19,8 @@ import { isAiPlanningSessionExpired, releasesMirroredAiPlanningSession } from '.
 
 import { queryKeys } from '@/lib/query/keys';
 
-const ACTIVE_SESSION_POLL_MS = 1_500;
+const INITIAL_SESSION_POLL_MS = 3_000;
+const LATER_SESSION_POLL_MS = 5_000;
 
 export type AiPlanningOperation = 'cancelling' | 'idle' | 'starting';
 
@@ -65,13 +66,6 @@ export function useAiPlanningLifecycle(enabled: boolean) {
   });
   const recoveredSession = recoveryQuery.data?.session ?? null;
   const recoveredSessionId = recoveredSession?.id ?? null;
-  const activeSession = session && isAiPlanningSessionGenerating(session.status) ? session : null;
-  const activeSessionQuery = useQuery({
-    enabled: Boolean(activeSession),
-    queryFn: () => fetchAiPlanningSession(activeSession!.id),
-    queryKey: queryKeys.aiPlanningSession(activeSession?.id ?? 'none'),
-    refetchInterval: activeSession ? ACTIVE_SESSION_POLL_MS : false,
-  });
 
   const discardExpiredSession = useCallback(
     (expiredSessionId: string) => {
@@ -154,47 +148,53 @@ export function useAiPlanningLifecycle(enabled: boolean) {
     );
   }, [operation, recoveredSessionId]);
 
+  // Create reserves its session before the POST completes. Follow that one
+  // session through recovery and stage reads; schedule the next read only after
+  // the previous read has settled, so slow responses cannot pile up.
   useEffect(() => {
-    if (activeSessionQuery.data?.session) publishSession(activeSessionQuery.data.session);
-  }, [activeSessionQuery.data?.session, publishSession]);
-
-  useEffect(() => {
-    if (!activeSessionQuery.error) return;
-    const code =
-      activeSessionQuery.error instanceof AiPlanningApiError
-        ? activeSessionQuery.error.code
-        : 'request_failed';
-    if (code === 'session_expired') {
-      publishSession(null);
-      setPromptValue('');
-      promptTouched.current = false;
-    }
-    setRequestError(code);
-  }, [activeSessionQuery.error, publishSession]);
-
-  // The Create endpoint reserves before it completes the synchronous pipeline.
-  // A parallel recovery read gives the takeover a session ID and a cancellable
-  // stage without ever sending a second Create request.
-  useEffect(() => {
-    if (operation !== 'starting' || session) return;
+    const active = session && isAiPlanningSessionGenerating(session.status);
+    if (!enabled || (!active && !(operation === 'starting' && !session))) return;
     let current = true;
-    const attemptRecovery = async () => {
+    let timer: number | undefined;
+    const startedAt = Date.now();
+    const poll = async () => {
       try {
-        const recovered = await recover();
-        if (current && recovered) publishSession(recovered);
-      } catch {
-        // The original request owns its visible failure state. Recovery is only
-        // a resumability aid and must not turn an incidental read failure into a
-        // second error for the traveller.
+        const next = active ? (await fetchAiPlanningSession(session.id)).session : await recover();
+        if (current && next) publishSession(next);
+      } catch (error) {
+        if (current && active) {
+          const code = error instanceof AiPlanningApiError ? error.code : 'request_failed';
+          if (code === 'session_expired') {
+            publishSession(null);
+            setPromptValue('');
+            promptTouched.current = false;
+          }
+          setRequestError(code);
+        }
+      } finally {
+        if (current) {
+          const interval =
+            Date.now() - startedAt < 30_000 ? INITIAL_SESSION_POLL_MS : LATER_SESSION_POLL_MS;
+          const untilDeadline =
+            active && session.deadlineAt ? Date.parse(session.deadlineAt) - Date.now() : interval;
+          timer = window.setTimeout(poll, Math.max(1_000, Math.min(interval, untilDeadline)));
+        }
       }
     };
-    void attemptRecovery();
-    const timer = window.setInterval(() => void attemptRecovery(), ACTIVE_SESSION_POLL_MS);
+    void poll();
     return () => {
       current = false;
-      window.clearInterval(timer);
+      if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [operation, publishSession, recover, session]);
+  }, [
+    enabled,
+    operation,
+    publishSession,
+    recover,
+    session?.deadlineAt,
+    session?.id,
+    session?.status,
+  ]);
 
   const availability: AiPlanningAvailability | undefined = availabilityQuery.data?.availability;
   const generating = Boolean(session && isAiPlanningSessionGenerating(session.status));

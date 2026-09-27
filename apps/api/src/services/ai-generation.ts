@@ -27,9 +27,11 @@ export type AiGenerationUsage = {
 };
 
 export type AiGenerationMetadata = AiGenerationUsage & {
+  finishReason?: string | null;
   latencyMs: number;
   model: string;
   provider: string;
+  reasoningTokens?: number | null;
 };
 
 export type AiStructuredGenerationRequest<OUTPUT> = {
@@ -46,7 +48,9 @@ export type AiProviderGenerationRequest<OUTPUT> = AiStructuredGenerationRequest<
 };
 
 export type AiProviderGenerationResult<OUTPUT> = {
+  finishReason?: string | null;
   output: OUTPUT;
+  reasoningTokens?: number | null;
   usage: AiGenerationUsage;
 };
 
@@ -72,6 +76,8 @@ export class AiGenerationProviderError extends Error {
   constructor(
     public readonly code: AiGenerationProviderErrorCode,
     public readonly usage: AiGenerationUsage = emptyAiGenerationUsage(),
+    public readonly finishReason: string | null = null,
+    public readonly reasoningTokens: number | null = null,
   ) {
     super(code);
     this.name = 'AiGenerationProviderError';
@@ -121,9 +127,12 @@ function metadataFor(
   usage: AiGenerationUsage,
   startedAt: number,
   clock: () => number,
+  extra: { finishReason?: string | null; reasoningTokens?: number | null } = {},
 ): AiGenerationMetadata {
   return {
     ...usage,
+    ...(extra.finishReason !== undefined ? { finishReason: extra.finishReason } : {}),
+    ...(extra.reasoningTokens !== undefined ? { reasoningTokens: extra.reasoningTokens } : {}),
     latencyMs: Math.max(0, Math.round(clock() - startedAt)),
     model: provider.modelId,
     provider: provider.providerId,
@@ -193,7 +202,10 @@ export class AiGateway {
         }),
       );
       const result = await Promise.race([providerCall, aborted]);
-      const metadata = metadataFor(provider, result.usage, startedAt, this.clock);
+      const metadata = metadataFor(provider, result.usage, startedAt, this.clock, {
+        finishReason: result.finishReason,
+        reasoningTokens: result.reasoningTokens,
+      });
 
       this.telemetrySink({
         ...metadata,
@@ -212,7 +224,10 @@ export class AiGateway {
             : 'provider_unavailable';
       const usage =
         error instanceof AiGenerationProviderError ? error.usage : emptyAiGenerationUsage();
-      const metadata = metadataFor(provider, usage, startedAt, this.clock);
+      const metadata = metadataFor(provider, usage, startedAt, this.clock, {
+        finishReason: error instanceof AiGenerationProviderError ? error.finishReason : null,
+        reasoningTokens: error instanceof AiGenerationProviderError ? error.reasoningTokens : null,
+      });
 
       this.telemetrySink({
         ...metadata,

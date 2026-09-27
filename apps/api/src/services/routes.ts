@@ -22,6 +22,7 @@ export type RouteCoordinates = {
 };
 
 export type RouteRequest = {
+  signal?: AbortSignal;
   /** Internal attribution supplied by the cache when this becomes outbound. */
   cacheMissReason?: ProviderCacheMissReason;
   destination: RouteCoordinates;

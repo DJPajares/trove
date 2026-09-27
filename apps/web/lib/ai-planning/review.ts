@@ -70,7 +70,11 @@ export function activeAiPlanningAssumptions(draft: AiPlanningDraft) {
   );
 
   return draft.assumptions.filter(
-    (assumption) => assumption.code === 'interest_inferred' || activeIds.has(assumption.id),
+    (assumption) =>
+      assumption.code === 'interest_inferred' ||
+      assumption.code === 'date_year_inferred' ||
+      assumption.code === 'optional_destination_omitted' ||
+      activeIds.has(assumption.id),
   );
 }
 

@@ -25,8 +25,10 @@ export type AiPlanningDraft = {
   assumptions: Array<{
     code:
       | 'dates_defaulted'
+      | 'date_year_inferred'
       | 'destination_inferred'
       | 'interest_inferred'
+      | 'optional_destination_omitted'
       | 'pace_defaulted'
       | 'party_size_defaulted'
       | 'trip_name_inferred';
@@ -108,6 +110,7 @@ export type AiPlanningDraft = {
 export type AiPlanningSession = {
   appliedTripId: string | null;
   createdAt: string;
+  deadlineAt: string | null;
   draft: AiPlanningDraft | null;
   draftRevision: number;
   expiresAt: string;

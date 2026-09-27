@@ -105,6 +105,7 @@ export class GoogleRoutesProvider implements RoutesProvider {
   }
 
   async computeRoute(request: RouteRequest): Promise<RouteEstimate | null> {
+    if (request.signal?.aborted) throw new RouteProviderError('provider_unavailable');
     if (!this.apiKey) throw new RouteProviderError('configuration_missing');
     if (this.budget && !this.budget.claim()) {
       throw new RouteProviderError('budget_exhausted');
@@ -140,7 +141,9 @@ export class GoogleRoutesProvider implements RoutesProvider {
             : GOOGLE_ROUTE_FIELD_MASK,
         },
         method: 'POST',
-        signal: AbortSignal.timeout(this.requestTimeoutMs),
+        signal: request.signal
+          ? AbortSignal.any([request.signal, AbortSignal.timeout(this.requestTimeoutMs)])
+          : AbortSignal.timeout(this.requestTimeoutMs),
       });
     } catch (error) {
       throw new RouteProviderError('provider_unavailable', { cause: error });

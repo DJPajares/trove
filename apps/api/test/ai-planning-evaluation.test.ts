@@ -17,6 +17,7 @@ import { RoutesService, type RoutesProvider } from '../src/services/routes.js';
 import {
   aiPlanningPrompts,
   ambiguousModelProposal,
+  compactModelProposal,
   contradictoryDraft,
   explicitModelProposal,
   missingDetailsProposal,
@@ -147,7 +148,7 @@ async function evaluate(options: {
     async generateStructured<OUTPUT>(request: AiStructuredGenerationRequest<OUTPUT>) {
       prompts.push(request.prompt);
       if (options.providerFails) throw new AiGenerationError('provider_unavailable', METADATA);
-      return { metadata: METADATA, output: options.proposal as OUTPUT };
+      return { metadata: METADATA, output: compactModelProposal(options.proposal) as OUTPUT };
     },
   };
 
@@ -159,6 +160,7 @@ async function evaluate(options: {
       async claim() {
         return {
           baseDraftRevision: 0,
+          deadlineAt: new Date(NOW.getTime() + 60_000),
           model: METADATA.model,
           prompt: options.prompt,
           provider: METADATA.provider,

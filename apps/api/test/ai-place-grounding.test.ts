@@ -95,6 +95,28 @@ test('a unique exact name and locality match becomes a canonical verified place'
   expect(resolutions).toStrictEqual([identity()]);
 });
 
+test('an exhausted provider allowance skips paid search and marks the place unchecked', async () => {
+  const { grounder, searches } = setup([identity()]);
+  const controller = new AbortController();
+  controller.abort('provider_time_allowance_exhausted');
+
+  const result = await grounder.groundCandidate(candidate({ signal: controller.signal }));
+
+  expect(searches()).toBe(0);
+  expect(result.place).toMatchObject({ resolution: 'custom', verification: 'not_checked' });
+  expect(result.evidence).toMatchObject({
+    code: 'provider_time_allowance_exhausted',
+    status: 'not_checked',
+  });
+});
+
+test('destination matching does not accept a same-named venue as the locality', async () => {
+  const { grounder } = setup([identity({ name: 'National Museum Cafe' })]);
+  const result = await grounder.groundCandidate(candidate({ requireExactName: true }));
+  expect(result.place).toMatchObject({ resolution: 'custom', verification: 'unverified' });
+  expect(result.evidence).toMatchObject({ code: 'place_unresolved', status: 'unverified' });
+});
+
 test('duplicate identity and scoring queries share the enriched search before either dispatches', async () => {
   for (const reverse of [false, true]) {
     const requests: string[] = [];

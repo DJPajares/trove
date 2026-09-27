@@ -303,7 +303,10 @@ function hasUserMustGoConstraint(
   if (item.priority !== 'must_go') return true;
   return item.constraintIds.some((constraintId) => {
     const constraint = constraints.get(constraintId);
-    return constraint?.source === 'user' && constraint.kind === 'must_go';
+    return (
+      constraint?.source === 'user' &&
+      (constraint.kind === 'must_go' || constraint.priority === 'must_go')
+    );
   });
 }
 
@@ -538,7 +541,11 @@ function hardConstraintIssues(draft: AiPlannerDraft, items: LocatedDraftItem[]) 
         ) {
           return false;
         }
-        if (constraint.kind === 'must_go' && item.priority !== 'must_go') return false;
+        if (
+          (constraint.kind === 'must_go' || constraint.priority === 'must_go') &&
+          item.priority !== 'must_go'
+        )
+          return false;
         return true;
       });
 

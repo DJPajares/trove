@@ -1,11 +1,13 @@
 export type AiGenerationTelemetryEvent = {
   completedAt: string;
   errorCode?: string;
+  finishReason?: string | null;
   inputTokens: number | null;
   latencyMs: number;
   model: string;
   outputTokens: number | null;
   provider: string;
+  reasoningTokens?: number | null;
   result: 'cancelled' | 'failed' | 'succeeded';
   totalTokens: number | null;
 };

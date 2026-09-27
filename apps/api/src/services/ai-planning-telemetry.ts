@@ -24,11 +24,13 @@ export const AI_PLANNING_TELEMETRY_WARNING_CODES = [
   'place_ambiguous',
   'place_unresolved',
   'provider_cap_reached',
+  'provider_time_allowance_exhausted',
   'provider_unavailable',
   'real_place_item_cap_reached',
   'route_not_checked',
   'route_not_found',
   'tight_transition',
+  'work_block_conflict',
 ] as const;
 
 export type AiPlanningTelemetryWarningCode = (typeof AI_PLANNING_TELEMETRY_WARNING_CODES)[number];
@@ -61,6 +63,13 @@ export type AiPlanningDraftSummary = {
 
 export type AiPlanningTelemetryEvent =
   | ({ kind: 'draft_assembled'; occurredAt: string } & AiPlanningDraftSummary)
+  | {
+      coveredDays: number;
+      expectedDays: number;
+      kind: 'proposal_coverage';
+      occurredAt: string;
+      sparse: boolean;
+    }
   | {
       code: AiPlanningApplyOutcomeCode | null;
       kind: 'apply_completed';
@@ -127,6 +136,21 @@ export function recordAiPlanningDraftAssembled(draft: AiPlannerDraft, occurredAt
     ...summarizeAiPlanningDraft(draft),
     kind: 'draft_assembled',
     occurredAt: occurredAt.toISOString(),
+  });
+}
+
+export function recordAiPlanningProposalCoverage(
+  coveredDays: number,
+  expectedDays: number,
+  sparse: boolean,
+  occurredAt: Date,
+) {
+  recordAiPlanningTelemetry({
+    coveredDays,
+    expectedDays,
+    kind: 'proposal_coverage',
+    occurredAt: occurredAt.toISOString(),
+    sparse,
   });
 }
 

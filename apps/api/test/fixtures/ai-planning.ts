@@ -4,6 +4,64 @@ import type {
   AiPlannerNormalizedRequest,
 } from '@trove/types';
 import { buildPlanScoreFromEvaluations } from '../../src/services/plan-score.js';
+import type { AiPlannerCompactProposal } from '../../src/services/ai-planner-compact.js';
+
+/** Convert legacy canonical fixtures into the provider-facing contract. */
+export function compactModelProposal(proposal: AiPlannerModelProposal): AiPlannerCompactProposal {
+  const placeIndex = new Map(proposal.places.map((place, index) => [place.id, index]));
+  const intentIndex = new Map(
+    proposal.normalizedRequest.destinations.map((intent, index) => [intent.id, index]),
+  );
+  const constraintIndex = new Map(
+    proposal.normalizedRequest.constraints.map((constraint, index) => [constraint.id, index]),
+  );
+  const {
+    schemaVersion: _requestVersion,
+    destinations,
+    constraints,
+    ...request
+  } = proposal.normalizedRequest;
+  return {
+    destinations: proposal.destinations.map((destination) => ({
+      candidatePlaceIndex: placeIndex.get(destination.candidatePlaceId) ?? -1,
+      destinationIntentIndex: destination.destinationIntentId
+        ? (intentIndex.get(destination.destinationIntentId) ?? -1)
+        : null,
+      rationale: null,
+      source: destination.source,
+    })),
+    items: proposal.items.map((item) => {
+      const { id: _id, candidatePlaceId, constraintIds, destinationIntentId, ...fields } = item;
+      return {
+        ...fields,
+        candidatePlaceIndex: candidatePlaceId ? (placeIndex.get(candidatePlaceId) ?? -1) : null,
+        constraintIndices: constraintIds.map((id) => constraintIndex.get(id) ?? -1),
+        destinationIntentIndex: destinationIntentId
+          ? (intentIndex.get(destinationIntentId) ?? -1)
+          : null,
+      };
+    }),
+    normalizedRequest: {
+      ...request,
+      constraints: constraints.map((constraint) => {
+        const { id: _id, destinationIntentId, ...fields } = constraint;
+        return {
+          ...fields,
+          destinationIntentIndex: destinationIntentId
+            ? (intentIndex.get(destinationIntentId) ?? -1)
+            : null,
+        };
+      }),
+      destinations: destinations.map((destination) => destination.name),
+    },
+    omittedOptionalDestinations: [],
+    partySize: proposal.partySize,
+    places: proposal.places.map(({ id: _id, ...place }) => place),
+    selectedDurationDays: proposal.selectedDurationDays,
+    tripDescription: proposal.tripDescription,
+    tripName: proposal.tripName,
+  };
+}
 
 const TOKYO_PLACE_ID = '0199a6f8-6e28-7a31-b11c-45db8dc98611';
 const KYOTO_PLACE_ID = '0199a6f8-6e28-7a31-b11c-45db8dc98612';

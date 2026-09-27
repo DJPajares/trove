@@ -72,9 +72,8 @@ test('the prompt names the trip in the tone the context picked', () => {
   const prompt = buildAiPlannerPrompt('Five days in Tokyo', context());
 
   expect(prompt).toContain('planner_context.naming.tone');
-  expect(prompt).toContain('"X Adventure"');
-  expect(prompt).toContain('no pun on the name of the destination');
-  expect(prompt).toContain('planner_context.maxTripDescription');
+  expect(prompt).toContain('short tripName in planner_context.naming.tone');
+  expect(prompt).toContain('Avoid generic titles');
 });
 
 test('every pace the schema accepts has an item band', () => {
@@ -94,9 +93,9 @@ test('the prompt carries the traveller request and the resolved context as data'
 test('the prompt keeps the integrity rules that keep a proposal applicable', () => {
   const prompt = buildAiPlannerPrompt('Five days in Tokyo', context());
 
-  expect(prompt).toContain('Every id you reference must be one you declared');
-  expect(prompt).toContain('must not use priority "must_go"');
-  expect(prompt).toContain('destination_inferred');
+  expect(prompt).toContain('Every non-null index must point to an existing entry');
+  expect(prompt).toContain('cannot be must_go or user_owned');
+  expect(prompt).toContain('strength "flexible"');
 });
 
 /**
@@ -116,8 +115,8 @@ test('the coverage requirement is the last instruction before the context', () =
 
   expect(instructions.at(-1)).toContain('Fill the whole trip');
   expect(instructions.at(-1)).toContain('item.dayIndex');
-  expect(instructions.at(-1)).toContain('Every day must contain items');
-  expect(instructions.at(-1)).toContain('separate entry in places for each real stop');
+  expect(instructions.at(-1)).toContain('Each day needs items');
+  expect(instructions.at(-1)).toContain('inclusive date range');
 });
 
 /**
@@ -129,7 +128,7 @@ test('the coverage requirement is the last instruction before the context', () =
 test('the schema description restates the coverage contract', () => {
   expect(AI_PLANNER_SCHEMA_DESCRIPTION).toContain('every day of the trip');
   expect(AI_PLANNER_SCHEMA_DESCRIPTION).toContain('item.dayIndex');
-  expect(AI_PLANNER_SCHEMA_DESCRIPTION).toContain('no day left without items');
+  expect(AI_PLANNER_SCHEMA_DESCRIPTION).toContain('No day may be left without items');
 });
 
 test('a proposal is sparse when it leaves a day of the selected length empty', () => {
@@ -142,16 +141,27 @@ test('a proposal is sparse when it leaves a day of the selected length empty', (
   expect(coveredDayCount([{ dayIndex: null }, { dayIndex: 3 }])).toBe(1);
 });
 
-test('an exact-date proposal is never treated as sparse', () => {
-  // The tier is null when the traveller gave real dates, so there is no
-  // expected day count to measure against and a retry would be guesswork.
-  expect(isSparseProposal({ items: [{ dayIndex: 0 }], selectedDurationDays: null })).toBe(false);
+test('exact-date coverage uses the actual inclusive date range', () => {
+  const normalizedRequest = {
+    datePreference: { kind: 'exact', startDate: '2026-11-04', endDate: '2026-11-10' },
+  };
+  expect(
+    isSparseProposal({ items: [{ dayIndex: 0 }], selectedDurationDays: null, normalizedRequest }),
+  ).toBe(true);
+  expect(
+    isSparseProposal({
+      items: Array.from({ length: 7 }, (_, dayIndex) => ({ dayIndex })),
+      selectedDurationDays: null,
+      normalizedRequest,
+    }),
+  ).toBe(false);
 });
 
-test('only the retry prompt carries the corrective note', () => {
-  const first = buildAiPlannerPrompt('Five days in Tokyo', context());
-  const retry = buildAiPlannerPrompt('Five days in Tokyo', context(), { coverageRetry: true });
-
-  expect(first).not.toContain('A previous attempt');
-  expect(retry).toContain('A previous attempt at this request left days empty');
+test('the prompt preserves separate occurrences and optional destinations', () => {
+  const prompt = buildAiPlannerPrompt('Da Nang with work and tailoring, maybe Sapa', context());
+  expect(prompt).toContain(
+    'each recurring workday, each flight direction, and each separate appointment',
+  );
+  expect(prompt).toContain('24-48 hour tailoring is elapsed time');
+  expect(prompt).toContain('Optional destinations may be omitted');
 });

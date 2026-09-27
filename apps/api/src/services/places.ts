@@ -36,6 +36,7 @@ export type PlaceSearchRequest = {
 };
 
 export type PlaceTextSearchRequest = {
+  signal?: AbortSignal;
   /** Identity-only searches stay on Pro; scoring evidence requires Enterprise. */
   detail: PlaceDetailLevel;
   /** Internal attribution; never part of the provider query or cache key. */
@@ -63,6 +64,7 @@ export type ProviderAttribution = {
 export type PlaceDetailLevel = 'evidence' | 'location';
 
 export type PlaceDetailsRequest = {
+  signal?: AbortSignal;
   /** Internal attribution supplied by the cache when this becomes outbound. */
   cacheMissReason?: ProviderCacheMissReason;
   detail: PlaceDetailLevel;

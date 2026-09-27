@@ -37,6 +37,8 @@ const GENERIC_LOCALITY_WORDS = new Set(['city', 'prefecture', 'province', 'regio
 const LOCALITY_TOKEN_MIN_LENGTH = 4;
 
 export type AiPlaceGroundingCandidate = AiPlannerCandidatePlace & {
+  signal?: AbortSignal;
+  requireExactName?: boolean;
   detail?: PlaceDetailLevel;
   languageCode?: string;
   localityHint?: string;
@@ -69,6 +71,7 @@ export type CanonicalIdentityResolver = {
 
 export function normalizeIdentityText(value: string) {
   return value
+    .replace(/[Đđ]/g, 'd')
     .normalize('NFKD')
     .replace(/\p{Mark}/gu, '')
     .toLocaleLowerCase('en')
@@ -166,6 +169,7 @@ function memoKey(request: PlaceTextSearchRequest) {
 function searchRequest(candidate: AiPlaceGroundingCandidate): PlaceTextSearchRequest {
   return {
     detail: candidate.detail ?? 'location',
+    signal: candidate.signal,
     languageCode: candidate.languageCode,
     locationBias: candidate.locationBias,
     regionCode: candidate.regionCode,
@@ -184,6 +188,7 @@ function cacheKey(request: PlaceTextSearchRequest, candidate: AiPlaceGroundingCa
         memoKey(request),
         normalizeIdentityText(candidate.name),
         candidate.localityHint?.trim() ? normalizeIdentityText(candidate.localityHint) : null,
+        candidate.requireExactName ?? false,
       ]),
     )
     .digest('hex');
@@ -203,6 +208,7 @@ function eligibleMatches<T extends Pick<ProviderPlaceIdentity, 'name' | 'formatt
     localityMatches(identity, candidate.localityHint),
   );
   const exact = located.filter((identity) => compactText(identity.name) === expectedName);
+  if (candidate.requireExactName) return exact;
   return exact.length
     ? exact
     : located.filter((identity) => nameTokensContained(identity.name, candidate.name));
@@ -400,6 +406,15 @@ export class AiPlaceGrounder {
     const persistentKey = cacheKey(request, candidate);
     const cached = await this.readCache(persistentKey, candidate);
     if ('result' in cached) return cached.result;
+    const skippedForTime = () => candidate.signal?.reason === 'provider_time_allowance_exhausted';
+    if (candidate.signal?.aborted) {
+      return fallback(
+        candidate,
+        'not_checked',
+        skippedForTime() ? 'provider_time_allowance_exhausted' : 'provider_unavailable',
+        null,
+      );
+    }
     let identities: ProviderPlaceSearchResult[];
     let checkedAt: Date;
     try {
@@ -418,9 +433,16 @@ export class AiPlaceGrounder {
       return fallback(
         candidate,
         'not_checked',
-        code === 'budget_exhausted' ? 'provider_cap_reached' : 'provider_unavailable',
+        skippedForTime()
+          ? 'provider_time_allowance_exhausted'
+          : code === 'budget_exhausted'
+            ? 'provider_cap_reached'
+            : 'provider_unavailable',
         null,
       );
+    }
+    if (skippedForTime()) {
+      return fallback(candidate, 'not_checked', 'provider_time_allowance_exhausted', null);
     }
 
     // Spacing is the other half of the transliteration problem: "Sensō-ji"

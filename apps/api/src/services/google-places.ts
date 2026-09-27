@@ -352,6 +352,7 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
     init: RequestInit,
     call: Omit<ProviderCall, 'kind' | 'provider' | 'source'>,
   ): Promise<T> {
+    if (init.signal?.aborted) throw new PlaceProviderError('provider_unavailable');
     if (!this.apiKey) {
       throw new PlaceProviderError('configuration_missing');
     }
@@ -374,7 +375,9 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
           'X-Goog-Api-Key': this.apiKey,
           ...init.headers,
         },
-        signal: AbortSignal.timeout(this.requestTimeoutMs),
+        signal: init.signal
+          ? AbortSignal.any([init.signal, AbortSignal.timeout(this.requestTimeoutMs)])
+          : AbortSignal.timeout(this.requestTimeoutMs),
       });
     } catch (error) {
       throw new PlaceProviderError('provider_unavailable', { cause: error });
@@ -446,6 +449,7 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
     const response = await this.requestJson<GoogleTextSearchResponse>(
       new URL('/v1/places:searchText', this.baseUrl),
       {
+        signal: request.signal,
         body: JSON.stringify({
           languageCode: request.languageCode,
           locationBias: request.locationBias
@@ -534,7 +538,7 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
     const fieldMask = PLACE_DETAIL_FIELD_MASKS[request.detail];
     const response = await this.requestJson<GooglePlaceDetails>(
       url,
-      { headers: { 'X-Goog-FieldMask': fieldMask }, method: 'GET' },
+      { headers: { 'X-Goog-FieldMask': fieldMask }, method: 'GET', signal: request.signal },
       {
         cacheMissReason: request.cacheMissReason,
         detailLevel: request.detail,

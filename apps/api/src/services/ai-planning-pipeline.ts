@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto';
 import { getPrismaClient } from '@trove/db';
 import {
   AI_PLANNER_MAX_REAL_PLACE_ITEMS,
-  aiPlannerModelProposalSchema,
   type AiPlannerDraft,
   type AiPlannerDraftItem,
   type AiPlannerEvidence,
@@ -17,6 +16,11 @@ import {
   coveredDayCount,
   isSparseProposal,
 } from './ai-planner-prompt.js';
+import {
+  AiPlannerCompactReferenceError,
+  aiPlannerCompactProposalSchema,
+  expandAiPlannerProposal,
+} from './ai-planner-compact.js';
 import { createCanonicalPlacesService } from './canonical-places.js';
 import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
 import { dayPartWindow } from './day-part-windows.js';
@@ -39,7 +43,10 @@ import {
   type TripPlanScore,
 } from './plan-score.js';
 import { groundableDraftPlaceIds, referencedDraftPlaceIds } from './ai-planning-draft-places.js';
-import { recordAiPlanningDraftAssembled } from './ai-planning-telemetry.js';
+import {
+  recordAiPlanningDraftAssembled,
+  recordAiPlanningProposalCoverage,
+} from './ai-planning-telemetry.js';
 import {
   balancedPaceAnchorRange,
   resolveAiPlannerDefaults,
@@ -52,6 +59,7 @@ import {
   completeAiPlanningRunFailure,
   completeAiPlanningRunSuccess,
   updateAiPlanningStage,
+  type AiRunFailureDetails,
 } from './ai-planning-sessions.js';
 import {
   evaluateFeasibility,
@@ -76,7 +84,6 @@ type GenerationGateway = {
   generateStructured<OUTPUT>(
     request: AiStructuredGenerationRequest<OUTPUT>,
   ): Promise<{ metadata: AiGenerationMetadata; output: OUTPUT }>;
-  /** Optional so injected fakes stay valid; absent means the retry is unbounded. */
   timeoutMs?: number;
 };
 
@@ -95,6 +102,7 @@ type PlanningLifecycle = {
     runId: string,
     code: AiGenerationErrorCode,
     metadata: AiGenerationMetadata | null,
+    details?: AiRunFailureDetails,
   ): Promise<void>;
   completeSuccess(
     ownerId: string,
@@ -119,6 +127,7 @@ export type AiPlanningPipelineOptions = {
     providerContext: ProviderContext,
     targetIds: ReadonlySet<string>,
     scheduledPlaceIds: ReadonlySet<string>,
+    signal?: AbortSignal,
   ) => Promise<GroundedCandidate[]>;
   lifecycle?: PlanningLifecycle;
   loadHomeLocation?: (ownerId: string) => Promise<string | null>;
@@ -129,10 +138,19 @@ class AiPlanningPipelineFailure extends Error {
   constructor(
     public readonly code: AiGenerationErrorCode,
     public readonly metadata: AiGenerationMetadata | null,
+    public readonly validationCodes: string[] = [],
+    public readonly validationPaths: string[] = [],
   ) {
     super(code);
     this.name = 'AiPlanningPipelineFailure';
   }
+}
+
+function safeIssuePath(path: readonly PropertyKey[]) {
+  return path
+    .map((part) => (typeof part === 'number' ? '[]' : String(part).replace(/[^a-zA-Z_]/g, '')))
+    .join('.')
+    .slice(0, 160);
 }
 
 const activeRuns = new Map<string, AbortController>();
@@ -241,6 +259,7 @@ async function groundCandidates(
   providerContext: ProviderContext,
   targetIds: ReadonlySet<string>,
   scheduledPlaceIds: ReadonlySet<string>,
+  signal?: AbortSignal,
 ): Promise<GroundedCandidate[]> {
   const targets = proposal.places.filter((candidate) => targetIds.has(candidate.id));
   if (targets.length === 0) return [];
@@ -251,11 +270,16 @@ async function groundCandidates(
   const canonical = createCanonicalPlacesService();
   const grounder = new AiPlaceGrounder(providerContext.placesProvider, canonical);
   const localities = candidateLocalities(proposal);
+  const destinationPlaceIds = new Set(
+    proposal.destinations.map((destination) => destination.candidatePlaceId),
+  );
   return grounder.groundCandidates(
     targets.map((candidate) => ({
       ...candidate,
       detail: scheduledPlaceIds.has(candidate.id) ? 'evidence' : 'location',
       localityHint: localities.get(candidate.id),
+      requireExactName: destinationPlaceIds.has(candidate.id),
+      signal,
     })),
   );
 }
@@ -384,6 +408,34 @@ function enforceRealPlaceLimit(draft: AiPlannerDraft, proposal: AiPlannerModelPr
   }
 }
 
+function protectWorkBlocks(draft: AiPlannerDraft, proposal: AiPlannerModelProposal) {
+  for (const day of draft.days) {
+    const workParts = day.items.flatMap((item) =>
+      item.blockType === 'work' && isHardItem(item, proposal) && item.schedule.kind === 'day_part'
+        ? [item.schedule.dayPart]
+        : [],
+    );
+    if (!workParts.length) continue;
+    day.items = day.items.filter((item) => {
+      if (item.origin !== 'model' || item.schedule.kind !== 'day_part') return true;
+      const itemPart = item.schedule.dayPart;
+      if (
+        !workParts.some((part) => part === 'anytime' || itemPart === 'anytime' || part === itemPart)
+      )
+        return true;
+      draft.unscheduledItems.push(item);
+      draft.warnings.push({
+        code: 'work_block_conflict',
+        evidenceIds: [],
+        id: scopedId('warning', `work:${day.date}:${item.id}`),
+        itemIds: [item.id],
+        material: false,
+      });
+      return false;
+    });
+  }
+}
+
 /**
  * Builds and prunes the day-to-day itinerary without reaching a provider. The
  * places it emits are pending placeholders; `applyGroundingToDraft` upgrades the
@@ -475,6 +527,7 @@ export function assembleAiPlanningDraft(
     unscheduledItems,
     warnings: [],
   };
+  protectWorkBlocks(draft, proposal);
   enforceBalancedPace(draft, proposal);
   enforceRealPlaceLimit(draft, proposal);
   // A candidate nothing references is not part of the plan, so it should neither
@@ -495,6 +548,10 @@ function evidenceCode(result: PlaceDetailsResult) {
       : 'opening_hours_not_checked';
   }
   return null;
+}
+
+function providerTimeAllowanceExpired(signal?: AbortSignal) {
+  return signal?.aborted && signal.reason === 'provider_time_allowance_exhausted';
 }
 
 function openingEvidence(
@@ -610,6 +667,17 @@ export function assignAiPlannerSuggestedTimes(
 
   day.items.forEach((item, index) => {
     if (item.schedule.kind !== 'day_part') return;
+    // "Night flight" is a traveller constraint, but there is no flight
+    // timetable in the draft. Turning Evening into 17:00 would falsely make
+    // the block look like a chosen departure time.
+    if (
+      item.blockType === 'transport' &&
+      item.origin === 'user' &&
+      /\bnight\b/i.test(`${item.label} ${item.notes ?? ''}`)
+    )
+      return;
+    if (item.blockType === 'work' && item.origin === 'user' && item.constraintIds.length > 0)
+      return;
 
     const suggestion = suggestItemStart({
       commitments: [],
@@ -639,6 +707,7 @@ export async function addOpeningEvidence(
   proposal: AiPlannerModelProposal,
   contexts: Map<string, GroundedPlaceContext>,
   placesService: PlacesService | null,
+  signal?: AbortSignal,
 ): Promise<{ intervals: Map<string, PlanScoreInterval[]>; ratings: Map<string, number> }> {
   const requestedContexts = new Map<string, GroundedPlaceContext>();
   const contextKey = (context: GroundedPlaceContext) =>
@@ -665,6 +734,7 @@ export async function addOpeningEvidence(
           externalPlaceId: context.externalPlaceId,
           languageCode: context.languageCode,
           regionCode: context.regionCode,
+          signal,
         };
         if (context.evidence) {
           rememberPlaceEvidence(request, context.evidence);
@@ -690,6 +760,9 @@ export async function addOpeningEvidence(
       }
       const result = details.get(contextKey(context)) ?? null;
       const opening = openingEvidence(item, day.date, result);
+      if (opening.evidence.status === 'not_checked' && providerTimeAllowanceExpired(signal)) {
+        opening.evidence.code = 'provider_time_allowance_exhausted';
+      }
       const evaluated = opening.intervals
         ? evaluateFeasibility({
             commitments: [],
@@ -745,6 +818,7 @@ async function addRouteEvidence(
   contexts: Map<string, GroundedPlaceContext>,
   intervals: Map<string, PlanScoreInterval[]>,
   routesService: RoutesService | null,
+  signal?: AbortSignal,
 ): Promise<{
   inbound: Map<string, number>;
   segments: Map<string, PlanScoreRouteSegment[]>;
@@ -772,7 +846,12 @@ async function addRouteEvidence(
       async ([key, request]) => [
         key,
         routesService
-          ? await routesService.computeRoute({ ...request, includePolyline: false, mode: 'drive' })
+          ? await routesService.computeRoute({
+              ...request,
+              includePolyline: false,
+              mode: 'drive',
+              signal,
+            })
           : null,
       ],
     ),
@@ -828,9 +907,11 @@ async function addRouteEvidence(
           ? null
           : result?.status === 'empty'
             ? 'route_not_found'
-            : result?.status === 'unavailable' && result.code === 'budget_exhausted'
-              ? 'provider_cap_reached'
-              : 'route_not_checked';
+            : providerTimeAllowanceExpired(signal)
+              ? 'provider_time_allowance_exhausted'
+              : result?.status === 'unavailable' && result.code === 'budget_exhausted'
+                ? 'provider_cap_reached'
+                : 'route_not_checked';
       draft.evidence.push({
         checkedAt: result?.status === 'ok' ? result.freshness.fetchedAt : null,
         code,
@@ -972,6 +1053,7 @@ async function validateWithProviderEvidence(
   proposal: AiPlannerModelProposal,
   grounding: GroundedCandidate[],
   providerContext: ProviderContext,
+  signal?: AbortSignal,
 ) {
   const contexts = new Map(
     grounding.flatMap((result) =>
@@ -983,6 +1065,7 @@ async function validateWithProviderEvidence(
     proposal,
     contexts,
     providerContext.placesService,
+    signal,
   );
   const { inbound, segments } = await addRouteEvidence(
     draft,
@@ -990,9 +1073,17 @@ async function validateWithProviderEvidence(
     contexts,
     intervals,
     providerContext.routesService,
+    signal,
   );
   const validated = validateAiPlannerDraft(draft);
-  if (!validated.success) throw new AiPlanningPipelineFailure('invalid_response', null);
+  if (!validated.success) {
+    throw new AiPlanningPipelineFailure(
+      'invalid_response',
+      null,
+      validated.issues.map((issue) => issue.code),
+      validated.issues.map((issue) => safeIssuePath(issue.path)),
+    );
+  }
 
   return {
     draft: validated.data,
@@ -1010,8 +1101,8 @@ function defaultLifecycle(
         ...lifecycleOptions,
         environment: options.environment,
       }),
-    completeFailure: (ownerId, runId, code, metadata) =>
-      completeAiPlanningRunFailure(ownerId, runId, code, metadata, lifecycleOptions),
+    completeFailure: (ownerId, runId, code, metadata, details) =>
+      completeAiPlanningRunFailure(ownerId, runId, code, metadata, lifecycleOptions, details),
     completeSuccess: (ownerId, runId, draft, planScore, metadata) =>
       completeAiPlanningRunSuccess(ownerId, runId, draft, planScore, metadata, lifecycleOptions),
     updateStage: (ownerId, runId, stage) =>
@@ -1054,6 +1145,18 @@ export async function runAiPlanningPipeline(
   const controller = new AbortController();
   activeRuns.set(claim.sessionId, controller);
   let metadata: AiGenerationMetadata | null = null;
+  let stage = 'generating';
+  let deadlineReached = false;
+  let providerAllowanceTimer: ReturnType<typeof setTimeout> | null = null;
+  const deadlineTimer = claim.deadlineAt
+    ? setTimeout(
+        () => {
+          deadlineReached = true;
+          controller.abort();
+        },
+        Math.max(0, claim.deadlineAt.getTime() - clock().getTime()),
+      )
+    : null;
   const generationDate = clock();
 
   try {
@@ -1066,43 +1169,51 @@ export async function runAiPlanningPipeline(
     ]);
     const gateway = options.gateway ?? createAiGateway({ environment: options.environment });
     const promptContext = buildAiPlannerContext({ generationDate, homeLocation });
-    const generate = (coverageRetry: boolean) =>
-      gateway.generateStructured({
-        prompt: buildAiPlannerPrompt(claim.prompt, promptContext, { coverageRetry }),
-        schema: aiPlannerModelProposalSchema,
-        schemaDescription: AI_PLANNER_SCHEMA_DESCRIPTION,
-        schemaName: 'trove_ai_planner_proposal_v1',
-        signal: controller.signal,
-      });
-
-    let generation = await generate(false);
+    const generation = await gateway.generateStructured({
+      prompt: buildAiPlannerPrompt(claim.prompt, promptContext),
+      schema: aiPlannerCompactProposalSchema,
+      schemaDescription: AI_PLANNER_SCHEMA_DESCRIPTION,
+      schemaName: 'trove_ai_planner_compact_v1',
+      signal: controller.signal,
+    });
     metadata = generation.metadata;
-    let proposal = validateAiPlannerModelProposal(generation.output);
-
-    // Day coverage is the one thing the model is unreliable about: identical
-    // requests alternate between filling every day and filling only the first,
-    // and no validation rule rejects a sparse plan. Ask once more, then keep
-    // whichever attempt covered more of the trip so a retry is never a downgrade.
-    // An invalid proposal is left alone — it already fails fast, and retrying it
-    // would spend a second call on every malformed response.
-    // A second call gets its own full timeout, so retrying after a slow first
-    // attempt can double the traveller's wait and then time out anyway.
-    const retryFits =
-      gateway.timeoutMs === undefined || generation.metadata.latencyMs * 2 <= gateway.timeoutMs;
-
-    if (retryFits && proposal.success && isSparseProposal(proposal.data)) {
-      const covered = coveredDayCount(proposal.data.items);
-      const retried = await generate(true);
-      const retriedProposal = validateAiPlannerModelProposal(retried.output);
-      if (retriedProposal.success && coveredDayCount(retriedProposal.data.items) > covered) {
-        generation = retried;
-        proposal = retriedProposal;
-        metadata = retried.metadata;
+    let expanded: AiPlannerModelProposal;
+    try {
+      const compact = aiPlannerCompactProposalSchema.safeParse(generation.output);
+      if (!compact.success) {
+        throw new AiPlanningPipelineFailure(
+          'invalid_response',
+          metadata,
+          compact.error.issues.map((issue) => issue.code),
+          compact.error.issues.map((issue) => safeIssuePath(issue.path)),
+        );
       }
+      expanded = expandAiPlannerProposal(compact.data, claim.prompt);
+    } catch (error) {
+      if (error instanceof AiPlannerCompactReferenceError) {
+        throw new AiPlanningPipelineFailure(
+          'invalid_response',
+          metadata,
+          ['dangling_reference'],
+          [error.path],
+        );
+      }
+      if (error instanceof AiPlanningPipelineFailure) throw error;
+      throw new AiPlanningPipelineFailure('invalid_response', metadata);
     }
+    const proposal = validateAiPlannerModelProposal(expanded);
 
-    if (!proposal.success) throw new AiPlanningPipelineFailure('invalid_response', metadata);
-
+    if (!proposal.success) {
+      throw new AiPlanningPipelineFailure(
+        'invalid_response',
+        metadata,
+        proposal.issues.map((issue) => issue.code),
+        proposal.issues.map((issue) => safeIssuePath(issue.path)),
+      );
+    }
+    if (controller.signal.aborted)
+      throw new AiPlanningPipelineFailure(deadlineReached ? 'timeout' : 'cancelled', metadata);
+    stage = 'scheduling';
     await lifecycle.updateStage(ownerId, runId, 'SCHEDULING');
     let draft: AiPlannerDraft;
     try {
@@ -1110,10 +1221,27 @@ export async function runAiPlanningPipeline(
     } catch {
       throw new AiPlanningPipelineFailure('invalid_response', metadata);
     }
+    recordAiPlanningProposalCoverage(
+      coveredDayCount(proposal.data.items),
+      draft.days.length,
+      isSparseProposal(proposal.data),
+      generationDate,
+    );
 
     // Grounding follows scheduling so a lookup is only ever spent on a place the
     // finished day-to-day itinerary actually stands on.
+    if (controller.signal.aborted)
+      throw new AiPlanningPipelineFailure(deadlineReached ? 'timeout' : 'cancelled', metadata);
+    stage = 'grounding';
     await lifecycle.updateStage(ownerId, runId, 'GROUNDING');
+    const providerAllowance = new AbortController();
+    if (claim.deadlineAt) {
+      providerAllowanceTimer = setTimeout(
+        () => providerAllowance.abort('provider_time_allowance_exhausted'),
+        Math.max(0, claim.deadlineAt.getTime() - clock().getTime() - 5_000),
+      );
+    }
+    const providerSignal = AbortSignal.any([controller.signal, providerAllowance.signal]);
     const grounding = await (options.groundCandidates ?? groundCandidates)(
       proposal.data,
       providerContext,
@@ -1123,22 +1251,42 @@ export async function runAiPlanningPipeline(
           day.items.flatMap((item) => (item.placeRefId ? [item.placeRefId] : [])),
         ),
       ),
+      providerSignal,
     );
     applyGroundingToDraft(draft, grounding);
 
+    if (controller.signal.aborted)
+      throw new AiPlanningPipelineFailure(deadlineReached ? 'timeout' : 'cancelled', metadata);
+    stage = 'validating';
     await lifecycle.updateStage(ownerId, runId, 'VALIDATING');
     const validated = await validateWithProviderEvidence(
       draft,
       proposal.data,
       grounding,
       providerContext,
+      providerSignal,
     );
     recordAiPlanningDraftAssembled(validated.draft, generationDate);
+    if (controller.signal.aborted)
+      throw new AiPlanningPipelineFailure(deadlineReached ? 'timeout' : 'cancelled', metadata);
     await lifecycle.completeSuccess(ownerId, runId, validated.draft, validated.planScore, metadata);
   } catch (error) {
     const failure = failureFrom(error, metadata);
-    await lifecycle.completeFailure(ownerId, runId, failure.code, failure.metadata);
+    const details: AiRunFailureDetails = {
+      stage,
+      validationCodes: error instanceof AiPlanningPipelineFailure ? error.validationCodes : [],
+      validationPaths: error instanceof AiPlanningPipelineFailure ? error.validationPaths : [],
+    };
+    await lifecycle.completeFailure(
+      ownerId,
+      runId,
+      deadlineReached ? 'timeout' : controller.signal.aborted ? 'cancelled' : failure.code,
+      failure.metadata,
+      details,
+    );
   } finally {
+    if (deadlineTimer) clearTimeout(deadlineTimer);
+    if (providerAllowanceTimer) clearTimeout(providerAllowanceTimer);
     if (activeRuns.get(claim.sessionId) === controller) activeRuns.delete(claim.sessionId);
   }
 }

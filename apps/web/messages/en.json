@@ -289,13 +289,13 @@
         "countries_not_reviewed": "Confirm the countries before creating this trip",
         "draft_conflict": "The draft changed. Review the latest version before continuing",
         "warnings_not_acknowledged": "Acknowledge the current warnings before creating this trip",
-        "invalid_response": "We could not make a usable plan",
+        "invalid_response": "We couldn't finish a reliable itinerary from that request. Try a shorter request or regenerate.",
         "place_unresolved": "That place could not be verified",
-        "provider_unavailable": "Planning service is unavailable right now",
+        "provider_unavailable": "Planning is temporarily unavailable. Please try again shortly.",
         "quota_exceeded": "You have used your AI planning allowance",
         "request_failed": "We could not reach planning right now",
         "session_expired": "This planning session has expired",
-        "timeout": "Planning took too long"
+        "timeout": "Planning took too long. Your saved draft is safe; try generating again."
       },
       "review": {
         "eyebrow": "AI itinerary draft",
@@ -324,8 +324,10 @@
         "assumptions": "Details we filled in",
         "assumptionCodes": {
           "dates_defaulted": "You didn't provide exact dates, so we chose {startDate} to {endDate} from your requested trip length.",
+          "date_year_inferred": "You didn't give a year, so we used {value} for these dates.",
           "destination_inferred": "You didn't choose a destination, so we suggested {value} from your request.",
           "interest_inferred": "You mentioned {value}, so we used it to shape your itinerary.",
+          "optional_destination_omitted": "We left out the optional stop in {value} to keep this trip workable.",
           "pace_defaulted": "You didn't choose a travel pace, so we used {pace}.",
           "party_size_defaulted": "You didn't provide a party size, so we planned for {count, plural, one {# traveler} other {# travelers}}.",
           "trip_name_inferred": "You didn't provide a trip name, so we suggested {name}."

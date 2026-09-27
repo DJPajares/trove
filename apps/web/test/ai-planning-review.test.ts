@@ -149,6 +149,7 @@ test('a review session with an initializing local draft stays in loading', () =>
   const session = {
     appliedTripId: null,
     createdAt: '2026-09-01T00:00:00.000Z',
+    deadlineAt: null,
     draft,
     draftRevision: 1,
     expiresAt: '2026-09-08T00:00:00.000Z',
@@ -189,6 +190,7 @@ test('an applied session drops its draft so the review page cannot render one ag
   const session = {
     appliedTripId: null,
     createdAt: '2026-09-01T00:00:00.000Z',
+    deadlineAt: null,
     draft,
     draftRevision: 4,
     expiresAt: '2026-09-08T00:00:00.000Z',

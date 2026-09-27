@@ -36,6 +36,7 @@ const ACTIVE_STATUSES = ['FAILED', 'GENERATING', 'PENDING', 'REVIEWING'] as cons
  */
 const DISPATCH_STAGES = ['GENERATING', 'SCHEDULING', 'GROUNDING', 'VALIDATING'] as const;
 const SESSION_EXPIRED = Symbol('session_expired');
+const RUN_OVERDUE = Symbol('run_overdue');
 
 type PlanningPrisma = ReturnType<typeof getPrismaClient>;
 type PlanningTransaction = Prisma.TransactionClient;
@@ -45,7 +46,7 @@ type PlanningOptions = {
   prisma?: PlanningPrisma;
 };
 
-type PendingRun = { id: string };
+type PendingRun = { deadlineAt: Date | null; id: string };
 type SessionRecord = {
   appliedTripId: string | null;
   createdAt: Date;
@@ -192,7 +193,7 @@ function reservationProvider(environment?: Record<string, string | undefined>) {
 const sessionInclude = {
   runs: {
     orderBy: { createdAt: 'desc' as const },
-    select: { id: true },
+    select: { deadlineAt: true, id: true },
     take: 1,
     where: { result: 'PENDING' as const },
   },
@@ -206,6 +207,7 @@ export function serializeAiPlanningSession(session: SessionRecord) {
     createdAt: session.createdAt.toISOString(),
     draft: terminal ? null : session.draft,
     draftRevision: session.draftRevision,
+    deadlineAt: terminal ? null : (session.runs[0]?.deadlineAt?.toISOString() ?? null),
     expiresAt: session.expiresAt.toISOString(),
     id: session.id,
     lastSafeError: terminal ? null : session.lastErrorCode,
@@ -355,6 +357,53 @@ async function expireIfNeeded(
   return true;
 }
 
+async function failOverdueRun(
+  transaction: PlanningTransaction,
+  session: {
+    draft: Prisma.JsonValue | null;
+    id: string;
+    ownerId: string;
+    stage: string;
+    status: string;
+  },
+  now: Date,
+) {
+  if (session.status !== 'GENERATING') return false;
+  const run = await transaction.aiGenerationRun.findFirst({
+    where: {
+      deadlineAt: { lte: now },
+      ownerId: session.ownerId,
+      result: 'PENDING',
+      sessionId: session.id,
+    },
+    select: { deadlineAt: true, dispatchedAt: true, id: true },
+  });
+  if (!run) return false;
+  const stopped = await transaction.aiGenerationRun.updateMany({
+    where: { deadlineAt: { lte: now }, id: run.id, ownerId: session.ownerId, result: 'PENDING' },
+    data: {
+      completedAt: now,
+      errorCode: 'timeout',
+      failureStage: session.stage.toLowerCase(),
+      result: 'FAILED',
+      totalLatencyMs: run.dispatchedAt
+        ? Math.max(0, now.getTime() - run.dispatchedAt.getTime())
+        : null,
+    },
+  });
+  if (stopped.count !== 1) return false;
+  const restoresDraft = session.draft !== null;
+  await transaction.aiPlanningSession.updateMany({
+    where: { id: session.id, ownerId: session.ownerId, status: 'GENERATING' },
+    data: {
+      lastErrorCode: 'timeout',
+      stage: restoresDraft ? 'REVIEWING' : 'COMPLETE',
+      status: restoresDraft ? 'REVIEWING' : 'FAILED',
+    },
+  });
+  return true;
+}
+
 async function findOwnedSession(
   transaction: PlanningTransaction,
   ownerId: string,
@@ -420,6 +469,11 @@ export async function createAiPlanningSession(
 
 async function expireOwnedSessions(prisma: PlanningPrisma, ownerId: string, now: Date) {
   await prisma.$transaction(async (transaction) => {
+    const active = await transaction.aiPlanningSession.findMany({
+      where: { ownerId, status: 'GENERATING' },
+      select: { draft: true, id: true, ownerId: true, stage: true, status: true },
+    });
+    for (const session of active) await failOverdueRun(transaction, session, now);
     const expired = await transaction.aiPlanningSession.findMany({
       where: { expiresAt: { lte: now }, ownerId, status: { in: [...ACTIVE_STATUSES] } },
       select: { id: true },
@@ -468,6 +522,9 @@ export async function getAiPlanningSession(
     await ensureAndLockOwner(transaction, ownerId);
     const found = await findOwnedSession(transaction, ownerId, sessionId);
     if (await expireIfNeeded(transaction, found, now)) return SESSION_EXPIRED;
+    if (await failOverdueRun(transaction, found, now)) {
+      return findOwnedSession(transaction, ownerId, sessionId);
+    }
     return found;
   });
   if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
@@ -489,8 +546,11 @@ export async function regenerateAiPlanningSession(
 
   const session = await prisma.$transaction(async (transaction) => {
     await ensureAndLockOwner(transaction, ownerId);
-    const found = await findOwnedSession(transaction, ownerId, sessionId);
+    let found = await findOwnedSession(transaction, ownerId, sessionId);
     if (await expireIfNeeded(transaction, found, now)) return SESSION_EXPIRED;
+    if (await failOverdueRun(transaction, found, now)) {
+      found = await findOwnedSession(transaction, ownerId, sessionId);
+    }
     const existing = await transaction.aiGenerationRun.findUnique({
       where: { ownerId_idempotencyKey: { idempotencyKey, ownerId } },
       select: { sessionId: true },
@@ -687,6 +747,7 @@ export async function cancelAiPlanningSession(
 
 type ClaimDispatchResult = {
   baseDraftRevision: number;
+  deadlineAt: Date;
   model: string;
   prompt: string;
   provider: string;
@@ -694,10 +755,17 @@ type ClaimDispatchResult = {
   sessionId: string;
 };
 
+export type AiRunFailureDetails = {
+  stage: string;
+  validationCodes?: string[];
+  validationPaths?: string[];
+};
+
 async function failRunInTransaction(
   transaction: PlanningTransaction,
   run: {
     baseDraftRevision: number;
+    dispatchedAt: Date | null;
     id: string;
     ownerId: string;
     session: { draft: Prisma.JsonValue | null; id: string; status: string };
@@ -705,6 +773,7 @@ async function failRunInTransaction(
   code: AiGenerationErrorCode,
   now: Date,
   metadata: AiGenerationMetadata | null = null,
+  details: AiRunFailureDetails | null = null,
 ) {
   if (run.session.status === 'CANCELLED' || run.session.status === 'EXPIRED') return;
   await transaction.aiGenerationRun.updateMany({
@@ -712,13 +781,21 @@ async function failRunInTransaction(
     data: {
       completedAt: now,
       errorCode: code === 'cancelled' ? null : code,
+      failureStage: details?.stage ?? null,
+      finishReason: metadata?.finishReason ?? null,
       inputTokens: metadata?.inputTokens ?? null,
       latencyMs: metadata?.latencyMs ?? null,
       model: metadata?.model,
       outputTokens: metadata?.outputTokens ?? null,
       provider: metadata?.provider,
+      reasoningTokens: metadata?.reasoningTokens ?? null,
       result: code === 'cancelled' ? 'CANCELLED' : 'FAILED',
       totalTokens: metadata?.totalTokens ?? null,
+      totalLatencyMs: run.dispatchedAt
+        ? Math.max(0, now.getTime() - run.dispatchedAt.getTime())
+        : null,
+      validationCodes: details?.validationCodes?.slice(0, 12) ?? [],
+      validationPaths: details?.validationPaths?.slice(0, 12) ?? [],
     },
   });
   const restoresDraft = run.baseDraftRevision > 0 && run.session.draft !== null;
@@ -787,9 +864,11 @@ export async function claimAiPlanningDispatch(
       };
     }
 
+    const deadlineAt = new Date(now.getTime() + configuration.timeoutMs + 30_000);
     const claimed = await transaction.aiGenerationRun.updateMany({
       where: { dispatchedAt: null, id: runId, ownerId, result: 'PENDING' },
       data: {
+        deadlineAt,
         dispatchedAt: now,
         model: configuration.vertex.model,
         provider: configuration.provider,
@@ -811,6 +890,7 @@ export async function claimAiPlanningDispatch(
       kind: 'claimed' as const,
       value: {
         baseDraftRevision: run.baseDraftRevision,
+        deadlineAt,
         model: configuration.vertex.model,
         prompt: run.session.rawPrompt,
         provider: configuration.provider,
@@ -848,6 +928,10 @@ export async function updateAiPlanningStage(
     });
     if (!run) throw new AiPlanningSessionError('session_not_found', 404);
     if (await expireIfNeeded(transaction, run.session, now)) return SESSION_EXPIRED;
+    if (run.deadlineAt && run.deadlineAt <= now) {
+      await failOverdueRun(transaction, run.session, now);
+      return RUN_OVERDUE;
+    }
     if (run.result !== 'PENDING' || !run.dispatchedAt || run.session.status !== 'GENERATING') {
       throw new AiPlanningSessionError('run_already_claimed', 409);
     }
@@ -864,6 +948,7 @@ export async function updateAiPlanningStage(
     }
   });
   if (outcome === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
+  if (outcome === RUN_OVERDUE) throw new AiPlanningSessionError('draft_conflict', 409);
 }
 
 export async function completeAiPlanningRunSuccess(
@@ -886,6 +971,10 @@ export async function completeAiPlanningRunSuccess(
     });
     if (!run) throw new AiPlanningSessionError('session_not_found', 404);
     if (await expireIfNeeded(transaction, run.session, now)) return SESSION_EXPIRED;
+    if (run.deadlineAt && run.deadlineAt <= now) {
+      await failOverdueRun(transaction, run.session, now);
+      return RUN_OVERDUE;
+    }
     if (
       run.result !== 'PENDING' ||
       !run.dispatchedAt ||
@@ -922,19 +1011,23 @@ export async function completeAiPlanningRunSuccess(
       where: { id: runId, ownerId, result: 'PENDING' },
       data: {
         completedAt: now,
+        finishReason: metadata.finishReason ?? null,
         inputTokens: metadata.inputTokens,
         latencyMs: metadata.latencyMs,
         model: metadata.model,
         outputTokens: metadata.outputTokens,
         provider: metadata.provider,
+        reasoningTokens: metadata.reasoningTokens ?? null,
         result: 'SUCCEEDED',
         totalTokens: metadata.totalTokens,
+        totalLatencyMs: Math.max(0, now.getTime() - run.dispatchedAt.getTime()),
       },
     });
     if (completed.count !== 1) throw new AiPlanningSessionError('draft_conflict', 409);
     return { draftRevision: run.baseDraftRevision + 1, sessionId: run.sessionId };
   });
   if (outcome === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
+  if (outcome === RUN_OVERDUE) throw new AiPlanningSessionError('draft_conflict', 409);
   return outcome;
 }
 
@@ -944,6 +1037,7 @@ export async function completeAiPlanningRunFailure(
   code: AiGenerationErrorCode,
   metadata: AiGenerationMetadata | null,
   options: PlanningOptions = {},
+  details: AiRunFailureDetails | null = null,
 ) {
   const prisma = prismaFrom(options);
   const now = nowFrom(options);
@@ -956,6 +1050,10 @@ export async function completeAiPlanningRunFailure(
     if (!run) throw new AiPlanningSessionError('session_not_found', 404);
     if (run.result !== 'PENDING') return;
     if (await expireIfNeeded(transaction, run.session, now)) return SESSION_EXPIRED;
+    if (run.deadlineAt && run.deadlineAt <= now) {
+      await failOverdueRun(transaction, run.session, now);
+      return;
+    }
     if (run.session.status === 'CANCELLED' || run.session.status === 'EXPIRED') {
       await transaction.aiGenerationRun.updateMany({
         where: { id: runId, ownerId, result: 'PENDING' },
@@ -963,7 +1061,7 @@ export async function completeAiPlanningRunFailure(
       });
       return;
     }
-    await failRunInTransaction(transaction, run, code, now, metadata);
+    await failRunInTransaction(transaction, run, code, now, metadata, details);
   });
   if (outcome === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
 }

@@ -102,3 +102,30 @@ test('offline duration selection clears an existing explicit end time', () => {
 
   expect(result.days[0]?.items[0]).toMatchObject({ durationMinutes: 45, localEndTime: null });
 });
+
+test('offline structural edits discard destination context while notes preserve it', () => {
+  const original = itinerary();
+  original.destinationContext = {
+    catalogVersion: '2026-09-28.1',
+    evaluatedAt: '2026-09-28T00:00:00.000Z',
+    expiresAt: '2026-12-27T00:00:00.000Z',
+    overview: [],
+    days: [{ dayId: 'day', groups: [] }],
+  };
+
+  const noted = applyOfflineMutation(original, {
+    baseNote: null,
+    itineraryDayId: 'day',
+    kind: 'itinerary_day_note',
+    note: 'Leave early',
+  });
+  expect(noted.destinationContext).toEqual(original.destinationContext);
+
+  const changed = applyOfflineMutation(noted, {
+    clientItemId: 'museum',
+    input: { customLabel: 'Museum', itineraryDayId: 'day' },
+    kind: 'itinerary_item_create',
+  });
+  expect(changed.destinationContext).toBeUndefined();
+  expect(original.destinationContext).toBeDefined();
+});

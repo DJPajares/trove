@@ -472,7 +472,7 @@ export async function applyAiPlanningSession(
     const score = loaded.planScore;
     const scoreTime =
       score?.evidenceAsOf !== undefined &&
-      score?.sourceInputRevision === draftPlanScoreInputRevision(draft)
+      score?.sourceInputRevision === draftPlanScoreInputRevision(draft, now)
         ? originalPlanScoreTime(score, now)
         : null;
     if (score && scoreTime) {
@@ -481,13 +481,13 @@ export async function applyAiPlanningSession(
         include: PLAN_SCORE_TRIP_INCLUDE,
       });
       const identity = { dayIdByDate, itemIdByDraftId, tripPlaceIdByPlaceRefId: tripPlaceIds };
-      if (appliedDraftScoreInputsMatch(draft, rows, identity))
+      if (appliedDraftScoreInputsMatch(draft, rows, identity, now))
         await transaction.trip.update({
           where: { id: trip.id },
           data: {
             planScore: remapDraftPlanScore(score, identity) as unknown as Prisma.InputJsonValue,
             planScoreComputedAt: scoreTime,
-            planScoreRevision: readPlanScoreInputs(rows).revision,
+            planScoreRevision: readPlanScoreInputs(rows, now).revision,
           },
         });
     }

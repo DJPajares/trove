@@ -38,6 +38,26 @@ let forecast: any;
 let update: ReturnType<typeof vi.fn>;
 let outbound: ReturnType<typeof vi.fn>;
 
+test('curated context expiry bounds the cached score without changing quality or acquiring data', async () => {
+  const beforeExpiry = new Date('2026-12-26T23:59:50Z');
+  evidenceRow.cachedEvidenceAt = beforeExpiry;
+  trip.startDate = new Date('2026-11-01');
+  trip.endDate = trip.startDate;
+  trip.itineraryDays[0].date = trip.startDate;
+  trip.tripPlaces[0].place.customName = 'Tokyo';
+  trip.tripPlaces[0].place.customLatitude = decimal(35.68);
+  trip.tripPlaces[0].place.customLongitude = decimal(139.76);
+  const first = await getTripPlanScore('owner', 'trip', { now: () => beforeExpiry });
+  const revision = trip.planScoreRevision;
+  expect(first?.expiresAt).toBe('2026-12-27T00:00:00.000Z');
+  const second = await getTripPlanScore('owner', 'trip', {
+    now: () => new Date('2026-12-27T00:00:00Z'),
+  });
+  expect(second?.score).toBe(first?.score);
+  expect(trip.planScoreRevision).not.toBe(revision);
+  expect(outbound).not.toHaveBeenCalled();
+});
+
 beforeEach(() => {
   vi.stubEnv('TROVE_PLAN_SCORE_DISABLED', 'false');
   evidenceRow = {

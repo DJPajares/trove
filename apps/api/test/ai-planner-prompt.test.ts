@@ -42,6 +42,7 @@ test('the planner context resolves every default the model would otherwise inven
       partySize: AI_PLANNER_DEFAULT_PARTY_SIZE,
     },
     generationDate: '2026-09-01',
+    destinationContext: { catalogVersion: '2026-09-28.1', records: [] },
     homeLocation: 'Auckland',
     itemsPerDay: AI_PLANNER_ITEMS_PER_DAY,
     maxRealPlaceItems: AI_PLANNER_MAX_REAL_PLACE_ITEMS,

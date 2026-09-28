@@ -52,6 +52,7 @@ import {
 import { usePreferences } from '@/components/preferences-provider';
 import { TimeInput } from '@/components/time-input';
 import { useTripContext } from '@/components/trip-provider';
+import { ItineraryDestinationContext } from '@/components/itinerary-destination-context';
 import { TripSectionHeader } from '@/components/trip-section-header';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsIndicator, TabsList, TabsTab } from '@/components/ui/tabs';
@@ -1665,6 +1666,11 @@ export function ItineraryManager({
           <TabsIndicator />
         </TabsList>
       </Tabs>
+
+      <ItineraryDestinationContext
+        context={itinerary.destinationContext}
+        dayId={activeView === 'overview' ? null : (selectedDayId ?? '')}
+      />
 
       {activeView === 'overview' ? (
         <ItineraryOverview

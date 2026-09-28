@@ -1,4 +1,23 @@
 import { createHash } from 'node:crypto';
+import type {
+  PlanScoreDayFactorId,
+  PlanScoreDayPayload,
+  PlanScoreDayWithheldReason,
+  PlanScoreFactorOutcome,
+  PlanScoreTripPayload,
+  PlanScoreTripWithheldReason,
+  PlanScoreUnknownReason,
+} from '@trove/types';
+
+export type {
+  PlanScoreDayFactorId,
+  PlanScoreDayPayload,
+  PlanScoreDayWithheldReason,
+  PlanScoreFactorOutcome,
+  PlanScoreTripPayload,
+  PlanScoreTripWithheldReason,
+  PlanScoreUnknownReason,
+} from '@trove/types';
 
 /**
  * Deterministic Plan Score contract (PRD section 29).
@@ -26,10 +45,7 @@ const DAY_FACTOR_IDS = [
   'PACE_BUFFER',
   'ROUTE_EFFICIENCY',
   'PLACE_QUALITY',
-] as const;
-
-/** Must Go priority fit is trip-scoped and is deliberately absent from this union. */
-export type PlanScoreDayFactorId = (typeof DAY_FACTOR_IDS)[number];
+] as const satisfies readonly PlanScoreDayFactorId[];
 
 /** Internal calibration. Not exported, not serialized, not exposed to users. */
 const BASE_WEIGHTS: Record<PlanScoreDayFactorId | 'MUST_GO_PRIORITY_FIT', number> = {
@@ -64,9 +80,6 @@ export type PlanScoreEvidence = {
   source: PlanScoreEvidenceSource;
 };
 
-export type PlanScoreUnknownReason =
-  'INSUFFICIENT_EVIDENCE' | 'MISSING_EVIDENCE' | 'UNUSABLE_EVIDENCE';
-
 /**
  * What a factor evaluator returns. `UNKNOWN` and `NOT_APPLICABLE` are distinct:
  * unknown evidence lowers completeness, while a non-applicable factor is removed
@@ -74,12 +87,6 @@ export type PlanScoreUnknownReason =
  */
 export type PlanScoreFactorResult =
   | { evidence: PlanScoreEvidence[]; score: number; state: 'EVALUATED' }
-  | { reason: PlanScoreUnknownReason; state: 'UNKNOWN' }
-  | { state: 'NOT_APPLICABLE' };
-
-/** What callers receive: clamped and rounded, with weights kept internal. */
-export type PlanScoreFactorOutcome =
-  | { confidence: number; score: number; state: 'EVALUATED' }
   | { reason: PlanScoreUnknownReason; state: 'UNKNOWN' }
   | { state: 'NOT_APPLICABLE' };
 
@@ -93,22 +100,9 @@ export type PlanScoreDayInput = {
   factors: Partial<Record<PlanScoreDayFactorId, PlanScoreFactorResult>>;
 };
 
-export type PlanScoreDayWithheldReason =
-  | 'EVIDENCE_NOT_CURRENT'
-  | 'ADMINISTRATIVELY_DISABLED'
-  | 'INSUFFICIENT_COMPLETENESS'
-  | 'NO_EVALUABLE_CORE_FACTOR';
-
-export type PlanScoreDayResult = {
-  completeness: number;
-  confidence: number | null;
-  dayId: string;
+export type PlanScoreDayResult = PlanScoreDayPayload & {
   /** Evidence each factor actually used, retained for explanations and debugging. */
   evidence: Record<PlanScoreDayFactorId, PlanScoreEvidence[]>;
-  factors: Record<PlanScoreDayFactorId, PlanScoreFactorOutcome>;
-  /** Withheld as `null` rather than reported as a poor score. */
-  score: number | null;
-  withheldReasons: PlanScoreDayWithheldReason[];
 };
 
 export type PlanScoreTripInput = {
@@ -116,25 +110,9 @@ export type PlanScoreTripInput = {
   mustGoPriorityFit: PlanScoreFactorResult;
 };
 
-export type PlanScoreTripWithheldReason =
-  'ADMINISTRATIVELY_DISABLED' | 'NO_SCORABLE_DAY' | 'EVIDENCE_NOT_CURRENT';
-
-export type PlanScoreTripResult = {
+export type PlanScoreTripResult = Omit<PlanScoreTripPayload, 'days'> & {
   days: PlanScoreDayResult[];
   mustGoEvidence: PlanScoreEvidence[];
-  mustGoPriorityFit: PlanScoreFactorOutcome;
-  score: number | null;
-  withheldReasons: PlanScoreTripWithheldReason[];
-};
-
-/**
- * User-facing shape. Score, confidence, completeness, and factor states only:
- * no base weights, no formula, and no evidence snapshots.
- */
-export type PlanScoreDayPayload = Omit<PlanScoreDayResult, 'evidence'>;
-
-export type PlanScoreTripPayload = Omit<PlanScoreTripResult, 'days' | 'mustGoEvidence'> & {
-  days: PlanScoreDayPayload[];
 };
 
 export type PlanScoreInvalidationTrigger =

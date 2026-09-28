@@ -1,57 +1,16 @@
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
-export type PlanScoreFactorId =
-  'FEASIBILITY' | 'PACE_BUFFER' | 'PLACE_QUALITY' | 'ROUTE_EFFICIENCY' | 'TRAVEL_EFFORT';
+import type { TripPlanScore } from '@trove/types';
 
-export type PlanScoreFactorOutcome =
-  | { confidence: number; score: number; state: 'EVALUATED' }
-  | { reason: string; state: 'UNKNOWN' }
-  | { state: 'NOT_APPLICABLE' };
-
-export type PlanScoreSuggestedAction =
-  | 'ADD_BUFFER'
-  | 'ADJUST_TIME'
-  | 'RECONSIDER_DETOUR'
-  | 'REORDER_MANUALLY'
-  | 'REVIEW_ALTERNATIVE'
-  | 'SCHEDULE_MUST_GO';
-
-export type PlanScoreExplanation = {
-  action: PlanScoreSuggestedAction | null;
-  factor: string;
-  messageKey: string;
-  references: string[];
-  values: Record<string, number | string>;
-};
-
-export type PlanScoreExplanationGroups = {
-  uncertainty: PlanScoreExplanation[];
-  whatWorks: PlanScoreExplanation[];
-  worthImproving: PlanScoreExplanation[];
-};
-
-export type PlanScoreDay = {
-  completeness: number;
-  confidence: number | null;
-  date: string;
-  dayId: string;
-  explanations: PlanScoreExplanationGroups;
-  factors: Record<PlanScoreFactorId, PlanScoreFactorOutcome>;
-  score: number | null;
-  withheldReasons: string[];
-};
-
-export type TripPlanScore = {
-  days: PlanScoreDay[];
-  explanations: PlanScoreExplanationGroups;
-  fingerprint: string;
-  generatedAt: string;
-  evidenceAsOf?: string | null;
-  sourceInputRevision?: string;
-  mustGoPriorityFit: PlanScoreFactorOutcome;
-  score: number | null;
-  withheldReasons: string[];
-};
+export type {
+  PlanScoreDayFactorId as PlanScoreFactorId,
+  PlanScoreFactorOutcome,
+  PlanScoreSuggestedAction,
+  PlanScoreExplanation,
+  PlanScoreExplanationGroups,
+  TripPlanScoreDay as PlanScoreDay,
+  TripPlanScore,
+} from '@trove/types';
 
 export class PlanScoreApiError extends Error {
   constructor(

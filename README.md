@@ -417,6 +417,13 @@ This sequence records dependency intent rather than current progress. Plan Score
 
 Trove has planning, travel, supporting, scoring, Memories, and AI surfaces. Use the Trove Linear project for the next unblocked task and known gaps, and the PRD for expected behavior. Historical validation notes do not establish that current production launch gates have passed.
 
+PRD Section 29 defines the approved Plan Score redesign: five daily categories,
+trip-wide pacing and destination use, and read-only reuse of permitted itinerary
+evidence. The redesign is being delivered incrementally; existing scores still
+use the prior rubric until the evaluator and its consumers migrate together.
+Shared score response types live in `@trove/types`; implementation progress is
+tracked in Linear rather than inferred from the product contract.
+
 ## Repository
 
 https://github.com/DJPajares/trove

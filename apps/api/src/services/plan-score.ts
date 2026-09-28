@@ -2,6 +2,11 @@ import { getPrismaClient, Prisma } from '@trove/db';
 import type { TripPlanScore } from '@trove/types';
 import { z } from 'zod';
 
+import {
+  readOwnedTripDestinationContext,
+  destinationContextRevision,
+  type OwnedContextPlace,
+} from './destination-context.js';
 import { tripPlanScoreRevision } from './plan-score-revision.js';
 import { oldestPlanScoreEvidenceAt, originalPlanScoreTime } from './plan-score-freshness.js';
 export { PLAN_SCORE_CACHE_TTL_MS } from './plan-score-freshness.js';
@@ -63,6 +68,7 @@ export type PlanScoreTripRecord = {
   /** Known public ratings keyed by Trip Place id; absent means no usable rating. */
   ratings: Map<string, number>;
   routes: Map<string, ItineraryDayRoutes>;
+  destinationContext?: import('@trove/types').TripDestinationContext;
 };
 
 function toRouteSegments(routes: ItineraryDayRoutes | undefined): PlanScoreRouteSegment[] {
@@ -278,6 +284,7 @@ export function buildPlanScoreFromEvaluations(input: {
   scheduledIds: string[];
   evaluatedAt?: Date;
   evidenceTimes?: readonly string[];
+  destinationContext?: import('@trove/types').TripDestinationContext;
 }): TripPlanScore {
   const generatedAt = (input.evaluatedAt ?? new Date()).toISOString();
   const evaluations = input.days;
@@ -323,6 +330,9 @@ export function buildPlanScoreFromEvaluations(input: {
     expiresAt: new Date(
       Math.min(
         Date.parse(generatedAt) + 24 * 60 * 60 * 1000,
+        ...(input.destinationContext?.expiresAt
+          ? [Date.parse(input.destinationContext.expiresAt)]
+          : []),
         ...(input.evidenceTimes ?? []).map((at) => Date.parse(at) + PLACE_EVIDENCE_TTL_MS),
       ),
     ).toISOString(),
@@ -343,6 +353,7 @@ export function buildTripPlanScore(
 ): TripPlanScore {
   return buildPlanScoreFromEvaluations({
     ...options,
+    destinationContext: record.destinationContext,
     days: record.days.map((day) => ({
       date: day.date,
       evaluation: evaluateDayRecord(day, record),
@@ -476,7 +487,7 @@ export const PLAN_SCORE_TRIP_INCLUDE = {
       },
     },
   },
-  destinations: true,
+  destinations: { include: { place: { include: { providerRefs: true } } } },
   reservations: {
     select: {
       transportDepartureLocalDate: true,
@@ -499,7 +510,7 @@ export const PLAN_SCORE_TRIP_INCLUDE = {
     },
   },
   tripPlaces: {
-    select: { id: true, placeId: true, place: { select: { providerRefs: true } }, priority: true },
+    select: { id: true, placeId: true, place: { include: { providerRefs: true } }, priority: true },
   },
 } as const;
 
@@ -534,11 +545,17 @@ export type PlanScoreTripRows = {
     planningContext?: unknown;
   }>;
   reservations: Parameters<typeof sameDayJourneyCommitment>[0][];
-  tripPlaces: Array<{ id: string; placeId?: string; priority: string | null }>;
+  tripPlaces: Array<{
+    id: string;
+    placeId?: string;
+    priority: string | null;
+    place?: OwnedContextPlace;
+  }>;
 };
 
 /** The single reading of a trip that both the digest and the scorer are built on. */
-export function readPlanScoreInputs(trip: PlanScoreTripRows) {
+export function readPlanScoreInputs(trip: PlanScoreTripRows, now = new Date()) {
+  const destinationContext = readOwnedTripDestinationContext(trip, now);
   const commitments = trip.reservations.flatMap((reservation) => {
     const commitment = sameDayJourneyCommitment(reservation);
     return commitment ? [commitment] : [];
@@ -562,8 +579,10 @@ export function readPlanScoreInputs(trip: PlanScoreTripRows) {
   return {
     days,
     mustGoTripPlaceIds,
+    destinationContext,
     revision: tripPlanScoreRevision({
       context: {
+        destinationContext: destinationContextRevision(destinationContext),
         preferences: readTripPlanningPreferences(trip.planningPreferences),
         days: trip.itineraryDays.map((day) => readDayPlanningContext(day.planningContext)),
         endDate: trip.endDate,
@@ -648,7 +667,12 @@ export async function getTripPlanScore(
   if (!trip) throw new ItineraryNotFoundError('trip_not_found');
 
   // Input and evidence revisions cover itinerary edits and ordinary refreshes.
-  const { days: dayRecords, mustGoTripPlaceIds, revision } = readPlanScoreInputs(trip);
+  const {
+    days: dayRecords,
+    mustGoTripPlaceIds,
+    revision,
+    destinationContext,
+  } = readPlanScoreInputs(trip, now);
 
   const resolvePlace = cachedPlaceResolver(now);
   // Evidence (rating/hours) only ever feeds a day's factors, scoped to the trip
@@ -700,6 +724,7 @@ export async function getTripPlanScore(
   const result = buildTripPlanScore(
     {
       days: dayRecords,
+      destinationContext,
       hours: placeEvidence.hours,
       mustGoTripPlaceIds,
       ratings: placeEvidence.ratings,
@@ -722,6 +747,7 @@ export async function getTripPlanScore(
   result.expiresAt = new Date(
     Math.min(
       evaluatedAt.getTime() + 24 * 60 * 60 * 1000,
+      ...(destinationContext.expiresAt ? [Date.parse(destinationContext.expiresAt)] : []),
       ...placeEvidence.evidenceTimes.map((at) => Date.parse(at) + PLACE_EVIDENCE_TTL_MS),
       ...routeResults.flatMap(({ routes }) =>
         routes.segments.flatMap((segment) =>

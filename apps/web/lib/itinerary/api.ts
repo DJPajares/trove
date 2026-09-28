@@ -1,4 +1,4 @@
-import type { DayPlanningContext } from '@trove/types';
+import type { DayPlanningContext, TripDestinationContext } from '@trove/types';
 import { resolveOfflineTripModeLeg } from '@/lib/itinerary/trip-mode-leg';
 import type { PlaceSnapshot } from '@/lib/saved/api';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
@@ -169,6 +169,7 @@ export type ItineraryDayTimeSuggestions = {
 };
 
 export type Itinerary = {
+  destinationContext?: TripDestinationContext;
   days: ItineraryDay[];
   trip: {
     endDate: string;

@@ -2670,5 +2670,22 @@
     "cancel": "Cancel",
     "save": "Save",
     "saving": "Saving…"
+  },
+  "destinationContext": {
+    "title": "Destination context",
+    "description": "Ideas and timing to consider alongside your interests. Seasonal patterns describe typical conditions; check individual venues before fixing a timed visit.",
+    "allYear": "Applies year round",
+    "seasonWindow": "Typical season: {start}–{end}",
+    "dateWindow": "Applies: {start}–{end}",
+    "dates": "Holiday dates in this view: {dates}",
+    "fact": "Sourced fact",
+    "tendency": "Typical pattern",
+    "scope": "Applies to: {area}",
+    "source": "Official source",
+    "reviewed": "Reviewed {date}",
+    "expires": "Expires {date}",
+    "reviewDue": "Review due {date}",
+    "emptyTrip": "No reviewed destination context is available for these places and dates.",
+    "emptyDay": "No reviewed destination context is available for this day’s places and dates."
   }
 }

@@ -817,7 +817,7 @@ The provider remains the source for mutable data such as:
 - website,
 - provider categories.
 
-This evidence is resolved on demand for a surface or calculation that needs it, not persisted as a permanent Trove-owned dataset. Any transient reuse must remain within provider permissions and retain its original age. Stored derived assessments follow their own expiry rules and must not become a back door for retaining raw mutable evidence.
+This evidence is resolved on demand for a normal Place/itinerary surface or planning acquisition flow that needs it, not persisted as a permanent Trove-owned dataset. Plan Scoring only reads evidence already available under Section 29.5 and never triggers acquisition. Any transient reuse must remain within provider permissions and retain its original age. Stored derived assessments follow their own expiry rules and must not become a back door for retaining raw mutable evidence.
 
 Trove-owned data includes:
 
@@ -868,7 +868,7 @@ If future provider ID changes create possible duplicates, use careful matching/m
 
 ## 11.8 Provider Cost and Attribution Boundaries
 
-- Request the least expensive fields sufficient for the surface or calculation. Identity/location-only use must not fetch hours, ratings, or photos merely because a richer response is available.
+- Request the least expensive fields sufficient for the normal surface or acquisition flow; scoring is not an acquisition trigger. Identity/location-only use must not fetch hours, ratings, or photos merely because a richer response is available.
 - Bound fan-out across trips, days, and repeated Places. Reuse permitted evidence within one operation; navigation and background refresh must not repeatedly purchase the same data without a product need.
 - Preserve source/freshness metadata and required attribution. Editorial imagery follows Section 4.8 separately; its hidden credit captions do not waive attribution requirements for functional provider data.
 - Provider outages, quotas, or kill switches must degrade enrichment without preventing access to Trove-owned plans or manual editing. Public itinerary reads never dispatch billable provider requests.
@@ -1103,7 +1103,7 @@ Users must not be forced to classify item type upfront.
 The itinerary is the primary planning workspace and should stay readable before it is capable.
 
 - A day states its date once. The day picker identifies the day being chosen; the day heading names the day being planned.
-- Day configuration — resolved timezone, accommodation base, and Daily Base — is available on request rather than displayed permanently. It describes how the day resolves, not what is planned in it.
+- Day configuration — resolved timezone, accommodation base, Daily Base, and optional day intent/availability (Section 29.6) — is available on request rather than displayed permanently. It describes how the day resolves, not what is planned in it.
 - A day note is optional content, shown quietly when written and never presented as a field the day is waiting on.
 - Item actions are grouped in a single per-item menu rather than rendered as a permanent row of controls. The menu behaves identically on every form factor, so no action depends on hover.
 - The day map frames the day's own locations. Other trip Places stay visible as markers because knowing what is nearby is useful, but they must not drag the viewport away from where the traveller is actually going. A day with nothing located yet frames everything instead of framing nothing.
@@ -1840,188 +1840,168 @@ A Ready indicator must not claim data is current when provider-cached content is
 
 # 29. Plan Score
 
-Plan Score is part of the current product and depends on stable planning and route behavior.
+Plan Score answers: **Is this itinerary realistic, efficient, comfortable, enjoyable, and a good use of the traveller's time?** It provides a canonical **0–100** assessment per day and for the overall trip when enough evidence exists. It evaluates a plan, not a promise of enjoyment or the traveller's later Experience Rating.
 
-Scale:
+Scoring and explanations are deterministic and advisory. They do not require an LLM and never automatically edit an itinerary. AI drafts and ordinary trips use the same evaluator. The approved redesign below replaces the previous logistics-heavy rubric; implementation and delivery status remain in Linear rather than changing this contract to match shipped behavior.
 
-**0–100**
+## 29.1 Daily Categories and Calibration
 
-Available:
+Expose at most these five daily categories. Each has a 0–100 score when evaluable, or an explicit **unknown** / **not applicable** state. Internal weights and formulas are versioned product calibration, not normal user-facing UI.
 
-- per day,
-- overall trip.
-
-Plan Score is deterministic and advisory. It does not require an LLM for MVP scoring or explanations and never automatically edits the itinerary.
-
-## 29.1 Required MVP Factors
-
-Each factor produces an internal **0–100 factor score** when applicable/evaluable, or an explicit `unknown` / `not applicable` state.
-
-Required MVP factor groups and base weights:
-
-These weights are the initial MVP scoring contract used for implementation and regression testing. They are internal product logic and are not exposed as a formula in normal user-facing UI. Any later recalibration must preserve the product invariants in this section and be covered by the Plan Score calibration/regression task.
-
-| Factor | Base weight | Notes |
+| Category | Base weight | Evaluation |
 | --- | ---: | --- |
-| Feasibility | 35% | Includes timing conflicts, opening-hours evidence, reservation/logistics conflicts, and impossible/tight transitions. |
-| Travel effort | 25% | Uses known route duration/distance and relevant day/start context. |
-| Pace / buffer | 15% | Evaluates whether known activity/travel timing is overpacked or has reasonable breathing room. |
-| Route efficiency / backtracking | 10% | Evaluates meaningful geographic inefficiency without automatically optimizing order. |
-| Must Go priority fit | 10% | Trip-scoped factor used only in the overall score; it is not assigned arbitrarily to individual days. |
-| Place quality | 5% | Supporting provider-backed quality signal only; small rating differences must never outweigh feasibility/travel effort. |
+| Feasibility & Resilience | 35% | Whether the whole schedule works, including operating hours, durations, reservations, connections, buffers, and sensitivity to delays. |
+| Route & Time Efficiency | 20% | Local travel burden, selected transport mode, geographic clustering, unnecessary movement, and demonstrably avoidable travel. |
+| Pace & Comfort | 20% | Preference-aware activity/transport load, walking, downtime, stop fragmentation, and accumulated fatigue. |
+| Experience Quality | 15% | Interest fit, distinctive value for time, date/time suitability, and supporting public-rating evidence. |
+| Plan Composition | 10% | Coherent flow, purposeful variety, area use, and relevant opportunities within available time. |
 
-Opening hours and timing conflicts are evidence inside **Feasibility**, not separate independently weighted factors.
+The day score is the weighted mean of evaluable applicable categories, followed by feasibility caps. Renormalize unavailable/inapplicable weights rather than inserting zero. Missing evidence affects coverage/confidence under 29.2. A sparse category must not claim complete coverage because a single signal is known.
 
-Provider-backed **better alternatives are recommendation outputs, not an additional weighted factor**.
+Assign each underlying problem one primary category. Other categories may explain consequences but must not deduct again for the same event. For example, a missed reservation belongs to feasibility; general walking load remains a distinct comfort concern. A feasibility cap bounds the result, rather than being an additional additive deduction.
 
-Must Go priority fit is always `not applicable` to day scores. For travel-heavy days, other factors that genuinely do not apply (for example Place quality) are also marked `not applicable`; remaining applicable weights are renormalized rather than penalizing the day.
+### Feasibility & Resilience
 
-### Initial Factor-Score Rubrics
+Evaluate the complete ordered schedule by propagating earliest/latest workable times. Independently workable adjacent pairs are insufficient if they cannot all work together. Respect exact commitments, flexible estimates, dayparts, visit durations, operating windows, available time, and required travel. Do not automatically reorder the plan.
 
-These are the authoritative initial MVP calibration rules. A factor is evaluable only when at least one required evidence point for its rubric exists. A coarse daypart counts as such an evidence point only where it actually constrains the rule being evaluated; a whole-day range such as Anytime constrains nothing and is not evidence. Missing inputs remain `unknown`; they are not scored as zero. All calculated factor scores are clamped to **0–100**.
+Use instants and the relevant location's timezone for cross-day journeys, overnight opening windows, date changes, and daylight-saving transitions. A reservation linked to an itinerary item represents one commitment, not two conflicting copies. Consider standalone timed reservations as well as linked ones. An unknown arrival time remains unknown rather than a zero-duration journey.
 
-**Feasibility** starts at 100. Each distinct known conflict applies only its single highest applicable deduction:
+Start at 100 and apply each distinct known conflict's highest deduction:
 
-- 50 points: a hard conflict, including overlapping fixed commitments, a planned visit entirely outside known opening hours, or a required route that arrives more than 30 minutes after a fixed start;
-- 25 points: a material conflict, including arrival 1–30 minutes after a fixed start, a planned visit partially outside known opening hours, or a coarse daypart that no placement within it can satisfy after required travel;
-- 10 points: a tight but still possible transition with less than 15 minutes of positive buffer after required travel.
+- **50** for a hard conflict: overlapping verified fixed commitments, a visit entirely outside verified applicable hours, or required arrival more than 30 minutes after a fixed start;
+- **25** for a material conflict: arrival 1–30 minutes late, a visit partially outside applicable hours, or an unsatisfiable movable daypart;
+- **10** for a tight but possible transition with less than 15 minutes of remaining buffer.
 
-The same underlying conflict must not be deducted more than once merely because it is detected from multiple evidence sources.
+Clamp category scores to 0–100. Evaluate flexible dayparts at their best feasible placement across the complete schedule; Anytime alone constrains nothing. A movable daypart remains a material scheduling conflict, however large the shortfall, unless an independent verified closure makes the visit impossible.
 
-A coarse daypart is evaluated at its best case: a conflict is recorded only when no placement anywhere inside it works. An unsatisfiable daypart stays material however large the shortfall, because the traveller can move a stated preference; the 50-point band is reserved for constraints they cannot move, such as a fixed start or a closed door. A daypart whose every placement falls outside known opening hours is still a hard conflict on those grounds, since the closure is what makes it impossible.
+The final daily score is capped at **59** for one verified hard conflict, **39** for multiple independent verified hard conflicts, or **74** for a material conflict when no harder cap applies. High ratings cannot rescue a known unworkable day. Estimated durations, generic preparation buffers, seasonal tendencies, and uncertain hours may support qualified risks, but cannot establish a verified hard conflict or hard cap.
 
-**Travel effort** uses total known local/base-to-item/inter-item route time for the day. Structured long-distance flight/train/ferry journey duration is evaluated as logistics/feasibility rather than local travel effort.
+Flight distance is never penalized. Airport access, preparation, connections, occupied travel time, and arrival scheduling matter. Long-distance flight/train/ferry travel is logistics and comfort evidence, not local route burden.
 
-A zero-minute total is evaluable only when all required local/base/inter-item segments are known and their total is actually zero. Missing route segments make this factor `unknown` rather than producing a zero-minute/100 score.
+### Route & Time Efficiency
 
-| Known local route time | Score |
+Combine local travel burden and avoidable movement at **60/40** within the category, renormalized when a signal is unknown. Burden includes base-to-item, inter-item, and return-to-base local legs according to the itinerary's established routing semantics.
+
+| Known local travel minutes | Burden score |
 | --- | ---: |
-| 0–60 minutes | 100 |
-| 61–120 minutes | 85 |
-| 121–180 minutes | 70 |
-| 181–240 minutes | 50 |
-| More than 240 minutes | 30 |
+| 0–60 | 100 |
+| More than 60–120 | 85 |
+| More than 120–180 | 70 |
+| More than 180–240 | 50 |
+| More than 240 | 30 |
 
-**Pace / buffer** uses the lower score produced by the applicable rules below:
+Zero travel is evaluable only when all required local segments are actually known to total zero. Partial routes cannot masquerade as a complete low-burden day. A day containing only long-distance transport has no local travel burden.
 
-- For two or more items with a known or daypart-constrained start, use the smallest positive buffer remaining after activity duration and required travel, measuring a daypart at its best case: at least 30 minutes = 100; 15–29 = 80; 5–14 = 60; 0–4 = 40; negative buffer = 20.
-- When known activity durations plus local travel describe most of the day: up to 8 hours = 100; more than 8–10 hours = 75; more than 10–12 hours = 50; more than 12 hours = 25.
-- If neither timing/duration rule can be evaluated, the factor is `unknown`.
+Compare alternative orders only when already available, comparable routes establish an improvement compatible with fixed commitments and opening windows. The initial planned/best-known duration ratios score **100/80/60/40/20** at **≤1.10 / ≤1.25 / ≤1.50 / ≤2.00 / >2.00**. Having only the planned route does not establish optimality. Never acquire a route matrix for scoring.
 
-**Route efficiency / backtracking** applies when at least three stops/base points are routable. Compare planned route duration with the best available duration for the same stops while respecting fixed-order commitments:
+Geographic clustering may provide a labeled estimate from permitted coordinates; it cannot claim road/transit time savings or prove a connection impossible. Keep estimated clustering separate from validated route comparisons. Do not propose a mode change unless available evidence supports that alternative.
 
-| Planned ÷ best available route duration | Score |
-| --- | ---: |
-| Up to 1.10 | 100 |
-| More than 1.10–1.25 | 80 |
-| More than 1.25–1.50 | 60 |
-| More than 1.50–2.00 | 40 |
-| More than 2.00 | 20 |
+### Pace & Comfort
 
-This comparison is advisory and must not automatically reorder the itinerary.
+Initial active-load targets are **6/8/10 hours** for relaxed/balanced/packed travel, constrained by known available time. These are comfort targets, not invented opening hours or exact daily start times.
 
-**Must Go priority fit** is trip-scoped rather than assigned arbitrarily to individual days. It is `not applicable` to day scores. When at least one Trip Place is marked Must Go, the trip-level score is:
+Calculate load from activity duration and transport effort. Initial transport multipliers are **1.25 walking**, **1.0 driving**, **0.75 local transit**, and **0.5 seated long-distance travel**. Unknown activity intensity uses a neutral weight with reduced confidence. Do not count the same journey as both an activity and a transport leg. A travel leg's distance alone does not add fatigue.
 
-`100 × distinct Must Go Trip Places scheduled in the itinerary ÷ total distinct Must Go Trip Places`
+Score load continuously: **100** at or below the target, **70** at 1.25 times the target, **40** at 1.5 times, and **0** at twice the target; interpolate between anchors and clamp. An unknown required duration does not become zero: evaluate known lower-bound overload only where it proves a concern, otherwise withhold that signal.
 
-**Place quality** uses the mean score of provider-backed places with an available current/permitted public rating:
+Also consider continuous activity blocks, known walking distance, stop fragmentation, natural free intervals, and recovery. Occupied transport is not free time. Neither meal stops nor explicit break stops are required. Carry incoming fatigue into the day using 29.3; a rest day can reduce fatigue without filling its itinerary.
 
-| Public rating | Place score |
-| --- | ---: |
-| 4.50–5.00 | 100 |
-| 4.00–4.49 | 85 |
-| 3.50–3.99 | 70 |
-| 3.00–3.49 | 55 |
-| Below 3.00 | 40 |
+### Experience Quality
 
-Places without usable rating evidence are excluded rather than penalized. Place quality remains capped at its 5% weight.
+Initial internal subweights are **40% interest fit**, **25% distinctive value for time**, **20% date/time suitability**, and **15% public-rating signal**. Unavailable signals remain unknown; ratings alone must not support a confident claim that a place suits the traveller.
 
-## 29.2 Score, Completeness, and Confidence
+Interpolate rating scores across these initial anchors: rating **0/3/3.5/4/4.5/5** maps to **40/55/70/85/100/100**. Review count affects evidence strength using **n / (n + 50)**, not a popularity bonus or an automatic quality penalty. Missing counts reduce rating confidence; missing ratings exclude that signal. Unrated and Custom Places are not inherently inferior.
 
-For evaluable factors, the day score is the weighted average of factor scores using the applicable base weights above, renormalized across factors that are both applicable and evaluable.
+Date/time suitability includes time of day, weekday/weekend, public holidays, peak/shoulder/off-season patterns, seasonal access/closures, scenery/activities, daylight, weather, and crowding only where applicable reliable evidence exists. There is no blanket weekend, rain-season, or off-season deduction. Forecasts apply only within their valid date/location horizon; seasonal patterns are not exact forecasts. Calculate daylight locally from permitted coordinates and dates.
 
-**Completeness** and **confidence** are separate internal 0–100 values:
+### Plan Composition and Destination Utilization
 
-- Completeness = `100 × sum of base weights for evaluable day factors ÷ sum of base weights for applicable day factors`. Must Go is excluded because it is trip-scoped. A factor is evaluable only under its rubric in Section 29.1.
-- Confidence = reliability/freshness of the evidence used for the evaluated factors.
+Evaluate coherent flow, purposeful variety, and use of available opportunities at **30/30/40**. A Focused day may repeat a theme; Rest and Transit days have no sightseeing quota.
 
-For the initial MVP, evaluated evidence receives these reliability values:
+Daily utilization asks: **Given this area, date, season, traveller interests, and available time, are these strong choices?** Trip utilization asks the corresponding question across the trip's destinations, geography, dates, duration, and available time. Complementary days may collectively satisfy interests rather than repeating all themes every day.
 
-- 100: explicit user-owned timing/reservation data or fresh provider/route evidence;
-- 75: permitted cached provider/route evidence that is not stale;
-- 50: an `AI_ESTIMATED` duration, an AI-estimated exact start, another normal/estimated duration, or coarse daypart evidence;
-- 25: stale evidence that remains safe to use with a visible stale qualification.
+Lower utilization only for a demonstrable relevant opportunity gap or avoidable poor use of available time. Recommendations without enough feasibility evidence remain advisory. Irrelevant famous attractions are excluded, not a checklist the traveller must complete. More stops or less downtime do not inherently improve composition. Must Go coverage belongs within trip destination utilization, not a sixth category or separate bonus. Better-alternative suggestions are recommendation outputs, not another weighted factor.
 
-An `AI_ESTIMATED` duration or exact start stays movable and at the estimated-evidence reliability level until the traveller edits that value. The edit promotes the changed value's provenance to `USER_OWNED`, after which it receives the user-owned reliability level where it is used. Merely applying an AI draft does not promote either estimate.
+## 29.2 Quality, Coverage, and Confidence
 
-Evidence too stale or incomplete to support the factor is `unknown` and affects completeness rather than receiving a misleading confidence value. Factor confidence is the mean reliability of the evidence used by that factor. Day confidence is the applicable-factor-weighted mean of evaluated factor confidence values.
+Quality measures the assessed plan. **Coverage/completeness** measures how much applicable evidence was evaluated. **Confidence** measures reliability of that evidence. They are separate 0–100 concepts; missing/uncertain data generally reduces coverage/confidence, not quality.
 
-Their user-facing presentation (percentage, label, meter, etc.) is a design decision, but the semantics above are authoritative.
+Track coverage at signal level using versioned applicable signal weights, then aggregate through category weights. Unknown signals remain in the applicable denominator; genuinely inapplicable signals are removed. Factor quality renormalizes across evaluated signals. Repeated evidence references do not increase confidence merely by being copied.
 
-A numeric day Plan Score is shown only when:
+Initial reliability values are **100** for explicit user-owned evidence or fresh authoritative evidence, **75** for current permitted cached evidence, **50** for estimates/dayparts/default assumptions, and **25** for stale evidence only where it is still permitted and safe to qualify. Confidence is the evidence-reliability mean within a signal, then the evaluated signal/category-weighted mean. Rating evidence additionally reflects review-count strength. Expired or unusable evidence is unknown, not confidently stale.
 
-- completeness is at least **60%**, and
-- at least one core factor (**Feasibility** or **Travel effort**) is applicable and evaluable.
+An AI-estimated exact start or duration remains movable/estimated until the traveller edits that value; Apply does not promote its provenance. Explicitly selected interests are stronger evidence than inferred ones. Merely choosing a Place does not establish all of the traveller's interests.
 
-Otherwise Trove withholds the number and shows `Not enough information yet` or equivalent. Missing, stale, unknown, or not-applicable evidence must never be treated as a zero/poor score merely to reach the threshold.
+Show a daily number only with **at least 60% applicable signal coverage** and an evaluated feasibility or route core signal. Explicit Rest days may instead use applicable comfort/composition evidence; a blank unspecified day is not an intentional rest day. Otherwise withhold the number with concise wording such as `Not enough information yet`. Verified actionable conflicts remain visible even without a number.
 
-## 29.3 Overall Trip Score
+Show a trip number only when scorable days cover **at least 60%** of trip days, or 60% of explicitly known available time when all applicable days have that information. Do not selectively drop unknown availability from the denominator. Show assessed coverage in details. No scorable days means no trip number, even if Must Go coverage is known.
 
-The overall trip score uses only days that meet the numeric-score threshold above.
+The numeric score is canonical; optional verdict bands are presentation only. Use unrounded intermediate values and round displayed scores half-up to whole numbers. Identical versioned inputs and evidence must produce identical results.
 
-First calculate the completeness-weighted mean of scorable day scores, with each day's contribution weighted by `day completeness / 100`, so low-information days cannot have the same influence as well-evidenced days.
+## 29.3 Overall Trip Score and Accumulated Fatigue
 
-- If Must Go priority fit is `not applicable`, that completeness-weighted day mean is the overall trip score.
-- If Must Go priority fit applies, the overall trip score is **90%** of the completeness-weighted day mean plus **10%** of the trip-level Must Go priority-fit score.
-- If no trip day is scorable, the overall trip score is withheld even if Must Go priority fit can be calculated.
+The trip score considers daily quality, destination use, variety, seasonal opportunities, sustained load, and unusually weak days. It is not merely an average of the displayed day scores.
 
-Repeated evaluation of identical evidence must produce identical results.
+`Trip = weighted(65% daily quality, 15% destination utilization, 10% variety/coverage, 10% seasonal fit) − fatigue adjustment − weak-day adjustment`
 
-The **numeric 0–100 score is canonical** for MVP. User-facing qualitative labels/bands are optional presentation and must not introduce a second scoring meaning or alter calculation semantics.
+Renormalize unknown/inapplicable components rather than substituting zero. Daily quality is the available-time-weighted mean of scorable **intrinsic** daily scores (including feasibility caps), before incoming fatigue. Use equal day weights when the applicable available-time information is incomplete. Displayed daily scores include incoming fatigue; using intrinsic scores here prevents charging that incoming fatigue twice.
 
-Calculations use unrounded intermediate values. Displayed factor/day/overall scores are rounded to the nearest whole number using standard half-up rounding.
+For known load ratios, propagate debt chronologically, starting at zero:
+
+`debtNext = clamp(0.5 × debt + max(0, loadRatio − 0.9) − 0.5 × max(0, 0.7 − loadRatio), 0, 1)`
+
+An unknown day does not count as recovery: carry the prior debt without decay and reduce fatigue confidence. An explicit rest day is recovery only to the extent known commitments and available time support it. Incoming debt reduces daily Pace & Comfort by **20 × debt** points; the trip fatigue adjustment is **15 × mean incoming debt** over assessed days. Both remain bounded and explained as planning estimates rather than medical claims.
+
+The weak-day adjustment is **min(10, 0.2 × max(0, dailyMean − lowerQuintileScore))**. Use the nearest-rank 20th percentile of scorable intrinsic day scores (ascending rank `ceil(0.2 × count)`, minimum one), so small trips have deterministic behavior too.
+
+Any verified hard-conflict day caps the trip at **84**. Hard conflicts affecting at least **20% of assessed days**, or an indispensable inter-destination connection, cap it at **69**. Verified conflicts still constrain an otherwise publishable trip assessment when their day lacks enough evidence for its own number. Unknown days do not dilute the conflict proportion. Clamp the final trip score to 0–100.
 
 ## 29.4 Explanations and Alternatives
 
-Explanations are generated as concise **What works** and **Worth improving** guidance, with issues prioritized in this order:
+Explanations answer what works, what may cause problems, what to improve, whether timing/season helps, and why the score changed. Prioritize verified feasibility problems, then travel/comfort, then experience/composition opportunities.
 
-1. feasibility/timing conflicts,
-2. travel effort,
-3. pace/buffer,
-4. route efficiency,
-5. Must Go fit,
-6. supporting Place quality.
+Preserve progressive disclosure: the collapsed panel shows a compact score/verdict and the single highest-priority action. Expanded details show the five category scores/states, coverage/confidence, strongest aspects, remaining issues, relevant timing context, and evidence dates. Where no result exists for a scope, omit the panel rather than rendering an empty report.
 
-That ordering governs which explanation matters most; it does not mean the full set is displayed. Presentation follows a progressive-disclosure model. By default Trove answers only two questions: does this look good, and what should I change. That is a short plain-language verdict derived from the numeric score — shown together with a compact score badge — plus the single highest-priority entry from the ordering above, with its suggested action. The full "N out of 100" score text, the confidence and completeness meters, the remaining explanations, and — at day scope — a compact per-factor status summary appear only when the user explicitly asks for the detail.
+Return stable reason codes, localization keys, affected item/day references, severity, and suggested actions. Explain changes using changed planning inputs, changed evidence, or a rubric change; do not compare incompatible assessments as if they were the same measurement. Do not persist expired raw provider values in explanation parameters or historical score comparisons.
 
-Qualitative verdict wording is display-only. It is derived from the canonical numeric score and never feeds back into calculation, consistent with Section 29.3.
+No suggestion silently adds, replaces, removes, or reorders anything. Alternatives declare their action:
 
-Where the numeric score is withheld under Section 29.2, Trove says so in one line and stops. It does not enumerate what it could not determine.
+- **Replace** preserves compatible item metadata (date/time/daypart/duration/notes/priority); incompatible linked data requires review.
+- **Add** names the target day/position or Unscheduled location and creates an item only after confirmation.
 
-Where there is no result for the scope at all — a day the current calculation does not cover — the surface omits Plan Score rather than presenting an empty one. Nothing is a quieter answer than a panel explaining its own absence.
+Trove may prefill an editable field with an evidence-derived deterministic proposal the traveller requested. Nothing changes until Save, and abandoning the edit discards the proposal. Do not invent a default when evidence cannot support a suggestion.
 
-Better-alternative suggestions must preserve the user's original itinerary until the user explicitly confirms an action. Every suggestion must declare its action type:
+## 29.5 Shared Evidence, Recalculation, and Boundaries
 
-- **Replace** — on confirmation, replace the targeted Place reference on the existing itinerary item while preserving compatible item metadata (date/time/daypart/duration/notes/priority); incompatible linked data must be reviewed rather than silently discarded.
-- **Add** — on confirmation, create a new itinerary item in the suggested day/position or Unscheduled location shown to the user.
+**Scoring never makes a provider request**, directly or through a cache service that refreshes on a miss. Opening/retrying a score, itinerary edits, expiry, missing routes, and cold caches must all result in zero external requests from scoring.
 
-No alternative may silently add, replace, remove, or reorder itinerary items.
+The shared lifecycle is: **normal itinerary acquisition → normalization and permitted storage/reuse → read-only scoring**. Normal route rendering, weather display, opened rich Place details, and AI generation acquire evidence for their own product purposes. Scoring consumes it; it never acquires a route matrix, nearby-place search, weather forecast, or richer Place response to fill a scoring gap.
 
-Trove may prefill an editable field with a deterministic proposal the user explicitly asked for, such as a suggested start time. A prefilled value changes nothing until the user saves, and abandoning the edit discards it. Trove proposes a value only when it has evidence to derive one from, and says it cannot rather than offering a default dressed as a suggestion.
+Rich Place details show rating/review count and applicable hours from one response. Include these fields in existing rich AI responses too, without widening identity/location-only masks. Dedupe concurrent requests and repeated Places across days. Provider failures must not block manual planning.
 
-## 29.5 Recalculation and Boundaries
+The evaluator accepts normalized evidence and read-only repositories; it cannot import provider factories or refresh-on-miss services. Evidence carries provenance, original acquisition time, applicable dates/location, attribution, and field-specific expiry. The 30-day internal snapshot ceiling is not blanket permission: persist only fields whose provider permits it, use unsupported mutable fields only within the permitted operation, and make expired/unavailable evidence unknown. Reuse never renews original age. Stored scores must not become raw evidence caches.
 
-Relevant itinerary/order/time/place/route/reservation/provider-evidence changes invalidate/recalculate affected results.
+Fingerprint every scoring input: itinerary/order/times/places/reservations/routes, trip preferences, day intent/availability, destinations/dates, evidence revisions, and curated-context/rubric versions. Changes invalidate affected days and all subsequent fatigue state as well as the trip result. Cache assessments until the earliest relevant evidence deadline, with a **24-hour maximum**. Expiry triggers cache-only recomputation, never acquisition; qualify a dated assessment or withhold its number when current evidence is insufficient.
 
-A computed result is stored and reused. It is keyed by a digest of every Trove-owned input the rubric reads, so an itinerary, order, timing, place, reservation or Must Go change invalidates it without a separate trigger. Provider evidence cannot be keyed that way — opening hours and ratings move under a plan nobody edited, and are never persisted — so a stored result also expires after at most 24 hours. A rubric change invalidates every stored result.
+AI review retains its generation-time assessment without buying new evidence when reopened. Regeneration acquires evidence only within the ordinary generation cap. Apply preserves original timestamps and reuses a score only for equivalent scoring inputs. Do not turn a derived score back into normalized evidence.
 
-Age is measured from the original evaluation/evidence timestamps, never from a cache read or AI Apply. An expired result is not a current score: when online, recompute on the next request using permitted fresh evidence; when unavailable, show a dated stale assessment or withhold the number. This is demand-driven expiry, not a requirement to call providers daily for every idle trip.
+The shared API/types contract includes versioned category outcomes, trip components, caps, coverage/confidence, reason codes, and original evidence timestamps. Version evaluator and payload changes together; incompatible legacy assessments are ignored. Keep weights and raw evidence out of product responses.
 
-An immutable AI draft retains its original generation-time assessment without buying new evidence merely because review is reopened. Once that assessment expires, it is labelled stale rather than current. Regenerate may produce new evidence within the normal run cap; after Apply the ordinary trip's recalculation rules apply. Reuse across Apply preserves timestamps and requires matching scoring inputs.
+Plan Score remains independent of lifecycle, manual Ready status, Trip Mode/Preview availability, and Experience Rating. Retain the administrative score-disable control independently from provider availability. Do not introduce traffic-aware replanning, disruption intelligence, or Smart Cost Forecasting as dependencies.
 
-Plan Score remains independent from lifecycle, manual Ready status, Trip Mode availability, Preview availability, and Experience Rating.
+## 29.6 Traveller Intent and Reusable Destination Context
 
-Plan Score does not depend on AI: the rubric, weights and evidence rules are the same wherever it is computed. An AI-generated draft is scored from the evidence its own generation already fetched, through the shared evaluator, rather than by a second scoring system. MVP Plan Score must not depend on traffic-aware replanning, disruption-intelligence features, or Smart Cost Forecasting.
+Store optional **trip-level** interests and relaxed/balanced/packed pace, editable for manual and AI-created trips. Default pace to balanced with disclosed estimated provenance; do not fabricate interests. Preserve explicit AI-request preferences on Apply. Use a controlled interest taxonomy with localized labels, retaining unmatched free text without claiming deterministic matches. No Profile inheritance or onboarding questionnaire is required by this change.
+
+A day may optionally declare **Explore, Focused, Rest, or Transit** intent and a local availability window. Missing intent remains unknown; infer Transit only from structured journey evidence. These controls belong in contextual day configuration, not mandatory creation. Generic structured transport departure/arrival instants and zones support non-flight journeys; reuse existing authoritative flight fields and never invent missing arrival times.
+
+Provide reviewed, versioned destination context shared by the itinerary's optional Destination context section, AI planning, and scoring. Initial curated coverage is **Singapore, Tokyo, and Kyoto**. All other destinations remain usable with unknown context and appropriately reduced confidence.
+
+Context records cover experience themes/areas, relevant seasonal opportunities, holidays, access/closures, demand patterns, and date/time suitability. Every record has a source URL, geographic scope, applicability range, review date, expiry, and certainty. Use concise authored facts from official tourism, government holiday, meteorological, and venue sources; no copied provider dataset, runtime research, or new context provider.
+
+General records require review every **90 days**. Dated events and closures expire at their stated boundaries. Expired/unmatched records cease affecting scores. Exact closures require date-specific authoritative evidence; peak-season or crowd tendencies cannot imply a particular venue is closed, a connection impossible, or a specific date crowded. Sources and validity dates remain inspectable in the planning context.
+
+Calibration is an initial reproducible product judgment, not a scientifically measured prediction of enjoyment. Changes require an explicit versioned contract update and regression evidence covering realistic scenarios, missing evidence, preference changes, and provider-cost invariants.
 
 ---
 

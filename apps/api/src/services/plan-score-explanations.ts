@@ -1,4 +1,17 @@
 import type {
+  PlanScoreExplanation,
+  PlanScoreExplanationFactor,
+  PlanScoreExplanationGroups,
+  PlanScoreSuggestedAction,
+} from '@trove/types';
+export type {
+  PlanScoreExplanation,
+  PlanScoreExplanationFactor,
+  PlanScoreExplanationGroups,
+  PlanScoreSuggestedAction,
+} from '@trove/types';
+
+import type {
   PlanScoreAlternative,
   PlanScoreAlternativeAction,
   PlanScoreConflict,
@@ -9,7 +22,6 @@ import type {
   PlanScoreTravelEffortEvaluation,
 } from './plan-score-factors.js';
 import type {
-  PlanScoreDayFactorId,
   PlanScoreDayResult,
   PlanScoreEvidence,
   PlanScoreFactorOutcome,
@@ -26,33 +38,6 @@ import type {
  * Suggestions are inert. `planReplacement` describes what a confirmed Replace
  * would carry over and what the traveller must review; nothing is applied here.
  */
-
-export type PlanScoreExplanationFactor = PlanScoreDayFactorId | 'MUST_GO_PRIORITY_FIT';
-
-/** Existing edit flows the UI can route to. Trove never applies these itself. */
-export type PlanScoreSuggestedAction =
-  | 'ADD_BUFFER'
-  | 'ADJUST_TIME'
-  | 'RECONSIDER_DETOUR'
-  | 'REORDER_MANUALLY'
-  | 'REVIEW_ALTERNATIVE'
-  | 'SCHEDULE_MUST_GO';
-
-export type PlanScoreExplanation = {
-  action: PlanScoreSuggestedAction | null;
-  factor: PlanScoreExplanationFactor;
-  /** Localization key under the `planScore` namespace. */
-  messageKey: string;
-  /** Itinerary items, Trip Places, or evidence points the message refers to. */
-  references: string[];
-  values: Record<string, number | string>;
-};
-
-export type PlanScoreExplanationGroups = {
-  uncertainty: PlanScoreExplanation[];
-  whatWorks: PlanScoreExplanation[];
-  worthImproving: PlanScoreExplanation[];
-};
 
 export type PlanScoreDayExplanationInput = {
   /** Recommendations only; they never change the itinerary. */

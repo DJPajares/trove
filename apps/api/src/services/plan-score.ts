@@ -1,4 +1,5 @@
 import { getPrismaClient, Prisma } from '@trove/db';
+import type { TripPlanScore } from '@trove/types';
 import { z } from 'zod';
 
 import { tripPlanScoreRevision } from './plan-score-revision.js';
@@ -23,11 +24,7 @@ import { createPlacesService } from './places-runtime.js';
 import type { PlacesService } from './places.js';
 import { createRoutesService } from './routes-runtime.js';
 import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
-import {
-  explainDay,
-  explainTrip,
-  type PlanScoreExplanationGroups,
-} from './plan-score-explanations.js';
+import { explainDay, explainTrip } from './plan-score-explanations.js';
 import {
   evaluateFeasibility,
   evaluateMustGoPriorityFit,
@@ -44,10 +41,7 @@ import {
   scoreTrip,
   toPlanScoreDayPayload,
   type PlanScoreDayInput,
-  type PlanScoreDayPayload,
-  type PlanScoreFactorOutcome,
   type PlanScoreFactorResult,
-  type PlanScoreTripWithheldReason,
 } from './plan-score-rules.js';
 
 /**
@@ -59,25 +53,7 @@ import {
  * matrix per day. It lowers completeness honestly instead of inventing evidence.
  */
 
-export type TripPlanScoreDay = PlanScoreDayPayload & {
-  date: string;
-  explanations: PlanScoreExplanationGroups;
-};
-
-export type TripPlanScore = {
-  days: TripPlanScoreDay[];
-  explanations: PlanScoreExplanationGroups;
-  /** Identity of the evidence this result came from, for cache validation. */
-  fingerprint: string;
-  generatedAt: string;
-  /** Oldest mutable evidence used by this assessment, never its cache-read time. */
-  evidenceAsOf?: string | null;
-  /** Rubric-versioned draft inputs, checked before adopting an AI assessment. */
-  sourceInputRevision?: string;
-  mustGoPriorityFit: PlanScoreFactorOutcome;
-  score: number | null;
-  withheldReasons: PlanScoreTripWithheldReason[];
-};
+export type { TripPlanScore, TripPlanScoreDay } from '@trove/types';
 
 /** The day shape is shared with the time suggester; see itinerary-day-evidence. */
 export type PlanScoreDayRecord = ItineraryDayRecord;

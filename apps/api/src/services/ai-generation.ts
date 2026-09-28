@@ -15,6 +15,7 @@ export const AI_GENERATION_ERROR_CODES = [
   'invalid_response',
   'provider_unavailable',
   'quota_exceeded',
+  'schedule_conflict',
   'timeout',
 ] as const;
 

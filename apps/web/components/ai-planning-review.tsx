@@ -42,6 +42,9 @@ import {
   activeAiPlanningAssumptions,
   aiPlanningAssumptionMessageValues,
   aiPlanningReviewPageState,
+  aiPlanningCountriesReviewed,
+  aiPlanningCountrySaveIsCurrent,
+  prepareAiPlanningCountriesForApply,
   appliedAiPlanningSession,
   buildAiPlanningReviewMapPoints,
   isAiPlanningSessionExpired,
@@ -119,6 +122,10 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   const [savingName, setSavingName] = useState(false);
   const [countries, setCountries] = useState<string[]>([]);
   const [savingCountries, setSavingCountries] = useState(false);
+  const [countrySaveInFlight, setCountrySaveInFlight] = useState(false);
+  const [countrySaveFailed, setCountrySaveFailed] = useState(false);
+  const countrySaveTimer = useRef<number | null>(null);
+  const countriesRef = useRef(countries);
   const [clock, setClock] = useState(() => Date.now());
   const sessionRef = useRef<AiPlanningSession | null>(null);
   const expired = Boolean(session && isAiPlanningSessionExpired(session, clock));
@@ -195,7 +202,9 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   const reviewedCountryKey = session?.reviewedCountries.join(',') ?? '';
   const suggestedCountryKey = session?.suggestedCountries.join(',') ?? '';
   useEffect(() => {
-    setCountries(expired || serverExpired ? [] : countrySeed);
+    const seeded = expired || serverExpired ? [] : countrySeed;
+    countriesRef.current = seeded;
+    setCountries(seeded);
   }, [
     expired,
     serverExpired,
@@ -205,6 +214,20 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
     reviewedCountryKey,
     suggestedCountryKey,
   ]);
+  useEffect(() => {
+    if (session?.status === 'reviewing' && !expired && !serverExpired) return;
+    if (countrySaveTimer.current) window.clearTimeout(countrySaveTimer.current);
+    countrySaveTimer.current = null;
+    setSavingCountries(false);
+    setCountrySaveInFlight(false);
+    setCountrySaveFailed(false);
+  }, [expired, serverExpired, session?.draftRevision, session?.id, session?.status]);
+  useEffect(
+    () => () => {
+      if (countrySaveTimer.current) window.clearTimeout(countrySaveTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!session?.appliedTripId) return;
@@ -218,13 +241,11 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   const warningsAcknowledged =
     session?.warningAcknowledgement?.revision === session?.draftRevision &&
     (materialWarnings.length > 0 || session?.countryContextChanged);
-  const countriesConfirmed =
-    session?.countriesReviewedRevision === session?.draftRevision &&
-    countries.join(',') === session?.reviewedCountries.join(',');
+  const countriesConfirmed = session && aiPlanningCountriesReviewed(session, countries);
   const canApply = Boolean(
     reviewing &&
     draft &&
-    countriesConfirmed &&
+    countries.length > 0 &&
     !savingCountries &&
     (!(materialWarnings.length || session?.countryContextChanged) || warningsAcknowledged),
   );
@@ -317,20 +338,54 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
     }
   }
 
-  async function confirmCountries() {
-    if (!session || !reviewing || publishing || savingCountries || !countries.length) return;
+  async function persistCountries(
+    current: AiPlanningSession,
+    selected: string[],
+  ): Promise<AiPlanningSession | null> {
+    if (!selected.length) return null;
     setSavingCountries(true);
+    setCountrySaveInFlight(true);
+    setCountrySaveFailed(false);
     setError(null);
     try {
-      publish((await setAiPlanningCountries(session.id, countries, session.draftRevision)).session);
+      const saved = (await setAiPlanningCountries(current.id, selected, current.draftRevision))
+        .session;
+      if (
+        !aiPlanningCountrySaveIsCurrent(current, sessionRef.current, selected, countriesRef.current)
+      )
+        return null;
+      publish(saved);
+      setCountrySaveFailed(false);
+      return saved;
     } catch (cause) {
+      setCountrySaveFailed(true);
       setError(cause instanceof AiPlanningApiError ? cause.code : 'request_failed');
       if (cause instanceof AiPlanningApiError && cause.code === 'draft_conflict') {
         void sessionQuery.refetch();
       }
+      return null;
     } finally {
       setSavingCountries(false);
+      setCountrySaveInFlight(false);
     }
+  }
+
+  function changeCountries(next: string[]) {
+    countriesRef.current = next;
+    setCountries(next);
+    setCountrySaveFailed(false);
+    if (countrySaveTimer.current) window.clearTimeout(countrySaveTimer.current);
+    countrySaveTimer.current = null;
+    if (!session || !reviewing || !next.length) {
+      setSavingCountries(false);
+      return;
+    }
+    setSavingCountries(true);
+    const current = session;
+    countrySaveTimer.current = window.setTimeout(() => {
+      countrySaveTimer.current = null;
+      void persistCountries(current, next);
+    }, 250);
   }
 
   async function acknowledgeWarnings() {
@@ -376,26 +431,16 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
       // A session with no draft is one the server has already applied, so it
       // cannot create a trip: close the dialog rather than leave it sitting
       // there with nothing to act on.
-      const saved = sessionRef.current ?? session;
-      if (!saved.draft) {
+      const prepared = await prepareAiPlanningCountriesForApply(
+        sessionRef.current ?? session,
+        countries,
+        persistCountries,
+      );
+      if (!prepared?.canApply) {
         setConfirmApply(false);
         return;
       }
-      const latestMaterialWarnings = saved.draft.warnings.filter((warning) => warning.material);
-      const latestWarningsAcknowledged =
-        (!latestMaterialWarnings.length && !saved.countryContextChanged) ||
-        saved.warningAcknowledgement?.revision === saved.draftRevision;
-      if (!latestWarningsAcknowledged) {
-        setConfirmApply(false);
-        return;
-      }
-      if (
-        saved.countriesReviewedRevision !== saved.draftRevision ||
-        countries.join(',') !== saved.reviewedCountries.join(',')
-      ) {
-        setConfirmApply(false);
-        return;
-      }
+      const saved = prepared.session;
       const deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
       const result = await applyAiPlanningSession(saved.id, saved.draftRevision, deviceTimeZone);
       const applied = appliedAiPlanningSession(saved, result.trip.id);
@@ -526,9 +571,9 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
               <FieldLabel htmlFor="review-trip-countries">{t('countries')}</FieldLabel>
               <CountryMultiCombobox
                 aria-label={t('countries')}
-                disabled={!reviewing || publishing || savingCountries}
+                disabled={!reviewing || publishing || countrySaveInFlight}
                 id="review-trip-countries"
-                onValueChange={setCountries}
+                onValueChange={changeCountries}
                 placeholder={t('countriesPlaceholder')}
                 required
                 value={countries}
@@ -545,17 +590,21 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                 <p className="text-sm text-muted-foreground" role="status">
                   {t('countriesConfirmed')}
                 </p>
-              ) : (
+              ) : savingCountries ? (
+                <p className="text-sm text-muted-foreground" role="status">
+                  {t('countriesSaving')}
+                </p>
+              ) : countrySaveFailed && countries.length ? (
                 <Button
-                  disabled={!reviewing || publishing || savingCountries || !countries.length}
-                  onClick={() => void confirmCountries()}
+                  disabled={!reviewing || publishing}
+                  onClick={() => void persistCountries(sessionRef.current ?? session, countries)}
                   size="sm"
                   type="button"
                   variant="outline"
                 >
-                  {savingCountries ? t('countriesSaving') : t('countriesConfirm')}
+                  {t('countriesRetry')}
                 </Button>
-              )}
+              ) : null}
             </Field>
             <dl className="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
@@ -682,9 +731,25 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
             <section className="rounded-[var(--radius-xl)] border border-border bg-card p-4 sm:p-6">
               <h2 className="font-semibold">{t('unscheduled')}</h2>
               <ul className="mt-3 space-y-2 text-sm">
-                {draft.unscheduledItems.map((item) => (
-                  <li key={item.id}>{item.label}</li>
-                ))}
+                {draft.unscheduledItems.map((item) => {
+                  const reason = draft.warnings.find(
+                    (warning) =>
+                      warning.itemIds.includes(item.id) &&
+                      ['arrival_time_unknown', 'schedule_conflict'].includes(warning.code),
+                  )?.code;
+                  return (
+                    <li key={item.id}>
+                      {item.label}
+                      {reason ? (
+                        <p className="text-muted-foreground">
+                          {reason === 'arrival_time_unknown'
+                            ? t('unscheduledArrivalUnknown')
+                            : t('unscheduledScheduleConflict')}
+                        </p>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           ) : null}
@@ -786,6 +851,9 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                 ),
               })}
             </p>
+          ) : null}
+          {materialWarnings.some((warning) => warning.code === 'arrival_time_unknown') ? (
+            <p className="text-sm text-muted-foreground">{t('arrivalTimeWarning')}</p>
           ) : null}
           {!warningsAcknowledged ? (
             <Button

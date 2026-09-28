@@ -191,6 +191,19 @@ test('contradictory exact commitments are rejected deterministically', () => {
   expect(aiPlanningPrompts.contradictory).toContain('09:00');
 });
 
+test('estimated exact times cannot overlap another timed itinerary item', () => {
+  const draft = explicitDraft();
+  draft.days[1]!.items.push({
+    ...draft.days[1]!.items[1]!,
+    constraintIds: [],
+    id: 'item:overlapping-lunch',
+    origin: 'model',
+    priority: null,
+    schedule: { kind: 'exact', localTime: '09:30', source: 'model' },
+  });
+  expect(issueCodes(validateAiPlannerDraft(draft))).toContain('overlapping_items');
+});
+
 test('raw model suggestions use day parts and AI-estimated durations', () => {
   const proposal = explicitModelProposal();
   proposal.items.push({

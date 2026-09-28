@@ -31,6 +31,7 @@ export function aiPlanningErrorMessageKey(code: string | null | undefined) {
     case 'place_unresolved':
     case 'provider_unavailable':
     case 'quota_exceeded':
+    case 'schedule_conflict':
     case 'session_expired':
     case 'timeout':
       return code;

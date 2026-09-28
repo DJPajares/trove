@@ -436,6 +436,41 @@ function protectWorkBlocks(draft: AiPlannerDraft, proposal: AiPlannerModelPropos
   }
 }
 
+/** A departure block supplies no destination arrival instant. */
+function protectUnknownArrival(draft: AiPlannerDraft, proposal: AiPlannerModelProposal) {
+  const firstDay = draft.days[0];
+  if (!firstDay) return;
+  const proposalItems = new Map(proposal.items.map((item) => [item.id, item]));
+  const outbound = firstDay.items.find((item) => {
+    const source = proposalItems.get(item.id);
+    return (
+      item.blockType === 'transport' &&
+      item.origin === 'user' &&
+      isHardItem(item, proposal) &&
+      /\bflight\b/i.test(`${item.label} ${source?.notes ?? ''}`)
+    );
+  });
+  if (!outbound) return;
+
+  firstDay.items = firstDay.items.filter((item) => {
+    if (item.id === outbound.id) return true;
+    const source = proposalItems.get(item.id);
+    const destinationActivity = Boolean(source?.destinationIntentId) || item.origin === 'model';
+    if (!destinationActivity) return true;
+    const hard = isHardItem(item, proposal);
+    draft.warnings.push({
+      code: 'arrival_time_unknown',
+      evidenceIds: [],
+      id: scopedId('warning', `arrival:${firstDay.date}:${item.id}`),
+      itemIds: [item.id],
+      material: hard,
+    });
+    if (hard) return true;
+    draft.unscheduledItems.push(item);
+    return false;
+  });
+}
+
 /**
  * Builds and prunes the day-to-day itinerary without reaching a provider. The
  * places it emits are pending placeholders; `applyGroundingToDraft` upgrades the
@@ -528,6 +563,7 @@ export function assembleAiPlanningDraft(
     warnings: [],
   };
   protectWorkBlocks(draft, proposal);
+  protectUnknownArrival(draft, proposal);
   enforceBalancedPace(draft, proposal);
   enforceRealPlaceLimit(draft, proposal);
   // A candidate nothing references is not part of the plan, so it should neither
@@ -661,6 +697,7 @@ export function assignAiPlannerSuggestedTimes(
   intervals: Map<string, PlanScoreInterval[]>,
   inbound: Map<string, number | null>,
 ) {
+  const noFeasibleTime: string[] = [];
   const evidenceItems = day.items.map((item) =>
     feasibilityItem(item, intervals.get(item.id) ?? null, inbound.get(item.id) ?? null),
   );
@@ -680,13 +717,34 @@ export function assignAiPlannerSuggestedTimes(
       return;
 
     const suggestion = suggestItemStart({
-      commitments: [],
+      // Previously assigned estimates occupy real time too, even though they
+      // remain movable estimates rather than traveller-owned commitments.
+      commitments: evidenceItems.flatMap((other) =>
+        other.id !== item.id && !other.fixed && other.start
+          ? [
+              {
+                endMinute: other.start.minutes + (other.duration?.minutes ?? 0),
+                id: other.id,
+                source: 'ESTIMATED' as const,
+                startMinute: other.start.minutes,
+              },
+            ]
+          : [],
+      ),
       dayStartMinute: DEFAULT_DAY_START_MINUTE,
       items: evidenceItems,
       roundingMinutes: SUGGESTED_TIME_ROUNDING_MINUTES,
       targetItemId: item.id,
     });
+    if (suggestion.status === 'no_feasible_time') {
+      noFeasibleTime.push(item.id);
+      return;
+    }
     if (suggestion.status !== 'ok') return;
+    if (suggestion.startMinute + item.durationMinutes > 1_440) {
+      noFeasibleTime.push(item.id);
+      return;
+    }
 
     item.schedule = {
       kind: 'exact',
@@ -700,6 +758,7 @@ export function assignAiPlannerSuggestedTimes(
       inbound.get(item.id) ?? null,
     );
   });
+  return noFeasibleTime;
 }
 
 export async function addOpeningEvidence(
@@ -933,7 +992,38 @@ async function addRouteEvidence(
       }
     }
 
-    assignAiPlannerSuggestedTimes(day, intervals, inbound);
+    const noFeasibleTime = new Set(assignAiPlannerSuggestedTimes(day, intervals, inbound));
+    if (noFeasibleTime.size) {
+      const previousById = new Map(
+        day.items.map((item, index) => [item.id, day.items[index - 1]?.id ?? null]),
+      );
+      day.items = day.items.filter((item) => {
+        if (!noFeasibleTime.has(item.id)) return true;
+        const hard = isHardItem(item, proposal);
+        draft.warnings.push({
+          code: 'schedule_conflict',
+          evidenceIds: [],
+          id: scopedId('warning', `schedule:${day.date}:${item.id}`),
+          itemIds: [item.id],
+          material: hard,
+        });
+        if (hard) return true;
+        draft.unscheduledItems.push(item);
+        return false;
+      });
+      const byId = new Map(segments.map((segment) => [segment.id, segment]));
+      segments.splice(0, segments.length);
+      for (let index = 1; index < day.items.length; index += 1) {
+        const previous = day.items[index - 1]!;
+        const next = day.items[index]!;
+        const routeId = scopedId('route', `${day.date}:${previous.id}:${next.id}`);
+        segments.push(byId.get(routeId) ?? { id: routeId, scope: 'LOCAL', status: 'UNKNOWN' });
+        if (previousById.get(next.id) !== previous.id) {
+          inbound.delete(next.id);
+          inboundMinutes.delete(next.id);
+        }
+      }
+    }
 
     const feasibility = evaluateFeasibility({
       commitments: [],
@@ -1078,7 +1168,11 @@ async function validateWithProviderEvidence(
   const validated = validateAiPlannerDraft(draft);
   if (!validated.success) {
     throw new AiPlanningPipelineFailure(
-      'invalid_response',
+      validated.issues.some((issue) =>
+        ['conflicting_hard_constraints', 'overlapping_items'].includes(issue.code),
+      )
+        ? 'schedule_conflict'
+        : 'invalid_response',
       null,
       validated.issues.map((issue) => issue.code),
       validated.issues.map((issue) => safeIssuePath(issue.path)),

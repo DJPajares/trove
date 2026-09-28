@@ -15,7 +15,7 @@ import {
 } from './itinerary-time-suggestions-rules.js';
 import { createPlacesService } from './places-runtime.js';
 import type { PlacesService } from './places.js';
-import { loadPlaceEvidence } from './plan-score.js';
+import { loadPlaceEvidence } from './place-evidence-acquisition.js';
 import type { PlanScoreFixedCommitment } from './plan-score-factors.js';
 
 /**

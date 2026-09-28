@@ -1,3 +1,4 @@
+import { readDayPlanningContext, type DayPlanningContext } from '@trove/types';
 import { getPrismaClient, type Prisma } from '@trove/db';
 
 import { DAY_PART_WINDOWS } from './day-part-windows.js';
@@ -492,6 +493,7 @@ export async function listItinerary(userId: string, tripId: string, languageCode
       name: day.name,
       notes: day.notes,
       routeStartTravelMode: mapTravelMode(day.routeStartTravelMode),
+      planningContext: readDayPlanningContext(day.planningContext),
     })),
     trip: {
       endDate: formatDateOnly(trip.endDate),
@@ -1323,5 +1325,23 @@ export async function deleteItineraryItem(
     }
     await unlinkItineraryItemReferences(transaction, tripId, item.id);
     await transaction.itineraryItem.delete({ where: { id: item.id } });
+  });
+}
+
+export async function updateItineraryDayPlanningContext(
+  userId: string,
+  tripId: string,
+  dayId: string,
+  context: DayPlanningContext,
+) {
+  const prisma = getPrismaClient();
+  return prisma.$transaction(async (transaction) => {
+    await findOwnedTrip(transaction, userId, tripId);
+    const day = await findDay(transaction, tripId, dayId);
+    await transaction.itineraryDay.update({
+      where: { id: day.id },
+      data: { planningContext: context },
+    });
+    return { id: day.id, planningContext: context };
   });
 }

@@ -1,3 +1,4 @@
+import type { DayPlanningContext } from '@trove/types';
 import { resolveOfflineTripModeLeg } from '@/lib/itinerary/trip-mode-leg';
 import type { PlaceSnapshot } from '@/lib/saved/api';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
@@ -70,6 +71,7 @@ export type ItineraryItem = {
 };
 
 export type ItineraryDay = {
+  planningContext?: DayPlanningContext;
   dailyBaseDepartureTripPlaceId: string | null;
   dailyBaseTripPlaceId: string | null;
   date: string;
@@ -1064,4 +1066,15 @@ export async function updateItineraryItemTravelStatus(
     await queueOrThrow(error, auth.userId, tripId, operation);
     return { id: itemId, travelStatus };
   }
+}
+
+export async function updateItineraryDayPlanningContext(
+  tripId: string,
+  dayId: string,
+  context: DayPlanningContext,
+) {
+  return itineraryRequest<{ id: string; planningContext: DayPlanningContext }>(
+    `/trips/${tripId}/itinerary/days/${dayId}/planning-context`,
+    { method: 'PATCH', body: JSON.stringify(context) },
+  );
 }

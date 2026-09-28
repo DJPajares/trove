@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { planningPreferencesFromAi } from '@trove/types';
 import type { AiPlannerDraft } from '@trove/types';
 import { readPlanScoreInputs, type PlanScoreTripRows, type TripPlanScore } from './plan-score.js';
 import { PLAN_SCORE_CONTRACT_VERSION } from './plan-score-rules.js';
@@ -9,7 +10,12 @@ import { parseDateOnly, resolveCountryPrimaryTimeZone } from './trip-rules.js';
 /** Binds an assessment to the final itinerary, not mutable review copy. */
 export function draftPlanScoreInputRevision(draft: AiPlannerDraft): string {
   const payload = {
-    version: 1,
+    version: 2,
+    preferences: {
+      pace: draft.trip.pace,
+      paceSource: draft.trip.paceSource,
+      interests: draft.normalizedRequest.interests,
+    },
     rubric: PLAN_SCORE_CONTRACT_VERSION,
     dates: [draft.trip.startDate, draft.trip.endDate],
     destinations: draft.trip.destinations.map(({ placeRefId }) => placeRefId),
@@ -136,6 +142,13 @@ export function appliedDraftScoreInputsMatch(
   return (
     readPlanScoreInputs(rows).revision ===
     readPlanScoreInputs({
+      planningPreferences: planningPreferencesFromAi(
+        draft.normalizedRequest,
+        draft.trip.paceSource === 'user',
+        draft.assumptions.some((assumption) => assumption.code === 'interest_inferred'),
+      ),
+      endDate: rows.endDate,
+      destinations: rows.destinations,
       startDate: parseDateOnly(draft.trip.startDate),
       startingPlaceId: null,
       itineraryDays: expectedDays,

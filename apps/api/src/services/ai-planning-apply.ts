@@ -1,4 +1,5 @@
 import { getPrismaClient, Prisma } from '@trove/db';
+import { planningPreferencesFromAi } from '@trove/types';
 import type { AiPlannerDraft, AiPlannerDraftItem, AiPlannerDraftPlace } from '@trove/types';
 
 import { referencedDraftPlaceIds } from './ai-planning-draft-places.js';
@@ -301,6 +302,11 @@ export async function applyAiPlanningSession(
     const trip = await transaction.trip.create({
       data: {
         countries,
+        planningPreferences: planningPreferencesFromAi(
+          draft.normalizedRequest,
+          draft.trip.paceSource === 'user',
+          draft.assumptions.some((assumption) => assumption.code === 'interest_inferred'),
+        ),
         creatorId: ownerId,
         // The traveller's own words win; the model's are the floor, so a trip
         // never lands blank just because nobody typed in the review field.

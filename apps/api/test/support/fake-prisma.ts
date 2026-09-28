@@ -10,6 +10,7 @@ export type ModelName =
   | 'memoryPhoto'
   | 'place'
   | 'reservation'
+  | 'reservationAccommodationDay'
   | 'reservationAttachment'
   | 'task'
   | 'trip'
@@ -25,6 +26,7 @@ const MODELS: ModelName[] = [
   'memoryPhoto',
   'place',
   'reservation',
+  'reservationAccommodationDay',
   'reservationAttachment',
   'task',
   'trip',

@@ -80,6 +80,7 @@ export function resolveOpeningHoursForDay(input: {
   dayTimeZone: string;
   periods: PlaceOpeningPeriod[];
   utcOffsetMinutes: number | null;
+  source?: 'FRESH_PROVIDER' | 'CACHED_PROVIDER';
 }): PlanScoreOpeningHours {
   if (input.periods.length === 0 || input.utcOffsetMinutes === null) {
     return { status: 'UNKNOWN' };
@@ -101,7 +102,7 @@ export function resolveOpeningHoursForDay(input: {
 
   return {
     intervals: openingIntervalsForWeekday(input.periods, weekdayForLocalDate(input.date)),
-    source: 'FRESH_PROVIDER',
+    source: input.source ?? 'FRESH_PROVIDER',
     status: 'KNOWN',
   };
 }

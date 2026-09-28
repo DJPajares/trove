@@ -1,3 +1,4 @@
+import type { TripPlanningPreferences } from '@trove/types';
 import type { DayNoteResolution, TripShrinkImpact } from '@trove/types';
 import { createBrowserSupabaseClient, getBrowserSession } from '@/lib/supabase/client';
 import {
@@ -29,6 +30,8 @@ export type TripDestination = {
 };
 
 export type Trip = {
+  planningPreferences?: TripPlanningPreferences;
+  effectivePace?: { pace: 'relaxed' | 'balanced' | 'packed'; source: 'user' | 'default' };
   /**
    * The countries the trip visits, ISO 3166-1 alpha-2.
    *
@@ -89,6 +92,7 @@ export type Trip = {
 };
 
 export type TripInput = {
+  planningPreferences?: TripPlanningPreferences | null;
   confirmDateShrink?: boolean;
   shrinkRevision?: string;
   noteResolutions?: DayNoteResolution[];

@@ -81,6 +81,10 @@ export type TripPlanScore = Omit<PlanScoreTripPayload, 'days'> & {
   /** Identity of the evidence this result came from, for cache validation. */
   fingerprint: string;
   generatedAt: string;
+  /** Assessment deadline, bounded by generation and the original evidence expiry. */
+  expiresAt?: string;
+  /** Revision of read-only evidence used by stored-trip assessments. */
+  evidenceRevision?: string;
   /** Original oldest mutable evidence time, never its cache-read or Apply time. */
   evidenceAsOf?: string | null;
   /** Rubric-versioned draft inputs, checked before adopting an AI assessment. */

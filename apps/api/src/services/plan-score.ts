@@ -14,15 +14,12 @@ import {
   type ItineraryDayRecord,
   type PlaceHoursEvidence,
 } from './itinerary-day-evidence.js';
-import {
-  createPlaceResolver,
-  getItineraryDayRoutes,
-  type ItineraryDayRoutes,
-} from './itinerary-routes.js';
+import type { ItineraryDayRoutes } from './itinerary-route-reader.js';
+import { cachedPlaceResolver, readScoringRoutes, readScoringPlace } from './scoring-evidence.js';
+import { PLACE_EVIDENCE_TTL_MS } from './place-evidence-cache.js';
+import { TRAVEL_LEG_CACHE_TTL_MS } from './route-evidence-cache.js';
 import { ItineraryNotFoundError } from './itineraries.js';
-import { createPlacesService } from './places-runtime.js';
-import type { PlacesService } from './places.js';
-import { createRoutesService } from './routes-runtime.js';
+import { readDayPlanningContext, readTripPlanningPreferences } from '@trove/types';
 import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
 import { explainDay, explainTrip } from './plan-score-explanations.js';
 import {
@@ -45,8 +42,8 @@ import {
 } from './plan-score-rules.js';
 
 /**
- * Plan Score for a trip, derived on demand from stored itinerary data and live
- * route/provider evidence (PRD section 29).
+ * Plan Score for a trip, derived on demand from stored itinerary data and
+ * unexpired cached route/place evidence (PRD section 29). Never acquires evidence.
  *
  * One factor stays unknown in this integration rather than being guessed: route
  * efficiency, because comparing alternative orders needs a full pairwise duration
@@ -78,7 +75,10 @@ function toRouteSegments(routes: ItineraryDayRoutes | undefined): PlanScoreRoute
     return segment.durationSeconds === null
       ? { id: segment.id, scope, status: 'UNKNOWN' }
       : {
-          duration: { minutes: segment.durationSeconds / 60, source: 'FRESH_PROVIDER' },
+          duration: {
+            minutes: segment.durationSeconds / 60,
+            source: segment.evidenceAsOf ? 'CACHED_PROVIDER' : 'USER_OWNED',
+          },
           id: segment.id,
           scope,
           status: 'KNOWN',
@@ -106,7 +106,7 @@ function toDayPlaces(day: PlanScoreDayRecord, ratings: Map<string, number>): Pla
       rating:
         rating === undefined
           ? { status: 'UNKNOWN' }
-          : { rating, source: 'FRESH_PROVIDER', status: 'KNOWN' },
+          : { rating, source: 'CACHED_PROVIDER', status: 'KNOWN' },
       tripPlaceId,
     };
   });
@@ -233,6 +233,8 @@ const tripPlanScoreSchema = z
     generatedAt: z.string(),
     evidenceAsOf: z.string().nullable().optional(),
     sourceInputRevision: z.string().optional(),
+    expiresAt: z.string().datetime().optional(),
+    evidenceRevision: z.string().optional(),
     mustGoPriorityFit: factorOutcomeSchema,
     score: z.number().nullable(),
     withheldReasons: z.array(z.string()),
@@ -318,6 +320,12 @@ export function buildPlanScoreFromEvaluations(input: {
     }),
     fingerprint: planScoreFingerprint(tripInput),
     generatedAt,
+    expiresAt: new Date(
+      Math.min(
+        Date.parse(generatedAt) + 24 * 60 * 60 * 1000,
+        ...(input.evidenceTimes ?? []).map((at) => Date.parse(at) + PLACE_EVIDENCE_TTL_MS),
+      ),
+    ).toISOString(),
     evidenceAsOf: oldestPlanScoreEvidenceAt(generatedAt, input.evidenceTimes ?? []),
     mustGoPriorityFit: result.mustGoPriorityFit,
     score: result.score,
@@ -347,28 +355,28 @@ export function buildTripPlanScore(
 }
 
 /**
- * One `getDetails` per Trip Place, yielding both factors that read provider data.
- * Callers scoped to a single day should narrow `tripPlaces` first, since this
- * fans out one request per entry.
+ * Read the shared evidence repository for scheduled Trip Places. Missing or
+ * expired evidence stays unknown; this function cannot acquire or refresh it.
  */
 export async function loadPlaceEvidence(
   tripPlaces: Array<{ externalPlaceId: string | null; id: string }>,
-  placesService: PlacesService | null,
+  now: Date,
 ) {
   const hours: PlaceHoursEvidence = new Map();
   const ratings = new Map<string, number>();
-  if (!placesService) return { hours, ratings, evidenceTimes: [] as string[] };
 
   const results = await mapWithConcurrency(
     tripPlaces,
     PROVIDER_CONCURRENCY_LIMIT,
     async (tripPlace) => {
       if (!tripPlace.externalPlaceId) return null;
-      const details = await placesService.getDetails({
-        detail: 'evidence',
-        externalPlaceId: tripPlace.externalPlaceId,
-      });
-      if (details.status !== 'ok') return null;
+      const details = await readScoringPlace(
+        {
+          externalPlaceId: tripPlace.externalPlaceId,
+        },
+        now,
+      );
+      if (!details || details.status !== 'ok') return null;
       return {
         fetchedAt: details.freshness.fetchedAt,
         id: tripPlace.id,
@@ -383,6 +391,7 @@ export async function loadPlaceEvidence(
     if (!result) continue;
     if (result.rating !== null) ratings.set(result.id, result.rating);
     hours.set(result.id, {
+      source: 'CACHED_PROVIDER',
       periods: result.openingPeriods,
       utcOffsetMinutes: result.utcOffsetMinutes,
     });
@@ -396,10 +405,8 @@ export async function loadPlaceEvidence(
 }
 
 /**
- * A stored score outlives a browser session, so its age has to be bounded by
- * something. The revision covers every Trove-owned input, but opening hours and
- * ratings move underneath a plan nobody edits and are never persisted, so a day
- * is the ceiling on how stale the evidence behind a displayed score may be.
+ * Stored assessments expire after one day or when any underlying evidence expires.
+ * Separate input and evidence revisions invalidate edits and refreshed snapshots.
  */
 type TripPlanScoreRow = {
   planScore: Prisma.JsonValue | null;
@@ -469,8 +476,21 @@ export const PLAN_SCORE_TRIP_INCLUDE = {
       },
     },
   },
+  destinations: true,
   reservations: {
     select: {
+      transportDepartureLocalDate: true,
+      transportDepartureLocalTime: true,
+      transportDepartureTimeZone: true,
+      transportDepartureInstant: true,
+      transportArrivalLocalDate: true,
+      transportArrivalLocalTime: true,
+      transportArrivalTimeZone: true,
+      transportArrivalInstant: true,
+      flightDepartureTimeZone: true,
+      flightDepartureInstant: true,
+      flightArrivalTimeZone: true,
+      flightArrivalInstant: true,
       flightArrivalLocalDate: true,
       flightArrivalLocalTime: true,
       flightDepartureLocalDate: true,
@@ -485,6 +505,9 @@ export const PLAN_SCORE_TRIP_INCLUDE = {
 
 export type PlanScoreTripRows = {
   startDate?: Date;
+  planningPreferences?: unknown;
+  endDate?: Date;
+  destinations?: unknown;
   startingPlaceId?: string | null;
   itineraryDays: Array<{
     dailyBaseDepartureTripPlaceId: string | null;
@@ -508,6 +531,7 @@ export type PlanScoreTripRows = {
       tripPlaceId: string | null;
     }>;
     routeStartTravelMode: string;
+    planningContext?: unknown;
   }>;
   reservations: Parameters<typeof sameDayJourneyCommitment>[0][];
   tripPlaces: Array<{ id: string; placeId?: string; priority: string | null }>;
@@ -539,6 +563,13 @@ export function readPlanScoreInputs(trip: PlanScoreTripRows) {
     days,
     mustGoTripPlaceIds,
     revision: tripPlanScoreRevision({
+      context: {
+        preferences: readTripPlanningPreferences(trip.planningPreferences),
+        days: trip.itineraryDays.map((day) => readDayPlanningContext(day.planningContext)),
+        endDate: trip.endDate,
+        destinations: trip.destinations,
+        reservations: trip.reservations,
+      },
       startDate: trip.startDate ?? null,
       startingPlaceId: trip.startingPlaceId ?? null,
       days: trip.itineraryDays.map((day, index) => ({
@@ -562,13 +593,21 @@ export function readPlanScoreInputs(trip: PlanScoreTripRows) {
   };
 }
 
-function readCachedPlanScore(trip: TripPlanScoreRow, revision: string, now: Date) {
+function readCachedPlanScore(
+  trip: TripPlanScoreRow,
+  revision: string,
+  now: Date,
+  evidenceRevision: string,
+) {
   if (trip.planScoreRevision !== revision || !trip.planScoreComputedAt) return null;
 
   // A row written before the current payload shape is a miss, not something to
   // hand to a client.
   const score = parseStoredPlanScore(trip.planScore);
-  return score && originalPlanScoreTime(score, now, trip.planScoreComputedAt) ? score : null;
+  return score?.evidenceRevision === evidenceRevision &&
+    originalPlanScoreTime(score, now, trip.planScoreComputedAt)
+    ? score
+    : null;
 }
 
 /**
@@ -585,7 +624,7 @@ async function writeCachedPlanScore(
     where: { id: tripId },
     data: {
       planScore: planScore as unknown as Prisma.InputJsonValue,
-      planScoreComputedAt: new Date(planScore.evidenceAsOf ?? planScore.generatedAt),
+      planScoreComputedAt: new Date(planScore.generatedAt),
       planScoreRevision: revision,
     },
   });
@@ -594,16 +633,11 @@ async function writeCachedPlanScore(
 export async function getTripPlanScore(
   userId: string,
   tripId: string,
-  services: { now?: () => Date; placesService?: PlacesService | null } = {},
+  services: { now?: () => Date } = {},
 ): Promise<TripPlanScore | null> {
   const now = services.now?.() ?? new Date();
-  // Do this before opening Prisma: stale clients may still reach the endpoint,
-  // but an administrative kill switch must make that request cost-free too.
-  //
-  // This is the switch's only reader, and deliberately so. It exists to stop the
-  // fan-out this endpoint causes; the AI planner scores a draft from evidence its
-  // own run already paid for and reaches no provider to score it, so there is
-  // nothing here for the switch to save and it must not silence that score.
+  // Preserve the administrative visibility switch. Scoring now makes zero
+  // provider requests whether enabled or disabled; AI draft assessment is separate.
   if (arePlanScoreProvidersDisabled()) return null;
 
   const prisma = getPrismaClient();
@@ -613,34 +647,14 @@ export async function getTripPlanScore(
   });
   if (!trip) throw new ItineraryNotFoundError('trip_not_found');
 
-  // Everything here is Prisma rows and arithmetic. The revision has to be
-  // decided before a provider is constructed, or a cache hit would still pay for
-  // the fan-out it exists to avoid.
+  // Input and evidence revisions cover itinerary edits and ordinary refreshes.
   const { days: dayRecords, mustGoTripPlaceIds, revision } = readPlanScoreInputs(trip);
 
-  const cached = readCachedPlanScore(trip, revision, now);
-  if (cached) return cached;
-
-  const placesService =
-    services.placesService === undefined
-      ? createPlacesService({ source: 'plan-score' })
-      : services.placesService;
-
-  const routesService = createRoutesService({ source: 'plan-score' });
-  // One resolver for the whole trip. Days share places constantly - the same
-  // hotel is the base every night - and a per-day resolver re-fetched each one.
-  // Mirrors the guard inside getItineraryDayRoutes: with no routing there is
-  // nothing to resolve coordinates for.
-  const resolvePlace = createPlaceResolver(
-    routesService ? placesService : null,
-    undefined,
-    'plan-score',
-  );
-
+  const resolvePlace = cachedPlaceResolver(now);
   // Evidence (rating/hours) only ever feeds a day's factors, scoped to the trip
   // places that are actually scheduled on some day - toDayPlaces/
   // toDayEvidenceItems never look past that set. A trip place saved but never
-  // placed on a day would otherwise be fetched and immediately discarded.
+  // placed on a day would otherwise be read and immediately discarded.
   const scheduledTripPlaceIds = new Set(
     trip.itineraryDays.flatMap((day) =>
       day.items.flatMap((item) => (item.tripPlaceId ? [item.tripPlaceId] : [])),
@@ -650,13 +664,7 @@ export async function getTripPlanScore(
   const [routeResults, placeEvidence] = await Promise.all([
     mapWithConcurrency(trip.itineraryDays, PROVIDER_CONCURRENCY_LIMIT, async (day) => ({
       id: day.id,
-      routes: await getItineraryDayRoutes(
-        userId,
-        tripId,
-        day.id,
-        {},
-        { placesService, resolvePlace, routesService, source: 'plan-score' },
-      ),
+      routes: await readScoringRoutes(userId, tripId, day.id, now, resolvePlace),
     })),
     loadPlaceEvidence(
       trip.tripPlaces
@@ -667,35 +675,67 @@ export async function getTripPlanScore(
               ?.externalPlaceId ?? null,
           id: tripPlace.id,
         })),
-      placesService,
+      now,
     ),
   ]);
 
+  const evidenceRevision = tripPlanScoreRevision({
+    days: [],
+    mustGoTripPlaceIds: [],
+    context: {
+      revision,
+      hours: [...placeEvidence.hours],
+      ratings: [...placeEvidence.ratings],
+      evidenceTimes: placeEvidence.evidenceTimes,
+      routes: routeResults.map(({ id, routes }) => ({
+        id,
+        segments: routes.segments,
+        summary: routes.summary,
+      })),
+    },
+  });
+  const cached = readCachedPlanScore(trip, revision, now, evidenceRevision);
+  if (cached) return cached;
   const evaluatedAt = services.now?.() ?? new Date();
-  const result = withholdNonCurrentPlanScore(
-    buildTripPlanScore(
-      {
-        days: dayRecords,
-        hours: placeEvidence.hours,
-        mustGoTripPlaceIds,
-        ratings: placeEvidence.ratings,
-        routes: new Map(routeResults.map(({ id, routes }) => [id, routes])),
-      },
-      {
-        evaluatedAt,
-        evidenceTimes: [
-          ...(placeEvidence.evidenceTimes ?? []),
-          ...routeResults.flatMap(({ routes }) =>
-            routes.segments.flatMap((segment) =>
-              segment.evidenceAsOf ? [segment.evidenceAsOf] : [],
-            ),
+  const result = buildTripPlanScore(
+    {
+      days: dayRecords,
+      hours: placeEvidence.hours,
+      mustGoTripPlaceIds,
+      ratings: placeEvidence.ratings,
+      routes: new Map(routeResults.map(({ id, routes }) => [id, routes])),
+    },
+    {
+      evaluatedAt,
+      evidenceTimes: [
+        ...(placeEvidence.evidenceTimes ?? []),
+        ...routeResults.flatMap(({ routes }) =>
+          routes.segments.flatMap((segment) =>
+            segment.evidenceAsOf ? [segment.evidenceAsOf] : [],
           ),
-        ],
-      },
-    ),
-    evaluatedAt,
+        ),
+      ],
+    },
   );
 
-  await writeCachedPlanScore(prisma, trip.id, result, revision);
-  return result;
+  result.evidenceRevision = evidenceRevision;
+  result.expiresAt = new Date(
+    Math.min(
+      evaluatedAt.getTime() + 24 * 60 * 60 * 1000,
+      ...placeEvidence.evidenceTimes.map((at) => Date.parse(at) + PLACE_EVIDENCE_TTL_MS),
+      ...routeResults.flatMap(({ routes }) =>
+        routes.segments.flatMap((segment) =>
+          segment.evidenceExpiresAt ? [Date.parse(segment.evidenceExpiresAt)] : [],
+        ),
+      ),
+      ...routeResults.flatMap(({ routes }) =>
+        routes.segments.flatMap((segment) =>
+          segment.evidenceAsOf ? [Date.parse(segment.evidenceAsOf) + TRAVEL_LEG_CACHE_TTL_MS] : [],
+        ),
+      ),
+    ),
+  ).toISOString();
+  const current = withholdNonCurrentPlanScore(result, evaluatedAt);
+  await writeCachedPlanScore(prisma, trip.id, current, revision);
+  return current;
 }

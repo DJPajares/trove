@@ -1,5 +1,5 @@
 import Fastify from 'fastify';
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 
 import { createPlacesControllers } from '../src/controllers/places.js';
 import { getPlacesEnvironment } from '../src/environment.js';
@@ -122,7 +122,12 @@ test('enriched Text Search returns scoring evidence and distinguishes missing fi
       openingPeriods: [{ open: { day: 0, hour: 0, minute: 0 }, close: null }],
     },
   });
-  expect(results[1]?.evidence).toEqual({ rating: null, openingPeriods: [] });
+  expect(results[1]?.evidence).toEqual({
+    rating: null,
+    openingPeriods: [],
+    userRatingCount: null,
+    openingHoursDescriptions: [],
+  });
   for (const field of ['*', 'photos', 'reviews', 'websiteUri'])
     expect(GOOGLE_TEXT_SEARCH_EVIDENCE_FIELD_MASK).not.toContain(field);
 });
@@ -141,17 +146,39 @@ test('evidence Details accepts hours and ratings without unrequested name or loc
       Response.json({
         id: 'museum',
         rating: 4.2,
+        userRatingCount: 845,
         utcOffsetMinutes: 480,
-        regularOpeningHours: { periods: [{ open: {} }] },
+        regularOpeningHours: {
+          periods: [{ open: {} }],
+          weekdayDescriptions: ['Monday: Open 24 hours'],
+        },
+        currentOpeningHours: {
+          periods: [
+            {
+              open: { day: 1, hour: 10, date: { year: 2026, month: 9, day: 28 } },
+              close: { day: 1, hour: 16, date: { year: 2026, month: 9, day: 28 } },
+            },
+          ],
+        },
       }),
   });
   const details = await provider.getDetails({ detail: 'evidence', externalPlaceId: 'museum' });
   expect(details).toMatchObject({
     rating: 4.2,
+    userRatingCount: 845,
     utcOffsetMinutes: 480,
     name: '',
     location: null,
     openingPeriods: [{ open: { day: 0, hour: 0, minute: 0 }, close: null }],
+    openingHoursDescriptions: ['Monday: Open 24 hours'],
+    currentHoursValidFrom: '2026-09-28',
+    currentHoursValidThrough: '2026-09-28',
+    currentOpeningPeriods: [
+      {
+        open: { day: 1, hour: 10, minute: 0, date: '2026-09-28' },
+        close: { day: 1, hour: 16, minute: 0, date: '2026-09-28' },
+      },
+    ],
   });
   await expect(
     provider.getDetails({ detail: 'location', externalPlaceId: 'museum' }),
@@ -478,4 +505,64 @@ test('Places controllers reject invalid input and degrade provider failures expl
   });
 
   await app.close();
+});
+
+test('rich details require an owned relationship before any provider acquisition', async () => {
+  const lookup = vi.fn(
+    async (
+      _query: unknown,
+    ): Promise<{ providerRefs: Array<{ provider: string; externalPlaceId: string }> } | null> =>
+      null,
+  );
+  const details = vi.fn(async () => {
+    throw new PlaceProviderError('provider_unavailable');
+  });
+  vi.stubGlobal('trovePrismaClient', { place: { findFirst: lookup } });
+  const app = Fastify();
+  app.decorateRequest('authUserId', undefined);
+  const controllers = createPlacesControllers(
+    new PlacesService({ name: 'google', search: async () => [], getDetails: details }),
+  );
+  app.get(
+    '/places/:placeId/details',
+    {
+      preHandler: async (request, reply) => {
+        if (!request.headers.authorization) return reply.code(401).send({ code: 'unauthorized' });
+        request.authUserId = 'owner';
+      },
+    },
+    controllers.richDetails,
+  );
+  const url = '/places/12345678-1234-4234-8234-123456789012/details?languageCode=ja';
+  try {
+    expect((await app.inject({ url })).statusCode).toBe(401);
+    expect(lookup).not.toHaveBeenCalled();
+    expect((await app.inject({ url, headers: { authorization: 'test' } })).statusCode).toBe(404);
+    expect(details).not.toHaveBeenCalled();
+    expect(lookup.mock.calls[0]?.[0]).toMatchObject({
+      where: {
+        OR: [
+          { ownerId: 'owner' },
+          { savedPlaces: { some: { ownerId: 'owner' } } },
+          { tripPlaces: { some: { trip: { ownerId: 'owner' } } } },
+        ],
+      },
+    });
+    lookup.mockResolvedValueOnce({
+      providerRefs: [{ provider: 'GOOGLE', externalPlaceId: 'museum' }],
+    });
+    expect((await app.inject({ url, headers: { authorization: 'test' } })).json()).toMatchObject({
+      status: 'unavailable',
+    });
+    expect(details).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        externalPlaceId: 'museum',
+        detail: 'evidence',
+        languageCode: 'ja',
+      }),
+    );
+  } finally {
+    await app.close();
+    vi.unstubAllGlobals();
+  }
 });

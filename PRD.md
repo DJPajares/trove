@@ -817,7 +817,7 @@ The provider remains the source for mutable data such as:
 - website,
 - provider categories.
 
-This evidence is resolved on demand for a normal Place/itinerary surface or planning acquisition flow that needs it, not persisted as a permanent Trove-owned dataset. Plan Scoring only reads evidence already available under Section 29.5 and never triggers acquisition. Any transient reuse must remain within provider permissions and retain its original age. Stored derived assessments follow their own expiry rules and must not become a back door for retaining raw mutable evidence.
+This evidence is resolved on demand for a normal Place/itinerary surface or planning acquisition flow that needs it, not persisted as a permanent Trove-owned dataset. Plan Scoring only reads evidence already available under Section 29.5 and never triggers acquisition. Necessary Google ratings, review counts and hours may use the approved 30-day bounded evidence cache, separate from Trove-owned data, retaining their original age. Stored derived assessments follow their own expiry rules and must not become a back door for retaining raw mutable evidence.
 
 Trove-owned data includes:
 
@@ -1979,7 +1979,7 @@ The shared lifecycle is: **normal itinerary acquisition → normalization and pe
 
 Rich Place details show rating/review count and applicable hours from one response. Include these fields in existing rich AI responses too, without widening identity/location-only masks. Dedupe concurrent requests and repeated Places across days. Provider failures must not block manual planning.
 
-The evaluator accepts normalized evidence and read-only repositories; it cannot import provider factories or refresh-on-miss services. Evidence carries provenance, original acquisition time, applicable dates/location, attribution, and field-specific expiry. The 30-day internal snapshot ceiling is not blanket permission: persist only fields whose provider permits it, use unsupported mutable fields only within the permitted operation, and make expired/unavailable evidence unknown. Reuse never renews original age. Stored scores must not become raw evidence caches.
+The evaluator accepts normalized evidence and read-only repositories; it cannot import provider factories or refresh-on-miss services. Evidence carries provenance, original acquisition time, applicable dates/location, attribution, and field-specific expiry. Necessary Google place evidence (ratings, review counts, hours, coordinates and categories) and route measurements use the accepted 30-day bounded cache policy. This application policy is not a claim of blanket provider retention permission. Date-specific hours apply only to their stated dates; weather keeps its existing shorter freshness limits. Expired/unavailable evidence becomes unknown. Expired raw place evidence is removed by scheduled maintenance. Reuse never renews original age. Stored scores must not become raw evidence caches.
 
 Fingerprint every scoring input: itinerary/order/times/places/reservations/routes, trip preferences, day intent/availability, destinations/dates, evidence revisions, and curated-context/rubric versions. Changes invalidate affected days and all subsequent fatigue state as well as the trip result. Cache assessments until the earliest relevant evidence deadline, with a **24-hour maximum**. Expiry triggers cache-only recomputation, never acquisition; qualify a dated assessment or withhold its number when current evidence is insufficient.
 

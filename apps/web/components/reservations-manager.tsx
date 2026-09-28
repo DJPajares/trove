@@ -71,6 +71,7 @@ import {
   type ReservationType,
   updateReservation,
   uploadReservationDocument,
+  ReservationsApiError,
 } from '@/lib/reservations/api';
 import { queryKeys } from '@/lib/query/keys';
 import { useQueryClient } from '@tanstack/react-query';
@@ -112,6 +113,14 @@ type ReservationForm = {
   plannedCostCurrencyCode: string;
   provider: string;
   title: string;
+  transportDepartureDate: string;
+  transportDepartureTime: string;
+  transportDepartureTimeZone: string;
+  transportDepartureAuthoritativeInstant: string;
+  transportArrivalDate: string;
+  transportArrivalTime: string;
+  transportArrivalTimeZone: string;
+  transportArrivalAuthoritativeInstant: string;
   transportDropoffLocation: string;
   transportOperator: string;
   transportPickupLocation: string;
@@ -153,6 +162,16 @@ function createForm(
     plannedCostCurrencyCode: reservation?.plannedCost?.currencyCode ?? preferredCurrency ?? '',
     provider: reservation?.provider ?? '',
     title: reservation?.title ?? '',
+    transportDepartureDate: reservation?.transport?.departure?.localDate ?? '',
+    transportDepartureTime: reservation?.transport?.departure?.localTime ?? '',
+    transportDepartureTimeZone: reservation?.transport?.departure?.timeZone ?? '',
+    transportDepartureAuthoritativeInstant:
+      reservation?.transport?.departure?.authoritativeInstant ?? '',
+    transportArrivalDate: reservation?.transport?.arrival?.localDate ?? '',
+    transportArrivalTime: reservation?.transport?.arrival?.localTime ?? '',
+    transportArrivalTimeZone: reservation?.transport?.arrival?.timeZone ?? '',
+    transportArrivalAuthoritativeInstant:
+      reservation?.transport?.arrival?.authoritativeInstant ?? '',
     transportDropoffLocation: reservation?.transport?.dropoffLocation ?? '',
     transportOperator: reservation?.transport?.operator ?? '',
     transportPickupLocation: reservation?.transport?.pickupLocation ?? '',
@@ -172,7 +191,7 @@ function isStructuredTransport(type: ReservationForm['type']) {
   );
 }
 
-function hasInvalidFlightEndpoint(input: { date: string; time: string; timeZone: string }) {
+function hasIncompleteJourneyEndpoint(input: { date: string; time: string; timeZone: string }) {
   return Boolean(
     (input.time && !input.date) ||
     ((input.date || input.time) && !input.timeZone) ||
@@ -272,18 +291,32 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
     }
     if (
       form.type === 'flight' &&
-      (hasInvalidFlightEndpoint({
+      (hasIncompleteJourneyEndpoint({
         date: form.flightDepartureDate,
         time: form.flightDepartureTime,
         timeZone: form.flightDepartureTimeZone,
       }) ||
-        hasInvalidFlightEndpoint({
+        hasIncompleteJourneyEndpoint({
           date: form.flightArrivalDate,
           time: form.flightArrivalTime,
           timeZone: form.flightArrivalTimeZone,
         }))
     ) {
       setFormError(t('flightEndpointError'));
+      return;
+    }
+
+    if (
+      isStructuredTransport(form.type) &&
+      (['Departure', 'Arrival'] as const).some((side) =>
+        hasIncompleteJourneyEndpoint({
+          date: form[`transport${side}Date`],
+          time: form[`transport${side}Time`],
+          timeZone: form[`transport${side}TimeZone`],
+        }),
+      )
+    ) {
+      setFormError(t('transportTimingError'));
       return;
     }
 
@@ -331,6 +364,18 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
       tripPlaceId: form.tripPlaceId === 'none' ? null : form.tripPlaceId,
       transport: isStructuredTransport(form.type)
         ? {
+            departure: {
+              localDate: form.transportDepartureDate || null,
+              localTime: form.transportDepartureTime || null,
+              timeZone: form.transportDepartureTimeZone.trim() || null,
+              authoritativeInstant: form.transportDepartureAuthoritativeInstant || null,
+            },
+            arrival: {
+              localDate: form.transportArrivalDate || null,
+              localTime: form.transportArrivalTime || null,
+              timeZone: form.transportArrivalTimeZone.trim() || null,
+              authoritativeInstant: form.transportArrivalAuthoritativeInstant || null,
+            },
             dropoffLocation: form.transportDropoffLocation.trim() || null,
             operator: form.transportOperator.trim() || null,
             pickupLocation: form.transportPickupLocation.trim() || null,
@@ -347,8 +392,14 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
       }
       await refreshWithPlanScore();
       closeEditor();
-    } catch {
-      setFormError(t('saveError'));
+    } catch (error) {
+      setFormError(
+        t(
+          error instanceof ReservationsApiError && error.code === 'invalid_transport_details'
+            ? 'transportTimingError'
+            : 'saveError',
+        ),
+      );
     } finally {
       setSaving(false);
     }
@@ -949,6 +1000,56 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
                             value={form.transportDropoffLocation}
                           />
                         </Field>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{t('transportTimingHint')}</p>
+                      <div className="grid gap-6 md:grid-cols-2">
+                        {(['Departure', 'Arrival'] as const).map((side) => (
+                          <div className="space-y-4" key={side}>
+                            <p className="text-sm font-medium">
+                              {t(side === 'Departure' ? 'departure' : 'arrival')}
+                            </p>
+                            <Field>
+                              <FieldLabel>{t('date')}</FieldLabel>
+                              <DatePicker
+                                id={`transport-${side}-date`}
+                                label={t('date')}
+                                value={form[`transport${side}Date`]}
+                                onChange={(date) => {
+                                  updateForm(`transport${side}Date`, date);
+                                  updateForm(`transport${side}AuthoritativeInstant`, '');
+                                }}
+                              />
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor={`transport-${side}-time`}>
+                                {t('time')}
+                              </FieldLabel>
+                              <TimeInput
+                                id={`transport-${side}-time`}
+                                value={form[`transport${side}Time`]}
+                                onValueChange={(time) => {
+                                  updateForm(`transport${side}Time`, time);
+                                  updateForm(`transport${side}AuthoritativeInstant`, '');
+                                }}
+                              />
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor={`transport-${side}-zone`}>
+                                {t('timeZone')}
+                              </FieldLabel>
+                              <Input
+                                id={`transport-${side}-zone`}
+                                maxLength={100}
+                                value={form[`transport${side}TimeZone`]}
+                                onChange={(event) => {
+                                  updateForm(`transport${side}TimeZone`, event.target.value);
+                                  updateForm(`transport${side}AuthoritativeInstant`, '');
+                                }}
+                                placeholder={t('timeZonePlaceholder')}
+                              />
+                            </Field>
+                          </div>
+                        ))}
                       </div>
                     </section>
                   ) : null}

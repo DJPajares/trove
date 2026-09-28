@@ -1,7 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPrismaClient, type Prisma } from '@trove/db';
 
-import { formatInstantInTimeZone, formatLocalTime, parseLocalTime } from './itinerary-rules.js';
+import {
+  floatingLocalTimeToInstant,
+  formatInstantInTimeZone,
+  formatLocalTime,
+  parseLocalTime,
+} from './itinerary-rules.js';
 import { refreshDayDefaultTimeZone } from './itineraries.js';
 import { resolvedPlaceTimeZone } from './place-data.js';
 import { placeProviderRefInclude } from './place-serializer.js';
@@ -63,7 +68,11 @@ export type FlightDetailsInput = {
   terminal?: string | null;
 };
 
+export type TransportEndpointInput = Omit<FlightEndpointInput, 'airport'>;
+
 export type TransportDetailsInput = {
+  departure?: TransportEndpointInput | null;
+  arrival?: TransportEndpointInput | null;
   dropoffLocation?: string | null;
   operator?: string | null;
   pickupLocation?: string | null;
@@ -92,6 +101,7 @@ export class ReservationValidationError extends Error {
       | 'invalid_reservation'
       | 'invalid_reservation_date'
       | 'invalid_reservation_time'
+      | 'invalid_transport_details'
       | 'invalid_flight_details',
   ) {
     super(code);
@@ -307,6 +317,14 @@ const emptyFlightData = {
 };
 
 const emptyTransportData = {
+  transportDepartureLocalDate: null,
+  transportDepartureLocalTime: null,
+  transportDepartureTimeZone: null,
+  transportDepartureInstant: null,
+  transportArrivalLocalDate: null,
+  transportArrivalLocalTime: null,
+  transportArrivalTimeZone: null,
+  transportArrivalInstant: null,
   transportDropoffLocation: null,
   transportOperator: null,
   transportPickupLocation: null,
@@ -349,7 +367,11 @@ function flightEndpointData(
   const localTime = endpoint.localTime ?? null;
   const timeZone = normalizeOptional(endpoint.timeZone);
   const authoritativeInstant = parseAuthoritativeInstant(endpoint.authoritativeInstant);
-  if ((localTime && !localDate) || (localDate && !timeZone) || (!localDate && timeZone)) {
+  if (
+    (localTime && !localDate) ||
+    (localDate && !timeZone) ||
+    (!localDate && timeZone && !authoritativeInstant)
+  ) {
     throw new ReservationValidationError('invalid_flight_details');
   }
   if (timeZone && !isValidIanaTimeZone(timeZone)) {
@@ -412,17 +434,67 @@ function isStructuredTransport(type: ReservationType | null) {
   );
 }
 
+function transportEndpointData(
+  endpoint: TransportEndpointInput | null | undefined,
+  side: 'departure' | 'arrival',
+) {
+  const data = flightEndpointData(endpoint, 'flightDeparture');
+  if (
+    endpoint?.localDate &&
+    endpoint.localTime &&
+    endpoint.timeZone &&
+    !endpoint.authoritativeInstant
+  ) {
+    try {
+      floatingLocalTimeToInstant(endpoint.localDate, endpoint.localTime, endpoint.timeZone);
+    } catch {
+      throw new ReservationValidationError('invalid_flight_details');
+    }
+  }
+  return side === 'departure'
+    ? {
+        transportDepartureLocalDate: data.flightDepartureLocalDate ?? null,
+        transportDepartureLocalTime: data.flightDepartureLocalTime ?? null,
+        transportDepartureTimeZone: data.flightDepartureTimeZone ?? null,
+        transportDepartureInstant: data.flightDepartureInstant ?? null,
+      }
+    : {
+        transportArrivalLocalDate: data.flightDepartureLocalDate ?? null,
+        transportArrivalLocalTime: data.flightDepartureLocalTime ?? null,
+        transportArrivalTimeZone: data.flightDepartureTimeZone ?? null,
+        transportArrivalInstant: data.flightDepartureInstant ?? null,
+      };
+}
+
 function transportData(
   value: TransportDetailsInput | null | undefined,
   type: ReservationType | null,
 ) {
   if (!isStructuredTransport(type) || !value) return emptyTransportData;
-  return {
-    transportDropoffLocation: normalizeOptional(value.dropoffLocation),
-    transportOperator: normalizeOptional(value.operator),
-    transportPickupLocation: normalizeOptional(value.pickupLocation),
-    transportServiceNumber: normalizeOptional(value.serviceNumber),
-  };
+  try {
+    const endpointInstant = (endpoint: TransportEndpointInput | null | undefined) =>
+      endpoint?.authoritativeInstant
+        ? new Date(endpoint.authoritativeInstant)
+        : endpoint?.localDate && endpoint.localTime && endpoint.timeZone
+          ? floatingLocalTimeToInstant(endpoint.localDate, endpoint.localTime, endpoint.timeZone)
+          : null;
+    const departure = transportEndpointData(value.departure, 'departure');
+    const arrival = transportEndpointData(value.arrival, 'arrival');
+    const start = endpointInstant(value.departure),
+      end = endpointInstant(value.arrival);
+    if (start && end && end.getTime() <= start.getTime())
+      throw new ReservationValidationError('invalid_transport_details');
+    return {
+      ...departure,
+      ...arrival,
+      transportDropoffLocation: normalizeOptional(value.dropoffLocation),
+      transportOperator: normalizeOptional(value.operator),
+      transportPickupLocation: normalizeOptional(value.pickupLocation),
+      transportServiceNumber: normalizeOptional(value.serviceNumber),
+    };
+  } catch {
+    throw new ReservationValidationError('invalid_transport_details');
+  }
 }
 
 function flightDetailsFromReservation(reservation: {
@@ -485,12 +557,24 @@ function flightDetailsFromReservation(reservation: {
 }
 
 function transportDetailsFromReservation(reservation: {
+  transportDepartureLocalDate?: Date | null;
+  transportDepartureLocalTime?: Date | null;
+  transportDepartureTimeZone?: string | null;
+  transportDepartureInstant?: Date | null;
+  transportArrivalLocalDate?: Date | null;
+  transportArrivalLocalTime?: Date | null;
+  transportArrivalTimeZone?: string | null;
+  transportArrivalInstant?: Date | null;
   transportDropoffLocation: string | null;
   transportOperator: string | null;
   transportPickupLocation: string | null;
   transportServiceNumber: string | null;
 }): TransportDetailsInput | null {
   if (
+    !reservation.transportDepartureLocalDate &&
+    !reservation.transportDepartureInstant &&
+    !reservation.transportArrivalLocalDate &&
+    !reservation.transportArrivalInstant &&
     !reservation.transportDropoffLocation &&
     !reservation.transportOperator &&
     !reservation.transportPickupLocation &&
@@ -499,6 +583,28 @@ function transportDetailsFromReservation(reservation: {
     return null;
   }
   return {
+    departure:
+      reservation.transportDepartureLocalDate || reservation.transportDepartureInstant
+        ? {
+            localDate: reservation.transportDepartureLocalDate
+              ? formatDateOnly(reservation.transportDepartureLocalDate)
+              : null,
+            localTime: formatLocalTime(reservation.transportDepartureLocalTime ?? null),
+            timeZone: reservation.transportDepartureTimeZone ?? null,
+            authoritativeInstant: reservation.transportDepartureInstant?.toISOString() ?? null,
+          }
+        : null,
+    arrival:
+      reservation.transportArrivalLocalDate || reservation.transportArrivalInstant
+        ? {
+            localDate: reservation.transportArrivalLocalDate
+              ? formatDateOnly(reservation.transportArrivalLocalDate)
+              : null,
+            localTime: formatLocalTime(reservation.transportArrivalLocalTime ?? null),
+            timeZone: reservation.transportArrivalTimeZone ?? null,
+            authoritativeInstant: reservation.transportArrivalInstant?.toISOString() ?? null,
+          }
+        : null,
     dropoffLocation: reservation.transportDropoffLocation,
     operator: reservation.transportOperator,
     pickupLocation: reservation.transportPickupLocation,

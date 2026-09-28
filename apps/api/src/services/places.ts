@@ -55,7 +55,7 @@ export type ProviderAttribution = {
 /**
  * `location` asks the provider only for identity and coordinates — everything
  * Trove stores and every screen renders. `evidence` adds just the mutable
- * fields Plan Score reads (rating, hours), which are never stored.
+ * fields rendered by rich details and reused by scoring in a dated, bounded cache.
  *
  * Required, not optional: an omitted level used to fall back to the most
  * expensive tier Google sells, so forgetting it was a silent bill rather than
@@ -96,11 +96,17 @@ export type ProviderPlaceDetails = {
   primaryType: string | null;
   provider: PlaceProviderName;
   rating: number | null;
+  userRatingCount?: number | null;
+  openingHoursDescriptions?: string[];
+  currentOpeningPeriods?: PlaceOpeningPeriod[];
+  currentHoursValidFrom?: string | null;
+  currentHoursValidThrough?: string | null;
   rawTypes: string[];
   utcOffsetMinutes: number | null;
 };
 
 export type PlaceOpeningPoint = {
+  date?: string;
   day: number;
   hour: number;
   minute: number;
@@ -138,12 +144,28 @@ export interface PlacesProvider {
 
 export type ProviderPlaceIdentity = Omit<
   ProviderPlaceDetails,
-  'location' | 'openingPeriods' | 'rating'
+  | 'location'
+  | 'openingPeriods'
+  | 'rating'
+  | 'userRatingCount'
+  | 'openingHoursDescriptions'
+  | 'currentOpeningPeriods'
+  | 'currentHoursValidFrom'
+  | 'currentHoursValidThrough'
 > & { location: PlaceCoordinates };
 
 export type ProviderPlaceSearchResult = ProviderPlaceIdentity & {
   /** Present when requested, even when Google has no hours or rating. */
-  evidence?: Pick<ProviderPlaceDetails, 'openingPeriods' | 'rating'>;
+  evidence?: Pick<
+    ProviderPlaceDetails,
+    | 'openingPeriods'
+    | 'rating'
+    | 'userRatingCount'
+    | 'openingHoursDescriptions'
+    | 'currentOpeningPeriods'
+    | 'currentHoursValidFrom'
+    | 'currentHoursValidThrough'
+  >;
 };
 
 export interface PlaceTextSearchProvider {

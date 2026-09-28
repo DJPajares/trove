@@ -603,15 +603,15 @@ test('a location request asks for coordinates only, not the billable detail', as
   expect(Object.keys(PLACE_DETAIL_FIELD_MASKS).toSorted()).toStrictEqual(['evidence', 'location']);
 
   // The expensive fields are exactly what separates the two.
-  for (const field of ['rating', 'regularOpeningHours']) {
+  for (const field of ['rating', 'regularOpeningHours', 'userRatingCount', 'currentOpeningHours']) {
     expect(GOOGLE_PLACE_LOCATION_FIELD_MASK.includes(field), field).toBe(false);
   }
   // Evidence asks for the mutable fields Plan Score reads, but not the ones
   // that only a place's own sheet renders.
-  for (const field of ['rating', 'regularOpeningHours']) {
+  for (const field of ['rating', 'regularOpeningHours', 'userRatingCount', 'currentOpeningHours']) {
     expect(GOOGLE_PLACE_EVIDENCE_FIELD_MASK.includes(field), field).toBe(true);
   }
-  for (const field of ['photos', 'nationalPhoneNumber', 'websiteUri', 'userRatingCount']) {
+  for (const field of ['photos', 'nationalPhoneNumber', 'websiteUri']) {
     expect(GOOGLE_PLACE_EVIDENCE_FIELD_MASK.includes(field), field).toBe(false);
   }
 });
@@ -764,16 +764,20 @@ test('an evidence request never reads the snapshot, which cannot carry ratings o
   expect(result.status === 'ok' && result.freshness.source).toBe('live');
 });
 
-test('the mutable half of a place is never written to the database', async () => {
+test('rich evidence is stored separately with its original acquisition date', async () => {
   seedProviderRef('ChIJmuseum');
   const service = new CachedPlacesService(countingPlacesProvider().provider);
 
   await service.getDetails({ detail: 'evidence', externalPlaceId: 'ChIJmuseum' });
 
-  const stored = JSON.stringify(providerRefs.get('ChIJmuseum'));
-  for (const forbidden of ['4.5', 'rating', 'openingPeriods', 'userRatingCount']) {
-    expect(stored.includes(forbidden), forbidden).toBe(false);
-  }
+  const stored = providerRefs.get('ChIJmuseum') as unknown as {
+    cachedEvidence: ProviderPlaceDetails;
+    cachedEvidenceAt: Date;
+    cachedAt: Date | null;
+  };
+  expect(stored.cachedEvidence.rating).toBe(4.5);
+  expect(stored.cachedEvidenceAt).toBeInstanceOf(Date);
+  expect(stored.cachedAt).toBeNull();
 });
 
 test('seeded search evidence keeps its original age and language/region isolation', async () => {
@@ -786,13 +790,13 @@ test('seeded search evidence keeps its original age and language/region isolatio
   if (result.status !== 'ok') throw new Error('fixture must provide evidence');
   resetProviderCallCounts();
   const request = { externalPlaceId: 'ChIJmuseum', languageCode: 'en', regionCode: 'SG' };
-  rememberPlaceEvidence(request, result);
+  await rememberPlaceEvidence(request, result);
   const service = new CachedPlacesService(provider, () => now);
-  now = new Date(now.getTime() + 5 * 60_000 - 1);
+  now = new Date(now.getTime() + 30 * DAY_MS - 1);
   const hit = await service.getDetails({ ...request, detail: 'evidence' });
   expect(hit).toEqual(result);
   expect(getProviderCallCounts()['google:getDetails'] ?? 0).toBe(0);
-  rememberPlaceEvidence(request, result);
+  await rememberPlaceEvidence(request, result);
   now = new Date(now.getTime() + 1);
   await service.getDetails({ ...request, detail: 'evidence' });
   expect(getProviderCallCounts()['google:getDetails']).toBe(1);
@@ -820,7 +824,7 @@ test('a leg already computed is not computed again', async () => {
   expect(second.status === 'ok' && second.estimate.durationSeconds).toBe(600);
 });
 
-test('Plan Score refreshes a 24-hour route while other surfaces retain permitted reuse', async () => {
+test('route retention is independent of the calling surface', async () => {
   let now = new Date('2026-09-01T09:00:00Z');
   const { provider, calls } = countingRoutesProvider();
   const ordinary = new CachedRoutesService(provider, () => now, 'itinerary-routes');
@@ -838,7 +842,7 @@ test('Plan Score refreshes a 24-hour route while other surfaces retain permitted
   await ordinary.computeRoute(request);
   expect(calls()).toBe(1);
   await scoring.computeRoute(request);
-  expect(calls()).toBe(2);
+  expect(calls()).toBe(1);
 });
 
 test('a leg cached without a polyline is recomputed when the map needs one', async () => {
@@ -954,10 +958,9 @@ async function withEnvOverride<T>(
   }
 }
 
-test('Plan Score fetches evidence only for scheduled trip places, not every saved one', async () => {
+test('Plan Score reads scheduled evidence without acquiring missing places', async () => {
   tripFixture = buildPlanScoreTripFixture();
-  const { provider, requests } = detailRequestsProvider();
-  const placesService = new CachedPlacesService(provider);
+  const { requests } = detailRequestsProvider();
 
   // Real network calls for routing would need a real Routes API key; disabling
   // the provider keeps this test's routes leg deterministic and offline while
@@ -966,36 +969,32 @@ test('Plan Score fetches evidence only for scheduled trip places, not every save
   // environment, since this test verifies its normal (not disabled) behaviour.
   await withEnvOverride(
     { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
-    () => getTripPlanScore('user-1', 'trip-1', { placesService }),
+    () => getTripPlanScore('user-1', 'trip-1', {}),
   );
 
   const evidenceRequests = requests.filter((request) => request.detail === 'evidence');
   expect(
     evidenceRequests.map((request) => request.externalPlaceId),
     'the unscheduled trip place must never be asked for evidence',
-  ).toStrictEqual(['ChIJscheduled']);
+  ).toStrictEqual([]);
 });
 
 test('TROVE_PLAN_SCORE_DISABLED stops every provider call, even with a working service supplied', async () => {
   tripFixture = buildPlanScoreTripFixture();
-  const { provider, requests } = detailRequestsProvider();
-  const placesService = new CachedPlacesService(provider);
+  const { requests } = detailRequestsProvider();
 
   await withEnvOverride(
     { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
-    () => getTripPlanScore('user-1', 'trip-1', { placesService }),
+    () => getTripPlanScore('user-1', 'trip-1', {}),
   );
-  expect(
-    requests.length > 0,
-    'sanity check: the fixture normally does call the provider',
-  ).toBeTruthy();
+  expect(requests.length, 'cache-only scoring must not reach a provider even when enabled').toBe(0);
 
   requests.length = 0;
   resetCachedPlacesMemo();
   const tripFindFirstCallsBeforeDisabled = tripFindFirstCalls;
   const disabled = await withEnvOverride(
     { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: '1' },
-    () => getTripPlanScore('user-1', 'trip-1', { placesService }),
+    () => getTripPlanScore('user-1', 'trip-1', {}),
   );
 
   expect(disabled, 'the kill switch must stop before trip lookup or scoring').toBe(null);
@@ -1044,16 +1043,15 @@ test('a stored Plan Score serves an unchanged trip with no provider call', async
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-09-01T09:00:00.000Z'));
   tripFixture = buildPlanScoreTripFixture();
-  const { provider, requests } = detailRequestsProvider();
-  const placesService = new CachedPlacesService(provider);
+  const { requests } = detailRequestsProvider();
   const scoreAt = (now: Date) =>
     withEnvOverride(
       { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
-      () => getTripPlanScore('user-1', 'trip-1', { now: () => now, placesService }),
+      () => getTripPlanScore('user-1', 'trip-1', { now: () => now }),
     );
 
   const first = await scoreAt(new Date('2026-09-01T09:00:00.000Z'));
-  expect(requests.length, 'the first look has to compute').toBeGreaterThan(0);
+  expect(requests.length, 'a first computation is cache-only').toBe(0);
   expect(tripPlanScoreWrites).toBe(1);
 
   requests.length = 0;
@@ -1068,10 +1066,10 @@ test('a stored Plan Score serves an unchanged trip with no provider call', async
 test('the stored Plan Score is invalidated by what the rubric reads, and only that', async () => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-09-01T09:00:00.000Z'));
-  const scoreAt = (now: Date, placesService: CachedPlacesService) =>
+  const scoreAt = (now: Date) =>
     withEnvOverride(
       { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
-      () => getTripPlanScore('user-1', 'trip-1', { now: () => now, placesService }),
+      () => getTripPlanScore('user-1', 'trip-1', { now: () => now }),
     );
   const NOW = new Date('2026-09-01T09:00:00.000Z');
 
@@ -1079,14 +1077,15 @@ test('the stored Plan Score is invalidated by what the rubric reads, and only th
   // look had to pay for itself.
   const recomputesAfter = async (edit: (trip: PlanScoreTripFixture) => void) => {
     tripFixture = buildPlanScoreTripFixture();
-    const { provider, requests } = detailRequestsProvider();
-    const placesService = new CachedPlacesService(provider);
-    await scoreAt(NOW, placesService);
+    const { requests } = detailRequestsProvider();
+    await scoreAt(NOW);
     requests.length = 0;
     resetCachedPlacesMemo();
     edit(tripFixture as PlanScoreTripFixture);
-    await scoreAt(NOW, placesService);
-    return requests.length > 0;
+    const writesBefore = tripPlanScoreWrites;
+    await scoreAt(NOW);
+    expect(requests).toHaveLength(0);
+    return tripPlanScoreWrites > writesBefore;
   };
 
   expect(await recomputesAfter(() => {}), 'nothing changed').toBe(false);
@@ -1142,12 +1141,11 @@ test('the stored Plan Score is invalidated by what the rubric reads, and only th
 
 test('a stored Plan Score expires even when nothing about the trip changed', async () => {
   tripFixture = buildPlanScoreTripFixture();
-  const { provider, requests } = detailRequestsProvider();
-  const placesService = new CachedPlacesService(provider);
+  const { requests } = detailRequestsProvider();
   const scoreAt = (now: Date) =>
     withEnvOverride(
       { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
-      () => getTripPlanScore('user-1', 'trip-1', { now: () => now, placesService }),
+      () => getTripPlanScore('user-1', 'trip-1', { now: () => now }),
     );
 
   const first = new Date('2026-09-01T09:00:00.000Z');
@@ -1158,7 +1156,8 @@ test('a stored Plan Score expires even when nothing about the trip changed', asy
   // Opening hours and ratings move underneath a plan nobody edits, and no
   // revision can express that, so age alone has to force the refresh.
   await scoreAt(new Date(first.getTime() + PLAN_SCORE_CACHE_TTL_MS));
-  expect(requests.length, 'an expired score must be recomputed').toBeGreaterThan(0);
+  expect(requests.length, 'an expired score recomputes without provider calls').toBe(0);
+  expect(tripPlanScoreWrites).toBe(2);
 });
 
 test('an inflated Apply timestamp cannot renew an expired generated assessment', async () => {
@@ -1182,16 +1181,15 @@ test('an inflated Apply timestamp cannot renew an expired generated assessment',
     planScoreComputedAt: now,
     planScoreRevision: readPlanScoreInputs(trip as never).revision,
   };
-  const { provider, requests } = detailRequestsProvider();
+  const { requests } = detailRequestsProvider();
   const result = await withEnvOverride(
     { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
     () =>
       getTripPlanScore('user-1', 'trip-1', {
         now: () => now,
-        placesService: new CachedPlacesService(provider),
       }),
   );
-  expect(requests).toHaveLength(1);
+  expect(requests).toHaveLength(0);
   expect(result?.generatedAt).toBe(now.toISOString());
   expect(result?.score).not.toBe(72);
 });
@@ -1217,7 +1215,7 @@ test('an expired assessment is withheld when fresh providers are unavailable', a
   };
   const result = await withEnvOverride(
     { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
-    () => getTripPlanScore('user-1', 'trip-1', { now: () => now, placesService: null }),
+    () => getTripPlanScore('user-1', 'trip-1', { now: () => now }),
   );
   expect(result?.score).toBeNull();
   expect(result?.days.every((day) => day.score === null)).toBe(true);
@@ -1893,7 +1891,7 @@ test('six venues use one Places call each, with persisted identity and transient
   expect(failures).toEqual([]);
   expect(getProviderCallCounts()['google:textSearch']).toBe(7);
   expect(getProviderCallCounts()['google:getDetails'] ?? 0).toBe(0);
-  expect(snapshotWrites).toBe(7);
+  expect(snapshotWrites).toBe(13);
   expect(groundingMappings.size).toBe(7);
   expect(
     events.filter(
@@ -1919,8 +1917,8 @@ test('six venues use one Places call each, with persisted identity and transient
   await run();
   expect(failures).toEqual([]);
   expect(getProviderCallCounts()['google:textSearch']).toBe(7);
-  expect(getProviderCallCounts()['google:getDetails']).toBe(6);
-  expect(snapshotWrites).toBe(7);
+  expect(getProviderCallCounts()['google:getDetails'] ?? 0).toBe(0);
+  expect(snapshotWrites).toBe(13);
   expect([...providerRefs.values()].map((ref) => ref.cachedAt)).toEqual(originalDates);
   expect(routeRequests).toHaveLength(9); // Three unchanged adjacent legs per run.
   for (const draft of drafts) {
@@ -1968,20 +1966,20 @@ test('six venues use one Places call each, with persisted identity and transient
   );
   resetCachedPlacesMemo();
   const previousSearches = getProviderCallCounts()['google:textSearch']!;
-  const previousDetails = getProviderCallCounts()['google:getDetails']!;
+  const previousDetails = getProviderCallCounts()['google:getDetails'] ?? 0;
   // Identity snapshots have a separate retention policy. Fresh score evidence
   // may be fetched while those identity decisions legitimately keep their age.
   vi.setSystemTime(new Date('2026-09-03T13:00:00Z'));
   await run();
   expect(failures).toEqual([]);
   expect(getProviderCallCounts()['google:textSearch']! - previousSearches).toBe(1);
-  expect(getProviderCallCounts()['google:getDetails']! - previousDetails).toBe(5);
+  expect((getProviderCallCounts()['google:getDetails'] ?? 0) - previousDetails).toBe(0);
   expect(
     drafts[3]!.evidence.some(
       (entry) => entry.kind === 'identity' && entry.checkedAt === '2026-09-02T12:00:00.000Z',
     ),
   ).toBe(true);
-  expect(planScores[3]!.evidenceAsOf).toBe('2026-09-03T13:00:00.000Z');
+  expect(planScores[3]!.evidenceAsOf).toBe('2026-09-02T12:00:00.000Z');
   expect(planScores[3]!.score).not.toBeNull();
   expect(planScores[3]!.sourceInputRevision).toBe(draftPlanScoreInputRevision(drafts[3]!));
   for (const row of groundingMappings.values()) {
@@ -2033,4 +2031,37 @@ test('a persisted negative grounding result avoids another billable search and r
     provider: 'google',
     source: 'ai-planner',
   });
+});
+
+test('concurrent rich details across service instances acquire once and persist original evidence age', async () => {
+  seedProviderRef('ChIJmuseum');
+  const { provider, calls } = countingPlacesProvider();
+  const request = { externalPlaceId: 'ChIJmuseum', detail: 'evidence' as const };
+  const [a, b] = await Promise.all([
+    new CachedPlacesService(provider).getDetails(request),
+    new CachedPlacesService(provider).getDetails(request),
+  ]);
+  expect(calls()).toBe(1);
+  expect(a).toEqual(b);
+  resetCachedPlacesMemo();
+  const c = await new CachedPlacesService(provider).getDetails(request);
+  expect(calls()).toBe(1);
+  expect(c.status === 'ok' && c.freshness.fetchedAt).toBe(
+    a.status === 'ok' && a.freshness.fetchedAt,
+  );
+});
+
+test('concurrent route acquisition across instances buys one leg', async () => {
+  const { provider, calls } = countingRoutesProvider();
+  const request: RouteRequest = {
+    origin: { latitude: 1, longitude: 2 },
+    destination: { latitude: 2, longitude: 3 },
+    mode: 'walk',
+  };
+  const [a, b] = await Promise.all([
+    new CachedRoutesService(provider).computeRoute(request),
+    new CachedRoutesService(provider).computeRoute(request),
+  ]);
+  expect(calls()).toBe(1);
+  expect(a).toEqual(b);
 });

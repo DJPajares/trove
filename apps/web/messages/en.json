@@ -1145,7 +1145,10 @@
     "deleteTitle": "Delete this reservation?",
     "deleteDescription": "{title} and its attached documents will be permanently removed.",
     "deleting": "Deleting…",
-    "deleteError": "We couldn't delete this reservation. Try again."
+    "deleteError": "We couldn't delete this reservation. Try again.",
+    "transportTimingHint": "Add known departure and arrival details in their own local timezones. Arrival can be on a later date.",
+    "transportTimingError": "Check the transport dates, times, and timezones. Each date needs a valid timezone, and arrival must follow departure.",
+    "transportEndpointError": "For each transport time, add its date and IANA timezone."
   },
   "expenses": {
     "title": "Expenses for {trip}",
@@ -1367,7 +1370,14 @@
     "snapshotStale": "From Google on {date}. Due a refresh.",
     "source": "Details",
     "timeZone": "Time zone",
-    "unavailableDescription": "Current provider details are unavailable."
+    "unavailableDescription": "Current provider details are unavailable.",
+    "rating": "Public rating",
+    "ratingSummary": "{rating} / 5 · {count, plural, one {# review} other {# reviews}}",
+    "ratingOnly": "{rating} / 5",
+    "openingHours": "Regular opening hours",
+    "evidenceDated": "Details checked",
+    "googleAttribution": "Google Maps",
+    "richUnavailable": "Ratings and hours are unavailable. You can continue planning."
   },
   "itinerary": {
     "title": "Itinerary for {trip}",
@@ -2612,5 +2622,53 @@
         "mi": "mi"
       }
     }
+  },
+  "planningPreferences": {
+    "title": "Travel preferences",
+    "hint": "Optional pace and interests for this trip.",
+    "pace": "Pace",
+    "paceHint": "Balanced is an estimate until you choose a pace.",
+    "paces": {
+      "default": "Balanced · default",
+      "relaxed": "Relaxed",
+      "balanced": "Balanced",
+      "packed": "Packed"
+    },
+    "interests": "Interests",
+    "interestsHint": "Choose what matters to you. There is no required attraction checklist.",
+    "otherInterests": "Other interests",
+    "otherInterestsHint": "Keep any additional interests in your own words.",
+    "interestsList": {
+      "culture_history": "Culture & history",
+      "art_museums": "Art & museums",
+      "food_drink": "Food & drink",
+      "nature_scenery": "Nature & scenery",
+      "outdoor_activities": "Outdoor activities",
+      "architecture": "Architecture",
+      "shopping": "Shopping",
+      "entertainment_nightlife": "Entertainment & nightlife",
+      "wellness_relaxation": "Wellness & relaxation"
+    }
+  },
+  "dayPlanningContext": {
+    "title": "Day intent & available time",
+    "hint": "Optional context for how you want this day to feel.",
+    "intent": "Day intent",
+    "intents": {
+      "unknown": "Not specified",
+      "explore": "Explore",
+      "focused": "Focused",
+      "rest": "Rest",
+      "transit": "Transit"
+    },
+    "start": "Available from",
+    "end": "Available until",
+    "windowHint": "Local time in {timeZone}. Leave both blank for an open day.",
+    "clearWindow": "Clear time window",
+    "windowError": "Add both times, with the end later than the start.",
+    "saveError": "Could not save the day settings. Try again.",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…"
   }
 }

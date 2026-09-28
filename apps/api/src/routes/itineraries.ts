@@ -64,6 +64,11 @@ export function registerItineraryRoutes(app: FastifyInstance) {
     controllers.updateDayNote,
   );
   app.patch(
+    '/trips/:tripId/itinerary/days/:itineraryDayId/planning-context',
+    authenticated,
+    controllers.updateDayPlanningContext,
+  );
+  app.patch(
     '/trips/:tripId/itinerary/days/:itineraryDayId/name',
     authenticated,
     controllers.updateDayName,

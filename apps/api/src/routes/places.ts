@@ -20,13 +20,18 @@ export function registerPlacesRoutes(app: FastifyInstance) {
     createPlaceLocationCandidatesService({ environment: process.env, source: 'place-locate' }),
   );
 
+  app.get(
+    '/places/:placeId/details',
+    { config: PROVIDER_SEARCH_RATE_LIMIT, preHandler: requireAuthenticatedUser },
+    controllers.richDetails,
+  );
   app.post(
     '/places/search',
     { config: PROVIDER_SEARCH_RATE_LIMIT, preHandler: requireAuthenticatedUser },
     controllers.search,
   );
-  // Resolving is the only place data endpoint that reaches the provider, and it
-  // does so once per Place ever. Every screen afterwards reads the database.
+  // Resolve identity on demand; opened rich details use the separate bounded
+  // evidence cache. Decorative surfaces never acquire provider data.
   app.post(
     '/places/resolve',
     { preHandler: requireAuthenticatedUser },

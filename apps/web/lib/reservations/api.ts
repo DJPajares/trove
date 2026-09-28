@@ -79,7 +79,11 @@ export type FlightDetails = {
   terminal: string | null;
 };
 
+export type TransportEndpoint = Omit<FlightEndpoint, 'airport'>;
+
 export type TransportDetails = {
+  departure?: TransportEndpoint | null;
+  arrival?: TransportEndpoint | null;
   dropoffLocation: string | null;
   operator: string | null;
   pickupLocation: string | null;

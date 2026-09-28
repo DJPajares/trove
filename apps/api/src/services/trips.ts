@@ -1,4 +1,11 @@
-import { reassignedDayNotes, type DayNoteResolution, type TripShrinkImpact } from '@trove/types';
+import {
+  readTripPlanningPreferences,
+  effectiveTripPace,
+  type TripPlanningPreferences,
+  reassignedDayNotes,
+  type DayNoteResolution,
+  type TripShrinkImpact,
+} from '@trove/types';
 import { hasShrinkContent, tripShrinkImpact } from './trip-shrink.js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPrismaClient, Prisma } from '@trove/db';
@@ -31,6 +38,7 @@ export const TRIP_COVERS_BUCKET = 'trip-covers';
 export type TripDestinationInput = { name: string };
 
 export type TripCreate = {
+  planningPreferences?: TripPlanningPreferences | null;
   /** ISO 3166-1 alpha-2, already validated and de-duplicated by the controller. */
   countries?: string[];
   coverPhotoPath?: string | null;
@@ -219,6 +227,8 @@ async function serializeTrip(
   );
 
   return {
+    planningPreferences: readTripPlanningPreferences(trip.planningPreferences),
+    effectivePace: effectiveTripPace(readTripPlanningPreferences(trip.planningPreferences)),
     countries: trip.countries,
     coverPhotoPath: trip.coverPhotoPath,
     coverPhotoUrl: await createCoverUrl(supabase, trip.coverPhotoPath),
@@ -468,6 +478,7 @@ export async function createTrip(userId: string, accessToken: string, input: Tri
     });
     const trip = await transaction.trip.create({
       data: {
+        planningPreferences: input.planningPreferences ?? Prisma.DbNull,
         countries: input.countries ?? [],
         coverPhotoPath: input.coverPhotoPath ?? null,
         creatorId: userId,
@@ -778,6 +789,9 @@ export async function updateTrip(
         await transaction.trip.update({
           where: { id: tripId },
           data: {
+            ...(input.planningPreferences !== undefined
+              ? { planningPreferences: input.planningPreferences ?? Prisma.DbNull }
+              : {}),
             ...(input.countries !== undefined ? { countries: input.countries } : {}),
             ...(input.coverPhotoPath !== undefined ? { coverPhotoPath: input.coverPhotoPath } : {}),
             ...(input.description !== undefined

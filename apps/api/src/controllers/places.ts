@@ -1,3 +1,4 @@
+import { getPrismaClient } from '@trove/db';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
@@ -150,6 +151,38 @@ export function createPlacesControllers(
   placeLocationCandidatesService: PlaceLocationCandidatesService | null = null,
 ) {
   return {
+    async richDetails(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getAuthenticatedUserId(request, reply);
+      if (!userId) return;
+      const params = customPlaceParamsSchema.safeParse(request.params);
+      const query = z
+        .object({ languageCode: languageCodeSchema.optional() })
+        .strict()
+        .safeParse(request.query);
+      if (!params.success || !query.success)
+        return reply.code(400).send({ code: 'invalid_place_details' });
+      const place = await getPrismaClient().place.findFirst({
+        where: {
+          id: params.data.placeId,
+          OR: [
+            { ownerId: userId },
+            { savedPlaces: { some: { ownerId: userId } } },
+            { tripPlaces: { some: { trip: { ownerId: userId } } } },
+          ],
+        },
+        include: { providerRefs: true },
+      });
+      if (!place) return reply.code(404).send({ code: 'place_not_found' });
+      const ref = place.providerRefs.find((entry) => entry.provider === 'GOOGLE');
+      if (!ref) return reply.send({ status: 'empty', provider: 'google', reason: 'not_found' });
+      if (!placesService) return sendConfigurationMissing(reply);
+      const result = await placesService.getDetails({
+        externalPlaceId: ref.externalPlaceId,
+        detail: 'evidence',
+        languageCode: query.data.languageCode,
+      });
+      return reply.send(result);
+    },
     async createCustomPlace(request: FastifyRequest, reply: FastifyReply) {
       const userId = getAuthenticatedUserId(request, reply);
       if (!userId) return;

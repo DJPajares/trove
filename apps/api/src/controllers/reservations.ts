@@ -52,6 +52,8 @@ const flightDetailsSchema = z
   .strict();
 const transportDetailsSchema = z
   .object({
+    departure: flightEndpointSchema.omit({ airport: true }).nullable().optional(),
+    arrival: flightEndpointSchema.omit({ airport: true }).nullable().optional(),
     dropoffLocation: z.string().trim().max(300).nullable().optional(),
     operator: z.string().trim().max(200).nullable().optional(),
     pickupLocation: z.string().trim().max(300).nullable().optional(),

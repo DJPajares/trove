@@ -1,3 +1,4 @@
+import { cleanupProviderEvidence } from '../services/provider-evidence-retention.js';
 import { timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
@@ -86,5 +87,23 @@ export async function notificationDispatchController(request: FastifyRequest, re
   } catch {
     request.log.error({ kind: 'notification_dispatch' }, 'notification dispatch failed');
     return reply.code(503).send({ code: 'notification_dispatch_failed' });
+  }
+}
+
+export async function providerEvidenceRetentionController(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  if (!getMaintenanceEnvironment()) return reply.code(503).send({ code: 'configuration_missing' });
+  if (!isScheduler(request)) return reply.code(401).send({ code: 'unauthorized' });
+  try {
+    const report = await cleanupProviderEvidence();
+    request.log.info(
+      { ...report, kind: 'provider_evidence_retention' },
+      'provider evidence retention',
+    );
+    return reply.send(report);
+  } catch {
+    return reply.code(503).send({ code: 'retention_failed' });
   }
 }

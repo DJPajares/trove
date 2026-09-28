@@ -1,4 +1,5 @@
 'use client';
+import { DayPlanningContextDialog } from '@/components/day-planning-context';
 
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -132,6 +133,7 @@ import {
   setItineraryDayBase,
   updateItineraryDayNote,
   updateItineraryDayName,
+  updateItineraryDayPlanningContext,
   updateItineraryDayRouteMode,
   updateItineraryItem,
   updateItineraryItemRouteMode,
@@ -300,6 +302,7 @@ export function ItineraryManager({
   tripId,
 }: Readonly<{ planScoreEnabled: boolean; tripId: string }>) {
   const t = useTranslations('itinerary');
+  const dayContextT = useTranslations('dayPlanningContext');
   const tripPlacesTranslations = useTranslations('tripPlaces');
   const tripDescription = useTripContext()?.trip?.description?.trim() ?? '';
   const locale = useLocale();
@@ -359,6 +362,7 @@ export function ItineraryManager({
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [dayNoteEditor, setDayNoteEditor] = useState<ItineraryDay | null>(null);
+  const [contextDay, setContextDay] = useState<ItineraryDay | null>(null);
   const [dayNameEditor, setDayNameEditor] = useState<ItineraryDay | null>(null);
   const [daySettingsOpen, setDaySettingsOpen] = useState(false);
   const { compact, setCompactItinerary } = useCompactItinerary();
@@ -1850,6 +1854,17 @@ export function ItineraryManager({
                         <div className="border-b border-border p-2">
                           <Button
                             className="w-full justify-start px-3"
+                            type="button"
+                            variant="ghost"
+                            onClick={() => {
+                              setDaySettingsOpen(false);
+                              setContextDay(selectedDay);
+                            }}
+                          >
+                            {dayContextT('title')}
+                          </Button>
+                          <Button
+                            className="w-full justify-start px-3"
                             onClick={() => {
                               setDaySettingsOpen(false);
                               setDayNameEditor(selectedDay);
@@ -3028,6 +3043,29 @@ export function ItineraryManager({
         </DialogContent>
       </Dialog>
 
+      {contextDay ? (
+        <DayPlanningContextDialog
+          initial={contextDay.planningContext}
+          timeZone={contextDay.defaultTimeZone}
+          onClose={() => setContextDay(null)}
+          onSave={async (value) => {
+            const result = await updateItineraryDayPlanningContext(tripId, contextDay.id, value);
+            setItinerary((current) =>
+              current
+                ? {
+                    ...current,
+                    days: current.days.map((day) =>
+                      day.id === result.id
+                        ? { ...day, planningContext: result.planningContext }
+                        : day,
+                    ),
+                  }
+                : current,
+            );
+            void queryClient.invalidateQueries({ queryKey: queryKeys.planScore(tripId) });
+          }}
+        />
+      ) : null}
       <Dialog
         open={Boolean(dayNameEditor)}
         onOpenChange={(open) => {

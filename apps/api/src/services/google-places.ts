@@ -68,21 +68,16 @@ export const GOOGLE_TEXT_SEARCH_EVIDENCE_FIELD_MASK = [
   GOOGLE_TEXT_SEARCH_FIELD_MASK,
   'places.regularOpeningHours',
   'places.rating',
+  'places.userRatingCount',
 ].join(',');
 
-/**
- * Rating and hours only — what Plan Score reads and nothing else. These already
- * require Place Details Enterprise, not Enterprise + Atmosphere, so nothing
- * that is never rendered gets to ride along with them.
- *
- * Note there is no `location` here, and that is load-bearing: the snapshot
- * write refuses a place without coordinates, so an evidence answer can never
- * reach the database. Rating and hours may not be stored at any TTL (PRD 11.4).
- */
+/** Opened rich details and AI checks share one Enterprise response; identity masks stay cheap. */
 export const GOOGLE_PLACE_EVIDENCE_FIELD_MASK = [
   'attributions',
   'id',
   'rating',
+  'userRatingCount',
+  'currentOpeningHours',
   'regularOpeningHours',
   'utcOffsetMinutes',
 ].join(',');
@@ -124,6 +119,8 @@ type GooglePlaceDetails = {
   };
   primaryType?: string;
   rating?: number;
+  userRatingCount?: number;
+  currentOpeningHours?: { periods?: GoogleOpeningPeriod[] };
   regularOpeningHours?: {
     periods?: GoogleOpeningPeriod[];
     weekdayDescriptions?: string[];
@@ -145,7 +142,12 @@ type GoogleTextSearchResponse = { places?: GooglePlaceDetails[] };
  * and zero is common here: Sunday is day 0, midnight is hour 0, and any place
  * opening on the hour has minute 0.
  */
-type GoogleOpeningPoint = { day?: number; hour?: number; minute?: number };
+type GoogleOpeningPoint = {
+  date?: { year?: number; month?: number; day?: number };
+  day?: number;
+  hour?: number;
+  minute?: number;
+};
 type GoogleOpeningPeriod = { close?: GoogleOpeningPoint; open?: GoogleOpeningPoint };
 
 type GoogleErrorResponse = {
@@ -163,6 +165,24 @@ type GooglePlacesProviderOptions = {
   budget?: ProviderCallBudget;
 };
 
+function validReviewCount(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+function openingDate(point: GoogleOpeningPoint | undefined): string | null {
+  const date = point?.date;
+  if (!date?.year || !date.month || !date.day) return null;
+  return `${date.year}-${String(date.month).padStart(2, '0')}-${String(date.day).padStart(2, '0')}`;
+}
+function currentHoursRange(periods: GoogleOpeningPeriod[] | undefined) {
+  const dates = (periods ?? [])
+    .flatMap((period) =>
+      [openingDate(period.open), openingDate(period.close)].filter(
+        (date): date is string => date !== null,
+      ),
+    )
+    .toSorted();
+  return { from: dates[0] ?? null, through: dates.at(-1) ?? null };
+}
 function cleanString(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
@@ -228,7 +248,8 @@ function mapOpeningPoint(point: GoogleOpeningPoint | undefined): PlaceOpeningPoi
     minute >= 0 &&
     minute <= 59;
 
-  return inRange ? { day, hour, minute } : null;
+  const date = openingDate(point);
+  return inRange ? { day, hour, minute, ...(date ? { date } : {}) } : null;
 }
 
 function mapOpeningPeriods(periods: GoogleOpeningPeriod[] | undefined): PlaceOpeningPeriod[] {
@@ -501,6 +522,8 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
             ? {
                 evidence: {
                   openingPeriods: mapOpeningPeriods(place.regularOpeningHours?.periods),
+                  openingHoursDescriptions: place.regularOpeningHours?.weekdayDescriptions ?? [],
+                  userRatingCount: validReviewCount(place.userRatingCount),
                   rating:
                     typeof place.rating === 'number' && Number.isFinite(place.rating)
                       ? place.rating
@@ -580,6 +603,11 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
       location: hasLocation ? { latitude, longitude } : null,
       name: name ?? '',
       openingPeriods,
+      openingHoursDescriptions: response.regularOpeningHours?.weekdayDescriptions ?? [],
+      currentOpeningPeriods: mapOpeningPeriods(response.currentOpeningHours?.periods),
+      currentHoursValidFrom: currentHoursRange(response.currentOpeningHours?.periods).from,
+      currentHoursValidThrough: currentHoursRange(response.currentOpeningHours?.periods).through,
+      userRatingCount: validReviewCount(response.userRatingCount),
       primaryType,
       provider: 'google',
       rating: typeof response.rating === 'number' ? response.rating : null,

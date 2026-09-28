@@ -408,10 +408,8 @@ model PlaceProviderRef {
   /// canonical Trove truth (PRD 11.4) — `cachedAt` dates it and it is refetched
   /// once stale, which is what PRD 11.7 means by retaining freshness context.
   ///
-  /// Mutable detail — rating, review count, opening hours, website, phone,
-  /// photos — is deliberately absent and always fetched live. Caching it is
-  /// what the policy actually prohibits, and it is also the half that goes out
-  /// of date in ways a traveller would act on.
+  /// Rich scoring evidence has a separate bounded snapshot and timestamp below.
+  /// It is acquired only by normal details/AI flows, never by scoring.
   ///
   /// Without this, every rendered place name and every routed leg costs a Place
   /// Details call, because a provider Place otherwise stores no name and no
@@ -431,6 +429,11 @@ model PlaceProviderRef {
   /// a snapshot may only answer a request asking for the same language.
   cachedLanguageCode     String?   @map("cached_language_code")
   cachedAt               DateTime? @map("cached_at") @db.Timestamptz(3)
+  /// Bounded rich evidence acquired by normal details/AI flows, never scoring.
+  cachedEvidence         Json?     @map("cached_evidence") @db.JsonB
+  cachedEvidenceAt       DateTime? @map("cached_evidence_at") @db.Timestamptz(3)
+  cachedEvidenceRegion   String?   @map("cached_evidence_region")
+  cachedEvidenceLanguage String?   @map("cached_evidence_language")
   detailsFailureCode     String?   @map("details_failure_code")
   detailsFailedAt        DateTime? @map("details_failed_at") @db.Timestamptz(3)
 
@@ -668,6 +671,7 @@ model Trip {
   countries                      String[]              @default([]) @db.Char(2)
   startDate                      DateTime              @map("start_date") @db.Date
   endDate                        DateTime              @map("end_date") @db.Date
+  planningPreferences            Json?                 @map("planning_preferences") @db.JsonB
   partySize                      Int                   @default(1) @map("party_size")
   startingPlaceId                String?               @map("starting_place_id") @db.Uuid
   coverPhotoPath                 String?               @map("cover_photo_path")
@@ -958,6 +962,7 @@ model ItineraryDay {
   dailyBaseTripPlaceId             String?           @map("daily_base_trip_place_id") @db.Uuid
   dailyBaseDepartureTripPlaceId    String?           @map("daily_base_departure_trip_place_id") @db.Uuid
   notes                            String?           @db.Text
+  planningContext                  Json?             @map("planning_context") @db.JsonB
   routeStartTravelMode             RouteTravelMode   @default(DRIVE) @map("route_start_travel_mode")
   defaultTimeZone                  String            @map("default_time_zone")
   defaultTimeZoneSource            DayTimeZoneSource @map("default_time_zone_source")
@@ -1196,46 +1201,54 @@ model TripInfo {
 }
 
 model Reservation {
-  id                       String                     @id @default(uuid(7)) @db.Uuid
-  tripId                   String                     @map("trip_id") @db.Uuid
-  tripPlaceId              String?                    @map("trip_place_id") @db.Uuid
-  itineraryItemId          String?                    @map("itinerary_item_id") @db.Uuid
-  title                    String
-  type                     ReservationType?
-  provider                 String?
-  bookingReference         String?                    @map("booking_reference")
-  notes                    String?                    @db.Text
-  localDate                DateTime?                  @map("local_date") @db.Date
-  localTime                DateTime?                  @map("local_time") @db.Time(0)
-  timeZone                 String?                    @map("time_zone")
-  timeZoneSource           ReservationTimeZoneSource? @map("time_zone_source")
-  timeZoneResolvedAt       DateTime?                  @map("time_zone_resolved_at") @db.Timestamptz(3)
-  plannedCostAmount        Decimal?                   @map("planned_cost_amount") @db.Decimal(12, 2)
-  plannedCostCurrencyCode  String?                    @map("planned_cost_currency_code") @db.Char(3)
-  checkInDate              DateTime?                  @map("check_in_date") @db.Date
-  checkOutDate             DateTime?                  @map("check_out_date") @db.Date
-  accommodationAddress     String?                    @map("accommodation_address") @db.Text
-  flightAirline            String?                    @map("flight_airline")
-  flightNumber             String?                    @map("flight_number")
-  flightDepartureAirport   String?                    @map("flight_departure_airport")
-  flightDepartureLocalDate DateTime?                  @map("flight_departure_local_date") @db.Date
-  flightDepartureLocalTime DateTime?                  @map("flight_departure_local_time") @db.Time(0)
-  flightDepartureTimeZone  String?                    @map("flight_departure_time_zone")
-  flightDepartureInstant   DateTime?                  @map("flight_departure_instant") @db.Timestamptz(3)
-  flightArrivalAirport     String?                    @map("flight_arrival_airport")
-  flightArrivalLocalDate   DateTime?                  @map("flight_arrival_local_date") @db.Date
-  flightArrivalLocalTime   DateTime?                  @map("flight_arrival_local_time") @db.Time(0)
-  flightArrivalTimeZone    String?                    @map("flight_arrival_time_zone")
-  flightArrivalInstant     DateTime?                  @map("flight_arrival_instant") @db.Timestamptz(3)
-  flightTerminal           String?                    @map("flight_terminal")
-  flightGate               String?                    @map("flight_gate")
-  flightSeat               String?                    @map("flight_seat")
-  transportOperator        String?                    @map("transport_operator")
-  transportServiceNumber   String?                    @map("transport_service_number")
-  transportPickupLocation  String?                    @map("transport_pickup_location")
-  transportDropoffLocation String?                    @map("transport_dropoff_location")
-  createdAt                DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt                DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                          String                     @id @default(uuid(7)) @db.Uuid
+  tripId                      String                     @map("trip_id") @db.Uuid
+  tripPlaceId                 String?                    @map("trip_place_id") @db.Uuid
+  itineraryItemId             String?                    @map("itinerary_item_id") @db.Uuid
+  title                       String
+  type                        ReservationType?
+  provider                    String?
+  bookingReference            String?                    @map("booking_reference")
+  notes                       String?                    @db.Text
+  localDate                   DateTime?                  @map("local_date") @db.Date
+  localTime                   DateTime?                  @map("local_time") @db.Time(0)
+  timeZone                    String?                    @map("time_zone")
+  timeZoneSource              ReservationTimeZoneSource? @map("time_zone_source")
+  timeZoneResolvedAt          DateTime?                  @map("time_zone_resolved_at") @db.Timestamptz(3)
+  plannedCostAmount           Decimal?                   @map("planned_cost_amount") @db.Decimal(12, 2)
+  plannedCostCurrencyCode     String?                    @map("planned_cost_currency_code") @db.Char(3)
+  checkInDate                 DateTime?                  @map("check_in_date") @db.Date
+  checkOutDate                DateTime?                  @map("check_out_date") @db.Date
+  accommodationAddress        String?                    @map("accommodation_address") @db.Text
+  flightAirline               String?                    @map("flight_airline")
+  flightNumber                String?                    @map("flight_number")
+  flightDepartureAirport      String?                    @map("flight_departure_airport")
+  flightDepartureLocalDate    DateTime?                  @map("flight_departure_local_date") @db.Date
+  flightDepartureLocalTime    DateTime?                  @map("flight_departure_local_time") @db.Time(0)
+  flightDepartureTimeZone     String?                    @map("flight_departure_time_zone")
+  flightDepartureInstant      DateTime?                  @map("flight_departure_instant") @db.Timestamptz(3)
+  flightArrivalAirport        String?                    @map("flight_arrival_airport")
+  flightArrivalLocalDate      DateTime?                  @map("flight_arrival_local_date") @db.Date
+  flightArrivalLocalTime      DateTime?                  @map("flight_arrival_local_time") @db.Time(0)
+  flightArrivalTimeZone       String?                    @map("flight_arrival_time_zone")
+  flightArrivalInstant        DateTime?                  @map("flight_arrival_instant") @db.Timestamptz(3)
+  flightTerminal              String?                    @map("flight_terminal")
+  flightGate                  String?                    @map("flight_gate")
+  flightSeat                  String?                    @map("flight_seat")
+  transportDepartureLocalDate DateTime?                  @map("transport_departure_local_date") @db.Date
+  transportDepartureLocalTime DateTime?                  @map("transport_departure_local_time") @db.Time(0)
+  transportDepartureTimeZone  String?                    @map("transport_departure_time_zone")
+  transportDepartureInstant   DateTime?                  @map("transport_departure_instant") @db.Timestamptz(3)
+  transportArrivalLocalDate   DateTime?                  @map("transport_arrival_local_date") @db.Date
+  transportArrivalLocalTime   DateTime?                  @map("transport_arrival_local_time") @db.Time(0)
+  transportArrivalTimeZone    String?                    @map("transport_arrival_time_zone")
+  transportArrivalInstant     DateTime?                  @map("transport_arrival_instant") @db.Timestamptz(3)
+  transportOperator           String?                    @map("transport_operator")
+  transportServiceNumber      String?                    @map("transport_service_number")
+  transportPickupLocation     String?                    @map("transport_pickup_location")
+  transportDropoffLocation    String?                    @map("transport_dropoff_location")
+  createdAt                   DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                   DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   trip              Trip                          @relation(fields: [tripId], references: [id], onDelete: Cascade)
   tripPlace         TripPlace?                    @relation(fields: [tripPlaceId, tripId], references: [id, tripId], onDelete: NoAction)

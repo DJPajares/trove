@@ -10,8 +10,8 @@ import { TRIP_SCOPED_QUERY_ROOTS, type TripScopedQueryRoot } from '@/lib/query/k
  * no roots clears all of them, which is what an edit whose blast radius is not
  * obvious should do - a stale screen is a bug, a redundant refetch is not.
  *
- * Note that `trip-mode-context`, `plan-score` and `itinerary-day-routes` are
- * provider-billable. Invalidating them is the *only* thing that refetches them,
+ * Note that `trip-mode-context` and `itinerary-day-routes` can acquire provider
+ * evidence. `plan-score` only reads the cache. Invalidating them is the *only* thing that refetches them,
  * so leaving one out of a mutation's list shows up as a screen that will not
  * update rather than as an expense.
  */

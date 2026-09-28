@@ -1,3 +1,9 @@
+import {
+  readCachedPlaceEvidence,
+  storePlaceEvidence,
+  PLACE_EVIDENCE_TTL_MS,
+} from './place-evidence-cache.js';
+import { singleFlight } from './single-flight.js';
 import { getPrismaClient } from '@trove/db';
 
 import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
@@ -22,18 +28,13 @@ import {
 } from './places.js';
 
 /**
- * Google's terms allow place content to be cached for up to 30 consecutive
- * days, so that is the ceiling rather than a tuning knob.
+ * The accepted application snapshot ceiling is 30 days. This does not
+ * establish blanket provider permissions.
  */
 export const PLACE_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
 
-/**
- * An `evidence` answer cannot be persisted because it carries ratings and
- * opening hours, but the same trip place is often asked for several times
- * inside one burst of work. Short enough that nobody acts on stale hours, long
- * enough to absorb a Plan Score recomputation.
- */
-const EVIDENCE_MEMO_TTL_MS = 5 * 60 * 1_000;
+/** Operation-local fallback also preserves the bounded snapshot's original deadline. */
+const EVIDENCE_MEMO_TTL_MS = PLACE_EVIDENCE_TTL_MS;
 const EVIDENCE_MEMO_LIMIT = 500;
 
 type MemoEntry = { expiresAt: number; result: PlaceDetailsResult };
@@ -64,8 +65,8 @@ function memoKey(request: PlaceDetailsRequest) {
   ].join(' ');
 }
 
-/** Reuse selected Text Search evidence without a Details request or a snapshot write. */
-export function rememberPlaceEvidence(
+/** Reuse and persist selected Text Search evidence without another Details request. */
+export async function rememberPlaceEvidence(
   request: Omit<PlaceDetailsRequest, 'detail'>,
   result: Extract<PlaceDetailsResult, { status: 'ok' }>,
 ) {
@@ -81,6 +82,7 @@ export function rememberPlaceEvidence(
     if (!oldest.done) evidenceMemo.delete(oldest.value);
   }
   evidenceMemo.set(key, { expiresAt, result });
+  await storePlaceEvidence(request, result);
 }
 
 /**
@@ -139,7 +141,8 @@ export class CachedPlacesService extends PlacesService {
       }
       cacheMissReason = cached.reason;
     } else {
-      const memoized = this.readMemo(request);
+      const stored = await readCachedPlaceEvidence(request, this.now());
+      const memoized = stored ? { kind: 'hit' as const, result: stored } : this.readMemo(request);
       if (memoized.kind === 'hit') {
         this.recordHit(request, 'place-evidence');
         return memoized.result;
@@ -147,23 +150,25 @@ export class CachedPlacesService extends PlacesService {
       cacheMissReason = memoized.reason;
     }
 
-    const result = await super.getDetails({ ...request, cacheMissReason });
+    return singleFlight(`place:${memoKey(request)}`, async () => {
+      const result = await super.getDetails({ ...request, cacheMissReason });
 
-    if (result.status === 'ok') {
-      if (request.detail === 'location') {
-        if (!result.place.location) {
-          await this.writeFailure(request.externalPlaceId, 'UNUSABLE_LOCATION');
-          return { provider: this.providerName, reason: 'unusable_location', status: 'empty' };
+      if (result.status === 'ok') {
+        if (request.detail === 'location') {
+          if (!result.place.location) {
+            await this.writeFailure(request.externalPlaceId, 'UNUSABLE_LOCATION');
+            return { provider: this.providerName, reason: 'unusable_location', status: 'empty' };
+          }
+          await this.writeSnapshot(result.place, request.externalPlaceId, request.languageCode);
+        } else {
+          await rememberPlaceEvidence(request, result);
         }
-        await this.writeSnapshot(result.place, request.externalPlaceId, request.languageCode);
-      } else {
-        rememberPlaceEvidence(request, result);
+      } else if (request.detail === 'location' && result.status === 'empty') {
+        await this.writeFailure(request.externalPlaceId, 'NOT_FOUND');
       }
-    } else if (request.detail === 'location' && result.status === 'empty') {
-      await this.writeFailure(request.externalPlaceId, 'NOT_FOUND');
-    }
 
-    return result;
+      return result;
+    });
   }
 
   private recordHit(request: PlaceDetailsRequest, cache: 'place-details' | 'place-evidence') {

@@ -6,7 +6,7 @@ import { PLAN_SCORE_CONTRACT_VERSION } from './plan-score-rules.js';
 /**
  * The routing inputs a day's legs are built from. They live on the Prisma rows
  * rather than in `ItineraryDayRecord`, because the scorer reads legs through
- * `getItineraryDayRoutes` rather than from the record, so they have to be named
+ * the cache-only route reader rather than from the record, so they have to be named
  * here or a reorder would not move the digest.
  */
 export type TripPlanScoreRevisionRouting = {
@@ -42,16 +42,15 @@ function canonicalize(value: unknown): unknown {
  * score can be served without recomputing it and an edit invalidates it with no
  * trigger to maintain.
  *
- * It deliberately says nothing about the provider evidence behind a score:
- * opening hours and ratings can change with no itinerary edit and are never
- * persisted, so freshness there is a matter for the cache's age rather than its
- * key.
+ * Reusable provider evidence has a separate digest and original-age deadline:
+ * opening hours and ratings can change without an itinerary edit.
  *
  * The day records are the same objects handed to `buildTripPlanScore`, which is
  * what keeps the key complete: a field added to the record is in the digest
  * without anyone remembering to add it.
  */
 export function tripPlanScoreRevision(input: {
+  context?: unknown;
   startDate?: Date | null;
   startingPlaceId?: string | null;
   days: readonly TripPlanScoreRevisionDay[];
@@ -62,6 +61,8 @@ export function tripPlanScoreRevision(input: {
     // A rubric change has to invalidate every stored score, which is exactly
     // what this constant already promises.
     contractVersion: PLAN_SCORE_CONTRACT_VERSION,
+    evidenceIntegrationVersion: 2,
+    context: input.context ?? null,
     startDate: input.startDate ?? null,
     startingPlaceId: input.startingPlaceId ?? null,
     days: input.days,

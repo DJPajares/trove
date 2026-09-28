@@ -1,5 +1,6 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, MapPin, XIcon } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
@@ -15,7 +16,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
-import { googleMapsPlaceHref, type CanonicalPlace } from '@/lib/saved/api';
+import { fetchRichPlaceDetails, googleMapsPlaceHref, type CanonicalPlace } from '@/lib/saved/api';
 
 /** A row only the surface that opened this sheet can supply: a note, a priority, a collection. */
 export type PlaceDetailsRow = { label: string; value: string };
@@ -44,12 +45,8 @@ type PlaceDetailsSheetProps = {
 /**
  * What Trove knows about one Place, opened from wherever that Place is listed.
  *
- * Everything here is already in hand - the canonical Place the surface is
- * rendering and the editorial reference it resolved for the row - so opening
- * this costs no provider request. Rating, opening hours, website and phone are
- * deliberately absent: they are the mutable half Trove never stores (PRD 11.4),
- * and a live call per opening is exactly the fan-out that turns a screen into a
- * bill. Google Maps stays one tap away for those.
+ * Opening provider-backed details acquires the rich response on demand through
+ * the shared bounded cache. List rows and decorative images never acquire it.
  *
  * Photography keeps its attribution metadata without rendering credits on this
  * authenticated surface. Generic images are explicitly labeled as illustrative.
@@ -69,6 +66,25 @@ export function PlaceDetailsSheet({
   const categoryTranslations = useTranslations('saved');
   const locale = useLocale();
 
+  const richDetails = useQuery({
+    queryKey: ['place-rich-details', place.id, locale],
+    queryFn: () => fetchRichPlaceDetails(place.id, locale),
+    enabled: place.kind === 'provider',
+    retry: false,
+    staleTime: (query) =>
+      query.state.data
+        ? Math.max(
+            0,
+            Date.parse(query.state.data.freshness.fetchedAt) +
+              30 * 24 * 60 * 60 * 1000 -
+              query.state.dataUpdatedAt,
+          )
+        : 0,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+  const evidence = richDetails.data;
   const category = place.snapshot?.category;
   const providerAddress = place.snapshot?.address ?? place.providerAddress;
   const address = place.kind === 'custom' ? null : (providerAddress ?? t('unavailableDescription'));
@@ -96,6 +112,30 @@ export function PlaceDetailsSheet({
         }
       : null,
     place.note ? { label: t('note'), value: place.note } : null,
+    ...(evidence?.place.rating != null
+      ? [
+          {
+            label: t('rating'),
+            value: t(evidence.place.userRatingCount == null ? 'ratingOnly' : 'ratingSummary', {
+              rating: new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(
+                evidence.place.rating,
+              ),
+              count: evidence.place.userRatingCount ?? 0,
+            }),
+          },
+        ]
+      : []),
+    ...(evidence?.place.openingHoursDescriptions?.length
+      ? [{ label: t('openingHours'), value: evidence.place.openingHoursDescriptions.join('\n') }]
+      : []),
+    ...(evidence
+      ? [
+          {
+            label: t('evidenceDated'),
+            value: dateFormatter.format(new Date(evidence.freshness.fetchedAt)),
+          },
+        ]
+      : []),
     ...meta,
     // Provider data is stored dated rather than live, so the sheet says how old
     // what it is showing actually is instead of implying it was just fetched.
@@ -145,12 +185,37 @@ export function PlaceDetailsSheet({
             name={name}
           />
 
+          {place.kind === 'provider' ? (
+            <div className="px-5 pt-5 text-xs text-muted-foreground">
+              <p>{t('googleAttribution')}</p>
+              {evidence?.place.attributions.map((attribution) =>
+                attribution.providerUri ? (
+                  <a
+                    className="underline"
+                    href={attribution.providerUri}
+                    key={attribution.provider}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    {attribution.provider}
+                  </a>
+                ) : (
+                  <span key={attribution.provider}>{attribution.provider}</span>
+                ),
+              )}
+              {richDetails.isError || (richDetails.isFetched && !evidence) ? (
+                <p className="mt-2">{t('richUnavailable')}</p>
+              ) : null}
+            </div>
+          ) : null}
           {rows.length ? (
             <dl className="grid gap-4 px-6 pt-5">
               {rows.map((row) => (
-                <div className="grid gap-1" key={row.label}>
+                <div className="grid gap-1" key={`${row.label}:${row.value}`}>
                   <dt className="text-xs text-muted-foreground">{row.label}</dt>
-                  <dd className="text-sm break-words text-foreground">{row.value}</dd>
+                  <dd className="text-sm break-words whitespace-pre-line text-foreground">
+                    {row.value}
+                  </dd>
                 </div>
               ))}
             </dl>

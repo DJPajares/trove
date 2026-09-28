@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { timeZoneForCountry } from '@trove/types/countries';
 import { z } from 'zod';
+import { tripPlanningPreferencesSchema } from '@trove/types';
 
 import { getBearerToken } from '../services/request-auth.js';
 import {
@@ -41,6 +42,7 @@ const countriesSchema = z
   .max(20)
   .transform((codes) => [...new Set(codes)]);
 const tripFields = {
+  planningPreferences: tripPlanningPreferencesSchema.nullable().optional(),
   coverPhotoPath: z.string().trim().max(512).nullable().optional(),
   destinations: z
     .array(destinationSchema)
@@ -75,6 +77,7 @@ const tripFields = {
 const tripCreateSchema = z.object(tripFields).strict();
 const tripUpdateSchema = z
   .object({
+    planningPreferences: tripFields.planningPreferences,
     coverPhotoPath: tripFields.coverPhotoPath,
     confirmDateShrink: z.boolean().optional(),
     shrinkRevision: z

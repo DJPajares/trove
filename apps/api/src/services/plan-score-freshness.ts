@@ -1,7 +1,7 @@
 /** Provider evidence expires independently of immutable itinerary inputs. */
 export const PLAN_SCORE_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
 
-type AssessmentTime = { generatedAt: string; evidenceAsOf?: string | null };
+type AssessmentTime = { generatedAt: string; evidenceAsOf?: string | null; expiresAt?: string };
 
 /** Unknown, invalid, or future evidence cannot establish freshness. */
 export function oldestPlanScoreEvidenceAt(
@@ -23,11 +23,22 @@ export function originalPlanScoreTime(
   const times = [Date.parse(score.generatedAt)];
   if (score.evidenceAsOf !== undefined) {
     if (score.evidenceAsOf === null) return null;
-    times.push(Date.parse(score.evidenceAsOf));
-    if (times[1]! > times[0]!) return null;
+    const evidence = Date.parse(score.evidenceAsOf);
+    if (!Number.isFinite(evidence) || evidence > times[0]!) return null;
+    if (score.expiresAt && now.getTime() - evidence >= 30 * PLAN_SCORE_CACHE_TTL_MS) return null;
+    if (!score.expiresAt) times.push(evidence);
   }
   if (computedAt) times.push(computedAt.getTime());
   if (times.some((value) => !Number.isFinite(value) || value > now.getTime())) return null;
+  if (score.expiresAt) {
+    const expires = Date.parse(score.expiresAt);
+    if (
+      !Number.isFinite(expires) ||
+      expires <= now.getTime() ||
+      expires > times[0]! + PLAN_SCORE_CACHE_TTL_MS
+    )
+      return null;
+  }
   const original = Math.min(...times);
   return now.getTime() - original < PLAN_SCORE_CACHE_TTL_MS ? new Date(original) : null;
 }

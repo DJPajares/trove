@@ -319,3 +319,23 @@ export function fetchPlaceLocationCandidates(
     },
   );
 }
+
+export type RichPlaceDetails = {
+  status: 'ok';
+  freshness: { fetchedAt: string; source: 'cache' | 'live' };
+  place: {
+    rating: number | null;
+    userRatingCount?: number | null;
+    openingHoursDescriptions?: string[];
+    attributions: Array<{ provider: string; providerUri: string | null }>;
+  };
+};
+export async function fetchRichPlaceDetails(
+  placeId: string,
+  languageCode: string,
+): Promise<RichPlaceDetails | null> {
+  const result = await savedRequest<RichPlaceDetails | { status: 'empty' | 'unavailable' }>(
+    `/places/${placeId}/details?languageCode=${encodeURIComponent(languageCode)}`,
+  );
+  return result.status === 'ok' ? result : null;
+}

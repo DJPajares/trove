@@ -1,3 +1,4 @@
+import { dayPlanningContextSchema } from '@trove/types';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
@@ -15,6 +16,7 @@ import {
   updateItineraryDayExperienceRating,
   updateDatedExperienceRating,
   updateItineraryDayName,
+  updateItineraryDayPlanningContext,
   updateItineraryDayNote,
   updateItineraryItem,
 } from '../services/itineraries.js';
@@ -316,6 +318,26 @@ export function createItineraryControllers() {
       }
     },
 
+    async updateDayPlanningContext(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = dayParamsSchema.safeParse(request.params);
+      const body = dayPlanningContextSchema.safeParse(request.body);
+      if (!userId) return;
+      if (!params.success || !body.success)
+        return reply.code(400).send({ code: 'invalid_itinerary_day' });
+      try {
+        return reply.send(
+          await updateItineraryDayPlanningContext(
+            userId,
+            params.data.tripId,
+            params.data.itineraryDayId,
+            body.data,
+          ),
+        );
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
     async updateDayName(request: FastifyRequest, reply: FastifyReply) {
       const userId = getUserId(request, reply);
       const params = dayParamsSchema.safeParse(request.params);

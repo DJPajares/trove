@@ -1,68 +1,27 @@
+import { singleFlight } from './single-flight.js';
 import { getPrismaClient } from '@trove/db';
 
 import {
   recordProviderCacheEvent,
   recordProviderCall,
-  type ProviderCacheMissReason,
   type ProviderCallSource,
 } from './provider-usage.js';
 import {
   OpenMeteoWeatherProvider,
-  type WeatherDailyForecast,
   type WeatherPoint,
   type WeatherPointForecast,
   type WeatherProvider,
 } from './weather.js';
-import { isWithinForecastWindow, type ForecastWindow } from './weather-window.js';
+import { type ForecastWindow } from './weather-window.js';
 
-/**
- * A forecast is a claim about the next fortnight, not a fact about a place, so
- * it expires far sooner than a Place snapshot does. Three hours keeps a day's
- * planning session on one answer while still moving before the shape of the
- * week does.
- */
-export const WEATHER_FORECAST_TTL_MS = 3 * 60 * 60 * 1_000;
-
-/**
- * Two decimals is roughly a kilometre, which is finer than the grid Open-Meteo
- * answers on anyway - it snapped 35.68 to 35.7 in testing. Rounding this hard is
- * deliberate: it makes every stop in one city share a single snapshot, which is
- * where the saving on a dense day actually comes from. As in `cached-routes`,
- * the same rounding runs on write and on read, or a row could never be found by
- * the coordinate that created it.
- */
-const COORDINATE_PRECISION = 100;
-
-export type CachedPointForecast = {
-  days: WeatherDailyForecast[];
-  fetchedAt: Date;
-  location: { latitude: number; longitude: number; timeZone: string };
-  point: WeatherPoint;
-};
-
-function round(value: number) {
-  return Math.round(value * COORDINATE_PRECISION) / COORDINATE_PRECISION;
-}
-
-export function weatherPointKey(point: WeatherPoint) {
-  return `${round(point.latitude)},${round(point.longitude)}`;
-}
-
-function snapshotKey(point: WeatherPoint) {
-  return {
-    latitude: round(point.latitude),
-    longitude: round(point.longitude),
-    provider: 'open_meteo',
-  };
-}
-
-function toNumber(value: number | { toNumber(): number }) {
-  return typeof value === 'number' ? value : value.toNumber();
-}
-
-function toDateOnly(value: Date) {
-  return value.toISOString().slice(0, 10);
-}
+export type { CachedPointForecast } from './weather-evidence-cache.js';
+export { WEATHER_FORECAST_TTL_MS, weatherPointKey } from './weather-evidence-cache.js';
+import {
+  readCachedForecast,
+  weatherPointKey,
+  snapshotKey,
+  type CachedPointForecast,
+} from './weather-evidence-cache.js';
 
 /**
  * The trip's day-by-day forecast, bought once and shared by everyone.
@@ -93,8 +52,8 @@ export class CachedWeatherService {
     const stale: WeatherPoint[] = [];
     const storedForStale = new Map<string, CachedPointForecast>();
 
-    for (const point of points) {
-      const cached = await this.readSnapshot(point, window);
+    for (const point of new Map(points.map((point) => [weatherPointKey(point), point])).values()) {
+      const cached = await readCachedForecast(point, window, this.now());
       if (cached.kind === 'hit') {
         recordProviderCacheEvent({
           cache: 'weather-forecast',
@@ -112,22 +71,28 @@ export class CachedWeatherService {
 
     if (!stale.length) return answers;
 
-    recordProviderCall({
-      endpoint: '/v1/forecast',
-      expectedSku: 'weather-forecast-free',
-      operation: 'getForecast',
-      provider: 'open_meteo',
-      source: this.source,
-    });
-
     // One request for every stale point, not one per point.
-    let fetched;
+    let acquired;
     try {
-      fetched = await this.provider.getDailyForecasts({
-        endDate: window.endDate,
-        points: stale,
-        startDate: window.startDate,
-      });
+      acquired = await singleFlight(
+        `weather:${window.startDate}:${window.endDate}:${stale.map(weatherPointKey).toSorted().join(';')}`,
+        async () => {
+          recordProviderCall({
+            endpoint: '/v1/forecast',
+            expectedSku: 'weather-forecast-free',
+            operation: 'getForecast',
+            provider: 'open_meteo',
+            source: this.source,
+          });
+
+          const forecasts = await this.provider.getDailyForecasts({
+            endDate: window.endDate,
+            points: stale,
+            startDate: window.startDate,
+          });
+          return { forecasts, fetchedAt: this.now() };
+        },
+      );
     } catch (error) {
       // A refused forecast is not a refused trip. Yesterday's answer for the
       // same place is worth more than nothing, and the surfaces already say how
@@ -146,78 +111,14 @@ export class CachedWeatherService {
 
       return answers;
     }
-    const fetchedAt = this.now();
+    const { forecasts, fetchedAt } = acquired;
 
-    for (const forecast of fetched) {
+    for (const forecast of forecasts) {
       answers.set(weatherPointKey(forecast.point), { ...forecast, fetchedAt });
       await this.writeSnapshot(forecast, fetchedAt);
     }
 
     return answers;
-  }
-
-  private async readSnapshot(
-    point: WeatherPoint,
-    window: ForecastWindow,
-  ): Promise<
-    | { forecast: CachedPointForecast; kind: 'hit' }
-    | {
-        kind: 'miss';
-        reason: ProviderCacheMissReason;
-        /**
-         * The snapshot that was not good enough to serve outright. A stale or
-         * window-short forecast is still the best answer available when the
-         * provider then refuses to give a better one, so it is carried rather
-         * than dropped.
-         */
-        stored: CachedPointForecast | null;
-      }
-  > {
-    let snapshot;
-
-    try {
-      snapshot = await getPrismaClient().weatherForecastSnapshot.findUnique({
-        include: { days: { orderBy: { date: 'asc' } } },
-        where: { weather_forecast_snapshot_point: snapshotKey(point) },
-      });
-    } catch {
-      // A cache that cannot be read is a slow path, never a failed request.
-      return { kind: 'miss', reason: 'cache_read_failed', stored: null };
-    }
-
-    if (!snapshot) return { kind: 'miss', reason: 'missing_snapshot', stored: null };
-
-    const days = snapshot.days.map((day) => ({
-      date: toDateOnly(day.date),
-      precipitationProbability: day.precipitationProbability,
-      temperatureMax: toNumber(day.temperatureMaxCelsius),
-      temperatureMin: toNumber(day.temperatureMinCelsius),
-      weatherCode: day.weatherCode,
-    }));
-
-    const stored: CachedPointForecast = {
-      days,
-      fetchedAt: snapshot.fetchedAt,
-      location: {
-        latitude: toNumber(snapshot.latitude),
-        longitude: toNumber(snapshot.longitude),
-        timeZone: snapshot.timeZone,
-      },
-      point,
-    };
-
-    if (this.now().getTime() - snapshot.fetchedAt.getTime() > WEATHER_FORECAST_TTL_MS) {
-      return { kind: 'miss', reason: 'stale_forecast', stored };
-    }
-
-    // A snapshot written before midnight in this zone still looks fresh but has
-    // lost the far end of the window. Serving it would quietly shorten the trip.
-    const covered = days.filter((day) => isWithinForecastWindow(day.date, window));
-    if (!covered.length || covered[covered.length - 1]!.date < window.endDate) {
-      return { kind: 'miss', reason: 'incomplete_forecast', stored };
-    }
-
-    return { forecast: stored, kind: 'hit' };
   }
 
   private async writeSnapshot(forecast: WeatherPointForecast, fetchedAt: Date) {

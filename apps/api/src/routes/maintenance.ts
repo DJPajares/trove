@@ -1,12 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 
 import {
+  providerEvidenceRetentionController,
   aiPlanningRetentionController,
   notificationDispatchController,
   tripMediaCleanupController,
 } from '../controllers/maintenance.js';
 
 export function registerMaintenanceRoutes(app: FastifyInstance) {
+  app.get('/maintenance/provider-evidence-retention', providerEvidenceRetentionController);
   app.get('/maintenance/ai-planning-retention', aiPlanningRetentionController);
   app.get('/maintenance/trip-media-cleanup', tripMediaCleanupController);
   app.post('/maintenance/notification-dispatch', notificationDispatchController);

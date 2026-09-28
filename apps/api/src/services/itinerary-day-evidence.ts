@@ -6,7 +6,7 @@ import type { PlaceOpeningPeriod } from './places.js';
 import type { PlanScoreDayItem, PlanScoreOpeningHours } from './plan-score-factors.js';
 
 /**
- * Turns stored itinerary rows plus live route and provider evidence into the
+ * Turns stored itinerary rows plus reusable route and provider evidence into the
  * day shape the Plan Score rubric already understands.
  *
  * Pure, so both the trip-wide scorer and the day-scoped time suggester can share
@@ -18,7 +18,11 @@ import type { PlanScoreDayItem, PlanScoreOpeningHours } from './plan-score-facto
 /** Provider opening evidence keyed by Trip Place id. */
 export type PlaceHoursEvidence = Map<
   string,
-  { periods: PlaceOpeningPeriod[]; utcOffsetMinutes: number | null }
+  {
+    periods: PlaceOpeningPeriod[];
+    utcOffsetMinutes: number | null;
+    source?: 'FRESH_PROVIDER' | 'CACHED_PROVIDER';
+  }
 >;
 
 export type ItineraryDayItemRecord = {
@@ -123,6 +127,7 @@ export function toDayEvidenceItems(
           dayTimeZone: day.timeZone,
           periods: placeHours.periods,
           utcOffsetMinutes: placeHours.utcOffsetMinutes,
+          source: placeHours.source,
         })
       : { status: 'UNKNOWN' };
 
@@ -142,7 +147,15 @@ export function toDayEvidenceItems(
         (item.timeSemantics === 'FLOATING_LOCAL' && item.timeProvenance !== 'AI_ESTIMATED'),
       id: item.id,
       inboundTravel:
-        travelMinutes === null ? null : { minutes: travelMinutes, source: 'FRESH_PROVIDER' },
+        travelMinutes === null
+          ? null
+          : {
+              minutes: travelMinutes,
+              source: routes?.segments.find((segment) => segment.destination.id === item.id)
+                ?.evidenceAsOf
+                ? 'CACHED_PROVIDER'
+                : 'USER_OWNED',
+            },
       openingHours,
       start:
         startMinutes === null

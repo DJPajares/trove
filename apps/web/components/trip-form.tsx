@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 
 import { TripMedia } from '@/components/trip-media';
+import { TripPlanningPreferencesFields } from '@/components/trip-planning-preferences';
+import { readTripPlanningPreferences, type TripPlanningPreferences } from '@trove/types';
 import { TripOptionalDetails } from '@/components/trip-optional-details';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -54,6 +56,7 @@ type TripFormProps = {
 };
 
 type FormState = {
+  planningPreferences: TripPlanningPreferences;
   countries: string[];
   coverPhotoPath: string | null;
   description: string;
@@ -81,6 +84,7 @@ function createInitialForm(trip: Trip | null): FormState {
   const today = getToday();
 
   return {
+    planningPreferences: readTripPlanningPreferences(trip?.planningPreferences),
     countries: trip?.countries ?? [],
     coverPhotoPath: trip?.coverPhotoPath ?? null,
     description: trip?.description ?? '',
@@ -95,6 +99,7 @@ function createInitialForm(trip: Trip | null): FormState {
 export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
   const queryClient = useQueryClient();
   const t = useTranslations('trips');
+  const preferencesT = useTranslations('planningPreferences');
   const [form, setForm] = useState(() => createInitialForm(trip));
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(trip?.coverPhotoUrl ?? null);
@@ -205,6 +210,7 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
     }
 
     return {
+      planningPreferences: form.planningPreferences,
       countries: form.countries,
       coverPhotoPath,
       description: form.description.trim() || null,
@@ -569,6 +575,34 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
               </section>
             </>
           ) : null}
+          <section className="border-t pt-6">
+            <Collapsible
+              defaultOpen={Boolean(
+                trip?.planningPreferences?.pace ||
+                trip?.planningPreferences?.interests.length ||
+                trip?.planningPreferences?.unmatchedInterests.length,
+              )}
+            >
+              <CollapsibleTrigger className="group w-full justify-between text-left">
+                <span>
+                  <span className="block font-medium">{preferencesT('title')}</span>
+                  <span className="mt-1 block text-sm font-normal text-muted-foreground">
+                    {preferencesT('hint')}
+                  </span>
+                </span>
+                <ChevronDown
+                  aria-hidden="true"
+                  className="shrink-0 group-data-[panel-open]:rotate-180"
+                />
+              </CollapsibleTrigger>
+              <CollapsiblePanel>
+                <TripPlanningPreferencesFields
+                  value={form.planningPreferences}
+                  onChange={(value) => updateField('planningPreferences', value)}
+                />
+              </CollapsiblePanel>
+            </Collapsible>
+          </section>
         </div>
 
         <SheetFooter className="gap-3 sm:flex-row sm:items-center sm:justify-between">

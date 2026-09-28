@@ -144,7 +144,7 @@ test('scores a planned day from stored timing and live route evidence', () => {
 
   expect(day?.score).toBe(100);
   expect(day?.completeness).toBe(89);
-  expect(day?.confidence).toBe(100);
+  expect(day?.confidence).toBe(98);
   expect(day?.date).toBe('2026-09-01');
   expect(day?.factors.TRAVEL_EFFORT).toStrictEqual({
     confidence: 100,

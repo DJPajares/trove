@@ -427,3 +427,5 @@ tracked in Linear rather than inferred from the product contract.
 ## Repository
 
 https://github.com/DJPajares/trove
+
+WDL-309 makes stored-trip scoring cache-only. Normal opened Place details, itinerary routes and AI acquisition supply dated evidence; score misses and expiry never acquire provider data. Necessary Google evidence has a separate 30-day bounded snapshot, with daily removal of expired raw place evidence at `/maintenance/provider-evidence-retention` (the existing `CRON_SECRET` guard). Weather retains its three-hour freshness. Apply the additive `shared_planning_evidence` Prisma migration before deploying these APIs. Optional trip preferences and day intent/availability are now stored; the new scoring rubric still follows in WDL-311.

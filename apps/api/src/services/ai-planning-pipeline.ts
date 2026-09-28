@@ -798,7 +798,7 @@ export async function addOpeningEvidence(
           signal,
         };
         if (context.evidence) {
-          rememberPlaceEvidence(request, context.evidence);
+          await rememberPlaceEvidence(request, context.evidence);
           return [key, context.evidence] as const;
         }
         return [

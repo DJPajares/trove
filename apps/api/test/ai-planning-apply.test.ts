@@ -32,6 +32,7 @@ function draftAssessment(draft: AiPlannerDraft, evaluatedAt = new Date(NOW.getTi
   return {
     ...emptyPlanScore(),
     generatedAt: evaluatedAt.toISOString(),
+    expiresAt: new Date(evaluatedAt.getTime() + PLAN_SCORE_CACHE_TTL_MS).toISOString(),
     evidenceAsOf: evaluatedAt.toISOString(),
     sourceInputRevision: draftPlanScoreInputRevision(draft),
     score: 72,
@@ -815,11 +816,11 @@ test('Apply preserves older mutable evidence, not identity age, and replay never
   const [first, concurrent] = await Promise.all([apply(store), apply(store)]);
   expect(concurrent).toEqual(first);
   expect(store.state.trips).toHaveLength(1);
-  expect(store.state.trips[0]?.planScoreComputedAt).toEqual(new Date(score.evidenceAsOf));
+  expect(store.state.trips[0]?.planScoreComputedAt).toEqual(new Date(score.generatedAt));
   await expect(
     apply(store, { now: new Date(NOW.getTime() + 2 * PLAN_SCORE_CACHE_TTL_MS) }),
   ).resolves.toEqual(first);
-  expect(store.state.trips[0]?.planScoreComputedAt).toEqual(new Date(score.evidenceAsOf));
+  expect(store.state.trips[0]?.planScoreComputedAt).toEqual(new Date(score.generatedAt));
   expect(store.state.trips[0]?.planScore.generatedAt).toBe(score.generatedAt);
   expect(score).toEqual(original);
   expect(store.state.runs).toHaveLength(0);
@@ -832,8 +833,8 @@ test('Apply succeeds but withholds expired, malformed, future, or unbound assess
   const expired = new Date(NOW.getTime() - PLAN_SCORE_CACHE_TTL_MS).toISOString();
   for (const score of [
     { ...base, generatedAt: expired },
-    { ...base, evidenceAsOf: expired },
-    { ...base, evidenceAsOf: new Date(NOW.getTime() - PLAN_SCORE_CACHE_TTL_MS - 1).toISOString() },
+    { ...base, evidenceAsOf: expired, expiresAt: undefined },
+    { ...base, evidenceAsOf: new Date(NOW.getTime() - 30 * PLAN_SCORE_CACHE_TTL_MS).toISOString() },
     { ...base, generatedAt: 'not-a-date' },
     { ...base, evidenceAsOf: new Date(NOW.getTime() + 1).toISOString() },
     { ...base, generatedAt: new Date(NOW.getTime() + 1).toISOString() },
@@ -973,4 +974,21 @@ test('a traveller-set trip name outranks the drafted one', async () => {
   const overridden = createApplyStore(draft, { session: { tripName: 'Our anniversary trip' } });
   await apply(overridden);
   expect(overridden.state.trips[0]).toMatchObject({ name: 'Our anniversary trip' });
+});
+
+test('Apply persists explicit pace and interests beyond session retention', async () => {
+  const draft = scoreableDraft();
+  draft.normalizedRequest.interests = ['History', 'Bird watching'];
+  draft.normalizedRequest.pace = 'relaxed';
+  draft.trip.pace = 'relaxed';
+  draft.trip.paceSource = 'user';
+  draft.trip.paceAssumptionId = null;
+  const store = createApplyStore(draft);
+  await apply(store);
+  expect(store.state.trips[0]?.planningPreferences).toEqual({
+    pace: 'relaxed',
+    interests: ['culture_history'],
+    unmatchedInterests: ['Bird watching'],
+  });
+  expect(store.state.sessions[0]?.draft).toBeNull();
 });

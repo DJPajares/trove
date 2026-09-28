@@ -21,6 +21,7 @@ import {
   setAiPlanningTripDescription,
   setAiPlanningTripName,
   setAiPlanningCountries,
+  serializeAiPlanningSession,
 } from '../src/services/ai-planning-sessions.js';
 import {
   setAiPlanningTelemetrySink,
@@ -32,6 +33,24 @@ import { suggestedDraftCountries } from '../src/services/ai-planning-countries.j
 const OWNER_ID = '00000000-0000-4000-8000-000000000001';
 const OTHER_OWNER_ID = '00000000-0000-4000-8000-000000000002';
 const NOW = new Date('2026-08-31T12:00:00.000Z');
+
+test('reopening an expired assessment withholds its numbers without editing the stored score or draft', () => {
+  const generatedAt = '2026-08-30T12:00:00.000Z';
+  const score = { ...emptyPlanScore(), generatedAt, evidenceAsOf: generatedAt, score: 72 };
+  const session = makeSession('00000000-0000-4000-8000-000000000169', {
+    draft: explicitDraft(),
+    planScore: score,
+    draftRevision: 1,
+    status: 'REVIEWING',
+    stage: 'REVIEWING',
+  });
+  const response = serializeAiPlanningSession({ ...session, runs: [] } as never, NOW);
+  expect(response.planScore?.score).toBeNull();
+  expect(response.planScore?.generatedAt).toBe(generatedAt);
+  expect(session.planScore).toBe(score);
+  expect((session.planScore as typeof score).score).toBe(72);
+  expect(response.draft).toBe(session.draft);
+});
 const AVAILABLE_ENVIRONMENT = {
   GOOGLE_VERTEX_CLIENT_EMAIL: 'ai@example.test',
   GOOGLE_VERTEX_PRIVATE_KEY: 'line-one\\nline-two',

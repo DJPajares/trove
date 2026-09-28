@@ -41,6 +41,8 @@ export type ItineraryRouteSegment = {
   distanceMeters: number | null;
   durationSeconds: number | null;
   encodedPolyline: string | null;
+  /** Original provider fetch time, including transient or permitted route reuse. */
+  evidenceAsOf?: string;
   id: string;
   mode: RouteTravelMode;
   modeOwner: { id: string; kind: 'day_start' | 'item_departure' };
@@ -356,6 +358,7 @@ async function resolveSegment(
     return {
       ...base,
       ...result.estimate,
+      evidenceAsOf: result.freshness.fetchedAt,
       provider: result.provider,
       reason: null,
       status: 'ok',

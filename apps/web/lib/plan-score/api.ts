@@ -46,6 +46,8 @@ export type TripPlanScore = {
   explanations: PlanScoreExplanationGroups;
   fingerprint: string;
   generatedAt: string;
+  evidenceAsOf?: string | null;
+  sourceInputRevision?: string;
   mustGoPriorityFit: PlanScoreFactorOutcome;
   score: number | null;
   withheldReasons: string[];

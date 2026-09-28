@@ -1,4 +1,5 @@
 import { getPrismaClient } from '@trove/db';
+import { PLAN_SCORE_CACHE_TTL_MS } from './plan-score-freshness.js';
 
 import {
   recordProviderCacheEvent,
@@ -107,7 +108,11 @@ export class CachedRoutesService extends RoutesService {
     }
 
     if (!leg) return { kind: 'miss', reason: 'missing_leg' };
-    if (this.now().getTime() - leg.fetchedAt.getTime() > TRAVEL_LEG_CACHE_TTL_MS) {
+    // A permitted durable route snapshot is not necessarily current scoring
+    // evidence. Ordinary score requests refresh only the legs they already use.
+    const maxAge = this.source === 'plan-score' ? PLAN_SCORE_CACHE_TTL_MS : TRAVEL_LEG_CACHE_TTL_MS;
+    const age = this.now().getTime() - leg.fetchedAt.getTime();
+    if (age < 0 || age >= maxAge) {
       return { kind: 'miss', reason: 'stale_leg' };
     }
 

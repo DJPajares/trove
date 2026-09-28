@@ -52,15 +52,23 @@ function canonicalize(value: unknown): unknown {
  * without anyone remembering to add it.
  */
 export function tripPlanScoreRevision(input: {
+  startDate?: Date | null;
+  startingPlaceId?: string | null;
   days: readonly TripPlanScoreRevisionDay[];
   mustGoTripPlaceIds: readonly string[];
+  placeIdentities?: readonly { id: string; placeId: string | null }[];
 }) {
   const payload = canonicalize({
     // A rubric change has to invalidate every stored score, which is exactly
     // what this constant already promises.
     contractVersion: PLAN_SCORE_CONTRACT_VERSION,
+    startDate: input.startDate ?? null,
+    startingPlaceId: input.startingPlaceId ?? null,
     days: input.days,
     mustGoTripPlaceIds: [...input.mustGoTripPlaceIds].toSorted(),
+    placeIdentities: [...(input.placeIdentities ?? [])].toSorted((a, b) =>
+      a.id.localeCompare(b.id),
+    ),
   });
 
   return createHash('sha256').update(JSON.stringify(payload)).digest('hex').slice(0, 32);

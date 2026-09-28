@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
 import type { AiPlannerDraft } from '@trove/types';
+import { draftPlanScoreInputRevision } from '../src/services/ai-planning-plan-score.js';
 import { readFile } from 'node:fs/promises';
 
-import { expect, beforeEach, test } from 'vitest';
+import { expect, beforeEach, afterEach, test, vi } from 'vitest';
 
 import {
   CachedPlacesService,
@@ -54,6 +55,7 @@ import { RoutesService } from '../src/services/routes.js';
 import {
   getTripPlanScore,
   PLAN_SCORE_CACHE_TTL_MS,
+  readPlanScoreInputs,
   type TripPlanScore,
 } from '../src/services/plan-score.js';
 import {
@@ -76,6 +78,7 @@ import {
  */
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
+afterEach(() => vi.useRealTimers());
 
 type ProviderRefRow = {
   id: string;
@@ -817,6 +820,27 @@ test('a leg already computed is not computed again', async () => {
   expect(second.status === 'ok' && second.estimate.durationSeconds).toBe(600);
 });
 
+test('Plan Score refreshes a 24-hour route while other surfaces retain permitted reuse', async () => {
+  let now = new Date('2026-09-01T09:00:00Z');
+  const { provider, calls } = countingRoutesProvider();
+  const ordinary = new CachedRoutesService(provider, () => now, 'itinerary-routes');
+  const scoring = new CachedRoutesService(provider, () => now, 'plan-score');
+  const request: RouteRequest = {
+    origin: { latitude: 1.2966, longitude: 103.8485 },
+    destination: { latitude: 1.3039, longitude: 103.8318 },
+    mode: 'walk',
+  };
+  await ordinary.computeRoute(request);
+  now = new Date(now.getTime() + PLAN_SCORE_CACHE_TTL_MS - 1);
+  await scoring.computeRoute(request);
+  expect(calls()).toBe(1);
+  now = new Date(now.getTime() + 1);
+  await ordinary.computeRoute(request);
+  expect(calls()).toBe(1);
+  await scoring.computeRoute(request);
+  expect(calls()).toBe(2);
+});
+
 test('a leg cached without a polyline is recomputed when the map needs one', async () => {
   const { provider, calls } = countingRoutesProvider();
   const service = new CachedRoutesService(provider);
@@ -1017,6 +1041,8 @@ test('TROVE_PLAN_SCORE_DISABLED cannot reach scoring that costs no provider call
  * next one costs zero, and that the key notices what the rubric actually reads.
  */
 test('a stored Plan Score serves an unchanged trip with no provider call', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-09-01T09:00:00.000Z'));
   tripFixture = buildPlanScoreTripFixture();
   const { provider, requests } = detailRequestsProvider();
   const placesService = new CachedPlacesService(provider);
@@ -1040,6 +1066,8 @@ test('a stored Plan Score serves an unchanged trip with no provider call', async
 });
 
 test('the stored Plan Score is invalidated by what the rubric reads, and only that', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-09-01T09:00:00.000Z'));
   const scoreAt = (now: Date, placesService: CachedPlacesService) =>
     withEnvOverride(
       { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
@@ -1131,6 +1159,68 @@ test('a stored Plan Score expires even when nothing about the trip changed', asy
   // revision can express that, so age alone has to force the refresh.
   await scoreAt(new Date(first.getTime() + PLAN_SCORE_CACHE_TTL_MS));
   expect(requests.length, 'an expired score must be recomputed').toBeGreaterThan(0);
+});
+
+test('an inflated Apply timestamp cannot renew an expired generated assessment', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  const now = new Date('2026-09-01T09:00:00Z');
+  vi.setSystemTime(now);
+  const trip = buildPlanScoreTripFixture();
+  const { buildPlanScoreFromEvaluations } = await import('../src/services/plan-score.js');
+  const assessment = {
+    ...buildPlanScoreFromEvaluations({ days: [], mustGoIds: [], scheduledIds: [] }),
+    score: 72,
+  };
+  const score = {
+    ...assessment,
+    generatedAt: new Date(now.getTime() - PLAN_SCORE_CACHE_TTL_MS).toISOString(),
+    evidenceAsOf: undefined,
+  };
+  tripFixture = {
+    ...trip,
+    planScore: score,
+    planScoreComputedAt: now,
+    planScoreRevision: readPlanScoreInputs(trip as never).revision,
+  };
+  const { provider, requests } = detailRequestsProvider();
+  const result = await withEnvOverride(
+    { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
+    () =>
+      getTripPlanScore('user-1', 'trip-1', {
+        now: () => now,
+        placesService: new CachedPlacesService(provider),
+      }),
+  );
+  expect(requests).toHaveLength(1);
+  expect(result?.generatedAt).toBe(now.toISOString());
+  expect(result?.score).not.toBe(72);
+});
+
+test('an expired assessment is withheld when fresh providers are unavailable', async () => {
+  const now = new Date('2026-09-01T09:00:00Z');
+  const trip = buildPlanScoreTripFixture();
+  const { buildPlanScoreFromEvaluations } = await import('../src/services/plan-score.js');
+  const score = {
+    ...buildPlanScoreFromEvaluations({
+      days: [],
+      mustGoIds: [],
+      scheduledIds: [],
+      evaluatedAt: new Date(now.getTime() - PLAN_SCORE_CACHE_TTL_MS),
+    }),
+    score: 72,
+  };
+  tripFixture = {
+    ...trip,
+    planScore: score,
+    planScoreComputedAt: now,
+    planScoreRevision: readPlanScoreInputs(trip as never).revision,
+  };
+  const result = await withEnvOverride(
+    { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
+    () => getTripPlanScore('user-1', 'trip-1', { now: () => now, placesService: null }),
+  );
+  expect(result?.score).toBeNull();
+  expect(result?.days.every((day) => day.score === null)).toBe(true);
 });
 
 /**
@@ -1667,6 +1757,8 @@ test('a generate run searches only the places its finished itinerary stands on',
 });
 
 test('six venues use one Places call each, with persisted identity and transient evidence reuse', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-09-02T12:00:00Z'));
   const proposal = explicitModelProposal();
   proposal.normalizedRequest.constraints = [];
   const template = proposal.items[1]!;
@@ -1752,7 +1844,7 @@ test('six venues use one Places call each, with persisted identity and transient
     async claim(_ownerId, runId) {
       return {
         baseDraftRevision: 0,
-        deadlineAt: new Date('2026-09-02T12:01:00Z'),
+        deadlineAt: new Date(Date.now() + 60_000),
         model: 'test',
         prompt: 'Tokyo trip',
         provider: 'vertex',
@@ -1786,7 +1878,7 @@ test('six venues use one Places call each, with persisted identity and transient
   };
   const run = () =>
     runAiPlanningPipeline(randomUUID(), randomUUID(), {
-      clock: () => new Date('2026-09-02T12:00:00Z'),
+      clock: () => new Date(),
       gateway,
       lifecycle,
       loadHomeLocation: async () => 'Singapore',
@@ -1849,6 +1941,8 @@ test('six venues use one Places call each, with persisted identity and transient
   // provider assertion in this test is the guard, so a score that fetched
   // anything of its own would break them rather than this block.
   for (const planScore of planScores) {
+    expect(planScore.generatedAt).toBe('2026-09-02T12:00:00.000Z');
+    expect(planScore.evidenceAsOf).toBe('2026-09-02T12:00:00.000Z');
     expect(planScore.days.map((day) => day.dayId)).toEqual(drafts[0]!.days.map((day) => day.date));
     expect(planScore.score).not.toBeNull();
     for (const day of planScore.days) {
@@ -1875,10 +1969,21 @@ test('six venues use one Places call each, with persisted identity and transient
   resetCachedPlacesMemo();
   const previousSearches = getProviderCallCounts()['google:textSearch']!;
   const previousDetails = getProviderCallCounts()['google:getDetails']!;
+  // Identity snapshots have a separate retention policy. Fresh score evidence
+  // may be fetched while those identity decisions legitimately keep their age.
+  vi.setSystemTime(new Date('2026-09-03T13:00:00Z'));
   await run();
   expect(failures).toEqual([]);
   expect(getProviderCallCounts()['google:textSearch']! - previousSearches).toBe(1);
   expect(getProviderCallCounts()['google:getDetails']! - previousDetails).toBe(5);
+  expect(
+    drafts[3]!.evidence.some(
+      (entry) => entry.kind === 'identity' && entry.checkedAt === '2026-09-02T12:00:00.000Z',
+    ),
+  ).toBe(true);
+  expect(planScores[3]!.evidenceAsOf).toBe('2026-09-03T13:00:00.000Z');
+  expect(planScores[3]!.score).not.toBeNull();
+  expect(planScores[3]!.sourceInputRevision).toBe(draftPlanScoreInputRevision(drafts[3]!));
   for (const row of groundingMappings.values()) {
     expect(Object.keys(row).sort()).toEqual(['checkedAt', 'key', 'outcome', 'placeProviderRefId']);
   }

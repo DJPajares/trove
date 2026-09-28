@@ -19,7 +19,11 @@ import {
   suggestedDraftCountries,
   suggestedDraftCountriesFromStoredPlaces,
 } from './ai-planning-countries.js';
-import { parseStoredPlanScore, type TripPlanScore } from './plan-score.js';
+import {
+  parseStoredPlanScore,
+  withholdNonCurrentPlanScore,
+  type TripPlanScore,
+} from './plan-score.js';
 import {
   recordAiPlanningDispatchRejected,
   type AiPlanningDispatchRejectionCode,
@@ -209,7 +213,7 @@ const sessionInclude = {
   },
 } as const;
 
-export function serializeAiPlanningSession(session: SessionRecord) {
+export function serializeAiPlanningSession(session: SessionRecord, now = new Date()) {
   const terminal = ['APPLIED', 'CANCELLED', 'EXPIRED'].includes(session.status);
   const draft = terminal || !session.draft ? null : validateAiPlannerDraft(session.draft);
   const timingConflict =
@@ -217,6 +221,7 @@ export function serializeAiPlanningSession(session: SessionRecord) {
   const readableDraft = timingConflict
     ? validateAiPlannerDraft(session.draft, { allowExactTimeOverlaps: true })
     : draft;
+  const planScore = parseStoredPlanScore(session.planScore);
   return {
     appliedTripId: session.appliedTripId,
     createdAt: session.createdAt.toISOString(),
@@ -230,7 +235,9 @@ export function serializeAiPlanningSession(session: SessionRecord) {
     planScore:
       terminal || session.countryContextChanged || timingConflict
         ? null
-        : parseStoredPlanScore(session.planScore),
+        : planScore
+          ? withholdNonCurrentPlanScore(planScore, now)
+          : null,
     countryContextChanged: terminal ? false : session.countryContextChanged,
     countriesReviewedRevision: terminal ? null : session.countriesReviewedRevision,
     reviewedCountries: terminal ? [] : session.reviewedCountries,
@@ -255,8 +262,9 @@ export function serializeAiPlanningSession(session: SessionRecord) {
 async function serializeAiPlanningSessionWithCountries(
   session: SessionRecord,
   prisma: PlanningPrisma,
+  now: Date,
 ) {
-  const serialized = serializeAiPlanningSession(session);
+  const serialized = serializeAiPlanningSession(session, now);
   if (!serialized.draft || !['REVIEWING', 'FAILED'].includes(session.status)) {
     return serialized;
   }
@@ -323,7 +331,7 @@ export async function setAiPlanningCountries(
     });
   });
   if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
-  return serializeAiPlanningSessionWithCountries(session, prisma);
+  return serializeAiPlanningSessionWithCountries(session, prisma, now);
 }
 
 async function ensureAndLockOwner(transaction: PlanningTransaction, ownerId: string) {
@@ -497,7 +505,7 @@ export async function createAiPlanningSession(
   });
 
   if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
-  return serializeAiPlanningSessionWithCountries(session, prisma);
+  return serializeAiPlanningSessionWithCountries(session, prisma, now);
 }
 
 async function expireOwnedSessions(prisma: PlanningPrisma, ownerId: string, now: Date) {
@@ -541,7 +549,7 @@ export async function recoverLatestAiPlanningSession(
     include: sessionInclude,
     orderBy: { updatedAt: 'desc' },
   });
-  return session ? serializeAiPlanningSessionWithCountries(session, prisma) : null;
+  return session ? serializeAiPlanningSessionWithCountries(session, prisma, now) : null;
 }
 
 export async function getAiPlanningSession(
@@ -561,7 +569,7 @@ export async function getAiPlanningSession(
     return found;
   });
   if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
-  return serializeAiPlanningSessionWithCountries(session, prisma);
+  return serializeAiPlanningSessionWithCountries(session, prisma, now);
 }
 
 export async function regenerateAiPlanningSession(
@@ -632,7 +640,7 @@ export async function regenerateAiPlanningSession(
   });
 
   if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
-  return serializeAiPlanningSessionWithCountries(session, prisma);
+  return serializeAiPlanningSessionWithCountries(session, prisma, now);
 }
 
 function parseStoredDraft(value: Prisma.JsonValue | null, allowExactTimeOverlaps = false) {
@@ -677,7 +685,7 @@ export async function setAiPlanningTripDescription(
     });
   });
   if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
-  return serializeAiPlanningSessionWithCountries(session, prisma);
+  return serializeAiPlanningSessionWithCountries(session, prisma, now);
 }
 
 /**
@@ -711,7 +719,7 @@ export async function setAiPlanningTripName(
     });
   });
   if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
-  return serializeAiPlanningSessionWithCountries(session, prisma);
+  return serializeAiPlanningSessionWithCountries(session, prisma, now);
 }
 
 export async function acknowledgeAiPlanningWarnings(
@@ -743,7 +751,7 @@ export async function acknowledgeAiPlanningWarnings(
     });
   });
   if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
-  return serializeAiPlanningSessionWithCountries(session, prisma);
+  return serializeAiPlanningSessionWithCountries(session, prisma, now);
 }
 
 export async function cancelAiPlanningSession(
@@ -780,7 +788,7 @@ export async function cancelAiPlanningSession(
     });
   });
   if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
-  return serializeAiPlanningSessionWithCountries(session, prisma);
+  return serializeAiPlanningSessionWithCountries(session, prisma, now);
 }
 
 type ClaimDispatchResult = {

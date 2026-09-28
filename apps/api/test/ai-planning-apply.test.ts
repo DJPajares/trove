@@ -9,12 +9,45 @@ import {
   type AiPlanningTelemetryEvent,
 } from '../src/services/ai-planning-telemetry.js';
 import { readPlanScoreInputs } from '../src/services/plan-score.js';
+import { draftPlanScoreInputRevision } from '../src/services/ai-planning-plan-score.js';
+import { PLAN_SCORE_CACHE_TTL_MS } from '../src/services/plan-score-freshness.js';
+import { getProviderCallCounts, resetProviderCallCounts } from '../src/services/provider-usage.js';
 import { customPlaceDraft, emptyPlanScore, explicitDraft } from './fixtures/ai-planning.js';
 
 const OWNER_ID = '00000000-0000-4000-8000-000000000001';
 const OTHER_OWNER_ID = '00000000-0000-4000-8000-000000000002';
 const SESSION_ID = '00000000-0000-4000-8000-000000000010';
 const NOW = new Date('2026-08-31T12:00:00.000Z');
+
+function scoreableDraft() {
+  const draft = customPlaceDraft();
+  for (const place of draft.places) {
+    if (place.resolution === 'verified')
+      place.location = { latitude: 35.6762, longitude: 139.6503 };
+  }
+  return draft;
+}
+
+function draftAssessment(draft: AiPlannerDraft, evaluatedAt = new Date(NOW.getTime() - 3_600_000)) {
+  return {
+    ...emptyPlanScore(),
+    generatedAt: evaluatedAt.toISOString(),
+    evidenceAsOf: evaluatedAt.toISOString(),
+    sourceInputRevision: draftPlanScoreInputRevision(draft),
+    score: 72,
+    withheldReasons: [],
+    days: draft.days.map((day) => ({
+      completeness: 80,
+      confidence: 90,
+      date: day.date,
+      dayId: day.date,
+      explanations: { uncertainty: [], whatWorks: [], worthImproving: [] },
+      factors: {},
+      score: 72,
+      withheldReasons: [],
+    })),
+  };
+}
 
 type SessionState = {
   appliedTripId: string | null;
@@ -130,6 +163,7 @@ function createApplyStore(
     failAt?: 'item';
     missingVerifiedPlace?: boolean;
     session?: Partial<SessionState>;
+    adjustAppliedRows?: (rows: any) => void;
   } = {},
 ) {
   let state: ApplyState = {
@@ -209,7 +243,7 @@ function createApplyStore(
     itineraryDay: {
       async create({ data }: any) {
         assertDayTimeZoneSourceContext(data);
-        const value = { ...data, id: id() };
+        const value = { routeStartTravelMode: 'DRIVE', ...data, id: id() };
         working.days.push(value);
         return { id: value.id };
       },
@@ -225,7 +259,7 @@ function createApplyStore(
       async create({ data }: any) {
         if (options.failAt === 'item') throw new Error('injected_item_failure');
         assertItemLocalTimeContext(data);
-        const value = { ...data, id: id() };
+        const value = { travelModeToNext: 'DRIVE', ...data, id: id() };
         working.items.push(value);
         return { id: value.id };
       },
@@ -267,7 +301,7 @@ function createApplyStore(
       async findFirstOrThrow({ where }: any) {
         const trip = working.trips.find((candidate) => candidate.id === where.id);
         if (!trip) throw new Error('trip_not_found');
-        return {
+        const rows = {
           ...trip,
           itineraryDays: working.days.map((day) => ({
             ...day,
@@ -282,6 +316,8 @@ function createApplyStore(
             place: { providerRefs: [] },
           })),
         };
+        options.adjustAppliedRows?.(rows);
+        return rows;
       },
       async update({ where, data }: any) {
         const trip = working.trips.find((candidate) => candidate.id === where.id);
@@ -683,12 +719,12 @@ describe('AI planning Apply', () => {
  * reference, and a draft names days by date and places by draft reference.
  */
 test('the draft score is carried onto the trip, keyed and remapped to its rows', async () => {
-  const draft = customPlaceDraft();
+  const draft = scoreableDraft();
   const dayItem = draft.days.flatMap((day) => day.items)[0];
   if (!dayItem) throw new Error('fixture missing a scheduled item');
 
   const planScore = {
-    ...emptyPlanScore(),
+    ...draftAssessment(draft),
     days: draft.days.map((day) => ({
       completeness: 80,
       confidence: 90,
@@ -720,7 +756,7 @@ test('the draft score is carried onto the trip, keyed and remapped to its rows',
   expect(trip.planScoreRevision, 'a carried score must be keyed to its trip').toEqual(
     expect.any(String),
   );
-  expect(trip.planScoreComputedAt).toEqual(NOW);
+  expect(trip.planScoreComputedAt).toEqual(new Date(planScore.generatedAt));
 
   const stored = trip.planScore as typeof planScore;
   const dayIds = store.state.days.map((day) => day.id);
@@ -740,12 +776,13 @@ test('the draft score is carried onto the trip, keyed and remapped to its rows',
  * Apply and the scorer share one. This fails the moment they stop agreeing.
  */
 test('the revision Apply stores is the one the scorer derives from the same trip', async () => {
-  const draft = customPlaceDraft();
-  const store = createApplyStore(draft, { session: { planScore: emptyPlanScore() } });
+  const draft = scoreableDraft();
+  const store = createApplyStore(draft, { session: { planScore: draftAssessment(draft) } });
   await apply(store);
 
   const trip = store.state.trips[0]!;
   const rows = {
+    ...trip,
     itineraryDays: store.state.days.map((day) => ({
       ...day,
       items: store.state.items
@@ -758,6 +795,134 @@ test('the revision Apply stores is the one the scorer derives from the same trip
   };
 
   expect(readPlanScoreInputs(rows as never).revision).toBe(trip.planScoreRevision);
+});
+
+test('Apply preserves older mutable evidence, not identity age, and replay never renews it', async () => {
+  resetProviderCallCounts();
+  const draft = scoreableDraft();
+  const score = {
+    ...draftAssessment(draft),
+    evidenceAsOf: new Date(NOW.getTime() - 2 * 3_600_000).toISOString(),
+  };
+  const original = structuredClone(score);
+  const store = createApplyStore(draft, {
+    session: {
+      planScore: score,
+      tripName: 'Reviewed title',
+      tripDescription: 'Reviewed description',
+    },
+  });
+  const [first, concurrent] = await Promise.all([apply(store), apply(store)]);
+  expect(concurrent).toEqual(first);
+  expect(store.state.trips).toHaveLength(1);
+  expect(store.state.trips[0]?.planScoreComputedAt).toEqual(new Date(score.evidenceAsOf));
+  await expect(
+    apply(store, { now: new Date(NOW.getTime() + 2 * PLAN_SCORE_CACHE_TTL_MS) }),
+  ).resolves.toEqual(first);
+  expect(store.state.trips[0]?.planScoreComputedAt).toEqual(new Date(score.evidenceAsOf));
+  expect(store.state.trips[0]?.planScore.generatedAt).toBe(score.generatedAt);
+  expect(score).toEqual(original);
+  expect(store.state.runs).toHaveLength(0);
+  expect(getProviderCallCounts()).toEqual({});
+});
+
+test('Apply succeeds but withholds expired, malformed, future, or unbound assessments', async () => {
+  const draft = scoreableDraft();
+  const base = draftAssessment(draft);
+  const expired = new Date(NOW.getTime() - PLAN_SCORE_CACHE_TTL_MS).toISOString();
+  for (const score of [
+    { ...base, generatedAt: expired },
+    { ...base, evidenceAsOf: expired },
+    { ...base, evidenceAsOf: new Date(NOW.getTime() - PLAN_SCORE_CACHE_TTL_MS - 1).toISOString() },
+    { ...base, generatedAt: 'not-a-date' },
+    { ...base, evidenceAsOf: new Date(NOW.getTime() + 1).toISOString() },
+    { ...base, generatedAt: new Date(NOW.getTime() + 1).toISOString() },
+    { ...base, sourceInputRevision: undefined },
+    { ...base, evidenceAsOf: undefined },
+    { ...base, evidenceAsOf: null },
+    { ...base, days: 'invalid' },
+  ]) {
+    const store = createApplyStore(draft, { session: { planScore: score } });
+    await expect(apply(store)).resolves.toHaveProperty('tripId');
+    expect(store.state.trips[0]?.planScore).toBeUndefined();
+    expect(store.state.trips[0]?.planScoreComputedAt).toBeUndefined();
+  }
+});
+
+test('scoring changes invalidate a bound assessment while review copy does not', async () => {
+  const edits: Array<(draft: AiPlannerDraft) => void> = [
+    (draft) => {
+      draft.days[1]!.items[1]!.durationMinutes = 90;
+    },
+    (draft) => {
+      draft.days[1]!.items[1]!.schedule = { kind: 'exact', localTime: '13:00', source: 'model' };
+    },
+    (draft) => {
+      draft.days[1]!.items.reverse();
+    },
+    (draft) => {
+      const place = draft.places[0]!;
+      if (place.resolution === 'verified') place.placeId = '00000000-0000-4000-8000-000000000099';
+    },
+    (draft) => {
+      draft.unscheduledItems[0]!.priority = 'interested';
+    },
+  ];
+  for (const edit of edits) {
+    const draft = scoreableDraft();
+    const score = draftAssessment(draft);
+    edit(draft);
+    const store = createApplyStore(draft, { session: { planScore: score } });
+    await apply(store);
+    expect(store.state.trips[0]?.planScore).toBeUndefined();
+  }
+  const draft = scoreableDraft();
+  const score = draftAssessment(draft);
+  const countryChanged = createApplyStore(draft, {
+    session: {
+      planScore: score,
+      countryContextChanged: true,
+      warningsAcknowledgedRevision: 1,
+      warningsAcknowledgedAt: NOW,
+    },
+  });
+  await apply(countryChanged);
+  expect(countryChanged.state.trips[0]?.planScore).toBeUndefined();
+});
+
+test('reuse requires the materialized rows to match the normal scorer inputs', async () => {
+  const changes: Array<(rows: any) => void> = [
+    (rows) => {
+      rows.itineraryDays[1].defaultTimeZone = 'UTC';
+    },
+    (rows) => {
+      rows.itineraryDays[1].items[1].durationMinutes += 1;
+    },
+    (rows) => {
+      rows.itineraryDays[1].items[0].localStartTime = new Date('1970-01-01T10:00:00Z');
+    },
+    (rows) => {
+      rows.itineraryDays[1].items.reverse();
+    },
+    (rows) => {
+      rows.itineraryDays[1].items[1].travelModeToNext = 'WALK';
+    },
+    (rows) => {
+      rows.tripPlaces[0].priority = null;
+    },
+    (rows) => {
+      rows.tripPlaces[0].placeId = '00000000-0000-4000-8000-000000000098';
+    },
+  ];
+  for (const adjustAppliedRows of changes) {
+    const draft = scoreableDraft();
+    const store = createApplyStore(draft, {
+      session: { planScore: draftAssessment(draft) },
+      adjustAppliedRows,
+    });
+    await apply(store);
+    expect(store.state.trips[0]?.planScore).toBeUndefined();
+  }
 });
 
 /**

@@ -2,6 +2,8 @@ import { getPrismaClient, Prisma } from '@trove/db';
 import { z } from 'zod';
 
 import { tripPlanScoreRevision } from './plan-score-revision.js';
+import { oldestPlanScoreEvidenceAt, originalPlanScoreTime } from './plan-score-freshness.js';
+export { PLAN_SCORE_CACHE_TTL_MS } from './plan-score-freshness.js';
 
 import { arePlanScoreProvidersDisabled } from '../environment.js';
 import {
@@ -68,6 +70,10 @@ export type TripPlanScore = {
   /** Identity of the evidence this result came from, for cache validation. */
   fingerprint: string;
   generatedAt: string;
+  /** Oldest mutable evidence used by this assessment, never its cache-read time. */
+  evidenceAsOf?: string | null;
+  /** Rubric-versioned draft inputs, checked before adopting an AI assessment. */
+  sourceInputRevision?: string;
   mustGoPriorityFit: PlanScoreFactorOutcome;
   score: number | null;
   withheldReasons: PlanScoreTripWithheldReason[];
@@ -249,6 +255,8 @@ const tripPlanScoreSchema = z
     explanations: explanationGroupsSchema,
     fingerprint: z.string(),
     generatedAt: z.string(),
+    evidenceAsOf: z.string().nullable().optional(),
+    sourceInputRevision: z.string().optional(),
     mustGoPriorityFit: factorOutcomeSchema,
     score: z.number().nullable(),
     withheldReasons: z.array(z.string()),
@@ -266,6 +274,22 @@ export function parseStoredPlanScore(value: unknown): TripPlanScore | null {
   return parsed.success ? (parsed.data as TripPlanScore) : null;
 }
 
+/** A failed freshness check must not return an apparently current number. */
+export function withholdNonCurrentPlanScore(score: TripPlanScore, now: Date): TripPlanScore {
+  if (score.score === null && score.days.every((day) => day.score === null)) return score;
+  if (originalPlanScoreTime(score, now)) return score;
+  return {
+    ...score,
+    score: null,
+    withheldReasons: [...new Set([...score.withheldReasons, 'EVIDENCE_NOT_CURRENT' as const])],
+    days: score.days.map((day) => ({
+      ...day,
+      score: null,
+      withheldReasons: [...new Set([...day.withheldReasons, 'EVIDENCE_NOT_CURRENT' as const])],
+    })),
+  };
+}
+
 /**
  * Aggregation and explanation over days that have already been evaluated, so a
  * caller that assembled its own evidence never reimplements the trip rubric.
@@ -274,7 +298,10 @@ export function buildPlanScoreFromEvaluations(input: {
   days: Array<{ date: string; evaluation: PlanScoreDayEvaluation }>;
   mustGoIds: string[];
   scheduledIds: string[];
+  evaluatedAt?: Date;
+  evidenceTimes?: readonly string[];
 }): TripPlanScore {
+  const generatedAt = (input.evaluatedAt ?? new Date()).toISOString();
   const evaluations = input.days;
   const mustGoPriorityFit: PlanScoreFactorResult = evaluateMustGoPriorityFit({
     mustGoTripPlaceIds: input.mustGoIds,
@@ -314,7 +341,8 @@ export function buildPlanScoreFromEvaluations(input: {
       ),
     }),
     fingerprint: planScoreFingerprint(tripInput),
-    generatedAt: new Date().toISOString(),
+    generatedAt,
+    evidenceAsOf: oldestPlanScoreEvidenceAt(generatedAt, input.evidenceTimes ?? []),
     mustGoPriorityFit: result.mustGoPriorityFit,
     score: result.score,
     withheldReasons: result.withheldReasons,
@@ -325,8 +353,12 @@ export function buildPlanScoreFromEvaluations(input: {
  * Pure scoring over already-loaded evidence, so the aggregation and explanation
  * wiring can be exercised without a database or provider.
  */
-export function buildTripPlanScore(record: PlanScoreTripRecord): TripPlanScore {
+export function buildTripPlanScore(
+  record: PlanScoreTripRecord,
+  options: { evaluatedAt?: Date; evidenceTimes?: readonly string[] } = {},
+): TripPlanScore {
   return buildPlanScoreFromEvaluations({
+    ...options,
     days: record.days.map((day) => ({
       date: day.date,
       evaluation: evaluateDayRecord(day, record),
@@ -349,7 +381,7 @@ export async function loadPlaceEvidence(
 ) {
   const hours: PlaceHoursEvidence = new Map();
   const ratings = new Map<string, number>();
-  if (!placesService) return { hours, ratings };
+  if (!placesService) return { hours, ratings, evidenceTimes: [] as string[] };
 
   const results = await mapWithConcurrency(
     tripPlaces,
@@ -362,6 +394,7 @@ export async function loadPlaceEvidence(
       });
       if (details.status !== 'ok') return null;
       return {
+        fetchedAt: details.freshness.fetchedAt,
         id: tripPlace.id,
         openingPeriods: details.place.openingPeriods,
         rating: details.place.rating,
@@ -379,7 +412,11 @@ export async function loadPlaceEvidence(
     });
   }
 
-  return { hours, ratings };
+  return {
+    hours,
+    ratings,
+    evidenceTimes: results.flatMap((result) => (result ? [result.fetchedAt] : [])),
+  };
 }
 
 /**
@@ -388,8 +425,6 @@ export async function loadPlaceEvidence(
  * ratings move underneath a plan nobody edits and are never persisted, so a day
  * is the ceiling on how stale the evidence behind a displayed score may be.
  */
-export const PLAN_SCORE_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
-
 type TripPlanScoreRow = {
   planScore: Prisma.JsonValue | null;
   planScoreComputedAt: Date | null;
@@ -468,11 +503,13 @@ export const PLAN_SCORE_TRIP_INCLUDE = {
     },
   },
   tripPlaces: {
-    select: { id: true, place: { select: { providerRefs: true } }, priority: true },
+    select: { id: true, placeId: true, place: { select: { providerRefs: true } }, priority: true },
   },
 } as const;
 
-type PlanScoreTripRows = {
+export type PlanScoreTripRows = {
+  startDate?: Date;
+  startingPlaceId?: string | null;
   itineraryDays: Array<{
     dailyBaseDepartureTripPlaceId: string | null;
     dailyBaseTripPlaceId: string | null;
@@ -497,7 +534,7 @@ type PlanScoreTripRows = {
     routeStartTravelMode: string;
   }>;
   reservations: Parameters<typeof sameDayJourneyCommitment>[0][];
-  tripPlaces: Array<{ id: string; priority: string | null }>;
+  tripPlaces: Array<{ id: string; placeId?: string; priority: string | null }>;
 };
 
 /** The single reading of a trip that both the digest and the scorer are built on. */
@@ -510,11 +547,24 @@ export function readPlanScoreInputs(trip: PlanScoreTripRows) {
     .filter((tripPlace) => tripPlace.priority === 'MUST_GO')
     .map((tripPlace) => tripPlace.id);
   const days = trip.itineraryDays.map((day) => toPlanScoreDayRecord(day, commitments));
+  const scoredPlaceIds = new Set([
+    ...mustGoTripPlaceIds,
+    ...trip.itineraryDays.flatMap((day) =>
+      [day.dailyBaseTripPlaceId, day.dailyBaseDepartureTripPlaceId].filter((id): id is string =>
+        Boolean(id),
+      ),
+    ),
+    ...days.flatMap((day) =>
+      day.items.flatMap((item) => (item.tripPlaceId ? [item.tripPlaceId] : [])),
+    ),
+  ]);
 
   return {
     days,
     mustGoTripPlaceIds,
     revision: tripPlanScoreRevision({
+      startDate: trip.startDate ?? null,
+      startingPlaceId: trip.startingPlaceId ?? null,
       days: trip.itineraryDays.map((day, index) => ({
         record: days[index]!,
         routing: {
@@ -529,17 +579,20 @@ export function readPlanScoreInputs(trip: PlanScoreTripRows) {
         },
       })),
       mustGoTripPlaceIds,
+      placeIdentities: trip.tripPlaces
+        .filter(({ id }) => scoredPlaceIds.has(id))
+        .map(({ id, placeId }) => ({ id, placeId: placeId ?? null })),
     }),
   };
 }
 
 function readCachedPlanScore(trip: TripPlanScoreRow, revision: string, now: Date) {
   if (trip.planScoreRevision !== revision || !trip.planScoreComputedAt) return null;
-  if (now.getTime() - trip.planScoreComputedAt.getTime() >= PLAN_SCORE_CACHE_TTL_MS) return null;
 
   // A row written before the current payload shape is a miss, not something to
   // hand to a client.
-  return parseStoredPlanScore(trip.planScore);
+  const score = parseStoredPlanScore(trip.planScore);
+  return score && originalPlanScoreTime(score, now, trip.planScoreComputedAt) ? score : null;
 }
 
 /**
@@ -551,13 +604,12 @@ async function writeCachedPlanScore(
   tripId: string,
   planScore: TripPlanScore,
   revision: string,
-  now: Date,
 ) {
   await prisma.trip.update({
     where: { id: tripId },
     data: {
       planScore: planScore as unknown as Prisma.InputJsonValue,
-      planScoreComputedAt: now,
+      planScoreComputedAt: new Date(planScore.evidenceAsOf ?? planScore.generatedAt),
       planScoreRevision: revision,
     },
   });
@@ -581,29 +633,7 @@ export async function getTripPlanScore(
   const prisma = getPrismaClient();
   const trip = await prisma.trip.findFirst({
     where: { id: tripId, ownerId: userId },
-    include: {
-      itineraryDays: {
-        orderBy: { date: 'asc' },
-        include: {
-          items: {
-            orderBy: { position: 'asc' },
-            include: { _count: { select: { reservations: true } } },
-          },
-        },
-      },
-      reservations: {
-        select: {
-          flightArrivalLocalDate: true,
-          flightArrivalLocalTime: true,
-          flightDepartureLocalDate: true,
-          flightDepartureLocalTime: true,
-          id: true,
-        },
-      },
-      tripPlaces: {
-        select: { id: true, place: { select: { providerRefs: true } }, priority: true },
-      },
-    },
+    include: PLAN_SCORE_TRIP_INCLUDE,
   });
   if (!trip) throw new ItineraryNotFoundError('trip_not_found');
 
@@ -665,14 +695,31 @@ export async function getTripPlanScore(
     ),
   ]);
 
-  const result = buildTripPlanScore({
-    days: dayRecords,
-    hours: placeEvidence.hours,
-    mustGoTripPlaceIds,
-    ratings: placeEvidence.ratings,
-    routes: new Map(routeResults.map(({ id, routes }) => [id, routes])),
-  });
+  const evaluatedAt = services.now?.() ?? new Date();
+  const result = withholdNonCurrentPlanScore(
+    buildTripPlanScore(
+      {
+        days: dayRecords,
+        hours: placeEvidence.hours,
+        mustGoTripPlaceIds,
+        ratings: placeEvidence.ratings,
+        routes: new Map(routeResults.map(({ id, routes }) => [id, routes])),
+      },
+      {
+        evaluatedAt,
+        evidenceTimes: [
+          ...(placeEvidence.evidenceTimes ?? []),
+          ...routeResults.flatMap(({ routes }) =>
+            routes.segments.flatMap((segment) =>
+              segment.evidenceAsOf ? [segment.evidenceAsOf] : [],
+            ),
+          ),
+        ],
+      },
+    ),
+    evaluatedAt,
+  );
 
-  await writeCachedPlanScore(prisma, trip.id, result, revision, now);
+  await writeCachedPlanScore(prisma, trip.id, result, revision);
   return result;
 }

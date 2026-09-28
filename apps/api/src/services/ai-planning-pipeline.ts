@@ -40,9 +40,11 @@ import { createAiPlannerProviderContext } from './ai-planner-provider-context.js
 import {
   buildPlanScoreFromEvaluations,
   evaluateScoredDay,
+  withholdNonCurrentPlanScore,
   type TripPlanScore,
 } from './plan-score.js';
 import { groundableDraftPlaceIds, referencedDraftPlaceIds } from './ai-planning-draft-places.js';
+import { draftPlanScoreInputRevision } from './ai-planning-plan-score.js';
 import {
   recordAiPlanningDraftAssembled,
   recordAiPlanningProposalCoverage,
@@ -1096,7 +1098,12 @@ function scoreDraft(
     ratings: Map<string, number>;
     segments: Map<string, PlanScoreRouteSegment[]>;
   },
+  evaluatedAt: Date,
 ) {
+  const scoredItems = new Set(draft.days.flatMap((day) => day.items.map((item) => item.id)));
+  const scoredRoutes = new Set(
+    [...evidence.segments.values()].flatMap((segments) => segments.map((segment) => segment.id)),
+  );
   const scheduledIds = [
     ...new Set(
       draft.days.flatMap((day) =>
@@ -1114,7 +1121,15 @@ function scoreDraft(
     ),
   ];
 
-  return buildPlanScoreFromEvaluations({
+  const score = buildPlanScoreFromEvaluations({
+    evaluatedAt,
+    evidenceTimes: draft.evidence.flatMap((entry) =>
+      entry.checkedAt &&
+      ((entry.kind === 'opening_hours' && scoredItems.has(entry.subjectId)) ||
+        (entry.kind === 'route' && scoredRoutes.has(entry.subjectId)))
+        ? [entry.checkedAt]
+        : [],
+    ),
     days: draft.days.map((day) => ({
       date: day.date,
       evaluation: evaluateScoredDay({
@@ -1136,6 +1151,10 @@ function scoreDraft(
     mustGoIds,
     scheduledIds,
   });
+  return {
+    ...withholdNonCurrentPlanScore(score, evaluatedAt),
+    sourceInputRevision: draftPlanScoreInputRevision(draft),
+  };
 }
 
 async function validateWithProviderEvidence(
@@ -1144,6 +1163,7 @@ async function validateWithProviderEvidence(
   grounding: GroundedCandidate[],
   providerContext: ProviderContext,
   signal?: AbortSignal,
+  clock: () => Date = () => new Date(),
 ) {
   const contexts = new Map(
     grounding.flatMap((result) =>
@@ -1181,7 +1201,7 @@ async function validateWithProviderEvidence(
 
   return {
     draft: validated.data,
-    planScore: scoreDraft(validated.data, { inbound, intervals, ratings, segments }),
+    planScore: scoreDraft(validated.data, { inbound, intervals, ratings, segments }, clock()),
   };
 }
 
@@ -1359,6 +1379,7 @@ export async function runAiPlanningPipeline(
       grounding,
       providerContext,
       providerSignal,
+      clock,
     );
     recordAiPlanningDraftAssembled(validated.draft, generationDate);
     if (controller.signal.aborted)

@@ -1,4 +1,149 @@
-import type { TripPlanScore } from './plan-score.js';
+import { createHash } from 'node:crypto';
+import type { AiPlannerDraft } from '@trove/types';
+import { readPlanScoreInputs, type PlanScoreTripRows, type TripPlanScore } from './plan-score.js';
+import { PLAN_SCORE_CONTRACT_VERSION } from './plan-score-rules.js';
+import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
+import { floatingLocalTimeToInstant, parseLocalTime } from './itinerary-rules.js';
+import { parseDateOnly, resolveCountryPrimaryTimeZone } from './trip-rules.js';
+
+/** Binds an assessment to the final itinerary, not mutable review copy. */
+export function draftPlanScoreInputRevision(draft: AiPlannerDraft): string {
+  const payload = {
+    version: 1,
+    rubric: PLAN_SCORE_CONTRACT_VERSION,
+    dates: [draft.trip.startDate, draft.trip.endDate],
+    destinations: draft.trip.destinations.map(({ placeRefId }) => placeRefId),
+    places: draft.places
+      .map((place) => ({
+        id: place.id,
+        name: place.name,
+        placeId: place.resolution === 'verified' ? place.placeId : null,
+        location: place.resolution === 'verified' ? (place.location ?? null) : null,
+      }))
+      .toSorted((a, b) => a.id.localeCompare(b.id)),
+    days: draft.days.map((day) => ({
+      date: day.date,
+      dailyBase: day.dailyBasePlaceRefId,
+      departureBase: day.dailyBaseDeparturePlaceRefId,
+      items: day.items.map((item) => ({
+        id: item.id,
+        place: item.placeRefId,
+        duration: item.durationMinutes,
+        durationProvenance: item.durationProvenance,
+        schedule:
+          item.schedule.kind === 'exact'
+            ? [item.schedule.kind, item.schedule.localTime, item.schedule.source]
+            : [item.schedule.kind, item.schedule.dayPart],
+        priority: item.priority,
+      })),
+    })),
+    unscheduled: draft.unscheduledItems.map(({ placeRefId, priority }) => ({
+      placeRefId,
+      priority,
+    })),
+  };
+  return createHash('sha256').update(JSON.stringify(payload)).digest('hex').slice(0, 32);
+}
+
+/**
+ * Compare the ordinary scorer's complete input reading to the expected rows.
+ * Only IDs may change. Unknown timezone context or merged place aliases cannot
+ * prove equivalence, so those cases defer to ordinary demand-driven scoring.
+ */
+export function appliedDraftScoreInputsMatch(
+  draft: AiPlannerDraft,
+  rows: PlanScoreTripRows,
+  identity: DraftPlanScoreIdentityMap,
+): boolean {
+  const zones = new Map(
+    draft.places.map((place) => [
+      place.id,
+      (place.resolution === 'verified' && place.location
+        ? timeZoneAtCoordinates(place.location)
+        : null) ?? resolveCountryPrimaryTimeZone(place.name),
+    ]),
+  );
+  const referenceZone = draft.trip.destinations
+    .map(({ placeRefId }) => zones.get(placeRefId))
+    .find(Boolean);
+  const ref = (value: string | null) =>
+    value ? (identity.tripPlaceIdByPlaceRefId.get(value) ?? null) : null;
+  const allItems = [...draft.days.flatMap((day) => day.items), ...draft.unscheduledItems];
+  const expectedPlaces = [...identity.tripPlaceIdByPlaceRefId].map(([placeRef, id]) => {
+    const place = draft.places.find((entry) => entry.id === placeRef);
+    const items = allItems.filter((item) => item.placeRefId === placeRef);
+    return {
+      id,
+      placeId:
+        place?.resolution === 'verified'
+          ? place.placeId
+          : rows.tripPlaces.find((p) => p.id === id)?.placeId,
+      priority: items.some((item) => item.priority === 'must_go') ? 'MUST_GO' : null,
+    };
+  });
+  if (new Set(expectedPlaces.map(({ id }) => id)).size !== expectedPlaces.length) return false;
+  if (expectedPlaces.some(({ placeId }) => !placeId)) return false;
+
+  const expectedDays: PlanScoreTripRows['itineraryDays'] = [];
+  for (const day of draft.days) {
+    const zone =
+      (day.dailyBasePlaceRefId ? zones.get(day.dailyBasePlaceRefId) : null) ??
+      day.items
+        .map((item) => (item.placeRefId ? zones.get(item.placeRefId) : null))
+        .find(Boolean) ??
+      referenceZone;
+    const dayId = identity.dayIdByDate.get(day.date);
+    if (!zone || !dayId) return false;
+    const actualDay = rows.itineraryDays.find((entry) => entry.id === dayId);
+    if (actualDay?.defaultTimeZone !== zone) return false;
+    const items: PlanScoreTripRows['itineraryDays'][number]['items'] = [];
+    for (const [position, item] of day.items.entries()) {
+      const id = identity.itemIdByDraftId.get(item.id);
+      if (!id || (item.placeRefId && !ref(item.placeRefId))) return false;
+      const itemZone = (item.placeRefId ? zones.get(item.placeRefId) : null) ?? zone;
+      if (actualDay.items.find((entry) => entry.id === id)?.timeZone !== itemZone) return false;
+      const exact = item.schedule.kind === 'exact' ? item.schedule.localTime : null;
+      items.push({
+        _count: { reservations: 0 },
+        dayPart: item.schedule.kind === 'day_part' ? item.schedule.dayPart.toUpperCase() : null,
+        durationMinutes: item.durationMinutes,
+        durationProvenance: item.durationProvenance.toUpperCase(),
+        id,
+        localStartTime: exact ? parseLocalTime(exact) : null,
+        position,
+        startInstant: exact ? floatingLocalTimeToInstant(day.date, exact, itemZone) : null,
+        timeSemantics: exact ? 'FLOATING_LOCAL' : null,
+        timeProvenance: exact
+          ? item.schedule.kind === 'exact' && item.schedule.source === 'model'
+            ? 'AI_ESTIMATED'
+            : 'USER_OWNED'
+          : null,
+        timeZone: itemZone,
+        travelModeToNext: 'DRIVE',
+        tripPlaceId: ref(item.placeRefId),
+      });
+    }
+    expectedDays.push({
+      dailyBaseDepartureTripPlaceId: ref(day.dailyBaseDeparturePlaceRefId),
+      dailyBaseTripPlaceId: ref(day.dailyBasePlaceRefId),
+      date: parseDateOnly(day.date),
+      defaultTimeZone: zone,
+      id: dayId,
+      items,
+      routeStartTravelMode: 'DRIVE',
+    });
+  }
+  return (
+    readPlanScoreInputs(rows).revision ===
+    readPlanScoreInputs({
+      startDate: parseDateOnly(draft.trip.startDate),
+      startingPlaceId: null,
+      itineraryDays: expectedDays,
+      reservations: [],
+      tripPlaces: expectedPlaces,
+    }).revision
+  );
+}
 
 export type DraftPlanScoreIdentityMap = {
   /** Draft day date to the itinerary day it became. */

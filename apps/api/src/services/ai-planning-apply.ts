@@ -2,7 +2,12 @@ import { getPrismaClient, Prisma } from '@trove/db';
 import type { AiPlannerDraft, AiPlannerDraftItem, AiPlannerDraftPlace } from '@trove/types';
 
 import { referencedDraftPlaceIds } from './ai-planning-draft-places.js';
-import { remapDraftPlanScore } from './ai-planning-plan-score.js';
+import {
+  appliedDraftScoreInputsMatch,
+  draftPlanScoreInputRevision,
+  remapDraftPlanScore,
+} from './ai-planning-plan-score.js';
+import { originalPlanScoreTime } from './plan-score-freshness.js';
 import { PLAN_SCORE_TRIP_INCLUDE, readPlanScoreInputs } from './plan-score.js';
 import { floatingLocalTimeToInstant, parseLocalTime } from './itinerary-rules.js';
 import {
@@ -458,23 +463,27 @@ export async function applyAiPlanningSession(
     // revision is read back off the rows just written, through the same reading
     // the scorer uses, so a stored score is only ever served for the trip it was
     // actually computed from.
-    if (loaded.planScore) {
+    const score = loaded.planScore;
+    const scoreTime =
+      score?.evidenceAsOf !== undefined &&
+      score?.sourceInputRevision === draftPlanScoreInputRevision(draft)
+        ? originalPlanScoreTime(score, now)
+        : null;
+    if (score && scoreTime) {
       const rows = await transaction.trip.findFirstOrThrow({
         where: { id: trip.id },
         include: PLAN_SCORE_TRIP_INCLUDE,
       });
-      await transaction.trip.update({
-        where: { id: trip.id },
-        data: {
-          planScore: remapDraftPlanScore(loaded.planScore, {
-            dayIdByDate,
-            itemIdByDraftId,
-            tripPlaceIdByPlaceRefId: tripPlaceIds,
-          }) as unknown as Prisma.InputJsonValue,
-          planScoreComputedAt: now,
-          planScoreRevision: readPlanScoreInputs(rows).revision,
-        },
-      });
+      const identity = { dayIdByDate, itemIdByDraftId, tripPlaceIdByPlaceRefId: tripPlaceIds };
+      if (appliedDraftScoreInputsMatch(draft, rows, identity))
+        await transaction.trip.update({
+          where: { id: trip.id },
+          data: {
+            planScore: remapDraftPlanScore(score, identity) as unknown as Prisma.InputJsonValue,
+            planScoreComputedAt: scoreTime,
+            planScoreRevision: readPlanScoreInputs(rows).revision,
+          },
+        });
     }
 
     const applied = await transaction.aiPlanningSession.updateMany({

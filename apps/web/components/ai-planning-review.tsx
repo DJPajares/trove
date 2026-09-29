@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { CountryMultiCombobox } from '@/components/country-multi-combobox';
 import { PageState } from '@/components/page-state';
+import { assessmentDeadline } from '@/lib/plan-score/presentation';
 import { assessmentChange, rememberAssessment } from '@/lib/plan-score/lifecycle';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { usePreferences } from '@/components/preferences-provider';
@@ -79,8 +80,24 @@ export function AiPlanningReview({
   const sessionQuery = useQuery({
     queryFn: () => fetchAiPlanningSession(sessionId),
     queryKey: queryKeys.aiPlanningSession(sessionId),
+    staleTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
   const session = sessionQuery.data?.session ?? null;
+  useEffect(() => {
+    if (!planScoreEnabled || session?.status !== 'reviewing' || !session.planScore) return;
+    const deadline = assessmentDeadline(session.planScore);
+    if (!Number.isFinite(deadline) || deadline <= Date.now()) return;
+    const timer = window.setTimeout(
+      () => {
+        void sessionQuery.refetch();
+      },
+      Math.max(0, deadline - Date.now() + 1),
+    );
+    return () => window.clearTimeout(timer);
+  }, [planScoreEnabled, session?.status, session?.planScore, sessionQuery.refetch]);
   useEffect(() => {
     if (!session || !isAiPlanningSessionGenerating(session.status)) return;
     let current = true;
@@ -688,9 +705,6 @@ export function AiPlanningReview({
               ) : null}
             </div>
             {draft.days.map((day, dayIndex) => {
-              const dayScore = planScoreEnabled
-                ? session.planScore?.days.find((entry) => entry.date === day.date)
-                : null;
               return (
                 <article
                   className="overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card"
@@ -754,24 +768,6 @@ export function AiPlanningReview({
                       <li className="p-4 text-sm text-muted-foreground sm:px-6">{t('emptyDay')}</li>
                     ) : null}
                   </ol>
-                  {dayScore ? (
-                    <div className="p-4 sm:px-6">
-                      <PlanScorePanel
-                        change={assessmentChange(queryClient, `draft:${sessionId}`, dayScore.dayId)}
-                        assessment={session.planScore}
-                        dayId={dayScore.dayId}
-                        completeness={dayScore.completeness}
-                        confidence={dayScore.confidence}
-                        explanations={dayScore.explanations}
-                        factors={dayScore.factors}
-                        score={dayScore.score}
-                        scope="day"
-                        status="idle"
-                        title={planScoreCopy('dayTitle')}
-                        resolveAction={resolveDraftScoreAction}
-                      />
-                    </div>
-                  ) : null}
                 </article>
               );
             })}

@@ -44,6 +44,7 @@ export type PlanScoreStartWindow = {
 };
 
 export type PlanScoreDayItem = {
+  blockType?: string | null;
   /** Known visit duration. */
   duration: PlanScoreMinutes | null;
   /** A fixed commitment cannot be moved, such as a reservation or booked tour. */
@@ -359,7 +360,13 @@ export function evaluateFeasibility(
           refs,
           timingTrusted && (!item.fixed || (item.start !== null && trusted(item.start.source))),
         );
-      } else if (item.fixed && remaining >= 0 && remaining < 15 && previous) {
+      } else if (
+        item.fixed &&
+        remaining >= 0 &&
+        remaining < 15 &&
+        previous &&
+        item.blockType !== 'free_time'
+      ) {
         record(collision, 'TIGHT_TRANSITION', 'SOFT', refs, timingTrusted);
       }
     }
@@ -403,7 +410,10 @@ export function evaluateFeasibility(
         [item.id],
         timingTrusted && (item.duration === null || trusted(item.duration.source)),
       );
-    if (item.openingHours.status === 'KNOWN' || item.placeId) {
+    if (
+      (!item.blockType || item.blockType === 'activity') &&
+      (item.openingHours.status === 'KNOWN' || item.placeId)
+    ) {
       applicable++;
       if (item.openingHours.status === 'KNOWN') {
         use(`hours:${item.id}`, item.openingHours.source);

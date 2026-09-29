@@ -27,6 +27,7 @@ export type ItineraryScheduleInput =
   | { kind: 'exact'; localTime: string };
 
 export type ItineraryItemInput = {
+  blockType?: import('@trove/types').ItineraryBlockType | null;
   clientItemId?: string;
   customLabel?: string | null;
   customLocation?: { label: string; timeZone?: string | null } | null;
@@ -198,6 +199,7 @@ export function serializeItineraryItem(
       : null,
     dayPart: mapDayPart(item.dayPart),
     durationMinutes: item.durationMinutes,
+    blockType: item.blockType ?? null,
     durationProvenance: mapDurationProvenance(item.durationProvenance),
     id: item.id,
     itineraryDayId: item.itineraryDayId,
@@ -1133,6 +1135,7 @@ export async function createItineraryItem(
     const timing = resolveItemTiming(input, schedule.localStartTime);
     const item = await transaction.itineraryItem.create({
       data: {
+        blockType: input.blockType ?? null,
         ...(input.clientItemId ? { id: input.clientItemId } : {}),
         customLabel,
         customLocation: customLocation.label,
@@ -1247,6 +1250,7 @@ export async function updateItineraryItem(
     const updated = await transaction.itineraryItem.update({
       where: { id: itemId },
       data: {
+        ...(input.blockType !== undefined ? { blockType: input.blockType } : {}),
         customLabel,
         customLocation: customLocation.label,
         customLocationTimeZone: customLocation.timeZone,

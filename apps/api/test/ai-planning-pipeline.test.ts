@@ -670,11 +670,11 @@ describe('AI planning pipeline', () => {
       },
     });
 
-    expect(placeRequests).toHaveLength(2);
+    expect(placeRequests).toHaveLength(1); // Non-venue meetings do not require hours.
     expect(routeRequests).toHaveLength(1);
     expect(
       harness.drafts[0]?.evidence.filter((entry) => entry.kind === 'opening_hours'),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
     expect(harness.drafts[0]?.evidence).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: 'route', provider: 'google', status: 'verified' }),

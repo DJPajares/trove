@@ -38,6 +38,7 @@ test('offline creation keeps an explicit end and derives its effective duration'
   const result = applyOfflineMutation(itinerary(), {
     clientItemId: 'museum',
     input: {
+      blockType: 'activity',
       customLabel: 'Museum',
       itineraryDayId: 'day',
       localEndTime: '10:30',
@@ -47,6 +48,7 @@ test('offline creation keeps an explicit end and derives its effective duration'
   });
 
   expect(result.days[0]?.items[0]).toMatchObject({
+    blockType: 'activity',
     durationMinutes: 90,
     localEndTime: '10:30',
     localStartTime: '09:00',
@@ -57,6 +59,7 @@ test('offline retiming preserves the explicit end and recalculates its duration'
   const created = applyOfflineMutation(itinerary(), {
     clientItemId: 'museum',
     input: {
+      blockType: 'work',
       customLabel: 'Museum',
       itineraryDayId: 'day',
       localEndTime: '10:30',
@@ -74,6 +77,7 @@ test('offline retiming preserves the explicit end and recalculates its duration'
   });
 
   expect(result.days[0]?.items[0]).toMatchObject({
+    blockType: 'work',
     durationMinutes: 60,
     localEndTime: '10:30',
     localStartTime: '09:30',

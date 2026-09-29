@@ -221,7 +221,11 @@ export function normalizeScoringItems(
           earliestMinute: elapsedLocalMinute(date, ownZone, startWindow.earliestMinute, origin),
           latestMinute: elapsedLocalMinute(date, ownZone, startWindow.latestMinute, origin),
         };
-      if (item.placeId && options.hours?.has(item.placeId))
+      if (
+        (!item.blockType || item.blockType === 'activity') &&
+        item.placeId &&
+        options.hours?.has(item.placeId)
+      )
         hours = scoringOpeningHours({
           date,
           zone: ownZone,

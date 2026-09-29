@@ -625,3 +625,25 @@ test('a mapping cannot claim a snapshot it never verified', async () => {
   expect(state.searches).toBe(3);
   expect(result.place).toMatchObject({ resolution: 'verified' });
 });
+
+test('duplicate search rows for one provider identity remain one unambiguous match', async () => {
+  const { grounder, searches } = setup([identity(), identity()]);
+  const result = await grounder.groundCandidate(candidate());
+  expect(result.place.resolution).toBe('verified');
+  expect(searches()).toBe(1);
+});
+
+test('relaxed matching cannot accept Old Airport Road as Old Airport Road Food Centre', async () => {
+  const { grounder, searches } = setup([
+    identity({ name: 'Old Airport Road', rawTypes: ['route'], primaryType: 'route' }),
+  ]);
+  const result = await grounder.groundCandidate(
+    candidate({
+      name: 'Old Airport Road Food Centre',
+      searchQuery: 'Old Airport Road Food Centre',
+    }),
+  );
+  expect(result.place.resolution).toBe('custom');
+  expect(result.evidence.code).toBe('place_unresolved');
+  expect(searches()).toBe(1);
+});

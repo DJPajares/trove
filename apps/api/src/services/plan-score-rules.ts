@@ -19,7 +19,7 @@ export type {
   PlanScoreTripWithheldReason,
   PlanScoreUnknownReason,
 } from '@trove/types';
-export const PLAN_SCORE_CONTRACT_VERSION = 5;
+export const PLAN_SCORE_CONTRACT_VERSION = 6;
 export const DAY_FACTOR_IDS = [
   'FEASIBILITY',
   'ROUTE_EFFICIENCY',
@@ -122,7 +122,9 @@ export function evidenceConfidence(evidence: readonly PlanScoreEvidence[]) {
     ) / distinct.size
   );
 }
-export function toOutcome(result: PlanScoreFactorResult): PlanScoreFactorOutcome {
+export function toOutcome(
+  result: PlanScoreFactorResult,
+): Exclude<PlanScoreFactorOutcome, { state: 'LIMITED' }> {
   if (result.state !== 'EVALUATED') return { ...result };
   return {
     state: 'EVALUATED',
@@ -138,20 +140,24 @@ export function combineSignals(
   const applicable = signals.filter((s) => s.result.state !== 'NOT_APPLICABLE');
   if (!applicable.length) return NOT_APPLICABLE;
   const evaluated = applicable.flatMap((s) =>
-    s.result.state === 'EVALUATED'
+    s.result.state === 'EVALUATED' && (s.result.coverage ?? 100) > 0
       ? [{ ...s, result: s.result, outcome: toOutcome(s.result) }]
       : [],
   );
   if (!evaluated.length) return UNKNOWN;
   const denominator = applicable.reduce((n, s) => n + s.weight, 0);
-  const evaluatedWeight = evaluated.reduce((n, s) => n + s.weight, 0);
   const coveredWeight = evaluated.reduce(
     (n, s) => n + (s.weight * (s.result.coverage ?? 100)) / 100,
     0,
   );
   return {
     state: 'EVALUATED',
-    score: evaluated.reduce((n, s) => n + s.weight * s.result.score, 0) / evaluatedWeight,
+    score: coveredWeight
+      ? evaluated.reduce(
+          (n, s) => n + ((s.weight * (s.result.coverage ?? 100)) / 100) * s.result.score,
+          0,
+        ) / coveredWeight
+      : 0,
     coverage: (100 * coveredWeight) / denominator,
     confidence: coveredWeight
       ? evaluated.reduce(
@@ -168,6 +174,12 @@ export function combineSignals(
   };
 }
 function rounded(outcome: PlanScoreFactorOutcome): PlanScoreFactorOutcome {
+  if (outcome.state === 'EVALUATED' && (outcome.coverage < 60 || outcome.confidence < 50))
+    return {
+      state: 'LIMITED',
+      coverage: Math.round(outcome.coverage),
+      confidence: Math.round(outcome.confidence),
+    };
   return outcome.state === 'EVALUATED'
     ? {
         ...outcome,
@@ -219,6 +231,11 @@ function evaluateDay(day: PlanScoreDayInput, incomingDebt = 0): PlanScoreDayResu
       : [];
   const bound = (score: number) => Math.min(score, ...caps.map((c) => c.limit));
   return {
+    assessmentStatus: withheldReasons.length
+      ? 'unavailable'
+      : completeness < 80 || (outcome.state === 'EVALUATED' && outcome.confidence < 60)
+        ? 'provisional'
+        : 'available',
     dayId: day.dayId,
     completeness,
     confidence: outcome.state === 'EVALUATED' ? outcome.confidence : null,
@@ -277,8 +294,15 @@ export function scoreTrip(input: PlanScoreTripInput): PlanScoreTripResult {
   const total = ordered.reduce((n, d) => n + weight(d), 0);
   const assessedWeight = scorable.reduce((n, e) => n + weight(e.input), 0);
   const completeness = total ? (100 * assessedWeight) / total : 0;
+  const supportedDailyWeight = scorable.reduce(
+    (n, e) => n + (weight(e.input) * e.result.completeness) / 100,
+    0,
+  );
   const dailyMean = scorable.length
-    ? scorable.reduce((n, e) => n + weight(e.input) * e.result.intrinsicScore!, 0) / assessedWeight
+    ? scorable.reduce(
+        (n, e) => n + ((weight(e.input) * e.result.completeness) / 100) * e.result.intrinsicScore!,
+        0,
+      ) / supportedDailyWeight
     : null;
   const daily: PlanScoreFactorResult =
     dailyMean === null
@@ -286,10 +310,13 @@ export function scoreTrip(input: PlanScoreTripInput): PlanScoreTripResult {
       : {
           state: 'EVALUATED',
           score: dailyMean,
-          coverage: completeness,
+          coverage: total ? (100 * supportedDailyWeight) / total : 0,
           confidence:
-            scorable.reduce((n, e) => n + weight(e.input) * (e.result.confidence ?? 0), 0) /
-            assessedWeight,
+            scorable.reduce(
+              (n, e) =>
+                n + ((weight(e.input) * e.result.completeness) / 100) * (e.result.confidence ?? 0),
+              0,
+            ) / supportedDailyWeight,
           evidence: scorable.map((e) => ({ ref: `day:${e.input.dayId}`, source: 'USER_OWNED' })),
         };
   const components = {
@@ -333,21 +360,30 @@ export function scoreTrip(input: PlanScoreTripInput): PlanScoreTripResult {
     : [];
   const withheldReasons: PlanScoreTripWithheldReason[] = [];
   if (!scorable.length) withheldReasons.push('NO_SCORABLE_DAY');
-  else if (completeness < 60) withheldReasons.push('INSUFFICIENT_COMPLETENESS');
+  else if ((100 * scorable.length) / ordered.length < 60 && (!allAvailability || completeness < 60))
+    withheldReasons.push('INSUFFICIENT_COMPLETENESS');
+  const confidence =
+    outcome.state === 'EVALUATED'
+      ? outcome.confidence * (ordered.length ? 0.75 + (0.25 * knownFatigue) / ordered.length : 1)
+      : null;
   return {
+    assessmentStatus: withheldReasons.length
+      ? 'unavailable'
+      : (outcome.state === 'EVALUATED' && outcome.coverage < 80) ||
+          (confidence ?? 0) < 60 ||
+          scorable.length < ordered.length
+        ? 'provisional'
+        : 'available',
+    assessedDayCount: scorable.length,
+    applicableDayCount: ordered.length,
+    evidenceCoverage: Math.round(outcome.state === 'EVALUATED' ? outcome.coverage : 0),
     days: evaluated.map((e) => displayDay(e.result)),
     components: Object.fromEntries(
       Object.entries(components).map(([id, value]) => [id, rounded(toOutcome(value))]),
     ) as PlanScoreTripResult['components'],
     // Unknown load never claims recovery. The unresolved share also qualifies confidence.
     completeness: Math.round(completeness),
-    confidence:
-      outcome.state === 'EVALUATED'
-        ? Math.round(
-            outcome.confidence *
-              (ordered.length ? 0.75 + (0.25 * knownFatigue) / ordered.length : 1),
-          )
-        : null,
+    confidence: confidence === null ? null : Math.round(confidence),
     caps,
     score:
       withheldReasons.length || outcome.state !== 'EVALUATED'

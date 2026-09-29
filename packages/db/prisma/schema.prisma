@@ -998,6 +998,7 @@ model ItineraryItem {
   tripId                  String                      @map("trip_id") @db.Uuid
   itineraryDayId          String?                     @map("itinerary_day_id") @db.Uuid
   tripPlaceId             String?                     @map("trip_place_id") @db.Uuid
+  blockType               String?                     @map("block_type")
   customLabel             String?                     @map("custom_label")
   customLocation          String?                     @map("custom_location")
   customLocationTimeZone  String?                     @map("custom_location_time_zone")

@@ -64,6 +64,7 @@ export type ProviderAttribution = {
 export type PlaceDetailLevel = 'evidence' | 'location';
 
 export type PlaceDetailsRequest = {
+  purpose?: 'itinerary';
   signal?: AbortSignal;
   /** Internal attribution supplied by the cache when this becomes outbound. */
   cacheMissReason?: ProviderCacheMissReason;

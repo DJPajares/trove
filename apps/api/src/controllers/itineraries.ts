@@ -92,6 +92,10 @@ const plannedCostSchema = z
   })
   .strict();
 const itemFields = {
+  blockType: z
+    .enum(['activity', 'free_time', 'meeting', 'transport', 'work'])
+    .nullable()
+    .optional(),
   customLabel: z.string().trim().max(200).nullable().optional(),
   customLocation: z
     .object({

@@ -18,37 +18,49 @@ export function currentAssessment(
   score: TripPlanScore | null | undefined,
   now = Date.now(),
 ): boolean {
-  if (!score || score.schemaVersion !== 5 || score.rubricVersion !== 5) return false;
+  if (!score || score.schemaVersion !== 6 || score.rubricVersion !== 6) return false;
+  if (score.evidenceAsOf === null) return false;
   const generated = Date.parse(score.generatedAt);
-  const deadline = assessmentDeadline(score);
-  if (score.evidenceAsOf !== undefined) {
-    if (score.evidenceAsOf === null) return false;
-    const evidence = Date.parse(score.evidenceAsOf);
-    if (
-      !Number.isFinite(evidence) ||
-      evidence > generated ||
-      now - evidence >= (score.expiresAt ? 30 : 1) * 86_400_000
-    )
-      return false;
-  }
-  if (score.expiresAt && Date.parse(score.expiresAt) > generated + 86_400_000) return false;
+  const evidence = score.evidenceAsOf ? Date.parse(score.evidenceAsOf) : null;
   return (
     Number.isFinite(generated) &&
     generated <= now &&
-    Number.isFinite(deadline) &&
-    now < deadline &&
+    (evidence === null ||
+      (Number.isFinite(evidence) && evidence <= generated && now - evidence < 30 * 86_400_000)) &&
+    Date.parse(score.recomputeAfter) <= generated + 86_400_000 &&
+    Number.isFinite(assessmentDeadline(score)) &&
+    now < assessmentDeadline(score) &&
     !score.withheldReasons.includes('EVIDENCE_NOT_CURRENT')
   );
 }
 export function assessmentDeadline(score: TripPlanScore) {
   return Math.min(
     Date.parse(score.generatedAt) + 86_400_000,
-    score.expiresAt
-      ? Date.parse(score.expiresAt)
-      : score.evidenceAsOf
-        ? Date.parse(score.evidenceAsOf) + 86_400_000
-        : Infinity,
+    Date.parse(score.recomputeAfter),
+    score.evidenceExpiresAt ? Date.parse(score.evidenceExpiresAt) : Infinity,
   );
+}
+/** Only useful traveler-facing insights, deduplicated by their underlying issue. */
+export function travelerInsights(groups: import('@trove/types').PlanScoreExplanationGroups) {
+  const seen = new Set<string>();
+  return [
+    ...prioritizedProblems([
+      ...groups.worthImproving,
+      ...groups.uncertainty.filter((reason) => reason.action),
+    ]),
+    ...groups.whatWorks,
+  ].filter((reason) => {
+    if (
+      reason.code.endsWith('_UNKNOWN') ||
+      reason.code.endsWith('_PARTIAL') ||
+      ['SEASONAL_PATTERN', 'PUBLIC_HOLIDAY', 'PARTIAL_ACCESS'].includes(reason.code)
+    )
+      return false;
+    const key = `${reason.code}:${[...reason.references].sort().join('|')}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 export function prioritizedProblems(reasons: readonly PlanScoreExplanation[]) {
   const severity = { HARD: 0, MATERIAL: 1, RISK: 2, INFO: 3 };
@@ -153,8 +165,6 @@ export function dayActionLink(
   explanation: PlanScoreExplanation,
 ): ScoreAction | null {
   if (!explanation.action || !assessment) return null;
-  const day = assessment.days.find((day) => explanation.references.includes(day.dayId));
-  if (day) return { href: `/trips/${tripId}/itinerary?day=${encodeURIComponent(day.dayId)}` };
   for (const reference of explanation.references) {
     const target = assessment.presentation?.referenceTargets?.[reference];
     if (target?.kind === 'item') {
@@ -167,6 +177,8 @@ export function dayActionLink(
     if (target?.kind === 'trip_place' && explanation.action === 'SCHEDULE_MUST_GO')
       return { href: `/trips/${tripId}/itinerary?place=${encodeURIComponent(reference)}` };
   }
+  const day = assessment.days.find((day) => explanation.references.includes(day.dayId));
+  if (day) return { href: `/trips/${tripId}/itinerary?day=${encodeURIComponent(day.dayId)}` };
   // Older compatible assessments already identify Must Go refs explicitly.
   if (explanation.action === 'SCHEDULE_MUST_GO' && explanation.references[0])
     return {

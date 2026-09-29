@@ -1208,6 +1208,7 @@ function applySchedule(item: ItineraryItem, schedule: ItineraryScheduleInput) {
 
 function applyInput(item: ItineraryItem, input: ItineraryItemInput, itinerary?: Itinerary) {
   const previousDurationMinutes = item.durationMinutes;
+  if (input.blockType !== undefined) item.blockType = input.blockType;
   if (input.customLabel !== undefined) item.customLabel = input.customLabel?.trim() || null;
   if (input.customLocation !== undefined) {
     item.customLocation = input.customLocation

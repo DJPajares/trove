@@ -1,6 +1,6 @@
 import { planScoreReferenceTargets } from './plan-score-reference-targets.js';
 import { getPrismaClient, Prisma } from '@trove/db';
-import { destinationContextRecordSchema, type TripPlanScore } from '@trove/types';
+import { type TripPlanScore } from '@trove/types';
 import { z } from 'zod';
 
 import {
@@ -211,6 +211,13 @@ function evaluateDayRecord(
 const factorOutcomeSchema = z.union([
   z
     .object({
+      state: z.literal('LIMITED'),
+      coverage: z.number().min(0).max(100),
+      confidence: z.number().min(0).max(100),
+    })
+    .strict(),
+  z
+    .object({
       confidence: z.number().min(0).max(100),
       coverage: z.number().min(0).max(100),
       score: z.number().min(0).max(100),
@@ -247,6 +254,8 @@ function explanationSchema() {
           'SCHEDULE_MUST_GO',
           'REDUCE_LOAD',
           'REVIEW_TIMING',
+          'LINK_PLACE',
+          'EDIT_TRANSFER',
         ])
         .nullable(),
       factor: z.enum([
@@ -282,17 +291,6 @@ const capSchema = z
     references: z.array(z.string()),
   })
   .strict();
-const contextGroupSchema = z
-  .object({
-    destination: z.enum(['singapore', 'tokyo', 'kyoto']),
-    records: z.array(
-      destinationContextRecordSchema.safeExtend({
-        interestMatch: z.boolean(),
-        matchedDates: z.array(z.string()),
-      }),
-    ),
-  })
-  .strict();
 const referenceTargetSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('item'), dayId: z.string().nullable() }).strict(),
   z.object({ kind: z.literal('reservation') }).strict(),
@@ -305,18 +303,6 @@ const presentationSchema = z
     revisions: z
       .object({ planning: z.string(), evidence: z.string(), destinationContext: z.string() })
       .strict(),
-    destinationContext: z
-      .object({
-        catalogVersion: z.string(),
-        evaluatedAt: z.string().datetime(),
-        expiresAt: z.string().datetime().nullable(),
-        overview: z.array(contextGroupSchema),
-        days: z.array(
-          z.object({ dayId: z.string(), groups: z.array(contextGroupSchema) }).strict(),
-        ),
-      })
-      .strict()
-      .optional(),
   })
   .strict();
 const tripPlanScoreSchema = z
@@ -324,6 +310,7 @@ const tripPlanScoreSchema = z
     days: z.array(
       z
         .object({
+          assessmentStatus: z.enum(['available', 'provisional', 'unavailable']),
           completeness: z.number(),
           confidence: z.number().nullable(),
           date: z.string(),
@@ -338,8 +325,12 @@ const tripPlanScoreSchema = z
         })
         .strict(),
     ),
-    schemaVersion: z.literal(5),
-    rubricVersion: z.literal(5),
+    schemaVersion: z.literal(6),
+    rubricVersion: z.literal(6),
+    assessmentStatus: z.enum(['available', 'provisional', 'unavailable']),
+    assessedDayCount: z.number().int().nonnegative(),
+    applicableDayCount: z.number().int().nonnegative(),
+    evidenceCoverage: z.number().min(0).max(100),
     explanations: explanationGroupsSchema,
     completeness: z.number(),
     confidence: z.number().nullable(),
@@ -357,7 +348,8 @@ const tripPlanScoreSchema = z
     evidenceAsOf: z.string().nullable().optional(),
     sourceInputRevision: z.string().optional(),
     presentation: presentationSchema.optional(),
-    expiresAt: z.string().datetime().optional(),
+    recomputeAfter: z.string().datetime(),
+    evidenceExpiresAt: z.string().datetime().nullable(),
     evidenceRevision: z.string().optional(),
     score: z.number().nullable(),
     withheldReasons: z.array(z.string()),
@@ -382,10 +374,12 @@ export function withholdNonCurrentPlanScore(score: TripPlanScore, now: Date): Tr
   return {
     ...score,
     score: null,
+    assessmentStatus: 'unavailable',
     withheldReasons: [...new Set([...score.withheldReasons, 'EVIDENCE_NOT_CURRENT' as const])],
     days: score.days.map((day) => ({
       ...day,
       score: null,
+      assessmentStatus: 'unavailable',
       withheldReasons: [...new Set([...day.withheldReasons, 'EVIDENCE_NOT_CURRENT' as const])],
     })),
   };
@@ -401,6 +395,7 @@ export function buildPlanScoreFromEvaluations(input: {
   scheduledIds: string[];
   evaluatedAt?: Date;
   evidenceTimes?: readonly string[];
+  evidenceDeadlines?: readonly string[];
   destinationContext?: import('@trove/types').TripDestinationContext;
 }): TripPlanScore {
   const generatedAt = (input.evaluatedAt ?? new Date()).toISOString();
@@ -450,6 +445,10 @@ export function buildPlanScoreFromEvaluations(input: {
   return {
     schemaVersion: PLAN_SCORE_CONTRACT_VERSION,
     rubricVersion: PLAN_SCORE_CONTRACT_VERSION,
+    assessmentStatus: result.assessmentStatus,
+    assessedDayCount: result.assessedDayCount,
+    applicableDayCount: result.applicableDayCount,
+    evidenceCoverage: result.evidenceCoverage,
     completeness: result.completeness,
     confidence: result.confidence,
     caps: result.caps,
@@ -459,33 +458,47 @@ export function buildPlanScoreFromEvaluations(input: {
       return {
         ...toPlanScoreDayPayload(dayResult),
         date: entry?.date ?? '',
-        explanations: explainDay({
-          alternatives: [],
-          conflicts: entry?.evaluation.conflicts ?? [],
-          day: dayResult,
-          pace: entry?.evaluation.pace ?? { activeMinutes: null, smallestBufferMinutes: null },
-          route: entry?.evaluation.route ?? { bestMinutes: null, plannedMinutes: null },
-          travel: entry?.evaluation.travel ?? { totalMinutes: null },
-          advisories: entry?.evaluation.advisories,
-        }),
+        explanations: {
+          ...explainDay({
+            alternatives: [],
+            conflicts: entry?.evaluation.conflicts ?? [],
+            day: dayResult,
+            pace: entry?.evaluation.pace ?? { activeMinutes: null, smallestBufferMinutes: null },
+            route: entry?.evaluation.route ?? { bestMinutes: null, plannedMinutes: null },
+            travel: entry?.evaluation.travel ?? { totalMinutes: null },
+            advisories: entry?.evaluation.advisories,
+          }),
+          uncertainty: (entry?.evaluation.missingInformation ?? []).map((reason) => ({
+            ...reason,
+            values: { ...reason.values, day: index + 1 },
+          })),
+        },
       };
     }),
-    explanations: explainTrip({
-      components: result.components,
-      caps: result.caps,
-      unscheduledMustGoTripPlaceIds: input.mustGoIds.filter((id) => !scheduled.has(id)),
-      fatigueAdjustment: result.fatigueAdjustment,
-      weakDayAdjustment: result.weakDayAdjustment,
-      fatigueDayIds: result.days.filter((day) => day.incomingDebt > 0).map((day) => day.dayId),
-      weakDayIds: result.days
-        .filter(
-          (day) =>
-            day.intrinsicScore !== null &&
-            weakestBoundary !== undefined &&
-            day.intrinsicScore <= weakestBoundary,
-        )
-        .map((day) => day.dayId),
-    }),
+    explanations: {
+      ...explainTrip({
+        components: result.components,
+        caps: result.caps,
+        unscheduledMustGoTripPlaceIds: input.mustGoIds.filter((id) => !scheduled.has(id)),
+        fatigueAdjustment: result.fatigueAdjustment,
+        weakDayAdjustment: result.weakDayAdjustment,
+        fatigueDayIds: result.days.filter((day) => day.incomingDebt > 0).map((day) => day.dayId),
+        weakDayIds: result.days
+          .filter(
+            (day) =>
+              day.intrinsicScore !== null &&
+              weakestBoundary !== undefined &&
+              day.intrinsicScore <= weakestBoundary,
+          )
+          .map((day) => day.dayId),
+      }),
+      uncertainty: evaluations.flatMap((entry, index) =>
+        entry.evaluation.missingInformation.map((reason) => ({
+          ...reason,
+          values: { ...reason.values, day: index + 1 },
+        })),
+      ),
+    },
     presentation: {
       adjustments: {
         fatigue: Math.round(result.fatigueAdjustment),
@@ -498,25 +511,33 @@ export function buildPlanScoreFromEvaluations(input: {
           ? scoringInputRevision(destinationContextRevision(input.destinationContext))
           : '',
       },
-      destinationContext: input.destinationContext,
     },
     fingerprint: scoringInputRevision({
       evaluation: planScoreFingerprint(tripInput),
       evidenceTimes: [...new Set(input.evidenceTimes ?? [])].sort(),
+      evidenceDeadlines: [...new Set(input.evidenceDeadlines ?? [])].sort(),
       destinationContext: input.destinationContext
         ? destinationContextRevision(input.destinationContext)
         : null,
     }),
     generatedAt,
-    expiresAt: new Date(
+    recomputeAfter: new Date(
       Math.min(
         Date.parse(generatedAt) + 24 * 60 * 60 * 1000,
         ...(input.destinationContext?.expiresAt
           ? [Date.parse(input.destinationContext.expiresAt)]
           : []),
         ...(input.evidenceTimes ?? []).map((at) => Date.parse(at) + PLACE_EVIDENCE_TTL_MS),
+        ...(input.evidenceDeadlines ?? []).map(Date.parse),
       ),
     ).toISOString(),
+    evidenceExpiresAt: evidenceDeadline([
+      ...(input.evidenceTimes ?? []).map((at) => Date.parse(at) + PLACE_EVIDENCE_TTL_MS),
+      ...(input.evidenceDeadlines ?? []).map(Date.parse),
+      ...(input.destinationContext?.expiresAt
+        ? [Date.parse(input.destinationContext.expiresAt)]
+        : []),
+    ]),
     evidenceAsOf: oldestPlanScoreEvidenceAt(generatedAt, input.evidenceTimes ?? []),
     score: result.score,
     withheldReasons: result.withheldReasons,
@@ -529,7 +550,11 @@ export function buildPlanScoreFromEvaluations(input: {
  */
 export function buildTripPlanScore(
   record: PlanScoreTripRecord,
-  options: { evaluatedAt?: Date; evidenceTimes?: readonly string[] } = {},
+  options: {
+    evaluatedAt?: Date;
+    evidenceTimes?: readonly string[];
+    evidenceDeadlines?: readonly string[];
+  } = {},
 ): TripPlanScore {
   return buildPlanScoreFromEvaluations({
     ...options,
@@ -581,6 +606,25 @@ export async function loadPlaceEvidence(
       types: place.rawTypes,
       coordinates: place.location,
       source: 'CACHED_PROVIDER',
+      fieldEvidence: {
+        identity: {
+          acquiredAt: details.freshness.fetchedAt,
+          expiresAt: new Date(
+            Date.parse(details.freshness.fetchedAt) + PLACE_EVIDENCE_TTL_MS,
+          ).toISOString(),
+        },
+        ...Object.fromEntries(
+          ['coordinates', 'types', 'name', 'rating', 'hours'].map((field) => [
+            field,
+            {
+              acquiredAt: details.freshness.fetchedAt,
+              expiresAt: new Date(
+                Date.parse(details.freshness.fetchedAt) + PLACE_EVIDENCE_TTL_MS,
+              ).toISOString(),
+            },
+          ]),
+        ),
+      },
       rating:
         place.rating === null
           ? { status: 'UNKNOWN' }
@@ -603,6 +647,7 @@ export async function loadPlaceEvidence(
     });
   }
 
+  discardExpiredCurrentHours(hours, now);
   return {
     hours,
     ratings,
@@ -630,6 +675,7 @@ function toPlanScoreDayRecord(
     planningContext?: unknown;
     items: Array<{
       _count: { reservations: number };
+      blockType?: string | null;
       dayPart: string | null;
       durationMinutes: number | null;
       durationProvenance: string;
@@ -651,6 +697,7 @@ function toPlanScoreDayRecord(
     date,
     id: day.id,
     items: day.items.map((item) => ({
+      blockType: item.blockType ?? null,
       dayPart: item.dayPart,
       durationMinutes: item.durationMinutes,
       durationProvenance: item.durationProvenance,
@@ -731,6 +778,7 @@ export type PlanScoreTripRows = {
     id: string;
     items: Array<{
       _count: { reservations: number };
+      blockType?: string | null;
       dayPart: string | null;
       durationMinutes: number | null;
       durationProvenance: string;
@@ -965,24 +1013,19 @@ export async function getTripPlanScore(
   ]);
 
   for (const row of trip.tripPlaces) {
-    if (placeEvidence.places.has(row.id)) continue;
-    const own = contextPlaceFromOwnedData(row.place, now);
-    const reference = row.place.providerRefs.find(
-      (r) =>
-        r.cachedAt &&
-        now.getTime() >= r.cachedAt.getTime() &&
-        now.getTime() - r.cachedAt.getTime() < PLACE_EVIDENCE_TTL_MS,
+    const merged = mergeScoringPlaceIdentity(
+      row.id,
+      row.place,
+      placeEvidence.places.get(row.id),
+      now,
     );
-    placeEvidence.places.set(row.id, {
-      tripPlaceId: row.id,
-      name: own.name,
-      coordinates: own.coordinates,
-      types: reference?.cachedTypes ?? [],
-      source: reference ? 'CACHED_PROVIDER' : 'USER_OWNED',
-      rating: { status: 'UNKNOWN' },
-    });
-    if (reference?.cachedAt) placeEvidence.evidenceTimes.push(reference.cachedAt.toISOString());
+    placeEvidence.places.set(row.id, merged.place);
+    const hours = placeEvidence.hours.get(row.id);
+    if (hours && !hours.timeZone && merged.place.coordinates)
+      hours.timeZone = timeZoneAtCoordinates(merged.place.coordinates);
+    if (scheduledTripPlaceIds.has(row.id)) placeEvidence.evidenceTimes.push(...merged.times);
   }
+  discardExpiredCurrentHours(placeEvidence.hours, now);
   const forecastEvidence = await loadScoringForecasts(dayRecords, placeEvidence.places, now);
   const evidenceRevision = tripPlanScoreRevision({
     days: [],
@@ -1049,28 +1092,30 @@ export async function getTripPlanScore(
     inputRevision: revision,
     evidenceRevision,
   });
-  result.expiresAt = new Date(
+  result.evidenceExpiresAt = evidenceDeadline([
+    ...trip.tripPlaces.flatMap((row) => {
+      const own = contextPlaceFromOwnedData(row.place, now);
+      return scheduledTripPlaceIds.has(row.id) && own.expiresAt ? [Date.parse(own.expiresAt)] : [];
+    }),
+    ...forecastEvidence.times.map((at) => Date.parse(at) + WEATHER_FORECAST_TTL_MS),
+    ...(destinationContext.expiresAt ? [Date.parse(destinationContext.expiresAt)] : []),
+    ...placeEvidence.evidenceTimes.map((at) => Date.parse(at) + PLACE_EVIDENCE_TTL_MS),
+    ...placeHoursDeadlines(placeEvidence.hours, dayRecords).map(Date.parse),
+    ...routeResults.flatMap(({ routes }) =>
+      routes.segments.flatMap((segment) =>
+        segment.evidenceExpiresAt ? [Date.parse(segment.evidenceExpiresAt)] : [],
+      ),
+    ),
+    ...routeResults.flatMap(({ routes }) =>
+      routes.segments.flatMap((segment) =>
+        segment.evidenceAsOf ? [Date.parse(segment.evidenceAsOf) + TRAVEL_LEG_CACHE_TTL_MS] : [],
+      ),
+    ),
+  ]);
+  result.recomputeAfter = new Date(
     Math.min(
       evaluatedAt.getTime() + 24 * 60 * 60 * 1000,
-      ...trip.tripPlaces.flatMap((row) => {
-        const own = contextPlaceFromOwnedData(row.place, now);
-        return scheduledTripPlaceIds.has(row.id) && own.expiresAt
-          ? [Date.parse(own.expiresAt)]
-          : [];
-      }),
-      ...forecastEvidence.times.map((at) => Date.parse(at) + WEATHER_FORECAST_TTL_MS),
-      ...(destinationContext.expiresAt ? [Date.parse(destinationContext.expiresAt)] : []),
-      ...placeEvidence.evidenceTimes.map((at) => Date.parse(at) + PLACE_EVIDENCE_TTL_MS),
-      ...routeResults.flatMap(({ routes }) =>
-        routes.segments.flatMap((segment) =>
-          segment.evidenceExpiresAt ? [Date.parse(segment.evidenceExpiresAt)] : [],
-        ),
-      ),
-      ...routeResults.flatMap(({ routes }) =>
-        routes.segments.flatMap((segment) =>
-          segment.evidenceAsOf ? [Date.parse(segment.evidenceAsOf) + TRAVEL_LEG_CACHE_TTL_MS] : [],
-        ),
-      ),
+      result.evidenceExpiresAt ? Date.parse(result.evidenceExpiresAt) : Infinity,
     ),
   ).toISOString();
   const current = withholdNonCurrentPlanScore(result, evaluatedAt);
@@ -1079,8 +1124,12 @@ export async function getTripPlanScore(
 }
 
 /** Reads each already-cached weather point once, only within its current horizon. */
-async function loadScoringForecasts(
-  days: PlanScoreDayRecord[],
+export async function loadScoringForecasts(
+  days: readonly {
+    date: string;
+    timeZone: string;
+    items: readonly { tripPlaceId: string | null }[];
+  }[],
   places: ReadonlyMap<string, ScoringPlace>,
   now: Date,
 ) {
@@ -1132,4 +1181,121 @@ async function loadScoringForecasts(
     ),
     times: [...new Set(times)].sort(),
   };
+}
+
+function evidenceDeadline(deadlines: number[]): string | null {
+  const finite = deadlines.filter(Number.isFinite);
+  return finite.length ? new Date(Math.min(...finite)).toISOString() : null;
+}
+
+/** Merge independently acquired fields without changing either snapshot's age. */
+export function mergeScoringPlaceIdentity(
+  id: string,
+  owned: OwnedContextPlace,
+  rich: ScoringPlace | undefined,
+  now: Date,
+) {
+  const own = contextPlaceFromOwnedData(owned, now);
+  const reference = owned.providerRefs?.find(
+    (r) =>
+      r.cachedAt &&
+      now.getTime() >= r.cachedAt.getTime() &&
+      now.getTime() - r.cachedAt.getTime() < PLACE_EVIDENCE_TTL_MS,
+  );
+  const identityAt = reference?.cachedAt?.toISOString() ?? null;
+  const ownStamp = { acquiredAt: identityAt, expiresAt: own.expiresAt ?? null };
+  const fields = { ...rich?.fieldEvidence };
+  const choose = <T>(
+    field: 'coordinates' | 'types' | 'name',
+    existing: T | null | undefined,
+    fallback: T | null | undefined,
+  ) => {
+    const stamp = rich?.fieldEvidence?.[field] ?? rich?.fieldEvidence?.identity;
+    const hasExisting =
+      existing != null && (!Array.isArray(existing) || existing.length > 0) && existing !== '';
+    const hasFallback =
+      fallback != null && (!Array.isArray(fallback) || fallback.length > 0) && fallback !== '';
+    const newer = identityAt && (!stamp?.acquiredAt || identityAt > stamp.acquiredAt);
+    if (hasFallback && (!hasExisting || newer)) {
+      fields[field] = ownStamp;
+      return fallback;
+    }
+    if (hasExisting) {
+      fields[field] = stamp;
+      return existing;
+    }
+    return fallback ?? existing;
+  };
+  const customCoordinates = owned.customLatitude != null && owned.customLongitude != null;
+  const coordinates = customCoordinates
+    ? own.coordinates
+    : choose('coordinates', rich?.coordinates, own.coordinates);
+  if (customCoordinates) fields.coordinates = { acquiredAt: null, expiresAt: null };
+  const name = owned.customName ?? choose('name', rich?.name, own.name);
+  if (owned.customName) fields.name = { acquiredAt: null, expiresAt: null };
+  const types = choose('types', rich?.types, reference?.cachedTypes);
+  fields.identity =
+    identityAt &&
+    (!rich?.fieldEvidence?.identity?.acquiredAt ||
+      identityAt > rich.fieldEvidence.identity.acquiredAt)
+      ? ownStamp
+      : (rich?.fieldEvidence?.identity ?? ownStamp);
+  return {
+    place: {
+      ...rich,
+      tripPlaceId: id,
+      name,
+      coordinates,
+      types: types ?? [],
+      source: rich?.source ?? (reference ? 'CACHED_PROVIDER' : 'USER_OWNED'),
+      rating: rich?.rating ?? { status: 'UNKNOWN' as const },
+      fieldEvidence: fields,
+    } satisfies ScoringPlace,
+    times: identityAt ? [identityAt] : [],
+  };
+}
+
+/** Qualify date-specific hours after coordinates from either owned snapshot establish the zone. */
+export function discardExpiredCurrentHours(hours: PlaceHoursEvidence, now: Date) {
+  for (const entry of hours.values()) {
+    if (!entry.currentPeriods || !entry.validThrough || !entry.timeZone) continue;
+    const after = new Date(Date.parse(`${entry.validThrough}T00:00:00Z`) + 86400000)
+      .toISOString()
+      .slice(0, 10);
+    if (dayOrigin(after, entry.timeZone) <= now.getTime()) entry.currentPeriods = undefined;
+  }
+}
+
+/** Only date-specific hours actually used by these days contribute a deadline. */
+export function placeHoursDeadlines(
+  hours: PlaceHoursEvidence,
+  days: readonly {
+    date: string;
+    items: readonly { tripPlaceId: string | null; blockType?: string | null }[];
+  }[],
+) {
+  return [
+    ...new Set(
+      days.flatMap((day) =>
+        day.items.flatMap((item) => {
+          if (item.blockType && item.blockType !== 'activity') return [];
+          const entry = item.tripPlaceId ? hours.get(item.tripPlaceId) : null;
+          if (
+            !entry?.currentPeriods ||
+            !entry.validFrom ||
+            !entry.validThrough ||
+            day.date < entry.validFrom ||
+            day.date > entry.validThrough
+          )
+            return [];
+          const zone = entry.timeZone;
+          if (!zone) return [];
+          const after = new Date(Date.parse(`${entry.validThrough}T00:00:00Z`) + 86400000)
+            .toISOString()
+            .slice(0, 10);
+          return [new Date(dayOrigin(after, zone)).toISOString()];
+        }),
+      ),
+    ),
+  ];
 }

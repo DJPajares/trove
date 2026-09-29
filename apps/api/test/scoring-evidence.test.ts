@@ -49,7 +49,7 @@ test('curated context expiry bounds the cached score without changing quality or
   trip.tripPlaces[0].place.customLongitude = decimal(139.76);
   const first = await getTripPlanScore('owner', 'trip', { now: () => beforeExpiry });
   const revision = trip.planScoreRevision;
-  expect(first?.expiresAt).toBe('2026-12-27T00:00:00.000Z');
+  expect(first?.recomputeAfter).toBe('2026-12-27T00:00:00.000Z');
   const second = await getTripPlanScore('owner', 'trip', {
     now: () => new Date('2026-12-27T00:00:00Z'),
   });
@@ -164,7 +164,7 @@ for (const state of ['cold', 'warm', 'expired', 'malformed'] as const)
     expect(second).toEqual(first);
     expect(outbound).not.toHaveBeenCalled();
     expect(first?.days[0]?.factors.EXPERIENCE_QUALITY.state).toBe(
-      state === 'warm' ? 'EVALUATED' : 'UNKNOWN',
+      state === 'warm' ? 'LIMITED' : 'UNKNOWN',
     );
     if (state === 'warm')
       expect(first?.evidenceAsOf).toBe((evidenceRow.cachedEvidenceAt as Date).toISOString());
@@ -297,6 +297,7 @@ test('expired raw place evidence is removed by maintenance without acquiring rep
 test('scoring readers cannot import provider factories or refresh-on-miss cache services', async () => {
   for (const name of [
     'plan-score',
+    'ai-draft-score-reader',
     'plan-score-evaluation',
     'plan-score-normalization',
     'plan-score-rules',
@@ -328,5 +329,142 @@ test('repeated places and coordinates across days are read once from existing ca
   await getTripPlanScore('owner', 'trip', { now: () => NOW });
   expect(prisma.placeProviderRef.findUnique).toHaveBeenCalledTimes(1);
   expect(prisma.weatherForecastSnapshot.findUnique).toHaveBeenCalledTimes(1);
+  expect(outbound).not.toHaveBeenCalled();
+});
+
+test('thin rich evidence preserves independently cached coordinates, types and both original ages', async () => {
+  const { mergeScoringPlaceIdentity } = await import('../src/services/plan-score.js');
+  const row = trip.tripPlaces[0].place;
+  row.providerRefs[0].cachedTypes = ['museum'];
+  const richAt = new Date(NOW.getTime() - 2 * DAY).toISOString();
+  const merged = mergeScoringPlaceIdentity(
+    'tp',
+    row,
+    {
+      tripPlaceId: 'tp',
+      coordinates: null,
+      types: [],
+      name: '',
+      rating: { status: 'KNOWN', rating: 4.7, reviewCount: 1000, source: 'CACHED_PROVIDER' },
+      fieldEvidence: {
+        identity: {
+          acquiredAt: richAt,
+          expiresAt: new Date(Date.parse(richAt) + 30 * DAY).toISOString(),
+        },
+        rating: {
+          acquiredAt: richAt,
+          expiresAt: new Date(Date.parse(richAt) + 30 * DAY).toISOString(),
+        },
+      },
+    },
+    NOW,
+  );
+  expect(merged.place.coordinates).toEqual({ latitude: 1, longitude: 2 });
+  expect(merged.place.types).toEqual(['museum']);
+  expect(merged.place.fieldEvidence?.identity?.acquiredAt).toBe(NOW.toISOString());
+  expect(merged.place.fieldEvidence?.rating?.acquiredAt).toBe(richAt);
+  expect(outbound).not.toHaveBeenCalled();
+});
+
+test('local recheck after a day reuses valid provider evidence without renewing its age', async () => {
+  const first = await getTripPlanScore('owner', 'trip', { now: () => NOW });
+  const acquiredAt = evidenceRow.cachedEvidenceAt;
+  const second = await getTripPlanScore('owner', 'trip', {
+    now: () => new Date(NOW.getTime() + DAY),
+  });
+  expect(second?.generatedAt).toBe(new Date(NOW.getTime() + DAY).toISOString());
+  expect(second?.evidenceAsOf).toBe(first?.evidenceAsOf);
+  expect(evidenceRow.cachedEvidenceAt).toBe(acquiredAt);
+  expect(second?.evidenceExpiresAt).toBe(first?.evidenceExpiresAt);
+  expect(outbound).not.toHaveBeenCalled();
+});
+
+test('re-enabling evaluates the same existing trip and rejects legacy payloads without acquisition', async () => {
+  vi.stubEnv('TROVE_PLAN_SCORE_DISABLED', 'true');
+  expect(await getTripPlanScore('owner', 'trip', { now: () => NOW })).toBeNull();
+  vi.stubEnv('TROVE_PLAN_SCORE_DISABLED', 'false');
+  const first = await getTripPlanScore('owner', 'trip', { now: () => NOW });
+  expect(first?.schemaVersion).toBe(6);
+  trip.planScore = { ...first, schemaVersion: 5, rubricVersion: 5 };
+  const second = await getTripPlanScore('owner', 'trip', { now: () => NOW });
+  expect(second?.schemaVersion).toBe(6);
+  expect(update).toHaveBeenCalledTimes(2);
+  expect(outbound).not.toHaveBeenCalled();
+});
+
+test('newer thin rich snapshots do not renew older coordinate and type evidence', async () => {
+  const { mergeScoringPlaceIdentity } = await import('../src/services/plan-score.js');
+  const row = trip.tripPlaces[0].place;
+  row.providerRefs[0].cachedAt = new Date(NOW.getTime() - 5 * DAY);
+  row.providerRefs[0].cachedTypes = ['museum'];
+  const stamp = {
+    acquiredAt: NOW.toISOString(),
+    expiresAt: new Date(NOW.getTime() + 30 * DAY).toISOString(),
+  };
+  const merged = mergeScoringPlaceIdentity(
+    'tp',
+    row,
+    {
+      tripPlaceId: 'tp',
+      coordinates: null,
+      types: [],
+      rating: { status: 'UNKNOWN' },
+      fieldEvidence: { identity: stamp },
+    },
+    NOW,
+  );
+  expect(merged.place.fieldEvidence?.coordinates?.acquiredAt).toBe(
+    row.providerRefs[0].cachedAt.toISOString(),
+  );
+  expect(merged.place.fieldEvidence?.types?.expiresAt).toBe(
+    new Date(NOW.getTime() + 25 * DAY).toISOString(),
+  );
+  expect(merged.place.coordinates).toEqual({ latitude: 1, longitude: 2 });
+});
+
+test('date-specific hours expire at their local boundary while regular hours keep their acquisition age', async () => {
+  const { loadPlaceEvidence, placeHoursDeadlines } = await import('../src/services/plan-score.js');
+  evidenceRow.cachedEvidence = {
+    ...place,
+    location: { latitude: 1.35, longitude: 103.82 },
+    currentOpeningPeriods: [
+      { open: { day: 1, hour: 9, minute: 0 }, close: { day: 1, hour: 18, minute: 0 } },
+    ],
+    currentHoursValidFrom: '2026-09-28',
+    currentHoursValidThrough: '2026-09-28',
+  };
+  const before = await loadPlaceEvidence([{ id: 'tp', externalPlaceId: 'venue' }], NOW);
+  expect(
+    placeHoursDeadlines(before.hours, [{ date: '2026-09-28', items: [{ tripPlaceId: 'tp' }] }]),
+  ).toEqual(['2026-09-28T16:00:00.000Z']);
+  const after = await loadPlaceEvidence(
+    [{ id: 'tp', externalPlaceId: 'venue' }],
+    new Date('2026-09-28T16:00Z'),
+  );
+  expect(after.hours.get('tp')?.currentPeriods).toBeUndefined();
+  expect(after.hours.get('tp')?.fetchedAt).toBe(before.hours.get('tp')?.fetchedAt);
+  expect(outbound).not.toHaveBeenCalled();
+});
+
+test('thin rich hours expire using the independently retained location timezone', async () => {
+  evidenceRow.cachedEvidence = {
+    ...place,
+    currentOpeningPeriods: [],
+    currentHoursValidFrom: '2026-09-28',
+    currentHoursValidThrough: '2026-09-28',
+  };
+  Object.assign(trip.tripPlaces[0].place.providerRefs[0], {
+    cachedLatitude: decimal(1.35),
+    cachedLongitude: decimal(103.82),
+  });
+  trip.itineraryDays[0].defaultTimeZone = 'Asia/Singapore';
+  trip.itineraryDays[0].items[0].timeZone = 'Asia/Singapore';
+  const before = await getTripPlanScore('owner', 'trip', { now: () => NOW });
+  expect(before?.evidenceExpiresAt).toBe('2026-09-28T16:00:00.000Z');
+  const after = await getTripPlanScore('owner', 'trip', {
+    now: () => new Date('2026-09-28T16:00:00Z'),
+  });
+  expect(after?.recomputeAfter).toBe('2026-09-29T16:00:00.000Z');
+  expect(after?.evidenceAsOf).toBe(before?.evidenceAsOf);
   expect(outbound).not.toHaveBeenCalled();
 });

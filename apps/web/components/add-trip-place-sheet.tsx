@@ -212,6 +212,8 @@ export function AddTripPlaceSheet({
         suggestion.externalPlaceId,
         { address: suggestion.description, name: suggestion.name },
         locale,
+        undefined,
+        'itinerary',
       );
       const { tripPlace } = await addTripPlace(tripId, place.id, { customName });
       onAdded(tripPlace);

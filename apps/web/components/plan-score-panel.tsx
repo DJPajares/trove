@@ -1,12 +1,11 @@
 'use client';
 
 import { ChevronDown, Sparkles } from 'lucide-react';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ItineraryDestinationContext } from '@/components/itinerary-destination-context';
 import type {
   PlanScoreExplanation,
   PlanScoreExplanationGroups,
@@ -19,7 +18,7 @@ import {
   assessmentDeadline,
   currentAssessment,
   DAILY_CATEGORIES,
-  prioritizedProblems,
+  travelerInsights,
   TRIP_COMPONENTS,
   type ScoreAction,
   type ScoreChange,
@@ -45,7 +44,6 @@ type Props = Readonly<{
   status: PlanScoreLoadStatus;
   title: string;
 }>;
-
 function verdictBand(score: number) {
   return score >= 85 ? 'good' : score >= 70 ? 'workable' : score >= 55 ? 'tight' : 'needsWork';
 }
@@ -56,18 +54,17 @@ function SuggestedAction({
   const t = useTranslations('planScore');
   const target = explanation.action ? resolveAction?.(explanation) : null;
   if (!target || !explanation.action) return null;
+  const label = t(`actions.${explanation.action}`);
   return 'href' in target ? (
-    <Button
-      className="h-auto px-0 text-sm"
-      render={<Link href={target.href} />}
-      size="sm"
-      variant="link"
+    <Link
+      className={cn(buttonVariants({ size: 'sm', variant: 'link' }), 'h-auto px-0 text-sm')}
+      href={target.href}
     >
-      {t(`actions.${explanation.action}`)}
-    </Button>
+      {label}
+    </Link>
   ) : (
     <Button className="h-auto px-0 text-sm" onClick={target.onSelect} size="sm" variant="link">
-      {t(`actions.${explanation.action}`)}
+      {label}
     </Button>
   );
 }
@@ -80,74 +77,58 @@ function OutcomeRows({
 }) {
   const t = useTranslations('planScore');
   return (
-    <dl className="divide-y divide-border-subtle">
-      {ids.map((id) => {
-        const outcome = outcomes[id]!;
-        return (
-          <div
-            className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3"
-            key={id}
-          >
-            <dt className="text-sm font-medium">{t(`factorLabels.${id}`)}</dt>
-            <dd className="text-right text-sm tabular-nums">
-              {outcome.state === 'EVALUATED' ? (
-                <>
-                  <span className="font-semibold">
-                    {outcome.score}{' '}
-                    <span className="text-xs font-normal text-muted-foreground">{t('outOf')}</span>
-                  </span>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {t('categoryEvidence', {
-                      coverage: outcome.coverage,
-                      confidence: outcome.confidence,
-                    })}
-                  </p>
-                </>
-              ) : (
-                <span className="text-muted-foreground">
-                  {t(
-                    outcome.state === 'UNKNOWN'
-                      ? 'factorStatus.unknown'
-                      : 'factorStatus.notApplicable',
-                  )}
-                </span>
-              )}
+    <dl className="space-y-3">
+      {ids.flatMap((id) => {
+        const outcome = outcomes[id];
+        if (outcome?.state !== 'EVALUATED' || outcome.coverage < 60 || outcome.confidence < 50)
+          return [];
+        return [
+          <div className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1.5" key={id}>
+            <dt className="text-xs font-medium text-muted-foreground">{t(`factorLabels.${id}`)}</dt>
+            <dd className="text-sm font-semibold tabular-nums">
+              {outcome.score}
+              <span className="sr-only"> {t('outOf')}</span>
             </dd>
-          </div>
-        );
+            <div
+              aria-hidden="true"
+              className="col-span-2 h-1.5 overflow-hidden rounded-full bg-muted"
+            >
+              <div
+                className="h-full rounded-full bg-brand"
+                style={{ width: `${outcome.score}%` }}
+              />
+            </div>
+          </div>,
+        ];
       })}
     </dl>
   );
 }
 function Reasons({
-  explanations,
-  label,
+  reasons,
   resolveAction,
-}: Pick<Props, 'resolveAction'> & { explanations: PlanScoreExplanation[]; label: string }) {
+}: Pick<Props, 'resolveAction'> & { reasons: PlanScoreExplanation[] }) {
   const t = useTranslations('planScore');
-  if (!explanations.length) return null;
+  if (!reasons.length) return null;
   return (
-    <div className="space-y-2">
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <ul className="space-y-2">
-        {explanations.map((reason, index) => (
-          <li className="text-sm leading-relaxed" key={`${reason.code}-${index}`}>
-            <p>{t(reason.messageKey, reason.values)}</p>
-            <SuggestedAction explanation={reason} resolveAction={resolveAction} />
-          </li>
-        ))}
-      </ul>
-    </div>
+    <ul className="space-y-3">
+      {reasons.map((reason, index) => (
+        <li className="text-sm leading-relaxed" key={`${reason.code}-${index}`}>
+          <p className={cn(['HARD', 'MATERIAL'].includes(reason.severity) && 'font-medium')}>
+            {t(reason.messageKey, reason.values)}
+          </p>
+          <SuggestedAction explanation={reason} resolveAction={resolveAction} />
+        </li>
+      ))}
+    </ul>
   );
 }
 
-/** One disclosure shared by planning and AI review. No calculations feed back into the rubric. */
+/** One traveler-facing summary shared by itinerary, Preview and AI review. */
 export function PlanScorePanel({
   assessment,
   change,
   className,
-  completeness,
-  confidence,
   dayId,
   disabled,
   explanations,
@@ -157,48 +138,20 @@ export function PlanScorePanel({
   resolveAction,
   score,
   scope,
-  showDestinationContext = true,
   status,
   title,
 }: Props) {
   const t = useTranslations('planScore');
-  const formatter = useFormatter();
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [focusedRecordId, setFocusedRecordId] = useState<string | null>(null);
-  const action = (explanation: PlanScoreExplanation): ScoreAction | null => {
-    const supplied = resolveAction?.(explanation);
-    if (supplied) return supplied;
-    if (!showDestinationContext) return null;
-    const context = assessment?.presentation?.destinationContext;
-    const groups =
-      scope === 'trip'
-        ? context?.overview
-        : context?.days.find((day) => day.dayId === dayId)?.groups;
-    const record = groups
-      ?.flatMap((group) => group.records)
-      .find(
-        (record) =>
-          explanation.references.includes(record.id) && Date.parse(record.expiresAt) > Date.now(),
-      );
-    return record
-      ? {
-          onSelect: () => {
-            setDetailsOpen(true);
-            setFocusedRecordId(record.id);
-          },
-        }
-      : null;
-  };
   const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
     if (!assessment) return;
     const deadline = assessmentDeadline(assessment);
-    if (!Number.isFinite(deadline) || deadline <= Date.now()) {
-      setClock(Date.now());
-      return;
-    }
-    const timeout = window.setTimeout(() => setClock(Date.now()), deadline - Date.now() + 1);
     const refresh = () => setClock(Date.now());
+    const timeout =
+      Number.isFinite(deadline) && deadline > Date.now()
+        ? window.setTimeout(refresh, deadline - Date.now() + 1)
+        : undefined;
     window.addEventListener('focus', refresh);
     return () => {
       window.clearTimeout(timeout);
@@ -217,36 +170,48 @@ export function PlanScorePanel({
     Boolean(assessment && !currentAssessment(assessment, Math.max(clock, Date.now())));
   const displayScore = unavailable ? null : score;
   const reasonStatus = status === 'idle' && unavailable ? 'expired' : status;
-  const problems = unavailable ? [] : prioritizedProblems(explanations.worthImproving);
-  const [topProblem, ...otherProblems] = problems;
   const day = assessment?.days.find((entry) => entry.dayId === dayId);
-  const caps = scope === 'day' ? (day?.caps ?? []) : (assessment?.caps ?? []);
-  const dateTime = (value: string) =>
-    formatter.dateTime(new Date(value), { dateStyle: 'medium', timeStyle: 'short' });
-  const adjustment = assessment?.presentation?.adjustments;
+  const assessmentStatus = scope === 'day' ? day?.assessmentStatus : assessment?.assessmentStatus;
+  const insights = unavailable ? [] : travelerInsights(explanations);
+  const initial = insights.slice(0, 3);
+  const additional = insights
+    .slice(3)
+    .filter((reason) => ['HARD', 'MATERIAL', 'RISK'].includes(reason.severity));
+  const outcomes = scope === 'day' ? factors : assessment?.components;
+  const specificGap =
+    displayScore === null && !unavailable
+      ? initial.find((reason) => ['LINK_PLACE', 'EDIT_TRANSFER'].includes(reason.action ?? ''))
+      : undefined;
   return (
     <section
       aria-label={title}
-      className={cn('space-y-3 rounded-lg border border-border bg-card p-4', className)}
+      className={cn('space-y-5 rounded-lg border border-border bg-card p-4 sm:p-5', className)}
     >
       <Heading className="flex items-center gap-2 text-sm font-medium">
         <Sparkles aria-hidden="true" className="size-4 text-muted-foreground" />
         {title}
       </Heading>
       {displayScore !== null ? (
-        <div className="flex items-baseline gap-3">
+        <div className="flex items-end gap-4">
           <span
             aria-label={t('scoreBadgeLabel', { score: displayScore })}
-            className="text-2xl font-semibold tabular-nums"
+            className="text-4xl font-semibold leading-none tracking-tight tabular-nums"
           >
             {displayScore}
-            <span aria-hidden="true" className="ml-1 text-xs font-normal text-muted-foreground">
+            <span
+              aria-hidden="true"
+              className="ml-1 text-xs font-normal tracking-normal text-muted-foreground"
+            >
               {t('outOf')}
             </span>
           </span>
-          <p className="text-sm font-medium">
-            {t(`verdict.${scope}.${verdictBand(displayScore)}`)}
-          </p>
+          <div className="space-y-1">
+            <p className="text-sm font-medium">
+              {assessmentStatus === 'provisional'
+                ? t('provisional')
+                : t(`verdict.${scope}.${verdictBand(displayScore)}`)}
+            </p>
+          </div>
         </div>
       ) : (
         <p className="text-sm text-muted-foreground" role="status">
@@ -256,10 +221,52 @@ export function PlanScorePanel({
                   ? 'availability.expiredStored'
                   : `availability.${reasonStatus}`,
               )
-            : t(`notEnoughInformation.${scope}`)}
+            : specificGap
+              ? t(specificGap.messageKey, specificGap.values)
+              : t(`notEnoughInformation.${scope}`)}
         </p>
       )}
-      {change && !unavailable ? (
+      {!unavailable &&
+      scope === 'trip' &&
+      assessment &&
+      assessment.assessedDayCount < assessment.applicableDayCount ? (
+        <p className="text-xs text-muted-foreground">
+          {t('assessedDays', {
+            count: assessment.assessedDayCount,
+            total: assessment.applicableDayCount,
+          })}
+        </p>
+      ) : null}
+      {specificGap ? (
+        <SuggestedAction explanation={specificGap} resolveAction={resolveAction} />
+      ) : null}
+      {!unavailable && outcomes ? (
+        <OutcomeRows
+          outcomes={outcomes}
+          ids={scope === 'day' ? DAILY_CATEGORIES : TRIP_COMPONENTS}
+        />
+      ) : null}
+      <Reasons
+        reasons={initial.filter((reason) => reason !== specificGap)}
+        resolveAction={resolveAction}
+      />
+      {additional.length ? (
+        <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+          <CollapsibleTrigger className="group text-xs">
+            <ChevronDown
+              aria-hidden="true"
+              className="size-3 transition-transform duration-[var(--motion-standard)] group-data-panel-open:rotate-180 motion-reduce:transition-none"
+            />
+            {t(detailsOpen ? 'hideDetails' : 'moreProblems', { count: additional.length })}
+          </CollapsibleTrigger>
+          <CollapsiblePanel>
+            <div className="mt-3 border-t border-border pt-3">
+              <Reasons reasons={additional} resolveAction={resolveAction} />
+            </div>
+          </CollapsiblePanel>
+        </Collapsible>
+      ) : null}
+      {change && !unavailable && change.state !== 'coverage' ? (
         <p className="text-xs text-muted-foreground" role="status">
           {t(`changes.sources.${change.source}`)}{' '}
           {t(`changes.states.${change.state}`, {
@@ -272,103 +279,11 @@ export function PlanScorePanel({
           })}
         </p>
       ) : null}
-      {topProblem ? (
-        <div className="space-y-1 text-sm leading-relaxed">
-          <p>
-            <span className="font-medium">{t('improvementLead')} </span>
-            {t(topProblem.messageKey, topProblem.values)}
-          </p>
-          <SuggestedAction explanation={topProblem} resolveAction={action} />
-        </div>
+      {unavailable && onRetry && ['error', 'expired'].includes(reasonStatus) ? (
+        <Button onClick={onRetry} size="sm" variant="outline">
+          {t('retry')}
+        </Button>
       ) : null}
-      {unavailable ? (
-        onRetry && ['error', 'expired'].includes(reasonStatus) ? (
-          <Button onClick={onRetry} size="sm" variant="outline">
-            {t('retry')}
-          </Button>
-        ) : null
-      ) : (
-        <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-          <CollapsibleTrigger className="group text-xs">
-            <ChevronDown
-              aria-hidden="true"
-              className="size-3 transition-transform duration-[var(--motion-standard)] group-data-panel-open:rotate-180 motion-reduce:transition-none"
-            />
-            {t(detailsOpen ? 'hideDetails' : 'showDetails')}
-          </CollapsibleTrigger>
-          <CollapsiblePanel>
-            <div className="mt-3 space-y-5 border-t border-border pt-3">
-              <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-                {typeof confidence === 'number' ? (
-                  <span>{t('confidenceValue', { value: confidence })}</span>
-                ) : null}
-                {typeof completeness === 'number' ? (
-                  <span>{t('coverageValue', { value: completeness })}</span>
-                ) : null}
-              </div>
-              {scope === 'day' && factors ? (
-                <OutcomeRows ids={DAILY_CATEGORIES} outcomes={factors} />
-              ) : null}
-              {scope === 'trip' && assessment ? (
-                <>
-                  <OutcomeRows ids={TRIP_COMPONENTS} outcomes={assessment.components} />
-                  {adjustment ? (
-                    <div className="space-y-1 text-sm">
-                      <p className="text-xs font-medium text-muted-foreground">
-                        {t('tripAdjustments')}
-                      </p>
-                      <p>{t('fatigueAdjustment', { value: adjustment.fatigue })}</p>
-                      <p>{t('weakDayAdjustment', { value: adjustment.weakDays })}</p>
-                    </div>
-                  ) : null}
-                </>
-              ) : null}
-              {caps.length ? (
-                <div className="space-y-1 text-sm">
-                  <p className="text-xs font-medium text-muted-foreground">{t('appliedCaps')}</p>
-                  {caps.map((cap, index) => (
-                    <p key={`${cap.reason}-${index}`}>
-                      {t(`caps.${cap.reason}`, { limit: cap.limit })}
-                    </p>
-                  ))}
-                </div>
-              ) : null}
-              <Reasons
-                explanations={otherProblems}
-                label={t('worthImproving')}
-                resolveAction={action}
-              />
-              <Reasons explanations={explanations.whatWorks} label={t('whatWorks')} />
-              <Reasons
-                explanations={explanations.uncertainty}
-                label={t('uncertainty')}
-                resolveAction={action}
-              />
-              {showDestinationContext && assessment?.presentation?.destinationContext ? (
-                <ItineraryDestinationContext
-                  onFocusedRecordDismissed={() => setFocusedRecordId(null)}
-                  focusedRecordId={focusedRecordId}
-                  context={assessment.presentation.destinationContext}
-                  dayId={scope === 'day' ? (dayId ?? '') : null}
-                />
-              ) : null}
-              {assessment ? (
-                <div className="space-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
-                  <p>{t('assessedAt', { date: dateTime(assessment.generatedAt) })}</p>
-                  {assessment.evidenceAsOf ? (
-                    <p>{t('evidenceAt', { date: dateTime(assessment.evidenceAsOf) })}</p>
-                  ) : null}
-                  <p>
-                    {t('validUntil', {
-                      date: dateTime(new Date(assessmentDeadline(assessment)).toISOString()),
-                    })}
-                  </p>
-                </div>
-              ) : null}
-            </div>
-          </CollapsiblePanel>
-        </Collapsible>
-      )}
     </section>
   );
 }

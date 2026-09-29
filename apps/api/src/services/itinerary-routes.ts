@@ -13,11 +13,7 @@ import { createRoutesService } from './routes-runtime.js';
 import { type RouteTravelMode, type RoutesService } from './routes.js';
 import { ItineraryNotFoundError } from './itineraries.js';
 
-export {
-  buildItineraryRoutePlan,
-  createSummary,
-  inferAccommodationBases,
-} from './itinerary-route-reader.js';
+export { buildItineraryRoutePlan, createSummary } from './itinerary-route-reader.js';
 export type {
   ItineraryDayRoutes,
   ItineraryRouteSegment,

@@ -1,6 +1,7 @@
 import { getPrismaClient, type Prisma } from '@trove/db';
 import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
 import { placeProviderRefInclude } from './place-serializer.js';
+import { resolveDayStay, stayAccommodationsInclude, toStayAccommodations } from './day-stay.js';
 import { ItineraryNotFoundError } from './itineraries.js';
 import {
   isRoutableTravelMode,
@@ -93,56 +94,6 @@ export type PlaceResolver = (
 export type AccommodationTripPlace = Prisma.TripPlaceGetPayload<{
   include: typeof tripPlaceInclude;
 }>;
-
-/**
- * A day's base is normally symmetric: one place the day's travel is measured
- * from and back to. On a transition day — checking out of one accommodation
- * and into another — that's wrong, so when exactly two accommodations apply
- * and their check-out/check-in dates cleanly identify which is which, resolve
- * them asymmetrically. Anything more ambiguous falls back to no inferred base
- * on that side rather than guessing (PRD 18.4).
- */
-export function inferAccommodationBases(
-  accommodationReservations: Array<{
-    reservation: {
-      checkInDate: Date | null;
-      checkOutDate: Date | null;
-      tripPlace: AccommodationTripPlace | null;
-    };
-  }>,
-  dayDate: Date,
-): { arrival: AccommodationTripPlace | null; departure: AccommodationTripPlace | null } {
-  const accommodations = [
-    ...new Map(
-      accommodationReservations
-        .map(({ reservation }) => reservation)
-        .filter(
-          (
-            reservation,
-          ): reservation is typeof reservation & { tripPlace: AccommodationTripPlace } =>
-            reservation.tripPlace !== null,
-        )
-        .map((reservation) => [reservation.tripPlace.id, reservation]),
-    ).values(),
-  ];
-
-  const [onlyAccommodation] = accommodations;
-  if (accommodations.length === 1 && onlyAccommodation) {
-    const tripPlace = onlyAccommodation.tripPlace;
-    return { arrival: tripPlace, departure: tripPlace };
-  }
-
-  if (accommodations.length === 2) {
-    const dayTime = dayDate.getTime();
-    const checkingOut = accommodations.find((entry) => entry.checkOutDate?.getTime() === dayTime);
-    const checkingIn = accommodations.find((entry) => entry.checkInDate?.getTime() === dayTime);
-    if (checkingOut && checkingIn && checkingOut.tripPlace.id !== checkingIn.tripPlace.id) {
-      return { arrival: checkingOut.tripPlace, departure: checkingIn.tripPlace };
-    }
-  }
-
-  return { arrival: null, departure: null };
-}
 
 type SegmentPlan = {
   destination: RoutePoint;
@@ -379,14 +330,10 @@ export async function readItineraryDayRoutes(
     where: { id: tripId, ownerId: userId },
     include: {
       startingPlace: { include: placeInclude },
+      reservations: stayAccommodationsInclude({ include: tripPlaceInclude }),
       itineraryDays: {
         where: { id: itineraryDayId },
         include: {
-          accommodationReservations: {
-            include: {
-              reservation: { include: { tripPlace: { include: tripPlaceInclude } } },
-            },
-          },
           dailyBaseDepartureTripPlace: { include: tripPlaceInclude },
           dailyBaseTripPlace: { include: tripPlaceInclude },
           items: {
@@ -438,13 +385,9 @@ export async function readItineraryDayRoutes(
   }));
 
   const wholeDay = options.legs !== 'between_items';
-  const { arrival: inferredArrival, departure: inferredDeparture } = wholeDay
-    ? inferAccommodationBases(day.accommodationReservations, day.date)
-    : { arrival: null, departure: null };
-  const arrivalBaseTripPlace = wholeDay ? (day.dailyBaseTripPlace ?? inferredArrival) : null;
-  const departureBaseTripPlace = wholeDay
-    ? (day.dailyBaseDepartureTripPlace ?? day.dailyBaseTripPlace ?? inferredDeparture)
-    : null;
+  const stay = wholeDay ? resolveDayStay(day, toStayAccommodations(trip.reservations)) : null;
+  const arrivalBaseTripPlace = stay?.start?.place ?? null;
+  const departureBaseTripPlace = stay?.end?.place ?? null;
   const arrivalBase = arrivalBaseTripPlace
     ? await resolvePlace(arrivalBaseTripPlace.place, 'daily_base', arrivalBaseTripPlace.id)
     : null;

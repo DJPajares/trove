@@ -7,6 +7,20 @@ import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
 import { floatingLocalTimeToInstant, parseLocalTime } from './itinerary-rules.js';
 import { parseDateOnly, resolveCountryPrimaryTimeZone } from './trip-rules.js';
 
+/**
+ * Where a draft day starts and ends, the same way the itinerary reads an
+ * applied day: it starts at its stay and ends at its departure stay, else back
+ * where it started.
+ */
+export function draftDayStay(
+  day: Pick<AiPlannerDraft['days'][number], 'dailyBasePlaceRefId' | 'dailyBaseDeparturePlaceRefId'>,
+) {
+  return {
+    start: day.dailyBasePlaceRefId,
+    end: day.dailyBaseDeparturePlaceRefId ?? day.dailyBasePlaceRefId,
+  };
+}
+
 /** Binds an assessment to the final itinerary, not mutable review copy. */
 export function draftPlanScoreInputRevision(draft: AiPlannerDraft): string {
   const payload = {

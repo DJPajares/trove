@@ -189,6 +189,29 @@ export const aiPlannerModelProposalSchema = z
     places: z.array(aiPlannerCandidatePlaceSchema),
     schemaVersion: schemaVersionField,
     selectedDurationDays: tripLengthTierSchema.nullable(),
+    /**
+     * Where the traveller said they are staying, as a candidate place and the
+     * zero-based days whose nights are spent there. Never invented.
+     */
+    stays: z
+      .array(
+        z
+          .object({
+            candidatePlaceId: identifierSchema,
+            firstNightDayIndex: z
+              .number()
+              .int()
+              .min(0)
+              .max(AI_PLANNER_MAX_DAYS - 1),
+            lastNightDayIndex: z
+              .number()
+              .int()
+              .min(0)
+              .max(AI_PLANNER_MAX_DAYS - 1),
+          })
+          .strict(),
+      )
+      .optional(),
     tripDescription: z
       .string()
       .trim()

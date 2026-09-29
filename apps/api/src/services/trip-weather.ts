@@ -1,3 +1,4 @@
+import { resolveDayStay, stayAccommodationsInclude, toStayAccommodations } from './day-stay.js';
 import { getPrismaClient } from '@trove/db';
 
 import {
@@ -103,6 +104,9 @@ const tripInclude = {
     },
     orderBy: { date: 'asc' as const },
   },
+  reservations: stayAccommodationsInclude({
+    include: { place: { include: placeProviderRefInclude } },
+  }),
 } as const;
 
 /** Celsius is what the cache stores; this is the only place a unit is applied. */
@@ -215,7 +219,18 @@ export class TripWeatherService {
       trip.referenceTimeZone,
     );
 
-    const dayLocations = resolveDayWeatherLocations(trip.itineraryDays, destination);
+    // The stay a day starts from answers first, whether the traveller set it
+    // or a booking supplies it.
+    const accommodations = toStayAccommodations(trip.reservations);
+    const dayLocations = resolveDayWeatherLocations(
+      trip.itineraryDays.map((day) => ({
+        ...day,
+        dailyBaseTripPlace:
+          resolveDayStay({ ...day, dailyBaseDepartureTripPlace: null }, accommodations).start
+            ?.place ?? null,
+      })),
+      destination,
+    );
     const located = trip.itineraryDays.flatMap((day, index) => {
       const location = dayLocations[index];
       return location ? [{ date: formatDateOnly(day.date), day, location }] : [];

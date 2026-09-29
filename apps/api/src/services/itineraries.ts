@@ -1,3 +1,4 @@
+import { resolveDayStay, stayAccommodationsInclude, toStayAccommodations } from './day-stay.js';
 import { readDayPlanningContext, type DayPlanningContext } from '@trove/types';
 import { getPrismaClient, type Prisma } from '@trove/db';
 
@@ -461,9 +462,31 @@ export async function listItinerary(userId: string, tripId: string, languageCode
         include: { place: { include: placeProviderRefInclude } },
         orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
       },
+      reservations: stayAccommodationsInclude({ select: { id: true } }),
     },
   });
   if (!trip) throw new ItineraryNotFoundError('trip_not_found');
+  const accommodations = toStayAccommodations(trip.reservations);
+  const serializeStay = (day: (typeof trip.itineraryDays)[number]) => {
+    const stay = resolveDayStay(
+      {
+        id: day.id,
+        date: day.date,
+        dailyBaseTripPlace: day.dailyBaseTripPlaceId ? { id: day.dailyBaseTripPlaceId } : null,
+        dailyBaseDepartureTripPlace: day.dailyBaseDepartureTripPlaceId
+          ? { id: day.dailyBaseDepartureTripPlaceId }
+          : null,
+      },
+      accommodations,
+    );
+    // The stay every surface routes from and back to, so none has to guess.
+    return {
+      endSource: stay.end?.source ?? null,
+      endTripPlaceId: stay.end?.place.id ?? null,
+      startSource: stay.start?.source ?? null,
+      startTripPlaceId: stay.start?.place.id ?? null,
+    };
+  };
 
   // Every Place the itinerary renders, resolved once from the database. This is
   // also what Trip Mode reads, so moving between its tabs re-reads Trove's own
@@ -496,6 +519,7 @@ export async function listItinerary(userId: string, tripId: string, languageCode
       notes: day.notes,
       routeStartTravelMode: mapTravelMode(day.routeStartTravelMode),
       planningContext: readDayPlanningContext(day.planningContext),
+      stay: serializeStay(day),
     })),
     trip: {
       endDate: formatDateOnly(trip.endDate),

@@ -116,9 +116,10 @@ const tripInclude = {
   itineraryDays: {
     orderBy: { date: 'asc' as const },
     select: {
-      // Both base columns and the reservation count are what `hasStay` reads;
-      // they mirror the base-resolution chain in `itinerary-routes.ts`, so
-      // preparedness and the itinerary's own routing cannot disagree.
+      // The stay columns, linked bookings and dated bookings are what
+      // `hasStay` reads, following `day-stay.ts`. A booking without a linked
+      // place still counts here: the traveller has somewhere to sleep even when
+      // routing cannot locate it.
       _count: { select: { accommodationReservations: true, items: true } },
       dailyBaseDepartureTripPlaceId: true,
       dailyBaseTripPlaceId: true,
@@ -126,6 +127,10 @@ const tripInclude = {
     },
   },
   owner: true,
+  reservations: {
+    where: { type: 'ACCOMMODATION' as const },
+    select: { checkInDate: true, checkOutDate: true },
+  },
   startingPlace: { include: placeProviderRefInclude },
 } as const;
 
@@ -181,7 +186,15 @@ async function serializeTrip(
     hasStay:
       day.dailyBaseTripPlaceId !== null ||
       day.dailyBaseDepartureTripPlaceId !== null ||
-      day._count.accommodationReservations > 0,
+      day._count.accommodationReservations > 0 ||
+      // A dated booking covers the nights from check-in until check-out.
+      (trip.reservations ?? []).some(
+        (stay) =>
+          stay.checkInDate !== null &&
+          stay.checkOutDate !== null &&
+          stay.checkInDate.getTime() <= day.date.getTime() &&
+          day.date.getTime() < stay.checkOutDate.getTime(),
+      ),
     scheduledItemCount: day._count.items,
   }));
   const itineraryCoverage = calculateItineraryCoverage(startDate, endDate, itineraryDays);

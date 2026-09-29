@@ -11,6 +11,20 @@ import {
 import { enumerateDateRange } from './trip-rules.js';
 
 const index = z.number().int().min(0);
+/** Words any lodging name shares, which prove nothing about which one was meant. */
+const GENERIC_STAY_WORDS = new Set([
+  'hotel',
+  'hostel',
+  'resort',
+  'inn',
+  'suites',
+  'apartment',
+  'apartments',
+  'house',
+  'lodge',
+  'stay',
+  'residence',
+]);
 
 /**
  * Provider-facing shape. The model chooses the trip and the provenance of its
@@ -52,6 +66,17 @@ export const aiPlannerCompactProposalSchema = z
     partySize: aiPlannerModelProposalSchema.shape.partySize,
     places: z.array(aiPlannerCandidatePlaceSchema.omit({ id: true })),
     selectedDurationDays: aiPlannerModelProposalSchema.shape.selectedDurationDays,
+    stays: z
+      .array(
+        z
+          .object({
+            candidatePlaceIndex: index,
+            firstNightDayIndex: index,
+            lastNightDayIndex: index,
+          })
+          .strict(),
+      )
+      .optional(),
     tripDescription: aiPlannerModelProposalSchema.shape.tripDescription,
     tripName: aiPlannerModelProposalSchema.shape.tripName,
   })
@@ -385,6 +410,34 @@ export function expandAiPlannerProposal(
       }),
     };
   });
+  // A stay is only ever one the traveller named: a place whose distinctive
+  // words the request never mentions is a suggestion, and is dropped.
+  // A city in the hotel's name ("Hilton Tokyo") is not evidence either: the
+  // traveller named the city as a destination, not the hotel.
+  const requestWords = new Set(localityKey(rawPrompt).split(' '));
+  const destinationWords = new Set(
+    destinationIntents.flatMap((intent) => localityKey(intent.name).split(' ')),
+  );
+  const stays = (compact.stays ?? []).flatMap((stay) => {
+    const place = places[stay.candidatePlaceIndex];
+    const words = place
+      ? localityKey(place.name)
+          .split(' ')
+          .filter(
+            (word) =>
+              word.length >= 4 && !GENERIC_STAY_WORDS.has(word) && !destinationWords.has(word),
+          )
+      : [];
+    if (!place || !words.some((word) => requestWords.has(word))) return [];
+    if (stay.lastNightDayIndex < stay.firstNightDayIndex) return [];
+    return [
+      {
+        candidatePlaceId: place.id,
+        firstNightDayIndex: stay.firstNightDayIndex,
+        lastNightDayIndex: stay.lastNightDayIndex,
+      },
+    ];
+  });
   const dates = exactDates(compact);
   removeInventedUserDurations(rawPrompt, constraints, items);
   splitRepeatedHardOccurrences(constraints, items, dates);
@@ -404,6 +457,7 @@ export function expandAiPlannerProposal(
     places,
     schemaVersion: AI_PLANNER_SCHEMA_VERSION,
     selectedDurationDays: compact.selectedDurationDays,
+    stays,
     tripDescription: compact.tripDescription,
     tripName: compact.tripName,
   };

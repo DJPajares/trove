@@ -1,91 +1,112 @@
 import { expect, test } from 'vitest';
 
 import {
-  buildItineraryRoutePlan,
-  inferAccommodationBases,
-  type AccommodationTripPlace,
-  type RoutePoint,
-} from '../src/services/itinerary-routes.js';
-
-function tripPlace(id: string): AccommodationTripPlace {
-  return {
-    id,
-    place: { id: `place-${id}`, providerRefs: [] },
-  } as unknown as AccommodationTripPlace;
-}
+  accommodationStay,
+  resolveDayStay,
+  type StayAccommodation,
+} from '../src/services/day-stay.js';
+import { buildItineraryRoutePlan, type RoutePoint } from '../src/services/itinerary-routes.js';
 
 function point(id: string, kind: RoutePoint['kind'] = 'itinerary_item'): RoutePoint {
   return { coordinates: { latitude: 0, longitude: 0 }, id, kind, label: null };
 }
 
-function accommodationDay(
-  tripPlaceId: string,
-  checkInDate: Date | null,
-  checkOutDate: Date | null,
-) {
+const place = (id: string) => ({ id });
+const DAY = { id: 'day', date: new Date('2026-09-03') };
+function stay(
+  id: string,
+  checkIn: string | null,
+  checkOut: string | null,
+  linkedDayIds: string[] = [],
+): StayAccommodation<{ id: string }> {
   return {
-    reservation: { checkInDate, checkOutDate, tripPlace: tripPlace(tripPlaceId) },
+    checkInDate: checkIn ? new Date(checkIn) : null,
+    checkOutDate: checkOut ? new Date(checkOut) : null,
+    linkedDayIds,
+    tripPlace: place(id),
   };
 }
+const ends = (result: ReturnType<typeof accommodationStay<{ id: string }>>) => [
+  result.start?.id ?? null,
+  result.end?.id ?? null,
+];
 
-test('a single applicable accommodation is the base for both ends of the day', () => {
-  const { arrival, departure } = inferAccommodationBases(
-    [accommodationDay('hotel-a', new Date('2026-09-01'), new Date('2026-09-03'))],
-    new Date('2026-09-01'),
-  );
-
-  expect(arrival?.id).toBe('hotel-a');
-  expect(departure?.id).toBe('hotel-a');
+test('a hand-linked accommodation is both ends of its day', () => {
+  expect(ends(accommodationStay(DAY, [stay('a', '2026-09-01', '2026-09-05', ['day'])]))).toEqual([
+    'a',
+    'a',
+  ]);
 });
 
-test('a transition day infers the checkout accommodation as arrival and the checkin one as departure', () => {
-  const dayDate = new Date('2026-09-03');
-  const { arrival, departure } = inferAccommodationBases(
-    [
-      accommodationDay('hotel-a', new Date('2026-09-01'), new Date('2026-09-03')),
-      accommodationDay('hotel-b', new Date('2026-09-03'), new Date('2026-09-05')),
-    ],
-    dayDate,
-  );
-
-  expect(arrival?.id).toBe('hotel-a');
-  expect(departure?.id).toBe('hotel-b');
+test('two hand-linked stays split cleanly on the change-over day, and otherwise give nothing', () => {
+  const changeOver = [
+    stay('a', '2026-09-01', '2026-09-03', ['day']),
+    stay('b', '2026-09-03', '2026-09-05', ['day']),
+  ];
+  expect(ends(accommodationStay(DAY, changeOver))).toEqual(['a', 'b']);
+  const overlapping = [
+    stay('a', '2026-09-01', '2026-09-05', ['day']),
+    stay('b', '2026-09-01', '2026-09-05', ['day']),
+  ];
+  expect(ends(accommodationStay(DAY, overlapping))).toEqual([null, null]);
 });
 
-test('two accommodations that do not cleanly disambiguate infer no base rather than guessing', () => {
-  const dayDate = new Date('2026-09-03');
-  const { arrival, departure } = inferAccommodationBases(
-    [
-      accommodationDay('hotel-a', new Date('2026-09-01'), new Date('2026-09-05')),
-      accommodationDay('hotel-b', new Date('2026-09-01'), new Date('2026-09-05')),
-    ],
-    dayDate,
-  );
-
-  expect(arrival).toBe(null);
-  expect(departure).toBe(null);
+test('without linked days, check-in and check-out dates decide each end', () => {
+  const hotel = [stay('a', '2026-09-03', '2026-09-05')];
+  // Check-in day: the day ends there but did not start there.
+  expect(ends(accommodationStay(DAY, hotel))).toEqual([null, 'a']);
+  expect(ends(accommodationStay({ id: 'mid', date: new Date('2026-09-04') }, hotel))).toEqual([
+    'a',
+    'a',
+  ]);
+  // Check-out day: the day starts there and ends elsewhere.
+  expect(ends(accommodationStay({ id: 'out', date: new Date('2026-09-05') }, hotel))).toEqual([
+    'a',
+    null,
+  ]);
 });
 
-test('more than two applicable accommodations infer no base', () => {
-  const dayDate = new Date('2026-09-03');
-  const { arrival, departure } = inferAccommodationBases(
-    [
-      accommodationDay('hotel-a', new Date('2026-09-01'), dayDate),
-      accommodationDay('hotel-b', dayDate, new Date('2026-09-05')),
-      accommodationDay('hotel-c', dayDate, new Date('2026-09-06')),
-    ],
-    dayDate,
-  );
-
-  expect(arrival).toBe(null);
-  expect(departure).toBe(null);
+test('a transfer day starts at one stay and ends at the next, with nothing picked', () => {
+  expect(
+    ends(
+      accommodationStay(DAY, [
+        stay('a', '2026-09-01', '2026-09-03'),
+        stay('b', '2026-09-03', '2026-09-06'),
+      ]),
+    ),
+  ).toEqual(['a', 'b']);
 });
 
-test('no applicable accommodation infers no base', () => {
-  const { arrival, departure } = inferAccommodationBases([], new Date('2026-09-03'));
+test('linked days override dates, and a stay without a place or dates is ignored', () => {
+  const linkedElsewhere = stay('a', '2026-09-01', '2026-09-05', ['other-day']);
+  expect(ends(accommodationStay(DAY, [linkedElsewhere]))).toEqual([null, null]);
+  expect(
+    ends(
+      accommodationStay(DAY, [
+        { ...stay('x', '2026-09-01', '2026-09-05'), tripPlace: null },
+        stay('y', null, null),
+      ]),
+    ),
+  ).toEqual([null, null]);
+  expect(ends(accommodationStay(DAY, []))).toEqual([null, null]);
+});
 
-  expect(arrival).toBe(null);
-  expect(departure).toBe(null);
+test('what the traveller set wins over any booking, and the end falls back to the start', () => {
+  const booked = [stay('hotel', '2026-09-01', '2026-09-05')];
+  const explicit = resolveDayStay(
+    { ...DAY, dailyBaseTripPlace: place('friend'), dailyBaseDepartureTripPlace: null },
+    booked,
+  );
+  expect(explicit).toEqual({
+    start: { place: { id: 'friend' }, source: 'explicit' },
+    end: { place: { id: 'friend' }, source: 'explicit' },
+  });
+  expect(
+    resolveDayStay({ ...DAY, dailyBaseTripPlace: null, dailyBaseDepartureTripPlace: null }, booked),
+  ).toEqual({
+    start: { place: { id: 'hotel' }, source: 'accommodation' },
+    end: { place: { id: 'hotel' }, source: 'accommodation' },
+  });
 });
 
 test('symmetric base adds a day-start leg and a return-to-base leg around the items', () => {

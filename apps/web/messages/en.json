@@ -2342,7 +2342,6 @@
   "planScore": {
     "title": "Plan Score",
     "dayTitle": "Plan Score for this day",
-    "outOf": "out of 100",
     "basis": {
       "travelUnknown": "Based on planned activity time; required travel time hasn't been fully assessed.",
       "verifiedProblemTravelUnknown": "Based on timing problems that can be checked; required travel time remains unassessed.",
@@ -2356,30 +2355,23 @@
       "trip": "Add a time or duration to at least one day to assess this trip."
     },
     "verdict": {
-      "day": {
-        "good": "This day looks good",
-        "workable": "This day should work",
-        "tight": "This day looks tight",
-        "needsWork": "This day needs some work"
-      },
-      "trip": {
-        "good": "This trip looks well planned",
-        "workable": "This trip should work",
-        "tight": "This trip looks tight in places",
-        "needsWork": "This trip needs some work"
-      }
+      "excellent": "Excellent plan",
+      "strong": "Strong plan",
+      "good": "Good plan",
+      "refine": "Needs refinement",
+      "attention": "Needs attention"
     },
     "improvementLead": "One thing worth a look:",
-    "showDetails": "Show the details",
-    "hideDetails": "Hide the details",
-    "scoreBadgeLabel": "Score {score} out of 100",
+    "showDetails": "Show breakdown",
+    "hideDetails": "Hide breakdown",
+    "scoreValue": "{score} out of 100",
     "loading": "Taking a look at this plan…",
     "unavailable": "We could not look at this plan just now.",
     "retry": "Try again",
     "confidence": "Confidence",
     "completeness": "Coverage",
-    "whatWorks": "What is working",
-    "worthImproving": "Also worth a look",
+    "whatWorks": "What’s working",
+    "worthImproving": "Worth a look",
     "uncertainty": "Timing context and what remains unknown",
     "factorLabels": {
       "FEASIBILITY": "Feasibility & Resilience",
@@ -2537,16 +2529,11 @@
         "rubric": "The scoring model changed."
       },
       "states": {
-        "score": "Score change: {delta} points.",
-        "coverage": "Evidence coverage or category results changed.",
-        "unavailable": "A current, comparable score is unavailable.",
-        "available": "Enough evidence is now available for a score.",
-        "rubric": "These assessments cannot be compared numerically."
+        "score": "Score change: {delta} points."
       }
     },
-    "provisional": "Provisional",
     "assessedDays": "{count} of {total} days assessed",
-    "moreProblems": "{count, plural, one {Show # more issue} other {Show # more issues}}",
+    "worthALook": "{count, plural, one {# thing worth a look} other {# things worth a look}}",
     "missing": {
       "timedAccess": "Add a location to check access to a timed booking or departure.",
       "locations": "Link {count, plural, one {one stop} other {# stops}} to check travel time for Day {day}.",

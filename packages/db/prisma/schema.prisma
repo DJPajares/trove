@@ -536,6 +536,33 @@ model WeatherForecastSnapshotDay {
   @@schema("trove")
 }
 
+/// Typical conditions for one place and calendar month, averaged over past
+/// years of Open-Meteo's historical archive.
+///
+/// Climate does not change between trips, so one answer serves every traveller
+/// whose day falls in the same ~11 km cell and month for as long as the averaged
+/// years stay the same. A row with no statistics records a failed fetch and
+/// stands as a short negative cache until it is retried.
+model ClimateNormSnapshot {
+  id                    String   @id @default(uuid(7)) @db.Uuid
+  provider              String   @default("open_meteo")
+  latitude              Decimal  @db.Decimal(9, 6)
+  longitude             Decimal  @db.Decimal(9, 6)
+  month                 Int      @db.SmallInt
+  yearFrom              Int      @map("year_from") @db.SmallInt
+  yearTo                Int      @map("year_to") @db.SmallInt
+  temperatureMaxCelsius Decimal? @map("temperature_max_celsius") @db.Decimal(5, 2)
+  temperatureMinCelsius Decimal? @map("temperature_min_celsius") @db.Decimal(5, 2)
+  wetDayShare           Decimal? @map("wet_day_share") @db.Decimal(4, 3)
+  sampleDays            Int      @default(0) @map("sample_days")
+  fetchedAt             DateTime @default(now()) @map("fetched_at") @db.Timestamptz(3)
+
+  @@unique([provider, latitude, longitude, month, yearFrom, yearTo], name: "climate_norm_snapshot_cell")
+  @@index([fetchedAt])
+  @@map("climate_norm_snapshots")
+  @@schema("trove")
+}
+
 /// One day's exchange rates from Frankfurter, always expressed against EUR.
 ///
 /// Frankfurter republishes once per working day, so asking it per conversion

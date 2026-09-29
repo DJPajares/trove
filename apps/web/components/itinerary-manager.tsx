@@ -41,6 +41,7 @@ import { ItineraryPlacesDrawer } from '@/components/itinerary-places-drawer';
 import { LocatePlaceDialog } from '@/components/locate-place-dialog';
 import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
 import { PlanScorePanel } from '@/components/plan-score-panel';
+import { TripInsights } from '@/components/trip-insights';
 import { useRegisterPrimaryAction } from '@/components/primary-action-provider';
 import {
   Popover,
@@ -52,7 +53,6 @@ import {
 import { usePreferences } from '@/components/preferences-provider';
 import { TimeInput } from '@/components/time-input';
 import { useTripContext } from '@/components/trip-provider';
-import { ItineraryDestinationContext } from '@/components/itinerary-destination-context';
 import { TripSectionHeader } from '@/components/trip-section-header';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsIndicator, TabsList, TabsTab } from '@/components/ui/tabs';
@@ -251,11 +251,13 @@ function useDesktopMapLayout() {
   return matches;
 }
 
-function ItineraryPlanScore({
+function ItineraryScoreAndInsights({
+  planScoreEnabled,
   resolveAction,
   selectedDayId,
   tripId,
 }: Readonly<{
+  planScoreEnabled: boolean;
   resolveAction: (
     explanation: import('@trove/types').PlanScoreExplanation,
   ) => import('@/lib/plan-score/presentation').ScoreAction | null;
@@ -265,19 +267,21 @@ function ItineraryPlanScore({
   const planScoreTranslations = useTranslations('planScore');
   const { hasBeenVisible: planScoreVisible, ref: planScoreSentinelRef } =
     useInViewOnce<HTMLDivElement>();
-  const planScore = useTripPlanScore(planScoreVisible ? tripId : null);
+  const planScore = useTripPlanScore(planScoreEnabled && planScoreVisible ? tripId : null);
   const planScoreDay =
     selectedDayId === null
       ? planScore.data
       : (planScore.data?.days.find((day) => day.dayId === selectedDayId) ?? null);
   const planScoreHidden =
+    !planScoreEnabled ||
     planScore.status === 'disabled' ||
     Boolean(planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED'));
 
-  // One element, so a surrounding `space-y` spaces the sentinel and the card as
-  // a single block instead of adding its gap twice around a 1px marker.
+  // One element, so a surrounding `space-y` spaces the sentinel and the cards
+  // as a single block instead of adding its gap twice around a 1px marker.
+  // How good the plan is comes first; what to know about it follows.
   return (
-    <div className={selectedDayId === null ? undefined : 'mt-6'}>
+    <div className={selectedDayId === null ? 'space-y-4' : 'mt-6 space-y-6'}>
       <div aria-hidden="true" className="h-px" ref={planScoreSentinelRef} />
       {!planScoreHidden && planScoreDay ? (
         <PlanScorePanel
@@ -304,6 +308,13 @@ function ItineraryPlanScore({
           title={planScoreTranslations(selectedDayId === null ? 'title' : 'dayTitle')}
         />
       ) : null}
+      <TripInsights
+        dayId={selectedDayId ?? undefined}
+        enabled={planScoreVisible}
+        resolveAction={resolveAction}
+        surface={selectedDayId === null ? 'card' : 'inset'}
+        tripId={tripId}
+      />
     </div>
   );
 }
@@ -361,7 +372,6 @@ export function ItineraryManager({
     },
     [queryClient, tripId],
   );
-  const [scoreContextId, setScoreContextId] = useState<string | null>(null);
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const status = itineraryQuery.isPending ? 'loading' : itineraryQuery.error ? 'error' : 'idle';
   const [error, setError] = useState<string | null>(null);
@@ -926,14 +936,6 @@ export function ItineraryManager({
         return {
           href: `/trips/${tripId}/reservations?reservation=${encodeURIComponent(reference)}`,
         };
-      const contextGroups =
-        activeView === 'overview'
-          ? itinerary.destinationContext?.overview
-          : itinerary.destinationContext?.days.find((day) => day.dayId === selectedDayId)?.groups;
-      const context = contextGroups
-        ?.flatMap((group) => group.records)
-        .find((record) => record.id === reference && Date.parse(record.expiresAt) > Date.now());
-      if (context) return { onSelect: () => setScoreContextId(context.id) };
       const place = itinerary.tripPlaces.find((place) => place.id === reference);
       if (place && explanation.action === 'SCHEDULE_MUST_GO')
         return {
@@ -1767,13 +1769,6 @@ export function ItineraryManager({
         </TabsList>
       </Tabs>
 
-      <ItineraryDestinationContext
-        onFocusedRecordDismissed={() => setScoreContextId(null)}
-        focusedRecordId={scoreContextId}
-        context={itinerary.destinationContext}
-        dayId={activeView === 'overview' ? null : (selectedDayId ?? '')}
-      />
-
       {activeView === 'overview' ? (
         <ItineraryOverview
           days={itinerary.days}
@@ -2294,13 +2289,12 @@ export function ItineraryManager({
                         title={t('emptyTitle')}
                       />
                     )}
-                    {planScoreEnabled ? (
-                      <ItineraryPlanScore
-                        resolveAction={resolveScoreAction}
-                        selectedDayId={selectedDayId}
-                        tripId={tripId}
-                      />
-                    ) : null}
+                    <ItineraryScoreAndInsights
+                      planScoreEnabled={planScoreEnabled}
+                      resolveAction={resolveScoreAction}
+                      selectedDayId={selectedDayId}
+                      tripId={tripId}
+                    />
                   </div>
 
                   <aside
@@ -2342,8 +2336,9 @@ export function ItineraryManager({
         </>
       )}
 
-      {activeView === 'overview' && planScoreEnabled ? (
-        <ItineraryPlanScore
+      {activeView === 'overview' ? (
+        <ItineraryScoreAndInsights
+          planScoreEnabled={planScoreEnabled}
           resolveAction={resolveScoreAction}
           selectedDayId={null}
           tripId={tripId}

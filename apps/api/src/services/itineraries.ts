@@ -1,8 +1,6 @@
 import { readDayPlanningContext, type DayPlanningContext } from '@trove/types';
 import { getPrismaClient, type Prisma } from '@trove/db';
 
-import { readOwnedTripDestinationContext } from './destination-context.js';
-
 import { DAY_PART_WINDOWS } from './day-part-windows.js';
 import {
   durationMinutesUntilLocalEnd,
@@ -447,8 +445,6 @@ export async function listItinerary(userId: string, tripId: string, languageCode
       referenceTimeZone: true,
       startDate: true,
       dayExperiences: true,
-      planningPreferences: true,
-      destinations: { include: { place: { include: placeProviderRefInclude } } },
       itineraryDays: {
         include: {
           dailyBaseTripPlace: true,
@@ -481,7 +477,6 @@ export async function listItinerary(userId: string, tripId: string, languageCode
   const options = { snapshots };
 
   return {
-    destinationContext: readOwnedTripDestinationContext(trip, new Date(), snapshots),
     days: trip.itineraryDays.map((day) => ({
       date: formatDateOnly(day.date),
       defaultTimeZone: day.defaultTimeZone,

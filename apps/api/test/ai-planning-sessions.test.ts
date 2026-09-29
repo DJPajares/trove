@@ -799,7 +799,7 @@ describe('review session safety', () => {
       generatedAt: NOW.toISOString(),
       evidenceAsOf: NOW.toISOString(),
       recomputeAfter: new Date(NOW.getTime() + 86400000).toISOString(),
-      sourceInputRevision: draftPlanScoreInputRevision(draft, NOW),
+      sourceInputRevision: draftPlanScoreInputRevision(draft),
     };
     store.sessions.set(
       sessionId,
@@ -889,7 +889,7 @@ describe('review session safety', () => {
       generatedAt: NOW.toISOString(),
       evidenceAsOf: NOW.toISOString(),
       recomputeAfter: new Date(NOW.getTime() + 86400000).toISOString(),
-      sourceInputRevision: draftPlanScoreInputRevision(draft, NOW),
+      sourceInputRevision: draftPlanScoreInputRevision(draft),
     };
     store.sessions.set(
       sessionId,

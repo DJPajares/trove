@@ -18,6 +18,7 @@ import { registerMemoryRoutes } from './routes/memories.js';
 import { registerNotificationRoutes } from './routes/notifications.js';
 import { registerPlacesRoutes } from './routes/places.js';
 import { registerPlanScoreRoutes } from './routes/plan-score.js';
+import { registerTripContextRoutes } from './routes/trip-context.js';
 import { registerProfileRoutes } from './routes/profile.js';
 import { registerPublicTripRoutes } from './routes/public-trips.js';
 import { registerReservationRoutes } from './routes/reservations.js';
@@ -166,6 +167,7 @@ export function buildApp() {
     registerTripRoutes(instance);
     registerPublicTripRoutes(instance);
     registerPlanScoreRoutes(instance);
+    registerTripContextRoutes(instance);
     registerMemoryRoutes(instance);
     registerSearchRoutes(instance);
     registerHealthRoutes(instance);

@@ -2483,9 +2483,6 @@
       "unknown": "Seasonal suitability is not sufficiently known for this trip."
     },
     "timing": {
-      "pattern": "Reviewed seasonal patterns may help you choose timing. They do not predict conditions on this date.",
-      "holiday": "A published public holiday applies. Check venue-specific arrangements before fixing a timed visit.",
-      "partialAccess": "A sourced restriction affects part of a planned venue. Check the Destination context details.",
       "forecastRain": "A current cached forecast suggests rain may affect outdoor plans. Keep an indoor option flexible.",
       "daylight": "This outdoor plan may extend beyond daylight. Review its timing and access requirements."
     },
@@ -2774,21 +2771,41 @@
     "save": "Save",
     "saving": "Saving…"
   },
-  "destinationContext": {
-    "title": "Destination context",
-    "description": "Ideas and timing to consider alongside your interests. Seasonal patterns describe typical conditions; check individual venues before fixing a timed visit.",
-    "allYear": "Applies year round",
-    "seasonWindow": "Typical season: {start}–{end}",
-    "dateWindow": "Applies: {start}–{end}",
-    "dates": "Holiday dates in this view: {dates}",
-    "fact": "Sourced fact",
-    "tendency": "Typical pattern",
-    "scope": "Applies to: {area}",
-    "source": "Official source",
-    "reviewed": "Reviewed {date}",
-    "expires": "Expires {date}",
-    "reviewDue": "Review due {date}",
-    "emptyTrip": "No reviewed destination context is available for these places and dates.",
-    "emptyDay": "No reviewed destination context is available for this day’s places and dates."
+  "insights": {
+    "title": "Insights",
+    "showMore": "Show {count} more",
+    "showFewer": "Show fewer",
+    "days": "{count, plural, one {Day {days}} other {Days {days}}}",
+    "certainty": {
+      "forecast": "Forecast",
+      "official": "Public holiday",
+      "expected": "Expected date",
+      "estimate": "Estimate",
+      "pattern": "Typical, {from}–{to}"
+    },
+    "rain": {
+      "title": "Rain is forecast for an outdoor stop",
+      "body": "Keep an indoor option in mind for that part of the day."
+    },
+    "holiday": {
+      "body": "Public holiday on {date}. Opening hours may change and popular places may be busier."
+    },
+    "daylight": {
+      "title": "An outdoor plan may run past daylight",
+      "body": "Check its timing so you are not finishing in the dark."
+    },
+    "walking": {
+      "title": "A long walk between stops",
+      "body": "One leg is over 5 km on foot. Check it suits you, or ride part of the way."
+    },
+    "continuous": {
+      "title": "A long stretch without a break",
+      "body": "Four hours or more run back to back. A pause would make the day easier."
+    },
+    "climate": {
+      "title": "Typically {low}–{high} in {month}",
+      "body": "{advice, select, indoor {Rain falls on about {wetDays} in 10 days. Keep outdoor plans flexible.} heat {Rain falls on about {wetDays} in 10 days. Plan outdoor time for mornings and evenings.} cold {Rain falls on about {wetDays} in 10 days. Pack warm layers.} other {Rain falls on about {wetDays} in 10 days.}}"
+    },
+    "opensSource": "(opens {source}, new tab)"
   }
 }

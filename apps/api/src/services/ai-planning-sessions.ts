@@ -24,6 +24,7 @@ import {
 import { readDraftPlanScore } from './ai-draft-score-reader.js';
 import { originalPlanScoreTime } from './plan-score-freshness.js';
 import { draftPlanScoreInputRevision } from './ai-planning-plan-score.js';
+import { draftTripContext } from './trip-context.js';
 import {
   parseStoredPlanScore,
   withholdNonCurrentPlanScore,
@@ -281,10 +282,10 @@ async function serializeAiPlanningSessionWithCountries(
       retained.success &&
       (!cached ||
         !originalPlanScoreTime(cached, now) ||
-        cached.sourceInputRevision !== draftPlanScoreInputRevision(retained.data, now))
+        cached.sourceInputRevision !== draftPlanScoreInputRevision(retained.data))
     ) {
       const score = await singleFlight(
-        `draft-score:${session.id}:${session.draftRevision}:${draftPlanScoreInputRevision(retained.data, now)}`,
+        `draft-score:${session.id}:${session.draftRevision}:${draftPlanScoreInputRevision(retained.data)}`,
         () => readDraftPlanScore(retained.data, now),
       );
       // Do not overwrite a concurrent regeneration/edit. No generation request is dispatched here.
@@ -303,6 +304,10 @@ async function serializeAiPlanningSessionWithCountries(
   if (!draft.success) return serialized;
   return {
     ...serialized,
+    context:
+      session.status === 'REVIEWING'
+        ? await draftTripContext(draft.data, session.reviewedCountries, now)
+        : null,
     suggestedCountries: await suggestedDraftCountriesFromStoredPlaces(draft.data, prisma),
   };
 }

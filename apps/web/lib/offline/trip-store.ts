@@ -1256,15 +1256,6 @@ export function applyOfflineMutation(
 ) {
   const next = structuredClone(itinerary);
 
-  // Offline structural edits cannot safely reuse the server's geographic/date resolution.
-  if (
-    mutation.kind !== 'itinerary_day_note' &&
-    mutation.kind !== 'itinerary_day_name' &&
-    mutation.kind !== 'itinerary_travel_status'
-  ) {
-    delete next.destinationContext;
-  }
-
   if (mutation.kind === 'itinerary_day_note') {
     const day = next.days.find((candidate) => candidate.id === mutation.itineraryDayId);
     if (day) day.notes = mutation.note?.trim() || null;

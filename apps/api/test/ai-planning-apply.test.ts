@@ -35,7 +35,7 @@ function draftAssessment(draft: AiPlannerDraft, evaluatedAt = new Date(NOW.getTi
     generatedAt: evaluatedAt.toISOString(),
     recomputeAfter: new Date(evaluatedAt.getTime() + PLAN_SCORE_CACHE_TTL_MS).toISOString(),
     evidenceAsOf: evaluatedAt.toISOString(),
-    sourceInputRevision: draftPlanScoreInputRevision(draft, evaluatedAt),
+    sourceInputRevision: draftPlanScoreInputRevision(draft),
     score: 72,
     withheldReasons: [],
     days: draft.days.map((day) => ({

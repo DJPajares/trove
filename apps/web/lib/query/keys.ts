@@ -1,3 +1,5 @@
+import { TRIP_CONTEXT_VERSION } from '@trove/types';
+
 import { EDITORIAL_IMAGE_RESOLUTION_VERSION } from '@/lib/media/editorial-images';
 import { WEATHER_CONTRACT_VERSION } from '@/lib/weather/api';
 
@@ -68,6 +70,13 @@ export const queryKeys = {
   memories: (tripId: string) => ['memories', tripId] as const,
   notifications: () => ['notifications', 'list'] as const,
   planScore: (tripId: string) => ['plan-score', tripId] as const,
+  /**
+   * What to know about when and where a trip happens. Persisted and refetched
+   * only on a trip edit, so the contract version and the language that names
+   * its holidays are both in the key.
+   */
+  tripContext: (tripId: string, languageCode: string) =>
+    ['trip-context', tripId, TRIP_CONTEXT_VERSION, languageCode] as const,
   profile: () => ['profile'] as const,
   reservations: (tripId: string) => ['reservations', tripId] as const,
   savedPlaces: () => ['saved'] as const,
@@ -173,6 +182,7 @@ export const TRIP_SCOPED_QUERY_ROOTS = [
   'reservations',
   'tasks',
   'trip',
+  'trip-context',
   'trip-info',
   'trip-mode-context',
   'trip-places',

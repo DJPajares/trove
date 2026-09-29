@@ -1,6 +1,6 @@
 import { getPrismaClient } from '@trove/db';
 import { planningPreferencesFromAi, type AiPlannerDraft } from '@trove/types';
-import { draftDestinationContext, draftPlanScoreInputRevision } from './ai-planning-plan-score.js';
+import { draftPlanScoreInputRevision } from './ai-planning-plan-score.js';
 import {
   buildPlanScoreFromEvaluations,
   loadPlaceEvidence,
@@ -66,7 +66,6 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, now: Date) {
   const routeMemo = new Map<string, ReturnType<typeof readCachedRoute>>();
   const routeTimes: string[] = [];
   const routeDeadlines: string[] = [];
-  const context = draftDestinationContext(draft, now);
   const records = draft.days.map((day) => ({
     date: day.date,
     timeZone:
@@ -210,14 +209,12 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, now: Date) {
           draft.trip.paceSource === 'user',
           draft.assumptions.some((a) => a.code === 'interest_inferred'),
         ),
-        context: context.days.find((d) => d.dayId === day.date)?.groups,
         forecasts: forecast.forecasts.filter((f) => f.date === day.date),
       }),
     });
   }
   const score = buildPlanScoreFromEvaluations({
     days,
-    destinationContext: context,
     evaluatedAt: now,
     evidenceTimes: [...evidence.evidenceTimes, ...routeTimes, ...forecast.times],
     evidenceDeadlines: [
@@ -234,7 +231,7 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, now: Date) {
       d.items.flatMap((i) => (i.placeRefId ? [i.placeRefId] : [])),
     ),
   });
-  score.sourceInputRevision = draftPlanScoreInputRevision(draft, now);
+  score.sourceInputRevision = draftPlanScoreInputRevision(draft);
   if (score.presentation) {
     score.presentation.referenceTargets = planScoreReferenceTargets(score, {
       items: [

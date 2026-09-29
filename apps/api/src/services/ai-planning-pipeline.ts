@@ -47,7 +47,7 @@ import {
   type TripPlanScore,
 } from './plan-score.js';
 import { groundableDraftPlaceIds, referencedDraftPlaceIds } from './ai-planning-draft-places.js';
-import { draftPlanScoreInputRevision, draftDestinationContext } from './ai-planning-plan-score.js';
+import { draftPlanScoreInputRevision } from './ai-planning-plan-score.js';
 import {
   recordAiPlanningDraftAssembled,
   recordAiPlanningProposalCoverage,
@@ -1174,9 +1174,7 @@ function scoreDraft(
     ),
   ];
 
-  const destinationContext = draftDestinationContext(draft, evaluatedAt);
   const score = buildPlanScoreFromEvaluations({
-    destinationContext,
     evaluatedAt,
     evidenceDeadlines: placeHoursDeadlines(
       evidence.hours,
@@ -1252,7 +1250,6 @@ function scoreDraft(
             draft.trip.paceSource === 'user',
             draft.assumptions.some((a) => a.code === 'interest_inferred'),
           ),
-          context: destinationContext.days.find((d) => d.dayId === day.date)?.groups,
         }),
       };
     }),
@@ -1261,7 +1258,7 @@ function scoreDraft(
   });
   return {
     ...withholdNonCurrentPlanScore(score, evaluatedAt),
-    sourceInputRevision: draftPlanScoreInputRevision(draft, evaluatedAt),
+    sourceInputRevision: draftPlanScoreInputRevision(draft),
     presentation: score.presentation
       ? {
           ...score.presentation,
@@ -1277,9 +1274,7 @@ function scoreDraft(
           }),
           revisions: {
             ...score.presentation.revisions,
-            planning: draftPlanScoreInputRevision(draft, evaluatedAt, {
-              includeDestinationContext: false,
-            }),
+            planning: draftPlanScoreInputRevision(draft),
             evidence: scoringInputRevision({
               hours: [...evidence.hours],
               ratings: [...evidence.ratings],

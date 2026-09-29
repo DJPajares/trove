@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { resolveDestinationContext, destinationContextRevision } from './destination-context.js';
 import { planningPreferencesFromAi } from '@trove/types';
 import type { AiPlannerDraft } from '@trove/types';
 import { readPlanScoreInputs, type PlanScoreTripRows, type TripPlanScore } from './plan-score.js';
@@ -9,53 +8,9 @@ import { floatingLocalTimeToInstant, parseLocalTime } from './itinerary-rules.js
 import { parseDateOnly, resolveCountryPrimaryTimeZone } from './trip-rules.js';
 
 /** Binds an assessment to the final itinerary, not mutable review copy. */
-export function draftDestinationContext(draft: AiPlannerDraft, now: Date) {
-  const placeById = new Map(
-    draft.places.map((place) => [
-      place.id,
-      {
-        name: place.name,
-        coordinates: place.resolution === 'verified' ? place.location : null,
-      },
-    ]),
-  );
-  return resolveDestinationContext(
-    {
-      startDate: draft.trip.startDate,
-      endDate: draft.trip.endDate,
-      preferences: planningPreferencesFromAi(
-        draft.normalizedRequest,
-        draft.trip.paceSource === 'user',
-        draft.assumptions.some((assumption) => assumption.code === 'interest_inferred'),
-      ),
-      destinations: draft.trip.destinations.flatMap((destination) =>
-        placeById.has(destination.placeRefId) ? [placeById.get(destination.placeRefId)!] : [],
-      ),
-      days: draft.days.map((day) => ({
-        id: day.date,
-        date: day.date,
-        places: [
-          day.dailyBasePlaceRefId,
-          day.dailyBaseDeparturePlaceRefId,
-          ...day.items.map((item) => item.placeRefId),
-        ].flatMap((id) => (id && placeById.has(id) ? [placeById.get(id)!] : [])),
-      })),
-    },
-    now,
-  );
-}
-
-export function draftPlanScoreInputRevision(
-  draft: AiPlannerDraft,
-  now = new Date(),
-  options: { includeDestinationContext?: boolean } = {},
-): string {
+export function draftPlanScoreInputRevision(draft: AiPlannerDraft): string {
   const payload = {
-    version: 3,
-    destinationContext:
-      options.includeDestinationContext === false
-        ? undefined
-        : destinationContextRevision(draftDestinationContext(draft, now)),
+    version: 4,
     preferences: {
       pace: draft.trip.pace,
       paceSource: draft.trip.paceSource,

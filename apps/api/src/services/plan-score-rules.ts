@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import type {
+  PlanScoreAssessmentBasis,
+  PlanScoreLimitation,
   PlanScoreCap,
   PlanScoreDayFactorId,
   PlanScoreDayPayload,
@@ -19,7 +21,7 @@ export type {
   PlanScoreTripWithheldReason,
   PlanScoreUnknownReason,
 } from '@trove/types';
-export const PLAN_SCORE_CONTRACT_VERSION = 6;
+export const PLAN_SCORE_CONTRACT_VERSION = 7;
 export const DAY_FACTOR_IDS = [
   'FEASIBILITY',
   'ROUTE_EFFICIENCY',
@@ -69,7 +71,11 @@ export type PlanScoreDayInput = {
   availableMinutes?: number | null;
   loadRatio?: number | null;
   rest?: boolean;
-  coreEvaluated?: boolean;
+  /** Established by the shared normalized evaluator, never by category coverage. */
+  assessmentBasis?: PlanScoreAssessmentBasis[];
+  limitations?: PlanScoreLimitation[];
+  /** Known subtotal, used only to prove increased fatigue, never recovery. */
+  partialLoadRatio?: number | null;
   hardConflictIds?: string[];
   materialConflictIds?: string[];
   indispensableConnectionConflict?: boolean;
@@ -80,6 +86,7 @@ export type PlanScoreDayResult = PlanScoreDayPayload & {
   evidence: Record<PlanScoreDayFactorId, PlanScoreEvidence[]>;
   /** Internal values never sent as product payloads. */
   intrinsicScore: number | null;
+  reliability: number | null;
   incomingDebt: number;
 };
 export type PlanScoreTripInput = {
@@ -173,7 +180,12 @@ export function combineSignals(
     ],
   };
 }
-function rounded(outcome: PlanScoreFactorOutcome): PlanScoreFactorOutcome {
+function rounded(internal: PlanScoreFactorOutcome): PlanScoreFactorOutcome {
+  // Internal confidence is reliability. Apply coverage once at this published scope.
+  const outcome =
+    internal.state === 'EVALUATED'
+      ? { ...internal, confidence: (internal.confidence * internal.coverage) / 100 }
+      : internal;
   if (outcome.state === 'EVALUATED' && (outcome.coverage < 60 || outcome.confidence < 50))
     return {
       state: 'LIMITED',
@@ -202,17 +214,13 @@ function evaluateDay(day: PlanScoreDayInput, incomingDebt = 0): PlanScoreDayResu
   );
   const outcome = toOutcome(aggregate);
   const completeness = outcome.state === 'EVALUATED' ? outcome.coverage : 0;
-  const core =
-    day.coreEvaluated ??
-    ['FEASIBILITY', 'ROUTE_EFFICIENCY'].some(
-      (id) => inputs[id as PlanScoreDayFactorId]?.state === 'EVALUATED',
-    );
-  const restCore =
-    day.rest &&
-    (inputs.PACE_COMFORT?.state === 'EVALUATED' || inputs.PLAN_COMPOSITION?.state === 'EVALUATED');
+  const assessmentBasis = day.assessmentBasis ?? [];
+  const limitations = day.limitations ?? [];
   const withheldReasons: PlanScoreDayWithheldReason[] = [];
-  if (completeness < 60) withheldReasons.push('INSUFFICIENT_COMPLETENESS');
-  if (!core && !restCore) withheldReasons.push('NO_EVALUABLE_CORE_FACTOR');
+  if (!assessmentBasis.length || outcome.state !== 'EVALUATED' || completeness <= 0)
+    withheldReasons.push('NO_MEANINGFUL_EVIDENCE');
+  const reliability = outcome.state === 'EVALUATED' ? outcome.confidence : null;
+  const confidence = reliability === null ? null : (reliability * completeness) / 100;
   const hard = [...new Set(day.hardConflictIds ?? [])];
   const material = [...new Set(day.materialConflictIds ?? [])];
   const references = (ids: string[]) => [
@@ -233,12 +241,15 @@ function evaluateDay(day: PlanScoreDayInput, incomingDebt = 0): PlanScoreDayResu
   return {
     assessmentStatus: withheldReasons.length
       ? 'unavailable'
-      : completeness < 80 || (outcome.state === 'EVALUATED' && outcome.confidence < 60)
+      : completeness < 80 || (confidence ?? 0) < 60 || limitations.includes('TRAVEL_TIME_UNKNOWN')
         ? 'provisional'
         : 'available',
+    assessmentBasis,
+    limitations,
     dayId: day.dayId,
     completeness,
-    confidence: outcome.state === 'EVALUATED' ? outcome.confidence : null,
+    reliability,
+    confidence,
     factors: Object.fromEntries(
       DAY_FACTOR_IDS.map((id) => [id, toOutcome(inputs[id] ?? UNKNOWN)]),
     ) as PlanScoreDayResult['factors'],
@@ -276,13 +287,14 @@ export function scoreTrip(input: PlanScoreTripInput): PlanScoreTripResult {
   let knownFatigue = 0;
   const evaluated = ordered.map((day) => {
     const result = evaluateDay(day, debt);
-    const ratio = day.loadRatio;
+    const ratio = day.loadRatio ?? day.partialLoadRatio;
     if (ratio != null && Number.isFinite(ratio)) {
-      knownFatigue++;
-      debt = Math.max(
+      if (day.loadRatio != null) knownFatigue++;
+      const next = Math.max(
         0,
         Math.min(1, 0.5 * debt + Math.max(0, ratio - 0.9) - 0.5 * Math.max(0, 0.7 - ratio)),
       );
+      debt = day.loadRatio != null ? next : Math.max(debt, next);
     }
     return { input: day, result };
   });
@@ -314,7 +326,7 @@ export function scoreTrip(input: PlanScoreTripInput): PlanScoreTripResult {
           confidence:
             scorable.reduce(
               (n, e) =>
-                n + ((weight(e.input) * e.result.completeness) / 100) * (e.result.confidence ?? 0),
+                n + ((weight(e.input) * e.result.completeness) / 100) * (e.result.reliability ?? 0),
               0,
             ) / supportedDailyWeight,
           evidence: scorable.map((e) => ({ ref: `day:${e.input.dayId}`, source: 'USER_OWNED' })),
@@ -344,7 +356,7 @@ export function scoreTrip(input: PlanScoreTripInput): PlanScoreTripResult {
     : 0;
   const conflicts = evaluated.filter((e) => (e.input.hardConflictIds?.length ?? 0) > 0);
   const assessed = evaluated.filter(
-    (e) => e.result.confidence !== null || (e.input.hardConflictIds?.length ?? 0) > 0,
+    (e) => e.result.intrinsicScore !== null || (e.input.hardConflictIds?.length ?? 0) > 0,
   );
   const indispensable = conflicts.some((e) => e.input.indispensableConnectionConflict);
   const severe =
@@ -360,18 +372,23 @@ export function scoreTrip(input: PlanScoreTripInput): PlanScoreTripResult {
     : [];
   const withheldReasons: PlanScoreTripWithheldReason[] = [];
   if (!scorable.length) withheldReasons.push('NO_SCORABLE_DAY');
-  else if ((100 * scorable.length) / ordered.length < 60 && (!allAvailability || completeness < 60))
-    withheldReasons.push('INSUFFICIENT_COMPLETENESS');
   const confidence =
     outcome.state === 'EVALUATED'
-      ? outcome.confidence * (ordered.length ? 0.75 + (0.25 * knownFatigue) / ordered.length : 1)
+      ? ((outcome.confidence * outcome.coverage) / 100) *
+        (ordered.length ? 0.75 + (0.25 * knownFatigue) / ordered.length : 1)
       : null;
+  const assessmentBasis = [...new Set(scorable.flatMap((e) => e.result.assessmentBasis))];
+  const limitations = [...new Set(evaluated.flatMap((e) => e.result.limitations))];
+  if (scorable.length < ordered.length) limitations.push('UNASSESSED_DAYS');
   return {
+    assessmentBasis,
+    limitations,
     assessmentStatus: withheldReasons.length
       ? 'unavailable'
       : (outcome.state === 'EVALUATED' && outcome.coverage < 80) ||
           (confidence ?? 0) < 60 ||
-          scorable.length < ordered.length
+          scorable.length < ordered.length ||
+          limitations.includes('TRAVEL_TIME_UNKNOWN')
         ? 'provisional'
         : 'available',
     assessedDayCount: scorable.length,
@@ -403,6 +420,7 @@ export function toPlanScoreDayPayload(result: PlanScoreDayResult): PlanScoreDayP
   const {
     evidence: _evidence,
     intrinsicScore: _intrinsic,
+    reliability: _reliability,
     incomingDebt: _debt,
     ...payload
   } = result;

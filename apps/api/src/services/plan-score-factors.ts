@@ -328,11 +328,16 @@ export function evaluateFeasibility(
     const inboundRequired = item.inboundRequired ?? index > 0;
     const previous = input.items[index - 1];
     if (inboundRequired) {
+      applicable++; // Transition feasibility is independent of the block itself.
       if (item.inboundTravel && earliest !== null) {
         use(`travel:${item.id}`, item.inboundTravel.source);
+        evaluated++;
         earliest += item.inboundTravel.minutes;
         chainTrusted = chainTrusted && trusted(item.inboundTravel.source);
-      } else earliest = null;
+      } else {
+        earliest = null;
+        chainTrusted = false;
+      }
     }
     const minimum =
       item.startWindow?.earliestMinute ??
@@ -341,9 +346,10 @@ export function evaluateFeasibility(
       0;
     let start: number | null =
       earliest === null
-        ? item.fixed
-          ? (item.start?.minutes ?? null)
-          : null
+        ? (item.start?.minutes ??
+          item.startWindow?.earliestMinute ??
+          input.availability?.startMinute ??
+          null)
         : Math.max(earliest, minimum);
     const deadline = item.fixed ? item.start?.minutes : item.startWindow?.latestMinute;
     const timingTrusted: boolean =
@@ -410,6 +416,8 @@ export function evaluateFeasibility(
         [item.id],
         timingTrusted && (item.duration === null || trusted(item.duration.source)),
       );
+    const intrinsicTiming =
+      item.start !== null || item.startWindow !== null || input.availability != null;
     if (
       (!item.blockType || item.blockType === 'activity') &&
       (item.openingHours.status === 'KNOWN' || item.placeId)
@@ -417,7 +425,9 @@ export function evaluateFeasibility(
       applicable++;
       if (item.openingHours.status === 'KNOWN') {
         use(`hours:${item.id}`, item.openingHours.source);
-        const point = start ?? item.start?.minutes ?? item.startWindow?.earliestMinute;
+        const point = intrinsicTiming
+          ? (start ?? item.start?.minutes ?? item.startWindow?.earliestMinute)
+          : null;
         const closed = item.openingHours.intervals.length === 0;
         if (closed || point != null) {
           evaluated++;
@@ -454,8 +464,7 @@ export function evaluateFeasibility(
         }
       }
     }
-    if (start !== null && duration !== null && (!inboundRequired || item.inboundTravel !== null))
-      evaluated++;
+    if (start !== null && duration !== null && intrinsicTiming) evaluated++;
     if (
       input.availability &&
       start !== null &&
@@ -467,7 +476,14 @@ export function evaluateFeasibility(
         'OUTSIDE_AVAILABILITY',
         'MATERIAL',
         [item.id],
-        timingTrusted && trusted(item.duration!.source),
+        trusted(item.duration!.source) &&
+          (timingTrusted ||
+            (isAnchored(item) && trusted(item.start!.source)) ||
+            (item.startWindow !== null &&
+              trusted(item.startWindow.source) &&
+              Math.max(input.availability.startMinute, item.startWindow.earliestMinute) + duration >
+                input.availability.endMinute) ||
+            duration > input.availability.endMinute - input.availability.startMinute),
       );
     }
     if (duration === null || start === null) {

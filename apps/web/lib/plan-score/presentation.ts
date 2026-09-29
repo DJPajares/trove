@@ -18,7 +18,7 @@ export function currentAssessment(
   score: TripPlanScore | null | undefined,
   now = Date.now(),
 ): boolean {
-  if (!score || score.schemaVersion !== 6 || score.rubricVersion !== 6) return false;
+  if (!score || score.schemaVersion !== 7 || score.rubricVersion !== 7) return false;
   if (score.evidenceAsOf === null) return false;
   const generated = Date.parse(score.generatedAt);
   const evidence = score.evidenceAsOf ? Date.parse(score.evidenceAsOf) : null;
@@ -197,4 +197,21 @@ const SCORING_EDIT_KINDS = new Set([
 ]);
 export function hasUnsyncedScoringEdits(operations: readonly { kind: string }[]) {
   return operations.some((operation) => SCORING_EDIT_KINDS.has(operation.kind));
+}
+
+/** One short basis statement, without raw diagnostics or speculative quality claims. */
+export function assessmentBasisKey(
+  assessment: Pick<TripPlanScore, 'assessmentBasis' | 'limitations'>,
+) {
+  if (assessment.limitations.includes('TRAVEL_TIME_UNKNOWN'))
+    return assessment.assessmentBasis.some(
+      (basis) => basis === 'TIMING' || basis === 'ACTIVITY_LOAD',
+    )
+      ? 'basis.travelUnknown'
+      : 'basis.verifiedProblemTravelUnknown';
+  if (assessment.assessmentBasis.includes('REST') && assessment.assessmentBasis.length === 1)
+    return 'basis.rest';
+  if (assessment.assessmentBasis.includes('TIMING')) return 'basis.timing';
+  if (assessment.assessmentBasis.includes('ACTIVITY_LOAD')) return 'basis.activityLoad';
+  return 'basis.verifiedProblem';
 }

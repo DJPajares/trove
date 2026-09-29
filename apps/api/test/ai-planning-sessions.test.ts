@@ -1350,7 +1350,7 @@ test('reopening null and legacy draft assessments recomputes locally without a g
     weatherForecastSnapshot: { findUnique: vi.fn(async () => null) },
   });
   try {
-    for (const previous of [null, { ...emptyPlanScore(), schemaVersion: 5, rubricVersion: 5 }]) {
+    for (const previous of [null, { ...emptyPlanScore(), schemaVersion: 6, rubricVersion: 6 }]) {
       const store = createPlanningStore();
       const draft = explicitDraft();
       const session = makeSession('00000000-0000-4000-8000-000000000170', {
@@ -1369,7 +1369,7 @@ test('reopening null and legacy draft assessments recomputes locally without a g
         prisma: store.prisma as never,
         now: () => NOW,
       });
-      expect(a.planScore?.schemaVersion).toBe(6);
+      expect(a.planScore?.schemaVersion).toBe(7);
       expect(b.planScore?.fingerprint).toBe(a.planScore?.fingerprint);
       expect(store.runs.size).toBe(0);
       expect(session.draft).toBe(draft);

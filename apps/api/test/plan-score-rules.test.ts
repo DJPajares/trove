@@ -23,6 +23,7 @@ const day = (id = 'day', score = 100): PlanScoreDayInput => ({
   dayId: id,
   factors: Object.fromEntries(DAY_FACTOR_IDS.map((f) => [f, evaluated(score)])),
   loadRatio: 0.8,
+  assessmentBasis: ['TIMING'],
 });
 test('five category weights implement the approved weighted mean', () => {
   const input = day();
@@ -52,7 +53,7 @@ test('partial evidence cannot make an entire category look covered', () => {
   expect(scoreDay(input).completeness).toBe(69);
   input.factors.ROUTE_EFFICIENCY = UNKNOWN;
   input.factors.PACE_COMFORT = UNKNOWN;
-  expect(scoreDay(input).score).toBeNull();
+  expect(scoreDay(input)).toMatchObject({ score: 100, assessmentStatus: 'provisional' });
 });
 test('inapplicable weights disappear from both quality and coverage', () => {
   expect(
@@ -63,24 +64,22 @@ test('inapplicable weights disappear from both quality and coverage', () => {
   ).toMatchObject({ score: 80, coverage: 100 });
   expect(combineSignals([{ weight: 1, result: NOT_APPLICABLE }])).toEqual(NOT_APPLICABLE);
 });
-test('daily gate requires unrounded 60 percent coverage and a core signal', () => {
+test('publication uses meaningful evidence instead of a coverage or core gate', () => {
   const input = day();
-  input.factors = {
-    FEASIBILITY: evaluated(100),
-    PACE_COMFORT: evaluated(100),
-    PLAN_COMPOSITION: evaluated(100, 49),
-  };
-  expect(scoreDay(input).score).toBeNull();
-  input.factors.PLAN_COMPOSITION = evaluated(100, 50);
-  expect(scoreDay(input).score).toBe(100);
-  input.coreEvaluated = false;
-  expect(scoreDay(input).withheldReasons).toContain('NO_EVALUABLE_CORE_FACTOR');
+  input.factors = { PACE_COMFORT: evaluated(100, 10) };
+  expect(scoreDay(input)).toMatchObject({
+    score: 100,
+    assessmentStatus: 'provisional',
+    confidence: 2,
+  });
+  input.assessmentBasis = [];
+  expect(scoreDay(input).withheldReasons).toEqual(['NO_MEANINGFUL_EVIDENCE']);
 });
-test('an explicit rest day can use comfort/composition without a logistics core', () => {
+test('explicit rest needs supported intent and availability; a blank day remains unspecified', () => {
   const input: PlanScoreDayInput = {
     dayId: 'rest',
     rest: true,
-    coreEvaluated: false,
+    assessmentBasis: ['REST'],
     factors: {
       FEASIBILITY: NOT_APPLICABLE,
       ROUTE_EFFICIENCY: NOT_APPLICABLE,
@@ -90,7 +89,7 @@ test('an explicit rest day can use comfort/composition without a logistics core'
     },
   };
   expect(scoreDay(input).score).toBe(100);
-  expect(scoreDay({ ...input, rest: false }).score).toBeNull();
+  expect(scoreDay({ ...input, assessmentBasis: [] }).score).toBeNull();
 });
 test.each([
   [['a'], [], 59],
@@ -104,6 +103,7 @@ test.each([
 test('caps remain visible without enough evidence for a number', () => {
   const result = scoreDay({
     ...day(),
+    assessmentBasis: [],
     factors: { FEASIBILITY: evaluated(50, 10) },
     hardConflictIds: ['conflict'],
   });
@@ -114,9 +114,14 @@ test('duplicate evidence does not improve confidence', () => {
   const evidence = [{ ref: 'one', source: 'ESTIMATED' as const }];
   expect(evidenceConfidence([...evidence, ...evidence])).toBe(50);
 });
-test('trip numbers require at least 60 percent of days and cannot live on Must Go alone', () => {
+test('one qualifying day can support a partial trip, but Must Go alone cannot', () => {
   const unknown: PlanScoreDayInput = { dayId: 'unknown', factors: {} };
-  expect(scoreTrip({ days: [day(), unknown, unknown] }).score).toBeNull();
+  expect(scoreTrip({ days: [day(), unknown, unknown] })).toMatchObject({
+    score: 100,
+    assessedDayCount: 1,
+    applicableDayCount: 3,
+    assessmentStatus: 'provisional',
+  });
   expect(scoreTrip({ days: [day('a'), day('b'), day('c'), unknown, unknown] }).score).toBe(100);
   expect(
     scoreTrip({ days: [unknown], components: { DESTINATION_UTILIZATION: evaluated() } })
@@ -255,7 +260,7 @@ test('three of five days pass even when unscorable days have most available time
   expect(result.completeness).toBe(13);
 });
 
-test('the fully known time gate can pass fewer days without selectively dropping unknown availability', () => {
+test('partial trip eligibility stays separate from availability weighting', () => {
   const days = [
     day('a', 80),
     day('b', 80),
@@ -265,7 +270,7 @@ test('the fully known time gate can pass fewer days without selectively dropping
   ].map((d, i) => ({ ...d, availableMinutes: i < 2 ? 600 : 60 }));
   expect(scoreTrip({ days }).score).toBe(80);
   days[4]!.availableMinutes = null as never;
-  expect(scoreTrip({ days }).score).toBeNull();
+  expect(scoreTrip({ days }).score).toBe(80);
 });
 
 test('weak optional trip components cannot overwhelm better-supported daily quality', () => {
@@ -278,4 +283,32 @@ test('weak optional trip components cannot overwhelm better-supported daily qual
   });
   expect(result.score).toBe(Math.round((65 * 60 + 1.5 * 100 + 1 * 100) / 67.5));
   expect(result.components.DESTINATION_UTILIZATION.state).toBe('LIMITED');
+});
+
+test('reported confidence applies coverage once at each scope without aggregating already discounted confidence', () => {
+  const input = { ...day(), factors: { FEASIBILITY: evaluated(100, 50) } };
+  expect(scoreDay(input).confidence).toBe(18); // 100 reliability × 17.5% daily coverage.
+  const trip = scoreTrip({
+    days: [input],
+    components: {
+      DESTINATION_UTILIZATION: NOT_APPLICABLE,
+      VARIETY_COVERAGE: NOT_APPLICABLE,
+      SEASONAL_FIT: NOT_APPLICABLE,
+    },
+  });
+  expect(trip.confidence).toBe(18);
+  expect(trip.evidenceCoverage).toBe(18);
+  expect(toPlanScoreTripPayload(trip).days[0]).not.toHaveProperty('reliability');
+});
+
+test('non-meaningful venue evidence cannot dilute the verified conflict-day proportion', () => {
+  const sparse = { dayId: 'conflict', factors: {}, hardConflictIds: ['verified'] };
+  const unspecified = Array.from({ length: 5 }, (_, i) => ({
+    dayId: `unspecified-${i}`,
+    factors: { EXPERIENCE_QUALITY: evaluated() },
+  }));
+  const result = scoreTrip({ days: [day('meaningful'), sparse, ...unspecified] });
+  expect(result.assessedDayCount).toBe(1);
+  expect(result.applicableDayCount).toBe(7);
+  expect(result.caps[0]?.limit).toBe(69);
 });

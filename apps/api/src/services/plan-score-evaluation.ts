@@ -4,6 +4,8 @@ import {
   readDayPlanningContext,
   type DestinationContextGroup,
   type PlanScoreExplanation,
+  type PlanScoreAssessmentBasis,
+  type PlanScoreLimitation,
 } from '@trove/types';
 import {
   evaluateFeasibility,
@@ -243,8 +245,28 @@ export function evaluateScoredDay(input: ScoredDayInput) {
       : item;
   });
   const feasibility = evaluateFeasibility({ items, commitments: input.commitments, availability });
+  const requiredInbound = input.items.filter((item, index) => item.inboundRequired ?? index > 0);
+  const unresolvedTransport = input.items.some(
+    (item) =>
+      item.blockType === 'transport' && !input.commitments.some((c) => c.itemId === item.id),
+  );
+  const requiredTravelUnknown =
+    requiredInbound.some((item) => item.inboundTravel === null) ||
+    input.segments.some(
+      (s) =>
+        s.status === 'UNKNOWN' &&
+        (s.scope === 'LOCAL' ||
+          !input.commitments.some(
+            (c) =>
+              c.longDistance && c.endKnown !== false && c.itemId && s.itemIds?.includes(c.itemId),
+          )),
+    ) ||
+    unresolvedTransport ||
+    input.commitments.some((c) => c.longDistance && c.endKnown === false);
   const travel =
-    noVisits && !input.segments.some((s) => s.scope === 'LOCAL')
+    !input.segments.some((s) => s.scope === 'LOCAL') &&
+    !requiredInbound.length &&
+    !unresolvedTransport
       ? { factor: NOT_APPLICABLE, totalMinutes: null }
       : evaluateTravelEffort(input.segments);
   const routeComparison = input.routeComparison
@@ -270,67 +292,82 @@ export function evaluateScoredDay(input: ScoredDayInput) {
     { ref: 'pace', source: pace.source === 'user' ? 'USER_OWNED' : 'ESTIMATED' },
   ];
   let load = 0;
-  const journeyCovered = input.segments
-    .filter((s) => s.scope === 'LONG_DISTANCE')
-    .every((s) =>
-      input.commitments.some(
-        (c) => c.longDistance && c.endKnown !== false && c.itemId && s.itemIds?.includes(c.itemId),
-      ),
-    );
-  let complete =
-    journeyCovered &&
-    !input.items.some(
-      (item, index) => (item.inboundRequired ?? index > 0) && item.inboundTravel === null,
-    );
+  let observations = 0;
+  let knownObservations = 0;
+  const commitments = [...new Map(input.commitments.map((c) => [c.id, c])).values()];
   const represented = new Set(
-    input.commitments.flatMap((c) => (c.longDistance && c.itemId ? [c.itemId] : [])),
+    commitments.flatMap((c) => (c.longDistance && c.itemId ? [c.itemId] : [])),
   );
   for (const item of input.items) {
     if (represented.has(item.id)) continue;
-    if (!item.duration) {
-      complete = false;
-      continue;
-    }
+    observations++;
+    if (!item.duration) continue;
+    knownObservations++;
     load +=
       item.duration.minutes * (item.blockType === 'free_time' ? 0 : item.longDistance ? 0.5 : 1);
-    // Unknown activity intensity is a neutral estimate, never an exhaustion claim.
     evidence.push(
       { ref: `duration:${item.id}`, source: item.duration.source },
       { ref: `intensity:${item.id}`, source: 'ESTIMATED' },
     );
   }
-  for (const c of input.commitments) {
+  for (const c of commitments) {
     if (!c.longDistance && c.itemId && input.items.some((i) => i.id === c.itemId)) continue;
-    if (!c.longDistance && c.endMinute === c.startMinute) complete = false;
-    if (c.endKnown === false) {
-      complete = false;
+    observations++;
+    if (
+      c.endKnown === false ||
+      c.startKnown === false ||
+      (!c.longDistance && c.endMinute === c.startMinute)
+    )
       continue;
-    }
+    knownObservations++;
     load += (c.endMinute - c.startMinute) * (c.longDistance ? 0.5 : 1);
     evidence.push({ ref: `commitment:${c.id}`, source: c.source });
   }
   for (const leg of input.segments) {
-    if (leg.scope === 'LONG_DISTANCE') continue; // Structured journey duration is counted above.
-    if (leg.status !== 'KNOWN') {
-      complete = false;
+    if (leg.scope === 'LONG_DISTANCE') {
+      // A represented journey has one duration observation, even when linked to an item.
+      if (!commitments.some((c) => c.longDistance && c.itemId && leg.itemIds?.includes(c.itemId)))
+        observations++;
       continue;
     }
+    observations++;
+    if (leg.status !== 'KNOWN') continue;
+    knownObservations++;
     const multiplier = leg.mode === 'walk' ? 1.25 : leg.mode === 'transit' ? 0.75 : 1;
     load += leg.duration.minutes * multiplier;
     evidence.push({ ref: `segment:${leg.id}`, source: leg.duration.source });
   }
-  if (!input.items.length && !input.commitments.length && !rest && !input.segments.length)
-    complete = false;
-  if (rest && !input.items.length && availableMinutes === null) complete = false;
+  // Missing topology must remain in the denominator even if no route snapshot exists.
+  const absentInbound = requiredInbound.filter(
+    (item) =>
+      item.inboundTravel === null &&
+      !input.segments.some(
+        (s) =>
+          s.scope === 'LOCAL' &&
+          (s.itemIds?.at(-1) === item.id || (!s.itemIds && s.status === 'UNKNOWN')),
+      ),
+  );
+  observations += absentInbound.length;
+  const restful =
+    rest &&
+    input.items.length === 0 &&
+    commitments.length === 0 &&
+    availableMinutes !== null &&
+    availableMinutes > 0;
+  if (restful) {
+    observations++;
+    knownObservations++;
+  }
+  const complete = observations > 0 && knownObservations === observations && !requiredTravelUnknown;
   if (availability) evidence.push({ ref: 'availability', source: 'USER_OWNED' });
   const ratio = target > 0 ? load / target : null;
   const provedOverload = ratio !== null && ratio > 1;
   const comfort: PlanScoreFactorResult =
-    complete || provedOverload
+    knownObservations > 0 && ratio !== null
       ? {
           state: 'EVALUATED',
-          score: loadScore(ratio ?? 0),
-          coverage: complete ? 100 : 50,
+          score: loadScore(ratio),
+          coverage: (100 * knownObservations) / observations,
           evidence,
         }
       : UNKNOWN;
@@ -428,18 +465,32 @@ export function evaluateScoredDay(input: ScoredDayInput) {
         { weight: 15, result: evaluatePlaceQuality(knownPlaces) },
       ]);
   const intentEvidence: PlanScoreEvidence[] = [{ ref: 'intent', source: 'USER_OWNED' }];
-  const restful =
-    rest && input.items.length === 0 && input.commitments.length === 0 && availableMinutes !== null;
   const focused = context.intent === 'focused';
+  // Temporal order is one coherence criterion. It does not prove geographic flow.
+  const timedItems = input.items.filter((item) => item.start && item.duration);
+  const temporalFlow =
+    timedItems.length === input.items.length &&
+    timedItems.length > 0 &&
+    timedItems.every(
+      (item, index) =>
+        index === 0 ||
+        timedItems[index - 1]!.start!.minutes + timedItems[index - 1]!.duration!.minutes <=
+          item.start!.minutes,
+    );
   const coherence: PlanScoreFactorResult = restful
     ? { state: 'EVALUATED', score: 100, evidence: intentEvidence }
     : focused && fit.state === 'EVALUATED'
       ? fit
-      : feasibility.factor.state === 'EVALUATED' &&
-          feasibility.factor.coverage === 100 &&
-          !feasibility.conflicts.length &&
-          travel.factor.state === 'EVALUATED'
-        ? { ...feasibility.factor, coverage: 100 / 3 }
+      : temporalFlow && !feasibility.conflicts.length
+        ? {
+            state: 'EVALUATED',
+            score: 100,
+            coverage: 100 / 3,
+            evidence: timedItems.flatMap((item) => [
+              { ref: `start:${item.id}`, source: item.start!.source },
+              { ref: `duration:${item.id}`, source: item.duration!.source },
+            ]),
+          }
         : UNKNOWN;
   const themes = [...new Set(knownPlaces.flatMap((p) => interestsForPlaceTypes(p.types ?? [])))];
   const variety: PlanScoreFactorResult =
@@ -549,15 +600,45 @@ export function evaluateScoredDay(input: ScoredDayInput) {
   }
   const hard = feasibility.conflicts.filter((c) => c.severity === 'HARD' && c.verified);
   const material = feasibility.conflicts.filter((c) => c.severity === 'MATERIAL' && c.verified);
+  const assessmentBasis: PlanScoreAssessmentBasis[] = [];
+  if (
+    input.items.some(
+      (item) => item.duration && item.duration.minutes > 0 && (item.start || item.startWindow),
+    ) ||
+    commitments.some(
+      (c) => c.startKnown !== false && c.endKnown !== false && c.endMinute > c.startMinute,
+    )
+  )
+    assessmentBasis.push('TIMING');
+  if (
+    input.items.length > 0 &&
+    input.items.every((item) => item.duration !== null) &&
+    input.items.some((item) => (item.duration?.minutes ?? 0) > 0)
+  )
+    assessmentBasis.push('ACTIVITY_LOAD');
+  if (feasibility.conflicts.some((c) => c.verified) || provedOverload)
+    assessmentBasis.push('VERIFIED_PROBLEM');
+  if (rest && availability && (restful || complete)) assessmentBasis.push('REST');
+  const limitations: PlanScoreLimitation[] = [];
+  if (requiredTravelUnknown) limitations.push('TRAVEL_TIME_UNKNOWN');
+  if (!complete) limitations.push('LOAD_INCOMPLETE');
+  if (!assessmentBasis.includes('TIMING') && !restful) limitations.push('TIMING_UNKNOWN');
+  if (
+    quality.state === 'UNKNOWN' ||
+    (quality.state === 'EVALUATED' && (quality.coverage ?? 100) < 100)
+  )
+    limitations.push('VENUE_EVIDENCE_INCOMPLETE');
   const dayInput: PlanScoreDayInput = {
     dayId: input.dayId,
     date: input.date,
     availableMinutes,
     loadRatio: complete ? ratio : null,
+    partialLoadRatio: !complete && knownObservations > 0 ? ratio : null,
+    assessmentBasis,
+    limitations,
     rest,
     normalizedRevision: scoringInputRevision(input),
     conflictReferences: Object.fromEntries(feasibility.conflicts.map((c) => [c.id, c.subjectIds])),
-    coreEvaluated: feasibility.factor.state === 'EVALUATED' || travel.factor.state === 'EVALUATED',
     hardConflictIds: hard.map((c) => c.id),
     materialConflictIds: material.map((c) => c.id),
     indispensableConnectionConflict: hard.some((c) =>
@@ -577,25 +658,27 @@ export function evaluateScoredDay(input: ScoredDayInput) {
     (item) =>
       item.blockType === 'transport' && !input.commitments.some((c) => c.itemId === item.id),
   );
+  const timedAccessLegs = input.segments.filter(
+    (segment) =>
+      segment.scope === 'LOCAL' &&
+      segment.status === 'UNKNOWN' &&
+      input.commitments.some(
+        (c) => c.itemId && c.startKnown !== false && segment.itemIds?.at(-1) === c.itemId,
+      ),
+  );
   const missingLocations = input.items.filter(
     (item) =>
-      (!item.blockType || item.blockType === 'activity') &&
       !input.places.find((place) => place.tripPlaceId === item.placeId)?.coordinates &&
-      input.segments.some(
-        (segment) =>
-          segment.scope === 'LOCAL' &&
-          segment.status === 'UNKNOWN' &&
-          segment.itemIds?.includes(item.id),
-      ),
+      timedAccessLegs.some((segment) => segment.itemIds?.includes(item.id)),
   );
   const missingInformation: PlanScoreExplanation[] = [
     ...(missingLocations.length
       ? [
           {
             action: 'LINK_PLACE' as const,
-            code: 'UNLOCATED_STOPS',
+            code: 'TIMED_ACCESS_LOCATION',
             factor: 'ROUTE_EFFICIENCY' as const,
-            messageKey: 'missing.locations',
+            messageKey: 'missing.timedAccess',
             severity: 'INFO' as const,
             references: missingLocations.map((item) => item.id),
             values: { count: missingLocations.length },

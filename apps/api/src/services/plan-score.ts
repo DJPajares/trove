@@ -305,12 +305,26 @@ const presentationSchema = z
       .strict(),
   })
   .strict();
+const assessmentBasisSchema = z.array(
+  z.enum(['TIMING', 'ACTIVITY_LOAD', 'VERIFIED_PROBLEM', 'REST']),
+);
+const limitationsSchema = z.array(
+  z.enum([
+    'TRAVEL_TIME_UNKNOWN',
+    'LOAD_INCOMPLETE',
+    'TIMING_UNKNOWN',
+    'VENUE_EVIDENCE_INCOMPLETE',
+    'UNASSESSED_DAYS',
+  ]),
+);
 const tripPlanScoreSchema = z
   .object({
     days: z.array(
       z
         .object({
           assessmentStatus: z.enum(['available', 'provisional', 'unavailable']),
+          assessmentBasis: assessmentBasisSchema,
+          limitations: limitationsSchema,
           completeness: z.number(),
           confidence: z.number().nullable(),
           date: z.string(),
@@ -325,9 +339,11 @@ const tripPlanScoreSchema = z
         })
         .strict(),
     ),
-    schemaVersion: z.literal(6),
-    rubricVersion: z.literal(6),
+    schemaVersion: z.literal(7),
+    rubricVersion: z.literal(7),
     assessmentStatus: z.enum(['available', 'provisional', 'unavailable']),
+    assessmentBasis: assessmentBasisSchema,
+    limitations: limitationsSchema,
     assessedDayCount: z.number().int().nonnegative(),
     applicableDayCount: z.number().int().nonnegative(),
     evidenceCoverage: z.number().min(0).max(100),
@@ -446,6 +462,8 @@ export function buildPlanScoreFromEvaluations(input: {
     schemaVersion: PLAN_SCORE_CONTRACT_VERSION,
     rubricVersion: PLAN_SCORE_CONTRACT_VERSION,
     assessmentStatus: result.assessmentStatus,
+    assessmentBasis: result.assessmentBasis,
+    limitations: result.limitations,
     assessedDayCount: result.assessedDayCount,
     applicableDayCount: result.applicableDayCount,
     evidenceCoverage: result.evidenceCoverage,

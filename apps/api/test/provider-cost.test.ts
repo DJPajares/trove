@@ -1194,7 +1194,7 @@ test('an inflated Apply timestamp cannot renew an expired generated assessment',
   expect(result?.score).not.toBe(72);
 });
 
-test('an expired assessment is withheld when fresh providers are unavailable', async () => {
+test('expired provider evidence still permits a cache-only partial timing assessment', async () => {
   const now = new Date('2026-09-01T09:00:00Z');
   const trip = buildPlanScoreTripFixture();
   const { buildPlanScoreFromEvaluations } = await import('../src/services/plan-score.js');
@@ -1217,8 +1217,8 @@ test('an expired assessment is withheld when fresh providers are unavailable', a
     { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
     () => getTripPlanScore('user-1', 'trip-1', { now: () => now }),
   );
-  expect(result?.score).toBeNull();
-  expect(result?.days.every((day) => day.score === null)).toBe(true);
+  expect(result).toMatchObject({ score: 100, assessmentStatus: 'provisional' });
+  expect(result?.days.every((day) => day.score !== null)).toBe(true);
 });
 
 /**

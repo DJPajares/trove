@@ -2343,9 +2343,17 @@
     "title": "Plan Score",
     "dayTitle": "Plan Score for this day",
     "outOf": "out of 100",
+    "basis": {
+      "travelUnknown": "Based on planned activity time; required travel time hasn't been fully assessed.",
+      "verifiedProblemTravelUnknown": "Based on timing problems that can be checked; required travel time remains unassessed.",
+      "activityLoad": "Based on planned activity time; the schedule hasn't been assessed.",
+      "timing": "Based on the supported schedule and activity time; some parts of the plan remain unassessed.",
+      "rest": "Based on planned rest time and known commitments.",
+      "verifiedProblem": "Based on the timing or activity load that can be checked."
+    },
     "notEnoughInformation": {
-      "day": "Add timing and locations to assess this day.",
-      "trip": "Add timing and locations to assess more days."
+      "day": "Add a time or duration to assess this day.",
+      "trip": "Add a time or duration to at least one day to assess this trip."
     },
     "verdict": {
       "day": {
@@ -2540,6 +2548,7 @@
     "assessedDays": "{count} of {total} days assessed",
     "moreProblems": "{count, plural, one {Show # more issue} other {Show # more issues}}",
     "missing": {
+      "timedAccess": "Add a location to check access to a timed booking or departure.",
       "locations": "Link {count, plural, one {one stop} other {# stops}} to check travel time for Day {day}.",
       "transfer": "Add transfer locations and arrival details for Day {day}.",
       "arrival": "Add the arrival time to check connections for Day {day}."

@@ -142,16 +142,16 @@ const plannedTrip: PlanScoreTripRecord = {
 test('stored timing and complete local routes retain partial coverage honestly', () => {
   const result = buildTripPlanScore(plannedTrip),
     day = result.days[0]!;
-  expect(day.score).toBeNull();
+  expect(day.score).toBe(100);
   expect(day.completeness).toBeLessThan(60);
   expect(day.factors.ROUTE_EFFICIENCY).toMatchObject({
     state: 'EVALUATED',
     score: 100,
     coverage: 60,
-    confidence: 100,
+    confidence: 60,
   });
   expect(day.date).toBe('2026-09-01');
-  expect(result.score).toBeNull();
+  expect(result.score).toBe(92);
 });
 test('burden is known while unevidenced alternative orders reduce route coverage', () => {
   const day = buildTripPlanScore(plannedTrip).days[0]!;
@@ -246,10 +246,7 @@ test('withholds a day score when the day has no usable evidence', () => {
 
   expect(result.days[0]?.score).toBe(null);
   expect(result.days[0]?.completeness).toBe(0);
-  expect(result.days[0]?.withheldReasons).toStrictEqual([
-    'INSUFFICIENT_COMPLETENESS',
-    'NO_EVALUABLE_CORE_FACTOR',
-  ]);
+  expect(result.days[0]?.withheldReasons).toStrictEqual(['NO_MEANINGFUL_EVIDENCE']);
   expect(result.score).toBe(null);
   expect(result.withheldReasons).toStrictEqual(['NO_SCORABLE_DAY']);
 });
@@ -392,6 +389,7 @@ test('keeps the internal weighting out of the payload', () => {
   const day = buildTripPlanScore(plannedTrip).days[0];
 
   expect(Object.keys(day ?? {}).toSorted()).toStrictEqual([
+    'assessmentBasis',
     'assessmentStatus',
     'caps',
     'completeness',
@@ -400,6 +398,7 @@ test('keeps the internal weighting out of the payload', () => {
     'dayId',
     'explanations',
     'factors',
+    'limitations',
     'score',
     'withheldReasons',
   ]);
@@ -423,7 +422,7 @@ test('a flight leg leaves travel effort evaluable where a failed route does not'
     state: 'UNKNOWN',
   });
   expect(flight?.factors.ROUTE_EFFICIENCY).toStrictEqual({
-    confidence: 100,
+    confidence: 60,
     coverage: 60,
     score: 100,
     state: 'EVALUATED',
@@ -472,7 +471,7 @@ test('a coarse daypart is scored rather than ignored', () => {
   }).days[0];
 
   expect(vague?.factors.PACE_COMFORT.state).toBe('EVALUATED');
-  expect(vague?.score).toBeNull();
+  expect(vague?.score).toBe(100);
   expect(vague?.completeness).toBeLessThan(60);
 });
 
@@ -590,8 +589,8 @@ test('a real score survives being stored and read back', () => {
 
 test('presentation metadata is additive and validates without changing the version-5 measurement', () => {
   const score = buildTripPlanScore(plannedTrip);
-  expect(score.schemaVersion).toBe(6);
-  expect(score.rubricVersion).toBe(6);
+  expect(score.schemaVersion).toBe(7);
+  expect(score.rubricVersion).toBe(7);
   expect(score.presentation?.adjustments).toEqual({ fatigue: 0, weakDays: 0 });
   expect(parseStoredPlanScore(score)).toEqual(score);
   const { presentation: _presentation, ...legacyCompatible } = score;

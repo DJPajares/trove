@@ -384,10 +384,10 @@ test('re-enabling evaluates the same existing trip and rejects legacy payloads w
   expect(await getTripPlanScore('owner', 'trip', { now: () => NOW })).toBeNull();
   vi.stubEnv('TROVE_PLAN_SCORE_DISABLED', 'false');
   const first = await getTripPlanScore('owner', 'trip', { now: () => NOW });
-  expect(first?.schemaVersion).toBe(6);
-  trip.planScore = { ...first, schemaVersion: 5, rubricVersion: 5 };
+  expect(first?.schemaVersion).toBe(7);
+  trip.planScore = { ...first, schemaVersion: 6, rubricVersion: 6 };
   const second = await getTripPlanScore('owner', 'trip', { now: () => NOW });
-  expect(second?.schemaVersion).toBe(6);
+  expect(second?.schemaVersion).toBe(7);
   expect(update).toHaveBeenCalledTimes(2);
   expect(outbound).not.toHaveBeenCalled();
 });

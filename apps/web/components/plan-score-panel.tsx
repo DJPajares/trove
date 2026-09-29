@@ -16,6 +16,7 @@ import type {
 import type { PlanScoreLoadStatus } from '@/lib/plan-score/use-trip-plan-score';
 import {
   assessmentDeadline,
+  assessmentBasisKey,
   currentAssessment,
   DAILY_CATEGORIES,
   travelerInsights,
@@ -171,7 +172,8 @@ export function PlanScorePanel({
   const displayScore = unavailable ? null : score;
   const reasonStatus = status === 'idle' && unavailable ? 'expired' : status;
   const day = assessment?.days.find((entry) => entry.dayId === dayId);
-  const assessmentStatus = scope === 'day' ? day?.assessmentStatus : assessment?.assessmentStatus;
+  const scopedAssessment = scope === 'day' ? day : assessment;
+  const assessmentStatus = scopedAssessment?.assessmentStatus;
   const insights = unavailable ? [] : travelerInsights(explanations);
   const initial = insights.slice(0, 3);
   const additional = insights
@@ -226,6 +228,11 @@ export function PlanScorePanel({
               : t(`notEnoughInformation.${scope}`)}
         </p>
       )}
+      {displayScore !== null && assessmentStatus === 'provisional' && scopedAssessment ? (
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          {t(assessmentBasisKey(scopedAssessment))}
+        </p>
+      ) : null}
       {!unavailable &&
       scope === 'trip' &&
       assessment &&

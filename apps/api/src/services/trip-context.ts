@@ -2,6 +2,7 @@ import { getPrismaClient } from '@trove/db';
 import { TRIP_CONTEXT_VERSION, type AiPlannerDraft, type TripContext } from '@trove/types';
 
 import { tripClimate, type ClimateOptions } from './climate-norms.js';
+import { resolveDayStay, stayAccommodationsInclude, toStayAccommodations } from './day-stay.js';
 import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
 import { ItineraryNotFoundError } from './itineraries.js';
 import { contextPlaceFromOwnedData } from './owned-place-location.js';
@@ -31,6 +32,7 @@ export async function readTripContext(
         select: { place: { include: placeProviderRefInclude } },
       },
       tripPlaces: { select: { id: true, place: { include: placeProviderRefInclude } } },
+      reservations: stayAccommodationsInclude({ select: { id: true } }),
       itineraryDays: {
         orderBy: { date: 'asc' },
         select: {
@@ -49,17 +51,29 @@ export async function readTripContext(
     contextPlaceFromOwnedData(place, now).coordinates ?? null;
   const placeCoordinates = new Map(trip.tripPlaces.map((row) => [row.id, located(row.place)]));
   const destination = trip.destinations.map((row) => located(row.place)).find(Boolean) ?? null;
-  const days = trip.itineraryDays.map((day) => ({
-    id: day.id,
-    date: formatDateOnly(day.date),
-    timeZone: day.defaultTimeZone ?? trip.referenceTimeZone,
-    // Where the day is spent: its base, else its first placed stop, else the
-    // trip's first destination.
-    coordinates:
-      [day.dailyBaseTripPlaceId, ...day.items.map((item) => item.tripPlaceId)]
-        .map((id) => (id ? placeCoordinates.get(id) : null))
-        .find(Boolean) ?? destination,
-  }));
+  const accommodations = toStayAccommodations(trip.reservations);
+  const days = trip.itineraryDays.map((day) => {
+    const stay = resolveDayStay(
+      {
+        id: day.id,
+        date: day.date,
+        dailyBaseTripPlace: day.dailyBaseTripPlaceId ? { id: day.dailyBaseTripPlaceId } : null,
+        dailyBaseDepartureTripPlace: null,
+      },
+      accommodations,
+    );
+    return {
+      id: day.id,
+      date: formatDateOnly(day.date),
+      timeZone: day.defaultTimeZone ?? trip.referenceTimeZone,
+      // Where the day is spent: its stay, else its first placed stop, else the
+      // trip's first destination.
+      coordinates:
+        [stay.start?.place.id ?? null, ...day.items.map((item) => item.tripPlaceId)]
+          .map((id) => (id ? placeCoordinates.get(id) : null))
+          .find(Boolean) ?? destination,
+    };
+  });
 
   return {
     version: TRIP_CONTEXT_VERSION,

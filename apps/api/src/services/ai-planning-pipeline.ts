@@ -47,7 +47,7 @@ import {
   type TripPlanScore,
 } from './plan-score.js';
 import { groundableDraftPlaceIds, referencedDraftPlaceIds } from './ai-planning-draft-places.js';
-import { draftPlanScoreInputRevision } from './ai-planning-plan-score.js';
+import { draftDayStay, draftPlanScoreInputRevision } from './ai-planning-plan-score.js';
 import {
   recordAiPlanningDraftAssembled,
   recordAiPlanningProposalCoverage,
@@ -481,6 +481,53 @@ function protectUnknownArrival(draft: AiPlannerDraft, proposal: AiPlannerModelPr
 }
 
 /**
+ * Turns the nights the traveller named into where each day starts and ends.
+ * A night spent at a stay ends that day there and starts the next one there,
+ * so a change-over day starts at one stay and ends at the next. The morning
+ * after the last stay is left alone: ending it back at a hotel already
+ * checked out of would invent a return trip.
+ */
+function assignDraftStays(
+  days: AiPlannerDraft['days'],
+  proposal: AiPlannerModelProposal,
+  candidateIds: ReadonlySet<string>,
+) {
+  const start = new Map<number, string>();
+  const end = new Map<number, string>();
+  for (const stay of proposal.stays ?? []) {
+    if (!candidateIds.has(stay.candidatePlaceId)) continue;
+    for (let night = stay.firstNightDayIndex; night <= stay.lastNightDayIndex; night++) {
+      if (night >= days.length) break;
+      end.set(night, stay.candidatePlaceId);
+      if (night + 1 < days.length) start.set(night + 1, stay.candidatePlaceId);
+    }
+  }
+  days.forEach((day, index) => {
+    const from = start.get(index) ?? null;
+    const to = end.get(index) ?? null;
+    if (!to) return;
+    day.dailyBasePlaceRefId = from;
+    day.dailyBaseDeparturePlaceRefId = from === to ? null : to;
+  });
+}
+
+/**
+ * A stay only helps when it is somewhere real. One the provider could not
+ * verify has no location to route from, so the days fall back to their stops.
+ */
+export function dropUnverifiedDraftStays(draft: AiPlannerDraft) {
+  const verified = new Set(
+    draft.places.filter((place) => place.resolution === 'verified').map((place) => place.id),
+  );
+  for (const day of draft.days) {
+    if (day.dailyBasePlaceRefId && !verified.has(day.dailyBasePlaceRefId))
+      day.dailyBasePlaceRefId = null;
+    if (day.dailyBaseDeparturePlaceRefId && !verified.has(day.dailyBaseDeparturePlaceRefId))
+      day.dailyBaseDeparturePlaceRefId = null;
+  }
+}
+
+/**
  * Builds and prunes the day-to-day itinerary without reaching a provider. The
  * places it emits are pending placeholders; `applyGroundingToDraft` upgrades the
  * ones that survive to here.
@@ -519,6 +566,7 @@ export function assembleAiPlanningDraft(
           ]!.id,
     items: [],
   }));
+  assignDraftStays(days, proposal, candidateIds);
   const unscheduledItems: AiPlannerDraftItem[] = [];
 
   for (const proposalItem of proposal.items) {
@@ -1211,15 +1259,14 @@ function scoreDraft(
           evidence.inbound.get(item.id) ?? null,
         ),
         placeId: item.placeRefId ?? undefined,
-        inboundRequired:
-          index > 0 || Boolean(day.dailyBaseDeparturePlaceRefId ?? day.dailyBasePlaceRefId),
+        inboundRequired: index > 0 || Boolean(draftDayStay(day).start),
       }));
       // Generation already acquires inter-item routes. Base legs are required by the
       // ordinary itinerary but are not purchased to improve a draft's score.
       const segments = [...(evidence.segments.get(day.date) ?? [])];
-      if (day.items.length && (day.dailyBaseDeparturePlaceRefId ?? day.dailyBasePlaceRefId))
+      if (day.items.length && draftDayStay(day).start)
         segments.unshift({ id: `base-start:${day.date}`, scope: 'LOCAL', status: 'UNKNOWN' });
-      if (day.items.length && day.dailyBasePlaceRefId)
+      if (day.items.length && draftDayStay(day).end)
         segments.push({ id: `base-return:${day.date}`, scope: 'LOCAL', status: 'UNKNOWN' });
       const zones = new Map(
         day.items.flatMap((item) =>
@@ -1505,6 +1552,7 @@ export async function runAiPlanningPipeline(
       providerSignal,
     );
     applyGroundingToDraft(draft, grounding);
+    dropUnverifiedDraftStays(draft);
 
     if (controller.signal.aborted)
       throw new AiPlanningPipelineFailure(deadlineReached ? 'timeout' : 'cancelled', metadata);

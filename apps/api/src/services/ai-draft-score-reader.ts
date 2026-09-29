@@ -1,6 +1,6 @@
 import { getPrismaClient } from '@trove/db';
 import { planningPreferencesFromAi, type AiPlannerDraft } from '@trove/types';
-import { draftPlanScoreInputRevision } from './ai-planning-plan-score.js';
+import { draftDayStay, draftPlanScoreInputRevision } from './ai-planning-plan-score.js';
 import {
   buildPlanScoreFromEvaluations,
   loadPlaceEvidence,
@@ -83,19 +83,11 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, now: Date) {
       day.items.map((i) => (i.placeRefId ? zones.get(i.placeRefId) : null)).find(Boolean) ??
       draft.trip.destinations.map((d) => zones.get(d.placeRefId)).find(Boolean) ??
       'UTC';
+    const stay = draftDayStay(day);
     const points = [
-      ...((day.dailyBaseDeparturePlaceRefId ?? day.dailyBasePlaceRefId)
-        ? [
-            {
-              id: `base-start:${day.date}`,
-              placeId: day.dailyBaseDeparturePlaceRefId ?? day.dailyBasePlaceRefId,
-            },
-          ]
-        : []),
+      ...(stay.start ? [{ id: `base-start:${day.date}`, placeId: stay.start }] : []),
       ...day.items.map((i) => ({ id: i.id, placeId: i.placeRefId })),
-      ...(day.dailyBasePlaceRefId
-        ? [{ id: `base-return:${day.date}`, placeId: day.dailyBasePlaceRefId }]
-        : []),
+      ...(stay.end ? [{ id: `base-return:${day.date}`, placeId: stay.end }] : []),
     ];
     const segments: ScoringRouteSegment[] = [];
     for (let i = 1; i < points.length; i++) {

@@ -1,3 +1,4 @@
+import { resolveDayStay, stayAccommodationsInclude, toStayAccommodations } from './day-stay.js';
 import { getPrismaClient, type Prisma } from '@trove/db';
 
 import { DAY_PART_ORDER, dayPartIndexForHour } from './day-part-windows.js';
@@ -489,6 +490,7 @@ export async function resolveTripModeContext(
       id: true,
       name: true,
       referenceTimeZone: true,
+      reservations: stayAccommodationsInclude(legBaseInclude),
       startDate: true,
     },
   });
@@ -584,6 +586,7 @@ export async function resolveTripModeContext(
       { languageCode: options.languageCode, source: 'trip-mode-context' },
     ),
   ]);
+  const stay = resolveDayStay(day, toStayAccommodations(trip.reservations));
 
   return {
     ...base,
@@ -604,11 +607,10 @@ export async function resolveTripModeContext(
     },
     leaveBy,
     leg: resolveTripModeLeg({
-      arrivalBase: day.dailyBaseTripPlace,
+      arrivalBase: stay.start?.place ?? null,
       dayStartMode: day.routeStartTravelMode,
-      // Where the day ends falls back to where it began, the same precedence
-      // the itinerary's own base resolution uses.
-      departureBase: day.dailyBaseDepartureTripPlace ?? day.dailyBaseTripPlace,
+      // The same stay the itinerary routes from and back to, booking included.
+      departureBase: stay.end?.place ?? null,
       items: day.items,
       nextItemId: nextItem?.id ?? null,
     }),

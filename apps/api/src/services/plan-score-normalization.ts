@@ -38,6 +38,11 @@ export type ScoringReservation = {
   transportArrivalLocalDate?: Date | null;
   transportArrivalLocalTime?: Date | null;
   transportArrivalTimeZone?: string | null;
+  /** Accommodation fields: which stay a day starts from and returns to. */
+  tripPlaceId?: string | null;
+  checkInDate?: Date | null;
+  checkOutDate?: Date | null;
+  accommodationDays?: ReadonlyArray<{ itineraryDayId: string }>;
 };
 const dateOnly = (d: Date) => d.toISOString().slice(0, 10);
 export const addLocalDays = (date: string, days: number) =>

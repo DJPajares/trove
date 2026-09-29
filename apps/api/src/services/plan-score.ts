@@ -733,6 +733,12 @@ export const PLAN_SCORE_TRIP_INCLUDE = {
     select: {
       itineraryItemId: true,
       type: true,
+      // A booked stay moves where the day's legs start and end, so it belongs
+      // in the planning revision the scorer is cached against.
+      tripPlaceId: true,
+      checkInDate: true,
+      checkOutDate: true,
+      accommodationDays: { select: { itineraryDayId: true } },
       transportPickupLocation: true,
       transportDropoffLocation: true,
       localDate: true,

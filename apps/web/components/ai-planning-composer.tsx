@@ -3,7 +3,7 @@
 import { CircleAlert, CircleCheck, Sparkles, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
-import type { FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { SheetFooter } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import type { AiPlanningLifecycle } from '@/lib/ai-planning/use-lifecycle';
+import { aiPlanningExampleRotation, type AiPlanningExampleId } from '@/lib/ai-planning/examples';
 import {
   AI_PLANNING_PROMPT_MAX_LENGTH,
   aiPlanningErrorMessageKey,
@@ -29,6 +30,10 @@ function retryAtLabel(value: string) {
  */
 export function AiPlanningComposer({ lifecycle }: Readonly<{ lifecycle: AiPlanningLifecycle }>) {
   const t = useTranslations('trips.aiPlanning');
+  const [examples, setExamples] = useState<readonly AiPlanningExampleId[]>([]);
+  const [examplesAnnouncement, setExamplesAnnouncement] = useState('');
+  const initializedExamples = useRef(false);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
   const {
     availability,
     availabilityError,
@@ -45,6 +50,22 @@ export function AiPlanningComposer({ lifecycle }: Readonly<{ lifecycle: AiPlanni
     visibleError,
   } = lifecycle;
   const errorKey = aiPlanningErrorMessageKey(visibleError);
+
+  useEffect(() => {
+    // Mounting marks a new opening, including returning from the manual tab.
+    // Strict Mode replays this effect; it must not consume a second set.
+    if (initializedExamples.current) return;
+    initializedExamples.current = true;
+    setExamples(aiPlanningExampleRotation.next());
+  }, []);
+
+  function showMoreExamples() {
+    const next = aiPlanningExampleRotation.next();
+    setExamples(next);
+    setExamplesAnnouncement(
+      t('examplesUpdated', { examples: next.map((id) => t(`exampleLabels.${id}`)).join(', ') }),
+    );
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -65,19 +86,34 @@ export function AiPlanningComposer({ lifecycle }: Readonly<{ lifecycle: AiPlanni
               setPrompt(event.target.value);
             }}
             placeholder={t('promptPlaceholder')}
+            ref={promptRef}
             value={prompt}
           />
           <FieldDescription id="ai-planning-prompt-hint">{t('promptHint')}</FieldDescription>
         </Field>
 
         <section aria-label={t('examplesLabel')} className="space-y-2">
-          <p className="text-sm font-medium">{t('examplesLabel')}</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium">{t('examplesLabel')}</p>
+            <Button
+              disabled={operation !== 'idle' || generating || examples.length === 0}
+              onClick={showMoreExamples}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              {t('moreExamples')}
+            </Button>
+          </div>
           <div className="flex flex-wrap gap-2">
-            {(['cityBreak', 'workTrip', 'suggestion'] as const).map((example) => (
+            {examples.map((example) => (
               <Button
                 disabled={operation !== 'idle' || generating}
                 key={example}
-                onClick={() => setPrompt(t(`examples.${example}`))}
+                onClick={() => {
+                  setPrompt(t(`examples.${example}`));
+                  promptRef.current?.focus();
+                }}
                 size="sm"
                 type="button"
                 variant="secondary"
@@ -86,6 +122,9 @@ export function AiPlanningComposer({ lifecycle }: Readonly<{ lifecycle: AiPlanni
               </Button>
             ))}
           </div>
+          <p aria-atomic="true" className="sr-only" role="status">
+            {examplesAnnouncement}
+          </p>
         </section>
 
         {availability?.status === 'available' && availability.remainingDispatches !== null ? (

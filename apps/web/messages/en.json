@@ -2806,8 +2806,6 @@
       "title": "Typically {low}–{high} in {month}",
       "body": "{advice, select, indoor {Rain falls on about {wetDays} in 10 days. Keep outdoor plans flexible.} heat {Rain falls on about {wetDays} in 10 days. Plan outdoor time for mornings and evenings.} cold {Rain falls on about {wetDays} in 10 days. Pack warm layers.} other {Rain falls on about {wetDays} in 10 days.}}"
     },
-    "sources": "Sources:",
-    "holidaySource": "date-holidays",
-    "weatherSource": "Open-Meteo"
+    "opensSource": "(opens {source}, new tab)"
   }
 }

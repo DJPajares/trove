@@ -5,14 +5,14 @@ import {
   ChevronDown,
   CloudRain,
   Footprints,
-  Sparkles,
+  Lightbulb,
   Sunset,
   Thermometer,
   Timer,
   type LucideIcon,
 } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 
 import { panelSurfaceClass, type PanelSurface } from '@/components/panel-surface';
 import { SuggestedAction } from '@/components/plan-score-panel';
@@ -31,10 +31,13 @@ const ICONS: Record<InsightKind, LucideIcon> = {
   continuous: Timer,
   climate: Thermometer,
 };
-const SOURCES = {
-  holidays: 'https://github.com/commenthol/date-holidays',
-  weather: 'https://open-meteo.com/',
-} as const;
+const OPEN_METEO = { href: 'https://open-meteo.com/', label: 'Open-Meteo' };
+/** Provider-backed items link their title to the provider; advisories have none. */
+const SOURCES: Partial<Record<InsightKind, { href: string; label: string }>> = {
+  climate: OPEN_METEO,
+  rain: OPEN_METEO,
+  holiday: { href: 'https://github.com/commenthol/date-holidays', label: 'date-holidays' },
+};
 /** Enough to say what matters; the rest waits behind one control. */
 const INITIAL_ITEMS = 3;
 
@@ -99,6 +102,7 @@ function InsightItem({
     insight.certainty === 'pattern' && insight.climate
       ? t('certainty.pattern', insight.climate.years)
       : t(`certainty.${insight.certainty}`);
+  const source = SOURCES[insight.kind as keyof typeof SOURCES];
   // A day label only helps when the item does not already cover the whole trip.
   const days =
     showDays && insight.dayNumbers.length && insight.dayNumbers.length < totalDays
@@ -110,7 +114,20 @@ function InsightItem({
       <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1 space-y-0.5">
         <p className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-          <span className="text-sm font-medium">{title}</span>
+          {source ? (
+            // The title credits where the item came from, in place of a footer.
+            <a
+              className="rounded-sm text-sm font-medium underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+              href={source.href}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              {title}
+              <span className="sr-only"> {t('opensSource', { source: source.label })}</span>
+            </a>
+          ) : (
+            <span className="text-sm font-medium">{title}</span>
+          )}
           <span className="text-xs text-muted-foreground">
             {certainty}
             {days ? (
@@ -167,14 +184,6 @@ export function TripInsightsPanel({
   );
   const initial = insights.slice(0, INITIAL_ITEMS);
   const more = insights.slice(INITIAL_ITEMS);
-  const sources = [
-    insights.some((insight) => insight.kind === 'holiday')
-      ? { href: SOURCES.holidays, label: t('holidaySource') }
-      : null,
-    insights.some((insight) => insight.kind === 'climate' || insight.kind === 'rain')
-      ? { href: SOURCES.weather, label: t('weatherSource') }
-      : null,
-  ].filter((source) => source !== null);
 
   return (
     <section
@@ -182,7 +191,7 @@ export function TripInsightsPanel({
       className={cn('space-y-4', panelSurfaceClass(surface), className)}
     >
       <Heading className="flex items-center gap-2 text-sm font-medium">
-        <Sparkles aria-hidden="true" className="size-4 text-muted-foreground" />
+        <Lightbulb aria-hidden="true" className="size-4 text-muted-foreground" />
         {t('title')}
       </Heading>
       <Collapsible onOpenChange={setOpen} open={open}>
@@ -202,24 +211,6 @@ export function TripInsightsPanel({
           </>
         ) : null}
       </Collapsible>
-      {sources.length ? (
-        <p className="text-xs text-muted-foreground">
-          {t('sources')}{' '}
-          {sources.map((source, index) => (
-            <Fragment key={source.href}>
-              {index ? ', ' : null}
-              <a
-                className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-                href={source.href}
-                rel="noopener noreferrer"
-                target="_blank"
-              >
-                {source.label}
-              </a>
-            </Fragment>
-          ))}
-        </p>
-      ) : null}
     </section>
   );
 }

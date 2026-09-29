@@ -804,6 +804,8 @@ export function AiPlanningReview({
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
           {planScoreEnabled && session.planScore ? (
             <PlanScorePanel
+              // Matches the review's own cards beside it in this column.
+              className="border-border sm:p-6"
               change={assessmentChange(queryClient, `draft:${sessionId}`, 'trip')}
               assessment={session.planScore}
               resolveAction={resolveDraftScoreAction}

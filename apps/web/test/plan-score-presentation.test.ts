@@ -449,3 +449,23 @@ test('insight groups keep issues in priority order apart from what is working', 
     }),
   ).toEqual({ issues: [conflict, route, missing], highlights: [works] });
 });
+
+test('Plan Score keeps to scoring: advisories and generic category lines stay out', async () => {
+  const { travelerInsightGroups } = await import('../lib/plan-score/presentation');
+  const overload = reason('PACE_COMFORT', 'RISK', 'HIGH_ACTIVE_LOAD');
+  const rain = reason('EXPERIENCE_QUALITY', 'RISK', 'RAIN_FORECAST');
+  const walking = reason('PACE_COMFORT', 'RISK', 'WALKING_LOAD');
+  const timing = { ...reason('FEASIBILITY', 'INFO', 'ASSESSED_TIMING_WORKS'), action: null };
+  const generic = {
+    ...reason('PLAN_COMPOSITION', 'INFO', 'PLAN_COMPOSITION_SUPPORTED'),
+    action: null,
+  };
+  const downtime = { ...reason('PACE_COMFORT', 'INFO', 'NATURAL_DOWNTIME'), action: null };
+  expect(
+    travelerInsightGroups({
+      whatWorks: [timing, generic, downtime],
+      worthImproving: [rain, overload, walking],
+      uncertainty: [],
+    }),
+  ).toEqual({ issues: [overload], highlights: [timing] });
+});

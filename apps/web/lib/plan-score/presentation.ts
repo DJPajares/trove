@@ -40,6 +40,20 @@ export function assessmentDeadline(score: TripPlanScore) {
     score.evidenceExpiresAt ? Date.parse(score.evidenceExpiresAt) : Infinity,
   );
 }
+/**
+ * Day advisories the evaluator emits alongside the score but never scores.
+ * They answer "what should I know", so they belong to Insights, not Plan Score.
+ */
+export const INSIGHT_ADVISORY_CODES: ReadonlySet<string> = new Set([
+  'RAIN_FORECAST',
+  'DAYLIGHT_LIMIT',
+  'WALKING_LOAD',
+  'CONTINUOUS_ACTIVITY',
+  'NATURAL_DOWNTIME',
+  'SEASONAL_PATTERN',
+  'PUBLIC_HOLIDAY',
+  'PARTIAL_ACCESS',
+]);
 /** Only useful traveler-facing insights, deduplicated by their underlying issue. */
 export function travelerInsights(groups: import('@trove/types').PlanScoreExplanationGroups) {
   const seen = new Set<string>();
@@ -53,7 +67,7 @@ export function travelerInsights(groups: import('@trove/types').PlanScoreExplana
     if (
       reason.code.endsWith('_UNKNOWN') ||
       reason.code.endsWith('_PARTIAL') ||
-      ['SEASONAL_PATTERN', 'PUBLIC_HOLIDAY', 'PARTIAL_ACCESS'].includes(reason.code)
+      INSIGHT_ADVISORY_CODES.has(reason.code)
     )
       return false;
     const key = `${reason.code}:${[...reason.references].sort().join('|')}`;
@@ -68,7 +82,10 @@ export function travelerInsightGroups(groups: import('@trove/types').PlanScoreEx
   const insights = travelerInsights(groups);
   return {
     issues: insights.filter((reason) => !positive.has(reason)),
-    highlights: insights.filter((reason) => positive.has(reason)),
+    // A category's generic "supported" line only restates its high bar.
+    highlights: insights.filter(
+      (reason) => positive.has(reason) && !reason.code.endsWith('_SUPPORTED'),
+    ),
   };
 }
 export type ScoreBand = 'excellent' | 'strong' | 'good' | 'refine' | 'attention';

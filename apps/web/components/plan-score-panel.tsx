@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, Sparkles } from 'lucide-react';
+import { Check, ChevronDown, Gauge } from 'lucide-react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { Fragment, useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Meter } from '@/components/ui/meter';
+import { panelSurfaceClass, type PanelSurface } from '@/components/panel-surface';
 import type {
   PlanScoreExplanation,
   PlanScoreExplanationGroups,
@@ -45,8 +46,8 @@ type Props = Readonly<{
   resolveAction?: (explanation: PlanScoreExplanation) => ScoreAction | null;
   score: number | null;
   scope: 'day' | 'trip';
-  showDestinationContext?: boolean;
   status: PlanScoreLoadStatus;
+  surface?: PanelSurface;
   title: string;
 }>;
 /** Colour follows the verdict band; the words always carry the meaning. */
@@ -203,6 +204,7 @@ export function PlanScorePanel({
   score,
   scope,
   status,
+  surface = 'card',
   title,
 }: Props) {
   const t = useTranslations('planScore');
@@ -269,12 +271,9 @@ export function PlanScorePanel({
   const hasBreakdown = rows.length > 0 || issues.length > 0 || highlights.length > 0 || !!basis;
   const Subheading = headingLevel === 2 ? 'h3' : 'h4';
   return (
-    <section
-      aria-label={title}
-      className={cn('space-y-4 rounded-lg border border-border bg-card p-4 sm:p-5', className)}
-    >
+    <section aria-label={title} className={cn('space-y-4', panelSurfaceClass(surface), className)}>
       <Heading className="flex items-center gap-2 text-sm font-medium">
-        <Sparkles aria-hidden="true" className="size-4 text-muted-foreground" />
+        <Gauge aria-hidden="true" className="size-4 text-muted-foreground" />
         {title}
       </Heading>
       <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
@@ -330,7 +329,7 @@ export function PlanScorePanel({
         </div>
         {hasBreakdown ? (
           <CollapsiblePanel>
-            <div className="mt-4 space-y-5 border-t border-border pt-4">
+            <div className="mt-4 space-y-5 border-t border-border-subtle pt-4">
               {rows.length ? <ScoreMeterRows rows={rows} /> : null}
               {issues.length ? (
                 <div className="space-y-2">
@@ -340,14 +339,19 @@ export function PlanScorePanel({
                   <Reasons reasons={issues} resolveAction={resolveAction} />
                 </div>
               ) : null}
+              {/* Supporting notes, kept a step quieter than the issues above so they
+                  never compete with the score they explain. */}
               {highlights.length ? (
-                <div className="space-y-2">
-                  <Subheading className="text-xs font-medium text-muted-foreground">
+                <div className="space-y-1.5">
+                  <Subheading className="text-xs text-muted-foreground">
                     {t('whatWorks')}
                   </Subheading>
-                  <ul className="space-y-2 text-sm leading-relaxed text-muted-foreground">
+                  <ul className="space-y-1 text-xs leading-relaxed text-muted-foreground">
                     {highlights.map((reason, index) => (
-                      <li key={`${reason.code}-${index}`}>{t(reason.messageKey, reason.values)}</li>
+                      <li className="flex gap-1.5" key={`${reason.code}-${index}`}>
+                        <Check aria-hidden="true" className="mt-0.5 size-3 shrink-0" />
+                        <span>{t(reason.messageKey, reason.values)}</span>
+                      </li>
                     ))}
                   </ul>
                 </div>

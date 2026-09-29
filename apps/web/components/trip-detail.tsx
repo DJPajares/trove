@@ -123,6 +123,8 @@ function TripDetailPlanScore({ tripId }: Readonly<{ tripId: string }>) {
 
   return (
     <PlanScorePanel
+      completeness={planScore.data?.completeness ?? null}
+      confidence={planScore.data?.confidence ?? null}
       disabled={planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')}
       explanations={
         planScore.data?.explanations ?? {

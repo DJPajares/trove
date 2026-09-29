@@ -163,7 +163,7 @@ for (const state of ['cold', 'warm', 'expired', 'malformed'] as const)
     const second = await getTripPlanScore('owner', 'trip', { now: () => NOW });
     expect(second).toEqual(first);
     expect(outbound).not.toHaveBeenCalled();
-    expect(first?.days[0]?.factors.PLACE_QUALITY.state).toBe(
+    expect(first?.days[0]?.factors.EXPERIENCE_QUALITY.state).toBe(
       state === 'warm' ? 'EVALUATED' : 'UNKNOWN',
     );
     if (state === 'warm')
@@ -196,7 +196,7 @@ test('unknown stops remain in the route chain instead of being bypassed', async 
     position: 1,
   });
   const result = await getTripPlanScore('owner', 'trip', { now: () => NOW });
-  expect(result?.days[0]?.factors.TRAVEL_EFFORT).toMatchObject({ state: 'UNKNOWN' });
+  expect(result?.days[0]?.factors.ROUTE_EFFICIENCY).toMatchObject({ state: 'UNKNOWN' });
   expect(outbound).not.toHaveBeenCalled();
 });
 
@@ -297,6 +297,9 @@ test('expired raw place evidence is removed by maintenance without acquiring rep
 test('scoring readers cannot import provider factories or refresh-on-miss cache services', async () => {
   for (const name of [
     'plan-score',
+    'plan-score-evaluation',
+    'plan-score-normalization',
+    'plan-score-rules',
     'scoring-evidence',
     'itinerary-route-reader',
     'place-evidence-cache',
@@ -308,4 +311,22 @@ test('scoring readers cannot import provider factories or refresh-on-miss cache 
       /from ['"].*(?:places-runtime|routes-runtime|cached-places|cached-routes|cached-weather)['"]/,
     );
   }
+});
+
+test('repeated places and coordinates across days are read once from existing caches', async () => {
+  trip.itineraryDays.push({
+    ...trip.itineraryDays[0],
+    id: 'day-two',
+    date: new Date('2026-09-29'),
+  });
+  evidenceRow.cachedEvidence = {
+    ...place,
+    location: { latitude: 1.35, longitude: 103.82 },
+    rawTypes: ['park'],
+  };
+  const prisma = (globalThis as any).trovePrismaClient;
+  await getTripPlanScore('owner', 'trip', { now: () => NOW });
+  expect(prisma.placeProviderRef.findUnique).toHaveBeenCalledTimes(1);
+  expect(prisma.weatherForecastSnapshot.findUnique).toHaveBeenCalledTimes(1);
+  expect(outbound).not.toHaveBeenCalled();
 });

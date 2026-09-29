@@ -1,92 +1,90 @@
-/**
- * Shared wire contract for the currently deployed Plan Score evaluator.
- *
- * PRD section 29 defines the approved redesign. Migrate these types alongside
- * its evaluator and consumers; changing the category names here alone would
- * misrepresent cached assessments produced by the existing rubric.
- * Scoring weights and raw provider evidence never belong in this payload.
- */
+/** Versioned derived assessments. Weights and raw provider evidence stay internal. */
 export type PlanScoreDayFactorId =
-  'FEASIBILITY' | 'PACE_BUFFER' | 'PLACE_QUALITY' | 'ROUTE_EFFICIENCY' | 'TRAVEL_EFFORT';
-
+  'FEASIBILITY' | 'ROUTE_EFFICIENCY' | 'PACE_COMFORT' | 'EXPERIENCE_QUALITY' | 'PLAN_COMPOSITION';
+export type PlanScoreTripComponentId =
+  'DAILY_QUALITY' | 'DESTINATION_UTILIZATION' | 'VARIETY_COVERAGE' | 'SEASONAL_FIT';
 export type PlanScoreUnknownReason =
   'INSUFFICIENT_EVIDENCE' | 'MISSING_EVIDENCE' | 'UNUSABLE_EVIDENCE';
-
 export type PlanScoreFactorOutcome =
-  | { confidence: number; score: number; state: 'EVALUATED' }
+  | { confidence: number; coverage: number; score: number; state: 'EVALUATED' }
   | { reason: PlanScoreUnknownReason; state: 'UNKNOWN' }
   | { state: 'NOT_APPLICABLE' };
-
 export type PlanScoreDayWithheldReason =
   | 'EVIDENCE_NOT_CURRENT'
   | 'ADMINISTRATIVELY_DISABLED'
   | 'INSUFFICIENT_COMPLETENESS'
   | 'NO_EVALUABLE_CORE_FACTOR';
-
 export type PlanScoreTripWithheldReason =
-  'ADMINISTRATIVELY_DISABLED' | 'NO_SCORABLE_DAY' | 'EVIDENCE_NOT_CURRENT';
-
+  | 'ADMINISTRATIVELY_DISABLED'
+  | 'NO_SCORABLE_DAY'
+  | 'INSUFFICIENT_COMPLETENESS'
+  | 'EVIDENCE_NOT_CURRENT';
+export type PlanScoreCap = {
+  limit: number;
+  reason:
+    | 'HARD_CONFLICT'
+    | 'MULTIPLE_HARD_CONFLICTS'
+    | 'MATERIAL_CONFLICT'
+    | 'TRIP_HARD_CONFLICT'
+    | 'TRIP_CONNECTION_CONFLICT';
+  references: string[];
+};
 export type PlanScoreDayPayload = {
+  /** Applicable signal coverage, independent of assessed quality. */
   completeness: number;
   confidence: number | null;
   dayId: string;
   factors: Record<PlanScoreDayFactorId, PlanScoreFactorOutcome>;
-  /** Missing evidence withholds a score; it is never reported as poor quality. */
   score: number | null;
+  caps: PlanScoreCap[];
   withheldReasons: PlanScoreDayWithheldReason[];
 };
-
 export type PlanScoreTripPayload = {
   days: PlanScoreDayPayload[];
-  mustGoPriorityFit: PlanScoreFactorOutcome;
+  components: Record<PlanScoreTripComponentId, PlanScoreFactorOutcome>;
+  completeness: number;
+  confidence: number | null;
+  caps: PlanScoreCap[];
   score: number | null;
   withheldReasons: PlanScoreTripWithheldReason[];
 };
-
-export type PlanScoreExplanationFactor = PlanScoreDayFactorId | 'MUST_GO_PRIORITY_FIT';
-
-/** Existing edit flows the UI can route to; suggestions never apply themselves. */
+export type PlanScoreExplanationFactor = PlanScoreDayFactorId | PlanScoreTripComponentId;
 export type PlanScoreSuggestedAction =
   | 'ADD_BUFFER'
   | 'ADJUST_TIME'
   | 'RECONSIDER_DETOUR'
   | 'REORDER_MANUALLY'
   | 'REVIEW_ALTERNATIVE'
-  | 'SCHEDULE_MUST_GO';
-
+  | 'SCHEDULE_MUST_GO'
+  | 'REDUCE_LOAD'
+  | 'REVIEW_TIMING';
 export type PlanScoreExplanation = {
   action: PlanScoreSuggestedAction | null;
   factor: PlanScoreExplanationFactor;
-  /** Localization key under the `planScore` namespace. */
+  code: string;
+  severity: 'INFO' | 'RISK' | 'MATERIAL' | 'HARD';
   messageKey: string;
-  /** Itinerary items, Trip Places, or evidence points the message refers to. */
   references: string[];
   values: Record<string, number | string>;
 };
-
 export type PlanScoreExplanationGroups = {
   uncertainty: PlanScoreExplanation[];
   whatWorks: PlanScoreExplanation[];
   worthImproving: PlanScoreExplanation[];
 };
-
 export type TripPlanScoreDay = PlanScoreDayPayload & {
   date: string;
   explanations: PlanScoreExplanationGroups;
 };
-
 export type TripPlanScore = Omit<PlanScoreTripPayload, 'days'> & {
+  schemaVersion: 5;
+  rubricVersion: 5;
   days: TripPlanScoreDay[];
   explanations: PlanScoreExplanationGroups;
-  /** Identity of the evidence this result came from, for cache validation. */
   fingerprint: string;
   generatedAt: string;
-  /** Assessment deadline, bounded by generation and the original evidence expiry. */
   expiresAt?: string;
-  /** Revision of read-only evidence used by stored-trip assessments. */
   evidenceRevision?: string;
-  /** Original oldest mutable evidence time, never its cache-read or Apply time. */
   evidenceAsOf?: string | null;
-  /** Rubric-versioned draft inputs, checked before adopting an AI assessment. */
   sourceInputRevision?: string;
 };

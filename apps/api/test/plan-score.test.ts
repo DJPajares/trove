@@ -138,32 +138,26 @@ const plannedTrip: PlanScoreTripRecord = {
   ]),
 };
 
-test('scores a planned day from stored timing and live route evidence', () => {
-  const result = buildTripPlanScore(plannedTrip);
-  const day = result.days[0];
-
-  expect(day?.score).toBe(100);
-  expect(day?.completeness).toBe(89);
-  expect(day?.confidence).toBe(98);
-  expect(day?.date).toBe('2026-09-01');
-  expect(day?.factors.TRAVEL_EFFORT).toStrictEqual({
-    confidence: 100,
-    score: 100,
+test('stored timing and complete local routes retain partial coverage honestly', () => {
+  const result = buildTripPlanScore(plannedTrip),
+    day = result.days[0]!;
+  expect(day.score).toBeNull();
+  expect(day.completeness).toBeLessThan(60);
+  expect(day.factors.ROUTE_EFFICIENCY).toMatchObject({
     state: 'EVALUATED',
+    score: 100,
+    coverage: 60,
+    confidence: 100,
   });
-  expect(result.score).toBe(95);
+  expect(day.date).toBe('2026-09-01');
+  expect(result.score).toBeNull();
 });
-
-test('leaves route efficiency unknown instead of guessing it', () => {
-  const day = buildTripPlanScore(plannedTrip).days[0];
-
-  expect(day?.factors.ROUTE_EFFICIENCY).toStrictEqual({
-    reason: 'MISSING_EVIDENCE',
-    state: 'UNKNOWN',
-  });
-  expect(day?.explanations.uncertainty.map((entry) => entry.messageKey)).toStrictEqual([
-    'routeEfficiency.unknown',
-  ]);
+test('burden is known while unevidenced alternative orders reduce route coverage', () => {
+  const day = buildTripPlanScore(plannedTrip).days[0]!;
+  expect(day.factors.ROUTE_EFFICIENCY).toMatchObject({ state: 'EVALUATED', coverage: 60 });
+  expect(day.explanations.uncertainty).toContainEqual(
+    expect.objectContaining({ code: 'ROUTE_EFFICIENCY_PARTIAL' }),
+  );
 });
 
 test('a place shut on the day of the visit is a hard feasibility conflict', () => {
@@ -213,21 +207,17 @@ test('known opening hours change the fingerprint', () => {
 test('explains a planned day and its unscheduled Must Go places', () => {
   const result = buildTripPlanScore(plannedTrip);
 
-  expect(result.days[0]?.explanations.whatWorks.map((entry) => entry.messageKey)).toStrictEqual([
-    'feasibility.noConflicts',
-    'travelEffort.light',
-    'pace.comfortable',
-    'placeQuality.strong',
-  ]);
-  expect(result.explanations.worthImproving).toStrictEqual([
-    {
-      action: 'SCHEDULE_MUST_GO',
-      factor: 'MUST_GO_PRIORITY_FIT',
-      messageKey: 'mustGo.unscheduled',
-      references: ['tp-3'],
-      values: { count: 1 },
-    },
-  ]);
+  expect(result.days[0]?.explanations.whatWorks.map((entry) => entry.messageKey)).toEqual(
+    expect.arrayContaining([
+      'feasibility.noConflicts',
+      'routeEfficiency.light',
+      'pace.comfortable',
+      'experienceQuality.supported',
+    ]),
+  );
+  expect(result.explanations.worthImproving).toContainEqual(
+    expect.objectContaining({ code: 'UNSCHEDULED_MUST_GO', references: ['tp-3'] }),
+  );
 });
 
 test('withholds a day score when the day has no usable evidence', () => {
@@ -270,7 +260,7 @@ test('withholds a day score when the day has no usable evidence', () => {
   expect(result.withheldReasons).toStrictEqual(['NO_SCORABLE_DAY']);
 });
 
-test('a normally scheduled item with no reservation and no visit duration still counts as feasibility evidence', () => {
+test('a timed item without duration leaves whole-day feasibility unknown', () => {
   // This is the ordinary case: a traveller drags a place into a day and picks
   // a start time. No reservation, no explicit visit length — exactly what
   // real itineraries look like, and previously left Feasibility permanently
@@ -316,12 +306,8 @@ test('a normally scheduled item with no reservation and no visit duration still 
     routes: new Map([['day-2', dayRoutes([segment('seg-x-y', 'item-y', 600)])]]),
   }).days[0];
 
-  expect(day?.factors.FEASIBILITY).toStrictEqual({
-    confidence: 100,
-    score: 100,
-    state: 'EVALUATED',
-  });
-  expect(day?.score).not.toBe(null);
+  expect(day?.factors.FEASIBILITY.state).toBe('UNKNOWN');
+  expect(day?.score).toBeNull();
 });
 
 test("an item with no visit duration is still caught when it lands inside another item's known interval", () => {
@@ -412,6 +398,7 @@ test('keeps the internal weighting out of the payload', () => {
   const day = buildTripPlanScore(plannedTrip).days[0];
 
   expect(Object.keys(day ?? {}).toSorted()).toStrictEqual([
+    'caps',
     'completeness',
     'confidence',
     'date',
@@ -436,12 +423,13 @@ test('a flight leg leaves travel effort evaluable where a failed route does not'
 
   // The defect this fixes: routing a long-distance hop as a drive returns nothing,
   // which dragged the whole day's travel effort into unknown and cost completeness.
-  expect(failedRoute?.factors.TRAVEL_EFFORT).toStrictEqual({
-    reason: 'INSUFFICIENT_EVIDENCE',
+  expect(failedRoute?.factors.ROUTE_EFFICIENCY).toStrictEqual({
+    reason: 'MISSING_EVIDENCE',
     state: 'UNKNOWN',
   });
-  expect(flight?.factors.TRAVEL_EFFORT).toStrictEqual({
+  expect(flight?.factors.ROUTE_EFFICIENCY).toStrictEqual({
     confidence: 100,
+    coverage: 60,
     score: 100,
     state: 'EVALUATED',
   });
@@ -455,7 +443,7 @@ test('a flight leg contributes no travel minutes alongside local legs', () => {
     routes: new Map([['day-1', dayRoutes([segment('seg-base-a', 'item-a', 600)])]]),
   }).days[0];
 
-  expect(mixed?.factors.TRAVEL_EFFORT).toStrictEqual(localOnly?.factors.TRAVEL_EFFORT);
+  expect(mixed?.factors.ROUTE_EFFICIENCY).toStrictEqual(localOnly?.factors.ROUTE_EFFICIENCY);
 });
 
 test('a day whose only movement is a flight drops travel effort from the weight base', () => {
@@ -467,7 +455,7 @@ test('a day whose only movement is a flight drops travel effort from the weight 
   // Not applicable rather than unknown, so the factor is renormalized away instead
   // of costing completeness. The day is still withheld here, but on the honest
   // grounds that nothing else about it is known -- not because of the flight.
-  expect(flightOnly?.factors.TRAVEL_EFFORT).toStrictEqual({ state: 'NOT_APPLICABLE' });
+  expect(flightOnly?.factors.ROUTE_EFFICIENCY).toStrictEqual({ state: 'NOT_APPLICABLE' });
 });
 
 test('a coarse daypart is scored rather than ignored', () => {
@@ -488,8 +476,9 @@ test('a coarse daypart is scored rather than ignored', () => {
     ],
   }).days[0];
 
-  expect(vague?.factors.PACE_BUFFER.state).toBe('EVALUATED');
-  expect(typeof vague?.score).toBe('number');
+  expect(vague?.factors.PACE_COMFORT.state).toBe('EVALUATED');
+  expect(vague?.score).toBeNull();
+  expect(vague?.completeness).toBeLessThan(60);
 });
 
 test('a daypart lowers confidence below what an exact time earns', () => {

@@ -1,491 +1,699 @@
 import { expect, test } from 'vitest';
-
+import type { DestinationContextGroup } from '@trove/types';
 import {
-  evaluateFeasibility,
-  evaluateMustGoPriorityFit,
-  evaluatePaceBuffer,
-  evaluatePlaceQuality,
-  evaluateRouteEfficiency,
-  evaluateTravelEffort,
-  type PlanScoreDayItem,
-  type PlanScoreMinutes,
-  type PlanScoreOpeningHours,
-  type PlanScorePlace,
-  type PlanScoreRouteLeg,
-  type PlanScoreRouteSegment,
-  type PlanScoreRouteStop,
-} from '../src/services/plan-score-factors.js';
-import { buildTripPlanScore } from '../src/services/plan-score.js';
+  evaluateScoredDay,
+  interestsForPlaceTypes,
+  loadScore,
+  daylightUtc,
+  type ScoredDayInput,
+} from '../src/services/plan-score-evaluation.js';
 import {
-  scoreDay,
-  scoreTrip,
-  type PlanScoreDayInput,
-  type PlanScoreEvidenceSource,
-  type PlanScoreFactorResult,
-} from '../src/services/plan-score-rules.js';
-
-/**
- * Plan Score calibration scenarios (PRD section 29).
- *
- * Each scenario runs real rubric evidence through the factor evaluators and the
- * scoring contract, so the checks below protect end-to-end behaviour rather than
- * hand-written factor scores. Intent is documented per scenario; the assertions
- * pin both the qualitative ordering the product depends on and the exact frozen
- * numbers, so an accidental recalibration fails loudly.
- */
-
-function at(value: number, source: PlanScoreEvidenceSource = 'USER_OWNED'): PlanScoreMinutes {
-  return { minutes: value, source };
-}
-
-function item(overrides: Partial<PlanScoreDayItem> & { id: string }): PlanScoreDayItem {
-  return {
-    duration: null,
-    fixed: false,
-    inboundTravel: null,
-    openingHours: { status: 'UNKNOWN' },
-    start: null,
-    startWindow: null,
-    ...overrides,
-  };
-}
-
-function hours(
-  startMinute: number,
-  endMinute: number,
-  source: PlanScoreEvidenceSource = 'FRESH_PROVIDER',
-): PlanScoreOpeningHours {
-  return { intervals: [{ endMinute, startMinute }], source, status: 'KNOWN' };
-}
-
-const DAYTIME = () => hours(540, 1020);
-
-function segments(...values: Array<number | null>): PlanScoreRouteSegment[] {
-  return values.map((value, index) =>
-    value === null
-      ? { id: `segment-${index}`, scope: 'LOCAL', status: 'UNKNOWN' }
-      : {
-          duration: at(value, 'FRESH_PROVIDER'),
-          id: `segment-${index}`,
-          scope: 'LOCAL',
-          status: 'KNOWN',
-        },
-  );
-}
-
-/** Four stops on a straight line, so the shortest order is unambiguous. */
-const LINE_STOPS = [
-  { id: 'base', position: 0 },
-  { id: 'a', position: 20 },
-  { id: 'b', position: 50 },
-  { id: 'c', position: 80 },
-];
-
-function lineLegs(): PlanScoreRouteLeg[] {
-  return LINE_STOPS.flatMap((from) =>
-    LINE_STOPS.filter((to) => to.id !== from.id).map((to) => ({
-      duration: at(Math.abs(from.position - to.position), 'FRESH_PROVIDER'),
-      fromId: from.id,
-      toId: to.id,
-    })),
-  );
-}
-
-function routeStops(order: string[]): PlanScoreRouteStop[] {
-  return order.map((id) => ({ fixed: id === 'base', id }));
-}
-
-function places(...ratings: number[]): PlanScorePlace[] {
-  return ratings.map((rating, index) => ({
-    rating: { rating, source: 'FRESH_PROVIDER', status: 'KNOWN' },
-    tripPlaceId: `place-${index}`,
-  }));
-}
-
-type ScenarioInput = {
-  items: PlanScoreDayItem[];
-  places?: PlanScorePlace[];
-  routeOrder?: string[];
-  segments: PlanScoreRouteSegment[];
-};
-
-function buildDay(dayId: string, scenario: ScenarioInput): PlanScoreDayInput {
-  const feasibility = evaluateFeasibility({ commitments: [], items: scenario.items });
-  const routeEfficiency = scenario.routeOrder
-    ? evaluateRouteEfficiency({ legs: lineLegs(), stops: routeStops(scenario.routeOrder) }).factor
-    : ({ reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' } satisfies PlanScoreFactorResult);
-
-  return {
-    dayId,
-    factors: {
-      FEASIBILITY: feasibility.factor,
-      PACE_BUFFER: evaluatePaceBuffer({ items: scenario.items, segments: scenario.segments })
-        .factor,
-      PLACE_QUALITY: evaluatePlaceQuality(scenario.places ?? []),
-      ROUTE_EFFICIENCY: routeEfficiency,
-      TRAVEL_EFFORT: evaluateTravelEffort(scenario.segments).factor,
+  scoringCommitments,
+  normalizeScoringItems,
+  dayOrigin,
+  scoringOpeningHours,
+} from '../src/services/plan-score-normalization.js';
+import { buildPlanScoreFromEvaluations, buildTripPlanScore } from '../src/services/plan-score.js';
+import { scoreDay, scoreTrip, toOutcome } from '../src/services/plan-score-rules.js';
+import type { PlanScoreDayItem } from '../src/services/plan-score-factors.js';
+const at = (minutes: number) => ({ minutes, source: 'USER_OWNED' as const });
+const visit = (id: string, extra: Partial<PlanScoreDayItem> = {}): PlanScoreDayItem => ({
+  id,
+  placeId: id,
+  duration: at(60),
+  fixed: true,
+  start: at(540),
+  startWindow: null,
+  inboundTravel: null,
+  openingHours: {
+    status: 'KNOWN',
+    source: 'CACHED_PROVIDER',
+    intervals: [{ startMinute: 0, endMinute: 1440 }],
+  },
+  ...extra,
+});
+const input = (extra: Partial<ScoredDayInput> = {}): ScoredDayInput => ({
+  dayId: 'day',
+  date: '2026-09-29',
+  timeZone: 'Asia/Singapore',
+  originInstant: dayOrigin('2026-09-29', 'Asia/Singapore'),
+  commitments: [],
+  items: [visit('museum')],
+  places: [
+    {
+      tripPlaceId: 'museum',
+      name: 'Museum',
+      types: ['museum'],
+      source: 'CACHED_PROVIDER',
+      rating: { status: 'KNOWN', rating: 4.5, reviewCount: 50, source: 'CACHED_PROVIDER' },
     },
-  };
-}
-
-const RATED_PLACES = places(4.6, 4.2, 4);
-const EFFICIENT_ORDER = ['base', 'a', 'b', 'c'];
-
-/** A comfortable sightseeing day: open places, real buffers, compact travel. */
-const strongDay: ScenarioInput = {
-  items: [
-    item({ duration: at(90), id: 'a', openingHours: DAYTIME(), start: at(540) }),
-    item({
-      duration: at(90),
-      id: 'b',
-      inboundTravel: at(30, 'FRESH_PROVIDER'),
-      openingHours: DAYTIME(),
-      start: at(690),
-    }),
-    item({
-      duration: at(90),
-      id: 'c',
-      inboundTravel: at(30, 'FRESH_PROVIDER'),
-      openingHours: DAYTIME(),
-      start: at(870),
-    }),
   ],
-  places: RATED_PLACES,
-  routeOrder: EFFICIENT_ORDER,
-  segments: segments(20, 30, 30, 20),
-};
-
-/** The same places, but travel makes the traveller arrive late for a booked stop. */
-const lateForBookingDay: ScenarioInput = {
-  items: [
-    item({ duration: at(90), id: 'a', openingHours: DAYTIME(), start: at(540) }),
-    item({
-      duration: at(90),
-      fixed: true,
-      id: 'b',
-      inboundTravel: at(90, 'FRESH_PROVIDER'),
-      openingHours: DAYTIME(),
-      start: at(660),
-    }),
-    item({
-      duration: at(90),
-      id: 'c',
-      inboundTravel: at(30, 'FRESH_PROVIDER'),
-      openingHours: DAYTIME(),
-      start: at(870),
-    }),
-  ],
-  places: RATED_PLACES,
-  routeOrder: EFFICIENT_ORDER,
-  segments: segments(20, 90, 30, 20),
-};
-
-/** The same places, but the last visit is planned after everything closes. */
-const closedPlaceDay: ScenarioInput = {
-  ...strongDay,
-  items: [
-    strongDay.items[0]!,
-    strongDay.items[1]!,
-    item({
-      duration: at(90),
-      id: 'c',
-      inboundTravel: at(30, 'FRESH_PROVIDER'),
-      openingHours: DAYTIME(),
-      start: at(1080),
-    }),
-  ],
-};
-
-test('scores a comfortable sightseeing day near the top of the range', () => {
-  const result = scoreDay(buildDay('strong', strongDay));
-
-  expect(result.score).toBe(95);
-  expect(result.completeness).toBe(100);
-  expect(result.confidence).toBe(100);
-  expect(result.withheldReasons).toStrictEqual([]);
+  segments: [{ id: 'local', scope: 'LOCAL', status: 'KNOWN', mode: 'drive', duration: at(0) }],
+  preferences: { pace: 'balanced', interests: ['art_museums'], unmatchedInterests: [] },
+  planningContext: { intent: 'focused', availability: null },
+  ...extra,
 });
+const assess = (extra: Partial<ScoredDayInput> = {}) => evaluateScoredDay(input(extra));
+const score = (extra: Partial<ScoredDayInput> = {}) => scoreDay(assess(extra).input);
 
-test('scores a known timing failure materially worse than the same places planned well', () => {
-  const strong = scoreDay(buildDay('strong', strongDay));
-  const late = scoreDay(buildDay('late', lateForBookingDay));
-
-  expect(late.score).toBe(58);
-  expect((strong.score ?? 0) - (late.score ?? 0) >= 30).toBe(true);
-});
-
-test('penalizes a visit planned outside known hours without punishing missing hours', () => {
-  const closed = scoreDay(buildDay('closed', closedPlaceDay));
-  const unknownHours = scoreDay(
-    buildDay('unknown-hours', {
-      ...closedPlaceDay,
-      items: closedPlaceDay.items.map((entry) => ({
-        ...entry,
-        openingHours: { status: 'UNKNOWN' },
-      })),
-    }),
-  );
-  const staleHours = scoreDay(
-    buildDay('stale-hours', {
-      ...closedPlaceDay,
-      items: closedPlaceDay.items.map((entry) => ({
-        ...entry,
-        openingHours: hours(540, 1020, 'STALE'),
-      })),
-    }),
-  );
-
-  expect(closed.score).toBe(76);
-  expect(unknownHours.score).toBe(95);
-  expect(staleHours.score).toBe(closed.score);
-  expect(
-    (staleHours.confidence ?? 0) < (closed.confidence ?? 0),
-    'stale hours must cost confidence, not score',
-  ).toBe(true);
-});
-
-test('scores an exhausting travel day well below a compact one', () => {
-  const heavyTravel = scoreDay(
-    buildDay('heavy-travel', {
-      ...strongDay,
-      items: strongDay.items.map((entry, index) =>
-        index === 0 ? entry : { ...entry, inboundTravel: at(120, 'FRESH_PROVIDER') },
-      ),
-      segments: segments(60, 120, 120, 60),
-    }),
-  );
-
-  expect(heavyTravel.score).toBe(67);
-});
-
-test('scores an overpacked day below the same places with breathing room', () => {
-  const overpacked = scoreDay(
-    buildDay('overpacked', {
-      ...strongDay,
-      items: [
-        item({ duration: at(240), id: 'a', openingHours: hours(480, 1440), start: at(540) }),
-        item({
-          duration: at(240),
-          id: 'b',
-          inboundTravel: at(10, 'FRESH_PROVIDER'),
-          openingHours: hours(480, 1440),
-          start: at(790),
-        }),
-        item({
-          duration: at(240),
-          id: 'c',
-          inboundTravel: at(10, 'FRESH_PROVIDER'),
-          openingHours: hours(480, 1440),
-          start: at(1040),
-        }),
-      ],
-      segments: segments(10, 10, 10, 10),
-    }),
-  );
-
-  expect(overpacked.score).toBe(79);
-});
-
-test('notices backtracking without letting it dominate the day', () => {
-  const strong = scoreDay(buildDay('strong', strongDay));
-  const backtracking = scoreDay(
-    buildDay('backtracking', { ...strongDay, routeOrder: ['base', 'c', 'a', 'b'] }),
-  );
-
-  expect(backtracking.score).toBe(86);
-  expect((strong.score ?? 0) - (backtracking.score ?? 0) <= 10).toBe(true);
-});
-
-test('keeps a small rating advantage from rescuing an unworkable plan', () => {
-  const wellRatedButLate = scoreDay(
-    buildDay('well-rated', { ...lateForBookingDay, places: places(4.9, 4.8, 4.7) }),
-  );
-  const workableButPlain = scoreDay(buildDay('plain', { ...strongDay, places: places(3.2, 3.1) }));
-
-  expect((workableButPlain.score ?? 0) > (wellRatedButLate.score ?? 0)).toBe(true);
-});
-
-test('reports an incomplete day honestly instead of scoring it harshly', () => {
-  const result = scoreDay(
-    buildDay('incomplete', {
-      items: [
-        item({ duration: at(90), id: 'a', start: at(540) }),
-        item({
-          duration: at(90),
-          id: 'b',
-          inboundTravel: at(30, 'FRESH_PROVIDER'),
-          start: at(690),
-        }),
-      ],
-      segments: segments(20, 30),
-    }),
-  );
-
-  expect(result.score).toBe(100);
-  expect(result.completeness).toBe(83);
-  expect(result.factors.PLACE_QUALITY).toStrictEqual({
-    reason: 'MISSING_EVIDENCE',
-    state: 'UNKNOWN',
+test('whole-day propagation catches a conflict that independent adjacent pairs would miss', () => {
+  const result = assess({
+    items: [
+      visit('a', { start: at(540), duration: at(120) }),
+      visit('b', { fixed: false, start: null, inboundTravel: at(30), duration: at(120) }),
+      visit('c', { start: at(750), inboundTravel: at(30) }),
+    ],
   });
-  expect(result.withheldReasons).toStrictEqual([]);
-});
-
-test('judges a travel-heavy day without sightseeing assumptions', () => {
-  const result = scoreDay({
-    dayId: 'travel-heavy',
-    factors: {
-      FEASIBILITY: evaluateFeasibility({
-        commitments: [{ endMinute: 660, id: 'flight', source: 'USER_OWNED', startMinute: 540 }],
-        items: [],
-      }).factor,
-      PACE_BUFFER: { state: 'NOT_APPLICABLE' },
-      PLACE_QUALITY: { state: 'NOT_APPLICABLE' },
-      ROUTE_EFFICIENCY: { state: 'NOT_APPLICABLE' },
-      TRAVEL_EFFORT: evaluateTravelEffort(segments(45)).factor,
-    },
-  });
-
-  expect(result.completeness).toBe(100);
-  expect(result.score).toBe(100);
-  expect(result.factors.PLACE_QUALITY).toStrictEqual({ state: 'NOT_APPLICABLE' });
-});
-
-test('excludes unrated places rather than treating them as poor quality', () => {
-  const unrated = evaluatePlaceQuality([
-    { rating: { status: 'UNKNOWN' }, tripPlaceId: 'place-0' },
-    { rating: { rating: 4.6, source: 'FRESH_PROVIDER', status: 'KNOWN' }, tripPlaceId: 'place-1' },
+  expect(result.conflicts).toMatchObject([
+    { kind: 'ARRIVES_AFTER_FIXED_START', severity: 'HARD', verified: true, subjectIds: ['b', 'c'] },
   ]);
-
-  expect(unrated).toStrictEqual({
-    evidence: [{ ref: 'rating:place-1', source: 'FRESH_PROVIDER' }],
-    score: 100,
-    state: 'EVALUATED',
-  });
+  expect(scoreDay(result.input).caps[0]?.limit).toBe(59);
 });
-
-test('withholds travel effort when the day has no usable route evidence', () => {
-  const result = scoreDay(
-    buildDay('routes-unavailable', { ...strongDay, segments: segments(null, null, null, null) }),
-  );
-
-  expect(result.factors.TRAVEL_EFFORT).toStrictEqual({
-    reason: 'INSUFFICIENT_EVIDENCE',
-    state: 'UNKNOWN',
+test('flexible placement waits for opening and fits around a standalone timed reservation', () => {
+  const result = assess({
+    items: [
+      visit('a', {
+        fixed: false,
+        start: null,
+        startWindow: { earliestMinute: 540, latestMinute: 720, source: 'ESTIMATED' },
+        openingHours: {
+          status: 'KNOWN',
+          source: 'CACHED_PROVIDER',
+          intervals: [{ startMinute: 600, endMinute: 900 }],
+        },
+      }),
+    ],
+    commitments: [{ id: 'booking', source: 'USER_OWNED', startMinute: 600, endMinute: 660 }],
   });
-  expect(result.score).not.toBe(0);
+  expect(result.conflicts).toEqual([]);
 });
-
-test('moves the trip score with Must Go fit under the frozen 90/10 rule', () => {
-  const days = [buildDay('strong', strongDay)];
-  const dayMean = scoreTrip({ days, mustGoPriorityFit: { state: 'NOT_APPLICABLE' } }).score;
-  const allScheduled = scoreTrip({
-    days,
-    mustGoPriorityFit: evaluateMustGoPriorityFit({
-      mustGoTripPlaceIds: ['x', 'y'],
-      scheduledTripPlaceIds: ['x', 'y'],
-      source: 'USER_OWNED',
-    }),
-  }).score;
-  const oneScheduled = scoreTrip({
-    days,
-    mustGoPriorityFit: evaluateMustGoPriorityFit({
-      mustGoTripPlaceIds: ['x', 'y', 'z', 'w'],
-      scheduledTripPlaceIds: ['x'],
-      source: 'USER_OWNED',
-    }),
-  }).score;
-
-  expect(dayMean).toBe(95);
-  expect(allScheduled).toBe(96);
-  expect(oneScheduled).toBe(88);
-});
-
-test('pins the frozen base weights through the influence of a single weak factor', () => {
-  const evaluated = (score: number): PlanScoreFactorResult => ({
-    evidence: [{ ref: 'evidence', source: 'USER_OWNED' }],
-    score,
-    state: 'EVALUATED',
+test('one flexible placement missing both hours and daypart is one material conflict', () => {
+  const result = assess({
+    items: [
+      visit('a', {
+        fixed: false,
+        start: null,
+        startWindow: { earliestMinute: 1080, latestMinute: 1140, source: 'ESTIMATED' },
+        openingHours: {
+          status: 'KNOWN',
+          source: 'CACHED_PROVIDER',
+          intervals: [{ startMinute: 540, endMinute: 1020 }],
+        },
+      }),
+    ],
   });
-  const bothCoreFactors = { FEASIBILITY: evaluated(100), TRAVEL_EFFORT: evaluated(100) };
-  const withWeakFactor = (factor: keyof PlanScoreDayInput['factors']) =>
-    scoreDay({ dayId: 'weights', factors: { ...bothCoreFactors, [factor]: evaluated(0) } }).score;
-
-  // Each secondary factor is paired with both core factors, because a day scored
-  // from secondary factors alone falls under the display gate and is withheld.
+  expect(result.conflicts).toHaveLength(1);
+  expect(result.conflicts[0]?.severity).toBe('MATERIAL');
+  expect(scoreDay(result.input).caps[0]?.limit).toBe(74);
+});
+test('estimated durations can support a qualified risk but never a hard cap', () => {
+  const result = assess({
+    items: [
+      visit('a', { duration: { minutes: 180, source: 'ESTIMATED' } }),
+      visit('b', { start: at(660), inboundTravel: at(0) }),
+    ],
+  });
+  expect(result.conflicts.some((c) => c.verified && c.severity === 'HARD')).toBe(false);
+  expect(scoreDay(result.input).caps).toEqual([]);
+});
+test('linked journey duration is counted once and its own booking cannot collide with it', () => {
+  const commitments = [
+    {
+      id: 'flight',
+      itemId: 'a',
+      source: 'USER_OWNED' as const,
+      startMinute: 600,
+      endMinute: 900,
+      longDistance: true,
+      endKnown: true,
+    },
+  ];
+  const items = normalizeScoringItems('2026-09-29', 'Asia/Singapore', [visit('a')], {
+    commitments,
+  });
+  const result = assess({ items, commitments, segments: [] });
+  expect(result.conflicts).toEqual([]);
+  expect(result.pace.activeMinutes).toBe(150);
+});
+test('generic linked reservations do not double count the visit', () => {
+  const result = assess({
+    commitments: [
+      { id: 'booking', itemId: 'museum', source: 'USER_OWNED', startMinute: 540, endMinute: 600 },
+    ],
+  });
+  expect(result.pace.activeMinutes).toBe(60);
+  expect(result.conflicts).toEqual([]);
+});
+test.each([
+  ['relaxed', 70],
+  ['balanced', 100],
+  ['packed', 100],
+] as const)('%s uses the approved comfort target', (pace, expected) => {
   expect(
-    scoreDay({
-      dayId: 'core-split',
-      factors: { FEASIBILITY: evaluated(100), TRAVEL_EFFORT: evaluated(0) },
-    }).score,
-  ).toBe(58);
-  expect(withWeakFactor('PACE_BUFFER')).toBe(80);
-  expect(withWeakFactor('ROUTE_EFFICIENCY')).toBe(86);
-  expect(withWeakFactor('PLACE_QUALITY')).toBe(92);
+    toOutcome(
+      assess({
+        items: [visit('museum', { duration: at(450) })],
+        preferences: { pace, interests: [], unmatchedInterests: [] },
+      }).pace.factor,
+    ),
+  ).toMatchObject({ score: expected });
 });
-
-test('rounds a displayed score half-up from the unrounded calculation', () => {
-  const evaluated = (score: number): PlanScoreFactorResult => ({
-    evidence: [{ ref: 'evidence', source: 'USER_OWNED' }],
-    score,
-    state: 'EVALUATED',
-  });
-  const result = scoreDay({
-    dayId: 'rounding',
-    factors: { FEASIBILITY: evaluated(100), TRAVEL_EFFORT: evaluated(22) },
-  });
-
-  // The unrounded weighted mean is exactly 67.5.
-  expect(result.score).toBe(68);
+test.each([
+  [1, 100],
+  [1.125, 85],
+  [1.25, 70],
+  [1.375, 55],
+  [1.5, 40],
+  [1.75, 20],
+  [2, 0],
+  [3, 0],
+])('comfort interpolation at %f is %f', (ratio, expected) =>
+  expect(loadScore(ratio)).toBe(expected),
+);
+test.each([
+  ['walk', 75],
+  ['drive', 60],
+  ['transit', 45],
+])('%s has the prescribed effort multiplier', (mode, load) => {
+  expect(
+    assess({
+      items: [],
+      places: [],
+      segments: [{ id: 'leg', scope: 'LOCAL', status: 'KNOWN', mode, duration: at(60) }],
+      planningContext: { intent: 'transit', availability: null },
+    }).pace.activeMinutes,
+  ).toBe(load);
 });
-
-test('respects the item time zone when deriving local start times', () => {
-  const withZone = (timeZone: string) =>
-    buildTripPlanScore({
-      days: [
+test('known available time constrains the comfort target', () => {
+  const result = assess({
+    items: [visit('museum', { duration: at(150) })],
+    planningContext: { intent: 'focused', availability: { start: '09:00', end: '11:00' } },
+  });
+  expect(toOutcome(result.pace.factor)).toMatchObject({ score: 70 });
+});
+test('missing durations remain unknown except when a known lower bound proves overload', () => {
+  const unknown = assess({ items: [visit('a', { duration: null })] });
+  expect(unknown.pace.factor.state).toBe('UNKNOWN');
+  const overload = assess({
+    items: [
+      visit('a', { duration: at(700) }),
+      visit('b', { duration: null, inboundTravel: at(0), start: at(1300) }),
+    ],
+  });
+  expect(overload.pace.factor).toMatchObject({ state: 'EVALUATED', coverage: 50 });
+  expect(overload.input.loadRatio).toBeNull();
+});
+test('missing local legs cannot make a comfortably paced complete day', () => {
+  expect(
+    assess({ segments: [{ id: 'missing', scope: 'LOCAL', status: 'UNKNOWN' }] }).pace.factor.state,
+  ).toBe('UNKNOWN');
+});
+test('flight distance, omitted meals and omitted break stops are never penalties', () => {
+  const one = score();
+  const withoutRating = score({
+    places: [{ tripPlaceId: 'museum', types: ['museum'], rating: { status: 'UNKNOWN' } }],
+  });
+  expect(one.score).toBe(100);
+  expect(withoutRating.score).toBe(100);
+  const flight = (distanceMeters: number) =>
+    assess({
+      items: [],
+      places: [],
+      commitments: [
         {
-          commitments: [{ endMinute: 300, id: 'transfer', startMinute: 180 }],
-          date: '2026-09-01',
-          id: 'day-1',
-          items: [
+          id: 'flight',
+          source: 'USER_OWNED',
+          startMinute: 600,
+          endMinute: 900,
+          longDistance: true,
+          endKnown: true,
+        },
+      ],
+      segments: [{ id: 'flight', scope: 'LONG_DISTANCE', status: 'UNKNOWN', distanceMeters }],
+      planningContext: { intent: 'transit', availability: null },
+    });
+  expect(flight(1000).input.factors).toEqual(flight(10_000_000).input.factors);
+  expect(flight(1000).input.factors.ROUTE_EFFICIENCY?.state).toBe('NOT_APPLICABLE');
+});
+test('custom/unrated venues and mismatched interests remain unknown rather than inferior', () => {
+  const result = assess({
+    places: [{ tripPlaceId: 'custom', types: ['unrecognized'], rating: { status: 'UNKNOWN' } }],
+  });
+  expect(result.input.factors.EXPERIENCE_QUALITY?.state).toBe('UNKNOWN');
+  expect(result.utilization.state).toBe('UNKNOWN');
+  expect(interestsForPlaceTypes(['tourist_attraction', 'point_of_interest'])).toEqual([]);
+  expect(interestsForPlaceTypes(['art_gallery'])).toEqual(['art_museums']);
+  expect(interestsForPlaceTypes(['hiking_area'])).toEqual(['nature_scenery', 'outdoor_activities']);
+});
+test('ratings alone support only 15 percent of experience coverage, not interest fit or uniqueness', () => {
+  const result = assess({
+    preferences: { pace: 'balanced', interests: [], unmatchedInterests: [] },
+  });
+  expect(toOutcome(result.input.factors.EXPERIENCE_QUALITY!)).toMatchObject({
+    score: 100,
+    coverage: 15,
+  });
+});
+test('intentional focused repetition does not require diversity or extra stops', () => {
+  const result = assess({
+    items: [visit('museum'), visit('gallery', { start: at(660), inboundTravel: at(0) })],
+    places: [
+      ...input().places,
+      { tripPlaceId: 'gallery', types: ['art_gallery'], rating: { status: 'UNKNOWN' } },
+    ],
+  });
+  expect(result.variety.state).toBe('NOT_APPLICABLE');
+  expect(result.input.factors.PLAN_COMPOSITION).toMatchObject({ score: 100 });
+});
+test('explicit rest with known free availability can score and recover without stops', () => {
+  const result = assess({
+    items: [],
+    places: [],
+    segments: [],
+    planningContext: { intent: 'rest', availability: { start: '09:00', end: '17:00' } },
+  });
+  expect(scoreDay(result.input).score).toBe(100);
+  expect(result.input.loadRatio).toBe(0);
+  expect(score({ items: [], places: [], segments: [], planningContext: null }).score).toBeNull();
+  expect(
+    assess({
+      items: [],
+      places: [],
+      segments: [],
+      planningContext: { intent: 'rest', availability: null },
+    }).input.loadRatio,
+  ).toBeNull();
+});
+test('a series of demanding days is worse than the same intrinsic days with recovery', () => {
+  const demanding = assess({ items: [visit('museum', { duration: at(600) })] }).input;
+  const rest = assess({
+    items: [],
+    places: [],
+    segments: [],
+    planningContext: { intent: 'rest', availability: { start: '09:00', end: '17:00' } },
+  }).input;
+  const sustained = scoreTrip({
+    days: [0, 1, 2].map((i) => ({ ...demanding, dayId: String(i), date: `2026-10-0${i + 1}` })),
+  });
+  const recovered = scoreTrip({
+    days: [
+      { ...demanding, dayId: 'a', date: '2026-10-01' },
+      { ...rest, dayId: 'r', date: '2026-10-02' },
+      { ...demanding, dayId: 'b', date: '2026-10-03' },
+    ],
+  });
+  expect(sustained.fatigueAdjustment).toBeGreaterThan(recovered.fatigueAdjustment);
+});
+test('complementary focused days cover explicit interests at trip scope', () => {
+  const preferences = {
+    pace: 'balanced',
+    interests: ['art_museums', 'nature_scenery'],
+    unmatchedInterests: [],
+  };
+  const a = assess({ preferences });
+  const b = assess({
+    preferences,
+    places: [{ tripPlaceId: 'park', types: ['botanical_garden'], rating: { status: 'UNKNOWN' } }],
+  });
+  const result = buildPlanScoreFromEvaluations({
+    days: [
+      { date: '2026-09-29', evaluation: a },
+      { date: '2026-09-30', evaluation: b },
+    ],
+    mustGoIds: [],
+    scheduledIds: [],
+  });
+  expect(result.components.VARIETY_COVERAGE).toMatchObject({ score: 100, coverage: 100 });
+});
+const context = (
+  kind: 'season' | 'holiday' | 'closure',
+  interestMatch = true,
+): DestinationContextGroup[] => [
+  {
+    destination: 'singapore',
+    records: [
+      {
+        id: 'record',
+        revision: 1,
+        scope: { destination: 'singapore', venueAliases: ['Museum'] },
+        kind,
+        applicability: { kind: 'dates', start: '2026-09-29', end: '2026-09-29' },
+        interests: ['nature_scenery'],
+        contentKey: 'record',
+        sourceUrl: 'https://example.gov',
+        certainty: kind === 'season' ? 'tendency' : 'fact',
+        reviewedAt: '2026-09-28T00:00:00Z',
+        expiresAt: '2026-09-29T16:00:00Z',
+        interestMatch,
+        matchedDates: ['2026-09-29'],
+        ...(kind === 'closure' ? { accessEffect: 'full_closure' as const } : {}),
+      },
+    ],
+  },
+];
+test('seasonal patterns and holidays never establish closure or quality penalties', () => {
+  const plain = score(),
+    season = score({ context: context('season') }),
+    holiday = score({ context: context('holiday') });
+  expect(season.score).toBe(plain.score);
+  expect(holiday.score).toBe(plain.score);
+  expect(season.caps).toEqual([]);
+  expect(holiday.caps).toEqual([]);
+  expect(assess({ context: context('season', false) }).seasonalFit.state).toBe('UNKNOWN');
+});
+test('only dated authoritative full closure for the exact venue establishes a hard conflict', () => {
+  expect(score({ context: context('closure') }).caps[0]?.limit).toBe(59);
+  expect(
+    score({
+      context: context('closure').map((g) => ({
+        ...g,
+        records: g.records.map((r) => ({
+          ...r,
+          scope: { ...r.scope, venueAliases: ['Other venue'] },
+        })),
+      })),
+    }).caps,
+  ).toEqual([]);
+});
+test('daylight is calculated locally and polar conditions remain unknown', () => {
+  const light = daylightUtc('2026-09-29', { latitude: 1.35, longitude: 103.82 });
+  expect(light?.sunrise).toBeLessThan(light!.sunset);
+  expect(light!.sunset - light!.sunrise).toBeGreaterThan(11 * 3600000);
+  expect(daylightUtc('2026-06-21', { latitude: 89, longitude: 0 })).toBeNull();
+  const daylightVisit = assess({
+    items: [visit('park')],
+    places: [
+      {
+        tripPlaceId: 'park',
+        types: ['park'],
+        coordinates: { latitude: 1.35, longitude: 103.82 },
+        rating: { status: 'UNKNOWN' },
+      },
+    ],
+  });
+  expect(daylightVisit.seasonalFit.state).toBe('UNKNOWN');
+});
+test('overnight journeys occupy both local days and preserve timezone changes', () => {
+  const bookings = [
+    {
+      id: 'flight',
+      flightDepartureInstant: new Date('2026-09-29T14:00:00Z'),
+      flightArrivalInstant: new Date('2026-09-30T02:00:00Z'),
+    },
+  ];
+  expect(scoringCommitments(bookings, '2026-09-29', 'Asia/Singapore')).toMatchObject([
+    { startMinute: 1320, endMinute: 1440, longDistance: true },
+  ]);
+  expect(scoringCommitments(bookings, '2026-09-30', 'Asia/Tokyo')).toMatchObject([
+    { startMinute: 0, endMinute: 660, startKnown: true, longDistance: true },
+  ]);
+  const arrivalDay = assess({
+    commitments: scoringCommitments(bookings, '2026-09-30', 'Asia/Tokyo'),
+  });
+  expect(arrivalDay.conflicts).toContainEqual(
+    expect.objectContaining({ severity: 'HARD', verified: true }),
+  );
+  expect(scoreDay(arrivalDay.input).caps[0]?.limit).toBe(59);
+});
+test.each([
+  ['2026-03-08', 1380],
+  ['2026-11-01', 1500],
+])('DST day %s has %i real occupied minutes', (date, minutes) => {
+  const origin = dayOrigin(date, 'America/New_York');
+  expect(
+    scoringCommitments(
+      [
+        {
+          id: 'train',
+          transportDepartureInstant: new Date(origin),
+          transportArrivalInstant: new Date(origin + minutes * 60000),
+        },
+      ],
+      date,
+      'America/New_York',
+    ),
+  ).toMatchObject([{ startMinute: 0, endMinute: minutes }]);
+});
+test('missing arrivals never become zero-duration journeys or proven recovery', () => {
+  const commitments = scoringCommitments(
+    [{ id: 'flight', flightDepartureInstant: new Date('2026-09-29T01:00:00Z') }],
+    '2026-09-29',
+    'Asia/Singapore',
+  );
+  expect(commitments).toMatchObject([{ startMinute: 540, endMinute: 540, endKnown: false }]);
+  const result = assess({ items: [], places: [], segments: [], commitments });
+  expect(result.pace.factor.state).toBe('UNKNOWN');
+  expect(result.input.loadRatio).toBeNull();
+});
+test('one known booking does not establish duration coverage for unrelated long-distance legs', () => {
+  const commitments = [
+    {
+      id: 'booking',
+      itemId: 'train',
+      longDistance: true,
+      source: 'USER_OWNED' as const,
+      startMinute: 120,
+      endMinute: 180,
+      endKnown: true,
+    },
+  ];
+  const segment = { id: 'journey', scope: 'LONG_DISTANCE' as const, status: 'UNKNOWN' as const };
+  expect(
+    assess({ commitments, segments: [{ ...segment, itemIds: ['another-journey'] }] }).pace.factor
+      .state,
+  ).toBe('UNKNOWN');
+  expect(
+    assess({ commitments, segments: [{ ...segment, itemIds: ['train'] }] }).pace.factor.state,
+  ).toBe('EVALUATED');
+});
+test('authoritative instants distinguish both occurrences of a repeated DST hour', () => {
+  const items = normalizeScoringItems(
+    '2026-11-01',
+    'America/New_York',
+    [visit('first', { start: at(90) }), visit('second', { start: at(90) })],
+    {
+      instants: new Map([
+        ['first', new Date('2026-11-01T05:30:00Z')],
+        ['second', new Date('2026-11-01T06:30:00Z')],
+      ]),
+    },
+  );
+  expect(items.map((i) => i.start?.minutes)).toEqual([90, 150]);
+});
+test('dated hours apply only within their stated horizon; overnight weekly hours cross midnight', () => {
+  const date = '2026-09-29',
+    zone = 'Asia/Singapore',
+    origin = dayOrigin(date, zone);
+  const hours = {
+    timeZone: zone,
+    utcOffsetMinutes: 480,
+    periods: [{ open: { day: 2, hour: 9, minute: 0 }, close: { day: 2, hour: 17, minute: 0 } }],
+    currentPeriods: [
+      { open: { day: 2, hour: 10, minute: 0, date }, close: { day: 2, hour: 12, minute: 0, date } },
+    ],
+    validFrom: date,
+    validThrough: date,
+  };
+  expect(scoringOpeningHours({ date, zone, origin, hours })).toMatchObject({
+    intervals: [{ startMinute: 600, endMinute: 720 }],
+  });
+  expect(
+    scoringOpeningHours({ date: '2026-10-06', zone, origin: dayOrigin('2026-10-06', zone), hours }),
+  ).toMatchObject({ intervals: [{ startMinute: 540, endMinute: 1020 }] });
+  expect(
+    scoringOpeningHours({
+      date,
+      zone,
+      origin,
+      hours: {
+        ...hours,
+        currentPeriods: undefined,
+        periods: [{ open: { day: 1, hour: 22, minute: 0 }, close: { day: 2, hour: 2, minute: 0 } }],
+      },
+    }),
+  ).toMatchObject({ intervals: [{ startMinute: 0, endMinute: 120 }] });
+});
+
+test('an unknown overnight arrival cannot establish recovery on a later rest day', () => {
+  const commitments = scoringCommitments(
+    [{ id: 'flight', flightDepartureInstant: new Date('2026-09-28T14:00:00Z') }],
+    '2026-09-29',
+    'Asia/Singapore',
+  );
+  expect(commitments).toMatchObject([{ startKnown: false, endKnown: false }]);
+  const result = assess({
+    items: [],
+    places: [],
+    segments: [],
+    commitments,
+    planningContext: { intent: 'rest', availability: { start: '09:00', end: '17:00' } },
+  });
+  expect(result.input.loadRatio).toBeNull();
+  expect(result.conflicts).toEqual([]);
+});
+test('linked indispensable connections propagate the trip cap and item references', () => {
+  const result = assess({
+    commitments: [
+      {
+        id: 'connection',
+        source: 'USER_OWNED',
+        startMinute: 540,
+        endMinute: 660,
+        longDistance: true,
+        indispensable: true,
+      },
+    ],
+  });
+  expect(result.input.indispensableConnectionConflict).toBe(true);
+  expect(scoreTrip({ days: [result.input] }).caps[0]?.reason).toBe('TRIP_CONNECTION_CONFLICT');
+  expect(scoreDay(result.input).caps[0]?.references).toEqual(['connection', 'museum']);
+});
+
+test('an estimated visit end cannot establish an entirely closed fixed visit cap', () => {
+  const result = assess({
+    items: [
+      visit('museum', {
+        duration: { minutes: 120, source: 'ESTIMATED' },
+        openingHours: {
+          status: 'KNOWN',
+          source: 'CACHED_PROVIDER',
+          intervals: [{ startMinute: 720, endMinute: 1020 }],
+        },
+      }),
+    ],
+  });
+  expect(result.conflicts[0]).toMatchObject({ verified: false, severity: 'SOFT' });
+  expect(scoreDay(result.input).caps).toEqual([]);
+});
+
+test('an unreachable daypart remains material when its own duration is missing', () => {
+  const result = assess({
+    items: [
+      visit('a', { start: at(900) }),
+      visit('b', {
+        fixed: false,
+        start: null,
+        duration: null,
+        inboundTravel: at(90),
+        startWindow: { earliestMinute: 540, latestMinute: 720, source: 'ESTIMATED' },
+      }),
+    ],
+  });
+  expect(result.conflicts).toContainEqual(
+    expect.objectContaining({ severity: 'MATERIAL', kind: 'ARRIVES_AFTER_FIXED_START' }),
+  );
+});
+test('original evidence age changes the assessment fingerprint and its expiry', () => {
+  const evaluation = assess();
+  const build = (evidenceTimes: string[]) =>
+    buildPlanScoreFromEvaluations({
+      days: [{ date: '2026-09-29', evaluation }],
+      mustGoIds: [],
+      scheduledIds: [],
+      evaluatedAt: new Date('2026-09-29T00:00:00Z'),
+      evidenceTimes,
+    });
+  const older = build(['2026-08-30T01:00:00Z']),
+    fresh = build(['2026-09-28T00:00:00Z']);
+  expect(older.fingerprint).not.toBe(fresh.fingerprint);
+  expect(older.expiresAt).toBe('2026-09-29T01:00:00.000Z');
+  expect(fresh.expiresAt).toBe('2026-09-30T00:00:00.000Z');
+});
+
+test('AI estimates and equivalent stored itinerary inputs produce the same category outcomes', () => {
+  const original = input();
+  const date = original.date!,
+    zone = original.timeZone!;
+  const hours = new Map([
+    [
+      'museum',
+      {
+        periods: [{ open: { day: 0, hour: 0, minute: 0 }, close: null }],
+        utcOffsetMinutes: 480,
+        timeZone: zone,
+        source: 'CACHED_PROVIDER' as const,
+      },
+    ],
+  ]);
+  const estimated = visit('museum', {
+    fixed: false,
+    start: { minutes: 540, source: 'ESTIMATED' },
+    duration: { minutes: 60, source: 'ESTIMATED' },
+    inboundTravel: at(0),
+    inboundRequired: true,
+  });
+  const planningContext = { intent: 'focused', availability: { start: '09:00', end: '17:00' } };
+  const direct = scoreDay(
+    evaluateScoredDay({
+      ...original,
+      planningContext,
+      items: normalizeScoringItems(date, zone, [estimated], { hours }),
+    }).input,
+  );
+  const stored = buildTripPlanScore({
+    preferences: original.preferences,
+    places: new Map(original.places.map((p) => [p.tripPlaceId, p])),
+    hours,
+    ratings: new Map(),
+    mustGoTripPlaceIds: [],
+    days: [
+      {
+        id: 'day',
+        date,
+        timeZone: zone,
+        planningContext,
+        commitments: [],
+        items: [
+          {
+            id: 'museum',
+            tripPlaceId: 'museum',
+            durationMinutes: 60,
+            durationProvenance: 'AI_ESTIMATED',
+            timeProvenance: 'AI_ESTIMATED',
+            timeSemantics: 'FLOATING_LOCAL',
+            timeZone: zone,
+            startInstant: null,
+            localStartTime: new Date('1970-01-01T09:00:00Z'),
+            dayPart: null,
+            reservationCount: 0,
+          },
+        ],
+      },
+    ],
+    routes: new Map([
+      [
+        'day',
+        {
+          generatedAt: '2026-09-29T00:00:00Z',
+          segments: [
             {
-              dayPart: null,
-              durationMinutes: 60,
-              id: 'item-a',
-              localStartTime: null,
-              reservationCount: 1,
-              startInstant: new Date('2026-09-01T16:00:00.000Z'),
-              timeSemantics: 'AUTHORITATIVE_INSTANT',
-              timeProvenance: null,
-              timeZone,
-              tripPlaceId: null,
+              id: 'local',
+              mode: 'drive',
+              scope: 'local',
+              durationSeconds: 0,
+              distanceMeters: 0,
+              encodedPolyline: null,
+              provider: null,
+              status: 'ok',
+              reason: null,
+              origin: { id: 'base', kind: 'daily_base', label: null },
+              destination: { id: 'museum', kind: 'itinerary_item', label: null },
+              modeOwner: { id: 'day', kind: 'day_start' },
             },
           ],
-          timeZone: 'UTC',
+          summary: {
+            distanceMeters: 0,
+            durationSeconds: 0,
+            knownSegmentCount: 1,
+            localSegmentCount: 1,
+            scheduledPlaceCount: 1,
+            status: 'complete',
+            totalSegmentCount: 1,
+          },
         },
       ],
-      hours: new Map(),
-      mustGoTripPlaceIds: [],
-      ratings: new Map(),
-      routes: new Map(),
-    });
-
-  // 16:00 UTC is 04:00 in Auckland, inside the transfer window, and 16:00 in UTC, outside it.
-  expect(
-    withZone('Pacific/Auckland').days[0]?.explanations.worthImproving.map(
-      (entry) => entry.messageKey,
-    ),
-  ).toStrictEqual(['feasibility.overlappingCommitments']);
-  expect(withZone('UTC').days[0]?.explanations.worthImproving).toStrictEqual([]);
-});
-
-test('returns identical results for identical evidence', () => {
-  const days = [buildDay('strong', strongDay), buildDay('late', lateForBookingDay)];
-  const mustGoPriorityFit = evaluateMustGoPriorityFit({
-    mustGoTripPlaceIds: ['x', 'y'],
-    scheduledTripPlaceIds: ['x'],
-    source: 'USER_OWNED',
+    ]),
   });
-
-  expect(scoreTrip({ days, mustGoPriorityFit })).toStrictEqual(
-    scoreTrip({ days, mustGoPriorityFit }),
-  );
+  expect(stored.days[0]?.factors).toEqual(direct.factors);
+  expect(stored.days[0]?.score).toBe(direct.score);
 });

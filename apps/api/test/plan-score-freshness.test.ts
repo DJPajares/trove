@@ -50,7 +50,13 @@ test('expired assessments withhold numbers without rewriting the original assess
   expect(result.generatedAt).toBe(score.generatedAt);
 });
 
-test('old stored score payloads remain readable without the optional metadata', () => {
+test('current versioned payloads remain readable without optional age metadata', () => {
   const { evidenceAsOf: _age, ...legacy } = emptyPlanScore();
   expect(parseStoredPlanScore(legacy)).toEqual(legacy);
+});
+
+test('incompatible rubric and legacy category payloads are rejected', () => {
+  const score = emptyPlanScore();
+  expect(parseStoredPlanScore({ ...score, schemaVersion: 4, rubricVersion: 4 })).toBeNull();
+  expect(parseStoredPlanScore({ ...score, rubricVersion: 99 })).toBeNull();
 });

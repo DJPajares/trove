@@ -1,3 +1,4 @@
+import { scoreDay, toPlanScoreDayPayload } from '../src/services/plan-score-rules.js';
 import { Prisma } from '@trove/db';
 import type { AiPlannerDraft } from '@trove/types';
 import { describe, expect, test } from 'vitest';
@@ -38,12 +39,12 @@ function draftAssessment(draft: AiPlannerDraft, evaluatedAt = new Date(NOW.getTi
     score: 72,
     withheldReasons: [],
     days: draft.days.map((day) => ({
+      ...toPlanScoreDayPayload(scoreDay({ dayId: day.date, factors: {} })),
       completeness: 80,
       confidence: 90,
       date: day.date,
       dayId: day.date,
       explanations: { uncertainty: [], whatWorks: [], worthImproving: [] },
-      factors: {},
       score: 72,
       withheldReasons: [],
     })),
@@ -727,6 +728,7 @@ test('the draft score is carried onto the trip, keyed and remapped to its rows',
   const planScore = {
     ...draftAssessment(draft),
     days: draft.days.map((day) => ({
+      ...toPlanScoreDayPayload(scoreDay({ dayId: day.date, factors: {} })),
       completeness: 80,
       confidence: 90,
       date: day.date,
@@ -737,6 +739,8 @@ test('the draft score is carried onto the trip, keyed and remapped to its rows',
         worthImproving: [
           {
             action: 'ADJUST_TIME' as const,
+            code: 'TIGHT_TRANSITION',
+            severity: 'RISK' as const,
             factor: 'FEASIBILITY',
             messageKey: 'feasibility.tight',
             references: [dayItem.id],
@@ -744,7 +748,6 @@ test('the draft score is carried onto the trip, keyed and remapped to its rows',
           },
         ],
       },
-      factors: {},
       score: 72,
       withheldReasons: [],
     })),

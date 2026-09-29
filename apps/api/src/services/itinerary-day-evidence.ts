@@ -22,6 +22,11 @@ export type PlaceHoursEvidence = Map<
     periods: PlaceOpeningPeriod[];
     utcOffsetMinutes: number | null;
     source?: 'FRESH_PROVIDER' | 'CACHED_PROVIDER';
+    timeZone?: string | null;
+    fetchedAt?: string;
+    currentPeriods?: PlaceOpeningPeriod[];
+    validFrom?: string | null;
+    validThrough?: string | null;
   }
 >;
 
@@ -43,6 +48,10 @@ export type ItineraryDayCommitmentRecord = {
   endMinute: number;
   id: string;
   startMinute: number;
+  itemId?: string | null;
+  endKnown?: boolean;
+  longDistance?: boolean;
+  indispensable?: boolean;
 };
 
 export type ItineraryDayRecord = {
@@ -51,6 +60,7 @@ export type ItineraryDayRecord = {
   id: string;
   items: ItineraryDayItemRecord[];
   timeZone: string;
+  planningContext?: unknown;
 };
 
 export function toLocalDate(value: Date) {

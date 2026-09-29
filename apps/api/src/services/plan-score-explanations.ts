@@ -2,7 +2,8 @@ import type {
   PlanScoreExplanation,
   PlanScoreExplanationFactor,
   PlanScoreExplanationGroups,
-  PlanScoreSuggestedAction,
+  PlanScoreFactorOutcome,
+  PlanScoreCap,
 } from '@trove/types';
 export type {
   PlanScoreExplanation,
@@ -10,370 +11,240 @@ export type {
   PlanScoreExplanationGroups,
   PlanScoreSuggestedAction,
 } from '@trove/types';
-
 import type {
   PlanScoreAlternative,
-  PlanScoreAlternativeAction,
   PlanScoreConflict,
   PlanScoreConflictKind,
-  PlanScoreConflictSeverity,
-  PlanScorePaceEvaluation,
-  PlanScoreRouteEfficiencyEvaluation,
-  PlanScoreTravelEffortEvaluation,
 } from './plan-score-factors.js';
-import type {
-  PlanScoreDayResult,
-  PlanScoreEvidence,
-  PlanScoreFactorOutcome,
-} from './plan-score-rules.js';
-
-/**
- * Deterministic Plan Score explanations (PRD section 29.4).
- *
- * Explanations are structured objects carrying localization keys and values, so
- * no user-facing prose lives here and no model call is needed to produce them.
- * Values describe the plan in the traveller's own terms: minutes, counts, and
- * public ratings, never base weights or factor math.
- *
- * Suggestions are inert. `planReplacement` describes what a confirmed Replace
- * would carry over and what the traveller must review; nothing is applied here.
- */
-
-export type PlanScoreDayExplanationInput = {
-  /** Recommendations only; they never change the itinerary. */
-  alternatives: PlanScoreAlternative[];
-  conflicts: PlanScoreConflict[];
-  day: PlanScoreDayResult;
-  pace: Pick<PlanScorePaceEvaluation, 'activeMinutes' | 'smallestBufferMinutes'>;
-  route: Pick<PlanScoreRouteEfficiencyEvaluation, 'bestMinutes' | 'plannedMinutes'>;
-  travel: Pick<PlanScoreTravelEffortEvaluation, 'totalMinutes'>;
-};
-
-export type PlanScoreTripExplanationInput = {
-  mustGoPriorityFit: PlanScoreFactorOutcome;
-  /** Must Go Trip Places not scheduled anywhere in the itinerary. */
-  unscheduledMustGoTripPlaceIds: string[];
-};
-
-type ExplanationGroup = keyof PlanScoreExplanationGroups;
-
-type Entry = PlanScoreExplanation & { group: ExplanationGroup };
-
-const FACTOR_MESSAGE_ROOTS: Record<PlanScoreExplanationFactor, string> = {
-  FEASIBILITY: 'feasibility',
-  MUST_GO_PRIORITY_FIT: 'mustGo',
-  PACE_BUFFER: 'pace',
-  PLACE_QUALITY: 'placeQuality',
-  ROUTE_EFFICIENCY: 'routeEfficiency',
-  TRAVEL_EFFORT: 'travelEffort',
-};
-
-const CONFLICT_MESSAGES: Record<
-  PlanScoreConflictKind,
-  { action: PlanScoreSuggestedAction; messageKey: string }
-> = {
-  ARRIVES_AFTER_FIXED_START: {
-    action: 'ADJUST_TIME',
-    messageKey: 'feasibility.arrivesAfterFixedStart',
-  },
-  OUTSIDE_OPENING_HOURS: { action: 'ADJUST_TIME', messageKey: 'feasibility.outsideOpeningHours' },
-  OVERLAPPING_COMMITMENTS: {
-    action: 'ADJUST_TIME',
-    messageKey: 'feasibility.overlappingCommitments',
-  },
-  TIGHT_TRANSITION: { action: 'ADD_BUFFER', messageKey: 'feasibility.tightTransition' },
-};
-
-const ALTERNATIVE_MESSAGES: Record<PlanScoreAlternativeAction, string> = {
-  ADD: 'alternative.add',
-  REPLACE: 'alternative.replace',
-};
-
-const SEVERITY_ORDER: Record<PlanScoreConflictSeverity, number> = { HARD: 0, MATERIAL: 1, SOFT: 2 };
-
-/** A factor at or above this reads as working; at or below the weak mark it deserves attention. */
-const STRONG_FACTOR_SCORE = 85;
-const WEAK_FACTOR_SCORE = 60;
-
-/** Item fields a confirmed Replace carries over unchanged (PRD section 29.4). */
-export const PLAN_SCORE_PRESERVED_ITEM_FIELDS: readonly string[] = [
+import type { PlanScoreDayResult } from './plan-score-rules.js';
+import { DAY_FACTOR_IDS } from './plan-score-rules.js';
+import type { DayAdvisory } from './plan-score-evaluation.js';
+export const PLAN_SCORE_PRESERVED_ITEM_FIELDS = [
   'dayPart',
   'durationMinutes',
   'notes',
   'priority',
   'startDate',
   'startTime',
-];
-
-function uncertaintyEntries(
+] as const;
+export type PlanScoreDayExplanationInput = {
+  alternatives: PlanScoreAlternative[];
+  conflicts: PlanScoreConflict[];
+  day: PlanScoreDayResult;
+  pace: {
+    activeMinutes: number | null;
+    smallestBufferMinutes: number | null;
+    lowerBoundMinutes?: number | null;
+  };
+  route: { bestMinutes: number | null; plannedMinutes: number | null };
+  travel: { totalMinutes: number | null };
+  advisories?: DayAdvisory[];
+};
+export type PlanScoreTripExplanationInput = {
+  components: Record<string, PlanScoreFactorOutcome>;
+  caps: PlanScoreCap[];
+  unscheduledMustGoTripPlaceIds: string[];
+  fatigueAdjustment: number;
+  weakDayAdjustment: number;
+};
+const roots: Record<PlanScoreExplanationFactor, string> = {
+  FEASIBILITY: 'feasibility',
+  ROUTE_EFFICIENCY: 'routeEfficiency',
+  PACE_COMFORT: 'pace',
+  EXPERIENCE_QUALITY: 'experienceQuality',
+  PLAN_COMPOSITION: 'composition',
+  DAILY_QUALITY: 'dailyQuality',
+  DESTINATION_UTILIZATION: 'utilization',
+  VARIETY_COVERAGE: 'variety',
+  SEASONAL_FIT: 'seasonalFit',
+};
+const conflictMessages: Record<PlanScoreConflictKind, string> = {
+  ARRIVES_AFTER_FIXED_START: 'feasibility.arrivesAfterFixedStart',
+  OUTSIDE_OPENING_HOURS: 'feasibility.outsideOpeningHours',
+  OVERLAPPING_COMMITMENTS: 'feasibility.overlappingCommitments',
+  TIGHT_TRANSITION: 'feasibility.tightTransition',
+  OUTSIDE_AVAILABILITY: 'feasibility.outsideAvailability',
+};
+function reason(
   factor: PlanScoreExplanationFactor,
-  outcome: PlanScoreFactorOutcome,
-  evidence: PlanScoreEvidence[],
-): Entry[] {
-  const root = FACTOR_MESSAGE_ROOTS[factor];
-
-  if (outcome.state === 'NOT_APPLICABLE') return [];
-  if (outcome.state === 'UNKNOWN') {
-    return [
-      {
-        action: null,
-        factor,
-        group: 'uncertainty',
-        messageKey: `${root}.unknown`,
-        references: [],
-        values: {},
-      },
-    ];
-  }
-
-  const stale = evidence.filter((entry) => entry.source === 'STALE');
-  if (stale.length === 0) return [];
-
-  return [
-    {
-      action: null,
-      factor,
-      group: 'uncertainty',
-      messageKey: `${root}.stale`,
-      references: stale.map((entry) => entry.ref),
-      values: { count: stale.length },
-    },
-  ];
+  code: string,
+  messageKey: string,
+  options: Partial<Omit<PlanScoreExplanation, 'factor' | 'code' | 'messageKey'>> = {},
+): PlanScoreExplanation {
+  return {
+    factor,
+    code,
+    messageKey,
+    action: null,
+    severity: 'INFO',
+    references: [],
+    values: {},
+    ...options,
+  };
 }
-
-function feasibilityEntries(input: PlanScoreDayExplanationInput): Entry[] {
-  const outcome = input.day.factors.FEASIBILITY;
-  const entries = uncertaintyEntries('FEASIBILITY', outcome, input.day.evidence.FEASIBILITY);
-  if (outcome.state !== 'EVALUATED') return entries;
-
-  const ranked = input.conflicts.toSorted(
-    (left, right) => SEVERITY_ORDER[left.severity] - SEVERITY_ORDER[right.severity],
-  );
-
-  if (ranked.length === 0) {
-    return [
-      {
-        action: null,
-        factor: 'FEASIBILITY',
-        group: 'whatWorks',
-        messageKey: 'feasibility.noConflicts',
-        references: [],
-        values: {},
-      },
-      ...entries,
-    ];
-  }
-
-  return [
-    ...ranked.map((conflict): Entry => {
-      const message = CONFLICT_MESSAGES[conflict.kind];
-      return {
-        action: message.action,
-        factor: 'FEASIBILITY',
-        group: 'worthImproving',
-        messageKey: message.messageKey,
+export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplanationGroups {
+  const groups: PlanScoreExplanationGroups = { whatWorks: [], worthImproving: [], uncertainty: [] };
+  const severityOrder = { HARD: 0, MATERIAL: 1, SOFT: 2 };
+  for (const conflict of input.conflicts.toSorted(
+    (a, b) => severityOrder[a.severity] - severityOrder[b.severity] || a.id.localeCompare(b.id),
+  )) {
+    groups.worthImproving.push(
+      reason('FEASIBILITY', conflict.kind, conflictMessages[conflict.kind], {
+        action: conflict.kind === 'TIGHT_TRANSITION' ? 'ADD_BUFFER' : 'ADJUST_TIME',
+        severity: conflict.severity === 'SOFT' ? 'RISK' : conflict.severity,
         references: conflict.subjectIds,
-        values: { severity: conflict.severity },
-      };
-    }),
-    ...entries,
-  ];
-}
-
-function bandedEntries(
-  factor: PlanScoreExplanationFactor,
-  outcome: PlanScoreFactorOutcome,
-  evidence: PlanScoreEvidence[],
-  strong: { messageKey: string; values: Record<string, number | string> },
-  /** `null` when a low score is a preference signal rather than something to fix. */
-  weak: {
-    action: PlanScoreSuggestedAction;
-    messageKey: string;
-    values: Record<string, number | string>;
-  } | null,
-): Entry[] {
-  const entries = uncertaintyEntries(factor, outcome, evidence);
-  if (outcome.state !== 'EVALUATED') return entries;
-
-  if (outcome.score >= STRONG_FACTOR_SCORE) {
-    return [
+        values: { severity: conflict.verified ? conflict.severity : 'ESTIMATED' },
+      }),
+    );
+  }
+  for (const id of DAY_FACTOR_IDS) {
+    const outcome = input.day.factors[id];
+    if (outcome.state === 'NOT_APPLICABLE') continue;
+    if (outcome.state === 'UNKNOWN') {
+      groups.uncertainty.push(reason(id, `${id}_UNKNOWN`, `${roots[id]}.unknown`));
+      continue;
+    }
+    if (outcome.coverage < 100)
+      groups.uncertainty.push(
+        reason(id, `${id}_PARTIAL`, 'assessment.partial', {
+          values: { coverage: outcome.coverage },
+        }),
+      );
+    if (id === 'FEASIBILITY') {
+      if (!input.conflicts.length)
+        groups.whatWorks.push(reason(id, 'ASSESSED_TIMING_WORKS', 'feasibility.noConflicts'));
+    } else if (id === 'ROUTE_EFFICIENCY') {
+      if (outcome.score >= 85 && input.travel.totalMinutes !== null)
+        groups.whatWorks.push(
+          reason(id, 'LOCAL_TRAVEL_LIGHT', 'routeEfficiency.light', {
+            values: { minutes: Math.round(input.travel.totalMinutes) },
+          }),
+        );
+      if (input.travel.totalMinutes !== null && input.travel.totalMinutes > 180)
+        groups.worthImproving.push(
+          reason(id, 'LOCAL_TRAVEL_HEAVY', 'routeEfficiency.heavy', {
+            action: 'RECONSIDER_DETOUR',
+            severity: 'RISK',
+            values: { minutes: Math.round(input.travel.totalMinutes) },
+          }),
+        );
+      if (
+        input.route.bestMinutes !== null &&
+        input.route.plannedMinutes !== null &&
+        input.route.plannedMinutes > 1.1 * input.route.bestMinutes
+      )
+        groups.worthImproving.push(
+          reason(id, 'AVOIDABLE_MOVEMENT', 'routeEfficiency.backtracking', {
+            action: 'REORDER_MANUALLY',
+            severity: 'RISK',
+            values: {
+              bestMinutes: Math.round(input.route.bestMinutes),
+              plannedMinutes: Math.round(input.route.plannedMinutes),
+            },
+          }),
+        );
+    } else if (id === 'PACE_COMFORT') {
+      if (input.pace.lowerBoundMinutes != null)
+        groups.worthImproving.push(
+          reason(id, 'LOWER_BOUND_OVERLOAD', 'pace.lowerBoundLoad', {
+            action: 'REDUCE_LOAD',
+            severity: 'RISK',
+            values: { minutes: Math.round(input.pace.lowerBoundMinutes) },
+          }),
+        );
+      if (input.day.incomingDebt > 0)
+        groups.worthImproving.push(
+          reason(id, 'INCOMING_FATIGUE', 'pace.accumulated', {
+            action: 'REDUCE_LOAD',
+            severity: 'RISK',
+          }),
+        );
+      if (outcome.score >= 85)
+        groups.whatWorks.push(reason(id, 'COMFORTABLE_LOAD', 'pace.comfortable'));
+      else if (outcome.score <= 70 && input.pace.activeMinutes !== null)
+        groups.worthImproving.push(
+          reason(id, 'HIGH_ACTIVE_LOAD', 'pace.load', {
+            action: 'REDUCE_LOAD',
+            severity: 'RISK',
+            values: { minutes: Math.round(input.pace.activeMinutes) },
+          }),
+        );
+    } else if (outcome.score >= 85)
+      groups.whatWorks.push(reason(id, `${id}_SUPPORTED`, `${roots[id]}.supported`));
+  }
+  const advisoryMessages: Record<DayAdvisory['code'], string> = {
+    NATURAL_DOWNTIME: 'pace.naturalDowntime',
+    CONTINUOUS_ACTIVITY: 'pace.continuous',
+    WALKING_LOAD: 'pace.walking',
+    SEASONAL_PATTERN: 'timing.pattern',
+    PUBLIC_HOLIDAY: 'timing.holiday',
+    PARTIAL_ACCESS: 'timing.partialAccess',
+    RAIN_FORECAST: 'timing.forecastRain',
+    DAYLIGHT_LIMIT: 'timing.daylight',
+  };
+  const seen = new Set<string>();
+  for (const advisory of input.advisories ?? []) {
+    if (seen.has(advisory.code)) continue;
+    seen.add(advisory.code);
+    const positive = advisory.code === 'NATURAL_DOWNTIME';
+    const comfort = ['NATURAL_DOWNTIME', 'CONTINUOUS_ACTIVITY', 'WALKING_LOAD'].includes(
+      advisory.code,
+    );
+    const info = ['SEASONAL_PATTERN', 'PUBLIC_HOLIDAY'].includes(advisory.code);
+    const entry = reason(
+      comfort ? 'PACE_COMFORT' : 'EXPERIENCE_QUALITY',
+      advisory.code,
+      advisoryMessages[advisory.code],
       {
-        action: null,
-        factor,
-        group: 'whatWorks',
-        messageKey: strong.messageKey,
-        references: [],
-        values: strong.values,
+        severity: positive || info ? 'INFO' : 'RISK',
+        action: positive || info ? null : 'REVIEW_TIMING',
+        references: advisory.references,
       },
-      ...entries,
-    ];
+    );
+    groups[positive ? 'whatWorks' : info ? 'uncertainty' : 'worthImproving'].push(entry);
   }
-
-  if (weak && outcome.score <= WEAK_FACTOR_SCORE) {
-    return [
-      {
-        action: weak.action,
-        factor,
-        group: 'worthImproving',
-        messageKey: weak.messageKey,
-        references: [],
-        values: weak.values,
-      },
-      ...entries,
-    ];
-  }
-
-  return entries;
-}
-
-function knownValues(values: Record<string, number | null>) {
-  return Object.fromEntries(
-    Object.entries(values).flatMap(([key, value]) => (value === null ? [] : [[key, value]])),
-  );
-}
-
-/** Display boundary only — the scoring math upstream keeps the exact float. */
-function roundMinutes(minutes: number | null): number | null {
-  return minutes === null ? null : Math.round(minutes);
-}
-
-function alternativeEntries(alternatives: PlanScoreAlternative[]): Entry[] {
-  return alternatives
-    .toSorted(
-      (left, right) =>
-        right.improvement - left.improvement || left.targetItemId.localeCompare(right.targetItemId),
-    )
-    .map((alternative) => ({
-      action: 'REVIEW_ALTERNATIVE' as const,
-      factor: 'PLACE_QUALITY' as const,
-      group: 'worthImproving' as const,
-      messageKey: ALTERNATIVE_MESSAGES[alternative.action],
-      references: [alternative.targetItemId, alternative.candidateTripPlaceId],
-      values: {
-        candidateRating: alternative.candidateRating,
-        currentRating: alternative.currentRating,
-      },
-    }));
-}
-
-function group(entries: Entry[]): PlanScoreExplanationGroups {
-  const groups: PlanScoreExplanationGroups = { uncertainty: [], whatWorks: [], worthImproving: [] };
-
-  for (const entry of entries) {
-    const { group: name, ...explanation } = entry;
-    groups[name].push(explanation);
-  }
-
   return groups;
 }
-
-/**
- * Orders explanations by consequence: feasibility, travel effort, pace, route
- * efficiency, then supporting place quality and provider-backed alternatives.
- * Place quality only ever reports what works; a low public rating is a
- * preference signal, so improvement is offered through alternatives instead.
- */
-export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplanationGroups {
-  const bufferMinutes = input.pace.smallestBufferMinutes;
-  const overlapping = bufferMinutes !== null && bufferMinutes < 0;
-  const paceWeak = overlapping
-    ? {
-        action: 'ADD_BUFFER' as const,
-        messageKey: 'pace.overlapping',
-        values: knownValues({
-          activeMinutes: roundMinutes(input.pace.activeMinutes),
-          overlapMinutes: roundMinutes(Math.abs(bufferMinutes as number)),
-        }),
-      }
-    : {
-        action: 'ADD_BUFFER' as const,
-        messageKey: 'pace.tight',
-        values: knownValues({
-          activeMinutes: roundMinutes(input.pace.activeMinutes),
-          bufferMinutes: roundMinutes(bufferMinutes),
-        }),
-      };
-
-  return group([
-    ...feasibilityEntries(input),
-    ...bandedEntries(
-      'TRAVEL_EFFORT',
-      input.day.factors.TRAVEL_EFFORT,
-      input.day.evidence.TRAVEL_EFFORT,
-      {
-        messageKey: 'travelEffort.light',
-        values: knownValues({ minutes: roundMinutes(input.travel.totalMinutes) }),
-      },
-      {
-        action: 'RECONSIDER_DETOUR',
-        messageKey: 'travelEffort.heavy',
-        values: knownValues({ minutes: roundMinutes(input.travel.totalMinutes) }),
-      },
-    ),
-    ...bandedEntries(
-      'PACE_BUFFER',
-      input.day.factors.PACE_BUFFER,
-      input.day.evidence.PACE_BUFFER,
-      { messageKey: 'pace.comfortable', values: {} },
-      paceWeak,
-    ),
-    ...bandedEntries(
-      'ROUTE_EFFICIENCY',
-      input.day.factors.ROUTE_EFFICIENCY,
-      input.day.evidence.ROUTE_EFFICIENCY,
-      { messageKey: 'routeEfficiency.direct', values: {} },
-      {
-        action: 'REORDER_MANUALLY',
-        messageKey: 'routeEfficiency.backtracking',
-        values: knownValues({
-          bestMinutes: roundMinutes(input.route.bestMinutes),
-          plannedMinutes: roundMinutes(input.route.plannedMinutes),
-        }),
-      },
-    ),
-    ...bandedEntries(
-      'PLACE_QUALITY',
-      input.day.factors.PLACE_QUALITY,
-      input.day.evidence.PLACE_QUALITY,
-      { messageKey: 'placeQuality.strong', values: {} },
-      null,
-    ),
-    ...alternativeEntries(input.alternatives),
-  ]);
-}
-
-/** Trip-scoped explanation for Must Go priority fit. */
 export function explainTrip(input: PlanScoreTripExplanationInput): PlanScoreExplanationGroups {
-  const outcome = input.mustGoPriorityFit;
-  const entries = uncertaintyEntries('MUST_GO_PRIORITY_FIT', outcome, []);
-  if (outcome.state !== 'EVALUATED') return group(entries);
-
-  const unscheduled = input.unscheduledMustGoTripPlaceIds;
-  if (unscheduled.length === 0) {
-    return group([
-      {
-        action: null,
-        factor: 'MUST_GO_PRIORITY_FIT',
-        group: 'whatWorks',
-        messageKey: 'mustGo.allScheduled',
-        references: [],
-        values: {},
-      },
-      ...entries,
-    ]);
+  const groups: PlanScoreExplanationGroups = { whatWorks: [], worthImproving: [], uncertainty: [] };
+  for (const cap of input.caps)
+    groups.worthImproving.push(
+      reason('DAILY_QUALITY', cap.reason, 'trip.conflict', {
+        action: 'ADJUST_TIME',
+        severity: 'HARD',
+        references: cap.references,
+      }),
+    );
+  if (input.fatigueAdjustment > 0)
+    groups.worthImproving.push(
+      reason('DAILY_QUALITY', 'SUSTAINED_LOAD', 'trip.fatigue', {
+        action: 'REDUCE_LOAD',
+        severity: 'RISK',
+      }),
+    );
+  if (input.weakDayAdjustment > 0)
+    groups.worthImproving.push(
+      reason('DAILY_QUALITY', 'WEAK_DAYS', 'trip.weakDays', {
+        action: 'REVIEW_TIMING',
+        severity: 'RISK',
+      }),
+    );
+  if (input.unscheduledMustGoTripPlaceIds.length)
+    groups.worthImproving.push(
+      reason('DESTINATION_UTILIZATION', 'UNSCHEDULED_MUST_GO', 'mustGo.unscheduled', {
+        action: 'SCHEDULE_MUST_GO',
+        references: input.unscheduledMustGoTripPlaceIds,
+        values: { count: input.unscheduledMustGoTripPlaceIds.length },
+      }),
+    );
+  for (const [id, outcome] of Object.entries(input.components)) {
+    const factor = id as PlanScoreExplanationFactor;
+    if (outcome.state === 'UNKNOWN')
+      groups.uncertainty.push(reason(factor, `${id}_UNKNOWN`, `${roots[factor]}.unknown`));
+    else if (outcome.state === 'EVALUATED' && outcome.score >= 85)
+      groups.whatWorks.push(reason(factor, `${id}_SUPPORTED`, `${roots[factor]}.supported`));
   }
-
-  return group([
-    {
-      action: 'SCHEDULE_MUST_GO',
-      factor: 'MUST_GO_PRIORITY_FIT',
-      group: 'worthImproving',
-      messageKey: 'mustGo.unscheduled',
-      references: unscheduled,
-      values: { count: unscheduled.length },
-    },
-    ...entries,
-  ]);
+  return groups;
 }
 
 export type PlanScoreLinkedRecordKind = 'EXPENSE' | 'RESERVATION' | 'TASK';

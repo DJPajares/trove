@@ -49,6 +49,9 @@ export type PlanScoreDayItem = {
   /** A fixed commitment cannot be moved, such as a reservation or booked tour. */
   fixed: boolean;
   id: string;
+  placeId?: string;
+  inboundRequired?: boolean;
+  longDistance?: boolean;
   /** Required route time from the previous point in planned order. */
   inboundTravel: PlanScoreMinutes | null;
   openingHours: PlanScoreOpeningHours;
@@ -63,6 +66,11 @@ export type PlanScoreFixedCommitment = {
   id: string;
   source: PlanScoreEvidenceSource;
   startMinute: number;
+  itemId?: string | null;
+  endKnown?: boolean;
+  startKnown?: boolean;
+  longDistance?: boolean;
+  indispensable?: boolean;
 };
 
 export type PlanScoreFeasibilityInput = {
@@ -75,13 +83,15 @@ export type PlanScoreFeasibilityInput = {
   commitments: PlanScoreFixedCommitment[];
   /** Items in planned order. The evaluator never reorders them. */
   items: PlanScoreDayItem[];
+  availability?: PlanScoreInterval | null;
 };
 
 export type PlanScoreConflictKind =
   | 'ARRIVES_AFTER_FIXED_START'
   | 'OUTSIDE_OPENING_HOURS'
   | 'OVERLAPPING_COMMITMENTS'
-  | 'TIGHT_TRANSITION';
+  | 'TIGHT_TRANSITION'
+  | 'OUTSIDE_AVAILABILITY';
 
 /** `HARD` and `MATERIAL` are conflicts; `SOFT` is a still-possible risk. */
 export type PlanScoreConflictSeverity = 'HARD' | 'MATERIAL' | 'SOFT';
@@ -92,6 +102,7 @@ export type PlanScoreConflict = {
   id: string;
   kind: PlanScoreConflictKind;
   severity: PlanScoreConflictSeverity;
+  verified?: boolean;
   subjectIds: string[];
 };
 
@@ -122,9 +133,6 @@ const SEVERITY_DEDUCTIONS: Record<PlanScoreConflictSeverity, number> = {
   MATERIAL: 25,
   SOFT: 10,
 };
-
-const LATE_ARRIVAL_HARD_MINUTES = 30;
-const TIGHT_TRANSITION_MINUTES = 15;
 
 const TRAVEL_EFFORT_BANDS: ReadonlyArray<{ maxMinutes: number; score: number }> = [
   { maxMinutes: 60, score: 100 },
@@ -183,6 +191,10 @@ export function evaluateTravelEffort(
 }
 
 function overlaps(left: PlanScoreInterval, right: PlanScoreInterval) {
+  if (left.startMinute === left.endMinute)
+    return right.startMinute <= left.startMinute && left.startMinute < right.endMinute;
+  if (right.startMinute === right.endMinute)
+    return left.startMinute <= right.startMinute && right.startMinute < left.endMinute;
   return left.startMinute < right.endMinute && right.startMinute < left.endMinute;
 }
 
@@ -196,92 +208,14 @@ function isAnchored(item: PlanScoreDayItem) {
   return item.fixed && item.start !== null;
 }
 
-/** Earliest the visit can begin: an exact start, or the front of its window. */
-function earliestStart(item: PlanScoreDayItem): number | null {
-  if (item.start) return assertMinutes(item.start.minutes);
-  if (item.startWindow) return assertMinutes(item.startWindow.earliestMinute);
-
-  return null;
-}
-
-/** Latest the visit can begin: an exact start, or the back of its window. */
-function latestStart(item: PlanScoreDayItem): number | null {
-  if (item.start) return assertMinutes(item.start.minutes);
-  if (item.startWindow) return assertMinutes(item.startWindow.latestMinute);
-
-  return null;
-}
-
-/**
- * Best-case slack between two consecutive items: the previous one leaves as
- * early as it can, the next one starts as late as it may. For two exact starts
- * this is the plain difference the evaluators always used.
- */
-function transitionBuffer(previous: PlanScoreDayItem, next: PlanScoreDayItem): number | null {
-  const departs = earliestStart(previous);
-  const arrives = latestStart(next);
-  if (departs === null || arrives === null || !previous.duration || !next.inboundTravel) {
-    return null;
-  }
-
-  return (
-    arrives -
-    (departs + assertMinutes(previous.duration.minutes) + assertMinutes(next.inboundTravel.minutes))
-  );
-}
-
-/**
- * The most open minutes any start inside `window` can achieve.
- *
- * Coverage as a function of start time is piecewise linear, changing slope only
- * where an interval opens or where the visit would end exactly as one closes, so
- * the maximum is always attained at one of those breakpoints. Checking that
- * finite candidate set is exact and avoids scanning the window minute by minute.
- */
-function bestOpeningCoverage(
-  intervals: PlanScoreInterval[],
-  window: PlanScoreInterval,
-  durationMinutes: number | null,
-): number {
-  const visit = durationMinutes === null ? 0 : durationMinutes;
-  const candidates = new Set<number>([window.startMinute]);
-
-  for (const interval of intervals) {
-    candidates.add(interval.startMinute);
-    candidates.add(interval.endMinute - visit);
-  }
-
-  let best = 0;
-
-  for (const candidate of candidates) {
-    const start = Math.min(Math.max(candidate, window.startMinute), window.endMinute);
-    if (start < window.startMinute || start > window.endMinute) continue;
-
-    let open = 0;
-    for (const interval of intervals) {
-      if (visit === 0) {
-        if (interval.startMinute <= start && start < interval.endMinute) open = 1;
-        continue;
-      }
-      open += Math.max(
-        0,
-        Math.min(start + visit, interval.endMinute) - Math.max(start, interval.startMinute),
-      );
-    }
-    best = Math.max(best, open);
-  }
-
-  return best;
-}
-
 function openingHoursSeverity(
   intervals: PlanScoreInterval[],
   startMinute: number,
   durationMinutes: number | null,
 ): PlanScoreConflictSeverity | null {
   for (const interval of intervals) {
-    assertMinutes(interval.startMinute);
-    assertMinutes(interval.endMinute);
+    if (!Number.isFinite(interval.startMinute) || !Number.isFinite(interval.endMinute))
+      throw new Error('invalid_plan_score_minutes');
   }
 
   if (durationMinutes === null || durationMinutes <= 0) {
@@ -306,68 +240,6 @@ function openingHoursSeverity(
 }
 
 /**
- * Records whichever timing the item actually supplied. A daypart enters as
- * `ESTIMATED`, so a day leaning on coarse timings reports lower confidence than
- * one the traveller has given exact times (PRD section 29.2).
- */
-function useTiming(
-  use: (ref: string, source: PlanScoreEvidenceSource) => void,
-  item: PlanScoreDayItem,
-) {
-  if (item.start) {
-    use(`start:${item.id}`, item.start.source);
-    return;
-  }
-  if (item.startWindow) use(`window:${item.id}`, item.startWindow.source);
-}
-
-/** The same banding as an exact start, applied to the best placement in a window. */
-function windowOpeningSeverity(
-  intervals: PlanScoreInterval[],
-  window: PlanScoreInterval,
-  durationMinutes: number | null,
-): PlanScoreConflictSeverity | null {
-  for (const interval of intervals) {
-    assertMinutes(interval.startMinute);
-    assertMinutes(interval.endMinute);
-  }
-
-  const coverage = bestOpeningCoverage(intervals, window, durationMinutes);
-
-  if (durationMinutes === null || durationMinutes <= 0) {
-    return coverage > 0 ? null : 'HARD';
-  }
-  if (coverage <= 0) return 'HARD';
-
-  return coverage < durationMinutes ? 'MATERIAL' : null;
-}
-
-function transitionSeverity(next: PlanScoreDayItem, bufferMinutes: number) {
-  if (bufferMinutes < 0) {
-    if (isAnchored(next)) {
-      const severity = -bufferMinutes > LATE_ARRIVAL_HARD_MINUTES ? 'HARD' : 'MATERIAL';
-      return { kind: 'ARRIVES_AFTER_FIXED_START', severity } as const;
-    }
-
-    // A negative best-case buffer means no placement in the daypart works, which
-    // is a real conflict. It stays MATERIAL however large the shortfall: HARD is
-    // reserved for constraints outside the traveller's control, like a
-    // reservation or a closed door, and a daypart is a preference they can move.
-    if (next.startWindow) {
-      return { kind: 'ARRIVES_AFTER_FIXED_START', severity: 'MATERIAL' } as const;
-    }
-
-    return null;
-  }
-
-  if (bufferMinutes < TIGHT_TRANSITION_MINUTES) {
-    return { kind: 'TIGHT_TRANSITION', severity: 'SOFT' } as const;
-  }
-
-  return null;
-}
-
-/**
  * Starts at 100 and applies each distinct known conflict's single highest
  * deduction. Detection is limited to evidence the day actually has, so missing
  * times, locations, routes, or provider hours never produce a deduction.
@@ -377,133 +249,251 @@ export function evaluateFeasibility(
 ): PlanScoreFeasibilityEvaluation {
   const evidence = new Map<string, PlanScoreEvidence>();
   const conflicts = new Map<string, PlanScoreConflict>();
-
-  const use = (ref: string, source: PlanScoreEvidenceSource) => {
-    if (!evidence.has(ref)) evidence.set(ref, { ref, source });
+  let applicable = 0,
+    evaluated = 0;
+  const use = (ref: string, source: PlanScoreEvidenceSource) => evidence.set(ref, { ref, source });
+  const trusted = (source: PlanScoreEvidenceSource) =>
+    source === 'USER_OWNED' || source === 'FRESH_PROVIDER' || source === 'CACHED_PROVIDER';
+  const record = (
+    id: string,
+    kind: PlanScoreConflictKind,
+    severity: PlanScoreConflictSeverity,
+    subjectIds: string[],
+    verified: boolean,
+  ) => {
+    const qualified = severity === 'HARD' && !verified ? 'SOFT' : severity;
+    const next = {
+      id,
+      kind,
+      severity: qualified,
+      subjectIds,
+      verified,
+      deduction: SEVERITY_DEDUCTIONS[qualified],
+    };
+    const old = conflicts.get(id);
+    if (!old || next.deduction > old.deduction) conflicts.set(id, next);
   };
-  const record = (conflict: PlanScoreConflict) => {
-    const existing = conflicts.get(conflict.id);
-    if (!existing || conflict.deduction > existing.deduction) conflicts.set(conflict.id, conflict);
-  };
-
-  const intervals: Array<PlanScoreInterval & { id: string }> = [];
-
-  for (const commitment of input.commitments) {
-    use(`commitment:${commitment.id}`, commitment.source);
-    intervals.push({
-      endMinute: assertMinutes(commitment.endMinute),
-      id: commitment.id,
-      startMinute: assertMinutes(commitment.startMinute),
-    });
-  }
-
-  for (const item of input.items) {
-    if (!item.fixed || !item.start) continue;
-
-    use(`start:${item.id}`, item.start.source);
-    // An item with no known visit length still committed to a start instant.
-    // Treating it as zero-length keeps it able to conflict with a real
-    // interval it falls inside, without inventing a duration nobody gave it.
-    if (item.duration) use(`duration:${item.id}`, item.duration.source);
-    const durationMinutes = item.duration ? assertMinutes(item.duration.minutes) : 0;
-    intervals.push({
-      endMinute: assertMinutes(item.start.minutes) + durationMinutes,
-      id: item.id,
-      startMinute: item.start.minutes,
-    });
-  }
-
-  for (let left = 0; left < intervals.length; left += 1) {
-    for (let right = left + 1; right < intervals.length; right += 1) {
-      const first = intervals[left];
-      const second = intervals[right];
-      if (!first || !second || !overlaps(first, second)) continue;
-
-      const subjectIds = [first.id, second.id].toSorted((one, other) => one.localeCompare(other));
-      record({
-        deduction: SEVERITY_DEDUCTIONS.HARD,
-        id: `overlap:${subjectIds.join(':')}`,
-        kind: 'OVERLAPPING_COMMITMENTS',
-        severity: 'HARD',
-        subjectIds,
+  // Linked reservations are already represented by their item; never collide with themselves.
+  const commitments = input.commitments.filter(
+    (c) => !c.itemId || !input.items.some((i) => i.id === c.itemId),
+  );
+  const fixed: Array<PlanScoreInterval & { id: string; verified: boolean }> = [];
+  for (const c of commitments) {
+    assertMinutes(c.startMinute);
+    assertMinutes(c.endMinute);
+    applicable++;
+    use(`commitment:${c.id}`, c.source);
+    if (c.endKnown !== false) evaluated++;
+    if (c.startKnown !== false)
+      fixed.push({
+        id: c.id,
+        startMinute: c.startMinute,
+        endMinute: c.endMinute,
+        verified: trusted(c.source),
       });
+  }
+  for (const item of input.items) {
+    if (!isAnchored(item)) continue;
+    fixed.push({
+      id: item.id,
+      startMinute: item.start!.minutes,
+      endMinute: item.start!.minutes + (item.duration?.minutes ?? 0),
+      verified: trusted(item.start!.source) && (!item.duration || trusted(item.duration.source)),
+    });
+  }
+  for (let i = 0; i < fixed.length; i++)
+    for (let j = i + 1; j < fixed.length; j++) {
+      const a = fixed[i]!,
+        b = fixed[j]!;
+      if (a.id === b.id || !overlaps(a, b)) continue;
+      const refs = [a.id, b.id].sort();
+      record(
+        `collision:${refs.join(':')}`,
+        'OVERLAPPING_COMMITMENTS',
+        'HARD',
+        refs,
+        a.verified && b.verified,
+      );
+    }
+  let earliest: number | null =
+    input.availability?.startMinute ?? Math.min(0, input.items[0]?.start?.minutes ?? 0);
+  let chainTrusted = true;
+  for (const [index, item] of input.items.entries()) {
+    const duration = item.duration?.minutes ?? null;
+    applicable++;
+    if (item.duration) use(`duration:${item.id}`, item.duration.source);
+    if (item.start) use(`start:${item.id}`, item.start.source);
+    if (item.startWindow) use(`window:${item.id}`, item.startWindow.source);
+    const inboundRequired = item.inboundRequired ?? index > 0;
+    const previous = input.items[index - 1];
+    if (inboundRequired) {
+      if (item.inboundTravel && earliest !== null) {
+        use(`travel:${item.id}`, item.inboundTravel.source);
+        earliest += item.inboundTravel.minutes;
+        chainTrusted = chainTrusted && trusted(item.inboundTravel.source);
+      } else earliest = null;
+    }
+    const minimum =
+      item.startWindow?.earliestMinute ??
+      (item.fixed ? item.start?.minutes : null) ??
+      input.availability?.startMinute ??
+      0;
+    let start: number | null =
+      earliest === null
+        ? item.fixed
+          ? (item.start?.minutes ?? null)
+          : null
+        : Math.max(earliest, minimum);
+    const deadline = item.fixed ? item.start?.minutes : item.startWindow?.latestMinute;
+    const timingTrusted: boolean =
+      chainTrusted && (!previous?.duration || trusted(previous.duration.source));
+    if (earliest !== null && deadline != null) {
+      const remaining = deadline - earliest;
+      const refs = previous ? [previous.id, item.id] : [item.id];
+      const collision = `collision:${[...refs].sort().join(':')}`;
+      if (item.fixed && remaining < 0 && !conflicts.has(collision)) {
+        record(
+          collision,
+          'ARRIVES_AFTER_FIXED_START',
+          item.fixed && -remaining > 30 ? 'HARD' : 'MATERIAL',
+          refs,
+          timingTrusted && (!item.fixed || (item.start !== null && trusted(item.start.source))),
+        );
+      } else if (item.fixed && remaining >= 0 && remaining < 15 && previous) {
+        record(collision, 'TIGHT_TRANSITION', 'SOFT', refs, timingTrusted);
+      }
+    }
+    if (item.fixed && item.start) start = item.start.minutes;
+    if (!isAnchored(item) && start !== null && duration !== null) {
+      // Earliest feasible placement in the complete ordered schedule. Wait for an opening
+      // or move past a standalone commitment; do not reorder the itinerary.
+      for (
+        let pass = 0;
+        pass <=
+        commitments.length +
+          (item.openingHours.status === 'KNOWN' ? item.openingHours.intervals.length : 0) +
+          1;
+        pass++
+      ) {
+        let moved: number = start;
+        if (item.openingHours.status === 'KNOWN') {
+          const fitting = item.openingHours.intervals.find(
+            (h) => Math.max(start!, h.startMinute) + duration <= h.endMinute,
+          );
+          if (fitting) moved = Math.max(moved, fitting.startMinute);
+        }
+        for (const c of commitments) {
+          if (c.endKnown !== false && moved < c.endMinute && moved + duration > c.startMinute)
+            moved = c.endMinute;
+        }
+        if (moved === start) break;
+        start = moved;
+      }
+    }
+    if (
+      !isAnchored(item) &&
+      item.startWindow &&
+      start !== null &&
+      start > item.startWindow.latestMinute
+    )
+      record(
+        `window:${item.id}`,
+        'ARRIVES_AFTER_FIXED_START',
+        'MATERIAL',
+        [item.id],
+        timingTrusted && (item.duration === null || trusted(item.duration.source)),
+      );
+    if (item.openingHours.status === 'KNOWN' || item.placeId) {
+      applicable++;
+      if (item.openingHours.status === 'KNOWN') {
+        use(`hours:${item.id}`, item.openingHours.source);
+        const point = start ?? item.start?.minutes ?? item.startWindow?.earliestMinute;
+        const closed = item.openingHours.intervals.length === 0;
+        if (closed || point != null) {
+          evaluated++;
+          const severity = closed
+            ? 'HARD'
+            : openingHoursSeverity(item.openingHours.intervals, point!, duration);
+          if (severity) {
+            const independentClosure =
+              closed ||
+              (item.fixed &&
+                item.start !== null &&
+                trusted(item.start.source) &&
+                duration !== null &&
+                item.duration !== null &&
+                trusted(item.duration.source) &&
+                item.openingHours.intervals.every(
+                  (h) => h.endMinute <= point! || h.startMinute >= point! + duration,
+                ));
+            const verified =
+              trusted(item.openingHours.source) &&
+              (independentClosure ||
+                (timingTrusted &&
+                  (!item.fixed || (item.start !== null && trusted(item.start.source))) &&
+                  item.duration !== null &&
+                  trusted(item.duration.source)));
+            record(
+              `hours:${item.id}`,
+              'OUTSIDE_OPENING_HOURS',
+              severity === 'HARD' && !item.fixed && !closed ? 'MATERIAL' : severity,
+              [item.id],
+              verified,
+            );
+          }
+        }
+      }
+    }
+    if (start !== null && duration !== null && (!inboundRequired || item.inboundTravel !== null))
+      evaluated++;
+    if (
+      input.availability &&
+      start !== null &&
+      duration !== null &&
+      start + duration > input.availability.endMinute
+    ) {
+      record(
+        `availability:${item.id}`,
+        'OUTSIDE_AVAILABILITY',
+        'MATERIAL',
+        [item.id],
+        timingTrusted && trusted(item.duration!.source),
+      );
+    }
+    if (duration === null || start === null) {
+      earliest = null;
+      chainTrusted = false;
+    } else {
+      earliest = start + duration;
+      chainTrusted =
+        (item.fixed && item.start ? trusted(item.start.source) : timingTrusted) &&
+        trusted(item.duration!.source);
     }
   }
-
-  for (const item of input.items) {
-    if (item.openingHours.status !== 'KNOWN' || (!item.start && !item.startWindow)) continue;
-
-    if (item.start) use(`start:${item.id}`, item.start.source);
-    if (!item.start && item.startWindow) use(`window:${item.id}`, item.startWindow.source);
-    use(`hours:${item.id}`, item.openingHours.source);
-    if (item.duration) use(`duration:${item.id}`, item.duration.source);
-
-    const durationMinutes = item.duration ? assertMinutes(item.duration.minutes) : null;
-    const severity = item.start
-      ? openingHoursSeverity(
-          item.openingHours.intervals,
-          assertMinutes(item.start.minutes),
-          durationMinutes,
-        )
-      : // Best case across the whole daypart: only a window with no workable
-        // placement anywhere inside it counts against the day.
-        windowOpeningSeverity(
-          item.openingHours.intervals,
-          {
-            endMinute: assertMinutes(item.startWindow!.latestMinute),
-            startMinute: assertMinutes(item.startWindow!.earliestMinute),
-          },
-          durationMinutes,
-        );
-    if (!severity) continue;
-
-    record({
-      deduction: SEVERITY_DEDUCTIONS[severity],
-      id: `hours:${item.id}`,
-      kind: 'OUTSIDE_OPENING_HOURS',
-      severity,
-      subjectIds: [item.id],
-    });
+  if (!applicable) return { conflicts: [], factor: { state: 'NOT_APPLICABLE' } };
+  if (!evaluated || !evidence.size)
+    return {
+      conflicts: [...conflicts.values()],
+      factor: { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' },
+    };
+  // A flexible placement missing both its window and opening/availability boundary
+  // is one unsatisfied placement, not two independent conflicts.
+  for (const item of input.items.filter((i) => !i.fixed)) {
+    const keys = [`window:${item.id}`, `hours:${item.id}`, `availability:${item.id}`];
+    const detected = keys.flatMap((key) => (conflicts.has(key) ? [conflicts.get(key)!] : []));
+    if (detected.length > 1) {
+      const primary = detected.toSorted((a, b) => b.deduction - a.deduction)[0]!;
+      for (const key of keys) if (key !== primary.id) conflicts.delete(key);
+    }
   }
-
-  for (let index = 1; index < input.items.length; index += 1) {
-    const previous = input.items[index - 1];
-    const next = input.items[index];
-    if (!previous || !next) continue;
-
-    const buffer = transitionBuffer(previous, next);
-    if (buffer === null) continue;
-
-    useTiming(use, previous);
-    use(`duration:${previous.id}`, previous.duration!.source);
-    useTiming(use, next);
-    use(`travel:${next.id}`, next.inboundTravel!.source);
-
-    const transition = transitionSeverity(next, buffer);
-    if (!transition) continue;
-
-    record({
-      deduction: SEVERITY_DEDUCTIONS[transition.severity],
-      id: `transition:${next.id}`,
-      kind: transition.kind,
-      severity: transition.severity,
-      subjectIds: [previous.id, next.id],
-    });
-  }
-
-  if (evidence.size === 0) {
-    return { conflicts: [], factor: { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' } };
-  }
-
   const detected = [...conflicts.values()];
-  const deducted = detected.reduce((total, conflict) => total + conflict.deduction, 0);
-
   return {
     conflicts: detected,
     factor: {
-      evidence: [...evidence.values()],
-      score: Math.max(0, 100 - deducted),
       state: 'EVALUATED',
+      coverage: (100 * evaluated) / applicable,
+      evidence: [...evidence.values()],
+      score: Math.max(0, 100 - detected.reduce((n, c) => n + c.deduction, 0)),
     },
   };
 }
@@ -516,111 +506,13 @@ export type PlanScorePaceEvaluation = {
   smallestBufferMinutes: number | null;
 };
 
-export type PlanScorePaceInput = {
-  /** Items in planned order, sharing the day model used by Feasibility. */
-  items: PlanScoreDayItem[];
-  /** The day's required local route segments, as used by Travel effort. */
-  segments: PlanScoreRouteSegment[];
-};
-
-function bufferScore(bufferMinutes: number) {
-  if (bufferMinutes < 0) return 20;
-  if (bufferMinutes < 5) return 40;
-  if (bufferMinutes < 15) return 60;
-  if (bufferMinutes < 30) return 80;
-  return 100;
-}
-
-function activeMinutesScore(totalMinutes: number) {
-  if (totalMinutes <= 480) return 100;
-  if (totalMinutes <= 600) return 75;
-  if (totalMinutes <= 720) return 50;
-  return 25;
-}
-
-/**
- * Uses the lower of the two applicable rubric rules: the smallest transition
- * buffer between timed items, and how much of the day known activity duration
- * plus local travel consumes. The second rule needs the day to be fully
- * described, so partial duration or route coverage leaves it unevaluated rather
- * than understating how packed the day is.
- */
-export function evaluatePaceBuffer(input: PlanScorePaceInput): PlanScorePaceEvaluation {
-  const evidence = new Map<string, PlanScoreEvidence>();
-  const use = (ref: string, source: PlanScoreEvidenceSource) => {
-    if (!evidence.has(ref)) evidence.set(ref, { ref, source });
-  };
-
-  // A daypart counts as a timing here: it constrains the pair enough to measure
-  // best-case slack, which is better evidence than skipping the pair entirely.
-  const timedItems = input.items.filter((item) => item.start !== null || item.startWindow !== null);
-  let smallestBufferMinutes: number | null = null;
-
-  if (timedItems.length >= 2) {
-    for (let index = 1; index < input.items.length; index += 1) {
-      const previous = input.items[index - 1];
-      const next = input.items[index];
-      if (!previous || !next) continue;
-
-      const buffer = transitionBuffer(previous, next);
-      if (buffer === null) continue;
-
-      useTiming(use, previous);
-      use(`duration:${previous.id}`, previous.duration!.source);
-      useTiming(use, next);
-      use(`travel:${next.id}`, next.inboundTravel!.source);
-
-      smallestBufferMinutes = Math.min(smallestBufferMinutes ?? buffer, buffer);
-    }
-  }
-
-  const localSegments = input.segments.filter((segment) => segment.scope === 'LOCAL');
-  const knownSegments = localSegments.flatMap((segment) =>
-    segment.status === 'KNOWN' ? [segment] : [],
-  );
-  const describesDay =
-    input.items.length > 0 &&
-    input.items.every((item) => item.duration !== null) &&
-    knownSegments.length === localSegments.length;
-  let activeMinutes: number | null = null;
-
-  if (describesDay) {
-    activeMinutes = 0;
-    for (const item of input.items) {
-      if (!item.duration) continue;
-      use(`duration:${item.id}`, item.duration.source);
-      activeMinutes += assertMinutes(item.duration.minutes);
-    }
-    for (const segment of knownSegments) {
-      use(`segment:${segment.id}`, segment.duration.source);
-      activeMinutes += assertMinutes(segment.duration.minutes);
-    }
-  }
-
-  const scores = [
-    smallestBufferMinutes === null ? null : bufferScore(smallestBufferMinutes),
-    activeMinutes === null ? null : activeMinutesScore(activeMinutes),
-  ].flatMap((score) => (score === null ? [] : [score]));
-
-  if (scores.length === 0) {
-    return {
-      activeMinutes: null,
-      factor: { reason: 'INSUFFICIENT_EVIDENCE', state: 'UNKNOWN' },
-      smallestBufferMinutes: null,
-    };
-  }
-
-  return {
-    activeMinutes,
-    factor: { evidence: [...evidence.values()], score: Math.min(...scores), state: 'EVALUATED' },
-    smallestBufferMinutes,
-  };
-}
-
 export type PlanScoreRouteStop = {
   /** A stop pinned by a fixed-order commitment keeps its planned position. */
   fixed: boolean;
   id: string;
+  placeId?: string;
+  inboundRequired?: boolean;
+  longDistance?: boolean;
 };
 
 export type PlanScoreRouteLeg = { duration: PlanScoreMinutes; fromId: string; toId: string };
@@ -630,6 +522,7 @@ export type PlanScoreRouteEfficiencyInput = {
   legs: PlanScoreRouteLeg[];
   /** Stops in planned order, including base endpoints when the day has them. */
   stops: PlanScoreRouteStop[];
+  isFeasibleOrder?: (order: readonly string[]) => boolean;
 };
 
 export type PlanScoreRouteEfficiencyEvaluation = {
@@ -720,6 +613,8 @@ export function evaluateRouteEfficiency(
   }
 
   let best = planned;
+  let compared = 0;
+  let incomplete = false;
   forEachPermutation(
     movable.map((entry) => entry.id),
     (permutation) => {
@@ -729,12 +624,21 @@ export function evaluateRouteEfficiency(
         if (id !== undefined) candidateOrder[entry.index] = id;
       });
 
+      if (candidateOrder.every((id, index) => id === plannedOrder[index])) return;
       const candidate = orderDuration(candidateOrder, legs);
-      if (candidate && candidate.total < best.total) best = candidate;
+      if (!candidate) {
+        incomplete = true;
+        return;
+      }
+      if (!input.isFeasibleOrder || !input.isFeasibleOrder(candidateOrder)) return;
+      compared++;
+      if (candidate.total < best.total) best = candidate;
     },
   );
 
-  const ratio = best.total <= 0 ? 1 : planned.total / best.total;
+  if (!compared || incomplete)
+    return unevaluated({ reason: 'INSUFFICIENT_EVIDENCE', state: 'UNKNOWN' }, planned.total);
+  const ratio = best.total <= 0 ? (planned.total > 0 ? Infinity : 1) : planned.total / best.total;
   const band = ROUTE_EFFICIENCY_BANDS.find((entry) => ratio <= entry.maxRatio);
   const evidence = new Map<string, PlanScoreEvidence>();
   for (const entry of [...planned.used, ...best.used]) {
@@ -783,18 +687,15 @@ export function evaluateMustGoPriorityFit(input: PlanScoreMustGoInput): PlanScor
 }
 
 export type PlanScoreRating =
-  { rating: number; source: PlanScoreEvidenceSource; status: 'KNOWN' } | { status: 'UNKNOWN' };
+  | {
+      rating: number;
+      source: PlanScoreEvidenceSource;
+      status: 'KNOWN';
+      reviewCount?: number | null;
+    }
+  | { status: 'UNKNOWN' };
 
 export type PlanScorePlace = { rating: PlanScoreRating; tripPlaceId: string };
-
-const PLACE_QUALITY_BANDS: ReadonlyArray<{ minRating: number; score: number }> = [
-  { minRating: 4.5, score: 100 },
-  { minRating: 4, score: 85 },
-  { minRating: 3.5, score: 70 },
-  { minRating: 3, score: 55 },
-];
-
-const PLACE_QUALITY_LOW_SCORE = 40;
 
 const MAXIMUM_PUBLIC_RATING = 5;
 
@@ -803,9 +704,20 @@ function ratingScore(rating: number) {
     throw new Error('invalid_public_rating');
   }
 
-  return (
-    PLACE_QUALITY_BANDS.find((band) => rating >= band.minRating)?.score ?? PLACE_QUALITY_LOW_SCORE
-  );
+  const anchors = [
+    [0, 40],
+    [3, 55],
+    [3.5, 70],
+    [4, 85],
+    [4.5, 100],
+    [5, 100],
+  ] as const;
+  for (let index = 1; index < anchors.length; index++) {
+    const [x, y] = anchors[index]!,
+      [px, py] = anchors[index - 1]!;
+    if (rating <= x) return py + ((y - py) * (rating - px)) / (x - px);
+  }
+  return 100;
 }
 
 /**
@@ -832,8 +744,13 @@ export function evaluatePlaceQuality(places: PlanScorePlace[]): PlanScoreFactorR
     evidence: rated.map((place) => ({
       ref: `rating:${place.tripPlaceId}`,
       source: place.rating.source,
+      strength:
+        place.rating.reviewCount == null
+          ? 0.5
+          : place.rating.reviewCount / (place.rating.reviewCount + 50),
     })),
     score: total / rated.length,
+    coverage: (100 * rated.length) / distinct.size,
     state: 'EVALUATED',
   };
 }

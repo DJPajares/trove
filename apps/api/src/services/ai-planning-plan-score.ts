@@ -227,7 +227,10 @@ export function remapDraftPlanScore(
   identity: DraftPlanScoreIdentityMap,
 ): TripPlanScore {
   const reference = (value: string) =>
-    identity.itemIdByDraftId.get(value) ?? identity.tripPlaceIdByPlaceRefId.get(value) ?? value;
+    identity.itemIdByDraftId.get(value) ??
+    identity.tripPlaceIdByPlaceRefId.get(value) ??
+    identity.dayIdByDate.get(value) ??
+    value;
 
   const explanations = (groups: TripPlanScore['explanations']) => ({
     uncertainty: groups.uncertainty.map((entry) => ({
@@ -246,9 +249,11 @@ export function remapDraftPlanScore(
 
   return {
     ...planScore,
+    caps: planScore.caps.map((cap) => ({ ...cap, references: cap.references.map(reference) })),
     days: planScore.days.map((day) => ({
       ...day,
       dayId: identity.dayIdByDate.get(day.date) ?? day.dayId,
+      caps: day.caps.map((cap) => ({ ...cap, references: cap.references.map(reference) })),
       explanations: explanations(day.explanations),
     })),
     explanations: explanations(planScore.explanations),

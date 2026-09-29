@@ -2369,19 +2369,19 @@
     "unavailable": "We could not look at this plan just now.",
     "retry": "Try again",
     "confidence": "Confidence",
-    "completeness": "Completeness",
+    "completeness": "Coverage",
     "whatWorks": "What is working",
     "worthImproving": "Also worth a look",
     "uncertainty": "Not enough to say yet",
     "factorLabels": {
-      "FEASIBILITY": "Feasibility",
-      "TRAVEL_EFFORT": "Travel effort",
-      "PACE_BUFFER": "Pace",
-      "ROUTE_EFFICIENCY": "Route efficiency",
-      "PLACE_QUALITY": "Place quality"
+      "FEASIBILITY": "Feasibility & Resilience",
+      "ROUTE_EFFICIENCY": "Route & Time Efficiency",
+      "PACE_COMFORT": "Pace & Comfort",
+      "EXPERIENCE_QUALITY": "Experience Quality",
+      "PLAN_COMPOSITION": "Plan Composition"
     },
     "factorStatus": {
-      "groupLabel": "Factor status",
+      "groupLabel": "Category status",
       "working": "Working",
       "worthImproving": "Worth improving",
       "unknown": "Unknown"
@@ -2392,16 +2392,19 @@
       "RECONSIDER_DETOUR": "Review this day",
       "REORDER_MANUALLY": "Reorder the day",
       "REVIEW_ALTERNATIVE": "Review the alternative",
-      "SCHEDULE_MUST_GO": "Schedule it"
+      "SCHEDULE_MUST_GO": "Schedule it",
+      "REDUCE_LOAD": "Review the load",
+      "REVIEW_TIMING": "Review timing"
     },
     "feasibility": {
-      "noConflicts": "Your timings fit together.",
-      "overlappingCommitments": "Two booked commitments overlap here.",
-      "outsideOpeningHours": "{severity, select, HARD {This visit falls outside the opening hours we know about.} other {Part of this visit falls outside the opening hours we know about.}}",
-      "arrivesAfterFixedStart": "{severity, select, HARD {The travel time lands you well after this fixed start.} other {The travel time lands you a little after this fixed start.}}",
+      "noConflicts": "No conflicts were found in the timings we could assess.",
+      "overlappingCommitments": "Two fixed activities or commitments overlap here.",
+      "outsideOpeningHours": "{severity, select, HARD {This visit falls entirely outside verified applicable hours.} ESTIMATED {Estimated timing may put this visit outside applicable hours.} other {This visit cannot fit fully within the applicable hours.}}",
+      "arrivesAfterFixedStart": "{severity, select, HARD {The preceding schedule reaches this commitment more than 30 minutes late.} ESTIMATED {Estimated timing leaves little room to reach this commitment.} other {The preceding schedule does not reach this commitment in time.}}",
       "tightTransition": "There is very little room between these two stops.",
       "unknown": "We cannot tell how the timings fit yet.",
-      "stale": "{count, plural, one {One timing detail we used may be out of date.} other {# timing details we used may be out of date.}}"
+      "stale": "{count, plural, one {One timing detail we used may be out of date.} other {# timing details we used may be out of date.}}",
+      "outsideAvailability": "This activity extends beyond your available time."
     },
     "travelEffort": {
       "light": "Getting around stays light, about {minutes} minutes.",
@@ -2410,17 +2413,25 @@
       "stale": "{count, plural, one {One route estimate we used may be out of date.} other {# route estimates we used may be out of date.}}"
     },
     "pace": {
-      "comfortable": "The day has room to breathe.",
+      "comfortable": "Known activity and transport load fits your selected pace.",
       "tight": "The day is packed, with only about {bufferMinutes} minutes spare between stops.",
       "overlapping": "The day is overbooked, with stops running into each other by about {overlapMinutes} minutes.",
       "unknown": "We cannot judge the pace yet.",
-      "stale": "{count, plural, one {One duration estimate we used may be out of date.} other {# duration estimates we used may be out of date.}}"
+      "stale": "{count, plural, one {One duration estimate we used may be out of date.} other {# duration estimates we used may be out of date.}}",
+      "load": "Known activity and transport effort adds up to about {minutes} weighted minutes. Consider a lighter day.",
+      "accumulated": "Demanding earlier days add to this day’s load. Consider a lighter day or more recovery time.",
+      "naturalDowntime": "The known schedule leaves a natural interval for downtime.",
+      "continuous": "There is a long continuous activity block. Consider leaving room to recover.",
+      "walking": "A known walking leg is lengthy. Check that it suits your comfort level.",
+      "lowerBoundLoad": "Known activities and travel already add up to at least {minutes} minutes of active load. Review this before adding more."
     },
     "routeEfficiency": {
       "direct": "The order of your stops keeps travel direct.",
       "backtracking": "Reordering the stops could cut travel from about {plannedMinutes} to {bestMinutes} minutes.",
-      "unknown": "We do not know enough routes to compare the order yet.",
-      "stale": "{count, plural, one {One route estimate we used may be out of date.} other {# route estimates we used may be out of date.}}"
+      "unknown": "Local travel or comparable alternatives are not sufficiently known yet.",
+      "stale": "{count, plural, one {One route estimate we used may be out of date.} other {# route estimates we used may be out of date.}}",
+      "light": "Known local travel stays light, about {minutes} minutes.",
+      "heavy": "Local travel takes about {minutes} minutes. Consider grouping the stops more closely."
     },
     "mustGo": {
       "allScheduled": "Every Must Go place has a spot on the plan.",
@@ -2436,7 +2447,47 @@
     "alternative": {
       "replace": "A place nearby is rated {candidateRating}, against {currentRating} for the one you have.",
       "add": "A place nearby rated {candidateRating} could fit this day."
-    }
+    },
+    "assessment": {
+      "partial": "About {coverage}% of the applicable evidence in this category was assessed."
+    },
+    "experienceQuality": {
+      "supported": "The assessed experience choices have supporting evidence. Unassessed suitability remains unknown.",
+      "unknown": "Interest fit, distinctive value, or reliable timing evidence is still limited."
+    },
+    "composition": {
+      "supported": "The assessed choices support your declared day intent and interests.",
+      "unknown": "There is not enough evidence to assess the day’s complete composition."
+    },
+    "dailyQuality": {
+      "supported": "The assessed days provide a strong foundation for this trip.",
+      "unknown": "Not enough days can be assessed yet."
+    },
+    "utilization": {
+      "supported": "The assessed destination choices support your stated priorities.",
+      "unknown": "Relevant destination opportunities are not sufficiently known yet."
+    },
+    "variety": {
+      "supported": "The supported choices provide purposeful variety for your interests.",
+      "unknown": "Purposeful variety across the trip is not sufficiently known yet."
+    },
+    "seasonalFit": {
+      "supported": "Applicable seasonal opportunities align with supported choices and interests; actual conditions remain uncertain.",
+      "unknown": "Seasonal suitability is not sufficiently known for this trip."
+    },
+    "timing": {
+      "pattern": "Reviewed seasonal patterns may help you choose timing. They do not predict conditions on this date.",
+      "holiday": "A published public holiday applies. Check venue-specific arrangements before fixing a timed visit.",
+      "partialAccess": "A sourced restriction affects part of a planned venue. Check the Destination context details.",
+      "forecastRain": "A current cached forecast suggests rain may affect outdoor plans. Keep an indoor option flexible.",
+      "daylight": "This outdoor plan may extend beyond daylight. Review its timing and access requirements."
+    },
+    "trip": {
+      "conflict": "A verified scheduling conflict limits this trip assessment. Review the affected day or connection.",
+      "fatigue": "Several demanding days create accumulated load. Consider spacing them with lighter days.",
+      "weakDays": "An unusually weak assessed day affects the overall trip. Review that day’s main issue."
+    },
+    "categoryEvidence": "Coverage {coverage}% · Confidence {confidence}%"
   },
   "memories": {
     "capture": {

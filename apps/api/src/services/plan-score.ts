@@ -3,12 +3,7 @@ import { getPrismaClient, Prisma } from '@trove/db';
 import { type TripPlanScore } from '@trove/types';
 import { z } from 'zod';
 
-import {
-  readOwnedTripDestinationContext,
-  destinationContextRevision,
-  matchContextDestination,
-  type OwnedContextPlace,
-} from './destination-context.js';
+import { contextPlaceFromOwnedData, type OwnedContextPlace } from './owned-place-location.js';
 import { tripPlanScoreRevision } from './plan-score-revision.js';
 import { oldestPlanScoreEvidenceAt, originalPlanScoreTime } from './plan-score-freshness.js';
 export { PLAN_SCORE_CACHE_TTL_MS } from './plan-score-freshness.js';
@@ -40,7 +35,6 @@ import {
   elapsedLocalMinute,
   type ScoringReservation,
 } from './plan-score-normalization.js';
-import { contextPlaceFromOwnedData } from './destination-context.js';
 import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
 import {
   readCachedForecast,
@@ -83,7 +77,6 @@ export type PlanScoreTripRecord = {
   /** Known public ratings keyed by Trip Place id; absent means no usable rating. */
   ratings: Map<string, number>;
   routes: Map<string, ItineraryDayRoutes>;
-  destinationContext?: import('@trove/types').TripDestinationContext;
   preferences?: unknown;
   places?: Map<string, ScoringPlace>;
   forecasts?: ScoringForecast[];
@@ -203,7 +196,6 @@ function evaluateDayRecord(
     segments: toRouteSegments(routes),
     preferences: record.preferences,
     planningContext: day.planningContext,
-    context: record.destinationContext?.days.find((d) => d.dayId === day.id)?.groups,
     forecasts: record.forecasts?.filter((f) => f.date === day.date),
   });
 }
@@ -412,7 +404,6 @@ export function buildPlanScoreFromEvaluations(input: {
   evaluatedAt?: Date;
   evidenceTimes?: readonly string[];
   evidenceDeadlines?: readonly string[];
-  destinationContext?: import('@trove/types').TripDestinationContext;
 }): TripPlanScore {
   const generatedAt = (input.evaluatedAt ?? new Date()).toISOString();
   const evaluations = input.days.toSorted((a, b) => a.date.localeCompare(b.date));
@@ -525,26 +516,19 @@ export function buildPlanScoreFromEvaluations(input: {
       revisions: {
         planning: '',
         evidence: '',
-        destinationContext: input.destinationContext
-          ? scoringInputRevision(destinationContextRevision(input.destinationContext))
-          : '',
+        // Kept for the v7 contract; destination context no longer feeds scoring.
+        destinationContext: '',
       },
     },
     fingerprint: scoringInputRevision({
       evaluation: planScoreFingerprint(tripInput),
       evidenceTimes: [...new Set(input.evidenceTimes ?? [])].sort(),
       evidenceDeadlines: [...new Set(input.evidenceDeadlines ?? [])].sort(),
-      destinationContext: input.destinationContext
-        ? destinationContextRevision(input.destinationContext)
-        : null,
     }),
     generatedAt,
     recomputeAfter: new Date(
       Math.min(
         Date.parse(generatedAt) + 24 * 60 * 60 * 1000,
-        ...(input.destinationContext?.expiresAt
-          ? [Date.parse(input.destinationContext.expiresAt)]
-          : []),
         ...(input.evidenceTimes ?? []).map((at) => Date.parse(at) + PLACE_EVIDENCE_TTL_MS),
         ...(input.evidenceDeadlines ?? []).map(Date.parse),
       ),
@@ -552,9 +536,6 @@ export function buildPlanScoreFromEvaluations(input: {
     evidenceExpiresAt: evidenceDeadline([
       ...(input.evidenceTimes ?? []).map((at) => Date.parse(at) + PLACE_EVIDENCE_TTL_MS),
       ...(input.evidenceDeadlines ?? []).map(Date.parse),
-      ...(input.destinationContext?.expiresAt
-        ? [Date.parse(input.destinationContext.expiresAt)]
-        : []),
     ]),
     evidenceAsOf: oldestPlanScoreEvidenceAt(generatedAt, input.evidenceTimes ?? []),
     score: result.score,
@@ -576,7 +557,6 @@ export function buildTripPlanScore(
 ): TripPlanScore {
   return buildPlanScoreFromEvaluations({
     ...options,
-    destinationContext: record.destinationContext,
     days: record.days.map((day) => ({
       date: day.date,
       evaluation: evaluateDayRecord(day, record),
@@ -822,21 +802,29 @@ export type PlanScoreTripRows = {
   }>;
 };
 
+/**
+ * A destination or booking endpoint as a comparable name: the part before the
+ * first comma, so "Kyoto, Japan" and "Kyoto" are the same place. Only the
+ * trip's own destinations are compared, never a list authored in Trove.
+ */
+function destinationName(value: string | null | undefined) {
+  return value?.split(',')[0]?.normalize('NFKC').toLowerCase().trim() || null;
+}
+
 /** The single reading of a trip that both the digest and the scorer are built on. */
 export function readPlanScoreInputs(trip: PlanScoreTripRows, now = new Date()) {
-  const destinationContext = readOwnedTripDestinationContext(trip, now);
   const destinations: Array<{ timeZone?: string | null; place?: OwnedContextPlace }> =
     Array.isArray(trip.destinations) ? trip.destinations : [];
   const zones = destinations.flatMap((d) => (d.timeZone ? [d.timeZone] : []));
   const identities = destinations.flatMap((d) => {
-    const id = d.place ? matchContextDestination(contextPlaceFromOwnedData(d.place, now)) : null;
-    return id ? [id] : [];
+    const name = d.place ? destinationName(contextPlaceFromOwnedData(d.place, now).name) : null;
+    return name ? [name] : [];
   });
   const reservations = trip.reservations.map((r) => {
     const fromZone = r.flightDepartureTimeZone ?? r.transportDepartureTimeZone;
     const toZone = r.flightArrivalTimeZone ?? r.transportArrivalTimeZone;
-    const from = matchContextDestination({ name: r.transportPickupLocation }),
-      to = matchContextDestination({ name: r.transportDropoffLocation });
+    const from = destinationName(r.transportPickupLocation),
+      to = destinationName(r.transportDropoffLocation);
     // An owned booking between two unambiguously identified trip destinations is
     // an indispensable connection. Ambiguous endpoints remain unknown.
     const zoned =
@@ -929,12 +917,8 @@ export function readPlanScoreInputs(trip: PlanScoreTripRows, now = new Date()) {
   return {
     days,
     mustGoTripPlaceIds,
-    destinationContext,
     planningRevision,
-    revision: scoringInputRevision({
-      planningRevision,
-      destinationContext: destinationContextRevision(destinationContext),
-    }),
+    revision: scoringInputRevision({ planningRevision }),
   };
 }
 
@@ -998,7 +982,6 @@ export async function getTripPlanScore(
     mustGoTripPlaceIds,
     revision,
     planningRevision,
-    destinationContext,
   } = readPlanScoreInputs(trip, now);
 
   const resolvePlace = cachedPlaceResolver(now);
@@ -1070,7 +1053,6 @@ export async function getTripPlanScore(
       preferences: trip.planningPreferences,
       places: placeEvidence.places,
       forecasts: forecastEvidence.forecasts,
-      destinationContext,
       hours: placeEvidence.hours,
       mustGoTripPlaceIds,
       ratings: placeEvidence.ratings,
@@ -1103,7 +1085,7 @@ export async function getTripPlanScore(
     result.presentation.revisions = {
       planning: planningRevision,
       evidence: evidenceRevision,
-      destinationContext: scoringInputRevision(destinationContextRevision(destinationContext)),
+      destinationContext: '',
     };
   result.fingerprint = scoringInputRevision({
     assessment: result.fingerprint,
@@ -1116,7 +1098,6 @@ export async function getTripPlanScore(
       return scheduledTripPlaceIds.has(row.id) && own.expiresAt ? [Date.parse(own.expiresAt)] : [];
     }),
     ...forecastEvidence.times.map((at) => Date.parse(at) + WEATHER_FORECAST_TTL_MS),
-    ...(destinationContext.expiresAt ? [Date.parse(destinationContext.expiresAt)] : []),
     ...placeEvidence.evidenceTimes.map((at) => Date.parse(at) + PLACE_EVIDENCE_TTL_MS),
     ...placeHoursDeadlines(placeEvidence.hours, dayRecords).map(Date.parse),
     ...routeResults.flatMap(({ routes }) =>

@@ -2483,9 +2483,6 @@
       "unknown": "Seasonal suitability is not sufficiently known for this trip."
     },
     "timing": {
-      "pattern": "Reviewed seasonal patterns may help you choose timing. They do not predict conditions on this date.",
-      "holiday": "A published public holiday applies. Check venue-specific arrangements before fixing a timed visit.",
-      "partialAccess": "A sourced restriction affects part of a planned venue. Check the Destination context details.",
       "forecastRain": "A current cached forecast suggests rain may affect outdoor plans. Keep an indoor option flexible.",
       "daylight": "This outdoor plan may extend beyond daylight. Review its timing and access requirements."
     },
@@ -2773,22 +2770,5 @@
     "cancel": "Cancel",
     "save": "Save",
     "saving": "Saving…"
-  },
-  "destinationContext": {
-    "title": "Destination context",
-    "description": "Ideas and timing to consider alongside your interests. Seasonal patterns describe typical conditions; check individual venues before fixing a timed visit.",
-    "allYear": "Applies year round",
-    "seasonWindow": "Typical season: {start}–{end}",
-    "dateWindow": "Applies: {start}–{end}",
-    "dates": "Holiday dates in this view: {dates}",
-    "fact": "Sourced fact",
-    "tendency": "Typical pattern",
-    "scope": "Applies to: {area}",
-    "source": "Official source",
-    "reviewed": "Reviewed {date}",
-    "expires": "Expires {date}",
-    "reviewDue": "Review due {date}",
-    "emptyTrip": "No reviewed destination context is available for these places and dates.",
-    "emptyDay": "No reviewed destination context is available for this day’s places and dates."
   }
 }

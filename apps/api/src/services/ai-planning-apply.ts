@@ -473,7 +473,7 @@ export async function applyAiPlanningSession(
     const score = loaded.planScore;
     const scoreTime =
       score?.evidenceAsOf !== undefined &&
-      score?.sourceInputRevision === draftPlanScoreInputRevision(draft, now)
+      score?.sourceInputRevision === draftPlanScoreInputRevision(draft)
         ? originalPlanScoreTime(score, now)
         : null;
     if (score && scoreTime) {

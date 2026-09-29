@@ -3,5 +3,4 @@ export * from './countries.js';
 export * from './plan-score.js';
 export * from './trip-date-change.js';
 export * from './planning-context.js';
-export * from './destination-context.js';
-export * from './destination-context-messages.js';
+export * from './trip-context.js';

@@ -81,14 +81,10 @@ test('sparse categories omit numbers and diagnostic filler without overstating s
   expect(result.uncertainty).toEqual([]);
   expect(result.whatWorks).toEqual([]);
 });
-test('patterns and holidays are informational; natural downtime is positive without meal stops', () => {
+test('natural downtime is positive without meal stops', () => {
   const result = explainDay({
     ...input,
-    advisories: [
-      { code: 'SEASONAL_PATTERN', references: ['context'] },
-      { code: 'PUBLIC_HOLIDAY', references: ['holiday'] },
-      { code: 'NATURAL_DOWNTIME', references: ['a', 'b'] },
-    ],
+    advisories: [{ code: 'NATURAL_DOWNTIME', references: ['a', 'b'] }],
   });
   expect(result.uncertainty).toEqual([]);
   expect(result.worthImproving).toEqual([]);

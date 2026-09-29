@@ -25,6 +25,7 @@ export const PROVIDER_CALL_SOURCES = [
   'plan-score',
   'public-share',
   'screen-hydration',
+  'trip-context',
   'trip-mode-context',
   'trip-places',
   'weather',
@@ -71,10 +72,18 @@ export type ProviderExpectedSku =
   | 'place-details-pro'
   | 'place-details-enterprise'
   | 'routes-compute-routes-essentials'
+  | 'weather-archive-free'
   | 'weather-forecast-free';
 
 type ProviderEventBase = {
-  operation: 'computeRoute' | 'getDetails' | 'getForecast' | 'getRates' | 'search' | 'textSearch';
+  operation:
+    | 'computeRoute'
+    | 'getClimate'
+    | 'getDetails'
+    | 'getForecast'
+    | 'getRates'
+    | 'search'
+    | 'textSearch';
   provider: 'big_data_cloud' | 'frankfurter' | 'google' | 'open_meteo' | 'pexels';
   source: ProviderCallSource;
 };
@@ -91,6 +100,7 @@ export type ProviderCall = ProviderEventBase & {
     | '/v1/places:searchText'
     | '/v1/search'
     | '/v1/forecast'
+    | '/v1/archive'
     | '/data/reverse-geocode-client';
   expectedSku: ProviderExpectedSku;
   includePolyline?: boolean;
@@ -101,6 +111,7 @@ export type ProviderCall = ProviderEventBase & {
 
 export type ProviderCacheEvent = ProviderEventBase & {
   cache:
+    | 'climate-norm'
     | 'currency'
     | 'editorial-image'
     | 'place-details'

@@ -52,7 +52,6 @@ import {
 import { usePreferences } from '@/components/preferences-provider';
 import { TimeInput } from '@/components/time-input';
 import { useTripContext } from '@/components/trip-provider';
-import { ItineraryDestinationContext } from '@/components/itinerary-destination-context';
 import { TripSectionHeader } from '@/components/trip-section-header';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsIndicator, TabsList, TabsTab } from '@/components/ui/tabs';
@@ -361,7 +360,6 @@ export function ItineraryManager({
     },
     [queryClient, tripId],
   );
-  const [scoreContextId, setScoreContextId] = useState<string | null>(null);
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const status = itineraryQuery.isPending ? 'loading' : itineraryQuery.error ? 'error' : 'idle';
   const [error, setError] = useState<string | null>(null);
@@ -926,14 +924,6 @@ export function ItineraryManager({
         return {
           href: `/trips/${tripId}/reservations?reservation=${encodeURIComponent(reference)}`,
         };
-      const contextGroups =
-        activeView === 'overview'
-          ? itinerary.destinationContext?.overview
-          : itinerary.destinationContext?.days.find((day) => day.dayId === selectedDayId)?.groups;
-      const context = contextGroups
-        ?.flatMap((group) => group.records)
-        .find((record) => record.id === reference && Date.parse(record.expiresAt) > Date.now());
-      if (context) return { onSelect: () => setScoreContextId(context.id) };
       const place = itinerary.tripPlaces.find((place) => place.id === reference);
       if (place && explanation.action === 'SCHEDULE_MUST_GO')
         return {
@@ -1766,13 +1756,6 @@ export function ItineraryManager({
           <TabsIndicator />
         </TabsList>
       </Tabs>
-
-      <ItineraryDestinationContext
-        onFocusedRecordDismissed={() => setScoreContextId(null)}
-        focusedRecordId={scoreContextId}
-        context={itinerary.destinationContext}
-        dayId={activeView === 'overview' ? null : (selectedDayId ?? '')}
-      />
 
       {activeView === 'overview' ? (
         <ItineraryOverview

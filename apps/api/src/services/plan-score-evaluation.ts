@@ -2,7 +2,6 @@ import {
   effectiveTripPace,
   readTripPlanningPreferences,
   readDayPlanningContext,
-  type DestinationContextGroup,
   type PlanScoreExplanation,
   type PlanScoreAssessmentBasis,
   type PlanScoreLimitation,
@@ -27,7 +26,6 @@ import {
   type PlanScoreEvidence,
   type PlanScoreFactorResult,
 } from './plan-score-rules.js';
-import { matchContextDestination } from './destination-context.js';
 
 /** Reviewed semantic mappings, not an inferred preference from selecting a Place. */
 const TYPE_INTERESTS: Record<string, readonly string[]> = {
@@ -105,7 +103,6 @@ export type ScoredDayInput = {
   planningContext?: unknown;
   originInstant?: number;
   availability?: { startMinute: number; endMinute: number } | null;
-  context?: DestinationContextGroup[];
   forecasts?: readonly ScoringForecast[];
   routeComparison?: PlanScoreRouteEfficiencyInput;
 };
@@ -192,9 +189,6 @@ export type DayAdvisory = {
     | 'NATURAL_DOWNTIME'
     | 'CONTINUOUS_ACTIVITY'
     | 'WALKING_LOAD'
-    | 'SEASONAL_PATTERN'
-    | 'PUBLIC_HOLIDAY'
-    | 'PARTIAL_ACCESS'
     | 'RAIN_FORECAST'
     | 'DAYLIGHT_LIMIT';
   references: string[];
@@ -216,34 +210,11 @@ export function evaluateScoredDay(input: ScoredDayInput) {
     context.intent === 'transit' ||
     (input.items.length === 0 && input.commitments.some((c) => c.longDistance));
   const noVisits = input.places.length === 0 && (rest || transit);
-  const items = input.items.map((item) => {
-    const place = input.places.find((p) => p.tripPlaceId === item.placeId);
-    if (item.blockType && item.blockType !== 'activity')
-      return { ...item, openingHours: { status: 'UNKNOWN' as const } };
-    const closure = (input.context ?? [])
-      .flatMap((g) => g.records)
-      .find(
-        (r) =>
-          r.kind === 'closure' &&
-          r.certainty === 'fact' &&
-          r.accessEffect === 'full_closure' &&
-          input.date &&
-          r.matchedDates.includes(input.date) &&
-          r.scope.venueAliases?.some(
-            (alias) => alias.toLocaleLowerCase() === place?.name?.toLocaleLowerCase(),
-          ),
-      );
-    return closure
-      ? {
-          ...item,
-          openingHours: {
-            status: 'KNOWN' as const,
-            intervals: [],
-            source: 'FRESH_PROVIDER' as const,
-          },
-        }
-      : item;
-  });
+  const items = input.items.map((item) =>
+    item.blockType && item.blockType !== 'activity'
+      ? { ...item, openingHours: { status: 'UNKNOWN' as const } }
+      : item,
+  );
   const feasibility = evaluateFeasibility({ items, commitments: input.commitments, availability });
   const requiredInbound = input.items.filter((item, index) => item.inboundRequired ?? index > 0);
   const unresolvedTransport = input.items.some(
@@ -408,15 +379,6 @@ export function evaluateScoredDay(input: ScoredDayInput) {
     source: 'ESTIMATED',
     satisfied: null,
   }));
-  for (const group of input.context ?? [])
-    for (const record of group.records) {
-      if (record.kind === 'season' || record.kind === 'demand')
-        advisories.push({ code: 'SEASONAL_PATTERN', references: [record.id] });
-      if (record.kind === 'holiday')
-        advisories.push({ code: 'PUBLIC_HOLIDAY', references: [record.id] });
-      if (record.accessEffect === 'partial_restriction')
-        advisories.push({ code: 'PARTIAL_ACCESS', references: [record.id] });
-    }
   for (const forecast of input.forecasts ?? [])
     if (
       forecast.precipitationProbability != null &&
@@ -512,34 +474,10 @@ export function evaluateScoredDay(input: ScoredDayInput) {
               Math.max(1, knownPlaces.length),
           }
         : UNKNOWN;
-  const areaFit = supported(
-    knownPlaces.map((place) => ({
-      id: `area:${place.tripPlaceId}`,
-      source: place.source ?? 'CACHED_PROVIDER',
-      satisfied: (input.context ?? [])
-        .filter(
-          (g) =>
-            g.destination ===
-            matchContextDestination({ name: place.name, coordinates: place.coordinates }),
-        )
-        .some((g) =>
-          g.records.some(
-            (r) =>
-              r.kind === 'experience' &&
-              r.interestMatch &&
-              r.interests.some((i) => interestsForPlaceTypes(place.types ?? []).includes(i)),
-          ),
-        )
-        ? true
-        : null,
-    })),
-  );
-  const utilization =
-    rest || transit
-      ? NOT_APPLICABLE
-      : areaFit.state === 'EVALUATED'
-        ? { ...areaFit, coverage: (areaFit.coverage ?? 100) / 2 }
-        : UNKNOWN;
+  // Whether a day makes good use of its area needs sourced evidence about that
+  // area's opportunities. The evaluator has none, so it stays honestly unknown
+  // rather than scoring a guess.
+  const utilization = rest || transit ? NOT_APPLICABLE : UNKNOWN;
   const composition = combineSignals([
     { weight: 30, result: coherence },
     { weight: 30, result: variety },

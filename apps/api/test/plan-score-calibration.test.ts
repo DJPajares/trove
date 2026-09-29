@@ -1,5 +1,4 @@
 import { expect, test } from 'vitest';
-import type { DestinationContextGroup } from '@trove/types';
 import {
   evaluateScoredDay,
   interestsForPlaceTypes,
@@ -325,56 +324,6 @@ test('complementary focused days cover explicit interests at trip scope', () => 
     scheduledIds: [],
   });
   expect(result.components.VARIETY_COVERAGE).toMatchObject({ score: 100, coverage: 100 });
-});
-const context = (
-  kind: 'season' | 'holiday' | 'closure',
-  interestMatch = true,
-): DestinationContextGroup[] => [
-  {
-    destination: 'singapore',
-    records: [
-      {
-        id: 'record',
-        revision: 1,
-        scope: { destination: 'singapore', venueAliases: ['Museum'] },
-        kind,
-        applicability: { kind: 'dates', start: '2026-09-29', end: '2026-09-29' },
-        interests: ['nature_scenery'],
-        contentKey: 'record',
-        sourceUrl: 'https://example.gov',
-        certainty: kind === 'season' ? 'tendency' : 'fact',
-        reviewedAt: '2026-09-28T00:00:00Z',
-        expiresAt: '2026-09-29T16:00:00Z',
-        interestMatch,
-        matchedDates: ['2026-09-29'],
-        ...(kind === 'closure' ? { accessEffect: 'full_closure' as const } : {}),
-      },
-    ],
-  },
-];
-test('seasonal patterns and holidays never establish closure or quality penalties', () => {
-  const plain = score(),
-    season = score({ context: context('season') }),
-    holiday = score({ context: context('holiday') });
-  expect(season.score).toBe(plain.score);
-  expect(holiday.score).toBe(plain.score);
-  expect(season.caps).toEqual([]);
-  expect(holiday.caps).toEqual([]);
-  expect(assess({ context: context('season', false) }).seasonalFit.state).toBe('UNKNOWN');
-});
-test('only dated authoritative full closure for the exact venue establishes a hard conflict', () => {
-  expect(score({ context: context('closure') }).caps[0]?.limit).toBe(59);
-  expect(
-    score({
-      context: context('closure').map((g) => ({
-        ...g,
-        records: g.records.map((r) => ({
-          ...r,
-          scope: { ...r.scope, venueAliases: ['Other venue'] },
-        })),
-      })),
-    }).caps,
-  ).toEqual([]);
 });
 test('daylight is calculated locally and polar conditions remain unknown', () => {
   const light = daylightUtc('2026-09-29', { latitude: 1.35, longitude: 103.82 });

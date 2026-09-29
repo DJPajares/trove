@@ -182,33 +182,28 @@ export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplan
     NATURAL_DOWNTIME: 'pace.naturalDowntime',
     CONTINUOUS_ACTIVITY: 'pace.continuous',
     WALKING_LOAD: 'pace.walking',
-    SEASONAL_PATTERN: 'timing.pattern',
-    PUBLIC_HOLIDAY: 'timing.holiday',
-    PARTIAL_ACCESS: 'timing.partialAccess',
     RAIN_FORECAST: 'timing.forecastRain',
     DAYLIGHT_LIMIT: 'timing.daylight',
   };
   const seen = new Set<string>();
   for (const advisory of input.advisories ?? []) {
-    if (['SEASONAL_PATTERN', 'PUBLIC_HOLIDAY', 'PARTIAL_ACCESS'].includes(advisory.code)) continue;
     if (seen.has(advisory.code)) continue;
     seen.add(advisory.code);
     const positive = advisory.code === 'NATURAL_DOWNTIME';
     const comfort = ['NATURAL_DOWNTIME', 'CONTINUOUS_ACTIVITY', 'WALKING_LOAD'].includes(
       advisory.code,
     );
-    const info = ['SEASONAL_PATTERN', 'PUBLIC_HOLIDAY'].includes(advisory.code);
     const entry = reason(
       comfort ? 'PACE_COMFORT' : 'EXPERIENCE_QUALITY',
       advisory.code,
       advisoryMessages[advisory.code],
       {
-        severity: positive || info ? 'INFO' : 'RISK',
-        action: positive || info ? null : 'REVIEW_TIMING',
+        severity: positive ? 'INFO' : 'RISK',
+        action: positive ? null : 'REVIEW_TIMING',
         references: advisory.references,
       },
     );
-    groups[positive ? 'whatWorks' : info ? 'uncertainty' : 'worthImproving'].push(entry);
+    groups[positive ? 'whatWorks' : 'worthImproving'].push(entry);
   }
   return groups;
 }

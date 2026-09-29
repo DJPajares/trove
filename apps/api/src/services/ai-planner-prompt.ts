@@ -1,4 +1,3 @@
-import { destinationContextForAi } from './destination-context.js';
 import {
   AI_PLANNER_MAX_REAL_PLACE_ITEMS,
   AI_PLANNER_MAX_TRIP_DESCRIPTION,
@@ -72,7 +71,6 @@ export type AiPlannerPromptContext = {
     partySize: number;
   };
   generationDate: string;
-  destinationContext: ReturnType<typeof destinationContextForAi>;
   homeLocation: string | null;
   itemsPerDay: Record<Pace, string>;
   maxRealPlaceItems: number;
@@ -93,7 +91,6 @@ export function buildAiPlannerContext(input: {
 }): AiPlannerPromptContext {
   const tone = input.nameTone ?? pickAiPlannerNameTone();
   return {
-    destinationContext: destinationContextForAi(input.generationDate),
     defaults: {
       durationDays: AI_PLANNER_DEFAULT_TRIP_LENGTH_DAYS,
       pace: AI_PLANNER_DEFAULT_PACE,
@@ -161,7 +158,6 @@ export function buildAiPlannerPrompt(rawPrompt: string, context: AiPlannerPrompt
     '',
     "Write a short tripName in planner_context.naming.tone and a one-sentence tripDescription in the traveller's voice. Keep notes and rationales brief. Avoid generic titles and unsupported claims.",
     '',
-    'Use destinationContext only for matching destinations and applicable local trip dates. Its seasonal and demand tendencies are not forecasts, closures, guaranteed scenery, or predictions of crowding. Venue-specific access applies only to that venue. Select experiences by traveller interests, never as a required attraction checklist. Unknown or absent context is not a problem with the plan.',
     'Fill the whole trip. This is the most important requirement. Set item.dayIndex to every zero-based day in the inclusive date range or selected duration, including arrival and departure days. Never use null or an out-of-range day. Each day needs items, with lighter work, arrival, and departure days. Spread discretionary stops through the day according to planner_context.itemsPerDay; never fill a fixed work or flight block with conflicting activities. Keep real-place items at or below planner_context.maxRealPlaceItems.',
     '',
     `planner_context=${JSON.stringify(context)}`,

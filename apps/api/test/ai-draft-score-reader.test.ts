@@ -97,4 +97,16 @@ for (const state of ['cold', 'warm', 'expired'] as const)
     ).toBe(false);
     expect(draft).toEqual(original);
     expect(outbound).not.toHaveBeenCalled();
+    if (state === 'warm') {
+      const boundary = acquired.getTime() + 30 * 86400000;
+      let clockReads = 0;
+      const crossed = await readDraftPlanScore(
+        draft,
+        () => new Date(boundary - (clockReads++ === 0 ? 1 : 0)),
+      );
+      expect(clockReads).toBe(2);
+      expect(crossed.evidenceAsOf).toBe(new Date(boundary).toISOString());
+      expect(reads).toHaveBeenCalledTimes(4);
+      expect(outbound).not.toHaveBeenCalled();
+    }
   });

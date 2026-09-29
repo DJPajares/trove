@@ -21,12 +21,30 @@ import { WEATHER_FORECAST_TTL_MS } from './weather-evidence-cache.js';
 import { scoringInputRevision } from './plan-score-rules.js';
 
 /** Reopening retained drafts evaluates owned data and caches, never generation or providers. */
-export async function readDraftPlanScore(draft: AiPlannerDraft, now: Date) {
+export async function readDraftPlanScore(draft: AiPlannerDraft, clock: Date | (() => Date)) {
+  const now = typeof clock === 'function' ? clock() : clock;
+  const scheduledRefs = new Set(
+    draft.days.flatMap((day) =>
+      day.items.flatMap((item) => (item.placeRefId ? [item.placeRefId] : [])),
+    ),
+  );
+  const relevantRefs = new Set([
+    ...scheduledRefs,
+    ...draft.days.flatMap((day) => {
+      const stay = draftDayStay(day);
+      return [stay.start, stay.end].filter((id): id is string => Boolean(id));
+    }),
+    ...draft.trip.destinations.map((destination) => destination.placeRefId),
+  ]);
   const rows = await getPrismaClient().place.findMany({
     where: {
       id: {
         in: [
-          ...new Set(draft.places.flatMap((p) => (p.resolution === 'verified' ? [p.placeId] : []))),
+          ...new Set(
+            draft.places.flatMap((p) =>
+              relevantRefs.has(p.id) && p.resolution === 'verified' ? [p.placeId] : [],
+            ),
+          ),
         ],
       },
     },
@@ -34,18 +52,21 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, now: Date) {
   });
   const byId = new Map(rows.map((row) => [row.id, row]));
   const evidence = await loadPlaceEvidence(
-    draft.places.map((p) => ({
-      id: p.id,
-      externalPlaceId:
-        p.resolution === 'verified'
-          ? (byId.get(p.placeId)?.providerRefs.find((r) => r.provider === 'GOOGLE')
-              ?.externalPlaceId ?? null)
-          : null,
-    })),
+    draft.places
+      .filter((p) => scheduledRefs.has(p.id))
+      .map((p) => ({
+        id: p.id,
+        externalPlaceId:
+          p.resolution === 'verified'
+            ? (byId.get(p.placeId)?.providerRefs.find((r) => r.provider === 'GOOGLE')
+                ?.externalPlaceId ?? null)
+            : null,
+      })),
     now,
   );
   const zones = new Map<string, string>();
   for (const place of draft.places) {
+    if (!relevantRefs.has(place.id)) continue;
     const row = place.resolution === 'verified' ? byId.get(place.placeId) : null;
     if (row) {
       const merged = mergeScoringPlaceIdentity(place.id, row, evidence.places.get(place.id), now);
@@ -205,17 +226,28 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, now: Date) {
       }),
     });
   }
+  const evaluatedAt = typeof clock === 'function' ? clock() : now;
+  const rawDeadlines = [
+    ...routeDeadlines,
+    ...placeHoursDeadlines(evidence.hours, records),
+    ...forecast.times.map((at) => new Date(Date.parse(at) + WEATHER_FORECAST_TTL_MS).toISOString()),
+    ...evidence.evidenceTimes.map((at) => new Date(Date.parse(at) + 30 * 86400000).toISOString()),
+  ];
+  if (
+    typeof clock === 'function' &&
+    rawDeadlines.some((at) => {
+      const boundary = Date.parse(at);
+      return (
+        Number.isFinite(boundary) && boundary > now.getTime() && boundary <= evaluatedAt.getTime()
+      );
+    })
+  )
+    return readDraftPlanScore(draft, evaluatedAt);
   const score = buildPlanScoreFromEvaluations({
     days,
-    evaluatedAt: now,
+    evaluatedAt,
     evidenceTimes: [...evidence.evidenceTimes, ...routeTimes, ...forecast.times],
-    evidenceDeadlines: [
-      ...routeDeadlines,
-      ...placeHoursDeadlines(evidence.hours, records),
-      ...forecast.times.map((at) =>
-        new Date(Date.parse(at) + WEATHER_FORECAST_TTL_MS).toISOString(),
-      ),
-    ],
+    evidenceDeadlines: rawDeadlines,
     mustGoIds: [...draft.days.flatMap((d) => d.items), ...draft.unscheduledItems].flatMap((i) =>
       i.priority === 'must_go' && i.placeRefId ? [i.placeRefId] : [],
     ),

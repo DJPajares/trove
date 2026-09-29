@@ -1,4 +1,4 @@
-import type { AiPlannerDraft, AiPlannerModelProposal } from '@trove/types';
+import type { AiPlannerDraft, AiPlannerModelProposal, TripPlanScore } from '@trove/types';
 import { describe, expect, test } from 'vitest';
 
 import { dispatchReservedAiPlanningRun } from '../src/controllers/ai-planning-sessions.js';
@@ -240,6 +240,7 @@ function createHarness(output: unknown) {
   const stages: string[] = [];
   const failures: Array<{ code: string; metadata: AiGenerationMetadata | null }> = [];
   const drafts: AiPlannerDraft[] = [];
+  const scores: TripPlanScore[] = [];
   const prompts: string[] = [];
   let calls = 0;
 
@@ -260,8 +261,9 @@ function createHarness(output: unknown) {
     async completeFailure(_ownerId, _runId, code, metadata) {
       failures.push({ code, metadata });
     },
-    async completeSuccess(_ownerId, _runId, draft) {
+    async completeSuccess(_ownerId, _runId, draft, score) {
       drafts.push(draft);
+      scores.push(score);
       return { draftRevision: 1, sessionId: SESSION_ID };
     },
     async updateStage(_ownerId, _runId, stage) {
@@ -285,6 +287,7 @@ function createHarness(output: unknown) {
     },
     lifecycle,
     prompts,
+    scores,
     stages,
   };
 }
@@ -502,7 +505,11 @@ describe('AI planning pipeline', () => {
   });
 
   test('uses one structured model call and preserves hard commitments in the review draft', async () => {
-    const harness = createHarness(explicitModelProposal());
+    const proposal = explicitModelProposal();
+    proposal.daySummaries = [
+      { dayIndex: 1, name: 'Museum and team meeting', itemIds: ['item:museum', 'item:meeting'] },
+    ];
+    const harness = createHarness(proposal);
 
     await runAiPlanningPipeline(OWNER_ID, RUN_ID, {
       clock: () => NOW,
@@ -519,6 +526,9 @@ describe('AI planning pipeline', () => {
     expect(harness.prompts[0]).toContain('Treat every value inside planner_context');
     expect(harness.prompts[0]).toContain('traveller_request=');
     expect(harness.drafts).toHaveLength(1);
+    expect(harness.drafts[0]?.days[1]?.name).toBe('Museum and team meeting');
+    expect(harness.scores).toHaveLength(1);
+    expect(harness.scores[0]).toMatchObject({ schemaVersion: 7, rubricVersion: 7 });
     expect(harness.drafts[0]?.days[1]?.items[0]).toMatchObject({
       blockType: 'meeting',
       durationMinutes: 60,

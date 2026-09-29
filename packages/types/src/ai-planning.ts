@@ -184,6 +184,21 @@ export const aiPlannerModelProposalSchema = z
         .strict(),
     ),
     items: z.array(aiPlannerProposalItemSchema),
+    daySummaries: z
+      .array(
+        z
+          .object({
+            dayIndex: z
+              .number()
+              .int()
+              .min(0)
+              .max(AI_PLANNER_MAX_DAYS - 1),
+            name: z.string().trim().max(500),
+            itemIds: z.array(identifierSchema),
+          })
+          .strict(),
+      )
+      .optional(),
     normalizedRequest: aiPlannerNormalizedRequestSchema,
     partySize: z.number().int().min(1).max(99).nullable(),
     places: z.array(aiPlannerCandidatePlaceSchema),
@@ -347,6 +362,7 @@ export const aiPlannerDraftSchema = z
           date: dateOnlySchema,
           destinationId: identifierSchema.nullable(),
           items: z.array(aiPlannerDraftItemSchema),
+          name: z.string().trim().min(1).max(80).nullable().optional(),
         })
         .strict(),
     ),

@@ -1,5 +1,3 @@
-import { scoringInputRevision } from './plan-score-rules.js';
-import { planScoreReferenceTargets } from './plan-score-reference-targets.js';
 import { createHash } from 'node:crypto';
 
 import { getPrismaClient } from '@trove/db';
@@ -24,6 +22,8 @@ import {
   expandAiPlannerProposal,
 } from './ai-planner-compact.js';
 import { createCanonicalPlacesService } from './canonical-places.js';
+import { finalizeDraftDayTitles } from './ai-planning-day-titles.js';
+import { readDraftPlanScore } from './ai-draft-score-reader.js';
 import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
 import { dayPartWindow } from './day-part-windows.js';
 import {
@@ -39,15 +39,8 @@ import {
   type GroundedPlaceContext,
 } from './ai-place-grounding.js';
 import { createAiPlannerProviderContext } from './ai-planner-provider-context.js';
-import {
-  buildPlanScoreFromEvaluations,
-  placeHoursDeadlines,
-  evaluateScoredDay,
-  withholdNonCurrentPlanScore,
-  type TripPlanScore,
-} from './plan-score.js';
+import type { TripPlanScore } from './plan-score.js';
 import { groundableDraftPlaceIds, referencedDraftPlaceIds } from './ai-planning-draft-places.js';
-import { draftDayStay, draftPlanScoreInputRevision } from './ai-planning-plan-score.js';
 import {
   recordAiPlanningDraftAssembled,
   recordAiPlanningProposalCoverage,
@@ -70,7 +63,6 @@ import {
   evaluateFeasibility,
   type PlanScoreDayItem,
   type PlanScoreInterval,
-  type PlanScorePlace,
   type PlanScoreRouteSegment,
 } from './plan-score-factors.js';
 import { normalizePlaceLanguageCode } from './place-language.js';
@@ -83,10 +75,9 @@ import {
   SUGGESTED_TIME_ROUNDING_MINUTES,
   suggestItemStart,
 } from './itinerary-time-suggestions-rules.js';
-import { enumerateDateRange, resolveCountryPrimaryTimeZone } from './trip-rules.js';
-import { planningPreferencesFromAi } from '@trove/types';
+import { enumerateDateRange } from './trip-rules.js';
 import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
-import { normalizeScoringItems, dayOrigin, type ScoringHours } from './plan-score-normalization.js';
+import type { ScoringHours } from './plan-score-normalization.js';
 import type { ScoringPlace, ScoringRouteSegment } from './plan-score-evaluation.js';
 
 type GenerationGateway = {
@@ -141,6 +132,8 @@ export type AiPlanningPipelineOptions = {
   lifecycle?: PlanningLifecycle;
   loadHomeLocation?: (ownerId: string) => Promise<string | null>;
   providerContext?: ProviderContext;
+  /** Test seam; production always uses the shared cache-only draft reader. */
+  readDraftScore?: typeof readDraftPlanScore;
 };
 
 class AiPlanningPipelineFailure extends Error {
@@ -1162,202 +1155,26 @@ async function addRouteEvidence(
   return { inbound: inboundMinutes, segments: daySegments };
 }
 
-/** Mirrors `toDayPlaces`, keyed on the draft's place references. */
-function draftDayPlaces(
-  day: AiPlannerDraft['days'][number],
-  ratings: Map<string, number>,
-): PlanScorePlace[] {
-  const placeRefIds = [
-    ...new Set(day.items.flatMap((item) => (item.placeRefId ? [item.placeRefId] : []))),
-  ];
-  return placeRefIds.map((placeRefId) => {
-    const rating = ratings.get(placeRefId);
-    return {
-      rating:
-        rating === undefined
-          ? { status: 'UNKNOWN' as const }
-          : { rating, source: 'FRESH_PROVIDER' as const, status: 'KNOWN' as const },
-      tripPlaceId: placeRefId,
-    };
-  });
-}
-
-/**
- * Scores the finished draft from the evidence validation already gathered, so a
- * Plan Score costs no provider request of its own. This is the one pass that
- * sees both halves at once: the hours check runs before routes exist, and the
- * transition check runs before the day is final, so neither can stand in for a
- * judgement of the whole day.
- */
-function scoreDraft(
-  draft: AiPlannerDraft,
-  evidence: {
-    inbound: Map<string, number>;
-    intervals: Map<string, PlanScoreInterval[]>;
-    ratings: Map<string, number>;
-    segments: Map<string, ScoringRouteSegment[]>;
-    scoringPlaces: Map<string, ScoringPlace>;
-    hours: Map<string, ScoringHours>;
-  },
-  evaluatedAt: Date,
-) {
-  const scoredItems = new Set(draft.days.flatMap((day) => day.items.map((item) => item.id)));
-  const scoredRoutes = new Set(
-    [...evidence.segments.values()].flatMap((segments) => segments.map((segment) => segment.id)),
-  );
-  const scheduledIds = [
-    ...new Set(
-      draft.days.flatMap((day) =>
-        day.items.flatMap((item) => (item.placeRefId ? [item.placeRefId] : [])),
-      ),
-    ),
-  ];
-  // An unscheduled Must Go is exactly what this factor exists to notice, so the
-  // wanted set spans the whole draft while the scheduled set spans only days.
-  const mustGoIds = [
-    ...new Set(
-      [...draft.days.flatMap((day) => day.items), ...draft.unscheduledItems].flatMap((item) =>
-        item.priority === 'must_go' && item.placeRefId ? [item.placeRefId] : [],
-      ),
-    ),
-  ];
-
-  const score = buildPlanScoreFromEvaluations({
-    evaluatedAt,
-    evidenceDeadlines: placeHoursDeadlines(
-      evidence.hours,
-      draft.days.map((d) => ({
-        date: d.date,
-        items: d.items.map((i) => ({ tripPlaceId: i.placeRefId, blockType: i.blockType })),
-      })),
-    ),
-    evidenceTimes: draft.evidence.flatMap((entry) =>
-      entry.checkedAt &&
-      ((entry.kind === 'opening_hours' && scoredItems.has(entry.subjectId)) ||
-        (entry.kind === 'route' && scoredRoutes.has(entry.subjectId)))
-        ? [entry.checkedAt]
-        : [],
-    ),
-    days: draft.days.map((day) => {
-      const zoneByRef = new Map(
-        draft.places.map((place) => [
-          place.id,
-          (place.resolution === 'verified' && place.location
-            ? timeZoneAtCoordinates(place.location)
-            : null) ?? resolveCountryPrimaryTimeZone(place.name),
-        ]),
-      );
-      const zone =
-        (day.dailyBasePlaceRefId ? zoneByRef.get(day.dailyBasePlaceRefId) : null) ??
-        day.items.map((i) => (i.placeRefId ? zoneByRef.get(i.placeRefId) : null)).find(Boolean) ??
-        draft.trip.destinations.map((d) => zoneByRef.get(d.placeRefId)).find(Boolean) ??
-        'UTC';
-      const raw = day.items.map((item, index) => ({
-        ...feasibilityItem(
-          item,
-          evidence.intervals.get(item.id) ?? null,
-          evidence.inbound.get(item.id) ?? null,
-        ),
-        placeId: item.placeRefId ?? undefined,
-        inboundRequired: index > 0 || Boolean(draftDayStay(day).start),
-      }));
-      // Generation already acquires inter-item routes. Base legs are required by the
-      // ordinary itinerary but are not purchased to improve a draft's score.
-      const segments = [...(evidence.segments.get(day.date) ?? [])];
-      if (day.items.length && draftDayStay(day).start)
-        segments.unshift({ id: `base-start:${day.date}`, scope: 'LOCAL', status: 'UNKNOWN' });
-      if (day.items.length && draftDayStay(day).end)
-        segments.push({ id: `base-return:${day.date}`, scope: 'LOCAL', status: 'UNKNOWN' });
-      const zones = new Map(
-        day.items.flatMap((item) =>
-          item.placeRefId && zoneByRef.get(item.placeRefId)
-            ? [[item.id, zoneByRef.get(item.placeRefId)!] as const]
-            : [],
-        ),
-      );
-      return {
-        date: day.date,
-        evaluation: evaluateScoredDay({
-          commitments: [],
-          dayId: day.date,
-          date: day.date,
-          timeZone: zone,
-          originInstant: dayOrigin(day.date, zone),
-          items: normalizeScoringItems(day.date, zone, raw, { zones, hours: evidence.hours }),
-          places: draftDayPlaces(day, evidence.ratings).map(
-            (place) =>
-              evidence.scoringPlaces.get(place.tripPlaceId) ?? {
-                ...place,
-                name: draft.places.find((p) => p.id === place.tripPlaceId)?.name,
-              },
-          ),
-          segments,
-          preferences: planningPreferencesFromAi(
-            draft.normalizedRequest,
-            draft.trip.paceSource === 'user',
-            draft.assumptions.some((a) => a.code === 'interest_inferred'),
-          ),
-        }),
-      };
-    }),
-    mustGoIds,
-    scheduledIds,
-  });
-  return {
-    ...withholdNonCurrentPlanScore(score, evaluatedAt),
-    sourceInputRevision: draftPlanScoreInputRevision(draft),
-    presentation: score.presentation
-      ? {
-          ...score.presentation,
-          referenceTargets: planScoreReferenceTargets(score, {
-            items: [
-              ...draft.days.flatMap((day) =>
-                day.items.map((item) => ({ id: item.id, dayId: day.date })),
-              ),
-              ...draft.unscheduledItems.map((item) => ({ id: item.id, dayId: null })),
-            ],
-            reservationIds: [],
-            tripPlaceIds: draft.places.map((place) => place.id),
-          }),
-          revisions: {
-            ...score.presentation.revisions,
-            planning: draftPlanScoreInputRevision(draft),
-            evidence: scoringInputRevision({
-              hours: [...evidence.hours],
-              ratings: [...evidence.ratings],
-              places: [...evidence.scoringPlaces],
-              segments: [...evidence.segments],
-              times: draft.evidence
-                .filter((entry) => entry.kind === 'opening_hours' || entry.kind === 'route')
-                .map((entry) => [entry.subjectId, entry.checkedAt]),
-            }),
-          },
-        }
-      : undefined,
-  };
-}
-
 async function validateWithProviderEvidence(
   draft: AiPlannerDraft,
   proposal: AiPlannerModelProposal,
   grounding: GroundedCandidate[],
   providerContext: ProviderContext,
   signal?: AbortSignal,
-  clock: () => Date = () => new Date(),
 ) {
   const contexts = new Map(
     grounding.flatMap((result) =>
       result.context ? ([[result.place.id, result.context]] as const) : [],
     ),
   );
-  const { intervals, ratings, scoringPlaces, hours } = await addOpeningEvidence(
+  const { intervals } = await addOpeningEvidence(
     draft,
     proposal,
     contexts,
     providerContext.placesService,
     signal,
   );
-  const { inbound, segments } = await addRouteEvidence(
+  await addRouteEvidence(
     draft,
     proposal,
     contexts,
@@ -1379,14 +1196,7 @@ async function validateWithProviderEvidence(
     );
   }
 
-  return {
-    draft: validated.data,
-    planScore: scoreDraft(
-      validated.data,
-      { inbound, intervals, ratings, segments, scoringPlaces, hours },
-      clock(),
-    ),
-  };
+  return { draft: validated.data };
 }
 
 function defaultLifecycle(
@@ -1564,12 +1374,16 @@ export async function runAiPlanningPipeline(
       grounding,
       providerContext,
       providerSignal,
-      clock,
     );
+    finalizeDraftDayTitles(validated.draft, proposal.data.daySummaries);
+    // The provider run has finished acquiring its ordinary evidence. Reuse the
+    // same cache-only normalizer as a retained draft, with the clock read after
+    // its asynchronous evidence reads rather than before generation began.
+    const planScore = await (options.readDraftScore ?? readDraftPlanScore)(validated.draft, clock);
     recordAiPlanningDraftAssembled(validated.draft, generationDate);
     if (controller.signal.aborted)
       throw new AiPlanningPipelineFailure(deadlineReached ? 'timeout' : 'cancelled', metadata);
-    await lifecycle.completeSuccess(ownerId, runId, validated.draft, validated.planScore, metadata);
+    await lifecycle.completeSuccess(ownerId, runId, validated.draft, planScore, metadata);
   } catch (error) {
     const failure = failureFrom(error, metadata);
     const details: AiRunFailureDetails = {

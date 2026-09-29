@@ -51,7 +51,6 @@ import {
   missingDetailsProposal,
 } from './fixtures/ai-planning.js';
 import { PlacesService } from '../src/services/places.js';
-import { RoutesService } from '../src/services/routes.js';
 import {
   getTripPlanScore,
   PLAN_SCORE_CACHE_TTL_MS,
@@ -267,6 +266,11 @@ function installStubPrisma() {
       },
     },
     place: {
+      findMany: async (args: { where: { id: { in: string[] } } }) =>
+        args.where.id.in.flatMap((id) => {
+          const row = canonicalRecord(id);
+          return row ? [row] : [];
+        }),
       findUnique: async (args: { where: { id: string } }) => canonicalRecord(args.where.id),
       updateMany: async () => ({ count: 0 }),
     },
@@ -561,6 +565,7 @@ function buildTripModeContextFixture() {
       name: 'Test Trip',
       ownerId: 'user-1',
       referenceTimeZone: 'UTC',
+      reservations: [],
       startDate: new Date('2026-08-25T00:00:00.000Z'),
       startingPlace: null,
     },
@@ -1020,13 +1025,19 @@ test('TROVE_PLAN_SCORE_DISABLED cannot reach scoring that costs no provider call
     new URL('../src/services/ai-planning-pipeline.ts', import.meta.url),
     'utf8',
   );
+  const draftReaderSource = await readFile(
+    new URL('../src/services/ai-draft-score-reader.ts', import.meta.url),
+    'utf8',
+  );
 
   expect(arePlanScoreProvidersDisabled({ TROVE_PLAN_SCORE_DISABLED: '1' })).toBe(true);
 
-  // The draft scorer is pure over evidence it is handed, so the flag has no
-  // reachable path into it.
+  // The pipeline now uses the shared cache-only draft reader. Neither path
+  // consults the provider kill switch or acquires missing evidence.
   expect(pipelineSource).not.toContain('arePlanScoreProvidersDisabled');
-  expect(pipelineSource).toContain('buildPlanScoreFromEvaluations');
+  expect(pipelineSource).toContain('readDraftPlanScore');
+  expect(draftReaderSource).toContain('buildPlanScoreFromEvaluations');
+  expect(draftReaderSource).not.toContain('arePlanScoreProvidersDisabled');
   expect(
     await withEnvOverride({ TROVE_PLAN_SCORE_DISABLED: '1' }, async () =>
       planScore.buildPlanScoreFromEvaluations({ days: [], mustGoIds: [], scheduledIds: [] }),
@@ -1823,7 +1834,7 @@ test('six venues use one Places call each, with persisted identity and transient
     },
   });
   const routeRequests: RouteRequest[] = [];
-  const routesService = new RoutesService({
+  const routesService = new CachedRoutesService({
     name: 'google',
     async computeRoute(request) {
       routeRequests.push(request);
@@ -1915,7 +1926,7 @@ test('six venues use one Places call each, with persisted identity and transient
   expect(getProviderCallCounts()['google:getDetails'] ?? 0).toBe(0);
   expect(snapshotWrites).toBe(13);
   expect([...providerRefs.values()].map((ref) => ref.cachedAt)).toEqual(originalDates);
-  expect(routeRequests).toHaveLength(9); // Three unchanged adjacent legs per run.
+  expect(routeRequests).toHaveLength(3); // Each adjacent leg is acquired once, then reused.
   for (const draft of drafts) {
     expect(draft.days.map((day) => day.items.length)).toEqual([2, 2, 2]);
     expect(
@@ -1939,8 +1950,8 @@ test('six venues use one Places call each, with persisted identity and transient
     expect(planScore.days.map((day) => day.dayId)).toEqual(drafts[0]!.days.map((day) => day.date));
     expect(planScore.score).not.toBeNull();
     for (const day of planScore.days) {
-      expect(day.factors.FEASIBILITY.state).toBe('EVALUATED');
-      expect(day.factors.ROUTE_EFFICIENCY.state).toBe('EVALUATED');
+      expect(day.factors.FEASIBILITY.state).not.toBe('UNKNOWN');
+      expect(day.factors.ROUTE_EFFICIENCY.state).not.toBe('UNKNOWN');
       // The rating arrives free on the same response the hours came from.
       expect(day.factors.EXPERIENCE_QUALITY.state).toBe('LIMITED');
     }

@@ -4,7 +4,11 @@ import {
   originalPlanScoreTime,
   PLAN_SCORE_CACHE_TTL_MS,
 } from '../src/services/plan-score-freshness.js';
-import { parseStoredPlanScore, withholdNonCurrentPlanScore } from '../src/services/plan-score.js';
+import {
+  buildPlanScoreFromEvaluations,
+  parseStoredPlanScore,
+  withholdNonCurrentPlanScore,
+} from '../src/services/plan-score.js';
 import { emptyPlanScore } from './fixtures/ai-planning.js';
 
 const NOW = new Date('2026-09-01T12:00:00.000Z');
@@ -39,6 +43,27 @@ test('evaluation preserves provider fetch age instead of resetting it', () => {
   expect(oldestPlanScoreEvidenceAt(NOW.toISOString(), [NOW.toISOString(), earlier])).toBe(earlier);
   expect(oldestPlanScoreEvidenceAt(NOW.toISOString(), [])).toBe(NOW.toISOString());
   expect(oldestPlanScoreEvidenceAt(NOW.toISOString(), ['bad-time'])).toBeNull();
+});
+
+test('expired and invalid optional evidence cannot expire unrelated assessment data', () => {
+  const fresh = new Date(NOW.getTime() - 60_000).toISOString();
+  const score = buildPlanScoreFromEvaluations({
+    days: [],
+    mustGoIds: [],
+    scheduledIds: [],
+    evaluatedAt: NOW,
+    evidenceTimes: [
+      'not-a-time',
+      new Date(NOW.getTime() - 31 * PLAN_SCORE_CACHE_TTL_MS).toISOString(),
+      fresh,
+    ],
+    evidenceDeadlines: ['invalid', new Date(NOW.getTime() - 1).toISOString()],
+  });
+  expect(score.evidenceAsOf).toBe(fresh);
+  expect(score.evidenceExpiresAt).toBe(
+    new Date(Date.parse(fresh) + 30 * PLAN_SCORE_CACHE_TTL_MS).toISOString(),
+  );
+  expect(originalPlanScoreTime(score, NOW)).toEqual(NOW);
 });
 
 test('expired assessments withhold numbers without rewriting the original assessment', () => {

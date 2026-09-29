@@ -41,6 +41,7 @@ function createTrip(days: ReturnType<typeof day>[], destination: WeatherPoint | 
     id: 'trip',
     itineraryDays: days,
     referenceTimeZone: 'Asia/Tokyo',
+    reservations: [],
   };
 }
 
@@ -411,6 +412,7 @@ test('today is the day it is where the traveller is standing, not at the destina
       day('d2', '2026-09-04', { base: auckland }),
     ],
     referenceTimeZone: 'Asia/Singapore',
+    reservations: [],
   });
 
   const weather = await new TripWeatherService(

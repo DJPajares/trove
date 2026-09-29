@@ -991,6 +991,20 @@ test('a trip applied from a draft written before descriptions existed keeps a nu
   expect(store.state.trips[0]).toMatchObject({ description: null });
 });
 
+test('Apply persists optional generated day names and accepts legacy unnamed days', async () => {
+  const named = customPlaceDraft();
+  named.days[0]!.name = 'Kyoto food and lanes';
+  const store = createApplyStore(named);
+  await apply(store);
+  expect(store.state.days[0]).toMatchObject({ name: 'Kyoto food and lanes' });
+
+  const legacy = customPlaceDraft();
+  delete legacy.days[0]!.name;
+  const oldStore = createApplyStore(legacy);
+  await apply(oldStore);
+  expect(oldStore.state.days[0]).toMatchObject({ name: null });
+});
+
 /**
  * A traveller renaming the trip during review works the same way as the
  * description: the model's title is the floor, the traveller's own choice

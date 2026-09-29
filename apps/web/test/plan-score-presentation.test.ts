@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { QueryObserver } from '@tanstack/react-query';
 import type { PlanScoreExplanation, TripPlanScore } from '@trove/types';
 import {
   assessmentDeadline,
@@ -15,6 +16,7 @@ import {
   assessmentChange,
   refreshExpiredAssessment,
   rememberAssessment,
+  startCanonicalPlanScoreRead,
 } from '../lib/plan-score/lifecycle';
 
 const NOW = Date.parse('2026-09-29T02:00:00Z');
@@ -219,19 +221,58 @@ test('navigation resolves explicit day and Must Go actions; unknown references h
     }),
   ).toEqual({ href: '/trips/trip/itinerary?place=place-1' });
 });
-test('expiry attempts are deduplicated across surfaces and repeated expired responses', () => {
+test('expiry reads coalesce in flight but a later eligible event can recover', async () => {
   const client = createQueryClient();
   const score = assessment();
   client.setQueryData(['plan-score', 'trip'], score);
-  let invalidations = 0;
-  const unsubscribe = client.getQueryCache().subscribe((event) => {
-    if (event.type === 'updated' && event.action.type === 'invalidate') invalidations++;
+  let reads = 0;
+  let release: ((score: TripPlanScore) => void) | undefined;
+  const observer = new QueryObserver(client, {
+    queryKey: ['plan-score', 'trip'],
+    queryFn: () => {
+      reads++;
+      return new Promise<TripPlanScore>((resolve) => {
+        release = resolve;
+      });
+    },
+    staleTime: Infinity,
   });
+  const unsubscribe = observer.subscribe(() => undefined);
   refreshExpiredAssessment(client, 'trip', score, NOW);
-  expect(invalidations).toBe(0);
+  expect(reads).toBe(0);
   refreshExpiredAssessment(client, 'trip', score, NOW + 86_400_000);
   refreshExpiredAssessment(client, 'trip', score, NOW + 86_400_001);
-  expect(invalidations).toBe(1);
+  expect(reads).toBe(1);
+  release?.(score);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  refreshExpiredAssessment(client, 'trip', score, NOW + 86_400_002);
+  expect(reads).toBe(2);
+  release?.(score);
+  unsubscribe();
+  client.clear();
+});
+test('Apply starts one canonical read that a destination observer shares', async () => {
+  const client = createQueryClient();
+  const score = assessment();
+  let reads = 0;
+  let finish: ((value: TripPlanScore) => void) | undefined;
+  const read = () => {
+    reads++;
+    return new Promise<TripPlanScore>((resolve) => {
+      finish = resolve;
+    });
+  };
+  const started = startCanonicalPlanScoreRead(client, 'applied-trip', read);
+  const observer = new QueryObserver(client, {
+    queryKey: ['plan-score', 'applied-trip'],
+    queryFn: read,
+    staleTime: Infinity,
+  });
+  const unsubscribe = observer.subscribe(() => undefined);
+  expect(reads).toBe(1);
+  finish?.(score);
+  await started;
+  expect(observer.getCurrentResult().data).toEqual(score);
   unsubscribe();
   client.clear();
 });

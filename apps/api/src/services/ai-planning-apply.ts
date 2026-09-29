@@ -408,6 +408,7 @@ export async function applyAiPlanningSession(
             ? (tripPlaceIds.get(day.dailyBasePlaceRefId) ?? null)
             : null,
           date: parseDateOnly(date),
+          name: day.name ?? null,
           defaultTimeZone,
           defaultTimeZoneResolvedAt: now,
           defaultTimeZoneSource: insertedSource,

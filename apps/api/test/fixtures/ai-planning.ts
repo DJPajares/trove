@@ -22,6 +22,11 @@ export function compactModelProposal(proposal: AiPlannerModelProposal): AiPlanne
     ...request
   } = proposal.normalizedRequest;
   return {
+    daySummaries: proposal.daySummaries?.map((summary) => ({
+      dayIndex: summary.dayIndex,
+      name: summary.name,
+      itemIndices: summary.itemIds.map((id) => proposal.items.findIndex((item) => item.id === id)),
+    })),
     destinations: proposal.destinations.map((destination) => ({
       candidatePlaceIndex: placeIndex.get(destination.candidatePlaceId) ?? -1,
       destinationIntentIndex: destination.destinationIntentId

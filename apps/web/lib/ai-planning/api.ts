@@ -45,6 +45,7 @@ export type AiPlanningDraft = {
     date: string;
     destinationId: string | null;
     items: AiPlanningDraftItem[];
+    name?: string | null;
   }>;
   evidence: Array<{
     checkedAt: string | null;

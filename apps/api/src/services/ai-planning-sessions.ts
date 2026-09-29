@@ -269,6 +269,7 @@ async function serializeAiPlanningSessionWithCountries(
   session: SessionRecord,
   prisma: PlanningPrisma,
   now: Date,
+  clock: () => Date = () => now,
 ) {
   let current = session;
   if (
@@ -285,19 +286,35 @@ async function serializeAiPlanningSessionWithCountries(
         cached.sourceInputRevision !== draftPlanScoreInputRevision(retained.data))
     ) {
       const score = await singleFlight(
-        `draft-score:${session.id}:${session.draftRevision}:${draftPlanScoreInputRevision(retained.data)}`,
-        () => readDraftPlanScore(retained.data, now),
+        `draft-score:${session.id}:${session.draftRevision}:${session.updatedAt.toISOString()}:${session.reviewedCountries.join(',')}:${draftPlanScoreInputRevision(retained.data)}`,
+        () => readDraftPlanScore(retained.data, clock),
       );
+      const completedAt = clock();
+      if (completedAt >= session.expiresAt)
+        throw new AiPlanningSessionError('session_expired', 410);
       // Do not overwrite a concurrent regeneration/edit. No generation request is dispatched here.
-      await prisma.aiPlanningSession.updateMany({
-        where: { id: session.id, draftRevision: session.draftRevision, status: 'REVIEWING' },
+      const updated = await prisma.aiPlanningSession.updateMany({
+        where: {
+          id: session.id,
+          ownerId: session.ownerId,
+          draftRevision: session.draftRevision,
+          status: 'REVIEWING',
+          countryContextChanged: false,
+          expiresAt: { gt: completedAt },
+          updatedAt: session.updatedAt,
+        },
         data: { planScore: score as unknown as Prisma.InputJsonValue },
       });
-      current = { ...session, planScore: score as unknown as Prisma.JsonValue };
+      current =
+        updated.count === 1
+          ? { ...session, planScore: score as unknown as Prisma.JsonValue }
+          : await findOwnedSession(prisma, session.ownerId, session.id);
     }
   }
-  const serialized = serializeAiPlanningSession(current, now);
-  if (!serialized.draft || !['REVIEWING', 'FAILED'].includes(session.status)) {
+  const serializedAt = clock();
+  if (serializedAt >= session.expiresAt) throw new AiPlanningSessionError('session_expired', 410);
+  const serialized = serializeAiPlanningSession(current, serializedAt);
+  if (!serialized.draft || !['REVIEWING', 'FAILED'].includes(current.status)) {
     return serialized;
   }
   const draft = validateAiPlannerDraft(serialized.draft, { allowExactTimeOverlaps: true });
@@ -305,8 +322,8 @@ async function serializeAiPlanningSessionWithCountries(
   return {
     ...serialized,
     context:
-      session.status === 'REVIEWING'
-        ? await draftTripContext(draft.data, session.reviewedCountries, now)
+      current.status === 'REVIEWING'
+        ? await draftTripContext(draft.data, current.reviewedCountries, serializedAt)
         : null,
     suggestedCountries: await suggestedDraftCountriesFromStoredPlaces(draft.data, prisma),
   };
@@ -585,7 +602,14 @@ export async function recoverLatestAiPlanningSession(
     include: sessionInclude,
     orderBy: { updatedAt: 'desc' },
   });
-  return session ? serializeAiPlanningSessionWithCountries(session, prisma, now) : null;
+  return session
+    ? serializeAiPlanningSessionWithCountries(
+        session,
+        prisma,
+        now,
+        options.now ?? (() => new Date()),
+      )
+    : null;
 }
 
 export async function getAiPlanningSession(
@@ -605,7 +629,12 @@ export async function getAiPlanningSession(
     return found;
   });
   if (session === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
-  return serializeAiPlanningSessionWithCountries(session, prisma, now);
+  return serializeAiPlanningSessionWithCountries(
+    session,
+    prisma,
+    now,
+    options.now ?? (() => new Date()),
+  );
 }
 
 export async function regenerateAiPlanningSession(

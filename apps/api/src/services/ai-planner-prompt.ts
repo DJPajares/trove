@@ -156,7 +156,7 @@ export function buildAiPlannerPrompt(rawPrompt: string, context: AiPlannerPrompt
     '',
     'For exact dates set selectedDurationDays to null and count days inclusively from startDate to endDate. If the traveller omitted a year, use the next upcoming occurrence from planner_context.generationDate. Otherwise select a 3, 5, or 7 day tier, defaulting to planner_context.defaults.durationDays; application code assigns those dates. Use planner_context defaults for pace and party size only when the traveller did not supply them.',
     '',
-    "Write a short tripName in planner_context.naming.tone and a one-sentence tripDescription in the traveller's voice. Keep notes and rationales brief. Avoid generic titles and unsupported claims.",
+    "Write a short tripName in planner_context.naming.tone and a one-sentence tripDescription in the traveller's voice. Add one daySummary per planned day, with dayIndex, a concise 2–6 word name grounded in that day's actual theme, area, or highlight, and itemIndices supporting it. Prefer specifics like 'Katong food and Marina Bay'. Avoid generic titles, poetic or promotional language, and repetition. Keep notes and rationales brief; never make unsupported claims.",
     '',
     'Fill the whole trip. This is the most important requirement. Set item.dayIndex to every zero-based day in the inclusive date range or selected duration, including arrival and departure days. Never use null or an out-of-range day. Each day needs items, with lighter work, arrival, and departure days. Spread discretionary stops through the day according to planner_context.itemsPerDay; never fill a fixed work or flight block with conflicting activities. Keep real-place items at or below planner_context.maxRealPlaceItems.',
     '',

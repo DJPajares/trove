@@ -122,7 +122,7 @@ function TripDetailPlanScore({ tripId }: Readonly<{ tripId: string }>) {
     planScore.status === 'disabled' ||
     Boolean(planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED'));
 
-  if (planScoreHidden || !planScore.data) return null;
+  if (planScoreHidden) return null;
 
   return (
     <PlanScorePanel
@@ -141,7 +141,9 @@ function TripDetailPlanScore({ tripId }: Readonly<{ tripId: string }>) {
       headingLevel={2}
       assessment={planScore.data}
       change={planScore.changeFor('trip')}
-      resolveAction={(explanation) => dayActionLink(tripId, planScore.data, explanation)}
+      resolveAction={(explanation) =>
+        planScore.data ? dayActionLink(tripId, planScore.data, explanation) : null
+      }
       onRetry={planScore.retry}
       score={planScore.data?.score ?? null}
       scope="trip"

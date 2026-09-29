@@ -276,7 +276,7 @@ function TripModePreviewPlanScore({
       previewDayScore?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED'),
     );
 
-  if (planScoreHidden || !previewDayScore) return null;
+  if (planScoreHidden) return null;
 
   return (
     <PlanScorePanel
@@ -295,7 +295,9 @@ function TripModePreviewPlanScore({
       assessment={planScore.data}
       dayId={previewDayScore?.dayId}
       change={planScore.changeFor(previewDayScore?.dayId ?? '')}
-      resolveAction={(explanation) => dayActionLink(tripId, planScore.data, explanation)}
+      resolveAction={(explanation) =>
+        planScore.data ? dayActionLink(tripId, planScore.data, explanation) : null
+      }
       onRetry={planScore.retry}
       score={previewDayScore?.score ?? null}
       scope="day"

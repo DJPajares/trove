@@ -144,8 +144,10 @@ function createPlanningStore(
     valuesMatch(session.id, where.id) &&
     valuesMatch(session.ownerId, where.ownerId) &&
     valuesMatch(session.status, where.status) &&
+    valuesMatch(session.countryContextChanged, where.countryContextChanged) &&
     valuesMatch(session.expiresAt, where.expiresAt) &&
-    valuesMatch(session.draftRevision, where.draftRevision);
+    valuesMatch(session.draftRevision, where.draftRevision) &&
+    valuesMatch(session.updatedAt, where.updatedAt);
   const runMatches = (run: RunState, where: Record<string, unknown> = {}) =>
     valuesMatch(run.id, where.id) &&
     valuesMatch(run.ownerId, where.ownerId) &&
@@ -1376,6 +1378,49 @@ test('reopening null and legacy draft assessments recomputes locally without a g
     }
     expect(outbound).not.toHaveBeenCalled();
     expect(places).toHaveBeenCalledTimes(2);
+  } finally {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  }
+});
+
+test('a late draft score cannot overwrite or return a concurrently regenerated session', async () => {
+  vi.stubEnv('TROVE_PLAN_SCORE_DISABLED', 'false');
+  const store = createPlanningStore();
+  const session = makeSession('00000000-0000-4000-8000-000000000171', {
+    draft: explicitDraft(),
+    draftRevision: 1,
+    planScore: null,
+    status: 'REVIEWING',
+    stage: 'REVIEWING',
+  });
+  store.sessions.set(session.id, session);
+  const outbound = vi.fn(() => {
+    throw new Error('unexpected provider request');
+  });
+  vi.stubGlobal('fetch', outbound);
+  vi.stubGlobal('trovePrismaClient', {
+    place: {
+      findMany: vi.fn(async () => {
+        session.status = 'GENERATING';
+        session.draftRevision = 2;
+        session.updatedAt = new Date(session.updatedAt.getTime() + 1);
+        return [];
+      }),
+    },
+    placeProviderRef: { findUnique: vi.fn(async () => null) },
+    travelLegCache: { findUnique: vi.fn(async () => null) },
+    weatherForecastSnapshot: { findUnique: vi.fn(async () => null) },
+  });
+  try {
+    const response = await getAiPlanningSession(OWNER_ID, session.id, {
+      prisma: store.prisma as never,
+      now: () => NOW,
+    });
+    expect(response.status).toBe('generating');
+    expect(response.planScore).toBeNull();
+    expect(session.planScore).toBeNull();
+    expect(outbound).not.toHaveBeenCalled();
   } finally {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();

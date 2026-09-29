@@ -12,7 +12,12 @@ import { CountryMultiCombobox } from '@/components/country-multi-combobox';
 import { PageState } from '@/components/page-state';
 import { composeInsights } from '@/lib/insights/compose';
 import { assessmentDeadline, currentAssessment } from '@/lib/plan-score/presentation';
-import { assessmentChange, rememberAssessment } from '@/lib/plan-score/lifecycle';
+import {
+  assessmentChange,
+  rememberAssessment,
+  startCanonicalPlanScoreRead,
+} from '@/lib/plan-score/lifecycle';
+import { fetchTripPlanScore } from '@/lib/plan-score/api';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripInsightsPanel } from '@/components/trip-insights-panel';
 import { usePreferences } from '@/components/preferences-provider';
@@ -79,6 +84,7 @@ export function AiPlanningReview({
   const reducedMotion = useReducedMotion();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const [clock, setClock] = useState(() => Date.now());
   const sessionQuery = useQuery({
     queryFn: () => fetchAiPlanningSession(sessionId),
     queryKey: queryKeys.aiPlanningSession(sessionId),
@@ -88,18 +94,37 @@ export function AiPlanningReview({
     refetchOnReconnect: true,
   });
   const session = sessionQuery.data?.session ?? null;
+  const lastDraftRefreshEvent = useRef<string | null>(null);
   useEffect(() => {
-    if (!planScoreEnabled || session?.status !== 'reviewing' || !session.planScore) return;
-    const deadline = assessmentDeadline(session.planScore);
+    if (!planScoreEnabled || session?.status !== 'reviewing' || session.countryContextChanged)
+      return;
+    const deadline = session.planScore ? assessmentDeadline(session.planScore) : Number.NaN;
     if (!Number.isFinite(deadline) || deadline <= Date.now()) return;
     const timer = window.setTimeout(
-      () => {
-        void sessionQuery.refetch();
-      },
+      () => setClock(Date.now()),
       Math.max(0, deadline - Date.now() + 1),
     );
     return () => window.clearTimeout(timer);
-  }, [planScoreEnabled, session?.status, session?.planScore, sessionQuery.refetch]);
+  }, [planScoreEnabled, session?.status, session?.countryContextChanged, session?.planScore]);
+  useEffect(() => {
+    if (
+      !planScoreEnabled ||
+      session?.status !== 'reviewing' ||
+      session.countryContextChanged ||
+      (session.planScore && currentAssessment(session.planScore, Math.max(clock, Date.now()))) ||
+      sessionQuery.isFetching
+    )
+      return;
+    const event = `${sessionId}:${session.draftRevision}:${session.countriesReviewedRevision}:${clock}`;
+    if (lastDraftRefreshEvent.current === event) return;
+    // One eligible event causes one session read. React Query shares it across
+    // consumers; a still-insufficient response waits for focus/expiry/reconnect.
+    lastDraftRefreshEvent.current = event;
+    void queryClient.invalidateQueries(
+      { queryKey: queryKeys.aiPlanningSession(sessionId), exact: true },
+      { cancelRefetch: false },
+    );
+  }, [clock, planScoreEnabled, queryClient, session, sessionId, sessionQuery.isFetching]);
   useEffect(() => {
     if (!session || !isAiPlanningSessionGenerating(session.status)) return;
     let current = true;
@@ -149,7 +174,6 @@ export function AiPlanningReview({
   const [countrySaveFailed, setCountrySaveFailed] = useState(false);
   const countrySaveTimer = useRef<number | null>(null);
   const countriesRef = useRef(countries);
-  const [clock, setClock] = useState(() => Date.now());
   const sessionRef = useRef<AiPlanningSession | null>(null);
   const expired = Boolean(session && isAiPlanningSessionExpired(session, clock));
   const serverExpired =
@@ -159,19 +183,22 @@ export function AiPlanningReview({
   useEffect(() => {
     if (!planScoreEnabled || !session?.planScore) return;
     rememberAssessment(queryClient, `draft:${sessionId}`, session.planScore);
-    setClock(Date.now());
   }, [planScoreEnabled, sessionId, session?.planScore, queryClient]);
 
   useEffect(() => {
     if (!session || session.status === 'applied') return;
-    const refreshClock = () => setClock(Date.now());
+    const refreshClock = () => {
+      if (document.visibilityState !== 'hidden') setClock(Date.now());
+    };
     window.addEventListener('focus', refreshClock);
+    window.addEventListener('online', refreshClock);
     document.addEventListener('visibilitychange', refreshClock);
     const delay = Math.max(0, Date.parse(session.expiresAt) - Date.now());
     const timer = window.setTimeout(refreshClock, Math.min(delay, 2_147_483_647));
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener('focus', refreshClock);
+      window.removeEventListener('online', refreshClock);
       document.removeEventListener('visibilitychange', refreshClock);
     };
   }, [session?.expiresAt, session?.status, clock]);
@@ -488,6 +515,10 @@ export function AiPlanningReview({
       queryClient.setQueryData(queryKeys.trips(), (current: { trips: Trip[] } | undefined) =>
         current ? { ...current, trips: [...current.trips, result.trip] } : current,
       );
+      if (planScoreEnabled)
+        void startCanonicalPlanScoreRead(queryClient, result.trip.id, (signal) =>
+          fetchTripPlanScore(result.trip.id, signal),
+        ).catch(() => undefined);
       router.replace(`/trips/${result.trip.id}`);
     } catch (cause) {
       setError(cause instanceof AiPlanningApiError ? cause.code : 'request_failed');
@@ -719,8 +750,13 @@ export function AiPlanningReview({
                       {t('day', { number: dayIndex + 1 })}
                     </p>
                     <h3 className="mt-1 font-semibold">
-                      {dateFormatter.format(new Date(`${day.date}T00:00:00.000Z`))}
+                      {day.name ?? dateFormatter.format(new Date(`${day.date}T00:00:00.000Z`))}
                     </h3>
+                    {day.name ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {dateFormatter.format(new Date(`${day.date}T00:00:00.000Z`))}
+                      </p>
+                    ) : null}
                   </header>
                   <ol className="divide-y divide-border-subtle">
                     {day.items.map((item) => {
@@ -804,19 +840,42 @@ export function AiPlanningReview({
         </div>
 
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-          {planScoreEnabled && session.planScore ? (
+          {planScoreEnabled && !session.countryContextChanged ? (
             <PlanScorePanel
               // Matches the review's own cards beside it in this column.
               className="border-border sm:p-6"
               change={assessmentChange(queryClient, `draft:${sessionId}`, 'trip')}
               assessment={session.planScore}
               resolveAction={resolveDraftScoreAction}
-              completeness={session.planScore.completeness}
-              confidence={session.planScore.confidence}
-              explanations={session.planScore.explanations}
-              score={session.planScore.score}
+              completeness={session.planScore?.completeness ?? null}
+              confidence={session.planScore?.confidence ?? null}
+              explanations={
+                session.planScore?.explanations ?? {
+                  uncertainty: [],
+                  whatWorks: [],
+                  worthImproving: [],
+                }
+              }
+              score={session.planScore?.score ?? null}
               scope="trip"
-              status="idle"
+              status={
+                sessionQuery.isFetching ||
+                (!session.planScore &&
+                  lastDraftRefreshEvent.current !==
+                    `${sessionId}:${session.draftRevision}:${session.countriesReviewedRevision}:${clock}`)
+                  ? 'updating'
+                  : sessionQuery.error
+                    ? 'error'
+                    : session.planScore && !currentAssessment(session.planScore)
+                      ? 'expired'
+                      : 'idle'
+              }
+              onRetry={() =>
+                void queryClient.invalidateQueries(
+                  { queryKey: queryKeys.aiPlanningSession(sessionId), exact: true },
+                  { cancelRefetch: false },
+                )
+              }
               title={planScoreCopy('title')}
             />
           ) : null}

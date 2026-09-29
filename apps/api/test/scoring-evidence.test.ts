@@ -167,6 +167,21 @@ test('new evidence, preferences, and day context invalidate a cached assessment 
   expect(outbound).not.toHaveBeenCalled();
 });
 
+test('a concurrent itinerary edit supersedes an older scoring read', async () => {
+  const cache = (globalThis as any).trovePrismaClient.placeProviderRef;
+  const originalRead = cache.findUnique;
+  let reads = 0;
+  cache.findUnique = vi.fn(async (args: unknown) => {
+    if (reads++ === 0) trip.itineraryDays[0].items[0].durationMinutes = 90;
+    return originalRead(args);
+  });
+  const first = await getTripPlanScore('owner', 'trip', { now: () => NOW });
+  const second = await getTripPlanScore('owner', 'trip', { now: () => NOW });
+  expect(first?.fingerprint).toBe(second?.fingerprint);
+  expect(update).toHaveBeenCalledTimes(1);
+  expect(outbound).not.toHaveBeenCalled();
+});
+
 test('unknown stops remain in the route chain instead of being bypassed', async () => {
   trip.itineraryDays[0].items.push({
     ...trip.itineraryDays[0].items[0],

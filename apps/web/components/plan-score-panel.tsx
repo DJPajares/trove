@@ -231,9 +231,12 @@ export function PlanScorePanel({
     assessment?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')
   )
     return null;
+  const assessmentCurrent = Boolean(
+    assessment && currentAssessment(assessment, Math.max(clock, Date.now())),
+  );
   const unavailable =
-    status !== 'idle' ||
-    Boolean(assessment && !currentAssessment(assessment, Math.max(clock, Date.now())));
+    ['loading', 'offline', 'syncing'].includes(status) ||
+    (!assessmentCurrent && (status !== 'idle' || Boolean(assessment)));
   const displayScore = unavailable ? null : score;
   const reasonStatus = status === 'idle' && unavailable ? 'expired' : status;
   const day = assessment?.days.find((entry) => entry.dayId === dayId);
@@ -288,11 +291,7 @@ export function PlanScorePanel({
             ) : (
               <p className="text-sm text-muted-foreground" role="status">
                 {unavailable
-                  ? t(
-                      reasonStatus === 'expired' && !onRetry
-                        ? 'availability.expiredStored'
-                        : `availability.${reasonStatus}`,
-                    )
+                  ? t(`availability.${reasonStatus}`)
                   : specificGap
                     ? t(specificGap.messageKey, specificGap.values)
                     : t(`notEnoughInformation.${scope}`)}

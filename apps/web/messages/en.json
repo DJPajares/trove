@@ -2534,8 +2534,7 @@
       "syncing": "Plan Score will update after your local planning edits sync.",
       "updating": "Updating the assessment for the latest plan.",
       "loading": "Assessing the plan…",
-      "error": "Plan Score is currently unavailable.",
-      "expiredStored": "Reopen this draft to update its assessment."
+      "error": "Plan Score is currently unavailable."
     },
     "changes": {
       "sources": {

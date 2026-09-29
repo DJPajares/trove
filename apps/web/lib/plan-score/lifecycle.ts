@@ -13,7 +13,20 @@ const histories = new WeakMap<
   Map<string, { latest: ScoreSnapshot; previous?: ScoreSnapshot }>
 >();
 const queuedEvidenceRefreshes = new WeakMap<QueryClient, Set<string>>();
-const expiryAttempts = new WeakMap<QueryClient, Map<string, string>>();
+const expiryRefreshes = new WeakMap<QueryClient, Map<string, Promise<void>>>();
+
+/** Start the canonical read before navigation; the destination observer joins this query. */
+export function startCanonicalPlanScoreRead(
+  client: QueryClient,
+  tripId: string,
+  read: (signal?: AbortSignal) => Promise<TripPlanScore | null>,
+) {
+  return client.fetchQuery({
+    queryKey: ['plan-score', tripId],
+    queryFn: ({ signal }) => read(signal),
+    staleTime: 0,
+  });
+}
 export function rememberAssessment(client: QueryClient, tripId: string, score: TripPlanScore) {
   let history = histories.get(client);
   if (!history) histories.set(client, (history = new Map()));
@@ -30,7 +43,7 @@ export function assessmentChange(
   const history = histories.get(client)?.get(tripId);
   return history?.previous ? compareScores(history.previous, history.latest, scope) : null;
 }
-/** Multiple mounted surfaces share a single expiry attempt, including a still-expired response. */
+/** Multiple mounted surfaces share only the in-flight cache-only read. */
 export function refreshExpiredAssessment(
   client: QueryClient,
   tripId: string,
@@ -38,12 +51,21 @@ export function refreshExpiredAssessment(
   now = Date.now(),
 ) {
   if (currentAssessment(score, now)) return;
-  let attempts = expiryAttempts.get(client);
-  if (!attempts) expiryAttempts.set(client, (attempts = new Map()));
-  const key = `${tripId}:${score.fingerprint}:${score.recomputeAfter}`;
-  if (attempts.get(tripId) === key) return;
-  attempts.set(tripId, key);
-  void client.invalidateQueries({ queryKey: ['plan-score', tripId] }, { cancelRefetch: false });
+  let refreshes = expiryRefreshes.get(client);
+  if (!refreshes) expiryRefreshes.set(client, (refreshes = new Map()));
+  if (refreshes.has(tripId)) return;
+  const queryKey = ['plan-score', tripId];
+  if (client.getQueryCache().find({ queryKey, exact: true })?.state.fetchStatus === 'fetching')
+    return;
+  const pending = client.invalidateQueries({ queryKey, exact: true }, { cancelRefetch: false });
+  const settled = pending.then(
+    () => undefined,
+    () => undefined,
+  );
+  refreshes.set(tripId, settled);
+  void settled.finally(() => {
+    if (refreshes.get(tripId) === settled) refreshes.delete(tripId);
+  });
 }
 
 /** Ordinary acquisition can supply scoring evidence. Only existing score queries are refreshed. */
@@ -59,7 +81,7 @@ export function watchScoringAcquisition(client: QueryClient) {
     if (event.type === 'removed' && event.query.queryKey[0] === 'plan-score') {
       const tripId = String(event.query.queryKey[1]);
       histories.get(client)?.delete(tripId);
-      expiryAttempts.get(client)?.delete(tripId);
+      expiryRefreshes.get(client)?.delete(tripId);
     }
     if (event.type !== 'updated' || event.action.type !== 'success' || event.action.manual) return;
     const [root, tripId] = event.query.queryKey;

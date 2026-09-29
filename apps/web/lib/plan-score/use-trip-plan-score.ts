@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchTripPlanScore } from '@/lib/plan-score/api';
 import { queryKeys } from '@/lib/query/keys';
 import {
@@ -27,6 +27,7 @@ export type PlanScoreLoadStatus =
 export function useTripPlanScore(tripId: string | null) {
   const client = useQueryClient();
   const [clock, setClock] = useState(() => Date.now());
+  const lastExpiryEvent = useRef<{ tripId: string; at: number } | null>(null);
   const [connectivity, setConnectivity] = useState<{
     tripId: string | null;
     online: boolean;
@@ -90,7 +91,6 @@ export function useTripPlanScore(tripId: string | null) {
   useEffect(() => {
     if (!data || !tripId) return;
     rememberAssessment(client, tripId, data);
-    setClock(Date.now());
     const deadline = assessmentDeadline(data);
     if (!Number.isFinite(deadline)) return;
     const timer = window.setTimeout(
@@ -105,10 +105,14 @@ export function useTripPlanScore(tripId: string | null) {
       data &&
       canRead &&
       document.visibilityState !== 'hidden' &&
+      query.dataUpdatedAt < clock &&
+      (lastExpiryEvent.current?.tripId !== tripId || lastExpiryEvent.current.at !== clock) &&
       !currentAssessment(data, Math.max(clock, Date.now()))
-    )
+    ) {
+      lastExpiryEvent.current = { tripId, at: clock };
       refreshExpiredAssessment(client, tripId, data, Math.max(clock, Date.now()));
-  }, [client, tripId, data, clock, canRead]);
+    }
+  }, [client, tripId, data, clock, canRead, query.dataUpdatedAt]);
   useEffect(() => {
     const refresh = () => {
       if (document.visibilityState !== 'hidden') setClock(Date.now());
@@ -125,22 +129,27 @@ export function useTripPlanScore(tripId: string | null) {
   }, [client, tripId, canRead]);
   const status: PlanScoreLoadStatus = !tripId
     ? 'idle'
-    : query.data === null
-      ? 'disabled'
-      : !ready
-        ? 'loading'
-        : !connectivity.online
-          ? 'offline'
-          : connectivity.pending
-            ? 'syncing'
-            : query.error
-              ? 'error'
-              : query.isPending
-                ? 'loading'
-                : data && !currentAssessment(data, Math.max(clock, Date.now()))
-                  ? 'expired'
-                  : query.isFetching && query.isStale
-                    ? 'updating'
+    : !ready
+      ? 'loading'
+      : !connectivity.online
+        ? 'offline'
+        : connectivity.pending
+          ? 'syncing'
+          : query.data === null && !query.isFetching
+            ? 'disabled'
+            : query.isPending
+              ? 'loading'
+              : query.isFetching ||
+                  (data &&
+                    !currentAssessment(data, Math.max(clock, Date.now())) &&
+                    query.dataUpdatedAt < clock &&
+                    (lastExpiryEvent.current?.tripId !== tripId ||
+                      lastExpiryEvent.current.at !== clock))
+                ? 'updating'
+                : query.error
+                  ? 'error'
+                  : data && !currentAssessment(data, Math.max(clock, Date.now()))
+                    ? 'expired'
                     : 'idle';
   return {
     data,

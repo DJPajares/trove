@@ -52,6 +52,17 @@ export const aiPlannerCompactProposalSchema = z
           destinationIntentIndex: index.nullable(),
         }),
     ),
+    daySummaries: z
+      .array(
+        z
+          .object({
+            dayIndex: z.number().int(),
+            name: z.string().trim().max(500),
+            itemIndices: z.array(z.number().int()),
+          })
+          .strict(),
+      )
+      .optional(),
     normalizedRequest: aiPlannerNormalizedRequestSchema
       .omit({ schemaVersion: true, destinations: true, constraints: true })
       .extend({
@@ -410,6 +421,15 @@ export function expandAiPlannerProposal(
       }),
     };
   });
+  const daySummaries = compact.daySummaries
+    ?.filter((summary) => summary.dayIndex >= 0 && summary.dayIndex < 14)
+    .map((summary) => ({
+      dayIndex: summary.dayIndex,
+      name: summary.name,
+      // Title hints are cosmetic. A bad reference falls back to a surviving item,
+      // never discards an otherwise useful plan or spends another model call.
+      itemIds: summary.itemIndices.map((at) => items[at]?.id ?? `item:missing:${at}`),
+    }));
   // A stay is only ever one the traveller named: a place whose distinctive
   // words the request never mentions is a suggestion, and is dropped.
   // A city in the hotel's name ("Hilton Tokyo") is not evidence either: the
@@ -447,6 +467,7 @@ export function expandAiPlannerProposal(
     assumptions,
     destinations,
     items,
+    daySummaries,
     normalizedRequest: {
       ...compact.normalizedRequest,
       constraints,

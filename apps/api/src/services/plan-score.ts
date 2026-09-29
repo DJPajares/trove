@@ -406,6 +406,21 @@ export function buildPlanScoreFromEvaluations(input: {
   evidenceDeadlines?: readonly string[];
 }): TripPlanScore {
   const generatedAt = (input.evaluatedAt ?? new Date()).toISOString();
+  const evaluatedMs = Date.parse(generatedAt);
+  // Invalid, future, or expired optional revisions cannot shorten an otherwise
+  // useful assessment. The readers themselves omit their associated fields.
+  const evidenceTimes = [...new Set(input.evidenceTimes ?? [])].filter((at) => {
+    const acquired = Date.parse(at);
+    return (
+      Number.isFinite(acquired) &&
+      acquired <= evaluatedMs &&
+      acquired + PLACE_EVIDENCE_TTL_MS > evaluatedMs
+    );
+  });
+  const evidenceDeadlines = [...new Set(input.evidenceDeadlines ?? [])].filter((at) => {
+    const deadline = Date.parse(at);
+    return Number.isFinite(deadline) && deadline > evaluatedMs;
+  });
   const evaluations = input.days.toSorted((a, b) => a.date.localeCompare(b.date));
   const mustGo = evaluateMustGoPriorityFit({
     mustGoTripPlaceIds: input.mustGoIds,
@@ -522,22 +537,22 @@ export function buildPlanScoreFromEvaluations(input: {
     },
     fingerprint: scoringInputRevision({
       evaluation: planScoreFingerprint(tripInput),
-      evidenceTimes: [...new Set(input.evidenceTimes ?? [])].sort(),
-      evidenceDeadlines: [...new Set(input.evidenceDeadlines ?? [])].sort(),
+      evidenceTimes: evidenceTimes.toSorted(),
+      evidenceDeadlines: evidenceDeadlines.toSorted(),
     }),
     generatedAt,
     recomputeAfter: new Date(
       Math.min(
         Date.parse(generatedAt) + 24 * 60 * 60 * 1000,
-        ...(input.evidenceTimes ?? []).map((at) => Date.parse(at) + PLACE_EVIDENCE_TTL_MS),
-        ...(input.evidenceDeadlines ?? []).map(Date.parse),
+        ...evidenceTimes.map((at) => Date.parse(at) + PLACE_EVIDENCE_TTL_MS),
+        ...evidenceDeadlines.map(Date.parse),
       ),
     ).toISOString(),
     evidenceExpiresAt: evidenceDeadline([
-      ...(input.evidenceTimes ?? []).map((at) => Date.parse(at) + PLACE_EVIDENCE_TTL_MS),
-      ...(input.evidenceDeadlines ?? []).map(Date.parse),
+      ...evidenceTimes.map((at) => Date.parse(at) + PLACE_EVIDENCE_TTL_MS),
+      ...evidenceDeadlines.map(Date.parse),
     ]),
-    evidenceAsOf: oldestPlanScoreEvidenceAt(generatedAt, input.evidenceTimes ?? []),
+    evidenceAsOf: oldestPlanScoreEvidenceAt(generatedAt, evidenceTimes),
     score: result.score,
     withheldReasons: result.withheldReasons,
   };
@@ -969,6 +984,7 @@ export async function getTripPlanScore(
   userId: string,
   tripId: string,
   services: { now?: () => Date } = {},
+  remainingSnapshotRetry = 1,
 ): Promise<TripPlanScore | null> {
   const now = services.now?.() ?? new Date();
   // Preserve the administrative visibility switch. Scoring now makes zero
@@ -1050,9 +1066,49 @@ export async function getTripPlanScore(
       })),
     },
   });
+  const stillCurrent = async () => {
+    const latest = await prisma.trip.findFirst({
+      where: { id: tripId, ownerId: userId },
+      include: PLAN_SCORE_TRIP_INCLUDE,
+    });
+    if (!latest) throw new ItineraryNotFoundError('trip_not_found');
+    return readPlanScoreInputs(latest, services.now?.() ?? new Date()).revision === revision;
+  };
+  const superseded = async (): Promise<TripPlanScore | null> => {
+    if (remainingSnapshotRetry > 0)
+      return getTripPlanScore(userId, tripId, services, remainingSnapshotRetry - 1);
+    throw new Error('plan_score_inputs_changed_during_read');
+  };
   const cached = readCachedPlanScore(trip, revision, now, evidenceRevision);
-  if (cached) return cached;
+  if (cached) return (await stillCurrent()) ? cached : superseded();
   const evaluatedAt = services.now?.() ?? new Date();
+  const rawEvidenceDeadlines = [
+    ...trip.tripPlaces.flatMap((row) => {
+      const own = contextPlaceFromOwnedData(row.place, now);
+      return scheduledTripPlaceIds.has(row.id) && own.expiresAt ? [Date.parse(own.expiresAt)] : [];
+    }),
+    ...forecastEvidence.times.map((at) => Date.parse(at) + WEATHER_FORECAST_TTL_MS),
+    ...placeEvidence.evidenceTimes.map((at) => Date.parse(at) + PLACE_EVIDENCE_TTL_MS),
+    ...placeHoursDeadlines(placeEvidence.hours, dayRecords).map(Date.parse),
+    ...routeResults.flatMap(({ routes }) =>
+      routes.segments.flatMap((segment) =>
+        segment.evidenceExpiresAt ? [Date.parse(segment.evidenceExpiresAt)] : [],
+      ),
+    ),
+    ...routeResults.flatMap(({ routes }) =>
+      routes.segments.flatMap((segment) =>
+        segment.evidenceAsOf ? [Date.parse(segment.evidenceAsOf) + TRAVEL_LEG_CACHE_TTL_MS] : [],
+      ),
+    ),
+  ];
+  if (
+    remainingSnapshotRetry > 0 &&
+    rawEvidenceDeadlines.some(
+      (deadline) =>
+        Number.isFinite(deadline) && deadline > now.getTime() && deadline <= evaluatedAt.getTime(),
+    )
+  )
+    return getTripPlanScore(userId, tripId, services, remainingSnapshotRetry - 1);
   const result = buildTripPlanScore(
     {
       days: dayRecords,
@@ -1098,32 +1154,25 @@ export async function getTripPlanScore(
     inputRevision: revision,
     evidenceRevision,
   });
-  result.evidenceExpiresAt = evidenceDeadline([
-    ...trip.tripPlaces.flatMap((row) => {
-      const own = contextPlaceFromOwnedData(row.place, now);
-      return scheduledTripPlaceIds.has(row.id) && own.expiresAt ? [Date.parse(own.expiresAt)] : [];
-    }),
-    ...forecastEvidence.times.map((at) => Date.parse(at) + WEATHER_FORECAST_TTL_MS),
-    ...placeEvidence.evidenceTimes.map((at) => Date.parse(at) + PLACE_EVIDENCE_TTL_MS),
-    ...placeHoursDeadlines(placeEvidence.hours, dayRecords).map(Date.parse),
-    ...routeResults.flatMap(({ routes }) =>
-      routes.segments.flatMap((segment) =>
-        segment.evidenceExpiresAt ? [Date.parse(segment.evidenceExpiresAt)] : [],
-      ),
+  result.evidenceExpiresAt = evidenceDeadline(
+    rawEvidenceDeadlines.filter(
+      (deadline) => Number.isFinite(deadline) && deadline > evaluatedAt.getTime(),
     ),
-    ...routeResults.flatMap(({ routes }) =>
-      routes.segments.flatMap((segment) =>
-        segment.evidenceAsOf ? [Date.parse(segment.evidenceAsOf) + TRAVEL_LEG_CACHE_TTL_MS] : [],
-      ),
-    ),
-  ]);
+  );
   result.recomputeAfter = new Date(
     Math.min(
       evaluatedAt.getTime() + 24 * 60 * 60 * 1000,
       result.evidenceExpiresAt ? Date.parse(result.evidenceExpiresAt) : Infinity,
     ),
   ).toISOString();
+  if (
+    result.evidenceExpiresAt &&
+    Date.parse(result.evidenceExpiresAt) <= evaluatedAt.getTime() &&
+    remainingSnapshotRetry > 0
+  )
+    return getTripPlanScore(userId, tripId, services, remainingSnapshotRetry - 1);
   const current = withholdNonCurrentPlanScore(result, evaluatedAt);
+  if (!(await stillCurrent())) return superseded();
   await writeCachedPlanScore(prisma, trip.id, current, revision);
   return current;
 }

@@ -283,7 +283,7 @@ function ItineraryScoreAndInsights({
   return (
     <div className={selectedDayId === null ? 'space-y-4' : 'mt-6 space-y-6'}>
       <div aria-hidden="true" className="h-px" ref={planScoreSentinelRef} />
-      {!planScoreHidden && planScoreDay ? (
+      {!planScoreHidden && planScoreVisible ? (
         <PlanScorePanel
           completeness={planScoreDay?.completeness ?? null}
           confidence={planScoreDay?.confidence ?? null}

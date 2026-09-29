@@ -5,6 +5,7 @@ import { z } from 'zod';
 import {
   readOwnedTripDestinationContext,
   destinationContextRevision,
+  matchContextDestination,
   type OwnedContextPlace,
 } from './destination-context.js';
 import { tripPlanScoreRevision } from './plan-score-revision.js';
@@ -13,7 +14,6 @@ export { PLAN_SCORE_CACHE_TTL_MS } from './plan-score-freshness.js';
 
 import { arePlanScoreProvidersDisabled } from '../environment.js';
 import {
-  sameDayJourneyCommitment,
   toDayEvidenceItems,
   toLocalDate,
   type ItineraryDayRecord,
@@ -25,24 +25,39 @@ import { PLACE_EVIDENCE_TTL_MS } from './place-evidence-cache.js';
 import { TRAVEL_LEG_CACHE_TTL_MS } from './route-evidence-cache.js';
 import { ItineraryNotFoundError } from './itineraries.js';
 import { readDayPlanningContext, readTripPlanningPreferences } from '@trove/types';
+import {
+  evaluateScoredDay,
+  type ScoringPlace,
+  type ScoringRouteSegment,
+  type ScoringForecast,
+} from './plan-score-evaluation.js';
+export { evaluateScoredDay } from './plan-score-evaluation.js';
+import {
+  scoringCommitments,
+  normalizeScoringItems,
+  dayOrigin,
+  elapsedLocalMinute,
+  type ScoringReservation,
+} from './plan-score-normalization.js';
+import { contextPlaceFromOwnedData } from './destination-context.js';
+import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
+import {
+  readCachedForecast,
+  weatherPointKey,
+  WEATHER_FORECAST_TTL_MS,
+} from './weather-evidence-cache.js';
+import { resolveForecastWindow } from './weather-window.js';
 import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
 import { explainDay, explainTrip } from './plan-score-explanations.js';
-import {
-  evaluateFeasibility,
-  evaluateMustGoPriorityFit,
-  evaluatePaceBuffer,
-  evaluatePlaceQuality,
-  evaluateTravelEffort,
-  type PlanScoreDayItem,
-  type PlanScoreFixedCommitment,
-  type PlanScorePlace,
-  type PlanScoreRouteSegment,
-} from './plan-score-factors.js';
+import { evaluateMustGoPriorityFit, type PlanScoreFixedCommitment } from './plan-score-factors.js';
 import {
   planScoreFingerprint,
+  scoringInputRevision,
   scoreTrip,
+  combineSignals,
+  DAY_FACTOR_IDS,
+  PLAN_SCORE_CONTRACT_VERSION,
   toPlanScoreDayPayload,
-  type PlanScoreDayInput,
   type PlanScoreFactorResult,
 } from './plan-score-rules.js';
 
@@ -50,9 +65,8 @@ import {
  * Plan Score for a trip, derived on demand from stored itinerary data and
  * unexpired cached route/place evidence (PRD section 29). Never acquires evidence.
  *
- * One factor stays unknown in this integration rather than being guessed: route
- * efficiency, because comparing alternative orders needs a full pairwise duration
- * matrix per day. It lowers completeness honestly instead of inventing evidence.
+ * Local burden uses the day's existing route legs. Avoidable movement remains
+ * unknown without evidenced feasible alternatives; no route matrix is acquired.
  */
 
 export type { TripPlanScore, TripPlanScoreDay } from '@trove/types';
@@ -69,9 +83,12 @@ export type PlanScoreTripRecord = {
   ratings: Map<string, number>;
   routes: Map<string, ItineraryDayRoutes>;
   destinationContext?: import('@trove/types').TripDestinationContext;
+  preferences?: unknown;
+  places?: Map<string, ScoringPlace>;
+  forecasts?: ScoringForecast[];
 };
 
-function toRouteSegments(routes: ItineraryDayRoutes | undefined): PlanScoreRouteSegment[] {
+function toRouteSegments(routes: ItineraryDayRoutes | undefined): ScoringRouteSegment[] {
   return (routes?.segments ?? []).map((segment) => {
     // A long-distance leg carries no estimate by design. Travel effort and pace both
     // filter on scope, so passing it through keeps flights out of local travel
@@ -79,13 +96,23 @@ function toRouteSegments(routes: ItineraryDayRoutes | undefined): PlanScoreRoute
     const scope = segment.scope === 'long_distance' ? 'LONG_DISTANCE' : 'LOCAL';
 
     return segment.durationSeconds === null
-      ? { id: segment.id, scope, status: 'UNKNOWN' }
+      ? {
+          id: segment.id,
+          scope,
+          status: 'UNKNOWN',
+          mode: segment.mode,
+          distanceMeters: segment.distanceMeters,
+          itemIds: [segment.origin.id, segment.destination.id],
+        }
       : {
           duration: {
             minutes: segment.durationSeconds / 60,
             source: segment.evidenceAsOf ? 'CACHED_PROVIDER' : 'USER_OWNED',
           },
           id: segment.id,
+          mode: segment.mode,
+          distanceMeters: segment.distanceMeters,
+          itemIds: [segment.origin.id, segment.destination.id],
           scope,
           status: 'KNOWN',
         };
@@ -94,6 +121,7 @@ function toRouteSegments(routes: ItineraryDayRoutes | undefined): PlanScoreRoute
 
 function toCommitments(day: PlanScoreDayRecord): PlanScoreFixedCommitment[] {
   return day.commitments.map((commitment) => ({
+    ...commitment,
     endMinute: commitment.endMinute,
     id: commitment.id,
     source: 'USER_OWNED',
@@ -101,85 +129,93 @@ function toCommitments(day: PlanScoreDayRecord): PlanScoreFixedCommitment[] {
   }));
 }
 
-function toDayPlaces(day: PlanScoreDayRecord, ratings: Map<string, number>): PlanScorePlace[] {
-  const tripPlaceIds = [
+function toDayPlaces(day: PlanScoreDayRecord, record: PlanScoreTripRecord): ScoringPlace[] {
+  const ids = [
     ...new Set(day.items.flatMap((item) => (item.tripPlaceId ? [item.tripPlaceId] : []))),
   ];
-
-  return tripPlaceIds.map((tripPlaceId) => {
-    const rating = ratings.get(tripPlaceId);
-    return {
-      rating:
-        rating === undefined
-          ? { status: 'UNKNOWN' }
-          : { rating, source: 'CACHED_PROVIDER', status: 'KNOWN' },
-      tripPlaceId,
-    };
-  });
-}
-
-export type PlanScoreDayEvaluation = {
-  conflicts: ReturnType<typeof evaluateFeasibility>['conflicts'];
-  input: PlanScoreDayInput;
-  pace: ReturnType<typeof evaluatePaceBuffer>;
-  travel: ReturnType<typeof evaluateTravelEffort>;
-};
-
-/**
- * The rubric over one day's evidence, with no opinion about where that evidence
- * came from. A stored trip reads it from Prisma rows; the AI planner builds the
- * same shapes from a draft it has just grounded. Keeping the mapping outside is
- * what lets both score identically without either owning the other's queries.
- */
-export function evaluateScoredDay(input: {
-  commitments: PlanScoreFixedCommitment[];
-  dayId: string;
-  items: PlanScoreDayItem[];
-  places: PlanScorePlace[];
-  segments: PlanScoreRouteSegment[];
-}): PlanScoreDayEvaluation {
-  const feasibility = evaluateFeasibility({
-    commitments: input.commitments,
-    items: input.items,
-  });
-  const travel = evaluateTravelEffort(input.segments);
-  const pace = evaluatePaceBuffer({ items: input.items, segments: input.segments });
-  const placeQuality = evaluatePlaceQuality(input.places);
-
-  return {
-    conflicts: feasibility.conflicts,
-    input: {
-      dayId: input.dayId,
-      // Route efficiency is deliberately absent: an alternative-order comparison
-      // needs a pairwise duration matrix no caller fetches.
-      factors: {
-        FEASIBILITY: feasibility.factor,
-        PACE_BUFFER: pace.factor,
-        PLACE_QUALITY: placeQuality,
-        TRAVEL_EFFORT: travel.factor,
+  return ids.map(
+    (tripPlaceId) =>
+      record.places?.get(tripPlaceId) ?? {
+        tripPlaceId,
+        rating: record.ratings.has(tripPlaceId)
+          ? { status: 'KNOWN', rating: record.ratings.get(tripPlaceId)!, source: 'CACHED_PROVIDER' }
+          : { status: 'UNKNOWN' },
       },
-    },
-    pace,
-    travel,
-  };
+  );
 }
-
+export type PlanScoreDayEvaluation = ReturnType<typeof evaluateScoredDay>;
 function evaluateDayRecord(
   day: PlanScoreDayRecord,
   record: PlanScoreTripRecord,
 ): PlanScoreDayEvaluation {
   const routes = record.routes.get(day.id);
+  const commitments = toCommitments(day);
+  const raw = toDayEvidenceItems(day, routes, new Map()).map((item, index) => ({
+    ...item,
+    placeId: day.items[index]?.tripPlaceId ?? undefined,
+    inboundRequired:
+      !!routes?.segments.some((s) => s.destination.id === item.id && s.scope === 'local') ||
+      (index > 0 &&
+        !routes?.segments.some((s) => s.destination.id === item.id && s.scope === 'long_distance')),
+  }));
+  const zones = new Map(
+    day.items.flatMap((item) => (item.timeZone ? [[item.id, item.timeZone] as const] : [])),
+  );
+  const instants = new Map(
+    day.items.flatMap((item) => (item.startInstant ? [[item.id, item.startInstant] as const] : [])),
+  );
+  const items = normalizeScoringItems(day.date, day.timeZone, raw, {
+    zones,
+    instants,
+    hours: record.hours,
+    commitments,
+  });
+  const config = readDayPlanningContext(day.planningContext);
+  const origin = dayOrigin(day.date, day.timeZone);
+  const availability = config.availability
+    ? {
+        startMinute: elapsedLocalMinute(
+          day.date,
+          day.timeZone,
+          Number(config.availability.start.slice(0, 2)) * 60 +
+            Number(config.availability.start.slice(3)),
+          origin,
+        ),
+        endMinute: elapsedLocalMinute(
+          day.date,
+          day.timeZone,
+          Number(config.availability.end.slice(0, 2)) * 60 +
+            Number(config.availability.end.slice(3)),
+          origin,
+        ),
+      }
+    : null;
   return evaluateScoredDay({
-    commitments: toCommitments(day),
+    commitments,
     dayId: day.id,
-    items: toDayEvidenceItems(day, routes, record.hours),
-    places: toDayPlaces(day, record.ratings),
+    date: day.date,
+    timeZone: day.timeZone,
+    originInstant: origin,
+    availability,
+    items,
+    places: toDayPlaces(day, record),
     segments: toRouteSegments(routes),
+    preferences: record.preferences,
+    planningContext: day.planningContext,
+    context: record.destinationContext?.days.find((d) => d.dayId === day.id)?.groups,
+    forecasts: record.forecasts?.filter((f) => f.date === day.date),
   });
 }
 
 const factorOutcomeSchema = z.union([
-  z.object({ confidence: z.number(), score: z.number(), state: z.literal('EVALUATED') }).strict(),
+  z
+    .object({
+      confidence: z.number().min(0).max(100),
+      coverage: z.number().min(0).max(100),
+      score: z.number().min(0).max(100),
+      state: z.literal('EVALUATED'),
+    })
+    .strict(),
   z
     .object({
       reason: z.enum(['INSUFFICIENT_EVIDENCE', 'MISSING_EVIDENCE', 'UNUSABLE_EVIDENCE']),
@@ -208,9 +244,23 @@ function explanationSchema() {
           'REORDER_MANUALLY',
           'REVIEW_ALTERNATIVE',
           'SCHEDULE_MUST_GO',
+          'REDUCE_LOAD',
+          'REVIEW_TIMING',
         ])
         .nullable(),
-      factor: z.string(),
+      factor: z.enum([
+        'FEASIBILITY',
+        'ROUTE_EFFICIENCY',
+        'PACE_COMFORT',
+        'EXPERIENCE_QUALITY',
+        'PLAN_COMPOSITION',
+        'DAILY_QUALITY',
+        'DESTINATION_UTILIZATION',
+        'VARIETY_COVERAGE',
+        'SEASONAL_FIT',
+      ]),
+      code: z.string(),
+      severity: z.enum(['INFO', 'RISK', 'MATERIAL', 'HARD']),
       messageKey: z.string(),
       references: z.array(z.string()),
       values: z.record(z.string(), z.union([z.number(), z.string()])),
@@ -218,6 +268,19 @@ function explanationSchema() {
     .strict();
 }
 
+const capSchema = z
+  .object({
+    limit: z.number().min(0).max(100),
+    reason: z.enum([
+      'HARD_CONFLICT',
+      'MULTIPLE_HARD_CONFLICTS',
+      'MATERIAL_CONFLICT',
+      'TRIP_HARD_CONFLICT',
+      'TRIP_CONNECTION_CONFLICT',
+    ]),
+    references: z.array(z.string()),
+  })
+  .strict();
 const tripPlanScoreSchema = z
   .object({
     days: z.array(
@@ -228,20 +291,35 @@ const tripPlanScoreSchema = z
           date: z.string(),
           dayId: z.string(),
           explanations: explanationGroupsSchema,
-          factors: z.record(z.string(), factorOutcomeSchema),
+          factors: z
+            .object(Object.fromEntries(DAY_FACTOR_IDS.map((id) => [id, factorOutcomeSchema])))
+            .strict(),
+          caps: z.array(capSchema),
           score: z.number().nullable(),
           withheldReasons: z.array(z.string()),
         })
         .strict(),
     ),
+    schemaVersion: z.literal(5),
+    rubricVersion: z.literal(5),
     explanations: explanationGroupsSchema,
+    completeness: z.number(),
+    confidence: z.number().nullable(),
+    caps: z.array(capSchema),
+    components: z
+      .object({
+        DAILY_QUALITY: factorOutcomeSchema,
+        DESTINATION_UTILIZATION: factorOutcomeSchema,
+        VARIETY_COVERAGE: factorOutcomeSchema,
+        SEASONAL_FIT: factorOutcomeSchema,
+      })
+      .strict(),
     fingerprint: z.string(),
     generatedAt: z.string(),
     evidenceAsOf: z.string().nullable().optional(),
     sourceInputRevision: z.string().optional(),
     expiresAt: z.string().datetime().optional(),
     evidenceRevision: z.string().optional(),
-    mustGoPriorityFit: factorOutcomeSchema,
     score: z.number().nullable(),
     withheldReasons: z.array(z.string()),
   })
@@ -287,20 +365,52 @@ export function buildPlanScoreFromEvaluations(input: {
   destinationContext?: import('@trove/types').TripDestinationContext;
 }): TripPlanScore {
   const generatedAt = (input.evaluatedAt ?? new Date()).toISOString();
-  const evaluations = input.days;
-  const mustGoPriorityFit: PlanScoreFactorResult = evaluateMustGoPriorityFit({
+  const evaluations = input.days.toSorted((a, b) => a.date.localeCompare(b.date));
+  const mustGo = evaluateMustGoPriorityFit({
     mustGoTripPlaceIds: input.mustGoIds,
     scheduledTripPlaceIds: input.scheduledIds,
     source: 'USER_OWNED',
   });
+  const mean = (key: 'utilization' | 'variety' | 'seasonalFit') =>
+    combineSignals(evaluations.map((e) => ({ weight: 1, result: e.evaluation[key] })));
+  const requested = [...new Set(evaluations.flatMap((e) => e.evaluation.requestedInterests))];
+  const interests = [
+    ...new Map(
+      evaluations.flatMap((e) => e.evaluation.interestEvidence).map((e) => [e.ref, e]),
+    ).values(),
+  ];
+  const covered = new Set(interests.map((e) => e.interest));
+  // Complementary days can cover explicit interests collectively. Unmatched
+  // interests are unknown, never a claim that the traveller skipped a landmark.
+  const tripVariety: PlanScoreFactorResult =
+    requested.length >= 2 && covered.size
+      ? {
+          state: 'EVALUATED',
+          score: 100,
+          coverage: (100 * covered.size) / requested.length,
+          evidence: interests,
+        }
+      : mean('variety');
   const tripInput = {
-    days: evaluations.map(({ evaluation }) => evaluation.input),
-    mustGoPriorityFit,
+    days: evaluations.map(({ date, evaluation }) => ({ ...evaluation.input, date })),
+    components: {
+      DESTINATION_UTILIZATION: combineSignals([
+        { weight: 1, result: mustGo },
+        { weight: 1, result: mean('utilization') },
+      ]),
+      VARIETY_COVERAGE: tripVariety,
+      SEASONAL_FIT: mean('seasonalFit'),
+    },
   };
   const result = scoreTrip(tripInput);
   const scheduled = new Set(input.scheduledIds);
-
   return {
+    schemaVersion: PLAN_SCORE_CONTRACT_VERSION,
+    rubricVersion: PLAN_SCORE_CONTRACT_VERSION,
+    completeness: result.completeness,
+    confidence: result.confidence,
+    caps: result.caps,
+    components: result.components,
     days: result.days.map((dayResult, index) => {
       const entry = evaluations[index];
       return {
@@ -310,22 +420,27 @@ export function buildPlanScoreFromEvaluations(input: {
           alternatives: [],
           conflicts: entry?.evaluation.conflicts ?? [],
           day: dayResult,
-          pace: {
-            activeMinutes: entry?.evaluation.pace.activeMinutes ?? null,
-            smallestBufferMinutes: entry?.evaluation.pace.smallestBufferMinutes ?? null,
-          },
-          route: { bestMinutes: null, plannedMinutes: null },
-          travel: { totalMinutes: entry?.evaluation.travel.totalMinutes ?? null },
+          pace: entry?.evaluation.pace ?? { activeMinutes: null, smallestBufferMinutes: null },
+          route: entry?.evaluation.route ?? { bestMinutes: null, plannedMinutes: null },
+          travel: entry?.evaluation.travel ?? { totalMinutes: null },
+          advisories: entry?.evaluation.advisories,
         }),
       };
     }),
     explanations: explainTrip({
-      mustGoPriorityFit: result.mustGoPriorityFit,
-      unscheduledMustGoTripPlaceIds: input.mustGoIds.filter(
-        (tripPlaceId) => !scheduled.has(tripPlaceId),
-      ),
+      components: result.components,
+      caps: result.caps,
+      unscheduledMustGoTripPlaceIds: input.mustGoIds.filter((id) => !scheduled.has(id)),
+      fatigueAdjustment: result.fatigueAdjustment,
+      weakDayAdjustment: result.weakDayAdjustment,
     }),
-    fingerprint: planScoreFingerprint(tripInput),
+    fingerprint: scoringInputRevision({
+      evaluation: planScoreFingerprint(tripInput),
+      evidenceTimes: [...new Set(input.evidenceTimes ?? [])].sort(),
+      destinationContext: input.destinationContext
+        ? destinationContextRevision(input.destinationContext)
+        : null,
+    }),
     generatedAt,
     expiresAt: new Date(
       Math.min(
@@ -337,7 +452,6 @@ export function buildPlanScoreFromEvaluations(input: {
       ),
     ).toISOString(),
     evidenceAsOf: oldestPlanScoreEvidenceAt(generatedAt, input.evidenceTimes ?? []),
-    mustGoPriorityFit: result.mustGoPriorityFit,
     score: result.score,
     withheldReasons: result.withheldReasons,
   };
@@ -376,42 +490,58 @@ export async function loadPlaceEvidence(
   const hours: PlaceHoursEvidence = new Map();
   const ratings = new Map<string, number>();
 
-  const results = await mapWithConcurrency(
-    tripPlaces,
-    PROVIDER_CONCURRENCY_LIMIT,
-    async (tripPlace) => {
-      if (!tripPlace.externalPlaceId) return null;
-      const details = await readScoringPlace(
-        {
-          externalPlaceId: tripPlace.externalPlaceId,
-        },
-        now,
-      );
-      if (!details || details.status !== 'ok') return null;
-      return {
-        fetchedAt: details.freshness.fetchedAt,
-        id: tripPlace.id,
-        openingPeriods: details.place.openingPeriods,
-        rating: details.place.rating,
-        utcOffsetMinutes: details.place.utcOffsetMinutes,
-      };
-    },
+  const places = new Map<string, ScoringPlace>();
+  const requests = [
+    ...new Set(tripPlaces.flatMap((p) => (p.externalPlaceId ? [p.externalPlaceId] : []))),
+  ];
+  const fetched = new Map(
+    await mapWithConcurrency(
+      requests,
+      PROVIDER_CONCURRENCY_LIMIT,
+      async (externalPlaceId) =>
+        [externalPlaceId, await readScoringPlace({ externalPlaceId }, now)] as const,
+    ),
   );
-
-  for (const result of results) {
-    if (!result) continue;
-    if (result.rating !== null) ratings.set(result.id, result.rating);
-    hours.set(result.id, {
+  const times: string[] = [];
+  for (const entry of tripPlaces) {
+    const details = entry.externalPlaceId ? fetched.get(entry.externalPlaceId) : null;
+    if (!details || details.status !== 'ok') continue;
+    const place = details.place;
+    times.push(details.freshness.fetchedAt);
+    if (place.rating !== null) ratings.set(entry.id, place.rating);
+    places.set(entry.id, {
+      tripPlaceId: entry.id,
+      name: place.name,
+      types: place.rawTypes,
+      coordinates: place.location,
       source: 'CACHED_PROVIDER',
-      periods: result.openingPeriods,
-      utcOffsetMinutes: result.utcOffsetMinutes,
+      rating:
+        place.rating === null
+          ? { status: 'UNKNOWN' }
+          : {
+              status: 'KNOWN',
+              rating: place.rating,
+              reviewCount: place.userRatingCount,
+              source: 'CACHED_PROVIDER',
+            },
+    });
+    hours.set(entry.id, {
+      source: 'CACHED_PROVIDER',
+      periods: place.openingPeriods,
+      utcOffsetMinutes: place.utcOffsetMinutes,
+      timeZone: place.location ? timeZoneAtCoordinates(place.location) : null,
+      fetchedAt: details.freshness.fetchedAt,
+      currentPeriods: place.currentOpeningPeriods,
+      validFrom: place.currentHoursValidFrom,
+      validThrough: place.currentHoursValidThrough,
     });
   }
 
   return {
     hours,
     ratings,
-    evidenceTimes: results.flatMap((result) => (result ? [result.fetchedAt] : [])),
+    places,
+    evidenceTimes: [...new Set(times)],
   };
 }
 
@@ -431,6 +561,7 @@ function toPlanScoreDayRecord(
     date: Date;
     defaultTimeZone: string;
     id: string;
+    planningContext?: unknown;
     items: Array<{
       _count: { reservations: number };
       dayPart: string | null;
@@ -445,13 +576,12 @@ function toPlanScoreDayRecord(
       tripPlaceId: string | null;
     }>;
   },
-  commitments: ReturnType<typeof sameDayJourneyCommitment>[],
+  commitments: PlanScoreFixedCommitment[],
 ): PlanScoreDayRecord {
   const date = toLocalDate(day.date);
   return {
-    commitments: commitments.flatMap((commitment) =>
-      commitment && commitment.date === date ? [commitment] : [],
-    ),
+    commitments,
+    planningContext: day.planningContext,
     date,
     id: day.id,
     items: day.items.map((item) => ({
@@ -490,6 +620,13 @@ export const PLAN_SCORE_TRIP_INCLUDE = {
   destinations: { include: { place: { include: { providerRefs: true } } } },
   reservations: {
     select: {
+      itineraryItemId: true,
+      type: true,
+      transportPickupLocation: true,
+      transportDropoffLocation: true,
+      localDate: true,
+      localTime: true,
+      timeZone: true,
       transportDepartureLocalDate: true,
       transportDepartureLocalTime: true,
       transportDepartureTimeZone: true,
@@ -544,7 +681,7 @@ export type PlanScoreTripRows = {
     routeStartTravelMode: string;
     planningContext?: unknown;
   }>;
-  reservations: Parameters<typeof sameDayJourneyCommitment>[0][];
+  reservations: ScoringReservation[];
   tripPlaces: Array<{
     id: string;
     placeId?: string;
@@ -556,14 +693,39 @@ export type PlanScoreTripRows = {
 /** The single reading of a trip that both the digest and the scorer are built on. */
 export function readPlanScoreInputs(trip: PlanScoreTripRows, now = new Date()) {
   const destinationContext = readOwnedTripDestinationContext(trip, now);
-  const commitments = trip.reservations.flatMap((reservation) => {
-    const commitment = sameDayJourneyCommitment(reservation);
-    return commitment ? [commitment] : [];
+  const destinations: Array<{ timeZone?: string | null; place?: OwnedContextPlace }> =
+    Array.isArray(trip.destinations) ? trip.destinations : [];
+  const zones = destinations.flatMap((d) => (d.timeZone ? [d.timeZone] : []));
+  const identities = destinations.flatMap((d) => {
+    const id = d.place ? matchContextDestination(contextPlaceFromOwnedData(d.place, now)) : null;
+    return id ? [id] : [];
   });
+  const reservations = trip.reservations.map((r) => {
+    const fromZone = r.flightDepartureTimeZone ?? r.transportDepartureTimeZone;
+    const toZone = r.flightArrivalTimeZone ?? r.transportArrivalTimeZone;
+    const from = matchContextDestination({ name: r.transportPickupLocation }),
+      to = matchContextDestination({ name: r.transportDropoffLocation });
+    // An owned booking between two unambiguously identified trip destinations is
+    // an indispensable connection. Ambiguous endpoints remain unknown.
+    const zoned =
+      fromZone &&
+      toZone &&
+      fromZone !== toZone &&
+      zones.filter((z) => z === fromZone).length === 1 &&
+      zones.filter((z) => z === toZone).length === 1;
+    const named = from && to && from !== to && identities.includes(from) && identities.includes(to);
+    return { ...r, indispensable: Boolean(zoned || named) };
+  });
+
   const mustGoTripPlaceIds = trip.tripPlaces
     .filter((tripPlace) => tripPlace.priority === 'MUST_GO')
     .map((tripPlace) => tripPlace.id);
-  const days = trip.itineraryDays.map((day) => toPlanScoreDayRecord(day, commitments));
+  const days = trip.itineraryDays.map((day) =>
+    toPlanScoreDayRecord(
+      day,
+      scoringCommitments(reservations, toLocalDate(day.date), day.defaultTimeZone),
+    ),
+  );
   const scoredPlaceIds = new Set([
     ...mustGoTripPlaceIds,
     ...trip.itineraryDays.flatMap((day) =>
@@ -703,6 +865,26 @@ export async function getTripPlanScore(
     ),
   ]);
 
+  for (const row of trip.tripPlaces) {
+    if (placeEvidence.places.has(row.id)) continue;
+    const own = contextPlaceFromOwnedData(row.place, now);
+    const reference = row.place.providerRefs.find(
+      (r) =>
+        r.cachedAt &&
+        now.getTime() >= r.cachedAt.getTime() &&
+        now.getTime() - r.cachedAt.getTime() < PLACE_EVIDENCE_TTL_MS,
+    );
+    placeEvidence.places.set(row.id, {
+      tripPlaceId: row.id,
+      name: own.name,
+      coordinates: own.coordinates,
+      types: reference?.cachedTypes ?? [],
+      source: reference ? 'CACHED_PROVIDER' : 'USER_OWNED',
+      rating: { status: 'UNKNOWN' },
+    });
+    if (reference?.cachedAt) placeEvidence.evidenceTimes.push(reference.cachedAt.toISOString());
+  }
+  const forecastEvidence = await loadScoringForecasts(dayRecords, placeEvidence.places, now);
   const evidenceRevision = tripPlanScoreRevision({
     days: [],
     mustGoTripPlaceIds: [],
@@ -710,7 +892,9 @@ export async function getTripPlanScore(
       revision,
       hours: [...placeEvidence.hours],
       ratings: [...placeEvidence.ratings],
-      evidenceTimes: placeEvidence.evidenceTimes,
+      places: [...placeEvidence.places],
+      forecasts: forecastEvidence.forecasts,
+      evidenceTimes: [...placeEvidence.evidenceTimes, ...forecastEvidence.times],
       routes: routeResults.map(({ id, routes }) => ({
         id,
         segments: routes.segments,
@@ -724,6 +908,9 @@ export async function getTripPlanScore(
   const result = buildTripPlanScore(
     {
       days: dayRecords,
+      preferences: trip.planningPreferences,
+      places: placeEvidence.places,
+      forecasts: forecastEvidence.forecasts,
       destinationContext,
       hours: placeEvidence.hours,
       mustGoTripPlaceIds,
@@ -734,6 +921,7 @@ export async function getTripPlanScore(
       evaluatedAt,
       evidenceTimes: [
         ...(placeEvidence.evidenceTimes ?? []),
+        ...forecastEvidence.times,
         ...routeResults.flatMap(({ routes }) =>
           routes.segments.flatMap((segment) =>
             segment.evidenceAsOf ? [segment.evidenceAsOf] : [],
@@ -744,9 +932,21 @@ export async function getTripPlanScore(
   );
 
   result.evidenceRevision = evidenceRevision;
+  result.fingerprint = scoringInputRevision({
+    assessment: result.fingerprint,
+    inputRevision: revision,
+    evidenceRevision,
+  });
   result.expiresAt = new Date(
     Math.min(
       evaluatedAt.getTime() + 24 * 60 * 60 * 1000,
+      ...trip.tripPlaces.flatMap((row) => {
+        const own = contextPlaceFromOwnedData(row.place, now);
+        return scheduledTripPlaceIds.has(row.id) && own.expiresAt
+          ? [Date.parse(own.expiresAt)]
+          : [];
+      }),
+      ...forecastEvidence.times.map((at) => Date.parse(at) + WEATHER_FORECAST_TTL_MS),
       ...(destinationContext.expiresAt ? [Date.parse(destinationContext.expiresAt)] : []),
       ...placeEvidence.evidenceTimes.map((at) => Date.parse(at) + PLACE_EVIDENCE_TTL_MS),
       ...routeResults.flatMap(({ routes }) =>
@@ -764,4 +964,60 @@ export async function getTripPlanScore(
   const current = withholdNonCurrentPlanScore(result, evaluatedAt);
   await writeCachedPlanScore(prisma, trip.id, current, revision);
   return current;
+}
+
+/** Reads each already-cached weather point once, only within its current horizon. */
+async function loadScoringForecasts(
+  days: PlanScoreDayRecord[],
+  places: ReadonlyMap<string, ScoringPlace>,
+  now: Date,
+) {
+  const grouped = new Map<
+    string,
+    { point: { latitude: number; longitude: number }; ids: string[]; dates: string[]; zone: string }
+  >();
+  for (const day of days) {
+    const horizon = resolveForecastWindow([day.timeZone], now);
+    if (day.date < horizon.startDate || day.date > horizon.endDate) continue;
+    for (const item of day.items) {
+      const place = item.tripPlaceId ? places.get(item.tripPlaceId) : null;
+      if (!place?.coordinates) continue;
+      const key = weatherPointKey(place.coordinates);
+      const group = grouped.get(key) ?? {
+        point: place.coordinates,
+        ids: [],
+        dates: [],
+        zone: day.timeZone,
+      };
+      if (!group.ids.includes(place.tripPlaceId)) group.ids.push(place.tripPlaceId);
+      if (!group.dates.includes(day.date)) group.dates.push(day.date);
+      grouped.set(key, group);
+    }
+  }
+  const forecasts: ScoringForecast[] = [],
+    times: string[] = [];
+  await mapWithConcurrency([...grouped.values()], PROVIDER_CONCURRENCY_LIMIT, async (group) => {
+    const dates = group.dates.toSorted();
+    const result = await readCachedForecast(
+      group.point,
+      { startDate: dates[0]!, endDate: dates.at(-1)! },
+      now,
+    );
+    if (result.kind !== 'hit') return;
+    times.push(result.forecast.fetchedAt.toISOString());
+    for (const day of result.forecast.days)
+      if (dates.includes(day.date))
+        forecasts.push({
+          date: day.date,
+          precipitationProbability: day.precipitationProbability,
+          source: 'CACHED_PROVIDER',
+          placeIds: group.ids,
+        });
+  });
+  return {
+    forecasts: forecasts.toSorted(
+      (a, b) => a.date.localeCompare(b.date) || a.placeIds.join().localeCompare(b.placeIds.join()),
+    ),
+    times: [...new Set(times)].sort(),
+  };
 }

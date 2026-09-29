@@ -1,357 +1,209 @@
 import { expect, test } from 'vitest';
-
 import {
-  planScoreFingerprint,
   scoreDay,
   scoreTrip,
+  combineSignals,
+  evidenceConfidence,
+  planScoreFingerprint,
   toPlanScoreDayPayload,
   toPlanScoreTripPayload,
-  type PlanScoreEvidenceSource,
+  type PlanScoreDayInput,
   type PlanScoreFactorResult,
+  DAY_FACTOR_IDS,
+  UNKNOWN,
+  NOT_APPLICABLE,
 } from '../src/services/plan-score-rules.js';
-
-function evaluated(score: number, ...sources: PlanScoreEvidenceSource[]): PlanScoreFactorResult {
-  return {
-    evidence: sources.map((source, index) => ({ ref: `evidence-${index}`, source })),
-    score,
-    state: 'EVALUATED',
+const evaluated = (score = 100, coverage = 100): PlanScoreFactorResult => ({
+  state: 'EVALUATED',
+  score,
+  coverage,
+  evidence: [{ ref: 'owned', source: 'USER_OWNED' }],
+});
+const day = (id = 'day', score = 100): PlanScoreDayInput => ({
+  dayId: id,
+  factors: Object.fromEntries(DAY_FACTOR_IDS.map((f) => [f, evaluated(score)])),
+  loadRatio: 0.8,
+});
+test('five category weights implement the approved weighted mean', () => {
+  const input = day();
+  input.factors = {
+    FEASIBILITY: evaluated(100),
+    ROUTE_EFFICIENCY: evaluated(85),
+    PACE_COMFORT: evaluated(80),
+    EXPERIENCE_QUALITY: evaluated(40),
+    PLAN_COMPOSITION: evaluated(100),
   };
-}
-
-const NOT_APPLICABLE: PlanScoreFactorResult = { state: 'NOT_APPLICABLE' };
-
-const completeSightseeingDay = {
-  dayId: 'day-complete',
-  factors: {
-    FEASIBILITY: evaluated(100, 'USER_OWNED'),
-    PACE_BUFFER: evaluated(80, 'USER_OWNED'),
-    PLACE_QUALITY: evaluated(40, 'CACHED_PROVIDER'),
-    ROUTE_EFFICIENCY: evaluated(60, 'FRESH_PROVIDER'),
-    TRAVEL_EFFORT: evaluated(85, 'FRESH_PROVIDER'),
-  },
-};
-
-test('scores a fully evidenced sightseeing day with the authoritative base weights', () => {
-  expect(scoreDay(completeSightseeingDay)).toStrictEqual({
-    completeness: 100,
-    confidence: 99,
-    dayId: 'day-complete',
-    evidence: {
-      FEASIBILITY: [{ ref: 'evidence-0', source: 'USER_OWNED' }],
-      PACE_BUFFER: [{ ref: 'evidence-0', source: 'USER_OWNED' }],
-      PLACE_QUALITY: [{ ref: 'evidence-0', source: 'CACHED_PROVIDER' }],
-      ROUTE_EFFICIENCY: [{ ref: 'evidence-0', source: 'FRESH_PROVIDER' }],
-      TRAVEL_EFFORT: [{ ref: 'evidence-0', source: 'FRESH_PROVIDER' }],
-    },
-    factors: {
-      FEASIBILITY: { confidence: 100, score: 100, state: 'EVALUATED' },
-      PACE_BUFFER: { confidence: 100, score: 80, state: 'EVALUATED' },
-      PLACE_QUALITY: { confidence: 75, score: 40, state: 'EVALUATED' },
-      ROUTE_EFFICIENCY: { confidence: 100, score: 60, state: 'EVALUATED' },
-      TRAVEL_EFFORT: { confidence: 100, score: 85, state: 'EVALUATED' },
-    },
-    score: 85,
-    withheldReasons: [],
-  });
+  expect(scoreDay(input)).toMatchObject({ score: 84, completeness: 100, confidence: 100 });
+  expect(Object.keys(scoreDay(input).factors)).toEqual([...DAY_FACTOR_IDS]);
 });
-
-test('keeps Must Go priority fit out of day scoring entirely', () => {
-  expect(Object.keys(scoreDay(completeSightseeingDay).factors).toSorted()).toStrictEqual([
-    'FEASIBILITY',
-    'PACE_BUFFER',
-    'PLACE_QUALITY',
-    'ROUTE_EFFICIENCY',
-    'TRAVEL_EFFORT',
+test('quality renormalizes unknown signals while coverage keeps them in the denominator', () => {
+  const partial = combineSignals([
+    { weight: 60, result: evaluated(90) },
+    { weight: 40, result: UNKNOWN },
   ]);
+  expect(partial).toMatchObject({ score: 90, coverage: 60, confidence: 100 });
+  const input = day();
+  input.factors.EXPERIENCE_QUALITY = UNKNOWN;
+  expect(scoreDay(input)).toMatchObject({ score: 100, completeness: 85 });
 });
-
-test('renormalizes evaluable weights instead of scoring missing evidence as zero', () => {
-  const result = scoreDay({
-    dayId: 'day-partial',
+test('partial evidence cannot make an entire category look covered', () => {
+  const input = day();
+  input.factors.FEASIBILITY = evaluated(100, 10);
+  expect(scoreDay(input).completeness).toBe(69);
+  input.factors.ROUTE_EFFICIENCY = UNKNOWN;
+  input.factors.PACE_COMFORT = UNKNOWN;
+  expect(scoreDay(input).score).toBeNull();
+});
+test('inapplicable weights disappear from both quality and coverage', () => {
+  expect(
+    combineSignals([
+      { weight: 60, result: evaluated(80) },
+      { weight: 40, result: NOT_APPLICABLE },
+    ]),
+  ).toMatchObject({ score: 80, coverage: 100 });
+  expect(combineSignals([{ weight: 1, result: NOT_APPLICABLE }])).toEqual(NOT_APPLICABLE);
+});
+test('daily gate requires unrounded 60 percent coverage and a core signal', () => {
+  const input = day();
+  input.factors = {
+    FEASIBILITY: evaluated(100),
+    PACE_COMFORT: evaluated(100),
+    PLAN_COMPOSITION: evaluated(100, 49),
+  };
+  expect(scoreDay(input).score).toBeNull();
+  input.factors.PLAN_COMPOSITION = evaluated(100, 50);
+  expect(scoreDay(input).score).toBe(100);
+  input.coreEvaluated = false;
+  expect(scoreDay(input).withheldReasons).toContain('NO_EVALUABLE_CORE_FACTOR');
+});
+test('an explicit rest day can use comfort/composition without a logistics core', () => {
+  const input: PlanScoreDayInput = {
+    dayId: 'rest',
+    rest: true,
+    coreEvaluated: false,
     factors: {
-      FEASIBILITY: evaluated(100, 'USER_OWNED'),
-      TRAVEL_EFFORT: evaluated(60, 'FRESH_PROVIDER'),
-    },
-  });
-
-  // Zero-filling the three unknown factors would give 5000/90 = 56, not 5000/60 = 83.
-  expect(result.score).toBe(83);
-  expect(result.completeness).toBe(67);
-  expect(result.factors.PACE_BUFFER).toStrictEqual({
-    reason: 'MISSING_EVIDENCE',
-    state: 'UNKNOWN',
-  });
-  expect(result.withheldReasons).toStrictEqual([]);
-});
-
-test('withholds the number when completeness or a core factor is insufficient', () => {
-  const result = scoreDay({
-    dayId: 'day-incomplete',
-    factors: { PLACE_QUALITY: evaluated(100, 'FRESH_PROVIDER') },
-  });
-
-  expect(result.score).toBe(null);
-  expect(result.completeness).toBe(6);
-  expect(result.withheldReasons).toStrictEqual([
-    'INSUFFICIENT_COMPLETENESS',
-    'NO_EVALUABLE_CORE_FACTOR',
-  ]);
-});
-
-test('treats a travel-heavy day as complete after excluding non-applicable factors', () => {
-  const result = scoreDay({
-    dayId: 'day-travel',
-    factors: {
-      FEASIBILITY: evaluated(90, 'USER_OWNED'),
-      PACE_BUFFER: evaluated(75, 'ESTIMATED'),
-      PLACE_QUALITY: NOT_APPLICABLE,
+      FEASIBILITY: NOT_APPLICABLE,
       ROUTE_EFFICIENCY: NOT_APPLICABLE,
-      TRAVEL_EFFORT: evaluated(50, 'FRESH_PROVIDER'),
+      PACE_COMFORT: evaluated(),
+      EXPERIENCE_QUALITY: NOT_APPLICABLE,
+      PLAN_COMPOSITION: evaluated(),
     },
-  });
-
-  expect(result.completeness).toBe(100);
-  expect(result.confidence).toBe(90);
-  expect(result.score).toBe(74);
-  expect(result.factors.ROUTE_EFFICIENCY).toStrictEqual({ state: 'NOT_APPLICABLE' });
-});
-
-test('moves confidence independently of the score for identical factor scores', () => {
-  const factors = {
-    FEASIBILITY: evaluated(100, 'STALE'),
-    TRAVEL_EFFORT: evaluated(60, 'STALE'),
   };
-  const stale = scoreDay({ dayId: 'day-stale', factors });
-  const fresh = scoreDay({
-    dayId: 'day-fresh',
-    factors: {
-      FEASIBILITY: evaluated(100, 'USER_OWNED'),
-      TRAVEL_EFFORT: evaluated(60, 'FRESH_PROVIDER'),
-    },
-  });
-
-  expect(stale.score).toBe(fresh.score);
-  expect(stale.completeness).toBe(fresh.completeness);
-  expect(stale.confidence).toBe(25);
-  expect(fresh.confidence).toBe(100);
+  expect(scoreDay(input).score).toBe(100);
+  expect(scoreDay({ ...input, rest: false }).score).toBeNull();
 });
-
-test('clamps evaluable factor scores to 0-100', () => {
+test.each([
+  [['a'], [], 59],
+  [['a', 'b'], [], 39],
+  [[], ['a'], 74],
+] as const)('feasibility caps bound quality: %j %j', (hard, material, cap) => {
+  expect(
+    scoreDay({ ...day(), hardConflictIds: [...hard], materialConflictIds: [...material] }).score,
+  ).toBe(cap);
+});
+test('caps remain visible without enough evidence for a number', () => {
   const result = scoreDay({
-    dayId: 'day-clamped',
-    factors: {
-      FEASIBILITY: evaluated(140, 'USER_OWNED'),
-      TRAVEL_EFFORT: evaluated(-20, 'FRESH_PROVIDER'),
-    },
+    ...day(),
+    factors: { FEASIBILITY: evaluated(50, 10) },
+    hardConflictIds: ['conflict'],
   });
-
-  expect(result.factors.FEASIBILITY).toStrictEqual({
-    confidence: 100,
-    score: 100,
-    state: 'EVALUATED',
-  });
-  expect(result.factors.TRAVEL_EFFORT).toStrictEqual({
-    confidence: 100,
-    score: 0,
-    state: 'EVALUATED',
-  });
-  expect(result.score).toBe(58);
+  expect(result.score).toBeNull();
+  expect(result.caps[0]?.limit).toBe(59);
 });
-
-const tripDays = [
-  { dayId: 'day-a', factors: completeSightseeingDay.factors },
-  {
-    dayId: 'day-b',
-    factors: {
-      FEASIBILITY: evaluated(60, 'USER_OWNED'),
-      TRAVEL_EFFORT: evaluated(60, 'USER_OWNED'),
-    },
-  },
-];
-
-test('weights trip days by completeness and blends trip-level Must Go priority fit', () => {
-  const withoutMustGo = scoreTrip({ days: tripDays, mustGoPriorityFit: NOT_APPLICABLE });
-  const withMustGo = scoreTrip({
-    days: tripDays,
-    mustGoPriorityFit: evaluated(50, 'USER_OWNED'),
-  });
-  const unknownMustGo = scoreTrip({
-    days: tripDays,
-    mustGoPriorityFit: { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' },
-  });
-
-  expect(withoutMustGo.score).toBe(75);
-  expect(withMustGo.score).toBe(72);
-  expect(unknownMustGo.score).toBe(withoutMustGo.score);
-  expect(withMustGo.mustGoPriorityFit).toStrictEqual({
-    confidence: 100,
-    score: 50,
-    state: 'EVALUATED',
-  });
+test('duplicate evidence does not improve confidence', () => {
+  const evidence = [{ ref: 'one', source: 'ESTIMATED' as const }];
+  expect(evidenceConfidence([...evidence, ...evidence])).toBe(50);
 });
-
-test('withholds the trip score when no day is scorable, even with Must Go evidence', () => {
+test('trip numbers require at least 60 percent of days and cannot live on Must Go alone', () => {
+  const unknown: PlanScoreDayInput = { dayId: 'unknown', factors: {} };
+  expect(scoreTrip({ days: [day(), unknown, unknown] }).score).toBeNull();
+  expect(scoreTrip({ days: [day('a'), day('b'), day('c'), unknown, unknown] }).score).toBe(100);
+  expect(
+    scoreTrip({ days: [unknown], components: { DESTINATION_UTILIZATION: evaluated() } })
+      .withheldReasons,
+  ).toContain('NO_SCORABLE_DAY');
+});
+test('all known availability weights coverage and intrinsic daily quality', () => {
+  const a = { ...day('a', 100), availableMinutes: 60 },
+    b = { ...day('b', 80), availableMinutes: 180 };
+  const result = scoreTrip({ days: [a, b] });
+  // Mean 85; nearest-rank lower quintile 80; weak adjustment 1.
+  expect(result.score).toBe(84);
+  expect(scoreTrip({ days: [a, { ...b, availableMinutes: null }] }).score).toBe(88);
+});
+test('sustained load is chronological and uses intrinsic scores to avoid double charging fatigue', () => {
+  const days = [0, 1, 2].map((i) => ({
+    ...day(String(i)),
+    date: `2026-10-0${i + 1}`,
+    loadRatio: 1.25,
+  }));
+  const result = scoreTrip({ days: days.toReversed() });
+  result.days.forEach((d, i) => expect(d.incomingDebt).toBeCloseTo([0, 0.35, 0.525][i]!));
+  expect(result.days.map((d) => d.intrinsicScore)).toEqual([100, 100, 100]);
+  expect(result.days.map((d) => d.score)).toEqual([100, 99, 98]);
+  expect(result.fatigueAdjustment).toBeCloseTo(4.375);
+  expect(result.score).toBe(96);
+});
+test('unknown days carry debt without decay; known rest can recover', () => {
   const result = scoreTrip({
     days: [
-      { dayId: 'day-incomplete', factors: { PLACE_QUALITY: evaluated(100, 'FRESH_PROVIDER') } },
+      { ...day('a'), date: '2026-10-01', loadRatio: 1.5 },
+      { ...day('b'), date: '2026-10-02', loadRatio: null },
+      { ...day('c'), date: '2026-10-03', loadRatio: 0 },
+      { ...day('d'), date: '2026-10-04', loadRatio: 0.8 },
     ],
-    mustGoPriorityFit: evaluated(100, 'USER_OWNED'),
   });
-
-  expect(result.score).toBe(null);
-  expect(result.withheldReasons).toStrictEqual(['NO_SCORABLE_DAY']);
+  expect(result.days.map((d) => d.incomingDebt)).toEqual([0, 0.6, 0.6, 0]);
 });
-
-test('produces identical results and fingerprints for identical evidence', () => {
-  const input = { days: tripDays, mustGoPriorityFit: evaluated(50, 'USER_OWNED') };
-  const reordered = {
-    days: tripDays,
-    mustGoPriorityFit: {
-      evidence: [
-        { ref: 'evidence-1', source: 'USER_OWNED' as const },
-        { ref: 'evidence-0', source: 'USER_OWNED' as const },
-      ],
-      score: 50,
-      state: 'EVALUATED' as const,
-    },
+test('weak-day nearest rank is deterministic for small trips', () => {
+  const result = scoreTrip({ days: [day('a', 100), day('b', 50)] });
+  expect(result.weakDayAdjustment).toBe(5);
+  expect(result.score).toBe(70);
+});
+test('hard conflicts on unscorable days still constrain a publishable trip', () => {
+  const sparse = {
+    dayId: 'sparse',
+    factors: { FEASIBILITY: evaluated(50, 5) },
+    hardConflictIds: ['conflict'],
   };
-
-  expect(scoreTrip(input)).toStrictEqual(scoreTrip(input));
-  expect(planScoreFingerprint(input)).toBe(planScoreFingerprint(input));
-  expect(
-    planScoreFingerprint({
-      ...input,
-      mustGoPriorityFit: evaluated(50, 'USER_OWNED', 'USER_OWNED'),
-    }),
-  ).toBe(planScoreFingerprint(reordered));
-});
-
-test('changes the fingerprint when evidence reliability changes', () => {
-  const days = [{ dayId: 'day-a', factors: { FEASIBILITY: evaluated(100, 'USER_OWNED') } }];
-
-  expect(planScoreFingerprint({ days, mustGoPriorityFit: NOT_APPLICABLE })).not.toBe(
-    planScoreFingerprint({
-      days: [{ dayId: 'day-a', factors: { FEASIBILITY: evaluated(100, 'STALE') } }],
-      mustGoPriorityFit: NOT_APPLICABLE,
-    }),
-  );
-});
-
-test('preserves the evidence snapshot and keeps it out of the user-facing payload', () => {
-  const result = scoreDay(completeSightseeingDay);
-  const payload = toPlanScoreDayPayload(result);
-
-  expect(result.evidence.PLACE_QUALITY).toStrictEqual([
-    { ref: 'evidence-0', source: 'CACHED_PROVIDER' },
-  ]);
-  expect(Object.keys(payload).toSorted()).toStrictEqual([
-    'completeness',
-    'confidence',
-    'dayId',
-    'factors',
-    'score',
-    'withheldReasons',
-  ]);
-  expect(Object.keys(payload.factors.FEASIBILITY).toSorted()).toStrictEqual([
-    'confidence',
-    'score',
-    'state',
-  ]);
-});
-
-test('keeps trip evidence snapshots out of the trip payload', () => {
-  const result = scoreTrip({ days: tripDays, mustGoPriorityFit: evaluated(50, 'USER_OWNED') });
-  const payload = toPlanScoreTripPayload(result);
-
-  expect(result.mustGoEvidence).toStrictEqual([{ ref: 'evidence-0', source: 'USER_OWNED' }]);
-  expect(Object.keys(payload).toSorted()).toStrictEqual([
-    'days',
-    'mustGoPriorityFit',
-    'score',
-    'withheldReasons',
-  ]);
-  expect(payload.days.every((day) => !Object.hasOwn(day, 'evidence'))).toBe(true);
-  expect(payload.score).toBe(result.score);
-});
-
-test('derives day confidence from the frozen evidence reliability tiers', () => {
-  const dayFrom = (source: PlanScoreEvidenceSource) =>
-    scoreDay({
-      dayId: 'day',
-      factors: { FEASIBILITY: evaluated(100, source), TRAVEL_EFFORT: evaluated(100, source) },
-    });
-  const stale = dayFrom('STALE');
-
-  expect(dayFrom('USER_OWNED').confidence).toBe(100);
-  expect(dayFrom('FRESH_PROVIDER').confidence).toBe(100);
-  expect(dayFrom('CACHED_PROVIDER').confidence).toBe(75);
-  expect(dayFrom('ESTIMATED').confidence).toBe(50);
-  expect({ confidence: stale.confidence, score: stale.score }).toStrictEqual({
-    confidence: 25,
-    score: 100,
+  const result = scoreTrip({ days: [day('a'), day('b'), day('c'), sparse] });
+  expect(result.caps[0]?.limit).toBe(69);
+  expect(result.score).toBeLessThanOrEqual(69);
+  const oneOfSix = scoreTrip({
+    days: [...Array.from({ length: 5 }, (_, i) => day(String(i))), sparse],
   });
+  expect(oneOfSix.caps[0]?.limit).toBe(84);
+  expect(
+    scoreTrip({
+      days: [
+        ...Array.from({ length: 5 }, (_, i) => day(String(i))),
+        { ...sparse, indispensableConnectionConflict: true },
+      ],
+    }).caps[0]?.limit,
+  ).toBe(69);
 });
-
-const fullyEvidencedDay = {
-  dayId: 'planned',
-  factors: {
-    FEASIBILITY: evaluated(100, 'USER_OWNED'),
-    PACE_BUFFER: evaluated(100, 'USER_OWNED'),
-    PLACE_QUALITY: evaluated(100, 'USER_OWNED'),
-    ROUTE_EFFICIENCY: evaluated(100, 'USER_OWNED'),
-    TRAVEL_EFFORT: evaluated(100, 'USER_OWNED'),
-  },
-};
-
-test('moves completeness and confidence for a partially evidenced day without collapsing its score', () => {
-  const complete = scoreDay(fullyEvidencedDay);
-  const partial = scoreDay({
-    dayId: 'partial',
-    factors: {
-      FEASIBILITY: evaluated(100, 'USER_OWNED'),
-      TRAVEL_EFFORT: evaluated(100, 'ESTIMATED'),
+test('trip components use 65/15/10/10 and renormalize unknown components', () => {
+  const result = scoreTrip({
+    days: [day()],
+    components: {
+      DESTINATION_UTILIZATION: evaluated(80),
+      VARIETY_COVERAGE: evaluated(60),
+      SEASONAL_FIT: evaluated(40),
     },
   });
-
-  expect(complete.score).toBe(partial.score);
-  expect({ completeness: complete.completeness, confidence: complete.confidence }).toStrictEqual({
-    completeness: 100,
-    confidence: 100,
-  });
-  expect({ completeness: partial.completeness, confidence: partial.confidence }).toStrictEqual({
-    completeness: 67,
-    confidence: 79,
-  });
+  expect(result.score).toBe(87);
+  expect(scoreTrip({ days: [day()] }).score).toBe(100);
 });
-
-test('stops a low-information day from pulling the trip score toward its own', () => {
-  const trip = scoreTrip({
-    days: [
-      fullyEvidencedDay,
-      {
-        dayId: 'travel',
-        factors: {
-          FEASIBILITY: evaluated(60, 'USER_OWNED'),
-          TRAVEL_EFFORT: evaluated(60, 'USER_OWNED'),
-        },
-      },
-    ],
-    mustGoPriorityFit: NOT_APPLICABLE,
-  });
-
-  // An unweighted mean of the two day scores would be 80.
-  expect(trip.score).toBe(84);
-  expect(trip.days.map((day) => day.completeness)).toStrictEqual([100, 67]);
+test('public payloads exclude raw evidence, weights and intrinsic fatigue bookkeeping', () => {
+  expect(toPlanScoreDayPayload(scoreDay(day()))).not.toHaveProperty('evidence');
+  const payload = toPlanScoreTripPayload(scoreTrip({ days: [day()] }));
+  expect(payload).not.toHaveProperty('fatigueAdjustment');
+  expect(payload.days[0]).not.toHaveProperty('intrinsicScore');
 });
-
-test('rejects evaluated factors without evidence or with an unusable score', () => {
-  expect(() =>
-    scoreDay({
-      dayId: 'day-a',
-      factors: { FEASIBILITY: { evidence: [], score: 100, state: 'EVALUATED' } },
-    }),
-  ).toThrow(/missing_factor_evidence/);
-  expect(() =>
-    scoreDay({ dayId: 'day-a', factors: { FEASIBILITY: evaluated(Number.NaN, 'USER_OWNED') } }),
-  ).toThrow(/invalid_factor_score/);
+test('fingerprint changes for timing inputs, context or fatigue-relevant order', () => {
+  const input = { days: [day()] };
+  expect(planScoreFingerprint(input)).not.toBe(
+    planScoreFingerprint({ days: [{ ...day(), loadRatio: 1.5 }] }),
+  );
+  expect(planScoreFingerprint(input)).toBe(planScoreFingerprint(structuredClone(input)));
 });

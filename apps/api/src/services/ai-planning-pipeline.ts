@@ -80,7 +80,11 @@ import {
   SUGGESTED_TIME_ROUNDING_MINUTES,
   suggestItemStart,
 } from './itinerary-time-suggestions-rules.js';
-import { enumerateDateRange } from './trip-rules.js';
+import { enumerateDateRange, resolveCountryPrimaryTimeZone } from './trip-rules.js';
+import { planningPreferencesFromAi } from '@trove/types';
+import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
+import { normalizeScoringItems, dayOrigin, type ScoringHours } from './plan-score-normalization.js';
+import type { ScoringPlace, ScoringRouteSegment } from './plan-score-evaluation.js';
 
 type GenerationGateway = {
   generateStructured<OUTPUT>(
@@ -769,7 +773,12 @@ export async function addOpeningEvidence(
   contexts: Map<string, GroundedPlaceContext>,
   placesService: PlacesService | null,
   signal?: AbortSignal,
-): Promise<{ intervals: Map<string, PlanScoreInterval[]>; ratings: Map<string, number> }> {
+): Promise<{
+  intervals: Map<string, PlanScoreInterval[]>;
+  ratings: Map<string, number>;
+  scoringPlaces: Map<string, ScoringPlace>;
+  hours: Map<string, ScoringHours>;
+}> {
   const requestedContexts = new Map<string, GroundedPlaceContext>();
   const contextKey = (context: GroundedPlaceContext) =>
     JSON.stringify([
@@ -810,6 +819,8 @@ export async function addOpeningEvidence(
   );
   const intervals = new Map<string, PlanScoreInterval[]>();
   const ratings = new Map<string, number>();
+  const scoringPlaces = new Map<string, ScoringPlace>();
+  const hours = new Map<string, ScoringHours>();
 
   for (const day of draft.days) {
     const retained: AiPlannerDraftItem[] = [];
@@ -860,12 +871,42 @@ export async function addOpeningEvidence(
       if (item.placeRefId && result?.status === 'ok' && result.place.rating !== null) {
         ratings.set(item.placeRefId, result.place.rating);
       }
+      if (item.placeRefId && result?.status === 'ok') {
+        const place = result.place;
+        const source = result.freshness.source === 'cache' ? 'CACHED_PROVIDER' : 'FRESH_PROVIDER';
+        scoringPlaces.set(item.placeRefId, {
+          tripPlaceId: item.placeRefId,
+          name: place.name,
+          types: place.rawTypes,
+          coordinates: place.location,
+          source,
+          rating:
+            place.rating === null
+              ? { status: 'UNKNOWN' }
+              : {
+                  status: 'KNOWN',
+                  rating: place.rating,
+                  reviewCount: place.userRatingCount,
+                  source,
+                },
+        });
+        hours.set(item.placeRefId, {
+          periods: place.openingPeriods,
+          utcOffsetMinutes: place.utcOffsetMinutes,
+          timeZone: place.location ? timeZoneAtCoordinates(place.location) : null,
+          fetchedAt: result.freshness.fetchedAt,
+          currentPeriods: place.currentOpeningPeriods,
+          validFrom: place.currentHoursValidFrom,
+          validThrough: place.currentHoursValidThrough,
+          source,
+        });
+      }
       draft.evidence.push(opening.evidence);
       retained.push(item);
     }
     day.items = retained;
   }
-  return { intervals, ratings };
+  return { intervals, ratings, scoringPlaces, hours };
 }
 
 /**
@@ -919,12 +960,12 @@ async function addRouteEvidence(
   );
 
   const inboundMinutes = new Map<string, number>();
-  const daySegments = new Map<string, PlanScoreRouteSegment[]>();
+  const daySegments = new Map<string, ScoringRouteSegment[]>();
 
   for (const day of draft.days) {
     const inbound = new Map<string, number | null>();
     const routeEvidenceIds = new Map<string, string>();
-    const segments: PlanScoreRouteSegment[] = [];
+    const segments: ScoringRouteSegment[] = [];
     daySegments.set(day.date, segments);
     for (let index = 1; index < day.items.length; index += 1) {
       const previous = day.items[index - 1]!;
@@ -948,7 +989,12 @@ async function addRouteEvidence(
         inbound.set(next.id, minutes);
         inboundMinutes.set(next.id, minutes);
         segments.push({
-          duration: { minutes, source: 'FRESH_PROVIDER' },
+          duration: {
+            minutes,
+            source: result.freshness.source === 'cache' ? 'CACHED_PROVIDER' : 'FRESH_PROVIDER',
+          },
+          mode: 'drive',
+          distanceMeters: result.estimate.distanceMeters,
           id: routeId,
           scope: 'LOCAL',
           status: 'KNOWN',
@@ -1096,7 +1142,9 @@ function scoreDraft(
     inbound: Map<string, number>;
     intervals: Map<string, PlanScoreInterval[]>;
     ratings: Map<string, number>;
-    segments: Map<string, PlanScoreRouteSegment[]>;
+    segments: Map<string, ScoringRouteSegment[]>;
+    scoringPlaces: Map<string, ScoringPlace>;
+    hours: Map<string, ScoringHours>;
   },
   evaluatedAt: Date,
 ) {
@@ -1132,24 +1180,70 @@ function scoreDraft(
         ? [entry.checkedAt]
         : [],
     ),
-    days: draft.days.map((day) => ({
-      date: day.date,
-      evaluation: evaluateScoredDay({
-        // A draft has no reservations by design, so an overlapping-commitment
-        // conflict is structurally unreachable rather than merely unchecked.
-        commitments: [],
-        dayId: day.date,
-        items: day.items.map((item) =>
-          feasibilityItem(
-            item,
-            evidence.intervals.get(item.id) ?? null,
-            evidence.inbound.get(item.id) ?? null,
-          ),
+    days: draft.days.map((day) => {
+      const zoneByRef = new Map(
+        draft.places.map((place) => [
+          place.id,
+          (place.resolution === 'verified' && place.location
+            ? timeZoneAtCoordinates(place.location)
+            : null) ?? resolveCountryPrimaryTimeZone(place.name),
+        ]),
+      );
+      const zone =
+        (day.dailyBasePlaceRefId ? zoneByRef.get(day.dailyBasePlaceRefId) : null) ??
+        day.items.map((i) => (i.placeRefId ? zoneByRef.get(i.placeRefId) : null)).find(Boolean) ??
+        draft.trip.destinations.map((d) => zoneByRef.get(d.placeRefId)).find(Boolean) ??
+        'UTC';
+      const raw = day.items.map((item, index) => ({
+        ...feasibilityItem(
+          item,
+          evidence.intervals.get(item.id) ?? null,
+          evidence.inbound.get(item.id) ?? null,
         ),
-        places: draftDayPlaces(day, evidence.ratings),
-        segments: evidence.segments.get(day.date) ?? [],
-      }),
-    })),
+        placeId: item.placeRefId ?? undefined,
+        inboundRequired:
+          index > 0 || Boolean(day.dailyBaseDeparturePlaceRefId ?? day.dailyBasePlaceRefId),
+      }));
+      // Generation already acquires inter-item routes. Base legs are required by the
+      // ordinary itinerary but are not purchased to improve a draft's score.
+      const segments = [...(evidence.segments.get(day.date) ?? [])];
+      if (day.items.length && (day.dailyBaseDeparturePlaceRefId ?? day.dailyBasePlaceRefId))
+        segments.unshift({ id: `base-start:${day.date}`, scope: 'LOCAL', status: 'UNKNOWN' });
+      if (day.items.length && day.dailyBasePlaceRefId)
+        segments.push({ id: `base-return:${day.date}`, scope: 'LOCAL', status: 'UNKNOWN' });
+      const zones = new Map(
+        day.items.flatMap((item) =>
+          item.placeRefId && zoneByRef.get(item.placeRefId)
+            ? [[item.id, zoneByRef.get(item.placeRefId)!] as const]
+            : [],
+        ),
+      );
+      return {
+        date: day.date,
+        evaluation: evaluateScoredDay({
+          commitments: [],
+          dayId: day.date,
+          date: day.date,
+          timeZone: zone,
+          originInstant: dayOrigin(day.date, zone),
+          items: normalizeScoringItems(day.date, zone, raw, { zones, hours: evidence.hours }),
+          places: draftDayPlaces(day, evidence.ratings).map(
+            (place) =>
+              evidence.scoringPlaces.get(place.tripPlaceId) ?? {
+                ...place,
+                name: draft.places.find((p) => p.id === place.tripPlaceId)?.name,
+              },
+          ),
+          segments,
+          preferences: planningPreferencesFromAi(
+            draft.normalizedRequest,
+            draft.trip.paceSource === 'user',
+            draft.assumptions.some((a) => a.code === 'interest_inferred'),
+          ),
+          context: destinationContext.days.find((d) => d.dayId === day.date)?.groups,
+        }),
+      };
+    }),
     mustGoIds,
     scheduledIds,
   });
@@ -1172,7 +1266,7 @@ async function validateWithProviderEvidence(
       result.context ? ([[result.place.id, result.context]] as const) : [],
     ),
   );
-  const { intervals, ratings } = await addOpeningEvidence(
+  const { intervals, ratings, scoringPlaces, hours } = await addOpeningEvidence(
     draft,
     proposal,
     contexts,
@@ -1203,7 +1297,11 @@ async function validateWithProviderEvidence(
 
   return {
     draft: validated.data,
-    planScore: scoreDraft(validated.data, { inbound, intervals, ratings, segments }, clock()),
+    planScore: scoreDraft(
+      validated.data,
+      { inbound, intervals, ratings, segments, scoringPlaces, hours },
+      clock(),
+    ),
   };
 }
 

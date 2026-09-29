@@ -758,6 +758,8 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
           {session.planScore ? (
             <PlanScorePanel
+              completeness={session.planScore.completeness}
+              confidence={session.planScore.confidence}
               explanations={session.planScore.explanations}
               score={session.planScore.score}
               scope="trip"

@@ -1945,9 +1945,9 @@ test('six venues use one Places call each, with persisted identity and transient
     expect(planScore.score).not.toBeNull();
     for (const day of planScore.days) {
       expect(day.factors.FEASIBILITY.state).toBe('EVALUATED');
-      expect(day.factors.TRAVEL_EFFORT.state).toBe('EVALUATED');
+      expect(day.factors.ROUTE_EFFICIENCY.state).toBe('EVALUATED');
       // The rating arrives free on the same response the hours came from.
-      expect(day.factors.PLACE_QUALITY.state).toBe('EVALUATED');
+      expect(day.factors.EXPERIENCE_QUALITY.state).toBe('EVALUATED');
     }
     // Derived from the plan, never a copy of the mutable evidence behind it.
     expect(JSON.stringify(planScore)).not.toContain('openingPeriods');

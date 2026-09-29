@@ -1,14 +1,15 @@
 import { createHash } from 'node:crypto';
 import type {
+  PlanScoreCap,
   PlanScoreDayFactorId,
   PlanScoreDayPayload,
   PlanScoreDayWithheldReason,
   PlanScoreFactorOutcome,
+  PlanScoreTripComponentId,
   PlanScoreTripPayload,
   PlanScoreTripWithheldReason,
   PlanScoreUnknownReason,
 } from '@trove/types';
-
 export type {
   PlanScoreDayFactorId,
   PlanScoreDayPayload,
@@ -18,114 +19,81 @@ export type {
   PlanScoreTripWithheldReason,
   PlanScoreUnknownReason,
 } from '@trove/types';
-
-/**
- * Deterministic Plan Score contract (PRD section 29).
- *
- * Factor evaluators supply evidence-backed factor results; this module owns the
- * weighted formula, applicability renormalization, completeness, confidence, and
- * the withholding rules. The base weights stay private to this module and must
- * never be surfaced through product APIs or UI.
- *
- * Results are derived and cacheable: `planScoreFingerprint` identifies the exact
- * evidence a stored result was produced from, and `PLAN_SCORE_INVALIDATION_TRIGGERS`
- * enumerates the changes that require re-evaluation.
- */
-
-/** Bump when weights, rubric bands, or aggregation semantics change; invalidates cached results. */
-export const PLAN_SCORE_CONTRACT_VERSION = 4;
-
-/**
- * Fixed evaluation order (PRD section 29.4 explanation priority). Iterating this
- * list rather than object keys keeps repeated evaluation bit-identical.
- */
-const DAY_FACTOR_IDS = [
+export const PLAN_SCORE_CONTRACT_VERSION = 5;
+export const DAY_FACTOR_IDS = [
   'FEASIBILITY',
-  'TRAVEL_EFFORT',
-  'PACE_BUFFER',
   'ROUTE_EFFICIENCY',
-  'PLACE_QUALITY',
-] as const satisfies readonly PlanScoreDayFactorId[];
-
-/** Internal calibration. Not exported, not serialized, not exposed to users. */
-const BASE_WEIGHTS: Record<PlanScoreDayFactorId | 'MUST_GO_PRIORITY_FIT', number> = {
+  'PACE_COMFORT',
+  'EXPERIENCE_QUALITY',
+  'PLAN_COMPOSITION',
+] as const;
+const BASE_WEIGHTS: Record<PlanScoreDayFactorId, number> = {
   FEASIBILITY: 35,
-  MUST_GO_PRIORITY_FIT: 10,
-  PACE_BUFFER: 15,
-  PLACE_QUALITY: 5,
-  ROUTE_EFFICIENCY: 10,
-  TRAVEL_EFFORT: 25,
+  ROUTE_EFFICIENCY: 20,
+  PACE_COMFORT: 20,
+  EXPERIENCE_QUALITY: 15,
+  PLAN_COMPOSITION: 10,
 };
-
-/** A numeric day score additionally requires one of these to be applicable and evaluable. */
-const CORE_DAY_FACTOR_IDS: readonly PlanScoreDayFactorId[] = ['FEASIBILITY', 'TRAVEL_EFFORT'];
-
-const MINIMUM_SCORABLE_COMPLETENESS = 60;
-
+const TRIP_WEIGHTS = {
+  DAILY_QUALITY: 65,
+  DESTINATION_UTILIZATION: 15,
+  VARIETY_COVERAGE: 10,
+  SEASONAL_FIT: 10,
+};
 export type PlanScoreEvidenceSource =
   'CACHED_PROVIDER' | 'ESTIMATED' | 'FRESH_PROVIDER' | 'STALE' | 'USER_OWNED';
-
-/** Evidence reliability values from PRD section 29.2. */
-const EVIDENCE_RELIABILITY: Record<PlanScoreEvidenceSource, number> = {
+const RELIABILITY = {
   CACHED_PROVIDER: 75,
   ESTIMATED: 50,
   FRESH_PROVIDER: 100,
   STALE: 25,
   USER_OWNED: 100,
 };
-
-export type PlanScoreEvidence = {
-  /** Stable reference to the evaluated data point, reused later for explanations. */
-  ref: string;
-  source: PlanScoreEvidenceSource;
-};
-
-/**
- * What a factor evaluator returns. `UNKNOWN` and `NOT_APPLICABLE` are distinct:
- * unknown evidence lowers completeness, while a non-applicable factor is removed
- * from the applicable weight base. Neither is ever scored as zero.
- */
+export type PlanScoreEvidence = { ref: string; source: PlanScoreEvidenceSource; strength?: number };
 export type PlanScoreFactorResult =
-  | { evidence: PlanScoreEvidence[]; score: number; state: 'EVALUATED' }
+  | {
+      evidence: PlanScoreEvidence[];
+      score: number;
+      state: 'EVALUATED';
+      coverage?: number;
+      confidence?: number;
+    }
   | { reason: PlanScoreUnknownReason; state: 'UNKNOWN' }
   | { state: 'NOT_APPLICABLE' };
-
-/**
- * Travel-heavy days need no separate scoring system: evaluators mark the factors
- * that genuinely do not apply as `NOT_APPLICABLE` and the remaining applicable
- * weights are renormalized. Omitted factors default to unknown/missing evidence.
- */
+export const UNKNOWN: PlanScoreFactorResult = { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' };
+export const NOT_APPLICABLE: PlanScoreFactorResult = { state: 'NOT_APPLICABLE' };
 export type PlanScoreDayInput = {
   dayId: string;
   factors: Partial<Record<PlanScoreDayFactorId, PlanScoreFactorResult>>;
+  date?: string;
+  availableMinutes?: number | null;
+  loadRatio?: number | null;
+  rest?: boolean;
+  coreEvaluated?: boolean;
+  hardConflictIds?: string[];
+  materialConflictIds?: string[];
+  indispensableConnectionConflict?: boolean;
+  normalizedRevision?: string;
+  conflictReferences?: Record<string, string[]>;
 };
-
 export type PlanScoreDayResult = PlanScoreDayPayload & {
-  /** Evidence each factor actually used, retained for explanations and debugging. */
   evidence: Record<PlanScoreDayFactorId, PlanScoreEvidence[]>;
+  /** Internal values never sent as product payloads. */
+  intrinsicScore: number | null;
+  incomingDebt: number;
 };
-
 export type PlanScoreTripInput = {
   days: PlanScoreDayInput[];
-  mustGoPriorityFit: PlanScoreFactorResult;
+  components?: Partial<
+    Record<Exclude<PlanScoreTripComponentId, 'DAILY_QUALITY'>, PlanScoreFactorResult>
+  >;
 };
-
 export type PlanScoreTripResult = Omit<PlanScoreTripPayload, 'days'> & {
   days: PlanScoreDayResult[];
-  mustGoEvidence: PlanScoreEvidence[];
+  fatigueAdjustment: number;
+  weakDayAdjustment: number;
 };
-
-export type PlanScoreInvalidationTrigger =
-  | 'ITINERARY_ITEM_CHANGED'
-  | 'ITINERARY_ORDER_CHANGED'
-  | 'ITINERARY_TIMING_CHANGED'
-  | 'PROVIDER_EVIDENCE_CHANGED'
-  | 'RESERVATION_CHANGED'
-  | 'ROUTE_EVIDENCE_CHANGED'
-  | 'TRIP_PLACE_CHANGED';
-
-/** Changes that invalidate an affected day and its trip result (PRD section 29.5). */
-export const PLAN_SCORE_INVALIDATION_TRIGGERS: readonly PlanScoreInvalidationTrigger[] = [
+export const PLAN_SCORE_INVALIDATION_TRIGGERS = [
   'ITINERARY_ITEM_CHANGED',
   'ITINERARY_ORDER_CHANGED',
   'ITINERARY_TIMING_CHANGED',
@@ -133,204 +101,325 @@ export const PLAN_SCORE_INVALIDATION_TRIGGERS: readonly PlanScoreInvalidationTri
   'RESERVATION_CHANGED',
   'ROUTE_EVIDENCE_CHANGED',
   'TRIP_PLACE_CHANGED',
-];
-
-const MISSING_FACTOR: PlanScoreFactorResult = { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' };
-
-function clampScore(value: number) {
+  'PREFERENCES_CHANGED',
+  'DAY_CONTEXT_CHANGED',
+  'DESTINATION_CONTEXT_CHANGED',
+  'RUBRIC_CHANGED',
+] as const;
+export type PlanScoreInvalidationTrigger = (typeof PLAN_SCORE_INVALIDATION_TRIGGERS)[number];
+export function clampScore(value: number) {
   if (!Number.isFinite(value)) throw new Error('invalid_factor_score');
-  return Math.min(100, Math.max(0, value));
+  return Math.max(0, Math.min(100, value));
 }
-
-/** Values are always 0–100, so `Math.round` is standard half-up rounding here. */
-function roundHalfUp(value: number) {
-  return Math.round(value);
-}
-
-function factorConfidence(evidence: PlanScoreEvidence[]) {
-  if (evidence.length === 0) throw new Error('missing_factor_evidence');
-
-  const total = evidence.reduce((sum, item) => sum + EVIDENCE_RELIABILITY[item.source], 0);
-  return total / evidence.length;
-}
-
-function toOutcome(result: PlanScoreFactorResult): PlanScoreFactorOutcome {
-  if (result.state === 'NOT_APPLICABLE') return { state: 'NOT_APPLICABLE' };
-  if (result.state === 'UNKNOWN') return { reason: result.reason, state: 'UNKNOWN' };
-
-  return {
-    confidence: factorConfidence(result.evidence),
-    score: clampScore(result.score),
-    state: 'EVALUATED',
-  };
-}
-
-function roundOutcome(outcome: PlanScoreFactorOutcome): PlanScoreFactorOutcome {
-  if (outcome.state !== 'EVALUATED') return outcome;
-
-  return {
-    confidence: roundHalfUp(outcome.confidence),
-    score: roundHalfUp(outcome.score),
-    state: 'EVALUATED',
-  };
-}
-
-type EvaluatedDay = {
-  completeness: number;
-  confidence: number | null;
-  evidence: Record<PlanScoreDayFactorId, PlanScoreEvidence[]>;
-  factors: Record<PlanScoreDayFactorId, PlanScoreFactorOutcome>;
-  score: number | null;
-  withheldReasons: PlanScoreDayWithheldReason[];
-};
-
-function snapshotEvidence(result: PlanScoreFactorResult) {
-  return result.state === 'EVALUATED' ? result.evidence.map((entry) => ({ ...entry })) : [];
-}
-
-/** Unrounded evaluation so trip aggregation can use exact intermediate values. */
-function evaluateDay(day: PlanScoreDayInput): EvaluatedDay {
-  const factors = Object.fromEntries(
-    DAY_FACTOR_IDS.map((id) => [id, toOutcome(day.factors[id] ?? MISSING_FACTOR)]),
-  ) as Record<PlanScoreDayFactorId, PlanScoreFactorOutcome>;
-  const evidence = Object.fromEntries(
-    DAY_FACTOR_IDS.map((id) => [id, snapshotEvidence(day.factors[id] ?? MISSING_FACTOR)]),
-  ) as Record<PlanScoreDayFactorId, PlanScoreEvidence[]>;
-
-  let applicableWeight = 0;
-  let evaluatedWeight = 0;
-  let weightedScore = 0;
-  let weightedConfidence = 0;
-
-  for (const id of DAY_FACTOR_IDS) {
-    const outcome = factors[id];
-    if (outcome.state === 'NOT_APPLICABLE') continue;
-
-    const weight = BASE_WEIGHTS[id];
-    applicableWeight += weight;
-    if (outcome.state !== 'EVALUATED') continue;
-
-    evaluatedWeight += weight;
-    weightedScore += weight * outcome.score;
-    weightedConfidence += weight * outcome.confidence;
-  }
-
-  const completeness = applicableWeight === 0 ? 0 : (100 * evaluatedWeight) / applicableWeight;
-  const withheldReasons: PlanScoreDayWithheldReason[] = [];
-
-  if (completeness < MINIMUM_SCORABLE_COMPLETENESS) {
-    withheldReasons.push('INSUFFICIENT_COMPLETENESS');
-  }
-  if (!CORE_DAY_FACTOR_IDS.some((id) => factors[id].state === 'EVALUATED')) {
-    withheldReasons.push('NO_EVALUABLE_CORE_FACTOR');
-  }
-
-  return {
-    completeness,
-    confidence: evaluatedWeight === 0 ? null : weightedConfidence / evaluatedWeight,
-    evidence,
-    factors,
-    score: withheldReasons.length > 0 ? null : weightedScore / evaluatedWeight,
-    withheldReasons,
-  };
-}
-
-function toDayResult(dayId: string, evaluated: EvaluatedDay): PlanScoreDayResult {
-  return {
-    completeness: roundHalfUp(evaluated.completeness),
-    confidence: evaluated.confidence === null ? null : roundHalfUp(evaluated.confidence),
-    dayId,
-    evidence: evaluated.evidence,
-    factors: Object.fromEntries(
-      DAY_FACTOR_IDS.map((id) => [id, roundOutcome(evaluated.factors[id])]),
-    ) as Record<PlanScoreDayFactorId, PlanScoreFactorOutcome>,
-    score: evaluated.score === null ? null : roundHalfUp(evaluated.score),
-    withheldReasons: evaluated.withheldReasons,
-  };
-}
-
-export function scoreDay(day: PlanScoreDayInput): PlanScoreDayResult {
-  return toDayResult(day.dayId, evaluateDay(day));
-}
-
-export function scoreTrip(input: PlanScoreTripInput): PlanScoreTripResult {
-  const evaluatedDays = input.days.map((day) => ({ day, evaluated: evaluateDay(day) }));
-  const scorableDays = evaluatedDays.flatMap(({ evaluated }) =>
-    evaluated.score === null
-      ? []
-      : [{ completeness: evaluated.completeness, score: evaluated.score }],
+export function evidenceConfidence(evidence: readonly PlanScoreEvidence[]) {
+  const distinct = new Map<string, PlanScoreEvidence>();
+  for (const entry of evidence) if (!distinct.has(entry.ref)) distinct.set(entry.ref, entry);
+  if (!distinct.size) throw new Error('missing_factor_evidence');
+  return (
+    [...distinct.values()].reduce(
+      (total, entry) => total + RELIABILITY[entry.source] * (entry.strength ?? 1),
+      0,
+    ) / distinct.size
   );
-  const mustGoPriorityFit = toOutcome(input.mustGoPriorityFit);
-  const withheldReasons: PlanScoreTripWithheldReason[] = [];
-  let score: number | null = null;
-
-  if (scorableDays.length === 0) {
-    withheldReasons.push('NO_SCORABLE_DAY');
-  } else {
-    let totalWeight = 0;
-    let weightedScore = 0;
-
-    for (const day of scorableDays) {
-      const weight = day.completeness / 100;
-      totalWeight += weight;
-      weightedScore += weight * day.score;
-    }
-
-    const dayMean = weightedScore / totalWeight;
-    const mustGoWeight = BASE_WEIGHTS.MUST_GO_PRIORITY_FIT / 100;
-    score =
-      mustGoPriorityFit.state === 'EVALUATED'
-        ? (1 - mustGoWeight) * dayMean + mustGoWeight * mustGoPriorityFit.score
-        : dayMean;
-  }
-
+}
+export function toOutcome(result: PlanScoreFactorResult): PlanScoreFactorOutcome {
+  if (result.state !== 'EVALUATED') return { ...result };
   return {
-    days: evaluatedDays.map(({ day, evaluated }) => toDayResult(day.dayId, evaluated)),
-    mustGoEvidence: snapshotEvidence(input.mustGoPriorityFit),
-    mustGoPriorityFit: roundOutcome(mustGoPriorityFit),
-    score: score === null ? null : roundHalfUp(score),
+    state: 'EVALUATED',
+    score: clampScore(result.score),
+    coverage: clampScore(result.coverage ?? 100),
+    confidence: clampScore(result.confidence ?? evidenceConfidence(result.evidence)),
+  };
+}
+/** Applicable unknown signals stay in the coverage denominator, never the quality mean. */
+export function combineSignals(
+  signals: readonly { weight: number; result: PlanScoreFactorResult }[],
+): PlanScoreFactorResult {
+  const applicable = signals.filter((s) => s.result.state !== 'NOT_APPLICABLE');
+  if (!applicable.length) return NOT_APPLICABLE;
+  const evaluated = applicable.flatMap((s) =>
+    s.result.state === 'EVALUATED'
+      ? [{ ...s, result: s.result, outcome: toOutcome(s.result) }]
+      : [],
+  );
+  if (!evaluated.length) return UNKNOWN;
+  const denominator = applicable.reduce((n, s) => n + s.weight, 0);
+  const evaluatedWeight = evaluated.reduce((n, s) => n + s.weight, 0);
+  const coveredWeight = evaluated.reduce(
+    (n, s) => n + (s.weight * (s.result.coverage ?? 100)) / 100,
+    0,
+  );
+  return {
+    state: 'EVALUATED',
+    score: evaluated.reduce((n, s) => n + s.weight * s.result.score, 0) / evaluatedWeight,
+    coverage: (100 * coveredWeight) / denominator,
+    confidence: coveredWeight
+      ? evaluated.reduce(
+          (n, s) =>
+            n +
+            ((s.weight * (s.result.coverage ?? 100)) / 100) *
+              (s.outcome.state === 'EVALUATED' ? s.outcome.confidence : 0),
+          0,
+        ) / coveredWeight
+      : 0,
+    evidence: [
+      ...new Map(evaluated.flatMap((s) => s.result.evidence).map((e) => [e.ref, e])).values(),
+    ],
+  };
+}
+function rounded(outcome: PlanScoreFactorOutcome): PlanScoreFactorOutcome {
+  return outcome.state === 'EVALUATED'
+    ? {
+        ...outcome,
+        score: Math.round(outcome.score),
+        coverage: Math.round(outcome.coverage),
+        confidence: Math.round(outcome.confidence),
+      }
+    : outcome;
+}
+function evaluateDay(day: PlanScoreDayInput, incomingDebt = 0): PlanScoreDayResult {
+  const inputs = { ...day.factors };
+  const comfort = inputs.PACE_COMFORT;
+  if (comfort?.state === 'EVALUATED')
+    inputs.PACE_COMFORT = { ...comfort, score: clampScore(comfort.score - 20 * incomingDebt) };
+  const aggregate = combineSignals(
+    DAY_FACTOR_IDS.map((id) => ({ weight: BASE_WEIGHTS[id], result: inputs[id] ?? UNKNOWN })),
+  );
+  const intrinsic = combineSignals(
+    DAY_FACTOR_IDS.map((id) => ({ weight: BASE_WEIGHTS[id], result: day.factors[id] ?? UNKNOWN })),
+  );
+  const outcome = toOutcome(aggregate);
+  const completeness = outcome.state === 'EVALUATED' ? outcome.coverage : 0;
+  const core =
+    day.coreEvaluated ??
+    ['FEASIBILITY', 'ROUTE_EFFICIENCY'].some(
+      (id) => inputs[id as PlanScoreDayFactorId]?.state === 'EVALUATED',
+    );
+  const restCore =
+    day.rest &&
+    (inputs.PACE_COMFORT?.state === 'EVALUATED' || inputs.PLAN_COMPOSITION?.state === 'EVALUATED');
+  const withheldReasons: PlanScoreDayWithheldReason[] = [];
+  if (completeness < 60) withheldReasons.push('INSUFFICIENT_COMPLETENESS');
+  if (!core && !restCore) withheldReasons.push('NO_EVALUABLE_CORE_FACTOR');
+  const hard = [...new Set(day.hardConflictIds ?? [])];
+  const material = [...new Set(day.materialConflictIds ?? [])];
+  const references = (ids: string[]) => [
+    ...new Set(ids.flatMap((id) => day.conflictReferences?.[id] ?? [id])),
+  ];
+  const caps: PlanScoreCap[] = hard.length
+    ? [
+        {
+          limit: hard.length > 1 ? 39 : 59,
+          reason: hard.length > 1 ? 'MULTIPLE_HARD_CONFLICTS' : 'HARD_CONFLICT',
+          references: references(hard),
+        },
+      ]
+    : material.length
+      ? [{ limit: 74, reason: 'MATERIAL_CONFLICT', references: references(material) }]
+      : [];
+  const bound = (score: number) => Math.min(score, ...caps.map((c) => c.limit));
+  return {
+    dayId: day.dayId,
+    completeness,
+    confidence: outcome.state === 'EVALUATED' ? outcome.confidence : null,
+    factors: Object.fromEntries(
+      DAY_FACTOR_IDS.map((id) => [id, toOutcome(inputs[id] ?? UNKNOWN)]),
+    ) as PlanScoreDayResult['factors'],
+    evidence: Object.fromEntries(
+      DAY_FACTOR_IDS.map((id) => [
+        id,
+        inputs[id]?.state === 'EVALUATED'
+          ? [...new Map(inputs[id].evidence.map((e) => [e.ref, { ...e }])).values()]
+          : [],
+      ]),
+    ) as PlanScoreDayResult['evidence'],
+    score: withheldReasons.length || outcome.state !== 'EVALUATED' ? null : bound(outcome.score),
+    intrinsicScore:
+      withheldReasons.length || intrinsic.state !== 'EVALUATED' ? null : bound(intrinsic.score),
+    incomingDebt,
+    caps,
     withheldReasons,
   };
 }
-
-/** Drops the evidence snapshot so normal product responses carry no scoring internals. */
+function displayDay(day: PlanScoreDayResult): PlanScoreDayResult {
+  return {
+    ...day,
+    completeness: Math.round(day.completeness),
+    confidence: day.confidence === null ? null : Math.round(day.confidence),
+    score: day.score === null ? null : Math.round(day.score),
+    factors: Object.fromEntries(
+      DAY_FACTOR_IDS.map((id) => [id, rounded(day.factors[id])]),
+    ) as PlanScoreDayResult['factors'],
+  };
+}
+export const scoreDay = (day: PlanScoreDayInput) => displayDay(evaluateDay(day));
+export function scoreTrip(input: PlanScoreTripInput): PlanScoreTripResult {
+  const ordered = input.days.toSorted((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+  let debt = 0;
+  let knownFatigue = 0;
+  const evaluated = ordered.map((day) => {
+    const result = evaluateDay(day, debt);
+    const ratio = day.loadRatio;
+    if (ratio != null && Number.isFinite(ratio)) {
+      knownFatigue++;
+      debt = Math.max(
+        0,
+        Math.min(1, 0.5 * debt + Math.max(0, ratio - 0.9) - 0.5 * Math.max(0, 0.7 - ratio)),
+      );
+    }
+    return { input: day, result };
+  });
+  const scorable = evaluated.filter((e) => e.result.intrinsicScore !== null);
+  const allAvailability =
+    ordered.length > 0 &&
+    ordered.every((d) => d.availableMinutes != null && d.availableMinutes > 0);
+  const weight = (d: PlanScoreDayInput) => (allAvailability ? d.availableMinutes! : 1);
+  const total = ordered.reduce((n, d) => n + weight(d), 0);
+  const assessedWeight = scorable.reduce((n, e) => n + weight(e.input), 0);
+  const completeness = total ? (100 * assessedWeight) / total : 0;
+  const dailyMean = scorable.length
+    ? scorable.reduce((n, e) => n + weight(e.input) * e.result.intrinsicScore!, 0) / assessedWeight
+    : null;
+  const daily: PlanScoreFactorResult =
+    dailyMean === null
+      ? UNKNOWN
+      : {
+          state: 'EVALUATED',
+          score: dailyMean,
+          coverage: completeness,
+          confidence:
+            scorable.reduce((n, e) => n + weight(e.input) * (e.result.confidence ?? 0), 0) /
+            assessedWeight,
+          evidence: scorable.map((e) => ({ ref: `day:${e.input.dayId}`, source: 'USER_OWNED' })),
+        };
+  const components = {
+    DAILY_QUALITY: daily,
+    DESTINATION_UTILIZATION: input.components?.DESTINATION_UTILIZATION ?? UNKNOWN,
+    VARIETY_COVERAGE: input.components?.VARIETY_COVERAGE ?? UNKNOWN,
+    SEASONAL_FIT: input.components?.SEASONAL_FIT ?? UNKNOWN,
+  };
+  const combined = combineSignals(
+    (Object.keys(TRIP_WEIGHTS) as PlanScoreTripComponentId[]).map((id) => ({
+      weight: TRIP_WEIGHTS[id],
+      result: components[id],
+    })),
+  );
+  const outcome = toOutcome(combined);
+  const lower = scorable.map((e) => e.result.intrinsicScore!).toSorted((a, b) => a - b)[
+    Math.max(0, Math.ceil(0.2 * scorable.length) - 1)
+  ];
+  const weakDayAdjustment =
+    dailyMean === null || lower === undefined
+      ? 0
+      : Math.min(10, 0.2 * Math.max(0, dailyMean - lower));
+  const fatigueAdjustment = scorable.length
+    ? (15 * scorable.reduce((n, e) => n + e.result.incomingDebt, 0)) / scorable.length
+    : 0;
+  const conflicts = evaluated.filter((e) => (e.input.hardConflictIds?.length ?? 0) > 0);
+  const assessed = evaluated.filter(
+    (e) => e.result.confidence !== null || (e.input.hardConflictIds?.length ?? 0) > 0,
+  );
+  const indispensable = conflicts.some((e) => e.input.indispensableConnectionConflict);
+  const severe =
+    indispensable || (assessed.length > 0 && conflicts.length / assessed.length >= 0.2);
+  const caps: PlanScoreCap[] = conflicts.length
+    ? [
+        {
+          limit: severe ? 69 : 84,
+          reason: indispensable ? 'TRIP_CONNECTION_CONFLICT' : 'TRIP_HARD_CONFLICT',
+          references: conflicts.map((e) => e.input.dayId),
+        },
+      ]
+    : [];
+  const withheldReasons: PlanScoreTripWithheldReason[] = [];
+  if (!scorable.length) withheldReasons.push('NO_SCORABLE_DAY');
+  else if (completeness < 60) withheldReasons.push('INSUFFICIENT_COMPLETENESS');
+  return {
+    days: evaluated.map((e) => displayDay(e.result)),
+    components: Object.fromEntries(
+      Object.entries(components).map(([id, value]) => [id, rounded(toOutcome(value))]),
+    ) as PlanScoreTripResult['components'],
+    // Unknown load never claims recovery. The unresolved share also qualifies confidence.
+    completeness: Math.round(completeness),
+    confidence:
+      outcome.state === 'EVALUATED'
+        ? Math.round(
+            outcome.confidence *
+              (ordered.length ? 0.75 + (0.25 * knownFatigue) / ordered.length : 1),
+          )
+        : null,
+    caps,
+    score:
+      withheldReasons.length || outcome.state !== 'EVALUATED'
+        ? null
+        : Math.round(
+            Math.min(
+              clampScore(outcome.score - fatigueAdjustment - weakDayAdjustment),
+              ...caps.map((c) => c.limit),
+            ),
+          ),
+    withheldReasons,
+    fatigueAdjustment,
+    weakDayAdjustment,
+  };
+}
 export function toPlanScoreDayPayload(result: PlanScoreDayResult): PlanScoreDayPayload {
-  const { evidence: _evidence, ...payload } = result;
+  const {
+    evidence: _evidence,
+    intrinsicScore: _intrinsic,
+    incomingDebt: _debt,
+    ...payload
+  } = result;
   return payload;
 }
-
 export function toPlanScoreTripPayload(result: PlanScoreTripResult): PlanScoreTripPayload {
-  const { days, mustGoEvidence: _mustGoEvidence, ...payload } = result;
+  const { days, fatigueAdjustment: _fatigue, weakDayAdjustment: _weak, ...payload } = result;
   return { ...payload, days: days.map(toPlanScoreDayPayload) };
 }
-
-function canonicalFactor(result: PlanScoreFactorResult | undefined) {
-  const factor = result ?? MISSING_FACTOR;
-  if (factor.state === 'NOT_APPLICABLE') return 'NOT_APPLICABLE';
-  if (factor.state === 'UNKNOWN') return `UNKNOWN:${factor.reason}`;
-
-  const evidence = factor.evidence
-    .map((item) => `${item.source}:${item.ref}`)
-    .toSorted((left, right) => left.localeCompare(right));
-
-  return `EVALUATED:${clampScore(factor.score)}:${evidence.join(',')}`;
+function canonical(value: unknown): unknown {
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value)
+        .toSorted(([a], [b]) => a.localeCompare(b))
+        .map(([key, entry]) => [key, canonical(entry)]),
+    );
+  return value;
 }
-
-/**
- * Stable identity of the evidence a result was derived from. A cached Plan Score
- * stays valid while this value is unchanged, so recalculation triggered by
- * `PLAN_SCORE_INVALIDATION_TRIGGERS` can re-evaluate without rewriting results.
- */
+export function scoringInputRevision(input: unknown) {
+  return createHash('sha256')
+    .update(JSON.stringify(canonical({ version: PLAN_SCORE_CONTRACT_VERSION, input })))
+    .digest('hex');
+}
 export function planScoreFingerprint(input: PlanScoreTripInput) {
-  const parts = [
-    `v${PLAN_SCORE_CONTRACT_VERSION}`,
-    `MUST_GO_PRIORITY_FIT=${canonicalFactor(input.mustGoPriorityFit)}`,
-  ];
-
-  for (const day of input.days) {
-    const factors = DAY_FACTOR_IDS.map((id) => `${id}:${canonicalFactor(day.factors[id])}`);
-    parts.push(`${day.dayId}=${factors.join('|')}`);
-  }
-
-  return createHash('sha256').update(parts.join('\n')).digest('hex');
+  const signal = (result: PlanScoreFactorResult) =>
+    result.state === 'EVALUATED'
+      ? {
+          ...result,
+          evidence: [...new Map(result.evidence.map((e) => [e.ref, e])).values()].toSorted((a, b) =>
+            a.ref.localeCompare(b.ref),
+          ),
+        }
+      : result;
+  return scoringInputRevision({
+    ...input,
+    days: input.days
+      .toSorted(
+        (a, b) => (a.date ?? '').localeCompare(b.date ?? '') || a.dayId.localeCompare(b.dayId),
+      )
+      .map((d) => ({
+        ...d,
+        hardConflictIds: d.hardConflictIds?.toSorted(),
+        materialConflictIds: d.materialConflictIds?.toSorted(),
+        factors: Object.fromEntries(
+          Object.entries(d.factors).map(([id, value]) => [id, signal(value)]),
+        ),
+      })),
+    components: input.components
+      ? Object.fromEntries(
+          Object.entries(input.components).map(([id, value]) => [id, signal(value)]),
+        )
+      : undefined,
+  });
 }

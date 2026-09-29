@@ -116,15 +116,15 @@ function ScoreBadge({ band, score }: Readonly<{ band: VerdictBand; score: number
 
 type FactorChipTone = 'unknown' | 'working' | 'worthImproving';
 
-/** Mirrors STRONG_FACTOR_SCORE in apps/api/src/services/plan-score-explanations.ts — keep in sync if that changes. */
+/** Presentation threshold shared with the explanation builder. */
 const CHIP_WORKING_SCORE = 85;
 
 const FACTOR_CHIP_ORDER: PlanScoreFactorId[] = [
   'FEASIBILITY',
-  'TRAVEL_EFFORT',
-  'PACE_BUFFER',
   'ROUTE_EFFICIENCY',
-  'PLACE_QUALITY',
+  'PACE_COMFORT',
+  'EXPERIENCE_QUALITY',
+  'PLAN_COMPOSITION',
 ];
 
 const FACTOR_BADGE_VARIANT: Record<FactorChipTone, VariantProps<typeof badgeVariants>['variant']> =
@@ -152,8 +152,21 @@ function FactorStatusRow({
         if (tone === null) return [];
 
         return [
-          <Badge key={id} render={<li />} variant={FACTOR_BADGE_VARIANT[tone]}>
-            {t(`factorLabels.${id}`)} · {t(`factorStatus.${tone}`)}
+          <Badge
+            key={id}
+            render={<li />}
+            variant={FACTOR_BADGE_VARIANT[tone]}
+            title={
+              factors[id].state === 'EVALUATED'
+                ? t('categoryEvidence', {
+                    coverage: factors[id].coverage,
+                    confidence: factors[id].confidence,
+                  })
+                : undefined
+            }
+          >
+            {t(`factorLabels.${id}`)} ·{' '}
+            {factors[id].state === 'EVALUATED' ? factors[id].score : t(`factorStatus.${tone}`)}
           </Badge>,
         ];
       })}
@@ -296,8 +309,7 @@ export function PlanScorePanel({
     </PanelHeading>
   );
 
-  // Without a number there is nothing useful to say; listing what could not be
-  // determined reads as a report card, so the panel stops here.
+  // Verified problems remain actionable even when coverage withholds the number.
   if (score === null) {
     return (
       <div className={shell}>
@@ -305,6 +317,15 @@ export function PlanScorePanel({
         <p className="text-sm text-muted-foreground">
           {status === 'loading' ? t('loading') : t(`notEnoughInformation.${scope}`)}
         </p>
+        <ExplanationList
+          explanations={explanations.worthImproving.filter(
+            (e) => e.severity === 'HARD' || e.severity === 'MATERIAL',
+          )}
+          heading={t('worthImproving')}
+          HeadingTag={GroupHeading}
+          onSelectReference={onSelectReference}
+          tone="improve"
+        />
       </div>
     );
   }

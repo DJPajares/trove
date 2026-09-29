@@ -1,5 +1,6 @@
+import { planScoreReferenceTargets } from './plan-score-reference-targets.js';
 import { getPrismaClient, Prisma } from '@trove/db';
-import type { TripPlanScore } from '@trove/types';
+import { destinationContextRecordSchema, type TripPlanScore } from '@trove/types';
 import { z } from 'zod';
 
 import {
@@ -281,6 +282,43 @@ const capSchema = z
     references: z.array(z.string()),
   })
   .strict();
+const contextGroupSchema = z
+  .object({
+    destination: z.enum(['singapore', 'tokyo', 'kyoto']),
+    records: z.array(
+      destinationContextRecordSchema.safeExtend({
+        interestMatch: z.boolean(),
+        matchedDates: z.array(z.string()),
+      }),
+    ),
+  })
+  .strict();
+const referenceTargetSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('item'), dayId: z.string().nullable() }).strict(),
+  z.object({ kind: z.literal('reservation') }).strict(),
+  z.object({ kind: z.literal('trip_place') }).strict(),
+]);
+const presentationSchema = z
+  .object({
+    adjustments: z.object({ fatigue: z.number().min(0), weakDays: z.number().min(0) }).strict(),
+    referenceTargets: z.record(z.string(), referenceTargetSchema).optional(),
+    revisions: z
+      .object({ planning: z.string(), evidence: z.string(), destinationContext: z.string() })
+      .strict(),
+    destinationContext: z
+      .object({
+        catalogVersion: z.string(),
+        evaluatedAt: z.string().datetime(),
+        expiresAt: z.string().datetime().nullable(),
+        overview: z.array(contextGroupSchema),
+        days: z.array(
+          z.object({ dayId: z.string(), groups: z.array(contextGroupSchema) }).strict(),
+        ),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
 const tripPlanScoreSchema = z
   .object({
     days: z.array(
@@ -318,6 +356,7 @@ const tripPlanScoreSchema = z
     generatedAt: z.string(),
     evidenceAsOf: z.string().nullable().optional(),
     sourceInputRevision: z.string().optional(),
+    presentation: presentationSchema.optional(),
     expiresAt: z.string().datetime().optional(),
     evidenceRevision: z.string().optional(),
     score: z.number().nullable(),
@@ -404,6 +443,10 @@ export function buildPlanScoreFromEvaluations(input: {
   };
   const result = scoreTrip(tripInput);
   const scheduled = new Set(input.scheduledIds);
+  const intrinsic = result.days
+    .flatMap((day) => (day.intrinsicScore === null ? [] : [day.intrinsicScore]))
+    .sort((a, b) => a - b);
+  const weakestBoundary = intrinsic[Math.max(0, Math.ceil(intrinsic.length * 0.2) - 1)];
   return {
     schemaVersion: PLAN_SCORE_CONTRACT_VERSION,
     rubricVersion: PLAN_SCORE_CONTRACT_VERSION,
@@ -433,7 +476,30 @@ export function buildPlanScoreFromEvaluations(input: {
       unscheduledMustGoTripPlaceIds: input.mustGoIds.filter((id) => !scheduled.has(id)),
       fatigueAdjustment: result.fatigueAdjustment,
       weakDayAdjustment: result.weakDayAdjustment,
+      fatigueDayIds: result.days.filter((day) => day.incomingDebt > 0).map((day) => day.dayId),
+      weakDayIds: result.days
+        .filter(
+          (day) =>
+            day.intrinsicScore !== null &&
+            weakestBoundary !== undefined &&
+            day.intrinsicScore <= weakestBoundary,
+        )
+        .map((day) => day.dayId),
     }),
+    presentation: {
+      adjustments: {
+        fatigue: Math.round(result.fatigueAdjustment),
+        weakDays: Math.round(result.weakDayAdjustment),
+      },
+      revisions: {
+        planning: '',
+        evidence: '',
+        destinationContext: input.destinationContext
+          ? scoringInputRevision(destinationContextRevision(input.destinationContext))
+          : '',
+      },
+      destinationContext: input.destinationContext,
+    },
     fingerprint: scoringInputRevision({
       evaluation: planScoreFingerprint(tripInput),
       evidenceTimes: [...new Set(input.evidenceTimes ?? [])].sort(),
@@ -738,38 +804,70 @@ export function readPlanScoreInputs(trip: PlanScoreTripRows, now = new Date()) {
     ),
   ]);
 
+  const planningRevision = tripPlanScoreRevision({
+    context: {
+      preferences: readTripPlanningPreferences(trip.planningPreferences),
+      days: trip.itineraryDays.map((day) => readDayPlanningContext(day.planningContext)),
+      endDate: trip.endDate,
+      destinations: destinations.map((d) => {
+        const owned = d as {
+          id?: string;
+          placeId?: string;
+          position?: number;
+          timeZone?: string | null;
+        };
+        return {
+          id: owned.id,
+          placeId: owned.placeId,
+          position: owned.position,
+          timeZone: owned.timeZone,
+          place: d.place
+            ? {
+                customName: d.place.customName,
+                providerLabel: d.place.providerLabel,
+                latitude: d.place.customLatitude == null ? null : String(d.place.customLatitude),
+                longitude: d.place.customLongitude == null ? null : String(d.place.customLongitude),
+              }
+            : null,
+        };
+      }),
+      reservations: trip.reservations,
+    },
+    startDate: trip.startDate ?? null,
+    startingPlaceId: trip.startingPlaceId ?? null,
+    days: trip.itineraryDays.map((day, index) => ({
+      record: days[index]!,
+      routing: {
+        dailyBaseDepartureTripPlaceId: day.dailyBaseDepartureTripPlaceId,
+        dailyBaseTripPlaceId: day.dailyBaseTripPlaceId,
+        items: day.items.map((item) => ({
+          id: item.id,
+          position: item.position,
+          travelModeToNext: item.travelModeToNext,
+        })),
+        routeStartTravelMode: day.routeStartTravelMode,
+      },
+    })),
+    mustGoTripPlaceIds,
+    placeIdentities: trip.tripPlaces
+      .filter(({ id }) => scoredPlaceIds.has(id))
+      .map(({ id, placeId, place }) => ({
+        id,
+        placeId: placeId ?? null,
+        customName: place?.customName,
+        providerLabel: place?.providerLabel,
+        latitude: place?.customLatitude == null ? null : String(place.customLatitude),
+        longitude: place?.customLongitude == null ? null : String(place.customLongitude),
+      })),
+  });
   return {
     days,
     mustGoTripPlaceIds,
     destinationContext,
-    revision: tripPlanScoreRevision({
-      context: {
-        destinationContext: destinationContextRevision(destinationContext),
-        preferences: readTripPlanningPreferences(trip.planningPreferences),
-        days: trip.itineraryDays.map((day) => readDayPlanningContext(day.planningContext)),
-        endDate: trip.endDate,
-        destinations: trip.destinations,
-        reservations: trip.reservations,
-      },
-      startDate: trip.startDate ?? null,
-      startingPlaceId: trip.startingPlaceId ?? null,
-      days: trip.itineraryDays.map((day, index) => ({
-        record: days[index]!,
-        routing: {
-          dailyBaseDepartureTripPlaceId: day.dailyBaseDepartureTripPlaceId,
-          dailyBaseTripPlaceId: day.dailyBaseTripPlaceId,
-          items: day.items.map((item) => ({
-            id: item.id,
-            position: item.position,
-            travelModeToNext: item.travelModeToNext,
-          })),
-          routeStartTravelMode: day.routeStartTravelMode,
-        },
-      })),
-      mustGoTripPlaceIds,
-      placeIdentities: trip.tripPlaces
-        .filter(({ id }) => scoredPlaceIds.has(id))
-        .map(({ id, placeId }) => ({ id, placeId: placeId ?? null })),
+    planningRevision,
+    revision: scoringInputRevision({
+      planningRevision,
+      destinationContext: destinationContextRevision(destinationContext),
     }),
   };
 }
@@ -818,7 +916,7 @@ export async function getTripPlanScore(
 ): Promise<TripPlanScore | null> {
   const now = services.now?.() ?? new Date();
   // Preserve the administrative visibility switch. Scoring now makes zero
-  // provider requests whether enabled or disabled; AI draft assessment is separate.
+  // provider requests whether enabled or disabled; AI review uses the same visibility switch.
   if (arePlanScoreProvidersDisabled()) return null;
 
   const prisma = getPrismaClient();
@@ -833,6 +931,7 @@ export async function getTripPlanScore(
     days: dayRecords,
     mustGoTripPlaceIds,
     revision,
+    planningRevision,
     destinationContext,
   } = readPlanScoreInputs(trip, now);
 
@@ -889,7 +988,6 @@ export async function getTripPlanScore(
     days: [],
     mustGoTripPlaceIds: [],
     context: {
-      revision,
       hours: [...placeEvidence.hours],
       ratings: [...placeEvidence.ratings],
       places: [...placeEvidence.places],
@@ -932,6 +1030,20 @@ export async function getTripPlanScore(
   );
 
   result.evidenceRevision = evidenceRevision;
+  if (result.presentation)
+    result.presentation.referenceTargets = planScoreReferenceTargets(result, {
+      items: trip.itineraryDays.flatMap((day) =>
+        day.items.map((item) => ({ id: item.id, dayId: day.id })),
+      ),
+      reservationIds: trip.reservations.map((reservation) => reservation.id),
+      tripPlaceIds: trip.tripPlaces.map((place) => place.id),
+    });
+  if (result.presentation)
+    result.presentation.revisions = {
+      planning: planningRevision,
+      evidence: evidenceRevision,
+      destinationContext: scoringInputRevision(destinationContextRevision(destinationContext)),
+    };
   result.fingerprint = scoringInputRevision({
     assessment: result.fingerprint,
     inputRevision: revision,

@@ -1,5 +1,7 @@
 'use client';
 
+import { dayActionLink } from '@/lib/plan-score/presentation';
+
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -119,7 +121,7 @@ function TripDetailPlanScore({ tripId }: Readonly<{ tripId: string }>) {
     planScore.status === 'disabled' ||
     Boolean(planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED'));
 
-  if (planScoreHidden || (!planScore.data && planScore.status !== 'error')) return null;
+  if (planScoreHidden || !planScore.data) return null;
 
   return (
     <PlanScorePanel
@@ -136,6 +138,9 @@ function TripDetailPlanScore({ tripId }: Readonly<{ tripId: string }>) {
       // The trip name is the only h1 here, so the panel sits at the top level
       // of the route's outline alongside the trip-info section.
       headingLevel={2}
+      assessment={planScore.data}
+      change={planScore.changeFor('trip')}
+      resolveAction={(explanation) => dayActionLink(tripId, planScore.data, explanation)}
       onRetry={planScore.retry}
       score={planScore.data?.score ?? null}
       scope="trip"

@@ -9,6 +9,7 @@ import {
   buildTripPlanScore,
   evaluateScoredDay,
   parseStoredPlanScore,
+  readPlanScoreInputs,
   type PlanScoreTripRecord,
 } from '../src/services/plan-score.js';
 
@@ -591,4 +592,85 @@ test('a real score survives being stored and read back', () => {
   expect(parseStoredPlanScore(stored)).toStrictEqual(stored);
   expect(parseStoredPlanScore(null)).toBeNull();
   expect(parseStoredPlanScore({ score: 80 })).toBeNull();
+});
+
+test('presentation metadata is additive and validates without changing the version-5 measurement', () => {
+  const score = buildTripPlanScore(plannedTrip);
+  expect(score.schemaVersion).toBe(5);
+  expect(score.rubricVersion).toBe(5);
+  expect(score.presentation?.adjustments).toEqual({ fatigue: 0, weakDays: 0 });
+  expect(parseStoredPlanScore(score)).toEqual(score);
+  const { presentation: _presentation, ...legacyCompatible } = score;
+  expect(parseStoredPlanScore(legacyCompatible)).toEqual(legacyCompatible);
+  expect(
+    parseStoredPlanScore({
+      ...score,
+      presentation: { ...score.presentation, adjustments: { fatigue: -1, weakDays: 0 } },
+    }),
+  ).toBeNull();
+  expect(parseStoredPlanScore({ ...score, rubricVersion: 4 })).toBeNull();
+});
+
+test('planning revisions distinguish owned edits from provider cache updates', () => {
+  const now = new Date('2026-09-29T00:00:00Z');
+  const rows = {
+    startDate: new Date('2026-10-01'),
+    endDate: new Date('2026-10-02'),
+    itineraryDays: [],
+    reservations: [],
+    tripPlaces: [],
+    destinations: [
+      {
+        id: 'destination',
+        placeId: 'place',
+        position: 0,
+        timeZone: 'Asia/Singapore',
+        place: {
+          customName: 'Singapore',
+          customLatitude: 1.35,
+          customLongitude: 103.82,
+          providerRefs: [
+            {
+              cachedAt: now,
+              cachedName: 'Singapore',
+              cachedLatitude: 1.35,
+              cachedLongitude: 103.82,
+            },
+          ],
+        },
+      },
+    ],
+  };
+  const first = readPlanScoreInputs(rows, now);
+  rows.destinations[0]!.place.providerRefs[0]!.cachedName = 'New cached name';
+  expect(readPlanScoreInputs(rows, now).planningRevision).toBe(first.planningRevision);
+  rows.destinations[0]!.place.customLatitude = 1.36;
+  expect(readPlanScoreInputs(rows, now).planningRevision).not.toBe(first.planningRevision);
+});
+
+test('reference targets include only known owned rows already named in explanations', async () => {
+  const { planScoreReferenceTargets } =
+    await import('../src/services/plan-score-reference-targets.js');
+  const score = buildTripPlanScore(plannedTrip);
+  score.explanations.worthImproving = [
+    {
+      action: 'ADJUST_TIME',
+      factor: 'FEASIBILITY',
+      code: 'conflict',
+      severity: 'HARD',
+      messageKey: 'unused',
+      values: {},
+      references: ['item', 'reservation', 'unknown'],
+    },
+  ];
+  expect(
+    planScoreReferenceTargets(score, {
+      items: [
+        { id: 'item', dayId: 'day' },
+        { id: 'unreferenced', dayId: 'day' },
+      ],
+      reservationIds: ['reservation'],
+      tripPlaceIds: [],
+    }),
+  ).toEqual({ item: { kind: 'item', dayId: 'day' }, reservation: { kind: 'reservation' } });
 });

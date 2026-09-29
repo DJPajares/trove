@@ -46,6 +46,8 @@ export type PlanScoreTripExplanationInput = {
   unscheduledMustGoTripPlaceIds: string[];
   fatigueAdjustment: number;
   weakDayAdjustment: number;
+  fatigueDayIds?: string[];
+  weakDayIds?: string[];
 };
 const roots: Record<PlanScoreExplanationFactor, string> = {
   FEASIBILITY: 'feasibility',
@@ -125,6 +127,7 @@ export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplan
           reason(id, 'LOCAL_TRAVEL_HEAVY', 'routeEfficiency.heavy', {
             action: 'RECONSIDER_DETOUR',
             severity: 'RISK',
+            references: [input.day.dayId],
             values: { minutes: Math.round(input.travel.totalMinutes) },
           }),
         );
@@ -137,6 +140,7 @@ export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplan
           reason(id, 'AVOIDABLE_MOVEMENT', 'routeEfficiency.backtracking', {
             action: 'REORDER_MANUALLY',
             severity: 'RISK',
+            references: [input.day.dayId],
             values: {
               bestMinutes: Math.round(input.route.bestMinutes),
               plannedMinutes: Math.round(input.route.plannedMinutes),
@@ -149,6 +153,7 @@ export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplan
           reason(id, 'LOWER_BOUND_OVERLOAD', 'pace.lowerBoundLoad', {
             action: 'REDUCE_LOAD',
             severity: 'RISK',
+            references: [input.day.dayId],
             values: { minutes: Math.round(input.pace.lowerBoundMinutes) },
           }),
         );
@@ -157,6 +162,7 @@ export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplan
           reason(id, 'INCOMING_FATIGUE', 'pace.accumulated', {
             action: 'REDUCE_LOAD',
             severity: 'RISK',
+            references: [input.day.dayId],
           }),
         );
       if (outcome.score >= 85)
@@ -166,6 +172,7 @@ export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplan
           reason(id, 'HIGH_ACTIVE_LOAD', 'pace.load', {
             action: 'REDUCE_LOAD',
             severity: 'RISK',
+            references: [input.day.dayId],
             values: { minutes: Math.round(input.pace.activeMinutes) },
           }),
         );
@@ -218,6 +225,7 @@ export function explainTrip(input: PlanScoreTripExplanationInput): PlanScoreExpl
   if (input.fatigueAdjustment > 0)
     groups.worthImproving.push(
       reason('DAILY_QUALITY', 'SUSTAINED_LOAD', 'trip.fatigue', {
+        references: input.fatigueDayIds ?? [],
         action: 'REDUCE_LOAD',
         severity: 'RISK',
       }),
@@ -225,6 +233,7 @@ export function explainTrip(input: PlanScoreTripExplanationInput): PlanScoreExpl
   if (input.weakDayAdjustment > 0)
     groups.worthImproving.push(
       reason('DAILY_QUALITY', 'WEAK_DAYS', 'trip.weakDays', {
+        references: input.weakDayIds ?? [],
         action: 'REVIEW_TIMING',
         severity: 'RISK',
       }),

@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { CountryMultiCombobox } from '@/components/country-multi-combobox';
 import { PageState } from '@/components/page-state';
+import { assessmentChange, rememberAssessment } from '@/lib/plan-score/lifecycle';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { usePreferences } from '@/components/preferences-provider';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -63,7 +64,10 @@ const LATER_SESSION_POLL_MS = 5_000;
 
 type ReviewOperation = 'acknowledging' | 'applying' | 'idle' | 'regenerating';
 
-export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>) {
+export function AiPlanningReview({
+  sessionId,
+  planScoreEnabled,
+}: Readonly<{ sessionId: string; planScoreEnabled: boolean }>) {
   const t = useTranslations('trips.aiPlanning.review');
   const general = useTranslations('trips.aiPlanning');
   const planScoreCopy = useTranslations('planScore');
@@ -132,6 +136,12 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
   const serverExpired =
     sessionQuery.error instanceof AiPlanningApiError &&
     sessionQuery.error.code === 'session_expired';
+
+  useEffect(() => {
+    if (!planScoreEnabled || !session?.planScore) return;
+    rememberAssessment(queryClient, `draft:${sessionId}`, session.planScore);
+    setClock(Date.now());
+  }, [planScoreEnabled, sessionId, session?.planScore, queryClient]);
 
   useEffect(() => {
     if (!session || session.status === 'applied') return;
@@ -498,6 +508,21 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
     );
   }
 
+  function resolveDraftScoreAction(explanation: import('@trove/types').PlanScoreExplanation) {
+    if (!explanation.action || !draft) return null;
+    const day = draft.days.find(
+      (day) =>
+        explanation.references.includes(day.date) ||
+        day.items.some(
+          (item) =>
+            explanation.references.includes(item.id) ||
+            Boolean(item.placeRefId && explanation.references.includes(item.placeRefId)),
+        ),
+    );
+    if (!day) return null;
+    return { onSelect: () => document.getElementById(`ai-score-day-${day.date}`)?.focus() };
+  }
+
   return (
     <section className="mx-auto max-w-7xl space-y-6 pb-28" aria-labelledby="ai-review-title">
       <motion.header className="border-b border-border pb-6" {...arrive(0)}>
@@ -662,69 +687,94 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
                 </p>
               ) : null}
             </div>
-            {draft.days.map((day, dayIndex) => (
-              <article
-                className="overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card"
-                key={day.date}
-              >
-                <header className="border-b border-border px-4 py-4 sm:px-6">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    {t('day', { number: dayIndex + 1 })}
-                  </p>
-                  <h3 className="mt-1 font-semibold">
-                    {dateFormatter.format(new Date(`${day.date}T00:00:00.000Z`))}
-                  </h3>
-                </header>
-                <ol className="divide-y divide-border-subtle">
-                  {day.items.map((item) => {
-                    const place = item.placeRefId
-                      ? draft.places.find((candidate) => candidate.id === item.placeRefId)
-                      : null;
-                    return (
-                      <li className="p-4 sm:px-6" key={item.id}>
-                        <div>
-                          <p className="font-medium">{item.label}</p>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {item.schedule.kind === 'exact'
-                              ? formatSegmentedTime(
-                                  item.schedule.localTime,
-                                  locale,
-                                  preferences.timeFormat,
-                                ).text
-                              : t(`dayParts.${item.schedule.dayPart}`)}{' '}
-                            · {t('duration', { minutes: item.durationMinutes })}
-                          </p>
-                          {item.origin === 'user' ? (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {t('travelerSupplied')}
+            {draft.days.map((day, dayIndex) => {
+              const dayScore = planScoreEnabled
+                ? session.planScore?.days.find((entry) => entry.date === day.date)
+                : null;
+              return (
+                <article
+                  className="overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card"
+                  id={`ai-score-day-${day.date}`}
+                  tabIndex={-1}
+                  key={day.date}
+                >
+                  <header className="border-b border-border px-4 py-4 sm:px-6">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {t('day', { number: dayIndex + 1 })}
+                    </p>
+                    <h3 className="mt-1 font-semibold">
+                      {dateFormatter.format(new Date(`${day.date}T00:00:00.000Z`))}
+                    </h3>
+                  </header>
+                  <ol className="divide-y divide-border-subtle">
+                    {day.items.map((item) => {
+                      const place = item.placeRefId
+                        ? draft.places.find((candidate) => candidate.id === item.placeRefId)
+                        : null;
+                      return (
+                        <li className="p-4 sm:px-6" key={item.id}>
+                          <div>
+                            <p className="font-medium">{item.label}</p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {item.schedule.kind === 'exact'
+                                ? formatSegmentedTime(
+                                    item.schedule.localTime,
+                                    locale,
+                                    preferences.timeFormat,
+                                  ).text
+                                : t(`dayParts.${item.schedule.dayPart}`)}{' '}
+                              · {t('duration', { minutes: item.durationMinutes })}
                             </p>
-                          ) : null}
-                          {/* Which provider found a place is Trove's problem, not
+                            {item.origin === 'user' ? (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {t('travelerSupplied')}
+                              </p>
+                            ) : null}
+                            {/* Which provider found a place is Trove's problem, not
                               the traveller's. What they are deciding here is
                               whether to trust the plan, and for that the only
                               thing that matters is that the place is real. */}
-                          {place ? (
-                            place.resolution === 'verified' ? (
-                              <Badge className="mt-1.5" size="sm" variant="success">
-                                <CircleCheck aria-hidden="true" />
-                                {t('verifiedPlace')}
-                              </Badge>
-                            ) : place.verification === 'not_checked' ? (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {t('customPlace.not_checked')}
-                              </p>
-                            ) : null
-                          ) : null}
-                        </div>
-                      </li>
-                    );
-                  })}
-                  {!day.items.length ? (
-                    <li className="p-4 text-sm text-muted-foreground sm:px-6">{t('emptyDay')}</li>
+                            {place ? (
+                              place.resolution === 'verified' ? (
+                                <Badge className="mt-1.5" size="sm" variant="success">
+                                  <CircleCheck aria-hidden="true" />
+                                  {t('verifiedPlace')}
+                                </Badge>
+                              ) : place.verification === 'not_checked' ? (
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {t('customPlace.not_checked')}
+                                </p>
+                              ) : null
+                            ) : null}
+                          </div>
+                        </li>
+                      );
+                    })}
+                    {!day.items.length ? (
+                      <li className="p-4 text-sm text-muted-foreground sm:px-6">{t('emptyDay')}</li>
+                    ) : null}
+                  </ol>
+                  {dayScore ? (
+                    <div className="p-4 sm:px-6">
+                      <PlanScorePanel
+                        change={assessmentChange(queryClient, `draft:${sessionId}`, dayScore.dayId)}
+                        assessment={session.planScore}
+                        dayId={dayScore.dayId}
+                        completeness={dayScore.completeness}
+                        confidence={dayScore.confidence}
+                        explanations={dayScore.explanations}
+                        factors={dayScore.factors}
+                        score={dayScore.score}
+                        scope="day"
+                        status="idle"
+                        title={planScoreCopy('dayTitle')}
+                        resolveAction={resolveDraftScoreAction}
+                      />
+                    </div>
                   ) : null}
-                </ol>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </section>
 
           {draft.unscheduledItems.length ? (
@@ -756,8 +806,11 @@ export function AiPlanningReview({ sessionId }: Readonly<{ sessionId: string }>)
         </div>
 
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-          {session.planScore ? (
+          {planScoreEnabled && session.planScore ? (
             <PlanScorePanel
+              change={assessmentChange(queryClient, `draft:${sessionId}`, 'trip')}
+              assessment={session.planScore}
+              resolveAction={resolveDraftScoreAction}
               completeness={session.planScore.completeness}
               confidence={session.planScore.confidence}
               explanations={session.planScore.explanations}

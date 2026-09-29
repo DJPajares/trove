@@ -1,3 +1,5 @@
+import type { TripDestinationContext } from './destination-context.js';
+
 /** Versioned derived assessments. Weights and raw provider evidence stay internal. */
 export type PlanScoreDayFactorId =
   'FEASIBILITY' | 'ROUTE_EFFICIENCY' | 'PACE_COMFORT' | 'EXPERIENCE_QUALITY' | 'PLAN_COMPOSITION';
@@ -76,6 +78,8 @@ export type TripPlanScoreDay = PlanScoreDayPayload & {
   date: string;
   explanations: PlanScoreExplanationGroups;
 };
+export type PlanScoreReferenceTarget =
+  { kind: 'item'; dayId: string | null } | { kind: 'reservation' } | { kind: 'trip_place' };
 export type TripPlanScore = Omit<PlanScoreTripPayload, 'days'> & {
   schemaVersion: 5;
   rubricVersion: 5;
@@ -87,4 +91,13 @@ export type TripPlanScore = Omit<PlanScoreTripPayload, 'days'> & {
   evidenceRevision?: string;
   evidenceAsOf?: string | null;
   sourceInputRevision?: string;
+  /** Optional additive presentation data; compatible version-5 assessments may omit it. */
+  presentation?: {
+    adjustments: { fatigue: number; weakDays: number };
+    /** Opaque digests only. No planning inputs or provider evidence are exposed. */
+    revisions: { planning: string; evidence: string; destinationContext: string };
+    destinationContext?: TripDestinationContext;
+    /** Only known, owned targets already referenced by an explanation. */
+    referenceTargets?: Record<string, PlanScoreReferenceTarget>;
+  };
 };

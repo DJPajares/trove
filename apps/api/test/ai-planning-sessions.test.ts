@@ -1300,3 +1300,25 @@ describe('dispatch quota and lifecycle completion', () => {
     expect(run).toMatchObject({ dispatchedAt: null, result: 'CANCELLED' });
   });
 });
+
+test('the administrative scoring kill switch hides an AI assessment without changing its draft', () => {
+  const previous = process.env.TROVE_PLAN_SCORE_DISABLED;
+  try {
+    process.env.TROVE_PLAN_SCORE_DISABLED = 'true';
+    const draft = explicitDraft();
+    const session = makeSession('00000000-0000-4000-8000-000000000168', {
+      draft,
+      planScore: emptyPlanScore(),
+      draftRevision: 1,
+      status: 'REVIEWING',
+      stage: 'REVIEWING',
+    });
+    const response = serializeAiPlanningSession({ ...session, runs: [] } as never, NOW);
+    expect(response.planScore).toBeNull();
+    expect(response.draft).toEqual(draft);
+    expect(session.planScore).not.toBeNull();
+  } finally {
+    if (previous === undefined) delete process.env.TROVE_PLAN_SCORE_DISABLED;
+    else process.env.TROVE_PLAN_SCORE_DISABLED = previous;
+  }
+});

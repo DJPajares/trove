@@ -1,3 +1,5 @@
+import { scoringInputRevision } from './plan-score-rules.js';
+import { planScoreReferenceTargets } from './plan-score-reference-targets.js';
 import { createHash } from 'node:crypto';
 
 import { getPrismaClient } from '@trove/db';
@@ -1250,6 +1252,36 @@ function scoreDraft(
   return {
     ...withholdNonCurrentPlanScore(score, evaluatedAt),
     sourceInputRevision: draftPlanScoreInputRevision(draft, evaluatedAt),
+    presentation: score.presentation
+      ? {
+          ...score.presentation,
+          referenceTargets: planScoreReferenceTargets(score, {
+            items: [
+              ...draft.days.flatMap((day) =>
+                day.items.map((item) => ({ id: item.id, dayId: day.date })),
+              ),
+              ...draft.unscheduledItems.map((item) => ({ id: item.id, dayId: null })),
+            ],
+            reservationIds: [],
+            tripPlaceIds: draft.places.map((place) => place.id),
+          }),
+          revisions: {
+            ...score.presentation.revisions,
+            planning: draftPlanScoreInputRevision(draft, evaluatedAt, {
+              includeDestinationContext: false,
+            }),
+            evidence: scoringInputRevision({
+              hours: [...evidence.hours],
+              ratings: [...evidence.ratings],
+              places: [...evidence.scoringPlaces],
+              segments: [...evidence.segments],
+              times: draft.evidence
+                .filter((entry) => entry.kind === 'opening_hours' || entry.kind === 'route')
+                .map((entry) => [entry.subjectId, entry.checkedAt]),
+            }),
+          },
+        }
+      : undefined,
   };
 }
 

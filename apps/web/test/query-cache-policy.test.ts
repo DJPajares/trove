@@ -223,3 +223,24 @@ test('the currency rate board is cached as a currency answer, not a trip one', (
     } as never),
   ).toBe(true);
 });
+
+test('locating a shared Place invalidates other cached scores without acquiring their routes', async () => {
+  const { PLACE_LOCATION_QUERY_ROOTS } = await import('../lib/query/trip-invalidation.ts');
+  const client = createQueryClient();
+  client.setQueryData(queryKeys.planScore('trip-1'), { score: 72 });
+  client.setQueryData(queryKeys.planScore('trip-2'), { score: 64 });
+  const routes = queryKeys.itineraryDayRoutes('trip-2', 'day', 'revision', false, undefined);
+  client.setQueryData(routes, { route: 'retain' });
+  await invalidateTripQueries(client, 'trip-1', PLACE_LOCATION_QUERY_ROOTS);
+  expect(client.getQueryState(queryKeys.planScore('trip-2'))?.isInvalidated).toBe(true);
+  expect(client.getQueryState(routes)?.isInvalidated).toBe(false);
+  client.clear();
+});
+
+test('Plan Score is cache-only and stays explicit about revalidation', () => {
+  const client = createQueryClient();
+  expect(PROVIDER_BILLABLE_QUERY_ROOTS.has('plan-score')).toBe(false);
+  expect(client.getQueryDefaults(['plan-score']).staleTime).toBe(Infinity);
+  expect(PERSISTED_QUERY_ROOTS.has('plan-score')).toBe(false);
+  client.clear();
+});

@@ -45,10 +45,17 @@ export function draftDestinationContext(draft: AiPlannerDraft, now: Date) {
   );
 }
 
-export function draftPlanScoreInputRevision(draft: AiPlannerDraft, now = new Date()): string {
+export function draftPlanScoreInputRevision(
+  draft: AiPlannerDraft,
+  now = new Date(),
+  options: { includeDestinationContext?: boolean } = {},
+): string {
   const payload = {
     version: 3,
-    destinationContext: destinationContextRevision(draftDestinationContext(draft, now)),
+    destinationContext:
+      options.includeDestinationContext === false
+        ? undefined
+        : destinationContextRevision(draftDestinationContext(draft, now)),
     preferences: {
       pace: draft.trip.pace,
       paceSource: draft.trip.paceSource,
@@ -249,6 +256,30 @@ export function remapDraftPlanScore(
 
   return {
     ...planScore,
+    presentation: planScore.presentation
+      ? {
+          ...planScore.presentation,
+          referenceTargets: planScore.presentation.referenceTargets
+            ? Object.fromEntries(
+                Object.entries(planScore.presentation.referenceTargets).map(([id, target]) => [
+                  reference(id),
+                  target.kind === 'item'
+                    ? { ...target, dayId: target.dayId ? reference(target.dayId) : null }
+                    : target,
+                ]),
+              )
+            : undefined,
+          destinationContext: planScore.presentation.destinationContext
+            ? {
+                ...planScore.presentation.destinationContext,
+                days: planScore.presentation.destinationContext.days.map((day) => ({
+                  ...day,
+                  dayId: reference(day.dayId),
+                })),
+              }
+            : undefined,
+        }
+      : undefined,
     caps: planScore.caps.map((cap) => ({ ...cap, references: cap.references.map(reference) })),
     days: planScore.days.map((day) => ({
       ...day,

@@ -67,6 +67,8 @@ const conflictMessages: Record<PlanScoreConflictKind, string> = {
   TIGHT_TRANSITION: 'feasibility.tightTransition',
   OUTSIDE_AVAILABILITY: 'feasibility.outsideAvailability',
 };
+/** A reorder must save at least this much before it is worth raising. */
+const MINIMUM_REORDER_SAVING_MINUTES = 10;
 function reason(
   factor: PlanScoreExplanationFactor,
   code: string,
@@ -129,7 +131,10 @@ export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplan
       if (
         input.route.bestMinutes !== null &&
         input.route.plannedMinutes !== null &&
-        input.route.plannedMinutes > 1.1 * input.route.bestMinutes
+        input.route.plannedMinutes > 1.1 * input.route.bestMinutes &&
+        // The best order is a straight-line estimate, so a few minutes' gain
+        // is within its error and not worth asking the traveller to act on.
+        input.route.plannedMinutes - input.route.bestMinutes >= MINIMUM_REORDER_SAVING_MINUTES
       )
         groups.worthImproving.push(
           reason(id, 'AVOIDABLE_MOVEMENT', 'routeEfficiency.backtracking', {

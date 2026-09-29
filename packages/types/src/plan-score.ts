@@ -94,7 +94,7 @@ export type PlanScoreReferenceTarget =
   { kind: 'item'; dayId: string | null } | { kind: 'reservation' } | { kind: 'trip_place' };
 export type TripPlanScore = Omit<PlanScoreTripPayload, 'days'> & {
   schemaVersion: 7;
-  rubricVersion: 7;
+  rubricVersion: 8;
   days: TripPlanScoreDay[];
   explanations: PlanScoreExplanationGroups;
   fingerprint: string;

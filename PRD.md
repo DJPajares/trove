@@ -1885,6 +1885,8 @@ Required movement comes from itinerary topology. A single stop without a configu
 
 Combine local travel burden and avoidable movement at **60/40** within the category, renormalized when a signal is unknown. Burden includes base-to-item, inter-item, and return-to-base local legs according to the itinerary's established routing semantics.
 
+Avoidable movement compares the planned order with the best order of the same stops, with the day's Stay fixed at both ends (or the first and last stops when there is no Stay). Booked stops and stops at a time the traveller chose keep their place; stops with an estimated time or a daypart may move, up to eight movable stops. Only the planned chain is routed, so every alternative is estimated from straight-line distance scaled by the day's own routed pace, and the result is **estimated** evidence. It makes no provider request. A leg that is long-distance, unrouted or unlocated leaves the signal unknown. Suggest a reorder only when it cuts the planned travel by more than 10% **and** by at least 10 minutes. Introducing this comparison is rubric version 8.
+
 | Known local travel minutes | Burden score |
 | --- | ---: |
 | 0–60 | 100 |

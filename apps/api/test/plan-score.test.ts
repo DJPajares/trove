@@ -590,7 +590,7 @@ test('a real score survives being stored and read back', () => {
 test('presentation metadata is additive and validates without changing the version-5 measurement', () => {
   const score = buildTripPlanScore(plannedTrip);
   expect(score.schemaVersion).toBe(7);
-  expect(score.rubricVersion).toBe(7);
+  expect(score.rubricVersion).toBe(8);
   expect(score.presentation?.adjustments).toEqual({ fatigue: 0, weakDays: 0 });
   expect(parseStoredPlanScore(score)).toEqual(score);
   const { presentation: _presentation, ...legacyCompatible } = score;

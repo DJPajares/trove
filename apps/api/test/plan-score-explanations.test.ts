@@ -135,3 +135,18 @@ test('Replace preserves compatible itinerary metadata and requests review of lin
   expect(result.requiresReview).toEqual(linkedRecords);
   expect(linkedRecords).toHaveLength(2);
 });
+
+test('a reorder is raised only when it saves a proportion and real minutes', () => {
+  const avoidable = (plannedMinutes: number, bestMinutes: number) =>
+    explainDay({ ...input, route: { bestMinutes, plannedMinutes } }).worthImproving.find(
+      (entry) => entry.code === 'AVOIDABLE_MOVEMENT',
+    );
+  expect(avoidable(80, 48)).toMatchObject({
+    action: 'REORDER_MANUALLY',
+    values: { plannedMinutes: 80, bestMinutes: 48 },
+  });
+  // A fifth faster, but only four minutes: within the straight-line estimate's error.
+  expect(avoidable(20, 16)).toBeUndefined();
+  // Ten minutes, but only a twentieth of a long day's travel.
+  expect(avoidable(200, 190)).toBeUndefined();
+});

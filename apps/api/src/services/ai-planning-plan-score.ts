@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { planningPreferencesFromAi } from '@trove/types';
 import type { AiPlannerDraft } from '@trove/types';
 import { readPlanScoreInputs, type PlanScoreTripRows, type TripPlanScore } from './plan-score.js';
-import { PLAN_SCORE_CONTRACT_VERSION } from './plan-score-rules.js';
+import { PLAN_SCORE_RUBRIC_VERSION } from './plan-score-rules.js';
 import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
 import { floatingLocalTimeToInstant, parseLocalTime } from './itinerary-rules.js';
 import { parseDateOnly, resolveCountryPrimaryTimeZone } from './trip-rules.js';
@@ -30,7 +30,7 @@ export function draftPlanScoreInputRevision(draft: AiPlannerDraft): string {
       paceSource: draft.trip.paceSource,
       interests: draft.normalizedRequest.interests,
     },
-    rubric: PLAN_SCORE_CONTRACT_VERSION,
+    rubric: PLAN_SCORE_RUBRIC_VERSION,
     dates: [draft.trip.startDate, draft.trip.endDate],
     destinations: draft.trip.destinations.map(({ placeRefId }) => placeRefId),
     places: draft.places

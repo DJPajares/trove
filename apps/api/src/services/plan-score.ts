@@ -4,6 +4,7 @@ import { type TripPlanScore } from '@trove/types';
 import { z } from 'zod';
 
 import { contextPlaceFromOwnedData, type OwnedContextPlace } from './owned-place-location.js';
+import { estimatedRouteComparison } from './plan-score-route-comparison.js';
 import { tripPlanScoreRevision } from './plan-score-revision.js';
 import { oldestPlanScoreEvidenceAt, originalPlanScoreTime } from './plan-score-freshness.js';
 export { PLAN_SCORE_CACHE_TTL_MS } from './plan-score-freshness.js';
@@ -52,6 +53,7 @@ import {
   combineSignals,
   DAY_FACTOR_IDS,
   PLAN_SCORE_CONTRACT_VERSION,
+  PLAN_SCORE_RUBRIC_VERSION,
   toPlanScoreDayPayload,
   type PlanScoreFactorResult,
 } from './plan-score-rules.js';
@@ -197,6 +199,21 @@ function evaluateDayRecord(
     preferences: record.preferences,
     planningContext: day.planningContext,
     forecasts: record.forecasts?.filter((f) => f.date === day.date),
+    // The planned chain already runs from the day's stay and back, so the
+    // comparison holds the stay fixed at both ends.
+    routeComparison: estimatedRouteComparison({
+      segments: routes?.segments ?? [],
+      items,
+      locate: (point) => {
+        const tripPlaceId =
+          point.kind === 'itinerary_item'
+            ? day.items.find((item) => item.id === point.id)?.tripPlaceId
+            : point.kind === 'daily_base'
+              ? point.id
+              : null;
+        return (tripPlaceId && record.places?.get(tripPlaceId)?.coordinates) || null;
+      },
+    }),
   });
 }
 
@@ -332,7 +349,7 @@ const tripPlanScoreSchema = z
         .strict(),
     ),
     schemaVersion: z.literal(7),
-    rubricVersion: z.literal(7),
+    rubricVersion: z.literal(PLAN_SCORE_RUBRIC_VERSION),
     assessmentStatus: z.enum(['available', 'provisional', 'unavailable']),
     assessmentBasis: assessmentBasisSchema,
     limitations: limitationsSchema,
@@ -466,7 +483,7 @@ export function buildPlanScoreFromEvaluations(input: {
   const weakestBoundary = intrinsic[Math.max(0, Math.ceil(intrinsic.length * 0.2) - 1)];
   return {
     schemaVersion: PLAN_SCORE_CONTRACT_VERSION,
-    rubricVersion: PLAN_SCORE_CONTRACT_VERSION,
+    rubricVersion: PLAN_SCORE_RUBRIC_VERSION,
     assessmentStatus: result.assessmentStatus,
     assessmentBasis: result.assessmentBasis,
     limitations: result.limitations,

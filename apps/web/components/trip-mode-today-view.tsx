@@ -32,6 +32,7 @@ import { useTripModePlaceDetails, useTripModePreview } from '@/components/trip-m
 import { useOnlineStatus } from '@/components/trip-sync-status';
 import { TripModeMemoryDialog } from '@/components/trip-mode-memory-dialog';
 import { TripModePendingMemories } from '@/components/trip-mode-pending-memories';
+import { TripInsights } from '@/components/trip-insights';
 import { TripWeatherContext } from '@/components/trip-weather-context';
 import {
   TripModeTaskDisclosure,
@@ -773,6 +774,10 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
         tripId={tripId}
         variant="card"
       />
+
+      {/* What to know about the day sits beside its weather rather than in it:
+          a holiday or a month's typical pattern is not a forecast. */}
+      <TripInsights dayId={day.id} tripId={tripId} />
 
       <TripModeTasksNotice />
 

@@ -1,3 +1,5 @@
+import type { TripContext } from '@trove/types';
+
 import type { TripPlanScore } from '@/lib/plan-score/api';
 import { createBrowserSupabaseClient, getBrowserSession } from '@/lib/supabase/client';
 import type { Trip } from '@/lib/trips/api';
@@ -119,6 +121,8 @@ export type AiPlanningSession = {
   pendingRunId: string | null;
   /** Scored during generation from evidence that run already fetched. */
   planScore: TripPlanScore | null;
+  /** Holidays and cached typical conditions for the draft's days, while reviewing. */
+  context?: TripContext | null;
   countryContextChanged: boolean;
   countriesReviewedRevision: number | null;
   reviewedCountries: string[];

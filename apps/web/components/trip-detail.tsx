@@ -34,6 +34,7 @@ import { ExperienceRatingSummary } from '@/components/experience-rating-field';
 import { OfflineReadyStatus } from '@/components/offline-ready-status';
 import { PageState } from '@/components/page-state';
 import { PlanScorePanel } from '@/components/plan-score-panel';
+import { TripInsights } from '@/components/trip-insights';
 import { TripCountries } from '@/components/trip-countries';
 import { TripForm } from '@/components/trip-form';
 import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
@@ -612,9 +613,10 @@ export function TripDetail({
       </section>
 
       {/*
-        Plan Score judges the plan and only applies while there is still
-        planning to do; Experience Rating is the traveller's own reflection
-        afterwards. They never occupy this slot at the same time.
+        Plan Score judges the plan and Insights says what to know about it; both
+        only apply while there is still planning or travelling to do. Experience
+        Rating is the traveller's own reflection afterwards. They never occupy
+        this slot at the same time.
       */}
       {trip.lifecycle === 'completed' ? (
         trip.experienceRating === null ? null : (
@@ -623,9 +625,12 @@ export function TripDetail({
             rating={trip.experienceRating}
           />
         )
-      ) : planScoreEnabled ? (
-        <TripDetailPlanScore tripId={trip.id} />
-      ) : null}
+      ) : (
+        <>
+          {planScoreEnabled ? <TripDetailPlanScore tripId={trip.id} /> : null}
+          <TripInsights headingLevel={2} tripId={trip.id} />
+        </>
+      )}
 
       <TripReadinessPrompt trip={trip} />
 

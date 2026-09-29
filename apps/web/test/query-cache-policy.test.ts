@@ -102,6 +102,7 @@ test('trip-scoped keys put the trip id directly after the root', () => {
     queryKeys.reservations('trip-1'),
     queryKeys.tasks('trip-1'),
     queryKeys.trip('trip-1'),
+    queryKeys.tripContext('trip-1', 'en'),
     queryKeys.tripInfo('trip-1'),
     queryKeys.tripModeContext('trip-1', {}),
     queryKeys.tripPlaces('trip-1'),

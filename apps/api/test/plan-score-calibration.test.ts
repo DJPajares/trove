@@ -191,22 +191,23 @@ test('known available time constrains the comfort target', () => {
   });
   expect(toOutcome(result.pace.factor)).toMatchObject({ score: 70 });
 });
-test('missing durations remain unknown except when a known lower bound proves overload', () => {
+test('missing durations retain only supported load and proven lower-bound overload', () => {
   const unknown = assess({ items: [visit('a', { duration: null })] });
-  expect(unknown.pace.factor.state).toBe('UNKNOWN');
+  expect(unknown.pace.factor).toMatchObject({ state: 'EVALUATED', coverage: 50 });
+  expect(scoreDay(unknown.input).score).toBeNull();
   const overload = assess({
     items: [
       visit('a', { duration: at(700) }),
       visit('b', { duration: null, inboundTravel: at(0), start: at(1300) }),
     ],
   });
-  expect(overload.pace.factor).toMatchObject({ state: 'EVALUATED', coverage: 50 });
+  expect(overload.pace.factor).toMatchObject({ state: 'EVALUATED', coverage: 200 / 3 });
   expect(overload.input.loadRatio).toBeNull();
 });
-test('missing local legs cannot make a comfortably paced complete day', () => {
+test('missing local legs keep comfort partial', () => {
   expect(
-    assess({ segments: [{ id: 'missing', scope: 'LOCAL', status: 'UNKNOWN' }] }).pace.factor.state,
-  ).toBe('UNKNOWN');
+    assess({ segments: [{ id: 'missing', scope: 'LOCAL', status: 'UNKNOWN' }] }).pace.factor,
+  ).toMatchObject({ state: 'EVALUATED', coverage: 50 });
 });
 test('flight distance, omitted meals and omitted break stops are never penalties', () => {
   const one = score();
@@ -459,9 +460,8 @@ test('one known booking does not establish duration coverage for unrelated long-
   ];
   const segment = { id: 'journey', scope: 'LONG_DISTANCE' as const, status: 'UNKNOWN' as const };
   expect(
-    assess({ commitments, segments: [{ ...segment, itemIds: ['another-journey'] }] }).pace.factor
-      .state,
-  ).toBe('UNKNOWN');
+    assess({ commitments, segments: [{ ...segment, itemIds: ['another-journey'] }] }).pace.factor,
+  ).toMatchObject({ state: 'EVALUATED', coverage: 200 / 3 });
   expect(
     assess({ commitments, segments: [{ ...segment, itemIds: ['train'] }] }).pace.factor.state,
   ).toBe('EVALUATED');
@@ -754,7 +754,6 @@ test('unlocated visits and unspecified structured transfers explain the exact re
     ],
   });
   expect(missing.missingInformation).toMatchObject([
-    { code: 'UNLOCATED_STOPS', action: 'LINK_PLACE', references: ['unlocated'] },
     { code: 'TRANSFER_DETAILS', action: 'EDIT_TRANSFER', references: ['transfer'] },
   ]);
   expect(missing.travel.totalMinutes).toBeNull();

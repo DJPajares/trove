@@ -160,7 +160,7 @@ export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplan
             references: [input.day.dayId],
           }),
         );
-      if (outcome.state === 'EVALUATED' && outcome.score >= 85)
+      if (outcome.state === 'EVALUATED' && outcome.score >= 85 && input.pace.activeMinutes !== null)
         groups.whatWorks.push(reason(id, 'COMFORTABLE_LOAD', 'pace.comfortable'));
       else if (
         outcome.state === 'EVALUATED' &&

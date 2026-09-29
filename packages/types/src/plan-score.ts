@@ -6,21 +6,22 @@ export type PlanScoreTripComponentId =
 export type PlanScoreUnknownReason =
   'INSUFFICIENT_EVIDENCE' | 'MISSING_EVIDENCE' | 'UNUSABLE_EVIDENCE';
 export type PlanScoreAssessmentStatus = 'available' | 'provisional' | 'unavailable';
+export type PlanScoreAssessmentBasis = 'TIMING' | 'ACTIVITY_LOAD' | 'VERIFIED_PROBLEM' | 'REST';
+export type PlanScoreLimitation =
+  | 'TRAVEL_TIME_UNKNOWN'
+  | 'LOAD_INCOMPLETE'
+  | 'TIMING_UNKNOWN'
+  | 'VENUE_EVIDENCE_INCOMPLETE'
+  | 'UNASSESSED_DAYS';
 export type PlanScoreFactorOutcome =
   | { confidence: number; coverage: number; score: number; state: 'EVALUATED' }
   | { confidence: number; coverage: number; state: 'LIMITED' }
   | { reason: PlanScoreUnknownReason; state: 'UNKNOWN' }
   | { state: 'NOT_APPLICABLE' };
 export type PlanScoreDayWithheldReason =
-  | 'EVIDENCE_NOT_CURRENT'
-  | 'ADMINISTRATIVELY_DISABLED'
-  | 'INSUFFICIENT_COMPLETENESS'
-  | 'NO_EVALUABLE_CORE_FACTOR';
+  'EVIDENCE_NOT_CURRENT' | 'ADMINISTRATIVELY_DISABLED' | 'NO_MEANINGFUL_EVIDENCE';
 export type PlanScoreTripWithheldReason =
-  | 'ADMINISTRATIVELY_DISABLED'
-  | 'NO_SCORABLE_DAY'
-  | 'INSUFFICIENT_COMPLETENESS'
-  | 'EVIDENCE_NOT_CURRENT';
+  'ADMINISTRATIVELY_DISABLED' | 'NO_SCORABLE_DAY' | 'EVIDENCE_NOT_CURRENT';
 export type PlanScoreCap = {
   limit: number;
   reason:
@@ -33,6 +34,8 @@ export type PlanScoreCap = {
 };
 export type PlanScoreDayPayload = {
   assessmentStatus: PlanScoreAssessmentStatus;
+  assessmentBasis: PlanScoreAssessmentBasis[];
+  limitations: PlanScoreLimitation[];
   /** Applicable signal coverage, independent of assessed quality. */
   completeness: number;
   confidence: number | null;
@@ -44,6 +47,8 @@ export type PlanScoreDayPayload = {
 };
 export type PlanScoreTripPayload = {
   assessmentStatus: PlanScoreAssessmentStatus;
+  assessmentBasis: PlanScoreAssessmentBasis[];
+  limitations: PlanScoreLimitation[];
   assessedDayCount: number;
   applicableDayCount: number;
   evidenceCoverage: number;
@@ -88,8 +93,8 @@ export type TripPlanScoreDay = PlanScoreDayPayload & {
 export type PlanScoreReferenceTarget =
   { kind: 'item'; dayId: string | null } | { kind: 'reservation' } | { kind: 'trip_place' };
 export type TripPlanScore = Omit<PlanScoreTripPayload, 'days'> & {
-  schemaVersion: 6;
-  rubricVersion: 6;
+  schemaVersion: 7;
+  rubricVersion: 7;
   days: TripPlanScoreDay[];
   explanations: PlanScoreExplanationGroups;
   fingerprint: string;

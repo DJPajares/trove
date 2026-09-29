@@ -77,7 +77,7 @@ for (const state of ['cold', 'warm', 'expired'] as const)
     });
     const first = await readDraftPlanScore(draft, now);
     const second = await readDraftPlanScore(draft, new Date(now.getTime() + 86400000));
-    expect(parseStoredPlanScore(first)?.schemaVersion).toBe(6);
+    expect(parseStoredPlanScore(first)?.schemaVersion).toBe(7);
     expect(first.sourceInputRevision).toBe(draftPlanScoreInputRevision(draft, now));
     expect(second.generatedAt).toBe('2026-09-30T00:00:00.000Z');
     if (state === 'warm') {

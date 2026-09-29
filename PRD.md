@@ -1862,7 +1862,7 @@ Assign each underlying problem one primary category. Other categories may explai
 
 ### Feasibility & Resilience
 
-Evaluate the complete ordered schedule by propagating earliest/latest workable times. Independently workable adjacent pairs are insufficient if they cannot all work together. Respect exact commitments, flexible estimates, dayparts, visit durations, operating windows, available time, and required travel. Do not automatically reorder the plan.
+Evaluate the complete ordered schedule by propagating earliest/latest workable times. Independently workable adjacent pairs are insufficient if they cannot all work together. Respect exact commitments, flexible estimates, dayparts, visit durations, operating windows, available time, and required travel. Assess intrinsic block timing separately from transitions: unknown inbound movement cannot erase a block’s own timing, duration, availability, or independently verified conflict. Apply opening-hour checks only to venue activities. Do not automatically reorder the plan.
 
 Use instants and the relevant location's timezone for cross-day journeys, overnight opening windows, date changes, and daylight-saving transitions. A reservation linked to an itinerary item represents one commitment, not two conflicting copies. Consider standalone timed reservations as well as linked ones. An unknown arrival time remains unknown rather than a zero-duration journey.
 
@@ -1879,6 +1879,8 @@ The final daily score is capped at **59** for one verified hard conflict, **39**
 Flight distance is never penalized. Airport access, preparation, connections, occupied travel time, and arrival scheduling matter. Long-distance flight/train/ferry travel is logistics and comfort evidence, not local route burden.
 
 ### Route & Time Efficiency
+
+Required movement comes from itinerary topology. A single stop without a configured origin/base or other required movement has no applicable route assessment. An unresolved configured base or required inter-stop leg remains unknown; never bypass an unlocated stop, invent travel or substitute zero minutes.
 
 Combine local travel burden and avoidable movement at **60/40** within the category, renormalized when a signal is unknown. Burden includes base-to-item, inter-item, and return-to-base local legs according to the itinerary's established routing semantics.
 
@@ -1898,11 +1900,13 @@ Geographic clustering may provide a labeled estimate from permitted coordinates;
 
 ### Pace & Comfort
 
+Assess the known activity/transport subtotal even when total load is incomplete, using the same pace targets/interpolation and qualifying it as partial. Load coverage is the proportion of known applicable duration and leg observations; linked journeys count once and unknown required observations remain in the denominator. Missing data causes no quality deduction or arbitrary cap.
+
 Initial active-load targets are **6/8/10 hours** for relaxed/balanced/packed travel, constrained by known available time. These are comfort targets, not invented opening hours or exact daily start times.
 
 Calculate load from activity duration and transport effort. Initial transport multipliers are **1.25 walking**, **1.0 driving**, **0.75 local transit**, and **0.5 seated long-distance travel**. Unknown activity intensity uses a neutral weight with reduced confidence. Do not count the same journey as both an activity and a transport leg. A travel leg's distance alone does not add fatigue.
 
-Score load continuously: **100** at or below the target, **70** at 1.25 times the target, **40** at 1.5 times, and **0** at twice the target; interpolate between anchors and clamp. An unknown required duration does not become zero: evaluate known lower-bound overload only where it proves a concern, otherwise withhold that signal.
+Score load continuously: **100** at or below the target, **70** at 1.25 times the target, **40** at 1.5 times, and **0** at twice the target; interpolate between anchors and clamp. An unknown required duration does not become zero: score known activity/transport load provisionally and qualify the incomplete subtotal. A proven lower-bound overload supports a concern without requiring the full load.
 
 Also consider continuous activity blocks, known walking distance, stop fragmentation, natural free intervals, and recovery. Occupied transport is not free time. Neither meal stops nor explicit break stops are required. Carry incoming fatigue into the day using 29.3; a rest day can reduce fatigue without filling its itinerary.
 
@@ -1916,7 +1920,7 @@ Date/time suitability includes time of day, weekday/weekend, public holidays, pe
 
 ### Plan Composition and Destination Utilization
 
-Evaluate coherent flow, purposeful variety, and use of available opportunities at **30/30/40**. A Focused day may repeat a theme; Rest and Transit days have no sightseeing quota.
+Evaluate coherent flow, purposeful variety, and use of available opportunities at **30/30/40**. A Focused day may repeat a theme; Rest and Transit days have no sightseeing quota. Supported temporal flow may satisfy the coherence criterion independently of provider routes; geographic flow, variety, interest fit, utilization and seasonal suitability require their own evidence. Labels, selection and broad destination guidance do not prove venue quality.
 
 Daily utilization asks: **Given this area, date, season, traveller interests, and available time, are these strong choices?** Trip utilization asks the corresponding question across the trip's destinations, geography, dates, duration, and available time. Complementary days may collectively satisfy interests rather than repeating all themes every day.
 
@@ -1928,15 +1932,15 @@ Quality measures the assessed plan. **Coverage/completeness** measures how much 
 
 Track coverage at signal level using versioned applicable signal weights, then aggregate through category weights. Unknown signals remain in the applicable denominator; genuinely inapplicable signals are removed. Signal, category, day-quality, and trip-component quality contributions use nominal weight × evaluated coverage, renormalized over supported evidence. Unknown evidence contributes neither zero nor perfect quality. Repeated evidence references do not increase confidence merely by being copied.
 
-Initial reliability values are **100** for explicit user-owned evidence or fresh authoritative evidence, **75** for current permitted cached evidence, **50** for estimates/dayparts/default assumptions, and **25** for stale evidence only where it is still permitted and safe to qualify. Confidence is the evidence-reliability mean within a signal, then the evaluated signal/category-weighted mean. Rating evidence additionally reflects review-count strength. Expired or unusable evidence is unknown, not confidently stale.
+Initial reliability values are **100** for explicit user-owned evidence or fresh authoritative evidence, **75** for current permitted cached evidence, **50** for estimates/dayparts/default assumptions, and **25** for stale evidence only where it is still permitted and safe to qualify. Internal reliability is the evidence-reliability mean within a signal, then the evaluated signal/category-weighted mean. Published confidence equals `aggregated reliability × applicable coverage / 100`, applying coverage once at the reported scope. Keep reliability separate when aggregating broader scopes. Rating evidence additionally reflects review-count strength. Expired or unusable evidence is unknown, not confidently stale.
 
 An AI-estimated exact start or duration remains movable/estimated until the traveller edits that value; Apply does not promote its provenance. Explicitly selected interests are stronger evidence than inferred ones. Merely choosing a Place does not establish all of the traveller's interests.
 
-Show a daily number only with **at least 60% applicable signal coverage** and an evaluated feasibility or route core signal. Explicit Rest days may instead use applicable comfort/composition evidence; a blank unspecified day is not an intentional rest day. Otherwise withhold the number with concise wording such as `Not enough information yet`. Verified actionable conflicts remain visible even without a number.
+Show a daily number when supported scoring evidence exists and at least one meaningful basis is present: a usable timed interval or daypart with duration; known durations for all scheduled activities; a proven timing conflict or lower-bound overload; or an explicit Rest day with sufficient availability and commitment evidence. Duration-only days may score provisionally from known activity load. No blanket coverage or core-factor gate applies. Empty or effectively unspecified plans remain unscored and request useful timing/duration information. Verified actionable conflicts remain visible without a number.
 
-Show a trip number only when scorable days cover **at least 60%** of trip days, or 60% of explicitly known available time when all applicable days have that information. Do not selectively drop unknown availability from the denominator. Eligibility is the explicit OR of the day-count gate and the all-known available-time gate; three valid days out of five always pass. Available-time weighting for daily quality is separate from eligibility. No scorable days means no trip number, even if Must Go coverage is known.
+Show a trip number when at least one day qualifies, using supported intrinsic daily scores and trip components. Keep every applicable day in coverage reporting. Use known availability consistently for weighting, or equal day weights when any applicable availability is unknown; available-time weighting does not determine eligibility. No scorable days means no trip number, even if Must Go coverage is known.
 
-Shared assessment states are **available**, **provisional**, and **unavailable**. A publishable assessment is provisional when applicable evidence coverage is below 80%, confidence is below 60%, or (for a trip) any day remains unscored. An individual category/component number is published only with at least 60% coverage and at least 50% confidence. Supported problems remain visible regardless of numeric visibility. Missing information is explained only when it matters, with a specific repair action where possible.
+Shared assessment states are **available**, **provisional**, and **unavailable**. A publishable assessment is provisional when applicable evidence coverage is below 80%, confidence is below 60%, required travel remains unknown, or (for a trip) any day remains unscored. An individual category/component number is published only with at least 60% coverage and at least 50% confidence. Supported problems remain visible regardless of numeric visibility. Missing information is explained only when it matters, with a specific repair action where possible.
 
 The numeric score is canonical; optional verdict bands are presentation only. Use unrounded intermediate values and round displayed scores half-up to whole numbers. Identical versioned inputs and evidence must produce identical results.
 
@@ -1952,7 +1956,7 @@ For known load ratios, propagate debt chronologically, starting at zero:
 
 `debtNext = clamp(0.5 × debt + max(0, loadRatio − 0.9) − 0.5 × max(0, 0.7 − loadRatio), 0, 1)`
 
-An unknown day does not count as recovery: carry the prior debt without decay and reduce fatigue confidence. An explicit rest day is recovery only to the extent known commitments and available time support it. Incoming debt reduces daily Pace & Comfort by **20 × debt** points; the trip fatigue adjustment is **15 × mean incoming debt** over assessed days. Both remain bounded and explained as planning estimates rather than medical claims.
+An unknown day does not count as recovery: carry prior debt without decay and reduce fatigue confidence. Only complete load evidence permits recovery. With partial load use `max(previousDebt, debtNext(knownLowerBound))`: carry existing debt and increase it only where known load proves an increase. An explicit rest day is recovery only to the extent known commitments and available time support it. Incoming debt reduces daily Pace & Comfort by **20 × debt** points; the trip fatigue adjustment is **15 × mean incoming debt** over assessed days. Both remain bounded and explained as planning estimates rather than medical claims.
 
 The weak-day adjustment is **min(10, 0.2 × max(0, dailyMean − lowerQuintileScore))**. Use the nearest-rank 20th percentile of scorable intrinsic day scores (ascending rank `ceil(0.2 × count)`, minimum one), so small trips have deterministic behavior too.
 
@@ -1960,9 +1964,9 @@ Any verified hard-conflict day caps the trip at **84**. Hard conflicts affecting
 
 ## 29.4 Traveller Presentation
 
-Use one shared score summary: prominent score, restrained verdict or Provisional label, highest-priority useful action, and assessed-day count for partial trips. Show supported daily categories or the four trip components as compact horizontal bars with aligned labels and numbers. Omit weak/unknown/inapplicable rows.
+Use one shared score summary: prominent score, restrained verdict or Provisional label, highest-priority useful action, and assessed-day count for partial trips. A provisional number includes one concise explanation of its assessment basis and limitations, such as “Based on planned activity time; travel time hasn’t been assessed.” Show supported daily categories or the four trip components as compact horizontal bars with aligned labels and numbers. Omit weak/unknown/inapplicable rows.
 
-Show up to three useful insights initially, prioritized by consequence and deduplicated by underlying issue. Additional verified problems remain accessible through disclosure. Avoid generic evidence statements, repeated unknown-category messages, normal coverage/confidence percentages, assessment/cache timestamps, and zero adjustments. Diagnostics remain internal. Specific missing information should link to existing Place/item/reservation editors; scoring never launches acquisition or automatically changes the itinerary.
+Show up to three useful insights initially, prioritized by consequence and deduplicated by underlying issue. Additional verified problems remain accessible through disclosure. Avoid generic evidence statements, repeated unknown-category messages, normal coverage/confidence percentages, assessment/cache timestamps, and zero adjustments. Diagnostics remain internal. Do not routinely ask travellers to link places for scoring. A location action is appropriate only when an unresolved endpoint prevents checking access to a linked timed reservation or structured departure. Unknown arrival details may offer a transfer-edit action. Ordinary location-linking controls remain outside scoring. Specific consequential missing information links to existing item/reservation editors; scoring never launches acquisition or automatically changes the itinerary.
 
 General seasonal/destination guidance belongs in the separate, optional Destination context section with source and validity disclosure. AI review shows one consolidated trip assessment; daily scores remain in the itinerary. Preserve localization, semantic controls, keyboard access, reduced motion, and mobile layouts. Plan Score remains advisory in Preview, not a required readiness gate.
 
@@ -1984,7 +1988,7 @@ Fingerprint every scoring input: itinerary/order/times/places/reservations/route
 
 AI review reuses a compatible, current assessment. Reopening a stale/incompatible retained draft recomputes from existing caches without provider acquisition or generation. Apply preserves original assessment age and evidence timestamps; retained draft semantics survive in a nullable canonical itinerary-item block type, while legacy items remain unspecified without structured proof. Regeneration acquires evidence only within the ordinary generation cap. Apply preserves original timestamps and reuses a score only for equivalent scoring inputs. Do not turn a derived score back into normalized evidence.
 
-The shared API/types contract includes versioned category outcomes, trip components, caps, coverage/confidence, reason codes, and original evidence timestamps. Version evaluator and payload changes together; incompatible legacy assessments are ignored. Keep weights and raw evidence out of product responses.
+The v7 shared API/types contract includes stable assessment-basis and limitation codes, versioned category outcomes, trip components, caps, coverage/confidence, reason codes, and original evidence timestamps. Version evaluator and payload changes together; incompatible legacy assessments are ignored. Keep weights and raw evidence out of product responses.
 
 Plan Score remains independent of lifecycle, manual Ready status, Trip Mode/Preview availability, and Experience Rating. Retain the administrative score-disable control independently from provider availability. Re-enabling evaluates existing trips directly; disabled/null client responses recheck on the next eligible mount/focus with deduplication. Do not introduce traffic-aware replanning, disruption intelligence, or Smart Cost Forecasting as dependencies.
 

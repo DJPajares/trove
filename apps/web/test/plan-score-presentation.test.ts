@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 import type { PlanScoreExplanation, TripPlanScore } from '@trove/types';
 import {
   assessmentDeadline,
+  assessmentBasisKey,
   compareScores,
   currentAssessment,
   dayActionLink,
@@ -21,9 +22,11 @@ function assessment(overrides: Partial<TripPlanScore> = {}): TripPlanScore {
   const evaluated = { state: 'EVALUATED', score: 80, coverage: 70, confidence: 90 } as const;
   const explanations = { whatWorks: [], worthImproving: [], uncertainty: [] };
   return {
-    schemaVersion: 6,
-    rubricVersion: 6,
+    schemaVersion: 7,
+    rubricVersion: 7,
     assessmentStatus: 'provisional',
+    assessmentBasis: ['TIMING'],
+    limitations: [],
     assessedDayCount: 1,
     applicableDayCount: 1,
     evidenceCoverage: 70,
@@ -46,6 +49,8 @@ function assessment(overrides: Partial<TripPlanScore> = {}): TripPlanScore {
     days: [
       {
         assessmentStatus: 'provisional',
+        assessmentBasis: ['TIMING'],
+        limitations: [],
         dayId: 'day-1',
         date: '2026-10-01',
         completeness: 75,
@@ -129,7 +134,7 @@ test('numeric changes require compatible, current scores and identify changed pl
     compareScores(first, scoreSnapshot(changed, NOW), 'trip', first.deadline)?.delta,
   ).toBeNull();
   expect(
-    compareScores(first, { ...scoreSnapshot(changed, NOW), version: '7:7' }, 'trip', NOW),
+    compareScores(first, { ...scoreSnapshot(changed, NOW), version: '6:6' }, 'trip', NOW),
   ).toEqual({ source: 'rubric', delta: null, state: 'rubric' });
 });
 test('coverage and withheld transitions never fabricate score deltas; unaffected days stay quiet', () => {
@@ -396,4 +401,17 @@ test('a disabled response rechecks on remount and concurrent score surfaces shar
   stopA();
   stopB();
   client.clear();
+});
+
+test('one concise basis prioritizes unknown required travel and uses stable v7 codes', () => {
+  expect(assessmentBasisKey(assessment({ limitations: ['TRAVEL_TIME_UNKNOWN'] }))).toBe(
+    'basis.travelUnknown',
+  );
+  expect(assessmentBasisKey(assessment({ assessmentBasis: ['ACTIVITY_LOAD'] }))).toBe(
+    'basis.activityLoad',
+  );
+  expect(assessmentBasisKey(assessment({ assessmentBasis: ['REST'] }))).toBe('basis.rest');
+  expect(
+    currentAssessment({ ...assessment(), schemaVersion: 6, rubricVersion: 6 } as never, NOW),
+  ).toBe(false);
 });

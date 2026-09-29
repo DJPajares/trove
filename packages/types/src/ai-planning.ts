@@ -1,3 +1,4 @@
+export type ItineraryBlockType = 'activity' | 'free_time' | 'meeting' | 'transport' | 'work';
 import { z } from 'zod';
 
 export const AI_PLANNER_SCHEMA_VERSION = 1 as const;

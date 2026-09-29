@@ -1856,7 +1856,7 @@ Expose at most these five daily categories. Each has a 0–100 score when evalua
 | Experience Quality | 15% | Interest fit, distinctive value for time, date/time suitability, and supporting public-rating evidence. |
 | Plan Composition | 10% | Coherent flow, purposeful variety, area use, and relevant opportunities within available time. |
 
-The day score is the weighted mean of evaluable applicable categories, followed by feasibility caps. Renormalize unavailable/inapplicable weights rather than inserting zero. Missing evidence affects coverage/confidence under 29.2. A sparse category must not claim complete coverage because a single signal is known.
+The day score is the weighted mean of supported applicable categories, followed by feasibility caps. At each weighted aggregation boundary use nominal weight × evaluated coverage, then renormalize. Coverage must not be applied twice within the same boundary; sparse evidence contributes proportionately without becoming a quality penalty or a perfect contribution. Renormalize unavailable/inapplicable weights rather than inserting zero. Missing evidence affects coverage/confidence under 29.2. A sparse category must not claim complete coverage because a single signal is known.
 
 Assign each underlying problem one primary category. Other categories may explain consequences but must not deduct again for the same event. For example, a missed reservation belongs to feasibility; general walking load remains a distinct comfort concern. A feasibility cap bounds the result, rather than being an additional additive deduction.
 
@@ -1926,7 +1926,7 @@ Lower utilization only for a demonstrable relevant opportunity gap or avoidable 
 
 Quality measures the assessed plan. **Coverage/completeness** measures how much applicable evidence was evaluated. **Confidence** measures reliability of that evidence. They are separate 0–100 concepts; missing/uncertain data generally reduces coverage/confidence, not quality.
 
-Track coverage at signal level using versioned applicable signal weights, then aggregate through category weights. Unknown signals remain in the applicable denominator; genuinely inapplicable signals are removed. Factor quality renormalizes across evaluated signals. Repeated evidence references do not increase confidence merely by being copied.
+Track coverage at signal level using versioned applicable signal weights, then aggregate through category weights. Unknown signals remain in the applicable denominator; genuinely inapplicable signals are removed. Signal, category, day-quality, and trip-component quality contributions use nominal weight × evaluated coverage, renormalized over supported evidence. Unknown evidence contributes neither zero nor perfect quality. Repeated evidence references do not increase confidence merely by being copied.
 
 Initial reliability values are **100** for explicit user-owned evidence or fresh authoritative evidence, **75** for current permitted cached evidence, **50** for estimates/dayparts/default assumptions, and **25** for stale evidence only where it is still permitted and safe to qualify. Confidence is the evidence-reliability mean within a signal, then the evaluated signal/category-weighted mean. Rating evidence additionally reflects review-count strength. Expired or unusable evidence is unknown, not confidently stale.
 
@@ -1934,7 +1934,9 @@ An AI-estimated exact start or duration remains movable/estimated until the trav
 
 Show a daily number only with **at least 60% applicable signal coverage** and an evaluated feasibility or route core signal. Explicit Rest days may instead use applicable comfort/composition evidence; a blank unspecified day is not an intentional rest day. Otherwise withhold the number with concise wording such as `Not enough information yet`. Verified actionable conflicts remain visible even without a number.
 
-Show a trip number only when scorable days cover **at least 60%** of trip days, or 60% of explicitly known available time when all applicable days have that information. Do not selectively drop unknown availability from the denominator. Show assessed coverage in details. No scorable days means no trip number, even if Must Go coverage is known.
+Show a trip number only when scorable days cover **at least 60%** of trip days, or 60% of explicitly known available time when all applicable days have that information. Do not selectively drop unknown availability from the denominator. Eligibility is the explicit OR of the day-count gate and the all-known available-time gate; three valid days out of five always pass. Available-time weighting for daily quality is separate from eligibility. No scorable days means no trip number, even if Must Go coverage is known.
+
+Shared assessment states are **available**, **provisional**, and **unavailable**. A publishable assessment is provisional when applicable evidence coverage is below 80%, confidence is below 60%, or (for a trip) any day remains unscored. An individual category/component number is published only with at least 60% coverage and at least 50% confidence. Supported problems remain visible regardless of numeric visibility. Missing information is explained only when it matters, with a specific repair action where possible.
 
 The numeric score is canonical; optional verdict bands are presentation only. Use unrounded intermediate values and round displayed scores half-up to whole numbers. Identical versioned inputs and evidence must produce identical results.
 
@@ -1944,7 +1946,7 @@ The trip score considers daily quality, destination use, variety, seasonal oppor
 
 `Trip = weighted(65% daily quality, 15% destination utilization, 10% variety/coverage, 10% seasonal fit) − fatigue adjustment − weak-day adjustment`
 
-Renormalize unknown/inapplicable components rather than substituting zero. Daily quality is the available-time-weighted mean of scorable **intrinsic** daily scores (including feasibility caps), before incoming fatigue. Use equal day weights when the applicable available-time information is incomplete. Displayed daily scores include incoming fatigue; using intrinsic scores here prevents charging that incoming fatigue twice.
+Renormalize unknown/inapplicable components rather than substituting zero. Daily quality is the available-time- and evaluated-coverage-weighted mean of scorable **intrinsic** daily scores (including feasibility caps), before incoming fatigue. Use equal day weights when the applicable available-time information is incomplete. Displayed daily scores include incoming fatigue; using intrinsic scores here prevents charging that incoming fatigue twice.
 
 For known load ratios, propagate debt chronologically, starting at zero:
 
@@ -1956,20 +1958,17 @@ The weak-day adjustment is **min(10, 0.2 × max(0, dailyMean − lowerQuintileSc
 
 Any verified hard-conflict day caps the trip at **84**. Hard conflicts affecting at least **20% of assessed days**, or an indispensable inter-destination connection, cap it at **69**. Verified conflicts still constrain an otherwise publishable trip assessment when their day lacks enough evidence for its own number. Unknown days do not dilute the conflict proportion. Clamp the final trip score to 0–100.
 
-## 29.4 Explanations and Alternatives
+## 29.4 Traveller Presentation
 
-Explanations answer what works, what may cause problems, what to improve, whether timing/season helps, and why the score changed. Prioritize verified feasibility problems, then travel/comfort, then experience/composition opportunities.
+Use one shared score summary: prominent score, restrained verdict or Provisional label, highest-priority useful action, and assessed-day count for partial trips. Show supported daily categories or the four trip components as compact horizontal bars with aligned labels and numbers. Omit weak/unknown/inapplicable rows.
 
-Preserve progressive disclosure: the collapsed panel shows a compact score/verdict and the single highest-priority action. Expanded details show the five category scores/states, coverage/confidence, strongest aspects, remaining issues, relevant timing context, and evidence dates. Where no result exists for a scope, omit the panel rather than rendering an empty report.
+Show up to three useful insights initially, prioritized by consequence and deduplicated by underlying issue. Additional verified problems remain accessible through disclosure. Avoid generic evidence statements, repeated unknown-category messages, normal coverage/confidence percentages, assessment/cache timestamps, and zero adjustments. Diagnostics remain internal. Specific missing information should link to existing Place/item/reservation editors; scoring never launches acquisition or automatically changes the itinerary.
 
-Return stable reason codes, localization keys, affected item/day references, severity, and suggested actions. Explain changes using changed planning inputs, changed evidence, or a rubric change; do not compare incompatible assessments as if they were the same measurement. Do not persist expired raw provider values in explanation parameters or historical score comparisons.
+General seasonal/destination guidance belongs in the separate, optional Destination context section with source and validity disclosure. AI review shows one consolidated trip assessment; daily scores remain in the itinerary. Preserve localization, semantic controls, keyboard access, reduced motion, and mobile layouts. Plan Score remains advisory in Preview, not a required readiness gate.
 
-No suggestion silently adds, replaces, removes, or reorders anything. Alternatives declare their action:
+Return stable reason codes, localization keys, affected item/day references, severity, and suggested actions. Explain score changes using changed inputs, evidence, or rubric; never compare incompatible assessments as the same measurement. Do not persist expired raw provider values in explanation parameters or historical comparisons.
 
-- **Replace** preserves compatible item metadata (date/time/daypart/duration/notes/priority); incompatible linked data requires review.
-- **Add** names the target day/position or Unscheduled location and creates an item only after confirmation.
-
-Trove may prefill an editable field with an evidence-derived deterministic proposal the traveller requested. Nothing changes until Save, and abandoning the edit discards the proposal. Do not invent a default when evidence cannot support a suggestion.
+No suggestion silently adds, replaces, removes, or reorders anything. Replace preserves compatible item metadata; incompatible linked data requires review. Add identifies its target day/position or Unscheduled location and requires confirmation. Deterministic suggestions may prefill an editable field only when requested and supported by evidence; Save remains the mutation boundary.
 
 ## 29.5 Shared Evidence, Recalculation, and Boundaries
 
@@ -1979,15 +1978,15 @@ The shared lifecycle is: **normal itinerary acquisition → normalization and pe
 
 Rich Place details show rating/review count and applicable hours from one response. Include these fields in existing rich AI responses too, without widening identity/location-only masks. Dedupe concurrent requests and repeated Places across days. Provider failures must not block manual planning.
 
-The evaluator accepts normalized evidence and read-only repositories; it cannot import provider factories or refresh-on-miss services. Evidence carries provenance, original acquisition time, applicable dates/location, attribution, and field-specific expiry. Necessary Google place evidence (ratings, review counts, hours, coordinates and categories) and route measurements use the accepted 30-day bounded cache policy. This application policy is not a claim of blanket provider retention permission. Date-specific hours apply only to their stated dates; weather keeps its existing shorter freshness limits. Expired/unavailable evidence becomes unknown. Expired raw place evidence is removed by scheduled maintenance. Reuse never renews original age. Stored scores must not become raw evidence caches.
+The evaluator accepts normalized evidence and read-only repositories; it cannot import provider factories or refresh-on-miss services. Evidence carries provenance, original acquisition time, applicable dates/location, attribution, and field-specific expiry. Explicit itinerary Place selection requests identity, coordinates, types, ratings, review counts and operating hours together in at most one rich Details acquisition, persisting both dated location and rich evidence snapshots. Sufficient fresh evidence is reused, including AI Text Search results; concurrent requests deduplicate. Autocomplete, decorative surfaces and routing-only lookups retain lightweight paths. Assemble fields independently without letting absent rich identity fields erase valid location evidence. Necessary Google place evidence and route measurements use the accepted 30-day bounded cache policy; richer fields can change the provider billing tier even in one request. This application policy is not a claim of blanket provider retention permission. Date-specific hours apply only to their stated dates; weather keeps its existing shorter freshness limits. Expired/unavailable evidence becomes unknown. Expired raw place evidence is removed by scheduled maintenance. Reuse never renews original age. Stored scores must not become raw evidence caches.
 
-Fingerprint every scoring input: itinerary/order/times/places/reservations/routes, trip preferences, day intent/availability, destinations/dates, evidence revisions, and curated-context/rubric versions. Changes invalidate affected days and all subsequent fatigue state as well as the trip result. Cache assessments until the earliest relevant evidence deadline, with a **24-hour maximum**. Expiry triggers cache-only recomputation, never acquisition; qualify a dated assessment or withhold its number when current evidence is insufficient.
+Fingerprint every scoring input: itinerary/order/times/places/reservations/routes, trip preferences, day intent/availability, destinations/dates, evidence revisions, and curated-context/rubric versions. Changes invalidate affected days and all subsequent fatigue state as well as the trip result. Keep computation and evidence freshness separate: `recomputeAfter` is a cache-only local recheck, bounded by the earliest relevant evidence deadline and a **24-hour maximum**; `evidenceExpiresAt` retains the independently acquired evidence deadline. A computed recheck never shortens or renews the provider cache lifetime. Expiry triggers cache-only recomputation, never acquisition; qualify a dated assessment or withhold its number when current evidence is insufficient.
 
-AI review retains its generation-time assessment without buying new evidence when reopened. Regeneration acquires evidence only within the ordinary generation cap. Apply preserves original timestamps and reuses a score only for equivalent scoring inputs. Do not turn a derived score back into normalized evidence.
+AI review reuses a compatible, current assessment. Reopening a stale/incompatible retained draft recomputes from existing caches without provider acquisition or generation. Apply preserves original assessment age and evidence timestamps; retained draft semantics survive in a nullable canonical itinerary-item block type, while legacy items remain unspecified without structured proof. Regeneration acquires evidence only within the ordinary generation cap. Apply preserves original timestamps and reuses a score only for equivalent scoring inputs. Do not turn a derived score back into normalized evidence.
 
 The shared API/types contract includes versioned category outcomes, trip components, caps, coverage/confidence, reason codes, and original evidence timestamps. Version evaluator and payload changes together; incompatible legacy assessments are ignored. Keep weights and raw evidence out of product responses.
 
-Plan Score remains independent of lifecycle, manual Ready status, Trip Mode/Preview availability, and Experience Rating. Retain the administrative score-disable control independently from provider availability. Do not introduce traffic-aware replanning, disruption intelligence, or Smart Cost Forecasting as dependencies.
+Plan Score remains independent of lifecycle, manual Ready status, Trip Mode/Preview availability, and Experience Rating. Retain the administrative score-disable control independently from provider availability. Re-enabling evaluates existing trips directly; disabled/null client responses recheck on the next eligible mount/focus with deduplication. Do not introduce traffic-aware replanning, disruption intelligence, or Smart Cost Forecasting as dependencies.
 
 ## 29.6 Traveller Intent and Reusable Destination Context
 

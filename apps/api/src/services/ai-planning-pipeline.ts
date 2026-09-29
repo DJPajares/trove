@@ -41,6 +41,7 @@ import {
 import { createAiPlannerProviderContext } from './ai-planner-provider-context.js';
 import {
   buildPlanScoreFromEvaluations,
+  placeHoursDeadlines,
   evaluateScoredDay,
   withholdNonCurrentPlanScore,
   type TripPlanScore,
@@ -660,6 +661,7 @@ function feasibilityItem(
   const window =
     item.schedule.kind === 'day_part' ? dayPartWindow(item.schedule.dayPart.toUpperCase()) : null;
   return {
+    blockType: item.blockType,
     duration: {
       minutes: item.durationMinutes,
       source: item.durationProvenance === 'user_owned' ? 'USER_OWNED' : 'ESTIMATED',
@@ -670,9 +672,10 @@ function feasibilityItem(
       inboundTravelMinutes === null
         ? null
         : { minutes: inboundTravelMinutes, source: 'FRESH_PROVIDER' },
-    openingHours: opening
-      ? { intervals: opening, source: 'FRESH_PROVIDER', status: 'KNOWN' }
-      : { status: 'UNKNOWN' },
+    openingHours:
+      item.blockType === 'activity' && opening
+        ? { intervals: opening, source: 'FRESH_PROVIDER', status: 'KNOWN' }
+        : { status: 'UNKNOWN' },
     start:
       item.schedule.kind === 'exact'
         ? {
@@ -791,7 +794,7 @@ export async function addOpeningEvidence(
   for (const day of draft.days) {
     for (const item of day.items) {
       const context = item.placeRefId ? contexts.get(item.placeRefId) : null;
-      if (!context) continue;
+      if (!context || (item.blockType !== 'activity' && !context.evidence)) continue;
       const key = contextKey(context);
       // Prefer paid-for evidence if two candidate references resolved to one venue.
       if (!requestedContexts.has(key) || context.evidence) requestedContexts.set(key, context);
@@ -828,7 +831,7 @@ export async function addOpeningEvidence(
     const retained: AiPlannerDraftItem[] = [];
     for (const item of day.items) {
       const context = item.placeRefId ? contexts.get(item.placeRefId) : null;
-      if (!context) {
+      if (!context || item.blockType !== 'activity') {
         retained.push(item);
         continue;
       }
@@ -1175,6 +1178,13 @@ function scoreDraft(
   const score = buildPlanScoreFromEvaluations({
     destinationContext,
     evaluatedAt,
+    evidenceDeadlines: placeHoursDeadlines(
+      evidence.hours,
+      draft.days.map((d) => ({
+        date: d.date,
+        items: d.items.map((i) => ({ tripPlaceId: i.placeRefId, blockType: i.blockType })),
+      })),
+    ),
     evidenceTimes: draft.evidence.flatMap((entry) =>
       entry.checkedAt &&
       ((entry.kind === 'opening_hours' && scoredItems.has(entry.subjectId)) ||

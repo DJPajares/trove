@@ -67,6 +67,7 @@ const providerPlaceResolutionSchema = z
       .strict()
       .optional(),
     provider: z.enum(PLACE_PROVIDERS),
+    purpose: z.literal('itinerary').optional(),
     sessionToken: sessionTokenSchema.optional(),
   })
   .strict();
@@ -251,6 +252,7 @@ export function createPlacesControllers(
         parsed.data.label,
         {
           languageCode: parsed.data.languageCode,
+          purpose: parsed.data.purpose,
           sessionToken: parsed.data.sessionToken,
         },
       );

@@ -79,6 +79,7 @@ export function draftPlanScoreInputRevision(
       items: day.items.map((item) => ({
         id: item.id,
         place: item.placeRefId,
+        blockType: item.blockType,
         duration: item.durationMinutes,
         durationProvenance: item.durationProvenance,
         schedule:
@@ -158,6 +159,7 @@ export function appliedDraftScoreInputsMatch(
       const exact = item.schedule.kind === 'exact' ? item.schedule.localTime : null;
       items.push({
         _count: { reservations: 0 },
+        blockType: item.blockType,
         dayPart: item.schedule.kind === 'day_part' ? item.schedule.dayPart.toUpperCase() : null,
         durationMinutes: item.durationMinutes,
         durationProvenance: item.durationProvenance.toUpperCase(),
@@ -268,15 +270,6 @@ export function remapDraftPlanScore(
                     : target,
                 ]),
               )
-            : undefined,
-          destinationContext: planScore.presentation.destinationContext
-            ? {
-                ...planScore.presentation.destinationContext,
-                days: planScore.presentation.destinationContext.days.map((day) => ({
-                  ...day,
-                  dayId: reference(day.dayId),
-                })),
-              }
             : undefined,
         }
       : undefined,

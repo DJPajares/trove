@@ -20,6 +20,7 @@ export type ContextPlace = {
 };
 type DecimalLike = number | { toNumber(): number };
 type ContextSnapshot = {
+  cachedTypes?: string[];
   externalPlaceId?: string;
   cachedAt?: Date | null;
   cachedName?: string | null;

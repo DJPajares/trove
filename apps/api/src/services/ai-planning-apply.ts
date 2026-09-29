@@ -208,6 +208,7 @@ function itemData(input: {
     item.schedule.kind === 'exact' && input.dayDate ? item.schedule.localTime : null;
   try {
     return {
+      blockType: item.blockType,
       customLabel: item.label.trim(),
       dayPart: mapDayPart(item),
       durationMinutes: item.durationMinutes,

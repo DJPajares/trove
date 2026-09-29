@@ -33,7 +33,7 @@ function draftAssessment(draft: AiPlannerDraft, evaluatedAt = new Date(NOW.getTi
   return {
     ...emptyPlanScore(),
     generatedAt: evaluatedAt.toISOString(),
-    expiresAt: new Date(evaluatedAt.getTime() + PLAN_SCORE_CACHE_TTL_MS).toISOString(),
+    recomputeAfter: new Date(evaluatedAt.getTime() + PLAN_SCORE_CACHE_TTL_MS).toISOString(),
     evidenceAsOf: evaluatedAt.toISOString(),
     sourceInputRevision: draftPlanScoreInputRevision(draft, evaluatedAt),
     score: 72,
@@ -740,13 +740,6 @@ test('the draft score is carried onto the trip, keyed and remapped to its rows',
           dayId: draft.days.find((day) => day.items.includes(dayItem))!.date,
         },
       },
-      destinationContext: {
-        catalogVersion: 'test',
-        evaluatedAt: NOW.toISOString(),
-        expiresAt: null,
-        overview: [],
-        days: draft.days.map((day) => ({ dayId: day.date, groups: [] })),
-      },
     },
     days: draft.days.map((day) => ({
       ...toPlanScoreDayPayload(scoreDay({ dayId: day.date, factors: {} })),
@@ -786,17 +779,19 @@ test('the draft score is carried onto the trip, keyed and remapped to its rows',
   const stored = trip.planScore as typeof planScore;
   expect(stored.presentation.adjustments).toEqual(planScore.presentation.adjustments);
   expect(stored.presentation.revisions).toEqual(planScore.presentation.revisions);
-  expect(stored.presentation.destinationContext.days.map((day) => day.dayId)).toEqual(
-    store.state.days.map((day) => day.id),
-  );
   expect(Object.values(stored.presentation.referenceTargets)[0]).toEqual({
     kind: 'item',
     dayId: stored.days.find(
       (day) => day.date === draft.days.find((day) => day.items.includes(dayItem))!.date,
     )!.dayId,
   });
+  expect(store.state.items.map((item: any) => item.blockType)).toEqual(
+    draft.days
+      .flatMap((day) => day.items.map((item) => item.blockType))
+      .concat(draft.unscheduledItems.map((item) => item.blockType)),
+  );
   expect(stored.generatedAt).toBe(planScore.generatedAt);
-  expect(stored.expiresAt).toBe(planScore.expiresAt);
+  expect(stored.recomputeAfter).toBe(planScore.recomputeAfter);
   const dayIds = store.state.days.map((day) => day.id);
   const itemIds = new Set(store.state.items.map((item) => item.id));
 
@@ -870,7 +865,7 @@ test('Apply succeeds but withholds expired, malformed, future, or unbound assess
   const expired = new Date(NOW.getTime() - PLAN_SCORE_CACHE_TTL_MS).toISOString();
   for (const score of [
     { ...base, generatedAt: expired },
-    { ...base, evidenceAsOf: expired, expiresAt: undefined },
+    { ...base, evidenceAsOf: expired, recomputeAfter: expired },
     { ...base, evidenceAsOf: new Date(NOW.getTime() - 30 * PLAN_SCORE_CACHE_TTL_MS).toISOString() },
     { ...base, generatedAt: 'not-a-date' },
     { ...base, evidenceAsOf: new Date(NOW.getTime() + 1).toISOString() },

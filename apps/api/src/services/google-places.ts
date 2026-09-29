@@ -73,8 +73,7 @@ export const GOOGLE_TEXT_SEARCH_EVIDENCE_FIELD_MASK = [
 
 /** Opened rich details and AI checks share one Enterprise response; identity masks stay cheap. */
 export const GOOGLE_PLACE_EVIDENCE_FIELD_MASK = [
-  'attributions',
-  'id',
+  GOOGLE_PLACE_LOCATION_FIELD_MASK,
   'rating',
   'userRatingCount',
   'currentOpeningHours',

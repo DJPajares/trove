@@ -376,6 +376,7 @@ export function ItineraryCreateItemSheet({
         { address: suggestion.description, name: suggestion.name },
         locale,
         providerSessionToken ?? undefined,
+        'itinerary',
       );
       const { tripPlace } = await addTripPlace(tripId, place.id);
       setAddedTripPlaces((current) =>

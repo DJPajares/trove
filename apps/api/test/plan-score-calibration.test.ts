@@ -531,6 +531,26 @@ test('an unknown overnight arrival cannot establish recovery on a later rest day
   expect(result.input.loadRatio).toBeNull();
   expect(result.conflicts).toEqual([]);
 });
+test('a linked transfer with an unknown arrival has one repair explanation', () => {
+  const result = assess({
+    items: [visit('transfer', { blockType: 'transport' })],
+    commitments: [
+      {
+        id: 'reservation',
+        itemId: 'transfer',
+        source: 'USER_OWNED',
+        startMinute: 540,
+        endMinute: 540,
+        longDistance: true,
+        endKnown: false,
+      },
+    ],
+  });
+  expect(result.missingInformation).toMatchObject([
+    { code: 'MISSING_ARRIVAL', action: 'EDIT_TRANSFER', references: ['reservation'] },
+  ]);
+  expect(result.missingInformation).toHaveLength(1);
+});
 test('linked indispensable connections propagate the trip cap and item references', () => {
   const result = assess({
     commitments: [
@@ -596,8 +616,8 @@ test('original evidence age changes the assessment fingerprint and its expiry', 
   const older = build(['2026-08-30T01:00:00Z']),
     fresh = build(['2026-09-28T00:00:00Z']);
   expect(older.fingerprint).not.toBe(fresh.fingerprint);
-  expect(older.expiresAt).toBe('2026-09-29T01:00:00.000Z');
-  expect(fresh.expiresAt).toBe('2026-09-30T00:00:00.000Z');
+  expect(older.recomputeAfter).toBe('2026-09-29T01:00:00.000Z');
+  expect(fresh.recomputeAfter).toBe('2026-09-30T00:00:00.000Z');
 });
 
 test('AI estimates and equivalent stored itinerary inputs produce the same category outcomes', () => {
@@ -696,4 +716,47 @@ test('AI estimates and equivalent stored itinerary inputs produce the same categ
   });
   expect(stored.days[0]?.factors).toEqual(direct.factors);
   expect(stored.days[0]?.score).toBe(direct.score);
+});
+
+test('free time and work retain block semantics and cannot receive venue closure caps', () => {
+  const result = assess({
+    items: [
+      visit('work', {
+        blockType: 'work',
+        duration: at(180),
+        openingHours: { status: 'KNOWN', intervals: [], source: 'CACHED_PROVIDER' },
+      }),
+      visit('free', {
+        blockType: 'free_time',
+        start: at(720),
+        duration: at(180),
+        inboundRequired: false,
+        openingHours: { status: 'KNOWN', intervals: [], source: 'CACHED_PROVIDER' },
+      }),
+    ],
+    places: [],
+    segments: [],
+  });
+  expect(result.conflicts).toEqual([]);
+  expect(result.pace.activeMinutes).toBe(180);
+  expect(scoreDay(result.input).caps).toEqual([]);
+});
+
+test('unlocated visits and unspecified structured transfers explain the exact repair, never fabricated travel', () => {
+  const missing = assess({
+    items: [
+      visit('transfer', { blockType: 'transport', placeId: undefined, duration: at(60) }),
+      visit('unlocated', { start: at(660) }),
+    ],
+    places: [],
+    segments: [
+      { id: 'unknown', scope: 'LOCAL', status: 'UNKNOWN', itemIds: ['transfer', 'unlocated'] },
+    ],
+  });
+  expect(missing.missingInformation).toMatchObject([
+    { code: 'UNLOCATED_STOPS', action: 'LINK_PLACE', references: ['unlocated'] },
+    { code: 'TRANSFER_DETAILS', action: 'EDIT_TRANSFER', references: ['transfer'] },
+  ]);
+  expect(missing.travel.totalMinutes).toBeNull();
+  expect(missing.pace.activeMinutes).toBeNull();
 });

@@ -31,6 +31,7 @@ export type PlaceHoursEvidence = Map<
 >;
 
 export type ItineraryDayItemRecord = {
+  blockType?: string | null;
   dayPart: string | null;
   durationMinutes: number | null;
   durationProvenance?: string;
@@ -130,7 +131,10 @@ export function toDayEvidenceItems(
     const startMinutes = itemStartMinutes(item, day.timeZone);
     const travelMinutes = inboundTravelMinutes(routes, item.id);
     const window = dayPartWindow(item.dayPart);
-    const placeHours = item.tripPlaceId ? hours.get(item.tripPlaceId) : undefined;
+    const placeHours =
+      (!item.blockType || item.blockType === 'activity') && item.tripPlaceId
+        ? hours.get(item.tripPlaceId)
+        : undefined;
     const openingHours: PlanScoreOpeningHours = placeHours
       ? resolveOpeningHoursForDay({
           date: day.date,
@@ -142,6 +146,7 @@ export function toDayEvidenceItems(
       : { status: 'UNKNOWN' };
 
     return {
+      blockType: item.blockType,
       duration:
         item.durationMinutes === null
           ? null

@@ -184,7 +184,7 @@ function cacheKey(request: PlaceTextSearchRequest, candidate: AiPlaceGroundingCa
   return createHash('sha256')
     .update(
       JSON.stringify([
-        'google:grounding:v1',
+        'google:grounding:v2',
         memoKey(request),
         normalizeIdentityText(candidate.name),
         candidate.localityHint?.trim() ? normalizeIdentityText(candidate.localityHint) : null,
@@ -196,16 +196,26 @@ function cacheKey(request: PlaceTextSearchRequest, candidate: AiPlaceGroundingCa
 
 type GroundingIdentity = Pick<
   ProviderPlaceIdentity,
-  'externalPlaceId' | 'formattedAddress' | 'location' | 'name'
+  'externalPlaceId' | 'formattedAddress' | 'location' | 'name' | 'rawTypes'
 >;
 
-function eligibleMatches<T extends Pick<ProviderPlaceIdentity, 'name' | 'formattedAddress'>>(
-  identities: T[],
-  candidate: AiPlaceGroundingCandidate,
-) {
+function eligibleMatches<
+  T extends Pick<
+    ProviderPlaceIdentity,
+    'name' | 'formattedAddress' | 'externalPlaceId' | 'rawTypes'
+  >,
+>(identities: T[], candidate: AiPlaceGroundingCandidate) {
   const expectedName = compactText(candidate.name);
-  const located = identities.filter((identity) =>
-    localityMatches(identity, candidate.localityHint),
+  const located = [
+    ...new Map(identities.map((identity) => [identity.externalPlaceId, identity])).values(),
+  ].filter(
+    (identity) =>
+      localityMatches(identity, candidate.localityHint) &&
+      !(
+        identity.rawTypes.some((type) =>
+          ['route', 'street_address', 'intersection'].includes(type),
+        ) && compactText(identity.name) !== expectedName
+      ),
   );
   const exact = located.filter((identity) => compactText(identity.name) === expectedName);
   if (candidate.requireExactName) return exact;
@@ -360,6 +370,7 @@ export class AiPlaceGrounder {
         formattedAddress: reference.cachedFormattedAddress ?? null,
         location,
         name: reference.cachedName,
+        rawTypes: reference.cachedTypes ?? [],
       };
       if (eligibleMatches([identity], candidate).length !== 1)
         return { reason: 'grounding_match_changed' };

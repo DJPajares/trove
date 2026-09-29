@@ -207,3 +207,75 @@ test('fingerprint changes for timing inputs, context or fatigue-relevant order',
   );
   expect(planScoreFingerprint(input)).toBe(planScoreFingerprint(structuredClone(input)));
 });
+
+test('thin supported signals contribute in proportion to coverage, without treating missing data as zero', () => {
+  const aggregate = combineSignals([
+    { weight: 50, result: evaluated(40, 100) },
+    { weight: 50, result: evaluated(100, 10) },
+  ]);
+  expect(aggregate.state).toBe('EVALUATED');
+  if (aggregate.state !== 'EVALUATED') return;
+  expect(aggregate.score).toBeCloseTo((40 * 50 + 100 * 5) / 55);
+  expect(aggregate.coverage).toBe(55);
+  expect(
+    combineSignals([
+      { weight: 50, result: evaluated(40) },
+      { weight: 50, result: UNKNOWN },
+    ]),
+  ).toMatchObject({ score: 40, coverage: 50 });
+});
+
+test('category numbers require unrounded support and reliability thresholds', () => {
+  const input = day();
+  input.factors.EXPERIENCE_QUALITY = evaluated(100, 59.99);
+  input.factors.PLAN_COMPOSITION = {
+    ...evaluated(100),
+    confidence: 49.99,
+  } as PlanScoreFactorResult;
+  const result = scoreDay(input);
+  expect(result.factors.EXPERIENCE_QUALITY.state).toBe('LIMITED');
+  expect(result.factors.PLAN_COMPOSITION.state).toBe('LIMITED');
+  expect(result.factors.EXPERIENCE_QUALITY).not.toHaveProperty('score');
+  expect(result.score).toBe(100);
+});
+
+test('three of five days pass even when unscorable days have most available time', () => {
+  const days = [
+    day('a', 80),
+    day('b', 80),
+    day('c', 80),
+    { ...day('d'), factors: {} },
+    { ...day('e'), factors: {} },
+  ].map((d, i) => ({ ...d, availableMinutes: i < 3 ? 60 : 600 }));
+  const result = scoreTrip({ days });
+  expect(result.score).toBe(80);
+  expect(result.assessmentStatus).toBe('provisional');
+  expect(result.assessedDayCount).toBe(3);
+  expect(result.applicableDayCount).toBe(5);
+  expect(result.completeness).toBe(13);
+});
+
+test('the fully known time gate can pass fewer days without selectively dropping unknown availability', () => {
+  const days = [
+    day('a', 80),
+    day('b', 80),
+    { ...day('c'), factors: {} },
+    { ...day('d'), factors: {} },
+    { ...day('e'), factors: {} },
+  ].map((d, i) => ({ ...d, availableMinutes: i < 2 ? 600 : 60 }));
+  expect(scoreTrip({ days }).score).toBe(80);
+  days[4]!.availableMinutes = null as never;
+  expect(scoreTrip({ days }).score).toBeNull();
+});
+
+test('weak optional trip components cannot overwhelm better-supported daily quality', () => {
+  const result = scoreTrip({
+    days: [day('a', 60)],
+    components: {
+      DESTINATION_UTILIZATION: evaluated(100, 10),
+      VARIETY_COVERAGE: evaluated(100, 10),
+    },
+  });
+  expect(result.score).toBe(Math.round((65 * 60 + 1.5 * 100 + 1 * 100) / 67.5));
+  expect(result.components.DESTINATION_UTILIZATION.state).toBe('LIMITED');
+});

@@ -46,6 +46,7 @@ export type ItineraryTripPlace = {
 };
 
 export type ItineraryItem = {
+  blockType?: import('@trove/types').ItineraryBlockType | null;
   createdAt: string;
   customLabel: string | null;
   customLocation: { label: string; timeZone: string | null } | null;
@@ -295,6 +296,7 @@ export function deviceTimeZone() {
 }
 
 export type ItineraryItemInput = {
+  blockType?: import('@trove/types').ItineraryBlockType | null;
   customLabel?: string | null;
   customLocation?: { label: string; timeZone?: string | null } | null;
   durationMinutes?: number | null;

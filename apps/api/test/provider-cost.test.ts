@@ -777,7 +777,7 @@ test('rich evidence is stored separately with its original acquisition date', as
   };
   expect(stored.cachedEvidence.rating).toBe(4.5);
   expect(stored.cachedEvidenceAt).toBeInstanceOf(Date);
-  expect(stored.cachedAt).toBeNull();
+  expect(stored.cachedAt).toEqual(stored.cachedEvidenceAt);
 });
 
 test('seeded search evidence keeps its original age and language/region isolation', async () => {
@@ -1352,16 +1352,11 @@ test('Plan Score and the day routes no longer take turns re-billing the same pla
   expect(calls()).toBe(1);
 });
 
-test('an evidence request never writes the location snapshot', async () => {
+test('thin evidence cannot overwrite a missing location snapshot', async () => {
   const now = new Date('2026-08-18T00:00:00.000Z');
   seedProviderRef('ChIJmuseum');
 
-  // Rating and opening hours are mutable provider data and may not be stored at
-  // any TTL (PRD 11.4). Two things keep them out of the database, and this pins
-  // both: the evidence field mask asks for no location, and the snapshot write
-  // refuses a place that has none. The provider here answers the way that mask
-  // actually makes Google answer.
-  expect(GOOGLE_PLACE_EVIDENCE_FIELD_MASK.includes('location')).toBe(false);
+  expect(GOOGLE_PLACE_EVIDENCE_FIELD_MASK.includes('location')).toBe(true);
 
   const provider: PlacesProvider = {
     name: 'google',
@@ -1947,7 +1942,7 @@ test('six venues use one Places call each, with persisted identity and transient
       expect(day.factors.FEASIBILITY.state).toBe('EVALUATED');
       expect(day.factors.ROUTE_EFFICIENCY.state).toBe('EVALUATED');
       // The rating arrives free on the same response the hours came from.
-      expect(day.factors.EXPERIENCE_QUALITY.state).toBe('EVALUATED');
+      expect(day.factors.EXPERIENCE_QUALITY.state).toBe('LIMITED');
     }
     // Derived from the plan, never a copy of the mutable evidence behind it.
     expect(JSON.stringify(planScore)).not.toContain('openingPeriods');
@@ -2064,4 +2059,33 @@ test('concurrent route acquisition across instances buys one leg', async () => {
   ]);
   expect(calls()).toBe(1);
   expect(a).toEqual(b);
+});
+
+test('explicit itinerary resolution acquires one rich response and persists both caches for concurrent selections', async () => {
+  const now = new Date('2026-09-29T01:00:00Z');
+  seedProviderRef('ChIJmuseum');
+  const { provider, calls } = countingPlacesProvider();
+  const request = {
+    externalPlaceId: 'ChIJmuseum',
+    detail: 'evidence' as const,
+    purpose: 'itinerary' as const,
+  };
+  const [a, b] = await Promise.all([
+    new CachedPlacesService(provider, () => now).getDetails(request),
+    new CachedPlacesService(provider, () => now).getDetails(request),
+  ]);
+  expect(calls()).toBe(1);
+  expect(a).toEqual(b);
+  const row = providerRefs.get('ChIJmuseum') as any;
+  expect(row.cachedAt).toEqual(now);
+  expect(row.cachedEvidenceAt).toEqual(now);
+  expect(row.cachedLatitude.toNumber()).toBe(1.2966);
+  resetCachedPlacesMemo();
+  await new CachedPlacesService(provider, () => new Date(now.getTime() + DAY_MS)).getDetails(
+    request,
+  );
+  expect(calls()).toBe(1);
+  expect(row.cachedAt).toEqual(now);
+  expect(row.cachedEvidenceAt).toEqual(now);
+  expect(GOOGLE_PLACE_EVIDENCE_FIELD_MASK).toContain(GOOGLE_PLACE_LOCATION_FIELD_MASK);
 });

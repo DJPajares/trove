@@ -76,7 +76,7 @@ export async function rememberPlaceEvidence(
   const key = memoKey({ ...request, detail: 'evidence' });
   const expiresAt = fetchedAt + EVIDENCE_MEMO_TTL_MS;
   // Reusing or re-seeding an older answer must never slide its lifetime.
-  if ((evidenceMemo.get(key)?.expiresAt ?? -Infinity) >= expiresAt) return;
+  if ((evidenceMemo.get(key)?.expiresAt ?? -Infinity) > expiresAt) return;
   if (evidenceMemo.size >= EVIDENCE_MEMO_LIMIT && !evidenceMemo.has(key)) {
     const oldest = evidenceMemo.keys().next();
     if (!oldest.done) evidenceMemo.delete(oldest.value);
@@ -143,11 +143,17 @@ export class CachedPlacesService extends PlacesService {
     } else {
       const stored = await readCachedPlaceEvidence(request, this.now());
       const memoized = stored ? { kind: 'hit' as const, result: stored } : this.readMemo(request);
-      if (memoized.kind === 'hit') {
+      if (
+        memoized.kind === 'hit' &&
+        (request.purpose !== 'itinerary' ||
+          (memoized.result.status === 'ok' &&
+            memoized.result.place.name &&
+            memoized.result.place.location))
+      ) {
         this.recordHit(request, 'place-evidence');
         return memoized.result;
       }
-      cacheMissReason = memoized.reason;
+      cacheMissReason = memoized.kind === 'hit' ? 'incomplete_snapshot' : memoized.reason;
     }
 
     return singleFlight(`place:${memoKey(request)}`, async () => {
@@ -162,6 +168,12 @@ export class CachedPlacesService extends PlacesService {
           await this.writeSnapshot(result.place, request.externalPlaceId, request.languageCode);
         } else {
           await rememberPlaceEvidence(request, result);
+          await this.writeSnapshot(
+            result.place,
+            request.externalPlaceId,
+            request.languageCode,
+            new Date(result.freshness.fetchedAt),
+          );
         }
       } else if (request.detail === 'location' && result.status === 'empty') {
         await this.writeFailure(request.externalPlaceId, 'NOT_FOUND');
@@ -273,6 +285,7 @@ export class CachedPlacesService extends PlacesService {
     place: ProviderPlaceDetails,
     requestedExternalPlaceId: string,
     languageCode: string | undefined,
+    fetchedAt = this.now(),
   ) {
     if (!place.location) return;
 
@@ -284,9 +297,13 @@ export class CachedPlacesService extends PlacesService {
         // different id in the response. The snapshot belongs to the reference
         // Trove queried; matching the response id silently discarded it and
         // caused the original reference to be billed again on every read.
-        where: { externalPlaceId: requestedExternalPlaceId, provider: 'GOOGLE' },
+        where: {
+          externalPlaceId: requestedExternalPlaceId,
+          provider: 'GOOGLE',
+          OR: [{ cachedAt: null }, { cachedAt: { lte: fetchedAt } }],
+        },
         data: {
-          cachedAt: this.now(),
+          cachedAt: fetchedAt,
           cachedFormattedAddress: place.formattedAddress,
           cachedGoogleMapsUri: place.googleMapsUri,
           cachedLanguageCode: normalizePlaceLanguageCode(languageCode),

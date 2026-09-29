@@ -102,21 +102,16 @@ export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplan
   for (const id of DAY_FACTOR_IDS) {
     const outcome = input.day.factors[id];
     if (outcome.state === 'NOT_APPLICABLE') continue;
-    if (outcome.state === 'UNKNOWN') {
-      groups.uncertainty.push(reason(id, `${id}_UNKNOWN`, `${roots[id]}.unknown`));
-      continue;
-    }
-    if (outcome.coverage < 100)
-      groups.uncertainty.push(
-        reason(id, `${id}_PARTIAL`, 'assessment.partial', {
-          values: { coverage: outcome.coverage },
-        }),
-      );
+    if (outcome.state === 'UNKNOWN') continue;
     if (id === 'FEASIBILITY') {
-      if (!input.conflicts.length)
+      if (!input.conflicts.length && outcome.state === 'EVALUATED')
         groups.whatWorks.push(reason(id, 'ASSESSED_TIMING_WORKS', 'feasibility.noConflicts'));
     } else if (id === 'ROUTE_EFFICIENCY') {
-      if (outcome.score >= 85 && input.travel.totalMinutes !== null)
+      if (
+        outcome.state === 'EVALUATED' &&
+        outcome.score >= 85 &&
+        input.travel.totalMinutes !== null
+      )
         groups.whatWorks.push(
           reason(id, 'LOCAL_TRAVEL_LIGHT', 'routeEfficiency.light', {
             values: { minutes: Math.round(input.travel.totalMinutes) },
@@ -165,9 +160,13 @@ export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplan
             references: [input.day.dayId],
           }),
         );
-      if (outcome.score >= 85)
+      if (outcome.state === 'EVALUATED' && outcome.score >= 85)
         groups.whatWorks.push(reason(id, 'COMFORTABLE_LOAD', 'pace.comfortable'));
-      else if (outcome.score <= 70 && input.pace.activeMinutes !== null)
+      else if (
+        outcome.state === 'EVALUATED' &&
+        outcome.score <= 70 &&
+        input.pace.activeMinutes !== null
+      )
         groups.worthImproving.push(
           reason(id, 'HIGH_ACTIVE_LOAD', 'pace.load', {
             action: 'REDUCE_LOAD',
@@ -176,7 +175,7 @@ export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplan
             values: { minutes: Math.round(input.pace.activeMinutes) },
           }),
         );
-    } else if (outcome.score >= 85)
+    } else if (id !== 'EXPERIENCE_QUALITY' && outcome.state === 'EVALUATED' && outcome.score >= 85)
       groups.whatWorks.push(reason(id, `${id}_SUPPORTED`, `${roots[id]}.supported`));
   }
   const advisoryMessages: Record<DayAdvisory['code'], string> = {
@@ -191,6 +190,7 @@ export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplan
   };
   const seen = new Set<string>();
   for (const advisory of input.advisories ?? []) {
+    if (['SEASONAL_PATTERN', 'PUBLIC_HOLIDAY', 'PARTIAL_ACCESS'].includes(advisory.code)) continue;
     if (seen.has(advisory.code)) continue;
     seen.add(advisory.code);
     const positive = advisory.code === 'NATURAL_DOWNTIME';
@@ -248,9 +248,7 @@ export function explainTrip(input: PlanScoreTripExplanationInput): PlanScoreExpl
     );
   for (const [id, outcome] of Object.entries(input.components)) {
     const factor = id as PlanScoreExplanationFactor;
-    if (outcome.state === 'UNKNOWN')
-      groups.uncertainty.push(reason(factor, `${id}_UNKNOWN`, `${roots[factor]}.unknown`));
-    else if (outcome.state === 'EVALUATED' && outcome.score >= 85)
+    if (outcome.state === 'EVALUATED' && outcome.score >= 85)
       groups.whatWorks.push(reason(factor, `${id}_SUPPORTED`, `${roots[factor]}.supported`));
   }
   return groups;

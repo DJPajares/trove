@@ -30,7 +30,7 @@ const input = {
 };
 test('every explanation has stable code, severity, references and a localization key', () => {
   const result = explainDay(input);
-  expect(result.whatWorks).toHaveLength(5);
+  expect(result.whatWorks).toHaveLength(4);
   for (const entry of result.whatWorks)
     expect(entry).toMatchObject({
       code: expect.any(String),
@@ -73,17 +73,13 @@ test('verified conflicts precede qualified risks and remain visible without a nu
   });
   expect(result.worthImproving[1]?.values).toEqual({ severity: 'ESTIMATED' });
 });
-test('sparse categories disclose coverage instead of overstating their strengths', () => {
+test('sparse categories omit numbers and diagnostic filler without overstating strengths', () => {
   const result = explainDay({
     ...input,
     day: scoreDay({ dayId: 'sparse', factors: { EXPERIENCE_QUALITY: { ...good, coverage: 15 } } }),
   });
-  expect(result.uncertainty).toContainEqual(
-    expect.objectContaining({ code: 'EXPERIENCE_QUALITY_PARTIAL', values: { coverage: 15 } }),
-  );
-  expect(result.uncertainty).toContainEqual(
-    expect.objectContaining({ code: 'FEASIBILITY_UNKNOWN' }),
-  );
+  expect(result.uncertainty).toEqual([]);
+  expect(result.whatWorks).toEqual([]);
 });
 test('patterns and holidays are informational; natural downtime is positive without meal stops', () => {
   const result = explainDay({
@@ -94,7 +90,7 @@ test('patterns and holidays are informational; natural downtime is positive with
       { code: 'NATURAL_DOWNTIME', references: ['a', 'b'] },
     ],
   });
-  expect(result.uncertainty.map((r) => r.severity)).toEqual(['INFO', 'INFO']);
+  expect(result.uncertainty).toEqual([]);
   expect(result.worthImproving).toEqual([]);
   expect(result.whatWorks.at(-1)?.code).toBe('NATURAL_DOWNTIME');
 });

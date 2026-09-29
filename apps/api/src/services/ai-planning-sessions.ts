@@ -1,3 +1,4 @@
+import { singleFlight } from './single-flight.js';
 import { arePlanScoreProvidersDisabled } from '../environment.js';
 import { getPrismaClient, Prisma } from '@trove/db';
 import { AI_PLANNER_SCHEMA_VERSION } from '@trove/types';
@@ -20,6 +21,9 @@ import {
   suggestedDraftCountries,
   suggestedDraftCountriesFromStoredPlaces,
 } from './ai-planning-countries.js';
+import { readDraftPlanScore } from './ai-draft-score-reader.js';
+import { originalPlanScoreTime } from './plan-score-freshness.js';
+import { draftPlanScoreInputRevision } from './ai-planning-plan-score.js';
 import {
   parseStoredPlanScore,
   withholdNonCurrentPlanScore,
@@ -265,7 +269,33 @@ async function serializeAiPlanningSessionWithCountries(
   prisma: PlanningPrisma,
   now: Date,
 ) {
-  const serialized = serializeAiPlanningSession(session, now);
+  let current = session;
+  if (
+    session.status === 'REVIEWING' &&
+    !session.countryContextChanged &&
+    !arePlanScoreProvidersDisabled()
+  ) {
+    const retained = validateAiPlannerDraft(session.draft);
+    const cached = parseStoredPlanScore(session.planScore);
+    if (
+      retained.success &&
+      (!cached ||
+        !originalPlanScoreTime(cached, now) ||
+        cached.sourceInputRevision !== draftPlanScoreInputRevision(retained.data, now))
+    ) {
+      const score = await singleFlight(
+        `draft-score:${session.id}:${session.draftRevision}:${draftPlanScoreInputRevision(retained.data, now)}`,
+        () => readDraftPlanScore(retained.data, now),
+      );
+      // Do not overwrite a concurrent regeneration/edit. No generation request is dispatched here.
+      await prisma.aiPlanningSession.updateMany({
+        where: { id: session.id, draftRevision: session.draftRevision, status: 'REVIEWING' },
+        data: { planScore: score as unknown as Prisma.InputJsonValue },
+      });
+      current = { ...session, planScore: score as unknown as Prisma.JsonValue };
+    }
+  }
+  const serialized = serializeAiPlanningSession(current, now);
   if (!serialized.draft || !['REVIEWING', 'FAILED'].includes(session.status)) {
     return serialized;
   }

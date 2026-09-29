@@ -129,6 +129,7 @@ export function resolvedPlaceTimeZone(place: TimeZonePlace, now: Date = new Date
 
 export type PlaceHydrationOptions = {
   languageCode?: string;
+  purpose?: 'itinerary';
   /** Test seam. Production omits it and gets the configured service. */
   now?: Date;
   /**
@@ -377,6 +378,26 @@ export async function hydratePlaceSnapshot(
   externalPlaceId: string,
   options: PlaceHydrationOptions = {},
 ): Promise<PlaceSnapshotSource | null> {
+  if (options.purpose === 'itinerary') {
+    const service =
+      options.placesService === undefined
+        ? createPlacesService({ source: options.source ?? 'place-resolution' })
+        : options.placesService;
+    const result = await service?.getDetails({
+      externalPlaceId,
+      detail: 'evidence',
+      purpose: 'itinerary',
+      languageCode: options.languageCode,
+      sessionToken: options.sessionToken,
+    });
+    return result?.status === 'ok' && result.place.location
+      ? toSnapshotSource(
+          result.place,
+          normalizePlaceLanguageCode(options.languageCode),
+          new Date(result.freshness.fetchedAt),
+        )
+      : null;
+  }
   const resolved = await hydratePlaceSnapshots([externalPlaceId], options);
   return resolved.get(externalPlaceId) ?? null;
 }

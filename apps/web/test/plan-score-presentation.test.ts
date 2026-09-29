@@ -21,11 +21,16 @@ function assessment(overrides: Partial<TripPlanScore> = {}): TripPlanScore {
   const evaluated = { state: 'EVALUATED', score: 80, coverage: 70, confidence: 90 } as const;
   const explanations = { whatWorks: [], worthImproving: [], uncertainty: [] };
   return {
-    schemaVersion: 5,
-    rubricVersion: 5,
+    schemaVersion: 6,
+    rubricVersion: 6,
+    assessmentStatus: 'provisional',
+    assessedDayCount: 1,
+    applicableDayCount: 1,
+    evidenceCoverage: 70,
+    evidenceExpiresAt: '2026-10-20T01:00:00Z',
     fingerprint: 'original',
     generatedAt: '2026-09-29T01:00:00Z',
-    expiresAt: '2026-09-29T03:00:00Z',
+    recomputeAfter: '2026-09-29T03:00:00Z',
     completeness: 75,
     confidence: 90,
     score: 80,
@@ -40,6 +45,7 @@ function assessment(overrides: Partial<TripPlanScore> = {}): TripPlanScore {
     },
     days: [
       {
+        assessmentStatus: 'provisional',
         dayId: 'day-1',
         date: '2026-10-01',
         completeness: 75,
@@ -100,10 +106,10 @@ test('problems prioritize hard conflicts, feasibility, travel and comfort ahead 
 test('freshness uses the original instant, earliest expiry and 24-hour maximum', () => {
   const score = assessment();
   expect(currentAssessment(score, NOW)).toBe(true);
-  expect(currentAssessment(score, Date.parse(score.expiresAt!))).toBe(false);
+  expect(currentAssessment(score, Date.parse(score.recomputeAfter!))).toBe(false);
   expect(currentAssessment(score, Date.parse(score.generatedAt) - 1)).toBe(false);
   expect(currentAssessment({ ...score, rubricVersion: 4 } as never, NOW)).toBe(false);
-  expect(assessmentDeadline({ ...score, expiresAt: '2026-10-02T00:00:00Z' })).toBe(
+  expect(assessmentDeadline({ ...score, recomputeAfter: '2026-10-02T00:00:00Z' })).toBe(
     Date.parse(score.generatedAt) + 86_400_000,
   );
 });
@@ -123,7 +129,7 @@ test('numeric changes require compatible, current scores and identify changed pl
     compareScores(first, scoreSnapshot(changed, NOW), 'trip', first.deadline)?.delta,
   ).toBeNull();
   expect(
-    compareScores(first, { ...scoreSnapshot(changed, NOW), version: '6:6' }, 'trip', NOW),
+    compareScores(first, { ...scoreSnapshot(changed, NOW), version: '7:7' }, 'trip', NOW),
   ).toEqual({ source: 'rubric', delta: null, state: 'rubric' });
 });
 test('coverage and withheld transitions never fabricate score deltas; unaffected days stay quiet', () => {
@@ -242,10 +248,18 @@ test('the client freshness guard preserves field-specific cache age and rejects 
   expect(currentAssessment(assessment({ evidenceAsOf: null }), NOW)).toBe(false);
   expect(currentAssessment(assessment({ evidenceAsOf: '2026-09-30T00:00:00Z' }), NOW)).toBe(false);
   expect(currentAssessment(assessment({ evidenceAsOf: '2026-09-20T00:00:00Z' }), NOW)).toBe(true);
-  expect(currentAssessment(assessment({ evidenceAsOf: '2026-08-20T00:00:00Z' }), NOW)).toBe(false);
   expect(
     currentAssessment(
-      assessment({ expiresAt: undefined, evidenceAsOf: '2026-09-20T00:00:00Z' }),
+      assessment({
+        evidenceAsOf: '2026-08-20T00:00:00Z',
+        evidenceExpiresAt: '2026-09-19T00:00:00Z',
+      }),
+      NOW,
+    ),
+  ).toBe(false);
+  expect(
+    currentAssessment(
+      assessment({ recomputeAfter: '2026-09-29T01:00:00Z', evidenceAsOf: '2026-09-20T00:00:00Z' }),
       NOW,
     ),
   ).toBe(false);
@@ -336,4 +350,50 @@ test('AI regeneration comparisons use the same sanitized, session-only baseline'
   expect(assessmentChange(client, 'draft:session-1', 'trip')).not.toBeNull();
   client.clear();
   expect(assessmentChange(client, 'draft:session-1', 'trip')).toBeNull();
+});
+
+test('traveler insights omit diagnostics and general guidance and deduplicate the same issue', async () => {
+  const { travelerInsights } = await import('../lib/plan-score/presentation');
+  const conflict = {
+    ...reason('FEASIBILITY', 'HARD', 'OVERLAPPING_COMMITMENTS'),
+    references: ['a', 'b'],
+  };
+  const insights = travelerInsights({
+    whatWorks: [],
+    worthImproving: [conflict, { ...conflict, references: ['b', 'a'] }],
+    uncertainty: [
+      reason('PACE_COMFORT', 'INFO', 'PACE_COMFORT_UNKNOWN'),
+      reason('SEASONAL_FIT', 'INFO', 'SEASONAL_PATTERN'),
+    ],
+  });
+  expect(insights).toEqual([conflict]);
+});
+
+test('a disabled response rechecks on remount and concurrent score surfaces share the request', async () => {
+  const { QueryObserver } = await import('@tanstack/react-query');
+  const { vi } = await import('vitest');
+  const { planScoreReadPolicy } = await import('../lib/plan-score/lifecycle');
+  const client = createQueryClient();
+  let enabled = false;
+  const reads = vi.fn(async () => (enabled ? assessment() : null));
+  const options = {
+    queryKey: ['plan-score', 'existing-trip'],
+    queryFn: reads,
+    ...planScoreReadPolicy,
+  };
+  const first = new QueryObserver(client, options);
+  const stop = first.subscribe(() => undefined);
+  await vi.waitFor(() => expect(first.getCurrentResult().data).toBeNull());
+  stop();
+  enabled = true;
+  const a = new QueryObserver(client, options),
+    b = new QueryObserver(client, options);
+  const stopA = a.subscribe(() => undefined),
+    stopB = b.subscribe(() => undefined);
+  await vi.waitFor(() => expect(a.getCurrentResult().data?.score).toBe(assessment().score));
+  expect(reads).toHaveBeenCalledTimes(2);
+  expect(b.getCurrentResult().data).toBe(a.getCurrentResult().data);
+  stopA();
+  stopB();
+  client.clear();
 });

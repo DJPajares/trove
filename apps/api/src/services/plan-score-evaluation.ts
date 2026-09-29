@@ -3,6 +3,7 @@ import {
   readTripPlanningPreferences,
   readDayPlanningContext,
   type DestinationContextGroup,
+  type PlanScoreExplanation,
 } from '@trove/types';
 import {
   evaluateFeasibility,
@@ -65,6 +66,12 @@ const OUTDOOR = new Set([
   'beach',
 ]);
 export type ScoringPlace = PlanScorePlace & {
+  fieldEvidence?: Partial<
+    Record<
+      'identity' | 'coordinates' | 'types' | 'name' | 'rating' | 'hours',
+      { acquiredAt: string | null; expiresAt: string | null }
+    >
+  >;
   types?: readonly string[];
   source?: PlanScoreEvidence['source'];
   coordinates?: { latitude: number; longitude: number } | null;
@@ -209,6 +216,8 @@ export function evaluateScoredDay(input: ScoredDayInput) {
   const noVisits = input.places.length === 0 && (rest || transit);
   const items = input.items.map((item) => {
     const place = input.places.find((p) => p.tripPlaceId === item.placeId);
+    if (item.blockType && item.blockType !== 'activity')
+      return { ...item, openingHours: { status: 'UNKNOWN' as const } };
     const closure = (input.context ?? [])
       .flatMap((g) => g.records)
       .find(
@@ -282,7 +291,8 @@ export function evaluateScoredDay(input: ScoredDayInput) {
       complete = false;
       continue;
     }
-    load += item.duration.minutes * (item.longDistance ? 0.5 : 1);
+    load +=
+      item.duration.minutes * (item.blockType === 'free_time' ? 0 : item.longDistance ? 0.5 : 1);
     // Unknown activity intensity is a neutral estimate, never an exhaustion claim.
     evidence.push(
       { ref: `duration:${item.id}`, source: item.duration.source },
@@ -324,7 +334,19 @@ export function evaluateScoredDay(input: ScoredDayInput) {
           evidence,
         }
       : UNKNOWN;
-  const knownPlaces = [...new Map(input.places.map((p) => [p.tripPlaceId, p])).values()];
+  const knownPlaces = [
+    ...new Map(
+      input.places
+        .filter((place) => {
+          const representedItems = input.items.filter((item) => item.placeId === place.tripPlaceId);
+          return (
+            !representedItems.length ||
+            representedItems.some((item) => !item.blockType || item.blockType === 'activity')
+          );
+        })
+        .map((p) => [p.tripPlaceId, p]),
+    ).values(),
+  ];
   const fit = preferences.interests.length
     ? supported(
         knownPlaces.map((place) => ({
@@ -551,7 +573,62 @@ export function evaluateScoredDay(input: ScoredDayInput) {
       PLAN_COMPOSITION: composition,
     },
   };
+  const missingTransfers = input.items.filter(
+    (item) =>
+      item.blockType === 'transport' && !input.commitments.some((c) => c.itemId === item.id),
+  );
+  const missingLocations = input.items.filter(
+    (item) =>
+      (!item.blockType || item.blockType === 'activity') &&
+      !input.places.find((place) => place.tripPlaceId === item.placeId)?.coordinates &&
+      input.segments.some(
+        (segment) =>
+          segment.scope === 'LOCAL' &&
+          segment.status === 'UNKNOWN' &&
+          segment.itemIds?.includes(item.id),
+      ),
+  );
+  const missingInformation: PlanScoreExplanation[] = [
+    ...(missingLocations.length
+      ? [
+          {
+            action: 'LINK_PLACE' as const,
+            code: 'UNLOCATED_STOPS',
+            factor: 'ROUTE_EFFICIENCY' as const,
+            messageKey: 'missing.locations',
+            severity: 'INFO' as const,
+            references: missingLocations.map((item) => item.id),
+            values: { count: missingLocations.length },
+          },
+        ]
+      : []),
+    ...(missingTransfers.length
+      ? [
+          {
+            action: 'EDIT_TRANSFER' as const,
+            code: 'TRANSFER_DETAILS',
+            factor: 'FEASIBILITY' as const,
+            messageKey: 'missing.transfer',
+            severity: 'INFO' as const,
+            references: missingTransfers.map((item) => item.id),
+            values: {},
+          },
+        ]
+      : []),
+    ...input.commitments
+      .filter((c) => c.longDistance && c.endKnown === false)
+      .map((c) => ({
+        action: 'EDIT_TRANSFER' as const,
+        code: 'MISSING_ARRIVAL',
+        factor: 'FEASIBILITY' as const,
+        messageKey: 'missing.arrival',
+        severity: 'INFO' as const,
+        references: [c.id],
+        values: {},
+      })),
+  ];
   return {
+    missingInformation,
     requestedInterests: preferences.interests,
     interestEvidence: knownPlaces.flatMap((p) =>
       interestsForPlaceTypes(p.types ?? [])

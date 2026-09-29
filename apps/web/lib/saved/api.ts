@@ -240,6 +240,7 @@ export function resolveProviderPlace(
   label?: { address?: string | null; name?: string | null },
   languageCode?: string,
   sessionToken?: string,
+  purpose?: 'itinerary',
 ) {
   return savedRequest<{ place: CanonicalPlace }>('/places/resolve', {
     body: JSON.stringify({
@@ -247,6 +248,7 @@ export function resolveProviderPlace(
       label,
       languageCode,
       provider: 'google',
+      purpose,
       sessionToken,
     }),
     method: 'POST',

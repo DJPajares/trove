@@ -2344,8 +2344,8 @@
     "dayTitle": "Plan Score for this day",
     "outOf": "out of 100",
     "notEnoughInformation": {
-      "day": "There is not enough here yet to say how this day looks.",
-      "trip": "There is not enough here yet to say how this trip looks."
+      "day": "Add timing and locations to assess this day.",
+      "trip": "Add timing and locations to assess more days."
     },
     "verdict": {
       "day": {
@@ -2399,7 +2399,9 @@
       "REVIEW_ALTERNATIVE": "Review the alternative",
       "SCHEDULE_MUST_GO": "Schedule it",
       "REDUCE_LOAD": "Review the load",
-      "REVIEW_TIMING": "Review timing"
+      "REVIEW_TIMING": "Review timing",
+      "LINK_PLACE": "Link a place",
+      "EDIT_TRANSFER": "Review transfer details"
     },
     "feasibility": {
       "noConflicts": "No conflicts were found in the timings we could assess.",
@@ -2516,7 +2518,7 @@
       "updating": "Updating the assessment for the latest plan.",
       "loading": "Assessing the plan…",
       "error": "Plan Score is currently unavailable.",
-      "expiredStored": "This assessment has expired. The draft remains available for review."
+      "expiredStored": "Reopen this draft to update its assessment."
     },
     "changes": {
       "sources": {
@@ -2533,6 +2535,14 @@
         "available": "Enough evidence is now available for a score.",
         "rubric": "These assessments cannot be compared numerically."
       }
+    },
+    "provisional": "Provisional",
+    "assessedDays": "{count} of {total} days assessed",
+    "moreProblems": "{count, plural, one {Show # more issue} other {Show # more issues}}",
+    "missing": {
+      "locations": "Link {count, plural, one {one stop} other {# stops}} to check travel time for Day {day}.",
+      "transfer": "Add transfer locations and arrival details for Day {day}.",
+      "arrival": "Add the arrival time to check connections for Day {day}."
     }
   },
   "memories": {

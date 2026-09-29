@@ -40,7 +40,7 @@ export function refreshExpiredAssessment(
   if (currentAssessment(score, now)) return;
   let attempts = expiryAttempts.get(client);
   if (!attempts) expiryAttempts.set(client, (attempts = new Map()));
-  const key = `${tripId}:${score.fingerprint}:${score.expiresAt ?? score.generatedAt}`;
+  const key = `${tripId}:${score.fingerprint}:${score.recomputeAfter}`;
   if (attempts.get(tripId) === key) return;
   attempts.set(tripId, key);
   void client.invalidateQueries({ queryKey: ['plan-score', tripId] }, { cancelRefetch: false });
@@ -102,3 +102,11 @@ function refreshAfterAcquisition(client: QueryClient, query: Query) {
   };
   void query.promise.then(refresh, refresh);
 }
+
+/** Disabled responses have no assessment lifetime; cache-only reads may recheck on mount/focus. */
+export const planScoreReadPolicy = {
+  staleTime: (query: Query<TripPlanScore | null>) => (query.state.data === null ? 0 : Infinity),
+  refetchOnMount: true,
+  refetchOnWindowFocus: true,
+  refetchOnReconnect: true,
+} as const;

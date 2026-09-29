@@ -1,6 +1,7 @@
+import { draftPlanScoreInputRevision } from '../src/services/ai-planning-plan-score.js';
 import Fastify from 'fastify';
 import { Prisma } from '@trove/db';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 
 import { registerAiPlanningSessionRoutes } from '../src/routes/ai-planning-sessions.js';
 import {
@@ -793,7 +794,13 @@ describe('review session safety', () => {
     const store = createPlanningStore();
     const sessionId = '00000000-0000-4000-8000-000000000160';
     const draft = explicitDraft();
-    const score = emptyPlanScore();
+    const score = {
+      ...emptyPlanScore(),
+      generatedAt: NOW.toISOString(),
+      evidenceAsOf: NOW.toISOString(),
+      recomputeAfter: new Date(NOW.getTime() + 86400000).toISOString(),
+      sourceInputRevision: draftPlanScoreInputRevision(draft, NOW),
+    };
     store.sessions.set(
       sessionId,
       makeSession(sessionId, {
@@ -877,7 +884,13 @@ describe('review session safety', () => {
     const sessionId = '00000000-0000-4000-8000-000000000161';
     const draft = explicitDraft();
     draft.places.find((place) => place.id === 'place:tokyo')!.name = 'Tokyo, Japan';
-    const score = emptyPlanScore();
+    const score = {
+      ...emptyPlanScore(),
+      generatedAt: NOW.toISOString(),
+      evidenceAsOf: NOW.toISOString(),
+      recomputeAfter: new Date(NOW.getTime() + 86400000).toISOString(),
+      sourceInputRevision: draftPlanScoreInputRevision(draft, NOW),
+    };
     store.sessions.set(
       sessionId,
       makeSession(sessionId, {
@@ -1320,5 +1333,51 @@ test('the administrative scoring kill switch hides an AI assessment without chan
   } finally {
     if (previous === undefined) delete process.env.TROVE_PLAN_SCORE_DISABLED;
     else process.env.TROVE_PLAN_SCORE_DISABLED = previous;
+  }
+});
+
+test('reopening null and legacy draft assessments recomputes locally without a generation run', async () => {
+  vi.stubEnv('TROVE_PLAN_SCORE_DISABLED', 'false');
+  const outbound = vi.fn(() => {
+    throw new Error('unexpected model/provider request');
+  });
+  vi.stubGlobal('fetch', outbound);
+  const places = vi.fn(async () => []);
+  vi.stubGlobal('trovePrismaClient', {
+    place: { findMany: places },
+    placeProviderRef: { findUnique: vi.fn(async () => null) },
+    travelLegCache: { findUnique: vi.fn(async () => null) },
+    weatherForecastSnapshot: { findUnique: vi.fn(async () => null) },
+  });
+  try {
+    for (const previous of [null, { ...emptyPlanScore(), schemaVersion: 5, rubricVersion: 5 }]) {
+      const store = createPlanningStore();
+      const draft = explicitDraft();
+      const session = makeSession('00000000-0000-4000-8000-000000000170', {
+        draft,
+        draftRevision: 1,
+        planScore: previous,
+        status: 'REVIEWING',
+        stage: 'REVIEWING',
+      });
+      store.sessions.set(session.id, session);
+      const a = await getAiPlanningSession(OWNER_ID, session.id, {
+        prisma: store.prisma as never,
+        now: () => NOW,
+      });
+      const b = await getAiPlanningSession(OWNER_ID, session.id, {
+        prisma: store.prisma as never,
+        now: () => NOW,
+      });
+      expect(a.planScore?.schemaVersion).toBe(6);
+      expect(b.planScore?.fingerprint).toBe(a.planScore?.fingerprint);
+      expect(store.runs.size).toBe(0);
+      expect(session.draft).toBe(draft);
+    }
+    expect(outbound).not.toHaveBeenCalled();
+    expect(places).toHaveBeenCalledTimes(2);
+  } finally {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   }
 });

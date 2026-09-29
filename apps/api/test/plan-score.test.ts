@@ -156,9 +156,7 @@ test('stored timing and complete local routes retain partial coverage honestly',
 test('burden is known while unevidenced alternative orders reduce route coverage', () => {
   const day = buildTripPlanScore(plannedTrip).days[0]!;
   expect(day.factors.ROUTE_EFFICIENCY).toMatchObject({ state: 'EVALUATED', coverage: 60 });
-  expect(day.explanations.uncertainty).toContainEqual(
-    expect.objectContaining({ code: 'ROUTE_EFFICIENCY_PARTIAL' }),
-  );
+  expect(day.explanations.uncertainty).toEqual([]);
 });
 
 test('a place shut on the day of the visit is a hard feasibility conflict', () => {
@@ -209,12 +207,7 @@ test('explains a planned day and its unscheduled Must Go places', () => {
   const result = buildTripPlanScore(plannedTrip);
 
   expect(result.days[0]?.explanations.whatWorks.map((entry) => entry.messageKey)).toEqual(
-    expect.arrayContaining([
-      'feasibility.noConflicts',
-      'routeEfficiency.light',
-      'pace.comfortable',
-      'experienceQuality.supported',
-    ]),
+    expect.arrayContaining(['routeEfficiency.light', 'pace.comfortable']),
   );
   expect(result.explanations.worthImproving).toContainEqual(
     expect.objectContaining({ code: 'UNSCHEDULED_MUST_GO', references: ['tp-3'] }),
@@ -399,6 +392,7 @@ test('keeps the internal weighting out of the payload', () => {
   const day = buildTripPlanScore(plannedTrip).days[0];
 
   expect(Object.keys(day ?? {}).toSorted()).toStrictEqual([
+    'assessmentStatus',
     'caps',
     'completeness',
     'confidence',
@@ -596,8 +590,8 @@ test('a real score survives being stored and read back', () => {
 
 test('presentation metadata is additive and validates without changing the version-5 measurement', () => {
   const score = buildTripPlanScore(plannedTrip);
-  expect(score.schemaVersion).toBe(5);
-  expect(score.rubricVersion).toBe(5);
+  expect(score.schemaVersion).toBe(6);
+  expect(score.rubricVersion).toBe(6);
   expect(score.presentation?.adjustments).toEqual({ fatigue: 0, weakDays: 0 });
   expect(parseStoredPlanScore(score)).toEqual(score);
   const { presentation: _presentation, ...legacyCompatible } = score;

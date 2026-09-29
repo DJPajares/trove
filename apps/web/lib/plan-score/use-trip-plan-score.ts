@@ -13,7 +13,12 @@ import {
   OFFLINE_SYNC_EVENT,
 } from '@/lib/offline/trip-store';
 import { assessmentDeadline, currentAssessment, hasUnsyncedScoringEdits } from './presentation';
-import { assessmentChange, refreshExpiredAssessment, rememberAssessment } from './lifecycle';
+import {
+  assessmentChange,
+  refreshExpiredAssessment,
+  rememberAssessment,
+  planScoreReadPolicy,
+} from './lifecycle';
 
 export type PlanScoreLoadStatus =
   'disabled' | 'error' | 'idle' | 'loading' | 'expired' | 'offline' | 'syncing' | 'updating';
@@ -68,8 +73,20 @@ export function useTripPlanScore(tripId: string | null) {
     enabled: tripId !== null && canRead,
     queryFn: ({ signal }) => fetchTripPlanScore(tripId as string, signal),
     queryKey: queryKeys.planScore(tripId ?? ''),
+    ...planScoreReadPolicy,
   });
   const data = query.data ?? null;
+  useEffect(() => {
+    if (!tripId || !canRead || query.data !== null) return;
+    const recheck = () => {
+      void client.invalidateQueries(
+        { queryKey: queryKeys.planScore(tripId) },
+        { cancelRefetch: false },
+      );
+    };
+    window.addEventListener('focus', recheck);
+    return () => window.removeEventListener('focus', recheck);
+  }, [client, tripId, canRead, query.data]);
   useEffect(() => {
     if (!data || !tripId) return;
     rememberAssessment(client, tripId, data);

@@ -9,14 +9,19 @@ import { emptyPlanScore } from './fixtures/ai-planning.js';
 
 const NOW = new Date('2026-09-01T12:00:00.000Z');
 
-test('freshness follows the oldest original timestamp and expires at exactly 24 hours', () => {
-  const evidence = new Date(NOW.getTime() - PLAN_SCORE_CACHE_TTL_MS + 1).toISOString();
-  const score = { generatedAt: NOW.toISOString(), evidenceAsOf: evidence };
-  expect(originalPlanScoreTime(score, NOW, NOW)).toEqual(new Date(evidence));
-  expect(originalPlanScoreTime(score, new Date(NOW.getTime() + 1), NOW)).toBeNull();
+test('the local recheck expires at 24 hours independently of provider acquisition age', () => {
+  const evidence = new Date(NOW.getTime() - 7 * PLAN_SCORE_CACHE_TTL_MS).toISOString();
+  const score = {
+    generatedAt: NOW.toISOString(),
+    evidenceAsOf: evidence,
+    recomputeAfter: new Date(NOW.getTime() + PLAN_SCORE_CACHE_TTL_MS).toISOString(),
+    evidenceExpiresAt: new Date(NOW.getTime() + 23 * PLAN_SCORE_CACHE_TTL_MS).toISOString(),
+  };
+  expect(originalPlanScoreTime(score, NOW, NOW)).toEqual(NOW);
   expect(
-    originalPlanScoreTime({ generatedAt: evidence }, new Date(NOW.getTime() + 1), NOW),
+    originalPlanScoreTime(score, new Date(NOW.getTime() + PLAN_SCORE_CACHE_TTL_MS), NOW),
   ).toBeNull();
+  expect(originalPlanScoreTime({ ...score, evidenceExpiresAt: NOW.toISOString() }, NOW)).toBeNull();
 });
 
 test('unknown, malformed, and future timestamps cannot make an assessment current', () => {

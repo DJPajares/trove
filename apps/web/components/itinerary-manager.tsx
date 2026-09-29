@@ -274,12 +274,13 @@ function ItineraryPlanScore({
     planScore.status === 'disabled' ||
     Boolean(planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED'));
 
+  // One element, so a surrounding `space-y` spaces the sentinel and the card as
+  // a single block instead of adding its gap twice around a 1px marker.
   return (
-    <>
+    <div className={selectedDayId === null ? undefined : 'mt-6'}>
       <div aria-hidden="true" className="h-px" ref={planScoreSentinelRef} />
       {!planScoreHidden && planScoreDay ? (
         <PlanScorePanel
-          className="mt-4"
           completeness={planScoreDay?.completeness ?? null}
           confidence={planScoreDay?.confidence ?? null}
           disabled={planScoreDay?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')}
@@ -293,17 +294,17 @@ function ItineraryPlanScore({
           assessment={planScore.data}
           dayId={selectedDayId ?? undefined}
           change={planScore.changeFor(selectedDayId ?? 'trip')}
-          showDestinationContext={false}
           factors={planScoreDay && 'factors' in planScoreDay ? planScoreDay.factors : undefined}
           onRetry={planScore.retry}
           resolveAction={resolveAction}
           score={planScoreDay?.score ?? null}
           scope={selectedDayId === null ? 'trip' : 'day'}
           status={planScore.status}
+          surface={selectedDayId === null ? 'card' : 'inset'}
           title={planScoreTranslations(selectedDayId === null ? 'title' : 'dayTitle')}
         />
       ) : null}
-    </>
+    </div>
   );
 }
 

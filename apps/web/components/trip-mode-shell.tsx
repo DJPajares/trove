@@ -261,7 +261,11 @@ function TripModePreviewSummary({
   );
 }
 
-function TripModePreviewPlanScore({ date, tripId }: Readonly<{ date: string; tripId: string }>) {
+function TripModePreviewPlanScore({
+  className,
+  date,
+  tripId,
+}: Readonly<{ className?: string; date: string; tripId: string }>) {
   const planScoreTranslations = useTranslations('planScore');
   const planScore = useTripPlanScore(tripId);
   const previewDayScore = planScore.data?.days.find((day) => day.date === date) ?? null;
@@ -276,6 +280,7 @@ function TripModePreviewPlanScore({ date, tripId }: Readonly<{ date: string; tri
 
   return (
     <PlanScorePanel
+      className={className}
       completeness={previewDayScore?.completeness ?? null}
       confidence={previewDayScore?.confidence ?? null}
       disabled={previewDayScore?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')}
@@ -577,14 +582,19 @@ export function TripModeShell({
               <TripModePlaceDetailsContext.Provider value={placeDetailsContext}>
                 {children}
               </TripModePlaceDetailsContext.Provider>
-            </div>
 
-            {/* Day quality is a review of the plan, not an answer to "what do I need
-            now". Above the view it was the largest single thing between a phone
-            and its own itinerary. */}
-            {planScoreEnabled && previewSelection ? (
-              <TripModePreviewPlanScore date={previewSelection.date} tripId={trip.id} />
-            ) : null}
+              {/* Day quality is a review of the plan, not an answer to "what do I
+                  need now". Above the view it was the largest single thing between a
+                  phone and its own itinerary. It stays inside this container so the
+                  tab bar's padding lands below it, not above it. */}
+              {planScoreEnabled && previewSelection ? (
+                <TripModePreviewPlanScore
+                  className="mt-8"
+                  date={previewSelection.date}
+                  tripId={trip.id}
+                />
+              ) : null}
+            </div>
           </section>
 
           {detailsPlace ? (

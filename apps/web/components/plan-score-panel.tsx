@@ -105,7 +105,7 @@ function ScoreDelta({ change }: { change: ScoreChange }) {
     </Badge>
   );
 }
-function SuggestedAction({
+export function SuggestedAction({
   explanation,
   resolveAction,
 }: Pick<Props, 'resolveAction'> & { explanation: PlanScoreExplanation }) {

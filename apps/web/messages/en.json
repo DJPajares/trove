@@ -2770,5 +2770,44 @@
     "cancel": "Cancel",
     "save": "Save",
     "saving": "Saving…"
+  },
+  "insights": {
+    "title": "Insights",
+    "showMore": "Show {count} more",
+    "showFewer": "Show fewer",
+    "days": "{count, plural, one {Day {days}} other {Days {days}}}",
+    "certainty": {
+      "forecast": "Forecast",
+      "official": "Public holiday",
+      "expected": "Expected date",
+      "estimate": "Estimate",
+      "pattern": "Typical, {from}–{to}"
+    },
+    "rain": {
+      "title": "Rain is forecast for an outdoor stop",
+      "body": "Keep an indoor option in mind for that part of the day."
+    },
+    "holiday": {
+      "body": "Public holiday on {date}. Opening hours may change and popular places may be busier."
+    },
+    "daylight": {
+      "title": "An outdoor plan may run past daylight",
+      "body": "Check its timing so you are not finishing in the dark."
+    },
+    "walking": {
+      "title": "A long walk between stops",
+      "body": "One leg is over 5 km on foot. Check it suits you, or ride part of the way."
+    },
+    "continuous": {
+      "title": "A long stretch without a break",
+      "body": "Four hours or more run back to back. A pause would make the day easier."
+    },
+    "climate": {
+      "title": "Typically {low}–{high} in {month}",
+      "body": "{advice, select, indoor {Rain falls on about {wetDays} in 10 days. Keep outdoor plans flexible.} heat {Rain falls on about {wetDays} in 10 days. Plan outdoor time for mornings and evenings.} cold {Rain falls on about {wetDays} in 10 days. Pack warm layers.} other {Rain falls on about {wetDays} in 10 days.}}"
+    },
+    "sources": "Sources:",
+    "holidaySource": "date-holidays",
+    "weatherSource": "Open-Meteo"
   }
 }

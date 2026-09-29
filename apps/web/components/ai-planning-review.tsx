@@ -10,9 +10,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { CountryMultiCombobox } from '@/components/country-multi-combobox';
 import { PageState } from '@/components/page-state';
-import { assessmentDeadline } from '@/lib/plan-score/presentation';
+import { composeInsights } from '@/lib/insights/compose';
+import { assessmentDeadline, currentAssessment } from '@/lib/plan-score/presentation';
 import { assessmentChange, rememberAssessment } from '@/lib/plan-score/lifecycle';
 import { PlanScorePanel } from '@/components/plan-score-panel';
+import { TripInsightsPanel } from '@/components/trip-insights-panel';
 import { usePreferences } from '@/components/preferences-provider';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -816,6 +818,23 @@ export function AiPlanningReview({
               scope="trip"
               status="idle"
               title={planScoreCopy('title')}
+            />
+          ) : null}
+          {session.context ? (
+            <TripInsightsPanel
+              className="border-border sm:p-6"
+              insights={composeInsights({
+                context: session.context,
+                // A draft's days are its dates, on the score and the context alike.
+                explanations:
+                  planScoreEnabled && session.planScore && currentAssessment(session.planScore)
+                    ? new Map(session.planScore.days.map((day) => [day.dayId, day.explanations]))
+                    : undefined,
+                scope: { kind: 'trip' },
+              })}
+              resolveAction={resolveDraftScoreAction}
+              showDays
+              totalDays={session.context.days.length}
             />
           ) : null}
           {session.countryContextChanged ? (

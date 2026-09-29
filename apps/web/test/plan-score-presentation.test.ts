@@ -415,3 +415,37 @@ test('one concise basis prioritizes unknown required travel and uses stable v7 c
     currentAssessment({ ...assessment(), schemaVersion: 6, rubricVersion: 6 } as never, NOW),
   ).toBe(false);
 });
+
+test('verdict bands follow the published thresholds at every boundary', async () => {
+  const { scoreBand } = await import('../lib/plan-score/presentation');
+  expect([100, 90, 89, 80, 79, 70, 69, 60, 59, 0].map(scoreBand)).toEqual([
+    'excellent',
+    'excellent',
+    'strong',
+    'strong',
+    'good',
+    'good',
+    'refine',
+    'refine',
+    'attention',
+    'attention',
+  ]);
+});
+
+test('insight groups keep issues in priority order apart from what is working', async () => {
+  const { travelerInsightGroups } = await import('../lib/plan-score/presentation');
+  const route = reason('ROUTE_EFFICIENCY', 'RISK', 'AVOIDABLE_MOVEMENT');
+  const conflict = {
+    ...reason('FEASIBILITY', 'HARD', 'OVERLAPPING_COMMITMENTS'),
+    references: ['a'],
+  };
+  const works = { ...reason('PACE_COMFORT', 'INFO', 'COMFORTABLE_LOAD'), action: null };
+  const missing = reason('FEASIBILITY', 'INFO', 'MISSING_ARRIVAL');
+  expect(
+    travelerInsightGroups({
+      whatWorks: [works],
+      worthImproving: [route, conflict, { ...conflict }],
+      uncertainty: [missing, { ...reason('PACE_COMFORT', 'INFO', 'NO_ACTION'), action: null }],
+    }),
+  ).toEqual({ issues: [conflict, route, missing], highlights: [works] });
+});

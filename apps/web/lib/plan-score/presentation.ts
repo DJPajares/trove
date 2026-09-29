@@ -62,6 +62,28 @@ export function travelerInsights(groups: import('@trove/types').PlanScoreExplana
     return true;
   });
 }
+/** Problems worth a look, apart from what is already working. */
+export function travelerInsightGroups(groups: import('@trove/types').PlanScoreExplanationGroups) {
+  const positive = new Set(groups.whatWorks);
+  const insights = travelerInsights(groups);
+  return {
+    issues: insights.filter((reason) => !positive.has(reason)),
+    highlights: insights.filter((reason) => positive.has(reason)),
+  };
+}
+export type ScoreBand = 'excellent' | 'strong' | 'good' | 'refine' | 'attention';
+/** Presentation-only verdict band; the number stays canonical (PRD 29.2). */
+export function scoreBand(score: number): ScoreBand {
+  return score >= 90
+    ? 'excellent'
+    : score >= 80
+      ? 'strong'
+      : score >= 70
+        ? 'good'
+        : score >= 60
+          ? 'refine'
+          : 'attention';
+}
 export function prioritizedProblems(reasons: readonly PlanScoreExplanation[]) {
   const severity = { HARD: 0, MATERIAL: 1, RISK: 2, INFO: 3 };
   const category = [

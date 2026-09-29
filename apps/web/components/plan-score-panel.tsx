@@ -1,11 +1,13 @@
 'use client';
 
 import { ChevronDown, Sparkles } from 'lucide-react';
-import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
+import { Fragment, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Meter } from '@/components/ui/meter';
 import type {
   PlanScoreExplanation,
   PlanScoreExplanationGroups,
@@ -19,9 +21,11 @@ import {
   assessmentBasisKey,
   currentAssessment,
   DAILY_CATEGORIES,
-  travelerInsights,
+  scoreBand,
+  travelerInsightGroups,
   TRIP_COMPONENTS,
   type ScoreAction,
+  type ScoreBand,
   type ScoreChange,
 } from '@/lib/plan-score/presentation';
 import { cn } from '@/lib/utils';
@@ -45,8 +49,60 @@ type Props = Readonly<{
   status: PlanScoreLoadStatus;
   title: string;
 }>;
-function verdictBand(score: number) {
-  return score >= 85 ? 'good' : score >= 70 ? 'workable' : score >= 55 ? 'tight' : 'needsWork';
+/** Colour follows the verdict band; the words always carry the meaning. */
+const WARNING_BANDS = new Set<ScoreBand>(['refine', 'attention']);
+function toneFor(score: number) {
+  return WARNING_BANDS.has(scoreBand(score)) ? 'warning' : 'brand';
+}
+function ScoreRing({ label, score }: { label: string; score: number }) {
+  const t = useTranslations('planScore');
+  const locale = useLocale();
+  return (
+    <Meter.Root
+      aria-label={label}
+      className="relative grid size-14 shrink-0 place-items-center"
+      format={{ maximumFractionDigits: 0 }}
+      getAriaValueText={(value) => t('scoreValue', { score: value })}
+      locale={locale}
+      value={score}
+    >
+      <svg aria-hidden="true" className="absolute inset-0 size-full -rotate-90" viewBox="0 0 36 36">
+        <circle className="stroke-muted" cx="18" cy="18" fill="none" r="16" strokeWidth="3" />
+        <circle
+          className={cn(
+            'transition-[stroke-dashoffset] duration-[var(--motion-slow)] ease-[var(--ease-standard)] motion-reduce:transition-none',
+            toneFor(score) === 'warning' ? 'stroke-status-warning' : 'stroke-brand',
+          )}
+          cx="18"
+          cy="18"
+          fill="none"
+          pathLength={100}
+          r="16"
+          strokeDasharray="100"
+          strokeDashoffset={100 - score}
+          strokeLinecap={score > 0 ? 'round' : 'butt'}
+          strokeWidth="3"
+        />
+      </svg>
+      <Meter.Value className="relative text-lg font-semibold leading-none tracking-tight tabular-nums" />
+    </Meter.Root>
+  );
+}
+function ScoreDelta({ change }: { change: ScoreChange }) {
+  const t = useTranslations('planScore');
+  const format = useFormatter();
+  if (change.state !== 'score' || change.delta === null) return null;
+  const delta = format.number(change.delta, { signDisplay: 'exceptZero' });
+  return (
+    <Badge role="status" size="sm" variant={change.delta > 0 ? 'success' : 'muted'}>
+      <span aria-hidden="true" className="tabular-nums">
+        {delta}
+      </span>
+      <span className="sr-only">
+        {t(`changes.sources.${change.source}`)} {t('changes.states.score', { delta })}
+      </span>
+    </Badge>
+  );
 }
 function SuggestedAction({
   explanation,
@@ -69,40 +125,47 @@ function SuggestedAction({
     </Button>
   );
 }
-function OutcomeRows({
-  outcomes,
-  ids,
-}: {
-  outcomes: Record<string, PlanScoreFactorOutcome>;
-  ids: readonly string[];
-}) {
+/** Only categories with enough evidence publish a number (PRD 29.2). */
+function publishedScores(
+  outcomes: Record<string, PlanScoreFactorOutcome>,
+  ids: readonly string[],
+): { id: string; score: number }[] {
+  return ids.flatMap((id) => {
+    const outcome = outcomes[id];
+    return outcome?.state === 'EVALUATED' && outcome.coverage >= 60 && outcome.confidence >= 50
+      ? [{ id, score: outcome.score }]
+      : [];
+  });
+}
+function ScoreMeterRows({ rows }: { rows: { id: string; score: number }[] }) {
   const t = useTranslations('planScore');
+  const locale = useLocale();
   return (
-    <dl className="space-y-3">
-      {ids.flatMap((id) => {
-        const outcome = outcomes[id];
-        if (outcome?.state !== 'EVALUATED' || outcome.coverage < 60 || outcome.confidence < 50)
-          return [];
-        return [
-          <div className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1.5" key={id}>
-            <dt className="text-xs font-medium text-muted-foreground">{t(`factorLabels.${id}`)}</dt>
-            <dd className="text-sm font-semibold tabular-nums">
-              {outcome.score}
-              <span className="sr-only"> {t('outOf')}</span>
-            </dd>
-            <div
-              aria-hidden="true"
-              className="col-span-2 h-1.5 overflow-hidden rounded-full bg-muted"
-            >
-              <div
-                className="h-full rounded-full bg-brand"
-                style={{ width: `${outcome.score}%` }}
-              />
-            </div>
-          </div>,
-        ];
-      })}
-    </dl>
+    <div className="space-y-3">
+      {rows.map(({ id, score }) => (
+        <Meter.Root
+          className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1.5"
+          format={{ maximumFractionDigits: 0 }}
+          getAriaValueText={(value) => t('scoreValue', { score: value })}
+          key={id}
+          locale={locale}
+          value={score}
+        >
+          <Meter.Label className="text-xs font-medium text-muted-foreground">
+            {t(`factorLabels.${id}`)}
+          </Meter.Label>
+          <Meter.Value className="text-sm font-semibold tabular-nums" />
+          <Meter.Track className="col-span-2 h-1.5 overflow-hidden rounded-full bg-muted">
+            <Meter.Indicator
+              className={cn(
+                'rounded-full transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-standard)] motion-reduce:transition-none',
+                toneFor(score) === 'warning' ? 'bg-status-warning' : 'bg-brand',
+              )}
+            />
+          </Meter.Track>
+        </Meter.Root>
+      ))}
+    </div>
   );
 }
 function Reasons({
@@ -174,118 +237,128 @@ export function PlanScorePanel({
   const day = assessment?.days.find((entry) => entry.dayId === dayId);
   const scopedAssessment = scope === 'day' ? day : assessment;
   const assessmentStatus = scopedAssessment?.assessmentStatus;
-  const insights = unavailable ? [] : travelerInsights(explanations);
-  const initial = insights.slice(0, 3);
-  const additional = insights
-    .slice(3)
-    .filter((reason) => ['HARD', 'MATERIAL', 'RISK'].includes(reason.severity));
-  const outcomes = scope === 'day' ? factors : assessment?.components;
+  const { issues: allIssues, highlights } = unavailable
+    ? { issues: [], highlights: [] }
+    : travelerInsightGroups(explanations);
   const specificGap =
     displayScore === null && !unavailable
-      ? initial.find((reason) => ['LINK_PLACE', 'EDIT_TRANSFER'].includes(reason.action ?? ''))
+      ? allIssues.find((reason) => ['LINK_PLACE', 'EDIT_TRANSFER'].includes(reason.action ?? ''))
       : undefined;
+  const issues = allIssues.filter((reason) => reason !== specificGap);
+  const outcomes = scope === 'day' ? factors : assessment?.components;
+  const rows =
+    !unavailable && outcomes
+      ? publishedScores(outcomes, scope === 'day' ? DAILY_CATEGORIES : TRIP_COMPONENTS)
+      : [];
+  const basis =
+    displayScore !== null && assessmentStatus === 'provisional' && scopedAssessment
+      ? t(assessmentBasisKey(scopedAssessment))
+      : null;
+  const support = [
+    !unavailable &&
+    scope === 'trip' &&
+    assessment &&
+    assessment.assessedDayCount < assessment.applicableDayCount
+      ? t('assessedDays', {
+          count: assessment.assessedDayCount,
+          total: assessment.applicableDayCount,
+        })
+      : null,
+    issues.length ? t('worthALook', { count: issues.length }) : null,
+  ].filter((part) => part !== null);
+  const hasBreakdown = rows.length > 0 || issues.length > 0 || highlights.length > 0 || !!basis;
+  const Subheading = headingLevel === 2 ? 'h3' : 'h4';
   return (
     <section
       aria-label={title}
-      className={cn('space-y-5 rounded-lg border border-border bg-card p-4 sm:p-5', className)}
+      className={cn('space-y-4 rounded-lg border border-border bg-card p-4 sm:p-5', className)}
     >
       <Heading className="flex items-center gap-2 text-sm font-medium">
         <Sparkles aria-hidden="true" className="size-4 text-muted-foreground" />
         {title}
       </Heading>
-      {displayScore !== null ? (
-        <div className="flex items-end gap-4">
-          <span
-            aria-label={t('scoreBadgeLabel', { score: displayScore })}
-            className="text-4xl font-semibold leading-none tracking-tight tabular-nums"
-          >
-            {displayScore}
-            <span
-              aria-hidden="true"
-              className="ml-1 text-xs font-normal tracking-normal text-muted-foreground"
-            >
-              {t('outOf')}
-            </span>
-          </span>
-          <div className="space-y-1">
-            <p className="text-sm font-medium">
-              {assessmentStatus === 'provisional'
-                ? t('provisional')
-                : t(`verdict.${scope}.${verdictBand(displayScore)}`)}
-            </p>
+      <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <div className="flex items-center gap-4">
+          {displayScore !== null ? <ScoreRing label={title} score={displayScore} /> : null}
+          <div className="min-w-0 flex-1 space-y-1">
+            {displayScore !== null ? (
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base font-semibold leading-snug">
+                {t(`verdict.${scoreBand(displayScore)}`)}
+                {change && !unavailable ? <ScoreDelta change={change} /> : null}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground" role="status">
+                {unavailable
+                  ? t(
+                      reasonStatus === 'expired' && !onRetry
+                        ? 'availability.expiredStored'
+                        : `availability.${reasonStatus}`,
+                    )
+                  : specificGap
+                    ? t(specificGap.messageKey, specificGap.values)
+                    : t(`notEnoughInformation.${scope}`)}
+              </p>
+            )}
+            {specificGap ? (
+              <SuggestedAction explanation={specificGap} resolveAction={resolveAction} />
+            ) : null}
+            {support.length ? (
+              <p className="text-sm text-muted-foreground">
+                {support.map((part, index) => (
+                  <Fragment key={part}>
+                    {index ? (
+                      <>
+                        {' '}
+                        <span aria-hidden="true">·</span>{' '}
+                      </>
+                    ) : null}
+                    {part}
+                  </Fragment>
+                ))}
+              </p>
+            ) : null}
+            {hasBreakdown ? (
+              <CollapsibleTrigger className="group pt-1 text-xs">
+                {t(detailsOpen ? 'hideDetails' : 'showDetails')}
+                <ChevronDown
+                  aria-hidden="true"
+                  className="size-3 transition-transform duration-[var(--motion-standard)] group-data-panel-open:rotate-180 motion-reduce:transition-none"
+                />
+              </CollapsibleTrigger>
+            ) : null}
           </div>
         </div>
-      ) : (
-        <p className="text-sm text-muted-foreground" role="status">
-          {unavailable
-            ? t(
-                reasonStatus === 'expired' && !onRetry
-                  ? 'availability.expiredStored'
-                  : `availability.${reasonStatus}`,
-              )
-            : specificGap
-              ? t(specificGap.messageKey, specificGap.values)
-              : t(`notEnoughInformation.${scope}`)}
-        </p>
-      )}
-      {displayScore !== null && assessmentStatus === 'provisional' && scopedAssessment ? (
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          {t(assessmentBasisKey(scopedAssessment))}
-        </p>
-      ) : null}
-      {!unavailable &&
-      scope === 'trip' &&
-      assessment &&
-      assessment.assessedDayCount < assessment.applicableDayCount ? (
-        <p className="text-xs text-muted-foreground">
-          {t('assessedDays', {
-            count: assessment.assessedDayCount,
-            total: assessment.applicableDayCount,
-          })}
-        </p>
-      ) : null}
-      {specificGap ? (
-        <SuggestedAction explanation={specificGap} resolveAction={resolveAction} />
-      ) : null}
-      {!unavailable && outcomes ? (
-        <OutcomeRows
-          outcomes={outcomes}
-          ids={scope === 'day' ? DAILY_CATEGORIES : TRIP_COMPONENTS}
-        />
-      ) : null}
-      <Reasons
-        reasons={initial.filter((reason) => reason !== specificGap)}
-        resolveAction={resolveAction}
-      />
-      {additional.length ? (
-        <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-          <CollapsibleTrigger className="group text-xs">
-            <ChevronDown
-              aria-hidden="true"
-              className="size-3 transition-transform duration-[var(--motion-standard)] group-data-panel-open:rotate-180 motion-reduce:transition-none"
-            />
-            {t(detailsOpen ? 'hideDetails' : 'moreProblems', { count: additional.length })}
-          </CollapsibleTrigger>
+        {hasBreakdown ? (
           <CollapsiblePanel>
-            <div className="mt-3 border-t border-border pt-3">
-              <Reasons reasons={additional} resolveAction={resolveAction} />
+            <div className="mt-4 space-y-5 border-t border-border pt-4">
+              {rows.length ? <ScoreMeterRows rows={rows} /> : null}
+              {issues.length ? (
+                <div className="space-y-2">
+                  <Subheading className="text-xs font-medium text-muted-foreground">
+                    {t('worthImproving')}
+                  </Subheading>
+                  <Reasons reasons={issues} resolveAction={resolveAction} />
+                </div>
+              ) : null}
+              {highlights.length ? (
+                <div className="space-y-2">
+                  <Subheading className="text-xs font-medium text-muted-foreground">
+                    {t('whatWorks')}
+                  </Subheading>
+                  <ul className="space-y-2 text-sm leading-relaxed text-muted-foreground">
+                    {highlights.map((reason, index) => (
+                      <li key={`${reason.code}-${index}`}>{t(reason.messageKey, reason.values)}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {basis ? (
+                <p className="text-xs leading-relaxed text-muted-foreground">{basis}</p>
+              ) : null}
             </div>
           </CollapsiblePanel>
-        </Collapsible>
-      ) : null}
-      {change && !unavailable && change.state !== 'coverage' ? (
-        <p className="text-xs text-muted-foreground" role="status">
-          {t(`changes.sources.${change.source}`)}{' '}
-          {t(`changes.states.${change.state}`, {
-            delta:
-              change.delta === null
-                ? ''
-                : change.delta > 0
-                  ? `+${change.delta}`
-                  : String(change.delta),
-          })}
-        </p>
-      ) : null}
+        ) : null}
+      </Collapsible>
       {unavailable && onRetry && ['error', 'expired'].includes(reasonStatus) ? (
         <Button onClick={onRetry} size="sm" variant="outline">
           {t('retry')}

@@ -20,9 +20,19 @@ export function invalidateTripQueries(
   tripId: string,
   roots: readonly TripScopedQueryRoot[] = TRIP_SCOPED_QUERY_ROOTS,
 ) {
-  return Promise.all(
-    roots.map((root) => queryClient.invalidateQueries({ queryKey: [root, tripId] })),
-  );
+  return Promise.all([
+    ...roots.map((root) => queryClient.invalidateQueries({ queryKey: [root, tripId] })),
+    // Located Places are shared across trips. Only the other derived assessments
+    // need invalidation here; do not acquire routes for unopened trips.
+    ...(roots === PLACE_LOCATION_QUERY_ROOTS
+      ? [
+          queryClient.invalidateQueries({
+            predicate: (query) =>
+              query.queryKey[0] === 'plan-score' && query.queryKey[1] !== tripId,
+          }),
+        ]
+      : []),
+  ]);
 }
 
 /**

@@ -144,7 +144,6 @@ export const queryKeys = {
 export const PROVIDER_BILLABLE_QUERY_ROOTS = new Set([
   'editorial-images',
   'itinerary-day-routes',
-  'plan-score',
   'trip-mode-context',
 ]);
 
@@ -157,7 +156,6 @@ export const PERSISTED_QUERY_ROOTS = new Set([
   'currency',
   'editorial-images',
   'itinerary-day-routes',
-  'plan-score',
   'profile',
   'saved',
   'task-templates',

@@ -1,3 +1,4 @@
+import { arePlanScoreProvidersDisabled } from '../environment.js';
 import { getPrismaClient, Prisma } from '@trove/db';
 import { AI_PLANNER_SCHEMA_VERSION } from '@trove/types';
 
@@ -233,7 +234,7 @@ export function serializeAiPlanningSession(session: SessionRecord, now = new Dat
     lastSafeError: terminal ? null : timingConflict ? 'schedule_conflict' : session.lastErrorCode,
     pendingRunId: terminal ? null : (session.runs[0]?.id ?? null),
     planScore:
-      terminal || session.countryContextChanged || timingConflict
+      terminal || arePlanScoreProvidersDisabled() || session.countryContextChanged || timingConflict
         ? null
         : planScore
           ? withholdNonCurrentPlanScore(planScore, now)

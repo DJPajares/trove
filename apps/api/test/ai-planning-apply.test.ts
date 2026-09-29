@@ -727,6 +727,27 @@ test('the draft score is carried onto the trip, keyed and remapped to its rows',
 
   const planScore = {
     ...draftAssessment(draft),
+    presentation: {
+      adjustments: { fatigue: 2, weakDays: 3 },
+      revisions: {
+        planning: 'original-plan',
+        evidence: 'original-evidence',
+        destinationContext: 'original-context',
+      },
+      referenceTargets: {
+        [dayItem.id]: {
+          kind: 'item' as const,
+          dayId: draft.days.find((day) => day.items.includes(dayItem))!.date,
+        },
+      },
+      destinationContext: {
+        catalogVersion: 'test',
+        evaluatedAt: NOW.toISOString(),
+        expiresAt: null,
+        overview: [],
+        days: draft.days.map((day) => ({ dayId: day.date, groups: [] })),
+      },
+    },
     days: draft.days.map((day) => ({
       ...toPlanScoreDayPayload(scoreDay({ dayId: day.date, factors: {} })),
       completeness: 80,
@@ -763,6 +784,19 @@ test('the draft score is carried onto the trip, keyed and remapped to its rows',
   expect(trip.planScoreComputedAt).toEqual(new Date(planScore.generatedAt));
 
   const stored = trip.planScore as typeof planScore;
+  expect(stored.presentation.adjustments).toEqual(planScore.presentation.adjustments);
+  expect(stored.presentation.revisions).toEqual(planScore.presentation.revisions);
+  expect(stored.presentation.destinationContext.days.map((day) => day.dayId)).toEqual(
+    store.state.days.map((day) => day.id),
+  );
+  expect(Object.values(stored.presentation.referenceTargets)[0]).toEqual({
+    kind: 'item',
+    dayId: stored.days.find(
+      (day) => day.date === draft.days.find((day) => day.items.includes(dayItem))!.date,
+    )!.dayId,
+  });
+  expect(stored.generatedAt).toBe(planScore.generatedAt);
+  expect(stored.expiresAt).toBe(planScore.expiresAt);
   const dayIds = store.state.days.map((day) => day.id);
   const itemIds = new Set(store.state.items.map((item) => item.id));
 

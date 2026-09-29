@@ -1,4 +1,5 @@
 import { QueryClient, type Query } from '@tanstack/react-query';
+import { watchScoringAcquisition } from '@/lib/plan-score/lifecycle';
 
 import { PERSISTED_QUERY_ROOTS, PROVIDER_BILLABLE_QUERY_ROOTS } from '@/lib/query/keys';
 
@@ -105,6 +106,7 @@ export function createQueryClient() {
     client.setQueryDefaults([root], { staleTime });
   }
 
+  watchScoringAcquisition(client);
   return client;
 }
 

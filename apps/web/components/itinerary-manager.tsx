@@ -252,11 +252,13 @@ function useDesktopMapLayout() {
 }
 
 function ItineraryPlanScore({
-  onSelectReference,
+  resolveAction,
   selectedDayId,
   tripId,
 }: Readonly<{
-  onSelectReference: (reference: string) => void;
+  resolveAction: (
+    explanation: import('@trove/types').PlanScoreExplanation,
+  ) => import('@/lib/plan-score/presentation').ScoreAction | null;
   selectedDayId: string | null;
   tripId: string;
 }>) {
@@ -264,7 +266,10 @@ function ItineraryPlanScore({
   const { hasBeenVisible: planScoreVisible, ref: planScoreSentinelRef } =
     useInViewOnce<HTMLDivElement>();
   const planScore = useTripPlanScore(planScoreVisible ? tripId : null);
-  const planScoreDay = planScore.data?.days.find((day) => day.dayId === selectedDayId) ?? null;
+  const planScoreDay =
+    selectedDayId === null
+      ? planScore.data
+      : (planScore.data?.days.find((day) => day.dayId === selectedDayId) ?? null);
   const planScoreHidden =
     planScore.status === 'disabled' ||
     Boolean(planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED'));
@@ -272,7 +277,7 @@ function ItineraryPlanScore({
   return (
     <>
       <div aria-hidden="true" className="h-px" ref={planScoreSentinelRef} />
-      {!planScoreHidden && (planScoreDay || planScore.status === 'error') ? (
+      {!planScoreHidden && planScoreDay ? (
         <PlanScorePanel
           className="mt-4"
           completeness={planScoreDay?.completeness ?? null}
@@ -285,13 +290,17 @@ function ItineraryPlanScore({
               worthImproving: [],
             }
           }
-          factors={planScoreDay?.factors}
+          assessment={planScore.data}
+          dayId={selectedDayId ?? undefined}
+          change={planScore.changeFor(selectedDayId ?? 'trip')}
+          showDestinationContext={false}
+          factors={planScoreDay && 'factors' in planScoreDay ? planScoreDay.factors : undefined}
           onRetry={planScore.retry}
-          onSelectReference={onSelectReference}
+          resolveAction={resolveAction}
           score={planScoreDay?.score ?? null}
-          scope="day"
+          scope={selectedDayId === null ? 'trip' : 'day'}
           status={planScore.status}
-          title={planScoreTranslations('dayTitle')}
+          title={planScoreTranslations(selectedDayId === null ? 'title' : 'dayTitle')}
         />
       ) : null}
     </>
@@ -351,6 +360,7 @@ export function ItineraryManager({
     },
     [queryClient, tripId],
   );
+  const [scoreContextId, setScoreContextId] = useState<string | null>(null);
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const status = itineraryQuery.isPending ? 'loading' : itineraryQuery.error ? 'error' : 'idle';
   const [error, setError] = useState<string | null>(null);
@@ -589,10 +599,6 @@ export function ItineraryManager({
     [routes],
   );
 
-  const focusItineraryItem = useCallback((reference: string) => {
-    setSelectedMapItemId(reference);
-    document.getElementById(`itinerary-item-${reference}`)?.focus();
-  }, []);
   const selectedIndex = itinerary?.days.findIndex((day) => day.id === selectedDayId) ?? -1;
   const dayActivityCounts = useMemo(
     () => Object.fromEntries((itinerary?.days ?? []).map((day) => [day.date, day.items.length])),
@@ -888,6 +894,98 @@ export function ItineraryManager({
     setSuggestedTimeStatus('idle');
     setEditor({ dayId: item.itineraryDayId, item, mode: 'edit' });
   }
+
+  function resolveScoreAction(explanation: import('@trove/types').PlanScoreExplanation) {
+    if (!explanation.action || !itinerary) return null;
+    for (const reference of explanation.references) {
+      const item = [
+        ...itinerary.days.flatMap((day) => day.items),
+        ...itinerary.unscheduledItems,
+      ].find((item) => item.id === reference);
+      if (item) return { onSelect: () => openEdit(item) };
+      const day = itinerary.days.find((day) => day.id === reference);
+      if (day)
+        return {
+          onSelect: () => {
+            openDay(day.id);
+            requestAnimationFrame(() =>
+              document.getElementById(`itinerary-day-${day.id}`)?.focus(),
+            );
+          },
+        };
+      const reservation = queryClient
+        .getQueryData<import('@/lib/reservations/api').ReservationsResponse>(
+          queryKeys.reservations(tripId),
+        )
+        ?.reservations.find((reservation) => reservation.id === reference);
+      const target = queryClient.getQueryData<import('@trove/types').TripPlanScore>(
+        queryKeys.planScore(tripId),
+      )?.presentation?.referenceTargets?.[reference];
+      if (reservation || target?.kind === 'reservation')
+        return {
+          href: `/trips/${tripId}/reservations?reservation=${encodeURIComponent(reference)}`,
+        };
+      const contextGroups =
+        activeView === 'overview'
+          ? itinerary.destinationContext?.overview
+          : itinerary.destinationContext?.days.find((day) => day.dayId === selectedDayId)?.groups;
+      const context = contextGroups
+        ?.flatMap((group) => group.records)
+        .find((record) => record.id === reference && Date.parse(record.expiresAt) > Date.now());
+      if (context) return { onSelect: () => setScoreContextId(context.id) };
+      const place = itinerary.tripPlaces.find((place) => place.id === reference);
+      if (place && explanation.action === 'SCHEDULE_MUST_GO')
+        return {
+          onSelect: () => {
+            const targetDay = selectedDay ?? itinerary.days[0];
+            if (!targetDay) return;
+            openCreate(targetDay);
+            selectTripPlace(place.id);
+          },
+        };
+    }
+    return null;
+  }
+
+  const handledScorePlace = useRef<string | null>(null);
+  const scoreItemId = searchParams.get('item');
+  const scorePlaceId = searchParams.get('place');
+  useEffect(() => {
+    if (!scorePlaceId) {
+      handledScorePlace.current = null;
+      return;
+    }
+    if (!itinerary || handledScorePlace.current === scorePlaceId) return;
+    handledScorePlace.current = scorePlaceId;
+    const place = itinerary.tripPlaces.find((place) => place.id === scorePlaceId);
+    const day = itinerary.days.find((day) => day.id === requestedDayId) ?? itinerary.days[0];
+    if (place && day) {
+      openCreate(day);
+      selectTripPlace(place.id);
+    }
+    // Editor state owns the pending proposal after opening; reload must not reopen it.
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('place');
+    window.history.replaceState(null, '', `${pathname}${params.size ? `?${params}` : ''}`);
+  }, [scorePlaceId, itinerary]);
+
+  const handledScoreItem = useRef<string | null>(null);
+  useEffect(() => {
+    if (!scoreItemId) {
+      handledScoreItem.current = null;
+      return;
+    }
+    if (!itinerary || handledScoreItem.current === scoreItemId) return;
+    handledScoreItem.current = scoreItemId;
+    const item = [
+      ...itinerary.days.flatMap((day) => day.items),
+      ...itinerary.unscheduledItems,
+    ].find((item) => item.id === scoreItemId);
+    if (item) openEdit(item);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('item');
+    window.history.replaceState(null, '', `${pathname}${params.size ? `?${params}` : ''}`);
+  }, [scoreItemId, itinerary]);
 
   function closeEditor() {
     setEditor({ dayId: null, item: null, mode: 'closed' });
@@ -1668,6 +1766,8 @@ export function ItineraryManager({
       </Tabs>
 
       <ItineraryDestinationContext
+        onFocusedRecordDismissed={() => setScoreContextId(null)}
+        focusedRecordId={scoreContextId}
         context={itinerary.destinationContext}
         dayId={activeView === 'overview' ? null : (selectedDayId ?? '')}
       />
@@ -1796,7 +1896,11 @@ export function ItineraryManager({
                     name enough room to be the day's identity. */}
                     {selectedDay.name ? (
                       <>
-                        <h2 className="text-lg leading-6 font-semibold tracking-tight break-words text-balance">
+                        <h2
+                          id={`itinerary-day-${selectedDay.id}`}
+                          tabIndex={-1}
+                          className="text-lg leading-6 font-semibold tracking-tight break-words text-balance"
+                        >
                           {selectedDay.name}
                         </h2>
                         <p className="mt-1 text-sm leading-5 text-muted-foreground">
@@ -1807,7 +1911,11 @@ export function ItineraryManager({
                         </p>
                       </>
                     ) : (
-                      <h2 className="text-lg leading-6 font-semibold tracking-tight break-words text-balance">
+                      <h2
+                        id={`itinerary-day-${selectedDay.id}`}
+                        tabIndex={-1}
+                        className="text-lg leading-6 font-semibold tracking-tight break-words text-balance"
+                      >
                         {formatDate(selectedDay.date, true)}
                       </h2>
                     )}
@@ -2186,7 +2294,7 @@ export function ItineraryManager({
                     )}
                     {planScoreEnabled ? (
                       <ItineraryPlanScore
-                        onSelectReference={focusItineraryItem}
+                        resolveAction={resolveScoreAction}
                         selectedDayId={selectedDayId}
                         tripId={tripId}
                       />
@@ -2231,6 +2339,14 @@ export function ItineraryManager({
           </div>
         </>
       )}
+
+      {activeView === 'overview' && planScoreEnabled ? (
+        <ItineraryPlanScore
+          resolveAction={resolveScoreAction}
+          selectedDayId={null}
+          tripId={tripId}
+        />
+      ) : null}
 
       {itinerary.unscheduledItems.length ? (
         <section className="space-y-3">

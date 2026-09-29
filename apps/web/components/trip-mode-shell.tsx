@@ -1,5 +1,7 @@
 'use client';
 
+import { dayActionLink } from '@/lib/plan-score/presentation';
+
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Compass, Eye } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
@@ -270,7 +272,7 @@ function TripModePreviewPlanScore({ date, tripId }: Readonly<{ date: string; tri
       previewDayScore?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED'),
     );
 
-  if (planScoreHidden || (!previewDayScore && planScore.status !== 'error')) return null;
+  if (planScoreHidden || !previewDayScore) return null;
 
   return (
     <PlanScorePanel
@@ -285,6 +287,10 @@ function TripModePreviewPlanScore({ date, tripId }: Readonly<{ date: string; tri
         }
       }
       factors={previewDayScore?.factors}
+      assessment={planScore.data}
+      dayId={previewDayScore?.dayId}
+      change={planScore.changeFor(previewDayScore?.dayId ?? '')}
+      resolveAction={(explanation) => dayActionLink(tripId, planScore.data, explanation)}
       onRetry={planScore.retry}
       score={previewDayScore?.score ?? null}
       scope="day"

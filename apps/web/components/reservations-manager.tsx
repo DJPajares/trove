@@ -12,8 +12,9 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 import { DatePicker } from '@/components/date-picker';
 import { CurrencyCombobox } from '@/components/currency-combobox';
@@ -250,6 +251,24 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
     setFormError(null);
     setEditor({ mode: 'edit', reservation });
   }
+
+  const scoreParams = useSearchParams();
+  const scorePath = usePathname();
+  const handledScoreReservation = useRef<string | null>(null);
+  const requestedReservation = scoreParams.get('reservation');
+  useEffect(() => {
+    if (!requestedReservation) {
+      handledScoreReservation.current = null;
+      return;
+    }
+    if (!data || handledScoreReservation.current === requestedReservation) return;
+    handledScoreReservation.current = requestedReservation;
+    const reservation = data.reservations.find((row) => row.id === requestedReservation);
+    if (reservation) openEdit(reservation);
+    const params = new URLSearchParams(scoreParams.toString());
+    params.delete('reservation');
+    window.history.replaceState(null, '', `${scorePath}${params.size ? `?${params}` : ''}`);
+  }, [requestedReservation, data]);
 
   function closeEditor() {
     setEditor({ mode: 'closed', reservation: null });

@@ -31,7 +31,13 @@ export function createQueryPersister(
   return createAsyncStoragePersister({
     key,
     storage: {
-      getItem: (itemKey: string) => readQueryCacheEntry(itemKey),
+      getItem: async (itemKey: string) => {
+        const stored = await readQueryCacheEntry(itemKey);
+        if (!stored) return stored;
+        const cleaned = stripPersistedPlanScores(stored);
+        if (cleaned !== stored) await writeQueryCacheEntry(itemKey, cleaned);
+        return cleaned;
+      },
       removeItem: (itemKey: string) => deleteQueryCacheEntry(itemKey),
       setItem: (itemKey: string, value: string) => writeQueryCacheEntry(itemKey, value),
     },
@@ -48,5 +54,19 @@ export async function removePersistedQueryCache(userId: string) {
   } catch {
     // The in-memory cache is cleared by the caller regardless, and the whole
     // store is dropped by `clearAllOfflineTripData` on sign-out.
+  }
+}
+
+/** Remove old score responses without discarding costly, still-permitted provider caches. */
+export function stripPersistedPlanScores(value: string): string {
+  try {
+    const client = JSON.parse(value);
+    const queries = client?.clientState?.queries;
+    if (!Array.isArray(queries)) return value;
+    const retained = queries.filter((query) => query.queryKey?.[0] !== 'plan-score');
+    if (retained.length === queries.length) return value;
+    return JSON.stringify({ ...client, clientState: { ...client.clientState, queries: retained } });
+  } catch {
+    return value;
   }
 }

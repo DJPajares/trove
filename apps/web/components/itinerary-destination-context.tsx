@@ -3,17 +3,34 @@
 import type { DestinationContextGroup, TripDestinationContext } from '@trove/types';
 import { ChevronDown, ExternalLink } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
+import { useEffect, useId, useState } from 'react';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 export function ItineraryDestinationContext({
   context,
   dayId,
+  focusedRecordId,
+  onFocusedRecordDismissed,
 }: {
   context: TripDestinationContext | undefined;
   /** null means Overview; an unknown day does not fall back to all destinations. */
   dayId: string | null;
+  focusedRecordId?: string | null;
+  onFocusedRecordDismissed?: () => void;
 }) {
   const t = useTranslations('destinationContext');
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  useEffect(() => {
+    if (focusedRecordId) setOpen(true);
+  }, [focusedRecordId]);
+  useEffect(() => {
+    if (!open || !focusedRecordId) return;
+    const frame = requestAnimationFrame(() =>
+      document.getElementById(`${id}-${focusedRecordId}`)?.focus(),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [open, focusedRecordId, id]);
   const content = useTranslations('destinationContextContent');
   const formatter = useFormatter();
   const groups: DestinationContextGroup[] =
@@ -39,7 +56,13 @@ export function ItineraryDestinationContext({
       timeZone: 'UTC',
     });
   return (
-    <Collapsible>
+    <Collapsible
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) onFocusedRecordDismissed?.();
+      }}
+    >
       <CollapsibleTrigger className="group">
         {t('title')}
         <ChevronDown
@@ -82,7 +105,12 @@ export function ItineraryDestinationContext({
                           ? t('dates', { dates: formatter.list(record.matchedDates.map(date)) })
                           : t('dateWindow', { start: date(window.start), end: date(window.end) });
                   return (
-                    <article className="space-y-1.5" key={record.id}>
+                    <article
+                      className="space-y-1.5 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      id={`${id}-${record.id}`}
+                      key={record.id}
+                      tabIndex={-1}
+                    >
                       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                         <h4 className="text-sm font-medium">
                           {content(`records.${record.contentKey}.title`)}

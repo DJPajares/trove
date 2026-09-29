@@ -2372,19 +2372,24 @@
     "completeness": "Coverage",
     "whatWorks": "What is working",
     "worthImproving": "Also worth a look",
-    "uncertainty": "Not enough to say yet",
+    "uncertainty": "Timing context and what remains unknown",
     "factorLabels": {
       "FEASIBILITY": "Feasibility & Resilience",
       "ROUTE_EFFICIENCY": "Route & Time Efficiency",
       "PACE_COMFORT": "Pace & Comfort",
       "EXPERIENCE_QUALITY": "Experience Quality",
-      "PLAN_COMPOSITION": "Plan Composition"
+      "PLAN_COMPOSITION": "Plan Composition",
+      "DAILY_QUALITY": "Daily plan quality",
+      "DESTINATION_UTILIZATION": "Destination utilization",
+      "VARIETY_COVERAGE": "Variety and coverage",
+      "SEASONAL_FIT": "Seasonal fit"
     },
     "factorStatus": {
       "groupLabel": "Category status",
       "working": "Working",
       "worthImproving": "Worth improving",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "notApplicable": "Not applicable"
     },
     "actions": {
       "ADD_BUFFER": "Add buffer",
@@ -2487,7 +2492,48 @@
       "fatigue": "Several demanding days create accumulated load. Consider spacing them with lighter days.",
       "weakDays": "An unusually weak assessed day affects the overall trip. Review that day’s main issue."
     },
-    "categoryEvidence": "Coverage {coverage}% · Confidence {confidence}%"
+    "categoryEvidence": "Coverage {coverage}% · Confidence {confidence}%",
+    "confidenceValue": "Confidence {value}%",
+    "coverageValue": "Evidence coverage {value}%",
+    "assessedAt": "Assessed {date}",
+    "evidenceAt": "Oldest supporting evidence {date}",
+    "validUntil": "Valid until {date}",
+    "tripAdjustments": "Trip adjustments",
+    "fatigueAdjustment": "{value, plural, =0 {No accumulated fatigue adjustment.} other {Accumulated fatigue: −# points.}}",
+    "weakDayAdjustment": "{value, plural, =0 {No adjustment for unusually weak days.} other {Unusually weak days: −# points.}}",
+    "appliedCaps": "Verified conflict limits",
+    "caps": {
+      "HARD_CONFLICT": "A verified hard conflict limits this day to {limit}.",
+      "MULTIPLE_HARD_CONFLICTS": "Multiple verified hard conflicts limit this day to {limit}.",
+      "MATERIAL_CONFLICT": "A material conflict limits this day to {limit}.",
+      "TRIP_HARD_CONFLICT": "A verified hard conflict limits this trip to {limit}.",
+      "TRIP_CONNECTION_CONFLICT": "A verified connection conflict limits this trip to {limit}."
+    },
+    "availability": {
+      "expired": "This assessment has expired. Refresh to reassess using available evidence.",
+      "offline": "Plan Score is unavailable offline.",
+      "syncing": "Plan Score will update after your local planning edits sync.",
+      "updating": "Updating the assessment for the latest plan.",
+      "loading": "Assessing the plan…",
+      "error": "Plan Score is currently unavailable.",
+      "expiredStored": "This assessment has expired. The draft remains available for review."
+    },
+    "changes": {
+      "sources": {
+        "planning": "Your planning inputs changed.",
+        "evidence": "Available evidence changed.",
+        "destinationContext": "Destination context changed.",
+        "assessment": "The assessment changed.",
+        "rubric": "The scoring model changed."
+      },
+      "states": {
+        "score": "Score change: {delta} points.",
+        "coverage": "Evidence coverage or category results changed.",
+        "unavailable": "A current, comparable score is unavailable.",
+        "available": "Enough evidence is now available for a score.",
+        "rubric": "These assessments cannot be compared numerically."
+      }
+    }
   },
   "memories": {
     "capture": {

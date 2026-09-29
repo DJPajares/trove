@@ -1,413 +1,374 @@
 'use client';
 
-import { ChevronDown, CircleAlert, Sparkles } from 'lucide-react';
-import type { VariantProps } from 'class-variance-authority';
-import { useTranslations } from 'next-intl';
-import { useId, useState } from 'react';
-
-import { Badge, type badgeVariants } from '@/components/ui/badge';
+import { ChevronDown, Sparkles } from 'lucide-react';
+import { useFormatter, useTranslations } from 'next-intl';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ItineraryDestinationContext } from '@/components/itinerary-destination-context';
 import type {
   PlanScoreExplanation,
   PlanScoreExplanationGroups,
   PlanScoreFactorId,
   PlanScoreFactorOutcome,
+  TripPlanScore,
 } from '@/lib/plan-score/api';
 import type { PlanScoreLoadStatus } from '@/lib/plan-score/use-trip-plan-score';
+import {
+  assessmentDeadline,
+  currentAssessment,
+  DAILY_CATEGORIES,
+  prioritizedProblems,
+  TRIP_COMPONENTS,
+  type ScoreAction,
+  type ScoreChange,
+} from '@/lib/plan-score/presentation';
 import { cn } from '@/lib/utils';
 
-type PlanScoreScope = 'day' | 'trip';
-
-type PlanScorePanelProps = Readonly<{
+type Props = Readonly<{
+  assessment?: TripPlanScore | null;
+  change?: ScoreChange | null;
   className?: string;
   completeness?: number | null;
   confidence?: number | null;
-  /** Administratively disabled (not just lacking evidence): render nothing at all. */
+  dayId?: string;
   disabled?: boolean;
   explanations: PlanScoreExplanationGroups;
-  /** Per-factor breakdown for the day-scope chip row; absent at trip scope. */
   factors?: Record<PlanScoreFactorId, PlanScoreFactorOutcome>;
-  /**
-   * How deep the panel sits in the host route's outline. The explanation
-   * groups nest one level below it, so both move together and neither call
-   * site has to know that.
-   */
   headingLevel?: 2 | 3;
   onRetry?: () => void;
-  /** Focuses the itinerary item or Trip Place a suggestion points at. */
-  onSelectReference?: (reference: string) => void;
+  resolveAction?: (explanation: PlanScoreExplanation) => ScoreAction | null;
   score: number | null;
-  /** Chooses day-worded or trip-worded copy; the score itself is scope-agnostic. */
-  scope: PlanScoreScope;
+  scope: 'day' | 'trip';
+  showDestinationContext?: boolean;
   status: PlanScoreLoadStatus;
   title: string;
 }>;
 
-/**
- * Display-only bands over the canonical 0–100 score. They never feed back into
- * scoring, so they stay presentation under PRD section 29.3.
- */
-function verdictBand(score: number): 'good' | 'needsWork' | 'tight' | 'workable' {
-  if (score >= 85) return 'good';
-  if (score >= 70) return 'workable';
-  if (score >= 55) return 'tight';
-  return 'needsWork';
+function verdictBand(score: number) {
+  return score >= 85 ? 'good' : score >= 70 ? 'workable' : score >= 55 ? 'tight' : 'needsWork';
 }
-
-type VerdictBand = ReturnType<typeof verdictBand>;
-
-const RING_RADIUS = 15.5;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-
-/** Status tokens only — never brand/primary, so the badge reads as a signal, not a call to action. */
-const BAND_RING_CLASS: Record<VerdictBand, string> = {
-  good: 'text-status-success',
-  needsWork: 'text-status-danger',
-  tight: 'text-status-warning',
-  workable: 'text-status-info',
-};
-
-function ScoreBadge({ band, score }: Readonly<{ band: VerdictBand; score: number }>) {
-  const t = useTranslations('planScore');
-  const clamped = Math.round(Math.min(100, Math.max(0, score)));
-  const offset = RING_CIRCUMFERENCE * (1 - clamped / 100);
-
-  return (
-    <div
-      aria-label={t('scoreBadgeLabel', { score: clamped })}
-      className="relative flex size-9 shrink-0 items-center justify-center"
-      role="img"
-    >
-      <svg aria-hidden="true" className="size-9 -rotate-90" viewBox="0 0 36 36">
-        <circle
-          className="text-border"
-          cx="18"
-          cy="18"
-          fill="none"
-          r={RING_RADIUS}
-          stroke="currentColor"
-          strokeWidth="3"
-        />
-        <circle
-          className={cn(
-            'transition-[stroke-dashoffset] duration-[var(--motion-slow)] ease-[var(--ease-standard)]',
-            BAND_RING_CLASS[band],
-          )}
-          cx="18"
-          cy="18"
-          fill="none"
-          r={RING_RADIUS}
-          stroke="currentColor"
-          strokeDasharray={RING_CIRCUMFERENCE}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          strokeWidth="3"
-        />
-      </svg>
-      <span
-        aria-hidden="true"
-        className="absolute text-[11px] font-semibold tabular-nums text-foreground"
-      >
-        {clamped}
-      </span>
-    </div>
-  );
-}
-
-type FactorChipTone = 'unknown' | 'working' | 'worthImproving';
-
-/** Presentation threshold shared with the explanation builder. */
-const CHIP_WORKING_SCORE = 85;
-
-const FACTOR_CHIP_ORDER: PlanScoreFactorId[] = [
-  'FEASIBILITY',
-  'ROUTE_EFFICIENCY',
-  'PACE_COMFORT',
-  'EXPERIENCE_QUALITY',
-  'PLAN_COMPOSITION',
-];
-
-const FACTOR_BADGE_VARIANT: Record<FactorChipTone, VariantProps<typeof badgeVariants>['variant']> =
-  {
-    unknown: 'muted',
-    working: 'success',
-    worthImproving: 'warning',
-  };
-
-function factorChipTone(outcome: PlanScoreFactorOutcome): FactorChipTone | null {
-  if (outcome.state === 'NOT_APPLICABLE') return null;
-  if (outcome.state === 'UNKNOWN') return 'unknown';
-  return outcome.score >= CHIP_WORKING_SCORE ? 'working' : 'worthImproving';
-}
-
-function FactorStatusRow({
-  factors,
-}: Readonly<{ factors: Record<PlanScoreFactorId, PlanScoreFactorOutcome> }>) {
-  const t = useTranslations('planScore');
-
-  return (
-    <ul aria-label={t('factorStatus.groupLabel')} className="flex flex-wrap gap-1.5">
-      {FACTOR_CHIP_ORDER.flatMap((id) => {
-        const tone = factorChipTone(factors[id]);
-        if (tone === null) return [];
-
-        return [
-          <Badge
-            key={id}
-            render={<li />}
-            variant={FACTOR_BADGE_VARIANT[tone]}
-            title={
-              factors[id].state === 'EVALUATED'
-                ? t('categoryEvidence', {
-                    coverage: factors[id].coverage,
-                    confidence: factors[id].confidence,
-                  })
-                : undefined
-            }
-          >
-            {t(`factorLabels.${id}`)} ·{' '}
-            {factors[id].state === 'EVALUATED' ? factors[id].score : t(`factorStatus.${tone}`)}
-          </Badge>,
-        ];
-      })}
-    </ul>
-  );
-}
-
 function SuggestedAction({
   explanation,
-  onSelectReference,
-}: Readonly<{
-  explanation: PlanScoreExplanation;
-  onSelectReference?: (reference: string) => void;
-}>) {
+  resolveAction,
+}: Pick<Props, 'resolveAction'> & { explanation: PlanScoreExplanation }) {
   const t = useTranslations('planScore');
-  const reference = explanation.references[0];
-
-  if (!explanation.action || !reference || !onSelectReference) return null;
-
-  return (
+  const target = explanation.action ? resolveAction?.(explanation) : null;
+  if (!target || !explanation.action) return null;
+  return 'href' in target ? (
     <Button
-      className="ml-1.5 h-auto px-0 align-baseline text-sm"
-      onClick={() => onSelectReference(reference)}
+      className="h-auto px-0 text-sm"
+      render={<Link href={target.href} />}
       size="sm"
       variant="link"
     >
       {t(`actions.${explanation.action}`)}
     </Button>
+  ) : (
+    <Button className="h-auto px-0 text-sm" onClick={target.onSelect} size="sm" variant="link">
+      {t(`actions.${explanation.action}`)}
+    </Button>
   );
 }
-
-function ExplanationList({
-  explanations,
-  heading,
-  HeadingTag,
-  onSelectReference,
-  tone,
-}: Readonly<{
-  explanations: PlanScoreExplanation[];
-  heading: string;
-  /** One level below the panel's own heading, whatever the host route set it to. */
-  HeadingTag: 'h3' | 'h4';
-  onSelectReference?: (reference: string) => void;
-  tone: 'improve' | 'uncertain' | 'works';
-}>) {
+function OutcomeRows({
+  outcomes,
+  ids,
+}: {
+  outcomes: Record<string, PlanScoreFactorOutcome>;
+  ids: readonly string[];
+}) {
   const t = useTranslations('planScore');
-
-  if (explanations.length === 0) return null;
-
   return (
-    <section className="space-y-1.5">
-      <HeadingTag className="text-xs font-medium text-muted-foreground">{heading}</HeadingTag>
-      <ul className="space-y-1.5">
-        {explanations.map((explanation, index) => (
-          <li
-            className={cn(
-              'text-sm leading-snug',
-              tone === 'uncertain' ? 'text-muted-foreground' : 'text-foreground',
-            )}
-            key={`${explanation.messageKey}-${index}`}
+    <dl className="divide-y divide-border-subtle">
+      {ids.map((id) => {
+        const outcome = outcomes[id]!;
+        return (
+          <div
+            className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3"
+            key={id}
           >
-            <span>{t(explanation.messageKey, explanation.values)}</span>
-            <SuggestedAction explanation={explanation} onSelectReference={onSelectReference} />
+            <dt className="text-sm font-medium">{t(`factorLabels.${id}`)}</dt>
+            <dd className="text-right text-sm tabular-nums">
+              {outcome.state === 'EVALUATED' ? (
+                <>
+                  <span className="font-semibold">
+                    {outcome.score}{' '}
+                    <span className="text-xs font-normal text-muted-foreground">{t('outOf')}</span>
+                  </span>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t('categoryEvidence', {
+                      coverage: outcome.coverage,
+                      confidence: outcome.confidence,
+                    })}
+                  </p>
+                </>
+              ) : (
+                <span className="text-muted-foreground">
+                  {t(
+                    outcome.state === 'UNKNOWN'
+                      ? 'factorStatus.unknown'
+                      : 'factorStatus.notApplicable',
+                  )}
+                </span>
+              )}
+            </dd>
+          </div>
+        );
+      })}
+    </dl>
+  );
+}
+function Reasons({
+  explanations,
+  label,
+  resolveAction,
+}: Pick<Props, 'resolveAction'> & { explanations: PlanScoreExplanation[]; label: string }) {
+  const t = useTranslations('planScore');
+  if (!explanations.length) return null;
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <ul className="space-y-2">
+        {explanations.map((reason, index) => (
+          <li className="text-sm leading-relaxed" key={`${reason.code}-${index}`}>
+            <p>{t(reason.messageKey, reason.values)}</p>
+            <SuggestedAction explanation={reason} resolveAction={resolveAction} />
           </li>
         ))}
       </ul>
-    </section>
-  );
-}
-
-function SupportingMeter({ label, value }: Readonly<{ label: string; value: number }>) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span
-        aria-hidden="true"
-        className="h-1 w-12 overflow-hidden rounded-full bg-muted"
-        data-slot="plan-score-meter"
-      >
-        <span
-          className="block h-full rounded-full bg-muted-foreground/50"
-          style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
-        />
-      </span>
-      <span className="text-xs tabular-nums text-muted-foreground">{value}%</span>
     </div>
   );
 }
 
-/**
- * Answers the two questions a traveller has — does this look good, and what
- * should I change — and keeps the number, the meters, and the rest of the
- * explanations behind explicit disclosure. See PRD section 29.4.
- */
+/** One disclosure shared by planning and AI review. No calculations feed back into the rubric. */
 export function PlanScorePanel({
+  assessment,
+  change,
   className,
   completeness,
   confidence,
+  dayId,
   disabled,
   explanations,
   factors,
   headingLevel = 3,
   onRetry,
-  onSelectReference,
+  resolveAction,
   score,
   scope,
+  showDestinationContext = true,
   status,
   title,
-}: PlanScorePanelProps) {
+}: Props) {
   const t = useTranslations('planScore');
-  const [showDetails, setShowDetails] = useState(false);
-  const detailsId = useId();
-  const PanelHeading = headingLevel === 2 ? 'h2' : 'h3';
-  const GroupHeading = headingLevel === 2 ? 'h3' : 'h4';
-
-  const shell = cn('space-y-3 rounded-lg border border-border bg-card p-4', className);
-
-  if (disabled) return null;
-
-  if (status === 'error') {
-    return (
-      <div className={shell} role="status">
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <CircleAlert aria-hidden="true" className="size-4" />
-          {t('unavailable')}
+  const formatter = useFormatter();
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [focusedRecordId, setFocusedRecordId] = useState<string | null>(null);
+  const action = (explanation: PlanScoreExplanation): ScoreAction | null => {
+    const supplied = resolveAction?.(explanation);
+    if (supplied) return supplied;
+    if (!showDestinationContext) return null;
+    const context = assessment?.presentation?.destinationContext;
+    const groups =
+      scope === 'trip'
+        ? context?.overview
+        : context?.days.find((day) => day.dayId === dayId)?.groups;
+    const record = groups
+      ?.flatMap((group) => group.records)
+      .find(
+        (record) =>
+          explanation.references.includes(record.id) && Date.parse(record.expiresAt) > Date.now(),
+      );
+    return record
+      ? {
+          onSelect: () => {
+            setDetailsOpen(true);
+            setFocusedRecordId(record.id);
+          },
+        }
+      : null;
+  };
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (!assessment) return;
+    const deadline = assessmentDeadline(assessment);
+    if (!Number.isFinite(deadline) || deadline <= Date.now()) {
+      setClock(Date.now());
+      return;
+    }
+    const timeout = window.setTimeout(() => setClock(Date.now()), deadline - Date.now() + 1);
+    const refresh = () => setClock(Date.now());
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearTimeout(timeout);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [assessment]);
+  const Heading = headingLevel === 2 ? 'h2' : 'h3';
+  if (
+    disabled ||
+    status === 'disabled' ||
+    assessment?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')
+  )
+    return null;
+  const unavailable =
+    status !== 'idle' ||
+    Boolean(assessment && !currentAssessment(assessment, Math.max(clock, Date.now())));
+  const displayScore = unavailable ? null : score;
+  const reasonStatus = status === 'idle' && unavailable ? 'expired' : status;
+  const problems = unavailable ? [] : prioritizedProblems(explanations.worthImproving);
+  const [topProblem, ...otherProblems] = problems;
+  const day = assessment?.days.find((entry) => entry.dayId === dayId);
+  const caps = scope === 'day' ? (day?.caps ?? []) : (assessment?.caps ?? []);
+  const dateTime = (value: string) =>
+    formatter.dateTime(new Date(value), { dateStyle: 'medium', timeStyle: 'short' });
+  const adjustment = assessment?.presentation?.adjustments;
+  return (
+    <section
+      aria-label={title}
+      className={cn('space-y-3 rounded-lg border border-border bg-card p-4', className)}
+    >
+      <Heading className="flex items-center gap-2 text-sm font-medium">
+        <Sparkles aria-hidden="true" className="size-4 text-muted-foreground" />
+        {title}
+      </Heading>
+      {displayScore !== null ? (
+        <div className="flex items-baseline gap-3">
+          <span
+            aria-label={t('scoreBadgeLabel', { score: displayScore })}
+            className="text-2xl font-semibold tabular-nums"
+          >
+            {displayScore}
+            <span aria-hidden="true" className="ml-1 text-xs font-normal text-muted-foreground">
+              {t('outOf')}
+            </span>
+          </span>
+          <p className="text-sm font-medium">
+            {t(`verdict.${scope}.${verdictBand(displayScore)}`)}
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground" role="status">
+          {unavailable
+            ? t(
+                reasonStatus === 'expired' && !onRetry
+                  ? 'availability.expiredStored'
+                  : `availability.${reasonStatus}`,
+              )
+            : t(`notEnoughInformation.${scope}`)}
         </p>
-        {onRetry ? (
+      )}
+      {change && !unavailable ? (
+        <p className="text-xs text-muted-foreground" role="status">
+          {t(`changes.sources.${change.source}`)}{' '}
+          {t(`changes.states.${change.state}`, {
+            delta:
+              change.delta === null
+                ? ''
+                : change.delta > 0
+                  ? `+${change.delta}`
+                  : String(change.delta),
+          })}
+        </p>
+      ) : null}
+      {topProblem ? (
+        <div className="space-y-1 text-sm leading-relaxed">
+          <p>
+            <span className="font-medium">{t('improvementLead')} </span>
+            {t(topProblem.messageKey, topProblem.values)}
+          </p>
+          <SuggestedAction explanation={topProblem} resolveAction={action} />
+        </div>
+      ) : null}
+      {unavailable ? (
+        onRetry && ['error', 'expired'].includes(reasonStatus) ? (
           <Button onClick={onRetry} size="sm" variant="outline">
             {t('retry')}
           </Button>
-        ) : null}
-      </div>
-    );
-  }
-
-  const heading = (
-    <PanelHeading className="flex items-center gap-2 text-sm font-medium">
-      <Sparkles aria-hidden="true" className="size-4 text-muted-foreground" />
-      {title}
-    </PanelHeading>
-  );
-
-  // Verified problems remain actionable even when coverage withholds the number.
-  if (score === null) {
-    return (
-      <div className={shell}>
-        {heading}
-        <p className="text-sm text-muted-foreground">
-          {status === 'loading' ? t('loading') : t(`notEnoughInformation.${scope}`)}
-        </p>
-        <ExplanationList
-          explanations={explanations.worthImproving.filter(
-            (e) => e.severity === 'HARD' || e.severity === 'MATERIAL',
-          )}
-          heading={t('worthImproving')}
-          HeadingTag={GroupHeading}
-          onSelectReference={onSelectReference}
-          tone="improve"
-        />
-      </div>
-    );
-  }
-
-  // The API already orders `worthImproving` by consequence (PRD section 29.4),
-  // so the first entry is the one improvement worth surfacing.
-  const [topImprovement, ...remainingImprovements] = explanations.worthImproving;
-  const band = verdictBand(score);
-
-  return (
-    <div className={shell}>
-      {heading}
-
-      <div className="flex items-center gap-2.5">
-        <ScoreBadge band={band} score={score} />
-        <p className="text-base font-semibold text-foreground">{t(`verdict.${scope}.${band}`)}</p>
-      </div>
-
-      {topImprovement ? (
-        <p className="text-sm leading-snug text-muted-foreground">
-          <span className="text-foreground">{t('improvementLead')} </span>
-          <span>{t(topImprovement.messageKey, topImprovement.values)}</span>
-          <SuggestedAction explanation={topImprovement} onSelectReference={onSelectReference} />
-        </p>
-      ) : null}
-
-      <button
-        aria-controls={detailsId}
-        aria-expanded={showDetails}
-        className="flex items-center gap-2 rounded-[var(--radius-sm)] py-1 text-left text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
-        onClick={() => setShowDetails(!showDetails)}
-        type="button"
-      >
-        <ChevronDown
-          aria-hidden="true"
-          className={cn('size-3 transition-transform duration-[var(--motion-standard)]', {
-            'rotate-180': showDetails,
-          })}
-        />
-        {showDetails ? t('hideDetails') : t('showDetails')}
-      </button>
-
-      {showDetails ? (
-        <div className="space-y-3 border-t border-border pt-3" id={detailsId}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="flex items-baseline gap-1">
-              <span className="text-2xl font-semibold tabular-nums">{score}</span>
-              <span className="text-xs text-muted-foreground">{t('outOf')}</span>
-            </p>
-            <div className="space-y-1">
-              {typeof confidence === 'number' ? (
-                <SupportingMeter label={t('confidence')} value={confidence} />
+        ) : null
+      ) : (
+        <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+          <CollapsibleTrigger className="group text-xs">
+            <ChevronDown
+              aria-hidden="true"
+              className="size-3 transition-transform duration-[var(--motion-standard)] group-data-panel-open:rotate-180 motion-reduce:transition-none"
+            />
+            {t(detailsOpen ? 'hideDetails' : 'showDetails')}
+          </CollapsibleTrigger>
+          <CollapsiblePanel>
+            <div className="mt-3 space-y-5 border-t border-border pt-3">
+              <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+                {typeof confidence === 'number' ? (
+                  <span>{t('confidenceValue', { value: confidence })}</span>
+                ) : null}
+                {typeof completeness === 'number' ? (
+                  <span>{t('coverageValue', { value: completeness })}</span>
+                ) : null}
+              </div>
+              {scope === 'day' && factors ? (
+                <OutcomeRows ids={DAILY_CATEGORIES} outcomes={factors} />
               ) : null}
-              {typeof completeness === 'number' ? (
-                <SupportingMeter label={t('completeness')} value={completeness} />
+              {scope === 'trip' && assessment ? (
+                <>
+                  <OutcomeRows ids={TRIP_COMPONENTS} outcomes={assessment.components} />
+                  {adjustment ? (
+                    <div className="space-y-1 text-sm">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {t('tripAdjustments')}
+                      </p>
+                      <p>{t('fatigueAdjustment', { value: adjustment.fatigue })}</p>
+                      <p>{t('weakDayAdjustment', { value: adjustment.weakDays })}</p>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+              {caps.length ? (
+                <div className="space-y-1 text-sm">
+                  <p className="text-xs font-medium text-muted-foreground">{t('appliedCaps')}</p>
+                  {caps.map((cap, index) => (
+                    <p key={`${cap.reason}-${index}`}>
+                      {t(`caps.${cap.reason}`, { limit: cap.limit })}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+              <Reasons
+                explanations={otherProblems}
+                label={t('worthImproving')}
+                resolveAction={action}
+              />
+              <Reasons explanations={explanations.whatWorks} label={t('whatWorks')} />
+              <Reasons
+                explanations={explanations.uncertainty}
+                label={t('uncertainty')}
+                resolveAction={action}
+              />
+              {showDestinationContext && assessment?.presentation?.destinationContext ? (
+                <ItineraryDestinationContext
+                  onFocusedRecordDismissed={() => setFocusedRecordId(null)}
+                  focusedRecordId={focusedRecordId}
+                  context={assessment.presentation.destinationContext}
+                  dayId={scope === 'day' ? (dayId ?? '') : null}
+                />
+              ) : null}
+              {assessment ? (
+                <div className="space-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
+                  <p>{t('assessedAt', { date: dateTime(assessment.generatedAt) })}</p>
+                  {assessment.evidenceAsOf ? (
+                    <p>{t('evidenceAt', { date: dateTime(assessment.evidenceAsOf) })}</p>
+                  ) : null}
+                  <p>
+                    {t('validUntil', {
+                      date: dateTime(new Date(assessmentDeadline(assessment)).toISOString()),
+                    })}
+                  </p>
+                </div>
               ) : null}
             </div>
-          </div>
-
-          {scope === 'day' && factors ? <FactorStatusRow factors={factors} /> : null}
-
-          <ExplanationList
-            explanations={remainingImprovements}
-            heading={t('worthImproving')}
-            HeadingTag={GroupHeading}
-            onSelectReference={onSelectReference}
-            tone="improve"
-          />
-          <ExplanationList
-            explanations={explanations.whatWorks}
-            heading={t('whatWorks')}
-            HeadingTag={GroupHeading}
-            tone="works"
-          />
-          <ExplanationList
-            explanations={explanations.uncertainty}
-            heading={t('uncertainty')}
-            HeadingTag={GroupHeading}
-            tone="uncertain"
-          />
-        </div>
-      ) : null}
-    </div>
+          </CollapsiblePanel>
+        </Collapsible>
+      )}
+    </section>
   );
 }

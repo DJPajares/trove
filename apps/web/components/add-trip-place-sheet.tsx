@@ -2,10 +2,11 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { Bookmark, CircleAlert, MapPinned, NotebookPen, Pencil, Plus } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { SearchField } from '@/components/search-field';
+import { useTripContext } from '@/components/trip-provider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
@@ -27,15 +28,15 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
+import { useProviderPlaceSearch } from '@/hooks/use-provider-place-search';
 import {
   createCustomPlace,
   fetchSavedPlaces,
-  GOOGLE_PLACES_SEARCH_DEBOUNCE_MS,
   type ProviderSuggestion,
   resolveProviderPlace,
   type SavedPlace,
-  searchProviderPlaces,
 } from '@/lib/saved/api';
+import { destinationLocationBias } from '@/lib/saved/provider-search-session';
 import { PROVIDER_SEARCH_RESULT_LIMIT } from '@/lib/saved/search-results';
 import { addTripPlace, type TripPlace } from '@/lib/trip-places/api';
 import { queryKeys } from '@/lib/query/keys';
@@ -69,10 +70,6 @@ export function AddTripPlaceSheet({
   const t = useTranslations('tripPlaces');
   const locale = useLocale();
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<ProviderSuggestion[]>([]);
-  const [searchStatus, setSearchStatus] = useState<'empty' | 'idle' | 'loading' | 'unavailable'>(
-    'idle',
-  );
   const [busyId, setBusyId] = useState<string | null>(null);
   /** Which row has its name field open — only ever one, like `busyId`. */
   const [namingId, setNamingId] = useState<string | null>(null);
@@ -92,46 +89,14 @@ export function AddTripPlaceSheet({
     useQuery({ queryFn: fetchSavedPlaces, queryKey: queryKeys.savedPlaces() }).data?.savedPlaces ??
     EMPTY_SAVED_PLACES;
 
-  // Nothing typed means nothing to ask the provider about.
-  useEffect(() => {
-    const input = query.trim();
-    if (!input) {
-      setResults([]);
-      setSearchStatus('idle');
-      return;
-    }
-
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => {
-      setSearchStatus('loading');
-      void searchProviderPlaces(input, controller.signal)
-        .then((result) => {
-          if (controller.signal.aborted) return;
-          if (result.status === 'unavailable') {
-            setResults([]);
-            setSearchStatus('unavailable');
-            return;
-          }
-          setResults(result.suggestions ?? []);
-          setSearchStatus(result.status === 'empty' ? 'empty' : 'idle');
-        })
-        .catch((cause: unknown) => {
-          if (
-            controller.signal.aborted ||
-            (cause instanceof DOMException && cause.name === 'AbortError')
-          ) {
-            return;
-          }
-          setResults([]);
-          setSearchStatus('unavailable');
-        });
-    }, GOOGLE_PLACES_SEARCH_DEBOUNCE_MS);
-
-    return () => {
-      controller.abort();
-      window.clearTimeout(timeout);
-    };
-  }, [query]);
+  // Searches made while this sheet is open are billed as one session, and are
+  // preferred near where the trip is going. Nothing shorter than a few letters
+  // is worth asking the provider about.
+  const destinations = useTripContext()?.trip?.destinations;
+  const locationBias = useMemo(() => destinationLocationBias(destinations ?? []), [destinations]);
+  const search = useProviderPlaceSearch(query, locationBias);
+  const results = search.results;
+  const searchStatus = search.status;
 
   const savedName = (savedPlace: SavedPlace) =>
     savedPlace.place.kind === 'custom'
@@ -212,9 +177,11 @@ export function AddTripPlaceSheet({
         suggestion.externalPlaceId,
         { address: suggestion.description, name: suggestion.name },
         locale,
-        undefined,
+        search.sessionToken(),
         'itinerary',
       );
+      // Choosing a place is what ends an Autocomplete session.
+      search.endSession();
       const { tripPlace } = await addTripPlace(tripId, place.id, { customName });
       onAdded(tripPlace);
       closeNaming();
@@ -440,6 +407,8 @@ export function AddTripPlaceSheet({
             <p aria-live="polite" className="text-sm text-muted-foreground" role="status">
               {t('searching')}
             </p>
+          ) : !search.searchable ? (
+            <p className="text-sm leading-6 text-muted-foreground">{t('searchHint')}</p>
           ) : searchStatus === 'empty' || searchStatus === 'idle' ? (
             <p className="text-sm leading-6 text-muted-foreground">{t('noSearchResults')}</p>
           ) : null}

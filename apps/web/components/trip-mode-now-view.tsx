@@ -453,6 +453,17 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
             {route?.bufferSeconds ? (
               <p className="text-xs leading-5 text-text-subtle md:min-w-44 md:border-l md:border-border md:pl-6">
                 {t('leaveByBuffer', { minutes: Math.round(route.bufferSeconds / 60) })}
+                {/* Offline, the travel time is one measured earlier; say when. */}
+                {route.measuredAt ? (
+                  <span className="block">
+                    {t('leaveByMeasured', {
+                      date: new Intl.DateTimeFormat(locale, {
+                        day: 'numeric',
+                        month: 'short',
+                      }).format(new Date(route.measuredAt)),
+                    })}
+                  </span>
+                ) : null}
               </p>
             ) : null}
           </div>

@@ -5,6 +5,7 @@ import { createItineraryRouteControllers } from '../controllers/itinerary-routes
 import { createItineraryTimeSuggestionControllers } from '../controllers/itinerary-time-suggestions.js';
 import { createDayBetterOrderControllers } from '../controllers/day-better-order.js';
 import { createPlaceGroupingsControllers } from '../controllers/place-groupings.js';
+import { createTripOfflineContextControllers } from '../controllers/trip-offline-context.js';
 import { createTripPlaceHoursControllers } from '../controllers/trip-place-hours.js';
 import { createTripModeContextControllers } from '../controllers/trip-mode-context.js';
 import { requireAuthenticatedUser } from '../services/request-auth.js';
@@ -18,6 +19,7 @@ export function registerItineraryRoutes(app: FastifyInstance) {
   const tripPlaceHoursControllers = createTripPlaceHoursControllers();
   const betterOrderControllers = createDayBetterOrderControllers();
   const placeGroupingsControllers = createPlaceGroupingsControllers();
+  const offlineContextControllers = createTripOfflineContextControllers();
   const authenticated = { preHandler: requireAuthenticatedUser };
   // These reach Google once per place and once per leg of the day.
   const providerBacked = { config: PROVIDER_FANOUT_RATE_LIMIT, ...authenticated };
@@ -40,6 +42,12 @@ export function registerItineraryRoutes(app: FastifyInstance) {
   );
   // Stored evidence only, so no provider fan-out: an ordinary authenticated read.
   app.get('/trips/:tripId/place-hours', authenticated, tripPlaceHoursControllers.getTripPlaceHours);
+  // What offline Trip Mode keeps: stored legs and hours only, never acquired.
+  app.get(
+    '/trips/:tripId/offline-context',
+    authenticated,
+    offlineContextControllers.getTripOfflineContext,
+  );
   // Stored coordinates and the itinerary only.
   app.get(
     '/trips/:tripId/place-groupings',

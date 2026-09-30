@@ -1,4 +1,4 @@
-import { fetchItinerary } from '@/lib/itinerary/api';
+import { fetchItinerary, fetchTripOfflineContext } from '@/lib/itinerary/api';
 import { getCurrenciesWithCache, getRateBoardWithCache } from '@/lib/currency/api';
 import { fetchExpenses } from '@/lib/expenses/api';
 import { fetchReservations } from '@/lib/reservations/api';
@@ -113,6 +113,10 @@ export async function prepareTripForOffline(tripId: string) {
       fetchExpenses(tripId),
       refreshSelectedDocuments(userId, tripId),
       cacheTripPages(tripId),
+      // Legs and hours Trove already has stored, so offline Trip Mode can still
+      // say when to leave and whether a stop is open. Never acquired here, and
+      // only enrichment: failing to keep it must not stop a trip being Ready.
+      fetchTripOfflineContext(tripId).catch(() => undefined),
     ]);
     await cacheTripCover(tripResult.trip.coverPhotoUrl);
     if (!isOfflineApiReachable()) throw new OfflineSyncError('offline_preparation_unavailable');

@@ -172,6 +172,8 @@ export const PERSISTED_QUERY_ROOTS = new Set([
   'currency',
   'editorial-images',
   'itinerary-day-routes',
+  // A place's opened details stay readable offline, within their own 30-day life.
+  'place-rich-details',
   'profile',
   'saved',
   'task-templates',

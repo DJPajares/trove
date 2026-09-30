@@ -711,6 +711,7 @@
         "leaveInHours": "Leave in {hours}h {minutes}m",
         "leaveByAt": "by {time}",
         "leaveByBuffer": "{minutes, plural, one {Includes # minute of slack.} other {Includes # minutes of slack.}}",
+        "leaveByMeasured": "Offline: travel time measured {date}",
         "travelEstimate": "{duration} by {mode}",
         "travelMode": {
           "drive": "car",

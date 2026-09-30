@@ -152,8 +152,11 @@ export const queryKeys = {
  */
 export const PROVIDER_BILLABLE_QUERY_ROOTS = new Set([
   'editorial-images',
+  'itinerary',
   'itinerary-day-routes',
+  'place-rich-details',
   'trip-mode-context',
+  'trip-places',
 ]);
 
 /**

@@ -245,3 +245,22 @@ test('Plan Score is cache-only and stays explicit about revalidation', () => {
   expect(PERSISTED_QUERY_ROOTS.has('plan-score')).toBe(false);
   client.clear();
 });
+
+test('every root that can reach a billed provider server-side is guarded', () => {
+  for (const root of ['itinerary', 'place-rich-details', 'trip-places']) {
+    expect(PROVIDER_BILLABLE_QUERY_ROOTS.has(root), root).toBe(true);
+    expect(createQueryClient().getQueryDefaults([root]).staleTime, root).toBe(
+      Number.POSITIVE_INFINITY,
+    );
+  }
+});
+
+test('Home and Trip Mode ask for the trip context with the same key', () => {
+  const home = queryKeys.tripModeContext('trip-1', { clockTimeZone: 'UTC', languageCode: 'en' });
+  const tripMode = queryKeys.tripModeContext('trip-1', {
+    clockTimeZone: 'UTC',
+    languageCode: 'en',
+  });
+  expect(home).toStrictEqual(tripMode);
+  expect(home).not.toStrictEqual(queryKeys.tripModeContext('trip-1', { clockTimeZone: 'UTC' }));
+});

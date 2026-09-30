@@ -639,3 +639,45 @@ test('date-specific hours from a grounded place are stored with the dates they a
     vi.unstubAllGlobals();
   }
 });
+
+test('opened rich details go through their own service, never the search one', async () => {
+  const searchDetails = vi.fn(async () => {
+    throw new PlaceProviderError('provider_unavailable');
+  });
+  const detailsDetails = vi.fn(async () => {
+    throw new PlaceProviderError('provider_unavailable');
+  });
+  vi.stubGlobal('trovePrismaClient', {
+    place: {
+      findFirst: async () => ({
+        providerRefs: [{ provider: 'GOOGLE', externalPlaceId: 'museum' }],
+      }),
+    },
+  });
+  const app = Fastify();
+  app.decorateRequest('authUserId', undefined);
+  const controllers = createPlacesControllers(
+    new PlacesService({ name: 'google', search: async () => [], getDetails: searchDetails }),
+    undefined,
+    null,
+    new PlacesService({ name: 'google', search: async () => [], getDetails: detailsDetails }),
+  );
+  app.get(
+    '/places/:placeId/details',
+    {
+      preHandler: async (request) => {
+        request.authUserId = 'owner';
+      },
+    },
+    controllers.richDetails,
+  );
+
+  try {
+    await app.inject({ url: '/places/12345678-1234-4234-8234-123456789012/details' });
+    expect(detailsDetails).toHaveBeenCalledTimes(1);
+    expect(searchDetails).not.toHaveBeenCalled();
+  } finally {
+    await app.close();
+    vi.unstubAllGlobals();
+  }
+});

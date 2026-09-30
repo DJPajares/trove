@@ -150,6 +150,7 @@ export function createPlacesControllers(
   placesService: PlacesService | null,
   canonicalPlacesService: CanonicalPlacesService = createCanonicalPlacesService(),
   placeLocationCandidatesService: PlaceLocationCandidatesService | null = null,
+  placeDetailsService: PlacesService | null = placesService,
 ) {
   return {
     async richDetails(request: FastifyRequest, reply: FastifyReply) {
@@ -176,8 +177,8 @@ export function createPlacesControllers(
       if (!place) return reply.code(404).send({ code: 'place_not_found' });
       const ref = place.providerRefs.find((entry) => entry.provider === 'GOOGLE');
       if (!ref) return reply.send({ status: 'empty', provider: 'google', reason: 'not_found' });
-      if (!placesService) return sendConfigurationMissing(reply);
-      const result = await placesService.getDetails({
+      if (!placeDetailsService) return sendConfigurationMissing(reply);
+      const result = await placeDetailsService.getDetails({
         externalPlaceId: ref.externalPlaceId,
         detail: 'evidence',
         languageCode: query.data.languageCode,

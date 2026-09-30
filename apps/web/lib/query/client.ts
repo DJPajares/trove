@@ -27,10 +27,11 @@ const STALE_TIME_BY_ROOT: Record<string, number> = {
   currency: 12 * 60 * MINUTE,
   'editorial-images': Number.POSITIVE_INFINITY,
   expenses: MINUTE,
-  itinerary: 15 * 1_000,
+  itinerary: Number.POSITIVE_INFINITY,
   'itinerary-day-routes': Number.POSITIVE_INFINITY,
   memories: MINUTE,
   notifications: MINUTE,
+  'place-rich-details': Number.POSITIVE_INFINITY,
   'plan-score': Number.POSITIVE_INFINITY,
   profile: 5 * MINUTE,
   reservations: MINUTE,
@@ -40,7 +41,7 @@ const STALE_TIME_BY_ROOT: Record<string, number> = {
   trip: MINUTE,
   'trip-info': MINUTE,
   'trip-mode-context': Number.POSITIVE_INFINITY,
-  'trip-places': MINUTE,
+  'trip-places': Number.POSITIVE_INFINITY,
   trips: 30 * 1_000,
 };
 

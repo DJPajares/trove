@@ -11,8 +11,13 @@ import type { PlanScoreInterval } from './plan-score-factors.js';
 /** A visit length: `typical` fills an unknown duration, `minimum` marks a rushed one. */
 export type PlaceVisitMinutes = { typical: number; minimum: number };
 
-/** Local minutes from midnight; an `endMinute` past 1440 runs into the next night. */
-export type PlaceTimeWindows = readonly PlanScoreInterval[] | 'DAYLIGHT';
+/**
+ * Local minutes from midnight; an `endMinute` past 1440 runs into the next night.
+ * `typicalMinute` is when such a visit usually starts, for suggesting a time; the
+ * window's bounds alone decide whether a planned time suits it.
+ */
+export type PlaceTimeWindow = PlanScoreInterval & { typicalMinute?: number };
+export type PlaceTimeWindows = readonly PlaceTimeWindow[] | 'DAYLIGHT';
 
 export type PlaceProfile = {
   /** Logistics places (airports, stations, stays) are never scored as visits. */
@@ -31,8 +36,8 @@ export type PlaceProfile = {
 
 const at = (hour: number, minute = 0) => hour * 60 + minute;
 const MEALS = [
-  { startMinute: at(10, 30), endMinute: at(15, 30) },
-  { startMinute: at(17), endMinute: at(23) },
+  { startMinute: at(10, 30), endMinute: at(15, 30), typicalMinute: at(12, 30) },
+  { startMinute: at(17), endMinute: at(23), typicalMinute: at(19) },
 ];
 const DAYTIME = [{ startMinute: at(7), endMinute: at(21) }];
 const OPENING_DAY = [{ startMinute: at(9), endMinute: at(19) }];
@@ -96,7 +101,7 @@ const RULES: readonly ProfileRule[] = [
   },
   {
     types: ['breakfast_restaurant', 'brunch_restaurant'],
-    profile: visit(60, 25, [{ startMinute: at(6), endMinute: at(14) }]),
+    profile: visit(60, 25, [{ startMinute: at(6), endMinute: at(14), typicalMinute: at(8, 30) }]),
   },
   {
     types: ['fast_food_restaurant', 'meal_takeaway', 'sandwich_shop', 'food_court'],
@@ -117,11 +122,11 @@ const RULES: readonly ProfileRule[] = [
   },
   {
     types: ['bar', 'pub', 'wine_bar', 'cocktail_bar', 'beer_garden', 'winery'],
-    profile: visit(90, 30, [{ startMinute: at(16), endMinute: at(26) }]),
+    profile: visit(90, 30, [{ startMinute: at(16), endMinute: at(26), typicalMinute: at(19) }]),
   },
   {
     types: ['night_club', 'karaoke', 'casino', 'comedy_club'],
-    profile: visit(150, 60, [{ startMinute: at(20), endMinute: at(28) }]),
+    profile: visit(150, 60, [{ startMinute: at(20), endMinute: at(28), typicalMinute: at(22) }]),
   },
   {
     types: ['market', 'farmers_market', 'flea_market', 'night_market'],

@@ -1670,13 +1670,20 @@
       "unavailable": "Not enough is known about this day to suggest a time.",
       "reason": {
         "AFTER_PREVIOUS_ITEM": "Leaves enough time to get here from the stop before.",
+        "AVAILABILITY": "Set to when your day starts.",
         "CLEARS_COMMITMENT": "Set after something else already booked for this day.",
         "DAY_PART_WINDOW": "Stays inside the part of the day you picked.",
-        "OPENING_HOURS": "Set to when this place opens."
+        "FITS_AROUND_STOPS": "Set around your other stops for this day.",
+        "FROM_STAY": "Leaves time to get here from where you’re staying.",
+        "OPENING_HOURS": "Set to when this place opens.",
+        "PREVIOUS_ITEM_ENDS": "Set for after the stop before ends.",
+        "SUITS_PLACE": "Set to a usual time for a place like this."
       },
       "caveat": {
+        "DURATION_ESTIMATED": "Based on typical visit lengths.",
         "DURATION_UNKNOWN": "Add a duration for a closer fit.",
         "OPENING_HOURS_UNKNOWN": "Opening hours are not known, so check them.",
+        "TRAVEL_ESTIMATED": "Travel times are estimates.",
         "TRAVEL_UNKNOWN": "Travel time from the stop before is not known."
       }
     },

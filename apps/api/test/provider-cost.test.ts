@@ -984,6 +984,21 @@ test('Plan Score reads scheduled evidence without acquiring missing places', asy
   ).toStrictEqual([]);
 });
 
+test('suggesting a time for a new stop reads only what is stored', async () => {
+  tripFixture = buildPlanScoreTripFixture();
+  const { getItineraryDayTimeSuggestions } =
+    await import('../src/services/itinerary-time-suggestions.js');
+
+  // No provider is configured and none may be reached: the new stop's place,
+  // hours and leg are all read from what Trove already stored, or estimated.
+  const result = await getItineraryDayTimeSuggestions('user-1', 'trip-1', 'day-1', {
+    candidate: { durationMinutes: null, tripPlaceId: 'tp-unscheduled' },
+  });
+
+  expect(result.suggestions.map((suggestion) => suggestion.itemId)).toStrictEqual(['candidate']);
+  expect(getProviderCallCounts()).toStrictEqual({});
+});
+
 test('TROVE_PLAN_SCORE_DISABLED stops every provider call, even with a working service supplied', async () => {
   tripFixture = buildPlanScoreTripFixture();
   const { requests } = detailRequestsProvider();

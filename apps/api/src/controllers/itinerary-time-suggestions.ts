@@ -7,11 +7,18 @@ import { ItineraryNotFoundError } from '../services/itineraries.js';
 const dayParamsSchema = z.object({ itineraryDayId: z.uuid(), tripId: z.uuid() }).strict();
 const querySchema = z
   .object({
+    // A stop being added, not yet saved: it is described rather than named.
+    candidate: z.literal('1').optional(),
+    candidateDurationMinutes: z.coerce.number().int().positive().max(1440).optional(),
+    candidateTripPlaceId: z.uuid().optional(),
     itemId: z.uuid().optional(),
     // The timing the caller is showing, which may not be what is stored yet.
     schedule: z.enum(['afternoon', 'anytime', 'evening', 'exact', 'morning', 'none']).optional(),
   })
-  .strict();
+  .strict()
+  .refine((query) => !(query.candidate && query.itemId), {
+    error: 'candidate_or_item',
+  });
 
 function getUserId(request: FastifyRequest, reply: FastifyReply) {
   if (!request.authUserId) {
@@ -45,7 +52,16 @@ export function createItineraryTimeSuggestionControllers() {
             userId,
             params.data.tripId,
             params.data.itineraryDayId,
-            { itemId: query.data.itemId, schedule: query.data.schedule },
+            {
+              candidate: query.data.candidate
+                ? {
+                    durationMinutes: query.data.candidateDurationMinutes ?? null,
+                    tripPlaceId: query.data.candidateTripPlaceId ?? null,
+                  }
+                : undefined,
+              itemId: query.data.itemId,
+              schedule: query.data.schedule,
+            },
           ),
         );
       } catch (error) {

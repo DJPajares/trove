@@ -133,13 +133,29 @@ export type ItineraryDayRoutes = {
 
 export type SuggestedTimeReasonCode =
   | 'AFTER_PREVIOUS_ITEM'
+  | 'AVAILABILITY'
   | 'BEFORE_FIXED_ITEM'
   | 'CLEARS_COMMITMENT'
   | 'DAY_PART_WINDOW'
   | 'DAY_START'
-  | 'OPENING_HOURS';
+  | 'FITS_AROUND_STOPS'
+  | 'FROM_STAY'
+  | 'OPENING_HOURS'
+  | 'PREVIOUS_ITEM_ENDS'
+  | 'SUITS_PLACE';
 
-export type SuggestedTimeCaveat = 'DURATION_UNKNOWN' | 'OPENING_HOURS_UNKNOWN' | 'TRAVEL_UNKNOWN';
+export type SuggestedTimeCaveat =
+  | 'DURATION_ESTIMATED'
+  | 'DURATION_UNKNOWN'
+  | 'OPENING_HOURS_UNKNOWN'
+  | 'TRAVEL_ESTIMATED'
+  | 'TRAVEL_UNKNOWN';
+
+/** A stop still being added: it has no id yet and joins the end of the day. */
+export type SuggestedTimeCandidate = { durationMinutes: number | null; tripPlaceId: string | null };
+
+/** The id a candidate stop's suggestion answers under. */
+export const CANDIDATE_SUGGESTION_ID = 'candidate';
 
 /** Mirrors the editor's schedule choices, including ones still unsaved. */
 export type RequestedSchedule = 'afternoon' | 'anytime' | 'evening' | 'exact' | 'morning' | 'none';
@@ -708,19 +724,31 @@ export async function fetchItineraryDayRoutes(
 /**
  * Suggested start times for a day.
  *
- * Deliberately has no offline path. The suggestion is derived from live route
- * and provider evidence, so a cached answer would be a stale proposal presented
- * as a current one — the same reason Plan Score never reads the offline
- * snapshot. Callers hide the affordance while offline rather than queueing it;
- * this is a read, and nothing is lost by waiting.
+ * The server answers from stored evidence only and never calls a provider for
+ * it. There is still no offline path: the answer depends on the rest of the
+ * day as the server holds it, so a cached one would be a stale proposal
+ * presented as current. Callers hide the affordance while offline; this is a
+ * read, and nothing is lost by waiting.
  */
 export async function fetchItineraryDayTimeSuggestions(
   tripId: string,
   itineraryDayId: string,
-  options: { itemId?: string; schedule?: RequestedSchedule; signal?: AbortSignal } = {},
+  options: {
+    candidate?: SuggestedTimeCandidate;
+    itemId?: string;
+    schedule?: RequestedSchedule;
+    signal?: AbortSignal;
+  } = {},
 ) {
   const query = new URLSearchParams();
   if (options.itemId) query.set('itemId', options.itemId);
+  if (options.candidate) {
+    query.set('candidate', '1');
+    if (options.candidate.tripPlaceId)
+      query.set('candidateTripPlaceId', options.candidate.tripPlaceId);
+    if (options.candidate.durationMinutes)
+      query.set('candidateDurationMinutes', String(options.candidate.durationMinutes));
+  }
   // Sent so the answer reflects the timing on screen rather than the timing on
   // disk; the editor can ask while a daypart change is still unsaved.
   if (options.schedule) query.set('schedule', options.schedule);

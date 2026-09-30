@@ -447,10 +447,12 @@ function countingPlacesProvider() {
 
 function countingRoutesProvider() {
   let calls = 0;
+  const asked: Array<boolean | undefined> = [];
   const provider: RoutesProvider = {
     name: 'google',
     computeRoute: async (request: RouteRequest): Promise<RouteEstimate> => {
       calls += 1;
+      asked.push(request.includePolyline);
       return {
         distanceMeters: 1_200,
         durationSeconds: 600,
@@ -459,7 +461,7 @@ function countingRoutesProvider() {
     },
   };
 
-  return { provider, calls: () => calls };
+  return { asked: () => asked, provider, calls: () => calls };
 }
 
 beforeEach(() => {
@@ -850,7 +852,32 @@ test('route retention is independent of the calling surface', async () => {
   expect(calls()).toBe(1);
 });
 
-test('a leg cached without a polyline is recomputed when the map needs one', async () => {
+test('a leg bought for a list already has its line when the map wants it', async () => {
+  const { asked, provider, calls } = countingRoutesProvider();
+  const service = new CachedRoutesService(provider);
+  const leg = {
+    destination: { latitude: 1.3039, longitude: 103.8318 },
+    mode: 'walk' as const,
+    origin: { latitude: 1.2966, longitude: 103.8485 },
+  };
+
+  const list = await service.computeRoute(leg);
+  // The price does not depend on the polyline, so every purchase includes it.
+  expect(asked()).toStrictEqual([true]);
+  expect(list.status === 'ok' && list.estimate.encodedPolyline, 'a list is not sent a line').toBe(
+    null,
+  );
+
+  const map = await service.computeRoute({ ...leg, includePolyline: true });
+  expect(calls(), 'one purchase serves both surfaces').toBe(1);
+  expect(map.status === 'ok' && map.estimate.encodedPolyline).toBe('abc');
+
+  const listAgain = await service.computeRoute(leg);
+  expect(calls()).toBe(1);
+  expect(listAgain.status === 'ok' && listAgain.estimate.encodedPolyline).toBe(null);
+});
+
+test('a leg stored before this without its line is bought once more, then complete', async () => {
   const { provider, calls } = countingRoutesProvider();
   const service = new CachedRoutesService(provider);
   const leg = {
@@ -860,14 +887,63 @@ test('a leg cached without a polyline is recomputed when the map needs one', asy
   };
 
   await service.computeRoute(leg);
-  const withPolyline = await service.computeRoute({ ...leg, includePolyline: true });
+  for (const row of legs.values()) row.encodedPolyline = null;
 
+  const first = await service.computeRoute({ ...leg, includePolyline: true });
   expect(calls()).toBe(2);
-  expect(withPolyline.status === 'ok' && withPolyline.estimate.encodedPolyline).toBe('abc');
+  expect(first.status === 'ok' && first.estimate.encodedPolyline).toBe('abc');
 
-  const again = await service.computeRoute({ ...leg, includePolyline: true });
-  expect(calls(), 'the richer answer should have replaced the thinner one').toBe(2);
-  expect(again.status === 'ok' && again.estimate.encodedPolyline).toBe('abc');
+  await service.computeRoute({ ...leg, includePolyline: true });
+  expect(calls(), 'the complete leg replaced the thin one').toBe(2);
+});
+
+test('a list and a map asking for the same leg together make one purchase', async () => {
+  const { provider, calls } = countingRoutesProvider();
+  const service = new CachedRoutesService(provider);
+  const leg = {
+    destination: { latitude: 1.3039, longitude: 103.8318 },
+    mode: 'walk' as const,
+    origin: { latitude: 1.2966, longitude: 103.8485 },
+  };
+
+  const [list, map] = await Promise.all([
+    service.computeRoute(leg),
+    service.computeRoute({ ...leg, includePolyline: true }),
+  ]);
+
+  expect(calls()).toBe(1);
+  expect(list.status === 'ok' && list.estimate.encodedPolyline).toBe(null);
+  expect(map.status === 'ok' && map.estimate.encodedPolyline).toBe('abc');
+});
+
+test('a list request is reported to the provider as asking for the line too', async () => {
+  const events: ProviderUsageEvent[] = [];
+  setProviderUsageSink((event) => events.push(event));
+  const routes = new CachedRoutesService(
+    new GoogleRoutesProvider({
+      apiKey: 'routes-key',
+      fetcher: async () =>
+        Response.json({
+          routes: [
+            { distanceMeters: 1200, duration: '600s', polyline: { encodedPolyline: 'abc' } },
+          ],
+        }),
+      source: 'itinerary-routes',
+    }),
+    () => new Date('2026-08-18T00:00:00.000Z'),
+    'itinerary-routes',
+  );
+
+  const list = await routes.computeRoute({
+    destination: { latitude: 1.3039, longitude: 103.8318 },
+    mode: 'walk',
+    origin: { latitude: 1.2966, longitude: 103.8485 },
+  });
+
+  expect(list.status === 'ok' && list.estimate.encodedPolyline).toBe(null);
+  expect(
+    events.filter((event) => event.kind === 'outbound' && event.includePolyline === true),
+  ).toHaveLength(1);
 });
 
 test('a different travel mode over the same leg is its own estimate', async () => {

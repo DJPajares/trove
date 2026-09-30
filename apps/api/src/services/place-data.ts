@@ -195,7 +195,16 @@ export function toPlaceSnapshot(
  */
 export function isSnapshotFresh(
   reference: PlaceSnapshotSource,
-  options: { languageCode?: string; now?: Date } = {},
+  options: {
+    /**
+     * Coordinates do not depend on language, so a caller that only needs where a
+     * place is can accept a snapshot taken in any language. A name is different:
+     * it is only ever served in the language it was fetched in.
+     */
+    anyLanguage?: boolean;
+    languageCode?: string;
+    now?: Date;
+  } = {},
 ): boolean {
   const now = options.now ?? new Date();
 
@@ -203,8 +212,9 @@ export function isSnapshotFresh(
     Boolean(reference.cachedAt) &&
     Boolean(reference.cachedName) &&
     toPlaceCoordinates(reference) !== null &&
-    normalizePlaceLanguageCode(reference.cachedLanguageCode) ===
-      normalizePlaceLanguageCode(options.languageCode) &&
+    (options.anyLanguage ||
+      normalizePlaceLanguageCode(reference.cachedLanguageCode) ===
+        normalizePlaceLanguageCode(options.languageCode)) &&
     now.getTime() - (reference.cachedAt?.getTime() ?? 0) <= PLACE_CACHE_TTL_MS
   );
 }

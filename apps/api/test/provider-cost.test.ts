@@ -1011,6 +1011,33 @@ test('a day is routed from stored coordinates, even with no provider at all', as
   expect(getProviderCallCounts()['google:getDetails']).toBe(undefined);
 });
 
+test('a day is routed from coordinates stored in another language, with no provider call', async () => {
+  // Freshness is judged against the real clock, so the snapshot has to be one.
+  const now = new Date();
+  seedFreshRef('ChIJhotel', now);
+  const stored = providerRefs.get('ChIJhotel');
+  const hotel = {
+    customLatitude: null,
+    customLongitude: null,
+    customName: null,
+    id: 'place-hotel',
+    providerRefs: [{ ...stored, cachedLanguageCode: 'ja', provider: 'GOOGLE' }],
+  } as unknown as Parameters<ReturnType<typeof createPlaceResolver>>[0];
+  const { provider, calls } = countingPlacesProvider();
+  const service = new PlacesService(provider);
+
+  const point = await createPlaceResolver(service, 'en')(hotel, 'daily_base', 'day-1-base');
+
+  expect(point?.coordinates.latitude).toBe(1.2966);
+  // Where it is does not depend on language; what it is called does.
+  expect(point?.label).toBeNull();
+  expect(calls(), 'a snapshot in another language still places the leg').toBe(0);
+
+  const sameLanguage = await createPlaceResolver(service, 'ja')(hotel, 'daily_base', 'day-1-base');
+  expect(sameLanguage?.label).toBe('National Museum');
+  expect(calls()).toBe(0);
+});
+
 /**
  * `getTripPlanScore` reads its kill switches straight from `process.env`
  * (there is no injectable environment override, unlike `getPlacesEnvironment`),

@@ -27,7 +27,7 @@ export const PLAN_SCORE_CONTRACT_VERSION = 7;
  * change (8: the estimated reorder comparison) while the response shape, the
  * contract version, stays put; either change invalidates every stored score.
  */
-export const PLAN_SCORE_RUBRIC_VERSION = 8;
+export const PLAN_SCORE_RUBRIC_VERSION = 9;
 export const DAY_FACTOR_IDS = [
   'FEASIBILITY',
   'ROUTE_EFFICIENCY',

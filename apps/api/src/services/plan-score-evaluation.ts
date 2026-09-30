@@ -420,9 +420,10 @@ export function evaluateScoredDay(input: ScoredDayInput) {
       : UNKNOWN;
   const quality = noVisits
     ? NOT_APPLICABLE
-    : combineSignals([
+    : // No evidence source exists yet for the rubric's fourth quality signal, so it
+      // stays out of the weights rather than capping coverage as permanent unknown.
+      combineSignals([
         { weight: 40, result: fit },
-        { weight: 25, result: UNKNOWN },
         { weight: 20, result: timing },
         { weight: 15, result: evaluatePlaceQuality(knownPlaces) },
       ]);
@@ -475,9 +476,9 @@ export function evaluateScoredDay(input: ScoredDayInput) {
           }
         : UNKNOWN;
   // Whether a day makes good use of its area needs sourced evidence about that
-  // area's opportunities. The evaluator has none, so it stays honestly unknown
-  // rather than scoring a guess.
-  const utilization = rest || transit ? NOT_APPLICABLE : UNKNOWN;
+  // area's opportunities. The evaluator has none, so the signal is not part of
+  // the rubric yet: counting it as unknown would cap every day's coverage.
+  const utilization = NOT_APPLICABLE;
   const composition = combineSignals([
     { weight: 30, result: coherence },
     { weight: 30, result: variety },
@@ -674,8 +675,9 @@ export function evaluateScoredDay(input: ScoredDayInput) {
     utilization,
     variety,
     // Daylight supports an outdoor time slot, not seasonal destination suitability.
-    // The current catalogue's seasonal tendencies cannot establish this trip component.
-    seasonalFit: noVisits ? NOT_APPLICABLE : UNKNOWN,
+    // The current catalogue's seasonal tendencies cannot establish this trip component,
+    // so it stays out of the rubric until a real evidence source exists.
+    seasonalFit: NOT_APPLICABLE,
   };
 }
 const parseMinute = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3));

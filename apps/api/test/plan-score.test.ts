@@ -151,7 +151,8 @@ test('stored timing and complete local routes retain partial coverage honestly',
     confidence: 60,
   });
   expect(day.date).toBe('2026-09-01');
-  expect(result.score).toBe(92);
+  // Half the Must Go places are scheduled, and that is the whole of Destination use.
+  expect(result.score).toBe(86);
 });
 test('burden is known while unevidenced alternative orders reduce route coverage', () => {
   const day = buildTripPlanScore(plannedTrip).days[0]!;
@@ -590,7 +591,7 @@ test('a real score survives being stored and read back', () => {
 test('presentation metadata is additive and validates without changing the version-5 measurement', () => {
   const score = buildTripPlanScore(plannedTrip);
   expect(score.schemaVersion).toBe(7);
-  expect(score.rubricVersion).toBe(8);
+  expect(score.rubricVersion).toBe(9);
   expect(score.presentation?.adjustments).toEqual({ fatigue: 0, weakDays: 0 });
   expect(parseStoredPlanScore(score)).toEqual(score);
   const { presentation: _presentation, ...legacyCompatible } = score;

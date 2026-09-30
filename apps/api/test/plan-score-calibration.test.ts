@@ -240,19 +240,34 @@ test('custom/unrated venues and mismatched interests remain unknown rather than 
     places: [{ tripPlaceId: 'custom', types: ['unrecognized'], rating: { status: 'UNKNOWN' } }],
   });
   expect(result.input.factors.EXPERIENCE_QUALITY?.state).toBe('UNKNOWN');
-  expect(result.utilization.state).toBe('UNKNOWN');
+  expect(result.utilization.state).toBe('NOT_APPLICABLE');
   expect(interestsForPlaceTypes(['tourist_attraction', 'point_of_interest'])).toEqual([]);
   expect(interestsForPlaceTypes(['art_gallery'])).toEqual(['art_museums']);
   expect(interestsForPlaceTypes(['hiking_area'])).toEqual(['nature_scenery', 'outdoor_activities']);
 });
-test('ratings alone support only 15 percent of experience coverage, not interest fit or uniqueness', () => {
+test('ratings alone support only a fifth of experience coverage, not interest fit or timing', () => {
   const result = assess({
     preferences: { pace: 'balanced', interests: [], unmatchedInterests: [] },
   });
   expect(toOutcome(result.input.factors.EXPERIENCE_QUALITY!)).toMatchObject({
     score: 100,
-    coverage: 15,
+    coverage: 20,
   });
+});
+test('a well-evidenced day publishes experience and composition, not only the core factors', () => {
+  const { factors } = score({
+    places: [
+      {
+        tripPlaceId: 'museum',
+        name: 'Museum',
+        types: ['museum'],
+        source: 'CACHED_PROVIDER',
+        rating: { status: 'KNOWN', rating: 4.5, reviewCount: 5000, source: 'CACHED_PROVIDER' },
+      },
+    ],
+  });
+  expect(factors.EXPERIENCE_QUALITY).toMatchObject({ state: 'EVALUATED', score: 100 });
+  expect(factors.PLAN_COMPOSITION).toMatchObject({ state: 'EVALUATED', coverage: 100 });
 });
 test('intentional focused repetition does not require diversity or extra stops', () => {
   const result = assess({
@@ -341,7 +356,7 @@ test('daylight is calculated locally and polar conditions remain unknown', () =>
       },
     ],
   });
-  expect(daylightVisit.seasonalFit.state).toBe('UNKNOWN');
+  expect(daylightVisit.seasonalFit.state).toBe('NOT_APPLICABLE');
 });
 test('overnight journeys occupy both local days and preserve timezone changes', () => {
   const bookings = [

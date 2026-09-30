@@ -9,6 +9,7 @@
     "ai:verify": "tsx scripts/verify-ai-generation.ts",
     "build": "../../node_modules/.bin/tsc --project tsconfig.build.json && node scripts/copy-geo-tz-data.mjs",
     "dev": "tsx watch --include '../../packages/types/dist/**/*.js' src/server.ts",
+    "evidence:coverage": "tsx scripts/measure-place-evidence-coverage.ts",
     "editorial-images:reconcile": "tsx scripts/reconcile-editorial-images.ts",
     "lint": "../../node_modules/.bin/oxlint --deny-warnings scripts src test",
     "production:operation": "tsx scripts/run-production-operation.ts",

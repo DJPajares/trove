@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import type { ItineraryDayRecord } from './itinerary-day-evidence.js';
-import { PLAN_SCORE_CONTRACT_VERSION } from './plan-score-rules.js';
+import { PLAN_SCORE_CONTRACT_VERSION, PLAN_SCORE_RUBRIC_VERSION } from './plan-score-rules.js';
 
 /**
  * The routing inputs a day's legs are built from. They live on the Prisma rows
@@ -61,6 +61,7 @@ export function tripPlanScoreRevision(input: {
     // A rubric change has to invalidate every stored score, which is exactly
     // what this constant already promises.
     contractVersion: PLAN_SCORE_CONTRACT_VERSION,
+    rubricVersion: PLAN_SCORE_RUBRIC_VERSION,
     evidenceIntegrationVersion: 2,
     context: input.context ?? null,
     startDate: input.startDate ?? null,

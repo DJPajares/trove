@@ -22,6 +22,12 @@ export type {
   PlanScoreUnknownReason,
 } from '@trove/types';
 export const PLAN_SCORE_CONTRACT_VERSION = 7;
+/**
+ * The judgement a stored score was made under. It moves on a calibration
+ * change (8: the estimated reorder comparison) while the response shape, the
+ * contract version, stays put; either change invalidates every stored score.
+ */
+export const PLAN_SCORE_RUBRIC_VERSION = 8;
 export const DAY_FACTOR_IDS = [
   'FEASIBILITY',
   'ROUTE_EFFICIENCY',
@@ -442,7 +448,15 @@ function canonical(value: unknown): unknown {
 }
 export function scoringInputRevision(input: unknown) {
   return createHash('sha256')
-    .update(JSON.stringify(canonical({ version: PLAN_SCORE_CONTRACT_VERSION, input })))
+    .update(
+      JSON.stringify(
+        canonical({
+          version: PLAN_SCORE_CONTRACT_VERSION,
+          rubric: PLAN_SCORE_RUBRIC_VERSION,
+          input,
+        }),
+      ),
+    )
     .digest('hex');
 }
 export function planScoreFingerprint(input: PlanScoreTripInput) {

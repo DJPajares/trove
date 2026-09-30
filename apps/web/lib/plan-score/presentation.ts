@@ -18,7 +18,7 @@ export function currentAssessment(
   score: TripPlanScore | null | undefined,
   now = Date.now(),
 ): boolean {
-  if (!score || score.schemaVersion !== 7 || score.rubricVersion !== 7) return false;
+  if (!score || score.schemaVersion !== 7 || score.rubricVersion !== 8) return false;
   if (score.evidenceAsOf === null) return false;
   const generated = Date.parse(score.generatedAt);
   const evidence = score.evidenceAsOf ? Date.parse(score.evidenceAsOf) : null;

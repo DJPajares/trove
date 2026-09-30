@@ -230,7 +230,7 @@ export function buildScoringDay(
   return { availability, commitments, holiday, items, locate, origin, routes };
 }
 
-function evaluateDayRecord(
+export function evaluateDayRecord(
   day: PlanScoreDayRecord,
   record: PlanScoreTripRecord,
   calibration: LegCalibration,

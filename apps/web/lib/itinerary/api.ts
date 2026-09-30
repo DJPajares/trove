@@ -1150,3 +1150,29 @@ export async function fetchTripPlaceHours(
     auth,
   );
 }
+
+export type DayBetterOrder =
+  | { status: 'no_better_order' }
+  | {
+      bestMinutes: number;
+      conflictsAfter: number;
+      conflictsBefore: number;
+      /** The day's item ids in the proposed order. */
+      order: string[];
+      plannedMinutes: number;
+      status: 'ok';
+    };
+
+/** The order Plan Score compared the day against. Read from stored evidence only. */
+export async function fetchDayBetterOrder(
+  tripId: string,
+  itineraryDayId: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  const auth = await getAuthContext();
+  return itineraryRequest<DayBetterOrder>(
+    `/trips/${tripId}/itinerary/days/${itineraryDayId}/better-order`,
+    { signal: options.signal },
+    auth,
+  );
+}

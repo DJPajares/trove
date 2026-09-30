@@ -31,6 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 
 import { DatePicker } from '@/components/date-picker';
 import { ItineraryCreateItemSheet } from '@/components/itinerary-create-item-sheet';
+import { ItineraryBetterOrder } from '@/components/itinerary-better-order';
 import { ItineraryDayTimeSuggestions } from '@/components/itinerary-day-time-suggestions';
 import { SuggestedTimeAction, useSuggestedTime } from '@/components/itinerary-suggested-time';
 import { PageState } from '@/components/page-state';
@@ -389,6 +390,7 @@ export function ItineraryManager({
   const [dayNameEditor, setDayNameEditor] = useState<ItineraryDay | null>(null);
   const [daySettingsOpen, setDaySettingsOpen] = useState(false);
   const [dayTimesOpen, setDayTimesOpen] = useState(false);
+  const [betterOrderDay, setBetterOrderDay] = useState<ItineraryDay | null>(null);
   const { compact, setCompactItinerary } = useCompactItinerary();
   const [dayNoteValue, setDayNoteValue] = useState('');
   const [dayNameValue, setDayNameValue] = useState('');
@@ -939,6 +941,10 @@ export function ItineraryManager({
       ].find((item) => item.id === reference);
       if (item) return { onSelect: () => openEdit(item) };
       const day = itinerary.days.find((day) => day.id === reference);
+      // The order Plan Score compared against can be previewed and applied,
+      // rather than leaving the traveller to find it by hand.
+      if (day && explanation.action === 'REORDER_MANUALLY')
+        return { onSelect: () => setBetterOrderDay(day) };
       if (day)
         return {
           onSelect: () => {
@@ -2919,6 +2925,14 @@ export function ItineraryManager({
           ) : null}
         </SheetContent>
       </Sheet>
+
+      <ItineraryBetterOrder
+        day={betterOrderDay}
+        itemName={itemName}
+        onApplied={refresh}
+        onOpenChange={(open) => !open && setBetterOrderDay(null)}
+        tripId={tripId}
+      />
 
       {selectedDay ? (
         <ItineraryDayTimeSuggestions

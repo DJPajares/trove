@@ -1672,6 +1672,21 @@
     "exactTimeError": "Choose an exact local time.",
     "localTimeHint": "Time at this stop.",
     "floatingTimeHint": "This is a floating local plan. Trove keeps the entered day and time if its timezone changes.",
+    "betterOrder": {
+      "title": "A better order for this day",
+      "description": "The same stops in an order with less travel. Stops with a set time or a booking stay where they are. Nothing changes until you apply.",
+      "loading": "Working out the order...",
+      "none": "This day’s order is already about as short as it gets.",
+      "error": "The order could not be worked out or saved. Try again.",
+      "saves": "Saves about {minutes} min of travel",
+      "fixesHours": "{count, plural, one {Also fixes # opening-hours clash.} other {Also fixes # opening-hours clashes.}}",
+      "createsHours": "{count, plural, one {But # stop would arrive outside its opening hours.} other {But # stops would arrive outside their opening hours.}}",
+      "estimate": "Travel is estimated from the distances between stops.",
+      "cancel": "Cancel",
+      "apply": "Apply this order",
+      "applying": "Applying...",
+      "close": "Close"
+    },
     "dayTimes": {
       "action": "Suggest times for this day",
       "title": "Suggest times",

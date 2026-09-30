@@ -108,5 +108,10 @@ export function estimatedRouteComparison(input: {
           },
         });
 
-  return { legs, stops, isFeasibleOrder: () => true };
+  return {
+    legs,
+    stops,
+    isFeasibleOrder: () => true,
+    points: points.map((point) => ({ id: point.id, kind: point.kind })),
+  };
 }

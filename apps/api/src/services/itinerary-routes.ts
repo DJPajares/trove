@@ -67,7 +67,8 @@ async function resolvePlaceData(
   // two known Places is computed without touching the provider at all. Going
   // through `place-data` rather than the places service directly is what keeps
   // one module in charge of when a Place Details call may happen.
-  if (isSnapshotFresh(googleReference, { languageCode })) {
+  // Only where the place is matters here, and that is the same in any language.
+  if (isSnapshotFresh(googleReference, { anyLanguage: true, languageCode })) {
     const coordinates = toPlaceCoordinates(googleReference);
     if (coordinates) {
       recordProviderCacheEvent({
@@ -78,7 +79,9 @@ async function resolvePlaceData(
         provider: 'google',
         source,
       });
-      return { coordinates, label: googleReference.cachedName };
+      // A name is only shown in the language it was fetched in.
+      const sameLanguage = isSnapshotFresh(googleReference, { languageCode });
+      return { coordinates, label: sameLanguage ? googleReference.cachedName : null };
     }
   }
 

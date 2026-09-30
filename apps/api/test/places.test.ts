@@ -12,6 +12,7 @@ import {
 } from '../src/services/google-places.js';
 import { categorizePlaceTypes } from '../src/services/place-categories.js';
 import { PlaceProviderError, PlacesService, type PlacesProvider } from '../src/services/places.js';
+import { storePlaceEvidence } from '../src/services/place-evidence-cache.js';
 
 test('maps provider types into the stable Trove taxonomy', () => {
   expect(categorizePlaceTypes(['point_of_interest', 'museum'])).toBe('things_to_do');
@@ -102,6 +103,14 @@ test('enriched Text Search returns scoring evidence and distinguishes missing fi
             rating: 4.7,
             utcOffsetMinutes: 480,
             regularOpeningHours: { periods: [{ open: {} }] },
+            currentOpeningHours: {
+              periods: [
+                {
+                  open: { date: { year: 2026, month: 10, day: 3 }, day: 6, hour: 10, minute: 0 },
+                  close: { date: { year: 2026, month: 10, day: 3 }, day: 6, hour: 16, minute: 0 },
+                },
+              ],
+            },
           },
           {
             id: 'missing-evidence',
@@ -120,10 +129,22 @@ test('enriched Text Search returns scoring evidence and distinguishes missing fi
     evidence: {
       rating: 4.7,
       openingPeriods: [{ open: { day: 0, hour: 0, minute: 0 }, close: null }],
+      currentOpeningPeriods: [
+        {
+          open: { date: '2026-10-03', day: 6, hour: 10, minute: 0 },
+          close: { date: '2026-10-03', day: 6, hour: 16, minute: 0 },
+        },
+      ],
+      currentHoursValidFrom: '2026-10-03',
+      currentHoursValidThrough: '2026-10-03',
     },
   });
+  expect(GOOGLE_TEXT_SEARCH_EVIDENCE_FIELD_MASK).toContain('places.currentOpeningHours');
   expect(results[1]?.evidence).toEqual({
     rating: null,
+    currentOpeningPeriods: [],
+    currentHoursValidFrom: null,
+    currentHoursValidThrough: null,
     openingPeriods: [],
     userRatingCount: null,
     openingHoursDescriptions: [],
@@ -563,6 +584,58 @@ test('rich details require an owned relationship before any provider acquisition
     );
   } finally {
     await app.close();
+    vi.unstubAllGlobals();
+  }
+});
+
+test('date-specific hours from a grounded place are stored with the dates they apply to', async () => {
+  const updateMany = vi.fn(async () => ({ count: 1 }));
+  vi.stubGlobal('trovePrismaClient', { placeProviderRef: { updateMany } });
+
+  try {
+    const provider = new GooglePlacesProvider({
+      apiKey: 'test-key',
+      fetcher: async () =>
+        Response.json({
+          places: [
+            {
+              id: 'grounded',
+              displayName: { text: 'Temple' },
+              location: { latitude: 35, longitude: 135 },
+              currentOpeningHours: {
+                periods: [
+                  {
+                    open: { date: { year: 2026, month: 10, day: 3 }, day: 6, hour: 9, minute: 0 },
+                    close: { date: { year: 2026, month: 10, day: 3 }, day: 6, hour: 15, minute: 0 },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+    });
+    const [found] = await provider.textSearch({ detail: 'evidence', textQuery: 'Temple' });
+    if (!found?.evidence) throw new Error('expected evidence');
+
+    await storePlaceEvidence(
+      { externalPlaceId: 'grounded' },
+      {
+        freshness: { fetchedAt: '2026-09-30T00:00:00.000Z', source: 'live' },
+        place: { ...found, ...found.evidence, rating: null },
+        provider: 'google',
+        status: 'ok',
+      },
+    );
+
+    const stored = (
+      updateMany.mock.calls[0] as unknown as [{ data: { cachedEvidence: unknown } }]
+    )[0].data.cachedEvidence;
+    expect(stored).toMatchObject({
+      currentHoursValidFrom: '2026-10-03',
+      currentHoursValidThrough: '2026-10-03',
+      currentOpeningPeriods: [{ open: { date: '2026-10-03', hour: 9 } }],
+    });
+  } finally {
     vi.unstubAllGlobals();
   }
 });

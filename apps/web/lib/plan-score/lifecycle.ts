@@ -7,6 +7,7 @@ import {
   type ScoreChange,
   type ScoreSnapshot,
 } from './presentation';
+import { serverNow } from './clock';
 
 const histories = new WeakMap<
   QueryClient,
@@ -48,7 +49,7 @@ export function refreshExpiredAssessment(
   client: QueryClient,
   tripId: string,
   score: TripPlanScore,
-  now = Date.now(),
+  now = serverNow(),
 ) {
   if (currentAssessment(score, now)) return;
   let refreshes = expiryRefreshes.get(client);

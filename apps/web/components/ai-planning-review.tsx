@@ -12,6 +12,7 @@ import { CountryMultiCombobox } from '@/components/country-multi-combobox';
 import { PageState } from '@/components/page-state';
 import { composeInsights } from '@/lib/insights/compose';
 import { assessmentDeadline, currentAssessment } from '@/lib/plan-score/presentation';
+import { serverNow } from '@/lib/plan-score/clock';
 import {
   assessmentChange,
   rememberAssessment,
@@ -99,10 +100,10 @@ export function AiPlanningReview({
     if (!planScoreEnabled || session?.status !== 'reviewing' || session.countryContextChanged)
       return;
     const deadline = session.planScore ? assessmentDeadline(session.planScore) : Number.NaN;
-    if (!Number.isFinite(deadline) || deadline <= Date.now()) return;
+    if (!Number.isFinite(deadline) || deadline <= serverNow()) return;
     const timer = window.setTimeout(
       () => setClock(Date.now()),
-      Math.max(0, deadline - Date.now() + 1),
+      Math.max(0, deadline - serverNow() + 1),
     );
     return () => window.clearTimeout(timer);
   }, [planScoreEnabled, session?.status, session?.countryContextChanged, session?.planScore]);
@@ -111,7 +112,8 @@ export function AiPlanningReview({
       !planScoreEnabled ||
       session?.status !== 'reviewing' ||
       session.countryContextChanged ||
-      (session.planScore && currentAssessment(session.planScore, Math.max(clock, Date.now()))) ||
+      (session.planScore &&
+        currentAssessment(session.planScore, serverNow(Math.max(clock, Date.now())))) ||
       sessionQuery.isFetching
     )
       return;

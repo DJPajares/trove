@@ -1,6 +1,7 @@
 import type { TripContext } from '@trove/types';
 
 import type { TripPlanScore } from '@/lib/plan-score/api';
+import { observeServerTime } from '@/lib/plan-score/clock';
 import { createBrowserSupabaseClient, getBrowserSession } from '@/lib/supabase/client';
 import type { Trip } from '@/lib/trips/api';
 
@@ -177,6 +178,8 @@ async function aiPlanningRequest<T>(path: string, init?: RequestInit) {
   } catch {
     throw new AiPlanningApiError('request_failed', 503);
   }
+  // Sessions carry draft Plan Scores, whose freshness is judged in server time.
+  observeServerTime(response);
 
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { code?: string; retryAt?: string };

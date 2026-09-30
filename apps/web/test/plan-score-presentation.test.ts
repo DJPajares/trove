@@ -11,6 +11,12 @@ import {
   prioritizedProblems,
   scoreSnapshot,
 } from '../lib/plan-score/presentation';
+import {
+  CLOCK_LEEWAY_MS,
+  observeServerTime,
+  resetServerClock,
+  serverNow,
+} from '../lib/plan-score/clock';
 import { stripPersistedPlanScores } from '../lib/query/persister';
 import { createQueryClient, shouldDehydrateQuery } from '../lib/query/client';
 import {
@@ -115,7 +121,9 @@ test('freshness uses the original instant, earliest expiry and 24-hour maximum',
   const score = assessment();
   expect(currentAssessment(score, NOW)).toBe(true);
   expect(currentAssessment(score, Date.parse(score.recomputeAfter!))).toBe(false);
-  expect(currentAssessment(score, Date.parse(score.generatedAt) - 1)).toBe(false);
+  // A score from beyond the clock leeway is not trusted; within it, it is.
+  expect(currentAssessment(score, Date.parse(score.generatedAt) - CLOCK_LEEWAY_MS - 1)).toBe(false);
+  expect(currentAssessment(score, Date.parse(score.generatedAt) - 1)).toBe(true);
   expect(currentAssessment({ ...score, rubricVersion: 4 } as never, NOW)).toBe(false);
   expect(assessmentDeadline({ ...score, recomputeAfter: '2026-10-02T00:00:00Z' })).toBe(
     Date.parse(score.generatedAt) + 86_400_000,
@@ -471,6 +479,34 @@ test('a published category is marked estimated when partial or mostly estimated'
   // Reliable where known, but only partly assessed.
   expect(isEstimatedOutcome(outcome(60, 60))).toBe(true);
   expect(isEstimatedOutcome(outcome(0, 0))).toBe(true);
+});
+
+test('freshness is judged in server time, so a device running behind still sees a fresh score', () => {
+  resetServerClock();
+  // Just computed on the server, received by a device whose clock runs 2 s behind.
+  const fresh = assessment({
+    generatedAt: new Date(NOW + 2_000).toISOString(),
+    evidenceAsOf: new Date(NOW - 60_000).toISOString(),
+  });
+  expect(currentAssessment(fresh, NOW)).toBe(true);
+  // Beyond the leeway, only a known offset can vouch for it.
+  const skewed = assessment({
+    generatedAt: new Date(NOW + 10 * 60_000).toISOString(),
+    evidenceAsOf: new Date(NOW - 60_000).toISOString(),
+  });
+  expect(currentAssessment(skewed, serverNow(NOW))).toBe(false);
+  observeServerTime(
+    new Response(null, {
+      headers: { 'x-trove-served-at': new Date(NOW + 10 * 60_000 + 500).toISOString() },
+    }),
+    NOW,
+  );
+  expect(currentAssessment(skewed, serverNow(NOW))).toBe(true);
+  // A passed deadline (03:00 server time) still expires, though the device reads 02:50.
+  expect(currentAssessment(assessment(), serverNow(Date.parse('2026-09-29T02:50:00Z')))).toBe(
+    false,
+  );
+  resetServerClock();
 });
 
 test('verdict bands follow the published thresholds at every boundary', async () => {

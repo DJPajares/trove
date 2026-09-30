@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { fetchTripPlanScore } from '@/lib/plan-score/api';
 import { queryKeys } from '@/lib/query/keys';
 import {
@@ -12,6 +12,7 @@ import {
   OFFLINE_DATA_REFRESH_EVENT,
   OFFLINE_SYNC_EVENT,
 } from '@/lib/offline/trip-store';
+import { serverNow } from './clock';
 import { assessmentDeadline, currentAssessment, hasUnsyncedScoringEdits } from './presentation';
 import {
   assessmentChange,
@@ -23,11 +24,24 @@ import {
 export type PlanScoreLoadStatus =
   'disabled' | 'error' | 'idle' | 'loading' | 'expired' | 'offline' | 'syncing' | 'updating';
 
+/**
+ * Automatic cache-only rereads for an assessment that is not current, before
+ * the traveller is asked to retry: straight away, then after a short wait in
+ * case a deadline passed in flight. Focus, reconnect, a passed deadline and
+ * Try again each restore the budget.
+ */
+const AUTOMATIC_REFRESH_DELAYS_MS = [0, 2_000, 10_000] as const;
+
 /** One in-memory trip assessment. Every refresh reads existing evidence only. */
 export function useTripPlanScore(tripId: string | null) {
   const client = useQueryClient();
   const [clock, setClock] = useState(() => Date.now());
-  const lastExpiryEvent = useRef<{ tripId: string; at: number } | null>(null);
+  const [refreshes, setRefreshes] = useState<{ tripId: string | null; count: number }>({
+    tripId,
+    count: 0,
+  });
+  const refreshCount = refreshes.tripId === tripId ? refreshes.count : 0;
+  const restoreRefreshes = useCallback(() => setRefreshes({ tripId, count: 0 }), [tripId]);
   const [connectivity, setConnectivity] = useState<{
     tripId: string | null;
     online: boolean;
@@ -51,6 +65,7 @@ export function useTripPlanScore(tripId: string | null) {
       if (active && version === request) {
         setConnectivity({ tripId, online, pending: Boolean(pending), ready: true });
         setClock(Date.now());
+        setRefreshes({ tripId, count: 0 });
       }
     };
     void check();
@@ -93,40 +108,52 @@ export function useTripPlanScore(tripId: string | null) {
     rememberAssessment(client, tripId, data);
     const deadline = assessmentDeadline(data);
     if (!Number.isFinite(deadline)) return;
+    // Deadlines are server time; the device waits out the corrected interval.
     const timer = window.setTimeout(
-      () => setClock(Date.now()),
-      Math.max(0, deadline - Date.now() + 1),
+      () => {
+        setClock(Date.now());
+        restoreRefreshes();
+      },
+      Math.max(0, deadline - serverNow() + 1),
     );
     return () => window.clearTimeout(timer);
-  }, [client, tripId, data]);
+  }, [client, tripId, data, restoreRefreshes]);
+  const current = Boolean(data && currentAssessment(data, serverNow(Math.max(clock, Date.now()))));
+  const visible = typeof document === 'undefined' || document.visibilityState !== 'hidden';
+  // A settled assessment that is not current rereads the stored evidence on its
+  // own; the traveller only sees "expired" once those rereads fail.
+  const refreshing =
+    Boolean(data && tripId && canRead && visible) &&
+    !current &&
+    refreshCount < AUTOMATIC_REFRESH_DELAYS_MS.length;
   useEffect(() => {
-    if (
-      tripId &&
-      data &&
-      canRead &&
-      document.visibilityState !== 'hidden' &&
-      query.dataUpdatedAt < clock &&
-      (lastExpiryEvent.current?.tripId !== tripId || lastExpiryEvent.current.at !== clock) &&
-      !currentAssessment(data, Math.max(clock, Date.now()))
-    ) {
-      lastExpiryEvent.current = { tripId, at: clock };
-      refreshExpiredAssessment(client, tripId, data, Math.max(clock, Date.now()));
-    }
-  }, [client, tripId, data, clock, canRead, query.dataUpdatedAt]);
+    if (!tripId || !data || !refreshing || query.isFetching) return;
+    const timer = window.setTimeout(() => {
+      setRefreshes({ tripId, count: refreshCount + 1 });
+      refreshExpiredAssessment(client, tripId, data, serverNow());
+    }, AUTOMATIC_REFRESH_DELAYS_MS[refreshCount]);
+    return () => window.clearTimeout(timer);
+  }, [client, tripId, data, refreshing, refreshCount, query.isFetching]);
+  useEffect(() => {
+    if (current && refreshCount) restoreRefreshes();
+  }, [current, refreshCount, restoreRefreshes]);
   useEffect(() => {
     const refresh = () => {
-      if (document.visibilityState !== 'hidden') setClock(Date.now());
+      if (document.visibilityState === 'hidden') return;
+      setClock(Date.now());
+      restoreRefreshes();
     };
     document.addEventListener('visibilitychange', refresh);
     return () => document.removeEventListener('visibilitychange', refresh);
-  }, []);
+  }, [restoreRefreshes]);
   const retry = useCallback(() => {
-    if (tripId && canRead)
-      void client.invalidateQueries(
-        { queryKey: queryKeys.planScore(tripId) },
-        { cancelRefetch: false },
-      );
-  }, [client, tripId, canRead]);
+    if (!tripId || !canRead) return;
+    restoreRefreshes();
+    void client.invalidateQueries(
+      { queryKey: queryKeys.planScore(tripId) },
+      { cancelRefetch: false },
+    );
+  }, [client, tripId, canRead, restoreRefreshes]);
   const status: PlanScoreLoadStatus = !tripId
     ? 'idle'
     : !ready
@@ -139,16 +166,11 @@ export function useTripPlanScore(tripId: string | null) {
             ? 'disabled'
             : query.isPending
               ? 'loading'
-              : query.isFetching ||
-                  (data &&
-                    !currentAssessment(data, Math.max(clock, Date.now())) &&
-                    query.dataUpdatedAt < clock &&
-                    (lastExpiryEvent.current?.tripId !== tripId ||
-                      lastExpiryEvent.current.at !== clock))
+              : query.isFetching || refreshing
                 ? 'updating'
                 : query.error
                   ? 'error'
-                  : data && !currentAssessment(data, Math.max(clock, Date.now()))
+                  : data && !current
                     ? 'expired'
                     : 'idle';
   return {

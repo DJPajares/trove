@@ -74,6 +74,7 @@ type CachedPlaceRow = {
   providerAddress: string | null;
   providerLabel: string | null;
   providerRefs: Array<{
+    cachedAt: Date | null;
     cachedFormattedAddress: string | null;
     cachedLanguageCode: string | null;
     cachedName: string | null;
@@ -783,6 +784,7 @@ test('same-name canonical places use cached locality and share one detailed-type
       providerLabel: 'Central',
       providerRefs: [
         {
+          cachedAt: new Date('2026-08-21T00:00:00.000Z'),
           cachedFormattedAddress: `1 Main Street, ${city}, Japan`,
           cachedLanguageCode: 'ja',
           cachedName: 'Central Bakery',
@@ -834,6 +836,40 @@ test('same-name canonical places use cached locality and share one detailed-type
   expect(subjects[2]).toMatchObject({ kind: 'generic', name: 'bakery' });
   expect(rows.get('place:place-tokyo')?.missCode).toBe('NO_VERIFIED_MATCH');
   expect(rows.get('generic:food_and_drink:bakery')?.images).toHaveLength(1);
+});
+
+test('a place snapshot past its 30 days is not read for editorial matching', async () => {
+  places.set('place-old', {
+    id: 'place-old',
+    ownerId: 'owner-1',
+    providerAddress: null,
+    providerLabel: 'Central',
+    providerRefs: [
+      {
+        cachedAt: new Date('2026-06-01T00:00:00.000Z'),
+        cachedFormattedAddress: '1 Main Street, Kyoto, Japan',
+        cachedLanguageCode: 'ja',
+        cachedName: 'Central Bakery',
+        cachedPrimaryType: 'bakery',
+        cachedTypes: ['bakery'],
+        provider: 'GOOGLE',
+      },
+    ],
+  });
+  const { provider, subjects } = countingProvider(() => []);
+  const service = new CachedEditorialImagesService(
+    provider,
+    () => new Date('2026-08-22T00:00:00.000Z'),
+  );
+
+  await service.resolveMany(
+    [{ placeId: 'place-old', subject: { category: 'food_and_drink' as const, name: 'Central' } }],
+    owner,
+  );
+
+  expect(subjects[0]).toMatchObject({ name: 'Central' });
+  expect(subjects[0]?.address ?? null).toBeNull();
+  expect(subjects[0]?.primaryType).toBeUndefined();
 });
 
 test('fresh shared generic collections expose their provenance and return the whole pool', async () => {

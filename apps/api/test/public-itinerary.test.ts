@@ -145,8 +145,9 @@ test('a shared trip renders its days in travel order', async () => {
     dayPart: 'morning',
     durationMinutes: 90,
     localStartTime: '10:30',
-    // Resolved from the snapshot the database already held, stale or not.
-    name: 'The Museum',
+    // The stored snapshot is long past its 30 days, so the Trove-owned label
+    // stands in for it.
+    name: 'Museum',
   });
 });
 
@@ -205,8 +206,29 @@ test('a stale snapshot is served, never refreshed', async () => {
 
   const itinerary = await listPublicItinerary(PUBLIC_TRIP_ID);
 
-  expect(itinerary.days[0]?.items[0]?.name).toBe('The Museum');
+  expect(itinerary.days[0]?.items[0]?.name).toBe('Museum');
   expect(detailsCalls, 'the public itinerary must not reach a provider').toBe(0);
+});
+
+test('a snapshot inside its 30 days names the place; one past it does not', async () => {
+  const day = 24 * 60 * 60 * 1_000;
+  const now = new Date();
+  const nameWith = async (ageMs: number) => {
+    const reference = providerRef({ cachedAt: new Date(now.getTime() - ageMs) });
+    const [trip] = trips;
+    if (!trip) throw new Error('fixture');
+    trip.itineraryDays[0]!.items[0]!.tripPlace.place.providerRefs = [reference];
+    (
+      globalThis as unknown as {
+        trovePrismaClient: { placeProviderRef: { findMany: unknown } };
+      }
+    ).trovePrismaClient.placeProviderRef.findMany = async () => [reference];
+    const itinerary = await listPublicItinerary(PUBLIC_TRIP_ID, { now });
+    return itinerary.days[0]?.items[0]?.name;
+  };
+
+  expect(await nameWith(30 * day - 1_000)).toBe('The Museum');
+  expect(await nameWith(30 * day + 1_000)).toBe('Museum');
 });
 
 /**

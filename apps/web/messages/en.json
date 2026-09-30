@@ -1913,6 +1913,17 @@
     "applyError": "We couldn't apply this template. Try again."
   },
   "tripPlaces": {
+    "savedNearby": {
+      "title": "{count, plural, one {You have # saved place near {destination}} other {You have # saved places near {destination}}}",
+      "review": "Review",
+      "hide": "Hide",
+      "addAll": "Add all to this trip",
+      "adding": "Adding...",
+      "addOne": "Add {name} to this trip",
+      "unnamed": "Saved place",
+      "note": "Adding them to the trip does not change your Saved Places.",
+      "error": "Some places could not be added. Try again."
+    },
     "eyebrow": "Trip planning",
     "title": "Places for {trip}",
     "titleLoading": "Trip places",
@@ -2885,6 +2896,20 @@
       "estimate": "Estimate",
       "pattern": "Typical, {from}–{to}",
       "published": "Published hours"
+    },
+    "rainIndoor": {
+      "show": "See indoor options from your places",
+      "loading": "Looking through your places...",
+      "none": "None of your unplanned places are an indoor option near these stops.",
+      "error": "Indoor options could not be loaded. Try again.",
+      "instead": "Instead of {name}",
+      "away": "{distance} away",
+      "hoursUnknown": "Opening hours not known, so check them",
+      "swap": "Swap",
+      "swapping": "Swapping...",
+      "swapFor": "Swap {stop} for {name}",
+      "swapError": "The stop could not be swapped. Try again.",
+      "reserved": "This stop has a reservation, so swap it from its own details."
     },
     "hours": {
       "specialTitle": "{name} has special hours on {date}",

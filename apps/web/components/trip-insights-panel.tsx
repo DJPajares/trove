@@ -13,7 +13,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { panelSurfaceClass, type PanelSurface } from '@/components/panel-surface';
 import { SuggestedAction } from '@/components/plan-score-panel';
@@ -56,11 +56,14 @@ function dayRanges(days: readonly number[]) {
 }
 
 function InsightItem({
+  extra,
   insight,
   resolveAction,
   showDays,
   totalDays,
 }: {
+  /** What a surface adds under an item, such as options for it. */
+  extra?: ReactNode;
   insight: Insight;
   resolveAction?: (explanation: PlanScoreExplanation) => ScoreAction | null;
   showDays: boolean;
@@ -167,6 +170,7 @@ function InsightItem({
         {insight.explanation?.action ? (
           <SuggestedAction explanation={insight.explanation} resolveAction={resolveAction} />
         ) : null}
+        {extra}
       </div>
     </li>
   );
@@ -178,6 +182,7 @@ function InsightItem({
  */
 export function TripInsightsPanel({
   className,
+  extraFor,
   headingLevel = 3,
   insights,
   resolveAction,
@@ -186,6 +191,8 @@ export function TripInsightsPanel({
   totalDays,
 }: Readonly<{
   className?: string;
+  /** Extra content under an item, for surfaces that can act on it. */
+  extraFor?: (insight: Insight) => ReactNode;
   headingLevel?: 2 | 3;
   insights: readonly Insight[];
   resolveAction?: (explanation: PlanScoreExplanation) => ScoreAction | null;
@@ -200,6 +207,7 @@ export function TripInsightsPanel({
   const Heading = headingLevel === 2 ? 'h2' : 'h3';
   const item = (insight: Insight) => (
     <InsightItem
+      extra={extraFor?.(insight)}
       insight={insight}
       key={insight.id}
       resolveAction={resolveAction}

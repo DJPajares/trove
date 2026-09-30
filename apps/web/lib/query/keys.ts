@@ -51,6 +51,9 @@ export const queryKeys = {
    * the key because a leg chain computed for one ordering is wrong for any
    * other - see `itineraryDayRouteRevision`.
    */
+  /** Indoor places for a rainy day's outdoor stops. */
+  rainAlternatives: (tripId: string, dayId: string) =>
+    ['rain-alternatives', tripId, dayId] as const,
   /** Stops whose hours are worth a word on their day, for Insights. */
   hoursNotices: (tripId: string) => ['hours-notices', tripId] as const,
   /** A day's free stretches and the unplanned places that fit them. */
@@ -196,6 +199,7 @@ export const TRIP_SCOPED_QUERY_ROOTS = [
   'place-groupings',
   'place-hours',
   'plan-score',
+  'rain-alternatives',
   'reservations',
   'tasks',
   'trip',

@@ -67,6 +67,7 @@ export const ITINERARY_EDIT_QUERY_ROOTS: readonly TripScopedQueryRoot[] = [
   'place-groupings',
   'place-hours',
   'plan-score',
+  'rain-alternatives',
   'trip-context',
   'trip-mode-context',
 ];
@@ -122,6 +123,7 @@ export const PLACE_LOCATION_QUERY_ROOTS: readonly TripScopedQueryRoot[] = [
   'place-groupings',
   'place-hours',
   'plan-score',
+  'rain-alternatives',
   'trip-context',
   'trip-mode-context',
   'trip-places',

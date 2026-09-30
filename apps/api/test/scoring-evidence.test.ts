@@ -768,3 +768,81 @@ test('a stop with published special hours on its date is named for Insights, fro
   ]);
   expect(outbound).not.toHaveBeenCalled();
 });
+
+test('a rainy outdoor stop is offered indoor places from the traveller’s own list, stored data only', async () => {
+  const { getRainAlternatives } = await import('../src/services/rain-alternatives.js');
+  const placeAt = (id: string, longitude: number) => ({
+    id: `tp-${id}`,
+    placeId: `place-${id}`,
+    priority: null,
+    place: {
+      id: `place-${id}`,
+      customLatitude: null,
+      customLongitude: null,
+      customName: null,
+      providerRefs: [
+        {
+          provider: 'GOOGLE',
+          externalPlaceId: `ext-${id}`,
+          cachedAt: NOW,
+          cachedLatitude: decimal(1),
+          cachedLongitude: decimal(longitude),
+          cachedName: id,
+        },
+      ],
+    },
+  });
+  const park = placeAt('park', 2);
+  const museum = placeAt('museum', 2.01);
+  trip.tripPlaces.push(park, museum);
+  trip.itineraryDays[0].items = [
+    { ...trip.itineraryDays[0].items[0], id: 'item-park', tripPlace: park, tripPlaceId: 'tp-park' },
+  ];
+  const evidenceFor: Record<string, unknown> = {
+    'ext-park': { ...place, externalPlaceId: 'ext-park', name: 'Park', rawTypes: ['park'] },
+    'ext-museum': { ...place, externalPlaceId: 'ext-museum', name: 'Museum', rawTypes: ['museum'] },
+  };
+  (
+    globalThis as unknown as {
+      trovePrismaClient: { placeProviderRef: { findUnique: unknown } };
+    }
+  ).trovePrismaClient.placeProviderRef.findUnique = async (args: {
+    where: { provider_externalPlaceId: { externalPlaceId: string } };
+  }) => ({
+    ...evidenceRow,
+    cachedEvidence: evidenceFor[args.where.provider_externalPlaceId.externalPlaceId] ?? null,
+  });
+  forecast = {
+    fetchedAt: new Date(NOW.getTime() - 3600000),
+    latitude: 1,
+    longitude: 2,
+    timeZone: 'UTC',
+    days: [
+      {
+        date: new Date('2026-09-28'),
+        temperatureMaxCelsius: 25,
+        temperatureMinCelsius: 20,
+        precipitationProbability: 85,
+        weatherCode: 61,
+      },
+    ],
+  };
+
+  const result = await getRainAlternatives('owner', 'trip', 'day', { now: NOW });
+
+  expect(result.stops).toHaveLength(1);
+  expect(result.stops[0]).toMatchObject({
+    itemId: 'item-park',
+    name: 'park',
+    swappable: true,
+    tripPlaceId: 'tp-park',
+  });
+  expect(result.stops[0]!.alternatives.map((entry) => entry.tripPlaceId)).toStrictEqual([
+    'tp-museum',
+  ]);
+  expect(outbound).not.toHaveBeenCalled();
+
+  // A dry day offers nothing.
+  forecast.days[0].precipitationProbability = 10;
+  expect((await getRainAlternatives('owner', 'trip', 'day', { now: NOW })).stops).toStrictEqual([]);
+});

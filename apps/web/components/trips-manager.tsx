@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ChevronDown, CircleAlert, MapPinned, Plus } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
 import { AiPlanningDraftCard } from '@/components/ai-planning-draft-card';
@@ -57,11 +57,20 @@ export function TripsManager() {
   // Trip Mode runs on the traveller's own clock, and these surfaces show the
   // same answer, so they have to ask the same question.
   const clockTimeZone = deviceTimeZone();
+  // Including the language is what makes this the same query as Trip Mode's.
+  const languageCode = useLocale();
   const tripModeContextQuery = useQuery({
     enabled: featuredActiveTripId !== null,
     queryFn: ({ signal }) =>
-      fetchTripModeContext(featuredActiveTripId as string, { clockTimeZone, signal }),
-    queryKey: queryKeys.tripModeContext(featuredActiveTripId ?? '', { clockTimeZone }),
+      fetchTripModeContext(featuredActiveTripId as string, {
+        clockTimeZone,
+        languageCode,
+        signal,
+      }),
+    queryKey: queryKeys.tripModeContext(featuredActiveTripId ?? '', {
+      clockTimeZone,
+      languageCode,
+    }),
   });
 
   // Readiness only earns headings when it actually divides something: a

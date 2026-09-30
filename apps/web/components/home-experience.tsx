@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, CircleAlert, MapPinned, Plus } from 'lucide-react';
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
 import { EditorialSection } from '@/components/editorial-section';
@@ -132,11 +132,14 @@ export function HomeExperience() {
   // Trip Mode runs on the traveller's own clock, and these surfaces show the
   // same answer, so they have to ask the same question.
   const clockTimeZone = deviceTimeZone();
+  // Including the language is what makes this the same query as Trip Mode's,
+  // rather than a second request for the same answer.
+  const languageCode = useLocale();
   const tripModeContextQuery = useQuery({
     enabled: primaryTripId !== null,
     queryFn: ({ signal }) =>
-      fetchTripModeContext(primaryTripId as string, { clockTimeZone, signal }),
-    queryKey: queryKeys.tripModeContext(primaryTripId ?? '', { clockTimeZone }),
+      fetchTripModeContext(primaryTripId as string, { clockTimeZone, languageCode, signal }),
+    queryKey: queryKeys.tripModeContext(primaryTripId ?? '', { clockTimeZone, languageCode }),
   });
 
   const tripModeContext = tripModeContextQuery.data ?? null;

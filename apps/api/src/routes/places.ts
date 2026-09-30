@@ -18,6 +18,9 @@ export function registerPlacesRoutes(app: FastifyInstance) {
     }),
     createCanonicalPlacesService(),
     createPlaceLocationCandidatesService({ environment: process.env, source: 'place-locate' }),
+    // Opened rich details are Enterprise-tier requests; counted under their own
+    // name so their spend is not read as Autocomplete's.
+    createPlacesService({ environment: process.env, logger: app.log, source: 'place-details' }),
   );
 
   app.get(

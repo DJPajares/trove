@@ -1399,6 +1399,16 @@
     "googleAttribution": "Google Maps",
     "richUnavailable": "Ratings and hours are unavailable. You can continue planning."
   },
+  "placeSignals": {
+    "closed": "Closed this day",
+    "openHours": "Open {times}",
+    "specialHours": "Special hours {times}",
+    "allDay": "Open all day",
+    "checked": "hours checked {date}",
+    "rating": "{rating} on Google",
+    "ratingWithCount": "{rating} on Google ({count} reviews)",
+    "fromDay": "{distance} from this day’s stops"
+  },
   "itinerary": {
     "title": "Itinerary for {trip}",
     "description": "The whole trip at a glance. Open any day to start filling it in.",
@@ -1893,7 +1903,9 @@
     "sort": {
       "name": "Name A-Z",
       "priority": "Priority",
-      "recent": "Recently added"
+      "recent": "Recently added",
+      "nearest": "Nearest to this day",
+      "open": "Open this day"
     },
     "removeAction": "Remove from trip",
     "customPlace": "Custom place",

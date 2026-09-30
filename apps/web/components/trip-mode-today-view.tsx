@@ -24,10 +24,12 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { PageState } from '@/components/page-state';
+import { PlaceHoursNote } from '@/components/place-hours-note';
 import { ItineraryCreateItemSheet } from '@/components/itinerary-create-item-sheet';
 import { usePreferences } from '@/components/preferences-provider';
 import { TimelineGroup, TimelineMarker, TimelineRow } from '@/components/timeline-row';
 import { useTripModeData } from '@/components/trip-mode-data';
+import { useTripPlaceHours } from '@/lib/trip-places/use-trip-place-hours';
 import { useTripModePlaceDetails, useTripModePreview } from '@/components/trip-mode-shell';
 import { useOnlineStatus } from '@/components/trip-sync-status';
 import { TripModeMemoryDialog } from '@/components/trip-mode-memory-dialog';
@@ -205,6 +207,8 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     return itinerary.days.find((candidate) => candidate.date === selectedDate) ?? null;
   }, [itinerary, selectedDate]);
   const placeUse = useMemo(() => (itinerary ? scheduledPlaceUse(itinerary) : {}), [itinerary]);
+  // Stored hours for the day being shown; nothing is bought to fill a gap.
+  const placeHours = useTripPlaceHours(tripId, day?.date ?? null, Boolean(day));
   const reservationsByItem = useMemo(() => {
     const grouped = new Map<string, Reservation[]>();
     for (const reservation of reservations) {
@@ -1014,6 +1018,10 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                       <span className="font-medium text-brand tabular-nums">
                         {itemSchedule(item)}
                       </span>
+                      <PlaceHoursNote
+                        className="basis-full"
+                        status={item.tripPlace ? placeHours[item.tripPlace.id]?.hours : undefined}
+                      />
                       {place || location ? (
                         <span className="inline-flex min-w-0 items-start gap-1.5">
                           <MapPin aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />

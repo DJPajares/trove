@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { createItineraryControllers } from '../controllers/itineraries.js';
 import { createItineraryRouteControllers } from '../controllers/itinerary-routes.js';
 import { createItineraryTimeSuggestionControllers } from '../controllers/itinerary-time-suggestions.js';
+import { createTripPlaceHoursControllers } from '../controllers/trip-place-hours.js';
 import { createTripModeContextControllers } from '../controllers/trip-mode-context.js';
 import { requireAuthenticatedUser } from '../services/request-auth.js';
 import { PROVIDER_FANOUT_RATE_LIMIT } from './rate-limits.js';
@@ -12,6 +13,7 @@ export function registerItineraryRoutes(app: FastifyInstance) {
   const routeControllers = createItineraryRouteControllers();
   const timeSuggestionControllers = createItineraryTimeSuggestionControllers();
   const tripModeContextControllers = createTripModeContextControllers();
+  const tripPlaceHoursControllers = createTripPlaceHoursControllers();
   const authenticated = { preHandler: requireAuthenticatedUser };
   // These reach Google once per place and once per leg of the day.
   const providerBacked = { config: PROVIDER_FANOUT_RATE_LIMIT, ...authenticated };
@@ -32,6 +34,8 @@ export function registerItineraryRoutes(app: FastifyInstance) {
     providerBacked,
     timeSuggestionControllers.getDayTimeSuggestions,
   );
+  // Stored evidence only, so no provider fan-out: an ordinary authenticated read.
+  app.get('/trips/:tripId/place-hours', authenticated, tripPlaceHoursControllers.getTripPlaceHours);
   app.patch(
     '/trips/:tripId/day-experiences/:date',
     authenticated,

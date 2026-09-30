@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { AddTripPlaceSheet } from '@/components/add-trip-place-sheet';
 import { EditTripPlaceDialog } from '@/components/edit-trip-place-dialog';
 import { PageState } from '@/components/page-state';
+import { useTripPlaceSignals } from '@/hooks/use-trip-place-signals';
 import { TripPlacesPanel } from '@/components/trip-places-panel';
 import { TripSectionHeader } from '@/components/trip-section-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -41,6 +42,8 @@ import { useTripPlaces } from '@/lib/trip-places/use-trip-places';
 export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripPlaces');
   const places = useTripPlaces(tripId);
+  // Ratings Trove already has stored; this page has no day, so no hours or distance.
+  const { signalsFor } = useTripPlaceSignals(tripId);
   const [sort, setSort] = useState<TripPlaceSort>('name');
   const [addOpen, setAddOpen] = useState(false);
   const [editPlace, setEditPlace] = useState<TripPlace | null>(null);
@@ -138,6 +141,7 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
             onPlaceLocated={places.placeLocated}
             onPriorityChange={(tripPlace, priority) => void places.setPriority(tripPlace, priority)}
             onRemove={setRemovingPlace}
+            signalsFor={signalsFor}
             tripPlaces={sortedPlaces}
           />
         </div>

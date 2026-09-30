@@ -72,6 +72,8 @@ type TripPlacesPanelProps = {
   onPriorityChange: (tripPlace: TripPlace, priority: TripPlacePriority | null) => void;
   onRemove: (tripPlace: TripPlace) => void;
   formatUsageDates?: (dates: string[]) => string;
+  /** Extra facts worth a line under a row: open that day, rating, distance. */
+  signalsFor?: (tripPlace: TripPlace) => Array<{ emphasis?: boolean; text: string }>;
   placeUse?: Record<string, ScheduledPlaceUse>;
   tripPlaces: TripPlace[];
 };
@@ -94,6 +96,7 @@ export function TripPlacesPanel({
   onPriorityChange,
   onRemove,
   formatUsageDates,
+  signalsFor,
   placeUse,
   tripPlaces,
 }: Readonly<TripPlacesPanelProps>) {
@@ -278,6 +281,18 @@ export function TripPlacesPanel({
                 {usage.map((label) => (
                   <p className="text-xs text-muted-foreground" key={label}>
                     {label}
+                  </p>
+                ))}
+                {signalsFor?.(tripPlace).map((signal) => (
+                  <p
+                    className={
+                      signal.emphasis
+                        ? 'text-xs font-medium text-status-warning'
+                        : 'text-xs text-muted-foreground'
+                    }
+                    key={signal.text}
+                  >
+                    {signal.text}
                   </p>
                 ))}
               </ItemContent>

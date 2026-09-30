@@ -154,6 +154,7 @@ import {
   dailyBasePoints,
   type ItineraryMapPoint,
 } from '@/lib/maps/itinerary-map';
+import { useTripPlaceHours } from '@/lib/trip-places/use-trip-place-hours';
 import { untimedItems } from '@/lib/itinerary/day-time-suggestions';
 import { planningMapLifecycle } from '@/lib/maps/map-retention';
 import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
@@ -517,6 +518,14 @@ export function ItineraryManager({
     [itinerary, selectedDayId],
   );
 
+  // What Trove has stored about each place on the selected day: whether it is
+  // open that day, and how it is rated. Stored evidence only.
+  const dayPlaceSignals = useTripPlaceHours(
+    tripId,
+    selectedDay?.date ?? null,
+    activeView === 'day' && selectedDay !== null,
+  );
+
   // Planning a day, the nearest thing to make is a stop on it, so the bottom
   // bar's create button makes that instead of another trip. The day it adds to
   // is the one the URL is already showing, which is why switching days needs no
@@ -815,6 +824,12 @@ export function ItineraryManager({
       ...bases,
     ];
   }, [activeView, dailyBases, itinerary, placeUse, selectedDay, selectedIndex, stopNumbers, t]);
+
+  // Where the day already goes (its stops and base), for "nearest to this day".
+  const dayAnchors = useMemo(
+    () => mapPoints.filter((point) => point.kind !== 'considered'),
+    [mapPoints],
+  );
 
   /**
    * A base is a stop of the day, so it reads like one: numbered in travel order,
@@ -2184,6 +2199,9 @@ export function ItineraryManager({
                         defaultTimeZone={selectedDay.defaultTimeZone}
                         distanceUnit={preferences.distanceUnit}
                         entries={shownSequence}
+                        hoursFor={(item) =>
+                          item.tripPlace ? dayPlaceSignals[item.tripPlace.id]?.hours : undefined
+                        }
                         itemCount={selectedDay.items.length}
                         label={t('itemListLabel')}
                         locale={locale}
@@ -2386,6 +2404,8 @@ export function ItineraryManager({
 
       {placesDrawerOpen && selectedDay ? (
         <ItineraryPlacesDrawer
+          anchors={dayAnchors}
+          date={selectedDay.date}
           dayName={selectedDay.name}
           dayNumber={selectedIndex + 1}
           onAddToDay={addPlaceToSelectedDay}

@@ -169,18 +169,24 @@ function chainLocator(day: PlanScoreDayRecord, record: PlanScoreTripRecord) {
   };
 }
 /** The trip's own routed legs scale every estimate, so each city estimates at its own pace. */
-function tripLegCalibration(record: PlanScoreTripRecord): LegCalibration {
+export function tripLegCalibration(record: PlanScoreTripRecord): LegCalibration {
   return legCalibration(
     record.days.flatMap((day) =>
       routedLegSamples([record.routes.get(day.id)], chainLocator(day, record)),
     ),
   );
 }
-function evaluateDayRecord(
+/**
+ * One day's normalized evidence, read from stored itinerary data and caches only:
+ * items with stored or estimated travel, date-aware opening hours, every
+ * reservation as a commitment, and the day's availability window. Plan Score and
+ * the time suggester read a day through this one assembly, so they agree.
+ */
+export function buildScoringDay(
   day: PlanScoreDayRecord,
   record: PlanScoreTripRecord,
   calibration: LegCalibration,
-): PlanScoreDayEvaluation {
+) {
   const locate = chainLocator(day, record);
   const routes = withEstimatedLegs(record.routes.get(day.id), locate, calibration);
   const commitments = toCommitments(day);
@@ -208,24 +214,32 @@ function evaluateDayRecord(
   });
   const config = readDayPlanningContext(day.planningContext);
   const origin = dayOrigin(day.date, day.timeZone);
+  const localMinute = (time: string) =>
+    elapsedLocalMinute(
+      day.date,
+      day.timeZone,
+      Number(time.slice(0, 2)) * 60 + Number(time.slice(3)),
+      origin,
+    );
   const availability = config.availability
     ? {
-        startMinute: elapsedLocalMinute(
-          day.date,
-          day.timeZone,
-          Number(config.availability.start.slice(0, 2)) * 60 +
-            Number(config.availability.start.slice(3)),
-          origin,
-        ),
-        endMinute: elapsedLocalMinute(
-          day.date,
-          day.timeZone,
-          Number(config.availability.end.slice(0, 2)) * 60 +
-            Number(config.availability.end.slice(3)),
-          origin,
-        ),
+        startMinute: localMinute(config.availability.start),
+        endMinute: localMinute(config.availability.end),
       }
     : null;
+  return { availability, commitments, holiday, items, locate, origin, routes };
+}
+
+function evaluateDayRecord(
+  day: PlanScoreDayRecord,
+  record: PlanScoreTripRecord,
+  calibration: LegCalibration,
+): PlanScoreDayEvaluation {
+  const { availability, commitments, holiday, items, locate, origin, routes } = buildScoringDay(
+    day,
+    record,
+    calibration,
+  );
   return evaluateScoredDay({
     commitments,
     dayId: day.id,

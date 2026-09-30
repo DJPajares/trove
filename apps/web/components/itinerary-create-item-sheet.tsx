@@ -4,6 +4,7 @@ import { CheckCircle2, CircleAlert, Clock3, MapPinned, NotebookPen, Search, X } 
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
+import { SuggestedTimeAction, useSuggestedTime } from '@/components/itinerary-suggested-time';
 import { TimeInput } from '@/components/time-input';
 import { useOnlineStatus } from '@/components/trip-sync-status';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -142,9 +143,15 @@ export function ItineraryCreateItemSheet({
   const providerSearchRequestQuery = useRef<string | null>(null);
   const providerSearchCache = useRef(new Map<string, ProviderSearchCacheEntry>());
   const currentPlaceQuery = useRef('');
+  const suggestedTime = useSuggestedTime(tripId, (localTime) => {
+    setForm((current) => ({ ...current, exactTime: localTime, schedule: 'exact' }));
+    setFormError(null);
+  });
+  const resetSuggestedTime = suggestedTime.reset;
 
   useEffect(() => {
     if (!open) return;
+    resetSuggestedTime();
     setForm(createFormState());
     setFormError(null);
     setPlaceQuery('');
@@ -162,7 +169,7 @@ export function ItineraryCreateItemSheet({
     providerSearchRequest.current = null;
     providerSearchRequestQuery.current = null;
     providerSearchCache.current = new Map();
-  }, [open]);
+  }, [open, resetSuggestedTime]);
 
   useEffect(
     () => () => {
@@ -441,6 +448,7 @@ export function ItineraryCreateItemSheet({
       timingMode: 'duration',
     }));
     setTimingExpanded(false);
+    suggestedTime.reset();
     setFormError(null);
   }
 
@@ -804,6 +812,27 @@ export function ItineraryCreateItemSheet({
                             {t('localTimeHint')}
                           </FieldDescription>
                         </div>
+                      ) : null}
+                      {online ? (
+                        <SuggestedTimeAction
+                          loading={suggestedTime.loading}
+                          message={suggestedTime.message}
+                          onRequest={() =>
+                            void suggestedTime.request({
+                              // The stop joins the end of the day, and the server
+                              // fits it there from what it already has stored.
+                              candidate: {
+                                durationMinutes:
+                                  form.timingMode === 'duration' && form.durationMinutes
+                                    ? Number(form.durationMinutes)
+                                    : null,
+                                tripPlaceId: form.tripPlaceId || null,
+                              },
+                              dayId,
+                              schedule: form.schedule,
+                            })
+                          }
+                        />
                       ) : null}
                     </Field>
                   )}

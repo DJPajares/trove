@@ -21,7 +21,6 @@ import {
   Ruler,
   Search,
   Settings2,
-  Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
@@ -31,6 +30,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 
 import { DatePicker } from '@/components/date-picker';
 import { ItineraryCreateItemSheet } from '@/components/itinerary-create-item-sheet';
+import { SuggestedTimeAction, useSuggestedTime } from '@/components/itinerary-suggested-time';
 import { PageState } from '@/components/page-state';
 import { ItineraryDayTimeline } from '@/components/itinerary-day-timeline';
 import { ItineraryOverview } from '@/components/itinerary-overview';
@@ -118,11 +118,9 @@ import {
   duplicateItineraryItem,
   fetchItinerary,
   fetchItineraryDayRoutes,
-  fetchItineraryDayTimeSuggestions,
   type Itinerary,
   ItineraryApiError,
   type ItineraryDay,
-  type ItineraryDayTimeSuggestion,
   type ItineraryItem,
   type ItineraryItemInput,
   type ItineraryRouteSegment,
@@ -409,11 +407,12 @@ export function ItineraryManager({
   const [customDurationOpen, setCustomDurationOpen] = useState(false);
   const [customDurationHours, setCustomDurationHours] = useState('');
   const [customDurationMinutes, setCustomDurationMinutes] = useState('');
-  const [suggestedTime, setSuggestedTime] = useState<ItineraryDayTimeSuggestion | null>(null);
-  const [suggestedTimeStatus, setSuggestedTimeStatus] = useState<'error' | 'idle' | 'loading'>(
-    'idle',
-  );
-  const suggestedTimeRequest = useRef<AbortController | null>(null);
+  // Accepting the proposal commits to the time the field now shows, since a
+  // daypart is what constrained it.
+  const suggestedTime = useSuggestedTime(tripId, (localTime) => {
+    setForm((current) => ({ ...current, exactTime: localTime, schedule: 'exact' }));
+    setFormError(null);
+  });
   const providerSearchRequest = useRef<AbortController | null>(null);
   const providerSearchRequestQuery = useRef<string | null>(null);
   const providerSearchCache = useRef(new Map<string, ProviderSearchCacheEntry>());
@@ -898,9 +897,7 @@ export function ItineraryManager({
     providerSearchRequest.current = null;
     providerSearchRequestQuery.current = null;
     providerSearchCache.current = new Map();
-    suggestedTimeRequest.current?.abort();
-    setSuggestedTime(null);
-    setSuggestedTimeStatus('idle');
+    suggestedTime.reset();
     setEditor({ dayId: item.itineraryDayId, item, mode: 'edit' });
   }
 
@@ -1004,9 +1001,7 @@ export function ItineraryManager({
     providerSearchRequest.current = null;
     providerSearchRequestQuery.current = null;
     providerSearchCache.current = new Map();
-    suggestedTimeRequest.current?.abort();
-    setSuggestedTime(null);
-    setSuggestedTimeStatus('idle');
+    suggestedTime.reset();
   }
 
   function updateForm<Key extends keyof FormState>(key: Key, value: FormState[Key]) {
@@ -1014,76 +1009,10 @@ export function ItineraryManager({
     setFormError(null);
   }
 
-  /**
-   * Fills the time field with Trove's proposal and nothing else. The value is
-   * form state until the user saves, so abandoning the editor discards it
-   * (PRD section 29.4).
-   */
-  async function requestSuggestedTime() {
-    if (editor.mode !== 'edit' || !editor.dayId) return;
-
-    suggestedTimeRequest.current?.abort();
-    const controller = new AbortController();
-    suggestedTimeRequest.current = controller;
-    setSuggestedTime(null);
-    setSuggestedTimeStatus('loading');
-
-    try {
-      const response = await fetchItineraryDayTimeSuggestions(tripId, editor.dayId, {
-        itemId: editor.item.id,
-        // The choice on screen, not the one on disk, so a daypart the user just
-        // picked shapes the answer instead of being contradicted by it.
-        schedule: form.schedule,
-        signal: controller.signal,
-      });
-      if (controller.signal.aborted) return;
-
-      const suggestion = response.suggestions[0] ?? null;
-      setSuggestedTime(suggestion);
-      setSuggestedTimeStatus('idle');
-
-      if (suggestion?.status === 'ok' && suggestion.localTime) {
-        updateForm('exactTime', suggestion.localTime);
-        // A daypart is what constrained the proposal, so accepting it means
-        // committing to the time the field now shows.
-        setForm((current) => ({ ...current, schedule: 'exact' }));
-      }
-    } catch {
-      if (!controller.signal.aborted) setSuggestedTimeStatus('error');
-    }
-  }
-
-  // Editing only: a new item has no id or position for the day to reason about.
-  // Offline only hides it, because the proposal needs live route and provider
-  // evidence and a queued read would help nobody.
+  // Editing only here: a stop being added asks from the add sheet instead.
+  // Offline only hides it; the answer depends on the day as the server holds it,
+  // and a queued read would help nobody.
   const canSuggestTime = editor.mode === 'edit' && online;
-
-  const suggestedTimeMessage = useMemo(() => {
-    if (suggestedTimeStatus === 'loading') return t('suggestedTime.loading');
-    if (suggestedTimeStatus === 'error') return t('suggestedTime.unavailable');
-    if (!suggestedTime) return '';
-    if (suggestedTime.status === 'no_feasible_time') return t('suggestedTime.none');
-    if (suggestedTime.status === 'insufficient_evidence') {
-      // Section 29.4: say it cannot, without itemising what was missing.
-      return t('suggestedTime.unavailable');
-    }
-
-    // The last constraint that actually moved the clock explains the answer
-    // best. The day start is only a floor, and the following-item check
-    // validates the time rather than setting it.
-    const moved = suggestedTime.reasons.filter(
-      (reason) => reason.code !== 'DAY_START' && reason.code !== 'BEFORE_FIXED_ITEM',
-    );
-    const reason = moved.at(-1);
-    const caveat = suggestedTime.caveats[0];
-
-    return [
-      reason ? t(`suggestedTime.reason.${reason.code}`) : t('suggestedTime.applied'),
-      caveat ? t(`suggestedTime.caveat.${caveat}`) : null,
-    ]
-      .filter(Boolean)
-      .join(' ');
-  }, [suggestedTime, suggestedTimeStatus, t]);
 
   const matchingTripPlaces = useMemo(() => {
     return sortTripPlaces(
@@ -1373,8 +1302,7 @@ export function ItineraryManager({
       timingMode: 'duration',
     }));
     setTimingExpanded(false);
-    setSuggestedTime(null);
-    setSuggestedTimeStatus('idle');
+    suggestedTime.reset();
     setFormError(null);
   }
 
@@ -2745,30 +2673,18 @@ export function ItineraryManager({
                               </FieldDescription>
                             </div>
                           ) : null}
-                          {canSuggestTime ? (
-                            <>
-                              <Button
-                                aria-busy={suggestedTimeStatus === 'loading'}
-                                aria-describedby="itinerary-suggested-time-status"
-                                className="self-start"
-                                disabled={suggestedTimeStatus === 'loading'}
-                                onClick={() => void requestSuggestedTime()}
-                                size="sm"
-                                type="button"
-                                variant="outline"
-                              >
-                                <Sparkles aria-hidden="true" />
-                                {t('suggestedTime.action')}
-                              </Button>
-                              <p
-                                aria-live="polite"
-                                className="text-sm text-muted-foreground"
-                                id="itinerary-suggested-time-status"
-                                role="status"
-                              >
-                                {suggestedTimeMessage}
-                              </p>
-                            </>
+                          {canSuggestTime && editor.mode === 'edit' && editor.dayId ? (
+                            <SuggestedTimeAction
+                              loading={suggestedTime.loading}
+                              message={suggestedTime.message}
+                              onRequest={() =>
+                                void suggestedTime.request({
+                                  dayId: editor.dayId,
+                                  itemId: editor.item.id,
+                                  schedule: form.schedule,
+                                })
+                              }
+                            />
                           ) : null}
                         </Field>
                       )}

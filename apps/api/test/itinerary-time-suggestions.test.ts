@@ -110,16 +110,16 @@ test('a broken travel chain degrades with a caveat instead of guessing across th
   const result = suggest([
     item({ duration: at(60), id: 'museum', start: at(540) }),
     // No inboundTravel: Trove cannot know when arrival happens.
-    item({ duration: at(60), id: 'target', openingHours: open([600, 1020]) }),
+    item({ duration: at(60), id: 'target', openingHours: open([0, 1440]) }),
   ]);
 
-  expect(result.status).toBe('ok');
+  // Not 10:00 plus a guessed leg: only the known end of the stop before.
   expect(result.status === 'ok' && result.startMinute).toBe(600);
   expect(result.status === 'ok' && result.caveats).toStrictEqual(['TRAVEL_UNKNOWN']);
-  expect(
-    result.status === 'ok' &&
-      result.reasons.some((reason) => reason.code === 'AFTER_PREVIOUS_ITEM'),
-  ).toBe(false);
+  expect(result.status === 'ok' && result.reasons.map((reason) => reason.code)).toStrictEqual([
+    'DAY_START',
+    'PREVIOUS_ITEM_ENDS',
+  ]);
 });
 
 test('clamps to the daypart the traveller chose', () => {
@@ -182,8 +182,9 @@ test('steps past another item the traveller pinned in place', () => {
   // The tour holds 09:00-11:00 and the place opens at 10:00, so the first open
   // slot is inside the tour and has to give way to it.
   const result = suggest([
-    item({ duration: at(120), fixed: true, id: 'tour', start: at(540) }),
+    // Listed first, so only the pinned tour - not the day's order - moves it.
     item({ duration: at(60), id: 'target', openingHours: open([600, 1200]) }),
+    item({ duration: at(120), fixed: true, id: 'tour', start: at(540) }),
   ]);
 
   expect(result.status === 'ok' && result.startMinute).toBe(660);
@@ -197,8 +198,8 @@ test('a start that merely abuts a pinned item is not displaced by it', () => {
   // 08:00-09:00 ends exactly as the tour begins. Nothing constrains the answer
   // beyond the day start, so Trove declines rather than dressing up its default.
   const result = suggest([
-    item({ duration: at(120), fixed: true, id: 'tour', start: at(540) }),
     item({ duration: at(60), id: 'target', openingHours: open([0, 1440]) }),
+    item({ duration: at(120), fixed: true, id: 'tour', start: at(540) }),
   ]);
 
   expect(result.status).toBe('insufficient_evidence');
@@ -322,4 +323,152 @@ test('a commitment that pushes the visit past closing blames the hours', () => {
   );
 
   expect(result).toStrictEqual({ blockedBy: ['OPENING_HOURS'], status: 'no_feasible_time' });
+});
+
+function estimated(minutes: number): { minutes: number; source: 'ESTIMATED' } {
+  return { minutes, source: 'ESTIMATED' };
+}
+
+test("the traveller's own available time replaces Trove's default start", () => {
+  const result = suggest(
+    [item({ duration: at(60), id: 'target', openingHours: open([0, 1440]) })],
+    { availability: { endMinute: 1200, startMinute: 630 } },
+  );
+
+  expect(result.status === 'ok' && result.startMinute).toBe(630);
+  expect(result.status === 'ok' && result.reasons.map((reason) => reason.code)).toStrictEqual([
+    'AVAILABILITY',
+  ]);
+});
+
+test('a visit that cannot finish inside the available time is not suggested', () => {
+  const result = suggest(
+    [item({ duration: at(120), id: 'target', openingHours: open([1080, 1440]) })],
+    { availability: { endMinute: 1140, startMinute: 540 } },
+  );
+
+  expect(result).toStrictEqual({ blockedBy: ['AVAILABILITY'], status: 'no_feasible_time' });
+});
+
+test('the first stop allows for getting there from the stay', () => {
+  const result = suggest([
+    item({
+      duration: at(60),
+      id: 'target',
+      inboundRequired: true,
+      inboundTravel: estimated(25),
+      openingHours: open([0, 1440]),
+    }),
+  ]);
+
+  // 08:00 + 25 min from the stay = 08:25.
+  expect(result.status === 'ok' && result.startMinute).toBe(505);
+  expect(result.status === 'ok' && result.reasons.map((reason) => reason.code)).toStrictEqual([
+    'DAY_START',
+    'FROM_STAY',
+  ]);
+  expect(result.status === 'ok' && result.caveats).toStrictEqual(['TRAVEL_ESTIMATED']);
+});
+
+test('an unscheduled day is walked from its start through typical visit lengths', () => {
+  const result = suggest(
+    [
+      item({ duration: at(90), id: 'museum', openingHours: open([0, 1440]) }),
+      item({
+        duration: at(60),
+        id: 'target',
+        inboundTravel: estimated(15),
+        openingHours: open([0, 1440]),
+      }),
+    ],
+    { inferredDurations: new Set(['museum']) },
+  );
+
+  // 08:00 + 90 min + 15 min travel = 09:45.
+  expect(result.status === 'ok' && result.startMinute).toBe(585);
+  expect(result.status === 'ok' && result.caveats).toStrictEqual([
+    'DURATION_ESTIMATED',
+    'TRAVEL_ESTIMATED',
+  ]);
+});
+
+test('an inferred order does not override the daypart the traveller chose', () => {
+  const result = suggest([
+    item({ duration: at(600), id: 'hike' }),
+    item({
+      duration: at(60),
+      id: 'target',
+      inboundTravel: estimated(15),
+      openingHours: open([0, 1440]),
+      startWindow: MORNING,
+    }),
+  ]);
+
+  // Walking the day would land at 18:15, outside Morning; Morning wins.
+  expect(result.status === 'ok' && result.startMinute).toBe(480);
+});
+
+test('a place suited to the evening is suggested for the evening, not the morning', () => {
+  const result = suggest(
+    [item({ duration: at(90), id: 'target', openingHours: open([660, 1380]) })],
+    {
+      preferredWindows: [
+        { endMinute: 930, startMinute: 630, typicalMinute: 750 },
+        { endMinute: 1380, startMinute: 1020, typicalMinute: 1140 },
+      ],
+    },
+  );
+
+  // Lunch is still ahead of 08:00, so the first suitable time is 12:30.
+  expect(result.status === 'ok' && result.startMinute).toBe(750);
+
+  const dinner = suggest(
+    [
+      item({ duration: at(300), id: 'tour', start: at(600) }),
+      item({
+        duration: at(90),
+        id: 'target',
+        inboundTravel: travel(20),
+        openingHours: open([660, 1380]),
+      }),
+    ],
+    {
+      preferredWindows: [
+        { endMinute: 930, startMinute: 630, typicalMinute: 750 },
+        { endMinute: 1380, startMinute: 1020, typicalMinute: 1140 },
+      ],
+    },
+  );
+
+  // The tour runs to 15:00 and lunch is over, so dinner at 19:00.
+  expect(dinner.status === 'ok' && dinner.startMinute).toBe(1140);
+  expect(dinner.status === 'ok' && dinner.reasons.map((reason) => reason.code)).toStrictEqual([
+    'DAY_START',
+    'AFTER_PREVIOUS_ITEM',
+    'SUITS_PLACE',
+  ]);
+});
+
+test('a stop listed after a pinned one starts once it ends, even with the leg unknown', () => {
+  const result = suggest([
+    item({ duration: at(120), fixed: true, id: 'tour', start: at(540) }),
+    item({ duration: at(60), id: 'target', openingHours: open([0, 1440]) }),
+  ]);
+
+  expect(result.status === 'ok' && result.startMinute).toBe(660);
+  expect(result.status === 'ok' && result.caveats).toStrictEqual(['TRAVEL_UNKNOWN']);
+});
+
+test("fits around the traveller's own timed stops, not only bookings", () => {
+  // Breakfast is the traveller's plan, not a booking, but it still holds 08:30.
+  const result = suggest([
+    item({ duration: at(60), id: 'target', openingHours: open([0, 1440]), startWindow: MORNING }),
+    item({ duration: at(60), id: 'breakfast', start: at(510) }),
+  ]);
+
+  expect(result.status === 'ok' && result.startMinute).toBe(570);
+  expect(
+    result.status === 'ok' &&
+      result.reasons.find((reason) => reason.code === 'FITS_AROUND_STOPS')?.references,
+  ).toStrictEqual(['breakfast']);
 });

@@ -1,29 +1,40 @@
 import { getPrismaClient } from '@trove/db';
 
-import {
-  sameDayJourneyCommitment,
-  toDayEvidenceItems,
-  toLocalDate,
-} from './itinerary-day-evidence.js';
-import { getItineraryDayRoutes } from './itinerary-routes.js';
-import { ItineraryNotFoundError } from './itineraries.js';
+import type { ItineraryRouteSegment } from './itinerary-route-reader.js';
+import { formatInstantInTimeZone } from './itinerary-rules.js';
+import { ItineraryNotFoundError, itemSortMinute, timedInsertIndex } from './itineraries.js';
 import {
   DEFAULT_DAY_START_MINUTE,
   SUGGESTED_TIME_ROUNDING_MINUTES,
   suggestItemStart,
   type SuggestedTimeResult,
+  type SuggestedTimeWindow,
 } from './itinerary-time-suggestions-rules.js';
-import { createPlacesService } from './places-runtime.js';
-import type { PlacesService } from './places.js';
-import { loadPlaceEvidence } from './place-evidence-acquisition.js';
-import type { PlanScoreFixedCommitment } from './plan-score-factors.js';
+import { inferDurations } from './plan-score-estimates.js';
+import { placeProfile } from './plan-score-place-types.js';
+import {
+  buildScoringDay,
+  discardExpiredCurrentHours,
+  loadPlaceEvidence,
+  mergeScoringPlaceIdentity,
+  PLAN_SCORE_TRIP_INCLUDE,
+  readPlanScoreInputs,
+  tripLegCalibration,
+  type PlanScoreTripRecord,
+} from './plan-score.js';
+import { readCachedRoute } from './route-evidence-cache.js';
+import { cachedPlaceResolver, readScoringRoutes } from './scoring-evidence.js';
+import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
 
 /**
  * Suggested start times for one itinerary day (PRD section 29.4).
  *
- * Reads the same evidence Plan Score does, through the same shared mappers, and
- * hands it to the pure planner. Day-scoped because the route lookup is a
- * whole-day call: a per-item endpoint would pay for it identically.
+ * Reads the day exactly as Plan Score does, through the same cache-only
+ * assembly: stored itinerary rows, cached or distance-estimated travel, stored
+ * place evidence with date-aware opening hours, every reservation, and the
+ * day's availability. Nothing here reaches a provider - a suggestion is never a
+ * reason to buy a route or a place lookup - so what it knows is whatever normal
+ * planning has already stored.
  */
 
 export type ItineraryDayTimeSuggestion = {
@@ -37,11 +48,6 @@ export type ItineraryDayTimeSuggestions = {
   itineraryDayId: string;
   suggestions: ItineraryDayTimeSuggestion[];
 };
-
-function toLocalTime(minutes: number) {
-  const hours = Math.floor(minutes / 60) % 24;
-  return `${String(hours).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
-}
 
 /**
  * The timing the caller is showing the traveller right now, which may not be
@@ -61,145 +67,234 @@ const REQUESTED_DAY_PARTS: Record<RequestedSchedule, string | null> = {
   none: null,
 };
 
+/**
+ * A stop being added that has no id yet. It sits where saving would put it: by
+ * its daypart among the day's timed stops, otherwise at the end of the day.
+ */
+export type CandidateStop = { durationMinutes: number | null; tripPlaceId: string | null };
+
+/** The id a not-yet-saved stop answers under. */
+export const CANDIDATE_ITEM_ID = 'candidate';
+
+const toRouteMode = (value: string | null | undefined) =>
+  (value ?? 'DRIVE').toLowerCase() as ItineraryRouteSegment['mode'];
+
 export async function getItineraryDayTimeSuggestions(
   userId: string,
   tripId: string,
   itineraryDayId: string,
-  options: { itemId?: string; schedule?: RequestedSchedule } = {},
-  services: { placesService?: PlacesService | null } = {},
+  options: { candidate?: CandidateStop; itemId?: string; schedule?: RequestedSchedule } = {},
+  services: { now?: Date } = {},
 ): Promise<ItineraryDayTimeSuggestions> {
+  const now = services.now ?? new Date();
   const prisma = getPrismaClient();
   const trip = await prisma.trip.findFirst({
     where: { id: tripId, ownerId: userId },
-    include: {
-      itineraryDays: {
-        where: { id: itineraryDayId },
-        include: {
-          items: {
-            orderBy: { position: 'asc' },
-            include: { _count: { select: { reservations: true } } },
-          },
-        },
-      },
-      reservations: {
-        select: {
-          flightArrivalLocalDate: true,
-          flightArrivalLocalTime: true,
-          flightDepartureLocalDate: true,
-          flightDepartureLocalTime: true,
-          id: true,
-        },
-      },
-      tripPlaces: {
-        select: { id: true, place: { select: { providerRefs: true } } },
-      },
-    },
+    include: PLAN_SCORE_TRIP_INCLUDE,
   });
   if (!trip) throw new ItineraryNotFoundError('trip_not_found');
 
-  const day = trip.itineraryDays[0];
-  if (!day) throw new ItineraryNotFoundError('itinerary_day_not_found');
+  const dayRow = trip.itineraryDays.find((day) => day.id === itineraryDayId);
+  const dayRecord = readPlanScoreInputs(trip, now).days.find((day) => day.id === itineraryDayId);
+  if (!dayRow || !dayRecord) throw new ItineraryNotFoundError('itinerary_day_not_found');
 
-  const date = toLocalDate(day.date);
-  const placesService =
-    services.placesService === undefined
-      ? createPlacesService({ source: 'itinerary-time-suggestions' })
-      : services.placesService;
-  // Only the places this day actually schedules: loadPlaceEvidence fans out one
-  // provider request per entry, so a trip-wide list would bill for the whole trip.
-  const dayTripPlaceIds = new Set(
+  // A place that is not this trip's is simply not known here: evidence is only
+  // ever read for the trip's own places, so the stop is treated as unplaced.
+  const candidate = options.candidate && {
+    ...options.candidate,
+    tripPlaceId: trip.tripPlaces.some((row) => row.id === options.candidate?.tripPlaceId)
+      ? options.candidate.tripPlaceId
+      : null,
+  };
+
+  const requestedDayPart = options.schedule ? REQUESTED_DAY_PARTS[options.schedule] : undefined;
+  const targetId = candidate ? CANDIDATE_ITEM_ID : options.itemId;
+  const sortMinute = requestedDayPart
+    ? itemSortMinute({ dayPart: requestedDayPart, localStartTime: null })
+    : null;
+  const candidateIndex =
+    sortMinute === null ? dayRow.items.length : timedInsertIndex(dayRow.items, sortMinute);
+  const storedItems = dayRecord.items.map((item) =>
+    // A caller-supplied schedule replaces what is stored for the target only.
+    // The stored start goes with it: an item being moved to Morning is no
+    // longer pinned to the time it used to hold. Other items keep their
+    // stored timing, since they are what the target has to fit around.
+    requestedDayPart !== undefined && item.id === targetId
+      ? {
+          ...item,
+          dayPart: requestedDayPart,
+          localStartTime: null,
+          startInstant: null,
+          timeProvenance: null,
+        }
+      : item,
+  );
+  const day = {
+    ...dayRecord,
+    items: [
+      ...storedItems.slice(0, candidateIndex),
+      ...(candidate
+        ? [
+            {
+              blockType: null,
+              dayPart: requestedDayPart ?? null,
+              durationMinutes: candidate.durationMinutes,
+              durationProvenance: 'USER_OWNED',
+              id: CANDIDATE_ITEM_ID,
+              localStartTime: null,
+              reservationCount: 0,
+              startInstant: null,
+              timeSemantics: null,
+              timeProvenance: null,
+              timeZone: null,
+              tripPlaceId: candidate.tripPlaceId,
+            },
+          ]
+        : []),
+      ...storedItems.slice(candidateIndex),
+    ],
+  };
+
+  const placeIds = new Set(
     day.items.flatMap((item) => (item.tripPlaceId ? [item.tripPlaceId] : [])),
   );
-
-  const [routes, placeEvidence] = await Promise.all([
-    getItineraryDayRoutes(
-      userId,
-      tripId,
-      day.id,
-      {},
-      { placesService, source: 'itinerary-time-suggestions' },
-    ),
+  const [storedRoutes, evidence] = await Promise.all([
+    readScoringRoutes(userId, tripId, itineraryDayId, now, cachedPlaceResolver(now)),
     loadPlaceEvidence(
       trip.tripPlaces
-        .filter((tripPlace) => dayTripPlaceIds.has(tripPlace.id))
-        .map((tripPlace) => ({
+        .filter((row) => placeIds.has(row.id))
+        .map((row) => ({
           externalPlaceId:
-            tripPlace.place.providerRefs.find((reference) => reference.provider === 'GOOGLE')
+            row.place.providerRefs.find((reference) => reference.provider === 'GOOGLE')
               ?.externalPlaceId ?? null,
-          id: tripPlace.id,
+          id: row.id,
         })),
-      placesService,
+      now,
     ),
   ]);
+  for (const row of trip.tripPlaces) {
+    const merged = mergeScoringPlaceIdentity(row.id, row.place, evidence.places.get(row.id), now);
+    evidence.places.set(row.id, merged.place);
+    const hours = evidence.hours.get(row.id);
+    if (hours && !hours.timeZone && merged.place.coordinates)
+      hours.timeZone = timeZoneAtCoordinates(merged.place.coordinates);
+  }
+  discardExpiredCurrentHours(evidence.hours, now);
 
-  const commitments: PlanScoreFixedCommitment[] = trip.reservations.flatMap((reservation) => {
-    const commitment = sameDayJourneyCommitment(reservation);
-    if (!commitment || commitment.date !== date) return [];
-    return [
-      {
-        endMinute: commitment.endMinute,
-        id: commitment.id,
-        source: 'USER_OWNED' as const,
-        startMinute: commitment.startMinute,
-      },
-    ];
-  });
+  // The new stop's leg runs from the stop before it (or the day's stay): a
+  // stored route when one was ever measured, otherwise the distance estimate
+  // every unrouted leg gets.
+  const routes = { ...storedRoutes, segments: [...storedRoutes.segments] };
+  if (candidate) {
+    const lastRow = candidateIndex > 0 ? dayRow.items[candidateIndex - 1] : undefined;
+    const origin = lastRow
+      ? { id: lastRow.id, kind: 'itinerary_item' as const, label: null }
+      : dayRow.dailyBaseTripPlaceId
+        ? { id: dayRow.dailyBaseTripPlaceId, kind: 'daily_base' as const, label: null }
+        : null;
+    if (origin) {
+      const mode = toRouteMode(lastRow ? lastRow.travelModeToNext : dayRow.routeStartTravelMode);
+      const from = evidence.places.get(lastRow?.tripPlaceId ?? origin.id)?.coordinates;
+      const to = candidate.tripPlaceId
+        ? evidence.places.get(candidate.tripPlaceId)?.coordinates
+        : null;
+      const cached =
+        from && to && mode !== 'flight'
+          ? await readCachedRoute({ origin: from, destination: to, mode }, now)
+          : null;
+      const routed = cached?.kind === 'hit' && cached.result.status === 'ok' ? cached.result : null;
+      routes.segments.push({
+        destination: { id: CANDIDATE_ITEM_ID, kind: 'itinerary_item', label: null },
+        distanceMeters: routed?.estimate.distanceMeters ?? null,
+        durationSeconds: routed?.estimate.durationSeconds ?? null,
+        encodedPolyline: null,
+        ...(routed ? { evidenceAsOf: routed.freshness.fetchedAt } : {}),
+        id: `${origin.kind}:${origin.id}:itinerary_item:${CANDIDATE_ITEM_ID}`,
+        mode,
+        modeOwner: { id: origin.id, kind: lastRow ? 'item_departure' : 'day_start' },
+        origin,
+        provider: routed ? 'google' : null,
+        reason: null,
+        scope: mode === 'flight' ? 'long_distance' : 'local',
+        status: routed ? 'ok' : 'unavailable',
+      });
+    }
+  }
 
-  const items = toDayEvidenceItems(
-    {
-      commitments: [],
-      date,
-      id: day.id,
-      items: day.items.map((item) => {
-        // A caller-supplied schedule replaces what is stored for the target
-        // only. The stored start goes with it: an item being moved to Morning
-        // is no longer pinned to the time it used to hold, and leaving it would
-        // suppress the window. Other items keep their stored timing, since they
-        // are what the target has to fit around.
-        const overridden = options.schedule !== undefined && item.id === options.itemId;
+  const record: PlanScoreTripRecord = {
+    days: [day],
+    hours: evidence.hours,
+    mustGoTripPlaceIds: [],
+    places: evidence.places,
+    preferences: trip.planningPreferences,
+    ratings: evidence.ratings,
+    routes: new Map([[day.id, routes]]),
+  };
+  const scoring = buildScoringDay(day, record, tripLegCalibration(record));
 
-        return {
-          dayPart: overridden ? REQUESTED_DAY_PARTS[options.schedule!] : item.dayPart,
-          durationMinutes: item.durationMinutes,
-          durationProvenance: item.durationProvenance,
-          id: item.id,
-          localStartTime: overridden ? null : item.localStartTime,
-          reservationCount: item._count.reservations,
-          startInstant: overridden ? null : item.startInstant,
-          timeSemantics: item.timeSemantics,
-          timeProvenance: overridden ? null : item.timeProvenance,
-          timeZone: item.timeZone,
-          tripPlaceId: item.tripPlaceId,
-        };
-      }),
-      timeZone: day.defaultTimeZone,
-    },
-    routes,
-    placeEvidence.hours,
+  // Stops without a stated length take the typical length for their kind of
+  // place, so one unknown duration no longer stops the day's timing chain.
+  const typeOf = (placeId: string | undefined) =>
+    placeProfile(placeId ? evidence.places.get(placeId)?.types : null);
+  const inferred = inferDurations(
+    scoring.items,
+    (item) => typeOf(item.placeId)?.visit?.typical ?? null,
+  );
+  const inferredDurations = new Set(
+    inferred.items.flatMap((item, index) =>
+      item.duration && !scoring.items[index]?.duration ? [item.id] : [],
+    ),
   );
 
-  // An item the traveller already gave an exact time is not asking for one, so
-  // it is only suggested for when explicitly named.
-  const targets = items.filter((item) =>
-    options.itemId ? item.id === options.itemId : item.start === null,
+  const targets = inferred.items.filter((item) =>
+    targetId
+      ? item.id === targetId
+      : // An item the traveller already gave an exact time is not asking for one.
+        item.start === null,
   );
 
   return {
-    generatedAt: new Date().toISOString(),
+    generatedAt: now.toISOString(),
     itineraryDayId: day.id,
     suggestions: targets.map((target) => {
+      const profile = typeOf(target.placeId);
+      // When a kind of place suits a visit - dinner in the evening, a bar after
+      // dark - is preferred; known opening hours already decide access, so a
+      // daytime stand-in only helps where the hours are unknown.
+      const preferredWindows: SuggestedTimeWindow[] | null =
+        profile && Array.isArray(profile.windows)
+          ? profile.windowKind === 'EXPERIENCE' || target.openingHours.status !== 'KNOWN'
+            ? [...(profile.windows as SuggestedTimeWindow[])]
+            : null
+          : null;
       const result = suggestItemStart({
-        commitments,
+        availability: scoring.availability,
+        // A reservation linked to this stop is the stop itself, not something in its way.
+        commitments: scoring.commitments.filter((commitment) => commitment.itemId !== target.id),
         dayStartMinute: DEFAULT_DAY_START_MINUTE,
-        items,
+        inferredDurations,
+        items: inferred.items,
+        preferredWindows,
         roundingMinutes: SUGGESTED_TIME_ROUNDING_MINUTES,
         targetItemId: target.id,
       });
 
+      // A plan with no place has no opening hours to be missing.
+      if (result.status === 'ok' && !target.placeId)
+        result.caveats = result.caveats.filter((caveat) => caveat !== 'OPENING_HOURS_UNKNOWN');
+
       return {
         ...result,
         itemId: target.id,
-        localTime: result.status === 'ok' ? toLocalTime(result.startMinute) : null,
+        // Minutes are counted from the day's own midnight, so the wall-clock time
+        // comes from the day's zone, correct across a daylight-saving change.
+        localTime:
+          result.status === 'ok'
+            ? formatInstantInTimeZone(
+                new Date(scoring.origin + result.startMinute * 60_000),
+                day.timeZone,
+              ).time
+            : null,
       };
     }),
   };

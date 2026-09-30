@@ -69,7 +69,15 @@ function MapSkeleton({ label }: Readonly<{ label: string }>) {
   );
 }
 
-export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
+/**
+ * `active` is false while the shell keeps this view alive, hidden, behind
+ * another one. A built map is worth keeping - each construction is billed - but
+ * a hidden one has no business watching the device or buying route legs.
+ */
+export function TripModeMapView({
+  active = true,
+  tripId,
+}: Readonly<{ active?: boolean; tripId: string }>) {
   const t = useTranslations('tripMode.views.map');
   const itineraryT = useTranslations('itinerary');
   const locale = useLocale();
@@ -84,7 +92,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
     position: deviceLocation,
     request: requestLocation,
     status: locationStatus,
-  } = useTravellerPosition({ enabled: !isPreview });
+  } = useTravellerPosition({ enabled: !isPreview && active });
   const clearMapSelection = useCallback(() => setSelectedPointId(null), []);
 
   const day = useMemo(() => {
@@ -97,7 +105,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
   const routeRevision = itineraryDayRouteRevision(day);
 
   const routesQuery = useQuery({
-    enabled: Boolean(day && online),
+    enabled: Boolean(day && online && active),
     queryFn: ({ signal }) =>
       fetchItineraryDayRoutes(tripId, day?.id as string, {
         includePolyline: true,
@@ -316,6 +324,7 @@ export function TripModeMapView({ tripId }: Readonly<{ tripId: string }>) {
               points={mapPoints}
               routeLines={routeLines}
               selectedPointId={selectedPointId}
+              suspendUpdates={!active}
             />
           ) : (
             <div className="flex h-full min-h-72 items-center justify-center bg-surface-sunken px-6 text-center">

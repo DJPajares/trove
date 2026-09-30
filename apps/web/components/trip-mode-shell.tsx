@@ -17,6 +17,7 @@ import { usePreferences } from '@/components/preferences-provider';
 import { TimeInput } from '@/components/time-input';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripModeTabBar, TripModeTopBar, tripModeViews } from '@/components/trip-mode-chrome';
+import { TripModeMapView } from '@/components/trip-mode-map-view';
 import { TripModeDataProvider } from '@/components/trip-mode-data';
 import { TripSyncStatus } from '@/components/trip-sync-status';
 import { TripModeTasksProvider } from '@/components/trip-mode-tasks';
@@ -31,7 +32,9 @@ import {
   type TripModeContextRequestOptions,
 } from '@/lib/itinerary/api';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
+import { tripModeMapLifecycle } from '@/lib/maps/map-retention';
 import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
+import { isNavigationPathActive } from '@/lib/navigation';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import { queryKeys } from '@/lib/query/keys';
 import { useTripResource } from '@/lib/query/use-trip-resource';
@@ -327,6 +330,14 @@ export function TripModeShell({
     status: itineraryStatus,
   } = useTripResource(queryKeys.itinerary(tripId), () => fetchItinerary(tripId));
   const [detailsPlace, setDetailsPlace] = useState<ItineraryTripPlace | null>(null);
+  // The Map view is built here rather than by its route, so a map already paid
+  // for survives a trip to Today and back instead of being built again.
+  const onMapView = isNavigationPathActive(pathname, `/trips/${tripId}/mode/map`);
+  const [mapVisited, setMapVisited] = useState(onMapView);
+  useEffect(() => {
+    if (onMapView) setMapVisited(true);
+  }, [onMapView]);
+  const mapLifecycle = tripModeMapLifecycle({ onMapView, visited: mapVisited });
   const detailsProviderName = detailsPlace ? resolveProviderPlaceName(detailsPlace) : null;
   const detailsSubjects: EditorialSubject[] =
     detailsPlace && detailsProviderName
@@ -583,6 +594,11 @@ export function TripModeShell({
             <div className="flex min-h-[min(32rem,55dvh)] flex-1 flex-col pt-5 pb-[calc(var(--bottom-bar-height)+var(--safe-bottom)+1rem)] sm:pt-6 lg:pb-8">
               <TripModePlaceDetailsContext.Provider value={placeDetailsContext}>
                 {children}
+                {mapLifecycle.render ? (
+                  <div className={mapLifecycle.active ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
+                    <TripModeMapView active={mapLifecycle.active} tripId={trip.id} />
+                  </div>
+                ) : null}
               </TripModePlaceDetailsContext.Provider>
 
               {/* Day quality is a review of the plan, not an answer to "what do I

@@ -1176,3 +1176,15 @@ export async function fetchDayBetterOrder(
     auth,
   );
 }
+
+export type PlaceGroup = { addedMinutes: number; dayId: string; tripPlaceIds: string[] };
+
+/** Which day each unplanned Trip Place fits, by location. Stored coordinates only. */
+export async function fetchPlaceGroupings(tripId: string, options: { signal?: AbortSignal } = {}) {
+  const auth = await getAuthContext();
+  return itineraryRequest<{ generatedAt: string; groups: PlaceGroup[] }>(
+    `/trips/${tripId}/place-groupings`,
+    { signal: options.signal },
+    auth,
+  );
+}

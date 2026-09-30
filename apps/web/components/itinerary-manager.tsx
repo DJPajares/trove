@@ -31,6 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 
 import { DatePicker } from '@/components/date-picker';
 import { ItineraryCreateItemSheet } from '@/components/itinerary-create-item-sheet';
+import { ItineraryPlaceGroups } from '@/components/itinerary-place-groups';
 import { ItineraryBetterOrder } from '@/components/itinerary-better-order';
 import { ItineraryDayTimeSuggestions } from '@/components/itinerary-day-time-suggestions';
 import { SuggestedTimeAction, useSuggestedTime } from '@/components/itinerary-suggested-time';
@@ -2313,6 +2314,17 @@ export function ItineraryManager({
             ) : null}
           </div>
         </div>
+      ) : null}
+
+      {activeView === 'overview' ? (
+        <ItineraryPlaceGroups
+          dayLabel={(day) => t('dayNumber', { number: itinerary.days.indexOf(day) + 1 })}
+          days={itinerary.days}
+          onAdded={refresh}
+          placeName={(tripPlace) => placeName(tripPlace) ?? t('providerPlace')}
+          tripId={tripId}
+          tripPlaces={itinerary.tripPlaces}
+        />
       ) : null}
 
       {activeView === 'overview' ? (

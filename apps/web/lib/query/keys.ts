@@ -51,6 +51,8 @@ export const queryKeys = {
    * the key because a leg chain computed for one ordering is wrong for any
    * other - see `itineraryDayRouteRevision`.
    */
+  /** Which day each unplanned Trip Place fits; stored coordinates only. */
+  placeGroupings: (tripId: string) => ['place-groupings', tripId] as const,
   /** Stored hours and ratings for a trip's places; `date` null asks for ratings only. */
   placeHours: (tripId: string, date: string | null) => ['place-hours', tripId, date] as const,
   itineraryDayRoutes: (
@@ -183,6 +185,7 @@ export const TRIP_SCOPED_QUERY_ROOTS = [
   'itinerary',
   'itinerary-day-routes',
   'memories',
+  'place-groupings',
   'place-hours',
   'plan-score',
   'reservations',

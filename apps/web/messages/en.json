@@ -1672,6 +1672,15 @@
     "exactTimeError": "Choose an exact local time.",
     "localTimeHint": "Time at this stop.",
     "floatingTimeHint": "This is a floating local plan. Trove keeps the entered day and time if its timezone changes.",
+    "placeGroups": {
+      "title": "Places not on any day yet",
+      "description": "Grouped by the day whose stops they are near. Nothing is added until you choose.",
+      "near": "{count, plural, one {# place near {day}’s stops} other {# places near {day}’s stops}}",
+      "addAll": "Add all to {day}",
+      "addOne": "Add {name} to {day}",
+      "adding": "Adding...",
+      "error": "Some places could not be added. Try again."
+    },
     "betterOrder": {
       "title": "A better order for this day",
       "description": "The same stops in an order with less travel. Stops with a set time or a booking stay where they are. Nothing changes until you apply.",

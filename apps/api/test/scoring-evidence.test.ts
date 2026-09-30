@@ -572,3 +572,36 @@ test('a zig-zag day gets the order Plan Score compared against, from stored legs
   expect(result.status === 'ok' && result.bestMinutes < result.plannedMinutes).toBe(true);
   expect(outbound).not.toHaveBeenCalled();
 });
+
+test('place groupings read stored coordinates only', async () => {
+  const { getPlaceGroupings } = await import('../src/services/place-groupings.js');
+  const nearby = {
+    id: 'tp-near',
+    placeId: 'place-near',
+    priority: null,
+    place: {
+      id: 'place-near',
+      customLatitude: null,
+      customLongitude: null,
+      customName: null,
+      providerRefs: [
+        {
+          provider: 'GOOGLE',
+          externalPlaceId: 'near',
+          cachedAt: NOW,
+          cachedLatitude: decimal(1.001),
+          cachedLongitude: decimal(2),
+          cachedName: 'Near',
+        },
+      ],
+    },
+  };
+  trip.tripPlaces.push(nearby);
+
+  const result = await getPlaceGroupings('owner', 'trip', { now: NOW });
+
+  expect(result.groups).toStrictEqual([
+    { addedMinutes: 60, dayId: 'day', tripPlaceIds: ['tp-near'] },
+  ]);
+  expect(outbound).not.toHaveBeenCalled();
+});

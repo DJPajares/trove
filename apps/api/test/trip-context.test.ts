@@ -201,7 +201,9 @@ test("another traveller's trip answers as if it did not exist", async () => {
   );
 });
 
-test('scoring never reaches the trip context or its climate provider', async () => {
+test('scoring reads destination context from its caches, never the climate archive', async () => {
+  // Scoring may read holidays and typical conditions (PRD 29.7), but only as a
+  // cache: no scoring path asks the archive, whatever the cache holds.
   for (const file of [
     'plan-score.ts',
     'plan-score-evaluation.ts',
@@ -209,8 +211,49 @@ test('scoring never reaches the trip context or its climate provider', async () 
     'ai-planning-plan-score.ts',
   ]) {
     const source = await readFile(new URL(`../src/services/${file}`, import.meta.url), 'utf8');
-    expect(source, file).not.toMatch(/from ['"]\.\/(?:climate-norms|trip-context|trip-holidays)/);
+    expect(source, file).not.toMatch(/allowFetch: true|from ['"]\.\/climate-norms/);
   }
+  const scorer = await readFile(new URL('../src/services/plan-score.ts', import.meta.url), 'utf8');
+  expect(scorer).toMatch(/readTripContext\([^)]*allowFetch: false/);
+
+  const fetcher = vi.fn(async () => archiveResponse());
+  const cache = stubClimateCache();
+  vi.stubGlobal('trovePrismaClient', {
+    climateNormSnapshot: cache,
+    trip: {
+      findFirst: vi.fn(async () => ({
+        countries: ['SG'],
+        referenceTimeZone: 'Asia/Singapore',
+        destinations: [],
+        reservations: [],
+        tripPlaces: [
+          {
+            id: 'stop',
+            place: { customLatitude: 1.28, customLongitude: 103.85, providerRefs: [] },
+          },
+        ],
+        itineraryDays: [
+          {
+            id: 'day',
+            date: new Date('2026-10-16T00:00:00Z'),
+            defaultTimeZone: 'Asia/Singapore',
+            dailyBaseTripPlaceId: null,
+            items: [{ tripPlaceId: 'stop' }],
+          },
+        ],
+      })),
+    },
+  });
+  const context = await readTripContext('owner', 'trip', {
+    now: NOW,
+    allowFetch: false,
+    source: 'plan-score',
+    fetcher,
+  });
+  expect(context.climate).toEqual([]);
+  expect(cache.findUnique).toHaveBeenCalledTimes(1);
+  expect(cache.upsert).not.toHaveBeenCalled();
+  expect(fetcher).not.toHaveBeenCalled();
 });
 
 test('one city is one pattern, and a year that fails leaves the others standing', async () => {

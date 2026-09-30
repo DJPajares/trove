@@ -2364,6 +2364,9 @@
     "dayTitle": "Plan Score for this day",
     "basis": {
       "travelUnknown": "Based on planned activity time; required travel time hasn't been fully assessed.",
+      "travelEstimated": "Based on the planned schedule, with travel times estimated from the distances between stops.",
+      "durationsEstimated": "Based on the planned schedule, using typical visit lengths where none are set.",
+      "durationsAndTravelEstimated": "Based on the planned schedule, with visit lengths and travel times estimated where they aren’t set.",
       "verifiedProblemTravelUnknown": "Based on timing problems that can be checked; required travel time remains unassessed.",
       "activityLoad": "Based on planned activity time; the schedule hasn't been assessed.",
       "timing": "Based on the supported schedule and activity time; some parts of the plan remain unassessed.",
@@ -2385,6 +2388,8 @@
     "showDetails": "Show breakdown",
     "hideDetails": "Hide breakdown",
     "scoreValue": "{score} out of 100",
+    "estimatedScoreValue": "About {score} out of 100, estimated",
+    "estimatedNote": "≈ Partly estimated from distances, typical visit lengths and typical conditions where details are missing.",
     "loading": "Taking a look at this plan…",
     "unavailable": "We could not look at this plan just now.",
     "retry": "Try again",
@@ -2440,12 +2445,12 @@
       "stale": "{count, plural, one {One route estimate we used may be out of date.} other {# route estimates we used may be out of date.}}"
     },
     "pace": {
-      "comfortable": "Known activity and transport load fits your selected pace.",
+      "comfortable": "The planned activity and transport load fits your selected pace.",
       "tight": "The day is packed, with only about {bufferMinutes} minutes spare between stops.",
       "overlapping": "The day is overbooked, with stops running into each other by about {overlapMinutes} minutes.",
       "unknown": "We cannot judge the pace yet.",
       "stale": "{count, plural, one {One duration estimate we used may be out of date.} other {# duration estimates we used may be out of date.}}",
-      "load": "Known activity and transport effort adds up to about {minutes} weighted minutes. Consider a lighter day.",
+      "load": "Planned activity and transport effort adds up to about {minutes} weighted minutes. Consider a lighter day.",
       "accumulated": "Demanding earlier days add to this day’s load. Consider a lighter day or more recovery time.",
       "naturalDowntime": "The known schedule leaves a natural interval for downtime.",
       "continuous": "There is a long continuous activity block. Consider leaving room to recover.",
@@ -2458,7 +2463,9 @@
       "unknown": "Local travel or comparable alternatives are not sufficiently known yet.",
       "stale": "{count, plural, one {One route estimate we used may be out of date.} other {# route estimates we used may be out of date.}}",
       "light": "Known local travel stays light, about {minutes} minutes.",
-      "heavy": "Local travel takes about {minutes} minutes. Consider grouping the stops more closely."
+      "lightEstimated": "Local travel looks light, an estimated {minutes} minutes from the distances between stops.",
+      "heavy": "Local travel takes about {minutes} minutes. Consider grouping the stops more closely.",
+      "heavyEstimated": "Local travel is estimated at about {minutes} minutes from the distances between stops. Consider grouping the stops more closely."
     },
     "mustGo": {
       "allScheduled": "Every Must Go place has a spot on the plan.",
@@ -2480,10 +2487,14 @@
     },
     "experienceQuality": {
       "supported": "The assessed experience choices have supporting evidence. Unassessed suitability remains unknown.",
-      "unknown": "Interest fit, distinctive value, or reliable timing evidence is still limited."
+      "unknown": "Interest fit, distinctive value, or reliable timing evidence is still limited.",
+      "timeOfDay": "{count, plural, one {One stop is timed outside the hours it usually suits, such as a dinner spot in the morning or an outdoor visit after dark.} other {# stops are timed outside the hours they usually suit.}}",
+      "rushed": "{count, plural, one {One visit is shorter than it usually needs. Consider giving it more time.} other {# visits are shorter than they usually need. Consider giving them more time.}}",
+      "holidayHours": "It’s a public holiday. {count, plural, one {Check that one stop keeps its usual hours.} other {Check that # stops keep their usual hours.}}"
     },
     "composition": {
-      "supported": "The assessed choices support your declared day intent and interests.",
+      "supported": "The day flows in a sensible order with a good mix of stops.",
+      "singleTheme": "Every stop on this Explore day is the same kind of experience. Something different could add variety.",
       "unknown": "There is not enough evidence to assess the day’s complete composition."
     },
     "dailyQuality": {
@@ -2499,7 +2510,9 @@
       "unknown": "Purposeful variety across the trip is not sufficiently known yet."
     },
     "seasonalFit": {
-      "supported": "Applicable seasonal opportunities align with supported choices and interests; actual conditions remain uncertain.",
+      "supported": "The outdoor plans suit the typical conditions for these months; actual weather can still vary.",
+      "wet": "{count, plural, one {One day’s outdoor plans fall in a typically wet month. Keep an indoor option flexible.} other {# days’ outdoor plans fall in typically wet months. Keep indoor options flexible.}}",
+      "heat": "{count, plural, one {One day has midday outdoor time in typically hot weather. Consider shade or an earlier start.} other {# days have midday outdoor time in typically hot weather. Consider shade or earlier starts.}}",
       "unknown": "Seasonal suitability is not sufficiently known for this trip."
     },
     "timing": {

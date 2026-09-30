@@ -9,6 +9,10 @@ export type PlanScoreAssessmentStatus = 'available' | 'provisional' | 'unavailab
 export type PlanScoreAssessmentBasis = 'TIMING' | 'ACTIVITY_LOAD' | 'VERIFIED_PROBLEM' | 'REST';
 export type PlanScoreLimitation =
   | 'TRAVEL_TIME_UNKNOWN'
+  /** Every unrouted leg was estimated from straight-line distance. */
+  | 'TRAVEL_TIME_ESTIMATED'
+  /** Some visit lengths come from the planned times or typical lengths, not the plan itself. */
+  | 'DURATION_ESTIMATED'
   | 'LOAD_INCOMPLETE'
   | 'TIMING_UNKNOWN'
   | 'VENUE_EVIDENCE_INCOMPLETE'
@@ -94,7 +98,7 @@ export type PlanScoreReferenceTarget =
   { kind: 'item'; dayId: string | null } | { kind: 'reservation' } | { kind: 'trip_place' };
 export type TripPlanScore = Omit<PlanScoreTripPayload, 'days'> & {
   schemaVersion: 7;
-  rubricVersion: 9;
+  rubricVersion: 10;
   days: TripPlanScoreDay[];
   explanations: PlanScoreExplanationGroups;
   fingerprint: string;

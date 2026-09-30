@@ -22,6 +22,7 @@ import {
   assessmentBasisKey,
   currentAssessment,
   DAILY_CATEGORIES,
+  isEstimatedOutcome,
   scoreBand,
   travelerInsightGroups,
   TRIP_COMPONENTS,
@@ -126,28 +127,34 @@ export function SuggestedAction({
     </Button>
   );
 }
-/** Only categories with enough evidence publish a number (PRD 29.2). */
+type ScoreRow = { id: string; score: number; estimated: boolean };
+/**
+ * The server decides which categories have enough evidence to publish (PRD
+ * 29.2); a number that rests partly on estimates is marked as approximate.
+ */
 function publishedScores(
   outcomes: Record<string, PlanScoreFactorOutcome>,
   ids: readonly string[],
-): { id: string; score: number }[] {
+): ScoreRow[] {
   return ids.flatMap((id) => {
     const outcome = outcomes[id];
-    return outcome?.state === 'EVALUATED' && outcome.coverage >= 60 && outcome.confidence >= 50
-      ? [{ id, score: outcome.score }]
+    return outcome?.state === 'EVALUATED'
+      ? [{ id, score: outcome.score, estimated: isEstimatedOutcome(outcome) }]
       : [];
   });
 }
-function ScoreMeterRows({ rows }: { rows: { id: string; score: number }[] }) {
+function ScoreMeterRows({ rows }: { rows: ScoreRow[] }) {
   const t = useTranslations('planScore');
   const locale = useLocale();
   return (
     <div className="space-y-3">
-      {rows.map(({ id, score }) => (
+      {rows.map(({ id, score, estimated }) => (
         <Meter.Root
           className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1.5"
           format={{ maximumFractionDigits: 0 }}
-          getAriaValueText={(value) => t('scoreValue', { score: value })}
+          getAriaValueText={(value) =>
+            t(estimated ? 'estimatedScoreValue' : 'scoreValue', { score: value })
+          }
           key={id}
           locale={locale}
           value={score}
@@ -155,7 +162,14 @@ function ScoreMeterRows({ rows }: { rows: { id: string; score: number }[] }) {
           <Meter.Label className="text-xs font-medium text-muted-foreground">
             {t(`factorLabels.${id}`)}
           </Meter.Label>
-          <Meter.Value className="text-sm font-semibold tabular-nums" />
+          <span className="flex items-baseline gap-0.5 text-sm font-semibold tabular-nums">
+            {estimated ? (
+              <span aria-hidden="true" className="font-normal text-muted-foreground">
+                ≈
+              </span>
+            ) : null}
+            <Meter.Value />
+          </span>
           <Meter.Track className="col-span-2 h-1.5 overflow-hidden rounded-full bg-muted">
             <Meter.Indicator
               className={cn(
@@ -329,7 +343,16 @@ export function PlanScorePanel({
         {hasBreakdown ? (
           <CollapsiblePanel>
             <div className="mt-4 space-y-5 border-t border-border-subtle pt-4">
-              {rows.length ? <ScoreMeterRows rows={rows} /> : null}
+              {rows.length ? (
+                <div className="space-y-2">
+                  <ScoreMeterRows rows={rows} />
+                  {rows.some((row) => row.estimated) ? (
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      {t('estimatedNote')}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
               {issues.length ? (
                 <div className="space-y-2">
                   <Subheading className="text-xs font-medium text-muted-foreground">

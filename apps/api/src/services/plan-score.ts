@@ -1,10 +1,17 @@
 import { planScoreReferenceTargets } from './plan-score-reference-targets.js';
 import { getPrismaClient, Prisma } from '@trove/db';
-import { type TripPlanScore } from '@trove/types';
+import { type TripContext, type TripPlanScore } from '@trove/types';
 import { z } from 'zod';
 
 import { contextPlaceFromOwnedData, type OwnedContextPlace } from './owned-place-location.js';
 import { estimatedRouteComparison } from './plan-score-route-comparison.js';
+import {
+  legCalibration,
+  routedLegSamples,
+  withEstimatedLegs,
+  type LegCalibration,
+  type ScoringClimate,
+} from './plan-score-estimates.js';
 import { tripPlanScoreRevision } from './plan-score-revision.js';
 import { oldestPlanScoreEvidenceAt, originalPlanScoreTime } from './plan-score-freshness.js';
 export { PLAN_SCORE_CACHE_TTL_MS } from './plan-score-freshness.js';
@@ -45,6 +52,7 @@ import {
 import { resolveForecastWindow } from './weather-window.js';
 import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
 import { explainDay, explainTrip } from './plan-score-explanations.js';
+import { readTripContext } from './trip-context.js';
 import { evaluateMustGoPriorityFit, type PlanScoreFixedCommitment } from './plan-score-factors.js';
 import {
   planScoreFingerprint,
@@ -82,6 +90,10 @@ export type PlanScoreTripRecord = {
   preferences?: unknown;
   places?: Map<string, ScoringPlace>;
   forecasts?: ScoringForecast[];
+  /** Public holidays by day id, from the bundled dataset. */
+  holidays?: ReadonlyMap<string, { certainty: 'official' | 'expected' }>;
+  /** Cached typical monthly conditions by day id; never fetched for scoring. */
+  climate?: ReadonlyMap<string, ScoringClimate>;
 };
 
 function toRouteSegments(routes: ItineraryDayRoutes | undefined): ScoringRouteSegment[] {
@@ -91,6 +103,12 @@ function toRouteSegments(routes: ItineraryDayRoutes | undefined): ScoringRouteSe
     // without pretending its duration is merely unknown.
     const scope = segment.scope === 'long_distance' ? 'LONG_DISTANCE' : 'LOCAL';
 
+    // A leg the rubric estimated from distance is an estimate, never provider evidence.
+    const source = segment.estimated
+      ? 'ESTIMATED'
+      : segment.evidenceAsOf
+        ? 'CACHED_PROVIDER'
+        : 'USER_OWNED';
     return segment.durationSeconds === null
       ? {
           id: segment.id,
@@ -101,10 +119,7 @@ function toRouteSegments(routes: ItineraryDayRoutes | undefined): ScoringRouteSe
           itemIds: [segment.origin.id, segment.destination.id],
         }
       : {
-          duration: {
-            minutes: segment.durationSeconds / 60,
-            source: segment.evidenceAsOf ? 'CACHED_PROVIDER' : 'USER_OWNED',
-          },
+          duration: { minutes: segment.durationSeconds / 60, source },
           id: segment.id,
           mode: segment.mode,
           distanceMeters: segment.distanceMeters,
@@ -140,12 +155,36 @@ function toDayPlaces(day: PlanScoreDayRecord, record: PlanScoreTripRecord): Scor
   );
 }
 export type PlanScoreDayEvaluation = ReturnType<typeof evaluateScoredDay>;
+type ChainPoint = ItineraryDayRoutes['segments'][number]['origin'];
+/** Where a route point is, from the same owned or cached place evidence scoring reads. */
+function chainLocator(day: PlanScoreDayRecord, record: PlanScoreTripRecord) {
+  return (point: ChainPoint) => {
+    const tripPlaceId =
+      point.kind === 'itinerary_item'
+        ? day.items.find((item) => item.id === point.id)?.tripPlaceId
+        : point.kind === 'daily_base'
+          ? point.id
+          : null;
+    return (tripPlaceId && record.places?.get(tripPlaceId)?.coordinates) || null;
+  };
+}
+/** The trip's own routed legs scale every estimate, so each city estimates at its own pace. */
+function tripLegCalibration(record: PlanScoreTripRecord): LegCalibration {
+  return legCalibration(
+    record.days.flatMap((day) =>
+      routedLegSamples([record.routes.get(day.id)], chainLocator(day, record)),
+    ),
+  );
+}
 function evaluateDayRecord(
   day: PlanScoreDayRecord,
   record: PlanScoreTripRecord,
+  calibration: LegCalibration,
 ): PlanScoreDayEvaluation {
-  const routes = record.routes.get(day.id);
+  const locate = chainLocator(day, record);
+  const routes = withEstimatedLegs(record.routes.get(day.id), locate, calibration);
   const commitments = toCommitments(day);
+  const holiday = record.holidays?.get(day.id) ?? null;
   const raw = toDayEvidenceItems(day, routes, new Map()).map((item, index) => ({
     ...item,
     placeId: day.items[index]?.tripPlaceId ?? undefined,
@@ -165,6 +204,7 @@ function evaluateDayRecord(
     instants,
     hours: record.hours,
     commitments,
+    holiday: holiday !== null,
   });
   const config = readDayPlanningContext(day.planningContext);
   const origin = dayOrigin(day.date, day.timeZone);
@@ -199,21 +239,11 @@ function evaluateDayRecord(
     preferences: record.preferences,
     planningContext: day.planningContext,
     forecasts: record.forecasts?.filter((f) => f.date === day.date),
+    holiday,
+    climate: record.climate?.get(day.id) ?? null,
     // The planned chain already runs from the day's stay and back, so the
     // comparison holds the stay fixed at both ends.
-    routeComparison: estimatedRouteComparison({
-      segments: routes?.segments ?? [],
-      items,
-      locate: (point) => {
-        const tripPlaceId =
-          point.kind === 'itinerary_item'
-            ? day.items.find((item) => item.id === point.id)?.tripPlaceId
-            : point.kind === 'daily_base'
-              ? point.id
-              : null;
-        return (tripPlaceId && record.places?.get(tripPlaceId)?.coordinates) || null;
-      },
-    }),
+    routeComparison: estimatedRouteComparison({ segments: routes?.segments ?? [], items, locate }),
   });
 }
 
@@ -320,6 +350,8 @@ const assessmentBasisSchema = z.array(
 const limitationsSchema = z.array(
   z.enum([
     'TRAVEL_TIME_UNKNOWN',
+    'TRAVEL_TIME_ESTIMATED',
+    'DURATION_ESTIMATED',
     'LOAD_INCOMPLETE',
     'TIMING_UNKNOWN',
     'VENUE_EVIDENCE_INCOMPLETE',
@@ -508,6 +540,7 @@ export function buildPlanScoreFromEvaluations(input: {
             route: entry?.evaluation.route ?? { bestMinutes: null, plannedMinutes: null },
             travel: entry?.evaluation.travel ?? { totalMinutes: null },
             advisories: entry?.evaluation.advisories,
+            experience: entry?.evaluation.experience,
           }),
           uncertainty: (entry?.evaluation.missingInformation ?? []).map((reason) => ({
             ...reason,
@@ -532,6 +565,14 @@ export function buildPlanScoreFromEvaluations(input: {
               day.intrinsicScore <= weakestBoundary,
           )
           .map((day) => day.dayId),
+        seasonalDayIds: {
+          wet: evaluations.flatMap((e) =>
+            e.evaluation.seasonal.wet ? [e.evaluation.input.dayId] : [],
+          ),
+          heat: evaluations.flatMap((e) =>
+            e.evaluation.seasonal.heat ? [e.evaluation.input.dayId] : [],
+          ),
+        },
       }),
       uncertainty: evaluations.flatMap((entry, index) =>
         entry.evaluation.missingInformation.map((reason) => ({
@@ -548,7 +589,7 @@ export function buildPlanScoreFromEvaluations(input: {
       revisions: {
         planning: '',
         evidence: '',
-        // Kept for the v7 contract; destination context no longer feeds scoring.
+        // Callers that read destination context set its revision.
         destinationContext: '',
       },
     },
@@ -587,11 +628,12 @@ export function buildTripPlanScore(
     evidenceDeadlines?: readonly string[];
   } = {},
 ): TripPlanScore {
+  const calibration = tripLegCalibration(record);
   return buildPlanScoreFromEvaluations({
     ...options,
     days: record.days.map((day) => ({
       date: day.date,
-      evaluation: evaluateDayRecord(day, record),
+      evaluation: evaluateDayRecord(day, record, calibration),
     })),
     mustGoIds: record.mustGoTripPlaceIds,
     scheduledIds: record.days.flatMap((day) =>
@@ -1066,7 +1108,14 @@ export async function getTripPlanScore(
     if (scheduledTripPlaceIds.has(row.id)) placeEvidence.evidenceTimes.push(...merged.times);
   }
   discardExpiredCurrentHours(placeEvidence.hours, now);
-  const forecastEvidence = await loadScoringForecasts(dayRecords, placeEvidence.places, now);
+  const [forecastEvidence, destination] = await Promise.all([
+    loadScoringForecasts(dayRecords, placeEvidence.places, now),
+    readScoringDestinationContext(userId, tripId, now),
+  ]);
+  const destinationRevision = scoringInputRevision({
+    holidays: [...destination.holidays],
+    climate: [...destination.climate],
+  });
   const evidenceRevision = tripPlanScoreRevision({
     days: [],
     mustGoTripPlaceIds: [],
@@ -1075,6 +1124,7 @@ export async function getTripPlanScore(
       ratings: [...placeEvidence.ratings],
       places: [...placeEvidence.places],
       forecasts: forecastEvidence.forecasts,
+      destination: destinationRevision,
       evidenceTimes: [...placeEvidence.evidenceTimes, ...forecastEvidence.times],
       routes: routeResults.map(({ id, routes }) => ({
         id,
@@ -1132,6 +1182,8 @@ export async function getTripPlanScore(
       preferences: trip.planningPreferences,
       places: placeEvidence.places,
       forecasts: forecastEvidence.forecasts,
+      holidays: destination.holidays,
+      climate: destination.climate,
       hours: placeEvidence.hours,
       mustGoTripPlaceIds,
       ratings: placeEvidence.ratings,
@@ -1164,7 +1216,7 @@ export async function getTripPlanScore(
     result.presentation.revisions = {
       planning: planningRevision,
       evidence: evidenceRevision,
-      destinationContext: '',
+      destinationContext: destinationRevision,
     };
   result.fingerprint = scoringInputRevision({
     assessment: result.fingerprint,
@@ -1192,6 +1244,40 @@ export async function getTripPlanScore(
   if (!(await stillCurrent())) return superseded();
   await writeCachedPlanScore(prisma, trip.id, current, revision);
   return current;
+}
+
+/** Holidays and typical conditions by day id, as scoring inputs. */
+export function destinationContextByDay(context: Pick<TripContext, 'holidays' | 'climate'>) {
+  const holidays = new Map<string, { certainty: 'official' | 'expected' }>();
+  for (const holiday of context.holidays)
+    for (const dayId of holiday.dayIds)
+      if (holidays.get(dayId)?.certainty !== 'official')
+        holidays.set(dayId, { certainty: holiday.certainty });
+  const climate = new Map<string, ScoringClimate>();
+  for (const norm of context.climate)
+    for (const dayId of norm.dayIds)
+      climate.set(dayId, {
+        temperatureMaxC: norm.temperatureMaxC,
+        temperatureMinC: norm.temperatureMinC,
+        wetDayShare: norm.wetDayShare,
+      });
+  return { holidays, climate };
+}
+
+/**
+ * The trip's holidays and typical conditions, placed on its days exactly as
+ * Insights places them. Climate is read from the cache only, so scoring never
+ * reaches the archive; a cold cache leaves seasonal fit unknown until Insights
+ * fills it. Context never fails a score: unreadable context is simply absent.
+ */
+async function readScoringDestinationContext(userId: string, tripId: string, now: Date) {
+  try {
+    return destinationContextByDay(
+      await readTripContext(userId, tripId, { now, allowFetch: false, source: 'plan-score' }),
+    );
+  } catch {
+    return destinationContextByDay({ holidays: [], climate: [] });
+  }
 }
 
 /** Reads each already-cached weather point once, only within its current horizon. */

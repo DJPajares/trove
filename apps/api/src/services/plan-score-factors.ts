@@ -171,23 +171,42 @@ export function evaluateTravelEffort(
       ? { factor: { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' }, totalMinutes: null }
       : { factor: { state: 'NOT_APPLICABLE' }, totalMinutes: null };
   }
-  if (known.length < local.length) {
-    return { factor: { reason: 'INSUFFICIENT_EVIDENCE', state: 'UNKNOWN' }, totalMinutes: null };
-  }
 
   const evidence: PlanScoreEvidence[] = [];
-  let totalMinutes = 0;
+  let knownMinutes = 0;
 
   for (const segment of known) {
-    totalMinutes += assertMinutes(segment.duration.minutes);
+    knownMinutes += assertMinutes(segment.duration.minutes);
     evidence.push({ ref: `segment:${segment.id}`, source: segment.duration.source });
   }
 
-  const band = TRAVEL_EFFORT_BANDS.find((entry) => totalMinutes <= entry.maxMinutes);
+  const band = (minutes: number) =>
+    TRAVEL_EFFORT_BANDS.find((entry) => minutes <= entry.maxMinutes)?.score ??
+    TRAVEL_EFFORT_EXCESS_SCORE;
+
+  if (known.length < local.length) {
+    // An unknown leg can only add travel, so a known subtotal already past the
+    // lightest band proves at least that burden. A lighter subtotal proves
+    // nothing: a partial route never passes for a light day.
+    if (!known.length || band(knownMinutes) === TRAVEL_EFFORT_BANDS[0]!.score)
+      return {
+        factor: { reason: 'INSUFFICIENT_EVIDENCE', state: 'UNKNOWN' },
+        totalMinutes: null,
+      };
+    return {
+      factor: {
+        evidence,
+        score: band(knownMinutes),
+        state: 'EVALUATED',
+        coverage: (100 * known.length) / local.length,
+      },
+      totalMinutes: null,
+    };
+  }
 
   return {
-    factor: { evidence, score: band?.score ?? TRAVEL_EFFORT_EXCESS_SCORE, state: 'EVALUATED' },
-    totalMinutes,
+    factor: { evidence, score: band(knownMinutes), state: 'EVALUATED' },
+    totalMinutes: knownMinutes,
   };
 }
 
@@ -634,6 +653,9 @@ export function evaluateRouteEfficiency(
   const movable = input.stops.flatMap((stop, index) =>
     stop.fixed ? [] : [{ id: stop.id, index }],
   );
+  // With fewer than two movable stops there is no other order to compare, so
+  // avoidable movement does not apply rather than being unknown.
+  if (movable.length < 2) return unevaluated({ state: 'NOT_APPLICABLE' }, planned.total);
   if (movable.length > ROUTE_EFFICIENCY_MOVABLE_LIMIT) {
     return unevaluated({ reason: 'UNUSABLE_EVIDENCE', state: 'UNKNOWN' }, planned.total);
   }

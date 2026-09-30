@@ -11,8 +11,9 @@ import {
 
 /**
  * Typical conditions for a trip's days, averaged from Open-Meteo's historical
- * archive. These are patterns over past years, never a forecast, and they only
- * inform Insights: scoring must not reach this module.
+ * archive. These are patterns over past years, never a forecast. Insights may
+ * fetch them on a cache miss; Plan Score reads them with `allowFetch: false`
+ * only, so scoring never reaches the archive.
  *
  * Climate does not move between trips, so an answer is cached per ~11 km cell
  * and calendar month and shared by every traveller who lands there.

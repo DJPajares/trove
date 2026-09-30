@@ -2,7 +2,8 @@
  * What a traveller should know about the time and place of a trip, read from
  * providers rather than authored in Trove: public holidays from the
  * `date-holidays` dataset and typical conditions from Open-Meteo's archive.
- * It never feeds Plan Score; it only informs Insights.
+ * Insights presents it. Plan Score reads the same context from its caches only,
+ * never fetching, for holiday date suitability and seasonal fit.
  */
 export const TRIP_CONTEXT_VERSION = 1;
 

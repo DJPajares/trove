@@ -37,8 +37,11 @@ export type PlanScoreDayExplanationInput = {
     lowerBoundMinutes?: number | null;
   };
   route: { bestMinutes: number | null; plannedMinutes: number | null };
-  travel: { totalMinutes: number | null };
+  /** `estimated` when any leg in the total was estimated from distance rather than routed. */
+  travel: { totalMinutes: number | null; estimated?: boolean };
   advisories?: DayAdvisory[];
+  /** Item ids behind each experience concern, and whether an Explore day repeats one theme. */
+  experience?: { timeOfDay: string[]; rushed: string[]; holiday: string[]; singleTheme: boolean };
 };
 export type PlanScoreTripExplanationInput = {
   components: Record<string, PlanScoreFactorOutcome>;
@@ -48,6 +51,8 @@ export type PlanScoreTripExplanationInput = {
   weakDayAdjustment: number;
   fatigueDayIds?: string[];
   weakDayIds?: string[];
+  /** Days whose outdoor time meets a typically wet or hot month. */
+  seasonalDayIds?: { wet: string[]; heat: string[] };
 };
 const roots: Record<PlanScoreExplanationFactor, string> = {
   FEASIBILITY: 'feasibility',
@@ -115,18 +120,28 @@ export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplan
         input.travel.totalMinutes !== null
       )
         groups.whatWorks.push(
-          reason(id, 'LOCAL_TRAVEL_LIGHT', 'routeEfficiency.light', {
-            values: { minutes: Math.round(input.travel.totalMinutes) },
-          }),
+          reason(
+            id,
+            'LOCAL_TRAVEL_LIGHT',
+            input.travel.estimated ? 'routeEfficiency.lightEstimated' : 'routeEfficiency.light',
+            {
+              values: { minutes: Math.round(input.travel.totalMinutes) },
+            },
+          ),
         );
       if (input.travel.totalMinutes !== null && input.travel.totalMinutes > 180)
         groups.worthImproving.push(
-          reason(id, 'LOCAL_TRAVEL_HEAVY', 'routeEfficiency.heavy', {
-            action: 'RECONSIDER_DETOUR',
-            severity: 'RISK',
-            references: [input.day.dayId],
-            values: { minutes: Math.round(input.travel.totalMinutes) },
-          }),
+          reason(
+            id,
+            'LOCAL_TRAVEL_HEAVY',
+            input.travel.estimated ? 'routeEfficiency.heavyEstimated' : 'routeEfficiency.heavy',
+            {
+              action: 'RECONSIDER_DETOUR',
+              severity: 'RISK',
+              references: [input.day.dayId],
+              values: { minutes: Math.round(input.travel.totalMinutes) },
+            },
+          ),
         );
       if (
         input.route.bestMinutes !== null &&
@@ -183,6 +198,28 @@ export function explainDay(input: PlanScoreDayExplanationInput): PlanScoreExplan
     } else if (id !== 'EXPERIENCE_QUALITY' && outcome.state === 'EVALUATED' && outcome.score >= 85)
       groups.whatWorks.push(reason(id, `${id}_SUPPORTED`, `${roots[id]}.supported`));
   }
+  const experience = input.experience;
+  const concerns = [
+    ['TIME_OF_DAY_MISMATCH', 'experienceQuality.timeOfDay', 'REVIEW_TIMING', experience?.timeOfDay],
+    ['RUSHED_VISIT', 'experienceQuality.rushed', 'ADJUST_TIME', experience?.rushed],
+    ['HOLIDAY_HOURS_RISK', 'experienceQuality.holidayHours', 'REVIEW_TIMING', experience?.holiday],
+  ] as const;
+  for (const [code, messageKey, action, references] of concerns)
+    if (references?.length)
+      groups.worthImproving.push(
+        reason('EXPERIENCE_QUALITY', code, messageKey, {
+          action,
+          severity: 'RISK',
+          references: [...references],
+          values: { count: references.length },
+        }),
+      );
+  if (experience?.singleTheme)
+    groups.worthImproving.push(
+      reason('PLAN_COMPOSITION', 'SINGLE_THEME_DAY', 'composition.singleTheme', {
+        references: [input.day.dayId],
+      }),
+    );
   const advisoryMessages: Record<DayAdvisory['code'], string> = {
     NATURAL_DOWNTIME: 'pace.naturalDowntime',
     CONTINUOUS_ACTIVITY: 'pace.continuous',
@@ -238,6 +275,19 @@ export function explainTrip(input: PlanScoreTripExplanationInput): PlanScoreExpl
         severity: 'RISK',
       }),
     );
+  for (const [code, messageKey, dayIds] of [
+    ['SEASONAL_OUTDOOR_WET', 'seasonalFit.wet', input.seasonalDayIds?.wet],
+    ['SEASONAL_HEAT', 'seasonalFit.heat', input.seasonalDayIds?.heat],
+  ] as const)
+    if (dayIds?.length)
+      groups.worthImproving.push(
+        reason('SEASONAL_FIT', code, messageKey, {
+          action: 'REVIEW_TIMING',
+          severity: 'RISK',
+          references: [...dayIds],
+          values: { count: dayIds.length },
+        }),
+      );
   if (input.unscheduledMustGoTripPlaceIds.length)
     groups.worthImproving.push(
       reason('DESTINATION_UTILIZATION', 'UNSCHEDULED_MUST_GO', 'mustGo.unscheduled', {

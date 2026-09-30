@@ -143,7 +143,9 @@ test('stored timing and complete local routes retain partial coverage honestly',
   const result = buildTripPlanScore(plannedTrip),
     day = result.days[0]!;
   expect(day.score).toBe(100);
-  expect(day.completeness).toBeLessThan(60);
+  // Untyped, unlocated places leave experience and variety unknown: partial, so provisional.
+  expect(day.completeness).toBeLessThan(80);
+  expect(day.assessmentStatus).toBe('provisional');
   expect(day.factors.ROUTE_EFFICIENCY).toMatchObject({
     state: 'EVALUATED',
     score: 100,
@@ -252,11 +254,11 @@ test('withholds a day score when the day has no usable evidence', () => {
   expect(result.withheldReasons).toStrictEqual(['NO_SCORABLE_DAY']);
 });
 
-test('a timed item without duration leaves whole-day feasibility unknown', () => {
+test("the traveller's own start times bound unstated durations, so an ordinary timed day is assessed", () => {
   // This is the ordinary case: a traveller drags a place into a day and picks
   // a start time. No reservation, no explicit visit length — exactly what
-  // real itineraries look like, and previously left Feasibility permanently
-  // unevaluable because only reservation-linked items counted as "fixed".
+  // real itineraries look like. The gap to the next start bounds the first
+  // visit, so the schedule is assessed as an estimate rather than left unknown.
   const day = buildTripPlanScore({
     days: [
       {
@@ -298,8 +300,10 @@ test('a timed item without duration leaves whole-day feasibility unknown', () =>
     routes: new Map([['day-2', dayRoutes([segment('seg-x-y', 'item-y', 600)])]]),
   }).days[0];
 
-  expect(day?.factors.FEASIBILITY.state).toBe('UNKNOWN');
-  expect(day?.score).toBeNull();
+  expect(day?.factors.FEASIBILITY).toMatchObject({ state: 'EVALUATED', score: 100 });
+  expect(day?.score).toBe(100);
+  expect(day?.assessmentStatus).toBe('provisional');
+  expect(day?.limitations).toContain('DURATION_ESTIMATED');
 });
 
 test("an item with no visit duration is still caught when it lands inside another item's known interval", () => {
@@ -473,7 +477,8 @@ test('a coarse daypart is scored rather than ignored', () => {
 
   expect(vague?.factors.PACE_COMFORT.state).toBe('EVALUATED');
   expect(vague?.score).toBe(100);
-  expect(vague?.completeness).toBeLessThan(60);
+  expect(vague?.completeness).toBeLessThan(80);
+  expect(vague?.assessmentStatus).toBe('provisional');
 });
 
 test('a daypart lowers confidence below what an exact time earns', () => {
@@ -591,7 +596,7 @@ test('a real score survives being stored and read back', () => {
 test('presentation metadata is additive and validates without changing the version-5 measurement', () => {
   const score = buildTripPlanScore(plannedTrip);
   expect(score.schemaVersion).toBe(7);
-  expect(score.rubricVersion).toBe(9);
+  expect(score.rubricVersion).toBe(10);
   expect(score.presentation?.adjustments).toEqual({ fatigue: 0, weakDays: 0 });
   expect(parseStoredPlanScore(score)).toEqual(score);
   const { presentation: _presentation, ...legacyCompatible } = score;

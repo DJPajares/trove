@@ -139,6 +139,8 @@ export function scoringOpeningHours(input: {
   zone: string;
   origin: number;
   hours: ScoringHours;
+  /** On a public holiday, weekly hours are only an estimate of the day's hours. */
+  holiday?: boolean;
 }): PlanScoreOpeningHours {
   const { hours, date, zone, origin } = input;
   // A coordinate-derived IANA zone avoids treating a provider's current UTC offset
@@ -189,7 +191,7 @@ export function scoringOpeningHours(input: {
         });
   return {
     status: 'KNOWN',
-    source: hours.source ?? 'CACHED_PROVIDER',
+    source: input.holiday && !dated ? 'ESTIMATED' : (hours.source ?? 'CACHED_PROVIDER'),
     intervals: intervals.toSorted((a, b) => a.startMinute - b.startMinute),
   };
 }
@@ -203,6 +205,7 @@ export function normalizeScoringItems(
     instants?: ReadonlyMap<string, Date>;
     hours?: ReadonlyMap<string, ScoringHours>;
     commitments?: readonly PlanScoreFixedCommitment[];
+    holiday?: boolean;
   } = {},
 ) {
   const origin = dayOrigin(date, zone);
@@ -236,6 +239,7 @@ export function normalizeScoringItems(
           zone: ownZone,
           origin,
           hours: options.hours.get(item.placeId)!,
+          holiday: options.holiday,
         });
       else if (hours.status === 'KNOWN')
         hours = {

@@ -13,8 +13,10 @@ import {
   evaluateRouteEfficiency,
   type PlanScoreDayItem,
   type PlanScoreFixedCommitment,
+  type PlanScoreInterval,
   type PlanScorePlace,
   type PlanScoreRouteSegment,
+  type PlanScoreRouteEfficiencyEvaluation,
   type PlanScoreRouteEfficiencyInput,
 } from './plan-score-factors.js';
 import {
@@ -24,47 +26,13 @@ import {
   scoringInputRevision,
   type PlanScoreDayInput,
   type PlanScoreEvidence,
+  type PlanScoreEvidenceSource,
   type PlanScoreFactorResult,
 } from './plan-score-rules.js';
+import { inferDurations, seasonalDayFit, type ScoringClimate } from './plan-score-estimates.js';
+import { interestsForPlaceTypes, placeProfile } from './plan-score-place-types.js';
+export { interestsForPlaceTypes } from './plan-score-place-types.js';
 
-/** Reviewed semantic mappings, not an inferred preference from selecting a Place. */
-const TYPE_INTERESTS: Record<string, readonly string[]> = {
-  museum: ['art_museums'],
-  art_gallery: ['art_museums'],
-  historical_landmark: ['culture_history', 'architecture'],
-  cultural_landmark: ['culture_history'],
-  historical_place: ['culture_history'],
-  monument: ['culture_history', 'architecture'],
-  buddhist_temple: ['culture_history', 'architecture'],
-  hindu_temple: ['culture_history', 'architecture'],
-  mosque: ['culture_history', 'architecture'],
-  church: ['culture_history', 'architecture'],
-  national_park: ['nature_scenery', 'outdoor_activities'],
-  park: ['nature_scenery', 'outdoor_activities'],
-  botanical_garden: ['nature_scenery'],
-  garden: ['nature_scenery'],
-  hiking_area: ['nature_scenery', 'outdoor_activities'],
-  beach: ['nature_scenery', 'outdoor_activities'],
-  restaurant: ['food_drink'],
-  cafe: ['food_drink'],
-  food_court: ['food_drink'],
-  market: ['shopping'],
-  shopping_mall: ['shopping'],
-  department_store: ['shopping'],
-  night_club: ['entertainment_nightlife'],
-  bar: ['food_drink', 'entertainment_nightlife'],
-  performing_arts_theater: ['entertainment_nightlife', 'art_museums'],
-  spa: ['wellness_relaxation'],
-  wellness_center: ['wellness_relaxation'],
-};
-const OUTDOOR = new Set([
-  'national_park',
-  'park',
-  'botanical_garden',
-  'garden',
-  'hiking_area',
-  'beach',
-]);
 export type ScoringPlace = PlanScorePlace & {
   fieldEvidence?: Partial<
     Record<
@@ -77,9 +45,6 @@ export type ScoringPlace = PlanScorePlace & {
   coordinates?: { latitude: number; longitude: number } | null;
   name?: string | null;
 };
-export const interestsForPlaceTypes = (types: readonly string[]) => [
-  ...new Set(types.flatMap((type) => TYPE_INTERESTS[type] ?? [])),
-];
 export type ScoringRouteSegment = PlanScoreRouteSegment & {
   mode?: string;
   distanceMeters?: number | null;
@@ -104,24 +69,51 @@ export type ScoredDayInput = {
   originInstant?: number;
   availability?: { startMinute: number; endMinute: number } | null;
   forecasts?: readonly ScoringForecast[];
-  routeComparison?: PlanScoreRouteEfficiencyInput;
+  routeComparison?: PlanScoreRouteEfficiencyInput | 'NOT_APPLICABLE';
+  /** A public holiday on this day in its country; certainty follows the holiday dataset. */
+  holiday?: { certainty: 'official' | 'expected' } | null;
+  /** Typical monthly conditions for the day's area: a pattern, never a forecast. */
+  climate?: ScoringClimate | null;
 };
-function supported(
-  criteria: readonly {
-    id: string;
-    source: PlanScoreEvidence['source'];
-    satisfied: boolean | null;
-  }[],
-): PlanScoreFactorResult {
+type Criterion = {
+  id: string;
+  source: PlanScoreEvidenceSource;
+  satisfied: boolean | null;
+  /** A partial concern counts for less than a full criterion. */
+  weight?: number;
+};
+function supported(criteria: readonly Criterion[]): PlanScoreFactorResult {
+  const weight = (criterion: Criterion) => criterion.weight ?? 1;
   const known = criteria.filter((c) => c.satisfied !== null);
-  if (!known.length) return UNKNOWN;
+  const knownWeight = known.reduce((sum, c) => sum + weight(c), 0);
+  if (!known.length || knownWeight <= 0) return UNKNOWN;
   return {
     state: 'EVALUATED',
-    score: (100 * known.filter((c) => c.satisfied).length) / known.length,
-    coverage: (100 * known.length) / criteria.length,
+    score: (100 * known.reduce((sum, c) => sum + (c.satisfied ? weight(c) : 0), 0)) / knownWeight,
+    coverage: (100 * knownWeight) / criteria.reduce((sum, c) => sum + weight(c), 0),
     evidence: known.map((c) => ({ ref: c.id, source: c.source })),
   };
 }
+const RELIABILITY_ORDER: readonly PlanScoreEvidenceSource[] = [
+  'STALE',
+  'ESTIMATED',
+  'CACHED_PROVIDER',
+  'FRESH_PROVIDER',
+  'USER_OWNED',
+];
+/** A judgment from two pieces of evidence is only as reliable as the weaker one. */
+const weaker = (a: PlanScoreEvidenceSource, b: PlanScoreEvidenceSource) =>
+  RELIABILITY_ORDER.indexOf(a) <= RELIABILITY_ORDER.indexOf(b) ? a : b;
+/** Outdoor time in these hours meets a month's typical heat. */
+const MIDDAY: PlanScoreInterval = { startMinute: 11 * 60, endMinute: 16 * 60 };
+/** Whether a start at `minute` (or the next night's same clock time) falls in a window. */
+const withinWindows = (minute: number, windows: readonly PlanScoreInterval[]) =>
+  windows.some((window) =>
+    [minute, minute + 1440].some((m) => m >= window.startMinute && m < window.endMinute),
+  );
+/** Whether any start in a daypart could fall in a window: dayparts are evaluated best-case. */
+const windowMeets = (earliest: number, latest: number, windows: readonly PlanScoreInterval[]) =>
+  windows.some((window) => earliest < window.endMinute && window.startMinute <= latest);
 /** NOAA solar approximation (https://gml.noaa.gov/grad/solcalc/solareqns.PDF).
  * Evaluated locally; polar day/night has no fabricated rise/set. */
 export function daylightUtc(
@@ -210,14 +202,24 @@ export function evaluateScoredDay(input: ScoredDayInput) {
     context.intent === 'transit' ||
     (input.items.length === 0 && input.commitments.some((c) => c.longDistance));
   const noVisits = input.places.length === 0 && (rest || transit);
-  const items = input.items.map((item) =>
+  const places = new Map(input.places.map((place) => [place.tripPlaceId, place]));
+  const profileOf = (item: PlanScoreDayItem) =>
+    placeProfile(item.placeId ? places.get(item.placeId)?.types : null);
+  // A duration the plan leaves unstated comes from its own timing, then from the
+  // typical length for the kind of place. A timed day can then be assessed, but
+  // only on its own timing: an untimed plan stays unscored, and every inferred
+  // length is disclosed as an estimate.
+  const inferred = inferDurations(input.items, (item) => profileOf(item)?.visit?.typical ?? null);
+  const dayItems = inferred.items;
+  const stated = new Map(input.items.map((item) => [item.id, item.duration]));
+  const items = dayItems.map((item) =>
     item.blockType && item.blockType !== 'activity'
       ? { ...item, openingHours: { status: 'UNKNOWN' as const } }
       : item,
   );
   const feasibility = evaluateFeasibility({ items, commitments: input.commitments, availability });
-  const requiredInbound = input.items.filter((item, index) => item.inboundRequired ?? index > 0);
-  const unresolvedTransport = input.items.some(
+  const requiredInbound = dayItems.filter((item, index) => item.inboundRequired ?? index > 0);
+  const unresolvedTransport = dayItems.some(
     (item) =>
       item.blockType === 'transport' && !input.commitments.some((c) => c.itemId === item.id),
   );
@@ -234,22 +236,29 @@ export function evaluateScoredDay(input: ScoredDayInput) {
     ) ||
     unresolvedTransport ||
     input.commitments.some((c) => c.longDistance && c.endKnown === false);
+  const travelEstimated =
+    input.segments.some(
+      (s) => s.scope === 'LOCAL' && s.status === 'KNOWN' && s.duration.source === 'ESTIMATED',
+    ) || requiredInbound.some((item) => item.inboundTravel?.source === 'ESTIMATED');
   const travel =
     !input.segments.some((s) => s.scope === 'LOCAL') &&
     !requiredInbound.length &&
     !unresolvedTransport
       ? { factor: NOT_APPLICABLE, totalMinutes: null }
       : evaluateTravelEffort(input.segments);
-  const routeComparison = input.routeComparison
-    ? evaluateRouteEfficiency(input.routeComparison)
-    : {
-        factor:
-          input.items.length < 2 || travel.factor.state === 'NOT_APPLICABLE'
-            ? NOT_APPLICABLE
-            : UNKNOWN,
-        bestMinutes: null,
-        plannedMinutes: null,
-      };
+  const routeComparison: PlanScoreRouteEfficiencyEvaluation =
+    input.routeComparison === 'NOT_APPLICABLE'
+      ? { factor: NOT_APPLICABLE, bestMinutes: null, plannedMinutes: null }
+      : input.routeComparison
+        ? evaluateRouteEfficiency(input.routeComparison)
+        : {
+            factor:
+              dayItems.length < 2 || travel.factor.state === 'NOT_APPLICABLE'
+                ? NOT_APPLICABLE
+                : UNKNOWN,
+            bestMinutes: null,
+            plannedMinutes: null,
+          };
   const route = combineSignals([
     { weight: 60, result: travel.factor },
     { weight: 40, result: routeComparison.factor },
@@ -262,27 +271,35 @@ export function evaluateScoredDay(input: ScoredDayInput) {
   const evidence: PlanScoreEvidence[] = [
     { ref: 'pace', source: pace.source === 'user' ? 'USER_OWNED' : 'ESTIMATED' },
   ];
+  // `load` includes every estimate and scores comfort. `provenLoad` leaves out
+  // what this rubric inferred (durations, distance-estimated legs), so only
+  // stated or routed load can prove an overload or carry fatigue forward.
   let load = 0;
+  let provenLoad = 0;
   let observations = 0;
   let knownObservations = 0;
+  let completeObservations = 0;
   const commitments = [...new Map(input.commitments.map((c) => [c.id, c])).values()];
   const represented = new Set(
     commitments.flatMap((c) => (c.longDistance && c.itemId ? [c.itemId] : [])),
   );
-  for (const item of input.items) {
+  for (const item of dayItems) {
     if (represented.has(item.id)) continue;
     observations++;
     if (!item.duration) continue;
     knownObservations++;
-    load +=
+    if (!inferred.typeInferred.has(item.id)) completeObservations++;
+    const minutes =
       item.duration.minutes * (item.blockType === 'free_time' ? 0 : item.longDistance ? 0.5 : 1);
+    load += minutes;
+    if (stated.get(item.id)) provenLoad += minutes;
     evidence.push(
       { ref: `duration:${item.id}`, source: item.duration.source },
       { ref: `intensity:${item.id}`, source: 'ESTIMATED' },
     );
   }
   for (const c of commitments) {
-    if (!c.longDistance && c.itemId && input.items.some((i) => i.id === c.itemId)) continue;
+    if (!c.longDistance && c.itemId && dayItems.some((i) => i.id === c.itemId)) continue;
     observations++;
     if (
       c.endKnown === false ||
@@ -291,7 +308,10 @@ export function evaluateScoredDay(input: ScoredDayInput) {
     )
       continue;
     knownObservations++;
-    load += (c.endMinute - c.startMinute) * (c.longDistance ? 0.5 : 1);
+    completeObservations++;
+    const minutes = (c.endMinute - c.startMinute) * (c.longDistance ? 0.5 : 1);
+    load += minutes;
+    provenLoad += minutes;
     evidence.push({ ref: `commitment:${c.id}`, source: c.source });
   }
   for (const leg of input.segments) {
@@ -304,8 +324,10 @@ export function evaluateScoredDay(input: ScoredDayInput) {
     observations++;
     if (leg.status !== 'KNOWN') continue;
     knownObservations++;
+    completeObservations++;
     const multiplier = leg.mode === 'walk' ? 1.25 : leg.mode === 'transit' ? 0.75 : 1;
     load += leg.duration.minutes * multiplier;
+    if (leg.duration.source !== 'ESTIMATED') provenLoad += leg.duration.minutes * multiplier;
     evidence.push({ ref: `segment:${leg.id}`, source: leg.duration.source });
   }
   // Missing topology must remain in the denominator even if no route snapshot exists.
@@ -321,18 +343,23 @@ export function evaluateScoredDay(input: ScoredDayInput) {
   observations += absentInbound.length;
   const restful =
     rest &&
-    input.items.length === 0 &&
+    dayItems.length === 0 &&
     commitments.length === 0 &&
     availableMinutes !== null &&
     availableMinutes > 0;
   if (restful) {
     observations++;
     knownObservations++;
+    completeObservations++;
   }
-  const complete = observations > 0 && knownObservations === observations && !requiredTravelUnknown;
+  // A typical visit length estimates load, but cannot complete it: only stated
+  // durations prove the whole day's load, as fatigue recovery requires.
+  const complete =
+    observations > 0 && completeObservations === observations && !requiredTravelUnknown;
   if (availability) evidence.push({ ref: 'availability', source: 'USER_OWNED' });
   const ratio = target > 0 ? load / target : null;
-  const provedOverload = ratio !== null && ratio > 1;
+  const provenRatio = target > 0 ? provenLoad / target : null;
+  const provedOverload = provenRatio !== null && provenRatio > 1;
   const comfort: PlanScoreFactorResult =
     knownObservations > 0 && ratio !== null
       ? {
@@ -342,11 +369,19 @@ export function evaluateScoredDay(input: ScoredDayInput) {
           evidence,
         }
       : UNKNOWN;
+  // Visits are the stops a traveller goes to experience. Logistics places - an
+  // airport, a station, a stay - are travel, not an experience to judge.
+  const visits = dayItems.filter(
+    (item) =>
+      (!item.blockType || item.blockType === 'activity') && profileOf(item)?.kind !== 'logistics',
+  );
+  const visitDay = !noVisits && visits.length > 0;
   const knownPlaces = [
     ...new Map(
       input.places
         .filter((place) => {
-          const representedItems = input.items.filter((item) => item.placeId === place.tripPlaceId);
+          if (placeProfile(place.types)?.kind === 'logistics') return false;
+          const representedItems = dayItems.filter((item) => item.placeId === place.tripPlaceId);
           return (
             !representedItems.length ||
             representedItems.some((item) => !item.blockType || item.blockType === 'activity')
@@ -369,121 +404,210 @@ export function evaluateScoredDay(input: ScoredDayInput) {
       )
     : UNKNOWN;
   const advisories: DayAdvisory[] = [];
-  // City-wide seasonal guidance does not prove suitability at an individual venue.
-  const timeCriteria: Array<{
-    id: string;
-    source: PlanScoreEvidence['source'];
-    satisfied: boolean | null;
-  }> = knownPlaces.map((place) => ({
-    id: `season:${place.tripPlaceId}`,
-    source: 'ESTIMATED',
-    satisfied: null,
-  }));
+  const outdoorPlace = (place: ScoringPlace) => placeProfile(place.types)?.outdoor ?? false;
   for (const forecast of input.forecasts ?? [])
     if (
       forecast.precipitationProbability != null &&
       forecast.precipitationProbability >= 60 &&
-      knownPlaces.some(
-        (p) => forecast.placeIds.includes(p.tripPlaceId) && p.types?.some((t) => OUTDOOR.has(t)),
-      )
+      knownPlaces.some((p) => forecast.placeIds.includes(p.tripPlaceId) && outdoorPlace(p))
     )
       advisories.push({ code: 'RAIN_FORECAST', references: [...forecast.placeIds] });
-  if (input.date)
+  if (input.date && input.originInstant !== undefined)
     for (const place of knownPlaces) {
-      if (!place.coordinates || !place.types?.some((t) => OUTDOOR.has(t))) continue;
+      if (!place.coordinates || !place.types?.includes('hiking_area')) continue;
       const sunlight = daylightUtc(input.date, place.coordinates);
       const item = input.items.find((i) => i.placeId === place.tripPlaceId);
-      if (sunlight && item?.start && item.duration) {
-        if (input.originInstant !== undefined) {
-          const start = input.originInstant + item.start.minutes * 60000;
-          const end = start + item.duration.minutes * 60000;
-          timeCriteria.push({
-            id: `daylight:${place.tripPlaceId}`,
-            source: 'ESTIMATED',
-            satisfied: start >= sunlight.sunrise && end <= sunlight.sunset ? true : null,
-          });
-          if (
-            place.types.includes('hiking_area') &&
-            (start < sunlight.sunrise || end > sunlight.sunset)
-          )
-            advisories.push({ code: 'DAYLIGHT_LIMIT', references: [item.id] });
-        }
-      }
+      if (!sunlight || !item?.start || !item.duration) continue;
+      const start = input.originInstant + item.start.minutes * 60000;
+      const end = start + item.duration.minutes * 60000;
+      if (start < sunlight.sunrise || end > sunlight.sunset)
+        advisories.push({ code: 'DAYLIGHT_LIMIT', references: [item.id] });
     }
-  const supportedTiming = supported(timeCriteria);
-  const timing = knownPlaces.length
-    ? supportedTiming.state === 'EVALUATED'
-      ? { ...supportedTiming, coverage: (supportedTiming.coverage ?? 100) / 4 }
-      : supportedTiming
-    : noVisits
-      ? NOT_APPLICABLE
-      : UNKNOWN;
-  const quality = noVisits
+  // Date and time suitability: when a visit happens against when its kind of
+  // place suits a traveller, daylight for outdoor places, and holiday hours.
+  const daylightWindow = (coordinates: ScoringPlace['coordinates']) => {
+    if (!coordinates || !input.date || input.originInstant === undefined) return null;
+    const light = daylightUtc(input.date, coordinates);
+    if (!light) return null;
+    return [
+      {
+        startMinute: (light.sunrise - input.originInstant) / 60000 - 30,
+        endMinute: (light.sunset - input.originInstant) / 60000 + 30,
+      },
+    ];
+  };
+  const timeCriteria: Criterion[] = [];
+  const timeOfDayMisses: string[] = [];
+  const holidayRisks: string[] = [];
+  for (const item of visits) {
+    const profile = profileOf(item);
+    const place = item.placeId ? places.get(item.placeId) : undefined;
+    const placeSource = place?.source ?? 'CACHED_PROVIDER';
+    const timingSource = item.start?.source ?? item.startWindow?.source ?? null;
+    const id = `time:${item.id}`;
+    if (!profile) {
+      timeCriteria.push({ id, source: 'ESTIMATED', satisfied: null });
+      continue;
+    }
+    if (profile.windowKind === 'ACCESS' && item.openingHours.status === 'KNOWN') {
+      // Known hours own this visit's timing (feasibility); a visit inside them is
+      // well timed, and one outside them is not judged a second time here.
+      const conflicted = feasibility.conflicts.some(
+        (c) => c.kind === 'OUTSIDE_OPENING_HOURS' && c.subjectIds.includes(item.id),
+      );
+      if (!conflicted)
+        timeCriteria.push({
+          id,
+          source: timingSource
+            ? weaker(timingSource, item.openingHours.source)
+            : item.openingHours.source,
+          satisfied: timingSource ? true : null,
+        });
+    } else if (profile.windows) {
+      const windows =
+        profile.windows === 'DAYLIGHT' ? daylightWindow(place?.coordinates) : profile.windows;
+      const satisfied =
+        !timingSource || !windows
+          ? null
+          : item.start
+            ? withinWindows(item.start.minutes, windows)
+            : windowMeets(
+                item.startWindow!.earliestMinute,
+                item.startWindow!.latestMinute,
+                windows,
+              );
+      if (satisfied === false) timeOfDayMisses.push(item.id);
+      timeCriteria.push({
+        id,
+        source: timingSource ? weaker(timingSource, placeSource) : placeSource,
+        satisfied,
+      });
+    }
+    if (input.holiday && profile.holidaySensitive) {
+      // Weekly hours do not speak for a public holiday; only date-specific hours do.
+      const confirmed =
+        item.openingHours.status === 'KNOWN' && item.openingHours.source !== 'ESTIMATED';
+      if (!confirmed) holidayRisks.push(item.id);
+      timeCriteria.push({
+        id: `holiday:${item.id}`,
+        source:
+          item.openingHours.status === 'KNOWN' && confirmed
+            ? item.openingHours.source
+            : 'ESTIMATED',
+        satisfied: confirmed,
+        weight: input.holiday.certainty === 'official' ? 0.5 : 0.25,
+      });
+    }
+  }
+  // Time allocation: a visit given less than its kind's minimum is rushed. Only
+  // a stated duration or the traveller's own timing can show that; a typical
+  // length would only agree with itself.
+  const allocationCriteria: Criterion[] = [];
+  const rushed: string[] = [];
+  for (const item of visits) {
+    const minimum = profileOf(item)?.visit?.minimum;
+    const own = stated.get(item.id);
+    const allowed = own?.minutes ?? inferred.allowedMinutes.get(item.id) ?? null;
+    const satisfied = minimum === undefined || allowed === null ? null : allowed >= minimum;
+    if (satisfied === false) rushed.push(item.id);
+    allocationCriteria.push({
+      id: `allocation:${item.id}`,
+      source: own?.source ?? 'ESTIMATED',
+      satisfied,
+    });
+  }
+  const quality = !visitDay
     ? NOT_APPLICABLE
-    : // No evidence source exists yet for the rubric's fourth quality signal, so it
-      // stays out of the weights rather than capping coverage as permanent unknown.
-      combineSignals([
-        { weight: 40, result: fit },
-        { weight: 20, result: timing },
+    : combineSignals([
+        { weight: 35, result: supported(timeCriteria) },
+        { weight: 25, result: supported(allocationCriteria) },
+        { weight: 25, result: fit },
         { weight: 15, result: evaluatePlaceQuality(knownPlaces) },
       ]);
   const intentEvidence: PlanScoreEvidence[] = [{ ref: 'intent', source: 'USER_OWNED' }];
   const focused = context.intent === 'focused';
-  // Temporal order is one coherence criterion. It does not prove geographic flow.
-  const timedItems = input.items.filter((item) => item.start && item.duration);
-  const temporalFlow =
-    timedItems.length === input.items.length &&
-    timedItems.length > 0 &&
-    timedItems.every(
-      (item, index) =>
-        index === 0 ||
-        timedItems[index - 1]!.start!.minutes + timedItems[index - 1]!.duration!.minutes <=
-          item.start!.minutes,
-    );
+  // Coherent flow is the plan's own time order, from exact starts or dayparts.
+  // Geographic flow is Route & Time Efficiency's to judge, not a second time here.
+  const timedItems = dayItems.filter((item) => item.start || item.startWindow);
+  const earliest = (item: PlanScoreDayItem) =>
+    item.start?.minutes ?? item.startWindow!.earliestMinute;
+  const latest = (item: PlanScoreDayItem) => item.start?.minutes ?? item.startWindow!.latestMinute;
+  const inOrder = timedItems
+    .slice(1)
+    .filter((item, index) => earliest(timedItems[index]!) <= latest(item)).length;
+  // One stop has no order to judge, and one timed stop among several proves none.
+  const temporalFlow: PlanScoreFactorResult =
+    dayItems.length < 2
+      ? NOT_APPLICABLE
+      : timedItems.length < 2
+        ? UNKNOWN
+        : {
+            state: 'EVALUATED',
+            score: (100 * inOrder) / (timedItems.length - 1),
+            coverage: (100 * timedItems.length) / dayItems.length,
+            evidence: timedItems.map((item) => ({
+              ref: `order:${item.id}`,
+              source: item.start?.source ?? item.startWindow!.source,
+            })),
+          };
   const coherence: PlanScoreFactorResult = restful
     ? { state: 'EVALUATED', score: 100, evidence: intentEvidence }
     : focused && fit.state === 'EVALUATED'
       ? fit
-      : temporalFlow && !feasibility.conflicts.length
-        ? {
-            state: 'EVALUATED',
-            score: 100,
-            coverage: 100 / 3,
-            evidence: timedItems.flatMap((item) => [
-              { ref: `start:${item.id}`, source: item.start!.source },
-              { ref: `duration:${item.id}`, source: item.duration!.source },
-            ]),
-          }
-        : UNKNOWN;
-  const themes = [...new Set(knownPlaces.flatMap((p) => interestsForPlaceTypes(p.types ?? [])))];
+      : temporalFlow;
+  // Purposeful variety: the mix of kinds of experience across the day's visits.
+  // An unknown intent may still be a focused day, so repetition only counts
+  // gently there; a declared Explore day expects a mix.
+  const themed = visits.flatMap((item) => {
+    const place = item.placeId ? places.get(item.placeId) : undefined;
+    const theme = interestsForPlaceTypes(place?.types ?? [])[0];
+    return theme ? [{ item, place, theme }] : [];
+  });
+  const distinctThemes = new Set(themed.map((entry) => entry.theme)).size;
+  const explore = context.intent === 'explore';
   const variety: PlanScoreFactorResult =
-    rest || transit || focused
+    rest || transit || focused || visits.length < 2
       ? NOT_APPLICABLE
-      : context.intent === 'explore' &&
-          themes.filter((t) =>
-            preferences.interests.includes(t as (typeof preferences.interests)[number]),
-          ).length >= 2
-        ? {
+      : themed.length < 2
+        ? UNKNOWN
+        : {
             state: 'EVALUATED',
-            score: 100,
-            evidence: knownPlaces.map((p) => ({
-              ref: `type:${p.tripPlaceId}`,
-              source: p.source ?? 'CACHED_PROVIDER',
+            score: distinctThemes >= 2 ? 100 : explore ? 50 : 75,
+            coverage: (100 * themed.length) / visits.length,
+            evidence: themed.map(({ item, place }) => ({
+              ref: `type:${item.placeId}`,
+              source: place?.source ?? 'CACHED_PROVIDER',
+              ...(distinctThemes < 2 && !explore ? { strength: 0.5 } : {}),
             })),
-            coverage:
-              (100 * knownPlaces.filter((p) => p.types?.length).length) /
-              Math.max(1, knownPlaces.length),
-          }
-        : UNKNOWN;
+          };
   // Whether a day makes good use of its area needs sourced evidence about that
   // area's opportunities. The evaluator has none, so the signal is not part of
   // the rubric yet: counting it as unknown would cap every day's coverage.
   const utilization = NOT_APPLICABLE;
   const composition = combineSignals([
-    { weight: 30, result: coherence },
-    { weight: 30, result: variety },
-    { weight: 40, result: utilization },
+    { weight: 50, result: coherence },
+    { weight: 50, result: variety },
   ]);
+  // Seasonal fit weighs the day's outdoor time against the month's typical
+  // conditions for its area. It feeds the trip component, not this day's score.
+  const midday = (item: PlanScoreDayItem) =>
+    item.start
+      ? item.start.minutes < MIDDAY.endMinute &&
+        MIDDAY.startMinute < item.start.minutes + (item.duration?.minutes ?? 0)
+      : item.startWindow
+        ? item.startWindow.earliestMinute >= MIDDAY.startMinute - 60 &&
+          item.startWindow.earliestMinute < MIDDAY.endMinute
+        : false;
+  const seasonal = visitDay
+    ? seasonalDayFit(
+        visits.map((item) => ({
+          minutes: item.duration?.minutes ?? 60,
+          outdoor: profileOf(item)?.outdoor ?? false,
+          midday: midday(item),
+        })),
+        input.climate,
+      )
+    : { factor: NOT_APPLICABLE, wet: false, heat: false };
   let continuous = 0;
   for (const [index, item] of input.items.entries()) {
     const previous = input.items[index - 1];
@@ -540,8 +664,9 @@ export function evaluateScoredDay(input: ScoredDayInput) {
   const hard = feasibility.conflicts.filter((c) => c.severity === 'HARD' && c.verified);
   const material = feasibility.conflicts.filter((c) => c.severity === 'MATERIAL' && c.verified);
   const assessmentBasis: PlanScoreAssessmentBasis[] = [];
+  const durationEstimated = dayItems.some((item) => item.duration && !stated.get(item.id));
   if (
-    input.items.some(
+    dayItems.some(
       (item) => item.duration && item.duration.minutes > 0 && (item.start || item.startWindow),
     ) ||
     commitments.some(
@@ -560,6 +685,8 @@ export function evaluateScoredDay(input: ScoredDayInput) {
   if (rest && availability && (restful || complete)) assessmentBasis.push('REST');
   const limitations: PlanScoreLimitation[] = [];
   if (requiredTravelUnknown) limitations.push('TRAVEL_TIME_UNKNOWN');
+  else if (travelEstimated) limitations.push('TRAVEL_TIME_ESTIMATED');
+  if (durationEstimated) limitations.push('DURATION_ESTIMATED');
   if (!complete) limitations.push('LOAD_INCOMPLETE');
   if (!assessmentBasis.includes('TIMING') && !restful) limitations.push('TIMING_UNKNOWN');
   if (
@@ -572,7 +699,7 @@ export function evaluateScoredDay(input: ScoredDayInput) {
     date: input.date,
     availableMinutes,
     loadRatio: complete ? ratio : null,
-    partialLoadRatio: !complete && knownObservations > 0 ? ratio : null,
+    partialLoadRatio: !complete && provenLoad > 0 ? provenRatio : null,
     assessmentBasis,
     limitations,
     rest,
@@ -667,17 +794,21 @@ export function evaluateScoredDay(input: ScoredDayInput) {
       factor: comfort,
       activeMinutes: complete ? load : null,
       smallestBufferMinutes: null,
-      lowerBoundMinutes: !complete && provedOverload ? load : null,
+      lowerBoundMinutes: !complete && provedOverload ? provenLoad : null,
     },
-    travel,
+    travel: { ...travel, estimated: travelEstimated },
     route: routeComparison,
     advisories,
+    experience: {
+      timeOfDay: timeOfDayMisses,
+      rushed,
+      holiday: holidayRisks,
+      singleTheme: explore && variety.state === 'EVALUATED' && distinctThemes < 2,
+    },
     utilization,
     variety,
-    // Daylight supports an outdoor time slot, not seasonal destination suitability.
-    // The current catalogue's seasonal tendencies cannot establish this trip component,
-    // so it stays out of the rubric until a real evidence source exists.
-    seasonalFit: NOT_APPLICABLE,
+    seasonalFit: seasonal.factor,
+    seasonal: { wet: seasonal.wet, heat: seasonal.heat },
   };
 }
 const parseMinute = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3));

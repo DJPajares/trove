@@ -674,3 +674,97 @@ test('preparing a trip for offline use keeps stored legs and hours, and buys not
   expect((await getTripOfflineContext('owner', 'trip', { now: NOW })).legs).toStrictEqual([]);
   expect(outbound).not.toHaveBeenCalled();
 });
+
+test('gap suggestions offer the traveller’s own unplanned places, from stored data only', async () => {
+  const { getDayGapSuggestions } = await import('../src/services/gap-suggestions.js');
+  const placeAt = (id: string, longitude: number) => ({
+    id: `tp-${id}`,
+    placeId: `place-${id}`,
+    priority: null,
+    place: {
+      id: `place-${id}`,
+      customLatitude: null,
+      customLongitude: null,
+      customName: null,
+      providerRefs: [
+        {
+          provider: 'GOOGLE',
+          externalPlaceId: `ext-${id}`,
+          cachedAt: NOW,
+          cachedLatitude: decimal(1),
+          cachedLongitude: decimal(longitude),
+          cachedName: id,
+        },
+      ],
+    },
+  });
+  const evening = placeAt('evening', 2.01);
+  const unplanned = placeAt('unplanned', 2.005);
+  trip.tripPlaces.push(evening, unplanned);
+  const template = trip.itineraryDays[0].items[0];
+  trip.itineraryDays[0].items = [
+    {
+      ...template,
+      id: 'morning',
+      localStartTime: new Date('1970-01-01T09:00Z'),
+      durationMinutes: 60,
+    },
+    {
+      ...template,
+      id: 'evening',
+      position: 1,
+      tripPlace: evening,
+      tripPlaceId: 'tp-evening',
+      localStartTime: new Date('1970-01-01T15:00Z'),
+      durationMinutes: 60,
+    },
+  ];
+
+  const result = await getDayGapSuggestions('owner', 'trip', 'day', { now: NOW });
+
+  expect(result.gaps).toHaveLength(1);
+  expect(result.gaps[0]).toMatchObject({
+    afterItemId: 'morning',
+    beforeItemId: 'evening',
+    endTime: '15:00',
+    startTime: '10:00',
+  });
+  expect(result.gaps[0]!.suggestions.map((s) => s.tripPlaceId)).toStrictEqual(['tp-unplanned']);
+  expect(outbound).not.toHaveBeenCalled();
+});
+
+test('a stop with published special hours on its date is named for Insights, from stored evidence', async () => {
+  const { getPlaceHoursNotices } = await import('../src/services/place-hours-notices.js');
+  evidenceRow.cachedEvidence = {
+    ...place,
+    name: 'Venue',
+    location: { latitude: 1.35, longitude: 103.82 },
+    openingPeriods: [
+      { open: { day: 1, hour: 9, minute: 0 }, close: { day: 1, hour: 18, minute: 0 } },
+    ],
+    currentOpeningPeriods: [
+      {
+        open: { date: '2026-09-28', day: 1, hour: 10, minute: 0 },
+        close: { date: '2026-09-28', day: 1, hour: 15, minute: 0 },
+      },
+    ],
+    currentHoursValidFrom: '2026-09-28',
+    currentHoursValidThrough: '2026-09-28',
+  };
+
+  const { notices } = await getPlaceHoursNotices('owner', 'trip', {
+    now: new Date('2026-09-27T12:00:00Z'),
+  });
+
+  expect(notices).toMatchObject([
+    {
+      date: '2026-09-28',
+      dayId: 'day',
+      kind: 'special_hours',
+      name: 'Venue',
+      spans: [{ close: '15:00', open: '10:00' }],
+      tripPlaceId: 'tp',
+    },
+  ]);
+  expect(outbound).not.toHaveBeenCalled();
+});

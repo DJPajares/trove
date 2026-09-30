@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 import type { PanelSurface } from '@/components/panel-surface';
 import { TripInsightsPanel } from '@/components/trip-insights-panel';
 import { composeInsights } from '@/lib/insights/compose';
+import { fetchPlaceHoursNotices } from '@/lib/itinerary/api';
 import { useTripContext } from '@/lib/insights/use-trip-context';
 import type { PlanScoreExplanation, TripPlanScore } from '@/lib/plan-score/api';
 import { currentAssessment, dayActionLink, type ScoreAction } from '@/lib/plan-score/presentation';
@@ -40,15 +41,23 @@ export function TripInsights({
     queryFn: skipToken,
     queryKey: queryKeys.planScore(tripId),
   });
+  // Stored evidence only, so this costs no provider request.
+  const { data: hoursNotices } = useQuery({
+    enabled,
+    queryFn: ({ signal }) => fetchPlaceHoursNotices(tripId, { signal }),
+    queryKey: queryKeys.hoursNotices(tripId),
+    retry: false,
+  });
   const insights = useMemo(() => {
     // A stale assessment's forecast advisory is exactly what must not be shown.
     const days = planScore && currentAssessment(planScore) ? planScore.days : [];
     return composeInsights({
       context,
       explanations: new Map(days.map((day) => [day.dayId, day.explanations])),
+      hoursNotices: hoursNotices?.notices,
       scope: dayId ? { kind: 'day', dayId } : { kind: 'trip' },
     });
-  }, [context, dayId, planScore]);
+  }, [context, dayId, hoursNotices, planScore]);
 
   return (
     <TripInsightsPanel

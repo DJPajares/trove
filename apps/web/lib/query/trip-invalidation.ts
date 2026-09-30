@@ -61,6 +61,8 @@ export function removeTripQueries(
  */
 export const ITINERARY_EDIT_QUERY_ROOTS: readonly TripScopedQueryRoot[] = [
   'itinerary',
+  'gap-suggestions',
+  'hours-notices',
   'itinerary-day-routes',
   'place-groupings',
   'place-hours',
@@ -114,6 +116,8 @@ export const TRIP_DATE_QUERY_ROOTS: readonly TripScopedQueryRoot[] = [
  */
 export const PLACE_LOCATION_QUERY_ROOTS: readonly TripScopedQueryRoot[] = [
   'itinerary',
+  'gap-suggestions',
+  'hours-notices',
   'itinerary-day-routes',
   'place-groupings',
   'place-hours',

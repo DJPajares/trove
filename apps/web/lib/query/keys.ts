@@ -51,6 +51,10 @@ export const queryKeys = {
    * the key because a leg chain computed for one ordering is wrong for any
    * other - see `itineraryDayRouteRevision`.
    */
+  /** Stops whose hours are worth a word on their day, for Insights. */
+  hoursNotices: (tripId: string) => ['hours-notices', tripId] as const,
+  /** A day's free stretches and the unplanned places that fit them. */
+  gapSuggestions: (tripId: string, dayId: string) => ['gap-suggestions', tripId, dayId] as const,
   /** Which day each unplanned Trip Place fits; stored coordinates only. */
   placeGroupings: (tripId: string) => ['place-groupings', tripId] as const,
   /** Stored hours and ratings for a trip's places; `date` null asks for ratings only. */
@@ -184,6 +188,8 @@ export const PERSISTED_QUERY_ROOTS = new Set([
 /** Roots scoped to a single trip, and the set `invalidateTripQueries` clears. */
 export const TRIP_SCOPED_QUERY_ROOTS = [
   'expenses',
+  'gap-suggestions',
+  'hours-notices',
   'itinerary',
   'itinerary-day-routes',
   'memories',

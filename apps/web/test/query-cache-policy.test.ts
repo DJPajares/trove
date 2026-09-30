@@ -95,6 +95,8 @@ test('a restored cache never outlives the garbage-collection window', () => {
 test('trip-scoped keys put the trip id directly after the root', () => {
   const keys = [
     queryKeys.expenses('trip-1'),
+    queryKeys.gapSuggestions('trip-1', 'day-1'),
+    queryKeys.hoursNotices('trip-1'),
     queryKeys.itinerary('trip-1'),
     queryKeys.itineraryDayRoutes('trip-1', 'day-1', 'rev', false, undefined),
     queryKeys.memories('trip-1'),

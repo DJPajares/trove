@@ -67,6 +67,9 @@ export const GOOGLE_TEXT_SEARCH_FIELD_MASK = [
 export const GOOGLE_TEXT_SEARCH_EVIDENCE_FIELD_MASK = [
   GOOGLE_TEXT_SEARCH_FIELD_MASK,
   'places.regularOpeningHours',
+  // Same Enterprise tier as the regular hours above; this is what carries a
+  // holiday's or a season's special hours, with the dates they apply to.
+  'places.currentOpeningHours',
   'places.rating',
   'places.userRatingCount',
 ].join(',');
@@ -522,6 +525,10 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
                 evidence: {
                   openingPeriods: mapOpeningPeriods(place.regularOpeningHours?.periods),
                   openingHoursDescriptions: place.regularOpeningHours?.weekdayDescriptions ?? [],
+                  currentOpeningPeriods: mapOpeningPeriods(place.currentOpeningHours?.periods),
+                  currentHoursValidFrom: currentHoursRange(place.currentOpeningHours?.periods).from,
+                  currentHoursValidThrough: currentHoursRange(place.currentOpeningHours?.periods)
+                    .through,
                   userRatingCount: validReviewCount(place.userRatingCount),
                   rating:
                     typeof place.rating === 'number' && Number.isFinite(place.rating)

@@ -519,14 +519,8 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
   return (
     <section className="space-y-7">
       <TripSectionHeader
-        actions={
-          <Button onClick={openCreate}>
-            <Plus aria-hidden="true" data-icon="inline-start" />
-            {t('addReservation')}
-          </Button>
-        }
-        currentSection="reservations"
         description={t('description')}
+        primaryAction={{ label: t('addReservation'), onSelect: openCreate }}
       />
 
       {error ? (

@@ -79,9 +79,8 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
   return (
     <section className="space-y-7">
       <TripSectionHeader
-        actions={addButton(t('addPlace'))}
-        currentSection="places"
         description={t('description')}
+        primaryAction={{ label: t('addPlace'), onSelect: () => setAddOpen(true) }}
       />
 
       {places.error && !removingPlace ? (

@@ -45,10 +45,10 @@ import {
 import { cn } from '@/lib/utils';
 
 type TripChromeSlots = {
-  /** Where a screen renders the actions that belong to it, above the nav row. */
+  /** The section toolbar's leading edge: a screen's view control, or its guidance. */
+  leadingSlot: HTMLElement | null;
+  /** The section toolbar's trailing edge: the actions that belong to the screen. */
   actionsSlot: HTMLElement | null;
-  /** Where a screen renders the standing guidance that sits below the nav row. */
-  descriptionSlot: HTMLElement | null;
   /** Where a screen renders a control onto the cover itself. */
   coverMetaSlot: HTMLElement | null;
   setCoverSource: (source: TripMediaSource | null) => void;
@@ -118,8 +118,8 @@ export function TripChrome({
   const trip = context?.trip ?? null;
   const editorial = context?.editorial ?? null;
 
+  const [leadingSlot, setLeadingSlot] = useState<HTMLElement | null>(null);
   const [actionsSlot, setActionsSlot] = useState<HTMLElement | null>(null);
-  const [descriptionSlot, setDescriptionSlot] = useState<HTMLElement | null>(null);
   const [coverMetaSlot, setCoverMetaSlot] = useState<HTMLElement | null>(null);
   const [coverSource, setCoverSource] = useState<TripMediaSource | null>(null);
   const [sharing, setSharing] = useState(false);
@@ -166,24 +166,23 @@ export function TripChrome({
   }
 
   const slots = useMemo<TripChromeSlots>(
-    () => ({ actionsSlot, coverMetaSlot, descriptionSlot, setCoverSource }),
-    [actionsSlot, coverMetaSlot, descriptionSlot],
+    () => ({ actionsSlot, coverMetaSlot, leadingSlot, setCoverSource }),
+    [actionsSlot, coverMetaSlot, leadingSlot],
   );
 
   return (
     <TripChromeContext.Provider value={slots}>
       {/* The chrome owns the page container that each screen used to declare for
           itself, so the cover, the nav row and the screen below them share one
-          measure and one rhythm. */}
-      <div className="mx-auto w-full max-w-5xl space-y-7">
+          measure and one rhythm. The rhythm is written as margins on each piece
+          rather than `space-y`: on a phone's itinerary the header is flattened to
+          `contents`, and a collapsed toolbar must not leave its gap behind. */}
+      <div className="mx-auto w-full max-w-5xl">
         {/* A sticky child is bounded by the height of its nearest box ancestor. On
           itinerary, flatten this header at mobile widths so the unchanged
           navigation row stays anchored to the full planning section. Desktop
           keeps the ordinary header box and flow. */}
-        <header
-          className={cn(stickyNavigation && 'contents md:block', 'space-y-5')}
-          data-slot="trip-chrome"
-        >
+        <header className={cn(stickyNavigation && 'contents md:block')} data-slot="trip-chrome">
           {/* The overview draws the same cover and the same sheet at the same
             sizes. Any change to one shape belongs in both, or the cover
             resizes under the traveller as they open a section. */}
@@ -269,17 +268,9 @@ export function TripChrome({
             </div>
           </section>
 
-          {/* Held open at one control's height — the same 44px minimum every
-            touch target in Trove gets — so a screen filling it on the frame
-            after mount costs nothing below it. */}
-          <div
-            className="flex min-h-11 shrink-0 flex-wrap items-center justify-end gap-2"
-            ref={setActionsSlot}
-          />
-
           <div
             className={cn(
-              'flex items-center justify-between gap-2 border-b border-border-subtle',
+              'mt-5 flex items-center justify-between gap-2 border-b border-border-subtle',
               stickyNavigation &&
                 'sticky top-[calc(var(--safe-top)+var(--header-offset))] z-[var(--layer-sticky)] bg-background backdrop-blur md:static md:z-auto md:bg-transparent md:backdrop-blur-none',
             )}
@@ -375,23 +366,23 @@ export function TripChrome({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+
+          {/* The section toolbar: the screen's own view control or guidance on
+            the leading edge, its actions on the trailing edge, directly under
+            the navigation it belongs to. A screen with nothing to put here gets
+            no row at all - margin included - so its content starts under the
+            tabs. On a phone's itinerary it is a sibling of the sticky navigation
+            rather than a wrapper, which would end the navigation's stickiness. */}
+          <div
+            className="mt-3 hidden min-h-11 items-center gap-3 has-[>*>*]:flex"
+            data-slot="trip-section-toolbar"
+          >
+            <div className="flex min-w-0 flex-1 items-center" ref={setLeadingSlot} />
+            <div className="ml-auto flex shrink-0 items-center gap-2" ref={setActionsSlot} />
+          </div>
         </header>
 
-        {/* Outside the header on purpose. Inside it the guidance carried its own
-            padding on top of the section's rhythm, which read as more space
-            above it than below. Out here it is spaced by the same rule as
-            everything else in the section.
-
-            `mt-7` restores that rule's own top half on a phone, where the header
-            is flattened to `contents` so the navigation can stick to the whole
-            section: the rhythm is a trailing margin, and a header with no box
-            has nowhere to put one. It matches the `space-y-7` above.
-
-            `empty:hidden` is what keeps a screen with nothing to say from
-            reserving a row for it - margin included. */}
-        <div ref={setDescriptionSlot} className="mt-7 empty:hidden md:mt-0" />
-
-        {children}
+        <div className="mt-5 md:mt-7">{children}</div>
 
         {/* Both of these act on the trip rather than on any one screen, which
             is why they hang off the chrome. Each writes its result straight

@@ -516,35 +516,64 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
     'onImage',
   );
 
+  // Highlights and Places are ways into the story, not second copies of it, so
+  // they lead the section toolbar rather than taking a row of their own. The
+  // row scrolls sideways instead of wrapping when a trip has many places.
+  const lensChips =
+    story.days.length && lensOptions.length > 1 ? (
+      <ChipGroup
+        aria-label={t('lensLabel')}
+        className="interaction-scrollbar -m-1 flex-nowrap overflow-x-auto p-1 pr-6 [mask-image:linear-gradient(to_right,black_calc(100%-1.5rem),transparent)] [&>*]:shrink-0"
+        multiple={false}
+        onValueChange={([value]) => {
+          const option = lensOptions.find(
+            (candidate) => (candidate.id ?? ALL_LENS_VALUE) === value,
+          );
+          if (option) selectLens(option);
+        }}
+        value={[lens ?? ALL_LENS_VALUE]}
+      >
+        {lensOptions.map((option) => (
+          <Chip
+            aria-label={`${option.label}, ${t('memoryCount', { count: option.count })}`}
+            count={option.count}
+            icon={option.marked ? <Sparkles aria-hidden="true" /> : undefined}
+            key={option.id ?? ALL_LENS_VALUE}
+            value={option.id ?? ALL_LENS_VALUE}
+          >
+            {option.label}
+          </Chip>
+        ))}
+      </ChipGroup>
+    ) : undefined;
+
   const header = (
     <TripSectionHeader
       actions={
-        <>
-          <Button onClick={() => setEditor({ memory: null, mode: 'create' })} variant="outline">
-            <Plus aria-hidden="true" data-icon="inline-start" />
-            {t('addMemory')}
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button aria-label={t('storyActions')} size="icon" type="button" variant="ghost" />
-              }
-            >
-              <Ellipsis aria-hidden="true" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-48">
-              <DropdownMenuItem onClick={() => setCoverPickerOpen(true)}>
-                <ImagePlus aria-hidden="true" />
-                {storyCover ? t('changeCover') : t('chooseCover')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button aria-label={t('storyActions')} size="icon" type="button" variant="ghost" />
+            }
+          >
+            <Ellipsis aria-hidden="true" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-48">
+            <DropdownMenuItem onClick={() => setCoverPickerOpen(true)}>
+              <ImagePlus aria-hidden="true" />
+              {storyCover ? t('changeCover') : t('chooseCover')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       }
       coverMeta={tripRating}
       coverSource={headSource}
-      currentSection="memories"
       description={t('description')}
+      leading={lensChips}
+      primaryAction={{
+        label: t('addMemory'),
+        onSelect: () => setEditor({ memory: null, mode: 'create' }),
+      }}
     />
   );
 
@@ -649,33 +678,6 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
     <section className="space-y-7">
       {header}
       {liveRegion}
-
-      {/* Highlights and Places are ways into the story, not second copies of it. */}
-      {lensOptions.length > 1 ? (
-        <ChipGroup
-          aria-label={t('lensLabel')}
-          multiple={false}
-          onValueChange={([value]) => {
-            const option = lensOptions.find(
-              (candidate) => (candidate.id ?? ALL_LENS_VALUE) === value,
-            );
-            if (option) selectLens(option);
-          }}
-          value={[lens ?? ALL_LENS_VALUE]}
-        >
-          {lensOptions.map((option) => (
-            <Chip
-              aria-label={`${option.label}, ${t('memoryCount', { count: option.count })}`}
-              count={option.count}
-              icon={option.marked ? <Sparkles aria-hidden="true" /> : undefined}
-              key={option.id ?? ALL_LENS_VALUE}
-              value={option.id ?? ALL_LENS_VALUE}
-            >
-              {option.label}
-            </Chip>
-          ))}
-        </ChipGroup>
-      ) : null}
 
       <div className="space-y-10">
         {visibleDays.map((day) => {

@@ -52,7 +52,6 @@ import {
 } from '@/components/ui/popover';
 import { usePreferences } from '@/components/preferences-provider';
 import { TimeInput } from '@/components/time-input';
-import { useTripContext } from '@/components/trip-provider';
 import { TripSectionHeader } from '@/components/trip-section-header';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsIndicator, TabsList, TabsTab } from '@/components/ui/tabs';
@@ -326,7 +325,6 @@ export function ItineraryManager({
   const t = useTranslations('itinerary');
   const dayContextT = useTranslations('dayPlanningContext');
   const tripPlacesTranslations = useTranslations('tripPlaces');
-  const tripDescription = useTripContext()?.trip?.description?.trim() ?? '';
   const locale = useLocale();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -1741,12 +1739,18 @@ export function ItineraryManager({
             {tripPlacesTranslations('openPlaces')}
           </Button>
         }
-        currentSection="itinerary"
-        // The traveller's own account of the trip stands in for Trove's
-        // guidance the moment there is one: it says more about this plan than
-        // any standing sentence can.
-        description={tripDescription || t('description')}
-        descriptionIsOwnContent={Boolean(tripDescription)}
+        // The day or the whole trip is the itinerary's own way of looking at
+        // itself, so it leads the toolbar beside the Places it plans from. The
+        // traveller's description of the trip lives on the trip's overview.
+        leading={
+          <Tabs onValueChange={changeItineraryView} value={activeView}>
+            <TabsList aria-label={t('view.navigation')}>
+              <TabsTab value="day">{t('view.day')}</TabsTab>
+              <TabsTab value="overview">{t('view.overview')}</TabsTab>
+              <TabsIndicator />
+            </TabsList>
+          </Tabs>
+        }
       />
 
       {error ? (
@@ -1761,14 +1765,6 @@ export function ItineraryManager({
           <AlertDescription>{t('timeZoneConsequence')}</AlertDescription>
         </Alert>
       ) : null}
-      <Tabs onValueChange={changeItineraryView} value={activeView}>
-        <TabsList aria-label={t('view.navigation')}>
-          <TabsTab value="day">{t('view.day')}</TabsTab>
-          <TabsTab value="overview">{t('view.overview')}</TabsTab>
-          <TabsIndicator />
-        </TabsList>
-      </Tabs>
-
       {activeView === 'overview' ? (
         <ItineraryOverview
           days={itinerary.days}

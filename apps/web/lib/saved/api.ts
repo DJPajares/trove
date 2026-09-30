@@ -219,11 +219,30 @@ export function removeFromCollection(savedPlaceId: string, collectionId: string)
   });
 }
 
-export function searchProviderPlaces(input: string, signal?: AbortSignal) {
+export type ProviderSearchOptions = {
+  /** Prefer results near here; the provider treats it as a hint, not a filter. */
+  locationBias?: { latitude: number; longitude: number; radiusMeters: number };
+  /** Searches sharing a token, ended by one resolve, are billed as one session. */
+  sessionToken?: string;
+  signal?: AbortSignal;
+};
+
+export function providerSearchBody(input: string, options: ProviderSearchOptions = {}) {
+  return JSON.stringify({
+    input,
+    ...(options.locationBias ? { locationBias: options.locationBias } : {}),
+    ...(options.sessionToken ? { sessionToken: options.sessionToken } : {}),
+  });
+}
+
+export function searchProviderPlaces(input: string, options?: AbortSignal | ProviderSearchOptions) {
+  const resolved: ProviderSearchOptions =
+    options instanceof AbortSignal ? { signal: options } : (options ?? {});
+
   return savedRequest<ProviderSearchResult>('/places/search', {
-    body: JSON.stringify({ input }),
+    body: providerSearchBody(input, resolved),
     method: 'POST',
-    signal,
+    signal: resolved.signal,
   });
 }
 

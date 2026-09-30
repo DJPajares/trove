@@ -16,7 +16,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { EditorialSection } from '@/components/editorial-section';
 import { PageHeader } from '@/components/page-header';
@@ -78,7 +78,6 @@ import {
   createCustomPlace,
   fetchSavedPlaces,
   type SavedPlacesResponse,
-  GOOGLE_PLACES_SEARCH_DEBOUNCE_MS,
   removeCollection,
   removeFromCollection,
   renameCollection,
@@ -88,12 +87,12 @@ import {
   type ProviderSuggestion,
   type SavedCollection,
   type SavedPlace,
-  searchProviderPlaces,
   unsavePlace,
   updateSavedPlaceNote,
 } from '@/lib/saved/api';
 import { PROVIDER_SEARCH_RESULT_LIMIT } from '@/lib/saved/search-results';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
+import { useProviderPlaceSearch } from '@/hooks/use-provider-place-search';
 import {
   editorialSubjectKey,
   MAX_EDITORIAL_IMAGE_SUBJECTS,
@@ -187,10 +186,10 @@ export function SavedPlacesManager() {
   const [addOpen, setAddOpen] = useState(false);
   const [addMode, setAddMode] = useState<'custom' | 'search'>('search');
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<ProviderSuggestion[]>([]);
-  const [searchStatus, setSearchStatus] = useState<'empty' | 'idle' | 'loading' | 'unavailable'>(
-    'idle',
-  );
+  // Searches while the add sheet is open are billed as one Autocomplete session.
+  const search = useProviderPlaceSearch(searchQuery, null);
+  const searchResults = search.results.slice(0, PROVIDER_SEARCH_RESULT_LIMIT);
+  const searchStatus = search.status;
   const [savingProviderId, setSavingProviderId] = useState<string | null>(null);
   const [customName, setCustomName] = useState('');
   const [customNote, setCustomNote] = useState('');
@@ -227,46 +226,6 @@ export function SavedPlacesManager() {
     label: t('addPlace'),
     onTrigger: () => setAddOpen(true),
   });
-
-  useEffect(() => {
-    const input = searchQuery.trim();
-    if (!input) {
-      setSearchResults([]);
-      setSearchStatus('idle');
-      return;
-    }
-
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => {
-      setSearchStatus('loading');
-      void searchProviderPlaces(input, controller.signal)
-        .then((result) => {
-          if (controller.signal.aborted) return;
-          if (result.status === 'unavailable') {
-            setSearchResults([]);
-            setSearchStatus('unavailable');
-            return;
-          }
-          setSearchResults((result.suggestions ?? []).slice(0, PROVIDER_SEARCH_RESULT_LIMIT));
-          setSearchStatus(result.status === 'empty' ? 'empty' : 'idle');
-        })
-        .catch((cause: unknown) => {
-          if (
-            controller.signal.aborted ||
-            (cause instanceof DOMException && cause.name === 'AbortError')
-          ) {
-            return;
-          }
-          setSearchResults([]);
-          setSearchStatus('unavailable');
-        });
-    }, GOOGLE_PLACES_SEARCH_DEBOUNCE_MS);
-
-    return () => {
-      controller.abort();
-      window.clearTimeout(timeout);
-    };
-  }, [searchQuery]);
 
   const activeCollection =
     collections.find((collection) => collection.id === activeCollectionId) ?? null;
@@ -377,8 +336,7 @@ export function SavedPlacesManager() {
     setCustomName('');
     setCustomNote('');
     setSearchQuery('');
-    setSearchResults([]);
-    setSearchStatus('idle');
+    search.endSession();
   }
 
   async function handleProviderSave(suggestion: ProviderSuggestion) {
@@ -386,7 +344,12 @@ export function SavedPlacesManager() {
     setError(null);
 
     try {
-      const { place } = await resolveProviderPlace(suggestion.externalPlaceId, undefined, locale);
+      const { place } = await resolveProviderPlace(
+        suggestion.externalPlaceId,
+        undefined,
+        locale,
+        search.sessionToken(),
+      );
       const { savedPlace } = await saveCanonicalPlace(place.id);
       setSavedPlaces((current) => [
         savedPlace,
@@ -887,7 +850,7 @@ export function SavedPlacesManager() {
                   placeholder={t('searchPlaceholder')}
                   value={searchQuery}
                 />
-                {!searchQuery.trim() ? (
+                {!search.searchable ? (
                   <p className="text-sm leading-6 text-muted-foreground">{t('searchHint')}</p>
                 ) : searchStatus === 'loading' ? (
                   <p aria-live="polite" className="text-sm text-muted-foreground" role="status">

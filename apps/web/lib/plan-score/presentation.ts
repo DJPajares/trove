@@ -1,4 +1,5 @@
 import type { PlanScoreExplanation, PlanScoreFactorOutcome, TripPlanScore } from '@trove/types';
+import { CLOCK_LEEWAY_MS, serverNow } from './clock';
 
 export const DAILY_CATEGORIES = [
   'FEASIBILITY',
@@ -26,9 +27,14 @@ export function isEstimatedOutcome(
   return outcome.coverage < 80 || reliability < 75;
 }
 
+/**
+ * Whether an assessment may still be shown. `now` is server time: a score the
+ * server just computed is never "from the future" to a device that runs behind,
+ * and the leeway covers latency and any read before the device offset is known.
+ */
 export function currentAssessment(
   score: TripPlanScore | null | undefined,
-  now = Date.now(),
+  now = serverNow(),
 ): boolean {
   if (!score || score.schemaVersion !== 7 || score.rubricVersion !== 10) return false;
   if (score.evidenceAsOf === null) return false;
@@ -36,7 +42,7 @@ export function currentAssessment(
   const evidence = score.evidenceAsOf ? Date.parse(score.evidenceAsOf) : null;
   return (
     Number.isFinite(generated) &&
-    generated <= now &&
+    generated <= now + CLOCK_LEEWAY_MS &&
     (evidence === null ||
       (Number.isFinite(evidence) && evidence <= generated && now - evidence < 30 * 86_400_000)) &&
     Date.parse(score.recomputeAfter) <= generated + 86_400_000 &&
@@ -158,7 +164,7 @@ export type ScoreChange = {
   delta: number | null;
   state: 'score' | 'coverage' | 'unavailable' | 'available' | 'rubric';
 };
-export function scoreSnapshot(score: TripPlanScore, now = Date.now()): ScoreSnapshot {
+export function scoreSnapshot(score: TripPlanScore, now = serverNow()): ScoreSnapshot {
   const summary = (entry: TripPlanScore | TripPlanScore['days'][number]) => ({
     score: entry.score,
     coverage: entry.completeness,
@@ -184,7 +190,7 @@ export function compareScores(
   previous: ScoreSnapshot,
   next: ScoreSnapshot,
   scope: string,
-  now = Date.now(),
+  now = serverNow(),
 ): ScoreChange | null {
   const before = previous.scopes[scope],
     after = next.scopes[scope];

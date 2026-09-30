@@ -17,6 +17,7 @@ import type {
   TripPlanScore,
 } from '@/lib/plan-score/api';
 import type { PlanScoreLoadStatus } from '@/lib/plan-score/use-trip-plan-score';
+import { serverNow } from '@/lib/plan-score/clock';
 import {
   assessmentDeadline,
   assessmentBasisKey,
@@ -229,8 +230,8 @@ export function PlanScorePanel({
     const deadline = assessmentDeadline(assessment);
     const refresh = () => setClock(Date.now());
     const timeout =
-      Number.isFinite(deadline) && deadline > Date.now()
-        ? window.setTimeout(refresh, deadline - Date.now() + 1)
+      Number.isFinite(deadline) && deadline > serverNow()
+        ? window.setTimeout(refresh, deadline - serverNow() + 1)
         : undefined;
     window.addEventListener('focus', refresh);
     return () => {
@@ -246,7 +247,7 @@ export function PlanScorePanel({
   )
     return null;
   const assessmentCurrent = Boolean(
-    assessment && currentAssessment(assessment, Math.max(clock, Date.now())),
+    assessment && currentAssessment(assessment, serverNow(Math.max(clock, Date.now()))),
   );
   const unavailable =
     ['loading', 'offline', 'syncing'].includes(status) ||

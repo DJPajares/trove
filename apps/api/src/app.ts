@@ -82,6 +82,9 @@ function describeError(error: unknown) {
   };
 }
 
+/** The instant the server sent a response, so clients can anchor to server time. */
+export const SERVED_AT_HEADER = 'x-trove-served-at';
+
 export function buildApp() {
   // Google Place IDs for address-only results (no POI) run well past Fastify's
   // default 100-char route param limit; `/places/:providerPlaceId` already
@@ -100,7 +103,14 @@ export function buildApp() {
     return reply.code(500).send({ code: described.code });
   });
 
+  // Clients judge time-bound answers such as Plan Score freshness against the
+  // server's clock, not the device's, so every response says when it was served.
+  app.addHook('onSend', async (_request, reply) => {
+    reply.header(SERVED_AT_HEADER, new Date().toISOString());
+  });
+
   void app.register(cors, {
+    exposedHeaders: [SERVED_AT_HEADER],
     methods: ['DELETE', 'GET', 'PATCH', 'POST', 'PUT', 'OPTIONS'],
     origin(origin, callback) {
       callback(

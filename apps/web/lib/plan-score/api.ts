@@ -1,6 +1,7 @@
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 import type { TripPlanScore } from '@trove/types';
+import { observeServerTime } from './clock';
 
 export type {
   PlanScoreDayFactorId as PlanScoreFactorId,
@@ -39,6 +40,7 @@ export async function fetchTripPlanScore(tripId: string, signal?: AbortSignal) {
     signal,
   });
 
+  observeServerTime(response);
   if (response.status === 204) return null;
 
   if (!response.ok) {

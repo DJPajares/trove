@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { AddTripPlaceSheet } from '@/components/add-trip-place-sheet';
 import { EditTripPlaceDialog } from '@/components/edit-trip-place-dialog';
 import { PageState } from '@/components/page-state';
+import { SavedPlacesForTrip } from '@/components/saved-places-for-trip';
 import { useTripPlaceSignals } from '@/hooks/use-trip-place-signals';
 import { TripPlacesPanel } from '@/components/trip-places-panel';
 import { TripSectionHeader } from '@/components/trip-section-header';
@@ -91,6 +92,20 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
           <CircleAlert aria-hidden="true" />
           <AlertDescription>{t(places.error.key, places.error.values)}</AlertDescription>
         </Alert>
+      ) : null}
+
+      {places.status === 'idle' ? (
+        <SavedPlacesForTrip
+          onAdded={(tripPlace) =>
+            places.setPlaces((current) =>
+              current.some((entry) => entry.id === tripPlace.id)
+                ? current
+                : [...current, tripPlace],
+            )
+          }
+          tripId={tripId}
+          tripPlaces={places.places}
+        />
       ) : null}
 
       {places.status === 'loading' ? (

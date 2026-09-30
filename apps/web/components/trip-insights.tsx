@@ -4,6 +4,7 @@ import { skipToken, useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import type { PanelSurface } from '@/components/panel-surface';
+import { RainIndoorOptions } from '@/components/rain-indoor-options';
 import { TripInsightsPanel } from '@/components/trip-insights-panel';
 import { composeInsights } from '@/lib/insights/compose';
 import { fetchPlaceHoursNotices } from '@/lib/itinerary/api';
@@ -62,6 +63,14 @@ export function TripInsights({
   return (
     <TripInsightsPanel
       className={className}
+      extraFor={(insight) => {
+        // Only a rain item for exactly one day can name which day's stops to look at.
+        if (insight.kind !== 'rain') return null;
+        const rainDayId =
+          dayId ??
+          (insight.dayNumbers.length === 1 ? context?.days[insight.dayNumbers[0]! - 1]?.id : null);
+        return rainDayId ? <RainIndoorOptions dayId={rainDayId} tripId={tripId} /> : null;
+      }}
       headingLevel={headingLevel}
       insights={insights}
       resolveAction={

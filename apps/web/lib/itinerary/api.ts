@@ -1327,3 +1327,38 @@ export async function fetchPlaceHoursNotices(
     auth,
   );
 }
+
+export type RainAlternatives = {
+  date: string;
+  generatedAt: string;
+  stops: Array<{
+    alternatives: Array<{
+      distanceKm: number;
+      hoursUnknown: boolean;
+      name: string;
+      rating: number | null;
+      tripPlaceId: string;
+    }>;
+    itemId: string;
+    name: string;
+    /** The stop's label is just the old place's name, so a swap retitles it. */
+    retitleOnSwap: boolean;
+    /** False for a stop with a reservation: replacing it needs review, not a tap. */
+    swappable: boolean;
+    tripPlaceId: string;
+  }>;
+};
+
+/** Indoor places from the traveller's own list for a rainy day's outdoor stops. Stored data only. */
+export async function fetchRainAlternatives(
+  tripId: string,
+  itineraryDayId: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  const auth = await getAuthContext();
+  return itineraryRequest<RainAlternatives>(
+    `/trips/${tripId}/itinerary/days/${itineraryDayId}/rain-alternatives`,
+    { signal: options.signal },
+    auth,
+  );
+}

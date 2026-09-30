@@ -8,6 +8,7 @@ import { createPlaceGroupingsControllers } from '../controllers/place-groupings.
 import { createTripOfflineContextControllers } from '../controllers/trip-offline-context.js';
 import { createGapSuggestionsControllers } from '../controllers/gap-suggestions.js';
 import { createPlaceHoursNoticesControllers } from '../controllers/place-hours-notices.js';
+import { createRainAlternativesControllers } from '../controllers/rain-alternatives.js';
 import { createTripPlaceHoursControllers } from '../controllers/trip-place-hours.js';
 import { createTripModeContextControllers } from '../controllers/trip-mode-context.js';
 import { requireAuthenticatedUser } from '../services/request-auth.js';
@@ -24,6 +25,7 @@ export function registerItineraryRoutes(app: FastifyInstance) {
   const offlineContextControllers = createTripOfflineContextControllers();
   const gapSuggestionsControllers = createGapSuggestionsControllers();
   const hoursNoticesControllers = createPlaceHoursNoticesControllers();
+  const rainAlternativesControllers = createRainAlternativesControllers();
   const authenticated = { preHandler: requireAuthenticatedUser };
   // These reach Google once per place and once per leg of the day.
   const providerBacked = { config: PROVIDER_FANOUT_RATE_LIMIT, ...authenticated };
@@ -63,6 +65,12 @@ export function registerItineraryRoutes(app: FastifyInstance) {
     '/trips/:tripId/hours-notices',
     authenticated,
     hoursNoticesControllers.getPlaceHoursNotices,
+  );
+  // Indoor places from the traveller's own list for a rainy day's outdoor stops.
+  app.get(
+    '/trips/:tripId/itinerary/days/:itineraryDayId/rain-alternatives',
+    authenticated,
+    rainAlternativesControllers.getRainAlternatives,
   );
   // Stored coordinates and the itinerary only.
   app.get(

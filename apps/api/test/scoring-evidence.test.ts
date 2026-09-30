@@ -124,8 +124,15 @@ beforeEach(() => {
       findUnique: vi.fn(async () => evidenceRow),
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
-    travelLegCache: { findUnique: vi.fn(async () => route) },
-    weatherForecastSnapshot: { findUnique: vi.fn(async () => forecast) },
+    aiPlaceGroundingCache: { deleteMany: vi.fn(async () => ({ count: 0 })) },
+    travelLegCache: {
+      deleteMany: vi.fn(async () => ({ count: 0 })),
+      findUnique: vi.fn(async () => route),
+    },
+    weatherForecastSnapshot: {
+      deleteMany: vi.fn(async () => ({ count: 0 })),
+      findUnique: vi.fn(async () => forecast),
+    },
   });
 });
 afterEach(() => {
@@ -281,7 +288,7 @@ test('concurrent acquisition is coalesced, then released after failure for a nor
 
 test('expired raw place evidence is removed by maintenance without acquiring replacements', async () => {
   const write = (globalThis as any).trovePrismaClient.placeProviderRef.updateMany;
-  await expect(cleanupProviderEvidence(NOW)).resolves.toEqual({ clearedPlaceEvidence: 1 });
+  await expect(cleanupProviderEvidence(NOW)).resolves.toMatchObject({ clearedPlaceEvidence: 1 });
   expect(write.mock.calls[0][0].where.cachedEvidenceAt.lte).toEqual(
     new Date(NOW.getTime() - 30 * DAY),
   );

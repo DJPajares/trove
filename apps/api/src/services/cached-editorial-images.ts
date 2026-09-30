@@ -11,6 +11,7 @@ import {
   type EditorialImageResult,
   type UniqueEditorialImageRequest,
 } from './editorial-images.js';
+import { PLACE_CACHE_TTL_MS } from './cached-places.js';
 import { genericEditorialSubject } from './editorial-image-matching.js';
 import { categorizePlaceTypes } from './place-categories.js';
 import {
@@ -58,6 +59,7 @@ type CachedPlaceRow = {
   providerAddress: string | null;
   providerLabel: string | null;
   providerRefs: Array<{
+    cachedAt?: Date | null;
     cachedFormattedAddress: string | null;
     cachedLanguageCode: string | null;
     cachedName: string | null;
@@ -254,7 +256,13 @@ export class CachedEditorialImagesService extends EditorialImagesService {
       const place = byId.get(request.placeIds[0] ?? '');
       if (!place) return [request];
 
-      const reference = place.providerRefs[0];
+      // A snapshot past its stored life is not read, so the Trove-owned label
+      // stands in for it until the place is next re-resolved.
+      const stored = place.providerRefs[0];
+      const reference =
+        stored?.cachedAt && this.now().getTime() - stored.cachedAt.getTime() <= PLACE_CACHE_TTL_MS
+          ? stored
+          : undefined;
       const types = reference?.cachedTypes ?? [];
       const category =
         reference && (types.length > 0 || reference.cachedPrimaryType)

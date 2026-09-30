@@ -178,5 +178,8 @@ function publicItemName(
   if (custom) return custom;
 
   const place = serializeCanonicalPlace(item.tripPlace.place, options);
-  return place.name?.trim() || place.snapshot?.name || place.providerLabel || null;
+  // A stranger's page is not a reason to keep showing a provider's name past its
+  // stored life, so an expired snapshot gives way to the Trove-owned label.
+  const snapshotName = place.snapshot && !place.snapshot.stale ? place.snapshot.name : null;
+  return place.name?.trim() || snapshotName || place.providerLabel || null;
 }

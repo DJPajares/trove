@@ -1662,6 +1662,17 @@
     "exactTimeError": "Choose an exact local time.",
     "localTimeHint": "Time at this stop.",
     "floatingTimeHint": "This is a floating local plan. Trove keeps the entered day and time if its timezone changes.",
+    "dayTimes": {
+      "action": "Suggest times for this day",
+      "title": "Suggest times",
+      "description": "A time for each stop that has none, from what Trove already knows. Nothing changes until you apply.",
+      "loading": "Working out times...",
+      "empty": "Every stop on this day already has a time.",
+      "error": "Times could not be suggested or saved. Try again.",
+      "include": "Use the suggested time for {name}",
+      "apply": "Apply times",
+      "applying": "Applying..."
+    },
     "suggestedTime": {
       "action": "Suggest a time",
       "loading": "Working out a time...",

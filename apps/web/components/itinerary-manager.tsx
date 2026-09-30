@@ -23,6 +23,7 @@ import {
   Settings2,
   Trash2,
   X,
+  Sparkles,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useSearchParams } from 'next/navigation';
@@ -30,6 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 
 import { DatePicker } from '@/components/date-picker';
 import { ItineraryCreateItemSheet } from '@/components/itinerary-create-item-sheet';
+import { ItineraryDayTimeSuggestions } from '@/components/itinerary-day-time-suggestions';
 import { SuggestedTimeAction, useSuggestedTime } from '@/components/itinerary-suggested-time';
 import { PageState } from '@/components/page-state';
 import { ItineraryDayTimeline } from '@/components/itinerary-day-timeline';
@@ -152,6 +154,7 @@ import {
   dailyBasePoints,
   type ItineraryMapPoint,
 } from '@/lib/maps/itinerary-map';
+import { untimedItems } from '@/lib/itinerary/day-time-suggestions';
 import { planningMapLifecycle } from '@/lib/maps/map-retention';
 import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
 import { useInViewOnce } from '@/lib/plan-score/use-in-view-once';
@@ -384,6 +387,7 @@ export function ItineraryManager({
   const [contextDay, setContextDay] = useState<ItineraryDay | null>(null);
   const [dayNameEditor, setDayNameEditor] = useState<ItineraryDay | null>(null);
   const [daySettingsOpen, setDaySettingsOpen] = useState(false);
+  const [dayTimesOpen, setDayTimesOpen] = useState(false);
   const { compact, setCompactItinerary } = useCompactItinerary();
   const [dayNoteValue, setDayNoteValue] = useState('');
   const [dayNameValue, setDayNameValue] = useState('');
@@ -1911,6 +1915,20 @@ export function ItineraryManager({
                           >
                             {dayContextT('title')}
                           </Button>
+                          {online && untimedItems(selectedDay).length > 0 ? (
+                            <Button
+                              className="w-full justify-start px-3"
+                              onClick={() => {
+                                setDaySettingsOpen(false);
+                                setDayTimesOpen(true);
+                              }}
+                              type="button"
+                              variant="ghost"
+                            >
+                              <Sparkles aria-hidden="true" data-icon="inline-start" />
+                              {t('dayTimes.action')}
+                            </Button>
+                          ) : null}
                           <Button
                             className="w-full justify-start px-3"
                             onClick={() => {
@@ -2881,6 +2899,17 @@ export function ItineraryManager({
           ) : null}
         </SheetContent>
       </Sheet>
+
+      {selectedDay ? (
+        <ItineraryDayTimeSuggestions
+          day={selectedDay}
+          itemName={itemName}
+          onApplied={refresh}
+          onOpenChange={setDayTimesOpen}
+          open={dayTimesOpen}
+          tripId={tripId}
+        />
+      ) : null}
 
       {createDay ? (
         <ItineraryCreateItemSheet

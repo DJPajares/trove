@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { describeSuggestedTime } from '@/lib/itinerary/day-time-suggestions';
 import {
   fetchItineraryDayTimeSuggestions,
   type ItineraryDayTimeSuggestion,
@@ -69,27 +70,7 @@ export function useSuggestedTime(tripId: string, onSuggested: (localTime: string
     if (status === 'loading') return t('suggestedTime.loading');
     if (status === 'error') return t('suggestedTime.unavailable');
     if (!suggestion) return '';
-    if (suggestion.status === 'no_feasible_time') return t('suggestedTime.none');
-    if (suggestion.status === 'insufficient_evidence') {
-      // Section 29.4: say it cannot, without itemising what was missing.
-      return t('suggestedTime.unavailable');
-    }
-
-    // The last constraint that actually moved the clock explains the answer
-    // best. The day start is only a floor, and the following-item check
-    // validates the time rather than setting it.
-    const moved = suggestion.reasons.filter(
-      (reason) => reason.code !== 'DAY_START' && reason.code !== 'BEFORE_FIXED_ITEM',
-    );
-    const reason = moved.at(-1);
-    const caveat = suggestion.caveats[0];
-
-    return [
-      reason ? t(`suggestedTime.reason.${reason.code}`) : t('suggestedTime.applied'),
-      caveat ? t(`suggestedTime.caveat.${caveat}`) : null,
-    ]
-      .filter(Boolean)
-      .join(' ');
+    return describeSuggestedTime(suggestion, t);
   }, [status, suggestion, t]);
 
   return { loading: status === 'loading', message, request, reset };

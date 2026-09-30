@@ -25,7 +25,7 @@ function assessment(overrides: Partial<TripPlanScore> = {}): TripPlanScore {
   const explanations = { whatWorks: [], worthImproving: [], uncertainty: [] };
   return {
     schemaVersion: 7,
-    rubricVersion: 8,
+    rubricVersion: 9,
     assessmentStatus: 'provisional',
     assessmentBasis: ['TIMING'],
     limitations: [],

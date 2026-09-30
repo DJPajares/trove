@@ -1,58 +1,73 @@
 'use client';
 
+import { Plus } from 'lucide-react';
 import { useEffect, useSyncExternalStore, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
+import { useRegisterPrimaryAction } from '@/components/primary-action-provider';
 import { useTripChrome } from '@/components/trip-chrome';
+import { Button } from '@/components/ui/button';
 import type { TripMediaSource } from '@/lib/media/trip-media';
 import type { TripSection } from '@/lib/trips/navigation';
-import { cn } from '@/lib/utils';
-import { Card, CardContent } from './ui/card';
 
 export type { TripSection };
 
+/** The one thing a screen makes, such as an expense or a task. */
+export type TripSectionPrimaryAction = {
+  icon?: ReactNode;
+  label: string;
+  onSelect: () => void;
+};
+
 type TripSectionHeaderProps = {
-  /** The screen's own actions, shown above the shared navigation row. */
+  /** Secondary actions, shown on the toolbar's trailing edge at every width. */
   actions?: ReactNode;
   /** A control belonging on the cover itself, such as a trip's rating. */
   coverMeta?: ReactNode;
   /** Overrides the cover the trip would otherwise show, as Memories does. */
   coverSource?: TripMediaSource;
-  currentSection: TripSection;
+  /** Trove's standing guidance for the screen, shown where there is room for it. */
   description?: string;
+  /** The screen's own view control, such as the itinerary's Day and Overview. */
+  leading?: ReactNode;
   /**
-   * Whether `description` is the traveller's own words rather than Trove's
-   * standing guidance. Guidance earns its rows on a wide screen and fewer than
-   * none on a phone; what a traveller wrote about their own trip is worth the
-   * rows everywhere.
+   * The screen's create action. On a phone it is the bottom bar's plus button,
+   * which is already the create action on every screen; with no bottom bar it
+   * is a labelled button at the end of the toolbar.
    */
-  descriptionIsOwnContent?: boolean;
+  primaryAction?: TripSectionPrimaryAction;
 };
 
-/**
- * Whether there is room for standing guidance, matching Tailwind's `sm`.
- *
- * This was a `hidden sm:block` on the paragraph, which hid the words and left
- * the card they sat in - a bordered, padded box with nothing inside it. The
- * breakpoint has to be a real condition rather than a class so the card is
- * never rendered at all, which is also what lets the slot collapse.
- */
+/** Standing guidance earns a line from Tailwind's `sm` up; a phone keeps it for content. */
 const WIDE_ENOUGH_FOR_GUIDANCE = '(min-width: 40rem)';
+/** Tailwind's `md`, where the bottom bar and its plus button give way to the header. */
+const WITHOUT_BOTTOM_BAR = '(min-width: 48rem)';
 
-function subscribeToGuidanceViewport(onChange: () => void) {
-  const query = window.matchMedia(WIDE_ENOUGH_FOR_GUIDANCE);
-  query.addEventListener('change', onChange);
-  return () => query.removeEventListener('change', onChange);
+/**
+ * Whether a media query matches. A real condition rather than a `hidden` class,
+ * because an element hidden by CSS still fills the toolbar and holds its row
+ * open; the server cannot know the viewport, so it guesses the phone.
+ */
+function useMediaQuery(query: string) {
+  return useSyncExternalStore(
+    (onChange) => {
+      const list = window.matchMedia(query);
+      list.addEventListener('change', onChange);
+      return () => list.removeEventListener('change', onChange);
+    },
+    () => window.matchMedia(query).matches,
+    () => false,
+  );
 }
 
 /**
  * The part of a trip's header that belongs to the screen rather than the trip.
  *
- * The cover and the navigation row moved to `TripChrome`, which the section
- * layout mounts once: they are the same on every screen, and re-rendering them
- * per screen is what made the cover flicker and the plan jump. What is left is
- * genuinely per-screen, and it renders into the chrome's slots so the reading
- * order on the page is unchanged — actions above the nav row, guidance below it.
+ * The cover and the navigation row live in `TripChrome`, mounted once by the
+ * section layout. What is per-screen renders into the section toolbar directly
+ * under that navigation: a view control or guidance leading, actions trailing.
+ * Everything a screen puts here sits against the section it acts on, and a
+ * screen with nothing to show there gets no row at all.
  *
  * Rendering nothing in place is deliberate: a screen keeps declaring its header
  * where the header reads in its markup, and the chrome decides where it lands.
@@ -61,20 +76,20 @@ export function TripSectionHeader({
   actions,
   coverMeta,
   coverSource,
-  currentSection,
   description,
-  descriptionIsOwnContent = false,
+  leading,
+  primaryAction,
 }: Readonly<TripSectionHeaderProps>) {
   const chrome = useTripChrome();
   const setCoverSource = chrome?.setCoverSource;
-  const wideEnoughForGuidance = useSyncExternalStore(
-    subscribeToGuidanceViewport,
-    () => window.matchMedia(WIDE_ENOUGH_FOR_GUIDANCE).matches,
-    // The server cannot know the viewport. Guessing narrow matches the mobile
-    // first stylesheet: the card appears on the first client render rather than
-    // flashing away on it.
-    () => false,
-  );
+  const wideEnoughForGuidance = useMediaQuery(WIDE_ENOUGH_FOR_GUIDANCE);
+  const withoutBottomBar = useMediaQuery(WITHOUT_BOTTOM_BAR);
+
+  useRegisterPrimaryAction({
+    enabled: Boolean(primaryAction),
+    label: primaryAction?.label ?? '',
+    onTrigger: () => primaryAction?.onSelect(),
+  });
 
   useEffect(() => {
     if (!setCoverSource) return;
@@ -85,37 +100,39 @@ export function TripSectionHeader({
 
   if (!chrome) return null;
 
-  // Standing guidance is worth its rows on a wide screen and worth fewer than
-  // none on a phone, where it sits between the traveller and their own plan.
-  // Their own description is not guidance, and is worth the rows everywhere.
-  const showsDescription = Boolean(
-    description &&
-    (descriptionIsOwnContent || currentSection !== 'itinerary' || wideEnoughForGuidance),
-  );
+  // A view control is the more useful occupant of the leading edge, so guidance
+  // only takes it when a screen has none - and only where it costs no row.
+  const leadingContent =
+    leading ??
+    (description && wideEnoughForGuidance ? (
+      <p className="line-clamp-2 max-w-(--layout-reading) text-sm leading-[1.5] text-pretty text-muted-foreground">
+        {description}
+      </p>
+    ) : null);
+  const primaryButton =
+    primaryAction && withoutBottomBar ? (
+      <Button onClick={primaryAction.onSelect} type="button">
+        {primaryAction.icon ?? <Plus aria-hidden="true" data-icon="inline-start" />}
+        {primaryAction.label}
+      </Button>
+    ) : null;
+  const trailingContent =
+    actions || primaryButton ? (
+      <>
+        {actions}
+        {primaryButton}
+      </>
+    ) : null;
 
   return (
     <>
-      {actions && chrome.actionsSlot ? createPortal(actions, chrome.actionsSlot) : null}
-      {coverMeta && chrome.coverMetaSlot ? createPortal(coverMeta, chrome.coverMetaSlot) : null}
-      {showsDescription && chrome.descriptionSlot
-        ? createPortal(
-            <Card size="sm" className="bg-transparent">
-              <CardContent>
-                <p
-                  className={cn(
-                    'max-w-(--layout-reading) text-sm leading-[1.55] text-pretty text-muted-foreground',
-                    // A description has no length Trove controls, and this header is
-                    // not where a long one belongs.
-                    descriptionIsOwnContent && 'line-clamp-3 whitespace-pre-line',
-                  )}
-                >
-                  {description}
-                </p>
-              </CardContent>
-            </Card>,
-            chrome.descriptionSlot,
-          )
+      {leadingContent && chrome.leadingSlot
+        ? createPortal(leadingContent, chrome.leadingSlot)
         : null}
+      {trailingContent && chrome.actionsSlot
+        ? createPortal(trailingContent, chrome.actionsSlot)
+        : null}
+      {coverMeta && chrome.coverMetaSlot ? createPortal(coverMeta, chrome.coverMetaSlot) : null}
     </>
   );
 }

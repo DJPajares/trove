@@ -269,14 +269,8 @@ export function TripInfoManager({ tripId }: Readonly<{ tripId: string }>) {
   return (
     <section className="space-y-7">
       <TripSectionHeader
-        actions={
-          <Button onClick={openCreate}>
-            <Plus aria-hidden="true" data-icon="inline-start" />
-            {t('addEntry')}
-          </Button>
-        }
-        currentSection="info"
         description={t('description')}
+        primaryAction={{ label: t('addEntry'), onSelect: openCreate }}
       />
 
       {error ? (

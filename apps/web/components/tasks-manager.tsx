@@ -265,35 +265,20 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
     <section className="space-y-7">
       <TripSectionHeader
         actions={
-          <>
-            <Button
-              nativeButton={false}
-              render={<Link href="/tools/task-templates" />}
-              variant="outline"
-            >
-              <Wrench aria-hidden="true" data-icon="inline-start" />
-              {t('templates')}
-            </Button>
-            <Button onClick={openCreate}>
-              <Plus aria-hidden="true" data-icon="inline-start" />
-              {t('addTask')}
-            </Button>
-          </>
+          <Button
+            nativeButton={false}
+            render={<Link href="/tools/task-templates" />}
+            variant="outline"
+          >
+            <Wrench aria-hidden="true" data-icon="inline-start" />
+            {t('templates')}
+          </Button>
         }
-        currentSection="tasks"
         description={t('description')}
-      />
-
-      {error ? (
-        <Alert role="alert" variant="destructive">
-          <CircleAlert aria-hidden="true" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : null}
-
-      {openTasks.length ? (
-        <EditorialSection
-          actions={
+        // How the open tasks are laid out is the screen's own view control, so
+        // it leads the toolbar the way the itinerary's Day and Overview do.
+        leading={
+          openTasks.length ? (
             <Tabs onValueChange={(value) => changeView(value as TasksView)} value={view}>
               <TabsList aria-label={t('viewNavigation')}>
                 <TabsTab className="gap-2" value="list">
@@ -307,7 +292,20 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
                 <TabsIndicator />
               </TabsList>
             </Tabs>
-          }
+          ) : undefined
+        }
+        primaryAction={{ label: t('addTask'), onSelect: openCreate }}
+      />
+
+      {error ? (
+        <Alert role="alert" variant="destructive">
+          <CircleAlert aria-hidden="true" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {openTasks.length ? (
+        <EditorialSection
           description={t('openDescription', { count: openTasks.length })}
           headerLayout="inline"
           title={t('open')}

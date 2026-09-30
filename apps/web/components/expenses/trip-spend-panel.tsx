@@ -88,9 +88,11 @@ export function TripSpendPanel({
   const percentLabel = new Intl.NumberFormat(locale, { style: 'percent' });
 
   return (
+    // The trip's navigation row already rules off the top of the screen this
+    // opens, so a second line directly beneath it would only stutter.
     <section
       aria-label={t('title', { trip: trip?.name ?? '' })}
-      className="border-y border-border py-5"
+      className="border-b border-border pb-5"
     >
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div className="min-w-0 space-y-1">

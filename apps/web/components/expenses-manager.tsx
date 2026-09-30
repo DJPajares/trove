@@ -251,14 +251,8 @@ export function ExpensesManager({
   return (
     <section className="space-y-7">
       <TripSectionHeader
-        actions={
-          <Button onClick={openCreate}>
-            <Plus aria-hidden="true" data-icon="inline-start" />
-            {t('addExpense')}
-          </Button>
-        }
-        currentSection="expenses"
         description={t('description')}
+        primaryAction={{ label: t('addExpense'), onSelect: openCreate }}
       />
 
       {error ? (

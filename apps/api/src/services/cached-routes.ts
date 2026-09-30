@@ -48,15 +48,28 @@ export class CachedRoutesService extends RoutesService {
       return cached.result;
     }
 
-    return singleFlight(
-      `route:${JSON.stringify(routeCacheKey(request.origin, request.destination, request.mode))}:${Boolean(request.includePolyline)}:${request.languageCode ?? ''}`,
+    // Whether the polyline is asked for does not change what Google bills - the
+    // SKU follows the routing features used - so every purchase includes it. A
+    // leg bought for a list is then already complete the day a map wants it,
+    // rather than being bought a second time.
+    const result = await singleFlight(
+      `route:${JSON.stringify(routeCacheKey(request.origin, request.destination, request.mode))}:${request.languageCode ?? ''}`,
       async () => {
-        const result = await super.computeRoute({ ...request, cacheMissReason: cached.reason });
-        if (result.status === 'ok')
-          await this.writeLeg(request, result.estimate, new Date(result.freshness.fetchedAt));
-        return result;
+        const bought = await super.computeRoute({
+          ...request,
+          cacheMissReason: cached.reason,
+          includePolyline: true,
+        });
+        if (bought.status === 'ok')
+          await this.writeLeg(request, bought.estimate, new Date(bought.freshness.fetchedAt));
+        return bought;
       },
     );
+
+    // Callers get what they asked for: a list never receives the drawn line.
+    return result.status === 'ok' && !request.includePolyline
+      ? { ...result, estimate: { ...result.estimate, encodedPolyline: null } }
+      : result;
   }
 
   private async writeLeg(request: RouteRequest, estimate: RouteEstimate, fetchedAt: Date) {

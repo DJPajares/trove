@@ -16,6 +16,7 @@ import {
   saveSupportingSnapshot,
   setOfflineApiReachable,
 } from '@/lib/offline/trip-store';
+import { offlineLeaveBy } from '@/lib/itinerary/offline-leave-by';
 
 export type ItineraryDayPart = 'afternoon' | 'anytime' | 'evening' | 'morning';
 export type ItineraryPriority = 'interested' | 'maybe' | 'must_go';
@@ -240,6 +241,8 @@ export type TripModeContext = {
   leaveBy: {
     at: string;
     bufferSeconds: number | null;
+    /** Only offline: when the leg behind this was measured, so its age can be shown. */
+    measuredAt?: string | null;
     destinationItemId: string;
     distanceMeters: number | null;
     mode: RouteTravelMode;
@@ -491,6 +494,7 @@ export function travellerItemStart(
 export function offlineTripModeContext(
   itinerary: Itinerary,
   options: TripModeContextRequestOptions,
+  offlineContext?: TripOfflineContext | null,
 ): TripModeContext {
   const requestedAt = options.at ? new Date(options.at) : new Date();
   // The traveller's own clock, exactly as the server uses it, so going offline
@@ -601,7 +605,15 @@ export function offlineTripModeContext(
           number: itinerary.days.findIndex((candidate) => candidate.id === day.id) + 1,
         }
       : null,
-    leaveBy: null,
+    leaveBy: day
+      ? offlineLeaveBy({
+          at: at.getTime(),
+          currentItem: current,
+          legs: offlineContext?.legs ?? [],
+          nextItem: next,
+          targetStart: next ? itemStart(next) : null,
+        })
+      : null,
     leg: resolveOfflineTripModeLeg({
       day,
       nextItemId: next?.id ?? null,
@@ -660,7 +672,7 @@ export async function fetchTripModeContext(
     const auth = await getAuthContext();
     const snapshot = await readTripSnapshot(auth.userId, tripId).catch(() => undefined);
     if (!snapshot?.itinerary) throw error;
-    return offlineTripModeContext(snapshot.itinerary, options);
+    return offlineTripModeContext(snapshot.itinerary, options, snapshot.offlineContext);
   }
 }
 
@@ -1143,12 +1155,38 @@ export async function fetchTripPlaceHours(
   if (options.date) query.set('date', options.date);
   const suffix = query.size ? `?${query.toString()}` : '';
   const auth = await getAuthContext();
+  // Offline, the hours saved when the trip was prepared answer instead. Each
+  // still carries the date it was checked, so its age is never hidden.
+  const fromSnapshot = async (): Promise<TripPlaceHours | null> => {
+    const snapshot = await readTripSnapshot(auth.userId, tripId).catch(() => undefined);
+    const context = snapshot?.offlineContext;
+    if (!context) return null;
+    const hours = options.date ? (context.hours[options.date] ?? {}) : {};
+    return {
+      date: options.date ?? null,
+      generatedAt: context.generatedAt,
+      places: Object.fromEntries(
+        Object.entries(hours).map(([id, status]) => [id, { hours: status }]),
+      ),
+    };
+  };
 
-  return itineraryRequest<TripPlaceHours>(
-    `/trips/${tripId}/place-hours${suffix}`,
-    { signal: options.signal },
-    auth,
-  );
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    const offline = await fromSnapshot();
+    if (offline) return offline;
+    throw new ItineraryApiError('offline_trip_not_prepared', 503);
+  }
+  try {
+    return await itineraryRequest<TripPlaceHours>(
+      `/trips/${tripId}/place-hours${suffix}`,
+      { signal: options.signal },
+      auth,
+    );
+  } catch (error) {
+    const offline = canUseOfflineFallback(error) ? await fromSnapshot() : null;
+    if (offline) return offline;
+    throw error;
+  }
 }
 
 export type DayBetterOrder =
@@ -1187,4 +1225,36 @@ export async function fetchPlaceGroupings(tripId: string, options: { signal?: Ab
     { signal: options.signal },
     auth,
   );
+}
+
+/** Travel between two consecutive stops that a provider measured, kept for offline use. */
+export type OfflineLeg = {
+  destinationItemId: string;
+  distanceMeters: number | null;
+  durationSeconds: number;
+  fetchedAt: string | null;
+  mode: string;
+  originItemId: string;
+};
+
+export type TripOfflineContext = {
+  generatedAt: string;
+  /** Opening hours per day date, per Trip Place, where known. */
+  hours: Record<string, Record<string, PlaceHoursStatus>>;
+  legs: OfflineLeg[];
+};
+
+/**
+ * Stored legs and opening hours for the whole trip, saved into the offline
+ * snapshot. The server reads what it already holds; nothing is acquired.
+ */
+export async function fetchTripOfflineContext(tripId: string) {
+  const auth = await getAuthContext();
+  const context = await itineraryRequest<TripOfflineContext>(
+    `/trips/${tripId}/offline-context`,
+    undefined,
+    auth,
+  );
+  await saveSupportingSnapshot(auth.userId, tripId, 'offlineContext', context);
+  return context;
 }

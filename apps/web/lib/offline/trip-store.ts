@@ -6,6 +6,7 @@ import type {
   ItineraryItemInput,
   ItineraryScheduleInput,
   ItineraryTravelStatus,
+  TripOfflineContext,
 } from '@/lib/itinerary/api';
 import type { Expense, ExpenseInput, ExpensesResponse } from '@/lib/expenses/api';
 import type { MemoriesResponse, Memory, MemoryInput } from '@/lib/memories/api';
@@ -155,7 +156,7 @@ export type OfflineMutationOperation =
   | { kind: 'memory_delete'; memoryId: string };
 
 export type OfflineSupportingSnapshotKey =
-  'expenses' | 'memories' | 'reservations' | 'routes' | 'tasks' | 'tripInfo';
+  'expenses' | 'memories' | 'offlineContext' | 'reservations' | 'routes' | 'tasks' | 'tripInfo';
 
 /**
  * A photo captured offline. The blob is held here rather than in the mutation so
@@ -234,6 +235,8 @@ export type OfflineTripSnapshot = {
   itinerary: Itinerary | null;
   key: string;
   memories: MemoriesResponse | null;
+  /** Stored legs and hours kept for offline Trip Mode; absent on older snapshots. */
+  offlineContext?: TripOfflineContext | null;
   lastPreparationAttemptAt: string | null;
   preparationError: string | null;
   preparedAt: string | null;
@@ -423,6 +426,7 @@ export async function saveItinerarySnapshot(userId: string, tripId: string, itin
     preparationError: current?.preparationError ?? null,
     preparedAt: current?.preparedAt ?? null,
     reservations: current?.reservations ?? null,
+    offlineContext: current?.offlineContext ?? null,
     routes: current?.routes ?? {},
     savedAt: new Date().toISOString(),
     tasks: current?.tasks ?? null,
@@ -454,6 +458,7 @@ export async function saveTripSnapshot(userId: string, trip: Trip) {
     preparationError: current?.preparationError ?? null,
     preparedAt: current?.preparedAt ?? null,
     reservations: current?.reservations ?? null,
+    offlineContext: current?.offlineContext ?? null,
     routes: current?.routes ?? {},
     savedAt: new Date().toISOString(),
     tasks: current?.tasks ?? null,
@@ -479,6 +484,7 @@ export async function saveSupportingSnapshot<Key extends OfflineSupportingSnapsh
     preparationError: current?.preparationError ?? null,
     preparedAt: current?.preparedAt ?? null,
     reservations: current?.reservations ?? null,
+    offlineContext: current?.offlineContext ?? null,
     routes: current?.routes ?? {},
     savedAt: new Date().toISOString(),
     tasks: current?.tasks ?? null,
@@ -596,6 +602,7 @@ export async function recordTripPreparationError(
     preparationError: errorCode,
     preparedAt: current?.preparedAt ?? null,
     reservations: current?.reservations ?? null,
+    offlineContext: current?.offlineContext ?? null,
     routes: current?.routes ?? {},
     savedAt: current?.savedAt ?? new Date().toISOString(),
     tasks: current?.tasks ?? null,

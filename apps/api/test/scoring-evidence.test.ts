@@ -605,3 +605,72 @@ test('place groupings read stored coordinates only', async () => {
   ]);
   expect(outbound).not.toHaveBeenCalled();
 });
+
+test('preparing a trip for offline use keeps stored legs and hours, and buys nothing', async () => {
+  const { getTripOfflineContext } = await import('../src/services/trip-offline-context.js');
+  evidenceRow.cachedEvidence = {
+    ...place,
+    location: { latitude: 1.35, longitude: 103.82 },
+    openingPeriods: [
+      { open: { day: 1, hour: 9, minute: 0 }, close: { day: 1, hour: 18, minute: 0 } },
+    ],
+  };
+  const other = {
+    id: 'tp-2',
+    placeId: 'place-2',
+    priority: null,
+    place: {
+      id: 'place-2',
+      customLatitude: null,
+      customLongitude: null,
+      customName: null,
+      providerRefs: [
+        {
+          provider: 'GOOGLE',
+          externalPlaceId: 'venue-2',
+          cachedAt: NOW,
+          cachedLatitude: decimal(1.01),
+          cachedLongitude: decimal(2.01),
+          cachedName: 'Other',
+        },
+      ],
+    },
+  };
+  trip.tripPlaces.push(other);
+  trip.itineraryDays[0].items = [
+    { ...trip.itineraryDays[0].items[0], id: 'item-1' },
+    {
+      ...trip.itineraryDays[0].items[0],
+      id: 'item-2',
+      position: 1,
+      tripPlace: other,
+      tripPlaceId: 'tp-2',
+    },
+  ];
+  route = {
+    distanceMeters: 1200,
+    durationSeconds: 900,
+    encodedPolyline: null,
+    fetchedAt: new Date(NOW.getTime() - DAY),
+  };
+
+  const context = await getTripOfflineContext('owner', 'trip', { now: NOW });
+
+  expect(context.legs).toStrictEqual([
+    {
+      destinationItemId: 'item-2',
+      distanceMeters: 1200,
+      durationSeconds: 900,
+      fetchedAt: new Date(NOW.getTime() - DAY).toISOString(),
+      mode: 'walk',
+      originItemId: 'item-1',
+    },
+  ]);
+  expect(context.hours['2026-09-28']?.tp).toMatchObject({ status: 'open' });
+  expect(outbound).not.toHaveBeenCalled();
+
+  // Nothing measured is nothing kept; it is never estimated or fetched instead.
+  route = null;
+  expect((await getTripOfflineContext('owner', 'trip', { now: NOW })).legs).toStrictEqual([]);
+  expect(outbound).not.toHaveBeenCalled();
+});

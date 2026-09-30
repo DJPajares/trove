@@ -33,6 +33,8 @@ import { TripWeatherContext } from '@/components/trip-weather-context';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNowTick } from '@/hooks/use-now-tick';
+import { useTripPlaceHours } from '@/lib/trip-places/use-trip-place-hours';
+import { PlaceHoursNote } from '@/components/place-hours-note';
 import { deviceTimeZone, type ItineraryItem } from '@/lib/itinerary/api';
 import { formatDistanceValue } from '@/lib/itinerary/format-distance';
 import { formatItineraryTimeRange } from '@/lib/itinerary/item-timing';
@@ -138,6 +140,8 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   const { isPreview, withPreviewHref } = useTripModePreview();
   const { context, refresh, reservations: loadedReservations, status } = useTripModeData();
   const tripModeTasks = useTripModeTasks();
+  // Stored hours for the day being shown; nothing is bought to fill a gap.
+  const placeHours = useTripPlaceHours(tripId, context?.selectedDate ?? null, Boolean(context));
   const reservations = loadedReservations ?? [];
   const now = useNowTick(!isPreview);
   const currentItem = useMemo(
@@ -365,6 +369,12 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
               <Clock3 aria-hidden="true" className="size-4 shrink-0" />
               {formatSchedule(currentItem)}
             </span>
+            <PlaceHoursNote
+              className="basis-full"
+              status={
+                currentItem.tripPlace ? placeHours[currentItem.tripPlace.id]?.hours : undefined
+              }
+            />
             <ItemWhere item={currentItem} />
           </div>
           <p className="mt-2 text-xs leading-5 text-text-subtle">{t('locationDisclaimer')}</p>
@@ -430,6 +440,10 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
                   <Clock3 aria-hidden="true" className="size-4 shrink-0" />
                   {formatSchedule(nextItem)}
                 </span>
+                <PlaceHoursNote
+                  className="basis-full"
+                  status={nextItem.tripPlace ? placeHours[nextItem.tripPlace.id]?.hours : undefined}
+                />
                 <ItemWhere item={nextItem} />
               </div>
             </div>

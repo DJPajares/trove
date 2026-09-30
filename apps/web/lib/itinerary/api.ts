@@ -1108,3 +1108,45 @@ export async function updateItineraryDayPlanningContext(
     { method: 'PATCH', body: JSON.stringify(context) },
   );
 }
+
+/**
+ * What stored opening hours say about one date. The server derives it from the
+ * bounded evidence cache only, so asking never costs a provider request.
+ */
+export type PlaceHoursStatus =
+  | { status: 'closed'; asOf: string }
+  | {
+      status: 'open';
+      asOf: string;
+      /** Day-local `HH:MM` spans; a span running past midnight closes at `24:00`. */
+      spans: Array<{ close: string; open: string }>;
+      /** The date-specific hours Google published, rather than the weekly pattern. */
+      special: boolean;
+    };
+
+export type TripPlaceSignals = {
+  hours?: PlaceHoursStatus;
+  rating?: { reviewCount: number | null; value: number };
+};
+
+export type TripPlaceHours = {
+  date: string | null;
+  generatedAt: string;
+  places: Record<string, TripPlaceSignals>;
+};
+
+export async function fetchTripPlaceHours(
+  tripId: string,
+  options: { date?: string | null; signal?: AbortSignal } = {},
+) {
+  const query = new URLSearchParams();
+  if (options.date) query.set('date', options.date);
+  const suffix = query.size ? `?${query.toString()}` : '';
+  const auth = await getAuthContext();
+
+  return itineraryRequest<TripPlaceHours>(
+    `/trips/${tripId}/place-hours${suffix}`,
+    { signal: options.signal },
+    auth,
+  );
+}

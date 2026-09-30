@@ -14,6 +14,7 @@ import {
 import { useTranslations } from 'next-intl';
 
 import { ItineraryRouteSegmentRow } from '@/components/itinerary-route-details';
+import { PlaceHoursNote } from '@/components/place-hours-note';
 import { TimelineGroup, TimelineMarker, TimelineRow } from '@/components/timeline-row';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,7 +30,12 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { ItineraryItem, ItineraryRouteSegment, RouteTravelMode } from '@/lib/itinerary/api';
+import type {
+  ItineraryItem,
+  ItineraryRouteSegment,
+  PlaceHoursStatus,
+  RouteTravelMode,
+} from '@/lib/itinerary/api';
 import type { DayTimelineEntry } from '@/lib/itinerary/day-sequence';
 import { formatItineraryTimeRange } from '@/lib/itinerary/item-timing';
 
@@ -66,6 +72,8 @@ export type ItineraryDayTimelineProps = {
   defaultTimeZone: string;
   distanceUnit: 'km' | 'mi';
   entries: DayTimelineEntry[];
+  /** Stored hours for this stop on this day, when Trove has them. */
+  hoursFor?: (item: ItineraryItem) => PlaceHoursStatus | undefined;
   itemCount: number;
   label: string;
   locale: string;
@@ -105,6 +113,7 @@ export function ItineraryDayTimeline({
   defaultTimeZone,
   distanceUnit,
   entries,
+  hoursFor,
   itemCount,
   label,
   locale,
@@ -359,6 +368,7 @@ export function ItineraryDayTimeline({
                   ) : null}
                   {item.customLocation ? <span>{item.customLocation.label}</span> : null}
                 </span>
+                <PlaceHoursNote className="mt-1" status={hoursFor?.(item)} />
                 {item.notes ? <span className="mt-1 block line-clamp-2">{item.notes}</span> : null}
               </>
             }

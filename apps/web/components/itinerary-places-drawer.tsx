@@ -34,13 +34,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useTripPlaceSignals } from '@/hooks/use-trip-place-signals';
 import type { ScheduledPlaceUse } from '@/lib/itinerary/places';
+import type { Coordinate } from '@/lib/maps/haversine';
 import type { TripPlace } from '@/lib/trip-places/api';
 import { resolveTripPlaceName } from '@/lib/trip-places/place-name';
-import { sortTripPlaces, tripPlaceSorts, type TripPlaceSort } from '@/lib/trip-places/sort';
+import { sortTripPlaces } from '@/lib/trip-places/sort';
+import {
+  isDaySort,
+  sortForDay,
+  tripPlaceDaySorts,
+  type TripPlaceDaySort,
+} from '@/lib/trip-places/signals';
 import { useTripPlaces } from '@/lib/trip-places/use-trip-places';
 
 type ItineraryPlacesDrawerProps = {
+  /** The located stops (and base) of the day being planned, for "nearest to this day". */
+  anchors: readonly Coordinate[];
+  /** The day being planned, `YYYY-MM-DD`, so each place can say whether it is open then. */
+  date: string;
   /** Optional custom name for the day currently being planned. */
   dayName: string | null;
   /** 1-based number of the day currently being planned. */
@@ -57,6 +69,8 @@ type ItineraryPlacesDrawerProps = {
  * only while open, so the itinerary does not pay for a collection nobody asked to see.
  */
 export function ItineraryPlacesDrawer({
+  anchors,
+  date,
   dayName,
   dayNumber,
   onAddToDay,
@@ -74,7 +88,8 @@ export function ItineraryPlacesDrawer({
   const [addingId, setAddingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [sort, setSort] = useState<TripPlaceSort>('name');
+  const [sort, setSort] = useState<TripPlaceDaySort>('name');
+  const { distanceOf, hoursOf, signalsFor } = useTripPlaceSignals(tripId, { anchors, date });
 
   const placeName = (tripPlace: TripPlace) =>
     resolveTripPlaceName(tripPlace, {
@@ -83,8 +98,12 @@ export function ItineraryPlacesDrawer({
     });
 
   const sortedPlaces = useMemo(
-    () => sortTripPlaces(places.places, sort, placeName),
-    [places.places, sort, t],
+    () =>
+      isDaySort(sort)
+        ? sortForDay(places.places, sort, placeName, { distanceOf, hoursOf })
+        : sortTripPlaces(places.places, sort, placeName),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [places.places, sort, t, distanceOf, hoursOf],
   );
   const dateFormatter = useMemo(
     () => new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' }),
@@ -137,14 +156,14 @@ export function ItineraryPlacesDrawer({
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm text-muted-foreground">{t('sortLabel')}</span>
               <Select
-                onValueChange={(value) => value && setSort(value as TripPlaceSort)}
+                onValueChange={(value) => value && setSort(value as TripPlaceDaySort)}
                 value={sort}
               >
                 <SelectTrigger aria-label={t('sortBy')} size="sm">
                   <SelectValue>{t(`sort.${sort}`)}</SelectValue>
                 </SelectTrigger>
                 <SelectContent align="end">
-                  {tripPlaceSorts.map((option) => (
+                  {tripPlaceDaySorts.map((option) => (
                     <SelectItem key={option} value={option}>
                       {t(`sort.${option}`)}
                     </SelectItem>
@@ -195,6 +214,7 @@ export function ItineraryPlacesDrawer({
                 }
                 onRemove={setRemovingPlace}
                 placeUse={placeUse}
+                signalsFor={signalsFor}
                 formatUsageDates={(dates) =>
                   listFormatter.format(
                     dates.map((date) => dateFormatter.format(new Date(`${date}T00:00:00Z`))),

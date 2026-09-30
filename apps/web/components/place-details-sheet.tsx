@@ -1,8 +1,9 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, MapPin, XIcon } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
+import { useEffect } from 'react';
 
 import { PlacePhotoCarousel } from '@/components/place-photo-carousel';
 import { Badge } from '@/components/ui/badge';
@@ -66,6 +67,7 @@ export function PlaceDetailsSheet({
   const categoryTranslations = useTranslations('saved');
   const locale = useLocale();
 
+  const queryClient = useQueryClient();
   const richDetails = useQuery({
     queryKey: ['place-rich-details', place.id, locale],
     queryFn: () => fetchRichPlaceDetails(place.id, locale),
@@ -84,6 +86,13 @@ export function PlaceDetailsSheet({
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
+
+  // Opening a place is what stores its hours and rating, so the lists that show
+  // them should now find them.
+  const detailsLoaded = Boolean(richDetails.data);
+  useEffect(() => {
+    if (detailsLoaded) void queryClient.invalidateQueries({ queryKey: ['place-hours'] });
+  }, [detailsLoaded, queryClient]);
   const evidence = richDetails.data;
   const category = place.snapshot?.category;
   const providerAddress = place.snapshot?.address ?? place.providerAddress;

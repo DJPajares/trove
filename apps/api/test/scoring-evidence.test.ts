@@ -470,3 +470,34 @@ test('thin rich hours expire using the independently retained location timezone'
   expect(after?.evidenceAsOf).toBe(before?.evidenceAsOf);
   expect(outbound).not.toHaveBeenCalled();
 });
+
+test('a trip’s place hours and ratings are read from stored evidence, never acquired', async () => {
+  const { getTripPlaceHours } = await import('../src/services/trip-place-hours.js');
+  evidenceRow.cachedEvidence = {
+    ...place,
+    location: { latitude: 1.35, longitude: 103.82 },
+    openingPeriods: [
+      { open: { day: 1, hour: 9, minute: 0 }, close: { day: 1, hour: 18, minute: 0 } },
+    ],
+  };
+
+  const monday = await getTripPlaceHours('owner', 'trip', '2026-09-28', { now: NOW });
+  expect(monday.places.tp).toMatchObject({
+    hours: { spans: [{ close: '18:00', open: '09:00' }], status: 'open' },
+    rating: { reviewCount: 1000, value: 4.7 },
+  });
+
+  const tuesday = await getTripPlaceHours('owner', 'trip', '2026-09-29', { now: NOW });
+  expect(tuesday.places.tp?.hours).toMatchObject({ status: 'closed' });
+
+  // With no date, only the rating is offered.
+  const undated = await getTripPlaceHours('owner', 'trip', null, { now: NOW });
+  expect(undated.places.tp).toStrictEqual({ rating: { reviewCount: 1000, value: 4.7 } });
+
+  // Expired evidence is absent, not refreshed.
+  const expired = await getTripPlaceHours('owner', 'trip', '2026-09-28', {
+    now: new Date(NOW.getTime() + 40 * DAY),
+  });
+  expect(expired.places).toStrictEqual({});
+  expect(outbound).not.toHaveBeenCalled();
+});

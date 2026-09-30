@@ -60,9 +60,11 @@ function backoffKey(externalPlaceId: string, languageCode: string) {
 
 /**
  * The durable half of a provider's answer as the app renders it. Everything
- * here is what Google's terms permit storing for 30 days; the mutable half —
- * rating, review count, opening hours, photos, phone, website — is deliberately
- * absent and is never persisted (PRD 11.4).
+ * here is what Google's terms permit storing for 30 days. The mutable half —
+ * rating, review count, opening hours — is deliberately absent from this shape;
+ * it lives in a separate bounded evidence copy, dated and kept for at most 30
+ * days, that opened details and scoring read (`place-evidence-cache.ts`,
+ * PRD 11.4 and 29.5). Photos, phone and website are never stored.
  */
 export type PlaceSnapshot = {
   address: string | null;

@@ -586,7 +586,7 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
     // unresolvable.
     const name = cleanString(response.displayName?.text) ?? cleanString(response.formattedAddress);
 
-    // Evidence requests deliberately omit display fields. Their absence must
+    // An evidence answer can arrive without a display name. That absence must
     // not discard the hours/rating answer or require a more expensive mask.
     if (!externalPlaceId || (!name && request.detail === 'location')) {
       throw new PlaceProviderError('provider_unavailable');

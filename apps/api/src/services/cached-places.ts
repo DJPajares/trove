@@ -266,8 +266,10 @@ export class CachedPlacesService extends PlacesService {
             longitude: reference.cachedLongitude.toNumber(),
           },
           name: reference.cachedName,
-          // Mutable provider data is never stored, and a `location` request never
-          // asks the provider for it either, so a hit and a miss agree.
+          // A `location` answer never carries hours or a rating: the snapshot does
+          // not hold them and the request does not ask for them, so a hit and a
+          // miss agree. Rich evidence has its own bounded, dated 30-day copy
+          // (`place-evidence-cache.ts`) that only `evidence` requests read.
           openingPeriods: [],
           primaryType: reference.cachedPrimaryType,
           provider: this.providerName,

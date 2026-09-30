@@ -568,11 +568,18 @@ export type PlanScoreRouteEfficiencyInput = {
   /** Stops in planned order, including base endpoints when the day has them. */
   stops: PlanScoreRouteStop[];
   isFeasibleOrder?: (order: readonly string[]) => boolean;
+  /**
+   * What each stop id stands for, in planned order, when the caller wants to act
+   * on the best order rather than only score it. Ignored by the evaluator.
+   */
+  points?: ReadonlyArray<{ id: string; kind: string }>;
 };
 
 export type PlanScoreRouteEfficiencyEvaluation = {
   /** Duration of the best comparable order, or `null` when it cannot be derived. */
   bestMinutes: number | null;
+  /** The stop ids of the best comparable order, when one was found. */
+  bestOrder?: string[];
   factor: PlanScoreFactorResult;
   plannedMinutes: number | null;
 };
@@ -661,6 +668,7 @@ export function evaluateRouteEfficiency(
   }
 
   let best = planned;
+  let bestOrder = plannedOrder;
   let compared = 0;
   let incomplete = false;
   forEachPermutation(
@@ -680,7 +688,10 @@ export function evaluateRouteEfficiency(
       }
       if (!input.isFeasibleOrder || !input.isFeasibleOrder(candidateOrder)) return;
       compared++;
-      if (candidate.total < best.total) best = candidate;
+      if (candidate.total < best.total) {
+        best = candidate;
+        bestOrder = candidateOrder;
+      }
     },
   );
 
@@ -695,6 +706,7 @@ export function evaluateRouteEfficiency(
 
   return {
     bestMinutes: best.total,
+    bestOrder,
     factor: {
       evidence: [...evidence.values()],
       score: band?.score ?? ROUTE_EFFICIENCY_EXCESS_SCORE,

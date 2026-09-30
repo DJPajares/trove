@@ -501,3 +501,107 @@ test('a trip’s place hours and ratings are read from stored evidence, never ac
   expect(expired.places).toStrictEqual({});
   expect(outbound).not.toHaveBeenCalled();
 });
+
+test('a better order is read from stored evidence only, and none is offered without one', async () => {
+  const { getDayBetterOrder } = await import('../src/services/day-better-order.js');
+  // One stop and no stored legs: there is nothing to reorder.
+  await expect(getDayBetterOrder('owner', 'trip', 'day', { now: NOW })).resolves.toStrictEqual({
+    status: 'no_better_order',
+  });
+  expect(outbound).not.toHaveBeenCalled();
+});
+
+test('a zig-zag day gets the order Plan Score compared against, from stored legs only', async () => {
+  const { getDayBetterOrder } = await import('../src/services/day-better-order.js');
+  // Four stops along one street, visited 0 -> 3 km -> 1 km -> 2 km... -> 4 km.
+  const stop = (id: string, km: number) => {
+    const reference = {
+      provider: 'GOOGLE',
+      externalPlaceId: `ext-${id}`,
+      cachedAt: NOW,
+      cachedLatitude: decimal(0),
+      cachedLongitude: decimal(km / 111.32),
+      cachedName: id,
+    };
+    const tripPlace = {
+      id: `tp-${id}`,
+      placeId: `place-${id}`,
+      priority: null,
+      place: {
+        id: `place-${id}`,
+        customLatitude: null,
+        customLongitude: null,
+        customName: null,
+        providerRefs: [reference],
+      },
+    };
+    return { tripPlace, km };
+  };
+  const planned = [stop('a', 0), stop('d', 3), stop('b', 1), stop('c', 2), stop('e', 4)];
+  const template = trip.itineraryDays[0].items[0];
+  trip.tripPlaces = planned.map((entry) => entry.tripPlace);
+  trip.itineraryDays[0].items = planned.map((entry, position) => ({
+    ...template,
+    id: `item-${entry.tripPlace.id}`,
+    tripPlaceId: entry.tripPlace.id,
+    tripPlace: entry.tripPlace,
+    position,
+    localStartTime: null,
+    timeProvenance: null,
+    timeSemantics: null,
+    durationMinutes: 30,
+  }));
+  // Every leg the day asks for is stored: 10 minutes each.
+  route = {
+    distanceMeters: 1000,
+    durationSeconds: 600,
+    encodedPolyline: null,
+    fetchedAt: new Date(NOW.getTime() - DAY),
+  };
+
+  const result = await getDayBetterOrder('owner', 'trip', 'day', { now: NOW });
+
+  expect(result).toMatchObject({ status: 'ok' });
+  expect(result.status === 'ok' && result.order).toStrictEqual([
+    'item-tp-a',
+    'item-tp-b',
+    'item-tp-c',
+    'item-tp-d',
+    'item-tp-e',
+  ]);
+  expect(result.status === 'ok' && result.bestMinutes < result.plannedMinutes).toBe(true);
+  expect(outbound).not.toHaveBeenCalled();
+});
+
+test('place groupings read stored coordinates only', async () => {
+  const { getPlaceGroupings } = await import('../src/services/place-groupings.js');
+  const nearby = {
+    id: 'tp-near',
+    placeId: 'place-near',
+    priority: null,
+    place: {
+      id: 'place-near',
+      customLatitude: null,
+      customLongitude: null,
+      customName: null,
+      providerRefs: [
+        {
+          provider: 'GOOGLE',
+          externalPlaceId: 'near',
+          cachedAt: NOW,
+          cachedLatitude: decimal(1.001),
+          cachedLongitude: decimal(2),
+          cachedName: 'Near',
+        },
+      ],
+    },
+  };
+  trip.tripPlaces.push(nearby);
+
+  const result = await getPlaceGroupings('owner', 'trip', { now: NOW });
+
+  expect(result.groups).toStrictEqual([
+    { addedMinutes: 60, dayId: 'day', tripPlaceIds: ['tp-near'] },
+  ]);
+  expect(outbound).not.toHaveBeenCalled();
+});

@@ -178,6 +178,21 @@ test('only complete routes and feasible alternative orders support avoidable mov
   const result = evaluateRouteEfficiency({ ...input, isFeasibleOrder: () => true });
   expect(result).toMatchObject({ plannedMinutes: 60, bestMinutes: 30, factor: { score: 40 } });
 });
+test('the best order is returned so it can be previewed, with fixed stops in place', () => {
+  const result = evaluateRouteEfficiency({
+    stops: stops(['base', 'c', 'a', 'b']),
+    legs: legs(),
+    isFeasibleOrder: () => true,
+  });
+  expect(result.bestOrder).toStrictEqual(['base', 'a', 'b', 'c']);
+
+  const scheduled = evaluateRouteEfficiency({
+    stops: stops(['base', 'c', 'a', 'b']),
+    legs: legs(),
+    isFeasibleOrder: (order) => order[1] === 'c',
+  });
+  expect(scheduled.bestOrder?.[1]).toBe('c');
+});
 test('planned legs alone cannot establish optimality, even when their coordinates cluster', () => {
   const input = {
     stops: stops(['base', 'a', 'b', 'c']),

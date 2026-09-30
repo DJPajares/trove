@@ -98,6 +98,7 @@ test('trip-scoped keys put the trip id directly after the root', () => {
     queryKeys.itinerary('trip-1'),
     queryKeys.itineraryDayRoutes('trip-1', 'day-1', 'rev', false, undefined),
     queryKeys.memories('trip-1'),
+    queryKeys.placeGroupings('trip-1'),
     queryKeys.placeHours('trip-1', '2026-10-01'),
     queryKeys.planScore('trip-1'),
     queryKeys.reservations('trip-1'),

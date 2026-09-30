@@ -6,6 +6,8 @@ import { createItineraryTimeSuggestionControllers } from '../controllers/itinera
 import { createDayBetterOrderControllers } from '../controllers/day-better-order.js';
 import { createPlaceGroupingsControllers } from '../controllers/place-groupings.js';
 import { createTripOfflineContextControllers } from '../controllers/trip-offline-context.js';
+import { createGapSuggestionsControllers } from '../controllers/gap-suggestions.js';
+import { createPlaceHoursNoticesControllers } from '../controllers/place-hours-notices.js';
 import { createTripPlaceHoursControllers } from '../controllers/trip-place-hours.js';
 import { createTripModeContextControllers } from '../controllers/trip-mode-context.js';
 import { requireAuthenticatedUser } from '../services/request-auth.js';
@@ -20,6 +22,8 @@ export function registerItineraryRoutes(app: FastifyInstance) {
   const betterOrderControllers = createDayBetterOrderControllers();
   const placeGroupingsControllers = createPlaceGroupingsControllers();
   const offlineContextControllers = createTripOfflineContextControllers();
+  const gapSuggestionsControllers = createGapSuggestionsControllers();
+  const hoursNoticesControllers = createPlaceHoursNoticesControllers();
   const authenticated = { preHandler: requireAuthenticatedUser };
   // These reach Google once per place and once per leg of the day.
   const providerBacked = { config: PROVIDER_FANOUT_RATE_LIMIT, ...authenticated };
@@ -47,6 +51,18 @@ export function registerItineraryRoutes(app: FastifyInstance) {
     '/trips/:tripId/offline-context',
     authenticated,
     offlineContextControllers.getTripOfflineContext,
+  );
+  // The traveller's own unplanned places that fit a day's free stretches.
+  app.get(
+    '/trips/:tripId/itinerary/days/:itineraryDayId/gap-suggestions',
+    authenticated,
+    gapSuggestionsControllers.getDayGapSuggestions,
+  );
+  // Special hours and holiday checks for Insights; stored evidence only.
+  app.get(
+    '/trips/:tripId/hours-notices',
+    authenticated,
+    hoursNoticesControllers.getPlaceHoursNotices,
   );
   // Stored coordinates and the itinerary only.
   app.get(

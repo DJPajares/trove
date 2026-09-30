@@ -113,3 +113,49 @@ test('nothing worth saying yields no insights, and natural downtime is not one',
     }),
   ).toEqual([]);
 });
+
+test('stops with special hours or a holiday check are named, on their own day, after rain', () => {
+  const insights = composeInsights({
+    context,
+    hoursNotices: [
+      {
+        date: '2026-10-12',
+        dayId: 'd2',
+        holidayCertainty: 'official',
+        holidayName: 'Sports Day',
+        kind: 'holiday_check',
+        name: 'Tokyo National Museum',
+        tripPlaceId: 'museum',
+      },
+      {
+        asOf: '2026-10-01T00:00:00.000Z',
+        date: '2026-10-13',
+        dayId: 'd3',
+        kind: 'special_hours',
+        name: 'Kinkaku-ji',
+        spans: [{ close: '15:00', open: '10:00' }],
+        tripPlaceId: 'temple',
+      },
+    ],
+    scope: { kind: 'trip' },
+  });
+
+  const hours = insights.filter((insight) => insight.kind === 'hours');
+  expect(
+    hours.map((insight) => [insight.hours?.name, insight.dayNumbers, insight.certainty]),
+  ).toStrictEqual([
+    ['Tokyo National Museum', [2], 'official'],
+    ['Kinkaku-ji', [3], 'published'],
+  ]);
+  // Ahead of the day-wide holiday note, which says less.
+  expect(insights.findIndex((insight) => insight.kind === 'hours')).toBeLessThan(
+    insights.findIndex((insight) => insight.kind === 'holiday'),
+  );
+
+  const dayThree = composeInsights({
+    context,
+    hoursNotices: hours.map((insight) => insight.hours!),
+    scope: { dayId: 'd3', kind: 'day' },
+  });
+  expect(dayThree.filter((insight) => insight.kind === 'hours')).toHaveLength(1);
+});

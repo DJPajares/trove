@@ -1673,6 +1673,21 @@
     "exactTimeError": "Choose an exact local time.",
     "localTimeHint": "Time at this stop.",
     "floatingTimeHint": "This is a floating local plan. Trove keeps the entered day and time if its timezone changes.",
+    "gaps": {
+      "title": "Fill a gap",
+      "free": "Free {start} – {end}",
+      "at": "At {time}",
+      "detour": "{minutes, plural, =0 {On the way} one {# min out of the way} other {# min out of the way}}",
+      "hoursUnknown": "Opening hours not known, so check them.",
+      "add": "Add {name} at {time}",
+      "error": "The place could not be added. Try again.",
+      "reason": {
+        "OPEN_THEN": "Open then",
+        "SUITS_TIME": "Good time for it",
+        "MATCHES_INTEREST": "Matches your interests",
+        "WELL_RATED": "Well rated"
+      }
+    },
     "placeGroups": {
       "title": "Places not on any day yet",
       "description": "Grouped by the day whose stops they are near. Nothing is added until you choose.",
@@ -2868,7 +2883,14 @@
       "official": "Public holiday",
       "expected": "Expected date",
       "estimate": "Estimate",
-      "pattern": "Typical, {from}–{to}"
+      "pattern": "Typical, {from}–{to}",
+      "published": "Published hours"
+    },
+    "hours": {
+      "specialTitle": "{name} has special hours on {date}",
+      "specialBody": "Open {times} that day. Hours checked {checked}.",
+      "holidayTitle": "Check {name}’s hours",
+      "holidayBody": "{date} is {holiday}, and places like this often close or change their hours."
     },
     "rain": {
       "title": "Rain is forecast for an outdoor stop",

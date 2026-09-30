@@ -1258,3 +1258,72 @@ export async function fetchTripOfflineContext(tripId: string) {
   await saveSupportingSnapshot(auth.userId, tripId, 'offlineContext', context);
   return context;
 }
+
+export type GapReason =
+  'MATCHES_INTEREST' | 'NEAR_ROUTE' | 'OPEN_THEN' | 'SUITS_TIME' | 'WELL_RATED';
+
+export type DayGapSuggestions = {
+  generatedAt: string;
+  gaps: Array<{
+    afterItemId: string;
+    beforeItemId: string;
+    endTime: string;
+    startTime: string;
+    suggestions: Array<{
+      detourMinutes: number;
+      hoursUnknown: boolean;
+      reasons: GapReason[];
+      startMinute: number;
+      startTime: string;
+      tripPlaceId: string;
+      visitMinutes: number;
+    }>;
+  }>;
+};
+
+/** The traveller's own unplanned places that fit a day's free stretches. Stored data only. */
+export async function fetchDayGapSuggestions(
+  tripId: string,
+  itineraryDayId: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  const auth = await getAuthContext();
+  return itineraryRequest<DayGapSuggestions>(
+    `/trips/${tripId}/itinerary/days/${itineraryDayId}/gap-suggestions`,
+    { signal: options.signal },
+    auth,
+  );
+}
+
+export type PlaceHoursNotice =
+  | {
+      asOf: string;
+      date: string;
+      dayId: string;
+      kind: 'special_hours';
+      name: string;
+      spans: Array<{ close: string; open: string }>;
+      tripPlaceId: string;
+    }
+  | {
+      date: string;
+      dayId: string;
+      holidayCertainty: 'expected' | 'official';
+      holidayName: string;
+      kind: 'holiday_check';
+      name: string;
+      tripPlaceId: string;
+    };
+
+/** Stops whose hours are worth a word on their day. Stored evidence only. */
+export async function fetchPlaceHoursNotices(
+  tripId: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  const auth = await getAuthContext();
+  return itineraryRequest<{ generatedAt: string; notices: PlaceHoursNotice[] }>(
+    `/trips/${tripId}/hours-notices`,
+    { signal: options.signal },
+    auth,
+  );
+}

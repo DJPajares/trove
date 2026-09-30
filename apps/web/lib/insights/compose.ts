@@ -1,14 +1,18 @@
 import type { PlanScoreExplanation, PlanScoreExplanationGroups, TripContext } from '@trove/types';
 
+import type { PlaceHoursNotice } from '@/lib/itinerary/api';
+
 /**
  * Insights answer "what should the traveller know?", never "how good is the
  * plan?". They come from two places Trove already has: the trip context (public
  * holidays, typical conditions) and the day advisories the Plan Score evaluator
  * computes but never scores.
  */
-export type InsightKind = 'rain' | 'holiday' | 'daylight' | 'walking' | 'continuous' | 'climate';
+export type InsightKind =
+  'rain' | 'hours' | 'holiday' | 'daylight' | 'walking' | 'continuous' | 'climate';
 /** How sure an item is, shown beside it so a pattern never reads as a fact. */
-export type InsightCertainty = 'forecast' | 'official' | 'expected' | 'estimate' | 'pattern';
+export type InsightCertainty =
+  'forecast' | 'official' | 'expected' | 'estimate' | 'pattern' | 'published';
 /** The one practical takeaway a typical month suggests, if any. */
 export type ClimateAdvice = 'indoor' | 'heat' | 'cold' | 'none';
 
@@ -19,6 +23,8 @@ export type Insight = {
   /** 1-based day numbers the item applies to, for trip-wide views. */
   dayNumbers: number[];
   holiday?: { name: string; date: string };
+  /** A named stop whose hours on its day are worth checking. */
+  hours?: PlaceHoursNotice;
   climate?: {
     month: number;
     years: { from: number; to: number };
@@ -43,14 +49,16 @@ const ADVISORY_KINDS: Record<string, InsightKind> = {
 /** Most specific and time-sensitive first; a month's pattern last. */
 const RANK: Record<InsightKind, number> = {
   rain: 0,
-  holiday: 1,
-  daylight: 2,
-  walking: 3,
-  continuous: 4,
-  climate: 5,
+  hours: 1,
+  holiday: 2,
+  daylight: 3,
+  walking: 4,
+  continuous: 5,
+  climate: 6,
 };
 const CERTAINTY: Record<InsightKind, InsightCertainty> = {
   rain: 'forecast',
+  hours: 'published',
   holiday: 'official',
   daylight: 'estimate',
   walking: 'estimate',
@@ -70,6 +78,8 @@ export function composeInsights(input: {
   context: TripContext | null | undefined;
   /** Day-level Plan Score explanations, where a score is available. */
   explanations?: ReadonlyMap<string, PlanScoreExplanationGroups>;
+  /** Stops whose hours are worth a word on their day, read from stored evidence. */
+  hoursNotices?: readonly PlaceHoursNotice[];
   scope: InsightScope;
 }): Insight[] {
   const days = input.context?.days ?? [];
@@ -99,6 +109,18 @@ export function composeInsights(input: {
       dayNumbers: dayNumbers(ids),
       explanation,
     });
+
+  // Named, per stop: the traveller needs to know which place, not only which day.
+  for (const notice of input.hoursNotices ?? []) {
+    if (!inScope(notice.dayId)) continue;
+    insights.push({
+      id: `hours:${notice.dayId}:${notice.tripPlaceId}`,
+      kind: 'hours',
+      certainty: notice.kind === 'special_hours' ? 'published' : notice.holidayCertainty,
+      dayNumbers: dayNumbers([notice.dayId]),
+      hours: notice,
+    });
+  }
 
   for (const holiday of input.context?.holidays ?? []) {
     if (!holiday.dayIds.some(inScope)) continue;

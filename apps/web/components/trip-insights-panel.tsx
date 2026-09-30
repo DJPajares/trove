@@ -3,6 +3,7 @@
 import {
   CalendarDays,
   ChevronDown,
+  Clock3,
   CloudRain,
   Footprints,
   Lightbulb,
@@ -11,7 +12,7 @@ import {
   Timer,
   type LucideIcon,
 } from 'lucide-react';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import { panelSurfaceClass, type PanelSurface } from '@/components/panel-surface';
@@ -21,10 +22,12 @@ import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/
 import type { PlanScoreExplanation } from '@/lib/plan-score/api';
 import type { ScoreAction } from '@/lib/plan-score/presentation';
 import type { Insight, InsightKind } from '@/lib/insights/compose';
+import { formatSuggestedClock } from '@/lib/itinerary/day-time-suggestions';
 import { cn } from '@/lib/utils';
 
 const ICONS: Record<InsightKind, LucideIcon> = {
   rain: CloudRain,
+  hours: Clock3,
   holiday: CalendarDays,
   daylight: Sunset,
   walking: Footprints,
@@ -65,6 +68,7 @@ function InsightItem({
 }) {
   const t = useTranslations('insights');
   const format = useFormatter();
+  const locale = useLocale();
   const { preferences } = usePreferences();
   const Icon = ICONS[insight.kind];
   const unit = preferences.temperatureUnit;
@@ -73,7 +77,28 @@ function InsightItem({
 
   let title: string;
   let body: string;
-  if (insight.kind === 'holiday' && insight.holiday) {
+  const shortDate = (date: string) =>
+    format.dateTime(new Date(`${date}T00:00:00Z`), {
+      day: 'numeric',
+      month: 'short',
+      timeZone: 'UTC',
+      weekday: 'short',
+    });
+  if (insight.kind === 'hours' && insight.hours) {
+    const notice = insight.hours;
+    if (notice.kind === 'special_hours') {
+      const clock = (time: string) =>
+        formatSuggestedClock(time, locale, preferences.timeFormat === '12h');
+      title = t('hours.specialTitle', { date: shortDate(notice.date), name: notice.name });
+      body = t('hours.specialBody', {
+        checked: format.dateTime(new Date(notice.asOf), { day: 'numeric', month: 'short' }),
+        times: notice.spans.map((span) => `${clock(span.open)} – ${clock(span.close)}`).join(', '),
+      });
+    } else {
+      title = t('hours.holidayTitle', { name: notice.name });
+      body = t('hours.holidayBody', { date: shortDate(notice.date), holiday: notice.holidayName });
+    }
+  } else if (insight.kind === 'holiday' && insight.holiday) {
     title = insight.holiday.name;
     body = t('holiday.body', {
       date: format.dateTime(new Date(`${insight.holiday.date}T00:00:00Z`), {

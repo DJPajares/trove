@@ -31,6 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 
 import { DatePicker } from '@/components/date-picker';
 import { ItineraryCreateItemSheet } from '@/components/itinerary-create-item-sheet';
+import { ItineraryGapSuggestions } from '@/components/itinerary-gap-suggestions';
 import { ItineraryPlaceGroups } from '@/components/itinerary-place-groups';
 import { ItineraryBetterOrder } from '@/components/itinerary-better-order';
 import { ItineraryDayTimeSuggestions } from '@/components/itinerary-day-time-suggestions';
@@ -2269,6 +2270,13 @@ export function ItineraryManager({
                         title={t('emptyTitle')}
                       />
                     )}
+                    <ItineraryGapSuggestions
+                      dayId={selectedDay.id}
+                      onAdded={refresh}
+                      placeName={(tripPlace) => placeName(tripPlace) ?? t('providerPlace')}
+                      tripId={tripId}
+                      tripPlaces={itinerary.tripPlaces}
+                    />
                     <ItineraryScoreAndInsights
                       planScoreEnabled={planScoreEnabled}
                       resolveAction={resolveScoreAction}

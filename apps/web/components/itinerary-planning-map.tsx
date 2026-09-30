@@ -18,6 +18,7 @@ import {
   type ItineraryMapPoint,
   viewportPoints,
 } from '@/lib/maps/itinerary-map';
+import { retainWhileSuspended } from '@/lib/maps/map-retention';
 import { routeLineStyle } from '@/lib/maps/route-line-style';
 import { googleMapsCoordinatesHref } from '@/lib/saved/api';
 import { cn } from '@/lib/utils';
@@ -115,14 +116,14 @@ function currentLocationContent() {
 export function ItineraryPlanningMap({
   ariaLabel,
   className,
-  currentLocation = null,
+  currentLocation: liveCurrentLocation = null,
   onAddToDay,
   onClearSelection,
   onSelectPoint,
   onViewItem,
   onViewPlaceDetails,
-  points,
-  routeLines,
+  points: livePoints,
+  routeLines: liveRouteLines,
   selectedPointId,
   suspendUpdates = false,
 }: Readonly<ItineraryPlanningMapProps>) {
@@ -134,6 +135,26 @@ export function ItineraryPlanningMap({
   const markerRefs = useRef(new Map<string, GoogleAdvancedMarkerInstance>());
   const currentLocationMarkerRef = useRef<GoogleAdvancedMarkerInstance | null>(null);
   const polylineRefs = useRef<GooglePolylineInstance[]>([]);
+  // While hidden the map keeps working from what it last showed. Its opening
+  // point and its empty state both come from these, and a hidden map whose day
+  // emptied would otherwise rebuild itself - a second billed load - on return.
+  const lastShownRef = useRef({
+    currentLocation: liveCurrentLocation,
+    points: livePoints,
+    routeLines: liveRouteLines,
+  });
+  if (!suspendUpdates) {
+    lastShownRef.current = {
+      currentLocation: liveCurrentLocation,
+      points: livePoints,
+      routeLines: liveRouteLines,
+    };
+  }
+  const { currentLocation, points, routeLines } = retainWhileSuspended(
+    { currentLocation: liveCurrentLocation, points: livePoints, routeLines: liveRouteLines },
+    suspendUpdates,
+    lastShownRef.current,
+  );
   const onClearSelectionRef = useRef(onClearSelection);
   const onSelectPointRef = useRef(onSelectPoint);
   const selectedPointIdRef = useRef(selectedPointId);

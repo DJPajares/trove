@@ -152,6 +152,7 @@ import {
   dailyBasePoints,
   type ItineraryMapPoint,
 } from '@/lib/maps/itinerary-map';
+import { planningMapLifecycle } from '@/lib/maps/map-retention';
 import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
 import { useInViewOnce } from '@/lib/plan-score/use-in-view-once';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
@@ -427,9 +428,18 @@ export function ItineraryManager({
   const [savingRouteOwner, setSavingRouteOwner] = useState<string | null>(null);
   const [placesDrawerOpen, setPlacesDrawerOpen] = useState(false);
   const desktopMapLayout = useDesktopMapLayout();
-  const planningMapVisible =
-    activeView === 'day' && (desktopMapLayout === true || mobileView === 'map');
-  const shouldMountPlanningMap = activeView === 'day' && (planningMapVisible || planningMapMounted);
+  // A map that has been built is kept, hidden, while Overview is showing, so
+  // coming back to the day does not build (and pay for) another one.
+  const {
+    mount: shouldMountPlanningMap,
+    renderDayView,
+    visible: planningMapVisible,
+  } = planningMapLifecycle({
+    activeView,
+    desktopMapLayout,
+    mobileView,
+    mounted: planningMapMounted,
+  });
 
   // Desktop opens the map immediately. Remember that construction so resizing
   // to the mobile list does not discard a map the user has already paid to load.
@@ -1659,7 +1669,9 @@ export function ItineraryManager({
   }
 
   return (
-    <section className="space-y-7">
+    // `gap` rather than `space-y`: the Day view can sit in a `contents` wrapper,
+    // and its children still need to be spaced as this section's own.
+    <section className="flex flex-col gap-7">
       <TripSectionHeader
         actions={
           <Button onClick={() => setPlacesDrawerOpen(true)} variant="outline">
@@ -1703,8 +1715,9 @@ export function ItineraryManager({
           timeFormat={preferences.timeFormat}
           weather={weather}
         />
-      ) : (
-        <>
+      ) : null}
+      {renderDayView ? (
+        <div className={activeView === 'day' ? 'contents' : 'hidden'}>
           {/* The bridge keeps the two mobile sticky rows visually contiguous. The
               tab row sits one layer above it so its active underline remains crisp
               while scrolling content stays covered. */}
@@ -2257,8 +2270,8 @@ export function ItineraryManager({
               </div>
             ) : null}
           </div>
-        </>
-      )}
+        </div>
+      ) : null}
 
       {activeView === 'overview' ? (
         <ItineraryScoreAndInsights

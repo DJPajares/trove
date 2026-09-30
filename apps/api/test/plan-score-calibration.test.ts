@@ -245,13 +245,15 @@ test('custom/unrated venues and mismatched interests remain unknown rather than 
   expect(interestsForPlaceTypes(['art_gallery'])).toEqual(['art_museums']);
   expect(interestsForPlaceTypes(['hiking_area'])).toEqual(['nature_scenery', 'outdoor_activities']);
 });
-test('ratings alone support only a fifth of experience coverage, not interest fit or timing', () => {
+test('ratings alone support only their own share of experience coverage, not interest fit or timing', () => {
+  // An untimed visit with no stated length: only its public rating is known.
   const result = assess({
+    items: [visit('museum', { start: null, fixed: false, duration: null })],
     preferences: { pace: 'balanced', interests: [], unmatchedInterests: [] },
   });
   expect(toOutcome(result.input.factors.EXPERIENCE_QUALITY!)).toMatchObject({
     score: 100,
-    coverage: 20,
+    coverage: 15,
   });
 });
 test('a well-evidenced day publishes experience and composition, not only the core factors', () => {
@@ -356,7 +358,8 @@ test('daylight is calculated locally and polar conditions remain unknown', () =>
       },
     ],
   });
-  expect(daylightVisit.seasonalFit.state).toBe('NOT_APPLICABLE');
+  // Without a cached typical-conditions norm, seasonal fit is unknown, not a guess.
+  expect(daylightVisit.seasonalFit.state).toBe('UNKNOWN');
 });
 test('overnight journeys occupy both local days and preserve timezone changes', () => {
   const bookings = [

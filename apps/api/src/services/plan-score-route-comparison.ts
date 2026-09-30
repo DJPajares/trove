@@ -37,12 +37,14 @@ export function haversineKm(a: Coordinates, b: Coordinates) {
  *
  * `undefined` when the comparison cannot be made honestly: a long-distance
  * leg, a gap in the chain, an unrouted leg, or a stop with no known location.
+ * `NOT_APPLICABLE` when the stops sit so close together that no order is worth
+ * comparing.
  */
 export function estimatedRouteComparison(input: {
   segments: ItineraryDayRoutes['segments'];
   items: readonly PlanScoreDayItem[];
   locate: (point: ChainPoint) => Coordinates | null;
-}): PlanScoreRouteEfficiencyInput | undefined {
+}): PlanScoreRouteEfficiencyInput | 'NOT_APPLICABLE' | undefined {
   let segments = [...input.segments];
   // A day-one starting location is not a place Trove stores coordinates for.
   // Its leg is dropped rather than letting it void the whole comparison.
@@ -76,7 +78,7 @@ export function estimatedRouteComparison(input: {
   let plannedKm = 0;
   for (let index = 1; index < coordinates.length; index++)
     plannedKm += haversineKm(coordinates[index - 1]!, coordinates[index]!);
-  if (plannedKm < MINIMUM_PLANNED_KM || plannedMinutes <= 0) return undefined;
+  if (plannedKm < MINIMUM_PLANNED_KM || plannedMinutes <= 0) return 'NOT_APPLICABLE';
   const minutesPerKm = plannedMinutes / plannedKm;
 
   const items = new Map(input.items.map((item) => [item.id, item]));

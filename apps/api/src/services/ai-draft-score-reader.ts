@@ -3,12 +3,16 @@ import { planningPreferencesFromAi, type AiPlannerDraft } from '@trove/types';
 import { draftDayStay, draftPlanScoreInputRevision } from './ai-planning-plan-score.js';
 import {
   buildPlanScoreFromEvaluations,
+  destinationContextByDay,
   loadPlaceEvidence,
   mergeScoringPlaceIdentity,
   loadScoringForecasts,
   placeHoursDeadlines,
   discardExpiredCurrentHours,
 } from './plan-score.js';
+import { estimateLegMinutes, legCalibration } from './plan-score-estimates.js';
+import { haversineKm } from './plan-score-route-comparison.js';
+import { draftTripContext } from './trip-context.js';
 import { evaluateScoredDay, type ScoringRouteSegment } from './plan-score-evaluation.js';
 import { normalizeScoringItems, dayOrigin } from './plan-score-normalization.js';
 import { toDayEvidenceItems } from './itinerary-day-evidence.js';
@@ -97,6 +101,53 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, clock: Date | ((
     items: day.items.map((i) => ({ tripPlaceId: i.placeRefId, blockType: i.blockType })),
   }));
   const forecast = await loadScoringForecasts(records, evidence.places, now);
+  // Countries are left to each day's zone here, so a draft's score depends only
+  // on the draft; climate is read from the cache and never fetched.
+  const destination = destinationContextByDay(await draftTripContext(draft, [], now));
+  const legsOf = (day: (typeof draft.days)[number]) => {
+    const stay = draftDayStay(day);
+    const points = [
+      ...(stay.start ? [{ id: `base-start:${day.date}`, placeId: stay.start }] : []),
+      ...day.items.map((i) => ({ id: i.id, placeId: i.placeRefId })),
+      ...(stay.end ? [{ id: `base-return:${day.date}`, placeId: stay.end }] : []),
+    ];
+    return points.slice(1).map((b, index) => {
+      const a = points[index]!;
+      return {
+        a,
+        b,
+        origin: a.placeId ? (evidence.places.get(a.placeId)?.coordinates ?? null) : null,
+        destination: b.placeId ? (evidence.places.get(b.placeId)?.coordinates ?? null) : null,
+      };
+    });
+  };
+  const cachedLeg = (
+    origin: { latitude: number; longitude: number },
+    destination: { latitude: number; longitude: number },
+  ) => {
+    const key = JSON.stringify(routeCacheKey(origin, destination, 'drive'));
+    if (!routeMemo.has(key))
+      routeMemo.set(
+        key,
+        readCachedRoute({ origin, destination, mode: 'drive', includePolyline: false }, now),
+      );
+    return routeMemo.get(key)!;
+  };
+  // The draft's own routed legs scale every estimate, as they do for a trip.
+  const samples: Array<{ mode: string; km: number; minutes: number }> = [];
+  for (const day of draft.days)
+    for (const { origin, destination: end } of legsOf(day)) {
+      if (!origin || !end) continue;
+      if (origin.latitude === end.latitude && origin.longitude === end.longitude) continue;
+      const cached = await cachedLeg(origin, end);
+      if (cached.kind === 'hit' && cached.result.status === 'ok')
+        samples.push({
+          mode: 'drive',
+          km: haversineKm(origin, end),
+          minutes: cached.result.estimate.durationSeconds / 60,
+        });
+    }
+  const calibration = legCalibration(samples);
   const days = [];
   for (const day of draft.days) {
     const zone =
@@ -104,18 +155,8 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, clock: Date | ((
       day.items.map((i) => (i.placeRefId ? zones.get(i.placeRefId) : null)).find(Boolean) ??
       draft.trip.destinations.map((d) => zones.get(d.placeRefId)).find(Boolean) ??
       'UTC';
-    const stay = draftDayStay(day);
-    const points = [
-      ...(stay.start ? [{ id: `base-start:${day.date}`, placeId: stay.start }] : []),
-      ...day.items.map((i) => ({ id: i.id, placeId: i.placeRefId })),
-      ...(stay.end ? [{ id: `base-return:${day.date}`, placeId: stay.end }] : []),
-    ];
     const segments: ScoringRouteSegment[] = [];
-    for (let i = 1; i < points.length; i++) {
-      const a = points[i - 1]!,
-        b = points[i]!;
-      const origin = a.placeId ? evidence.places.get(a.placeId)?.coordinates : null;
-      const destination = b.placeId ? evidence.places.get(b.placeId)?.coordinates : null;
+    for (const { a, b, origin, destination } of legsOf(day)) {
       const segment: ScoringRouteSegment = {
         id: `${a.id}:${b.id}`,
         itemIds: [a.id, b.id],
@@ -136,13 +177,7 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, clock: Date | ((
           });
           continue;
         }
-        const key = JSON.stringify(routeCacheKey(origin, destination, 'drive'));
-        if (!routeMemo.has(key))
-          routeMemo.set(
-            key,
-            readCachedRoute({ origin, destination, mode: 'drive', includePolyline: false }, now),
-          );
-        const cached = await routeMemo.get(key)!;
+        const cached = await cachedLeg(origin, destination);
         if (cached.kind === 'hit' && cached.result.status === 'ok') {
           routeTimes.push(cached.result.freshness.fetchedAt);
           routeDeadlines.push(
@@ -156,6 +191,16 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, clock: Date | ((
               source: 'CACHED_PROVIDER',
             },
             distanceMeters: cached.result.estimate.distanceMeters,
+          });
+          continue;
+        }
+        const minutes = estimateLegMinutes(origin, destination, 'drive', calibration);
+        if (minutes !== null) {
+          segments.push({
+            ...segment,
+            status: 'KNOWN',
+            duration: { minutes, source: 'ESTIMATED' },
+            distanceMeters: null,
           });
           continue;
         }
@@ -199,9 +244,11 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, clock: Date | ((
         inboundTravel: inbound?.status === 'KNOWN' ? inbound.duration : null,
       };
     });
+    const holiday = destination.holidays.get(day.date) ?? null;
     const items = normalizeScoringItems(day.date, zone, raw, {
       zones: new Map(record.items.map((i) => [i.id, i.timeZone])),
       hours: evidence.hours,
+      holiday: holiday !== null,
     });
     days.push({
       date: day.date,
@@ -223,6 +270,8 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, clock: Date | ((
           draft.assumptions.some((a) => a.code === 'interest_inferred'),
         ),
         forecasts: forecast.forecasts.filter((f) => f.date === day.date),
+        holiday,
+        climate: destination.climate.get(day.date) ?? null,
       }),
     });
   }
@@ -266,6 +315,10 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, clock: Date | ((
       tripPlaceIds: draft.places.map((p) => p.id),
     });
     score.presentation.revisions.planning = score.sourceInputRevision;
+    score.presentation.revisions.destinationContext = scoringInputRevision({
+      holidays: [...destination.holidays],
+      climate: [...destination.climate],
+    });
     score.presentation.revisions.evidence = scoringInputRevision({
       places: [...evidence.places],
       hours: [...evidence.hours],

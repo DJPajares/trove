@@ -52,6 +52,13 @@ const locate = (point: Point) => places[point.id] ?? null;
 
 function compare(points: Point[], items: PlanScoreDayItem[], scope?: 'local' | 'long_distance') {
   const comparison = estimatedRouteComparison({ segments: chain(points, scope), items, locate });
+  // The day evaluator treats a comparison with nothing to compare as not applicable.
+  if (comparison === 'NOT_APPLICABLE')
+    return {
+      factor: { state: 'NOT_APPLICABLE' as const },
+      bestMinutes: null,
+      plannedMinutes: null,
+    };
   return comparison ? evaluateRouteEfficiency(comparison) : undefined;
 }
 
@@ -81,8 +88,8 @@ test('booked stops and stops at a chosen time keep their place', () => {
     flexible('near', { start: { minutes: 600, source: 'USER_OWNED' } }),
     flexible('far'),
   ];
-  // Only one stop may move, so there is no other order to compare with.
-  expect(compare([stay, ...stops.map(item), stay], anchored)?.factor.state).toBe('UNKNOWN');
+  // Only one stop may move, so there is no other order: the comparison does not apply.
+  expect(compare([stay, ...stops.map(item), stay], anchored)?.factor.state).toBe('NOT_APPLICABLE');
   // An estimated time moves with its stop.
   const estimated = [
     flexible('mid', { start: { minutes: 600, source: 'ESTIMATED' } }),
@@ -100,6 +107,20 @@ test('without a stay the first and last stops hold the ends', () => {
     [...allFlexible, flexible('stay')],
   );
   expect(result?.factor.state).toBe('EVALUATED');
+});
+
+test('stops within a few hundred metres have no order worth comparing', () => {
+  const close = { stay: at(0), a: at(0.1), b: at(0.15), c: at(0.05) } as Record<
+    string,
+    ReturnType<typeof at>
+  >;
+  expect(
+    estimatedRouteComparison({
+      segments: chain([stay, item('a'), item('b'), item('c'), stay]),
+      items: ['a', 'b', 'c'].map((id) => flexible(id)),
+      locate: (point) => close[point.id] ?? null,
+    }),
+  ).toBe('NOT_APPLICABLE');
 });
 
 test('an unknown location, a gap or a long-distance leg makes no comparison at all', () => {
@@ -134,5 +155,5 @@ test('a day-one starting location Trove cannot locate is trimmed, not fatal', ()
     items: allFlexible,
     locate,
   });
-  expect(comparison?.stops).toHaveLength(4);
+  expect(comparison !== 'NOT_APPLICABLE' && comparison?.stops).toHaveLength(4);
 });

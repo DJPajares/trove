@@ -7,6 +7,7 @@ import {
   compareScores,
   currentAssessment,
   dayActionLink,
+  isEstimatedOutcome,
   prioritizedProblems,
   scoreSnapshot,
 } from '../lib/plan-score/presentation';
@@ -25,7 +26,7 @@ function assessment(overrides: Partial<TripPlanScore> = {}): TripPlanScore {
   const explanations = { whatWorks: [], worthImproving: [], uncertainty: [] };
   return {
     schemaVersion: 7,
-    rubricVersion: 9,
+    rubricVersion: 10,
     assessmentStatus: 'provisional',
     assessmentBasis: ['TIMING'],
     limitations: [],
@@ -452,9 +453,24 @@ test('one concise basis prioritizes unknown required travel and uses stable v7 c
     'basis.activityLoad',
   );
   expect(assessmentBasisKey(assessment({ assessmentBasis: ['REST'] }))).toBe('basis.rest');
+  expect(assessmentBasisKey(assessment({ limitations: ['TRAVEL_TIME_ESTIMATED'] }))).toBe(
+    'basis.travelEstimated',
+  );
   expect(
     currentAssessment({ ...assessment(), schemaVersion: 6, rubricVersion: 6 } as never, NOW),
   ).toBe(false);
+});
+
+test('a published category is marked estimated when partial or mostly estimated', () => {
+  const outcome = (coverage: number, confidence: number) =>
+    ({ state: 'EVALUATED', score: 90, coverage, confidence }) as const;
+  // Complete, mostly owned or routed evidence reads as a plain number.
+  expect(isEstimatedOutcome(outcome(100, 80))).toBe(false);
+  // Complete but mostly estimated (AI times, distance-estimated legs).
+  expect(isEstimatedOutcome(outcome(100, 50))).toBe(true);
+  // Reliable where known, but only partly assessed.
+  expect(isEstimatedOutcome(outcome(60, 60))).toBe(true);
+  expect(isEstimatedOutcome(outcome(0, 0))).toBe(true);
 });
 
 test('verdict bands follow the published thresholds at every boundary', async () => {

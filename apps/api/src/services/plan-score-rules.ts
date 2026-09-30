@@ -24,10 +24,19 @@ export type {
 export const PLAN_SCORE_CONTRACT_VERSION = 7;
 /**
  * The judgement a stored score was made under. It moves on a calibration
- * change (8: the estimated reorder comparison) while the response shape, the
- * contract version, stays put; either change invalidates every stored score.
+ * change (8: the estimated reorder comparison; 10: itinerary-native estimates,
+ * destination context and the coverage-only row gate) while the response
+ * shape, the contract version, stays put; either change invalidates every
+ * stored score.
  */
-export const PLAN_SCORE_RUBRIC_VERSION = 9;
+export const PLAN_SCORE_RUBRIC_VERSION = 10;
+/**
+ * A category or component publishes its number once this share of its weight
+ * is assessed from known or estimated evidence. Below it the number would rest
+ * on one minor signal. Reliability qualifies a published number; it no longer
+ * hides one (PRD section 29.2).
+ */
+export const PLAN_SCORE_PUBLISH_COVERAGE = 40;
 export const DAY_FACTOR_IDS = [
   'FEASIBILITY',
   'ROUTE_EFFICIENCY',
@@ -191,7 +200,7 @@ function rounded(internal: PlanScoreFactorOutcome): PlanScoreFactorOutcome {
     internal.state === 'EVALUATED'
       ? { ...internal, confidence: (internal.confidence * internal.coverage) / 100 }
       : internal;
-  if (outcome.state === 'EVALUATED' && (outcome.coverage < 60 || outcome.confidence < 50))
+  if (outcome.state === 'EVALUATED' && outcome.coverage < PLAN_SCORE_PUBLISH_COVERAGE)
     return {
       state: 'LIMITED',
       coverage: Math.round(outcome.coverage),

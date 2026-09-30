@@ -15,11 +15,19 @@ import { formatDateOnly } from './trip-rules.js';
  * What a traveller should know about when and where a trip happens, for
  * Insights. Places are located only from what Trove already stores, so the one
  * provider this reaches is the climate archive, and only on a cache miss.
+ * Plan Score reads the same context with `allowFetch: false`, so both place
+ * each day identically and scoring never reaches a provider.
  */
 export async function readTripContext(
   userId: string,
   tripId: string,
-  options: { fetcher?: ClimateOptions['fetcher']; languageCode?: string; now?: Date } = {},
+  options: {
+    fetcher?: ClimateOptions['fetcher'];
+    languageCode?: string;
+    now?: Date;
+    allowFetch?: boolean;
+    source?: ClimateOptions['source'];
+  } = {},
 ): Promise<TripContext> {
   const now = options.now ?? new Date();
   const trip = await getPrismaClient().trip.findFirst({
@@ -84,10 +92,10 @@ export async function readTripContext(
       language: normalizePlaceLanguageCode(options.languageCode),
     }),
     climate: await tripClimate(days, {
-      allowFetch: true,
+      allowFetch: options.allowFetch ?? true,
       fetcher: options.fetcher,
       now,
-      source: 'trip-context',
+      source: options.source ?? 'trip-context',
     }),
   };
 }

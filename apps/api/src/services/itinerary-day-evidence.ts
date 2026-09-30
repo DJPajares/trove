@@ -95,6 +95,13 @@ export function inboundTravelMinutes(routes: ItineraryDayRoutes | undefined, ite
   return segment.durationSeconds / 60;
 }
 
+/** Routed legs are cached provider evidence, estimated legs are estimates, and zero-length legs are owned. */
+function inboundTravelSource(routes: ItineraryDayRoutes | undefined, itemId: string) {
+  const segment = routes?.segments.find((entry) => entry.destination.id === itemId);
+  if (segment?.estimated) return 'ESTIMATED' as const;
+  return segment?.evidenceAsOf ? ('CACHED_PROVIDER' as const) : ('USER_OWNED' as const);
+}
+
 /**
  * A flight whose departure and arrival fall on the same local day occupies that
  * day the way a reservation does. PRD section 29.1 treats a long-distance
@@ -166,10 +173,7 @@ export function toDayEvidenceItems(
           ? null
           : {
               minutes: travelMinutes,
-              source: routes?.segments.find((segment) => segment.destination.id === item.id)
-                ?.evidenceAsOf
-                ? 'CACHED_PROVIDER'
-                : 'USER_OWNED',
+              source: inboundTravelSource(routes, item.id),
             },
       openingHours,
       start:

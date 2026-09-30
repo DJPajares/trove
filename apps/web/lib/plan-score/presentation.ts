@@ -1,4 +1,4 @@
-import type { PlanScoreExplanation, TripPlanScore } from '@trove/types';
+import type { PlanScoreExplanation, PlanScoreFactorOutcome, TripPlanScore } from '@trove/types';
 
 export const DAILY_CATEGORIES = [
   'FEASIBILITY',
@@ -14,11 +14,23 @@ export const TRIP_COMPONENTS = [
   'SEASONAL_FIT',
 ] as const;
 
+/**
+ * A published category number rests partly on estimates when its evidence is
+ * incomplete or mostly estimated (PRD 29.2). The payload's confidence is
+ * reliability already scaled by coverage, so reliability is recovered from both.
+ */
+export function isEstimatedOutcome(
+  outcome: Extract<PlanScoreFactorOutcome, { state: 'EVALUATED' }>,
+): boolean {
+  const reliability = outcome.coverage > 0 ? (100 * outcome.confidence) / outcome.coverage : 0;
+  return outcome.coverage < 80 || reliability < 75;
+}
+
 export function currentAssessment(
   score: TripPlanScore | null | undefined,
   now = Date.now(),
 ): boolean {
-  if (!score || score.schemaVersion !== 7 || score.rubricVersion !== 9) return false;
+  if (!score || score.schemaVersion !== 7 || score.rubricVersion !== 10) return false;
   if (score.evidenceAsOf === null) return false;
   const generated = Date.parse(score.generatedAt);
   const evidence = score.evidenceAsOf ? Date.parse(score.evidenceAsOf) : null;
@@ -242,6 +254,13 @@ export function hasUnsyncedScoringEdits(operations: readonly { kind: string }[])
 export function assessmentBasisKey(
   assessment: Pick<TripPlanScore, 'assessmentBasis' | 'limitations'>,
 ) {
+  const durations = assessment.limitations.includes('DURATION_ESTIMATED');
+  const travel = assessment.limitations.includes('TRAVEL_TIME_ESTIMATED');
+  if (!assessment.limitations.includes('TRAVEL_TIME_UNKNOWN')) {
+    if (durations && travel) return 'basis.durationsAndTravelEstimated';
+    if (durations) return 'basis.durationsEstimated';
+    if (travel) return 'basis.travelEstimated';
+  }
   if (assessment.limitations.includes('TRAVEL_TIME_UNKNOWN'))
     return assessment.assessmentBasis.some(
       (basis) => basis === 'TIMING' || basis === 'ACTIVITY_LOAD',

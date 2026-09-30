@@ -36,6 +36,8 @@ export type ItineraryRouteSegment = {
   /** Original provider fetch time, including transient or permitted route reuse. */
   evidenceAsOf?: string;
   evidenceExpiresAt?: string;
+  /** Plan Score only: a duration estimated from straight-line distance, never routed. */
+  estimated?: boolean;
   id: string;
   mode: RouteTravelMode;
   modeOwner: { id: string; kind: 'day_start' | 'item_departure' };

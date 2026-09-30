@@ -230,17 +230,21 @@ test('thin supported signals contribute in proportion to coverage, without treat
   ).toMatchObject({ score: 40, coverage: 50 });
 });
 
-test('category numbers require unrounded support and reliability thresholds', () => {
+test('category numbers publish from unrounded coverage; reliability qualifies rather than hides them', () => {
   const input = day();
-  input.factors.EXPERIENCE_QUALITY = evaluated(100, 59.99);
+  input.factors.EXPERIENCE_QUALITY = evaluated(100, 39.99);
+  input.factors.ROUTE_EFFICIENCY = evaluated(100, 40);
   input.factors.PLAN_COMPOSITION = {
     ...evaluated(100),
     confidence: 49.99,
   } as PlanScoreFactorResult;
   const result = scoreDay(input);
   expect(result.factors.EXPERIENCE_QUALITY.state).toBe('LIMITED');
-  expect(result.factors.PLAN_COMPOSITION.state).toBe('LIMITED');
   expect(result.factors.EXPERIENCE_QUALITY).not.toHaveProperty('score');
+  expect(result.factors.ROUTE_EFFICIENCY).toMatchObject({ state: 'EVALUATED', coverage: 40 });
+  // Low reliability no longer hides a fully covered category; it is published
+  // with its confidence so the traveller sees it as an estimate.
+  expect(result.factors.PLAN_COMPOSITION).toMatchObject({ state: 'EVALUATED', score: 100 });
   expect(result.score).toBe(100);
 });
 

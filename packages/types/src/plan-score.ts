@@ -16,7 +16,9 @@ export type PlanScoreLimitation =
   | 'LOAD_INCOMPLETE'
   | 'TIMING_UNKNOWN'
   | 'VENUE_EVIDENCE_INCOMPLETE'
-  | 'UNASSESSED_DAYS';
+  | 'UNASSESSED_DAYS'
+  /** Some stops have no location, time or duration yet; they count low until they do. */
+  | 'DETAIL_MISSING';
 export type PlanScoreFactorOutcome =
   | { confidence: number; coverage: number; score: number; state: 'EVALUATED' }
   | { confidence: number; coverage: number; state: 'LIMITED' }
@@ -75,7 +77,8 @@ export type PlanScoreSuggestedAction =
   | 'REDUCE_LOAD'
   | 'REVIEW_TIMING'
   | 'LINK_PLACE'
-  | 'EDIT_TRANSFER';
+  | 'EDIT_TRANSFER'
+  | 'ADD_TIMING';
 export type PlanScoreExplanation = {
   action: PlanScoreSuggestedAction | null;
   factor: PlanScoreExplanationFactor;
@@ -97,8 +100,8 @@ export type TripPlanScoreDay = PlanScoreDayPayload & {
 export type PlanScoreReferenceTarget =
   { kind: 'item'; dayId: string | null } | { kind: 'reservation' } | { kind: 'trip_place' };
 export type TripPlanScore = Omit<PlanScoreTripPayload, 'days'> & {
-  schemaVersion: 7;
-  rubricVersion: 10;
+  schemaVersion: 8;
+  rubricVersion: 11;
   days: TripPlanScoreDay[];
   explanations: PlanScoreExplanationGroups;
   fingerprint: string;

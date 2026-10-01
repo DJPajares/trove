@@ -35,10 +35,15 @@ export function haversineKm(a: Coordinates, b: Coordinates) {
  * the first and last stops when there is none - and so does any stop with a
  * booking or a time the traveller set. Only flexible stops may move.
  *
+ * A stop the traveller has not located yet sits out: the located stops around
+ * it are still compared, so leaving one stop unlocated cannot hide the order of
+ * the rest. The legs either side of it were never routed, so the day's pace
+ * comes from the routed legs between located neighbours.
+ *
  * `undefined` when the comparison cannot be made honestly: a long-distance
- * leg, a gap in the chain, an unrouted leg, or a stop with no known location.
- * `NOT_APPLICABLE` when the stops sit so close together that no order is worth
- * comparing.
+ * leg, a gap in the chain, an unrouted leg between located stops, or a base
+ * with no known location. `NOT_APPLICABLE` when the stops sit so close
+ * together that no order is worth comparing.
  */
 export function estimatedRouteComparison(input: {
   segments: ItineraryDayRoutes['segments'];
@@ -64,22 +69,40 @@ export function estimatedRouteComparison(input: {
   if (!segments.length) return undefined;
 
   for (const [index, segment] of segments.entries()) {
-    if (segment.scope !== 'local' || segment.durationSeconds === null) return undefined;
+    if (segment.scope !== 'local') return undefined;
     const next = segments[index + 1];
     if (next && next.origin.id !== segment.destination.id) return undefined;
   }
 
-  const points = [segments[0]!.origin, ...segments.map((segment) => segment.destination)];
-  const located = points.map((point) => input.locate(point));
-  if (located.some((coordinates) => coordinates === null)) return undefined;
-  const coordinates = located as Coordinates[];
+  const chain = [segments[0]!.origin, ...segments.map((segment) => segment.destination)];
+  const chainLocations = chain.map((point) => input.locate(point));
+  if (chain.some((point, index) => !chainLocations[index] && point.kind !== 'itinerary_item'))
+    return undefined;
+  let routedMinutes = 0;
+  let routedKm = 0;
+  for (const [index, segment] of segments.entries()) {
+    const from = chainLocations[index];
+    const to = chainLocations[index + 1];
+    if (!from || !to) continue;
+    if (segment.durationSeconds === null) return undefined;
+    routedMinutes += segment.durationSeconds / 60;
+    routedKm += haversineKm(from, to);
+  }
+  const kept = chain.flatMap((point, index) => {
+    const coordinates = chainLocations[index];
+    return coordinates ? [{ point, coordinates }] : [];
+  });
+  if (kept.length < 2) return undefined;
+  const points = kept.map((entry) => entry.point);
+  const coordinates = kept.map((entry) => entry.coordinates);
 
-  const plannedMinutes = segments.reduce((sum, segment) => sum + segment.durationSeconds! / 60, 0);
   let plannedKm = 0;
   for (let index = 1; index < coordinates.length; index++)
     plannedKm += haversineKm(coordinates[index - 1]!, coordinates[index]!);
-  if (plannedKm < MINIMUM_PLANNED_KM || plannedMinutes <= 0) return 'NOT_APPLICABLE';
-  const minutesPerKm = plannedMinutes / plannedKm;
+  // Every leg touched an unlocated stop: nothing routed sets the day's pace.
+  if (kept.length < chain.length && routedKm <= 0) return undefined;
+  if (plannedKm < MINIMUM_PLANNED_KM || routedMinutes <= 0) return 'NOT_APPLICABLE';
+  const minutesPerKm = routedMinutes / routedKm;
 
   const items = new Map(input.items.map((item) => [item.id, item]));
   const movable = (point: ChainPoint) => {

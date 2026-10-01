@@ -528,7 +528,7 @@ describe('AI planning pipeline', () => {
     expect(harness.drafts).toHaveLength(1);
     expect(harness.drafts[0]?.days[1]?.name).toBe('Museum and team meeting');
     expect(harness.scores).toHaveLength(1);
-    expect(harness.scores[0]).toMatchObject({ schemaVersion: 7, rubricVersion: 10 });
+    expect(harness.scores[0]).toMatchObject({ schemaVersion: 8, rubricVersion: 11 });
     expect(harness.drafts[0]?.days[1]?.items[0]).toMatchObject({
       blockType: 'meeting',
       durationMinutes: 60,

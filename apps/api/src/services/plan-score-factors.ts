@@ -1,7 +1,8 @@
-import type {
-  PlanScoreEvidence,
-  PlanScoreEvidenceSource,
-  PlanScoreFactorResult,
+import {
+  MISSING_DETAIL_SCORE,
+  type PlanScoreEvidence,
+  type PlanScoreEvidenceSource,
+  type PlanScoreFactorResult,
 } from './plan-score-rules.js';
 
 /**
@@ -10,7 +11,10 @@ import type {
  * All are pure and read an already time-zone-resolved description of one day, or
  * of the trip for Must Go priority fit. They never reorder items or change
  * itinerary/reservation data, and unknown routes, locations, times, or provider
- * data stay unknown rather than becoming fabricated zero or worst-case values.
+ * data are never fabricated as zero or worst-case values. Detail only the
+ * traveller can add - a stop's location, time or duration - is judged at the
+ * missing-detail value instead of standing aside (rubric 11); provider gaps
+ * stay unknown.
  *
  * Better alternatives are recommendation output only. They are not a weighted
  * factor and cannot reach the day or trip score.
@@ -85,6 +89,20 @@ export type PlanScoreFeasibilityInput = {
   /** Items in planned order. The evaluator never reorders them. */
   items: PlanScoreDayItem[];
   availability?: PlanScoreInterval | null;
+  /** Detail the traveller left out, which counts low where it leaves timing unchecked. */
+  gaps?: PlanScoreDetailGaps;
+};
+
+/** Item ids of stops missing detail only the traveller can add. */
+export type PlanScoreDetailGaps = {
+  /** No location: a custom label, or a custom place never placed on the map. */
+  location: ReadonlySet<string>;
+  /** No start time and no daypart. */
+  time: ReadonlySet<string>;
+  /** No stated duration, and none the plan's own timing or kind of place implies. */
+  duration: ReadonlySet<string>;
+  /** A daypart but no exact start: half a missing time. */
+  daypart: ReadonlySet<string>;
 };
 
 export type PlanScoreConflictKind =
@@ -162,6 +180,8 @@ function assertMinutes(value: number) {
  */
 export function evaluateTravelEffort(
   segments: PlanScoreRouteSegment[],
+  /** Unknown legs that are unknown only because the traveller left a stop unlocated. */
+  missingIds: ReadonlySet<string> = new Set(),
 ): PlanScoreTravelEffortEvaluation {
   const local = segments.filter((segment) => segment.scope === 'LOCAL');
   const known = local.flatMap((segment) => (segment.status === 'KNOWN' ? [segment] : []));
@@ -185,20 +205,43 @@ export function evaluateTravelEffort(
     TRAVEL_EFFORT_EXCESS_SCORE;
 
   if (known.length < local.length) {
+    const missing = local.filter(
+      (segment) => segment.status !== 'KNOWN' && missingIds.has(segment.id),
+    );
     // An unknown leg can only add travel, so a known subtotal already past the
     // lightest band proves at least that burden. A lighter subtotal proves
-    // nothing: a partial route never passes for a light day.
-    if (!known.length || band(knownMinutes) === TRAVEL_EFFORT_BANDS[0]!.score)
+    // nothing while a provider gap remains: a partial route never passes for a
+    // light day. Legs the traveller left unlocated count at the missing-detail
+    // value beside it instead.
+    const proven =
+      known.length > 0 &&
+      (band(knownMinutes) !== TRAVEL_EFFORT_BANDS[0]!.score ||
+        known.length + missing.length === local.length);
+    if (!proven && !missing.length)
       return {
         factor: { reason: 'INSUFFICIENT_EVIDENCE', state: 'UNKNOWN' },
         totalMinutes: null,
       };
+    const judged = (proven ? known.length : 0) + missing.length;
     return {
       factor: {
-        evidence,
-        score: band(knownMinutes),
+        evidence: [
+          ...(proven ? evidence : []),
+          ...missing.map((segment) => ({
+            ref: `missing:segment:${segment.id}`,
+            source: 'ESTIMATED' as const,
+          })),
+        ],
+        // The known legs bound the burden from below, so an unlocated stop can
+        // never make a heavy day look lighter than its known legs already are.
+        score: proven
+          ? Math.min(
+              band(knownMinutes),
+              (known.length * band(knownMinutes) + missing.length * MISSING_DETAIL_SCORE) / judged,
+            )
+          : MISSING_DETAIL_SCORE,
         state: 'EVALUATED',
-        coverage: (100 * known.length) / local.length,
+        coverage: (100 * judged) / local.length,
       },
       totalMinutes: null,
     };
@@ -262,7 +305,10 @@ function openingHoursSeverity(
 /**
  * Starts at 100 and applies each distinct known conflict's single highest
  * deduction. Detection is limited to evidence the day actually has, so missing
- * times, locations, routes, or provider hours never produce a deduction.
+ * times, locations, routes, or provider hours never produce a deduction. What
+ * stays unchecked only because the traveller left out a stop's location, time
+ * or duration joins the score at the missing-detail value; it can lower a clean
+ * day, never soften a proven conflict.
  */
 export function evaluateFeasibility(
   input: PlanScoreFeasibilityInput,
@@ -270,8 +316,15 @@ export function evaluateFeasibility(
   const evidence = new Map<string, PlanScoreEvidence>();
   const conflicts = new Map<string, PlanScoreConflict>();
   let applicable = 0,
-    evaluated = 0;
+    evaluated = 0,
+    missing = 0;
   const use = (ref: string, source: PlanScoreEvidenceSource) => evidence.set(ref, { ref, source });
+  const gaps = input.gaps;
+  /** A unit left unchecked because the traveller has yet to add `id`'s detail. */
+  const unchecked = (id: string, share = 1) => {
+    missing += share;
+    use(`missing:${id}`, 'ESTIMATED');
+  };
   const trusted = (source: PlanScoreEvidenceSource) =>
     source === 'USER_OWNED' || source === 'FRESH_PROVIDER' || source === 'CACHED_PROVIDER';
   const record = (
@@ -354,6 +407,15 @@ export function evaluateFeasibility(
         earliest += item.inboundTravel.minutes;
         chainTrusted = chainTrusted && trusted(item.inboundTravel.source);
       } else {
+        if (
+          gaps &&
+          ((!item.inboundTravel &&
+            (gaps.location.has(item.id) || (previous && gaps.location.has(previous.id)))) ||
+            (earliest === null &&
+              previous &&
+              (gaps.time.has(previous.id) || gaps.duration.has(previous.id))))
+        )
+          unchecked(item.id);
         earliest = null;
         chainTrusted = false;
       }
@@ -448,6 +510,7 @@ export function evaluateFeasibility(
           ? (start ?? item.start?.minutes ?? item.startWindow?.earliestMinute)
           : null;
         const closed = item.openingHours.intervals.length === 0;
+        if (!closed && point == null && gaps?.time.has(item.id)) unchecked(item.id);
         if (closed || point != null) {
           evaluated++;
           const severity = closed
@@ -481,9 +544,14 @@ export function evaluateFeasibility(
             );
           }
         }
-      }
+      } else if (gaps?.location.has(item.id)) unchecked(item.id);
     }
     if (start !== null && duration !== null && intrinsicTiming) evaluated++;
+    else if (gaps && (gaps.time.has(item.id) || gaps.duration.has(item.id))) unchecked(item.id);
+    if (gaps?.daypart.has(item.id)) {
+      applicable += 0.5;
+      unchecked(item.id, 0.5);
+    }
     if (
       input.availability &&
       start !== null &&
@@ -516,7 +584,7 @@ export function evaluateFeasibility(
     }
   }
   if (!applicable) return { conflicts: [], factor: { state: 'NOT_APPLICABLE' } };
-  if (!evaluated || !evidence.size)
+  if ((!evaluated && !missing) || !evidence.size)
     return {
       conflicts: [...conflicts.values()],
       factor: { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' },
@@ -532,13 +600,19 @@ export function evaluateFeasibility(
     }
   }
   const detected = [...conflicts.values()];
+  const checked = Math.max(0, 100 - detected.reduce((n, c) => n + c.deduction, 0));
   return {
     conflicts: detected,
     factor: {
       state: 'EVALUATED',
-      coverage: (100 * evaluated) / applicable,
+      coverage: (100 * (evaluated + missing)) / applicable,
       evidence: [...evidence.values()],
-      score: Math.max(0, 100 - detected.reduce((n, c) => n + c.deduction, 0)),
+      // Unchecked detail can only add risk, so it never lifts a day past what
+      // its proven conflicts already cost.
+      score: Math.min(
+        checked,
+        (evaluated * checked + missing * MISSING_DETAIL_SCORE) / (evaluated + missing),
+      ),
     },
   };
 }

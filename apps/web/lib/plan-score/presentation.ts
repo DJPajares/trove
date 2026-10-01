@@ -36,7 +36,7 @@ export function currentAssessment(
   score: TripPlanScore | null | undefined,
   now = serverNow(),
 ): boolean {
-  if (!score || score.schemaVersion !== 7 || score.rubricVersion !== 10) return false;
+  if (!score || score.schemaVersion !== 8 || score.rubricVersion !== 11) return false;
   if (score.evidenceAsOf === null) return false;
   const generated = Date.parse(score.generatedAt);
   const evidence = score.evidenceAsOf ? Date.parse(score.evidenceAsOf) : null;
@@ -260,6 +260,8 @@ export function hasUnsyncedScoringEdits(operations: readonly { kind: string }[])
 export function assessmentBasisKey(
   assessment: Pick<TripPlanScore, 'assessmentBasis' | 'limitations'>,
 ) {
+  // Most actionable first: the traveller can add what the score is missing.
+  if (assessment.limitations.includes('DETAIL_MISSING')) return 'basis.detailMissing';
   const durations = assessment.limitations.includes('DURATION_ESTIMATED');
   const travel = assessment.limitations.includes('TRAVEL_TIME_ESTIMATED');
   if (!assessment.limitations.includes('TRAVEL_TIME_UNKNOWN')) {

@@ -13,7 +13,12 @@ import {
   scoringOpeningHours,
 } from '../src/services/plan-score-normalization.js';
 import { buildPlanScoreFromEvaluations, buildTripPlanScore } from '../src/services/plan-score.js';
-import { scoreDay, scoreTrip, toOutcome } from '../src/services/plan-score-rules.js';
+import {
+  MISSING_DETAIL_SCORE,
+  scoreDay,
+  scoreTrip,
+  toOutcome,
+} from '../src/services/plan-score-rules.js';
 import type { PlanScoreDayItem } from '../src/services/plan-score-factors.js';
 const at = (minutes: number) => ({ minutes, source: 'USER_OWNED' as const });
 const visit = (id: string, extra: Partial<PlanScoreDayItem> = {}): PlanScoreDayItem => ({
@@ -190,9 +195,13 @@ test('known available time constrains the comfort target', () => {
   });
   expect(toOutcome(result.pace.factor)).toMatchObject({ score: 70 });
 });
-test('missing durations retain only supported load and proven lower-bound overload', () => {
+test('missing durations count low, never lifting a proven lower-bound overload', () => {
   const unknown = assess({ items: [visit('a', { duration: null })] });
-  expect(unknown.pace.factor).toMatchObject({ state: 'EVALUATED', coverage: 50 });
+  expect(unknown.pace.factor).toMatchObject({
+    state: 'EVALUATED',
+    coverage: 100,
+    score: (100 + MISSING_DETAIL_SCORE) / 2,
+  });
   expect(scoreDay(unknown.input).score).toBeNull();
   const overload = assess({
     items: [
@@ -200,7 +209,13 @@ test('missing durations retain only supported load and proven lower-bound overlo
       visit('b', { duration: null, inboundTravel: at(0), start: at(1300) }),
     ],
   });
-  expect(overload.pace.factor).toMatchObject({ state: 'EVALUATED', coverage: 200 / 3 });
+  // The known 700 minutes already overload the day; the unmeasured stop can
+  // only add to them.
+  expect(overload.pace.factor).toMatchObject({
+    state: 'EVALUATED',
+    coverage: 100,
+    score: loadScore(700 / 480),
+  });
   expect(overload.input.loadRatio).toBeNull();
 });
 test('missing local legs keep comfort partial', () => {
@@ -245,16 +260,18 @@ test('custom/unrated venues and mismatched interests remain unknown rather than 
   expect(interestsForPlaceTypes(['art_gallery'])).toEqual(['art_museums']);
   expect(interestsForPlaceTypes(['hiking_area'])).toEqual(['nature_scenery', 'outdoor_activities']);
 });
-test('ratings alone support only their own share of experience coverage, not interest fit or timing', () => {
+test('an untimed visit is judged on its rating, with its missing timing counting low', () => {
   // An untimed visit with no stated length: only its public rating is known.
   const result = assess({
     items: [visit('museum', { start: null, fixed: false, duration: null })],
     preferences: { pace: 'balanced', interests: [], unmatchedInterests: [] },
   });
-  expect(toOutcome(result.input.factors.EXPERIENCE_QUALITY!)).toMatchObject({
-    score: 100,
-    coverage: 15,
-  });
+  // Time of day (35) and allocation (25) wait on a time; the rating (15) is known.
+  const outcome = toOutcome(result.input.factors.EXPERIENCE_QUALITY!);
+  expect(outcome).toMatchObject({ coverage: 75 });
+  expect(outcome.state === 'EVALUATED' && outcome.score).toBeCloseTo(
+    (60 * MISSING_DETAIL_SCORE + 15 * 100) / 75,
+  );
 });
 test('a well-evidenced day publishes experience and composition, not only the core factors', () => {
   const { factors } = score({

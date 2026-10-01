@@ -10,6 +10,7 @@ import {
   isEstimatedOutcome,
   prioritizedProblems,
   scoreSnapshot,
+  travelerInsights,
 } from '../lib/plan-score/presentation';
 import {
   CLOCK_LEEWAY_MS,
@@ -31,8 +32,8 @@ function assessment(overrides: Partial<TripPlanScore> = {}): TripPlanScore {
   const evaluated = { state: 'EVALUATED', score: 80, coverage: 70, confidence: 90 } as const;
   const explanations = { whatWorks: [], worthImproving: [], uncertainty: [] };
   return {
-    schemaVersion: 7,
-    rubricVersion: 10,
+    schemaVersion: 8,
+    rubricVersion: 11,
     assessmentStatus: 'provisional',
     assessmentBasis: ['TIMING'],
     limitations: [],
@@ -408,7 +409,6 @@ test('AI regeneration comparisons use the same sanitized, session-only baseline'
 });
 
 test('traveler insights omit diagnostics and general guidance and deduplicate the same issue', async () => {
-  const { travelerInsights } = await import('../lib/plan-score/presentation');
   const conflict = {
     ...reason('FEASIBILITY', 'HARD', 'OVERLAPPING_COMMITMENTS'),
     references: ['a', 'b'],
@@ -453,6 +453,40 @@ test('a disabled response rechecks on remount and concurrent score surfaces shar
   client.clear();
 });
 
+test('missing stop detail leads the basis and its nudges open the stop to fix', () => {
+  expect(
+    assessmentBasisKey(assessment({ limitations: ['TRAVEL_TIME_UNKNOWN', 'DETAIL_MISSING'] })),
+  ).toBe('basis.detailMissing');
+  const conflict = {
+    ...reason('FEASIBILITY', 'HARD', 'OVERLAPPING_COMMITMENTS'),
+    references: ['a', 'b'],
+  };
+  const located = {
+    ...reason('ROUTE_EFFICIENCY', 'INFO', 'STOPS_NOT_LOCATED'),
+    action: 'LINK_PLACE' as const,
+    references: ['item-1'],
+  };
+  const timing = {
+    ...reason('FEASIBILITY', 'INFO', 'STOPS_WITHOUT_TIMING'),
+    action: 'ADD_TIMING' as const,
+    references: ['item-1'],
+  };
+  // Real problems come first; the nudges follow in category order and are
+  // never dropped as diagnostics.
+  expect(
+    travelerInsights({
+      whatWorks: [],
+      worthImproving: [timing, located, conflict],
+      uncertainty: [],
+    }),
+  ).toEqual([conflict, timing, located]);
+  const score = assessment();
+  score.presentation!.referenceTargets = { 'item-1': { kind: 'item', dayId: 'day-1' } };
+  expect(dayActionLink('trip', score, timing)).toEqual({
+    href: '/trips/trip/itinerary?item=item-1&day=day-1',
+  });
+});
+
 test('one concise basis prioritizes unknown required travel and uses stable v7 codes', () => {
   expect(assessmentBasisKey(assessment({ limitations: ['TRAVEL_TIME_UNKNOWN'] }))).toBe(
     'basis.travelUnknown',
@@ -465,7 +499,7 @@ test('one concise basis prioritizes unknown required travel and uses stable v7 c
     'basis.travelEstimated',
   );
   expect(
-    currentAssessment({ ...assessment(), schemaVersion: 6, rubricVersion: 6 } as never, NOW),
+    currentAssessment({ ...assessment(), schemaVersion: 7, rubricVersion: 10 } as never, NOW),
   ).toBe(false);
 });
 

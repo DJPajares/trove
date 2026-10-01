@@ -189,7 +189,7 @@ test('a concurrent itinerary edit supersedes an older scoring read', async () =>
   expect(outbound).not.toHaveBeenCalled();
 });
 
-test('unknown stops remain in the route chain instead of being bypassed', async () => {
+test('unknown stops remain in the route chain, counting low instead of being bypassed', async () => {
   trip.itineraryDays[0].items.push({
     ...trip.itineraryDays[0].items[0],
     id: 'unknown',
@@ -198,7 +198,12 @@ test('unknown stops remain in the route chain instead of being bypassed', async 
     position: 1,
   });
   const result = await getTripPlanScore('owner', 'trip', { now: () => NOW });
-  expect(result?.days[0]?.factors.ROUTE_EFFICIENCY).toMatchObject({ state: 'UNKNOWN' });
+  const route = result?.days[0]?.factors.ROUTE_EFFICIENCY;
+  expect(route).toMatchObject({ state: 'EVALUATED' });
+  expect(route?.state === 'EVALUATED' && route.score).toBeLessThan(100);
+  expect(result?.days[0]?.explanations.worthImproving).toContainEqual(
+    expect.objectContaining({ code: 'STOPS_NOT_LOCATED', references: ['unknown'] }),
+  );
   expect(outbound).not.toHaveBeenCalled();
 });
 
@@ -386,10 +391,10 @@ test('re-enabling evaluates the same existing trip and rejects legacy payloads w
   expect(await getTripPlanScore('owner', 'trip', { now: () => NOW })).toBeNull();
   vi.stubEnv('TROVE_PLAN_SCORE_DISABLED', 'false');
   const first = await getTripPlanScore('owner', 'trip', { now: () => NOW });
-  expect(first?.schemaVersion).toBe(7);
-  trip.planScore = { ...first, schemaVersion: 6, rubricVersion: 6 };
+  expect(first?.schemaVersion).toBe(8);
+  trip.planScore = { ...first, schemaVersion: 7, rubricVersion: 10 };
   const second = await getTripPlanScore('owner', 'trip', { now: () => NOW });
-  expect(second?.schemaVersion).toBe(7);
+  expect(second?.schemaVersion).toBe(8);
   expect(update).toHaveBeenCalledTimes(2);
   expect(outbound).not.toHaveBeenCalled();
 });

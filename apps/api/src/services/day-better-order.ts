@@ -196,14 +196,16 @@ export async function getDayBetterOrder(
     const point = pointAt.get(stopId);
     return point?.kind === 'itinerary_item' ? [point.id] : [];
   });
-  // Items the chain did not include (no location) keep their place at the end.
-  const order = [
-    ...proposedItems,
-    ...day.items.map((item) => item.id).filter((id) => !proposedItems.includes(id)),
-  ];
+  // Items the chain did not include (no location yet) keep their own position;
+  // the compared stops fill the positions they held, in the proposed order.
+  const compared = new Set(proposedItems);
+  const queue = proposedItems[Symbol.iterator]();
+  const order = day.items.map((item) =>
+    compared.has(item.id) ? (queue.next().value ?? item.id) : item.id,
+  );
 
-  const next = reorderedRecord(day, record, order);
-  const proposed = evaluateDayRecord(next.day, next.record, calibration);
+  const reordered = reorderedRecord(day, record, order);
+  const proposed = evaluateDayRecord(reordered.day, reordered.record, calibration);
 
   return {
     bestMinutes: Math.round(route.bestMinutes),

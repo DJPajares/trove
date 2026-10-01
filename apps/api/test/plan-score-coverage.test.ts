@@ -37,7 +37,7 @@ const places = new Map<string, ScoringPlace>([
   ['park', place('park', ['park'], { latitude: 1.2816, longitude: 103.8636 })],
   ['beach', place('beach', ['beach'], { latitude: 1.25, longitude: 103.82 })],
   // A custom place saved with a name only: no kind, no location.
-  ['custom', { tripPlaceId: 'custom', rating: { status: 'UNKNOWN' } }],
+  ['custom', { tripPlaceId: 'custom', linked: false, rating: { status: 'UNKNOWN' } }],
 ]);
 
 type Stop = {
@@ -180,7 +180,7 @@ test('a day with dayparts only is assessed from typical visit lengths, to the de
   expect(published(withInterests!.factors)).toEqual(ALL);
 });
 
-test('an unlocated custom stop leaves only its own route unknown', () => {
+test('an unlocated custom stop counts low on its own route; the rest of the day is still assessed', () => {
   const [result] = score([
     day('custom', [
       { place: 'museum', time: '10:00', minutes: 120 },
@@ -188,9 +188,19 @@ test('an unlocated custom stop leaves only its own route unknown', () => {
       { place: 'park', time: '15:00', minutes: 60 },
     ]),
   ]).days;
-  // Trove never bypasses a stop it cannot place, so local travel stays unknown...
-  expect(result!.factors.ROUTE_EFFICIENCY.state).not.toBe('EVALUATED');
-  expect(result!.limitations).toContain('TRAVEL_TIME_UNKNOWN');
+  // Trove never bypasses a stop it cannot place: its legs stay unknown and
+  // count low until the traveller locates it...
+  expect(result!.factors.ROUTE_EFFICIENCY).toMatchObject({ state: 'EVALUATED' });
+  const route = result!.factors.ROUTE_EFFICIENCY;
+  expect(route.state === 'EVALUATED' && route.score).toBeLessThan(100);
+  expect(result!.limitations).toEqual(
+    expect.arrayContaining(['TRAVEL_TIME_UNKNOWN', 'DETAIL_MISSING']),
+  );
+  expect(result!.explanations.worthImproving).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ code: 'STOPS_NOT_LOCATED', references: ['custom:1'] }),
+    ]),
+  );
   // ...while the rest of the day is still assessed.
   for (const id of ['FEASIBILITY', 'PACE_COMFORT', 'PLAN_COMPOSITION'] as const)
     expect(result!.factors[id].state, id).toBe('EVALUATED');

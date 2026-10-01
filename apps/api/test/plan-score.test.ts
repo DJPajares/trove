@@ -248,8 +248,12 @@ test('withholds a day score when the day has no usable evidence', () => {
   });
 
   expect(result.days[0]?.score).toBe(null);
-  expect(result.days[0]?.completeness).toBe(0);
   expect(result.days[0]?.withheldReasons).toStrictEqual(['NO_MEANINGFUL_EVIDENCE']);
+  // A bare label is no basis for a number, but the day still says what it needs.
+  expect(result.days[0]?.explanations.worthImproving.map((entry) => entry.code)).toStrictEqual([
+    'STOPS_NOT_LOCATED',
+    'STOPS_WITHOUT_TIMING',
+  ]);
   expect(result.score).toBe(null);
   expect(result.withheldReasons).toStrictEqual(['NO_SCORABLE_DAY']);
 });
@@ -300,10 +304,18 @@ test("the traveller's own start times bound unstated durations, so an ordinary t
     routes: new Map([['day-2', dayRoutes([segment('seg-x-y', 'item-y', 600)])]]),
   }).days[0];
 
-  expect(day?.factors.FEASIBILITY).toMatchObject({ state: 'EVALUATED', score: 100 });
-  expect(day?.score).toBe(100);
+  // The first visit is bounded by the next start. The last has no length at
+  // all, so its timing counts low until the traveller adds one.
+  expect(day?.factors.FEASIBILITY).toMatchObject({ state: 'EVALUATED' });
+  expect(day?.score).toBeGreaterThanOrEqual(90);
+  expect(day?.score).toBeLessThan(100);
   expect(day?.assessmentStatus).toBe('provisional');
-  expect(day?.limitations).toContain('DURATION_ESTIMATED');
+  expect(day?.limitations).toEqual(
+    expect.arrayContaining(['DURATION_ESTIMATED', 'DETAIL_MISSING']),
+  );
+  expect(day?.explanations.worthImproving).toContainEqual(
+    expect.objectContaining({ code: 'STOPS_WITHOUT_TIMING', references: ['item-y'] }),
+  );
 });
 
 test("an item with no visit duration is still caught when it lands inside another item's known interval", () => {
@@ -349,8 +361,10 @@ test("an item with no visit duration is still caught when it lands inside anothe
   }).days[0];
   const conflicts = day?.explanations.worthImproving ?? [];
 
+  // The verified overlap leads; the missing length is only a nudge after it.
   expect(conflicts.map((entry) => entry.messageKey)).toStrictEqual([
     'feasibility.overlappingCommitments',
+    'missing.timing',
   ]);
   expect(conflicts[0]?.references).toStrictEqual(['item-instant', 'item-long']);
 });
@@ -476,7 +490,9 @@ test('a coarse daypart is scored rather than ignored', () => {
   }).days[0];
 
   expect(vague?.factors.PACE_COMFORT.state).toBe('EVALUATED');
-  expect(vague?.score).toBe(100);
+  // A daypart is half a time: scored, a little short of exact starts.
+  expect(vague?.score).toBeGreaterThanOrEqual(95);
+  expect(vague?.score).toBeLessThan(100);
   expect(vague?.completeness).toBeLessThan(80);
   expect(vague?.assessmentStatus).toBe('provisional');
 });
@@ -595,8 +611,8 @@ test('a real score survives being stored and read back', () => {
 
 test('presentation metadata is additive and validates without changing the version-5 measurement', () => {
   const score = buildTripPlanScore(plannedTrip);
-  expect(score.schemaVersion).toBe(7);
-  expect(score.rubricVersion).toBe(10);
+  expect(score.schemaVersion).toBe(8);
+  expect(score.rubricVersion).toBe(11);
   expect(score.presentation?.adjustments).toEqual({ fatigue: 0, weakDays: 0 });
   expect(parseStoredPlanScore(score)).toEqual(score);
   const { presentation: _presentation, ...legacyCompatible } = score;

@@ -1424,8 +1424,15 @@ test('expired provider evidence still permits a cache-only partial timing assess
     { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
     () => getTripPlanScore('user-1', 'trip-1', { now: () => now }),
   );
-  expect(result).toMatchObject({ score: 100, assessmentStatus: 'provisional' });
+  expect(result).toMatchObject({ assessmentStatus: 'provisional' });
   expect(result?.days.every((day) => day.score !== null)).toBe(true);
+  // The stop has a length but no time, which counts low; its Google place
+  // still counts as located although its cached snapshot has lapsed.
+  expect(result?.score).toBeGreaterThanOrEqual(80);
+  expect(result?.score).toBeLessThan(100);
+  const codes = result?.explanations.worthImproving.map((reason) => reason.code);
+  expect(codes).toContain('STOPS_WITHOUT_TIMING');
+  expect(codes).not.toContain('STOPS_NOT_LOCATED');
 });
 
 /**

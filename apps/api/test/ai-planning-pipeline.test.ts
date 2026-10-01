@@ -23,7 +23,7 @@ import {
   type PlacesProvider,
   type ProviderPlaceDetails,
 } from '../src/services/places.js';
-import type { GroundedPlaceContext } from '../src/services/ai-place-grounding.js';
+import type { GroundedPlaceContext, KnownPlace } from '../src/services/ai-place-grounding.js';
 import { RoutesService, type RoutesProvider } from '../src/services/routes.js';
 import {
   compactModelProposal,
@@ -924,5 +924,69 @@ describe('planning-session dispatch orchestration', () => {
 
     expect(dispatched).toBe(false);
     expect(result).toStrictEqual(reviewing);
+  });
+});
+
+describe('the traveller’s own Saved Places', () => {
+  const savedMuseum: KnownPlace = {
+    checkedAt: NOW,
+    externalPlaceId: 'saved-museum',
+    formattedAddress: '13-9 Uenokoen, Taito City, Tokyo 110-8712, Japan',
+    location: { latitude: 35.7188, longitude: 139.7765 },
+    name: 'Tokyo National Museum',
+    placeId: '00000000-0000-4000-8000-000000000777',
+    rawTypes: ['museum'],
+  };
+
+  test('are offered to the model, and one it chooses is grounded with no Text Search', async () => {
+    const searched: string[] = [];
+    const harness = createHarness(explicitModelProposal());
+
+    await runAiPlanningPipeline(OWNER_ID, RUN_ID, {
+      clock: () => NOW,
+      gateway: harness.gateway,
+      lifecycle: harness.lifecycle,
+      loadHomeLocation: async () => null,
+      loadSavedPlaces: async () => [savedMuseum],
+      providerContext: {
+        ...noProviders,
+        placesProvider: {
+          name: 'google',
+          async textSearch(request) {
+            searched.push(request.textQuery);
+            return [];
+          },
+        },
+      },
+    });
+
+    expect(harness.prompts[0]).toContain('"savedPlaces":[{"area":"13-9 Uenokoen');
+    const museum = harness.drafts[0]?.places.find(
+      (place) => place.name === 'Tokyo National Museum',
+    );
+    expect(museum).toMatchObject({
+      placeId: '00000000-0000-4000-8000-000000000777',
+      resolution: 'verified',
+    });
+    expect(searched, 'the saved place needed no search').toStrictEqual([]);
+  });
+
+  test('a saved place elsewhere with the same name is not used', async () => {
+    const harness = createHarness(explicitModelProposal());
+    await runAiPlanningPipeline(OWNER_ID, RUN_ID, {
+      clock: () => NOW,
+      gateway: harness.gateway,
+      lifecycle: harness.lifecycle,
+      loadHomeLocation: async () => null,
+      loadSavedPlaces: async () => [
+        { ...savedMuseum, formattedAddress: '1 Museum Road, Osaka, Japan' },
+      ],
+      providerContext: noProviders,
+    });
+
+    const museum = harness.drafts[0]?.places.find(
+      (place) => place.name === 'Tokyo National Museum',
+    );
+    expect(museum?.resolution).not.toBe('verified');
   });
 });

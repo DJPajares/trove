@@ -513,11 +513,13 @@ AI-assisted trip creation is the first approved AI product capability. It is an 
 - Traveller-supplied exact times are retained as fixed commitments. Other activities begin with Morning/Afternoon/Evening/Anytime intent, then Trove assigns an estimated exact local time when its deterministic timing pass can find a feasible placement from the itinerary order, duration, and available opening-hours/route evidence. When it cannot, the original daypart remains the honest fallback.
 - Work, meetings, supplied transport, and intentional free time use normal itinerary items/blocks rather than new record types.
 - User-supplied fixed commitments, Must Go requirements, exact times, and other declared hard constraints outrank suggestions. Final validation may reorder flexible suggestions or move them to **Unscheduled**, but it must not move a fixed commitment.
+- The traveller's own Saved Places inform generation. The request may include up to 40 of their most recently saved provider-backed places, with name and address, from identity Trove already stores within its freshness limit. The model prefers them where the trip goes near them and they genuinely suit a stop. It never adds one only because it was listed, and never relocates the trip for one. They are traveller data, not instructions.
 - A generated trip may span at most 14 inclusive days and contain at most 24 provider-backed real-place items. Custom labels/blocks do not bypass feasibility rules, and repeated references to the same real Place do not justify provider-call fan-out.
 
 ### 7.6.3 Grounding and Validation
 
 - Generated destinations and real-place suggestions are resolved on demand through the provider rules in Sections 11 and 16. A confident provider identity reuses the canonical Trove Place.
+- A suggestion that matches one of the traveller's Saved Places exactly, by name and locality, is grounded on that Place's stored identity and costs no Text Search. Anything less certain is resolved through the normal search.
 - The complete Generate or Regenerate run may make at most **50 outbound Google calls**, shared across Text Search (New), place/detail evidence, opening-hours checks, and route checks. Provider usage accounting records the AI-planner source and billable SKU.
 - Text Search and final checks request the cheapest field mask that satisfies the reviewed surface. Mutable provider data such as opening hours remains on-demand evidence and is never permanently cached as Trove-owned truth.
 - Trove never fabricates provider IDs, coordinates, addresses, opening hours, routes, ratings, or confidence. Evidence needed after the provider cap is reached is labeled **Not checked**.

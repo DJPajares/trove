@@ -259,6 +259,36 @@ function verified(
   };
 }
 
+/** A place the traveller already saved, with the identity Trove stored for it. */
+export type KnownPlace = GroundingIdentity & {
+  /** When that identity was stored; it dates the verification. */
+  checkedAt: Date;
+  /** The Trove Place it already is. */
+  placeId: string;
+};
+
+/**
+ * Grounds a candidate on a place the traveller already saved, when the model
+ * chose it by name, so it costs no Text Search. It has to be the same name and
+ * sit in the same locality, and exactly one saved place may match: anything
+ * less certain is left to the normal search. Destinations (cities) are never
+ * matched here, since a saved place is a venue.
+ */
+export function groundFromKnownPlaces(
+  candidate: AiPlaceGroundingCandidate,
+  known: readonly KnownPlace[],
+): AiPlaceGroundingResult | null {
+  if (candidate.requireExactName || !known.length) return null;
+  const expected = compactText(candidate.name);
+  const matches = known.filter(
+    (place) =>
+      compactText(place.name) === expected && localityMatches(place, candidate.localityHint),
+  );
+  if (matches.length !== 1) return null;
+  const match = matches[0]!;
+  return verified(candidate, match, match.placeId, match.checkedAt);
+}
+
 function scopedId(scope: string, candidateId: string) {
   const digest = createHash('sha256').update(candidateId).digest('hex').slice(0, 24);
   return `${scope}:${digest}`;

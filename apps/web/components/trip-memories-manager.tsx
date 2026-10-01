@@ -17,11 +17,8 @@ import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
-import {
-  ExperienceRatingDialog,
-  ExperienceRatingStars,
-} from '@/components/experience-rating-field';
-import { MemoryEditorDialog } from '@/components/memory-editor-dialog';
+import { ExperienceRatingSheet, ExperienceRatingStars } from '@/components/experience-rating-field';
+import { MemoryEditorSheet } from '@/components/memory-editor-sheet';
 import { PageState } from '@/components/page-state';
 import { StoryCoverPicker } from '@/components/story-cover-picker';
 import { useTripContext } from '@/components/trip-provider';
@@ -67,7 +64,7 @@ type EditorState =
   | { memory: null; mode: 'create' }
   | { memory: Memory; mode: 'edit' };
 
-/** Which target the rating dialog is collecting for, held by id so it stays current. */
+/** Which target the rating sheet is collecting for, held by id so it stays current. */
 type RatingEditor = { date: string; kind: 'day' } | { kind: 'trip' } | null;
 
 /**
@@ -590,7 +587,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
 
   const dialogs = (
     <>
-      <MemoryEditorDialog
+      <MemoryEditorSheet
         itinerary={itinerary}
         memory={editor.mode === 'edit' ? editor.memory : null}
         onClose={() => setEditor({ memory: null, mode: 'closed' })}
@@ -622,7 +619,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
         storyCover={storyCover}
         tripId={tripId}
       />
-      <ExperienceRatingDialog
+      <ExperienceRatingSheet
         description={t('tripRatingDescription', { trip: trip.name })}
         initialNote={trip.experienceNote}
         initialRating={trip.experienceRating}
@@ -632,7 +629,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
         title={t('tripRatingTitle')}
       />
       {ratingDay ? (
-        <ExperienceRatingDialog
+        <ExperienceRatingSheet
           description={t('dayRatingDescription', { date: dateOnly(ratingDay.date) })}
           initialNote={ratingDay.note}
           initialRating={ratingDay.rating}

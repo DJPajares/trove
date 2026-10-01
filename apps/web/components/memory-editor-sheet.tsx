@@ -18,13 +18,6 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/date-picker';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import {
   Select,
@@ -33,6 +26,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { TimeInput } from '@/components/time-input';
@@ -60,10 +61,10 @@ type SaveResult = { localDateChanged: boolean; queued: boolean };
 /**
  * Curates one Memory after the fact: caption, highlight state, day/item context,
  * the captured date/time when it needs correcting, and photo management. The
- * same dialog also adds a Memory the traveller forgot to capture, through the
+ * same sheet also adds a Memory the traveller forgot to capture, through the
  * identical fields and the same underlying capture path.
  */
-export function MemoryEditorDialog({
+export function MemoryEditorSheet({
   itinerary,
   memory,
   onClose,
@@ -285,16 +286,19 @@ export function MemoryEditorDialog({
 
   return (
     <>
-      <Dialog onOpenChange={(next) => !next && onClose()} open={open}>
-        <DialogContent className="sm:max-w-lg" closeLabel={t('cancel')}>
-          <DialogHeader>
-            <DialogTitle>{isCreate ? t('addTitle') : t('editTitle')}</DialogTitle>
-            <DialogDescription>
+      <Sheet onOpenChange={(next) => !next && onClose()} open={open}>
+        <SheetContent
+          className="w-full md:data-[side=right]:w-[min(38rem,calc(100%-0.5rem))]"
+          closeLabel={t('cancel')}
+        >
+          <SheetHeader className="border-b">
+            <SheetTitle>{isCreate ? t('addTitle') : t('editTitle')}</SheetTitle>
+            <SheetDescription>
               {isCreate ? t('addDescription') : t('editDescription')}
-            </DialogDescription>
-          </DialogHeader>
+            </SheetDescription>
+          </SheetHeader>
 
-          <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
             <Field>
               <FieldLabel htmlFor="memory-editor-note">{t('note')}</FieldLabel>
               <Textarea
@@ -479,7 +483,7 @@ export function MemoryEditorDialog({
             ) : null}
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
+          <SheetFooter className="sm:flex-row sm:items-center sm:justify-between">
             {!isCreate ? (
               <Button onClick={() => setConfirmDelete(true)} type="button" variant="ghost">
                 <Trash2 aria-hidden="true" data-icon="inline-start" />
@@ -488,17 +492,17 @@ export function MemoryEditorDialog({
             ) : (
               <span />
             )}
-            <div className="flex justify-end gap-2">
-              <Button onClick={onClose} variant="ghost">
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
+              <Button onClick={onClose} type="button" variant="outline">
                 {t('cancel')}
               </Button>
-              <Button disabled={!canSave} onClick={() => void handleSave()}>
+              <Button disabled={!canSave} onClick={() => void handleSave()} type="button">
                 {saving ? t('saving') : t('save')}
               </Button>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
       <AlertDialog
         onOpenChange={(next) => !next && setPhotoToDelete(null)}

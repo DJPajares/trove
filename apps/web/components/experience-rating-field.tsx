@@ -6,14 +6,14 @@ import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
@@ -201,7 +201,7 @@ export function ExperienceRatingField({
  * collect it here, instead of standing a prompt beside everything on the page.
  * Saving is unchanged: a star commits on click, a note commits on blur.
  */
-export function ExperienceRatingDialog({
+export function ExperienceRatingSheet({
   description,
   initialNote,
   initialRating,
@@ -221,22 +221,24 @@ export function ExperienceRatingDialog({
   const t = useTranslations('experienceRating');
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent closeLabel={t('close')}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-        <ExperienceRatingField
-          initialNote={initialNote}
-          initialRating={initialRating}
-          label={t('summaryLabel')}
-          onSave={onSave}
-        />
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>{t('done')}</DialogClose>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <Sheet onOpenChange={onOpenChange} open={open}>
+      <SheetContent closeLabel={t('close')}>
+        <SheetHeader className="border-b">
+          <SheetTitle>{title}</SheetTitle>
+          <SheetDescription>{description}</SheetDescription>
+        </SheetHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          <ExperienceRatingField
+            initialNote={initialNote}
+            initialRating={initialRating}
+            label={t('summaryLabel')}
+            onSave={onSave}
+          />
+        </div>
+        <SheetFooter>
+          <SheetClose render={<Button variant="outline" />}>{t('done')}</SheetClose>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }

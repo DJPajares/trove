@@ -32,7 +32,7 @@ import { useTripModeData } from '@/components/trip-mode-data';
 import { useTripPlaceHours } from '@/lib/trip-places/use-trip-place-hours';
 import { useTripModePlaceDetails, useTripModePreview } from '@/components/trip-mode-shell';
 import { useOnlineStatus } from '@/components/trip-sync-status';
-import { TripModeMemoryDialog } from '@/components/trip-mode-memory-dialog';
+import { TripModeMemorySheet } from '@/components/trip-mode-memory-sheet';
 import { TripModePendingMemories } from '@/components/trip-mode-pending-memories';
 import { TripInsights } from '@/components/trip-insights';
 import { TripWeatherContext } from '@/components/trip-weather-context';
@@ -1191,7 +1191,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
 
       <TripModePendingMemories key={pendingMemoriesKey} tripId={tripId} />
 
-      <TripModeMemoryDialog
+      <TripModeMemorySheet
         dayDate={date}
         dayId={day.id}
         defaultItemId={currentItemId}

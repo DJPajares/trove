@@ -20,7 +20,7 @@ import { useMemo, useState } from 'react';
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
 import { TripLegBar } from '@/components/trip-leg-bar';
-import { TripModeMemoryDialog } from '@/components/trip-mode-memory-dialog';
+import { TripModeMemorySheet } from '@/components/trip-mode-memory-sheet';
 import { useTripModeData } from '@/components/trip-mode-data';
 import { useTripModePreview } from '@/components/trip-mode-shell';
 import {
@@ -333,7 +333,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
       </div>
 
       {readyContext.day ? (
-        <TripModeMemoryDialog
+        <TripModeMemorySheet
           dayDate={date}
           dayId={readyContext.day.id}
           defaultItemId={currentItem?.id ?? null}

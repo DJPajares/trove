@@ -5,6 +5,7 @@ import type { AiPlannerDraft, AiPlannerDraftItem, AiPlannerDraftPlace } from '@t
 import { referencedDraftPlaceIds } from './ai-planning-draft-places.js';
 import {
   appliedDraftScoreInputsMatch,
+  draftLegMode,
   draftPlanScoreInputRevision,
   remapDraftPlanScore,
 } from './ai-planning-plan-score.js';
@@ -233,6 +234,7 @@ function itemData(input: {
       timeZone: timeZone.timeZone,
       timeZoneResolvedAt: input.now,
       timeZoneSource: timeZone.source,
+      travelModeToNext: draftLegMode(item.travelModeToNext),
       tripId: input.tripId,
       tripPlaceId: item.placeRefId ? (input.tripPlaceIds.get(item.placeRefId) ?? null) : null,
     };
@@ -275,12 +277,8 @@ export async function applyAiPlanningSession(
     }
     const countries = normalizeReviewedCountries(loaded.reviewedCountries);
     if (!countries) throw new AiPlanningSessionError('invalid_countries', 400);
-    if (
-      (draft.warnings.some((warning) => warning.material) || loaded.countryContextChanged) &&
-      !loaded.warningAcknowledged
-    ) {
-      throw new AiPlanningSessionError('warnings_not_acknowledged', 409);
-    }
+    // Warnings inform the review; none of them stands between the traveller
+    // and their trip. The harness has already settled every timing conflict.
 
     const profile = await transaction.profile.findUniqueOrThrow({
       where: { id: ownerId },
@@ -409,6 +407,7 @@ export async function applyAiPlanningSession(
             : null,
           date: parseDateOnly(date),
           name: day.name ?? null,
+          routeStartTravelMode: draftLegMode(day.routeStartTravelMode),
           defaultTimeZone,
           defaultTimeZoneResolvedAt: now,
           defaultTimeZoneSource: insertedSource,

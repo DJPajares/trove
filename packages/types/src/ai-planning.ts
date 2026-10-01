@@ -297,11 +297,19 @@ export const aiPlannerDraftPlaceSchema = z.discriminatedUnion('resolution', [
     .strict(),
 ]);
 
+/**
+ * How a draft leg is travelled. Chosen by the harness, never by the model, and
+ * optional so drafts stored before it existed still parse.
+ */
+export const aiPlannerLegModeSchema = z.enum(['walk', 'transit', 'drive']);
+
 export const aiPlannerDraftItemSchema = z
   .object({
     ...itemFields,
     placeRefId: identifierSchema.nullable(),
     schedule: draftItemScheduleSchema,
+    /** The leg from this item to the next stop, or back to the day's stay. */
+    travelModeToNext: aiPlannerLegModeSchema.optional(),
   })
   .strict();
 
@@ -363,6 +371,8 @@ export const aiPlannerDraftSchema = z
           destinationId: identifierSchema.nullable(),
           items: z.array(aiPlannerDraftItemSchema),
           name: z.string().trim().min(1).max(80).nullable().optional(),
+          /** The leg from the day's stay to its first stop. */
+          routeStartTravelMode: aiPlannerLegModeSchema.optional(),
         })
         .strict(),
     ),
@@ -395,6 +405,7 @@ export type AiPlannerAssumption = z.infer<typeof aiPlannerAssumptionSchema>;
 export type AiPlannerConstraint = z.infer<typeof aiPlannerConstraintSchema>;
 export type AiPlannerDraft = z.infer<typeof aiPlannerDraftSchema>;
 export type AiPlannerDraftItem = z.infer<typeof aiPlannerDraftItemSchema>;
+export type AiPlannerLegMode = z.infer<typeof aiPlannerLegModeSchema>;
 export type AiPlannerDraftPlace = z.infer<typeof aiPlannerDraftPlaceSchema>;
 export type AiPlannerEvidence = z.infer<typeof aiPlannerEvidenceSchema>;
 export type AiPlannerCandidatePlace = z.infer<typeof aiPlannerCandidatePlaceSchema>;

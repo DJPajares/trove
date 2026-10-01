@@ -1,5 +1,6 @@
 import type { AiPlannerDraft } from '@trove/types';
 
+import type { AiPlannerRepairCode } from './ai-planner-repair-log.js';
 import type { AiPlanningSessionErrorCode } from './ai-planning-sessions.js';
 
 /**
@@ -30,6 +31,7 @@ export const AI_PLANNING_TELEMETRY_WARNING_CODES = [
   'real_place_item_cap_reached',
   'route_not_checked',
   'route_not_found',
+  'schedule_adjusted',
   'schedule_conflict',
   'tight_transition',
   'work_block_conflict',
@@ -78,7 +80,12 @@ export type AiPlanningTelemetryEvent =
       occurredAt: string;
       outcome: 'applied' | 'rejected' | 'replayed';
     }
-  | { code: AiPlanningDispatchRejectionCode; kind: 'dispatch_rejected'; occurredAt: string };
+  | { code: AiPlanningDispatchRejectionCode; kind: 'dispatch_rejected'; occurredAt: string }
+  | {
+      kind: 'proposal_repaired';
+      occurredAt: string;
+      repairs: Partial<Record<AiPlannerRepairCode, number>>;
+    };
 
 export type AiPlanningTelemetrySink = (event: AiPlanningTelemetryEvent) => void;
 
@@ -153,6 +160,19 @@ export function recordAiPlanningProposalCoverage(
     kind: 'proposal_coverage',
     occurredAt: occurredAt.toISOString(),
     sparse,
+  });
+}
+
+/** How much the harness had to fix in a model's answer, as counts per repair. */
+export function recordAiPlanningProposalRepaired(
+  repairs: Partial<Record<AiPlannerRepairCode, number>>,
+  occurredAt: Date,
+) {
+  if (!Object.keys(repairs).length) return;
+  recordAiPlanningTelemetry({
+    kind: 'proposal_repaired',
+    occurredAt: occurredAt.toISOString(),
+    repairs: { ...repairs },
   });
 }
 

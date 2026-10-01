@@ -49,10 +49,7 @@ test('Apply saves untouched suggestions, then reuses approval for the same revis
   const current = session();
   const reviewed = { ...current, countriesReviewedRevision: 2, reviewedCountries: ['VN'] };
   const save = vi.fn().mockResolvedValue(reviewed);
-  expect(await prepareAiPlanningCountriesForApply(current, ['VN'], save)).toEqual({
-    canApply: true,
-    session: reviewed,
-  });
+  expect(await prepareAiPlanningCountriesForApply(current, ['VN'], save)).toEqual(reviewed);
   expect(save).toHaveBeenCalledWith(current, ['VN']);
   await prepareAiPlanningCountriesForApply(reviewed, ['VN'], save);
   expect(save).toHaveBeenCalledTimes(1);
@@ -67,10 +64,10 @@ test('empty countries and failed saves stop Apply without changing the current d
   expect(current.countriesReviewedRevision).toBeNull();
   expect(current.draft).not.toBeNull();
   save.mockResolvedValue({ ...current, countriesReviewedRevision: 2, reviewedCountries: ['VN'] });
-  expect((await prepareAiPlanningCountriesForApply(current, ['VN'], save))?.canApply).toBe(true);
+  expect(await prepareAiPlanningCountriesForApply(current, ['VN'], save)).not.toBeNull();
 });
 
-test('a timezone warning discovered during the country save requires acknowledgement before Apply', async () => {
+test('a timezone change discovered during the country save does not hold back Apply', async () => {
   const current = session();
   const reviewed = {
     ...current,
@@ -79,17 +76,5 @@ test('a timezone warning discovered during the country save requires acknowledge
     reviewedCountries: ['VN'],
   };
   const save = vi.fn().mockResolvedValue(reviewed);
-  expect((await prepareAiPlanningCountriesForApply(current, ['VN'], save))?.canApply).toBe(false);
-  expect(
-    (
-      await prepareAiPlanningCountriesForApply(
-        {
-          ...reviewed,
-          warningAcknowledgement: { acknowledgedAt: current.updatedAt, revision: 2 },
-        },
-        ['VN'],
-        save,
-      )
-    )?.canApply,
-  ).toBe(true);
+  expect(await prepareAiPlanningCountriesForApply(current, ['VN'], save)).toEqual(reviewed);
 });

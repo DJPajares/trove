@@ -7,14 +7,6 @@ import {
 } from '@trove/types';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import {
   Select,
@@ -23,9 +15,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { TimeInput } from '@/components/time-input';
 
-export function DayPlanningContextDialog({
+export function DayPlanningContextSheet({
   initial,
   timeZone,
   onClose,
@@ -64,75 +64,78 @@ export function DayPlanningContextDialog({
     }
   }
   return (
-    <Dialog
+    <Sheet
       open
       onOpenChange={(open) => {
         if (!open && !saving) onClose();
       }}
     >
-      <DialogContent closeLabel={t('cancel')}>
-        <form className="space-y-6" onSubmit={save}>
-          <DialogHeader>
-            <DialogTitle>{t('title')}</DialogTitle>
-            <DialogDescription>{t('hint')}</DialogDescription>
-          </DialogHeader>
-          <Field>
-            <FieldLabel htmlFor="day-intent">{t('intent')}</FieldLabel>
-            <Select
-              value={value.intent ?? 'unknown'}
-              onValueChange={(intent) => {
-                if (intent)
-                  setValue({
-                    ...value,
-                    intent: intent === 'unknown' ? null : (intent as DayPlanningContext['intent']),
-                  });
+      <SheetContent closeLabel={t('cancel')}>
+        <SheetHeader className="border-b">
+          <SheetTitle>{t('title')}</SheetTitle>
+          <SheetDescription>{t('hint')}</SheetDescription>
+        </SheetHeader>
+        <form className="flex min-h-0 flex-1 flex-col" onSubmit={save}>
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-5">
+            <Field>
+              <FieldLabel htmlFor="day-intent">{t('intent')}</FieldLabel>
+              <Select
+                value={value.intent ?? 'unknown'}
+                onValueChange={(intent) => {
+                  if (intent)
+                    setValue({
+                      ...value,
+                      intent:
+                        intent === 'unknown' ? null : (intent as DayPlanningContext['intent']),
+                    });
+                }}
+              >
+                <SelectTrigger id="day-intent" className="w-full">
+                  <SelectValue>{(intent) => t(`intents.${intent}`)}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {['unknown', 'explore', 'focused', 'rest', 'transit'].map((intent) => (
+                    <SelectItem key={intent} value={intent}>
+                      {t(`intents.${intent}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <div className="grid grid-cols-2 gap-4">
+              <Field>
+                <FieldLabel htmlFor="day-available-start">{t('start')}</FieldLabel>
+                <TimeInput id="day-available-start" value={start} onValueChange={setStart} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="day-available-end">{t('end')}</FieldLabel>
+                <TimeInput id="day-available-end" value={end} onValueChange={setEnd} />
+              </Field>
+            </div>
+            <FieldDescription>{t('windowHint', { timeZone })}</FieldDescription>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setStart('');
+                setEnd('');
               }}
             >
-              <SelectTrigger id="day-intent" className="w-full">
-                <SelectValue>{(intent) => t(`intents.${intent}`)}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {['unknown', 'explore', 'focused', 'rest', 'transit'].map((intent) => (
-                  <SelectItem key={intent} value={intent}>
-                    {t(`intents.${intent}`)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field>
-              <FieldLabel htmlFor="day-available-start">{t('start')}</FieldLabel>
-              <TimeInput id="day-available-start" value={start} onValueChange={setStart} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="day-available-end">{t('end')}</FieldLabel>
-              <TimeInput id="day-available-end" value={end} onValueChange={setEnd} />
-            </Field>
+              {t('clearWindow')}
+            </Button>
+            {error ? <FieldError role="alert">{error}</FieldError> : null}
           </div>
-          <FieldDescription>{t('windowHint', { timeZone })}</FieldDescription>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setStart('');
-              setEnd('');
-            }}
-          >
-            {t('clearWindow')}
-          </Button>
-          {error ? <FieldError role="alert">{error}</FieldError> : null}
-          <DialogFooter>
+          <SheetFooter className="flex-col-reverse sm:flex-row sm:justify-end">
             <Button type="button" variant="outline" disabled={saving} onClick={onClose}>
               {t('cancel')}
             </Button>
             <Button type="submit" disabled={saving}>
               {saving ? t('saving') : t('save')}
             </Button>
-          </DialogFooter>
+          </SheetFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

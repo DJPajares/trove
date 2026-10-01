@@ -35,9 +35,12 @@ import {
 import { createAiGateway } from './ai-runtime.js';
 import {
   AiPlaceGrounder,
+  groundFromKnownPlaces,
   type AiPlaceGroundingResult,
   type GroundedPlaceContext,
+  type KnownPlace,
 } from './ai-place-grounding.js';
+import { loadSavedPlacesForPlanner, plannerSavedPlaces } from './ai-planner-saved-places.js';
 import { createAiPlannerProviderContext } from './ai-planner-provider-context.js';
 import type { TripPlanScore } from './plan-score.js';
 import { groundableDraftPlaceIds, referencedDraftPlaceIds } from './ai-planning-draft-places.js';
@@ -128,9 +131,12 @@ export type AiPlanningPipelineOptions = {
     targetIds: ReadonlySet<string>,
     scheduledPlaceIds: ReadonlySet<string>,
     signal?: AbortSignal,
+    knownPlaces?: readonly KnownPlace[],
   ) => Promise<GroundedCandidate[]>;
   lifecycle?: PlanningLifecycle;
   loadHomeLocation?: (ownerId: string) => Promise<string | null>;
+  /** The traveller's Saved Places the planner may prefer; storage only. */
+  loadSavedPlaces?: (ownerId: string, now: Date) => Promise<KnownPlace[]>;
   providerContext?: ProviderContext;
   /** Test seam; production always uses the shared cache-only draft reader. */
   readDraftScore?: typeof readDraftPlanScore;
@@ -262,28 +268,43 @@ async function groundCandidates(
   targetIds: ReadonlySet<string>,
   scheduledPlaceIds: ReadonlySet<string>,
   signal?: AbortSignal,
+  knownPlaces: readonly KnownPlace[] = [],
 ): Promise<GroundedCandidate[]> {
   const targets = proposal.places.filter((candidate) => targetIds.has(candidate.id));
   if (targets.length === 0) return [];
-  if (!providerContext.placesProvider) {
-    return targets.map(unavailableGrounding);
-  }
 
-  const canonical = createCanonicalPlacesService();
-  const grounder = new AiPlaceGrounder(providerContext.placesProvider, canonical);
   const localities = candidateLocalities(proposal);
   const destinationPlaceIds = new Set(
     proposal.destinations.map((destination) => destination.candidatePlaceId),
   );
-  return grounder.groundCandidates(
-    targets.map((candidate) => ({
-      ...candidate,
-      detail: scheduledPlaceIds.has(candidate.id) ? 'evidence' : 'location',
-      localityHint: localities.get(candidate.id),
-      requireExactName: destinationPlaceIds.has(candidate.id),
-      signal,
-    })),
+  const prepared = targets.map((candidate) => ({
+    ...candidate,
+    detail: scheduledPlaceIds.has(candidate.id) ? ('evidence' as const) : ('location' as const),
+    localityHint: localities.get(candidate.id),
+    requireExactName: destinationPlaceIds.has(candidate.id),
+    signal,
+  }));
+
+  // A place the traveller already saved is grounded on what Trove stored for
+  // it, with no Text Search; only the rest go to the provider.
+  const known = new Map(
+    prepared.flatMap((candidate) => {
+      const result = groundFromKnownPlaces(candidate, knownPlaces);
+      return result ? [[candidate.id, result] as const] : [];
+    }),
   );
+  const remaining = prepared.filter((candidate) => !known.has(candidate.id));
+  const searched = !remaining.length
+    ? []
+    : providerContext.placesProvider
+      ? await new AiPlaceGrounder(
+          providerContext.placesProvider,
+          createCanonicalPlacesService(),
+        ).groundCandidates(remaining)
+      : remaining.map(unavailableGrounding);
+
+  const byId = new Map(searched.map((result, index) => [remaining[index]!.id, result]));
+  return prepared.map((candidate) => known.get(candidate.id) ?? byId.get(candidate.id)!);
 }
 
 function targetDayIndex(
@@ -1268,15 +1289,23 @@ export async function runAiPlanningPipeline(
   const generationDate = clock();
 
   try {
-    const [homeLocation, providerContext] = await Promise.all([
+    const [homeLocation, providerContext, savedPlaces] = await Promise.all([
       (options.loadHomeLocation ?? loadHomeLocation)(ownerId),
       Promise.resolve(
         options.providerContext ??
           createAiPlannerProviderContext({ environment: options.environment }),
       ),
+      // A failure here only means the plan is made without them.
+      (options.loadSavedPlaces ?? loadSavedPlacesForPlanner)(ownerId, generationDate).catch(
+        () => [] as KnownPlace[],
+      ),
     ]);
     const gateway = options.gateway ?? createAiGateway({ environment: options.environment });
-    const promptContext = buildAiPlannerContext({ generationDate, homeLocation });
+    const promptContext = buildAiPlannerContext({
+      generationDate,
+      homeLocation,
+      savedPlaces: plannerSavedPlaces(savedPlaces),
+    });
     const generation = await gateway.generateStructured({
       prompt: buildAiPlannerPrompt(claim.prompt, promptContext),
       schema: aiPlannerCompactProposalSchema,
@@ -1360,6 +1389,7 @@ export async function runAiPlanningPipeline(
         ),
       ),
       providerSignal,
+      savedPlaces,
     );
     applyGroundingToDraft(draft, grounding);
     dropUnverifiedDraftStays(draft);

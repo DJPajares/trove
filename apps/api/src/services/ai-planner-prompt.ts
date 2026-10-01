@@ -76,6 +76,8 @@ export type AiPlannerPromptContext = {
   maxRealPlaceItems: number;
   maxTripDescription: number;
   naming: { tone: AiPlannerNameTone; toneBrief: string };
+  /** Venues the traveller saved, to prefer where the trip goes near them. */
+  savedPlaces?: ReadonlyArray<{ area: string; name: string }>;
   tripLengthTiers: readonly number[];
 };
 
@@ -88,6 +90,7 @@ export function buildAiPlannerContext(input: {
   homeLocation: string | null;
   /** Pinned by tests; a run that leaves it out gets a fresh tone every time. */
   nameTone?: AiPlannerNameTone;
+  savedPlaces?: ReadonlyArray<{ area: string; name: string }>;
 }): AiPlannerPromptContext {
   const tone = input.nameTone ?? pickAiPlannerNameTone();
   return {
@@ -102,6 +105,7 @@ export function buildAiPlannerContext(input: {
     maxRealPlaceItems: AI_PLANNER_MAX_REAL_PLACE_ITEMS,
     maxTripDescription: AI_PLANNER_MAX_TRIP_DESCRIPTION,
     naming: { tone, toneBrief: AI_PLANNER_NAME_TONES[tone] },
+    ...(input.savedPlaces?.length ? { savedPlaces: input.savedPlaces } : {}),
     tripLengthTiers: AI_PLANNER_TRIP_LENGTH_TIERS,
   };
 }
@@ -149,6 +153,8 @@ export function buildAiPlannerPrompt(rawPrompt: string, context: AiPlannerPrompt
     'Use zero-based array indexes for candidatePlaceIndex, destinationIntentIndex, and constraintIndices. Every non-null index must point to an existing entry in the corresponding places, normalizedRequest.destinations, or normalizedRequest.constraints array. Reuse one place entry when multiple items visit the same venue.',
     '',
     "In places, set name to the venue's own name exactly as Google Maps lists it, with no descriptive suffix, activity wording, or article added, and set searchQuery to that same name followed by the city it sits in. A name that reads as a label rather than a sign above the door cannot be matched to a real place.",
+    '',
+    'planner_context.savedPlaces, when present, lists venues the traveller has already saved, with their address. Where the trip goes near any of them, prefer them for stops they genuinely suit, and use the name exactly as listed. Never add one only because it is listed, and never move the trip somewhere because of it.',
     '',
     'Mark origin "user" only for a traveller request, otherwise "model". A model item uses day_part, not an exact time, and cannot be must_go or user_owned. A model constraint uses strength "flexible". User-supplied hard commitments use separate constraints for each occurrence; link each to exactly one item. Do not attach the same hard constraint to a fitting and pickup or to work on two days.',
     '',

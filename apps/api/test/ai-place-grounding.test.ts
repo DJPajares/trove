@@ -1,6 +1,10 @@
-import { expect, test } from 'vitest';
+import { describe, expect, test } from 'vitest';
 
-import { AiPlaceGrounder } from '../src/services/ai-place-grounding.js';
+import {
+  AiPlaceGrounder,
+  groundFromKnownPlaces,
+  type KnownPlace,
+} from '../src/services/ai-place-grounding.js';
 import type {
   AiPlaceGroundingCacheRepository,
   GroundingCacheReference,
@@ -646,4 +650,46 @@ test('relaxed matching cannot accept Old Airport Road as Old Airport Road Food C
   expect(result.place.resolution).toBe('custom');
   expect(result.evidence.code).toBe('place_unresolved');
   expect(searches()).toBe(1);
+});
+
+describe('grounding on a place the traveller saved', () => {
+  const saved = (overrides: Partial<KnownPlace> = {}): KnownPlace => ({
+    checkedAt: new Date('2026-09-01T00:00:00.000Z'),
+    externalPlaceId: 'saved-museum',
+    formattedAddress: '13-9 Uenokoen, Taito City, Tokyo 110-8712, Japan',
+    location: { latitude: 35.7188, longitude: 139.7765 },
+    name: 'Tokyo National Museum',
+    placeId: '00000000-0000-4000-8000-000000000777',
+    rawTypes: ['museum'],
+    ...overrides,
+  });
+  const candidate = (overrides: Record<string, unknown> = {}) => ({
+    id: 'candidate:museum',
+    localityHint: 'Tokyo',
+    name: 'Tokyo National Museum',
+    note: null,
+    searchQuery: 'Tokyo National Museum Tokyo',
+    ...overrides,
+  });
+
+  test('the same name in the same place is verified on the stored identity', () => {
+    expect(groundFromKnownPlaces(candidate(), [saved()])).toMatchObject({
+      context: { externalPlaceId: 'saved-museum' },
+      place: { placeId: '00000000-0000-4000-8000-000000000777', resolution: 'verified' },
+    });
+  });
+
+  test('a different city, an ambiguous pair, or a destination is left to the search', () => {
+    expect(
+      groundFromKnownPlaces(candidate(), [saved({ formattedAddress: '1 Road, Osaka, Japan' })]),
+    ).toBeNull();
+    expect(
+      groundFromKnownPlaces(candidate(), [
+        saved(),
+        saved({ externalPlaceId: 'second', placeId: 'x' }),
+      ]),
+    ).toBeNull();
+    expect(groundFromKnownPlaces(candidate({ requireExactName: true }), [saved()])).toBeNull();
+    expect(groundFromKnownPlaces(candidate({ name: 'Ueno Zoo' }), [saved()])).toBeNull();
+  });
 });

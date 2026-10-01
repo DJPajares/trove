@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import {
   addTripPlace,
+  linkTripPlaceToProvider,
   listTripPlaces,
   removeTripPlace,
   TripPlaceNotFoundError,
@@ -36,6 +37,22 @@ const updateTripPlaceSchema = z
     (value) =>
       value.customName !== undefined || value.note !== undefined || value.priority !== undefined,
   );
+
+const linkTripPlaceSchema = z
+  .object({
+    externalPlaceId: z.string().trim().min(1).max(512),
+    // What the traveller saw when they picked the match, kept only as a fallback
+    // label for when the provider cannot be reached later.
+    label: z
+      .object({
+        address: z.string().trim().max(500).nullable().optional(),
+        name: z.string().trim().max(200).nullable().optional(),
+      })
+      .strict()
+      .optional(),
+    languageCode: z.string().trim().min(2).max(35).optional(),
+  })
+  .strict();
 
 function getUserId(request: FastifyRequest, reply: FastifyReply) {
   if (!request.authUserId) {
@@ -87,6 +104,26 @@ export function createTripPlacesControllers() {
         return reply.send(
           await listTripPlaces(userId, params.data.tripId, query.data?.languageCode),
         );
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
+    async linkTripPlaceToProvider(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = tripPlaceParamsSchema.safeParse(request.params);
+      const body = linkTripPlaceSchema.safeParse(request.body);
+      if (!userId) return;
+      if (!params.success || !body.success)
+        return reply.code(400).send({ code: 'invalid_trip_place' });
+      try {
+        return reply.send({
+          tripPlace: await linkTripPlaceToProvider(
+            userId,
+            params.data.tripId,
+            params.data.tripPlaceId,
+            body.data,
+          ),
+        });
       } catch (error) {
         return handleError(reply, error);
       }

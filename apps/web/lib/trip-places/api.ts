@@ -93,6 +93,25 @@ export function updateTripPlace(
   });
 }
 
+/**
+ * Points a located Custom Place on this trip at the Google Place the traveller
+ * picked, so the stop shows that Place's address, photos and hours.
+ */
+export function linkTripPlaceToProvider(
+  tripId: string,
+  tripPlaceId: string,
+  input: {
+    externalPlaceId: string;
+    label?: { address?: string | null; name?: string | null };
+    languageCode?: string;
+  },
+) {
+  return tripPlaceRequest<{ tripPlace: TripPlace }>(
+    `/trips/${tripId}/places/${tripPlaceId}/link-provider`,
+    { body: JSON.stringify(input), method: 'POST' },
+  );
+}
+
 export function removeTripPlace(tripId: string, tripPlaceId: string) {
   return tripPlaceRequest<void>(`/trips/${tripId}/places/${tripPlaceId}`, { method: 'DELETE' });
 }

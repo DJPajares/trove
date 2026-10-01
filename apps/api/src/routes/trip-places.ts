@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 
 import { createTripPlacesControllers } from '../controllers/trip-places.js';
 import { requireAuthenticatedUser } from '../services/request-auth.js';
-import { PROVIDER_FANOUT_RATE_LIMIT } from './rate-limits.js';
+import { PROVIDER_FANOUT_RATE_LIMIT, PROVIDER_SEARCH_RATE_LIMIT } from './rate-limits.js';
 
 export function registerTripPlacesRoutes(app: FastifyInstance) {
   const controllers = createTripPlacesControllers();
@@ -14,5 +14,11 @@ export function registerTripPlacesRoutes(app: FastifyInstance) {
   app.get('/trips/:tripId/places', providerBacked, controllers.getTripPlaces);
   app.post('/trips/:tripId/places', authenticated, controllers.addTripPlace);
   app.patch('/trips/:tripId/places/:tripPlaceId', authenticated, controllers.updateTripPlace);
+  // Linking resolves the chosen Google Place with one Details request.
+  app.post(
+    '/trips/:tripId/places/:tripPlaceId/link-provider',
+    { config: PROVIDER_SEARCH_RATE_LIMIT, ...authenticated },
+    controllers.linkTripPlaceToProvider,
+  );
   app.delete('/trips/:tripId/places/:tripPlaceId', authenticated, controllers.removeTripPlace);
 }

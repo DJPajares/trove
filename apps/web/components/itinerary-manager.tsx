@@ -708,9 +708,8 @@ export function ItineraryManager({
   const [detailsPlace, setDetailsPlace] = useState<ItineraryTripPlace | null>(null);
   const [locatePlace, setLocatePlace] = useState<ItineraryTripPlace | null>(null);
 
-  /** Only a Custom Place with nowhere to be can be given somewhere to be. */
-  const canLocate = (tripPlace: ItineraryTripPlace) =>
-    tripPlace.place.kind === 'custom' && !tripPlace.place.location;
+  /** A Custom Place can be found on Google, even one already given coordinates by hand. */
+  const canLocate = (tripPlace: ItineraryTripPlace) => tripPlace.place.kind === 'custom';
   const detailsProviderName =
     detailsPlace && detailsPlace.place.kind === 'provider'
       ? (detailsPlace.place.snapshot?.name ?? detailsPlace.place.providerLabel)
@@ -3301,8 +3300,10 @@ export function ItineraryManager({
         place={
           locatePlace
             ? {
-                id: locatePlace.place.id,
                 name: placeName(locatePlace) ?? t('providerPlace'),
+                placeId: locatePlace.place.id,
+                tripId,
+                tripPlaceId: locatePlace.id,
               }
             : null
         }

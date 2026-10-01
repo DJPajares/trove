@@ -915,7 +915,9 @@ A locationless Custom Place remains valid and usable elsewhere, but it is not ma
 
 The traveller may locate or correct a Custom Place later from its details. They can enter location information or explicitly request a lookup and choose a candidate. Ambiguous matches are presented for selection; failure leaves the Place unchanged and does not trigger retries on every visit. No bulk background resolution is implied.
 
-Locating updates the owned Custom Place's location without silently converting it into a shared canonical provider Place. Existing Saved, Trip Place, itinerary, and Memory relationships keep their identity; affected maps and routes use the corrected location. Provider-derived lookup data remains subject to Section 11 even when used to locate a Custom Place.
+Entering location information by hand updates the owned Custom Place's location and never converts it into a shared canonical provider Place.
+
+Choosing a lookup candidate from a trip is an explicit link: that trip's Trip Place is pointed at the shared provider Place for the candidate, acquired like any itinerary selection (29.5), so the stop gains its provider details. The itinerary, reservation, expense, Memory, and day relationships held by the Trip Place follow it; if the trip already holds that provider Place, the two Trip Places merge. Saved Places and other trips keep the Custom Place. Affected maps and routes use the linked location. Provider-derived lookup data remains subject to Section 11.
 
 ---
 

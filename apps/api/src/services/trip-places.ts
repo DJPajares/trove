@@ -1,6 +1,11 @@
 import { getPrismaClient } from '@trove/db';
 
-import type { CanonicalPlace } from './canonical-places.js';
+import {
+  type CanonicalPlace,
+  type CanonicalPlacesService,
+  createCanonicalPlacesService,
+  type ProviderPlaceLabel,
+} from './canonical-places.js';
 import { refreshDayDefaultTimeZone } from './itineraries.js';
 import { hydratePlaceSnapshots } from './place-data.js';
 import {
@@ -267,4 +272,151 @@ export async function removeTripPlace(userId: string, tripId: string, tripPlaceI
       await refreshDayDefaultTimeZone(transaction, tripId, day.id);
     }
   });
+}
+
+/** Days whose default timezone can rest on this Trip Place, directly or through a stop. */
+const tripPlaceChildDays = (tripPlaceId: string) => ({
+  OR: [
+    { dailyBaseTripPlaceId: tripPlaceId },
+    { dailyBaseDepartureTripPlaceId: tripPlaceId },
+    { defaultTimeZoneSourceTripPlaceId: tripPlaceId },
+    { items: { some: { tripPlaceId } } },
+  ],
+});
+
+/**
+ * Links a Custom Place on this trip to the Google Place the traveller picked
+ * while locating it, so the stop gains the provider's address, photos, rating
+ * and hours rather than only its coordinates.
+ *
+ * A Custom Place cannot become a provider Place in place: the two are different
+ * shapes, and a provider Place is shared by everyone who uses it. So the trip's
+ * own Trip Place is pointed at the provider Place instead. Every itinerary item,
+ * reservation, expense, Memory and day setting holds the Trip Place rather than
+ * the Place, so all of it follows. Saved Places and other trips are not this
+ * trip's to change; they keep the Custom Place.
+ *
+ * The provider Place is resolved the way an itinerary selection is (PRD 29.5):
+ * identity and reusable evidence in one Details request. It happens before the
+ * transaction so a slow provider never holds rows locked.
+ */
+export async function linkTripPlaceToProvider(
+  userId: string,
+  tripId: string,
+  tripPlaceId: string,
+  input: { externalPlaceId: string; label?: ProviderPlaceLabel; languageCode?: string },
+  canonicalPlaces: Pick<
+    CanonicalPlacesService,
+    'resolveProviderPlace'
+  > = createCanonicalPlacesService(),
+) {
+  await assertOwnedTrip(userId, tripId);
+  const prisma = getPrismaClient();
+  const tripPlace = await prisma.tripPlace.findFirst({
+    where: { id: tripPlaceId, tripId, place: { kind: 'CUSTOM', ownerId: userId } },
+    select: { id: true, note: true, place: { select: { customNote: true, id: true } } },
+  });
+  if (!tripPlace) throw new TripPlaceNotFoundError();
+  const customPlaceId = tripPlace.place.id;
+
+  const providerPlace = await canonicalPlaces.resolveProviderPlace(
+    'google',
+    input.externalPlaceId,
+    input.label,
+    { languageCode: input.languageCode, purpose: 'itinerary' },
+  );
+
+  const linkedTripPlaceId = await prisma.$transaction(async (transaction) => {
+    const existing = await transaction.tripPlace.findFirst({
+      where: { tripId, placeId: providerPlace.id },
+      select: { id: true, note: true },
+    });
+    const affectedDays = await transaction.itineraryDay.findMany({
+      where: { tripId, ...tripPlaceChildDays(tripPlaceId) },
+      select: { id: true },
+    });
+    // A note the traveller wrote on the Custom Place itself would otherwise
+    // stay behind with it.
+    const carriedNote = tripPlace.place.customNote?.trim() || null;
+
+    let targetId = tripPlaceId;
+    if (existing) {
+      // The trip already holds this Google Place, and a trip holds a Place
+      // once, so the located stop folds into it.
+      targetId = existing.id;
+      const moved = { data: { tripPlaceId: existing.id }, where: { tripId, tripPlaceId } } as const;
+      await transaction.itineraryItem.updateMany(moved);
+      await transaction.memory.updateMany(moved);
+      await transaction.expense.updateMany(moved);
+      await transaction.reservation.updateMany(moved);
+      await transaction.itineraryDay.updateMany({
+        where: { tripId, dailyBaseTripPlaceId: tripPlaceId },
+        data: { dailyBaseTripPlaceId: existing.id },
+      });
+      await transaction.itineraryDay.updateMany({
+        where: { tripId, dailyBaseDepartureTripPlaceId: tripPlaceId },
+        data: { dailyBaseDepartureTripPlaceId: existing.id },
+      });
+      await transaction.itineraryDay.updateMany({
+        where: { tripId, defaultTimeZoneSourceTripPlaceId: tripPlaceId },
+        data: { defaultTimeZoneSourceTripPlaceId: existing.id },
+      });
+      const note = existing.note ?? tripPlace.note ?? carriedNote;
+      if (note !== existing.note) {
+        await transaction.tripPlace.update({ where: { id: existing.id }, data: { note } });
+      }
+      await transaction.tripPlace.delete({ where: { id: tripPlaceId } });
+    } else {
+      await transaction.tripPlace.update({
+        where: { id: tripPlaceId },
+        data: {
+          placeId: providerPlace.id,
+          ...(tripPlace.note === null && carriedNote ? { note: carriedNote } : {}),
+        },
+      });
+    }
+
+    // The trip's own references to the Custom Place move with it. A destination
+    // the trip already holds as the Google Place is left as it is.
+    const destinationTaken = await transaction.tripDestination.findFirst({
+      where: { tripId, placeId: providerPlace.id },
+      select: { id: true },
+    });
+    if (!destinationTaken) {
+      await transaction.tripDestination.updateMany({
+        where: { tripId, placeId: customPlaceId },
+        data: { placeId: providerPlace.id },
+      });
+    }
+    await transaction.trip.updateMany({
+      where: { id: tripId, startingPlaceId: customPlaceId },
+      data: { startingPlaceId: providerPlace.id },
+    });
+    await transaction.trip.updateMany({
+      where: { id: tripId, referenceTimeZoneSourcePlaceId: customPlaceId },
+      data: { referenceTimeZoneSourcePlaceId: providerPlace.id },
+    });
+
+    // The location may have moved, so any day that leans on this Place for its
+    // timezone re-resolves it.
+    for (const day of affectedDays) {
+      await refreshDayDefaultTimeZone(transaction, tripId, day.id);
+    }
+    return targetId;
+  });
+
+  const linked = await prisma.tripPlace.findFirst({
+    where: { id: linkedTripPlaceId, tripId },
+    include: {
+      ...tripPlaceInclude,
+      place: {
+        include: {
+          ...placeProviderRefInclude,
+          savedPlaces: { where: { ownerId: userId }, select: { id: true } },
+        },
+      },
+    },
+  });
+  if (!linked) throw new TripPlaceNotFoundError();
+  return serializeTripPlace(linked);
 }

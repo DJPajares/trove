@@ -75,6 +75,7 @@ type TripPlacesPanelProps = {
   /** Extra facts worth a line under a row: open that day, rating, distance. */
   signalsFor?: (tripPlace: TripPlace) => Array<{ emphasis?: boolean; text: string }>;
   placeUse?: Record<string, ScheduledPlaceUse>;
+  tripId: string;
   tripPlaces: TripPlace[];
 };
 
@@ -98,6 +99,7 @@ export function TripPlacesPanel({
   formatUsageDates,
   signalsFor,
   placeUse,
+  tripId,
   tripPlaces,
 }: Readonly<TripPlacesPanelProps>) {
   const t = useTranslations('tripPlaces');
@@ -119,9 +121,8 @@ export function TripPlacesPanel({
       provider: t('providerDetailsUnavailable'),
     });
 
-  /** Only a Custom Place with nowhere to be can be given somewhere to be. */
-  const canLocate = (tripPlace: TripPlace) =>
-    tripPlace.place.kind === 'custom' && !tripPlace.place.location;
+  /** A Custom Place can be found on Google, even one already given coordinates by hand. */
+  const canLocate = (tripPlace: TripPlace) => tripPlace.place.kind === 'custom';
 
   /** Only worth its own line once the traveller's name has taken the title. */
   const officialName = (tripPlace: TripPlace) =>
@@ -409,7 +410,16 @@ export function TripPlacesPanel({
       <LocatePlaceSheet
         onLocated={onPlaceLocated}
         onOpenChange={(open) => !open && setLocatePlace(null)}
-        place={locatePlace ? { id: locatePlace.place.id, name: placeName(locatePlace) } : null}
+        place={
+          locatePlace
+            ? {
+                name: placeName(locatePlace),
+                placeId: locatePlace.place.id,
+                tripId,
+                tripPlaceId: locatePlace.id,
+              }
+            : null
+        }
       />
     </>
   );

@@ -1366,7 +1366,7 @@
       "action": "Locate this place",
       "close": "Close",
       "title": "Locate this place",
-      "description": "Find where this place is so it can appear on the map, in travel times, and in the weather for its day.",
+      "description": "Find this place on Google. Choosing a match links it on this trip, with its address, photos and hours, and puts it on the map.",
       "queryLabel": "Search for this place",
       "queryPlaceholder": "Name, and the town or city",
       "queryHint": "Adding the town or city usually settles it.",
@@ -1377,7 +1377,7 @@
       "saving": "Saving…",
       "noMatches": "No matches for that. Try the full name, or add the town or city.",
       "unavailable": "Place search is unavailable right now. Try again shortly.",
-      "saveError": "We couldn't save that location. Try again."
+      "saveError": "We couldn't link that place. Try again."
     },
     "goToPhoto": "Show photo {current}",
     "nextPhoto": "Next photo",

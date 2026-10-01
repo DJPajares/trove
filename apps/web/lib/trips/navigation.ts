@@ -67,7 +67,7 @@ export function primaryTripDestinations(
         lifecycle === 'planning' || lifecycle === 'completed'
           ? `${base}/mode?preview=1&date=${encodeURIComponent(startDate)}&time=09%3A00`
           : `${base}/mode`,
-      labelKey: lifecycle === 'planning' ? 'preview' : 'tripMode',
+      labelKey: lifecycle === 'active' ? 'tripMode' : 'preview',
       section: 'mode',
     },
     {
@@ -128,7 +128,7 @@ export function tripOverviewDestinations(
     return {
       ...destination,
       descriptionKey: isCompletedPreview ? 'previewCompleted' : destination.labelKey,
-      displayLabelKey: isCompletedPreview ? 'preview' : destination.labelKey,
+      displayLabelKey: destination.labelKey,
     } satisfies TripOverviewDestination;
   });
   const primary = overviewDestinations.find((destination) => destination.emphasis === 'leading');
@@ -153,16 +153,6 @@ export function tripOverviewDestinations(
     primary,
     secondary: [firstSecondary, secondSecondary],
   };
-}
-
-/**
- * Trip section headers keep only the planning and memories destinations. The
- * shared destination set and the Preview and Trip Mode routes remain intact.
- */
-export function visibleTripNavigationDestinations(
-  destinations: TripDestination[],
-): TripDestination[] {
-  return destinations.filter((destination) => destination.section !== 'mode');
 }
 
 /**

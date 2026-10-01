@@ -9,7 +9,6 @@ import {
   tripOverviewDestinations,
   tripSectionLabelKey,
   type TripSection,
-  visibleTripNavigationDestinations,
   withLiveTripModeFirst,
 } from '../lib/trips/navigation.ts';
 
@@ -46,7 +45,7 @@ test('emphasis follows the stage the traveller is actually in', () => {
   ]);
   expect(shape('completed')).toStrictEqual([
     { emphasis: 'standard', label: 'itinerary', section: 'itinerary' },
-    { emphasis: 'quiet', label: 'tripMode', section: 'mode' },
+    { emphasis: 'quiet', label: 'preview', section: 'mode' },
     { emphasis: 'leading', label: 'memories', section: 'memories' },
   ]);
 });
@@ -78,14 +77,31 @@ test('Trip Mode is live only for active trips, while Preview is available before
   expect(isTripModeAvailable('completed', true)).toBe(true);
 });
 
-test('trip section navigation omits Preview and Trip Mode on every section', () => {
-  for (const lifecycle of ['planning', 'active', 'completed'] as const) {
-    expect(
-      visibleTripNavigationDestinations(primaryTripDestinations(TRIP, lifecycle, START)).map(
-        (entry) => entry.section,
-      ),
-    ).toStrictEqual(['itinerary', 'memories']);
-  }
+test('trip section navigation carries all three experiences, live only while travelling', () => {
+  const tabs = (lifecycle: 'active' | 'completed' | 'planning') =>
+    primaryTripDestinations(TRIP, lifecycle, START).map((entry) => [
+      entry.section,
+      entry.labelKey,
+      entry.href,
+    ]);
+  const preview = `/trips/${TRIP}/mode?preview=1&date=2026-09-05&time=09%3A00`;
+
+  expect(tabs('planning')).toStrictEqual([
+    ['itinerary', 'itinerary', `/trips/${TRIP}/itinerary`],
+    ['mode', 'preview', preview],
+    ['memories', 'memories', `/trips/${TRIP}/memories`],
+  ]);
+  expect(tabs('active')).toStrictEqual([
+    ['itinerary', 'itinerary', `/trips/${TRIP}/itinerary`],
+    ['mode', 'tripMode', `/trips/${TRIP}/mode`],
+    ['memories', 'memories', `/trips/${TRIP}/memories`],
+  ]);
+  // A finished trip can be rehearsed again, but never presented as live.
+  expect(tabs('completed')).toStrictEqual([
+    ['itinerary', 'itinerary', `/trips/${TRIP}/itinerary`],
+    ['mode', 'preview', preview],
+    ['memories', 'memories', `/trips/${TRIP}/memories`],
+  ]);
 });
 
 test('supporting tools stay complete and out of the primary set', () => {
@@ -191,7 +207,7 @@ test('completed overview uses Preview copy while retaining the mode destination 
   expect(mode).toMatchObject({
     descriptionKey: 'previewCompleted',
     displayLabelKey: 'preview',
-    labelKey: 'tripMode',
+    labelKey: 'preview',
   });
   expect(mode?.href).toBe(`/trips/${TRIP}/mode?preview=1&date=2026-09-05&time=09%3A00`);
 });

@@ -2,7 +2,7 @@
 
 import { CircleAlert, MapPinned, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -24,17 +24,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import {
-  fetchPlaceLocationCandidates,
-  type PlaceLocationCandidate,
-  updateCustomPlace,
-} from '@/lib/saved/api';
+import { fetchPlaceLocationCandidates, type PlaceLocationCandidate } from '@/lib/saved/api';
+import { linkTripPlaceToProvider } from '@/lib/trip-places/api';
 
 type LocatePlaceSheetProps = {
   onLocated: () => Promise<void> | void;
   onOpenChange: (open: boolean) => void;
-  /** The Custom Place being repaired: its id, and the name to search on first. */
-  place: { id: string; name: string } | null;
+  /** The trip's Custom Place being repaired, and the name to search on first. */
+  place: { name: string; placeId: string; tripId: string; tripPlaceId: string } | null;
 };
 
 type SearchState = 'empty' | 'idle' | 'results' | 'searching' | 'unavailable';
@@ -52,9 +49,9 @@ type SearchState = 'empty' | 'idle' | 'results' | 'searching' | 'unavailable';
  * exactly one match and gives up otherwise - and a traveller who knows which
  * Hanoi they meant can settle it where the pipeline could not.
  *
- * The coordinates land on the Place itself, which Saved Places and Trip Places
- * both point at, so neither relationship moves and one repair reaches every trip
- * using it.
+ * Choosing a match links this trip's stop to that Google Place, so it gains the
+ * address, photos, rating and hours a located-by-hand place never has. Only this
+ * trip moves: Saved Places and other trips keep the Custom Place (PRD 12).
  */
 export function LocatePlaceSheet({
   onLocated,
@@ -62,6 +59,7 @@ export function LocatePlaceSheet({
   place,
 }: Readonly<LocatePlaceSheetProps>) {
   const t = useTranslations('placeDetail');
+  const locale = useLocale();
   const [query, setQuery] = useState('');
   const [state, setState] = useState<SearchState>('idle');
   const [candidates, setCandidates] = useState<PlaceLocationCandidate[]>([]);
@@ -86,7 +84,7 @@ export function LocatePlaceSheet({
     setFailed(false);
     setCandidates([]);
     try {
-      const result = await fetchPlaceLocationCandidates(place.id, trimmed);
+      const result = await fetchPlaceLocationCandidates(place.placeId, trimmed);
       setCandidates(result.candidates);
       setState(result.status === 'empty' ? 'empty' : 'results');
     } catch {
@@ -100,11 +98,10 @@ export function LocatePlaceSheet({
     setSavingId(candidate.externalPlaceId);
     setFailed(false);
     try {
-      // The time zone is deliberately absent. A candidate carries a UTC offset,
-      // not an IANA zone, and the itinerary does DST-correct maths with that
-      // field - so an omitted zone leaves whatever the place already had.
-      await updateCustomPlace(place.id, {
-        location: { latitude: candidate.latitude, longitude: candidate.longitude },
+      await linkTripPlaceToProvider(place.tripId, place.tripPlaceId, {
+        externalPlaceId: candidate.externalPlaceId,
+        label: { address: candidate.address, name: candidate.name },
+        languageCode: locale,
       });
       await onLocated();
       onOpenChange(false);

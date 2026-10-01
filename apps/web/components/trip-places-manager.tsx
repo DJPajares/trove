@@ -157,6 +157,7 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
             onPriorityChange={(tripPlace, priority) => void places.setPriority(tripPlace, priority)}
             onRemove={setRemovingPlace}
             signalsFor={signalsFor}
+            tripId={tripId}
             tripPlaces={sortedPlaces}
           />
         </div>

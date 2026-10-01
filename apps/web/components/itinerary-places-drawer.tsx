@@ -220,6 +220,7 @@ export function ItineraryPlacesDrawer({
                     dates.map((date) => dateFormatter.format(new Date(`${date}T00:00:00Z`))),
                   )
                 }
+                tripId={tripId}
                 tripPlaces={sortedPlaces}
               />
             ) : null}

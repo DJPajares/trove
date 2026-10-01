@@ -262,7 +262,9 @@ export function PlanScorePanel({
     : travelerInsightGroups(explanations);
   const specificGap =
     displayScore === null && !unavailable
-      ? allIssues.find((reason) => ['LINK_PLACE', 'EDIT_TRANSFER'].includes(reason.action ?? ''))
+      ? allIssues.find((reason) =>
+          ['LINK_PLACE', 'ADD_TIMING', 'EDIT_TRANSFER'].includes(reason.action ?? ''),
+        )
       : undefined;
   const issues = allIssues.filter((reason) => reason !== specificGap);
   const outcomes = scope === 'day' ? factors : assessment?.components;

@@ -2463,7 +2463,8 @@
       "activityLoad": "Based on planned activity time; the schedule hasn't been assessed.",
       "timing": "Based on the supported schedule and activity time; some parts of the plan remain unassessed.",
       "rest": "Based on planned rest time and known commitments.",
-      "verifiedProblem": "Based on the timing or activity load that can be checked."
+      "verifiedProblem": "Based on the timing or activity load that can be checked.",
+      "detailMissing": "Some stops have no location or time yet, so they count low until you add them."
     },
     "notEnoughInformation": {
       "day": "Add a time or duration to assess this day.",
@@ -2518,7 +2519,8 @@
       "REDUCE_LOAD": "Review the load",
       "REVIEW_TIMING": "Review timing",
       "LINK_PLACE": "Link a place",
-      "EDIT_TRANSFER": "Review transfer details"
+      "EDIT_TRANSFER": "Review transfer details",
+      "ADD_TIMING": "Add times"
     },
     "feasibility": {
       "noConflicts": "No conflicts were found in the timings we could assess.",
@@ -2657,7 +2659,10 @@
     "worthALook": "{count, plural, one {# thing worth a look} other {# things worth a look}}",
     "missing": {
       "timedAccess": "Add a location to check access to a timed booking or departure.",
-      "locations": "Link {count, plural, one {one stop} other {# stops}} to check travel time for Day {day}.",
+      "locations": "{count, plural, one {One stop on Day {day} has} other {# stops on Day {day} have}} no location yet. Link a place to check travel, opening hours and fit.",
+      "timing": "{count, plural, one {One stop on Day {day} has} other {# stops on Day {day} have}} no time or length yet. Add them to check pace and opening hours.",
+      "locationsTrip": "{count, plural, one {One stop has} other {# stops have}} no location yet. Link places to check travel, opening hours and fit.",
+      "timingTrip": "{count, plural, one {One stop has} other {# stops have}} no time or length yet. Add them to check pace and opening hours.",
       "transfer": "Add transfer locations and arrival details for Day {day}.",
       "arrival": "Add the arrival time to check connections for Day {day}."
     }

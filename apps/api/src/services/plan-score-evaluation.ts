@@ -12,6 +12,7 @@ import {
   evaluatePlaceQuality,
   evaluateRouteEfficiency,
   type PlanScoreDayItem,
+  type PlanScoreDetailGaps,
   type PlanScoreFixedCommitment,
   type PlanScoreInterval,
   type PlanScorePlace,
@@ -21,9 +22,11 @@ import {
 } from './plan-score-factors.js';
 import {
   combineSignals,
+  MISSING_DETAIL_SCORE,
   UNKNOWN,
   NOT_APPLICABLE,
   scoringInputRevision,
+  withMissingDetail,
   type PlanScoreDayInput,
   type PlanScoreEvidence,
   type PlanScoreEvidenceSource,
@@ -44,6 +47,11 @@ export type ScoringPlace = PlanScorePlace & {
   source?: PlanScoreEvidence['source'];
   coordinates?: { latitude: number; longitude: number } | null;
   name?: string | null;
+  /**
+   * A provider place. It has a real location even while its cached snapshot
+   * has lapsed, so only a custom place with no position counts as unlocated.
+   */
+  linked?: boolean;
 };
 export type ScoringRouteSegment = PlanScoreRouteSegment & {
   mode?: string;
@@ -78,7 +86,8 @@ export type ScoredDayInput = {
 type Criterion = {
   id: string;
   source: PlanScoreEvidenceSource;
-  satisfied: boolean | null;
+  /** `MISSING`: unjudgeable only because the traveller has yet to add the detail. */
+  satisfied: boolean | 'MISSING' | null;
   /** A partial concern counts for less than a full criterion. */
   weight?: number;
 };
@@ -87,11 +96,21 @@ function supported(criteria: readonly Criterion[]): PlanScoreFactorResult {
   const known = criteria.filter((c) => c.satisfied !== null);
   const knownWeight = known.reduce((sum, c) => sum + weight(c), 0);
   if (!known.length || knownWeight <= 0) return UNKNOWN;
+  const credit = (c: Criterion) =>
+    c.satisfied === 'MISSING'
+      ? (weight(c) * MISSING_DETAIL_SCORE) / 100
+      : c.satisfied
+        ? weight(c)
+        : 0;
   return {
     state: 'EVALUATED',
-    score: (100 * known.reduce((sum, c) => sum + (c.satisfied ? weight(c) : 0), 0)) / knownWeight,
+    score: (100 * known.reduce((sum, c) => sum + credit(c), 0)) / knownWeight,
     coverage: (100 * knownWeight) / criteria.reduce((sum, c) => sum + weight(c), 0),
-    evidence: known.map((c) => ({ ref: c.id, source: c.source })),
+    evidence: known.map((c) =>
+      c.satisfied === 'MISSING'
+        ? { ref: `missing:${c.id}`, source: 'ESTIMATED' as const }
+        : { ref: c.id, source: c.source },
+    ),
   };
 }
 const RELIABILITY_ORDER: readonly PlanScoreEvidenceSource[] = [
@@ -217,7 +236,41 @@ export function evaluateScoredDay(input: ScoredDayInput) {
       ? { ...item, openingHours: { status: 'UNKNOWN' as const } }
       : item,
   );
-  const feasibility = evaluateFeasibility({ items, commitments: input.commitments, availability });
+  // Detail only the traveller can add (rubric 11). A stop is located when it is
+  // a provider place, even one whose cached snapshot has lapsed, or a custom
+  // place on the map; a label with no place, or a custom place with no
+  // position, is not. Booked stops take their time from the booking.
+  const isStop = (item: PlanScoreDayItem) => !item.blockType || item.blockType === 'activity';
+  const booked = new Set(input.commitments.flatMap((c) => (c.itemId ? [c.itemId] : [])));
+  const unlocated = (item: PlanScoreDayItem) => {
+    if (!item.placeId) return true;
+    const place = places.get(item.placeId);
+    return Boolean(place && !place.coordinates && place.linked === false);
+  };
+  const stopIds = (keep: (item: PlanScoreDayItem) => boolean) =>
+    new Set(dayItems.filter((item) => isStop(item) && keep(item)).map((item) => item.id));
+  const gaps: PlanScoreDetailGaps = {
+    location: stopIds(unlocated),
+    time: stopIds((item) => !item.start && !item.startWindow && !booked.has(item.id)),
+    daypart: stopIds((item) => !item.start && !!item.startWindow && !booked.has(item.id)),
+    duration: stopIds((item) => !item.duration && !item.longDistance),
+  };
+  const missingLegs = new Set(
+    input.segments
+      .filter(
+        (s) =>
+          s.scope === 'LOCAL' &&
+          s.status === 'UNKNOWN' &&
+          s.itemIds?.some((id) => gaps.location.has(id)),
+      )
+      .map((s) => s.id),
+  );
+  const feasibility = evaluateFeasibility({
+    items,
+    commitments: input.commitments,
+    availability,
+    gaps,
+  });
   const requiredInbound = dayItems.filter((item, index) => item.inboundRequired ?? index > 0);
   const unresolvedTransport = dayItems.some(
     (item) =>
@@ -245,7 +298,7 @@ export function evaluateScoredDay(input: ScoredDayInput) {
     !requiredInbound.length &&
     !unresolvedTransport
       ? { factor: NOT_APPLICABLE, totalMinutes: null }
-      : evaluateTravelEffort(input.segments);
+      : evaluateTravelEffort(input.segments, missingLegs);
   const routeComparison: PlanScoreRouteEfficiencyEvaluation =
     input.routeComparison === 'NOT_APPLICABLE'
       ? { factor: NOT_APPLICABLE, bestMinutes: null, plannedMinutes: null }
@@ -259,9 +312,15 @@ export function evaluateScoredDay(input: ScoredDayInput) {
             bestMinutes: null,
             plannedMinutes: null,
           };
+  // A comparison an unlocated stop leaves impossible is that stop's gap, not
+  // a free pass for the day's order.
+  const comparison =
+    routeComparison.factor.state === 'UNKNOWN' && gaps.location.size
+      ? withMissingDetail(routeComparison.factor, 100, [...gaps.location])
+      : routeComparison.factor;
   const route = combineSignals([
     { weight: 60, result: travel.factor },
-    { weight: 40, result: routeComparison.factor },
+    { weight: 40, result: comparison },
   ]);
   const pace = effectiveTripPace(preferences);
   const target = Math.min(
@@ -279,6 +338,10 @@ export function evaluateScoredDay(input: ScoredDayInput) {
   let observations = 0;
   let knownObservations = 0;
   let completeObservations = 0;
+  // Observations missing only because the traveller left a stop without a
+  // duration or a location. They count at the missing-detail value, never as
+  // an hour of rest.
+  const missingObservations: string[] = [];
   const commitments = [...new Map(input.commitments.map((c) => [c.id, c])).values()];
   const represented = new Set(
     commitments.flatMap((c) => (c.longDistance && c.itemId ? [c.itemId] : [])),
@@ -286,7 +349,10 @@ export function evaluateScoredDay(input: ScoredDayInput) {
   for (const item of dayItems) {
     if (represented.has(item.id)) continue;
     observations++;
-    if (!item.duration) continue;
+    if (!item.duration) {
+      if (gaps.duration.has(item.id)) missingObservations.push(`duration:${item.id}`);
+      continue;
+    }
     knownObservations++;
     if (!inferred.typeInferred.has(item.id)) completeObservations++;
     const minutes =
@@ -322,7 +388,10 @@ export function evaluateScoredDay(input: ScoredDayInput) {
       continue;
     }
     observations++;
-    if (leg.status !== 'KNOWN') continue;
+    if (leg.status !== 'KNOWN') {
+      if (missingLegs.has(leg.id)) missingObservations.push(`segment:${leg.id}`);
+      continue;
+    }
     knownObservations++;
     completeObservations++;
     const multiplier = leg.mode === 'walk' ? 1.25 : leg.mode === 'transit' ? 0.75 : 1;
@@ -341,6 +410,8 @@ export function evaluateScoredDay(input: ScoredDayInput) {
       ),
   );
   observations += absentInbound.length;
+  for (const item of absentInbound)
+    if (gaps.location.has(item.id)) missingObservations.push(`travel:${item.id}`);
   const restful =
     rest &&
     dayItems.length === 0 &&
@@ -360,13 +431,27 @@ export function evaluateScoredDay(input: ScoredDayInput) {
   const ratio = target > 0 ? load / target : null;
   const provenRatio = target > 0 ? provenLoad / target : null;
   const provedOverload = provenRatio !== null && provenRatio > 1;
+  const judgedObservations = knownObservations + missingObservations.length;
+  // Known load only grows as detail is added, so its comfort bounds the day:
+  // leaving a duration out can never make a day look lighter than it is.
   const comfort: PlanScoreFactorResult =
-    knownObservations > 0 && ratio !== null
+    judgedObservations > 0 && ratio !== null
       ? {
           state: 'EVALUATED',
-          score: loadScore(ratio),
-          coverage: (100 * knownObservations) / observations,
-          evidence,
+          score: Math.min(
+            loadScore(ratio),
+            (knownObservations * loadScore(ratio) +
+              missingObservations.length * MISSING_DETAIL_SCORE) /
+              judgedObservations,
+          ),
+          coverage: (100 * judgedObservations) / observations,
+          evidence: [
+            ...evidence,
+            ...missingObservations.map((ref) => ({
+              ref: `missing:${ref}`,
+              source: 'ESTIMATED' as const,
+            })),
+          ],
         }
       : UNKNOWN;
   // Visits are the stops a traveller goes to experience. Logistics places - an
@@ -390,18 +475,31 @@ export function evaluateScoredDay(input: ScoredDayInput) {
         .map((p) => [p.tripPlaceId, p]),
     ).values(),
   ];
+  // Venues the traveller has not located are still the day's venues: what
+  // they are, how they rate and whether they suit is unknowable until they are.
+  const unlocatedPlaceIds = new Set(
+    dayItems.flatMap((item) => (gaps.location.has(item.id) && item.placeId ? [item.placeId] : [])),
+  );
+  const labelVisits = visits.filter((item) => !item.placeId && gaps.location.has(item.id));
   const fit = preferences.interests.length
-    ? supported(
-        knownPlaces.map((place) => ({
+    ? supported([
+        ...knownPlaces.map((place) => ({
           id: `interest:${place.tripPlaceId}`,
           source: place.source ?? 'CACHED_PROVIDER',
           satisfied: interestsForPlaceTypes(place.types ?? []).some((i) =>
             preferences.interests.includes(i as (typeof preferences.interests)[number]),
           )
             ? true
-            : null,
+            : unlocatedPlaceIds.has(place.tripPlaceId)
+              ? ('MISSING' as const)
+              : null,
         })),
-      )
+        ...labelVisits.map((item) => ({
+          id: `interest:${item.id}`,
+          source: 'ESTIMATED' as const,
+          satisfied: 'MISSING' as const,
+        })),
+      ])
     : UNKNOWN;
   const advisories: DayAdvisory[] = [];
   const outdoorPlace = (place: ScoringPlace) => placeProfile(place.types)?.outdoor ?? false;
@@ -446,9 +544,14 @@ export function evaluateScoredDay(input: ScoredDayInput) {
     const timingSource = item.start?.source ?? item.startWindow?.source ?? null;
     const id = `time:${item.id}`;
     if (!profile) {
-      timeCriteria.push({ id, source: 'ESTIMATED', satisfied: null });
+      timeCriteria.push({
+        id,
+        source: 'ESTIMATED',
+        satisfied: gaps.location.has(item.id) ? 'MISSING' : null,
+      });
       continue;
     }
+    const untimed = gaps.time.has(item.id) ? ('MISSING' as const) : null;
     if (profile.windowKind === 'ACCESS' && item.openingHours.status === 'KNOWN') {
       // Known hours own this visit's timing (feasibility); a visit inside them is
       // well timed, and one outside them is not judged a second time here.
@@ -461,14 +564,14 @@ export function evaluateScoredDay(input: ScoredDayInput) {
           source: timingSource
             ? weaker(timingSource, item.openingHours.source)
             : item.openingHours.source,
-          satisfied: timingSource ? true : null,
+          satisfied: timingSource ? true : untimed,
         });
     } else if (profile.windows) {
       const windows =
         profile.windows === 'DAYLIGHT' ? daylightWindow(place?.coordinates) : profile.windows;
       const satisfied =
         !timingSource || !windows
-          ? null
+          ? untimed
           : item.start
             ? withinWindows(item.start.minutes, windows)
             : windowMeets(
@@ -508,7 +611,16 @@ export function evaluateScoredDay(input: ScoredDayInput) {
     const minimum = profileOf(item)?.visit?.minimum;
     const own = stated.get(item.id);
     const allowed = own?.minutes ?? inferred.allowedMinutes.get(item.id) ?? null;
-    const satisfied = minimum === undefined || allowed === null ? null : allowed >= minimum;
+    const satisfied =
+      !profileOf(item) && gaps.location.has(item.id)
+        ? ('MISSING' as const)
+        : minimum === undefined
+          ? null
+          : allowed === null
+            ? gaps.time.has(item.id) || gaps.duration.has(item.id)
+              ? ('MISSING' as const)
+              : null
+            : allowed >= minimum;
     if (satisfied === false) rushed.push(item.id);
     allocationCriteria.push({
       id: `allocation:${item.id}`,
@@ -522,7 +634,23 @@ export function evaluateScoredDay(input: ScoredDayInput) {
         { weight: 35, result: supported(timeCriteria) },
         { weight: 25, result: supported(allocationCriteria) },
         { weight: 25, result: fit },
-        { weight: 15, result: evaluatePlaceQuality(knownPlaces) },
+        {
+          weight: 15,
+          result: withMissingDetail(
+            evaluatePlaceQuality([
+              ...knownPlaces,
+              ...labelVisits.map((item) => ({
+                tripPlaceId: `item:${item.id}`,
+                rating: { status: 'UNKNOWN' as const },
+              })),
+            ]),
+            (100 *
+              (knownPlaces.filter((p) => unlocatedPlaceIds.has(p.tripPlaceId)).length +
+                labelVisits.length)) /
+              Math.max(1, knownPlaces.length + labelVisits.length),
+            [...gaps.location],
+          ),
+        },
       ]);
   const intentEvidence: PlanScoreEvidence[] = [{ ref: 'intent', source: 'USER_OWNED' }];
   const focused = context.intent === 'focused';
@@ -535,21 +663,27 @@ export function evaluateScoredDay(input: ScoredDayInput) {
   const inOrder = timedItems
     .slice(1)
     .filter((item, index) => earliest(timedItems[index]!) <= latest(item)).length;
-  // One stop has no order to judge, and one timed stop among several proves none.
+  // One stop has no order to judge, and one timed stop among several proves
+  // none. A stop the traveller left untimed has no place in the flow yet.
+  const untimedStops = dayItems.filter((item) => gaps.time.has(item.id));
   const temporalFlow: PlanScoreFactorResult =
     dayItems.length < 2
       ? NOT_APPLICABLE
-      : timedItems.length < 2
-        ? UNKNOWN
-        : {
-            state: 'EVALUATED',
-            score: (100 * inOrder) / (timedItems.length - 1),
-            coverage: (100 * timedItems.length) / dayItems.length,
-            evidence: timedItems.map((item) => ({
-              ref: `order:${item.id}`,
-              source: item.start?.source ?? item.startWindow!.source,
-            })),
-          };
+      : withMissingDetail(
+          timedItems.length < 2
+            ? UNKNOWN
+            : {
+                state: 'EVALUATED',
+                score: (100 * inOrder) / (timedItems.length - 1),
+                coverage: (100 * timedItems.length) / dayItems.length,
+                evidence: timedItems.map((item) => ({
+                  ref: `order:${item.id}`,
+                  source: item.start?.source ?? item.startWindow!.source,
+                })),
+              },
+          (100 * untimedStops.length) / dayItems.length,
+          untimedStops.map((item) => item.id),
+        );
   const coherence: PlanScoreFactorResult = restful
     ? { state: 'EVALUATED', score: 100, evidence: intentEvidence }
     : focused && fit.state === 'EVALUATED'
@@ -598,16 +732,21 @@ export function evaluateScoredDay(input: ScoredDayInput) {
         ? item.startWindow.earliestMinute >= MIDDAY.startMinute - 60 &&
           item.startWindow.earliestMinute < MIDDAY.endMinute
         : false;
-  const seasonal = visitDay
-    ? seasonalDayFit(
-        visits.map((item) => ({
-          minutes: item.duration?.minutes ?? 60,
-          outdoor: profileOf(item)?.outdoor ?? false,
-          midday: midday(item),
-        })),
-        input.climate,
-      )
-    : { factor: NOT_APPLICABLE, wet: false, heat: false };
+  // Only a visit whose kind is known can be judged indoor or outdoor; an
+  // unlocated stop is not assumed to be indoors.
+  const knownKindVisits = visits.filter((item) => profileOf(item));
+  const seasonal = !visitDay
+    ? { factor: NOT_APPLICABLE, wet: false, heat: false }
+    : knownKindVisits.length
+      ? seasonalDayFit(
+          knownKindVisits.map((item) => ({
+            minutes: item.duration?.minutes ?? 60,
+            outdoor: profileOf(item)?.outdoor ?? false,
+            midday: midday(item),
+          })),
+          input.climate,
+        )
+      : { factor: UNKNOWN, wet: false, heat: false };
   let continuous = 0;
   for (const [index, item] of input.items.entries()) {
     const previous = input.items[index - 1];
@@ -689,6 +828,8 @@ export function evaluateScoredDay(input: ScoredDayInput) {
   if (durationEstimated) limitations.push('DURATION_ESTIMATED');
   if (!complete) limitations.push('LOAD_INCOMPLETE');
   if (!assessmentBasis.includes('TIMING') && !restful) limitations.push('TIMING_UNKNOWN');
+  if (gaps.location.size || gaps.time.size || gaps.duration.size)
+    limitations.push('DETAIL_MISSING');
   if (
     quality.state === 'UNKNOWN' ||
     (quality.state === 'EVALUATED' && (quality.coverage ?? 100) < 100)
@@ -732,8 +873,10 @@ export function evaluateScoredDay(input: ScoredDayInput) {
         (c) => c.itemId && c.startKnown !== false && segment.itemIds?.at(-1) === c.itemId,
       ),
   );
+  // A stop the traveller left unlocated is already asked for below.
   const missingLocations = input.items.filter(
     (item) =>
+      !gaps.location.has(item.id) &&
       !input.places.find((place) => place.tripPlaceId === item.placeId)?.coordinates &&
       timedAccessLegs.some((segment) => segment.itemIds?.includes(item.id)),
   );
@@ -776,7 +919,41 @@ export function evaluateScoredDay(input: ScoredDayInput) {
         values: {},
       })),
   ];
+  // What the traveller can add to plan the day better, and to score it on its
+  // own detail rather than at the missing-detail value.
+  const untimedOrUnmeasured = dayItems.filter(
+    (item) => gaps.time.has(item.id) || gaps.duration.has(item.id),
+  );
+  const detailNudges: PlanScoreExplanation[] = [
+    ...(gaps.location.size
+      ? [
+          {
+            action: 'LINK_PLACE' as const,
+            code: 'STOPS_NOT_LOCATED',
+            factor: 'ROUTE_EFFICIENCY' as const,
+            messageKey: 'missing.locations',
+            severity: 'INFO' as const,
+            references: [...gaps.location],
+            values: { count: gaps.location.size },
+          },
+        ]
+      : []),
+    ...(untimedOrUnmeasured.length
+      ? [
+          {
+            action: 'ADD_TIMING' as const,
+            code: 'STOPS_WITHOUT_TIMING',
+            factor: 'FEASIBILITY' as const,
+            messageKey: 'missing.timing',
+            severity: 'INFO' as const,
+            references: untimedOrUnmeasured.map((item) => item.id),
+            values: { count: untimedOrUnmeasured.length },
+          },
+        ]
+      : []),
+  ];
   return {
+    detailNudges,
     missingInformation,
     requestedInterests: preferences.interests,
     interestEvidence: knownPlaces.flatMap((p) =>

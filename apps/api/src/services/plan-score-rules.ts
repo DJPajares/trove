@@ -21,15 +21,16 @@ export type {
   PlanScoreTripWithheldReason,
   PlanScoreUnknownReason,
 } from '@trove/types';
-export const PLAN_SCORE_CONTRACT_VERSION = 7;
+export const PLAN_SCORE_CONTRACT_VERSION = 8;
 /**
  * The judgement a stored score was made under. It moves on a calibration
  * change (8: the estimated reorder comparison; 10: itinerary-native estimates,
- * destination context and the coverage-only row gate) while the response
- * shape, the contract version, stays put; either change invalidates every
- * stored score.
+ * destination context and the coverage-only row gate; 11: missing traveller
+ * detail scores low, which also widened the contract to 8) while the response
+ * shape, the contract version, usually stays put; either change invalidates
+ * every stored score.
  */
-export const PLAN_SCORE_RUBRIC_VERSION = 10;
+export const PLAN_SCORE_RUBRIC_VERSION = 11;
 /**
  * A category or component publishes its number once this share of its weight
  * is assessed from known or estimated evidence. Below it the number would rest
@@ -79,6 +80,39 @@ export type PlanScoreFactorResult =
   | { state: 'NOT_APPLICABLE' };
 export const UNKNOWN: PlanScoreFactorResult = { reason: 'MISSING_EVIDENCE', state: 'UNKNOWN' };
 export const NOT_APPLICABLE: PlanScoreFactorResult = { state: 'NOT_APPLICABLE' };
+/**
+ * What a stop the traveller left without a location, a time or a duration
+ * counts for inside a signal (rubric 11). Unlike a provider gap, which stays
+ * unknown, it is assessed: a plan missing detail only the traveller can give
+ * is a weaker plan, and adding that detail is how it gets better. Calibrated so
+ * a day of unlocated, untimed stops lands in the low 80s.
+ */
+export const MISSING_DETAIL_SCORE = 78;
+/**
+ * Joins traveller-fixable gaps to a signal's judgement at the missing-detail
+ * value. `missingShare` is the percentage of the signal's weight the gaps hold;
+ * they can only fill weight the known evidence left uncovered.
+ */
+export function withMissingDetail(
+  result: PlanScoreFactorResult,
+  missingShare: number,
+  refs: readonly string[],
+): PlanScoreFactorResult {
+  if (result.state === 'NOT_APPLICABLE' || missingShare <= 0) return result;
+  const known = result.state === 'EVALUATED' ? (result.coverage ?? 100) : 0;
+  const missing = Math.min(missingShare, 100 - known);
+  if (missing <= 0) return result;
+  const score = result.state === 'EVALUATED' ? result.score : 0;
+  return {
+    state: 'EVALUATED',
+    score: (known * score + missing * MISSING_DETAIL_SCORE) / (known + missing),
+    coverage: known + missing,
+    evidence: [
+      ...(result.state === 'EVALUATED' ? result.evidence : []),
+      ...refs.map((ref) => ({ ref: `missing:${ref}`, source: 'ESTIMATED' as const })),
+    ],
+  };
+}
 export type PlanScoreDayInput = {
   dayId: string;
   factors: Partial<Record<PlanScoreDayFactorId, PlanScoreFactorResult>>;
@@ -255,7 +289,11 @@ function evaluateDay(day: PlanScoreDayInput, incomingDebt = 0): PlanScoreDayResu
   return {
     assessmentStatus: withheldReasons.length
       ? 'unavailable'
-      : completeness < 80 || (confidence ?? 0) < 60 || limitations.includes('TRAVEL_TIME_UNKNOWN')
+      : completeness < 80 ||
+          (confidence ?? 0) < 60 ||
+          limitations.includes('TRAVEL_TIME_UNKNOWN') ||
+          // Missing detail is judged, but the number moves once it is added.
+          limitations.includes('DETAIL_MISSING')
         ? 'provisional'
         : 'available',
     assessmentBasis,
@@ -402,7 +440,8 @@ export function scoreTrip(input: PlanScoreTripInput): PlanScoreTripResult {
       : (outcome.state === 'EVALUATED' && outcome.coverage < 80) ||
           (confidence ?? 0) < 60 ||
           scorable.length < ordered.length ||
-          limitations.includes('TRAVEL_TIME_UNKNOWN')
+          limitations.includes('TRAVEL_TIME_UNKNOWN') ||
+          limitations.includes('DETAIL_MISSING')
         ? 'provisional'
         : 'available',
     assessedDayCount: scorable.length,

@@ -1371,7 +1371,7 @@ test('reopening null and legacy draft assessments recomputes locally without a g
         prisma: store.prisma as never,
         now: () => NOW,
       });
-      expect(a.planScore?.schemaVersion).toBe(7);
+      expect(a.planScore?.schemaVersion).toBe(8);
       expect(b.planScore?.fingerprint).toBe(a.planScore?.fingerprint);
       expect(store.runs.size).toBe(0);
       expect(session.draft).toBe(draft);

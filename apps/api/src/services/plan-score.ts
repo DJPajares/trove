@@ -1,6 +1,6 @@
 import { planScoreReferenceTargets } from './plan-score-reference-targets.js';
 import { getPrismaClient, Prisma } from '@trove/db';
-import { type TripContext, type TripPlanScore } from '@trove/types';
+import { type PlanScoreExplanation, type TripContext, type TripPlanScore } from '@trove/types';
 import { z } from 'zod';
 
 import { contextPlaceFromOwnedData, type OwnedContextPlace } from './owned-place-location.js';
@@ -309,6 +309,7 @@ function explanationSchema() {
           'REVIEW_TIMING',
           'LINK_PLACE',
           'EDIT_TRANSFER',
+          'ADD_TIMING',
         ])
         .nullable(),
       factor: z.enum([
@@ -370,6 +371,7 @@ const limitationsSchema = z.array(
     'TIMING_UNKNOWN',
     'VENUE_EVIDENCE_INCOMPLETE',
     'UNASSESSED_DAYS',
+    'DETAIL_MISSING',
   ]),
 );
 const tripPlanScoreSchema = z
@@ -394,7 +396,7 @@ const tripPlanScoreSchema = z
         })
         .strict(),
     ),
-    schemaVersion: z.literal(7),
+    schemaVersion: z.literal(PLAN_SCORE_CONTRACT_VERSION),
     rubricVersion: z.literal(PLAN_SCORE_RUBRIC_VERSION),
     assessmentStatus: z.enum(['available', 'provisional', 'unavailable']),
     assessmentBasis: assessmentBasisSchema,
@@ -527,6 +529,30 @@ export function buildPlanScoreFromEvaluations(input: {
     .flatMap((day) => (day.intrinsicScore === null ? [] : [day.intrinsicScore]))
     .sort((a, b) => a - b);
   const weakestBoundary = intrinsic[Math.max(0, Math.ceil(intrinsic.length * 0.2) - 1)];
+  const tripExplanations = explainTrip({
+    components: result.components,
+    caps: result.caps,
+    unscheduledMustGoTripPlaceIds: input.mustGoIds.filter((id) => !scheduled.has(id)),
+    fatigueAdjustment: result.fatigueAdjustment,
+    weakDayAdjustment: result.weakDayAdjustment,
+    fatigueDayIds: result.days.filter((day) => day.incomingDebt > 0).map((day) => day.dayId),
+    weakDayIds: result.days
+      .filter(
+        (day) =>
+          day.intrinsicScore !== null &&
+          weakestBoundary !== undefined &&
+          day.intrinsicScore <= weakestBoundary,
+      )
+      .map((day) => day.dayId),
+    seasonalDayIds: {
+      wet: evaluations.flatMap((e) =>
+        e.evaluation.seasonal.wet ? [e.evaluation.input.dayId] : [],
+      ),
+      heat: evaluations.flatMap((e) =>
+        e.evaluation.seasonal.heat ? [e.evaluation.input.dayId] : [],
+      ),
+    },
+  });
   return {
     schemaVersion: PLAN_SCORE_CONTRACT_VERSION,
     rubricVersion: PLAN_SCORE_RUBRIC_VERSION,
@@ -542,20 +568,30 @@ export function buildPlanScoreFromEvaluations(input: {
     components: result.components,
     days: result.days.map((dayResult, index) => {
       const entry = evaluations[index];
+      const explained = explainDay({
+        alternatives: [],
+        conflicts: entry?.evaluation.conflicts ?? [],
+        day: dayResult,
+        pace: entry?.evaluation.pace ?? { activeMinutes: null, smallestBufferMinutes: null },
+        route: entry?.evaluation.route ?? { bestMinutes: null, plannedMinutes: null },
+        travel: entry?.evaluation.travel ?? { totalMinutes: null },
+        advisories: entry?.evaluation.advisories,
+        experience: entry?.evaluation.experience,
+      });
       return {
         ...toPlanScoreDayPayload(dayResult),
         date: entry?.date ?? '',
         explanations: {
-          ...explainDay({
-            alternatives: [],
-            conflicts: entry?.evaluation.conflicts ?? [],
-            day: dayResult,
-            pace: entry?.evaluation.pace ?? { activeMinutes: null, smallestBufferMinutes: null },
-            route: entry?.evaluation.route ?? { bestMinutes: null, plannedMinutes: null },
-            travel: entry?.evaluation.travel ?? { totalMinutes: null },
-            advisories: entry?.evaluation.advisories,
-            experience: entry?.evaluation.experience,
-          }),
+          ...explained,
+          // Shown on scored and withheld days alike: adding the detail is how
+          // a day gets a fuller, higher score.
+          worthImproving: [
+            ...explained.worthImproving,
+            ...(entry?.evaluation.detailNudges ?? []).map((reason) => ({
+              ...reason,
+              values: { ...reason.values, day: index + 1 },
+            })),
+          ],
           uncertainty: (entry?.evaluation.missingInformation ?? []).map((reason) => ({
             ...reason,
             values: { ...reason.values, day: index + 1 },
@@ -564,30 +600,11 @@ export function buildPlanScoreFromEvaluations(input: {
       };
     }),
     explanations: {
-      ...explainTrip({
-        components: result.components,
-        caps: result.caps,
-        unscheduledMustGoTripPlaceIds: input.mustGoIds.filter((id) => !scheduled.has(id)),
-        fatigueAdjustment: result.fatigueAdjustment,
-        weakDayAdjustment: result.weakDayAdjustment,
-        fatigueDayIds: result.days.filter((day) => day.incomingDebt > 0).map((day) => day.dayId),
-        weakDayIds: result.days
-          .filter(
-            (day) =>
-              day.intrinsicScore !== null &&
-              weakestBoundary !== undefined &&
-              day.intrinsicScore <= weakestBoundary,
-          )
-          .map((day) => day.dayId),
-        seasonalDayIds: {
-          wet: evaluations.flatMap((e) =>
-            e.evaluation.seasonal.wet ? [e.evaluation.input.dayId] : [],
-          ),
-          heat: evaluations.flatMap((e) =>
-            e.evaluation.seasonal.heat ? [e.evaluation.input.dayId] : [],
-          ),
-        },
-      }),
+      ...tripExplanations,
+      worthImproving: [
+        ...tripExplanations.worthImproving,
+        ...tripDetailNudges(evaluations.map((entry) => entry.evaluation.detailNudges)),
+      ],
       uncertainty: evaluations.flatMap((entry, index) =>
         entry.evaluation.missingInformation.map((reason) => ({
           ...reason,
@@ -1354,6 +1371,24 @@ export async function loadScoringForecasts(
   };
 }
 
+/**
+ * One trip-wide nudge per kind of missing detail, naming every stop, rather
+ * than one per day crowding out the problems that matter more.
+ */
+function tripDetailNudges(days: readonly PlanScoreExplanation[][]): PlanScoreExplanation[] {
+  const codes = [...new Set(days.flat().map((reason) => reason.code))];
+  return codes.map((code) => {
+    const entries = days.flat().filter((reason) => reason.code === code);
+    const references = entries.flatMap((reason) => reason.references);
+    return {
+      ...entries[0]!,
+      messageKey: `${entries[0]!.messageKey}Trip`,
+      references,
+      values: { count: references.length },
+    };
+  });
+}
+
 function evidenceDeadline(deadlines: number[]): string | null {
   const finite = deadlines.filter(Number.isFinite);
   return finite.length ? new Date(Math.min(...finite)).toISOString() : null;
@@ -1417,6 +1452,7 @@ export function mergeScoringPlaceIdentity(
       tripPlaceId: id,
       name,
       coordinates,
+      linked: Boolean(owned.providerRefs?.length),
       types: types ?? [],
       source: rich?.source ?? (reference ? 'CACHED_PROVIDER' : 'USER_OWNED'),
       rating: rich?.rating ?? { status: 'UNKNOWN' as const },

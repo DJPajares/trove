@@ -123,15 +123,49 @@ test('stops within a few hundred metres have no order worth comparing', () => {
   ).toBe('NOT_APPLICABLE');
 });
 
-test('an unknown location, a gap or a long-distance leg makes no comparison at all', () => {
+test('a stop with no location sits out, and cannot hide the zig-zag around it', () => {
   const unknown = { id: 'nowhere', kind: 'itinerary_item' } as const;
+  // Its legs were never routed, as for any stop with no location.
+  const segments = (
+    chain([stay, item('mid'), unknown, item('near'), item('far'), stay]) as unknown as Array<{
+      origin: { id: string };
+      destination: { id: string };
+      durationSeconds: number | null;
+    }>
+  ).map((leg) =>
+    leg.origin.id === 'nowhere' || leg.destination.id === 'nowhere'
+      ? { ...leg, durationSeconds: null }
+      : leg,
+  );
+  const comparison = estimatedRouteComparison({
+    segments: segments as never,
+    items: [...allFlexible, flexible('nowhere')],
+    locate,
+  });
+  expect(comparison !== 'NOT_APPLICABLE' && comparison?.points?.map((p) => p.id)).toEqual([
+    'stay',
+    'mid',
+    'near',
+    'far',
+    'stay',
+  ]);
+  const result =
+    comparison && comparison !== 'NOT_APPLICABLE' ? evaluateRouteEfficiency(comparison) : null;
+  expect(result?.factor).toMatchObject({ state: 'EVALUATED', score: 40 });
+  // With every leg touching it, nothing routed sets the day's pace.
   expect(
     estimatedRouteComparison({
-      segments: chain([stay, item('near'), unknown, item('far'), stay]),
-      items: [...allFlexible, flexible('nowhere')],
+      segments: (chain([stay, unknown, stay]) as unknown as object[]).map((leg) => ({
+        ...leg,
+        durationSeconds: null,
+      })) as never,
+      items: [flexible('nowhere')],
       locate,
     }),
   ).toBeUndefined();
+});
+
+test('a gap or a long-distance leg makes no comparison at all', () => {
   expect(
     estimatedRouteComparison({
       segments: chain([stay, ...stops.map(item), stay], 'long_distance'),

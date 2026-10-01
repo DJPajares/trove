@@ -27,36 +27,54 @@ const day = (extra: Partial<ScoredDayInput> = {}): ScoredDayInput => ({
   ...extra,
 });
 const evaluate = (extra: Partial<ScoredDayInput> = {}) => evaluateScoredDay(day(extra));
+/** A provider place: located even with no cached position to route from. */
+const linked = (tripPlaceId: string) => ({
+  tripPlaceId,
+  linked: true,
+  coordinates: null,
+  rating: { status: 'UNKNOWN' as const },
+});
 
-test('one timed custom stop scores without applicable movement, hours, ratings or linking prompts', () => {
+test('one timed custom stop scores without applicable movement or hours, a little short until located', () => {
   const evaluated = evaluate();
   const result = scoreDay(evaluated.input);
   expect(result).toMatchObject({
-    score: 100,
     assessmentStatus: 'provisional',
     assessmentBasis: ['TIMING', 'ACTIVITY_LOAD'],
   });
+  expect(result.score).toBeGreaterThanOrEqual(90);
+  expect(result.score).toBeLessThan(100);
   expect(result.factors.ROUTE_EFFICIENCY).toEqual({ state: 'NOT_APPLICABLE' });
   expect(evaluated.missingInformation).toEqual([]);
-  expect(result.confidence).toBeLessThan(80);
+  expect(evaluated.detailNudges).toMatchObject([
+    { code: 'STOPS_NOT_LOCATED', action: 'LINK_PLACE', references: ['custom'] },
+  ]);
+  expect(result.confidence).toBeLessThan(90);
   expect(result.caps).toEqual([]);
 });
 
 test('duration-only plans assess known activity time without inventing schedule evidence', () => {
-  const evaluated = evaluate({ items: [stop('custom', { start: null, fixed: false })] });
+  const evaluated = evaluate({
+    items: [stop('custom', { start: null, fixed: false, placeId: 'place' })],
+    places: [linked('place')],
+  });
   const result = scoreDay(evaluated.input);
   expect(result).toMatchObject({
-    score: 100,
     assessmentStatus: 'provisional',
     assessmentBasis: ['ACTIVITY_LOAD'],
   });
-  expect(result.factors.FEASIBILITY.state).toBe('UNKNOWN');
+  // Its timing is unchecked for want of a time, which counts low, not clean.
+  expect(result.factors.FEASIBILITY).toMatchObject({ state: 'EVALUATED' });
+  expect(result.score).toBeLessThan(100);
+  expect(evaluated.conflicts).toEqual([]);
+  expect(evaluated.detailNudges).toMatchObject([{ code: 'STOPS_WITHOUT_TIMING' }]);
   expect(result.limitations).toContain('TIMING_UNKNOWN');
 });
 
 test('unknown configured base keeps travel unknown but cannot erase the single stop interval', () => {
   const evaluated = evaluate({
-    items: [stop('custom', { inboundRequired: true })],
+    items: [stop('custom', { inboundRequired: true, placeId: 'place' })],
+    places: [linked('place')],
     segments: [{ id: 'base-custom', scope: 'LOCAL', status: 'UNKNOWN', itemIds: ['custom'] }],
   });
   expect(scoreDay(evaluated.input)).toMatchObject({ score: 100, assessmentStatus: 'provisional' });
@@ -67,7 +85,7 @@ test('unknown configured base keeps travel unknown but cannot erase the single s
   expect(evaluated.missingInformation).toEqual([]);
 });
 
-test('multiple unlocated stops retain intrinsic timing and count unknown legs in load coverage', () => {
+test('multiple unlocated stops retain intrinsic timing while their unknown legs count low', () => {
   const evaluated = evaluate({
     items: [stop('a'), stop('b', { start: at(720) }), stop('c', { start: at(900) })],
     segments: [
@@ -75,15 +93,25 @@ test('multiple unlocated stops retain intrinsic timing and count unknown legs in
       { id: 'b-c', scope: 'LOCAL', status: 'UNKNOWN', itemIds: ['b', 'c'] },
     ],
   });
-  expect(evaluated.pace.factor).toMatchObject({ state: 'EVALUATED', coverage: 60 });
-  expect(evaluated.input.factors.FEASIBILITY).toMatchObject({ state: 'EVALUATED', coverage: 60 });
-  expect(scoreDay(evaluated.input).score).toBe(100);
+  expect(evaluated.pace.factor).toMatchObject({ state: 'EVALUATED', coverage: 100 });
+  expect(evaluated.input.factors.FEASIBILITY).toMatchObject({ state: 'EVALUATED', coverage: 100 });
+  expect(evaluated.conflicts).toEqual([]);
+  const score = scoreDay(evaluated.input).score!;
+  expect(score).toBeGreaterThanOrEqual(80);
+  expect(score).toBeLessThan(100);
   expect(evaluated.missingInformation).toEqual([]);
+  expect(evaluated.detailNudges).toMatchObject([
+    { code: 'STOPS_NOT_LOCATED', references: ['a', 'b', 'c'], values: { count: 3 } },
+  ]);
 });
 
 test('partial routes contribute known effort without claiming complete route burden', () => {
   const evaluated = evaluate({
-    items: [stop('a'), stop('b', { start: at(720), inboundTravel: at(30) })],
+    items: [
+      stop('a', { placeId: 'pa' }),
+      stop('b', { start: at(720), inboundTravel: at(30), placeId: 'pb' }),
+    ],
+    places: [linked('pa'), linked('pb')],
     segments: [
       {
         id: 'a-b',
@@ -127,12 +155,18 @@ test('flexible daypart duration remains independently assessable with unknown in
         fixed: false,
         start: null,
         inboundRequired: true,
+        placeId: 'place',
         startWindow: { earliestMinute: 540, latestMinute: 720, source: 'ESTIMATED' },
       }),
     ],
+    places: [linked('place')],
     segments: [{ id: 'base-a', scope: 'LOCAL', status: 'UNKNOWN', itemIds: ['a'] }],
   });
-  expect(scoreDay(evaluated.input).score).toBe(100);
+  // A daypart is half a time: assessable, a little short of an exact start.
+  const score = scoreDay(evaluated.input).score!;
+  expect(score).toBeGreaterThanOrEqual(95);
+  expect(score).toBeLessThan(100);
+  expect(evaluated.detailNudges).toEqual([]);
   expect(evaluated.input.assessmentBasis).toContain('TIMING');
 });
 
@@ -163,7 +197,8 @@ test('empty, labels-only and time-only plans have no meaningful basis', () => {
 
 test('only access to a linked timed reservation warrants a scoring location action', () => {
   const evaluated = evaluate({
-    items: [stop('booking', { inboundRequired: true })],
+    items: [stop('booking', { inboundRequired: true, placeId: 'place' })],
+    places: [linked('place')],
     commitments: [
       {
         id: 'reservation',
@@ -218,6 +253,7 @@ test('partial load cannot recover debt; a known lower bound can increase it and 
 });
 
 test('one qualifying day scores a longer trip with partial coverage and hidden unsupported rows', () => {
+  const qualifying = scoreDay(evaluate().input).score;
   const result = scoreTrip({
     days: [
       evaluate().input,
@@ -225,7 +261,7 @@ test('one qualifying day scores a longer trip with partial coverage and hidden u
     ],
   });
   expect(result).toMatchObject({
-    score: 100,
+    score: qualifying,
     assessmentStatus: 'provisional',
     assessedDayCount: 1,
     applicableDayCount: 5,
@@ -235,7 +271,7 @@ test('one qualifying day scores a longer trip with partial coverage and hidden u
   expect(result.components.DAILY_QUALITY.state).toBe('LIMITED');
 });
 
-test('v7 rejects v6 while retaining original freshness and evidence ages', () => {
+test('v8 rejects v7 while retaining original freshness and evidence ages', () => {
   const score = buildPlanScoreFromEvaluations({
     days: [{ date: '2026-10-01', evaluation: evaluate() }],
     mustGoIds: [],
@@ -245,7 +281,7 @@ test('v7 rejects v6 while retaining original freshness and evidence ages', () =>
     evidenceDeadlines: ['2026-10-20T00:00:00Z'],
   });
   expect(parseStoredPlanScore(score)).toEqual(score);
-  expect(parseStoredPlanScore({ ...score, schemaVersion: 6, rubricVersion: 6 })).toBeNull();
+  expect(parseStoredPlanScore({ ...score, schemaVersion: 7, rubricVersion: 10 })).toBeNull();
   expect(score.evidenceAsOf).toBe('2026-09-20T00:00:00.000Z');
   expect(score.recomputeAfter).toBe('2026-09-30T12:00:00.000Z');
   expect(score.evidenceExpiresAt).toBe('2026-10-20T00:00:00.000Z');
@@ -294,7 +330,7 @@ test('a venue with hours but no planned timing cannot acquire an invented midnig
   expect(scoreDay(evaluated.input).score).toBeNull();
 });
 
-test('an unlocated origin warrants repair only when it prevents checking access to a timed booking', () => {
+test('an unlocated origin label is asked for once, as a stop to locate', () => {
   const evaluated = evaluate({
     items: [stop('origin'), stop('booking', { start: at(720), placeId: 'located-booking' })],
     places: [
@@ -317,8 +353,9 @@ test('an unlocated origin warrants repair only when it prevents checking access 
       { id: 'origin-booking', scope: 'LOCAL', status: 'UNKNOWN', itemIds: ['origin', 'booking'] },
     ],
   });
-  expect(evaluated.missingInformation).toMatchObject([
-    { code: 'TIMED_ACCESS_LOCATION', references: ['origin'], action: 'LINK_PLACE' },
+  expect(evaluated.missingInformation).toEqual([]);
+  expect(evaluated.detailNudges).toMatchObject([
+    { code: 'STOPS_NOT_LOCATED', references: ['origin'], action: 'LINK_PLACE' },
   ]);
 });
 

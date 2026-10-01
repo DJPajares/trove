@@ -10,6 +10,7 @@ import {
 import type { PlaceLocationCandidatesService } from '../services/place-location-candidates.js';
 import {
   PLACE_PROVIDERS,
+  type PlaceDetailsResult,
   type PlacesService,
   type PlacesUnavailableCode,
 } from '../services/places.js';
@@ -137,6 +138,43 @@ function sendServiceResult(
   return reply.send(result);
 }
 
+/**
+ * What an opened sheet renders, and nothing else. A photo's provider resource
+ * name stays on the server, and a photo whose image could not be resolved is
+ * left out rather than sent as a hole for the page to fill.
+ */
+function serializeRichDetails(result: PlaceDetailsResult) {
+  if (result.status !== 'ok') return result;
+  const { place } = result;
+  return {
+    status: result.status,
+    provider: result.provider,
+    freshness: result.freshness,
+    place: {
+      attributions: place.attributions,
+      internationalPhoneNumber: place.internationalPhoneNumber ?? null,
+      openingHoursDescriptions: place.openingHoursDescriptions ?? [],
+      photos: (place.photos ?? []).flatMap((photo) =>
+        photo.uri
+          ? [
+              {
+                authorAttributions: photo.authorAttributions,
+                heightPx: photo.heightPx,
+                uri: photo.uri,
+                widthPx: photo.widthPx,
+              },
+            ]
+          : [],
+      ),
+      priceLevel: place.priceLevel ?? null,
+      rating: place.rating,
+      userRatingCount: place.userRatingCount ?? null,
+      utcOffsetMinutes: place.utcOffsetMinutes,
+      websiteUri: place.websiteUri ?? null,
+    },
+  };
+}
+
 function getAuthenticatedUserId(request: FastifyRequest, reply: FastifyReply) {
   if (!request.authUserId) {
     void reply.code(500).send({ code: 'authentication_context_missing' });
@@ -182,8 +220,9 @@ export function createPlacesControllers(
         externalPlaceId: ref.externalPlaceId,
         detail: 'evidence',
         languageCode: query.data.languageCode,
+        purpose: 'details',
       });
-      return reply.send(result);
+      return reply.send(serializeRichDetails(result));
     },
     async createCustomPlace(request: FastifyRequest, reply: FastifyReply) {
       const userId = getAuthenticatedUserId(request, reply);

@@ -39,6 +39,28 @@ const evidenceSchema = z.object({
   currentOpeningPeriods: periods.optional(),
   currentHoursValidFrom: z.string().nullable().optional(),
   currentHoursValidThrough: z.string().nullable().optional(),
+  // Optional because evidence stored before photos were asked for has none;
+  // that absence is what tells an opened sheet to acquire them once.
+  photos: z
+    .array(
+      z.object({
+        authorAttributions: z.array(
+          z.object({ displayName: z.string(), uri: z.string().nullable() }),
+        ),
+        heightPx: z.number().int().positive().nullable(),
+        name: z.string(),
+        uri: z.string().nullable(),
+        widthPx: z.number().int().positive().nullable(),
+      }),
+    )
+    .max(3)
+    .optional(),
+  websiteUri: z.string().nullable().optional(),
+  internationalPhoneNumber: z.string().nullable().optional(),
+  priceLevel: z
+    .union([z.literal(0), z.literal(1), z.literal(2), z.literal(3), z.literal(4)])
+    .nullable()
+    .optional(),
 });
 
 /** No provider construction, callbacks or refresh-on-miss path. */

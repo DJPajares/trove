@@ -341,14 +341,33 @@ export function fetchPlaceLocationCandidates(
   );
 }
 
+/**
+ * A Google photo of the place, from the same dated 30-day evidence as its
+ * rating and hours. The URL is Google's own image host, loaded directly; the
+ * author credit must be shown wherever the photo is.
+ */
+export type PlaceProviderPhoto = {
+  authorAttributions: Array<{ displayName: string; uri: string | null }>;
+  heightPx: number | null;
+  uri: string;
+  widthPx: number | null;
+};
+
+export type PlacePriceLevel = 0 | 1 | 2 | 3 | 4;
+
 export type RichPlaceDetails = {
   status: 'ok';
   freshness: { fetchedAt: string; source: 'cache' | 'live' };
   place: {
-    rating: number | null;
-    userRatingCount?: number | null;
-    openingHoursDescriptions?: string[];
     attributions: Array<{ provider: string; providerUri: string | null }>;
+    internationalPhoneNumber: string | null;
+    openingHoursDescriptions: string[];
+    photos: PlaceProviderPhoto[];
+    priceLevel: PlacePriceLevel | null;
+    rating: number | null;
+    userRatingCount: number | null;
+    utcOffsetMinutes: number | null;
+    websiteUri: string | null;
   };
 };
 export async function fetchRichPlaceDetails(

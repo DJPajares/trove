@@ -40,6 +40,8 @@ export type MediaFrameProps = {
   category?: TrovePlaceCategory;
   className?: string;
   dataSlot: string;
+  /** Told when the source could not be loaded and the frame fell back. */
+  onUnreachable?: () => void;
   preload?: boolean;
   sizes?: string;
   source: TripMediaSource;
@@ -148,6 +150,7 @@ export function MediaFrame({
   category = 'destination',
   className,
   dataSlot,
+  onUnreachable,
   preload = false,
   sizes,
   source,
@@ -163,6 +166,10 @@ export function MediaFrame({
           : `${source.kind}:${source.url}`;
   const [unreachableSourceKey, setUnreachableSourceKey] = useState<string | null>(null);
   const [loadedSourceKey, setLoadedSourceKey] = useState<string | null>(null);
+  const markUnreachable = () => {
+    setUnreachableSourceKey(sourceKey);
+    onUnreachable?.();
+  };
   const frameClassName = cn(frameVariants({ variant }), className);
   const resolved = unreachableSourceKey === sourceKey ? ({ kind: 'fallback' } as const) : source;
   const loaded = loadedSourceKey === sourceKey;
@@ -190,7 +197,7 @@ export function MediaFrame({
         <EditorialImage
           alt={alt}
           key={sourceKey}
-          onError={() => setUnreachableSourceKey(sourceKey)}
+          onError={markUnreachable}
           preload={preload}
           reference={resolved.reference}
           sizes={sizes}
@@ -218,7 +225,7 @@ export function MediaFrame({
           )}
           decoding="async"
           loading={preload ? 'eager' : 'lazy'}
-          onError={() => setUnreachableSourceKey(sourceKey)}
+          onError={markUnreachable}
           onLoad={() => setLoadedSourceKey(sourceKey)}
           src={resolved.url}
         />
@@ -226,6 +233,8 @@ export function MediaFrame({
     );
   }
 
+  // Every remote source is unoptimized. For a Google photo that is a rule, not
+  // a convenience: `/_next/image` would keep a copy of provider pixels.
   const src = resolved.kind === 'local' ? resolved.src : resolved.url;
 
   return (
@@ -243,7 +252,7 @@ export function MediaFrame({
           loaded ? 'opacity-100' : 'opacity-0',
         )}
         fill
-        onError={() => setUnreachableSourceKey(sourceKey)}
+        onError={markUnreachable}
         onLoad={() => setLoadedSourceKey(sourceKey)}
         preload={preload}
         sizes={sizes}

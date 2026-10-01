@@ -64,7 +64,8 @@ function backoffKey(externalPlaceId: string, languageCode: string) {
  * rating, review count, opening hours — is deliberately absent from this shape;
  * it lives in a separate bounded evidence copy, dated and kept for at most 30
  * days, that opened details and scoring read (`place-evidence-cache.ts`,
- * PRD 11.4 and 29.5). Photos, phone and website are never stored.
+ * PRD 11.4 and 29.5). Up to three photos, phone, website and price level live
+ * in that same bounded copy, never here.
  */
 export type PlaceSnapshot = {
   address: string | null;

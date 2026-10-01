@@ -72,6 +72,7 @@ export type ProviderExpectedSku =
   | 'places-text-search-enterprise'
   | 'place-details-pro'
   | 'place-details-enterprise'
+  | 'place-details-photos'
   | 'routes-compute-routes-essentials'
   | 'weather-archive-free'
   | 'weather-forecast-free';
@@ -82,6 +83,7 @@ type ProviderEventBase = {
     | 'getClimate'
     | 'getDetails'
     | 'getForecast'
+    | 'getPhotoMedia'
     | 'getRates'
     | 'search'
     | 'textSearch';
@@ -97,6 +99,7 @@ export type ProviderCall = ProviderEventBase & {
     | '/directions/v2:computeRoutes'
     | '/v2/rates'
     | '/v1/places/:placeId'
+    | '/v1/places/:placeId/photos/:photoId/media'
     | '/v1/places:autocomplete'
     | '/v1/places:searchText'
     | '/v1/search'

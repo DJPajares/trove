@@ -12,6 +12,9 @@ import {
   type PlaceDetailsRequest,
   type PlaceOpeningPeriod,
   type PlaceOpeningPoint,
+  type PlacePhoto,
+  type PlacePhotoMediaRequest,
+  type PlacePriceLevel,
   type PlaceSearchRequest,
   type PlaceTextSearchProvider,
   type PlaceTextSearchRequest,
@@ -37,8 +40,9 @@ export const GOOGLE_AUTOCOMPLETE_FIELD_MASK = [
 /**
  * Identity and location: everything routing and list rendering read, and
  * nothing else. This mask reaches Place Details Pro. The fields left out —
- * rating, opening hours, website, phone and photos — are mutable and can move a
- * request into Place Details Enterprise or Enterprise + Atmosphere.
+ * rating, opening hours, website and phone — are mutable and move a request
+ * into Place Details Enterprise. Photos are left out too: identity and
+ * location never fetch them (PRD 11.8).
  */
 export const GOOGLE_PLACE_LOCATION_FIELD_MASK = [
   'attributions',
@@ -74,7 +78,13 @@ export const GOOGLE_TEXT_SEARCH_EVIDENCE_FIELD_MASK = [
   'places.userRatingCount',
 ].join(',');
 
-/** Opened rich details and AI checks share one Enterprise response; identity masks stay cheap. */
+/**
+ * Opened rich details and AI checks share one Enterprise response; identity
+ * masks stay cheap. Website, phone and price level are Enterprise fields
+ * already paid for here, and photos sit in the cheapest tier, so none of them
+ * changes what this request costs. Resolving a photo into an image is a
+ * separate, billed request that only an opened Place details sheet makes.
+ */
 export const GOOGLE_PLACE_EVIDENCE_FIELD_MASK = [
   GOOGLE_PLACE_LOCATION_FIELD_MASK,
   'rating',
@@ -82,7 +92,28 @@ export const GOOGLE_PLACE_EVIDENCE_FIELD_MASK = [
   'currentOpeningHours',
   'regularOpeningHours',
   'utcOffsetMinutes',
+  'photos',
+  'websiteUri',
+  'internationalPhoneNumber',
+  'priceLevel',
 ].join(',');
+
+/** The most photos one Place keeps; the sheet's cover never shows more. */
+export const MAX_PLACE_PHOTOS = 3;
+
+/**
+ * The widest a cover renders is a full-width phone at 3x, so 1200 is enough
+ * for every slot. The size does not change what the request costs.
+ */
+export const PLACE_PHOTO_MAX_WIDTH_PX = 1200;
+
+const GOOGLE_PRICE_LEVELS: Record<string, PlacePriceLevel> = {
+  PRICE_LEVEL_FREE: 0,
+  PRICE_LEVEL_INEXPENSIVE: 1,
+  PRICE_LEVEL_MODERATE: 2,
+  PRICE_LEVEL_EXPENSIVE: 3,
+  PRICE_LEVEL_VERY_EXPENSIVE: 4,
+};
 
 export const PLACE_DETAIL_FIELD_MASKS: Record<PlaceDetailLevel, string> = {
   evidence: GOOGLE_PLACE_EVIDENCE_FIELD_MASK,
@@ -129,7 +160,20 @@ type GooglePlaceDetails = {
   };
   types?: string[];
   utcOffsetMinutes?: number;
+  photos?: GooglePhoto[];
+  websiteUri?: string;
+  internationalPhoneNumber?: string;
+  priceLevel?: string;
 };
+
+type GooglePhoto = {
+  authorAttributions?: Array<{ displayName?: string; uri?: string }>;
+  heightPx?: number;
+  name?: string;
+  widthPx?: number;
+};
+
+type GooglePhotoMediaResponse = { photoUri?: string };
 
 type GoogleAttribution = {
   provider?: string;
@@ -307,6 +351,59 @@ function isValidLocationBias(request: Pick<PlaceSearchRequest, 'locationBias'>) 
     request.locationBias.radiusMeters > 0 &&
     request.locationBias.radiusMeters <= 50_000
   );
+}
+
+function positiveInteger(value: unknown) {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+/** A photo's name must be its own place's, so it can never address another resource. */
+const PHOTO_NAME_PATTERN = /^places\/[A-Za-z0-9_-]+\/photos\/[A-Za-z0-9_-]+$/;
+
+function mapPhotos(photos: GooglePhoto[] | undefined): PlacePhoto[] {
+  return (photos ?? [])
+    .flatMap((photo): PlacePhoto[] => {
+      const name = cleanString(photo.name);
+      if (!name || !PHOTO_NAME_PATTERN.test(name)) return [];
+      return [
+        {
+          authorAttributions: (photo.authorAttributions ?? []).flatMap((attribution) => {
+            const displayName = cleanString(attribution.displayName);
+            return displayName ? [{ displayName, uri: webUrl(attribution.uri) }] : [];
+          }),
+          heightPx: positiveInteger(photo.heightPx),
+          name,
+          uri: null,
+          widthPx: positiveInteger(photo.widthPx),
+        },
+      ];
+    })
+    .slice(0, MAX_PLACE_PHOTOS);
+}
+
+/** A link the page may render: https, or plain http where a venue's own site still is. */
+function webUrl(value: unknown, { allowHttp = false } = {}) {
+  const text = cleanString(value);
+  if (!text) return null;
+  try {
+    const { protocol } = new URL(text);
+    return protocol === 'https:' || (allowHttp && protocol === 'http:') ? text : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The URL is rendered straight into the page, so only Google's own image host
+ * over https is accepted. Anything else is treated as no answer.
+ */
+function googlePhotoUri(value: unknown) {
+  const text = webUrl(value);
+  if (!text) return null;
+  const { hostname } = new URL(text);
+  return hostname === 'googleusercontent.com' || hostname.endsWith('.googleusercontent.com')
+    ? text
+    : null;
 }
 
 function mapAttributions(attributions: GoogleAttribution[] | undefined) {
@@ -620,6 +717,46 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
       rawTypes,
       utcOffsetMinutes:
         typeof response.utcOffsetMinutes === 'number' ? response.utcOffsetMinutes : null,
+      // Only the evidence mask asks for these. A location answer leaves them
+      // absent rather than empty, so it can never pass for a place with none.
+      ...(request.detail === 'evidence'
+        ? {
+            internationalPhoneNumber: cleanString(response.internationalPhoneNumber),
+            photos: mapPhotos(response.photos),
+            priceLevel: GOOGLE_PRICE_LEVELS[response.priceLevel ?? ''] ?? null,
+            websiteUri: webUrl(response.websiteUri, { allowHttp: true }),
+          }
+        : {}),
     };
+  }
+
+  /**
+   * One photo's display URL. `skipHttpRedirect` returns it as JSON instead of
+   * the image, so the server never handles provider pixels and the page loads
+   * the image straight from Google.
+   */
+  async getPhotoMedia(request: PlacePhotoMediaRequest): Promise<string> {
+    if (!PHOTO_NAME_PATTERN.test(request.name)) {
+      throw new PlaceProviderError('invalid_request');
+    }
+
+    const url = new URL(`/v1/${request.name}/media`, this.baseUrl);
+    url.searchParams.set('maxWidthPx', String(request.maxWidthPx));
+    url.searchParams.set('skipHttpRedirect', 'true');
+
+    const response = await this.requestJson<GooglePhotoMediaResponse>(
+      url,
+      { method: 'GET', signal: request.signal },
+      {
+        endpoint: '/v1/places/:placeId/photos/:photoId/media',
+        expectedSku: 'place-details-photos',
+        operation: 'getPhotoMedia',
+        placeFingerprint: providerTargetFingerprint(request.name.split('/')[1] ?? ''),
+      },
+    );
+
+    const uri = googlePhotoUri(response.photoUri);
+    if (!uri) throw new PlaceProviderError('provider_unavailable');
+    return uri;
   }
 }

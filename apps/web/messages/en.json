@@ -2657,6 +2657,18 @@
     },
     "assessedDays": "{count} of {total} days assessed",
     "worthALook": "{count, plural, one {# thing worth a look} other {# things worth a look}}",
+    "notApplicableRow": "Doesn’t apply here",
+    "rowReasons": {
+      "FEASIBILITY": "Add times and lengths to check the timing.",
+      "ROUTE_EFFICIENCY": "Link places to check travel between stops.",
+      "PACE_COMFORT": "Add how long each stop takes to check the day’s load.",
+      "EXPERIENCE_QUALITY": "Link places or set your interests to judge the visits.",
+      "PLAN_COMPOSITION": "Add times to check how the day flows.",
+      "DAILY_QUALITY": "Add times to the days that aren’t scored yet.",
+      "DESTINATION_UTILIZATION": "Mark your Must Go places to check the plan covers them.",
+      "VARIETY_COVERAGE": "Link places or set your interests to check the variety.",
+      "SEASONAL_FIT": "Link places to check them against the season’s typical conditions."
+    },
     "missing": {
       "timedAccess": "Add a location to check access to a timed booking or departure.",
       "locations": "{count, plural, one {One stop on Day {day} has} other {# stops on Day {day} have}} no location yet. Link a place to check travel, opening hours and fit.",

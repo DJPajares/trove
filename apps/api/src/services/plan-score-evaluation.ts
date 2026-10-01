@@ -699,21 +699,28 @@ export function evaluateScoredDay(input: ScoredDayInput) {
   });
   const distinctThemes = new Set(themed.map((entry) => entry.theme)).size;
   const explore = context.intent === 'explore';
+  // A visit the traveller has not located has no kind yet, so it counts low
+  // here as in every other category (rubric 12).
+  const unlocatedVisits = visits.filter((item) => gaps.location.has(item.id));
   const variety: PlanScoreFactorResult =
     rest || transit || focused || visits.length < 2
       ? NOT_APPLICABLE
-      : themed.length < 2
-        ? UNKNOWN
-        : {
-            state: 'EVALUATED',
-            score: distinctThemes >= 2 ? 100 : explore ? 50 : 75,
-            coverage: (100 * themed.length) / visits.length,
-            evidence: themed.map(({ item, place }) => ({
-              ref: `type:${item.placeId}`,
-              source: place?.source ?? 'CACHED_PROVIDER',
-              ...(distinctThemes < 2 && !explore ? { strength: 0.5 } : {}),
-            })),
-          };
+      : withMissingDetail(
+          themed.length < 2
+            ? UNKNOWN
+            : {
+                state: 'EVALUATED',
+                score: distinctThemes >= 2 ? 100 : explore ? 50 : 75,
+                coverage: (100 * themed.length) / visits.length,
+                evidence: themed.map(({ item, place }) => ({
+                  ref: `type:${item.placeId}`,
+                  source: place?.source ?? 'CACHED_PROVIDER',
+                  ...(distinctThemes < 2 && !explore ? { strength: 0.5 } : {}),
+                })),
+              },
+          (100 * unlocatedVisits.length) / visits.length,
+          unlocatedVisits.map((item) => item.id),
+        );
   // Whether a day makes good use of its area needs sourced evidence about that
   // area's opportunities. The evaluator has none, so the signal is not part of
   // the rubric yet: counting it as unknown would cap every day's coverage.

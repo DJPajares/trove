@@ -52,7 +52,7 @@ export async function fetchTripPlanScore(tripId: string, signal?: AbortSignal) {
   }
 
   const score = (await response.json()) as TripPlanScore;
-  if (score.schemaVersion !== 8 || score.rubricVersion !== 11)
+  if (score.schemaVersion !== 8 || score.rubricVersion !== 12)
     throw new PlanScoreApiError('incompatible_assessment', 409);
   return score;
 }

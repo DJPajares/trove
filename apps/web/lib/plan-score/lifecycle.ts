@@ -92,9 +92,14 @@ export function watchScoringAcquisition(client: QueryClient) {
       return;
     }
     if (
-      !['itinerary-day-routes', 'trip-mode-context', 'trip-weather', 'place-rich-details'].includes(
-        String(root),
-      )
+      ![
+        'itinerary-day-routes',
+        'trip-mode-context',
+        'trip-weather',
+        'place-rich-details',
+        // Holidays and typical conditions feed holiday suitability and seasonal fit.
+        'trip-context',
+      ].includes(String(root))
     )
       return;
     for (const query of client.getQueryCache().findAll({

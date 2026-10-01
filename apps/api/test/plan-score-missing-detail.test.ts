@@ -318,3 +318,87 @@ test('a withheld day still asks for the detail it needs', () => {
     },
   ]);
 });
+
+test('every trip component carries a number, and a sparse one says what it needs', () => {
+  // No Must Go places and no cached typical conditions: neither row hides.
+  const score = buildPlanScoreFromEvaluations({
+    days: [{ date: '2026-10-01', evaluation: evaluate(reference()) }],
+    mustGoIds: [],
+    scheduledIds: [],
+  });
+  for (const id of [
+    'DAILY_QUALITY',
+    'DESTINATION_UTILIZATION',
+    'VARIETY_COVERAGE',
+    'SEASONAL_FIT',
+  ] as const)
+    expect(score.components[id], id).toMatchObject({ state: 'EVALUATED' });
+  expect(score.components.DESTINATION_UTILIZATION).toMatchObject({ score: 78 });
+  expect(score.components.SEASONAL_FIT).toMatchObject({ score: 78 });
+  const reasons = score.explanations.uncertainty.filter((r) => r.code === 'ROW_NEEDS_DETAIL');
+  expect(reasons.map((r) => [r.factor, r.messageKey, r.action])).toEqual([
+    ['DESTINATION_UTILIZATION', 'rowReasons.DESTINATION_UTILIZATION', null],
+    ['SEASONAL_FIT', 'rowReasons.SEASONAL_FIT', null],
+  ]);
+  // Must Go places scheduled on the day are judged on their own, with no reason.
+  const withMustGo = buildPlanScoreFromEvaluations({
+    days: [{ date: '2026-10-01', evaluation: evaluate(detailed()) }],
+    mustGoIds: ['anchor'],
+    scheduledIds: ['anchor'],
+  });
+  expect(withMustGo.components.DESTINATION_UTILIZATION).toMatchObject({ score: 100 });
+  expect(
+    withMustGo.explanations.uncertainty.some((r) => r.factor === 'DESTINATION_UTILIZATION'),
+  ).toBe(false);
+});
+
+test('every day category carries a number, with a reason on each one filled low', () => {
+  const score = buildPlanScoreFromEvaluations({
+    days: [{ date: '2026-10-01', evaluation: evaluate(reference()) }],
+    mustGoIds: [],
+    scheduledIds: [],
+  });
+  const day = score.days[0]!;
+  for (const id of [
+    'FEASIBILITY',
+    'ROUTE_EFFICIENCY',
+    'PACE_COMFORT',
+    'EXPERIENCE_QUALITY',
+    'PLAN_COMPOSITION',
+  ] as const)
+    expect(day.factors[id], id).toMatchObject({ state: 'EVALUATED' });
+  // Exactly the categories filled low carry a reason, one each.
+  const filled = scoreDay(evaluate(reference()).input).filledFactors;
+  expect(
+    day.explanations.uncertainty.filter((r) => r.code === 'ROW_NEEDS_DETAIL').map((r) => r.factor),
+  ).toEqual(filled);
+  // A day of timed labels is already judged on its missing detail (rubric 11),
+  // so its rows have enough to stand without filling.
+  const labels = scoreDay(
+    evaluate({
+      items: ['a', 'b'].map((id, index) =>
+        item(id, { fixed: true, start: at(540 + index * 180), duration: at(90) }),
+      ),
+    }).input,
+  );
+  expect(labels.filledFactors).toEqual([]);
+  expect(labels.factors.EXPERIENCE_QUALITY).toMatchObject({ state: 'EVALUATED' });
+  // A fully detailed day fills nothing and asks for nothing.
+  const full = buildPlanScoreFromEvaluations({
+    days: [{ date: '2026-10-01', evaluation: evaluate(detailed()) }],
+    mustGoIds: [],
+    scheduledIds: [],
+  }).days[0]!;
+  expect(full.score).toBe(100);
+  expect(full.explanations.uncertainty.filter((r) => r.code === 'ROW_NEEDS_DETAIL')).toEqual([]);
+});
+
+test('a one-stop day still marks the categories that do not apply', () => {
+  const evaluated = evaluate({
+    items: [anchor()],
+    places: [place('anchor', 0)],
+  });
+  const day = scoreDay(evaluated.input);
+  expect(day.factors.ROUTE_EFFICIENCY).toEqual({ state: 'NOT_APPLICABLE' });
+  expect(day.filledFactors).not.toContain('ROUTE_EFFICIENCY');
+});

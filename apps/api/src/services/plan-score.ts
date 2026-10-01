@@ -63,6 +63,7 @@ import {
   PLAN_SCORE_CONTRACT_VERSION,
   PLAN_SCORE_RUBRIC_VERSION,
   toPlanScoreDayPayload,
+  UNKNOWN,
   type PlanScoreFactorResult,
 } from './plan-score-rules.js';
 
@@ -515,8 +516,10 @@ export function buildPlanScoreFromEvaluations(input: {
   const tripInput = {
     days: evaluations.map(({ date, evaluation }) => ({ ...evaluation.input, date })),
     components: {
+      // Without Must Go places there is nothing yet to check the plan against:
+      // that is missing detail the traveller can add, not an inapplicable row.
       DESTINATION_UTILIZATION: combineSignals([
-        { weight: 1, result: mustGo },
+        { weight: 1, result: mustGo.state === 'NOT_APPLICABLE' ? UNKNOWN : mustGo },
         { weight: 1, result: mean('utilization') },
       ]),
       VARIETY_COVERAGE: tripVariety,
@@ -592,7 +595,10 @@ export function buildPlanScoreFromEvaluations(input: {
               values: { ...reason.values, day: index + 1 },
             })),
           ],
-          uncertainty: (entry?.evaluation.missingInformation ?? []).map((reason) => ({
+          uncertainty: [
+            ...(entry?.evaluation.missingInformation ?? []),
+            ...dayResult.filledFactors.map(rowNeedsDetail),
+          ].map((reason) => ({
             ...reason,
             values: { ...reason.values, day: index + 1 },
           })),
@@ -605,12 +611,15 @@ export function buildPlanScoreFromEvaluations(input: {
         ...tripExplanations.worthImproving,
         ...tripDetailNudges(evaluations.map((entry) => entry.evaluation.detailNudges)),
       ],
-      uncertainty: evaluations.flatMap((entry, index) =>
-        entry.evaluation.missingInformation.map((reason) => ({
-          ...reason,
-          values: { ...reason.values, day: index + 1 },
-        })),
-      ),
+      uncertainty: [
+        ...evaluations.flatMap((entry, index) =>
+          entry.evaluation.missingInformation.map((reason) => ({
+            ...reason,
+            values: { ...reason.values, day: index + 1 },
+          })),
+        ),
+        ...result.filledComponents.map(rowNeedsDetail),
+      ],
     },
     presentation: {
       adjustments: {
@@ -1368,6 +1377,23 @@ export async function loadScoringForecasts(
       (a, b) => a.date.localeCompare(b.date) || a.placeIds.join().localeCompare(b.placeIds.join()),
     ),
     times: [...new Set(times)].sort(),
+  };
+}
+
+/**
+ * Why a category or component shows a low, filled number: what the traveller
+ * could add for it to be judged on the plan itself. It belongs to its row, so
+ * it carries no action and never repeats in the list of problems.
+ */
+function rowNeedsDetail(factor: PlanScoreExplanation['factor']): PlanScoreExplanation {
+  return {
+    action: null,
+    code: 'ROW_NEEDS_DETAIL',
+    factor,
+    messageKey: `rowReasons.${factor}`,
+    references: [],
+    severity: 'INFO',
+    values: {},
   };
 }
 

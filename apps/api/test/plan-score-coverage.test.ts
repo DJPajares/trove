@@ -170,14 +170,20 @@ test('a day with dayparts only is assessed from typical visit lengths, to the de
   const [result] = score([plan]).days;
   expect(result!.limitations).toContain('DURATION_ESTIMATED');
   // Without stated lengths nothing shows whether a visit is rushed, so experience
-  // rests on time of day alone and stays limited rather than claiming more...
-  expect(published(result!.factors)).toEqual(ALL.filter((id) => id !== 'EXPERIENCE_QUALITY'));
-  expect(result!.factors.EXPERIENCE_QUALITY.state).toBe('LIMITED');
-  // ...until the traveller's declared interests add depth.
+  // rests on time of day alone: every category still shows, experience filled low
+  // and named as the row that needs detail...
+  expect(published(result!.factors)).toEqual(ALL);
+  expect(result!.explanations.uncertainty).toContainEqual(
+    expect.objectContaining({ code: 'ROW_NEEDS_DETAIL', factor: 'EXPERIENCE_QUALITY' }),
+  );
+  // ...until the traveller's declared interests add depth of their own.
   const [withInterests] = score([plan], {
     preferences: { pace: null, interests: ['art_museums', 'food_drink'], unmatchedInterests: [] },
   }).days;
   expect(published(withInterests!.factors)).toEqual(ALL);
+  expect(
+    withInterests!.explanations.uncertainty.filter((reason) => reason.code === 'ROW_NEEDS_DETAIL'),
+  ).toEqual([]);
 });
 
 test('an unlocated custom stop counts low on its own route; the rest of the day is still assessed', () => {
@@ -317,9 +323,11 @@ test('seasonal fit rewards indoor plans in a wet month and flags outdoor-heavy d
   expect(outdoor.explanations.worthImproving.map((reason) => reason.code)).toContain(
     'SEASONAL_OUTDOOR_WET',
   );
-  // Without a cached norm, seasonal fit stays unknown rather than guessed.
-  expect(
-    score([day('none', [{ place: 'park', time: '09:00', minutes: 90 }])]).components.SEASONAL_FIT
-      .state,
-  ).toBe('UNKNOWN');
+  // Without a cached norm nothing is guessed about the season: the row shows the
+  // missing-detail value and says why.
+  const none = score([day('none', [{ place: 'park', time: '09:00', minutes: 90 }])]);
+  expect(none.components.SEASONAL_FIT).toMatchObject({ state: 'EVALUATED', score: 78 });
+  expect(none.explanations.uncertainty).toContainEqual(
+    expect.objectContaining({ code: 'ROW_NEEDS_DETAIL', factor: 'SEASONAL_FIT' }),
+  );
 });

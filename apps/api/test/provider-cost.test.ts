@@ -2155,8 +2155,9 @@ test('six venues use one Places call each, with persisted identity and transient
     for (const day of planScore.days) {
       expect(day.factors.FEASIBILITY.state).not.toBe('UNKNOWN');
       expect(day.factors.ROUTE_EFFICIENCY.state).not.toBe('UNKNOWN');
-      // The rating arrives free on the same response the hours came from.
-      expect(day.factors.EXPERIENCE_QUALITY.state).toBe('LIMITED');
+      // The rating arrives free on the same response the hours came from; the
+      // rest of the sparse experience row is filled low (rubric 12).
+      expect(day.factors.EXPERIENCE_QUALITY.state).toBe('EVALUATED');
     }
     // Derived from the plan, never a copy of the mutable evidence behind it.
     expect(JSON.stringify(planScore)).not.toContain('openingPeriods');

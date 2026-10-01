@@ -150,9 +150,13 @@ for (const state of ['cold', 'warm', 'expired', 'malformed'] as const)
     const second = await getTripPlanScore('owner', 'trip', { now: () => NOW });
     expect(second).toEqual(first);
     expect(outbound).not.toHaveBeenCalled();
-    expect(first?.days[0]?.factors.EXPERIENCE_QUALITY.state).toBe(
-      state === 'warm' ? 'LIMITED' : 'UNKNOWN',
-    );
+    // Every row carries a number (rubric 12): a warm 4.7 rating lifts the
+    // sparse experience row above the missing-detail value; without it, it rests there.
+    const experience = first?.days[0]?.factors.EXPERIENCE_QUALITY;
+    expect(experience).toMatchObject({ state: 'EVALUATED' });
+    const experienceScore = experience?.state === 'EVALUATED' ? experience.score : null;
+    if (state === 'warm') expect(experienceScore).toBeGreaterThan(78);
+    else expect(experienceScore).toBe(78);
     if (state === 'warm')
       expect(first?.evidenceAsOf).toBe((evidenceRow.cachedEvidenceAt as Date).toISOString());
   });

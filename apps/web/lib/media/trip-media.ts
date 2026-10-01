@@ -7,10 +7,18 @@ export type TripMediaSource =
   | { kind: 'fallback' }
   | { kind: 'local'; src: StaticImageData }
   | { kind: 'memory'; url: string }
+  | { kind: 'provider-photo'; url: string }
   | { kind: 'trip-cover'; url: string };
 
+/**
+ * A place's media. `provider-photo` is a Google photo of the place itself,
+ * shown only by its opened details sheet; every other place surface stays
+ * editorial or fallback (PRD 11.5).
+ */
 export type PlaceMediaSource =
-  { kind: 'editorial'; reference: EditorialImageReference } | { kind: 'fallback' };
+  | { kind: 'editorial'; reference: EditorialImageReference }
+  | { kind: 'fallback' }
+  | { kind: 'provider-photo'; url: string };
 
 export type TripMediaVariant = 'banner' | 'card' | 'cover' | 'hero' | 'thumbnail';
 

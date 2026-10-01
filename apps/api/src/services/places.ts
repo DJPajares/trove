@@ -64,7 +64,13 @@ export type ProviderAttribution = {
 export type PlaceDetailLevel = 'evidence' | 'location';
 
 export type PlaceDetailsRequest = {
-  purpose?: 'itinerary';
+  /**
+   * `itinerary` needs identity and coordinates in the same rich answer.
+   * `details` is an opened Place details sheet: the only caller that resolves
+   * photo media, so a cached answer acquired before photos were asked for is
+   * re-acquired once rather than served without them.
+   */
+  purpose?: 'details' | 'itinerary';
   signal?: AbortSignal;
   /** Internal attribution supplied by the cache when this becomes outbound. */
   cacheMissReason?: ProviderCacheMissReason;
@@ -85,6 +91,33 @@ export type PlaceSuggestion = {
   rawTypes: string[];
 };
 
+export type PlacePhotoAttribution = {
+  displayName: string;
+  uri: string | null;
+};
+
+export type PlacePhoto = {
+  authorAttributions: PlacePhotoAttribution[];
+  heightPx: number | null;
+  /** The provider's resource name for the photo. Server-side only. */
+  name: string;
+  /** A display URL resolved by an opened Place details request; null until then. */
+  uri: string | null;
+  widthPx: number | null;
+};
+
+/** Google's price level, from free (0) to very expensive (4). */
+export type PlacePriceLevel = 0 | 1 | 2 | 3 | 4;
+
+export type PlacePhotoMediaRequest = {
+  maxWidthPx: number;
+  name: string;
+  signal?: AbortSignal;
+};
+
+export type PlacePhotoMediaResult =
+  { status: 'ok'; uri: string } | { status: 'not_found' } | { status: 'unavailable' };
+
 export type ProviderPlaceDetails = {
   attributions: ProviderAttribution[];
   category: TrovePlaceCategory;
@@ -102,6 +135,14 @@ export type ProviderPlaceDetails = {
   currentOpeningPeriods?: PlaceOpeningPeriod[];
   currentHoursValidFrom?: string | null;
   currentHoursValidThrough?: string | null;
+  /**
+   * Absent on evidence acquired before photos were part of the evidence mask,
+   * which is how an opened sheet tells it apart from a place with no photos.
+   */
+  photos?: PlacePhoto[];
+  websiteUri?: string | null;
+  internationalPhoneNumber?: string | null;
+  priceLevel?: PlacePriceLevel | null;
   rawTypes: string[];
   utcOffsetMinutes: number | null;
 };
@@ -140,6 +181,8 @@ export class PlaceProviderError extends Error {
 export interface PlacesProvider {
   readonly name: PlaceProviderName;
   getDetails(request: PlaceDetailsRequest): Promise<ProviderPlaceDetails>;
+  /** Billed per photo. Only an opened Place details sheet reaches for it. */
+  getPhotoMedia?(request: PlacePhotoMediaRequest): Promise<string>;
   search(request: PlaceSearchRequest): Promise<PlaceSuggestion[]>;
 }
 
@@ -315,6 +358,25 @@ export class PlacesService {
         provider: this.provider.name,
         status: 'unavailable',
       };
+    }
+  }
+
+  /**
+   * A photo the provider no longer has is told apart from one it could not
+   * serve right now: the first is dropped, the second is asked for again on
+   * the next opening.
+   */
+  async resolvePhotoMedia(request: PlacePhotoMediaRequest): Promise<PlacePhotoMediaResult> {
+    if (!this.provider.getPhotoMedia) return { status: 'unavailable' };
+
+    try {
+      return { status: 'ok', uri: await this.provider.getPhotoMedia(request) };
+    } catch (error) {
+      const providerError = getProviderError(error);
+      this.warn('getPhotoMedia', providerError);
+      return providerError.code === 'not_found'
+        ? { status: 'not_found' }
+        : { status: 'unavailable' };
     }
   }
 }

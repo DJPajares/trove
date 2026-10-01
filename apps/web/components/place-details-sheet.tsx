@@ -1,13 +1,14 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, MapPin, XIcon } from 'lucide-react';
+import { ChevronDown, ExternalLink, Globe, MapPin, Phone, Star, XIcon } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { PlacePhotoCarousel } from '@/components/place-photo-carousel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Sheet,
   SheetClose,
@@ -16,8 +17,11 @@ import {
   SheetFooter,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
+import { placeWeekdayIndex } from '@/lib/places/opening-hours';
 import { fetchRichPlaceDetails, googleMapsPlaceHref, type CanonicalPlace } from '@/lib/saved/api';
+import { cn } from '@/lib/utils';
 
 /** A row only the surface that opened this sheet can supply: a note, a priority, a collection. */
 export type PlaceDetailsRow = { label: string; value: string };
@@ -26,7 +30,8 @@ type PlaceDetailsSheetProps = {
   /**
    * The photograph the surface already resolved for this place. Passed in
    * rather than resolved here: a sheet that asked for its own would turn one
-   * request per screen into one per opening.
+   * request per screen into one per opening. It is the cover whenever Google
+   * has no photo of the place to show.
    */
   editorialImages: EditorialImageReference[];
   meta?: PlaceDetailsRow[];
@@ -43,14 +48,20 @@ type PlaceDetailsSheetProps = {
   place: CanonicalPlace;
 };
 
+const EVIDENCE_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
+
 /**
  * What Trove knows about one Place, opened from wherever that Place is listed.
  *
  * Opening provider-backed details acquires the rich response on demand through
- * the shared bounded cache. List rows and decorative images never acquire it.
+ * the shared bounded cache: rating, hours, contact links and up to three Google
+ * photos, all dated and kept for at most 30 days. List rows and decorative
+ * images never acquire it.
  *
- * Photography keeps its attribution metadata without rendering credits on this
- * authenticated surface. Generic images are explicitly labeled as illustrative.
+ * The cover is fixed at the top and the details scroll beneath it. Google
+ * photos carry their author's credit; editorial photography keeps its
+ * attribution metadata without rendering credits on this authenticated surface,
+ * and a generic one is labelled as illustrative.
  */
 export function PlaceDetailsSheet({
   editorialImages,
@@ -66,10 +77,13 @@ export function PlaceDetailsSheet({
   // and a place's category means the same thing on every surface.
   const categoryTranslations = useTranslations('saved');
   const locale = useLocale();
+  const [photoDescription, setPhotoDescription] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
   const richDetails = useQuery({
-    queryKey: ['place-rich-details', place.id, locale],
+    // Versioned: this root is persisted, and an answer from before photos and
+    // contact links were part of it must not be read back as a current one.
+    queryKey: ['place-rich-details', place.id, locale, 'photos-v1'],
     queryFn: () => fetchRichPlaceDetails(place.id, locale),
     enabled: place.kind === 'provider',
     retry: false,
@@ -78,7 +92,7 @@ export function PlaceDetailsSheet({
         ? Math.max(
             0,
             Date.parse(query.state.data.freshness.fetchedAt) +
-              30 * 24 * 60 * 60 * 1000 -
+              EVIDENCE_LIFETIME_MS -
               query.state.dataUpdatedAt,
           )
         : 0,
@@ -93,7 +107,9 @@ export function PlaceDetailsSheet({
   useEffect(() => {
     if (detailsLoaded) void queryClient.invalidateQueries({ queryKey: ['place-hours'] });
   }, [detailsLoaded, queryClient]);
-  const evidence = richDetails.data;
+
+  const evidence = richDetails.data?.place;
+  const loadingEvidence = place.kind === 'provider' && richDetails.isPending;
   const category = place.snapshot?.category;
   const providerAddress = place.snapshot?.address ?? place.providerAddress;
   const address = place.kind === 'custom' ? null : (providerAddress ?? t('unavailableDescription'));
@@ -110,8 +126,25 @@ export function PlaceDetailsSheet({
   const coordinateFormatter = new Intl.NumberFormat(locale, { maximumFractionDigits: 5 });
   const dateFormatter = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' });
 
+  const rating = evidence?.rating ?? null;
+  const reviewCount = evidence?.userRatingCount ?? null;
+  const priceLevel = evidence?.priceLevel ?? null;
+  const hours = evidence?.openingHoursDescriptions ?? [];
+  const todayIndex = placeWeekdayIndex(evidence?.utcOffsetMinutes);
+  const todayHours = todayIndex === null ? null : (hours[todayIndex] ?? null);
+  const phone = evidence?.internationalPhoneNumber ?? null;
+
+  const actions = [
+    mapsHref ? { href: mapsHref, Icon: ExternalLink, label: t('googleMaps') } : null,
+    evidence?.websiteUri ? { href: evidence.websiteUri, Icon: Globe, label: t('website') } : null,
+    phone ? { href: `tel:${phone.replace(/[^\d+]/g, '')}`, Icon: Phone, label: t('call') } : null,
+  ].filter((action) => action !== null);
+
   const rows: PlaceDetailsRow[] = [
     address ? { label: t('address'), value: address } : null,
+    phone ? { label: t('phone'), value: phone } : null,
+    place.note ? { label: t('note'), value: place.note } : null,
+    ...meta,
     place.location
       ? {
           label: t('coordinates'),
@@ -120,45 +153,16 @@ export function PlaceDetailsSheet({
           )}`,
         }
       : null,
-    place.note ? { label: t('note'), value: place.note } : null,
-    ...(evidence?.place.rating != null
-      ? [
-          {
-            label: t('rating'),
-            value: t(evidence.place.userRatingCount == null ? 'ratingOnly' : 'ratingSummary', {
-              rating: new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(
-                evidence.place.rating,
-              ),
-              count: evidence.place.userRatingCount ?? 0,
-            }),
-          },
-        ]
-      : []),
-    ...(evidence?.place.openingHoursDescriptions?.length
-      ? [{ label: t('openingHours'), value: evidence.place.openingHoursDescriptions.join('\n') }]
-      : []),
-    ...(evidence
-      ? [
-          {
-            label: t('evidenceDated'),
-            value: dateFormatter.format(new Date(evidence.freshness.fetchedAt)),
-          },
-        ]
-      : []),
-    ...meta,
-    // Provider data is stored dated rather than live, so the sheet says how old
-    // what it is showing actually is instead of implying it was just fetched.
-    place.snapshot
-      ? {
-          label: t('source'),
-          value: place.snapshot.stale
-            ? t('snapshotStale', { date: dateFormatter.format(new Date(place.snapshot.fetchedAt)) })
-            : t('snapshotDated', {
-                date: dateFormatter.format(new Date(place.snapshot.fetchedAt)),
-              }),
-        }
-      : null,
   ].filter((row): row is PlaceDetailsRow => row !== null);
+
+  // Provider data is stored dated rather than live, so the sheet says how old
+  // what it is showing actually is instead of implying it was just fetched.
+  const checkedAt = richDetails.data?.freshness.fetchedAt ?? place.snapshot?.fetchedAt ?? null;
+  const sourceLine = checkedAt
+    ? t(!richDetails.data && place.snapshot?.stale ? 'snapshotStale' : 'snapshotDated', {
+        date: dateFormatter.format(new Date(checkedAt)),
+      })
+    : null;
 
   return (
     <Sheet onOpenChange={onOpenChange} open>
@@ -168,55 +172,128 @@ export function PlaceDetailsSheet({
         side="right"
         showCloseButton={false}
       >
-        <div className="min-h-0 flex-1 overflow-y-auto pb-6">
-          <PlacePhotoCarousel
-            category={category}
-            footer={
-              category ? (
-                <div>
+        <PlacePhotoCarousel
+          category={category}
+          editorialImages={editorialImages}
+          heading={
+            <>
+              <SheetTitle className="text-[1.75rem] leading-[1.1] text-balance text-media-fallback-foreground">
+                {name}
+              </SheetTitle>
+              <SheetDescription className="line-clamp-2 text-media-fallback-foreground/82">
+                {coverDescription}
+              </SheetDescription>
+            </>
+          }
+          name={name}
+          onDescriptionChange={setPhotoDescription}
+          pending={loadingEvidence}
+          providerPhotos={evidence?.photos}
+        />
+
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6">
+          <section className="grid gap-4 px-6 pt-5">
+            {loadingEvidence ? (
+              <Skeleton className="h-5 w-48" />
+            ) : category || rating !== null || priceLevel !== null ? (
+              <p className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+                {category ? (
                   <Badge size="sm" variant="muted">
                     {categoryTranslations(`categories.${category}`)}
                   </Badge>
-                </div>
-              ) : undefined
-            }
-            heading={
-              <>
-                <SheetTitle className="text-[1.75rem] leading-[1.1] text-balance text-media-fallback-foreground">
-                  {name}
-                </SheetTitle>
-                <SheetDescription className="text-media-fallback-foreground/82">
-                  {coverDescription}
-                </SheetDescription>
-              </>
-            }
-            images={editorialImages}
-            name={name}
-          />
-
-          {place.kind === 'provider' ? (
-            <div className="px-5 pt-5 text-xs text-muted-foreground">
-              <p>{t('googleAttribution')}</p>
-              {evidence?.place.attributions.map((attribution) =>
-                attribution.providerUri ? (
-                  <a
-                    className="underline"
-                    href={attribution.providerUri}
-                    key={attribution.provider}
-                    rel="noreferrer"
-                    target="_blank"
+                ) : null}
+                {rating !== null ? (
+                  <span
+                    aria-label={t(reviewCount === null ? 'ratingOnly' : 'ratingSummary', {
+                      count: reviewCount ?? 0,
+                      rating: new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(
+                        rating,
+                      ),
+                    })}
+                    className="inline-flex items-center gap-1"
+                    role="img"
                   >
-                    {attribution.provider}
-                  </a>
-                ) : (
-                  <span key={attribution.provider}>{attribution.provider}</span>
-                ),
-              )}
-              {richDetails.isError || (richDetails.isFetched && !evidence) ? (
-                <p className="mt-2">{t('richUnavailable')}</p>
-              ) : null}
-            </div>
+                    <Star aria-hidden="true" className="size-4 fill-current text-rating" />
+                    <span className="font-medium text-foreground">
+                      {new Intl.NumberFormat(locale, {
+                        maximumFractionDigits: 1,
+                        minimumFractionDigits: 1,
+                      }).format(rating)}
+                    </span>
+                    {reviewCount !== null ? (
+                      <span className="text-muted-foreground">
+                        (
+                        {new Intl.NumberFormat(locale, { notation: 'compact' }).format(reviewCount)}
+                        )
+                      </span>
+                    ) : null}
+                  </span>
+                ) : null}
+                {priceLevel !== null ? (
+                  <span className="text-muted-foreground">{t(`priceLevel.${priceLevel}`)}</span>
+                ) : null}
+              </p>
+            ) : null}
+
+            {actions.length ? (
+              <div className="flex flex-wrap gap-2">
+                {actions.map(({ href, Icon, label }) => (
+                  <Button
+                    key={label}
+                    nativeButton={false}
+                    render={
+                      href.startsWith('tel:') ? (
+                        <a href={href} />
+                      ) : (
+                        <a href={href} rel="noreferrer" target="_blank" />
+                      )
+                    }
+                    size="sm"
+                    variant="outline"
+                  >
+                    <Icon aria-hidden="true" data-icon="inline-start" />
+                    {label}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
+          </section>
+
+          {loadingEvidence ? (
+            <Skeleton className="mx-6 mt-5 h-14 rounded-[var(--radius-lg)]" />
+          ) : hours.length ? (
+            <Collapsible className="mx-6 mt-5 rounded-[var(--radius-lg)] border border-border-subtle">
+              <CollapsibleTrigger className="group flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
+                <span className="grid gap-0.5">
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {t('regularHours')}
+                  </span>
+                  <span className="text-sm text-foreground">{todayHours ?? t('showWeek')}</span>
+                </span>
+                <ChevronDown
+                  aria-hidden="true"
+                  className="transition-transform duration-[var(--motion-standard)] group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
+                />
+              </CollapsibleTrigger>
+              <CollapsiblePanel>
+                <ul className="grid gap-1.5 px-4 pb-4 text-sm">
+                  {hours.map((line, index) => (
+                    <li
+                      aria-current={index === todayIndex ? 'date' : undefined}
+                      className={cn(
+                        'text-muted-foreground',
+                        index === todayIndex && 'font-medium text-foreground',
+                      )}
+                      key={line}
+                    >
+                      {line}
+                    </li>
+                  ))}
+                </ul>
+              </CollapsiblePanel>
+            </Collapsible>
           ) : null}
+
           {rows.length ? (
             <dl className="grid gap-4 px-6 pt-5">
               {rows.map((row) => (
@@ -229,28 +306,52 @@ export function PlaceDetailsSheet({
               ))}
             </dl>
           ) : null}
+
+          <div className="mx-6 mt-6 grid gap-1.5 border-t border-border-subtle pt-4 text-xs text-muted-foreground">
+            {place.kind === 'provider' ? (
+              <p>
+                {[t('googleAttribution'), sourceLine].filter(Boolean).join(' · ')}
+                {evidence?.attributions.map((attribution) => (
+                  <span key={attribution.provider}>
+                    {' · '}
+                    {attribution.providerUri ? (
+                      <a
+                        className="underline"
+                        href={attribution.providerUri}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        {attribution.provider}
+                      </a>
+                    ) : (
+                      attribution.provider
+                    )}
+                  </span>
+                ))}
+              </p>
+            ) : null}
+            {place.kind === 'provider' &&
+            (richDetails.isError || (richDetails.isFetched && !evidence)) ? (
+              <p>{t('richUnavailable')}</p>
+            ) : null}
+            {photoDescription ? (
+              <p>
+                <span className="font-medium text-foreground">{t('photoDescription')}</span>
+                {' · '}
+                {photoDescription}
+              </p>
+            ) : null}
+          </div>
         </div>
 
         {/* A Custom Place has no Google listing to link out to, so this footer
-            used to be empty for exactly the places most in need of an action. */}
-        {mapsHref || onLocate ? (
+            is where it gets the one action that can give it a location. */}
+        {onLocate ? (
           <SheetFooter>
-            {onLocate ? (
-              <Button onClick={onLocate} variant="outline">
-                <MapPin aria-hidden="true" data-icon="inline-start" />
-                {t('locate.action')}
-              </Button>
-            ) : null}
-            {mapsHref ? (
-              <Button
-                nativeButton={false}
-                render={<a href={mapsHref} rel="noreferrer" target="_blank" />}
-                variant="outline"
-              >
-                <ExternalLink aria-hidden="true" data-icon="inline-start" />
-                {t('googleMaps')}
-              </Button>
-            ) : null}
+            <Button onClick={onLocate} variant="outline">
+              <MapPin aria-hidden="true" data-icon="inline-start" />
+              {t('locate.action')}
+            </Button>
           </SheetFooter>
         ) : null}
 

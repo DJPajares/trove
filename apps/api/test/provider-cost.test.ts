@@ -445,6 +445,65 @@ function countingPlacesProvider() {
   return { provider, calls: () => calls };
 }
 
+/**
+ * A provider whose evidence carries photos, and whose photo media answers can
+ * be scripted per call: `'not_found'` and `'unavailable'` throw the matching
+ * provider error, anything else is the image URL.
+ */
+function photoPlacesProvider(mediaAnswers: Record<string, string[]> = {}) {
+  let details = 0;
+  let media = 0;
+  const provider: PlacesProvider = {
+    name: 'google',
+    getDetails: async (request) => {
+      details += 1;
+      recordProviderCall({
+        detailLevel: request.detail,
+        endpoint: '/v1/places/:placeId',
+        expectedSku:
+          request.detail === 'location' ? 'place-details-pro' : 'place-details-enterprise',
+        operation: 'getDetails',
+        provider: 'google',
+        source: 'test',
+      });
+      return {
+        ...detailsFor(request.externalPlaceId),
+        ...(request.detail === 'evidence'
+          ? {
+              photos: [1, 2, 3].map((index) => ({
+                authorAttributions: [{ displayName: `Author ${index}`, uri: null }],
+                heightPx: 900,
+                name: `places/${request.externalPlaceId}/photos/p${index}`,
+                uri: null,
+                widthPx: 1200,
+              })),
+              priceLevel: 1 as const,
+              websiteUri: 'https://museum.example/',
+            }
+          : {}),
+      };
+    },
+    getPhotoMedia: async (request) => {
+      media += 1;
+      recordProviderCall({
+        endpoint: '/v1/places/:placeId/photos/:photoId/media',
+        expectedSku: 'place-details-photos',
+        operation: 'getPhotoMedia',
+        provider: 'google',
+        source: 'test',
+      });
+      const answer = mediaAnswers[request.name]?.shift();
+      if (answer === 'not_found' || answer === 'unavailable') {
+        throw new PlaceProviderError(answer === 'not_found' ? 'not_found' : 'provider_unavailable');
+      }
+      return answer ?? `https://lh3.googleusercontent.com/${request.name}`;
+    },
+    search: async () => [],
+  };
+
+  return { provider, details: () => details, media: () => media };
+}
+
 function countingRoutesProvider() {
   let calls = 0;
   const asked: Array<boolean | undefined> = [];
@@ -613,12 +672,31 @@ test('a location request asks for coordinates only, not the billable detail', as
   for (const field of ['rating', 'regularOpeningHours', 'userRatingCount', 'currentOpeningHours']) {
     expect(GOOGLE_PLACE_LOCATION_FIELD_MASK.includes(field), field).toBe(false);
   }
-  // Evidence asks for the mutable fields Plan Score reads, but not the ones
-  // that only a place's own sheet renders.
-  for (const field of ['rating', 'regularOpeningHours', 'userRatingCount', 'currentOpeningHours']) {
+  // Evidence asks for the mutable fields Plan Score reads, plus what a
+  // place's own sheet renders from the same Enterprise answer: website, phone
+  // and price level are that tier already, and photos are the cheapest one.
+  for (const field of [
+    'rating',
+    'regularOpeningHours',
+    'userRatingCount',
+    'currentOpeningHours',
+    'photos',
+    'websiteUri',
+    'internationalPhoneNumber',
+    'priceLevel',
+  ]) {
     expect(GOOGLE_PLACE_EVIDENCE_FIELD_MASK.includes(field), field).toBe(true);
   }
-  for (const field of ['photos', 'nationalPhoneNumber', 'websiteUri']) {
+  // Identity, location and AI grounding never ask for photos (PRD 11.8), and
+  // nothing reaches into Enterprise + Atmosphere.
+  for (const mask of [
+    GOOGLE_PLACE_LOCATION_FIELD_MASK,
+    GOOGLE_TEXT_SEARCH_FIELD_MASK,
+    GOOGLE_TEXT_SEARCH_EVIDENCE_FIELD_MASK,
+  ]) {
+    expect(mask.includes('photos')).toBe(false);
+  }
+  for (const field of ['reviews', 'editorialSummary', 'generativeSummary']) {
     expect(GOOGLE_PLACE_EVIDENCE_FIELD_MASK.includes(field), field).toBe(false);
   }
 });
@@ -2217,4 +2295,129 @@ test('explicit itinerary resolution acquires one rich response and persists both
   expect(row.cachedAt).toEqual(now);
   expect(row.cachedEvidenceAt).toEqual(now);
   expect(GOOGLE_PLACE_EVIDENCE_FIELD_MASK).toContain(GOOGLE_PLACE_LOCATION_FIELD_MASK);
+});
+
+test('an opened sheet buys at most three photo images once, and reopening buys nothing', async () => {
+  const now = new Date('2026-10-01T00:00:00Z');
+  seedProviderRef('ChIJmuseum');
+  const { provider, details, media } = photoPlacesProvider();
+  const request = {
+    detail: 'evidence' as const,
+    externalPlaceId: 'ChIJmuseum',
+    languageCode: 'en',
+    purpose: 'details' as const,
+  };
+
+  const [first, concurrent] = await Promise.all([
+    new CachedPlacesService(provider, () => now).getDetails(request),
+    new CachedPlacesService(provider, () => now).getDetails(request),
+  ]);
+  expect(details()).toBe(1);
+  expect(media()).toBe(3);
+  expect(concurrent).toEqual(first);
+  expect(first.status === 'ok' && first.place.photos?.map((photo) => photo.uri)).toStrictEqual([
+    'https://lh3.googleusercontent.com/places/ChIJmuseum/photos/p1',
+    'https://lh3.googleusercontent.com/places/ChIJmuseum/photos/p2',
+    'https://lh3.googleusercontent.com/places/ChIJmuseum/photos/p3',
+  ]);
+
+  // Stored with the evidence, at the evidence's own acquisition time.
+  const row = providerRefs.get('ChIJmuseum') as unknown as {
+    cachedEvidence: ProviderPlaceDetails;
+    cachedEvidenceAt: Date;
+  };
+  expect(row.cachedEvidenceAt).toEqual(now);
+  expect(row.cachedEvidence.photos?.every((photo) => photo.uri !== null)).toBe(true);
+
+  resetCachedPlacesMemo();
+  const later = new Date(now.getTime() + 29 * DAY_MS);
+  const reopened = await new CachedPlacesService(provider, () => later).getDetails(request);
+  expect(details()).toBe(1);
+  expect(media()).toBe(3);
+  expect(reopened.status === 'ok' && reopened.freshness).toStrictEqual({
+    fetchedAt: now.toISOString(),
+    source: 'cache',
+  });
+  expect(reopened.status === 'ok' && reopened.place).toEqual(first.status === 'ok' && first.place);
+  expect(row.cachedEvidenceAt).toEqual(now);
+  expect(getProviderCallCounts()['google:getPhotoMedia']).toBe(3);
+});
+
+test('only an opened sheet buys photo images; every other evidence reader buys none', async () => {
+  const now = new Date('2026-10-01T00:00:00Z');
+  seedProviderRef('ChIJmuseum');
+  const { provider, details, media } = photoPlacesProvider();
+  const base = { detail: 'evidence' as const, externalPlaceId: 'ChIJmuseum', languageCode: 'en' };
+
+  // Itinerary selection acquires the evidence, photo references included.
+  await new CachedPlacesService(provider, () => now).getDetails({
+    ...base,
+    purpose: 'itinerary',
+  });
+  await new CachedPlacesService(provider, () => now).getDetails(base);
+  expect(details()).toBe(1);
+  expect(media()).toBe(0);
+
+  // The sheet reuses that answer and only buys the images.
+  await new CachedPlacesService(provider, () => now).getDetails({ ...base, purpose: 'details' });
+  expect(details()).toBe(1);
+  expect(media()).toBe(3);
+});
+
+test('evidence stored before photos is acquired once more by an opened sheet, and by nothing else', async () => {
+  const now = new Date('2026-10-01T00:00:00Z');
+  seedProviderRef('ChIJmuseum');
+  const request = { externalPlaceId: 'ChIJmuseum', languageCode: 'en' };
+  await rememberPlaceEvidence(request, {
+    freshness: { fetchedAt: now.toISOString(), source: 'live' },
+    place: detailsFor('ChIJmuseum'),
+    provider: 'google',
+    status: 'ok',
+  });
+  resetCachedPlacesMemo();
+  const { provider, details, media } = photoPlacesProvider();
+  const service = () => new CachedPlacesService(provider, () => now);
+
+  await service().getDetails({ ...request, detail: 'evidence' });
+  await service().getDetails({ ...request, detail: 'evidence', purpose: 'itinerary' });
+  expect(details()).toBe(0);
+
+  await service().getDetails({ ...request, detail: 'evidence', purpose: 'details' });
+  await service().getDetails({ ...request, detail: 'evidence', purpose: 'details' });
+  expect(details()).toBe(1);
+  expect(media()).toBe(3);
+});
+
+test('a photo Google no longer has is dropped; one it could not serve is asked for next opening', async () => {
+  const now = new Date('2026-10-01T00:00:00Z');
+  seedProviderRef('ChIJmuseum');
+  const { provider, media } = photoPlacesProvider({
+    'places/ChIJmuseum/photos/p2': ['not_found'],
+    'places/ChIJmuseum/photos/p3': ['unavailable'],
+  });
+  const request = {
+    detail: 'evidence' as const,
+    externalPlaceId: 'ChIJmuseum',
+    languageCode: 'en',
+    purpose: 'details' as const,
+  };
+  const names = (result: Awaited<ReturnType<CachedPlacesService['getDetails']>>) =>
+    result.status === 'ok'
+      ? result.place.photos?.map((photo) => [photo.name.split('/').at(-1), Boolean(photo.uri)])
+      : null;
+
+  const first = await new CachedPlacesService(provider, () => now).getDetails(request);
+  expect(media()).toBe(3);
+  expect(names(first)).toStrictEqual([
+    ['p1', true],
+    ['p3', false],
+  ]);
+
+  resetCachedPlacesMemo();
+  const second = await new CachedPlacesService(provider, () => now).getDetails(request);
+  expect(media()).toBe(4);
+  expect(names(second)).toStrictEqual([
+    ['p1', true],
+    ['p3', true],
+  ]);
 });

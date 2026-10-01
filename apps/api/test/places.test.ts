@@ -206,6 +206,96 @@ test('evidence Details accepts hours and ratings without unrequested name or loc
   ).rejects.toThrow('provider_unavailable');
 });
 
+test('evidence Details keeps three photos, contact links and price level; location asks for none', async () => {
+  const photo = (index: number) => ({
+    name: `places/museum/photos/p${index}`,
+    widthPx: 4032,
+    heightPx: 3024,
+    authorAttributions: [
+      { displayName: `Author ${index}`, uri: `https://maps.google.com/contrib/${index}` },
+    ],
+  });
+  const provider = new GooglePlacesProvider({
+    apiKey: 'test-key',
+    fetcher: async () =>
+      Response.json({
+        id: 'museum',
+        displayName: { text: 'National Museum' },
+        location: { latitude: 1.2966, longitude: 103.8485 },
+        photos: [
+          photo(1),
+          { name: '../../elsewhere', widthPx: 10, heightPx: 10 },
+          photo(2),
+          photo(3),
+          photo(4),
+          photo(5),
+        ],
+        websiteUri: 'http://museum.example/',
+        internationalPhoneNumber: ' +65 6332 3659 ',
+        priceLevel: 'PRICE_LEVEL_MODERATE',
+      }),
+  });
+
+  const evidence = await provider.getDetails({ detail: 'evidence', externalPlaceId: 'museum' });
+  expect(evidence.photos).toStrictEqual([
+    {
+      authorAttributions: [{ displayName: 'Author 1', uri: 'https://maps.google.com/contrib/1' }],
+      heightPx: 3024,
+      name: 'places/museum/photos/p1',
+      uri: null,
+      widthPx: 4032,
+    },
+    expect.objectContaining({ name: 'places/museum/photos/p2' }),
+    expect.objectContaining({ name: 'places/museum/photos/p3' }),
+  ]);
+  expect(evidence).toMatchObject({
+    internationalPhoneNumber: '+65 6332 3659',
+    priceLevel: 2,
+    websiteUri: 'http://museum.example/',
+  });
+
+  // A location answer leaves them absent, so it never passes for a place
+  // that was asked for photos and had none.
+  const location = await provider.getDetails({ detail: 'location', externalPlaceId: 'museum' });
+  expect(location.photos).toBeUndefined();
+  expect(location.websiteUri).toBeUndefined();
+});
+
+test('a photo is resolved to a Google image URL and nothing else', async () => {
+  const requested: string[] = [];
+  let photoUri: string = 'https://lh3.googleusercontent.com/place-photos/abc=s1200';
+  const provider = new GooglePlacesProvider({
+    apiKey: 'test-key',
+    fetcher: async (input) => {
+      requested.push(String(input));
+      return Response.json({ name: 'places/museum/photos/p1/media', photoUri });
+    },
+  });
+  const request = { maxWidthPx: 1200, name: 'places/museum/photos/p1' };
+
+  await expect(provider.getPhotoMedia(request)).resolves.toBe(photoUri);
+  const url = new URL(requested[0] ?? '');
+  expect(url.pathname).toBe('/v1/places/museum/photos/p1/media');
+  expect(url.searchParams.get('maxWidthPx')).toBe('1200');
+  expect(url.searchParams.get('skipHttpRedirect')).toBe('true');
+  expect(url.searchParams.has('key')).toBe(false);
+
+  for (const unsafe of [
+    'http://lh3.googleusercontent.com/place-photos/abc',
+    'https://evil.example/googleusercontent.com/abc',
+    'javascript:alert(1)',
+  ]) {
+    photoUri = unsafe;
+    await expect(provider.getPhotoMedia(request), unsafe).rejects.toThrow('provider_unavailable');
+  }
+
+  const before = requested.length;
+  await expect(
+    provider.getPhotoMedia({ maxWidthPx: 1200, name: 'places/museum/../../v1/places:searchText' }),
+  ).rejects.toThrow('invalid_request');
+  expect(requested).toHaveLength(before);
+});
+
 test('Google search uses location bias, a session token, and an explicit field mask', async () => {
   let capturedUrl = '';
   let capturedInit: RequestInit | undefined;
@@ -580,6 +670,7 @@ test('rich details require an owned relationship before any provider acquisition
         externalPlaceId: 'museum',
         detail: 'evidence',
         languageCode: 'ja',
+        purpose: 'details',
       }),
     );
   } finally {

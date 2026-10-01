@@ -6,7 +6,9 @@ import {
 import { singleFlight } from './single-flight.js';
 import { getPrismaClient } from '@trove/db';
 
+import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
 import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
+import { PLACE_PHOTO_MAX_WIDTH_PX } from './google-places.js';
 import { categorizePlaceTypes } from './place-categories.js';
 import {
   getActivePlaceDetailsFailure,
@@ -23,6 +25,7 @@ import {
   PlacesService,
   type PlaceDetailsRequest,
   type PlaceDetailsResult,
+  type PlacePhoto,
   type PlacesProvider,
   type ProviderPlaceDetails,
 } from './places.js';
@@ -97,6 +100,23 @@ function matchesLanguage(cached: string | null, requested: string | undefined) {
   return normalizePlaceLanguageCode(cached) === normalizePlaceLanguageCode(requested);
 }
 
+/**
+ * Whether a stored answer can serve what this caller came for. An itinerary
+ * selection needs a name and coordinates; an opened sheet needs the answer to
+ * have been asked for photos at all. Evidence from Text Search or from before
+ * photos were requested lacks them, and is acquired once more rather than
+ * served without them.
+ */
+function answersPurpose(request: PlaceDetailsRequest, result: PlaceDetailsResult) {
+  if (request.purpose === 'itinerary') {
+    return result.status === 'ok' && Boolean(result.place.name && result.place.location);
+  }
+  if (request.purpose === 'details') {
+    return result.status === 'ok' && result.place.photos !== undefined;
+  }
+  return true;
+}
+
 export class CachedPlacesService extends PlacesService {
   private readonly providerName: PlacesProvider['name'];
   private readonly now: () => Date;
@@ -143,20 +163,22 @@ export class CachedPlacesService extends PlacesService {
     } else {
       const stored = await readCachedPlaceEvidence(request, this.now());
       const memoized = stored ? { kind: 'hit' as const, result: stored } : this.readMemo(request);
-      if (
-        memoized.kind === 'hit' &&
-        (request.purpose !== 'itinerary' ||
-          (memoized.result.status === 'ok' &&
-            memoized.result.place.name &&
-            memoized.result.place.location))
-      ) {
+      if (memoized.kind === 'hit' && answersPurpose(request, memoized.result)) {
         this.recordHit(request, 'place-evidence');
-        return memoized.result;
+        return this.withResolvedPhotos(request, memoized.result);
       }
       cacheMissReason = memoized.kind === 'hit' ? 'incomplete_snapshot' : memoized.reason;
     }
 
-    return singleFlight(`place:${memoKey(request)}`, async () => {
+    const result = await this.acquire(request, cacheMissReason);
+    return this.withResolvedPhotos(request, result);
+  }
+
+  private acquire(
+    request: PlaceDetailsRequest,
+    cacheMissReason: ProviderCacheMissReason,
+  ): Promise<PlaceDetailsResult> {
+    return singleFlight(`place:${memoKey(request)}`, async (): Promise<PlaceDetailsResult> => {
       const result = await super.getDetails({ ...request, cacheMissReason });
 
       if (result.status === 'ok') {
@@ -181,6 +203,57 @@ export class CachedPlacesService extends PlacesService {
 
       return result;
     });
+  }
+
+  /**
+   * Turns an opened sheet's photos into images, once per photo per evidence
+   * snapshot. Each resolution is a billed request, so nothing but `details`
+   * reaches here, and what it buys is written back into the evidence it came
+   * with - keeping that evidence's original acquisition time, so a photo is
+   * never what keeps an answer alive past its 30 days.
+   *
+   * A photo Google no longer has is dropped. One it could not serve right now
+   * stays unresolved, is left out of this answer, and is asked for again on
+   * the next opening.
+   */
+  private async withResolvedPhotos(
+    request: PlaceDetailsRequest,
+    result: PlaceDetailsResult,
+  ): Promise<PlaceDetailsResult> {
+    if (request.purpose !== 'details' || result.status !== 'ok') return result;
+    const photos = result.place.photos ?? [];
+    if (!photos.some((photo) => photo.uri === null)) return result;
+
+    return singleFlight(
+      `place-photos:${memoKey(request)}:${result.freshness.fetchedAt}`,
+      async () => {
+        let changed = false;
+        const resolved = await mapWithConcurrency(
+          photos,
+          PROVIDER_CONCURRENCY_LIMIT,
+          async (photo): Promise<PlacePhoto | null> => {
+            if (photo.uri !== null) return photo;
+            const media = await this.resolvePhotoMedia({
+              maxWidthPx: PLACE_PHOTO_MAX_WIDTH_PX,
+              name: photo.name,
+              signal: request.signal,
+            });
+            if (media.status === 'unavailable') return photo;
+            changed = true;
+            return media.status === 'ok' ? { ...photo, uri: media.uri } : null;
+          },
+        );
+        const next = {
+          ...result,
+          place: {
+            ...result.place,
+            photos: resolved.filter((photo): photo is PlacePhoto => photo !== null),
+          },
+        };
+        if (changed) await rememberPlaceEvidence(request, next);
+        return next;
+      },
+    );
   }
 
   private recordHit(request: PlaceDetailsRequest, cache: 'place-details' | 'place-evidence') {

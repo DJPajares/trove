@@ -319,7 +319,7 @@ Rules:
 
 - Sourced from a free editorial photography provider, resolved on demand for a destination name, or a place name and its category.
 - Resolution is deterministic. The same subject resolves the same ordered collection across sessions and across travellers. The first photograph is the stable representative image used by covers and thumbnails.
-- A collection contains at least one and at most three photographs. Place details may present the full collection as a carousel; other surfaces use its first photograph.
+- A collection contains at least one and at most three photographs. Place details may present the full collection as a carousel when Google has no usable photo of the place (11.5); other surfaces use its first photograph.
 - Only each photograph's **reference** is stored: one unsized source URL, attribution metadata, intrinsic dimensions, provider alt text, and a dominant colour used as a loading placeholder. Responsive display URLs are derived at render time. Image bytes are never copied into Trove Storage, which stays user-owned media only.
 - A stored collection is dated and re-resolved once stale, in the same spirit as 11.7. Fresh collections are read from Trove's database and never call the editorial provider.
 - Attribution metadata is required whenever an image URL is returned, even where an authenticated surface intentionally does not render a visible credit. Public editorial surfaces may render the provider credit in their own layout; authenticated Home, Trips, and place details do not show photo-credit captions.
@@ -820,7 +820,7 @@ The provider remains the source for mutable data such as:
 - website,
 - provider categories.
 
-This evidence is resolved on demand for a normal Place/itinerary surface or planning acquisition flow that needs it, not persisted as a permanent Trove-owned dataset. Plan Scoring only reads evidence already available under Section 29.5 and never triggers acquisition. Necessary Google ratings, review counts and hours may use the approved 30-day bounded evidence cache, separate from Trove-owned data, retaining their original age. Stored derived assessments follow their own expiry rules and must not become a back door for retaining raw mutable evidence.
+This evidence is resolved on demand for a normal Place/itinerary surface or planning acquisition flow that needs it, not persisted as a permanent Trove-owned dataset. Plan Scoring only reads evidence already available under Section 29.5 and never triggers acquisition. Necessary Google ratings, review counts and hours, and the up to three photos, website, phone and price level opened Place details show, may use the approved 30-day bounded evidence cache, separate from Trove-owned data, retaining their original age. Stored derived assessments follow their own expiry rules and must not become a back door for retaining raw mutable evidence.
 
 Trove-owned data includes:
 
@@ -840,9 +840,11 @@ Mutable provider data must not be treated as permanent canonical Trove truth.
 
 ## 11.5 Photos
 
-When a functional Place surface uses provider photos, use the current provider photo URL/reference obtained through current provider data and preserve required attribution. Google Places photos are not a decorative source for trip covers or generic thumbnails.
+Opened Place details use up to three Google photos of the place as their cover, held fixed while the details scroll. The photo references, and the display URLs resolved for them, live in the 30-day bounded evidence cache (11.4) and keep that evidence's original age. Only opening Place details resolves a display URL - a separately billed request - and at most once per photo per evidence snapshot; itinerary, AI, scoring, list and identity/location paths never do.
 
-Do not permanently copy provider photos into Trove Storage.
+This is an accepted application policy, not a claim of provider permission: Google documents photo names as not cacheable and display URLs as short-lived. A stored URL that stops loading falls back to editorial imagery, and is replaced when the evidence is next acquired. Each Google photo shows its author attribution wherever it is displayed. Google Places photos are not a decorative source for trip covers or generic thumbnails.
+
+Do not copy provider photo bytes into Trove Storage, image optimisation, or any cache of Trove's own; the page loads them from Google.
 
 User-uploaded trip/Memory photos are separate user-owned content and may be stored privately by Trove.
 

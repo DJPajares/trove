@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
 import {
-  AiPlannerCompactReferenceError,
   aiPlannerCompactProposalSchema,
   expandAiPlannerProposal,
 } from '../src/services/ai-planner-compact.js';
@@ -34,12 +33,13 @@ describe('compact planner contract', () => {
     ).toBe(false);
   });
 
-  test('rejects a broken index before storing a draft', () => {
+  test('clears a broken index instead of discarding the plan', () => {
     const compact = compactModelProposal(explicitModelProposal());
     compact.items[0]!.constraintIndices = [99];
-    expect(() => expandAiPlannerProposal(compact, 'Tokyo')).toThrowError(
-      AiPlannerCompactReferenceError,
-    );
+    compact.items[0]!.candidatePlaceIndex = 42;
+    const proposal = expandAiPlannerProposal(compact, 'Tokyo');
+    expect(proposal.items[0]!.constraintIds).toStrictEqual([]);
+    expect(proposal.items[0]!.candidatePlaceId).toBeNull();
   });
 
   test('a user destination resolves to its locality instead of a same-named venue', () => {

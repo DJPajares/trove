@@ -582,7 +582,7 @@ describe('AI planning Apply', () => {
     expect(store.state.items).toHaveLength(3);
   });
 
-  test('requires acknowledgement only for material warnings', async () => {
+  test('never waits on a warning acknowledgement, even for a retained material warning', async () => {
     const draft = explicitDraft();
     draft.warnings.push({
       code: 'route_conflict',
@@ -592,15 +592,29 @@ describe('AI planning Apply', () => {
       material: true,
     });
     const store = createApplyStore(draft);
-    await expect(apply(store)).rejects.toMatchObject({
-      code: 'warnings_not_acknowledged',
-      statusCode: 409,
-    });
-    expect(store.state.trips).toHaveLength(0);
-
-    store.state.sessions[0]!.warningsAcknowledgedAt = NOW;
-    store.state.sessions[0]!.warningsAcknowledgedRevision = 1;
     await expect(apply(store)).resolves.toHaveProperty('tripId');
+    expect(store.state.trips).toHaveLength(1);
+  });
+
+  test('stores each leg the way the draft travels it', async () => {
+    const draft = explicitDraft();
+    const day = draft.days.find((entry) => entry.items.length > 0)!;
+    day.routeStartTravelMode = 'walk';
+    day.items[0]!.travelModeToNext = 'transit';
+    const store = createApplyStore(draft);
+    await apply(store);
+    expect(store.state.days.find((entry) => entry.routeStartTravelMode === 'WALK')).toBeDefined();
+    expect(store.state.days.filter((entry) => entry.routeStartTravelMode === 'DRIVE').length).toBe(
+      store.state.days.length - 1,
+    );
+    expect(
+      store.state.items.find((item) => item.customLabel === day.items[0]!.label),
+    ).toMatchObject({
+      travelModeToNext: 'TRANSIT',
+    });
+    expect(store.state.items.filter((item) => item.travelModeToNext === 'DRIVE').length).toBe(
+      store.state.items.length - 1,
+    );
   });
 
   test('reports each Apply outcome as a content-free telemetry event', async () => {
@@ -608,20 +622,12 @@ describe('AI planning Apply', () => {
     setAiPlanningTelemetrySink((event) => events.push(event));
 
     try {
-      const draft = explicitDraft();
-      draft.warnings.push({
-        code: 'route_conflict',
-        evidenceIds: [],
-        id: 'warning:material',
-        itemIds: ['item:meeting'],
-        material: true,
+      const store = createApplyStore(explicitDraft());
+
+      await expect(apply(store, { revision: 0 })).rejects.toMatchObject({
+        code: 'draft_conflict',
       });
-      const store = createApplyStore(draft);
 
-      await expect(apply(store)).rejects.toMatchObject({ code: 'warnings_not_acknowledged' });
-
-      store.state.sessions[0]!.warningsAcknowledgedAt = NOW;
-      store.state.sessions[0]!.warningsAcknowledgedRevision = 1;
       const applied = await apply(store);
 
       store.state.sessions[0]!.expiresAt = new Date(NOW.getTime() - 1);
@@ -635,7 +641,7 @@ describe('AI planning Apply', () => {
     // from a first Apply on a dashboard rather than inflating the applied count.
     expect(events).toStrictEqual([
       {
-        code: 'warnings_not_acknowledged',
+        code: 'draft_conflict',
         kind: 'apply_completed',
         occurredAt: NOW.toISOString(),
         outcome: 'rejected',

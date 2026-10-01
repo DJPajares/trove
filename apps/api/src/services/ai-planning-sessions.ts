@@ -1245,8 +1245,5 @@ export async function loadAiPlanningSessionForApplyInTransaction(
     countryContextChanged: session.countryContextChanged,
     tripDescription: session.tripDescription,
     tripName: session.tripName,
-    warningAcknowledged:
-      session.warningsAcknowledgedRevision === expectedRevision &&
-      session.warningsAcknowledgedAt !== null,
   };
 }

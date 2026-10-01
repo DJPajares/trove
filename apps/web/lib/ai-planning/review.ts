@@ -26,7 +26,10 @@ export function aiPlanningCountrySaveIsCurrent(
   );
 }
 
-/** Apply approves visible suggestions, then rechecks warnings revealed by saving. */
+/**
+ * Apply approves visible suggestions first. Nothing the save reveals holds
+ * Apply back: warnings inform the review, they do not gate it.
+ */
 export async function prepareAiPlanningCountriesForApply(
   session: AiPlanningSession,
   countries: string[],
@@ -44,13 +47,7 @@ export async function prepareAiPlanningCountriesForApply(
     !aiPlanningCountriesReviewed(saved, countries)
   )
     return null;
-  const requiresAcknowledgement =
-    saved.countryContextChanged || saved.draft.warnings.some((warning) => warning.material);
-  return {
-    canApply:
-      !requiresAcknowledgement || saved.warningAcknowledgement?.revision === saved.draftRevision,
-    session: saved,
-  };
+  return saved;
 }
 
 export function isAiPlanningSessionExpired(session: AiPlanningSession, now = Date.now()): boolean {

@@ -39,7 +39,6 @@ import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  acknowledgeAiPlanningWarnings,
   AiPlanningApiError,
   applyAiPlanningSession,
   fetchAiPlanningSession,
@@ -73,7 +72,7 @@ import type { Trip } from '@/lib/trips/api';
 const INITIAL_SESSION_POLL_MS = 3_000;
 const LATER_SESSION_POLL_MS = 5_000;
 
-type ReviewOperation = 'acknowledging' | 'applying' | 'idle' | 'regenerating';
+type ReviewOperation = 'applying' | 'idle' | 'regenerating';
 
 export function AiPlanningReview({
   sessionId,
@@ -297,18 +296,22 @@ export function AiPlanningReview({
   const publishing = operation !== 'idle';
   const reviewing = !expired && !serverExpired && session?.status === 'reviewing';
   const visibleError = error ?? (publishing ? null : session?.lastSafeError);
-  const materialWarnings = draft?.warnings.filter((warning) => warning.material) ?? [];
-  const warningsAcknowledged =
-    session?.warningAcknowledgement?.revision === session?.draftRevision &&
-    (materialWarnings.length > 0 || session?.countryContextChanged);
   const countriesConfirmed = session && aiPlanningCountriesReviewed(session, countries);
-  const canApply = Boolean(
-    reviewing &&
-    draft &&
-    countries.length > 0 &&
-    !savingCountries &&
-    (!(materialWarnings.length || session?.countryContextChanged) || warningsAcknowledged),
-  );
+  const canApply = Boolean(reviewing && draft && countries.length > 0 && !savingCountries);
+  // A commitment the plan had to move names the one it now follows, so the
+  // traveller sees why its time differs from the one they asked for.
+  const adjustedAfter = useMemo(() => {
+    const labels = new Map(
+      draft?.days.flatMap((day) => day.items.map((item) => [item.id, item.label])) ?? [],
+    );
+    return new Map(
+      draft?.warnings.flatMap((warning) => {
+        const [earlier, moved] = warning.itemIds;
+        const label = earlier ? labels.get(earlier) : undefined;
+        return warning.code === 'schedule_adjusted' && moved && label ? [[moved, label]] : [];
+      }) ?? [],
+    );
+  }, [draft]);
   const selectedMapPoints = useMemo(
     () => (draft ? buildAiPlanningReviewMapPoints(draft) : []),
     [draft],
@@ -448,19 +451,6 @@ export function AiPlanningReview({
     }, 250);
   }
 
-  async function acknowledgeWarnings() {
-    if (!session || publishing) return;
-    setOperation('acknowledging');
-    setError(null);
-    try {
-      publish((await acknowledgeAiPlanningWarnings(session.id, session.draftRevision)).session);
-    } catch (cause) {
-      setError(cause instanceof AiPlanningApiError ? cause.code : 'request_failed');
-    } finally {
-      setOperation('idle');
-    }
-  }
-
   async function regenerate() {
     if (!session || expired || serverExpired || publishing || !regeneratePrompt.trim()) return;
     setOperation('regenerating');
@@ -491,16 +481,15 @@ export function AiPlanningReview({
       // A session with no draft is one the server has already applied, so it
       // cannot create a trip: close the dialog rather than leave it sitting
       // there with nothing to act on.
-      const prepared = await prepareAiPlanningCountriesForApply(
+      const saved = await prepareAiPlanningCountriesForApply(
         sessionRef.current ?? session,
         countries,
         persistCountries,
       );
-      if (!prepared?.canApply) {
+      if (!saved) {
         setConfirmApply(false);
         return;
       }
-      const saved = prepared.session;
       const deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
       const result = await applyAiPlanningSession(saved.id, saved.draftRevision, deviceTimeZone);
       const applied = appliedAiPlanningSession(saved, result.trip.id);
@@ -786,6 +775,11 @@ export function AiPlanningReview({
                                 {t('travelerSupplied')}
                               </p>
                             ) : null}
+                            {adjustedAfter.has(item.id) ? (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {t('scheduleAdjusted', { other: adjustedAfter.get(item.id)! })}
+                              </p>
+                            ) : null}
                             {/* Which provider found a place is Trove's problem, not
                               the traveller's. What they are deciding here is
                               whether to trust the plan, and for that the only
@@ -823,7 +817,9 @@ export function AiPlanningReview({
                   const reason = draft.warnings.find(
                     (warning) =>
                       warning.itemIds.includes(item.id) &&
-                      ['arrival_time_unknown', 'schedule_conflict'].includes(warning.code),
+                      ['arrival_time_unknown', 'schedule_adjusted', 'schedule_conflict'].includes(
+                        warning.code,
+                      ),
                   )?.code;
                   return (
                     <li key={item.id}>
@@ -969,40 +965,6 @@ export function AiPlanningReview({
           </section>
         </aside>
       </motion.div>
-
-      {materialWarnings.length || session.countryContextChanged ? (
-        <Alert role="alert" variant="warning">
-          <CircleAlert aria-hidden="true" />
-          <AlertTitle>{t('materialWarnings')}</AlertTitle>
-          <AlertDescription>
-            {warningsAcknowledged ? t('warningsAcknowledged') : t('warningsNeedAcknowledgement')}
-          </AlertDescription>
-          {materialWarnings.length ? (
-            <p className="text-sm text-muted-foreground">
-              {t('warningAffects', {
-                count: materialWarnings.reduce(
-                  (total, warning) => total + warning.itemIds.length,
-                  0,
-                ),
-              })}
-            </p>
-          ) : null}
-          {materialWarnings.some((warning) => warning.code === 'arrival_time_unknown') ? (
-            <p className="text-sm text-muted-foreground">{t('arrivalTimeWarning')}</p>
-          ) : null}
-          {!warningsAcknowledged ? (
-            <Button
-              disabled={!reviewing || publishing}
-              onClick={() => void acknowledgeWarnings()}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              {operation === 'acknowledging' ? t('acknowledging') : t('acknowledgeWarnings')}
-            </Button>
-          ) : null}
-        </Alert>
-      ) : null}
 
       <div className="fixed right-[var(--gutter-inline-end)] bottom-[calc(var(--bottom-bar-height)+var(--safe-bottom)+1rem)] z-20">
         <Button disabled={!canApply || publishing} onClick={() => setConfirmApply(true)}>

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { planningPreferencesFromAi } from '@trove/types';
-import type { AiPlannerDraft } from '@trove/types';
+import type { AiPlannerDraft, AiPlannerLegMode } from '@trove/types';
 import { readPlanScoreInputs, type PlanScoreTripRows, type TripPlanScore } from './plan-score.js';
 import { PLAN_SCORE_RUBRIC_VERSION } from './plan-score-rules.js';
 import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
@@ -21,10 +21,18 @@ export function draftDayStay(
   };
 }
 
+/**
+ * The stored travel mode a draft leg becomes on Apply. A draft written before
+ * legs carried a mode keeps the column default.
+ */
+export function draftLegMode(mode: AiPlannerLegMode | undefined): 'DRIVE' | 'TRANSIT' | 'WALK' {
+  return mode === 'walk' ? 'WALK' : mode === 'transit' ? 'TRANSIT' : 'DRIVE';
+}
+
 /** Binds an assessment to the final itinerary, not mutable review copy. */
 export function draftPlanScoreInputRevision(draft: AiPlannerDraft): string {
   const payload = {
-    version: 4,
+    version: 5,
     preferences: {
       pace: draft.trip.pace,
       paceSource: draft.trip.paceSource,
@@ -45,6 +53,7 @@ export function draftPlanScoreInputRevision(draft: AiPlannerDraft): string {
       date: day.date,
       dailyBase: day.dailyBasePlaceRefId,
       departureBase: day.dailyBaseDeparturePlaceRefId,
+      startMode: draftLegMode(day.routeStartTravelMode),
       items: day.items.map((item) => ({
         id: item.id,
         place: item.placeRefId,
@@ -56,6 +65,7 @@ export function draftPlanScoreInputRevision(draft: AiPlannerDraft): string {
             ? [item.schedule.kind, item.schedule.localTime, item.schedule.source]
             : [item.schedule.kind, item.schedule.dayPart],
         priority: item.priority,
+        mode: draftLegMode(item.travelModeToNext),
       })),
     })),
     unscheduled: draft.unscheduledItems.map(({ placeRefId, priority }) => ({
@@ -143,7 +153,7 @@ export function appliedDraftScoreInputsMatch(
             : 'USER_OWNED'
           : null,
         timeZone: itemZone,
-        travelModeToNext: 'DRIVE',
+        travelModeToNext: draftLegMode(item.travelModeToNext),
         tripPlaceId: ref(item.placeRefId),
       });
     }
@@ -154,7 +164,7 @@ export function appliedDraftScoreInputsMatch(
       defaultTimeZone: zone,
       id: dayId,
       items,
-      routeStartTravelMode: 'DRIVE',
+      routeStartTravelMode: draftLegMode(day.routeStartTravelMode),
     });
   }
   return (

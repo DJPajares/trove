@@ -20,6 +20,7 @@ import { floatingLocalTimeToInstant, parseLocalTime } from './itinerary-rules.js
 import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
 import { resolveCountryPrimaryTimeZone } from './trip-rules.js';
 import { readCachedRoute, routeCacheKey } from './route-evidence-cache.js';
+import type { RoutableTravelMode } from './routes.js';
 import { planScoreReferenceTargets } from './plan-score-reference-targets.js';
 import { WEATHER_FORECAST_TTL_MS } from './weather-evidence-cache.js';
 import { scoringInputRevision } from './plan-score-rules.js';
@@ -106,16 +107,34 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, clock: Date | ((
   const destination = destinationContextByDay(await draftTripContext(draft, [], now));
   const legsOf = (day: (typeof draft.days)[number]) => {
     const stay = draftDayStay(day);
-    const points = [
-      ...(stay.start ? [{ id: `base-start:${day.date}`, placeId: stay.start }] : []),
-      ...day.items.map((i) => ({ id: i.id, placeId: i.placeRefId })),
-      ...(stay.end ? [{ id: `base-return:${day.date}`, placeId: stay.end }] : []),
+    // Each point carries the mode of the leg that leaves it, as the applied
+    // itinerary stores it: the day's start mode on the stay, otherwise on the
+    // stop being left.
+    const points: Array<{ id: string; placeId: string | null; mode: RoutableTravelMode }> = [
+      ...(stay.start
+        ? [
+            {
+              id: `base-start:${day.date}`,
+              placeId: stay.start,
+              mode: day.routeStartTravelMode ?? 'drive',
+            },
+          ]
+        : []),
+      ...day.items.map((i) => ({
+        id: i.id,
+        placeId: i.placeRefId,
+        mode: i.travelModeToNext ?? 'drive',
+      })),
+      ...(stay.end
+        ? [{ id: `base-return:${day.date}`, placeId: stay.end, mode: 'drive' as const }]
+        : []),
     ];
     return points.slice(1).map((b, index) => {
       const a = points[index]!;
       return {
         a,
         b,
+        mode: a.mode,
         origin: a.placeId ? (evidence.places.get(a.placeId)?.coordinates ?? null) : null,
         destination: b.placeId ? (evidence.places.get(b.placeId)?.coordinates ?? null) : null,
       };
@@ -124,25 +143,26 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, clock: Date | ((
   const cachedLeg = (
     origin: { latitude: number; longitude: number },
     destination: { latitude: number; longitude: number },
+    mode: RoutableTravelMode,
   ) => {
-    const key = JSON.stringify(routeCacheKey(origin, destination, 'drive'));
+    const key = JSON.stringify(routeCacheKey(origin, destination, mode));
     if (!routeMemo.has(key))
       routeMemo.set(
         key,
-        readCachedRoute({ origin, destination, mode: 'drive', includePolyline: false }, now),
+        readCachedRoute({ origin, destination, mode, includePolyline: false }, now),
       );
     return routeMemo.get(key)!;
   };
   // The draft's own routed legs scale every estimate, as they do for a trip.
   const samples: Array<{ mode: string; km: number; minutes: number }> = [];
   for (const day of draft.days)
-    for (const { origin, destination: end } of legsOf(day)) {
+    for (const { origin, destination: end, mode } of legsOf(day)) {
       if (!origin || !end) continue;
       if (origin.latitude === end.latitude && origin.longitude === end.longitude) continue;
-      const cached = await cachedLeg(origin, end);
+      const cached = await cachedLeg(origin, end, mode);
       if (cached.kind === 'hit' && cached.result.status === 'ok')
         samples.push({
-          mode: 'drive',
+          mode,
           km: haversineKm(origin, end),
           minutes: cached.result.estimate.durationSeconds / 60,
         });
@@ -156,13 +176,13 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, clock: Date | ((
       draft.trip.destinations.map((d) => zones.get(d.placeRefId)).find(Boolean) ??
       'UTC';
     const segments: ScoringRouteSegment[] = [];
-    for (const { a, b, origin, destination } of legsOf(day)) {
+    for (const { a, b, origin, destination, mode } of legsOf(day)) {
       const segment: ScoringRouteSegment = {
         id: `${a.id}:${b.id}`,
         itemIds: [a.id, b.id],
         scope: 'LOCAL',
         status: 'UNKNOWN',
-        mode: 'drive',
+        mode,
       };
       if (origin && destination) {
         if (
@@ -177,7 +197,7 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, clock: Date | ((
           });
           continue;
         }
-        const cached = await cachedLeg(origin, destination);
+        const cached = await cachedLeg(origin, destination, mode);
         if (cached.kind === 'hit' && cached.result.status === 'ok') {
           routeTimes.push(cached.result.freshness.fetchedAt);
           routeDeadlines.push(
@@ -194,7 +214,7 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, clock: Date | ((
           });
           continue;
         }
-        const minutes = estimateLegMinutes(origin, destination, 'drive', calibration);
+        const minutes = estimateLegMinutes(origin, destination, mode, calibration);
         if (minutes !== null) {
           segments.push({
             ...segment,

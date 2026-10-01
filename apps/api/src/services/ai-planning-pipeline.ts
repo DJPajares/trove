@@ -6,6 +6,7 @@ import {
   type AiPlannerDraft,
   type AiPlannerDraftItem,
   type AiPlannerEvidence,
+  type AiPlannerLegMode,
   type AiPlannerModelProposal,
 } from '@trove/types';
 
@@ -16,14 +17,14 @@ import {
   coveredDayCount,
   isSparseProposal,
 } from './ai-planner-prompt.js';
-import {
-  AiPlannerCompactReferenceError,
-  aiPlannerCompactProposalSchema,
-  expandAiPlannerProposal,
-} from './ai-planner-compact.js';
+import { aiPlannerCompactProposalSchema, expandAiPlannerProposal } from './ai-planner-compact.js';
+import { AiPlannerRepairLog } from './ai-planner-repair-log.js';
+import { repairAiPlannerModelProposal, repairCompactOutput } from './ai-planner-repair.js';
 import { createCanonicalPlacesService } from './canonical-places.js';
 import { finalizeDraftDayTitles } from './ai-planning-day-titles.js';
 import { readDraftPlanScore } from './ai-draft-score-reader.js';
+import { draftDayStay } from './ai-planning-plan-score.js';
+import { preferredLegMode } from './ai-planning-travel-modes.js';
 import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
 import { dayPartWindow } from './day-part-windows.js';
 import {
@@ -47,6 +48,7 @@ import { groundableDraftPlaceIds, referencedDraftPlaceIds } from './ai-planning-
 import {
   recordAiPlanningDraftAssembled,
   recordAiPlanningProposalCoverage,
+  recordAiPlanningProposalRepaired,
 } from './ai-planning-telemetry.js';
 import {
   balancedPaceAnchorRange,
@@ -396,10 +398,10 @@ function enforceRealPlaceLimit(draft: AiPlannerDraft, proposal: AiPlannerModelPr
     const hard = Number(isHardItem(right, proposal)) - Number(isHardItem(left, proposal));
     return hard || items.indexOf(left) - items.indexOf(right);
   });
+  // Hard items sort first, so one only reaches here when the traveller named
+  // more real places than a run may look up. It keeps its slot in the plan as
+  // a Custom Place, like any other over the cap.
   for (const item of ordered.slice(AI_PLANNER_MAX_REAL_PLACE_ITEMS)) {
-    if (isHardItem(item, proposal)) {
-      throw new AiPlanningPipelineFailure('invalid_response', null);
-    }
     const original = draft.places.find((place) => place.id === item.placeRefId);
     const customId = scopedId('place-cap', item.id);
     draft.places.push({
@@ -486,7 +488,7 @@ function protectUnknownArrival(draft: AiPlannerDraft, proposal: AiPlannerModelPr
       evidenceIds: [],
       id: scopedId('warning', `arrival:${firstDay.date}:${item.id}`),
       itemIds: [item.id],
-      material: hard,
+      material: false,
     });
     if (hard) return true;
     draft.unscheduledItems.push(item);
@@ -542,6 +544,90 @@ export function dropUnverifiedDraftStays(draft: AiPlannerDraft) {
 }
 
 /**
+ * No two timed items on a day may overlap, and the plan settles that itself
+ * rather than handing the traveller a contradiction to sort out. Of each
+ * overlapping pair a suggestion gives way first, moving to Unscheduled. Two of
+ * the traveller's own commitments cannot both stand at once: the earlier keeps
+ * its time and the later starts as soon as the earlier ends, its constraint
+ * relaxed to flexible so the plan no longer claims to hold the original time,
+ * and a note names both so the change is never silent.
+ */
+export function resolveScheduleOverlaps(
+  draft: AiPlannerDraft,
+  proposal: AiPlannerModelProposal,
+  log = new AiPlannerRepairLog(),
+) {
+  const constraints = new Map(
+    proposal.normalizedRequest.constraints.map((constraint) => [constraint.id, constraint]),
+  );
+  for (const day of draft.days) {
+    for (let guard = 0; guard <= day.items.length; guard += 1) {
+      const timed = day.items
+        .flatMap((item) =>
+          item.schedule.kind === 'exact'
+            ? [{ item, start: minuteOfDay(item.schedule.localTime) }]
+            : [],
+        )
+        .sort((left, right) => left.start - right.start);
+      let pair: [(typeof timed)[number], (typeof timed)[number]] | null = null;
+      for (let left = 0; left < timed.length && !pair; left += 1) {
+        for (let right = left + 1; right < timed.length; right += 1) {
+          const a = timed[left]!;
+          const b = timed[right]!;
+          if (b.start < a.start + a.item.durationMinutes) {
+            pair = [a, b];
+            break;
+          }
+        }
+      }
+      if (!pair) break;
+      const [earlier, later] = pair;
+      const suggestion = [later, earlier].find(
+        ({ item }) => item.origin === 'model' && !isHardItem(item, proposal),
+      );
+      if (suggestion) {
+        day.items = day.items.filter((item) => item.id !== suggestion.item.id);
+        draft.unscheduledItems.push(suggestion.item);
+        draft.warnings.push({
+          code: 'schedule_conflict',
+          evidenceIds: [],
+          id: scopedId('warning', `schedule:${day.date}:${suggestion.item.id}`),
+          itemIds: [suggestion.item.id],
+          material: false,
+        });
+        log.add('overlap_unscheduled');
+        continue;
+      }
+
+      const moved = later.item;
+      for (const id of moved.constraintIds) {
+        const constraint = constraints.get(id);
+        if (constraint?.strength === 'hard') constraint.strength = 'flexible';
+      }
+      const end = earlier.start + earlier.item.durationMinutes;
+      const start =
+        Math.ceil(end / SUGGESTED_TIME_ROUNDING_MINUTES) * SUGGESTED_TIME_ROUNDING_MINUTES;
+      draft.warnings.push({
+        code: 'schedule_adjusted',
+        evidenceIds: [],
+        id: scopedId('warning', `adjusted:${day.date}:${earlier.item.id}:${moved.id}`),
+        itemIds: [earlier.item.id, moved.id],
+        material: false,
+      });
+      log.add('commitment_retimed');
+      if (start + moved.durationMinutes <= 1_440) {
+        moved.schedule = { kind: 'exact', localTime: localTimeFromMinutes(start), source: 'model' };
+        day.items.sort((left, right) => scheduleRank(left) - scheduleRank(right));
+      } else {
+        // No room left in the day: it stays the traveller's item, unscheduled.
+        day.items = day.items.filter((item) => item.id !== moved.id);
+        draft.unscheduledItems.push(moved);
+      }
+    }
+  }
+}
+
+/**
  * Builds and prunes the day-to-day itinerary without reaching a provider. The
  * places it emits are pending placeholders; `applyGroundingToDraft` upgrades the
  * ones that survive to here.
@@ -549,6 +635,7 @@ export function dropUnverifiedDraftStays(draft: AiPlannerDraft) {
 export function assembleAiPlanningDraft(
   proposal: AiPlannerModelProposal,
   generationDate: Date,
+  log = new AiPlannerRepairLog(),
 ): AiPlannerDraft {
   const defaults = resolveAiPlannerDefaults(proposal.normalizedRequest, proposal, generationDate);
   const dates = enumerateDateRange(defaults.startDate, defaults.endDate);
@@ -633,6 +720,7 @@ export function assembleAiPlanningDraft(
     unscheduledItems,
     warnings: [],
   };
+  resolveScheduleOverlaps(draft, proposal, log);
   protectWorkBlocks(draft, proposal);
   protectUnknownArrival(draft, proposal);
   enforceBalancedPace(draft, proposal);
@@ -918,7 +1006,7 @@ export async function addOpeningEvidence(
           evidenceIds: [opening.evidence.id],
           id: scopedId('warning', `hours:${day.date}:${item.id}`),
           itemIds: [item.id],
-          material: hard || conflict.severity !== 'SOFT',
+          material: false,
         });
         if (!hard) {
           draft.unscheduledItems.push(item);
@@ -988,11 +1076,18 @@ async function addRouteEvidence(
   intervals: Map<string, PlanScoreInterval[]>,
   routesService: RoutesService | null,
   signal?: AbortSignal,
+  log = new AiPlannerRepairLog(),
 ): Promise<{
   inbound: Map<string, number>;
+  legModes: Map<string, AiPlannerLegMode>;
   segments: Map<string, PlanScoreRouteSegment[]>;
 }> {
   type RouteResult = Awaited<ReturnType<RoutesService['computeRoute']>> | null;
+  type RoutedLeg = { mode: AiPlannerLegMode; result: RouteResult };
+  const legKey = (
+    origin: GroundedPlaceContext['location'],
+    destination: GroundedPlaceContext['location'],
+  ) => `${origin.latitude}:${origin.longitude}:${destination.latitude}:${destination.longitude}`;
   const routeRequests = new Map<
     string,
     { destination: GroundedPlaceContext['location']; origin: GroundedPlaceContext['location'] }
@@ -1004,29 +1099,36 @@ async function addRouteEvidence(
       const origin = previous.placeRefId ? contexts.get(previous.placeRefId) : null;
       const destination = next.placeRefId ? contexts.get(next.placeRefId) : null;
       if (!origin || !destination) continue;
-      const key = `${origin.location.latitude}:${origin.location.longitude}:${destination.location.latitude}:${destination.location.longitude}`;
-      routeRequests.set(key, { destination: destination.location, origin: origin.location });
+      routeRequests.set(legKey(origin.location, destination.location), {
+        destination: destination.location,
+        origin: origin.location,
+      });
     }
   }
-  const routeResults = new Map<string, RouteResult>(
+  // Each leg is routed the way a traveller would make it: walked when short,
+  // by public transport across a city. Only where the provider finds no such
+  // route is the same leg asked again by car, so a leg costs one call unless
+  // the area has no transit at all.
+  const routeResults = new Map<string, RoutedLeg>(
     await mapWithConcurrency(
       [...routeRequests],
       PROVIDER_CONCURRENCY_LIMIT,
-      async ([key, request]) => [
-        key,
-        routesService
-          ? await routesService.computeRoute({
-              ...request,
-              includePolyline: false,
-              mode: 'drive',
-              signal,
-            })
-          : null,
-      ],
+      async ([key, request]): Promise<[string, RoutedLeg]> => {
+        const preferred = preferredLegMode(request.origin, request.destination);
+        if (!routesService) return [key, { mode: preferred, result: null }];
+        const route = (mode: AiPlannerLegMode) =>
+          routesService.computeRoute({ ...request, includePolyline: false, mode, signal });
+        const result = await route(preferred);
+        if (result.status !== 'empty' || preferred === 'drive') {
+          return [key, { mode: preferred, result }];
+        }
+        return [key, { mode: 'drive', result: await route('drive') }];
+      },
     ),
   );
 
   const inboundMinutes = new Map<string, number>();
+  const legModes = new Map<string, AiPlannerLegMode>();
   const daySegments = new Map<string, ScoringRouteSegment[]>();
 
   for (const day of draft.days) {
@@ -1049,8 +1151,9 @@ async function addRouteEvidence(
       }
       const evidenceId = scopedId('route-evidence', routeId);
       routeEvidenceIds.set(next.id, evidenceId);
-      const memoKey = `${origin.location.latitude}:${origin.location.longitude}:${destination.location.latitude}:${destination.location.longitude}`;
-      const result = routeResults.get(memoKey) ?? null;
+      const routed = routeResults.get(legKey(origin.location, destination.location)) ?? null;
+      const result = routed?.result ?? null;
+      if (routed) legModes.set(`${day.date}:${previous.id}:${next.id}`, routed.mode);
       if (result?.status === 'ok') {
         const minutes = result.estimate.durationSeconds / 60;
         inbound.set(next.id, minutes);
@@ -1060,7 +1163,7 @@ async function addRouteEvidence(
             minutes,
             source: result.freshness.source === 'cache' ? 'CACHED_PROVIDER' : 'FRESH_PROVIDER',
           },
-          mode: 'drive',
+          mode: routed!.mode,
           distanceMeters: result.estimate.distanceMeters,
           id: routeId,
           scope: 'LOCAL',
@@ -1107,25 +1210,58 @@ async function addRouteEvidence(
       }
     }
 
-    const noFeasibleTime = new Set(assignAiPlannerSuggestedTimes(day, intervals, inbound));
-    if (noFeasibleTime.size) {
-      const previousById = new Map(
-        day.items.map((item, index) => [item.id, day.items[index - 1]?.id ?? null]),
+    const previousById = new Map(
+      day.items.map((item, index) => [item.id, day.items[index - 1]?.id ?? null]),
+    );
+    const plannedSchedules = new Map(day.items.map((item) => [item.id, item.schedule]));
+    let noFeasibleTime = new Set(assignAiPlannerSuggestedTimes(day, intervals, inbound));
+    let removed = false;
+    // The traveller's own commitment is never the one to give way. A suggestion
+    // crowding it out moves to Unscheduled, nearest first, and the day is timed
+    // again from its planned dayparts, until the commitment fits or nothing
+    // movable is left in front of it.
+    for (;;) {
+      const blocked = day.items.find(
+        (item) => noFeasibleTime.has(item.id) && isHardItem(item, proposal),
       );
-      day.items = day.items.filter((item) => {
-        if (!noFeasibleTime.has(item.id)) return true;
-        const hard = isHardItem(item, proposal);
-        draft.warnings.push({
-          code: 'schedule_conflict',
-          evidenceIds: [],
-          id: scopedId('warning', `schedule:${day.date}:${item.id}`),
-          itemIds: [item.id],
-          material: hard,
-        });
-        if (hard) return true;
-        draft.unscheduledItems.push(item);
-        return false;
+      if (!blocked) break;
+      const at = day.items.indexOf(blocked);
+      const partOf = (item: AiPlannerDraftItem) => {
+        const planned = plannedSchedules.get(item.id);
+        return planned?.kind === 'day_part' ? planned.dayPart : null;
+      };
+      // Only a suggestion competing for the same part of the day can make room.
+      const competes = (item: AiPlannerDraftItem) =>
+        [partOf(item), partOf(blocked)].includes('anytime') || partOf(item) === partOf(blocked);
+      const movable = (item: AiPlannerDraftItem) =>
+        item.id !== blocked.id &&
+        !isHardItem(item, proposal) &&
+        item.origin === 'model' &&
+        competes(item);
+      const yielding =
+        day.items.slice(0, at).findLast(movable) ?? day.items.slice(at + 1).find(movable);
+      if (!yielding) break;
+      day.items = day.items.filter((item) => item.id !== yielding.id);
+      draft.unscheduledItems.push(yielding);
+      draft.warnings.push({
+        code: 'schedule_conflict',
+        evidenceIds: [],
+        id: scopedId('warning', `schedule:${day.date}:${yielding.id}`),
+        itemIds: [yielding.id],
+        material: false,
       });
+      log.add('blocking_item_unscheduled');
+      removed = true;
+      for (const item of day.items) item.schedule = plannedSchedules.get(item.id) ?? item.schedule;
+      for (const [index, item] of day.items.entries()) {
+        if (previousById.get(item.id) !== (day.items[index - 1]?.id ?? null)) {
+          inbound.delete(item.id);
+          inboundMinutes.delete(item.id);
+        }
+      }
+      noFeasibleTime = new Set(assignAiPlannerSuggestedTimes(day, intervals, inbound));
+    }
+    const rechain = () => {
       const byId = new Map(segments.map((segment) => [segment.id, segment]));
       segments.splice(0, segments.length);
       for (let index = 1; index < day.items.length; index += 1) {
@@ -1138,17 +1274,63 @@ async function addRouteEvidence(
           inboundMinutes.delete(next.id);
         }
       }
+    };
+    const unschedule = (item: AiPlannerDraftItem) => {
+      draft.unscheduledItems.push(item);
+      draft.warnings.push({
+        code: 'schedule_conflict',
+        evidenceIds: [],
+        id: scopedId('warning', `schedule:${day.date}:${item.id}`),
+        itemIds: [item.id],
+        material: false,
+      });
+    };
+    if (noFeasibleTime.size || removed) {
+      day.items = day.items.filter((item) => {
+        if (!noFeasibleTime.has(item.id)) return true;
+        // A commitment that still cannot be timed keeps the traveller's own
+        // daypart; it is theirs to keep, not the plan's to drop.
+        if (isHardItem(item, proposal)) return true;
+        unschedule(item);
+        return false;
+      });
+      rechain();
     }
 
-    const feasibility = evaluateFeasibility({
-      commitments: [],
-      items: day.items.map((item) =>
-        feasibilityItem(item, intervals.get(item.id) ?? null, inbound.get(item.id) ?? null),
-      ),
-    });
-    for (const conflict of feasibility.conflicts.filter((entry) =>
-      ['ARRIVES_AFTER_FIXED_START', 'TIGHT_TRANSITION'].includes(entry.kind),
-    )) {
+    const transitionConflicts = () =>
+      evaluateFeasibility({
+        commitments: [],
+        items: day.items.map((item) =>
+          feasibilityItem(item, intervals.get(item.id) ?? null, inbound.get(item.id) ?? null),
+        ),
+      }).conflicts.filter((entry) =>
+        ['ARRIVES_AFTER_FIXED_START', 'TIGHT_TRANSITION'].includes(entry.kind),
+      );
+    let conflicts = transitionConflicts();
+    // A suggestion that cannot be reached in time gives way, the later one of
+    // each pair, so the plan never asks the traveller to be in two places.
+    const yielding = new Set(
+      conflicts.flatMap((conflict) => {
+        const movable = day.items.filter(
+          (item) =>
+            conflict.subjectIds.includes(item.id) &&
+            item.origin === 'model' &&
+            !isHardItem(item, proposal),
+        );
+        return movable.length ? [movable.at(-1)!.id] : [];
+      }),
+    );
+    if (yielding.size) {
+      day.items = day.items.filter((item) => {
+        if (!yielding.has(item.id)) return true;
+        unschedule(item);
+        log.add('blocking_item_unscheduled');
+        return false;
+      });
+      rechain();
+      conflicts = transitionConflicts();
+    }
+    for (const conflict of conflicts) {
       const evidenceIds = conflict.subjectIds.flatMap((itemId) => {
         const id = routeEvidenceIds.get(itemId);
         if (!id) return [];
@@ -1159,22 +1341,66 @@ async function addRouteEvidence(
         }
         return [id];
       });
-      const hard = conflict.subjectIds.every((itemId) => {
-        const item = day.items.find((entry) => entry.id === itemId);
-        return item ? isHardItem(item, proposal) : false;
-      });
       draft.warnings.push({
         code: conflict.kind.toLowerCase(),
         evidenceIds,
         id: scopedId('warning', `route-conflict:${day.date}:${conflict.id}`),
         itemIds: conflict.subjectIds,
-        material: hard || conflict.severity !== 'SOFT',
+        material: false,
       });
     }
+    assignDraftLegModes(day, contexts, legModes);
   }
 
-  return { inbound: inboundMinutes, segments: daySegments };
+  return { inbound: inboundMinutes, legModes, segments: daySegments };
 }
+
+/**
+ * Records how each of the day's legs is travelled, over the same chain the
+ * applied itinerary routes: stay to first located stop, located stop to the
+ * next, last located stop back to the stay. A leg the run routed keeps the
+ * mode it was routed with; any other is chosen by distance alone, which costs
+ * nothing.
+ */
+export function assignDraftLegModes(
+  day: AiPlannerDraft['days'][number],
+  contexts: ReadonlyMap<string, Pick<GroundedPlaceContext, 'location'>>,
+  /** Modes legs were routed with, keyed `date:fromItemId:toItemId`. */
+  routedModes: ReadonlyMap<string, AiPlannerLegMode> = new Map(),
+) {
+  // A re-chained day is assigned afresh, so no leg keeps a mode for a
+  // neighbour it no longer has.
+  for (const item of day.items) delete item.travelModeToNext;
+  delete day.routeStartTravelMode;
+  const locate = (placeRefId: string | null) =>
+    placeRefId ? (contexts.get(placeRefId)?.location ?? null) : null;
+  const located = day.items.flatMap((item) => {
+    const location = locate(item.placeRefId);
+    return location ? [{ item, location }] : [];
+  });
+  const stay = draftDayStay(day);
+  const start = locate(stay.start);
+  const end = locate(stay.end);
+  const first = located[0];
+  if (start && first) day.routeStartTravelMode = preferredLegMode(start, first.location);
+  located.forEach(({ item, location }, index) => {
+    const next = located[index + 1];
+    if (next) {
+      item.travelModeToNext =
+        routedModes.get(`${day.date}:${item.id}:${next.item.id}`) ??
+        preferredLegMode(location, next.location);
+    } else if (end) {
+      item.travelModeToNext = preferredLegMode(location, end);
+    }
+  });
+}
+
+const HARD_CONSTRAINT_ISSUES = new Set([
+  'conflicting_hard_constraints',
+  'hard_constraint_changed',
+  'hard_constraint_missing',
+  'hard_constraint_unscheduled',
+]);
 
 async function validateWithProviderEvidence(
   draft: AiPlannerDraft,
@@ -1182,6 +1408,7 @@ async function validateWithProviderEvidence(
   grounding: GroundedCandidate[],
   providerContext: ProviderContext,
   signal?: AbortSignal,
+  log = new AiPlannerRepairLog(),
 ) {
   const contexts = new Map(
     grounding.flatMap((result) =>
@@ -1195,22 +1422,45 @@ async function validateWithProviderEvidence(
     providerContext.placesService,
     signal,
   );
-  await addRouteEvidence(
+  const { legModes } = await addRouteEvidence(
     draft,
     proposal,
     contexts,
     intervals,
     providerContext.routesService,
     signal,
+    log,
   );
-  const validated = validateAiPlannerDraft(draft);
+  let validated = validateAiPlannerDraft(draft);
+  // The evidence passes move and retime items; whatever they leave
+  // inconsistent is settled here too, rather than failing a finished plan.
+  const constraints = proposal.normalizedRequest.constraints;
+  for (let attempt = 0; !validated.success && attempt < 3; attempt += 1) {
+    let changed = false;
+    if (validated.issues.some((issue) => issue.code === 'overlapping_items')) {
+      resolveScheduleOverlaps(draft, proposal, log);
+      changed = true;
+    }
+    for (const issue of validated.issues) {
+      if (!HARD_CONSTRAINT_ISSUES.has(issue.code) || !issue.subjectId) continue;
+      const constraint = constraints.find(
+        (entry) =>
+          entry.strength === 'hard' &&
+          (entry.id === issue.subjectId || issue.subjectId!.endsWith(`:${entry.id}`)),
+      );
+      if (!constraint) continue;
+      constraint.strength = 'flexible';
+      log.add('commitment_relaxed');
+      changed = true;
+    }
+    if (!changed) break;
+    for (const day of draft.days) assignDraftLegModes(day, contexts, legModes);
+    for (const item of draft.unscheduledItems) delete item.travelModeToNext;
+    validated = validateAiPlannerDraft(draft);
+  }
   if (!validated.success) {
     throw new AiPlanningPipelineFailure(
-      validated.issues.some((issue) =>
-        ['conflicting_hard_constraints', 'overlapping_items'].includes(issue.code),
-      )
-        ? 'schedule_conflict'
-        : 'invalid_response',
+      'invalid_response',
       null,
       validated.issues.map((issue) => issue.code),
       validated.issues.map((issue) => safeIssuePath(issue.path)),
@@ -1314,29 +1564,23 @@ export async function runAiPlanningPipeline(
       signal: controller.signal,
     });
     metadata = generation.metadata;
+    // The harness repairs what the model got wrong rather than failing the run:
+    // only output that is not an object at all, or a repair the validator
+    // still rejects, ends a run here.
+    const repairs = new AiPlannerRepairLog();
     let expanded: AiPlannerModelProposal;
     try {
-      const compact = aiPlannerCompactProposalSchema.safeParse(generation.output);
-      if (!compact.success) {
-        throw new AiPlanningPipelineFailure(
-          'invalid_response',
-          metadata,
-          compact.error.issues.map((issue) => issue.code),
-          compact.error.issues.map((issue) => safeIssuePath(issue.path)),
-        );
+      const compact = repairCompactOutput(generation.output, claim.prompt, repairs);
+      if (!compact) {
+        throw new AiPlanningPipelineFailure('invalid_response', metadata, ['unusable_output']);
       }
-      expanded = expandAiPlannerProposal(compact.data, claim.prompt);
+      expanded = repairAiPlannerModelProposal(
+        expandAiPlannerProposal(compact, claim.prompt, repairs),
+        repairs,
+      );
     } catch (error) {
-      if (error instanceof AiPlannerCompactReferenceError) {
-        throw new AiPlanningPipelineFailure(
-          'invalid_response',
-          metadata,
-          ['dangling_reference'],
-          [error.path],
-        );
-      }
       if (error instanceof AiPlanningPipelineFailure) throw error;
-      throw new AiPlanningPipelineFailure('invalid_response', metadata);
+      throw new AiPlanningPipelineFailure('invalid_response', metadata, ['repair_failed']);
     }
     const proposal = validateAiPlannerModelProposal(expanded);
 
@@ -1354,7 +1598,7 @@ export async function runAiPlanningPipeline(
     await lifecycle.updateStage(ownerId, runId, 'SCHEDULING');
     let draft: AiPlannerDraft;
     try {
-      draft = assembleAiPlanningDraft(proposal.data, generationDate);
+      draft = assembleAiPlanningDraft(proposal.data, generationDate, repairs);
     } catch {
       throw new AiPlanningPipelineFailure('invalid_response', metadata);
     }
@@ -1404,6 +1648,7 @@ export async function runAiPlanningPipeline(
       grounding,
       providerContext,
       providerSignal,
+      repairs,
     );
     finalizeDraftDayTitles(validated.draft, proposal.data.daySummaries);
     // The provider run has finished acquiring its ordinary evidence. Reuse the
@@ -1411,6 +1656,7 @@ export async function runAiPlanningPipeline(
     // its asynchronous evidence reads rather than before generation began.
     const planScore = await (options.readDraftScore ?? readDraftPlanScore)(validated.draft, clock);
     recordAiPlanningDraftAssembled(validated.draft, generationDate);
+    recordAiPlanningProposalRepaired(repairs.counts, generationDate);
     if (controller.signal.aborted)
       throw new AiPlanningPipelineFailure(deadlineReached ? 'timeout' : 'cancelled', metadata);
     await lifecycle.completeSuccess(ownerId, runId, validated.draft, planScore, metadata);

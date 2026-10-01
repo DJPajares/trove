@@ -8,6 +8,7 @@ import {
   aiPlannerProposalItemSchema,
   type AiPlannerModelProposal,
 } from '@trove/types';
+import { AiPlannerRepairLog } from './ai-planner-repair-log.js';
 import { enumerateDateRange } from './trip-rules.js';
 
 const index = z.number().int().min(0);
@@ -94,12 +95,6 @@ export const aiPlannerCompactProposalSchema = z
   .strict();
 
 export type AiPlannerCompactProposal = z.infer<typeof aiPlannerCompactProposalSchema>;
-
-export class AiPlannerCompactReferenceError extends Error {
-  constructor(public readonly path: string) {
-    super('dangling_reference');
-  }
-}
 
 const WEEKDAYS = [
   'sunday',
@@ -277,11 +272,15 @@ function preserveNightFlightLanguage(
   }
 }
 
-function reference<T>(values: readonly T[], at: number | null, path: string): T | null {
+/**
+ * A model index pointing past its array is a reference to nothing: it is
+ * cleared, never a reason to discard the plan.
+ */
+function reference<T>(values: readonly T[], at: number | null, log: AiPlannerRepairLog): T | null {
   if (at === null) return null;
   const value = values[at];
-  if (value === undefined) throw new AiPlannerCompactReferenceError(path);
-  return value;
+  if (value === undefined) log.add('reference_cleared');
+  return value ?? null;
 }
 
 function localityKey(name: string) {
@@ -297,6 +296,7 @@ function localityKey(name: string) {
 export function expandAiPlannerProposal(
   compact: AiPlannerCompactProposal,
   rawPrompt: string,
+  log = new AiPlannerRepairLog(),
 ): AiPlannerModelProposal {
   const destinationIntents = compact.normalizedRequest.destinations.map((name, i) => ({
     id: `intent:${i}`,
@@ -308,12 +308,7 @@ export function expandAiPlannerProposal(
     return {
       ...fields,
       id: `constraint:${i}`,
-      destinationIntentId:
-        reference(
-          destinationIntents,
-          destinationIntentIndex,
-          `normalizedRequest.constraints.${i}.destinationIntentIndex`,
-        )?.id ?? null,
+      destinationIntentId: reference(destinationIntents, destinationIntentIndex, log)?.id ?? null,
     };
   });
   const assumptions: AiPlannerModelProposal['assumptions'] = [];
@@ -338,46 +333,44 @@ export function expandAiPlannerProposal(
       value: compact.normalizedRequest.datePreference.startDate.slice(0, 4),
     });
   }
-  const destinations = compact.destinations.map((destination, i) => {
-    let place = reference(
-      places,
-      destination.candidatePlaceIndex,
-      `destinations.${i}.candidatePlaceIndex`,
-    );
-    if (!place) throw new AiPlannerCompactReferenceError(`destinations.${i}.candidatePlaceIndex`);
-    const intent = reference(
-      destinationIntents,
-      destination.destinationIntentIndex,
-      `destinations.${i}.destinationIntentIndex`,
-    );
-    if (destination.source === 'user' && !intent) {
-      throw new AiPlannerCompactReferenceError(`destinations.${i}.destinationIntentIndex`);
+  const placeForIntent = (intent: { name: string }) => {
+    let place =
+      places.find((candidate) => localityKey(candidate.name) === localityKey(intent.name)) ?? null;
+    if (!place) {
+      place = {
+        id: `place:${places.length}`,
+        name: intent.name,
+        note: null,
+        searchQuery: intent.name,
+      };
+      places.push(place);
     }
-    if (destination.source === 'model' && intent) {
-      throw new AiPlannerCompactReferenceError(`destinations.${i}.destinationIntentIndex`);
+    return place;
+  };
+  const destinations = compact.destinations.flatMap((destination, i) => {
+    let place = reference(places, destination.candidatePlaceIndex, log);
+    let intent = reference(destinationIntents, destination.destinationIntentIndex, log);
+    // Provenance follows the request, not the model's label for it: a
+    // destination the traveller named is theirs, any other is a suggestion.
+    if (!intent && place) {
+      intent =
+        destinationIntents.find(
+          (candidate) => localityKey(candidate.name) === localityKey(place!.name),
+        ) ?? null;
     }
+    const source = intent ? ('user' as const) : ('model' as const);
+    if (source !== destination.source) log.add('destination_repaired');
     // A model can point a city intent at a same-named office, hotel, or
     // attraction. The traveller chose the locality, so its place identity
     // comes from that intent; provider grounding then verifies it normally.
-    if (
-      destination.source === 'user' &&
-      intent &&
-      localityKey(place.name) !== localityKey(intent.name)
-    ) {
-      place =
-        places.find((candidate) => localityKey(candidate.name) === localityKey(intent.name)) ??
-        null;
-      if (!place) {
-        place = {
-          id: `place:${places.length}`,
-          name: intent.name,
-          note: null,
-          searchQuery: intent.name,
-        };
-        places.push(place);
-      }
+    if (intent && (!place || localityKey(place.name) !== localityKey(intent.name))) {
+      place = placeForIntent(intent);
     }
-    const assumptionId = destination.source === 'model' ? `assumption:destination:${i}` : null;
+    if (!place) {
+      log.add('destination_repaired');
+      return [];
+    }
+    const assumptionId = source === 'model' ? `assumption:destination:${i}` : null;
     if (assumptionId) {
       assumptions.push({
         code: 'destination_inferred',
@@ -387,12 +380,14 @@ export function expandAiPlannerProposal(
         value: place.name,
       });
     }
-    return {
-      assumptionId,
-      candidatePlaceId: place.id,
-      destinationIntentId: intent?.id ?? null,
-      source: destination.source,
-    };
+    return [
+      {
+        assumptionId,
+        candidatePlaceId: place.id,
+        destinationIntentId: intent?.id ?? null,
+        source,
+      },
+    ];
   });
   compact.omittedOptionalDestinations.forEach((name, i) => {
     assumptions.push({
@@ -408,17 +403,16 @@ export function expandAiPlannerProposal(
     return {
       ...fields,
       id: `item:${i}`,
-      candidatePlaceId:
-        reference(places, candidatePlaceIndex, `items.${i}.candidatePlaceIndex`)?.id ?? null,
-      destinationIntentId:
-        reference(destinationIntents, destinationIntentIndex, `items.${i}.destinationIntentIndex`)
-          ?.id ?? null,
-      constraintIds: constraintIndices.map((at, j) => {
-        const constraint = reference(constraints, at, `items.${i}.constraintIndices.${j}`);
-        if (!constraint)
-          throw new AiPlannerCompactReferenceError(`items.${i}.constraintIndices.${j}`);
-        return constraint.id;
-      }),
+      candidatePlaceId: reference(places, candidatePlaceIndex, log)?.id ?? null,
+      destinationIntentId: reference(destinationIntents, destinationIntentIndex, log)?.id ?? null,
+      constraintIds: [
+        ...new Set(
+          constraintIndices.flatMap((at) => {
+            const constraint = reference(constraints, at, log);
+            return constraint ? [constraint.id] : [];
+          }),
+        ),
+      ],
     };
   });
   const daySummaries = compact.daySummaries

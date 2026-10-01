@@ -274,16 +274,6 @@ export function setAiPlanningCountries(
   );
 }
 
-export function acknowledgeAiPlanningWarnings(sessionId: string, revision: number) {
-  return aiPlanningRequest<{ session: AiPlanningSession }>(
-    `/ai/planning-sessions/${sessionId}/warnings/acknowledge`,
-    {
-      body: JSON.stringify({ revision }),
-      method: 'POST',
-    },
-  );
-}
-
 export function applyAiPlanningSession(
   sessionId: string,
   expectedRevision: number,

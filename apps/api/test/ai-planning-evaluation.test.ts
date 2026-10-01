@@ -285,7 +285,7 @@ describe('AI planning launch evaluation', () => {
     });
   });
 
-  test('an hours conflict is surfaced as a material warning rather than silently rescheduled', async () => {
+  test('an hours conflict on a commitment is noted, never blocking, and the commitment is kept', async () => {
     const proposal = explicitModelProposal();
     const placesProvider: PlacesProvider = {
       name: 'google',
@@ -325,7 +325,7 @@ describe('AI planning launch evaluation', () => {
     });
 
     expect(outcome.warningCodes).toContain('outside_opening_hours');
-    expect(outcome.materialWarnings).toBeGreaterThan(0);
+    expect(outcome.materialWarnings).toBe(0);
     expect(outcome.hardCommitmentsKept).toBe(true);
   });
 

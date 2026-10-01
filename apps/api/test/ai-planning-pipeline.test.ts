@@ -468,7 +468,7 @@ describe('AI planning pipeline', () => {
     });
   });
 
-  test('conflicting traveller work and meeting times return a recoverable schedule error', async () => {
+  test('settles conflicting traveller work and meeting times instead of failing', async () => {
     const proposal = explicitModelProposal();
     const meeting = proposal.normalizedRequest.constraints.find(
       (entry) => entry.kind === 'meeting',
@@ -499,8 +499,22 @@ describe('AI planning pipeline', () => {
       providerContext: noProviders,
     });
     expect(harness.calls).toBe(1);
-    expect(harness.drafts).toStrictEqual([]);
-    expect(harness.failures).toContainEqual({ code: 'schedule_conflict', metadata: METADATA });
+    expect(harness.failures).toStrictEqual([]);
+    const draft = harness.drafts[0]!;
+    const day = draft.days.find((entry) => entry.date === '2026-10-03')!;
+    // The earlier commitment keeps its time; the later starts once it ends.
+    expect(day.items.find((item) => item.label === 'Team meeting')?.schedule).toStrictEqual({
+      kind: 'exact',
+      localTime: '09:00',
+      source: 'user',
+    });
+    expect(day.items.find((item) => item.label === 'Work commitment')?.schedule).toStrictEqual({
+      kind: 'exact',
+      localTime: '10:00',
+      source: 'model',
+    });
+    expect(draft.warnings.map((warning) => warning.code)).toContain('schedule_adjusted');
+    expect(draft.warnings.filter((warning) => warning.material)).toStrictEqual([]);
     expect(proposal).toStrictEqual(original);
   });
 
@@ -695,7 +709,7 @@ describe('AI planning pipeline', () => {
         expect.objectContaining({
           code: 'outside_opening_hours',
           itemIds: ['item:1'],
-          material: true,
+          material: false,
         }),
       ]),
     );
@@ -768,7 +782,7 @@ describe('AI planning pipeline', () => {
     expect(harness.drafts[0]?.unscheduledItems.map((item) => item.id)).toStrictEqual(['item:0']);
     expect(harness.drafts[0]?.warnings).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: 'outside_opening_hours', material: true }),
+        expect.objectContaining({ code: 'outside_opening_hours', material: false }),
       ]),
     );
   });
@@ -856,10 +870,78 @@ describe('AI planning pipeline', () => {
     expect(realPlaceItems).toHaveLength(24);
   });
 
-  test('persists a safe failure and no draft for an invalid model proposal', async () => {
+  test('routes a leg by public transport first and by car only where no transit route exists', async () => {
+    const proposal = explicitModelProposal();
+    proposal.places.push({
+      id: 'candidate:meeting',
+      name: 'Tokyo Office',
+      note: null,
+      searchQuery: 'Tokyo Office Tokyo',
+    });
+    proposal.items[0]!.candidatePlaceId = 'candidate:meeting';
+    const modes: string[] = [];
+    const routesProvider: RoutesProvider = {
+      name: 'google',
+      async computeRoute(request) {
+        modes.push(request.mode);
+        return request.mode === 'drive'
+          ? { distanceMeters: 2_000, durationSeconds: 600, encodedPolyline: null }
+          : null;
+      },
+    };
+    const harness = createHarness(proposal);
+
+    await runAiPlanningPipeline(OWNER_ID, RUN_ID, {
+      clock: () => NOW,
+      gateway: harness.gateway,
+      groundCandidates: async (value) => verifiedGrounding(value),
+      lifecycle: harness.lifecycle,
+      loadHomeLocation: async () => null,
+      providerContext: {
+        placesProvider: null,
+        placesService: null,
+        routesService: new RoutesService(routesProvider, () => NOW),
+      },
+    });
+
+    // The stops are about 1.4 km apart: past a short walk, so transit is
+    // asked first, and the car only once transit finds nothing.
+    expect(modes).toStrictEqual(['transit', 'drive']);
+    const day = harness.drafts[0]!.days[1]!;
+    const meeting = day.items.find((item) => item.id === 'item:0')!;
+    expect(meeting.travelModeToNext).toBe('drive');
+    expect(harness.drafts[0]!.evidence).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'route', provider: 'google', status: 'verified' }),
+      ]),
+    );
+  });
+
+  test('repairs a proposal that breaks its own contract instead of failing the run', async () => {
     const invalid = structuredClone(explicitModelProposal()) as AiPlannerModelProposal;
     invalid.items[0]!.origin = 'model';
     const harness = createHarness(invalid);
+
+    await runAiPlanningPipeline(OWNER_ID, RUN_ID, {
+      clock: () => NOW,
+      gateway: harness.gateway,
+      lifecycle: harness.lifecycle,
+      loadHomeLocation: async () => null,
+      providerContext: noProviders,
+    });
+
+    expect(harness.calls).toBe(1);
+    expect(harness.failures).toStrictEqual([]);
+    // The traveller's meeting is put back exactly as they asked for it.
+    const meeting = harness.drafts[0]!.days[1]!.items.find((item) => item.label === 'Team meeting');
+    expect(meeting).toMatchObject({
+      origin: 'user',
+      schedule: { kind: 'exact', localTime: '09:00', source: 'user' },
+    });
+  });
+
+  test('persists a safe failure and no draft only for output that is not a plan at all', async () => {
+    const harness = createHarness('not a plan');
 
     await runAiPlanningPipeline(OWNER_ID, RUN_ID, {
       clock: () => NOW,

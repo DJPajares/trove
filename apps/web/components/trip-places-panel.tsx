@@ -14,7 +14,7 @@ import {
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
-import { LocatePlaceDialog } from '@/components/locate-place-dialog';
+import { LocatePlaceSheet } from '@/components/locate-place-sheet';
 import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
 import { PlaceMedia } from '@/components/place-media';
 import { Badge } from '@/components/ui/badge';
@@ -406,7 +406,7 @@ export function TripPlacesPanel({
         />
       ) : null}
 
-      <LocatePlaceDialog
+      <LocatePlaceSheet
         onLocated={onPlaceLocated}
         onOpenChange={(open) => !open && setLocatePlace(null)}
         place={locatePlace ? { id: locatePlace.place.id, name: placeName(locatePlace) } : null}

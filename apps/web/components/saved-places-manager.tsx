@@ -40,14 +40,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -69,6 +61,7 @@ import {
   Sheet,
   SheetContent,
   SheetDescription,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
@@ -938,43 +931,48 @@ export function SavedPlacesManager() {
         </SheetContent>
       </Sheet>
 
-      <Dialog
+      <Sheet
         onOpenChange={(open) => {
           if (!open) openCollectionEditor('closed');
         }}
         open={collectionEditor.mode !== 'closed'}
       >
-        <DialogContent closeLabel={t('close')}>
-          <form onSubmit={(event) => void handleCollectionSave(event)}>
-            <DialogHeader>
-              <DialogTitle>
+        <SheetContent closeLabel={t('close')}>
+          <form
+            className="flex min-h-0 flex-1 flex-col"
+            onSubmit={(event) => void handleCollectionSave(event)}
+          >
+            <SheetHeader className="border-b">
+              <SheetTitle>
                 {collectionEditor.mode === 'rename'
                   ? t('renameCollectionTitle')
                   : t('createCollectionTitle')}
-              </DialogTitle>
-              <DialogDescription>
+              </SheetTitle>
+              <SheetDescription>
                 {collectionEditor.mode === 'rename'
                   ? t('renameCollectionDescription')
                   : t('createCollectionDescription')}
-              </DialogDescription>
-            </DialogHeader>
-            {collectionError ? (
-              <Alert className="mt-5" role="alert" variant="destructive">
-                <CircleAlert aria-hidden="true" />
-                <AlertDescription>{collectionError}</AlertDescription>
-              </Alert>
-            ) : null}
-            <div className="mt-5 space-y-2">
-              <Label htmlFor="saved-collection-name">{t('collectionName')}</Label>
-              <Input
-                autoFocus
-                id="saved-collection-name"
-                onChange={(event) => setCollectionName(event.target.value)}
-                required
-                value={collectionName}
-              />
+              </SheetDescription>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+              {collectionError ? (
+                <Alert role="alert" variant="destructive">
+                  <CircleAlert aria-hidden="true" />
+                  <AlertDescription>{collectionError}</AlertDescription>
+                </Alert>
+              ) : null}
+              <div className="space-y-2">
+                <Label htmlFor="saved-collection-name">{t('collectionName')}</Label>
+                <Input
+                  autoFocus
+                  id="saved-collection-name"
+                  onChange={(event) => setCollectionName(event.target.value)}
+                  required
+                  value={collectionName}
+                />
+              </div>
             </div>
-            <DialogFooter>
+            <SheetFooter className="flex-col-reverse sm:flex-row sm:justify-end">
               {collectionEditor.mode === 'rename' ? (
                 <Button
                   className="sm:mr-auto"
@@ -996,10 +994,10 @@ export function SavedPlacesManager() {
               <Button disabled={savingCollection || !collectionName.trim()} type="submit">
                 {savingCollection ? t('saving') : t('save')}
               </Button>
-            </DialogFooter>
+            </SheetFooter>
           </form>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
       <AlertDialog
         open={Boolean(collectionToDelete)}
@@ -1021,52 +1019,54 @@ export function SavedPlacesManager() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog
+      <Sheet
         onOpenChange={(open) => {
           if (!open) setCollectionPickerPlace(null);
         }}
         open={Boolean(collectionPickerPlace)}
       >
-        <DialogContent closeLabel={t('close')}>
-          <DialogHeader>
-            <DialogTitle>{t('manageCollectionsTitle')}</DialogTitle>
-            <DialogDescription>
+        <SheetContent closeLabel={t('close')}>
+          <SheetHeader className="border-b">
+            <SheetTitle>{t('manageCollectionsTitle')}</SheetTitle>
+            <SheetDescription>
               {t('manageCollectionsDescription', {
                 name: collectionPickerPlace ? getPlaceName(collectionPickerPlace) : '',
               })}
-            </DialogDescription>
-          </DialogHeader>
-          {collectionError ? (
-            <Alert role="alert" variant="destructive">
-              <CircleAlert aria-hidden="true" />
-              <AlertDescription>{collectionError}</AlertDescription>
-            </Alert>
-          ) : null}
-          {collections.length ? (
-            <div className="mt-1 space-y-1">
-              {collections.map((collection) => {
-                const selected = collectionPickerPlace?.collections.some(
-                  (item) => item.id === collection.id,
-                );
-                return (
-                  <Button
-                    aria-pressed={selected}
-                    className="w-full justify-between"
-                    disabled={Boolean(togglingCollectionId)}
-                    key={collection.id}
-                    onClick={() => void handleCollectionMembership(collection)}
-                    variant={selected ? 'secondary' : 'ghost'}
-                  >
-                    <span>{collection.name}</span>
-                    {selected ? <Check aria-hidden="true" /> : null}
-                  </Button>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">{t('noCollections')}</p>
-          )}
-          <DialogFooter>
+            </SheetDescription>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+            {collectionError ? (
+              <Alert role="alert" variant="destructive">
+                <CircleAlert aria-hidden="true" />
+                <AlertDescription>{collectionError}</AlertDescription>
+              </Alert>
+            ) : null}
+            {collections.length ? (
+              <div className="space-y-1">
+                {collections.map((collection) => {
+                  const selected = collectionPickerPlace?.collections.some(
+                    (item) => item.id === collection.id,
+                  );
+                  return (
+                    <Button
+                      aria-pressed={selected}
+                      className="w-full justify-between"
+                      disabled={Boolean(togglingCollectionId)}
+                      key={collection.id}
+                      onClick={() => void handleCollectionMembership(collection)}
+                      variant={selected ? 'secondary' : 'ghost'}
+                    >
+                      <span>{collection.name}</span>
+                      {selected ? <Check aria-hidden="true" /> : null}
+                    </Button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm leading-6 text-muted-foreground">{t('noCollections')}</p>
+            )}
+          </div>
+          <SheetFooter className="flex-col-reverse sm:flex-row sm:justify-end">
             <Button
               onClick={() => {
                 const target = collectionPickerPlace;
@@ -1079,35 +1079,40 @@ export function SavedPlacesManager() {
               {t('createCollection')}
             </Button>
             <Button onClick={() => setCollectionPickerPlace(null)}>{t('done')}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
-      <Dialog
+      <Sheet
         open={Boolean(noteEditorPlace)}
         onOpenChange={(open) => !open && setNoteEditorPlace(null)}
       >
-        <DialogContent closeLabel={t('close')}>
-          <form onSubmit={(event) => void handleNoteSave(event)}>
-            <DialogHeader>
-              <DialogTitle>{t('editNoteTitle')}</DialogTitle>
-              <DialogDescription>
+        <SheetContent closeLabel={t('close')}>
+          <form
+            className="flex min-h-0 flex-1 flex-col"
+            onSubmit={(event) => void handleNoteSave(event)}
+          >
+            <SheetHeader className="border-b">
+              <SheetTitle>{t('editNoteTitle')}</SheetTitle>
+              <SheetDescription>
                 {t('editNoteDescription', {
                   name: noteEditorPlace ? getPlaceName(noteEditorPlace) : '',
                 })}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="mt-5 space-y-2">
-              <Label htmlFor="saved-place-note">{t('personalNote')}</Label>
-              <Input
-                autoFocus
-                id="saved-place-note"
-                onChange={(event) => setNoteValue(event.target.value)}
-                placeholder={t('personalNotePlaceholder')}
-                value={noteValue}
-              />
+              </SheetDescription>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+              <div className="space-y-2">
+                <Label htmlFor="saved-place-note">{t('personalNote')}</Label>
+                <Input
+                  autoFocus
+                  id="saved-place-note"
+                  onChange={(event) => setNoteValue(event.target.value)}
+                  placeholder={t('personalNotePlaceholder')}
+                  value={noteValue}
+                />
+              </div>
             </div>
-            <DialogFooter>
+            <SheetFooter className="flex-col-reverse sm:flex-row sm:justify-end">
               <Button
                 disabled={savingNote}
                 onClick={() => setNoteEditorPlace(null)}
@@ -1119,10 +1124,10 @@ export function SavedPlacesManager() {
               <Button disabled={savingNote} type="submit">
                 {savingNote ? t('saving') : t('save')}
               </Button>
-            </DialogFooter>
+            </SheetFooter>
           </form>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
       <AlertDialog
         open={Boolean(savedPlaceToUnsave)}

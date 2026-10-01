@@ -24,15 +24,17 @@ import { TripInsightsPanel } from '@/components/trip-insights-panel';
 import { usePreferences } from '@/components/preferences-provider';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -1007,27 +1009,20 @@ export function AiPlanningReview({
           {t('apply')}
         </Button>
       </div>
-      <Dialog onOpenChange={setConfirmApply} open={confirmApply}>
-        <DialogContent closeLabel={t('close')}>
-          <DialogHeader>
-            <DialogTitle>{t('confirmTitle')}</DialogTitle>
-            <DialogDescription>{t('confirmDescription')}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              disabled={operation === 'applying'}
-              onClick={() => setConfirmApply(false)}
-              type="button"
-              variant="ghost"
-            >
-              {t('notYet')}
-            </Button>
-            <Button disabled={operation === 'applying'} onClick={() => void apply()} type="button">
+      <AlertDialog onOpenChange={setConfirmApply} open={confirmApply}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('confirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('confirmDescription')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={operation === 'applying'}>{t('notYet')}</AlertDialogCancel>
+            <AlertDialogAction disabled={operation === 'applying'} onClick={() => void apply()}>
               {operation === 'applying' ? t('applying') : t('confirmApply')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

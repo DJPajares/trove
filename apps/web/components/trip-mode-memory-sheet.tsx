@@ -7,13 +7,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useOnlineStatus } from '@/components/trip-sync-status';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import {
   Select,
@@ -22,6 +15,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import type { ItineraryItem } from '@/lib/itinerary/api';
@@ -45,7 +46,7 @@ const NO_CONTEXT = 'none';
  * Capture does not depend on connectivity: anything that cannot be sent now is
  * queued with its photos and syncs later.
  */
-export function TripModeMemoryDialog({
+export function TripModeMemorySheet({
   dayDate,
   dayId,
   defaultItemId,
@@ -140,14 +141,17 @@ export function TripModeMemoryDialog({
   }
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="sm:max-w-md" closeLabel={t('cancel')}>
-        <DialogHeader>
-          <DialogTitle>{t('title')}</DialogTitle>
-          <DialogDescription>{t('description')}</DialogDescription>
-        </DialogHeader>
+    <Sheet onOpenChange={onOpenChange} open={open}>
+      <SheetContent
+        className="w-full md:data-[side=right]:w-[min(34rem,calc(100%-0.5rem))]"
+        closeLabel={t('cancel')}
+      >
+        <SheetHeader className="border-b">
+          <SheetTitle>{t('title')}</SheetTitle>
+          <SheetDescription>{t('description')}</SheetDescription>
+        </SheetHeader>
 
-        <div className="space-y-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
           <p className="text-xs leading-5 text-text-subtle">
             {t('capturedContext', { date: dayDate, timeZone })}
           </p>
@@ -249,18 +253,18 @@ export function TripModeMemoryDialog({
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           ) : null}
-
-          <div className="flex justify-end gap-2">
-            <Button onClick={() => onOpenChange(false)} variant="ghost">
-              {t('cancel')}
-            </Button>
-            <Button disabled={!canSave} onClick={() => void handleSave()}>
-              <Sparkles aria-hidden="true" data-icon="inline-start" />
-              {saving ? t('saving') : t('save')}
-            </Button>
-          </div>
         </div>
-      </DialogContent>
-    </Dialog>
+
+        <SheetFooter className="flex-col-reverse sm:flex-row sm:justify-end">
+          <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
+            {t('cancel')}
+          </Button>
+          <Button disabled={!canSave} onClick={() => void handleSave()} type="button">
+            <Sparkles aria-hidden="true" data-icon="inline-start" />
+            {saving ? t('saving') : t('save')}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }

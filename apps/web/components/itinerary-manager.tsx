@@ -1,5 +1,5 @@
 'use client';
-import { DayPlanningContextDialog } from '@/components/day-planning-context';
+import { DayPlanningContextSheet } from '@/components/day-planning-context';
 
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -43,7 +43,7 @@ import { TripDayWeather } from '@/components/trip-day-weather';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
 import { ItineraryPlacesDrawer } from '@/components/itinerary-places-drawer';
-import { LocatePlaceDialog } from '@/components/locate-place-dialog';
+import { LocatePlaceSheet } from '@/components/locate-place-sheet';
 import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripInsights } from '@/components/trip-insights';
@@ -81,14 +81,6 @@ import {
   ComboboxItem,
   ComboboxList,
 } from '@/components/ui/combobox';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
@@ -2987,7 +2979,7 @@ export function ItineraryManager({
         />
       ) : null}
 
-      <Dialog
+      <Sheet
         open={Boolean(dayMoveSource)}
         onOpenChange={(open) => {
           if (!open && !movingDay) {
@@ -2996,16 +2988,16 @@ export function ItineraryManager({
           }
         }}
       >
-        <DialogContent closeLabel={t('close')}>
+        <SheetContent closeLabel={t('close')}>
           {dayMoveSource ? (
-            <form className="space-y-6" onSubmit={handleDayMove}>
-              <DialogHeader>
-                <DialogTitle>
+            <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleDayMove}>
+              <SheetHeader className="border-b">
+                <SheetTitle>
                   {effectiveDayMoveStrategy === 'swap'
                     ? t('dayMove.swapTitle')
                     : t('dayMove.title')}
-                </DialogTitle>
-                <DialogDescription>
+                </SheetTitle>
+                <SheetDescription>
                   {t('dayMove.description', {
                     count: dayMoveSource.items.length,
                     day: dayOption(
@@ -3013,98 +3005,98 @@ export function ItineraryManager({
                       itinerary.days.findIndex(({ id }) => id === dayMoveSource.id),
                     ),
                   })}
-                </DialogDescription>
-              </DialogHeader>
-
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="itinerary-day-move-target">
-                    {t('dayMove.targetLabel')}
-                  </FieldLabel>
-                  <Select
-                    onValueChange={(value) => {
-                      // The strategy is not reset here. It is now how the
-                      // dialog was opened, and a traveller who asked to swap
-                      // has not changed their mind by naming the other day.
-                      setDayMoveTargetId(value ?? '');
-                      setDayMoveError(null);
-                    }}
-                    value={dayMoveTargetId}
-                  >
-                    <SelectTrigger id="itinerary-day-move-target" className="w-full">
-                      <SelectValue>
-                        {dayMoveTarget
-                          ? t('dayMove.targetOption', {
-                              count: dayMoveTarget.items.length,
-                              day: dayOption(
-                                dayMoveTarget,
-                                itinerary.days.findIndex(({ id }) => id === dayMoveTarget.id),
-                              ),
-                            })
-                          : t('dayMove.targetPlaceholder')}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {itinerary.days.map((day, index) =>
-                        day.id === dayMoveSource.id ? null : (
-                          <SelectItem key={day.id} value={day.id}>
-                            {t('dayMove.targetOption', {
-                              count: day.items.length,
-                              day: dayOption(day, index),
-                            })}
-                          </SelectItem>
-                        ),
-                      )}
-                    </SelectContent>
-                  </Select>
-                </Field>
-
-                {dayMoveTarget?.items.length ? (
+                </SheetDescription>
+              </SheetHeader>
+              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+                <FieldGroup>
                   <Field>
-                    <FieldLabel htmlFor="itinerary-day-move-strategy">
-                      {t('dayMove.strategyLabel')}
+                    <FieldLabel htmlFor="itinerary-day-move-target">
+                      {t('dayMove.targetLabel')}
                     </FieldLabel>
                     <Select
-                      onValueChange={(value) =>
-                        setDayMoveStrategy(value === 'swap' ? 'swap' : 'append')
-                      }
-                      value={dayMoveStrategy}
+                      onValueChange={(value) => {
+                        // The strategy is not reset here. It is now how the
+                        // sheet was opened, and a traveller who asked to swap
+                        // has not changed their mind by naming the other day.
+                        setDayMoveTargetId(value ?? '');
+                        setDayMoveError(null);
+                      }}
+                      value={dayMoveTargetId}
                     >
-                      <SelectTrigger id="itinerary-day-move-strategy" className="w-full">
+                      <SelectTrigger id="itinerary-day-move-target" className="w-full">
                         <SelectValue>
-                          {t(dayMoveStrategy === 'swap' ? 'dayMove.swap' : 'dayMove.append')}
+                          {dayMoveTarget
+                            ? t('dayMove.targetOption', {
+                                count: dayMoveTarget.items.length,
+                                day: dayOption(
+                                  dayMoveTarget,
+                                  itinerary.days.findIndex(({ id }) => id === dayMoveTarget.id),
+                                ),
+                              })
+                            : t('dayMove.targetPlaceholder')}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="append">{t('dayMove.append')}</SelectItem>
-                        <SelectItem value="swap">{t('dayMove.swap')}</SelectItem>
+                        {itinerary.days.map((day, index) =>
+                          day.id === dayMoveSource.id ? null : (
+                            <SelectItem key={day.id} value={day.id}>
+                              {t('dayMove.targetOption', {
+                                count: day.items.length,
+                                day: dayOption(day, index),
+                              })}
+                            </SelectItem>
+                          ),
+                        )}
                       </SelectContent>
                     </Select>
-                    <FieldDescription>
-                      {dayMoveStrategy === 'swap'
-                        ? t('dayMove.swapDescription', {
-                            count: dayMoveTarget.items.length,
-                          })
-                        : t('dayMove.appendDescription', {
-                            count: dayMoveTarget.items.length,
-                          })}
-                    </FieldDescription>
                   </Field>
+
+                  {dayMoveTarget?.items.length ? (
+                    <Field>
+                      <FieldLabel htmlFor="itinerary-day-move-strategy">
+                        {t('dayMove.strategyLabel')}
+                      </FieldLabel>
+                      <Select
+                        onValueChange={(value) =>
+                          setDayMoveStrategy(value === 'swap' ? 'swap' : 'append')
+                        }
+                        value={dayMoveStrategy}
+                      >
+                        <SelectTrigger id="itinerary-day-move-strategy" className="w-full">
+                          <SelectValue>
+                            {t(dayMoveStrategy === 'swap' ? 'dayMove.swap' : 'dayMove.append')}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="append">{t('dayMove.append')}</SelectItem>
+                          <SelectItem value="swap">{t('dayMove.swap')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FieldDescription>
+                        {dayMoveStrategy === 'swap'
+                          ? t('dayMove.swapDescription', {
+                              count: dayMoveTarget.items.length,
+                            })
+                          : t('dayMove.appendDescription', {
+                              count: dayMoveTarget.items.length,
+                            })}
+                      </FieldDescription>
+                    </Field>
+                  ) : null}
+                </FieldGroup>
+
+                <p className="rounded-[var(--radius-md)] bg-muted px-3 py-2.5 text-sm leading-5 text-muted-foreground">
+                  {t('dayMove.settingsStay')}
+                </p>
+
+                {dayMoveError ? (
+                  <Alert role="alert" variant="destructive">
+                    <CircleAlert aria-hidden="true" />
+                    <AlertDescription>{dayMoveError}</AlertDescription>
+                  </Alert>
                 ) : null}
-              </FieldGroup>
-
-              <p className="rounded-[var(--radius-md)] bg-muted px-3 py-2.5 text-sm leading-5 text-muted-foreground">
-                {t('dayMove.settingsStay')}
-              </p>
-
-              {dayMoveError ? (
-                <Alert role="alert" variant="destructive">
-                  <CircleAlert aria-hidden="true" />
-                  <AlertDescription>{dayMoveError}</AlertDescription>
-                </Alert>
-              ) : null}
-
-              <DialogFooter>
+              </div>
+              <SheetFooter className="flex-col-reverse sm:flex-row sm:justify-end">
                 <Button
                   disabled={movingDay}
                   onClick={() => setDayMoveSourceId(null)}
@@ -3120,40 +3112,42 @@ export function ItineraryManager({
                       ? t('dayMove.swapConfirm')
                       : t('dayMove.confirm')}
                 </Button>
-              </DialogFooter>
+              </SheetFooter>
             </form>
           ) : null}
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
-      <Dialog
+      <Sheet
         open={Boolean(dayNoteEditor)}
         onOpenChange={(open) => {
           if (!open && !savingDayNote) setDayNoteEditor(null);
         }}
       >
-        <DialogContent closeLabel={t('close')}>
-          <form className="space-y-6" onSubmit={handleDayNoteSave}>
-            <DialogHeader>
-              <DialogTitle>{t('dayNoteTitle')}</DialogTitle>
-              <DialogDescription>
+        <SheetContent closeLabel={t('close')}>
+          <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleDayNoteSave}>
+            <SheetHeader className="border-b">
+              <SheetTitle>{t('dayNoteTitle')}</SheetTitle>
+              <SheetDescription>
                 {t('dayNoteDescription', {
                   date: dayNoteEditor ? formatDate(dayNoteEditor.date, true) : '',
                 })}
-              </DialogDescription>
-            </DialogHeader>
-            <Field>
-              <FieldLabel htmlFor="itinerary-day-note">{t('dayNoteLabel')}</FieldLabel>
-              <Textarea
-                id="itinerary-day-note"
-                maxLength={5_000}
-                onChange={(event) => setDayNoteValue(event.target.value)}
-                placeholder={t('dayNotePlaceholder')}
-                rows={5}
-                value={dayNoteValue}
-              />
-            </Field>
-            <DialogFooter>
+              </SheetDescription>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+              <Field>
+                <FieldLabel htmlFor="itinerary-day-note">{t('dayNoteLabel')}</FieldLabel>
+                <Textarea
+                  id="itinerary-day-note"
+                  maxLength={5_000}
+                  onChange={(event) => setDayNoteValue(event.target.value)}
+                  placeholder={t('dayNotePlaceholder')}
+                  rows={5}
+                  value={dayNoteValue}
+                />
+              </Field>
+            </div>
+            <SheetFooter className="flex-col-reverse sm:flex-row sm:justify-end">
               <Button
                 disabled={savingDayNote}
                 onClick={() => setDayNoteEditor(null)}
@@ -3165,13 +3159,13 @@ export function ItineraryManager({
               <Button disabled={savingDayNote} type="submit">
                 {savingDayNote ? t('saving') : t('save')}
               </Button>
-            </DialogFooter>
+            </SheetFooter>
           </form>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
       {contextDay ? (
-        <DayPlanningContextDialog
+        <DayPlanningContextSheet
           initial={contextDay.planningContext}
           timeZone={contextDay.defaultTimeZone}
           onClose={() => setContextDay(null)}
@@ -3193,40 +3187,42 @@ export function ItineraryManager({
           }}
         />
       ) : null}
-      <Dialog
+      <Sheet
         open={Boolean(dayNameEditor)}
         onOpenChange={(open) => {
           if (!open && !savingDayName) setDayNameEditor(null);
         }}
       >
-        <DialogContent closeLabel={t('close')}>
-          <form className="space-y-6" onSubmit={handleDayNameSave}>
-            <DialogHeader>
-              <DialogTitle>{t('dayNameTitle')}</DialogTitle>
-              <DialogDescription>
+        <SheetContent closeLabel={t('close')}>
+          <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleDayNameSave}>
+            <SheetHeader className="border-b">
+              <SheetTitle>{t('dayNameTitle')}</SheetTitle>
+              <SheetDescription>
                 {t('dayNameDescription', {
                   date: dayNameEditor ? formatDate(dayNameEditor.date, true) : '',
                 })}
-              </DialogDescription>
-            </DialogHeader>
-            <Field>
-              <FieldLabel htmlFor="itinerary-day-name">{t('dayNameLabel')}</FieldLabel>
-              <Input
-                autoFocus
-                id="itinerary-day-name"
-                maxLength={120}
-                onChange={(event) => setDayNameValue(event.target.value)}
-                placeholder={t('dayNamePlaceholder')}
-                value={dayNameValue}
-              />
-              <FieldDescription>{t('dayNameHint')}</FieldDescription>
-              {dayNameError ? (
-                <p className="text-sm text-destructive" role="alert">
-                  {dayNameError}
-                </p>
-              ) : null}
-            </Field>
-            <DialogFooter>
+              </SheetDescription>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+              <Field>
+                <FieldLabel htmlFor="itinerary-day-name">{t('dayNameLabel')}</FieldLabel>
+                <Input
+                  autoFocus
+                  id="itinerary-day-name"
+                  maxLength={120}
+                  onChange={(event) => setDayNameValue(event.target.value)}
+                  placeholder={t('dayNamePlaceholder')}
+                  value={dayNameValue}
+                />
+                <FieldDescription>{t('dayNameHint')}</FieldDescription>
+                {dayNameError ? (
+                  <p className="text-sm text-destructive" role="alert">
+                    {dayNameError}
+                  </p>
+                ) : null}
+              </Field>
+            </div>
+            <SheetFooter className="flex-col-reverse sm:flex-row sm:justify-end">
               <Button
                 disabled={savingDayName}
                 onClick={() => setDayNameEditor(null)}
@@ -3238,10 +3234,10 @@ export function ItineraryManager({
               <Button disabled={savingDayName} type="submit">
                 {savingDayName ? t('saving') : t('save')}
               </Button>
-            </DialogFooter>
+            </SheetFooter>
           </form>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
       <AlertDialog
         open={Boolean(itemToDelete)}
@@ -3297,7 +3293,7 @@ export function ItineraryManager({
         />
       ) : null}
 
-      <LocatePlaceDialog
+      <LocatePlaceSheet
         onLocated={async () => {
           await invalidateTripQueries(queryClient, tripId, PLACE_LOCATION_QUERY_ROOTS);
         }}

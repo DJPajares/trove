@@ -6,15 +6,17 @@ import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useState } from 'react';
 
-import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 import { cancelAiPlanningSession, recoverAiPlanningSession } from '@/lib/ai-planning/api';
 import { queryKeys } from '@/lib/query/keys';
 import { formatTripDateRange } from '@/lib/trips/format';
@@ -94,32 +96,24 @@ export function AiPlanningDraftCard() {
         </Button>
       </div>
 
-      <Dialog onOpenChange={setConfirmDiscard} open={confirmDiscard}>
-        <DialogContent closeLabel={t('close')}>
-          <DialogHeader>
-            <DialogTitle>{t('discardTitle')}</DialogTitle>
-            <DialogDescription>{t('discardDescription')}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              disabled={discarding}
-              onClick={() => setConfirmDiscard(false)}
-              type="button"
-              variant="ghost"
-            >
-              {t('keep')}
-            </Button>
-            <Button
+      <AlertDialog onOpenChange={setConfirmDiscard} open={confirmDiscard}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('discardTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('discardDescription')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={discarding}>{t('keep')}</AlertDialogCancel>
+            <AlertDialogAction
               disabled={discarding}
               onClick={() => void discard()}
-              type="button"
               variant="destructive"
             >
               {discarding ? t('discarding') : t('discardConfirm')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

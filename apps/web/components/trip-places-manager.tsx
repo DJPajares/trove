@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { AddTripPlaceSheet } from '@/components/add-trip-place-sheet';
-import { EditTripPlaceDialog } from '@/components/edit-trip-place-dialog';
+import { EditTripPlaceSheet } from '@/components/edit-trip-place-sheet';
 import { PageState } from '@/components/page-state';
 import { SavedPlacesForTrip } from '@/components/saved-places-for-trip';
 import { useTripPlaceSignals } from '@/hooks/use-trip-place-signals';
@@ -175,7 +175,7 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
         />
       ) : null}
 
-      <EditTripPlaceDialog
+      <EditTripPlaceSheet
         onOpenChange={(open) => !open && setEditPlace(null)}
         onRefresh={places.refresh}
         onSave={places.savePlace}

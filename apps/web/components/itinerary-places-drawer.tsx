@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { AddTripPlaceSheet } from '@/components/add-trip-place-sheet';
-import { EditTripPlaceDialog } from '@/components/edit-trip-place-dialog';
+import { EditTripPlaceSheet } from '@/components/edit-trip-place-sheet';
 import { PageState } from '@/components/page-state';
 import { TripPlacesPanel } from '@/components/trip-places-panel';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -243,7 +243,7 @@ export function ItineraryPlacesDrawer({
         />
       ) : null}
 
-      <EditTripPlaceDialog
+      <EditTripPlaceSheet
         onOpenChange={(open) => !open && setEditPlace(null)}
         onRefresh={places.refresh}
         onSave={places.savePlace}

@@ -4,21 +4,21 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { updateCustomPlace } from '@/lib/saved/api';
 import type { TripPlace } from '@/lib/trip-places/api';
 
-type EditTripPlaceDialogProps = {
+type EditTripPlaceSheetProps = {
   onOpenChange: (open: boolean) => void;
   /** Renaming a custom Place changes the Place itself, so the collection is reloaded. */
   onRefresh: () => Promise<void> | void;
@@ -37,12 +37,12 @@ type EditTripPlaceDialogProps = {
  * searched for it, so the name is kept against this trip and leaving the field
  * empty simply hands the Place back to whatever Google calls it.
  */
-export function EditTripPlaceDialog({
+export function EditTripPlaceSheet({
   onOpenChange,
   onRefresh,
   onSave,
   tripPlace,
-}: Readonly<EditTripPlaceDialogProps>) {
+}: Readonly<EditTripPlaceSheetProps>) {
   const t = useTranslations('tripPlaces');
   const [name, setName] = useState('');
   const [note, setNote] = useState('');
@@ -91,14 +91,17 @@ export function EditTripPlaceDialog({
   }
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={Boolean(tripPlace)}>
-      <DialogContent closeLabel={t('close')}>
-        <DialogHeader>
-          <DialogTitle>{t('editPlaceTitle')}</DialogTitle>
-          <DialogDescription>{t('editPlaceDescription')}</DialogDescription>
-        </DialogHeader>
+    <Sheet onOpenChange={onOpenChange} open={Boolean(tripPlace)}>
+      <SheetContent
+        className="w-full md:data-[side=right]:w-[min(34rem,calc(100%-0.5rem))]"
+        closeLabel={t('close')}
+      >
+        <SheetHeader className="border-b">
+          <SheetTitle>{t('editPlaceTitle')}</SheetTitle>
+          <SheetDescription>{t('editPlaceDescription')}</SheetDescription>
+        </SheetHeader>
 
-        <div className="space-y-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
           <Field>
             <FieldLabel htmlFor="trip-place-name-editor">{t('placeNameLabel')}</FieldLabel>
             <Input
@@ -132,15 +135,15 @@ export function EditTripPlaceDialog({
           ) : null}
         </div>
 
-        <DialogFooter>
+        <SheetFooter className="flex-col-reverse sm:flex-row sm:justify-end">
           <Button disabled={saving} onClick={() => onOpenChange(false)} variant="outline">
             {t('cancel')}
           </Button>
           <Button disabled={saving || (isCustom && !name.trim())} onClick={() => void save()}>
             {saving ? t('saving') : t('save')}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }

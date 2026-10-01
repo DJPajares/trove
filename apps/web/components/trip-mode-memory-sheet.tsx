@@ -255,7 +255,7 @@ export function TripModeMemorySheet({
           ) : null}
         </div>
 
-        <SheetFooter className="sm:flex-row sm:justify-end">
+        <SheetFooter className="flex-col-reverse sm:flex-row sm:justify-end">
           <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
             {t('cancel')}
           </Button>

@@ -43,7 +43,7 @@ import { TripDayWeather } from '@/components/trip-day-weather';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
 import { ItineraryPlacesDrawer } from '@/components/itinerary-places-drawer';
-import { LocatePlaceDialog } from '@/components/locate-place-dialog';
+import { LocatePlaceSheet } from '@/components/locate-place-sheet';
 import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripInsights } from '@/components/trip-insights';
@@ -3297,7 +3297,7 @@ export function ItineraryManager({
         />
       ) : null}
 
-      <LocatePlaceDialog
+      <LocatePlaceSheet
         onLocated={async () => {
           await invalidateTripQueries(queryClient, tripId, PLACE_LOCATION_QUERY_ROOTS);
         }}

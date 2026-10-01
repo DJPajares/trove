@@ -6,13 +6,6 @@ import { useTranslations } from 'next-intl';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
@@ -25,12 +18,19 @@ import {
   ItemTitle,
 } from '@/components/ui/item';
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import {
   fetchPlaceLocationCandidates,
   type PlaceLocationCandidate,
   updateCustomPlace,
 } from '@/lib/saved/api';
 
-type LocatePlaceDialogProps = {
+type LocatePlaceSheetProps = {
   onLocated: () => Promise<void> | void;
   onOpenChange: (open: boolean) => void;
   /** The Custom Place being repaired: its id, and the name to search on first. */
@@ -56,11 +56,11 @@ type SearchState = 'empty' | 'idle' | 'results' | 'searching' | 'unavailable';
  * both point at, so neither relationship moves and one repair reaches every trip
  * using it.
  */
-export function LocatePlaceDialog({
+export function LocatePlaceSheet({
   onLocated,
   onOpenChange,
   place,
-}: Readonly<LocatePlaceDialogProps>) {
+}: Readonly<LocatePlaceSheetProps>) {
   const t = useTranslations('placeDetail');
   const [query, setQuery] = useState('');
   const [state, setState] = useState<SearchState>('idle');
@@ -116,14 +116,17 @@ export function LocatePlaceDialog({
   }
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={Boolean(place)}>
-      <DialogContent closeLabel={t('locate.close')}>
-        <DialogHeader>
-          <DialogTitle>{t('locate.title')}</DialogTitle>
-          <DialogDescription>{t('locate.description')}</DialogDescription>
-        </DialogHeader>
+    <Sheet onOpenChange={onOpenChange} open={Boolean(place)}>
+      <SheetContent
+        className="w-full md:data-[side=right]:w-[min(34rem,calc(100%-0.5rem))]"
+        closeLabel={t('locate.close')}
+      >
+        <SheetHeader className="border-b">
+          <SheetTitle>{t('locate.title')}</SheetTitle>
+          <SheetDescription>{t('locate.description')}</SheetDescription>
+        </SheetHeader>
 
-        <div className="space-y-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -216,7 +219,7 @@ export function LocatePlaceDialog({
             </ItemGroup>
           ) : null}
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

@@ -71,13 +71,17 @@ test('duration-only plans assess known activity time without inventing schedule 
   expect(result.limitations).toContain('TIMING_UNKNOWN');
 });
 
-test('unknown configured base keeps travel unknown but cannot erase the single stop interval', () => {
+test('unknown configured base keeps travel unknown, counting low, but cannot erase the single stop interval', () => {
   const evaluated = evaluate({
     items: [stop('custom', { inboundRequired: true, placeId: 'place' })],
     places: [linked('place')],
     segments: [{ id: 'base-custom', scope: 'LOCAL', status: 'UNKNOWN', itemIds: ['custom'] }],
   });
-  expect(scoreDay(evaluated.input)).toMatchObject({ score: 100, assessmentStatus: 'provisional' });
+  // The route row has no evidence, so it shows the missing-detail value (rubric 12).
+  const result = scoreDay(evaluated.input);
+  expect(result).toMatchObject({ assessmentStatus: 'provisional' });
+  expect(result.factors.ROUTE_EFFICIENCY).toMatchObject({ state: 'EVALUATED', score: 78 });
+  expect(result.score).toBeGreaterThanOrEqual(80);
   expect(evaluated.input.limitations).toContain('TRAVEL_TIME_UNKNOWN');
   expect(evaluated.travel.factor.state).toBe('UNKNOWN');
   expect(evaluated.input.loadRatio).toBeNull();
@@ -162,10 +166,12 @@ test('flexible daypart duration remains independently assessable with unknown in
     places: [linked('place')],
     segments: [{ id: 'base-a', scope: 'LOCAL', status: 'UNKNOWN', itemIds: ['a'] }],
   });
-  // A daypart is half a time: assessable, a little short of an exact start.
-  const score = scoreDay(evaluated.input).score!;
-  expect(score).toBeGreaterThanOrEqual(95);
-  expect(score).toBeLessThan(100);
+  // A daypart is half a time: assessable, a little short of an exact start. Its
+  // unrouted base leg leaves the route row at the missing-detail value.
+  const result = scoreDay(evaluated.input);
+  expect(result.score).toBeGreaterThanOrEqual(80);
+  expect(result.score).toBeLessThan(100);
+  expect(result.factors.FEASIBILITY).toMatchObject({ state: 'EVALUATED' });
   expect(evaluated.detailNudges).toEqual([]);
   expect(evaluated.input.assessmentBasis).toContain('TIMING');
 });
@@ -252,8 +258,8 @@ test('partial load cannot recover debt; a known lower bound can increase it and 
   expect(result.days.map((d) => d.incomingDebt)).toEqual([0, 0.6, 0.6, 1, 0.15000000000000002]);
 });
 
-test('one qualifying day scores a longer trip with partial coverage and hidden unsupported rows', () => {
-  const qualifying = scoreDay(evaluate().input).score;
+test('one qualifying day scores a longer trip with partial coverage and low-filled sparse rows', () => {
+  const qualifying = scoreDay(evaluate().input).score!;
   const result = scoreTrip({
     days: [
       evaluate().input,
@@ -261,14 +267,16 @@ test('one qualifying day scores a longer trip with partial coverage and hidden u
     ],
   });
   expect(result).toMatchObject({
-    score: qualifying,
     assessmentStatus: 'provisional',
     assessedDayCount: 1,
     applicableDayCount: 5,
   });
+  // The four unassessed days fill daily quality low instead of hiding it.
+  expect(result.score).toBeLessThan(qualifying);
   expect(result.confidence).toBeLessThan(20);
   expect(result.limitations).toContain('UNASSESSED_DAYS');
-  expect(result.components.DAILY_QUALITY.state).toBe('LIMITED');
+  expect(result.components.DAILY_QUALITY).toMatchObject({ state: 'EVALUATED', coverage: 100 });
+  expect(result.filledComponents).toContain('DAILY_QUALITY');
 });
 
 test('v8 rejects v7 while retaining original freshness and evidence ages', () => {
@@ -382,5 +390,7 @@ test('a standalone unspecified transfer is required movement, not an inapplicabl
   expect(evaluated.travel.factor.state).toBe('UNKNOWN');
   expect(evaluated.input.limitations).toContain('TRAVEL_TIME_UNKNOWN');
   expect(evaluated.missingInformation).toMatchObject([{ action: 'EDIT_TRANSFER' }]);
-  expect(scoreDay(evaluated.input)).toMatchObject({ score: 100, assessmentStatus: 'provisional' });
+  const result = scoreDay(evaluated.input);
+  expect(result).toMatchObject({ assessmentStatus: 'provisional' });
+  expect(result.factors.ROUTE_EFFICIENCY).toMatchObject({ state: 'EVALUATED', score: 78 });
 });

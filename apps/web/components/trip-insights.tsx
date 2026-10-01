@@ -1,6 +1,6 @@
 'use client';
 
-import { skipToken, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import type { PanelSurface } from '@/components/panel-surface';
@@ -9,7 +9,11 @@ import { TripInsightsPanel } from '@/components/trip-insights-panel';
 import { composeInsights } from '@/lib/insights/compose';
 import { fetchPlaceHoursNotices } from '@/lib/itinerary/api';
 import { useTripContext } from '@/lib/insights/use-trip-context';
-import type { PlanScoreExplanation, TripPlanScore } from '@/lib/plan-score/api';
+import {
+  fetchTripPlanScore,
+  type PlanScoreExplanation,
+  type TripPlanScore,
+} from '@/lib/plan-score/api';
 import { currentAssessment, dayActionLink, type ScoreAction } from '@/lib/plan-score/presentation';
 import { queryKeys } from '@/lib/query/keys';
 
@@ -38,8 +42,13 @@ export function TripInsights({
   tripId: string;
 }>) {
   const context = useTripContext(enabled ? tripId : null);
+  // Reads the score the Plan Score panel fetches, never fetching it here. It
+  // carries the same read rather than `skipToken`: whichever observer set the
+  // query's options last is the one an evidence refresh runs, and a skipToken
+  // there would make that refresh fail.
   const { data: planScore } = useQuery<TripPlanScore | null>({
-    queryFn: skipToken,
+    enabled: false,
+    queryFn: ({ signal }) => fetchTripPlanScore(tripId, signal),
     queryKey: queryKeys.planScore(tripId),
   });
   // Stored evidence only, so this costs no provider request.

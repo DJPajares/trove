@@ -4,6 +4,7 @@ import type { PlanScoreExplanation, TripPlanScore } from '@trove/types';
 import {
   assessmentDeadline,
   assessmentBasisKey,
+  breakdownRows,
   compareScores,
   currentAssessment,
   dayActionLink,
@@ -33,7 +34,7 @@ function assessment(overrides: Partial<TripPlanScore> = {}): TripPlanScore {
   const explanations = { whatWorks: [], worthImproving: [], uncertainty: [] };
   return {
     schemaVersion: 8,
-    rubricVersion: 11,
+    rubricVersion: 12,
     assessmentStatus: 'provisional',
     assessmentBasis: ['TIMING'],
     limitations: [],
@@ -298,6 +299,55 @@ test('ordinary acquisition invalidates cached scoring without invoking any acqui
   expect(client.getQueryState(['plan-score', 'other'])?.isInvalidated).toBe(false);
   expect(client.getQueryData(['itinerary-day-routes', 'trip', 'day'])).toEqual({ route: 'owned' });
   client.clear();
+});
+
+test('loading the trip context refreshes that trip score, so seasonal fit can fill', async () => {
+  const client = createQueryClient();
+  client.setQueryData(['plan-score', 'trip'], assessment());
+  client.setQueryData(['plan-score', 'other'], assessment());
+  await client.fetchQuery({
+    queryKey: ['trip-context', 'trip', 1, 'en'],
+    queryFn: async () => ({ climate: [] }),
+  });
+  expect(client.getQueryState(['plan-score', 'trip'])?.isInvalidated).toBe(true);
+  expect(client.getQueryState(['plan-score', 'other'])?.isInvalidated).toBe(false);
+  client.clear();
+});
+
+test('the breakdown lists every row: filled rows say why, inapplicable rows say so', () => {
+  const filled = { state: 'EVALUATED', score: 78, coverage: 100, confidence: 0 } as const;
+  const rows = breakdownRows(
+    {
+      DAILY_QUALITY: { state: 'EVALUATED', score: 82, coverage: 90, confidence: 85 },
+      DESTINATION_UTILIZATION: filled,
+      VARIETY_COVERAGE: { state: 'NOT_APPLICABLE' },
+      SEASONAL_FIT: filled,
+    },
+    ['DAILY_QUALITY', 'DESTINATION_UTILIZATION', 'VARIETY_COVERAGE', 'SEASONAL_FIT'],
+    [
+      {
+        ...reason('DESTINATION_UTILIZATION', 'INFO', 'ROW_NEEDS_DETAIL'),
+        action: null,
+        messageKey: 'rowReasons.DESTINATION_UTILIZATION',
+      },
+      {
+        ...reason('SEASONAL_FIT', 'INFO', 'ROW_NEEDS_DETAIL'),
+        action: null,
+        messageKey: 'rowReasons.SEASONAL_FIT',
+      },
+    ],
+  );
+  expect(rows).toEqual([
+    { id: 'DAILY_QUALITY', score: 82, estimated: false, reasonKey: null },
+    {
+      id: 'DESTINATION_UTILIZATION',
+      score: 78,
+      estimated: true,
+      reasonKey: 'rowReasons.DESTINATION_UTILIZATION',
+    },
+    { id: 'VARIETY_COVERAGE', notApplicable: true },
+    { id: 'SEASONAL_FIT', score: 78, estimated: true, reasonKey: 'rowReasons.SEASONAL_FIT' },
+  ]);
 });
 
 test('the client freshness guard preserves field-specific cache age and rejects unknown evidence age', () => {

@@ -22,11 +22,12 @@ import {
   assessmentDeadline,
   assessmentBasisKey,
   currentAssessment,
+  breakdownRows,
   DAILY_CATEGORIES,
-  isEstimatedOutcome,
   scoreBand,
   travelerInsightGroups,
   TRIP_COMPONENTS,
+  type BreakdownRow,
   type ScoreAction,
   type ScoreBand,
   type ScoreChange,
@@ -128,59 +129,65 @@ export function SuggestedAction({
     </Button>
   );
 }
-type ScoreRow = { id: string; score: number; estimated: boolean };
-/**
- * The server decides which categories have enough evidence to publish (PRD
- * 29.2); a number that rests partly on estimates is marked as approximate.
- */
-function publishedScores(
-  outcomes: Record<string, PlanScoreFactorOutcome>,
-  ids: readonly string[],
-): ScoreRow[] {
-  return ids.flatMap((id) => {
-    const outcome = outcomes[id];
-    return outcome?.state === 'EVALUATED'
-      ? [{ id, score: outcome.score, estimated: isEstimatedOutcome(outcome) }]
-      : [];
-  });
+function ScoreMeterRows({ rows }: { rows: BreakdownRow[] }) {
+  const t = useTranslations('planScore');
+  return (
+    <div className="space-y-3">
+      {rows.map((row) =>
+        'notApplicable' in row ? (
+          <div className="flex items-baseline justify-between gap-4" key={row.id}>
+            <span className="text-xs font-medium text-muted-foreground">
+              {t(`factorLabels.${row.id}`)}
+            </span>
+            <span className="text-xs text-muted-foreground">{t('notApplicableRow')}</span>
+          </div>
+        ) : (
+          <ScoreMeterRow key={row.id} {...row} />
+        ),
+      )}
+    </div>
+  );
 }
-function ScoreMeterRows({ rows }: { rows: ScoreRow[] }) {
+function ScoreMeterRow({
+  id,
+  score,
+  estimated,
+  reasonKey,
+}: Extract<BreakdownRow, { score: number }>) {
   const t = useTranslations('planScore');
   const locale = useLocale();
   return (
-    <div className="space-y-3">
-      {rows.map(({ id, score, estimated }) => (
-        <Meter.Root
-          className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1.5"
-          format={{ maximumFractionDigits: 0 }}
-          getAriaValueText={(value) =>
-            t(estimated ? 'estimatedScoreValue' : 'scoreValue', { score: value })
-          }
-          key={id}
-          locale={locale}
-          value={score}
-        >
-          <Meter.Label className="text-xs font-medium text-muted-foreground">
-            {t(`factorLabels.${id}`)}
-          </Meter.Label>
-          <span className="flex items-baseline gap-0.5 text-sm font-semibold tabular-nums">
-            {estimated ? (
-              <span aria-hidden="true" className="font-normal text-muted-foreground">
-                ≈
-              </span>
-            ) : null}
-            <Meter.Value />
-          </span>
-          <Meter.Track className="col-span-2 h-1.5 overflow-hidden rounded-full bg-muted">
-            <Meter.Indicator
-              className={cn(
-                'rounded-full transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-standard)] motion-reduce:transition-none',
-                toneFor(score) === 'warning' ? 'bg-status-warning' : 'bg-brand',
-              )}
-            />
-          </Meter.Track>
-        </Meter.Root>
-      ))}
+    <div className="space-y-1">
+      <Meter.Root
+        className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1.5"
+        format={{ maximumFractionDigits: 0 }}
+        getAriaValueText={(value) =>
+          t(estimated ? 'estimatedScoreValue' : 'scoreValue', { score: value })
+        }
+        locale={locale}
+        value={score}
+      >
+        <Meter.Label className="text-xs font-medium text-muted-foreground">
+          {t(`factorLabels.${id}`)}
+        </Meter.Label>
+        <span className="flex items-baseline gap-0.5 text-sm font-semibold tabular-nums">
+          {estimated ? (
+            <span aria-hidden="true" className="font-normal text-muted-foreground">
+              ≈
+            </span>
+          ) : null}
+          <Meter.Value />
+        </span>
+        <Meter.Track className="col-span-2 h-1.5 overflow-hidden rounded-full bg-muted">
+          <Meter.Indicator
+            className={cn(
+              'rounded-full transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-standard)] motion-reduce:transition-none',
+              toneFor(score) === 'warning' ? 'bg-status-warning' : 'bg-brand',
+            )}
+          />
+        </Meter.Track>
+      </Meter.Root>
+      {reasonKey ? <p className="text-xs text-muted-foreground">{t(reasonKey)}</p> : null}
     </div>
   );
 }
@@ -268,9 +275,14 @@ export function PlanScorePanel({
       : undefined;
   const issues = allIssues.filter((reason) => reason !== specificGap);
   const outcomes = scope === 'day' ? factors : assessment?.components;
+  // A breakdown explains a number; a withheld day or trip has none to break down.
   const rows =
-    !unavailable && outcomes
-      ? publishedScores(outcomes, scope === 'day' ? DAILY_CATEGORIES : TRIP_COMPONENTS)
+    !unavailable && outcomes && displayScore !== null
+      ? breakdownRows(
+          outcomes,
+          scope === 'day' ? DAILY_CATEGORIES : TRIP_COMPONENTS,
+          explanations.uncertainty,
+        )
       : [];
   const basis =
     displayScore !== null && assessmentStatus === 'provisional' && scopedAssessment
@@ -349,7 +361,7 @@ export function PlanScorePanel({
               {rows.length ? (
                 <div className="space-y-2">
                   <ScoreMeterRows rows={rows} />
-                  {rows.some((row) => row.estimated) ? (
+                  {rows.some((row) => 'estimated' in row && row.estimated) ? (
                     <p className="text-xs leading-relaxed text-muted-foreground">
                       {t('estimatedNote')}
                     </p>

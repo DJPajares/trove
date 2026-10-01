@@ -142,10 +142,14 @@ const plannedTrip: PlanScoreTripRecord = {
 test('stored timing and complete local routes retain partial coverage honestly', () => {
   const result = buildTripPlanScore(plannedTrip),
     day = result.days[0]!;
-  expect(day.score).toBe(100);
-  // Untyped, unlocated places leave experience and variety unknown: partial, so provisional.
-  expect(day.completeness).toBeLessThan(80);
+  // Untyped places leave experience unknown: its row fills low, so the day is
+  // just short of perfect and provisional.
+  expect(day.score).toBeGreaterThanOrEqual(90);
+  expect(day.score).toBeLessThan(100);
   expect(day.assessmentStatus).toBe('provisional');
+  expect(day.explanations.uncertainty).toContainEqual(
+    expect.objectContaining({ code: 'ROW_NEEDS_DETAIL', factor: 'EXPERIENCE_QUALITY' }),
+  );
   expect(day.factors.ROUTE_EFFICIENCY).toMatchObject({
     state: 'EVALUATED',
     score: 100,
@@ -154,12 +158,16 @@ test('stored timing and complete local routes retain partial coverage honestly',
   });
   expect(day.date).toBe('2026-09-01');
   // Half the Must Go places are scheduled, and that is the whole of Destination use.
-  expect(result.score).toBe(86);
+  expect(result.components.DESTINATION_UTILIZATION).toMatchObject({ score: 50 });
+  expect(result.score).toBeLessThan(90);
 });
 test('burden is known while unevidenced alternative orders reduce route coverage', () => {
   const day = buildTripPlanScore(plannedTrip).days[0]!;
   expect(day.factors.ROUTE_EFFICIENCY).toMatchObject({ state: 'EVALUATED', coverage: 60 });
-  expect(day.explanations.uncertainty).toEqual([]);
+  // Route is published on its own evidence, so it asks for nothing.
+  expect(
+    day.explanations.uncertainty.filter((reason) => reason.factor === 'ROUTE_EFFICIENCY'),
+  ).toEqual([]);
 });
 
 test('a place shut on the day of the visit is a hard feasibility conflict', () => {
@@ -436,17 +444,16 @@ test('a flight leg leaves travel effort evaluable where a failed route does not'
 
   // The defect this fixes: routing a long-distance hop as a drive returns nothing,
   // which dragged the whole day's travel effort into unknown and cost completeness.
-  expect(failedRoute?.factors.ROUTE_EFFICIENCY).toStrictEqual({
-    reason: 'MISSING_EVIDENCE',
-    state: 'UNKNOWN',
-  });
+  // A failed route has no evidence, so its row shows the missing-detail value.
+  expect(failedRoute?.factors.ROUTE_EFFICIENCY).toMatchObject({ state: 'EVALUATED', score: 78 });
   expect(flight?.factors.ROUTE_EFFICIENCY).toStrictEqual({
     confidence: 60,
     coverage: 60,
     score: 100,
     state: 'EVALUATED',
   });
-  expect((flight?.completeness ?? 0) > (failedRoute?.completeness ?? 0)).toBeTruthy();
+  // The failed route's filled row costs the day; the flight's does not.
+  expect((flight?.score ?? 0) > (failedRoute?.score ?? 0)).toBeTruthy();
 });
 
 test('a flight leg contributes no travel minutes alongside local legs', () => {
@@ -612,7 +619,7 @@ test('a real score survives being stored and read back', () => {
 test('presentation metadata is additive and validates without changing the version-5 measurement', () => {
   const score = buildTripPlanScore(plannedTrip);
   expect(score.schemaVersion).toBe(8);
-  expect(score.rubricVersion).toBe(11);
+  expect(score.rubricVersion).toBe(12);
   expect(score.presentation?.adjustments).toEqual({ fatigue: 0, weakDays: 0 });
   expect(parseStoredPlanScore(score)).toEqual(score);
   const { presentation: _presentation, ...legacyCompatible } = score;

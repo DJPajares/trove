@@ -27,6 +27,43 @@ export function isEstimatedOutcome(
   return outcome.coverage < 80 || reliability < 75;
 }
 
+export type BreakdownRow =
+  | {
+      id: string;
+      score: number;
+      estimated: boolean;
+      /** Why the number is low: what the traveller could add (rubric 12). */
+      reasonKey: string | null;
+    }
+  | { id: string; notApplicable: true };
+/**
+ * Every category or component, in order (PRD 29.4). A row too sparse to stand
+ * on its own evidence arrives filled low with a reason; one that does not apply
+ * is still listed, without a number. Older payloads may still hide a row.
+ */
+export function breakdownRows(
+  outcomes: Record<string, PlanScoreFactorOutcome>,
+  ids: readonly string[],
+  explanations: readonly PlanScoreExplanation[],
+): BreakdownRow[] {
+  return ids.flatMap((id): BreakdownRow[] => {
+    const outcome = outcomes[id];
+    if (outcome?.state === 'NOT_APPLICABLE') return [{ id, notApplicable: true }];
+    if (outcome?.state !== 'EVALUATED') return [];
+    const reason = explanations.find(
+      (entry) => entry.code === 'ROW_NEEDS_DETAIL' && entry.factor === id,
+    );
+    return [
+      {
+        id,
+        score: outcome.score,
+        estimated: isEstimatedOutcome(outcome),
+        reasonKey: reason?.messageKey ?? null,
+      },
+    ];
+  });
+}
+
 /**
  * Whether an assessment may still be shown. `now` is server time: a score the
  * server just computed is never "from the future" to a device that runs behind,
@@ -36,7 +73,7 @@ export function currentAssessment(
   score: TripPlanScore | null | undefined,
   now = serverNow(),
 ): boolean {
-  if (!score || score.schemaVersion !== 8 || score.rubricVersion !== 11) return false;
+  if (!score || score.schemaVersion !== 8 || score.rubricVersion !== 12) return false;
   if (score.evidenceAsOf === null) return false;
   const generated = Date.parse(score.generatedAt);
   const evidence = score.evidenceAsOf ? Date.parse(score.evidenceAsOf) : null;

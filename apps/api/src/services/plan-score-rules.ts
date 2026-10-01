@@ -26,11 +26,11 @@ export const PLAN_SCORE_CONTRACT_VERSION = 8;
  * The judgement a stored score was made under. It moves on a calibration
  * change (8: the estimated reorder comparison; 10: itinerary-native estimates,
  * destination context and the coverage-only row gate; 11: missing traveller
- * detail scores low, which also widened the contract to 8) while the response
- * shape, the contract version, usually stays put; either change invalidates
- * every stored score.
+ * detail scores low, which also widened the contract to 8; 12: every row has a
+ * number, sparse rows filled low) while the response shape, the contract
+ * version, usually stays put; either change invalidates every stored score.
  */
-export const PLAN_SCORE_RUBRIC_VERSION = 11;
+export const PLAN_SCORE_RUBRIC_VERSION = 12;
 /**
  * A category or component publishes its number once this share of its weight
  * is assessed from known or estimated evidence. Below it the number would rest
@@ -113,6 +113,25 @@ export function withMissingDetail(
     ],
   };
 }
+/**
+ * A row too sparse to publish on its own evidence (rubric 12): its unassessed
+ * share counts at the missing-detail value, so every category and component
+ * carries a number, a low one until the plan says more. Rows at or above the
+ * publish threshold, and rows that do not apply, are left as they are.
+ */
+export function fillSparse(result: PlanScoreFactorResult, ref: string): PlanScoreFactorResult {
+  if (result.state === 'NOT_APPLICABLE') return result;
+  const coverage = result.state === 'EVALUATED' ? (result.coverage ?? 100) : 0;
+  if (coverage >= PLAN_SCORE_PUBLISH_COVERAGE) return result;
+  const filled = withMissingDetail(result, 100 - coverage, [ref]);
+  // The filled share is a judgement, not evidence: it adds no reliability, so
+  // a mostly filled row stays an estimate however complete it looks.
+  const known = toOutcome(result);
+  const reliability = known.state === 'EVALUATED' ? known.confidence : 0;
+  return filled.state === 'EVALUATED'
+    ? { ...filled, confidence: (coverage * reliability) / 100 }
+    : filled;
+}
 export type PlanScoreDayInput = {
   dayId: string;
   factors: Partial<Record<PlanScoreDayFactorId, PlanScoreFactorResult>>;
@@ -137,6 +156,8 @@ export type PlanScoreDayResult = PlanScoreDayPayload & {
   intrinsicScore: number | null;
   reliability: number | null;
   incomingDebt: number;
+  /** Categories filled to a number at the missing-detail value. */
+  filledFactors: PlanScoreDayFactorId[];
 };
 export type PlanScoreTripInput = {
   days: PlanScoreDayInput[];
@@ -148,6 +169,8 @@ export type PlanScoreTripResult = Omit<PlanScoreTripPayload, 'days'> & {
   days: PlanScoreDayResult[];
   fatigueAdjustment: number;
   weakDayAdjustment: number;
+  /** Components filled to a number at the missing-detail value. */
+  filledComponents: PlanScoreTripComponentId[];
 };
 export const PLAN_SCORE_INVALIDATION_TRIGGERS = [
   'ITINERARY_ITEM_CHANGED',
@@ -250,7 +273,15 @@ function rounded(internal: PlanScoreFactorOutcome): PlanScoreFactorOutcome {
     : outcome;
 }
 function evaluateDay(day: PlanScoreDayInput, incomingDebt = 0): PlanScoreDayResult {
-  const inputs = { ...day.factors };
+  const filledFactors: PlanScoreDayFactorId[] = [];
+  const own: PlanScoreDayInput['factors'] = {};
+  for (const id of DAY_FACTOR_IDS) {
+    const supplied = day.factors[id];
+    if (!supplied) continue;
+    own[id] = fillSparse(supplied, `category:${id}`);
+    if (own[id] !== supplied) filledFactors.push(id);
+  }
+  const inputs = { ...own };
   const comfort = inputs.PACE_COMFORT;
   if (comfort?.state === 'EVALUATED')
     inputs.PACE_COMFORT = { ...comfort, score: clampScore(comfort.score - 20 * incomingDebt) };
@@ -258,7 +289,7 @@ function evaluateDay(day: PlanScoreDayInput, incomingDebt = 0): PlanScoreDayResu
     DAY_FACTOR_IDS.map((id) => ({ weight: BASE_WEIGHTS[id], result: inputs[id] ?? UNKNOWN })),
   );
   const intrinsic = combineSignals(
-    DAY_FACTOR_IDS.map((id) => ({ weight: BASE_WEIGHTS[id], result: day.factors[id] ?? UNKNOWN })),
+    DAY_FACTOR_IDS.map((id) => ({ weight: BASE_WEIGHTS[id], result: own[id] ?? UNKNOWN })),
   );
   const outcome = toOutcome(aggregate);
   const completeness = outcome.state === 'EVALUATED' ? outcome.coverage : 0;
@@ -293,7 +324,8 @@ function evaluateDay(day: PlanScoreDayInput, incomingDebt = 0): PlanScoreDayResu
           (confidence ?? 0) < 60 ||
           limitations.includes('TRAVEL_TIME_UNKNOWN') ||
           // Missing detail is judged, but the number moves once it is added.
-          limitations.includes('DETAIL_MISSING')
+          limitations.includes('DETAIL_MISSING') ||
+          filledFactors.length > 0
         ? 'provisional'
         : 'available',
     assessmentBasis,
@@ -319,6 +351,7 @@ function evaluateDay(day: PlanScoreDayInput, incomingDebt = 0): PlanScoreDayResu
     incomingDebt,
     caps,
     withheldReasons,
+    filledFactors,
   };
 }
 function displayDay(day: PlanScoreDayResult): PlanScoreDayResult {
@@ -383,11 +416,23 @@ export function scoreTrip(input: PlanScoreTripInput): PlanScoreTripResult {
             ) / supportedDailyWeight,
           evidence: scorable.map((e) => ({ ref: `day:${e.input.dayId}`, source: 'USER_OWNED' })),
         };
+  const supplied: Partial<Record<PlanScoreTripComponentId, PlanScoreFactorResult>> = {
+    DAILY_QUALITY: scorable.length ? daily : undefined,
+    ...input.components,
+  };
+  const filledComponents: PlanScoreTripComponentId[] = [];
+  const component = (id: PlanScoreTripComponentId) => {
+    const result = supplied[id];
+    if (!result) return id === 'DAILY_QUALITY' ? daily : UNKNOWN;
+    const filled = fillSparse(result, `component:${id}`);
+    if (filled !== result) filledComponents.push(id);
+    return filled;
+  };
   const components = {
-    DAILY_QUALITY: daily,
-    DESTINATION_UTILIZATION: input.components?.DESTINATION_UTILIZATION ?? UNKNOWN,
-    VARIETY_COVERAGE: input.components?.VARIETY_COVERAGE ?? UNKNOWN,
-    SEASONAL_FIT: input.components?.SEASONAL_FIT ?? UNKNOWN,
+    DAILY_QUALITY: component('DAILY_QUALITY'),
+    DESTINATION_UTILIZATION: component('DESTINATION_UTILIZATION'),
+    VARIETY_COVERAGE: component('VARIETY_COVERAGE'),
+    SEASONAL_FIT: component('SEASONAL_FIT'),
   };
   const combined = combineSignals(
     (Object.keys(TRIP_WEIGHTS) as PlanScoreTripComponentId[]).map((id) => ({
@@ -441,7 +486,8 @@ export function scoreTrip(input: PlanScoreTripInput): PlanScoreTripResult {
           (confidence ?? 0) < 60 ||
           scorable.length < ordered.length ||
           limitations.includes('TRAVEL_TIME_UNKNOWN') ||
-          limitations.includes('DETAIL_MISSING')
+          limitations.includes('DETAIL_MISSING') ||
+          filledComponents.length > 0
         ? 'provisional'
         : 'available',
     assessedDayCount: scorable.length,
@@ -467,6 +513,7 @@ export function scoreTrip(input: PlanScoreTripInput): PlanScoreTripResult {
     withheldReasons,
     fatigueAdjustment,
     weakDayAdjustment,
+    filledComponents,
   };
 }
 export function toPlanScoreDayPayload(result: PlanScoreDayResult): PlanScoreDayPayload {
@@ -475,12 +522,19 @@ export function toPlanScoreDayPayload(result: PlanScoreDayResult): PlanScoreDayP
     intrinsicScore: _intrinsic,
     reliability: _reliability,
     incomingDebt: _debt,
+    filledFactors: _filled,
     ...payload
   } = result;
   return payload;
 }
 export function toPlanScoreTripPayload(result: PlanScoreTripResult): PlanScoreTripPayload {
-  const { days, fatigueAdjustment: _fatigue, weakDayAdjustment: _weak, ...payload } = result;
+  const {
+    days,
+    fatigueAdjustment: _fatigue,
+    weakDayAdjustment: _weak,
+    filledComponents: _filled,
+    ...payload
+  } = result;
   return { ...payload, days: days.map(toPlanScoreDayPayload) };
 }
 function canonical(value: unknown): unknown {

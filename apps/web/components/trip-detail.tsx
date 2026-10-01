@@ -79,6 +79,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
+import { useTripContext as useDestinationContext } from '@/lib/insights/use-trip-context';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import { fetchTripInfo, type TripInfoEntry } from '@/lib/trip-info/api';
 import { deleteTrip, type Trip } from '@/lib/trips/api';
@@ -121,6 +122,10 @@ function TripDetailPlanScore({ tripId }: Readonly<{ tripId: string }>) {
   const planScoreHidden =
     planScore.status === 'disabled' ||
     Boolean(planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED'));
+  // Seasonal fit reads the typical conditions Insights caches. Asking for them
+  // with the score means the trip's breakdown need not wait for Insights to
+  // scroll into view; the score refreshes once they arrive.
+  useDestinationContext(planScoreHidden ? null : tripId);
 
   if (planScoreHidden) return null;
 

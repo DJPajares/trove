@@ -12,6 +12,7 @@ import {
   DAY_FACTOR_IDS,
   UNKNOWN,
   NOT_APPLICABLE,
+  MISSING_DETAIL_SCORE,
 } from '../src/services/plan-score-rules.js';
 const evaluated = (score = 100, coverage = 100): PlanScoreFactorResult => ({
   state: 'EVALUATED',
@@ -37,7 +38,7 @@ test('five category weights implement the approved weighted mean', () => {
   expect(scoreDay(input)).toMatchObject({ score: 84, completeness: 100, confidence: 100 });
   expect(Object.keys(scoreDay(input).factors)).toEqual([...DAY_FACTOR_IDS]);
 });
-test('quality renormalizes unknown signals while coverage keeps them in the denominator', () => {
+test('signals renormalize unknowns, while an unknown category is filled low (rubric 12)', () => {
   const partial = combineSignals([
     { weight: 60, result: evaluated(90) },
     { weight: 40, result: UNKNOWN },
@@ -45,15 +46,32 @@ test('quality renormalizes unknown signals while coverage keeps them in the deno
   expect(partial).toMatchObject({ score: 90, coverage: 60, confidence: 100 });
   const input = day();
   input.factors.EXPERIENCE_QUALITY = UNKNOWN;
-  expect(scoreDay(input)).toMatchObject({ score: 100, completeness: 85 });
+  const result = scoreDay(input);
+  // Every row carries a number: the unknown category counts at the missing-detail value.
+  expect(result.factors.EXPERIENCE_QUALITY).toMatchObject({
+    state: 'EVALUATED',
+    score: MISSING_DETAIL_SCORE,
+    confidence: 0,
+  });
+  expect(result).toMatchObject({
+    score: Math.round((85 * 100 + 15 * MISSING_DETAIL_SCORE) / 100),
+    assessmentStatus: 'provisional',
+  });
+  expect(result.filledFactors).toEqual(['EXPERIENCE_QUALITY']);
 });
-test('partial evidence cannot make an entire category look covered', () => {
+test('a category below the publish threshold fills its unassessed share low', () => {
   const input = day();
   input.factors.FEASIBILITY = evaluated(100, 10);
-  expect(scoreDay(input).completeness).toBe(69);
+  expect(scoreDay(input).factors.FEASIBILITY).toMatchObject({
+    state: 'EVALUATED',
+    score: Math.round((10 * 100 + 90 * MISSING_DETAIL_SCORE) / 100),
+    confidence: 10,
+  });
   input.factors.ROUTE_EFFICIENCY = UNKNOWN;
   input.factors.PACE_COMFORT = UNKNOWN;
-  expect(scoreDay(input)).toMatchObject({ score: 100, assessmentStatus: 'provisional' });
+  const result = scoreDay(input);
+  expect(result.score).toBeLessThan(90);
+  expect(result.assessmentStatus).toBe('provisional');
 });
 test('inapplicable weights disappear from both quality and coverage', () => {
   expect(
@@ -68,7 +86,7 @@ test('publication uses meaningful evidence instead of a coverage or core gate', 
   const input = day();
   input.factors = { PACE_COMFORT: evaluated(100, 10) };
   expect(scoreDay(input)).toMatchObject({
-    score: 100,
+    score: Math.round((10 * 100 + 90 * MISSING_DETAIL_SCORE) / 100),
     assessmentStatus: 'provisional',
     confidence: 2,
   });
@@ -116,8 +134,9 @@ test('duplicate evidence does not improve confidence', () => {
 });
 test('one qualifying day can support a partial trip, but Must Go alone cannot', () => {
   const unknown: PlanScoreDayInput = { dayId: 'unknown', factors: {} };
+  // One of three days is too little daily quality to stand alone: the rest fills low.
   expect(scoreTrip({ days: [day(), unknown, unknown] })).toMatchObject({
-    score: 100,
+    score: Math.round((100 + 2 * MISSING_DETAIL_SCORE) / 3),
     assessedDayCount: 1,
     applicableDayCount: 3,
     assessmentStatus: 'provisional',
@@ -230,7 +249,7 @@ test('thin supported signals contribute in proportion to coverage, without treat
   ).toMatchObject({ score: 40, coverage: 50 });
 });
 
-test('category numbers publish from unrounded coverage; reliability qualifies rather than hides them', () => {
+test('categories fill from unrounded coverage; reliability qualifies rather than hides them', () => {
   const input = day();
   input.factors.EXPERIENCE_QUALITY = evaluated(100, 39.99);
   input.factors.ROUTE_EFFICIENCY = evaluated(100, 40);
@@ -239,13 +258,14 @@ test('category numbers publish from unrounded coverage; reliability qualifies ra
     confidence: 49.99,
   } as PlanScoreFactorResult;
   const result = scoreDay(input);
-  expect(result.factors.EXPERIENCE_QUALITY.state).toBe('LIMITED');
-  expect(result.factors.EXPERIENCE_QUALITY).not.toHaveProperty('score');
+  // Just under the threshold, the unassessed share fills low; at it, nothing changes.
+  expect(result.factors.EXPERIENCE_QUALITY).toMatchObject({ state: 'EVALUATED', coverage: 100 });
+  expect(result.filledFactors).toEqual(['EXPERIENCE_QUALITY']);
   expect(result.factors.ROUTE_EFFICIENCY).toMatchObject({ state: 'EVALUATED', coverage: 40 });
   // Low reliability no longer hides a fully covered category; it is published
   // with its confidence so the traveller sees it as an estimate.
   expect(result.factors.PLAN_COMPOSITION).toMatchObject({ state: 'EVALUATED', score: 100 });
-  expect(result.score).toBe(100);
+  expect(result.score).toBeLessThan(100);
 });
 
 test('three of five days pass even when unscorable days have most available time', () => {
@@ -257,7 +277,9 @@ test('three of five days pass even when unscorable days have most available time
     { ...day('e'), factors: {} },
   ].map((d, i) => ({ ...d, availableMinutes: i < 3 ? 60 : 600 }));
   const result = scoreTrip({ days });
-  expect(result.score).toBe(80);
+  // 13% of the available time is assessed: the rest of daily quality fills low.
+  expect(result.score).toBe(78);
+  expect(result.filledComponents).toContain('DAILY_QUALITY');
   expect(result.assessmentStatus).toBe('provisional');
   expect(result.assessedDayCount).toBe(3);
   expect(result.applicableDayCount).toBe(5);
@@ -277,7 +299,7 @@ test('partial trip eligibility stays separate from availability weighting', () =
   expect(scoreTrip({ days }).score).toBe(80);
 });
 
-test('weak optional trip components cannot overwhelm better-supported daily quality', () => {
+test('sparse optional trip components fill low rather than lift daily quality', () => {
   const result = scoreTrip({
     days: [day('a', 60)],
     components: {
@@ -285,8 +307,12 @@ test('weak optional trip components cannot overwhelm better-supported daily qual
       VARIETY_COVERAGE: evaluated(100, 10),
     },
   });
-  expect(result.score).toBe(Math.round((65 * 60 + 1.5 * 100 + 1 * 100) / 67.5));
-  expect(result.components.DESTINATION_UTILIZATION.state).toBe('LIMITED');
+  const filled = (10 * 100 + 90 * MISSING_DETAIL_SCORE) / 100;
+  expect(result.score).toBe(Math.round((65 * 60 + 15 * filled + 10 * filled) / 90));
+  expect(result.components.DESTINATION_UTILIZATION).toMatchObject({
+    state: 'EVALUATED',
+    coverage: 100,
+  });
 });
 
 test('reported confidence applies coverage once at each scope without aggregating already discounted confidence', () => {
@@ -300,8 +326,9 @@ test('reported confidence applies coverage once at each scope without aggregatin
       SEASONAL_FIT: NOT_APPLICABLE,
     },
   });
+  // Daily quality is filled to full coverage, but the filling adds no reliability.
   expect(trip.confidence).toBe(18);
-  expect(trip.evidenceCoverage).toBe(18);
+  expect(trip.evidenceCoverage).toBe(100);
   expect(toPlanScoreTripPayload(trip).days[0]).not.toHaveProperty('reliability');
 });
 

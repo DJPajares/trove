@@ -39,7 +39,7 @@
     "lint-staged": "^17.6.0",
     "oxlint": "^1.86.0",
     "prettier": "^3.9.9",
-    "turbo": "^2.11.4",
+    "turbo": "^2.11.5",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   }

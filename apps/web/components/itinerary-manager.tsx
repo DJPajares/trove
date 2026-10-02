@@ -141,7 +141,7 @@ import {
   DuplicateAttemptTracker,
   refreshedItineraryContainsCopy,
 } from '@/lib/itinerary/duplicate-attempt';
-import { scheduledPlaceUse } from '@/lib/itinerary/places';
+import { placeVisitDate, scheduledPlaceUse } from '@/lib/itinerary/places';
 import { itineraryDayRouteRevision } from '@/lib/itinerary/routes';
 import { itineraryViewHref, resolveItineraryView } from '@/lib/itinerary/view';
 import {
@@ -706,6 +706,11 @@ export function ItineraryManager({
    * of them, where a picture is the fastest answer there is.
    */
   const [detailsPlace, setDetailsPlace] = useState<ItineraryTripPlace | null>(null);
+  const [detailsVisitDate, setDetailsVisitDate] = useState<string | null>();
+  function openPlaceDetails(tripPlace: ItineraryTripPlace | null, visitDate?: string | null) {
+    setDetailsPlace(tripPlace);
+    setDetailsVisitDate(visitDate);
+  }
   const [locatePlace, setLocatePlace] = useState<ItineraryTripPlace | null>(null);
 
   /** A Custom Place can be found on Google, even one already given coordinates by hand. */
@@ -2214,9 +2219,11 @@ export function ItineraryManager({
                         onSelectBase={selectBaseOnMap}
                         onSelectItem={selectItemOnMap}
                         onViewBaseDetails={(tripPlaceId) =>
-                          setDetailsPlace(tripPlaceById(tripPlaceId) ?? null)
+                          openPlaceDetails(tripPlaceById(tripPlaceId) ?? null, selectedDay.date)
                         }
-                        onViewItemDetails={(item) => setDetailsPlace(item.tripPlace)}
+                        onViewItemDetails={(item) =>
+                          openPlaceDetails(item.tripPlace, selectedDay.date)
+                        }
                         organizingItemId={organizingItemId}
                         resolveBase={(tripPlaceId) => {
                           const tripPlace = tripPlaceById(tripPlaceId);
@@ -2294,7 +2301,13 @@ export function ItineraryManager({
                         onViewItem={viewMapItem}
                         onViewPlaceDetails={(point) => {
                           const tripPlace = tripPlaceById(point.tripPlaceId);
-                          if (tripPlace) setDetailsPlace(tripPlace);
+                          if (tripPlace)
+                            openPlaceDetails(
+                              tripPlace,
+                              point.kind === 'considered'
+                                ? placeVisitDate(placeUse[tripPlace.id])
+                                : selectedDay.date,
+                            );
                         }}
                         points={mapPoints}
                         routeLines={routeLines}
@@ -2366,7 +2379,7 @@ export function ItineraryManager({
                           // The whole row opens the place, the same as a
                           // scheduled stop; the controls sit above the claim.
                           className="rounded-[var(--radius-sm)] text-left outline-none after:absolute after:inset-0 hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
-                          onClick={() => setDetailsPlace(item.tripPlace)}
+                          onClick={() => openPlaceDetails(item.tripPlace)}
                           type="button"
                         >
                           {name}
@@ -3275,6 +3288,7 @@ export function ItineraryManager({
 
       {detailsPlace ? (
         <PlaceDetailsSheet
+          key={detailsPlace.place.id}
           editorialImages={detailsEditorialImages}
           meta={detailsMeta(detailsPlace)}
           name={placeName(detailsPlace) ?? t('providerPlace')}
@@ -3289,6 +3303,7 @@ export function ItineraryManager({
           }
           onOpenChange={(open) => !open && setDetailsPlace(null)}
           place={detailsPlace.place}
+          visitDate={detailsVisitDate}
         />
       ) : null}
 

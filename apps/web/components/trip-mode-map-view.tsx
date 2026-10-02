@@ -36,6 +36,7 @@ import {
   type ItineraryTripPlace,
 } from '@/lib/itinerary/api';
 import { dayStopNumbers, resolveDailyBases } from '@/lib/itinerary/day-sequence';
+import { placeVisitDate, scheduledPlaceUse } from '@/lib/itinerary/places';
 import { itineraryDayRouteRevision } from '@/lib/itinerary/routes';
 import { haversineMeters } from '@/lib/maps/haversine';
 import {
@@ -99,6 +100,7 @@ export function TripModeMapView({
     if (!context || !itinerary) return null;
     return itinerary.days.find((candidate) => candidate.date === context.selectedDate) ?? null;
   }, [context, itinerary]);
+  const placeUse = useMemo(() => (itinerary ? scheduledPlaceUse(itinerary) : {}), [itinerary]);
 
   // Keyed on the day's ordering, not just its identity, so a reorder made in the
   // planner invalidates the legs this view is showing.
@@ -319,7 +321,11 @@ export function TripModeMapView({
                 const tripPlace = itinerary.tripPlaces.find(
                   (candidate) => candidate.id === point.tripPlaceId,
                 );
-                if (tripPlace) openPlaceDetails(tripPlace);
+                if (tripPlace)
+                  openPlaceDetails(
+                    tripPlace,
+                    point.kind === 'considered' ? placeVisitDate(placeUse[tripPlace.id]) : day.date,
+                  );
               }}
               points={mapPoints}
               routeLines={routeLines}
@@ -456,7 +462,7 @@ export function TripModeMapView({
                   <button
                     aria-label={itineraryT('viewDetailsFor', { name: placeName(baseTripPlace) })}
                     className="mt-1 block rounded-[var(--radius-sm)] text-left text-sm font-semibold outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
-                    onClick={() => openPlaceDetails(baseTripPlace)}
+                    onClick={() => openPlaceDetails(baseTripPlace, day.date)}
                     type="button"
                   >
                     {placeName(baseTripPlace)}

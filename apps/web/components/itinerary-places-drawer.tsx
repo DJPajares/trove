@@ -214,6 +214,7 @@ export function ItineraryPlacesDrawer({
                 }
                 onRemove={setRemovingPlace}
                 placeUse={placeUse}
+                viewedDate={date}
                 signalsFor={signalsFor}
                 formatUsageDates={(dates) =>
                   listFormatter.format(

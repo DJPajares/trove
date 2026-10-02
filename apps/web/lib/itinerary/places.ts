@@ -9,6 +9,17 @@ export type ScheduledPlaceUse = {
   unscheduledCount: number;
 };
 
+/** Undefined means unscheduled; null means several visits cannot identify one day. */
+export function placeVisitDate(
+  use: ScheduledPlaceUse | undefined,
+  viewedDate?: string | null,
+): string | null | undefined {
+  const dates = use?.dayDates ?? [];
+  if (viewedDate && dates.includes(viewedDate)) return viewedDate;
+  if (dates.length === 1) return dates[0];
+  return dates.length > 1 ? null : undefined;
+}
+
 /**
  * Where a trip's Places have already landed in the plan. The Places drawer shows
  * this so a traveller can tell at a glance what is already accounted for, rather
@@ -23,15 +34,22 @@ export function scheduledPlaceUse(itinerary: Itinerary): Record<string, Schedule
   };
 
   for (const [index, day] of itinerary.days.entries()) {
-    for (const item of day.items) {
-      if (!item.tripPlace) continue;
-      const use = entry(item.tripPlace.id);
-      use.itemCount += 1;
-      // A Place visited twice in one day is still one day on the plan.
+    const recordDay = (tripPlaceId: string) => {
+      const use = entry(tripPlaceId);
       if (!use.dayNumbers.includes(index + 1)) {
         use.dayNumbers.push(index + 1);
         use.dayDates.push(day.date);
       }
+      return use;
+    };
+    // Explicit daily bases are scheduled visits even without a separate item.
+    for (const tripPlaceId of [day.dailyBaseTripPlaceId, day.dailyBaseDepartureTripPlaceId]) {
+      if (tripPlaceId) recordDay(tripPlaceId);
+    }
+    for (const item of day.items) {
+      if (!item.tripPlace) continue;
+      const use = recordDay(item.tripPlace.id);
+      use.itemCount += 1;
     }
   }
 

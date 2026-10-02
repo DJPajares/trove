@@ -74,7 +74,7 @@ export function useTripModePreview() {
 }
 
 type TripModePlaceDetailsContextValue = {
-  openPlaceDetails: (tripPlace: ItineraryTripPlace) => void;
+  openPlaceDetails: (tripPlace: ItineraryTripPlace, visitDate?: string | null) => void;
 };
 
 const TripModePlaceDetailsContext = createContext<TripModePlaceDetailsContextValue>({
@@ -330,6 +330,7 @@ export function TripModeShell({
     status: itineraryStatus,
   } = useTripResource(queryKeys.itinerary(tripId), () => fetchItinerary(tripId));
   const [detailsPlace, setDetailsPlace] = useState<ItineraryTripPlace | null>(null);
+  const [detailsVisitDate, setDetailsVisitDate] = useState<string | null>();
   // The Map view is built here rather than by its route, so a map already paid
   // for survives a trip to Today and back instead of being built again.
   const onMapView = isNavigationPathActive(pathname, `/trips/${tripId}/mode/map`);
@@ -353,9 +354,13 @@ export function TripModeShell({
   const detailsEditorialImages = detailsSubjects[0]
     ? (detailsImages.get(editorialSubjectKey(detailsSubjects[0])) ?? [])
     : [];
-  const openPlaceDetails = useCallback((tripPlace: ItineraryTripPlace) => {
-    setDetailsPlace(tripPlace);
-  }, []);
+  const openPlaceDetails = useCallback(
+    (tripPlace: ItineraryTripPlace, visitDate?: string | null) => {
+      setDetailsPlace(tripPlace);
+      setDetailsVisitDate(visitDate);
+    },
+    [],
+  );
   const placeDetailsContext = useMemo(() => ({ openPlaceDetails }), [openPlaceDetails]);
 
   const isPreview = searchParams.get('preview') === '1';
@@ -617,6 +622,7 @@ export function TripModeShell({
 
           {detailsPlace ? (
             <PlaceDetailsSheet
+              key={detailsPlace.place.id}
               editorialImages={detailsEditorialImages}
               meta={[
                 detailsPlace.priority
@@ -634,6 +640,7 @@ export function TripModeShell({
               officialName={detailsPlace.customName?.trim() ? detailsProviderName : null}
               onOpenChange={(open) => !open && setDetailsPlace(null)}
               place={detailsPlace.place}
+              visitDate={detailsVisitDate}
             />
           ) : null}
         </TripModeTasksProvider>

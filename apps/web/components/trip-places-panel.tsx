@@ -42,7 +42,7 @@ import {
 } from '@/components/ui/item';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { useVisibleKeys } from '@/hooks/use-visible-keys';
-import type { ScheduledPlaceUse } from '@/lib/itinerary/places';
+import { placeVisitDate, type ScheduledPlaceUse } from '@/lib/itinerary/places';
 import {
   editorialSubjectKey,
   MAX_EDITORIAL_IMAGE_SUBJECTS,
@@ -75,6 +75,8 @@ type TripPlacesPanelProps = {
   /** Extra facts worth a line under a row: open that day, rating, distance. */
   signalsFor?: (tripPlace: TripPlace) => Array<{ emphasis?: boolean; text: string }>;
   placeUse?: Record<string, ScheduledPlaceUse>;
+  /** A library beside a day can identify a visit only when this Place is on that day. */
+  viewedDate?: string;
   tripId: string;
   tripPlaces: TripPlace[];
 };
@@ -99,6 +101,7 @@ export function TripPlacesPanel({
   formatUsageDates,
   signalsFor,
   placeUse,
+  viewedDate,
   tripId,
   tripPlaces,
 }: Readonly<TripPlacesPanelProps>) {
@@ -388,6 +391,7 @@ export function TripPlacesPanel({
 
       {detailsPlace ? (
         <PlaceDetailsSheet
+          key={detailsPlace.place.id}
           editorialImages={editorialImagesFor(detailsPlace)}
           meta={detailsMeta(detailsPlace)}
           name={placeName(detailsPlace)}
@@ -404,6 +408,7 @@ export function TripPlacesPanel({
           }
           onOpenChange={(open) => !open && setDetailsPlace(null)}
           place={detailsPlace.place}
+          visitDate={placeUse ? placeVisitDate(placeUse[detailsPlace.id], viewedDate) : null}
         />
       ) : null}
 

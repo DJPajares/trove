@@ -1350,7 +1350,6 @@
   "placeDetail": {
     "address": "Address",
     "close": "Close place details",
-    "coordinates": "Coordinates",
     "call": "Call",
     "customDescription": "A private Trove place.",
     "googleMaps": "Google Maps",
@@ -1377,6 +1376,8 @@
     "nextPhoto": "Next photo",
     "note": "Note",
     "phone": "Phone",
+    "photo": "Photo",
+    "plannedVisit": "Planned visit · {date}",
     "place": "Place",
     "photoAlt": "Editorial travel photo of {name}, photo {current} of {total}",
     "photoCarousel": "Editorial photos of {name}",

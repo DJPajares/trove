@@ -2,7 +2,7 @@
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { PlaceMedia } from '@/components/place-media';
 import { Button } from '@/components/ui/button';
@@ -14,27 +14,33 @@ import type { TrovePlaceCategory } from '@/lib/place-categories';
 import type { PlaceProviderPhoto } from '@/lib/saved/api';
 import { cn } from '@/lib/utils';
 
+export type PlacePhotoMetadata = {
+  credits: PlaceProviderPhoto['authorAttributions'];
+  description: string | null;
+  illustrative: boolean;
+};
+
 type PlacePhotoCarouselProps = {
   category?: TrovePlaceCategory;
   className?: string;
   editorialImages: EditorialImageReference[];
   heading?: ReactNode;
   name: string;
-  /** The active editorial photograph's description, for a caption the cover has no room for. */
-  onDescriptionChange?: (description: string | null) => void;
+  /** The owning drawer renders metadata outside the photographic cover. */
+  onPhotoChange?: (photo: PlacePhotoMetadata | null) => void;
   /** Google's photos have not been answered for yet; editorial would only be swapped out. */
   pending?: boolean;
   providerPhotos?: PlaceProviderPhoto[];
 };
 
-type Slide = {
-  credit: PlaceProviderPhoto['authorAttributions'][number] | null;
-  description: string | null;
+type Slide = PlacePhotoMetadata & {
   /** Set for a Google photo, so one that fails to load can be dropped. */
   googleUri: string | null;
   key: string;
   source: PlaceMediaSource;
 };
+
+const NO_PROVIDER_PHOTOS: PlaceProviderPhoto[] = [];
 
 const overlayControl =
   'border-media-fallback-foreground/18 bg-neutral-950/58 text-media-fallback-foreground backdrop-blur-sm hover:bg-neutral-950/78 hover:text-media-fallback-foreground';
@@ -54,31 +60,40 @@ export function PlacePhotoCarousel({
   editorialImages,
   heading,
   name,
-  onDescriptionChange,
+  onPhotoChange,
   pending = false,
-  providerPhotos = [],
+  providerPhotos = NO_PROVIDER_PHOTOS,
 }: Readonly<PlacePhotoCarouselProps>) {
   const t = useTranslations('placeDetail');
   const trackRef = useRef<HTMLDivElement>(null);
   const [failedUris, setFailedUris] = useState<ReadonlySet<string>>(() => new Set());
 
-  const google = providerPhotos.filter((photo) => !failedUris.has(photo.uri));
+  const google = useMemo(
+    () => providerPhotos.filter((photo) => !failedUris.has(photo.uri)),
+    [providerPhotos, failedUris],
+  );
   const generic = !google.length && editorialImages[0]?.matchKind === 'generic';
-  const slides: Slide[] = google.length
-    ? google.map((photo) => ({
-        credit: photo.authorAttributions[0] ?? null,
-        description: null,
-        googleUri: photo.uri,
-        key: `google:${photo.uri}`,
-        source: { kind: 'provider-photo', url: photo.uri },
-      }))
-    : (generic ? editorialImages.slice(0, 1) : editorialImages).map((image) => ({
-        credit: null,
-        description: photographicDescription(image),
-        googleUri: null,
-        key: `editorial:${image.externalPhotoId}`,
-        source: resolvePlaceMediaSource({ editorial: image }),
-      }));
+  const slides: Slide[] = useMemo(
+    () =>
+      google.length
+        ? google.map((photo) => ({
+            credits: photo.authorAttributions,
+            description: null,
+            illustrative: false,
+            googleUri: photo.uri,
+            key: `google:${photo.uri}`,
+            source: { kind: 'provider-photo', url: photo.uri },
+          }))
+        : (generic ? editorialImages.slice(0, 1) : editorialImages).map((image) => ({
+            credits: [],
+            description: photographicDescription(image),
+            illustrative: image.matchKind === 'generic',
+            googleUri: null,
+            key: `editorial:${image.externalPhotoId}`,
+            source: resolvePlaceMediaSource({ editorial: image }),
+          })),
+    [google, generic, editorialImages],
+  );
   const total = slides.length;
   // A different set of slides starts again from its first; the track is keyed
   // the same way, so its scroll position starts over with it.
@@ -86,11 +101,9 @@ export function PlacePhotoCarousel({
   const [active, setActive] = useState({ index: 0, setKey });
   const activeIndex = active.setKey === setKey ? carouselIndex(active.index, total) : 0;
   const activeSlide = slides[activeIndex];
-  const description = pending ? null : (activeSlide?.description ?? null);
-
   useEffect(() => {
-    onDescriptionChange?.(description);
-  }, [description, onDescriptionChange]);
+    onPhotoChange?.(pending ? null : (activeSlide ?? null));
+  }, [activeSlide, pending, onPhotoChange]);
 
   function goTo(index: number) {
     const nextIndex = carouselIndex(index, total);
@@ -179,24 +192,6 @@ export function PlacePhotoCarousel({
         className="pointer-events-none absolute inset-0 bg-linear-to-t from-neutral-950/82 via-neutral-950/18 to-neutral-950/30"
       />
 
-      {/* Google requires the author wherever their photo is shown. */}
-      {!pending && activeSlide?.credit ? (
-        <p className="absolute top-[max(1rem,var(--safe-top))] left-4 max-w-[calc(100%-5.5rem)] truncate rounded-[var(--radius-sm)] bg-neutral-950/56 px-2 py-1 text-[0.6875rem] font-medium text-media-fallback-foreground/90 backdrop-blur-sm">
-          {activeSlide.credit.uri ? (
-            <a
-              className="underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
-              href={activeSlide.credit.uri}
-              rel="noreferrer"
-              target="_blank"
-            >
-              {t('photoCredit', { name: activeSlide.credit.displayName })}
-            </a>
-          ) : (
-            t('photoCredit', { name: activeSlide.credit.displayName })
-          )}
-        </p>
-      ) : null}
-
       {heading ? (
         <div
           className={cn(
@@ -205,11 +200,6 @@ export function PlacePhotoCarousel({
           )}
         >
           {heading}
-          {generic && !pending ? (
-            <span className="mt-1 w-fit rounded-[var(--radius-sm)] border border-media-fallback-foreground/18 bg-neutral-950/56 px-2 py-1 text-[0.6875rem] font-medium text-media-fallback-foreground/90 backdrop-blur-sm">
-              {t('representativePhoto')}
-            </span>
-          ) : null}
         </div>
       ) : null}
 

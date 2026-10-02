@@ -857,7 +857,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                     <button
                       aria-label={itineraryT('viewDetailsFor', { name: base.name })}
                       className={stopTitleClassName}
-                      onClick={() => openPlaceDetails(base.tripPlace)}
+                      onClick={() => openPlaceDetails(base.tripPlace, day.date)}
                       type="button"
                     >
                       {base.name}
@@ -1132,7 +1132,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                         stopTitleClassName,
                         !upcoming && 'text-muted-foreground line-through decoration-1',
                       )}
-                      onClick={() => openPlaceDetails(tripPlace)}
+                      onClick={() => openPlaceDetails(tripPlace, day.date)}
                       type="button"
                     >
                       {name}

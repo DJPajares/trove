@@ -31,6 +31,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { TripPlace } from '@/lib/trip-places/api';
+import { fetchItinerary } from '@/lib/itinerary/api';
+import { scheduledPlaceUse } from '@/lib/itinerary/places';
+import { queryKeys } from '@/lib/query/keys';
+import { useTripResource } from '@/lib/query/use-trip-resource';
 import { resolveTripPlaceName } from '@/lib/trip-places/place-name';
 import { sortTripPlaces, tripPlaceSorts, type TripPlaceSort } from '@/lib/trip-places/sort';
 import { useTripPlaces } from '@/lib/trip-places/use-trip-places';
@@ -43,6 +47,13 @@ import { useTripPlaces } from '@/lib/trip-places/use-trip-places';
 export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripPlaces');
   const places = useTripPlaces(tripId);
+  const { data: itinerary } = useTripResource(queryKeys.itinerary(tripId), () =>
+    fetchItinerary(tripId),
+  );
+  const placeUse = useMemo(
+    () => (itinerary ? scheduledPlaceUse(itinerary) : undefined),
+    [itinerary],
+  );
   // Ratings Trove already has stored; this page has no day, so no hours or distance.
   const { signalsFor } = useTripPlaceSignals(tripId);
   const [sort, setSort] = useState<TripPlaceSort>('name');
@@ -152,6 +163,7 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
           </div>
 
           <TripPlacesPanel
+            placeUse={placeUse}
             onEditPlace={setEditPlace}
             onPlaceLocated={places.placeLocated}
             onPriorityChange={(tripPlace, priority) => void places.setPriority(tripPlace, priority)}

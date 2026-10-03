@@ -12,8 +12,10 @@ import { useEffect, useState } from 'react';
  * When `enabled` is false (a Trip Mode preview, which stands at a fixed
  * hypothetical instant), no timer is ever set and the caller is expected to
  * source its displayed time elsewhere.
+ * `tickOffline` keeps local evidence-age checks running for a visible offline
+ * reader. It only advances this clock and never requests data.
  */
-export function useNowTick(enabled: boolean): Date {
+export function useNowTick(enabled: boolean, tickOffline = false): Date {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -23,7 +25,7 @@ export function useNowTick(enabled: boolean): Date {
 
     const schedule = () => {
       window.clearTimeout(timer);
-      if (document.hidden || !navigator.onLine) return;
+      if (document.hidden || (!tickOffline && !navigator.onLine)) return;
       const current = new Date();
       const msToNextMinute = 60_000 - (current.getTime() % 60_000);
       timer = window.setTimeout(() => {
@@ -53,7 +55,7 @@ export function useNowTick(enabled: boolean): Date {
       window.removeEventListener('online', schedule);
       window.removeEventListener('offline', schedule);
     };
-  }, [enabled]);
+  }, [enabled, tickOffline]);
 
   return now;
 }

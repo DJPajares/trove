@@ -44,6 +44,10 @@ export type TripWeatherLocation = {
 };
 
 export type TripWeatherDay = {
+  /** Original forecast retrieval time; absent in legacy local archives. */
+  fetchedAt?: string | null;
+  /** A retained prediction, not an observation of weather that occurred. */
+  archived?: boolean;
   date: string;
   itineraryDayId: string;
   location: TripWeatherLocation;
@@ -153,7 +157,11 @@ export async function getTripWeather(
     historyRead = false;
   }
 
-  const history = mergeArchivedTripWeather(archived, weather.days, temperatureUnit);
+  const freshDays = weather.days.map((day) => ({
+    ...day,
+    fetchedAt: day.fetchedAt ?? weather.fetchedAt,
+  }));
+  const history = mergeArchivedTripWeather(archived, freshDays, temperatureUnit);
   if (historyRead) {
     try {
       await writeTripWeatherHistory(userId, tripId, history);
@@ -162,12 +170,19 @@ export async function getTripWeather(
     }
   }
 
-  return { ...weather, days: restoreArchivedTripWeather(history, temperatureUnit) };
+  return {
+    ...weather,
+    days: restoreArchivedTripWeather(history, temperatureUnit).map((day) => ({
+      ...day,
+      archived: day.date < weather.horizon.startDate,
+    })),
+  };
 }
 
 export type LocationWeather = {
   attribution: { label: string; url: string };
   current: WeatherCurrentConditions | null;
+  forecast: Omit<TripWeatherDay, 'itineraryDayId' | 'location'>[];
   fetchedAt: string;
   location: { latitude: number; longitude: number; timeZone: string };
   /**

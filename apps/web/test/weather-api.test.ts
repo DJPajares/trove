@@ -105,6 +105,9 @@ test('archives returned daily forecasts and includes a saved past day in the res
   expect(weather.days.map((day) => day.date)).toEqual(['2026-09-20', '2026-09-24']);
   expect(weather.current).toEqual({ temperature: 20 });
   expect(weather.hours).toHaveLength(1);
+  expect(weather.days[0]).toMatchObject({ archived: true });
+  expect(weather.days[0]!.fetchedAt).toBeUndefined();
+  expect(weather.days[1]).toMatchObject({ archived: false, fetchedAt: '2026-09-23T00:00:00.000Z' });
   expect(writeTripWeatherHistory).toHaveBeenCalledWith('traveller', 'trip-id', [
     archivedDay,
     expect.objectContaining({ date: '2026-09-24', itineraryDayId: 'future-day' }),
@@ -125,4 +128,35 @@ test('does not overwrite saved history when the private store cannot be read', a
   await getTripWeather('trip-id', { temperatureUnit: 'celsius' });
 
   expect(writeTripWeatherHistory).not.toHaveBeenCalled();
+});
+
+test('retained future forecasts keep their source age and remain forecasts after an empty refresh', async () => {
+  readTripWeatherHistory.mockResolvedValue([
+    {
+      date: '2026-10-04',
+      itineraryDayId: 'future',
+      location: { timeZone: 'Asia/Tokyo' },
+      temperatureMaxCelsius: 25,
+      temperatureMinCelsius: 16,
+      weatherCode: 2,
+      precipitationProbability: 20,
+      fetchedAt: '2026-10-02T00:00:00Z',
+    },
+  ]);
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        days: [],
+        fetchedAt: '2026-10-03T03:00:00Z',
+        horizon: { startDate: '2026-10-03', endDate: '2026-10-18' },
+      }),
+    })),
+  );
+  const first = await getTripWeather('trip', { temperatureUnit: 'celsius' });
+  const repeated = await getTripWeather('trip', { temperatureUnit: 'celsius' });
+  expect(first.days[0]).toMatchObject({ archived: false, fetchedAt: '2026-10-02T00:00:00Z' });
+  expect(repeated.days[0]!.fetchedAt).toBe(first.days[0]!.fetchedAt);
 });

@@ -41,11 +41,13 @@ import type { WeatherCurrentConditions, WeatherHourlyForecast } from '@/lib/weat
 export function TripHourlyWeather({
   attribution,
   current,
+  evidenceDescription,
   readings,
   temperatureUnit,
 }: Readonly<{
   attribution: { label: string; url: string };
   current: WeatherCurrentConditions | null;
+  evidenceDescription?: string;
   /**
    * Already selected by the caller, which needs to know whether there are any
    * before deciding that the hours are this day's answer at all.
@@ -92,12 +94,14 @@ export function TripHourlyWeather({
 
   return (
     <a
-      aria-label={t('stripLabel', { source: attribution.label })}
+      aria-label={`${t('stripLabel', { source: attribution.label })}${evidenceDescription ? `. ${evidenceDescription}` : ''}`}
       className="block rounded-[var(--radius-sm)] outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
       href={attribution.url}
       rel="noreferrer"
       target="_blank"
-      title={attribution.label}
+      title={
+        evidenceDescription ? `${attribution.label} · ${evidenceDescription}` : attribution.label
+      }
     >
       <div className="flex items-stretch gap-3">
         {current && currentTemperature ? (

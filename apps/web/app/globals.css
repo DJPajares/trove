@@ -70,11 +70,19 @@
   --text-subtle: oklch(0.49 0.03 74);
   --brand: oklch(0.455 0.07 115);
   --brand-strong: oklch(0.385 0.058 115);
-  /* The identity stays fixed across appearances, like a printed travel token.
-     Product surfaces can theme around it without changing the mark itself. */
+  /* The Keepsake's fixed colours, which every export reads as hex. In its olive
+     tile the mark never changes with the appearance. The bare symbol keeps its
+     terracotta ribbon (3.9:1 on ivory, 4.5:1 on the olive-black ground) and
+     changes only its bar: olive on light grounds, ivory on dark ones. On the
+     tile the ribbon lightens to clear the olive, where the base terracotta
+     measures only 1.8:1. */
   --brand-mark-surface: #515723;
   --brand-mark-ink: #fcf7ee;
   --brand-mark-accent: #c2603d;
+  --brand-mark-accent-on-surface: #d27350;
+  --brand-mark-type: #33261f;
+  --brand-symbol-bar: var(--brand-mark-surface);
+  --brand-symbol-ribbon: var(--brand-mark-accent);
   /* Experience Rating has a colour of its own rather than borrowing the brand's:
      a rating is the traveller's own mark, not a Trove accent. Gold, but dark
      enough to clear 3:1 non-text contrast (WCAG 1.4.11) on every light surface
@@ -146,6 +154,13 @@
   --text-page-title: clamp(1.875rem, 4vw, 2.75rem);
   --text-section-title: clamp(1.25rem, 2vw, 1.75rem);
   --text-metadata: 0.8125rem;
+  /* Icons draw one stroke weight at every size, matched to Instrument Sans,
+     rather than Lucide's 2-in-24 that thins to 1px at 12px and thickens to 2px
+     at 24px. Compact contexts (14px and under) and active navigation set the
+     variable on an ancestor. */
+  --icon-stroke: 1.5px;
+  --icon-stroke-compact: 1.25px;
+  --icon-stroke-emphasis: 2px;
   --motion-fast: 150ms;
   --motion-standard: 200ms;
   --motion-slow: 320ms;
@@ -224,6 +239,7 @@
   --text-subtle: oklch(0.735 0.031 77);
   --brand: oklch(0.78 0.085 115);
   --brand-strong: oklch(0.845 0.072 115);
+  --brand-symbol-bar: var(--brand-mark-ink);
   --rating: oklch(0.83 0.13 82);
   /* Deliberately the same value as in :root; the scrim below it is dark in both. */
   --rating-on-media: oklch(0.85 0.13 82);
@@ -456,6 +472,18 @@ body {
   select,
   textarea {
     font: inherit;
+  }
+
+  /* Author CSS outranks the stroke-width attribute Lucide writes, and a
+     non-scaling stroke keeps that weight in CSS pixels however the icon is
+     sized. Brand marks and the score ring are not `.lucide`, so they keep
+     their own geometry. */
+  svg.lucide {
+    stroke-width: var(--icon-stroke);
+  }
+
+  svg.lucide :where(*) {
+    vector-effect: non-scaling-stroke;
   }
 }
 

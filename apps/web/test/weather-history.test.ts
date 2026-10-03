@@ -59,3 +59,19 @@ test('identifies dates before the current provider window', () => {
   expect(dateIsBeforeForecastWindow(horizon, '2026-09-23')).toBe(false);
   expect(dateIsBeforeForecastWindow(null, '2026-09-22')).toBe(false);
 });
+
+test('archival and unit conversion preserve the original forecast retrieval time', () => {
+  const forecast = { ...day('day-1', '2026-09-20', 68, 50), fetchedAt: '2026-09-18T01:00:00Z' };
+  const history = mergeArchivedTripWeather([], [forecast], 'fahrenheit');
+  const retained = mergeArchivedTripWeather(
+    history,
+    [day('day-2', '2026-09-24', 25, 12)],
+    'celsius',
+  );
+  expect(restoreArchivedTripWeather(retained, 'celsius')[0]).toMatchObject({
+    fetchedAt: forecast.fetchedAt,
+    temperatureMax: 20,
+    temperatureMin: 10,
+  });
+  expect(restoreArchivedTripWeather(retained, 'celsius')[1]!.fetchedAt).toBeUndefined();
+});

@@ -6,6 +6,7 @@ import { usePreferences } from '@/components/preferences-provider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useHereWeather } from '@/lib/home/use-here-weather';
 import { weatherConditionIcon, weatherConditionKey } from '@/lib/weather/conditions';
+import { useWeatherEvidenceDescription } from '@/lib/weather/use-evidence-description';
 
 /**
  * Where the traveller is, and when.
@@ -20,11 +21,18 @@ import { weatherConditionIcon, weatherConditionKey } from '@/lib/weather/conditi
  * down, which is what the page is actually about.
  */
 export function HomeNowStrip() {
+  return <HomeNowStripContent {...useHereWeather()} />;
+}
+
+export function HomeNowStripContent({
+  status,
+  weather,
+}: Readonly<ReturnType<typeof useHereWeather>>) {
   const t = useTranslations('home');
   const conditionT = useTranslations('tripMode.views.weather');
   const locale = useLocale();
   const { preferences } = usePreferences();
-  const { status, weather } = useHereWeather();
+  const evidenceDescription = useWeatherEvidenceDescription();
 
   const today = new Intl.DateTimeFormat(locale, {
     day: 'numeric',
@@ -32,8 +40,31 @@ export function HomeNowStrip() {
     weekday: 'short',
   }).format(new Date());
 
-  const Icon = weather ? weatherConditionIcon(weather.condition) : null;
+  const condition = weather?.kind === 'current' ? weather.current : weather?.forecast;
+  const Icon = condition ? weatherConditionIcon(condition.weatherCode) : null;
   const unit = conditionT(`unit.${preferences.temperatureUnit}`);
+  const temperature = (value: number) => `${Math.round(value)}${unit}`;
+  const valueLabel =
+    weather?.kind === 'current'
+      ? temperature(weather.current.temperature)
+      : weather
+        ? conditionT('range', {
+            high: temperature(weather.forecast.temperatureMax),
+            low: temperature(weather.forecast.temperatureMin),
+          })
+        : '';
+  const evidence = weather
+    ? evidenceDescription(
+        weather.kind === 'current'
+          ? { kind: 'current', timeZone: weather.timeZone, observedAt: weather.current.observedAt }
+          : {
+              kind: 'forecast',
+              timeZone: weather.timeZone,
+              date: weather.forecast.date,
+              fetchedAt: weather.fetchedAt,
+            },
+      )
+    : '';
 
   return (
     // The floating Search/Account stack is pinned to the top right of every
@@ -43,7 +74,7 @@ export function HomeNowStrip() {
         <Skeleton aria-label={t('weather.loading')} className="h-5 w-32" role="status" />
       ) : null}
 
-      {weather && Icon ? (
+      {weather && condition && Icon ? (
         <>
           {/* The reading is the link to where it came from. `conditions.ts` is
               explicit that the icon carries no meaning on its own, so the
@@ -52,17 +83,17 @@ export function HomeNowStrip() {
           <a
             // Without a city the sentence has nothing to be "in", so it drops
             // the clause rather than standing in something that is not a place.
-            aria-label={conditionT(weather.city ? 'readingLabelWithPlace' : 'readingLabel', {
-              condition: conditionT(`condition.${weatherConditionKey(weather.condition)}`),
+            aria-label={`${conditionT(weather.city ? 'readingLabelWithPlace' : 'readingLabel', {
+              condition: conditionT(`condition.${weatherConditionKey(condition.weatherCode)}`),
               place: weather.city ?? '',
               source: weather.attribution.label,
-              temperature: `${Math.round(weather.temperature)}${unit}`,
-            })}
-            className="flex items-center gap-2 rounded-[var(--radius-sm)] outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
+              temperature: valueLabel,
+            })}. ${evidence}`}
+            className="flex min-w-0 flex-wrap items-center gap-2 rounded-[var(--radius-sm)] outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
             href={weather.attribution.url}
             rel="noreferrer"
             target="_blank"
-            title={weather.attribution.label}
+            title={`${weather.attribution.label} · ${evidence}`}
           >
             <Icon aria-hidden="true" className="size-5 shrink-0 text-brand" />
             {weather.city ? (
@@ -70,9 +101,15 @@ export function HomeNowStrip() {
                 {weather.city}
               </span>
             ) : null}
+            {weather.kind === 'forecast' ? (
+              <span aria-hidden="true" className="text-muted-foreground">
+                {conditionT('forecastCue')}
+              </span>
+            ) : null}
             <span aria-hidden="true" className="text-muted-foreground tabular-nums">
-              {Math.round(weather.temperature)}
-              {unit}
+              {weather.kind === 'current'
+                ? temperature(weather.current.temperature)
+                : `${temperature(weather.forecast.temperatureMax)} / ${temperature(weather.forecast.temperatureMin)}`}
             </span>
           </a>
           <span aria-hidden="true" className="text-border-strong">

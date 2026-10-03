@@ -4,17 +4,19 @@ import { useQuery } from '@tanstack/react-query';
 
 import { usePreferences } from '@/components/preferences-provider';
 import { useTravellerPosition } from '@/hooks/use-traveller-position';
+import { useNowTick } from '@/hooks/use-now-tick';
 import { deviceTimeZone } from '@/lib/itinerary/api';
 import { queryKeys } from '@/lib/query/keys';
 import { getLocationWeather } from '@/lib/weather/api';
+import { selectLocationWeather } from '@/lib/weather/freshness';
 
 export type HereWeather = {
   /** Where the reading came from, so the strip can link back to it. */
   attribution: { label: string; url: string };
   city: string | null;
-  condition: number;
-  temperature: number;
-};
+  timeZone: string;
+  fetchedAt: string;
+} & NonNullable<ReturnType<typeof selectLocationWeather>>;
 
 /**
  * What it is like where the traveller is standing.
@@ -36,6 +38,7 @@ export function useHereWeather() {
   const timeZone = deviceTimeZone();
   // Asks once, then never again. A granted permission is still read silently.
   const { position } = useTravellerPosition({ askOnce: true });
+  const now = useNowTick(true, true);
 
   const query = useQuery({
     enabled: Boolean(timeZone),
@@ -61,7 +64,8 @@ export function useHereWeather() {
   });
 
   const data = query.data;
-  if (!data?.current)
+  const selected = data ? selectLocationWeather(data, now) : null;
+  if (!data || !selected)
     return { status: query.isPending ? 'loading' : 'error', weather: null } as const;
 
   return {
@@ -74,8 +78,9 @@ export function useHereWeather() {
       // traveller in Whangarei is the claim PRD 21.1 forbids. Without a
       // position the strip shows the reading and says nothing about where.
       city: position ? (data.place?.name ?? null) : null,
-      condition: data.current.weatherCode,
-      temperature: data.current.temperature,
+      timeZone: data.location.timeZone,
+      fetchedAt: data.fetchedAt,
+      ...selected,
     },
   } as const;
 }

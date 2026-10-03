@@ -36,6 +36,7 @@ export function mergeArchivedTripWeather(
   for (const day of fresh) {
     days.set(archiveKey(day), {
       date: day.date,
+      ...(day.fetchedAt !== undefined ? { fetchedAt: day.fetchedAt } : {}),
       itineraryDayId: day.itineraryDayId,
       location: { timeZone: day.location.timeZone },
       precipitationProbability: day.precipitationProbability,
@@ -58,6 +59,7 @@ export function restoreArchivedTripWeather(
 ): TripWeatherDay[] {
   return archived.map((day) => ({
     date: day.date,
+    ...(day.fetchedAt !== undefined ? { fetchedAt: day.fetchedAt } : {}),
     itineraryDayId: day.itineraryDayId,
     location: { timeZone: day.location.timeZone },
     precipitationProbability: day.precipitationProbability,

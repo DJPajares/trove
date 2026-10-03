@@ -5,29 +5,15 @@ import { useTranslations } from 'next-intl';
 
 import { usePreferences } from '@/components/preferences-provider';
 import { TripHourlyWeather } from '@/components/trip-hourly-weather';
+import { useNowTick } from '@/hooks/use-now-tick';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { weatherConditionIcon, weatherConditionKey } from '@/lib/weather/conditions';
-import { selectHourlyReadings } from '@/lib/weather/hourly';
+import { isArchivedForecast, selectTripWeather } from '@/lib/weather/freshness';
 import { dateIsBeforeForecastWindow } from '@/lib/weather/history';
 import { cn } from '@/lib/utils';
-import {
-  isCurrentReadingStale,
-  isDateForecastable,
-  tripWeatherForDate,
-  useTripWeather,
-} from '@/lib/weather/use-trip-weather';
-
-function localDate(timeZone: string) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    day: '2-digit',
-    month: '2-digit',
-    timeZone,
-    year: 'numeric',
-  }).formatToParts(new Date());
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${values.year}-${values.month}-${values.day}`;
-}
+import { isDateForecastable, useTripWeather } from '@/lib/weather/use-trip-weather';
+import { useWeatherEvidenceDescription } from '@/lib/weather/use-evidence-description';
 
 /**
  * The day's weather, at the size a traveller reads it standing up.
@@ -63,7 +49,10 @@ export function TripWeatherContext({
       : 'border-y border-border py-4';
 
   const { preferences } = usePreferences();
-  const { data, dataUpdatedAt, refetch, status } = useTripWeather(tripId);
+  const { data, refetch, status } = useTripWeather(tripId);
+  const now = useNowTick(true, true);
+  const evidenceDescription = useWeatherEvidenceDescription();
+  const selected = data ? selectTripWeather(data, selectedDate, isPreview, now) : null;
 
   if (status === 'loading') {
     return (
@@ -79,7 +68,7 @@ export function TripWeatherContext({
     );
   }
 
-  if (status === 'error' || !data) {
+  if (!data || (status === 'error' && !selected?.current && !selected?.forecast)) {
     return (
       <section aria-live="polite" className={cn('flex items-start gap-3', frameClassName)}>
         <CloudSun aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
@@ -96,45 +85,25 @@ export function TripWeatherContext({
     );
   }
 
-  const selectedForecast = tripWeatherForDate(data, selectedDate);
-  const timeZone =
-    selectedForecast?.location.timeZone ??
-    data.days.find((day) => day.date >= data.horizon.startDate)?.location.timeZone ??
-    data.days[0]?.location.timeZone ??
-    'UTC';
-  const current = data.current;
-  // An answer read off disk on a plane is worth showing, but it stops being
-  // "now" the moment it outlives its window. Dropping back to the day's
-  // forecast is the whole of that correction.
-  const stale = isCurrentReadingStale(dataUpdatedAt);
-  const isToday = selectedDate === localDate(timeZone);
-  const showCurrent = Boolean(!isPreview && !stale && current && isToday);
-  /**
-   * Whether the hours in hand are this day's hours.
-   *
-   * They are fetched for one place - wherever the traveller is today - so a
-   * trip that moves on tomorrow would otherwise read this city's rain against
-   * the next city's afternoon. PRD 21.1 calls that fabricating a forecast, so a
-   * day somewhere else keeps the daily summary instead.
-   *
-   * The server names the day rather than the coordinate it read. Comparing
-   * coordinates looked stricter and was in fact looser both ways: a day past
-   * the location cap carries the trip's fallback coordinate rather than its
-   * own, which matched today's and handed a city the traveller is not in
-   * today's rain, while a provider grid cell shifting between the daily and
-   * live tiers failed the match on the one day it should always pass.
-   */
-  const hoursBelongHere = Boolean(data.hours.length && data.hoursDate === selectedDate);
-  // Selected here rather than inside the strip, because whether there are any
-  // hours for this day is what decides if the hours are the answer at all. A
-  // day past the hourly window has none, and must fall back to its summary
-  // rather than to a bare high and low.
-  const hourReadings =
-    !isPreview && !stale && hoursBelongHere
-      ? selectHourlyReadings(data.hours, { date: selectedDate, timeZone })
-      : [];
+  const { current, forecast: selectedForecast, readings: hourReadings } = selected!;
+  const showCurrent = Boolean(current);
   const showHours = hourReadings.length > 0;
-  const condition = showCurrent && current ? current : selectedForecast;
+  const condition = current ?? selectedForecast;
+  const archived = Boolean(selectedForecast && isArchivedForecast(selectedForecast, now));
+  const evidence = current
+    ? evidenceDescription({
+        kind: 'current',
+        observedAt: current.observedAt,
+        timeZone: selectedForecast!.location.timeZone,
+      })
+    : selectedForecast
+      ? evidenceDescription({
+          kind: archived ? 'archived' : 'forecast',
+          date: selectedForecast.date,
+          timeZone: selectedForecast.location.timeZone,
+          fetchedAt: selectedForecast.fetchedAt,
+        })
+      : '';
   const DayIcon = weatherConditionIcon(condition?.weatherCode ?? 0);
   const unit = t(`unit.${preferences.temperatureUnit}`);
   const formatTemperature = (value: number) => `${Math.round(value)}${unit}`;
@@ -142,7 +111,7 @@ export function TripWeatherContext({
   return (
     <section aria-labelledby="trip-weather-heading" className={frameClassName}>
       <h3 className="sr-only" id="trip-weather-heading">
-        {showCurrent ? t('now') : t('forecast')}
+        {showCurrent ? t('now') : archived ? t('archivedForecast') : t('forecast')}
       </h3>
 
       {/* The hours lead. The panel used to spend three lines - an eyebrow saying
@@ -154,6 +123,7 @@ export function TripWeatherContext({
         <TripHourlyWeather
           attribution={data.attribution}
           current={showCurrent ? current : null}
+          evidenceDescription={evidence}
           readings={hourReadings}
           temperatureUnit={preferences.temperatureUnit}
         />
@@ -161,18 +131,23 @@ export function TripWeatherContext({
         // No hours for this day, so the day itself is the answer: one line, the
         // condition and the range, still linking to where it came from.
         <a
-          aria-label={t('readingLabel', {
+          aria-label={`${t('readingLabel', {
             condition: t(`condition.${weatherConditionKey(condition.weatherCode)}`),
             source: data.attribution.label,
-            temperature: formatTemperature(selectedForecast.temperatureMax),
-          })}
+            temperature: formatTemperature(current?.temperature ?? selectedForecast.temperatureMax),
+          })}. ${evidence}`}
           className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[var(--radius-sm)] outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
           href={data.attribution.url}
           rel="noreferrer"
           target="_blank"
-          title={data.attribution.label}
+          title={`${data.attribution.label} · ${evidence}`}
         >
           <DayIcon aria-hidden="true" className="size-5 shrink-0 text-brand" />
+          {archived ? (
+            <span aria-hidden="true" className="text-xs text-muted-foreground">
+              {t('archivedForecast')}
+            </span>
+          ) : null}
           <p
             aria-hidden="true"
             className="text-xl font-semibold tracking-[-0.02em] text-foreground tabular-nums"

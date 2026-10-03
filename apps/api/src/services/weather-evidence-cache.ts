@@ -1,4 +1,5 @@
 import { getPrismaClient } from '@trove/db';
+import { WEATHER_CACHE_TTL_MS } from '@trove/types';
 import type { ProviderCacheMissReason } from './provider-usage.js';
 import type { WeatherDailyForecast, WeatherPoint } from './weather.js';
 import { isWithinForecastWindow, type ForecastWindow } from './weather-window.js';
@@ -9,7 +10,7 @@ import { isWithinForecastWindow, type ForecastWindow } from './weather-window.js
  * planning session on one answer while still moving before the shape of the
  * week does.
  */
-export const WEATHER_FORECAST_TTL_MS = 3 * 60 * 60 * 1_000;
+export const WEATHER_FORECAST_TTL_MS = WEATHER_CACHE_TTL_MS;
 
 /**
  * Two decimals is roughly a kilometre, which is finer than the grid Open-Meteo

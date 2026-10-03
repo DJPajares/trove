@@ -35,6 +35,7 @@ let refs: Row[];
 let legs: Row[];
 let grounding: Row[];
 let weather: Row[];
+let weatherContext: Row[];
 
 const ago = (ms: number) => new Date(NOW.getTime() - ms);
 
@@ -43,11 +44,13 @@ beforeEach(() => {
   legs = [];
   grounding = [];
   weather = [];
+  weatherContext = [];
   vi.stubGlobal('trovePrismaClient', {
     aiPlaceGroundingCache: table(grounding),
     placeProviderRef: table(refs),
     travelLegCache: table(legs),
     weatherForecastSnapshot: table(weather),
+    weatherContextSnapshot: table(weatherContext),
   });
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -74,6 +77,7 @@ test('nothing is removed before the end of its 30 days, whichever dataset it is 
     deletedGroundingDecisions: 0,
     deletedTravelLegs: 0,
     deletedWeatherSnapshots: 0,
+    deletedWeatherContextSnapshots: 0,
   });
 
   expect(refs[0]).toMatchObject({
@@ -112,6 +116,7 @@ test('everything is removed at exactly 30 days, keeping the link to the place', 
     deletedGroundingDecisions: 1,
     deletedTravelLegs: 1,
     deletedWeatherSnapshots: 1,
+    deletedWeatherContextSnapshots: 0,
   });
 
   expect(refs[0]).toMatchObject({
@@ -154,4 +159,16 @@ test('each dataset expires on its own clock', async () => {
     cachedEvidenceAt: null,
     cachedName: 'Identity fresh, evidence old',
   });
+});
+
+test('current/hourly snapshots expire at three hours independently of daily retention', async () => {
+  weatherContext.push({ fetchedAt: ago(3 * 60 * 60 * 1_000 - 1) });
+  weatherContext.push({ fetchedAt: ago(3 * 60 * 60 * 1_000) });
+  weather.push({ fetchedAt: ago(3 * 60 * 60 * 1_000) });
+  await expect(cleanupProviderEvidence(NOW)).resolves.toMatchObject({
+    deletedWeatherContextSnapshots: 1,
+    deletedWeatherSnapshots: 0,
+  });
+  expect(weatherContext).toHaveLength(1);
+  expect(weather).toHaveLength(1);
 });

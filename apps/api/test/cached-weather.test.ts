@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 import { WeatherProviderError, type WeatherDailyForecast } from '../src/services/weather.js';
 
@@ -141,6 +141,14 @@ test('two coordinates in the same city share one snapshot', async () => {
 
   expect(calls).toHaveLength(1);
   expect(store.rows.size).toBe(1);
+});
+
+test('concurrent daily requests share acquisition and snapshot persistence', async () => {
+  const { service, calls } = await createService();
+  const writes = vi.spyOn(store.client, '$transaction');
+  await Promise.all(Array.from({ length: 8 }, () => service.getForecasts([TOKYO], WINDOW)));
+  expect(calls).toHaveLength(1);
+  expect(writes).toHaveBeenCalledTimes(1);
 });
 
 test('a stale snapshot is refetched', async () => {

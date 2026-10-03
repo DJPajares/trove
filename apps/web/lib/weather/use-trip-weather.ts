@@ -5,16 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { usePreferences } from '@/components/preferences-provider';
 import { queryKeys } from '@/lib/query/keys';
 import { getTripWeather, type TripWeather } from '@/lib/weather/api';
-import { forecastForDate, WEATHER_CURRENT_MAX_AGE_MS } from '@/lib/weather/freshness';
-
-/**
- * How long an answer is held before it is worth asking again.
- *
- * Query receipt age controls requests only. Current-condition eligibility is
- * independently measured from the provider observation, so serving a cached
- * response cannot extend its current window. Keep the existing request policy.
- */
-const WEATHER_REFETCH_AFTER_MS = WEATHER_CURRENT_MAX_AGE_MS;
+import { forecastForDate } from '@/lib/weather/freshness';
+import { weatherQueryStaleTime } from '@/lib/weather/cache-policy';
 
 export type TripWeatherQuery = {
   data: TripWeather | null;
@@ -41,14 +33,11 @@ export function useTripWeather(tripId: string): TripWeatherQuery {
   const query = useQuery({
     queryFn: ({ signal }) => getTripWeather(tripId, { signal, temperatureUnit }),
     queryKey: queryKeys.tripWeather(tripId, temperatureUnit),
-    // Trove turns all three of these off globally, because several read
-    // endpoints reach Google and an automatic refetch would be a per-focus
-    // charge. This one reaches a free provider through a cache of its own, and
-    // a forecast nobody refreshes is the thing that made surfaces apologise for
-    // their own data. The stale time above is what keeps it from being chatty.
+    // Mount/reconnect reuse fresh persisted evidence. After expiry the shared
+    // server cache decides whether provider acquisition is needed.
     refetchOnMount: true,
     refetchOnReconnect: true,
-    staleTime: WEATHER_REFETCH_AFTER_MS,
+    staleTime: weatherQueryStaleTime,
   });
 
   return {

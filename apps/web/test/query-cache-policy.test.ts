@@ -269,3 +269,13 @@ test('Home and Trip Mode ask for the trip context with the same key', () => {
   expect(home).toStrictEqual(tripMode);
   expect(home).not.toStrictEqual(queryKeys.tripModeContext('trip-1', { clockTimeZone: 'UTC' }));
 });
+
+test('Home weather persists and separates timezone fallbacks from real coordinates', () => {
+  const client = createQueryClient();
+  const tokyo = queryKeys.locationWeather(null, null, 'celsius', 'Asia/Tokyo');
+  const utc = queryKeys.locationWeather(null, null, 'celsius', 'UTC');
+  expect(tokyo).not.toEqual(utc);
+  expect(utc).not.toEqual(queryKeys.locationWeather(0, 0, 'celsius', 'UTC'));
+  client.setQueryData(tokyo, { fetchedAt: '2026-10-03T00:00:00Z' });
+  expect(shouldDehydrateQuery(client.getQueryCache().find({ queryKey: tokyo })!)).toBe(true);
+});

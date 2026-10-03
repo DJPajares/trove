@@ -1,7 +1,7 @@
+import { getCachedWeatherContext } from './weather-context-cache.js';
+
 const DEFAULT_BASE_URL = 'https://api.open-meteo.com/v1/forecast';
-const DEFAULT_CACHE_TTL_MS = 10 * 60_000;
 const DEFAULT_TIMEOUT_MS = 8_000;
-const MAX_CACHE_ENTRIES = 200;
 
 export const WEATHER_ATTRIBUTION = {
   label: 'Weather data by Open-Meteo.com',
@@ -472,47 +472,10 @@ export class OpenMeteoWeatherProvider implements WeatherProvider {
   }
 }
 
-type CacheEntry = {
-  expiresAt: number;
-  value: WeatherContext;
-};
-
 export class WeatherService {
-  private readonly cache = new Map<string, CacheEntry>();
-
-  constructor(
-    private readonly provider: WeatherProvider = new OpenMeteoWeatherProvider(),
-    private readonly cacheTtlMs = DEFAULT_CACHE_TTL_MS,
-  ) {}
+  constructor(private readonly provider: WeatherProvider = new OpenMeteoWeatherProvider()) {}
 
   async getWeather(input: WeatherRequest) {
-    const key = [
-      input.latitude.toFixed(3),
-      input.longitude.toFixed(3),
-      input.timeZone,
-      input.temperatureUnit,
-    ].join(':');
-    const cached = this.cache.get(key);
-    if (cached && cached.expiresAt > Date.now()) return cached.value;
-
-    const result: WeatherContext = {
-      ...(await this.provider.getWeather(input)),
-      fetchedAt: new Date().toISOString(),
-    };
-    this.cache.set(key, { expiresAt: Date.now() + this.cacheTtlMs, value: result });
-    this.pruneCache();
-    return result;
-  }
-
-  private pruneCache() {
-    const now = Date.now();
-    for (const [key, entry] of this.cache) {
-      if (entry.expiresAt <= now) this.cache.delete(key);
-    }
-    while (this.cache.size > MAX_CACHE_ENTRIES) {
-      const oldestKey = this.cache.keys().next().value;
-      if (!oldestKey) return;
-      this.cache.delete(oldestKey);
-    }
+    return getCachedWeatherContext(this.provider, input);
   }
 }

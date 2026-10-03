@@ -9,6 +9,7 @@ import { deviceTimeZone } from '@/lib/itinerary/api';
 import { queryKeys } from '@/lib/query/keys';
 import { getLocationWeather } from '@/lib/weather/api';
 import { selectLocationWeather } from '@/lib/weather/freshness';
+import { weatherQueryStaleTime } from '@/lib/weather/cache-policy';
 
 export type HereWeather = {
   /** Where the reading came from, so the strip can link back to it. */
@@ -52,15 +53,15 @@ export function useHereWeather() {
         timeZone: timeZone as string,
       }),
     queryKey: queryKeys.locationWeather(
-      position?.latitude ?? 0,
-      position?.longitude ?? 0,
+      position?.latitude ?? null,
+      position?.longitude ?? null,
       temperatureUnit,
+      timeZone ?? null,
     ),
-    // The same policy the trip's weather runs on: a free provider behind a
-    // server-side cache, so a stale reading costs a request rather than money.
+    // Match Trip Mode's three-hour cache, measured from original retrieval.
     refetchOnMount: true,
     refetchOnReconnect: true,
-    staleTime: 24 * 60 * 60 * 1_000,
+    staleTime: weatherQueryStaleTime,
   });
 
   const data = query.data;

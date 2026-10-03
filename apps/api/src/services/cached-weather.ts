@@ -90,7 +90,9 @@ export class CachedWeatherService {
             points: stale,
             startDate: window.startDate,
           });
-          return { forecasts, fetchedAt: this.now() };
+          const fetchedAt = this.now();
+          for (const forecast of forecasts) await this.writeSnapshot(forecast, fetchedAt);
+          return { forecasts, fetchedAt };
         },
       );
     } catch (error) {
@@ -115,7 +117,6 @@ export class CachedWeatherService {
 
     for (const forecast of forecasts) {
       answers.set(weatherPointKey(forecast.point), { ...forecast, fetchedAt });
-      await this.writeSnapshot(forecast, fetchedAt);
     }
 
     return answers;

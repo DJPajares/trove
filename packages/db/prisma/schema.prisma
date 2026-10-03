@@ -516,6 +516,23 @@ model WeatherForecastSnapshot {
   @@schema("trove")
 }
 
+/// Shared current/hourly response in Celsius, independent of trip or traveller.
+/// Retrieval time remains unchanged on reuse; maintenance removes expired rows.
+model WeatherContextSnapshot {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  provider  String   @default("open_meteo")
+  latitude  Decimal  @db.Decimal(9, 6)
+  longitude Decimal  @db.Decimal(9, 6)
+  timeZone  String   @map("time_zone")
+  fetchedAt DateTime @map("fetched_at") @db.Timestamptz(3)
+  payload   Json
+
+  @@unique([provider, latitude, longitude, timeZone], name: "weather_context_snapshot_point")
+  @@index([fetchedAt])
+  @@map("weather_context_snapshots")
+  @@schema("trove")
+}
+
 /// One dated day inside a forecast snapshot.
 ///
 /// A snapshot holds the provider's whole available window rather than the slice

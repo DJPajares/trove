@@ -15,7 +15,7 @@ import type { TemperatureUnit } from '@/lib/profile/preferences';
  * a version in the key a returning traveller keeps reading an answer the server
  * has already stopped producing.
  */
-export const WEATHER_CONTRACT_VERSION = 'v4';
+export const WEATHER_CONTRACT_VERSION = 'v5';
 
 export type WeatherCurrentConditions = {
   apparentTemperature: number;

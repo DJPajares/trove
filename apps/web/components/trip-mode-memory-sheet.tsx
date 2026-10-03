@@ -1,6 +1,6 @@
 'use client';
 
-import { CloudOff, ImagePlus, Sparkles, X } from 'lucide-react';
+import { CloudOff, ImagePlus, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -33,6 +33,7 @@ import {
   MemoriesApiError,
 } from '@/lib/memories/api';
 import { resolveItineraryItemPlaceName } from '@/lib/trip-places/place-name';
+import * as Icons from '@/lib/icons';
 
 const NO_CONTEXT = 'none';
 
@@ -250,6 +251,7 @@ export function TripModeMemorySheet({
 
           {error ? (
             <Alert variant="destructive">
+              <Icons.Error aria-hidden="true" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           ) : null}
@@ -260,7 +262,6 @@ export function TripModeMemorySheet({
             {t('cancel')}
           </Button>
           <Button disabled={!canSave} onClick={() => void handleSave()} type="button">
-            <Sparkles aria-hidden="true" data-icon="inline-start" />
             {saving ? t('saving') : t('save')}
           </Button>
         </SheetFooter>

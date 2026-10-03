@@ -43,10 +43,20 @@ export async function generateMetadata(): Promise<Metadata> {
         { sizes: 'any', type: 'image/svg+xml', url: brandAssets.favicon },
       ],
     },
+    // Inherited by every page, the shared itinerary included, so a link preview
+    // only ever shows the brand card and never trip details.
+    openGraph: {
+      description: t('description'),
+      images: [{ alt: t('ogImageAlt'), height: 630, url: brandAssets.og, width: 1200 }],
+      siteName: t('name'),
+      title: t('name'),
+      type: 'website',
+    },
     title: {
       default: t('name'),
       template: `%s | ${t('name')}`,
     },
+    twitter: { card: 'summary_large_image' },
   };
 }
 

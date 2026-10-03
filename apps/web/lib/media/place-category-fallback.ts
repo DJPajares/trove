@@ -1,8 +1,6 @@
 import {
   BedDouble,
-  Compass,
   Landmark,
-  MapPinned,
   ShoppingBag,
   TramFront,
   UtensilsCrossed,
@@ -10,6 +8,7 @@ import {
 } from 'lucide-react';
 
 import type { TrovePlaceCategory } from '@/lib/place-categories';
+import * as Icons from '@/lib/icons';
 
 type PlaceCategoryFallback = {
   Icon: LucideIcon;
@@ -30,7 +29,7 @@ type PlaceCategoryFallback = {
  */
 const PLACE_CATEGORY_FALLBACKS: Record<TrovePlaceCategory, PlaceCategoryFallback> = {
   destination: {
-    Icon: MapPinned,
+    Icon: Icons.Places,
     gradientClassName:
       'bg-[linear-gradient(145deg,var(--media-fallback-destination-from),var(--media-fallback-destination-to))]',
   },
@@ -40,7 +39,7 @@ const PLACE_CATEGORY_FALLBACKS: Record<TrovePlaceCategory, PlaceCategoryFallback
       'bg-[linear-gradient(145deg,var(--media-fallback-food-and-drink-from),var(--media-fallback-food-and-drink-to))]',
   },
   other: {
-    Icon: Compass,
+    Icon: Icons.Other,
     gradientClassName:
       'bg-[linear-gradient(145deg,var(--media-fallback-other-from),var(--media-fallback-other-to))]',
   },

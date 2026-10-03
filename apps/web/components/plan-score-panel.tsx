@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronDown, Gauge } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { Fragment, useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -33,6 +33,7 @@ import {
   type ScoreChange,
 } from '@/lib/plan-score/presentation';
 import { cn } from '@/lib/utils';
+import * as Icons from '@/lib/icons';
 
 type Props = Readonly<{
   assessment?: TripPlanScore | null;
@@ -322,7 +323,7 @@ export function PlanScorePanel({
   return (
     <section aria-label={title} className={cn('space-y-4', panelSurfaceClass(surface), className)}>
       <Heading className="flex items-center gap-2 text-sm font-medium">
-        <Gauge aria-hidden="true" className="size-4 text-muted-foreground" />
+        <Icons.PlanScore aria-hidden="true" className="size-4 text-muted-foreground" />
         {title}
       </Heading>
       <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>

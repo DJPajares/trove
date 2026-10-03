@@ -1,6 +1,6 @@
 'use client';
 
-import { CircleAlert, CircleCheck, Sparkles, X } from 'lucide-react';
+import { CircleAlert, CircleCheck, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -16,6 +16,7 @@ import {
   AI_PLANNING_PROMPT_MAX_LENGTH,
   aiPlanningErrorMessageKey,
 } from '@/lib/ai-planning/presentation';
+import * as Icons from '@/lib/icons';
 
 function retryAtLabel(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(
@@ -134,7 +135,7 @@ export function AiPlanningComposer({ lifecycle }: Readonly<{ lifecycle: AiPlanni
         ) : null}
         {availability?.status === 'quota_exhausted' ? (
           <Alert role="alert" variant="warning">
-            <CircleAlert aria-hidden="true" />
+            <Icons.Warning aria-hidden="true" />
             <AlertTitle>{t('errors.quota_exceeded')}</AlertTitle>
             <AlertDescription>
               {availability.retryAt
@@ -145,7 +146,7 @@ export function AiPlanningComposer({ lifecycle }: Readonly<{ lifecycle: AiPlanni
         ) : null}
         {availability?.status === 'unavailable' ? (
           <Alert role="alert" variant="warning">
-            <CircleAlert aria-hidden="true" />
+            <Icons.Warning aria-hidden="true" />
             <AlertTitle>{t(`errors.${aiPlanningErrorMessageKey(availability.code)}`)}</AlertTitle>
             <AlertDescription>{t('manualFallbackHint')}</AlertDescription>
           </Alert>
@@ -209,7 +210,7 @@ export function AiPlanningComposer({ lifecycle }: Readonly<{ lifecycle: AiPlanni
           <span />
         )}
         <Button disabled={!canGenerate} type="submit">
-          <Sparkles aria-hidden="true" data-icon="inline-start" />
+          <Icons.Ai aria-hidden="true" data-icon="inline-start" />
           {operation === 'starting' ? t('starting') : session ? t('regenerate') : t('generate')}
         </Button>
       </SheetFooter>

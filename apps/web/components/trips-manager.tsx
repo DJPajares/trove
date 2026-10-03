@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ChevronDown, CircleAlert, MapPinned, Plus } from 'lucide-react';
+import { ChevronDown, CircleAlert, Plus } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -22,6 +22,7 @@ import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/
 import { Button } from '@/components/ui/button';
 import { fetchTrips, type Trip } from '@/lib/trips/api';
 import { queryKeys } from '@/lib/query/keys';
+import * as Icons from '@/lib/icons';
 
 /**
  * The library creates trips; editing and deleting a trip belong to the trip's
@@ -151,7 +152,7 @@ export function TripsManager() {
           }
           description={t('emptyDescription')}
           headingLevel={2}
-          icon={<MapPinned aria-hidden="true" />}
+          icon={<Icons.Trips aria-hidden="true" />}
           kind="empty"
           title={t('emptyTitle')}
         />

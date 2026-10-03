@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CircleAlert, ClipboardCheck, CopyPlus, Pencil, Plus, Trash2 } from 'lucide-react';
+import { CircleAlert, CopyPlus, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useState, type FormEvent } from 'react';
 
@@ -55,6 +55,7 @@ import {
 } from '@/lib/tasks/api';
 import { fetchTrips, type Trip } from '@/lib/trips/api';
 import { queryKeys } from '@/lib/query/keys';
+import * as Icons from '@/lib/icons';
 
 type EditorState =
   | { mode: 'closed'; template: null }
@@ -250,7 +251,7 @@ export function TaskTemplatesManager() {
                 className="size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
                 variant="icon"
               >
-                <ClipboardCheck aria-hidden="true" />
+                <Icons.TaskTemplates aria-hidden="true" />
               </ItemMedia>
               <ItemContent className="min-w-0">
                 <ItemTitle>{template.name}</ItemTitle>
@@ -295,7 +296,7 @@ export function TaskTemplatesManager() {
           className="min-h-64 justify-center"
           description={t('emptyDescription')}
           headingLevel={2}
-          icon={<ClipboardCheck aria-hidden="true" />}
+          icon={<Icons.TaskTemplates aria-hidden="true" />}
           kind="empty"
           title={t('emptyTitle')}
         />

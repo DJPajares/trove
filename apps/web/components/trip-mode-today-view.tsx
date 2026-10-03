@@ -5,19 +5,12 @@ import {
   ArrowUp,
   CalendarDays,
   Check,
-  CheckCircle2,
-  ClipboardCheck,
-  Compass,
   Ellipsis,
-  ExternalLink,
-  ListChecks,
   MapPin,
   Pencil,
   Plus,
   RotateCcw,
   SkipForward,
-  StickyNote,
-  WalletCards,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
@@ -98,6 +91,7 @@ import {
   resolvePlacePhotoName,
   resolveTripPlaceName,
 } from '@/lib/trip-places/place-name';
+import * as Icons from '@/lib/icons';
 
 type UndoAction =
   | { itemId: string; kind: 'organize'; itineraryDayId: string; position: number }
@@ -334,7 +328,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
         actions={<Button onClick={() => void refresh()}>{t('tryAgain')}</Button>}
         description={t('loadErrorDescription')}
         headingLevel={2}
-        icon={<Compass aria-hidden="true" />}
+        icon={<Icons.Error aria-hidden="true" />}
         kind="error"
         title={t('loadError')}
       />
@@ -760,7 +754,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
             size="sm"
             variant="outline"
           >
-            <ListChecks aria-hidden="true" data-icon="inline-start" />
+            <Icons.Tasks aria-hidden="true" data-icon="inline-start" />
             {tasksT('add')}
           </Button>
           <Button onClick={() => setCreateItemOpen(true)} size="sm">
@@ -787,7 +781,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
 
       {day.notes ? (
         <section className="flex items-start gap-3 border-y border-border py-4">
-          <StickyNote aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand" />
+          <Icons.Notes aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand" />
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-foreground">{t('dayNote')}</h3>
             <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
@@ -800,7 +794,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
       <div aria-live="polite" className="space-y-2">
         {feedback ? (
           <Alert>
-            <CheckCircle2 aria-hidden="true" />
+            <Icons.Success aria-hidden="true" />
             <AlertDescription>{feedback}</AlertDescription>
             {undoAction ? (
               <AlertAction>
@@ -819,6 +813,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
         ) : null}
         {error ? (
           <Alert variant="destructive">
+            <Icons.Error aria-hidden="true" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
@@ -921,7 +916,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                           {t('editTime')}
                         </DropdownMenuItem>
                         <DropdownMenuLinkItem render={<Link href={expenseHref(item.id)} />}>
-                          <WalletCards aria-hidden="true" />
+                          <Icons.Expenses aria-hidden="true" />
                           {t('addExpense')}
                         </DropdownMenuLinkItem>
                         <DropdownMenuItem
@@ -930,7 +925,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                             tripModeTasks.openCreate({ itineraryItemId: item.id, kind: 'item' })
                           }
                         >
-                          <ListChecks aria-hidden="true" />
+                          <Icons.Tasks aria-hidden="true" />
                           {tasksT('add')}
                         </DropdownMenuItem>
                         {upcoming ? (
@@ -1001,7 +996,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                                 />
                               }
                             >
-                              <ExternalLink aria-hidden="true" />
+                              <Icons.Directions aria-hidden="true" />
                               {t('directions')}
                             </DropdownMenuLinkItem>
                           </>
@@ -1037,7 +1032,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                     </span>
                     {item.notes || (item.tripPlace?.note && item.tripPlace.note !== item.notes) ? (
                       <span className="mt-1 flex items-start gap-1.5 text-text-subtle">
-                        <StickyNote aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                        <Icons.Notes aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
                         <span className="min-w-0 space-y-0.5">
                           {item.notes ? (
                             <span className="block line-clamp-2">{item.notes}</span>
@@ -1054,7 +1049,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                           className="relative z-10 inline-flex min-h-8 items-center gap-1.5 rounded-[var(--radius-sm)] outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
                           href={`/trips/${tripId}/reservations`}
                         >
-                          <ClipboardCheck
+                          <Icons.Reservations
                             aria-hidden="true"
                             className="size-3.5 shrink-0 text-brand"
                           />
@@ -1112,7 +1107,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                   isCurrent || !upcoming ? (
                     completed ? (
                       <Badge variant="success">
-                        <CheckCircle2 aria-hidden="true" />
+                        <Icons.Success aria-hidden="true" />
                         {t('statusCompleted')}
                       </Badge>
                     ) : (
@@ -1248,6 +1243,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
           <div className="overflow-y-auto px-5 pb-5">
             {scheduleError ? (
               <Alert className="mb-4" variant="destructive">
+                <Icons.Error aria-hidden="true" />
                 <AlertDescription>{scheduleError}</AlertDescription>
               </Alert>
             ) : null}

@@ -2,7 +2,7 @@
 
 import { dayActionLink } from '@/lib/plan-score/presentation';
 
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Compass, Eye } from 'lucide-react';
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -41,6 +41,7 @@ import { useTripResource } from '@/lib/query/use-trip-resource';
 import { resolveProviderPlaceName, resolveTripPlaceName } from '@/lib/trip-places/place-name';
 import { isTripModeAvailable } from '@/lib/trips/navigation';
 import { cn } from '@/lib/utils';
+import * as Icons from '@/lib/icons';
 
 type PreviewSelection = { date: string; time: string };
 
@@ -496,7 +497,7 @@ export function TripModeShell({
             </>
           }
           description={t('loadErrorDescription')}
-          icon={<Compass aria-hidden="true" />}
+          icon={<Icons.Error aria-hidden="true" />}
           kind="error"
           title={t('loadError')}
         />

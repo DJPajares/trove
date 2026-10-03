@@ -1,18 +1,6 @@
 'use client';
 
-import {
-  ArrowRight,
-  CalendarDays,
-  ChevronRight,
-  ClipboardCheck,
-  Clock3,
-  Compass,
-  ExternalLink,
-  ListChecks,
-  MapPin,
-  Route,
-  Sparkles,
-} from 'lucide-react';
+import { ArrowRight, CalendarDays, ChevronRight, Clock3, ExternalLink, MapPin } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
@@ -43,6 +31,7 @@ import { cn } from '@/lib/utils';
 import type { Reservation } from '@/lib/reservations/api';
 import { defaultTripModeTaskContext, nowTaskGroups } from '@/lib/tasks/trip-mode';
 import { resolveItineraryItemPlaceName, resolveTripPlaceName } from '@/lib/trip-places/place-name';
+import * as Icons from '@/lib/icons';
 
 function providerId(item: ItineraryItem | null) {
   return item?.tripPlace?.place.providerRefs.find((ref) => ref.provider === 'google')
@@ -172,7 +161,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
         }
         description={t('loadErrorDescription')}
         headingLevel={2}
-        icon={<Compass aria-hidden="true" />}
+        icon={<Icons.Error aria-hidden="true" />}
         kind="error"
         title={t('loadError')}
       />
@@ -518,7 +507,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
                   />
                 }
               >
-                <Route aria-hidden="true" data-icon="inline-start" />
+                <Icons.Directions aria-hidden="true" data-icon="inline-start" />
                 {t('directions')}
                 <ExternalLink aria-hidden="true" data-icon="inline-end" />
               </Button>
@@ -601,7 +590,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
                 className="flex min-h-14 items-center gap-3 rounded-[var(--radius-sm)] py-2.5 outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
                 href={`/trips/${tripId}/reservations`}
               >
-                <ClipboardCheck aria-hidden="true" className="size-5 shrink-0 text-brand" />
+                <Icons.Reservations aria-hidden="true" className="size-5 shrink-0 text-brand" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-foreground">
                     {relevantReservation.title}
@@ -640,7 +629,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
           }
           variant="outline"
         >
-          <ListChecks aria-hidden="true" data-icon="inline-start" />
+          <Icons.Tasks aria-hidden="true" data-icon="inline-start" />
           {tasksT('add')}
         </Button>
         {hasNext ? (
@@ -655,7 +644,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
         ) : null}
         {readyContext.day ? (
           <Button onClick={() => setMemoryOpen(true)} variant="outline">
-            <Sparkles aria-hidden="true" data-icon="inline-start" />
+            <Icons.Memories aria-hidden="true" data-icon="inline-start" />
             {memoryTranslations('quickAction')}
           </Button>
         ) : null}

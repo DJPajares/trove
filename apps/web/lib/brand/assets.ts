@@ -7,9 +7,11 @@ function assetUrl(path: string) {
 
 export const brandAssets = {
   apple: assetUrl('/icons/trove-180.png'),
+  badge: assetUrl('/icons/trove-badge-96.png'),
   favicon: assetUrl('/icon.svg'),
   faviconFallback: assetUrl('/favicon.ico'),
   launcher192: assetUrl('/icons/trove-192.png'),
   launcher512: assetUrl('/icons/trove-512.png'),
   maskable512: assetUrl('/icons/trove-maskable-512.png'),
+  og: assetUrl('/brand/trove-og.png'),
 } as const;

@@ -3,7 +3,6 @@
 import {
   ArrowDown,
   ArrowUp,
-  CalendarClock,
   Copy,
   Ellipsis,
   ExternalLink,
@@ -39,6 +38,7 @@ import type {
 } from '@/lib/itinerary/api';
 import type { DayTimelineEntry } from '@/lib/itinerary/day-sequence';
 import { formatItineraryTimeRange } from '@/lib/itinerary/item-timing';
+import * as Icons from '@/lib/icons';
 
 /**
  * A stop's name, and the whole row along with it.
@@ -277,7 +277,7 @@ export function ItineraryDayTimeline({
 
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger>
-                      <CalendarClock aria-hidden="true" />
+                      <Icons.Itinerary aria-hidden="true" />
                       {t('moveToDay')}
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent className="max-h-80 overflow-y-auto">
@@ -304,6 +304,7 @@ export function ItineraryDayTimeline({
                   {item.tripPlace && onPlacePriorityChange ? (
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger disabled={savingPriorityIds?.has(item.tripPlace.id)}>
+                        <Icons.MustGo aria-hidden="true" />
                         {placesT('priorityMenuLabel')}
                         <span className="ml-2 text-xs text-muted-foreground">
                           {placesT(`priority.${item.tripPlace.priority ?? 'none'}`)}

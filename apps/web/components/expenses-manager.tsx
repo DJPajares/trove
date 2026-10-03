@@ -1,6 +1,6 @@
 'use client';
 
-import { CircleAlert, Plus, WalletCards } from 'lucide-react';
+import { CircleAlert, Plus } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
@@ -38,6 +38,7 @@ import {
 import { placeLabel as resolvePlaceLabel } from '@/lib/expenses/labels';
 import { queryKeys } from '@/lib/query/keys';
 import { useTripResource } from '@/lib/query/use-trip-resource';
+import * as Icons from '@/lib/icons';
 
 export function ExpensesManager({
   quickAdd,
@@ -279,7 +280,7 @@ export function ExpensesManager({
           className="min-h-64 justify-center"
           description={t('emptyDescription')}
           headingLevel={2}
-          icon={<WalletCards aria-hidden="true" />}
+          icon={<Icons.Expenses aria-hidden="true" />}
           title={t('emptyTitle')}
         />
       ) : (

@@ -1,6 +1,6 @@
 'use client';
 
-import { CloudUpload, RotateCcw, TriangleAlert, WifiOff } from 'lucide-react';
+import { CloudUpload, RefreshCw, TriangleAlert, WifiOff } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -257,7 +257,7 @@ export function TripSyncStatus({ tripId }: Readonly<{ tripId: string }>) {
                           }
                           size="sm"
                         >
-                          <RotateCcw
+                          <RefreshCw
                             aria-hidden="true"
                             className={
                               busyId === mutation.id

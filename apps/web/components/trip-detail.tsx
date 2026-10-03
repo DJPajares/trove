@@ -5,24 +5,16 @@ import { dayActionLink } from '@/lib/plan-score/presentation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
-  CalendarClock,
   CalendarSync,
   ChevronRight,
   CircleAlert,
   CircleCheck,
   ClipboardCheck,
-  Compass,
   Ellipsis,
-  Info,
-  MapPinned,
-  Navigation,
   Pencil,
   RefreshCw,
   RotateCcw,
-  ReceiptText,
   Share2,
-  Sparkles,
-  WalletCards,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -95,25 +87,27 @@ import { useTripReadiness } from '@/lib/trips/use-trip-readiness';
 import { discardTripOfflineData } from '@/lib/offline/trip-preparation';
 import { queryKeys } from '@/lib/query/keys';
 import { removeTripQueries } from '@/lib/query/trip-invalidation';
+import * as Icons from '@/lib/icons';
+import { tripSectionIcons } from '@/lib/icons';
 
 /** The tools' icons. Which tools there are, and their order, is the navigation contract's. */
 const supportingIcons: Record<
   'expenses' | 'info' | 'reservations' | 'tasks',
   ComponentType<{ className?: string }>
 > = {
-  expenses: WalletCards,
-  info: Info,
-  reservations: ReceiptText,
-  tasks: ClipboardCheck,
+  expenses: tripSectionIcons.expenses,
+  info: tripSectionIcons.info,
+  reservations: tripSectionIcons.reservations,
+  tasks: tripSectionIcons.tasks,
 };
 
 const experienceIcons: Record<
   'itinerary' | 'memories' | 'mode',
   ComponentType<{ className?: string }>
 > = {
-  itinerary: CalendarClock,
-  memories: Sparkles,
-  mode: Compass,
+  itinerary: tripSectionIcons.itinerary,
+  memories: tripSectionIcons.memories,
+  mode: tripSectionIcons.mode,
 };
 
 function TripDetailPlanScore({ tripId }: Readonly<{ tripId: string }>) {
@@ -320,7 +314,7 @@ export function TripDetail({
             status === 'error' ? (
               <CircleAlert aria-hidden="true" />
             ) : (
-              <MapPinned aria-hidden="true" />
+              <Icons.Trips aria-hidden="true" />
             )
           }
           kind={status === 'error' ? 'error' : 'empty'}
@@ -653,7 +647,7 @@ export function TripDetail({
           value={t(`readinessState.${trip.planningReadiness}`)}
         />
         <OverviewFact
-          Icon={Navigation}
+          Icon={Icons.Place}
           label={t('startingLocation')}
           value={trip.startingLocation?.name ?? t('startingLocationUnavailable')}
         />

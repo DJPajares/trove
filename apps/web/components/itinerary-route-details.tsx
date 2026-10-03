@@ -211,7 +211,7 @@ export function ItineraryRouteSegmentRow({
           >
             <SelectValue>
               <span className="inline-flex items-center">
-                <TravelModeIcon mode={segment.mode} />
+                <TravelModeIcon className="size-4" mode={segment.mode} />
                 <span className="sr-only">{t(`mode.${segment.mode}`)}</span>
               </span>
             </SelectValue>
@@ -228,7 +228,7 @@ export function ItineraryRouteSegmentRow({
             {(['drive', 'transit', 'walk', 'flight'] as const).map((mode) => (
               <SelectItem key={mode} value={mode}>
                 <span className="inline-flex items-center gap-2">
-                  <TravelModeIcon mode={mode} />
+                  <TravelModeIcon className="size-4" mode={mode} />
                   {t(`mode.${mode}`)}
                 </span>
               </SelectItem>

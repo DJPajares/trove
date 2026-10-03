@@ -1,6 +1,6 @@
 'use client';
 
-import { CircleAlert, MapPinned, Plus } from 'lucide-react';
+import { CircleAlert, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
@@ -47,6 +47,7 @@ import {
   type TripPlaceDaySort,
 } from '@/lib/trip-places/signals';
 import { useTripPlaces } from '@/lib/trip-places/use-trip-places';
+import * as Icons from '@/lib/icons';
 
 type ItineraryPlacesDrawerProps = {
   /** The located stops (and base) of the day being planned, for "nearest to this day". */
@@ -180,6 +181,7 @@ export function ItineraryPlacesDrawer({
 
             {places.error && !removingPlace ? (
               <Alert role="alert" variant="destructive">
+                <Icons.Error aria-hidden="true" />
                 <AlertDescription>{t(places.error.key, places.error.values)}</AlertDescription>
               </Alert>
             ) : null}
@@ -192,7 +194,7 @@ export function ItineraryPlacesDrawer({
               <PageState
                 description={t('emptyDescription')}
                 headingLevel={2}
-                icon={<MapPinned aria-hidden="true" />}
+                icon={<Icons.Places aria-hidden="true" />}
                 kind="empty"
                 title={t('emptyTitle')}
               />

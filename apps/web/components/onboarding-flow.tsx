@@ -1,11 +1,12 @@
 'use client';
 
-import { Coins, MapPinned, Sparkles, UserRound } from 'lucide-react';
+import { UserRound } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 
+import { BrandMark } from '@/components/brand-logo';
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
 import { CountryCombobox } from '@/components/country-combobox';
@@ -15,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import * as Icons from '@/lib/icons';
 import {
   firstIncompleteStep,
   isProfileOnboarded,
@@ -28,8 +30,8 @@ type FormValues = {
 };
 
 const stepIcons: Record<OnboardingStep, typeof UserRound> = {
-  currency: Coins,
-  location: MapPinned,
+  currency: Icons.Currency,
+  location: Icons.Place,
   name: UserRound,
 };
 
@@ -138,13 +140,14 @@ export function OnboardingFlow() {
       <CardContent className="space-y-6">
         {stepIndex === 0 ? (
           <p className="text-sm leading-6 text-muted-foreground">
-            <Sparkles aria-hidden="true" className="mr-1.5 inline size-4 text-brand" />
+            <BrandMark className="mr-1.5 inline h-3.5 w-auto align-[-0.1em]" />
             {t('welcome')}
           </p>
         ) : null}
 
         {error ? (
           <Alert role="alert" variant="destructive">
+            <Icons.Error aria-hidden="true" />
             <AlertDescription className="text-destructive">{t('saveError')}</AlertDescription>
           </Alert>
         ) : null}

@@ -1,4 +1,4 @@
-import { CalendarClock, Compass, Eye, Sparkles } from 'lucide-react';
+import { Eye } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { ComponentType, ReactNode } from 'react';
@@ -11,6 +11,7 @@ import {
   type TripSection,
 } from '@/lib/trips/navigation';
 import { cn } from '@/lib/utils';
+import { tripSectionIcons } from '@/lib/icons';
 
 /**
  * Trip Mode wears a different face before departure than during the trip, so
@@ -22,9 +23,9 @@ const sectionIcons: Record<
     className?: string;
   }>
 > = {
-  itinerary: CalendarClock,
-  memories: Sparkles,
-  mode: Compass,
+  itinerary: tripSectionIcons.itinerary,
+  memories: tripSectionIcons.memories,
+  mode: tripSectionIcons.mode,
   preview: Eye,
 };
 

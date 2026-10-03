@@ -5,12 +5,9 @@ import {
   BedDouble,
   CalendarDays,
   CircleAlert,
-  Compass,
-  ExternalLink,
   Eye,
   LocateFixed,
   MapPin,
-  Navigation,
   Route,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -46,6 +43,7 @@ import {
 } from '@/lib/maps/itinerary-map';
 import { queryKeys } from '@/lib/query/keys';
 import { cn } from '@/lib/utils';
+import * as Icons from '@/lib/icons';
 
 type RouteState =
   | { data: null; status: 'error' | 'idle' | 'loading' }
@@ -135,7 +133,7 @@ export function TripModeMapView({
         actions={<Button onClick={() => void refresh()}>{t('tryAgain')}</Button>}
         description={t('loadErrorDescription')}
         headingLevel={2}
-        icon={<Compass aria-hidden="true" />}
+        icon={<Icons.Error aria-hidden="true" />}
         kind="error"
         title={t('loadError')}
       />
@@ -548,7 +546,7 @@ export function TripModeMapView({
                                 size="xs"
                                 variant="ghost"
                               >
-                                <ExternalLink aria-hidden="true" data-icon="inline-start" />
+                                <Icons.Directions aria-hidden="true" data-icon="inline-start" />
                                 {t('directions')}
                               </Button>
                             ) : null}
@@ -568,7 +566,7 @@ export function TripModeMapView({
           </section>
 
           <p className="flex items-start gap-2 text-xs leading-5 text-text-subtle">
-            <Navigation aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+            <Icons.Directions aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
             {t('directionsHandoff')}
           </p>
         </TripModeMapSheet>

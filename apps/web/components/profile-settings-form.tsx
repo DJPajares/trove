@@ -32,6 +32,7 @@ import {
   type SavedProfileSettings,
 } from '@/lib/profile/settings-form';
 import { cn } from '@/lib/utils';
+import * as Icons from '@/lib/icons';
 
 export function ProfileSettingsForm({ locale }: { locale: string }) {
   const t = useTranslations('profile');
@@ -164,12 +165,14 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
     <form className="space-y-6" onSubmit={handleSubmit}>
       {error ? (
         <Alert role="alert" variant="destructive">
+          <Icons.Error aria-hidden="true" />
           <AlertDescription className="text-destructive">{error}</AlertDescription>
         </Alert>
       ) : null}
 
       {appearanceSaveError ? (
         <Alert role="status" variant="destructive">
+          <Icons.Error aria-hidden="true" />
           <AlertDescription className="text-destructive">{t('appearanceUnsaved')}</AlertDescription>
         </Alert>
       ) : null}

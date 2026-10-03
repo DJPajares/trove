@@ -8,7 +8,6 @@ import {
   MapPin,
   Pencil,
   Plus,
-  ReceiptText,
   Trash2,
   Upload,
 } from 'lucide-react';
@@ -79,6 +78,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { useTripResource } from '@/lib/query/use-trip-resource';
 import { invalidateTripQueries, PLAN_SCORE_INPUT_QUERY_ROOTS } from '@/lib/query/trip-invalidation';
+import * as Icons from '@/lib/icons';
 
 type EditorState =
   | { mode: 'closed'; reservation: null }
@@ -541,7 +541,7 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
           className="min-h-64 justify-center"
           description={t('emptyDescription')}
           headingLevel={2}
-          icon={<ReceiptText aria-hidden="true" />}
+          icon={<Icons.Reservations aria-hidden="true" />}
           title={t('emptyTitle')}
         />
       ) : (
@@ -555,7 +555,7 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
                 {reservation.type === 'accommodation' ? (
                   <MapPin aria-hidden="true" />
                 ) : (
-                  <ReceiptText aria-hidden="true" />
+                  <Icons.Reservations aria-hidden="true" />
                 )}
               </ItemMedia>
               <ItemContent className="min-w-0 gap-1">

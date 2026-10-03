@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarPlus, Eye, MapPinned, Navigation, X } from 'lucide-react';
+import { CalendarPlus, Eye, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -22,6 +22,7 @@ import { retainWhileSuspended } from '@/lib/maps/map-retention';
 import { routeLineStyle } from '@/lib/maps/route-line-style';
 import { googleMapsCoordinatesHref } from '@/lib/saved/api';
 import { cn } from '@/lib/utils';
+import * as Icons from '@/lib/icons';
 
 type ItineraryPlanningMapProps = {
   ariaLabel?: string;
@@ -390,7 +391,7 @@ export function ItineraryPlanningMap({
         )}
         description={t('emptyDescription')}
         headingLevel={2}
-        icon={<MapPinned aria-hidden="true" />}
+        icon={<Icons.Places aria-hidden="true" />}
         title={t('emptyTitle')}
       />
     );
@@ -405,7 +406,7 @@ export function ItineraryPlanningMap({
         )}
         description={t('configurationDescription')}
         headingLevel={2}
-        icon={<MapPinned aria-hidden="true" />}
+        icon={<Icons.Places aria-hidden="true" />}
         kind="error"
         title={t('configurationTitle')}
       />
@@ -439,7 +440,7 @@ export function ItineraryPlanningMap({
           className="absolute inset-0 z-[1] justify-center rounded-none border-0 bg-muted/90 px-6 py-8 sm:px-8"
           description={t('unavailableDescription')}
           headingLevel={2}
-          icon={<MapPinned aria-hidden="true" />}
+          icon={<Icons.Places aria-hidden="true" />}
           kind="error"
           title={t('unavailableTitle')}
         />
@@ -496,7 +497,7 @@ export function ItineraryPlanningMap({
             ) : null}
             {onViewPlaceDetails ? (
               <Button onClick={() => onViewPlaceDetails(selectedPoint)} size="sm" variant="outline">
-                <MapPinned aria-hidden="true" data-icon="inline-start" />
+                <Icons.Place aria-hidden="true" data-icon="inline-start" />
                 {t('viewPlace')}
               </Button>
             ) : (
@@ -512,7 +513,7 @@ export function ItineraryPlanningMap({
                 size="sm"
                 variant="outline"
               >
-                <MapPinned aria-hidden="true" data-icon="inline-start" />
+                <Icons.Place aria-hidden="true" data-icon="inline-start" />
                 {t('viewPlace')}
               </Button>
             )}
@@ -528,7 +529,7 @@ export function ItineraryPlanningMap({
               size="sm"
               variant="outline"
             >
-              <Navigation aria-hidden="true" data-icon="inline-start" />
+              <Icons.Directions aria-hidden="true" data-icon="inline-start" />
               {t('directions')}
             </Button>
           </div>

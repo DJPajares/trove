@@ -1,6 +1,6 @@
 'use client';
 
-import { BellOff } from 'lucide-react';
+import { Bell, BellOff } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
@@ -52,7 +52,11 @@ export function TripNotificationControl({ tripId }: Readonly<{ tripId: string }>
     <section aria-labelledby="trip-notifications-heading" className="border-y border-border py-5">
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-start gap-3">
-          <BellOff aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand" />
+          {muted ? (
+            <BellOff aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand" />
+          ) : (
+            <Bell aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand" />
+          )}
           <div>
             <h3 className="text-base font-semibold" id="trip-notifications-heading">
               {t('title')}

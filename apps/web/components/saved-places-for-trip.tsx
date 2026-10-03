@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Bookmark, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 
@@ -11,6 +11,7 @@ import { fetchSavedPlaces } from '@/lib/saved/api';
 import { queryKeys } from '@/lib/query/keys';
 import { addTripPlace, type TripPlace } from '@/lib/trip-places/api';
 import { savedPlacesNearTrip } from '@/lib/trip-places/saved-near-trip';
+import * as Icons from '@/lib/icons';
 
 type Props = {
   onAdded: (tripPlace: TripPlace) => void;
@@ -74,7 +75,7 @@ export function SavedPlacesForTrip({ onAdded, tripId, tripPlaces }: Readonly<Pro
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="flex items-center gap-2 text-sm font-medium">
-                <Bookmark aria-hidden="true" className="size-4 text-muted-foreground" />
+                <Icons.Saved aria-hidden="true" className="size-4 text-muted-foreground" />
                 {t('title', { count: group.places.length, destination: group.destinationName })}
               </p>
               <div className="flex gap-2">

@@ -53,7 +53,11 @@ function Chip<Value extends string>({
       className={cn(chipVariants({ variant, className }))}
       {...props}
     >
-      {icon ? <span className="size-3 shrink-0 [&_svg]:size-3">{icon}</span> : null}
+      {icon ? (
+        <span className="size-3 shrink-0 [--icon-stroke:var(--icon-stroke-compact)] [&_svg]:size-3">
+          {icon}
+        </span>
+      ) : null}
       <span className="max-w-40 truncate">{children}</span>
       {count !== undefined ? <span className="tabular-nums opacity-60">{count}</span> : null}
     </TogglePrimitive>

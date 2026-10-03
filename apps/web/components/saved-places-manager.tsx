@@ -2,17 +2,13 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Bookmark,
   Check,
   CircleAlert,
   Ellipsis,
   FolderPlus,
-  MapPinned,
-  NotebookPen,
   Pencil,
   Plus,
   Search,
-  StickyNote,
   Trash2,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -97,6 +93,7 @@ import {
   updateCollectionMembershipState,
 } from '@/lib/saved/collection-membership';
 import { queryKeys } from '@/lib/query/keys';
+import * as Icons from '@/lib/icons';
 
 type CollectionEditor =
   { collection: null; mode: 'closed' | 'create' } | { collection: SavedCollection; mode: 'rename' };
@@ -600,7 +597,7 @@ export function SavedPlacesManager() {
           }
           description={t('emptyDescription')}
           headingLevel={2}
-          icon={<Bookmark aria-hidden="true" />}
+          icon={<Icons.Saved aria-hidden="true" />}
           kind="empty"
           title={t('emptyTitle')}
         />
@@ -697,7 +694,7 @@ export function SavedPlacesManager() {
                           className="size-14 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground sm:size-16"
                           variant="icon"
                         >
-                          <NotebookPen aria-hidden="true" className="size-5" />
+                          <Icons.CustomPlace aria-hidden="true" className="size-5" />
                         </ItemMedia>
                       ) : (
                         <ItemMedia
@@ -760,7 +757,7 @@ export function SavedPlacesManager() {
                         </div>
                         {savedPlace.note ? (
                           <p className="flex items-start gap-1.5 text-xs leading-5 text-text-subtle">
-                            <StickyNote aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                            <Icons.Notes aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
                             <span className="line-clamp-2">{savedPlace.note}</span>
                           </p>
                         ) : null}
@@ -869,7 +866,7 @@ export function SavedPlacesManager() {
                           className="size-10 rounded-[var(--radius-md)] bg-brand/10 text-brand"
                           variant="icon"
                         >
-                          <MapPinned aria-hidden="true" />
+                          <Icons.Places aria-hidden="true" />
                         </ItemMedia>
                         <ItemContent className="min-w-0">
                           <ItemTitle>{suggestion.name}</ItemTitle>

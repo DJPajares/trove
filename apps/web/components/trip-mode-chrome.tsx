@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, CalendarDays, Clock3, Map, MapPinned } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { usePathname } from 'next/navigation';
@@ -9,12 +9,13 @@ import { NavActiveIndicator } from '@/components/nav-active-indicator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { isNavigationPathActive } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
+import * as Icons from '@/lib/icons';
 
 export const tripModeViews = [
-  { icon: Clock3, key: 'now', path: '' },
-  { icon: CalendarDays, key: 'today', path: '/today' },
-  { icon: Map, key: 'map', path: '/map' },
-  { icon: MapPinned, key: 'trip', path: '/trip' },
+  { icon: Icons.Now, key: 'now', path: '' },
+  { icon: Icons.Itinerary, key: 'today', path: '/today' },
+  { icon: Icons.MapView, key: 'map', path: '/map' },
+  { icon: Icons.Trips, key: 'trip', path: '/trip' },
 ] as const;
 
 /**
@@ -65,7 +66,7 @@ export function TripModeTabBar({
                 className={cn(
                   'relative isolate flex min-h-[3.25rem] flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-2 pt-1.5 pb-2 text-[length:var(--text-metadata)] font-medium outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none lg:min-h-11 lg:flex-row lg:gap-1.5 lg:py-1.5',
                   active
-                    ? 'font-semibold text-brand lg:bg-secondary lg:font-medium lg:text-secondary-foreground'
+                    ? 'font-semibold text-brand [--icon-stroke:var(--icon-stroke-emphasis)] lg:bg-secondary lg:font-medium lg:text-secondary-foreground'
                     : 'text-muted-foreground hover:text-foreground lg:hover:bg-surface-hover',
                 )}
                 href={withPreviewHref(href)}

@@ -10,7 +10,7 @@ import { tripFacts, type TripFact } from '@/lib/trips/facts';
 import { cn } from '@/lib/utils';
 
 const chipVariants = cva(
-  'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[length:var(--text-metadata)] leading-5 font-medium whitespace-nowrap tabular-nums [&_svg]:size-3.5 [&_svg]:shrink-0',
+  'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[length:var(--text-metadata)] leading-5 font-medium whitespace-nowrap tabular-nums [--icon-stroke:var(--icon-stroke-compact)] [&_svg]:size-3.5 [&_svg]:shrink-0',
   {
     variants: {
       tone: {

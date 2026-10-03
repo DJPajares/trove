@@ -10,6 +10,7 @@ import {
 import type { PlaceLocationCandidatesService } from '../services/place-location-candidates.js';
 import {
   PLACE_PROVIDERS,
+  placePhotoId,
   type PlaceDetailsResult,
   type PlacesService,
   type PlacesUnavailableCode,
@@ -68,7 +69,7 @@ const providerPlaceResolutionSchema = z
       .strict()
       .optional(),
     provider: z.enum(PLACE_PROVIDERS),
-    purpose: z.literal('itinerary').optional(),
+    purpose: z.enum(['itinerary', 'saved']).optional(),
     sessionToken: sessionTokenSchema.optional(),
   })
   .strict();
@@ -154,6 +155,13 @@ function serializeRichDetails(result: PlaceDetailsResult) {
       attributions: place.attributions,
       internationalPhoneNumber: place.internationalPhoneNumber ?? null,
       openingHoursDescriptions: place.openingHoursDescriptions ?? [],
+      photoSlots: (place.photos ?? []).map((photo) => ({
+        id: placePhotoId(photo.name),
+        authorAttributions: photo.authorAttributions,
+        heightPx: photo.heightPx,
+        uri: photo.uri,
+        widthPx: photo.widthPx,
+      })),
       photos: (place.photos ?? []).flatMap((photo) =>
         photo.uri
           ? [
@@ -191,6 +199,50 @@ export function createPlacesControllers(
   placeDetailsService: PlacesService | null = placesService,
 ) {
   return {
+    async photo(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getAuthenticatedUserId(request, reply);
+      if (!userId) return;
+      const params = z
+        .object({
+          placeId: z.uuid(),
+          photoId: z.string().regex(/^[a-f0-9]{24}$/),
+        })
+        .safeParse(request.params);
+      const body = z
+        .object({
+          languageCode: languageCodeSchema.optional(),
+          evidenceFetchedAt: z.iso.datetime(),
+        })
+        .strict()
+        .safeParse(request.body);
+      if (!params.success || !body.success)
+        return reply.code(400).send({ code: 'invalid_place_photo' });
+      const place = await getPrismaClient().place.findFirst({
+        where: {
+          id: params.data.placeId,
+          OR: [
+            { ownerId: userId },
+            { savedPlaces: { some: { ownerId: userId } } },
+            { tripPlaces: { some: { trip: { ownerId: userId } } } },
+          ],
+        },
+        include: { providerRefs: true },
+      });
+      const ref = place?.providerRefs.find((entry) => entry.provider === 'GOOGLE');
+      if (!ref) return reply.code(404).send({ code: 'place_not_found' });
+      if (!placeDetailsService) return sendConfigurationMissing(reply);
+      const result = await placeDetailsService.getPhoto({
+        externalPlaceId: ref.externalPlaceId,
+        photoId: params.data.photoId,
+        ...body.data,
+      });
+      if (result.status === 'stale') return reply.code(409).send({ code: 'stale_place_photo' });
+      if (result.status === 'not_found')
+        return reply.code(404).send({ code: 'place_photo_not_found' });
+      if (result.status === 'unavailable')
+        return reply.code(503).send({ code: 'place_photo_unavailable' });
+      return reply.send(result);
+    },
     async richDetails(request: FastifyRequest, reply: FastifyReply) {
       const userId = getAuthenticatedUserId(request, reply);
       if (!userId) return;

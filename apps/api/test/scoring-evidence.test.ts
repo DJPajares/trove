@@ -236,7 +236,7 @@ test('rich evidence retains its original age and request locale while score fiel
   );
   expect(write.mock.calls[0][0].data.cachedEvidenceAt).toEqual(evidenceRow.cachedEvidenceAt);
   expect(write.mock.calls[0][0].where.OR).toContainEqual({
-    cachedEvidenceAt: { lte: evidenceRow.cachedEvidenceAt },
+    cachedEvidenceAt: { lt: evidenceRow.cachedEvidenceAt },
   });
 });
 

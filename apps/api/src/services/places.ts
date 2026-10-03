@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import type { ProviderCacheMissReason } from './provider-usage.js';
 import { providerTargetFingerprint } from './provider-usage.js';
@@ -65,12 +65,12 @@ export type PlaceDetailLevel = 'evidence' | 'location';
 
 export type PlaceDetailsRequest = {
   /**
-   * `itinerary` needs identity and coordinates in the same rich answer.
+   * `saved` and `itinerary` acquire the app's rich metadata together.
    * `details` is an opened Place details sheet: the only caller that resolves
    * photo media, so a cached answer acquired before photos were asked for is
    * re-acquired once rather than served without them.
    */
-  purpose?: 'details' | 'itinerary';
+  purpose?: 'details' | 'itinerary' | 'saved';
   signal?: AbortSignal;
   /** Internal attribution supplied by the cache when this becomes outbound. */
   cacheMissReason?: ProviderCacheMissReason;
@@ -117,6 +117,17 @@ export type PlacePhotoMediaRequest = {
 
 export type PlacePhotoMediaResult =
   { status: 'ok'; uri: string } | { status: 'not_found' } | { status: 'unavailable' };
+
+/** Public photo identity without exposing Google's resource name. */
+export function placePhotoId(name: string) {
+  return createHash('sha256').update(name).digest('hex').slice(0, 24);
+}
+
+export type PlacePhotoRequest = Omit<PlaceDetailsRequest, 'detail' | 'purpose'> & {
+  photoId: string;
+  evidenceFetchedAt: string;
+};
+export type PlacePhotoResult = PlacePhotoMediaResult | { status: 'stale' };
 
 export type ProviderPlaceDetails = {
   attributions: ProviderAttribution[];
@@ -209,6 +220,10 @@ export type ProviderPlaceSearchResult = ProviderPlaceIdentity & {
     | 'currentOpeningPeriods'
     | 'currentHoursValidFrom'
     | 'currentHoursValidThrough'
+    | 'photos'
+    | 'websiteUri'
+    | 'internationalPhoneNumber'
+    | 'priceLevel'
   >;
 };
 
@@ -361,10 +376,14 @@ export class PlacesService {
     }
   }
 
+  /** Photo resolution requires a bounded cached snapshot, supplied by CachedPlacesService. */
+  getPhoto(_request: PlacePhotoRequest): Promise<PlacePhotoResult> {
+    return Promise.resolve({ status: 'unavailable' });
+  }
+
   /**
-   * A photo the provider no longer has is told apart from one it could not
-   * serve right now: the first is dropped, the second is asked for again on
-   * the next opening.
+   * Preserve the provider's failure kind so callers can render a stable slot
+   * and leave retries to an explicit user action.
    */
   async resolvePhotoMedia(request: PlacePhotoMediaRequest): Promise<PlacePhotoMediaResult> {
     if (!this.provider.getPhotoMedia) return { status: 'unavailable' };

@@ -29,6 +29,11 @@ export function registerPlacesRoutes(app: FastifyInstance) {
     controllers.richDetails,
   );
   app.post(
+    '/places/:placeId/photos/:photoId',
+    { config: PROVIDER_SEARCH_RATE_LIMIT, preHandler: requireAuthenticatedUser },
+    controllers.photo,
+  );
+  app.post(
     '/places/search',
     { config: PROVIDER_SEARCH_RATE_LIMIT, preHandler: requireAuthenticatedUser },
     controllers.search,

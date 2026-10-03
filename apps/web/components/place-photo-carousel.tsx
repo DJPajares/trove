@@ -11,7 +11,7 @@ import { carouselIndex, photographicDescription } from '@/lib/media/editorial-ca
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { resolvePlaceMediaSource, type PlaceMediaSource } from '@/lib/media/trip-media';
 import type { TrovePlaceCategory } from '@/lib/place-categories';
-import type { PlaceProviderPhoto } from '@/lib/saved/api';
+import type { PlaceProviderPhoto, PlaceProviderPhotoSlot } from '@/lib/saved/api';
 import { cn } from '@/lib/utils';
 
 export type PlacePhotoMetadata = {
@@ -31,11 +31,16 @@ type PlacePhotoCarouselProps = {
   /** Google's photos have not been answered for yet; editorial would only be swapped out. */
   pending?: boolean;
   providerPhotos?: PlaceProviderPhoto[];
+  providerPhotoSlots?: PlaceProviderPhotoSlot[];
+  onRequestPhoto?: (id: string) => void;
+  photoRequests?: Record<string, 'loading' | 'failed'>;
+  evidenceFetchedAt?: string;
 };
 
 type Slide = PlacePhotoMetadata & {
-  /** Set for a Google photo, so one that fails to load can be dropped. */
+  /** Set for a Google photo, so an unreachable image can fall back in the same slot. */
   googleUri: string | null;
+  photoId: string | null;
   key: string;
   source: PlaceMediaSource;
 };
@@ -63,63 +68,92 @@ export function PlacePhotoCarousel({
   onPhotoChange,
   pending = false,
   providerPhotos = NO_PROVIDER_PHOTOS,
+  providerPhotoSlots,
+  onRequestPhoto,
+  photoRequests,
+  evidenceFetchedAt,
 }: Readonly<PlacePhotoCarouselProps>) {
   const t = useTranslations('placeDetail');
   const trackRef = useRef<HTMLDivElement>(null);
+  const scrollTarget = useRef<number | null>(null);
   const [failedUris, setFailedUris] = useState<ReadonlySet<string>>(() => new Set());
 
   const google = useMemo(
-    () => providerPhotos.filter((photo) => !failedUris.has(photo.uri)),
-    [providerPhotos, failedUris],
+    () =>
+      providerPhotoSlots ?? providerPhotos.map((photo, index) => ({ ...photo, id: String(index) })),
+    [providerPhotoSlots, providerPhotos],
   );
-  const generic = !google.length && editorialImages[0]?.matchKind === 'generic';
+  const generic = editorialImages[0]?.matchKind === 'generic';
   const slides: Slide[] = useMemo(
     () =>
       google.length
-        ? google.map((photo) => ({
-            credits: photo.authorAttributions,
-            description: null,
-            illustrative: false,
-            googleUri: photo.uri,
-            key: `google:${photo.uri}`,
-            source: { kind: 'provider-photo', url: photo.uri },
-          }))
+        ? google.map((photo) => {
+            const usable = Boolean(photo.uri && !failedUris.has(photo.uri));
+            const fallback = editorialImages[0];
+            return {
+              credits: usable ? photo.authorAttributions : [],
+              description: !usable && fallback ? photographicDescription(fallback) : null,
+              illustrative: !usable && Boolean(generic),
+              googleUri: photo.uri,
+              photoId: photo.id,
+              key: `google:${photo.id}`,
+              source: usable
+                ? { kind: 'provider-photo' as const, url: photo.uri! }
+                : resolvePlaceMediaSource({ editorial: fallback }),
+            };
+          })
         : (generic ? editorialImages.slice(0, 1) : editorialImages).map((image) => ({
             credits: [],
             description: photographicDescription(image),
             illustrative: image.matchKind === 'generic',
             googleUri: null,
+            photoId: null,
             key: `editorial:${image.externalPhotoId}`,
             source: resolvePlaceMediaSource({ editorial: image }),
           })),
-    [google, generic, editorialImages],
+    [google, failedUris, generic, editorialImages],
   );
   const total = slides.length;
   // A different set of slides starts again from its first; the track is keyed
   // the same way, so its scroll position starts over with it.
-  const setKey = google.length ? 'google' : 'editorial';
+  const setKey = google.length ? `google:${evidenceFetchedAt ?? ''}` : 'editorial';
   const [active, setActive] = useState({ index: 0, setKey });
   const activeIndex = active.setKey === setKey ? carouselIndex(active.index, total) : 0;
   const activeSlide = slides[activeIndex];
+  const unresolved = activeSlide?.photoId !== null && activeSlide?.googleUri === null;
+  const requestState = activeSlide?.photoId
+    ? photoRequests?.[`${evidenceFetchedAt}:${activeSlide.photoId}`]
+    : undefined;
+  // The details response already attempted the cover. An unresolved cover is
+  // a failure, not a reason to silently make a second media request.
+  const photoFailed = Boolean(
+    unresolved && (requestState === 'failed' || (activeIndex === 0 && requestState !== 'loading')),
+  );
+  const loadingPhoto = unresolved && !photoFailed;
   useEffect(() => {
-    onPhotoChange?.(pending ? null : (activeSlide ?? null));
-  }, [activeSlide, pending, onPhotoChange]);
+    onPhotoChange?.(pending || loadingPhoto ? null : (activeSlide ?? null));
+  }, [activeSlide, pending, loadingPhoto, onPhotoChange]);
 
   function goTo(index: number) {
     const nextIndex = carouselIndex(index, total);
+    scrollTarget.current = nextIndex;
+    requestSlide(nextIndex);
     trackRef.current?.scrollTo({ left: (trackRef.current?.clientWidth ?? 0) * nextIndex });
     setActive({ index: nextIndex, setKey });
   }
 
-  function dropUnreachable(uri: string) {
+  function requestSlide(index: number) {
+    const slide = slides[index];
+    if (slide?.photoId && slide.googleUri === null) onRequestPhoto?.(slide.photoId);
+  }
+
+  function markUnreachable(uri: string) {
     setFailedUris((current) => new Set(current).add(uri));
-    setActive({ index: 0, setKey });
-    trackRef.current?.scrollTo({ left: 0 });
   }
 
   return (
     <figure
-      aria-busy={pending || undefined}
+      aria-busy={pending || loadingPhoto || undefined}
       aria-label={t(google.length ? 'googlePhotoCarousel' : 'photoCarousel', { name })}
       className={cn(
         'relative isolate h-[clamp(13rem,34dvh,19rem)] w-full shrink-0 overflow-hidden bg-surface-media md:h-[clamp(15rem,40dvh,22rem)]',
@@ -143,11 +177,23 @@ export function PlacePhotoCarousel({
             }
           }}
           onScroll={(event) => {
+            if (scrollTarget.current !== null) return;
             const track = event.currentTarget;
             const nextIndex = Math.round(track.scrollLeft / Math.max(track.clientWidth, 1));
             if (nextIndex !== activeIndex && nextIndex >= 0 && nextIndex < total) {
               setActive({ index: nextIndex, setKey });
             }
+          }}
+          onScrollEnd={(event) => {
+            const track = event.currentTarget;
+            const index = carouselIndex(
+              Math.round(track.scrollLeft / Math.max(track.clientWidth, 1)),
+              total,
+            );
+            const navigatedByControl = scrollTarget.current !== null;
+            scrollTarget.current = null;
+            setActive({ index, setKey });
+            if (!navigatedByControl) requestSlide(index);
           }}
           ref={trackRef}
           tabIndex={total > 1 ? 0 : -1}
@@ -162,25 +208,29 @@ export function PlacePhotoCarousel({
               variant="card"
             />
           ) : (
-            slides.map(({ googleUri, ...slide }, index) => (
+            slides.map(({ googleUri, photoId: _photoId, ...slide }, index) => (
               <div
                 aria-hidden={index !== activeIndex}
                 className="h-full w-full shrink-0 snap-center"
                 key={slide.key}
               >
-                <PlaceMedia
-                  alt={t(google.length ? 'googlePhotoAlt' : 'photoAlt', {
-                    current: index + 1,
-                    name,
-                    total,
-                  })}
-                  category={category}
-                  className="aspect-auto h-full w-full rounded-none"
-                  onUnreachable={googleUri ? () => dropUnreachable(googleUri) : undefined}
-                  sizes="(max-width: 768px) 100vw, 30rem"
-                  source={slide.source}
-                  variant="card"
-                />
+                {index === activeIndex && !loadingPhoto ? (
+                  <PlaceMedia
+                    alt={t(google.length ? 'googlePhotoAlt' : 'photoAlt', {
+                      current: index + 1,
+                      name,
+                      total,
+                    })}
+                    category={category}
+                    className="aspect-auto h-full w-full rounded-none"
+                    onUnreachable={googleUri ? () => markUnreachable(googleUri) : undefined}
+                    sizes="(max-width: 768px) 100vw, 30rem"
+                    source={slide.source}
+                    variant="card"
+                  />
+                ) : (
+                  <Skeleton className="h-full w-full rounded-none" />
+                )}
               </div>
             ))
           )}
@@ -191,6 +241,21 @@ export function PlacePhotoCarousel({
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 bg-linear-to-t from-neutral-950/82 via-neutral-950/18 to-neutral-950/30"
       />
+
+      {photoFailed && activeSlide?.photoId ? (
+        <div className="absolute inset-x-6 top-6 z-10 flex items-center justify-between gap-3 rounded-lg bg-neutral-950/75 px-3 py-2 text-sm text-media-fallback-foreground">
+          <p role="status">{t('photoUnavailable')}</p>
+          <Button
+            className={overlayControl}
+            onClick={() => requestSlide(activeIndex)}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            {t('retryPhoto')}
+          </Button>
+        </div>
+      ) : null}
 
       {heading ? (
         <div

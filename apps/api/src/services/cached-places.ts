@@ -1,12 +1,12 @@
 import {
   readCachedPlaceEvidence,
   storePlaceEvidence,
+  storePlacePhotoUri,
   PLACE_EVIDENCE_TTL_MS,
 } from './place-evidence-cache.js';
 import { singleFlight } from './single-flight.js';
 import { getPrismaClient } from '@trove/db';
 
-import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
 import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
 import { PLACE_PHOTO_MAX_WIDTH_PX } from './google-places.js';
 import { categorizePlaceTypes } from './place-categories.js';
@@ -26,6 +26,9 @@ import {
   type PlaceDetailsRequest,
   type PlaceDetailsResult,
   type PlacePhoto,
+  placePhotoId,
+  type PlacePhotoRequest,
+  type PlacePhotoResult,
   type PlacesProvider,
   type ProviderPlaceDetails,
 } from './places.js';
@@ -80,6 +83,15 @@ export async function rememberPlaceEvidence(
   const expiresAt = fetchedAt + EVIDENCE_MEMO_TTL_MS;
   // Reusing or re-seeding an older answer must never slide its lifetime.
   if ((evidenceMemo.get(key)?.expiresAt ?? -Infinity) > expiresAt) return;
+  const previous = evidenceMemo.get(key)?.result;
+  if (previous?.status === 'ok' && previous.freshness.fetchedAt === result.freshness.fetchedAt) {
+    const photos =
+      result.place.photos?.map((photo) => {
+        const known = previous.place.photos?.find((item) => item.name === photo.name);
+        return known?.uri ? { ...photo, uri: known.uri } : photo;
+      }) ?? previous.place.photos;
+    result = { ...result, place: { ...previous.place, ...result.place, photos } };
+  }
   if (evidenceMemo.size >= EVIDENCE_MEMO_LIMIT && !evidenceMemo.has(key)) {
     const oldest = evidenceMemo.keys().next();
     if (!oldest.done) evidenceMemo.delete(oldest.value);
@@ -102,17 +114,19 @@ function matchesLanguage(cached: string | null, requested: string | undefined) {
 
 /**
  * Whether a stored answer can serve what this caller came for. An itinerary
- * selection needs a name and coordinates; an opened sheet needs the answer to
- * have been asked for photos at all. Evidence from Text Search or from before
- * photos were requested lacks them, and is acquired once more rather than
- * served without them.
+ * explicit selection or opened sheet requires the app's complete rich field
+ * mask. Empty/null answers are complete; absent fields in legacy evidence are not.
  */
 function answersPurpose(request: PlaceDetailsRequest, result: PlaceDetailsResult) {
-  if (request.purpose === 'itinerary') {
-    return result.status === 'ok' && Boolean(result.place.name && result.place.location);
-  }
-  if (request.purpose === 'details') {
-    return result.status === 'ok' && result.place.photos !== undefined;
+  if (request.purpose) {
+    return (
+      result.status === 'ok' &&
+      (request.purpose === 'details' || Boolean(result.place.name && result.place.location)) &&
+      result.place.photos !== undefined &&
+      result.place.websiteUri !== undefined &&
+      result.place.internationalPhoneNumber !== undefined &&
+      result.place.priceLevel !== undefined
+    );
   }
   return true;
 }
@@ -165,13 +179,13 @@ export class CachedPlacesService extends PlacesService {
       const memoized = stored ? { kind: 'hit' as const, result: stored } : this.readMemo(request);
       if (memoized.kind === 'hit' && answersPurpose(request, memoized.result)) {
         this.recordHit(request, 'place-evidence');
-        return this.withResolvedPhotos(request, memoized.result);
+        return this.withCoverPhoto(request, memoized.result);
       }
       cacheMissReason = memoized.kind === 'hit' ? 'incomplete_snapshot' : memoized.reason;
     }
 
     const result = await this.acquire(request, cacheMissReason);
-    return this.withResolvedPhotos(request, result);
+    return this.withCoverPhoto(request, result);
   }
 
   private acquire(
@@ -205,53 +219,107 @@ export class CachedPlacesService extends PlacesService {
     });
   }
 
-  /**
-   * Turns an opened sheet's photos into images, once per photo per evidence
-   * snapshot. Each resolution is a billed request, so nothing but `details`
-   * reaches here, and what it buys is written back into the evidence it came
-   * with - keeping that evidence's original acquisition time, so a photo is
-   * never what keeps an answer alive past its 30 days.
-   *
-   * A photo Google no longer has is dropped. One it could not serve right now
-   * stays unresolved, is left out of this answer, and is asked for again on
-   * the next opening.
-   */
-  private async withResolvedPhotos(
+  /** Resolve only the cover on opening; the other slots require explicit selection. */
+  private async withCoverPhoto(
     request: PlaceDetailsRequest,
     result: PlaceDetailsResult,
   ): Promise<PlaceDetailsResult> {
     if (request.purpose !== 'details' || result.status !== 'ok') return result;
-    const photos = result.place.photos ?? [];
-    if (!photos.some((photo) => photo.uri === null)) return result;
-
-    return singleFlight(
-      `place-photos:${memoKey(request)}:${result.freshness.fetchedAt}`,
-      async () => {
-        let changed = false;
-        const resolved = await mapWithConcurrency(
-          photos,
-          PROVIDER_CONCURRENCY_LIMIT,
-          async (photo): Promise<PlacePhoto | null> => {
-            if (photo.uri !== null) return photo;
-            const media = await this.resolvePhotoMedia({
-              maxWidthPx: PLACE_PHOTO_MAX_WIDTH_PX,
-              name: photo.name,
-              signal: request.signal,
-            });
-            if (media.status === 'unavailable') return photo;
-            changed = true;
-            return media.status === 'ok' ? { ...photo, uri: media.uri } : null;
-          },
-        );
-        const next = {
-          ...result,
+    const cover = result.place.photos?.[0];
+    if (!cover || cover.uri !== null) return result;
+    const media = await this.getPhoto({
+      externalPlaceId: request.externalPlaceId,
+      languageCode: request.languageCode,
+      regionCode: request.regionCode,
+      signal: request.signal,
+      evidenceFetchedAt: result.freshness.fetchedAt,
+      photoId: placePhotoId(cover.name),
+    });
+    const latest = this.readMemo({ ...request, detail: 'evidence' });
+    const answer =
+      latest.kind === 'hit' &&
+      latest.result.status === 'ok' &&
+      latest.result.freshness.fetchedAt === result.freshness.fetchedAt
+        ? latest.result
+        : result;
+    return media.status === 'ok'
+      ? {
+          ...answer,
           place: {
-            ...result.place,
-            photos: resolved.filter((photo): photo is PlacePhoto => photo !== null),
+            ...answer.place,
+            photos: answer.place.photos?.map((photo) =>
+              photo.name === cover.name ? { ...photo, uri: media.uri } : photo,
+            ),
+          },
+        }
+      : answer;
+  }
+
+  override async getPhoto(request: PlacePhotoRequest): Promise<PlacePhotoResult> {
+    const key = memoKey({ ...request, detail: 'evidence' });
+    return singleFlight(
+      `place-photo:${key}:${request.evidenceFetchedAt}:${request.photoId}`,
+      async () => {
+        const stored = await readCachedPlaceEvidence(request, this.now());
+        const memo = this.readMemo({ ...request, detail: 'evidence' });
+        const result = stored ?? (memo.kind === 'hit' ? memo.result : null);
+        if (
+          !result ||
+          result.status !== 'ok' ||
+          result.freshness.fetchedAt !== request.evidenceFetchedAt
+        )
+          return { status: 'stale' };
+        const photo = result.place.photos?.find(
+          (item) => placePhotoId(item.name) === request.photoId,
+        );
+        if (!photo) return { status: 'not_found' };
+        const memoPhoto =
+          memo.kind === 'hit' &&
+          memo.result.status === 'ok' &&
+          memo.result.freshness.fetchedAt === result.freshness.fetchedAt
+            ? memo.result.place.photos?.find((item) => item.name === photo.name)
+            : null;
+        const knownUri = photo.uri ?? memoPhoto?.uri;
+        if (knownUri) return { status: 'ok', uri: knownUri };
+        const media = await this.resolvePhotoMedia({
+          maxWidthPx: PLACE_PHOTO_MAX_WIDTH_PX,
+          name: photo.name,
+          signal: request.signal,
+        });
+        if (media.status !== 'ok') return media;
+        const persisted = await storePlacePhotoUri(
+          request,
+          request.evidenceFetchedAt,
+          photo.name,
+          media.uri,
+        );
+        const current = evidenceMemo.get(key)?.result;
+        const base =
+          current?.status === 'ok' && current.freshness.fetchedAt === result.freshness.fetchedAt
+            ? current
+            : result;
+        // A narrow database update merges concurrent resolutions. On database
+        // failure the module memo still preserves every photo acquired here.
+        const next = {
+          ...base,
+          place: persisted ?? {
+            ...base.place,
+            photos: base.place.photos?.map((item): PlacePhoto =>
+              item.name === photo.name ? { ...item, uri: media.uri } : item,
+            ),
           },
         };
-        if (changed) await rememberPlaceEvidence(request, next);
-        return next;
+        if (
+          !current ||
+          current.status !== 'ok' ||
+          Date.parse(current.freshness.fetchedAt) <= Date.parse(next.freshness.fetchedAt)
+        ) {
+          evidenceMemo.set(key, {
+            expiresAt: Date.parse(next.freshness.fetchedAt) + EVIDENCE_MEMO_TTL_MS,
+            result: next,
+          });
+        }
+        return media;
       },
     );
   }

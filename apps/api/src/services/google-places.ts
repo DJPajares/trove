@@ -76,6 +76,10 @@ export const GOOGLE_TEXT_SEARCH_EVIDENCE_FIELD_MASK = [
   'places.currentOpeningHours',
   'places.rating',
   'places.userRatingCount',
+  'places.photos',
+  'places.websiteUri',
+  'places.internationalPhoneNumber',
+  'places.priceLevel',
 ].join(',');
 
 /**
@@ -620,6 +624,10 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
           ...(request.detail === 'evidence'
             ? {
                 evidence: {
+                  photos: mapPhotos(place.photos),
+                  websiteUri: webUrl(place.websiteUri, { allowHttp: true }),
+                  internationalPhoneNumber: cleanString(place.internationalPhoneNumber),
+                  priceLevel: GOOGLE_PRICE_LEVELS[place.priceLevel ?? ''] ?? null,
                   openingPeriods: mapOpeningPeriods(place.regularOpeningHours?.periods),
                   openingHoursDescriptions: place.regularOpeningHours?.weekdayDescriptions ?? [],
                   currentOpeningPeriods: mapOpeningPeriods(place.currentOpeningHours?.periods),

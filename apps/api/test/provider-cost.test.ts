@@ -50,7 +50,7 @@ import {
   explicitModelProposal,
   missingDetailsProposal,
 } from './fixtures/ai-planning.js';
-import { PlacesService } from '../src/services/places.js';
+import { PlacesService, placePhotoId } from '../src/services/places.js';
 import {
   getTripPlanScore,
   PLAN_SCORE_CACHE_TTL_MS,
@@ -96,6 +96,10 @@ type ProviderRefRow = {
   detailsFailedAt: Date | null;
   detailsFailureCode: string | null;
   externalPlaceId: string;
+  cachedEvidence?: ProviderPlaceDetails;
+  cachedEvidenceAt?: Date;
+  cachedEvidenceLanguage?: string;
+  cachedEvidenceRegion?: string | null;
 };
 
 type LegRow = {
@@ -157,6 +161,21 @@ function canonicalRecord(id: string) {
 
 function installStubPrisma() {
   (globalThis as { trovePrismaClient?: unknown }).trovePrismaClient = {
+    $queryRaw: async (query: { values: unknown[] }) => {
+      const [name, uri, externalId, acquiredAt, language, region] = query.values;
+      const row = providerRefs.get(String(externalId));
+      if (
+        !row?.cachedEvidence ||
+        row.cachedEvidenceAt?.getTime() !== (acquiredAt as Date).getTime() ||
+        row.cachedEvidenceLanguage !== language ||
+        (row.cachedEvidenceRegion ?? '') !== region
+      )
+        return [];
+      const photo = row.cachedEvidence.photos?.find((item) => item.name === name);
+      if (!photo) return [];
+      photo.uri = String(uri);
+      return [{ evidence: structuredClone(row.cachedEvidence) }];
+    },
     placeProviderRef: {
       findUnique: async (args: {
         where: { provider_externalPlaceId: { externalPlaceId: string }; placeId?: string };
@@ -192,6 +211,12 @@ function installStubPrisma() {
       }) => {
         const existing = providerRefs.get(args.where.externalPlaceId);
         if (!existing) return { count: 0 };
+        if (
+          args.data.cachedEvidenceAt instanceof Date &&
+          existing.cachedEvidenceAt &&
+          args.data.cachedEvidenceAt.getTime() <= existing.cachedEvidenceAt.getTime()
+        )
+          return { count: 0 };
         snapshotWrites += 1;
         Object.assign(existing, args.data);
         if (typeof args.data.cachedLatitude === 'number') {
@@ -374,7 +399,17 @@ function detailRequestsProvider() {
         provider: 'google',
         source: 'test',
       });
-      return detailsFor(request.externalPlaceId);
+      return {
+        ...detailsFor(request.externalPlaceId),
+        ...(request.detail === 'evidence'
+          ? {
+              photos: [],
+              websiteUri: null,
+              internationalPhoneNumber: null,
+              priceLevel: null,
+            }
+          : {}),
+      };
     },
     search: async () => [],
   };
@@ -437,7 +472,17 @@ function countingPlacesProvider() {
         provider: 'google',
         source: 'test',
       });
-      return detailsFor(request.externalPlaceId);
+      return {
+        ...detailsFor(request.externalPlaceId),
+        ...(request.detail === 'evidence'
+          ? {
+              photos: [],
+              websiteUri: null,
+              internationalPhoneNumber: null,
+              priceLevel: null,
+            }
+          : {}),
+      };
     },
     search: async () => [],
   };
@@ -477,6 +522,7 @@ function photoPlacesProvider(mediaAnswers: Record<string, string[]> = {}) {
                 uri: null,
                 widthPx: 1200,
               })),
+              internationalPhoneNumber: null,
               priceLevel: 1 as const,
               websiteUri: 'https://museum.example/',
             }
@@ -687,13 +733,9 @@ test('a location request asks for coordinates only, not the billable detail', as
   ]) {
     expect(GOOGLE_PLACE_EVIDENCE_FIELD_MASK.includes(field), field).toBe(true);
   }
-  // Identity, location and AI grounding never ask for photos (PRD 11.8), and
+  // Identity and location-only grounding never ask for photos, and
   // nothing reaches into Enterprise + Atmosphere.
-  for (const mask of [
-    GOOGLE_PLACE_LOCATION_FIELD_MASK,
-    GOOGLE_TEXT_SEARCH_FIELD_MASK,
-    GOOGLE_TEXT_SEARCH_EVIDENCE_FIELD_MASK,
-  ]) {
+  for (const mask of [GOOGLE_PLACE_LOCATION_FIELD_MASK, GOOGLE_TEXT_SEARCH_FIELD_MASK]) {
     expect(mask.includes('photos')).toBe(false);
   }
   for (const field of ['reviews', 'editorialSummary', 'generativeSummary']) {
@@ -1998,6 +2040,9 @@ test('six venues use one Places call each, with persisted identity and transient
     source: 'ai-planner',
     fetcher: async (input, init) => {
       const url = String(input);
+      if (url.includes('/photos/') && url.includes('/media')) {
+        return Response.json({ photoUri: 'https://lh3.googleusercontent.com/venue-cover' });
+      }
       if (url.endsWith('/v1/places:searchText')) {
         const query = (JSON.parse(String(init?.body)) as { textQuery: string }).textQuery;
         const place = proposal.places.find((candidate) => candidate.searchQuery === query)!;
@@ -2014,6 +2059,15 @@ test('six venues use one Places call each, with persisted identity and transient
               id: `google-${place.id}`,
               displayName: { text: place.name },
               rating: 4.5,
+              photos: [1, 2, 3].map((number) => ({
+                name: `places/google-${place.id.replaceAll(':', '_')}/photos/p${number}`,
+                authorAttributions: [{ displayName: `Author ${number}` }],
+                widthPx: 1200,
+                heightPx: 900,
+              })),
+              websiteUri: 'https://example.com/venue',
+              internationalPhoneNumber: '+81 3 1234 5678',
+              priceLevel: 'PRICE_LEVEL_MODERATE',
               utcOffsetMinutes: 540,
               regularOpeningHours: { periods: [{ open: {} }] },
               formattedAddress: 'Tokyo, Japan',
@@ -2168,6 +2222,27 @@ test('six venues use one Places call each, with persisted identity and transient
     drafts[0]!.evidence.filter((entry) => entry.kind === 'identity'),
   );
 
+  // Opening a generated venue reuses all metadata from Text Search across instances.
+  // Only its cover photo incurs a new provider call.
+  resetCachedPlacesMemo();
+  const venueDetails = await new CachedPlacesService(provider).getDetails({
+    externalPlaceId: 'google-candidate:venue0',
+    detail: 'evidence',
+    purpose: 'details',
+  });
+  expect(getProviderCallCounts()['google:getDetails'] ?? 0).toBe(0);
+  expect(getProviderCallCounts()['google:getPhotoMedia']).toBe(1);
+  expect(venueDetails.status === 'ok' && venueDetails.place).toMatchObject({
+    websiteUri: 'https://example.com/venue',
+    internationalPhoneNumber: '+81 3 1234 5678',
+    priceLevel: 2,
+    photos: [
+      { uri: 'https://lh3.googleusercontent.com/venue-cover' },
+      { uri: null },
+      { uri: null },
+    ],
+  });
+
   // Drop just one decision: mixed new/cached targets still cost one call each.
   groundingMappings.delete(
     [...groundingMappings].find(
@@ -2276,36 +2351,39 @@ test('concurrent route acquisition across instances buys one leg', async () => {
   expect(a).toEqual(b);
 });
 
-test('explicit itinerary resolution acquires one rich response and persists both caches for concurrent selections', async () => {
-  const now = new Date('2026-09-29T01:00:00Z');
-  seedProviderRef('ChIJmuseum');
-  const { provider, calls } = countingPlacesProvider();
-  const request = {
-    externalPlaceId: 'ChIJmuseum',
-    detail: 'evidence' as const,
-    purpose: 'itinerary' as const,
-  };
-  const [a, b] = await Promise.all([
-    new CachedPlacesService(provider, () => now).getDetails(request),
-    new CachedPlacesService(provider, () => now).getDetails(request),
-  ]);
-  expect(calls()).toBe(1);
-  expect(a).toEqual(b);
-  const row = providerRefs.get('ChIJmuseum') as any;
-  expect(row.cachedAt).toEqual(now);
-  expect(row.cachedEvidenceAt).toEqual(now);
-  expect(row.cachedLatitude.toNumber()).toBe(1.2966);
-  resetCachedPlacesMemo();
-  await new CachedPlacesService(provider, () => new Date(now.getTime() + DAY_MS)).getDetails(
-    request,
-  );
-  expect(calls()).toBe(1);
-  expect(row.cachedAt).toEqual(now);
-  expect(row.cachedEvidenceAt).toEqual(now);
-  expect(GOOGLE_PLACE_EVIDENCE_FIELD_MASK).toContain(GOOGLE_PLACE_LOCATION_FIELD_MASK);
-});
+test.each(['saved', 'itinerary'] as const)(
+  'explicit %s resolution acquires one rich response and persists both caches for concurrent selections',
+  async (purpose) => {
+    const now = new Date('2026-09-29T01:00:00Z');
+    seedProviderRef('ChIJmuseum');
+    const { provider, calls } = countingPlacesProvider();
+    const request = {
+      externalPlaceId: 'ChIJmuseum',
+      detail: 'evidence' as const,
+      purpose,
+    };
+    const [a, b] = await Promise.all([
+      new CachedPlacesService(provider, () => now).getDetails(request),
+      new CachedPlacesService(provider, () => now).getDetails(request),
+    ]);
+    expect(calls()).toBe(1);
+    expect(a).toEqual(b);
+    const row = providerRefs.get('ChIJmuseum') as any;
+    expect(row.cachedAt).toEqual(now);
+    expect(row.cachedEvidenceAt).toEqual(now);
+    expect(row.cachedLatitude.toNumber()).toBe(1.2966);
+    resetCachedPlacesMemo();
+    await new CachedPlacesService(provider, () => new Date(now.getTime() + DAY_MS)).getDetails(
+      request,
+    );
+    expect(calls()).toBe(1);
+    expect(row.cachedAt).toEqual(now);
+    expect(row.cachedEvidenceAt).toEqual(now);
+    expect(GOOGLE_PLACE_EVIDENCE_FIELD_MASK).toContain(GOOGLE_PLACE_LOCATION_FIELD_MASK);
+  },
+);
 
-test('an opened sheet buys at most three photo images once, and reopening buys nothing', async () => {
+test('an opened sheet buys only its cover; selected photos resolve once and survive reopening', async () => {
   const now = new Date('2026-10-01T00:00:00Z');
   seedProviderRef('ChIJmuseum');
   const { provider, details, media } = photoPlacesProvider();
@@ -2321,12 +2399,12 @@ test('an opened sheet buys at most three photo images once, and reopening buys n
     new CachedPlacesService(provider, () => now).getDetails(request),
   ]);
   expect(details()).toBe(1);
-  expect(media()).toBe(3);
+  expect(media()).toBe(1);
   expect(concurrent).toEqual(first);
   expect(first.status === 'ok' && first.place.photos?.map((photo) => photo.uri)).toStrictEqual([
     'https://lh3.googleusercontent.com/places/ChIJmuseum/photos/p1',
-    'https://lh3.googleusercontent.com/places/ChIJmuseum/photos/p2',
-    'https://lh3.googleusercontent.com/places/ChIJmuseum/photos/p3',
+    null,
+    null,
   ]);
 
   // Stored with the evidence, at the evidence's own acquisition time.
@@ -2335,6 +2413,27 @@ test('an opened sheet buys at most three photo images once, and reopening buys n
     cachedEvidenceAt: Date;
   };
   expect(row.cachedEvidenceAt).toEqual(now);
+  expect(row.cachedEvidence.photos?.filter((photo) => photo.uri !== null)).toHaveLength(1);
+  const photoRequest = { ...request, evidenceFetchedAt: now.toISOString() };
+  const service = new CachedPlacesService(provider, () => now);
+  await Promise.all([
+    service.getPhoto({ ...photoRequest, photoId: placePhotoId('places/ChIJmuseum/photos/p2') }),
+    new CachedPlacesService(provider, () => now).getPhoto({
+      ...photoRequest,
+      photoId: placePhotoId('places/ChIJmuseum/photos/p2'),
+    }),
+    service.getPhoto({ ...photoRequest, photoId: placePhotoId('places/ChIJmuseum/photos/p3') }),
+  ]);
+  expect(media()).toBe(3);
+  expect(row.cachedEvidence.photos?.every((photo) => photo.uri !== null)).toBe(true);
+  expect(row.cachedEvidenceAt).toEqual(now);
+  await rememberPlaceEvidence(request, {
+    ...(first as Extract<typeof first, { status: 'ok' }>),
+    place: {
+      ...row.cachedEvidence,
+      photos: row.cachedEvidence.photos?.map((photo) => ({ ...photo, uri: null })),
+    },
+  });
   expect(row.cachedEvidence.photos?.every((photo) => photo.uri !== null)).toBe(true);
 
   resetCachedPlacesMemo();
@@ -2346,7 +2445,7 @@ test('an opened sheet buys at most three photo images once, and reopening buys n
     fetchedAt: now.toISOString(),
     source: 'cache',
   });
-  expect(reopened.status === 'ok' && reopened.place).toEqual(first.status === 'ok' && first.place);
+  expect(reopened.status === 'ok' && reopened.place).toEqual(row.cachedEvidence);
   expect(row.cachedEvidenceAt).toEqual(now);
   expect(getProviderCallCounts()['google:getPhotoMedia']).toBe(3);
 });
@@ -2369,15 +2468,15 @@ test('only an opened sheet buys photo images; every other evidence reader buys n
   // The sheet reuses that answer and only buys the images.
   await new CachedPlacesService(provider, () => now).getDetails({ ...base, purpose: 'details' });
   expect(details()).toBe(1);
-  expect(media()).toBe(3);
+  expect(media()).toBe(1);
 });
 
-test('evidence stored before photos is acquired once more by an opened sheet, and by nothing else', async () => {
+test('legacy incomplete evidence enriches once on explicit selection, then the sheet reuses it', async () => {
   const now = new Date('2026-10-01T00:00:00Z');
   seedProviderRef('ChIJmuseum');
   const request = { externalPlaceId: 'ChIJmuseum', languageCode: 'en' };
   await rememberPlaceEvidence(request, {
-    freshness: { fetchedAt: now.toISOString(), source: 'live' },
+    freshness: { fetchedAt: new Date(now.getTime() - DAY_MS).toISOString(), source: 'live' },
     place: detailsFor('ChIJmuseum'),
     provider: 'google',
     status: 'ok',
@@ -2387,16 +2486,18 @@ test('evidence stored before photos is acquired once more by an opened sheet, an
   const service = () => new CachedPlacesService(provider, () => now);
 
   await service().getDetails({ ...request, detail: 'evidence' });
-  await service().getDetails({ ...request, detail: 'evidence', purpose: 'itinerary' });
   expect(details()).toBe(0);
+  await service().getDetails({ ...request, detail: 'evidence', purpose: 'itinerary' });
+  expect(details()).toBe(1);
+  expect(media()).toBe(0);
 
   await service().getDetails({ ...request, detail: 'evidence', purpose: 'details' });
   await service().getDetails({ ...request, detail: 'evidence', purpose: 'details' });
   expect(details()).toBe(1);
-  expect(media()).toBe(3);
+  expect(media()).toBe(1);
 });
 
-test('a photo Google no longer has is dropped; one it could not serve is asked for next opening', async () => {
+test('failed secondary photos do not trigger retries or adjacent requests on opening', async () => {
   const now = new Date('2026-10-01T00:00:00Z');
   seedProviderRef('ChIJmuseum');
   const { provider, media } = photoPlacesProvider({
@@ -2409,23 +2510,81 @@ test('a photo Google no longer has is dropped; one it could not serve is asked f
     languageCode: 'en',
     purpose: 'details' as const,
   };
-  const names = (result: Awaited<ReturnType<CachedPlacesService['getDetails']>>) =>
-    result.status === 'ok'
-      ? result.place.photos?.map((photo) => [photo.name.split('/').at(-1), Boolean(photo.uri)])
-      : null;
-
-  const first = await new CachedPlacesService(provider, () => now).getDetails(request);
+  const service = () => new CachedPlacesService(provider, () => now);
+  await service().getDetails(request);
+  expect(media()).toBe(1);
+  const photoRequest = { ...request, evidenceFetchedAt: now.toISOString() };
+  await expect(
+    service().getPhoto({ ...photoRequest, photoId: placePhotoId('places/ChIJmuseum/photos/p2') }),
+  ).resolves.toEqual({ status: 'not_found' });
+  await expect(
+    service().getPhoto({ ...photoRequest, photoId: placePhotoId('places/ChIJmuseum/photos/p3') }),
+  ).resolves.toEqual({ status: 'unavailable' });
   expect(media()).toBe(3);
-  expect(names(first)).toStrictEqual([
-    ['p1', true],
-    ['p3', false],
-  ]);
-
   resetCachedPlacesMemo();
-  const second = await new CachedPlacesService(provider, () => now).getDetails(request);
+  await service().getDetails(request);
+  expect(media()).toBe(3);
+  await expect(
+    service().getPhoto({ ...photoRequest, photoId: placePhotoId('places/ChIJmuseum/photos/p3') }),
+  ).resolves.toMatchObject({ status: 'ok' });
   expect(media()).toBe(4);
-  expect(names(second)).toStrictEqual([
-    ['p1', true],
-    ['p3', true],
-  ]);
+});
+
+test('photo write failures still reuse resolved URLs in the current API instance', async () => {
+  const now = new Date('2026-10-01T00:00:00Z');
+  seedProviderRef('ChIJmuseum');
+  const { provider, media } = photoPlacesProvider();
+  const prisma = (globalThis as { trovePrismaClient?: { $queryRaw: () => Promise<unknown> } })
+    .trovePrismaClient!;
+  const write = vi.spyOn(prisma, '$queryRaw').mockRejectedValue(new Error('Database unavailable'));
+  const request = {
+    externalPlaceId: 'ChIJmuseum',
+    languageCode: 'en',
+    detail: 'evidence' as const,
+    purpose: 'details' as const,
+  };
+  const service = () => new CachedPlacesService(provider, () => now);
+  try {
+    await service().getDetails(request);
+    const reopened = await service().getDetails(request);
+    expect(media()).toBe(1);
+    expect(reopened.status === 'ok' && reopened.place.photos?.[0]?.uri).not.toBeNull();
+    const selected = {
+      ...request,
+      evidenceFetchedAt: now.toISOString(),
+      photoId: placePhotoId('places/ChIJmuseum/photos/p2'),
+    };
+    await service().getPhoto(selected);
+    await service().getPhoto(selected);
+    expect(media()).toBe(2);
+  } finally {
+    write.mockRestore();
+  }
+});
+
+test('unknown, mismatched and expired photo references cost zero provider requests', async () => {
+  const now = new Date('2026-10-01T00:00:00Z');
+  seedProviderRef('ChIJmuseum');
+  const { provider, media, details } = photoPlacesProvider();
+  const service = new CachedPlacesService(provider, () => now);
+  const request = {
+    externalPlaceId: 'ChIJmuseum',
+    languageCode: 'en',
+    evidenceFetchedAt: now.toISOString(),
+  };
+  await service.getDetails({ ...request, detail: 'evidence', purpose: 'saved' });
+  expect(media()).toBe(0);
+  await expect(service.getPhoto({ ...request, photoId: '0'.repeat(24) })).resolves.toEqual({
+    status: 'not_found',
+  });
+  const valid = { ...request, photoId: placePhotoId('places/ChIJmuseum/photos/p2') };
+  await expect(
+    service.getPhoto({ ...valid, evidenceFetchedAt: new Date(now.getTime() - 1).toISOString() }),
+  ).resolves.toEqual({ status: 'stale' });
+  resetCachedPlacesMemo();
+  await expect(
+    new CachedPlacesService(provider, () => new Date(now.getTime() + 30 * DAY_MS)).getPhoto(valid),
+  ).resolves.toEqual({ status: 'stale' });
+  expect(details()).toBe(1);
+  expect(media()).toBe(0);
 });

@@ -20,7 +20,13 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { visitWeekdayIndex } from '@/lib/places/opening-hours';
-import { fetchRichPlaceDetails, googleMapsPlaceHref, type CanonicalPlace } from '@/lib/saved/api';
+import {
+  fetchRichPlaceDetails,
+  fetchPlacePhoto,
+  googleMapsPlaceHref,
+  type CanonicalPlace,
+  type RichPlaceDetails,
+} from '@/lib/saved/api';
 
 /** A row only the surface that opened this sheet can supply: a note, a priority, a collection. */
 export type PlaceDetailsRow = { label: string; value: string };
@@ -54,10 +60,10 @@ const EVIDENCE_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 /**
  * What Trove knows about one Place, opened from wherever that Place is listed.
  *
- * Opening provider-backed details acquires the rich response on demand through
- * the shared bounded cache: rating, hours, contact links and up to three Google
- * photos, all dated and kept for at most 30 days. List rows and decorative
- * images never acquire it.
+ * Provider-backed details reuse the shared rich metadata cache acquired on
+ * selection, or enrich incomplete evidence once on opening. Opening resolves
+ * only the cover photo; further photos require selection. All provider data
+ * retains its original acquisition time and 30-day maximum lifetime.
  *
  * The cover is fixed at the top and the details scroll beneath it. Google
  * photos carry their author's credit; editorial photography keeps its
@@ -82,10 +88,12 @@ export function PlaceDetailsSheet({
   const [photo, setPhoto] = useState<PlacePhotoMetadata | null>(null);
 
   const queryClient = useQueryClient();
+  const detailsKey = ['place-rich-details', place.id, locale, 'photos-v2'] as const;
+  const [photoRequests, setPhotoRequests] = useState<Record<string, 'loading' | 'failed'>>({});
   const richDetails = useQuery({
     // Versioned: this root is persisted, and an answer from before photos and
     // contact links were part of it must not be read back as a current one.
-    queryKey: ['place-rich-details', place.id, locale, 'photos-v1'],
+    queryKey: detailsKey,
     queryFn: () => fetchRichPlaceDetails(place.id, locale),
     enabled: place.kind === 'provider',
     retry: false,
@@ -102,6 +110,48 @@ export function PlaceDetailsSheet({
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
+
+  async function requestPhoto(photoId: string) {
+    const snapshot = richDetails.data;
+    const slot = snapshot?.place.photoSlots?.find((item) => item.id === photoId);
+    if (!snapshot || !slot || slot.uri !== null) return;
+    const fetchedAt = snapshot.freshness.fetchedAt;
+    const requestKey = `${fetchedAt}:${photoId}`;
+    setPhotoRequests((current) => ({ ...current, [requestKey]: 'loading' }));
+    try {
+      const result = await queryClient.fetchQuery({
+        queryKey: [...detailsKey, fetchedAt, photoId],
+        queryFn: () => fetchPlacePhoto(place.id, photoId, locale, fetchedAt),
+        staleTime: Math.max(0, Date.parse(fetchedAt) + EVIDENCE_LIFETIME_MS - Date.now()),
+        retry: false,
+      });
+      queryClient.setQueryData<RichPlaceDetails | null>(detailsKey, (current) => {
+        if (!current || current.freshness.fetchedAt !== fetchedAt) return current;
+        const slots = current.place.photoSlots?.map((photo) =>
+          photo.id === photoId ? { ...photo, uri: result.uri } : photo,
+        );
+        return {
+          ...current,
+          place: {
+            ...current.place,
+            photoSlots: slots,
+            photos: (slots ?? []).flatMap(({ uri, authorAttributions, widthPx, heightPx }) =>
+              uri ? [{ uri, authorAttributions, widthPx, heightPx }] : [],
+            ),
+          },
+        };
+      });
+      setPhotoRequests((current) => {
+        const next = { ...current };
+        delete next[requestKey];
+        return next;
+      });
+    } catch (error) {
+      setPhotoRequests((current) => ({ ...current, [requestKey]: 'failed' }));
+      // Refresh an expired/replaced snapshot only in response to this user action.
+      if ((error as { status?: number }).status === 409) void richDetails.refetch();
+    }
+  }
 
   // Opening a place is what stores its hours and rating, so the lists that show
   // them should now find them.
@@ -193,6 +243,10 @@ export function PlaceDetailsSheet({
           onPhotoChange={setPhoto}
           pending={loadingEvidence}
           providerPhotos={evidence?.photos}
+          providerPhotoSlots={evidence?.photoSlots}
+          onRequestPhoto={(id) => void requestPhoto(id)}
+          photoRequests={photoRequests}
+          evidenceFetchedAt={richDetails.data?.freshness.fetchedAt}
         />
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6">

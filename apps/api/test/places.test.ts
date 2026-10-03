@@ -11,8 +11,14 @@ import {
   GooglePlacesProvider,
 } from '../src/services/google-places.js';
 import { categorizePlaceTypes } from '../src/services/place-categories.js';
-import { PlaceProviderError, PlacesService, type PlacesProvider } from '../src/services/places.js';
+import {
+  PlaceProviderError,
+  PlacesService,
+  placePhotoId,
+  type PlacesProvider,
+} from '../src/services/places.js';
 import { storePlaceEvidence } from '../src/services/place-evidence-cache.js';
+import { requireAuthenticatedUser } from '../src/services/request-auth.js';
 
 test('maps provider types into the stable Trove taxonomy', () => {
   expect(categorizePlaceTypes(['point_of_interest', 'museum'])).toBe('things_to_do');
@@ -139,8 +145,19 @@ test('enriched Text Search returns scoring evidence and distinguishes missing fi
       currentHoursValidThrough: '2026-10-03',
     },
   });
-  expect(GOOGLE_TEXT_SEARCH_EVIDENCE_FIELD_MASK).toContain('places.currentOpeningHours');
+  for (const field of [
+    'currentOpeningHours',
+    'photos',
+    'websiteUri',
+    'internationalPhoneNumber',
+    'priceLevel',
+  ])
+    expect(GOOGLE_TEXT_SEARCH_EVIDENCE_FIELD_MASK).toContain(`places.${field}`);
   expect(results[1]?.evidence).toEqual({
+    photos: [],
+    websiteUri: null,
+    internationalPhoneNumber: null,
+    priceLevel: null,
     rating: null,
     currentOpeningPeriods: [],
     currentHoursValidFrom: null,
@@ -149,7 +166,7 @@ test('enriched Text Search returns scoring evidence and distinguishes missing fi
     userRatingCount: null,
     openingHoursDescriptions: [],
   });
-  for (const field of ['*', 'photos', 'reviews', 'websiteUri'])
+  for (const field of ['*', 'reviews', 'editorialSummary'])
     expect(GOOGLE_TEXT_SEARCH_EVIDENCE_FIELD_MASK).not.toContain(field);
 });
 
@@ -767,6 +784,93 @@ test('opened rich details go through their own service, never the search one', a
     await app.inject({ url: '/places/12345678-1234-4234-8234-123456789012/details' });
     expect(detailsDetails).toHaveBeenCalledTimes(1);
     expect(searchDetails).not.toHaveBeenCalled();
+  } finally {
+    await app.close();
+    vi.unstubAllGlobals();
+  }
+});
+
+test('per-photo endpoint validates input and ownership before resolving an image', async () => {
+  const placeId = '12345678-1234-4234-8234-123456789012';
+  const photoId = placePhotoId('places/museum/photos/p2');
+  const evidenceFetchedAt = '2026-10-01T00:00:00.000Z';
+  let owned = true;
+  const findFirst = vi.fn(async () =>
+    owned ? { providerRefs: [{ provider: 'GOOGLE', externalPlaceId: 'museum' }] } : null,
+  );
+  vi.stubGlobal('trovePrismaClient', { place: { findFirst } });
+  const service = new PlacesService({
+    name: 'google',
+    search: async () => [],
+    getDetails: async () => {
+      throw new Error('Details must never be called');
+    },
+  });
+  const getPhoto = vi
+    .spyOn(service, 'getPhoto')
+    .mockResolvedValue({ status: 'ok', uri: 'https://lh3.googleusercontent.com/photo2' });
+  const app = Fastify();
+  app.decorateRequest('authUserId', undefined);
+  app.post(
+    '/places/:placeId/photos/:photoId',
+    {
+      preHandler: async (request, reply) => {
+        if (request.headers.authorization) request.authUserId = 'owner';
+        else return requireAuthenticatedUser(request, reply);
+      },
+    },
+    createPlacesControllers(null, undefined, null, service).photo,
+  );
+  const request = {
+    method: 'POST' as const,
+    url: `/places/${placeId}/photos/${photoId}`,
+    payload: { languageCode: 'en', evidenceFetchedAt },
+  };
+  try {
+    expect((await app.inject(request)).statusCode).toBe(401);
+    expect(
+      (
+        await app.inject({
+          ...request,
+          headers: { authorization: 'test' },
+          payload: { ...request.payload, name: 'arbitrary-google-photo' },
+        })
+      ).statusCode,
+    ).toBe(400);
+    owned = false;
+    expect((await app.inject({ ...request, headers: { authorization: 'test' } })).statusCode).toBe(
+      404,
+    );
+    expect(getPhoto).not.toHaveBeenCalled();
+    owned = true;
+    const response = await app.inject({ ...request, headers: { authorization: 'test' } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      status: 'ok',
+      uri: 'https://lh3.googleusercontent.com/photo2',
+    });
+    expect(findFirst).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: {
+          id: placeId,
+          OR: [
+            { ownerId: 'owner' },
+            { savedPlaces: { some: { ownerId: 'owner' } } },
+            { tripPlaces: { some: { trip: { ownerId: 'owner' } } } },
+          ],
+        },
+      }),
+    );
+    expect(getPhoto).toHaveBeenCalledWith({
+      externalPlaceId: 'museum',
+      photoId,
+      languageCode: 'en',
+      evidenceFetchedAt,
+    });
+    getPhoto.mockResolvedValueOnce({ status: 'stale' });
+    expect((await app.inject({ ...request, headers: { authorization: 'test' } })).statusCode).toBe(
+      409,
+    );
   } finally {
     await app.close();
     vi.unstubAllGlobals();

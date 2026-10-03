@@ -1,14 +1,14 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ExternalLink, Globe, MapPin, Phone, Star, XIcon } from 'lucide-react';
+import { ExternalLink, Globe, MapPin, Phone, Star, XIcon } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
 import { PlacePhotoCarousel, type PlacePhotoMetadata } from '@/components/place-photo-carousel';
+import { PlaceOpeningHours } from '@/components/place-opening-hours';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Sheet,
   SheetClose,
@@ -21,7 +21,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { visitWeekdayIndex } from '@/lib/places/opening-hours';
 import { fetchRichPlaceDetails, googleMapsPlaceHref, type CanonicalPlace } from '@/lib/saved/api';
-import { cn } from '@/lib/utils';
 
 /** A row only the surface that opened this sheet can supply: a note, a priority, a collection. */
 export type PlaceDetailsRow = { label: string; value: string };
@@ -137,7 +136,6 @@ export function PlaceDetailsSheet({
   const priceLevel = evidence?.priceLevel ?? null;
   const hours = evidence?.openingHoursDescriptions ?? [];
   const highlightedIndex = visitWeekdayIndex(visitDate, evidence?.utcOffsetMinutes);
-  const highlightedHours = highlightedIndex === null ? null : (hours[highlightedIndex] ?? null);
   const plannedVisit =
     visitDate && highlightedIndex !== null
       ? t('plannedVisit', {
@@ -268,42 +266,11 @@ export function PlaceDetailsSheet({
           {loadingEvidence ? (
             <Skeleton className="mx-6 mt-5 h-14 rounded-[var(--radius-lg)]" />
           ) : hours.length ? (
-            <Collapsible className="mx-6 mt-5 rounded-[var(--radius-lg)] border border-border-subtle">
-              <CollapsibleTrigger className="group flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
-                <span className="grid gap-0.5">
-                  <span className="text-xs font-normal text-muted-foreground group-data-[panel-open]:text-sm group-data-[panel-open]:font-medium group-data-[panel-open]:text-foreground">
-                    {t('regularHours')}
-                  </span>
-                  <span className="text-sm text-foreground group-data-[panel-open]:hidden">
-                    {highlightedHours ?? t('showWeek')}
-                  </span>
-                </span>
-                <ChevronDown
-                  aria-hidden="true"
-                  className="transition-transform duration-[var(--motion-standard)] group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
-                />
-              </CollapsibleTrigger>
-              <CollapsiblePanel>
-                <ul className="grid gap-0.5 px-1 pb-3 text-sm">
-                  {hours.map((line, index) => (
-                    <li
-                      aria-current={index === highlightedIndex ? 'date' : undefined}
-                      className={cn(
-                        'mx-1 rounded-[var(--radius-sm)] px-2 py-1.5 text-muted-foreground',
-                        index === highlightedIndex &&
-                          'bg-secondary font-medium text-secondary-foreground',
-                      )}
-                      key={line}
-                    >
-                      {line}
-                      {index === highlightedIndex && plannedVisit ? (
-                        <span className="mt-0.5 block text-xs font-normal">{plannedVisit}</span>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              </CollapsiblePanel>
-            </Collapsible>
+            <PlaceOpeningHours
+              highlightedIndex={highlightedIndex}
+              hours={hours}
+              plannedVisit={plannedVisit}
+            />
           ) : null}
 
           {rows.length || hasPhotoMetadata ? (

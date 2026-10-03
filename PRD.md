@@ -1348,7 +1348,7 @@ Trip Mode eligibility is date-derived for the selected owned trip using the life
 
 Global navigation must remain reachable while Trip Mode provides its own Now / Today / Map / Trip navigation, under the terms in Section 4.5.
 
-Trip Mode is read standing up, one-handed, outdoors, often while walking. Its chrome is therefore held to what a traveller cannot supply themselves: the way out, the trip's name as a quiet anchor, and the local time. A trip's cover photograph, its country and its date range belong to the surfaces that introduce a trip, not to the one that runs it — on a phone they cost most of the first screen, and the answer to "what do I need right now" must not begin below the fold.
+Trip Mode is read standing up, one-handed, outdoors, often while walking. Its header contains only a visible Exit and the trip's name as a quiet anchor. On live and Preview screens, at every viewport, center the name on the horizontal screen midpoint with equal space reserved for Exit and the menu FAB; long names truncate without overlapping either control. The header must not show a time, location/country, Preview badge, or their loading placeholders. Preview remains clearly identified by its day/time controls below the header. Loading and loaded headers retain the same height and title position. A trip's cover photograph, its country and its date range belong to the surfaces that introduce a trip, not to the one that runs it — on a phone they cost most of the first screen, and the answer to "what do I need right now" must not begin below the fold.
 
 ## 20.1 Views
 

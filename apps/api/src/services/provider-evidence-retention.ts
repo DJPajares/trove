@@ -3,6 +3,7 @@ import { PLACE_CACHE_TTL_MS } from './cached-places.js';
 import { PLACE_DETAILS_FAILURE_TTL_MS } from './place-details-failures.js';
 import { PLACE_EVIDENCE_TTL_MS } from './place-evidence-cache.js';
 import { TRAVEL_LEG_CACHE_TTL_MS } from './route-evidence-cache.js';
+import { WEATHER_CACHE_TTL_MS } from '@trove/types';
 
 /** Grounding decisions are reused for as long as the place snapshot they point at. */
 export const GROUNDING_CACHE_TTL_MS = PLACE_CACHE_TTL_MS;
@@ -71,6 +72,9 @@ export async function cleanupProviderEvidence(now = new Date()) {
   const weather = await prisma.weatherForecastSnapshot.deleteMany({
     where: { fetchedAt: { lte: before(WEATHER_SNAPSHOT_RETENTION_MS) } },
   });
+  const weatherContext = await prisma.weatherContextSnapshot.deleteMany({
+    where: { fetchedAt: { lte: before(WEATHER_CACHE_TTL_MS) } },
+  });
 
   return {
     clearedFailureMarkers: failures.count,
@@ -79,5 +83,6 @@ export async function cleanupProviderEvidence(now = new Date()) {
     deletedGroundingDecisions: grounding.count,
     deletedTravelLegs: legs.count,
     deletedWeatherSnapshots: weather.count,
+    deletedWeatherContextSnapshots: weatherContext.count,
   };
 }

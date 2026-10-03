@@ -133,6 +133,7 @@ beforeEach(() => {
       deleteMany: vi.fn(async () => ({ count: 0 })),
       findUnique: vi.fn(async () => forecast),
     },
+    weatherContextSnapshot: { deleteMany: vi.fn(async () => ({ count: 0 })) },
   });
 });
 afterEach(() => {

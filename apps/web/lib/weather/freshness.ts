@@ -1,9 +1,10 @@
 import { localDateInTimeZone, localPreviewInstant } from '@/lib/itinerary/api';
 import { selectHourlyReadings } from '@/lib/weather/hourly';
+import { WEATHER_CACHE_TTL_MS } from '@trove/types';
 
 import type { LocationWeather, TripWeather, TripWeatherDay } from '@/lib/weather/api';
 
-export const WEATHER_CURRENT_MAX_AGE_MS = 3 * 60 * 60 * 1_000;
+export const WEATHER_CURRENT_MAX_AGE_MS = WEATHER_CACHE_TTL_MS;
 
 function localMinute(at: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat('en-CA', {

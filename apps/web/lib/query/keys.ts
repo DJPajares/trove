@@ -143,13 +143,19 @@ export const queryKeys = {
    * Rounded because a position that moves twenty metres is the same weather,
    * and an unrounded key would buy a fresh forecast for every GPS jitter.
    */
-  locationWeather: (latitude: number, longitude: number, temperatureUnit: TemperatureUnit) =>
+  locationWeather: (
+    latitude: number | null,
+    longitude: number | null,
+    temperatureUnit: TemperatureUnit,
+    timeZone: string | null,
+  ) =>
     [
       'location-weather',
-      latitude.toFixed(2),
-      longitude.toFixed(2),
+      latitude?.toFixed(2) ?? null,
+      longitude?.toFixed(2) ?? null,
       WEATHER_CONTRACT_VERSION,
       temperatureUnit,
+      timeZone,
     ] as const,
 } as const;
 
@@ -179,6 +185,7 @@ export const PERSISTED_QUERY_ROOTS = new Set([
   'currency',
   'editorial-images',
   'itinerary-day-routes',
+  'location-weather',
   // A place's opened details stay readable offline, within their own 30-day life.
   'place-rich-details',
   'profile',

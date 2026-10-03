@@ -123,7 +123,8 @@ export type ProviderCacheEvent = ProviderEventBase & {
     | 'place-grounding'
     | 'reverse-geocode'
     | 'route'
-    | 'weather-forecast';
+    | 'weather-forecast'
+    | 'weather-context';
   failureCode?: 'NOT_FOUND' | 'UNUSABLE_LOCATION';
   includePolyline?: boolean;
   kind: 'cache_hit' | 'negative_cache_hit';

@@ -14,6 +14,7 @@ vi.mock('@/hooks/use-traveller-position', () => ({
 vi.mock('@/hooks/use-now-tick', () => ({ useNowTick: () => mocks.now }));
 const { useTripWeather } = await import('../lib/weather/use-trip-weather.ts');
 const { useHereWeather } = await import('../lib/home/use-here-weather.ts');
+const { weatherQueryStaleTime } = await import('../lib/weather/cache-policy.ts');
 
 const daily = {
   date: '2026-10-03',
@@ -55,7 +56,7 @@ afterEach(() => vi.clearAllMocks());
 test('a failed trip refresh retains forecasts and its error state without changing request policy', () => {
   expect(useTripWeather('trip')).toMatchObject({ status: 'error', data });
   expect(mocks.query.mock.calls[0]![0]).toMatchObject({
-    staleTime: 10_800_000,
+    staleTime: weatherQueryStaleTime,
     refetchOnMount: true,
     refetchOnReconnect: true,
   });
@@ -65,7 +66,7 @@ test('Home retains a dated forecast after failed refresh without claiming a time
     status: 'ready',
     weather: { kind: 'forecast', forecast: daily, city: null, fetchedAt: data.fetchedAt },
   });
-  expect(mocks.query.mock.calls[0]![0]).toMatchObject({ staleTime: 86_400_000 });
+  expect(mocks.query.mock.calls[0]![0]).toMatchObject({ staleTime: weatherQueryStaleTime });
 });
 test('an error without evidence leaves trip unavailable and Home date-only', () => {
   mocks.query.mockReturnValue({
@@ -76,4 +77,22 @@ test('an error without evidence leaves trip unavailable and Home date-only', () 
   });
   expect(useTripWeather('trip')).toMatchObject({ data: null, status: 'error' });
   expect(useHereWeather()).toMatchObject({ weather: null, status: 'error' });
+});
+
+test('cached responses retain their original three-hour expiry in browser scheduling', () => {
+  const fetchedAt = '2026-10-03T00:00:00Z';
+  expect(
+    weatherQueryStaleTime({
+      state: { data: { fetchedAt }, dataUpdatedAt: Date.parse('2026-10-03T01:00:00Z') },
+    }),
+  ).toBe(7_200_000);
+  expect(
+    weatherQueryStaleTime({
+      state: { data: { fetchedAt }, dataUpdatedAt: Date.parse('2026-10-03T03:00:00Z') },
+    }),
+  ).toBe(0);
+  expect(
+    weatherQueryStaleTime({ state: { data: { fetchedAt: 'invalid' }, dataUpdatedAt: Date.now() } }),
+  ).toBe(0);
+  expect(weatherQueryStaleTime({ state: { data: undefined, dataUpdatedAt: 0 } })).toBe(10_800_000);
 });

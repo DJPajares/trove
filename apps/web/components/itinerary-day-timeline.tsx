@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type {
   ItineraryItem,
+  ItineraryPriority,
   ItineraryRouteSegment,
   PlaceHoursStatus,
   RouteTravelMode,
@@ -80,6 +81,8 @@ export type ItineraryDayTimelineProps = {
   onDeleteItem: (item: ItineraryItem) => void;
   onDuplicateItem: (item: ItineraryItem) => void;
   onEditItem: (item: ItineraryItem) => void;
+  onPlacePriorityChange?: (item: ItineraryItem, priority: ItineraryPriority | null) => void;
+  savingPriorityIds?: ReadonlySet<string>;
   onModeChange: (segment: ItineraryRouteSegment, mode: RouteTravelMode) => void;
   onMoveItem: (item: ItineraryItem, dayId: string | null, position: number) => void;
   onSelectBase: (tripPlaceId: string) => void;
@@ -120,6 +123,8 @@ export function ItineraryDayTimeline({
   onDeleteItem,
   onDuplicateItem,
   onEditItem,
+  onPlacePriorityChange,
+  savingPriorityIds,
   onModeChange,
   onMoveItem,
   onSelectBase,
@@ -136,6 +141,7 @@ export function ItineraryDayTimeline({
   unscheduledLabel,
 }: Readonly<ItineraryDayTimelineProps>) {
   const t = useTranslations('itinerary');
+  const placesT = useTranslations('tripPlaces');
   let itemIndex = -1;
 
   return (
@@ -294,6 +300,38 @@ export function ItineraryDayTimeline({
                   </DropdownMenuSub>
 
                   <DropdownMenuSeparator />
+
+                  {item.tripPlace && onPlacePriorityChange ? (
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger disabled={savingPriorityIds?.has(item.tripPlace.id)}>
+                        {placesT('priorityMenuLabel')}
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {placesT(`priority.${item.tripPlace.priority ?? 'none'}`)}
+                        </span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        <DropdownMenuRadioGroup
+                          value={item.tripPlace.priority ?? 'none'}
+                          onValueChange={(value) =>
+                            onPlacePriorityChange(
+                              item,
+                              value === 'none' ? null : (value as ItineraryPriority),
+                            )
+                          }
+                        >
+                          {(['none', 'must_go', 'interested', 'maybe'] as const).map((priority) => (
+                            <DropdownMenuRadioItem
+                              key={priority}
+                              value={priority}
+                              disabled={savingPriorityIds?.has(item.tripPlace!.id)}
+                            >
+                              {placesT(`priority.${priority}`)}
+                            </DropdownMenuRadioItem>
+                          ))}
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  ) : null}
 
                   <DropdownMenuItem onClick={() => onEditItem(item)}>
                     <Pencil aria-hidden="true" />

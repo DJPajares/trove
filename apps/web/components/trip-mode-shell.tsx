@@ -283,6 +283,7 @@ function TripModePreviewPlanScore({
 
   return (
     <PlanScorePanel
+      tripPlacesHref={`/trips/${tripId}/places`}
       className={className}
       completeness={previewDayScore?.completeness ?? null}
       confidence={previewDayScore?.confidence ?? null}

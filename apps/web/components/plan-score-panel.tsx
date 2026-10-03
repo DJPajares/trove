@@ -52,6 +52,7 @@ type Props = Readonly<{
   status: PlanScoreLoadStatus;
   surface?: PanelSurface;
   title: string;
+  tripPlacesHref?: string;
 }>;
 /** Colour follows the verdict band; the words always carry the meaning. */
 const WARNING_BANDS = new Set<ScoreBand>(['refine', 'attention']);
@@ -129,7 +130,13 @@ export function SuggestedAction({
     </Button>
   );
 }
-function ScoreMeterRows({ rows }: { rows: BreakdownRow[] }) {
+function ScoreMeterRows({
+  rows,
+  tripPlacesHref,
+}: {
+  rows: BreakdownRow[];
+  tripPlacesHref?: string;
+}) {
   const t = useTranslations('planScore');
   return (
     <div className="space-y-3">
@@ -142,7 +149,7 @@ function ScoreMeterRows({ rows }: { rows: BreakdownRow[] }) {
             <span className="text-xs text-muted-foreground">{t('notApplicableRow')}</span>
           </div>
         ) : (
-          <ScoreMeterRow key={row.id} {...row} />
+          <ScoreMeterRow key={row.id} {...row} tripPlacesHref={tripPlacesHref} />
         ),
       )}
     </div>
@@ -153,7 +160,8 @@ function ScoreMeterRow({
   score,
   estimated,
   reasonKey,
-}: Extract<BreakdownRow, { score: number }>) {
+  tripPlacesHref,
+}: Extract<BreakdownRow, { score: number }> & { tripPlacesHref?: string }) {
   const t = useTranslations('planScore');
   const locale = useLocale();
   return (
@@ -188,6 +196,14 @@ function ScoreMeterRow({
         </Meter.Track>
       </Meter.Root>
       {reasonKey ? <p className="text-xs text-muted-foreground">{t(reasonKey)}</p> : null}
+      {reasonKey === 'rowReasons.DESTINATION_UTILIZATION' && tripPlacesHref ? (
+        <Link
+          className={cn(buttonVariants({ size: 'sm', variant: 'link' }), 'h-auto px-0 text-sm')}
+          href={tripPlacesHref}
+        >
+          {t('openTripPlaces')}
+        </Link>
+      ) : null}
     </div>
   );
 }
@@ -228,6 +244,7 @@ export function PlanScorePanel({
   status,
   surface = 'card',
   title,
+  tripPlacesHref,
 }: Props) {
   const t = useTranslations('planScore');
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -360,7 +377,7 @@ export function PlanScorePanel({
             <div className="mt-4 space-y-5 border-t border-border-subtle pt-4">
               {rows.length ? (
                 <div className="space-y-2">
-                  <ScoreMeterRows rows={rows} />
+                  <ScoreMeterRows rows={rows} tripPlacesHref={tripPlacesHref} />
                   {rows.some((row) => 'estimated' in row && row.estimated) ? (
                     <p className="text-xs leading-relaxed text-muted-foreground">
                       {t('estimatedNote')}

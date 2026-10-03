@@ -161,7 +161,8 @@ import {
   resolveProviderPlace,
   searchProviderPlaces,
 } from '@/lib/saved/api';
-import { addTripPlace, type TripPlace } from '@/lib/trip-places/api';
+import { addTripPlace, type TripPlace, type TripPlacePriority } from '@/lib/trip-places/api';
+import { setTripPlacePriority } from '@/lib/trip-places/priority';
 import { sortTripPlaces } from '@/lib/trip-places/sort';
 import { cn } from '@/lib/utils';
 import { tripWeatherForDate, useTripWeather } from '@/lib/weather/use-trip-weather';
@@ -282,6 +283,7 @@ function ItineraryScoreAndInsights({
       <div aria-hidden="true" className="h-px" ref={planScoreSentinelRef} />
       {!planScoreHidden && planScoreVisible ? (
         <PlanScorePanel
+          tripPlacesHref={`/trips/${tripId}/places`}
           completeness={planScoreDay?.completeness ?? null}
           confidence={planScoreDay?.confidence ?? null}
           disabled={planScoreDay?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')}
@@ -371,6 +373,8 @@ export function ItineraryManager({
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const status = itineraryQuery.isPending ? 'loading' : itineraryQuery.error ? 'error' : 'idle';
   const [error, setError] = useState<string | null>(null);
+  const prioritySaves = useRef(new Set<string>());
+  const [savingPriorityIds, setSavingPriorityIds] = useState<ReadonlySet<string>>(() => new Set());
   const [editor, setEditor] = useState<EditorState>({ dayId: null, item: null, mode: 'closed' });
   const [createDay, setCreateDay] = useState<ItineraryDay | null>(null);
   const [form, setForm] = useState<FormState>(() => createFormState(null));
@@ -1655,6 +1659,22 @@ export function ItineraryManager({
     if (day) setSelectedDayId(day.id);
   }
 
+  async function changePlacePriority(item: ItineraryItem, priority: TripPlacePriority | null) {
+    const place = item.tripPlace;
+    if (!place || prioritySaves.current.has(place.id) || place.priority === priority) return;
+    prioritySaves.current.add(place.id);
+    setSavingPriorityIds(new Set(prioritySaves.current));
+    setError(null);
+    try {
+      await setTripPlacePriority(queryClient, tripId, place.id, priority);
+    } catch {
+      setError(tripPlacesTranslations('actionError'));
+    } finally {
+      prioritySaves.current.delete(place.id);
+      setSavingPriorityIds(new Set(prioritySaves.current));
+    }
+  }
+
   function openDay(dayId: string) {
     setSelectedDayId(dayId);
     writeDayToUrl(dayId, 'push');
@@ -2212,6 +2232,10 @@ export function ItineraryManager({
                         onDeleteItem={setItemToDelete}
                         onDuplicateItem={(item) => void handleDuplicate(item)}
                         onEditItem={openEdit}
+                        onPlacePriorityChange={(item, priority) =>
+                          void changePlacePriority(item, priority)
+                        }
+                        savingPriorityIds={savingPriorityIds}
                         onModeChange={(segment, mode) => void handleRouteModeChange(segment, mode)}
                         onMoveItem={(item, dayId, position) =>
                           void handleOrganize(item, dayId, position)

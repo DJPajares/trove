@@ -995,6 +995,8 @@ Optional priority:
 - Interested
 - Maybe
 
+Trip Place priority is editable from Trip places and a linked itinerary stop’s menu. It applies to every occurrence of that place within this trip. The Plan Score prompt to mark Must Go places explains the priority menu and links to Trip places for an existing trip.
+
 Sources:
 
 - Global Saved Places,

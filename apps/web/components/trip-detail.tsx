@@ -131,6 +131,7 @@ function TripDetailPlanScore({ tripId }: Readonly<{ tripId: string }>) {
 
   return (
     <PlanScorePanel
+      tripPlacesHref={`/trips/${tripId}/places`}
       completeness={planScore.data?.completeness ?? null}
       confidence={planScore.data?.confidence ?? null}
       disabled={planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')}

@@ -19,6 +19,7 @@ import {
   type TripPlacesResponse,
   updateTripPlace,
 } from './api';
+import { setTripPlacePriority } from './priority';
 
 export type TripPlacesStatus = 'error' | 'idle' | 'loading';
 
@@ -78,14 +79,12 @@ export function useTripPlaces(tripId: string) {
     async (tripPlace: TripPlace, priority: TripPlacePriority | null) => {
       setError(null);
       try {
-        replace((await updateTripPlace(tripId, tripPlace.id, { priority })).tripPlace);
-        // Must Go is a scoring input, and nothing else clears the score.
-        await invalidateTripQueries(queryClient, tripId, PLAN_SCORE_INPUT_QUERY_ROOTS);
+        await setTripPlacePriority(queryClient, tripId, tripPlace.id, priority);
       } catch {
         setError({ key: 'actionError' });
       }
     },
-    [queryClient, replace, tripId],
+    [queryClient, tripId],
   );
 
   /**

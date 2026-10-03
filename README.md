@@ -379,6 +379,20 @@ Use `--category`, `--place-id`, `--cursor`, or `--all` to narrow or resume a run
 Production reconciliation loads `.env.production`; active refresh also requires
 `PEXELS_API_KEY` in that file.
 
+## Brand Assets
+
+The collected-journey symbol and outlined Trove wordmark share their geometry in
+`apps/web/lib/brand/identity.ts`; fixed export colours come from the existing
+`--brand-mark-*` CSS tokens. Run `pnpm --filter @trove/web brand:generate` after
+changing either. Commit the generated SVGs, PNGs, favicon, and asset revision;
+`brand:check` verifies them without writing and runs before every web build.
+
+Review the variants and actual-size favicon samples in
+[`docs/brand/collected-journey.svg`](docs/brand/collected-journey.svg).
+Asset URLs carry a content revision so installed browsers can detect new icons.
+Native launcher and splash updates follow the platform's update flow; the web
+app does not force an identity change or clear offline data.
+
 ## PWA and Offline Support
 
 Trove registers its Serwist service worker in production builds. Offline preparation caches trip pages and stores the full itinerary and supporting snapshots locally, with durable queues for supported travel edits and Memory uploads. Selected reservation documents are downloaded explicitly. The service worker also handles shell/media caching; live maps and fresh provider data are not guaranteed offline. See `PRD.md` section 28 for the required read/write and readiness contract.

@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { getTranslations } from 'next-intl/server';
 
+import { brandAssets } from '@/lib/brand/assets';
 import { statusBarColor, themeColor, type ThemeName } from '@/lib/theme-color';
 
 /**
@@ -45,19 +46,19 @@ export async function buildManifest(theme: ThemeName): Promise<MetadataRoute.Man
       {
         purpose: 'any',
         sizes: '192x192',
-        src: '/icons/trove-192.png',
+        src: brandAssets.launcher192,
         type: 'image/png',
       },
       {
         purpose: 'any',
         sizes: '512x512',
-        src: '/icons/trove-512.png',
+        src: brandAssets.launcher512,
         type: 'image/png',
       },
       {
         purpose: 'maskable',
         sizes: '512x512',
-        src: '/icons/trove-maskable-512.png',
+        src: brandAssets.maskable512,
         type: 'image/png',
       },
     ],

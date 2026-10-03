@@ -4,10 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "next build",
+    "brand:check": "node scripts/generate-brand-assets.mjs --check",
+    "brand:generate": "node scripts/generate-brand-assets.mjs",
+    "build": "pnpm brand:check && next build",
     "dev": "next dev --port 3000",
     "dev:reset": "rm -rf .next/dev/cache/turbopack",
-    "lint": "../../node_modules/.bin/oxlint --deny-warnings app components i18n lib test",
+    "lint": "../../node_modules/.bin/oxlint --deny-warnings app components i18n lib scripts test",
     "start": "next start --port 3000",
     "test": "../../node_modules/.bin/tsc --noEmit --project tsconfig.test.json && ../../node_modules/.bin/vitest run",
     "typecheck": "../../node_modules/.bin/tsc --noEmit --project tsconfig.json"
@@ -47,6 +49,7 @@
     "esbuild": "0.28.2",
     "postcss": "^8.5.28",
     "serwist": "9.5.12",
+    "sharp": "0.35.4",
     "tailwindcss": "^4.3.3"
   }
 }

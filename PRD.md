@@ -258,19 +258,19 @@ Trip Mode must not become the only way out. Wherever it replaces the global bar 
 
 Inside a trip, the trip itself is the subject: its name is the page heading on every trip screen, with its dates and lifecycle beneath.
 
-Trip navigation offers the core experiences in a stable order, subject to the itinerary-planner restriction below:
+Trove offers three core trip experiences:
 
 - **Itinerary** — Plan it.
 - **Trip Mode** — Live it.
 - **Memories** — Remember it.
 
-**Strict requirement:** Trip Mode and Preview must never appear as tabs on the itinerary planner, regardless of trip lifecycle or viewport. Its trip tab row contains only **Itinerary** and **Memories**, in that order. Trip Mode and Preview remain reachable through existing contextual CTAs, including Home and trip overview entry points. This restriction does not change their opening behavior or other trip pages' navigation.
+**Strict requirement:** Trip Mode and Preview must never appear in the shared trip page tab row, including Itinerary, Memories, Expenses, Tasks, Reservations, Trip Info, and Places, regardless of trip lifecycle, viewport, or entry point. That tab row contains only **Itinerary** and **Memories**, in that order. Trip Mode and Preview remain reachable through contextual CTAs, including Home and trip overview entry points. Their opening behavior and their own **Now / Today / Map / Trip** navigation remain unchanged.
 
 Supporting tools — Tasks, Reservations, Expenses, Trip Info — are reachable in one interaction from a single grouped menu on every trip screen, and must never occupy the primary navigation.
 
 The trip's Places collection is not a destination in that menu. The itinerary opens it directly, as Section 16.1 describes, so listing it again would be a second door to the same room. Wherever a trip is summarised outside its own screens — the Trips library, for example — the same rule holds: the three experiences are offered as themselves, and the tools listed are only the four above.
 
-Trip lifecycle changes emphasis only. All three core experiences remain reachable at every stage, but availability does not require each experience to appear in every tab row. The itinerary-planner restriction above applies at every stage; other trip pages retain their stable navigation.
+Trip lifecycle changes emphasis only. All three core experiences remain reachable at every stage through contextual entry points. The shared trip page tab row always contains only Itinerary and Memories; lifecycle-aware CTAs retain the emphasis below.
 
 - **Planning:** Itinerary leads. Trip Mode is offered as Preview, opening at the first day.
 - **Active:** Trip Mode leads.

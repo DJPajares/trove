@@ -1,7 +1,7 @@
 import { getPrismaClient, Prisma } from '@trove/db';
 import { z } from 'zod';
 import { normalizePlaceLanguageCode } from './place-language.js';
-import type { PlaceDetailsRequest, PlaceDetailsResult } from './places.js';
+import type { PlaceDetailsRequest, PlaceDetailsResult, ProviderPlaceDetails } from './places.js';
 
 /** Accepted bounded retention policy. Acquiring or reusing evidence never extends its age. */
 export const PLACE_EVIDENCE_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
@@ -119,7 +119,8 @@ export async function storePlaceEvidence(
       where: {
         provider: 'GOOGLE',
         externalPlaceId: request.externalPlaceId,
-        OR: [{ cachedEvidenceAt: null }, { cachedEvidenceAt: { lte: fetchedAt } }],
+        // Re-seeding the same acquisition must not erase subsequently resolved photos.
+        OR: [{ cachedEvidenceAt: null }, { cachedEvidenceAt: { lt: fetchedAt } }],
       },
       data: {
         cachedEvidence: parsed.data as Prisma.InputJsonValue,
@@ -130,5 +131,37 @@ export async function storePlaceEvidence(
     });
   } catch {
     /* Evidence persistence must never fail ordinary planning. */
+  }
+}
+
+/** Update one photo in place, preserving concurrent URLs and the snapshot's original age. */
+export async function storePlacePhotoUri(
+  request: Omit<PlaceDetailsRequest, 'detail'>,
+  fetchedAt: string,
+  photoName: string,
+  uri: string,
+): Promise<ProviderPlaceDetails | null> {
+  try {
+    const rows = await getPrismaClient().$queryRaw<Array<{ evidence: unknown }>>(Prisma.sql`
+      UPDATE trove.place_provider_refs
+      SET cached_evidence = jsonb_set(cached_evidence, (
+        SELECT ARRAY['photos', (ordinality - 1)::text, 'uri']
+        FROM jsonb_array_elements(cached_evidence->'photos') WITH ORDINALITY
+        WHERE value->>'name' = ${photoName}
+        LIMIT 1
+      ), to_jsonb(${uri}::text), false)
+      WHERE provider = 'google'
+        AND external_place_id = ${request.externalPlaceId}
+        AND cached_evidence_at = ${new Date(fetchedAt)}
+        AND COALESCE(lower(cached_evidence_language), 'en') = ${normalizePlaceLanguageCode(request.languageCode).toLowerCase()}
+        AND COALESCE(lower(cached_evidence_region), '') = ${request.regionCode?.toLowerCase() ?? ''}
+        AND cached_evidence->'photos' @> ${JSON.stringify([{ name: photoName }])}::jsonb
+      RETURNING cached_evidence AS evidence
+    `);
+    const parsed = evidenceSchema.safeParse(rows[0]?.evidence);
+    return parsed.success ? parsed.data : null;
+  } catch {
+    // Retain process-local reuse when persistence is unavailable.
+    return null;
   }
 }

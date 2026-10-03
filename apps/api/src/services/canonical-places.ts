@@ -324,7 +324,7 @@ export type PlaceSnapshotHydrator = (
   externalPlaceId: string,
   options?: {
     languageCode?: string;
-    purpose?: 'itinerary';
+    purpose?: 'itinerary' | 'saved';
     sessionToken?: string;
     source?: 'place-resolution';
   },
@@ -340,7 +340,7 @@ export class CanonicalPlacesService {
     provider: PlaceProviderName,
     externalPlaceId: string,
     label?: ProviderPlaceLabel,
-    options: { languageCode?: string; sessionToken?: string; purpose?: 'itinerary' } = {},
+    options: { languageCode?: string; sessionToken?: string; purpose?: 'itinerary' | 'saved' } = {},
   ) {
     const normalizedExternalPlaceId = externalPlaceId.trim();
     const place = await this.getOrCreateProviderPlace(provider, normalizedExternalPlaceId, label);
@@ -406,16 +406,13 @@ export class CanonicalPlacesService {
   private async ensureSnapshot(
     place: CanonicalPlaceRecord,
     externalPlaceId: string,
-    options: { languageCode?: string; sessionToken?: string; purpose?: 'itinerary' },
+    options: { languageCode?: string; sessionToken?: string; purpose?: 'itinerary' | 'saved' },
   ) {
     const reference = place.providerRefs.find(
       (entry) => entry.externalPlaceId === externalPlaceId && entry.provider === 'GOOGLE',
     );
     if (!reference) return null;
-    if (
-      options.purpose !== 'itinerary' &&
-      isSnapshotFresh(reference, { languageCode: options.languageCode })
-    ) {
+    if (!options.purpose && isSnapshotFresh(reference, { languageCode: options.languageCode })) {
       recordProviderCacheEvent({
         cache: 'place-details',
         kind: 'cache_hit',

@@ -13,7 +13,7 @@ import {
   type AiPlaceGroundingCacheRepository,
   type GroundingCacheWrite,
 } from './ai-place-grounding-cache.js';
-import { PLACE_CACHE_TTL_MS } from './cached-places.js';
+import { PLACE_CACHE_TTL_MS, rememberPlaceEvidence } from './cached-places.js';
 import { isSnapshotFresh, toPlaceCoordinates } from './place-data.js';
 import { getActivePlaceDetailsFailure } from './place-details-failures.js';
 import {
@@ -524,6 +524,7 @@ export class AiPlaceGrounder {
         provider: this.provider.name,
         status: 'ok',
       };
+      await rememberPlaceEvidence(result.context, result.context.evidence);
     }
     return result;
   }

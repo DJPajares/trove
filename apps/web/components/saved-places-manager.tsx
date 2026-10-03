@@ -342,6 +342,7 @@ export function SavedPlacesManager() {
         undefined,
         locale,
         search.sessionToken(),
+        'saved',
       );
       const { savedPlace } = await saveCanonicalPlace(place.id);
       setSavedPlaces((current) => [

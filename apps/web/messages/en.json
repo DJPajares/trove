@@ -1395,6 +1395,8 @@
     "photoCredit": "Photo: {name}",
     "photoDescription": "About this photo",
     "photoPosition": "Photo {current} of {total}",
+    "photoUnavailable": "This photo couldn’t load.",
+    "retryPhoto": "Try again",
     "previousPhoto": "Previous photo",
     "priceLevel": {
       "0": "Free",

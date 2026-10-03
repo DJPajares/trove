@@ -259,7 +259,7 @@ export function resolveProviderPlace(
   label?: { address?: string | null; name?: string | null },
   languageCode?: string,
   sessionToken?: string,
-  purpose?: 'itinerary',
+  purpose?: 'itinerary' | 'saved',
 ) {
   return savedRequest<{ place: CanonicalPlace }>('/places/resolve', {
     body: JSON.stringify({
@@ -353,6 +353,11 @@ export type PlaceProviderPhoto = {
   widthPx: number | null;
 };
 
+export type PlaceProviderPhotoSlot = Omit<PlaceProviderPhoto, 'uri'> & {
+  id: string;
+  uri: string | null;
+};
+
 export type PlacePriceLevel = 0 | 1 | 2 | 3 | 4;
 
 export type RichPlaceDetails = {
@@ -363,6 +368,8 @@ export type RichPlaceDetails = {
     internationalPhoneNumber: string | null;
     openingHoursDescriptions: string[];
     photos: PlaceProviderPhoto[];
+    /** Additive for compatibility with a previously deployed API. */
+    photoSlots?: PlaceProviderPhotoSlot[];
     priceLevel: PlacePriceLevel | null;
     rating: number | null;
     userRatingCount: number | null;
@@ -378,4 +385,16 @@ export async function fetchRichPlaceDetails(
     `/places/${placeId}/details?languageCode=${encodeURIComponent(languageCode)}`,
   );
   return result.status === 'ok' ? result : null;
+}
+
+export function fetchPlacePhoto(
+  placeId: string,
+  photoId: string,
+  languageCode: string,
+  evidenceFetchedAt: string,
+) {
+  return savedRequest<{ status: 'ok'; uri: string }>(`/places/${placeId}/photos/${photoId}`, {
+    method: 'POST',
+    body: JSON.stringify({ languageCode, evidenceFetchedAt }),
+  });
 }

@@ -457,11 +457,7 @@ export function TripModeShell({
         role="status"
       >
         <span className="sr-only">{t('loading')}</span>
-        <TripModeTopBar
-          timeZone={deviceTimeZone() ?? contextTrip?.referenceTimeZone ?? null}
-          tripId={tripId}
-          tripName={null}
-        />
+        <TripModeTopBar tripId={tripId} tripName={null} />
 
         <TripModeTabBar tripId={tripId} />
 
@@ -562,16 +558,7 @@ export function TripModeShell({
             className="mx-auto flex min-h-[calc(100dvh-var(--safe-top))] w-full max-w-6xl flex-col lg:min-h-0 gap-2"
             data-slot="trip-mode-shell"
           >
-            <TripModeTopBar
-              isPreview={Boolean(previewSelection)}
-              timeZone={
-                previewSelection
-                  ? trip.referenceTimeZone
-                  : (deviceTimeZone() ?? trip.referenceTimeZone)
-              }
-              tripId={trip.id}
-              tripName={trip.name}
-            />
+            <TripModeTopBar tripId={trip.id} tripName={trip.name} />
 
             {/* Fixed to the foot of a phone, in the thumb's reach; a plain row
                 under the bar on a desktop, which has no thumb zone to aim at.

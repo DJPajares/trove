@@ -32,7 +32,7 @@ type TripShareDialogProps = {
  * A switch rather than a Copy-link button that quietly publishes: turning a trip
  * public is a consequential change, so it is the thing the traveller does, and
  * the link only appears once they have done it. The line naming what the link
- * carries sits next to the switch for the same reason - the moment to learn that
+ * carries precedes the switch for the same reason - the moment to learn that
  * notes travel with a plan is before sending it, not after.
  */
 export function TripShareDialog({
@@ -43,6 +43,7 @@ export function TripShareDialog({
 }: Readonly<TripShareDialogProps>) {
   const t = useTranslations('trips.share');
   const switchId = useId();
+  const disclosureId = `${switchId}-disclosure`;
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
   const isPublic = trip.visibility === 'public';
@@ -105,16 +106,28 @@ export function TripShareDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3 text-sm leading-5" id={disclosureId}>
+            <p className="font-medium">{t('sharedTitle')}</p>
+            <ul className="list-disc space-y-2 pl-4 text-muted-foreground">
+              <li>{t('sharedTrip')}</li>
+              <li>{t('sharedDays')}</li>
+              <li>{t('sharedStops')}</li>
+            </ul>
+            <p className="text-muted-foreground">{t('privateDetails')}</p>
+          </div>
+
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <Label htmlFor={switchId}>{t('toggleLabel')}</Label>
-              <p className="mt-1 text-sm leading-5 text-muted-foreground">{t('carries')}</p>
             </div>
             <Switch
+              aria-describedby={disclosureId}
               checked={isPublic}
               disabled={saving}
               id={switchId}
+              nativeButton
               onCheckedChange={(checked) => void setVisibility(checked ? 'public' : 'private')}
+              render={<button />}
             />
           </div>
 

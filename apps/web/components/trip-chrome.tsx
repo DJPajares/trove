@@ -128,7 +128,9 @@ export function TripChrome({
   const stickyNavigation = currentSection === 'itinerary';
 
   const lifecycle = trip?.lifecycle ?? 'planning';
-  const primary = primaryTripDestinations(tripId, lifecycle, trip?.startDate ?? '');
+  const primary = primaryTripDestinations(tripId, lifecycle, trip?.startDate ?? '').filter(
+    (destination) => currentSection !== 'itinerary' || destination.section !== 'mode',
+  );
   const supporting = supportingTripDestinations(tripId);
   const activeSupporting = supporting.find((entry) => entry.section === currentSection);
   const onCoreExperience = primary.some((entry) => entry.section === currentSection);

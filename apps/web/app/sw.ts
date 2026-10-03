@@ -21,6 +21,7 @@ import {
 } from '@/lib/media/storage-cache-key';
 import { readPushAccount } from '@/lib/notifications/push-account';
 import { shouldShowPush } from '@/lib/notifications/push-payload';
+import { brandAssets } from '@/lib/brand/assets';
 
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
@@ -49,7 +50,7 @@ self.addEventListener('push', (event) => {
       if (!shouldShowPush(payload, activeOwner)) return;
       await self.registration.showNotification(payload.title, {
         body: payload.body,
-        icon: '/icons/trove-192.png',
+        icon: brandAssets.launcher192,
         tag: payload.tag,
         data: { ownerId: payload.ownerId, url: payload.url },
       });

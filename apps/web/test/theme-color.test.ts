@@ -5,6 +5,7 @@ import { expect, test, vi } from 'vitest';
 
 import { statusBarColor, statusBarStyle, themeColor, themeNameFrom } from '../lib/theme-color.ts';
 import { readAppearanceCookie } from '../lib/theme-cookie.ts';
+import { brandAssets } from '../lib/brand/assets.ts';
 
 /**
  * `--background` is oklch in CSS and hex in `theme-color.ts`, because a manifest
@@ -156,7 +157,7 @@ test('the manifest gives maskable launchers their own safe-zone export', async (
   expect(manifest.icons).toContainEqual({
     purpose: 'maskable',
     sizes: '512x512',
-    src: '/icons/trove-maskable-512.png',
+    src: brandAssets.maskable512,
     type: 'image/png',
   });
 });

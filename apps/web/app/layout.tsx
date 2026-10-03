@@ -14,6 +14,7 @@ import { AppearanceCookie } from '@/components/appearance-cookie';
 import { ThemeProvider } from '@/components/theme-provider';
 import { TroveMotionProvider } from '@/components/trove-motion-provider';
 import { getAuthUserId } from '@/lib/auth/session';
+import { brandAssets } from '@/lib/brand/assets';
 import { statusBarColor, statusBarStyle } from '@/lib/theme-color';
 
 const instrumentSans = Instrument_Sans({
@@ -36,8 +37,11 @@ export async function generateMetadata(): Promise<Metadata> {
     icons: {
       // iOS ignores SVG for the home-screen icon. Give it the dedicated opaque
       // 180px export rather than making it resample an Android launcher asset.
-      apple: '/icons/trove-180.png',
-      icon: '/icon.svg',
+      apple: brandAssets.apple,
+      icon: [
+        { sizes: '16x16 32x32 48x48', type: 'image/x-icon', url: brandAssets.faviconFallback },
+        { sizes: 'any', type: 'image/svg+xml', url: brandAssets.favicon },
+      ],
     },
     title: {
       default: t('name'),

@@ -104,7 +104,7 @@ export function TripModeTopBar({
 
   return (
     <div
-      className="sticky top-[calc(var(--safe-top)+var(--header-offset))] z-[var(--layer-sticky)] -ms-[var(--gutter-inline-start)] -me-[var(--gutter-inline-end)] grid min-h-13 grid-cols-[5rem_minmax(0,1fr)_5rem] items-center border-b border-border-subtle bg-background/95 px-[max(var(--gutter-inline-start),var(--gutter-inline-end))] backdrop-blur supports-[backdrop-filter]:bg-background/88"
+      className="sticky top-[calc(var(--safe-top)+var(--header-offset))] z-[var(--layer-sticky)] -ms-[var(--gutter-inline-start)] -me-[var(--gutter-inline-end)] grid min-h-17 grid-cols-[5rem_minmax(0,1fr)_5rem] items-center border-b border-border-subtle bg-background/95 px-[max(var(--gutter-inline-start),var(--gutter-inline-end))] backdrop-blur supports-[backdrop-filter]:bg-background/88 md:min-h-13"
       data-slot="trip-mode-top-bar"
       data-translucent-surface
     >

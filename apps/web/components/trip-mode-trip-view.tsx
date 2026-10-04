@@ -1,19 +1,6 @@
 'use client';
 
-import {
-  BedDouble,
-  CalendarDays,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  ClipboardCheck,
-  Compass,
-  Info,
-  MapPinned,
-  ReceiptText,
-  StickyNote,
-  Users,
-} from 'lucide-react';
+import { BedDouble, CalendarDays, ChevronDown, ChevronRight, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo } from 'react';
@@ -53,6 +40,8 @@ import { namedCountryLine } from '@/lib/trips/countries';
 import { tripDestinationSummary } from '@/lib/trips/summary';
 import { tripWeatherForDate, useTripWeather } from '@/lib/weather/use-trip-weather';
 import { cn } from '@/lib/utils';
+import * as Icons from '@/lib/icons';
+import { tripSectionIcons } from '@/lib/icons';
 
 type Tool = {
   descriptionKey:
@@ -193,7 +182,7 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
         }
         description={t('loadErrorDescription')}
         headingLevel={2}
-        icon={<Compass aria-hidden="true" />}
+        icon={<Icons.Error aria-hidden="true" />}
         kind="error"
         title={t('loadError')}
       />
@@ -236,37 +225,37 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
     {
       descriptionKey: 'itineraryDescription',
       href: `/trips/${tripId}/itinerary`,
-      icon: CalendarDays,
+      icon: tripSectionIcons.itinerary,
       key: 'itinerary',
     },
     {
       descriptionKey: 'placesDescription',
       href: `/trips/${tripId}/places`,
-      icon: MapPinned,
+      icon: tripSectionIcons.places,
       key: 'places',
     },
     {
       descriptionKey: 'reservationsDescription',
       href: `/trips/${tripId}/reservations`,
-      icon: ClipboardCheck,
+      icon: tripSectionIcons.reservations,
       key: 'reservations',
     },
     {
       descriptionKey: 'expensesDescription',
       href: `/trips/${tripId}/expenses`,
-      icon: ReceiptText,
+      icon: tripSectionIcons.expenses,
       key: 'expenses',
     },
     {
       descriptionKey: 'notesDescription',
       href: itineraryHref,
-      icon: StickyNote,
+      icon: tripSectionIcons.notes,
       key: 'notes',
     },
     {
       descriptionKey: 'infoDescription',
       href: `/trips/${tripId}/info`,
-      icon: Info,
+      icon: tripSectionIcons.info,
       key: 'info',
     },
   ];
@@ -366,7 +355,7 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
           <Collapsible className="border-t border-border-subtle pt-2">
             <CollapsibleTrigger className="group w-full justify-between gap-3 py-2 text-left">
               <span className="inline-flex items-center gap-2 text-foreground">
-                <CheckCircle2 aria-hidden="true" className="text-brand" />
+                <Icons.Success aria-hidden="true" className="text-brand" />
                 {tasksT('byDayAndPlace')}
               </span>
               <span className="inline-flex shrink-0 items-center gap-2 text-xs text-muted-foreground">

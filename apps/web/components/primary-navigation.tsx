@@ -1,6 +1,6 @@
 'use client';
 
-import { Bookmark, House, MapPinned, Plus, Wrench } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -18,6 +18,7 @@ import {
   primaryNavigationDestinations,
 } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
+import * as Icons from '@/lib/icons';
 
 type NavigationItem = {
   /**
@@ -41,7 +42,7 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
   const t = useTranslations('navigation');
   const { openCreateTrip } = useTripCreation();
   const primaryAction = usePrimaryAction();
-  const icons = { home: House, saved: Bookmark, tools: Wrench, trips: MapPinned };
+  const icons = { home: Icons.Home, saved: Icons.Saved, tools: Icons.Tools, trips: Icons.Trips };
   const items: NavigationItem[] = primaryNavigationDestinations.map(({ column, href, key }) => ({
     column,
     href,
@@ -117,7 +118,7 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
                     className={cn(
                       'relative isolate flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-1 py-1.5 text-xs font-medium transition-colors duration-[var(--motion-standard)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
                       active
-                        ? 'font-semibold text-brand'
+                        ? 'font-semibold text-brand [--icon-stroke:var(--icon-stroke-emphasis)]'
                         : 'text-muted-foreground hover:text-foreground',
                     )}
                     href={href}

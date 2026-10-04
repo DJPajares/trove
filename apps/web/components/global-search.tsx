@@ -1,17 +1,6 @@
 'use client';
 
-import {
-  Bookmark,
-  CircleAlert,
-  ExternalLink,
-  FileText,
-  Info,
-  MapPinned,
-  Plane,
-  ReceiptText,
-  Search,
-  Sparkles,
-} from 'lucide-react';
+import { CircleAlert, ExternalLink, FileText, Info, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
@@ -42,18 +31,19 @@ import {
   type SearchResultKind,
   type TroveSearchResult,
 } from '@/lib/search/api';
+import * as Icons from '@/lib/icons';
 
 const LOCAL_SEARCH_DELAY_MS = 350;
 
 function ResultIcon({ kind }: Readonly<{ kind: SearchResultKind }>) {
   const Icon = {
-    memory: Sparkles,
+    memory: Icons.Memories,
     note: FileText,
-    reservation: ReceiptText,
-    saved_place: Bookmark,
-    trip: Plane,
+    reservation: Icons.Reservations,
+    saved_place: Icons.Saved,
+    trip: Icons.Trips,
     trip_info: Info,
-    trip_place: MapPinned,
+    trip_place: Icons.Places,
   }[kind];
   return <Icon aria-hidden="true" />;
 }
@@ -321,7 +311,7 @@ export function GlobalSearch({
                         size="sm"
                       >
                         <ItemMedia className="text-muted-foreground" variant="icon">
-                          <MapPinned aria-hidden="true" />
+                          <Icons.Place aria-hidden="true" />
                         </ItemMedia>
                         <ItemContent className="min-w-0">
                           <ItemTitle>{place.name}</ItemTitle>
@@ -357,7 +347,7 @@ export function GlobalSearch({
                     size="sm"
                     variant="outline"
                   >
-                    <MapPinned data-icon="inline-start" />
+                    <Icons.Place data-icon="inline-start" />
                     {status === 'places' ? t('searchingGoogle') : t('searchGoogle')}
                   </Button>
                 </div>

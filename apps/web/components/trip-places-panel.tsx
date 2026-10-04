@@ -1,16 +1,6 @@
 'use client';
 
-import {
-  CalendarPlus,
-  CheckCircle2,
-  Ellipsis,
-  Eye,
-  MapPin,
-  MapPinned,
-  MapPinOff,
-  Pencil,
-  Trash2,
-} from 'lucide-react';
+import { CalendarPlus, Ellipsis, Eye, MapPin, MapPinOff, Pencil, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
@@ -55,6 +45,7 @@ import {
   resolveTripPlaceAddress,
   resolveTripPlaceName,
 } from '@/lib/trip-places/place-name';
+import * as Icons from '@/lib/icons';
 
 const priorities = ['none', 'must_go', 'interested', 'maybe'] as const;
 
@@ -223,7 +214,7 @@ export function TripPlacesPanel({
                   className="size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
                   variant="icon"
                 >
-                  <MapPinned aria-hidden="true" className="size-4" />
+                  <Icons.CustomPlace aria-hidden="true" className="size-4" />
                 </ItemMedia>
               ) : (
                 <ItemMedia className="size-10 rounded-[var(--radius-md)]" variant="default">
@@ -258,7 +249,7 @@ export function TripPlacesPanel({
                     {name}
                   </button>
                   {hasScheduledDay ? (
-                    <CheckCircle2
+                    <Icons.Success
                       aria-hidden="true"
                       className="size-3.5 shrink-0 text-muted-foreground"
                     />
@@ -331,6 +322,7 @@ export function TripPlacesPanel({
 
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger>
+                        <Icons.MustGo aria-hidden="true" />
                         {t('priorityMenuLabel')}
                         {/* The current priority stays readable without opening the submenu. */}
                         <span className="ml-2 text-xs text-muted-foreground">

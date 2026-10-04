@@ -1,6 +1,6 @@
 'use client';
 
-import { CloudUpload, Sparkles, TriangleAlert, X } from 'lucide-react';
+import { CloudUpload, TriangleAlert, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -12,6 +12,7 @@ import {
   type PendingMemory,
 } from '@/lib/memories/api';
 import { OFFLINE_SYNC_EVENT } from '@/lib/offline/trip-store';
+import * as Icons from '@/lib/icons';
 
 function previewUrls(memories: PendingMemory[]) {
   return memories.flatMap((memory) =>
@@ -90,7 +91,7 @@ export function TripModePendingMemories({ tripId }: Readonly<{ tripId: string }>
                 </p>
                 {memory.isHighlight ? (
                   <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-brand">
-                    <Sparkles aria-hidden="true" className="size-3.5" />
+                    <Icons.Highlight aria-hidden="true" className="size-3.5" />
                     {t('highlight')}
                   </p>
                 ) : null}

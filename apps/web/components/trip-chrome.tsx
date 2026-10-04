@@ -42,6 +42,7 @@ import {
   type TripDestination,
 } from '@/lib/trips/navigation';
 import { cn } from '@/lib/utils';
+import { tripSectionIcons } from '@/lib/icons';
 
 type TripChromeSlots = {
   /** The section toolbar's leading edge: a screen's view control, or its guidance. */
@@ -336,15 +337,20 @@ export function TripChrome({
                   <DropdownMenuLabel>{t('supportingTools')}</DropdownMenuLabel>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
-                {supporting.map((destination) => (
-                  <DropdownMenuLinkItem
-                    aria-current={destination.section === currentSection ? 'page' : undefined}
-                    key={destination.section}
-                    render={<Link href={destination.href} />}
-                  >
-                    {t(destination.labelKey)}
-                  </DropdownMenuLinkItem>
-                ))}
+                {supporting.map((destination) => {
+                  const SectionIcon = tripSectionIcons[destination.section];
+
+                  return (
+                    <DropdownMenuLinkItem
+                      aria-current={destination.section === currentSection ? 'page' : undefined}
+                      key={destination.section}
+                      render={<Link href={destination.href} />}
+                    >
+                      <SectionIcon aria-hidden="true" />
+                      {t(destination.labelKey)}
+                    </DropdownMenuLinkItem>
+                  );
+                })}
                 {/* Sharing belongs to the trip rather than to any one section,
                     and the overflow menu is the only control in the chrome that
                     already does. It waits for the trip: there is nothing to

@@ -4,8 +4,6 @@ import { DayPlanningContextSheet } from '@/components/day-planning-context';
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeftRight,
-  CalendarClock,
-  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -14,7 +12,6 @@ import {
   Copy,
   List,
   Map as MapIcon,
-  MapPinned,
   NotebookPen,
   Pencil,
   Plus,
@@ -23,7 +20,6 @@ import {
   Settings2,
   Trash2,
   X,
-  Sparkles,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useSearchParams } from 'next/navigation';
@@ -183,6 +179,7 @@ import {
   invalidateTripQueries,
   PLACE_LOCATION_QUERY_ROOTS,
 } from '@/lib/query/trip-invalidation';
+import * as Icons from '@/lib/icons';
 
 type EditorState =
   | { dayId: null; item: null; mode: 'closed' }
@@ -1718,7 +1715,7 @@ export function ItineraryManager({
       <TripSectionHeader
         actions={
           <Button onClick={() => setPlacesDrawerOpen(true)} variant="outline">
-            <MapPinned aria-hidden="true" data-icon="inline-start" />
+            <Icons.Places aria-hidden="true" data-icon="inline-start" />
             {tripPlacesTranslations('openPlaces')}
           </Button>
         }
@@ -1964,7 +1961,7 @@ export function ItineraryManager({
                               type="button"
                               variant="ghost"
                             >
-                              <Sparkles aria-hidden="true" data-icon="inline-start" />
+                              <Icons.Ai aria-hidden="true" data-icon="inline-start" />
                               {t('dayTimes.action')}
                             </Button>
                           ) : null}
@@ -2011,7 +2008,7 @@ export function ItineraryManager({
                           <CollapsibleTrigger className="group w-full justify-between gap-3 text-left">
                             <span className="flex min-w-0 items-center gap-3">
                               <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-secondary text-secondary-foreground">
-                                <MapPinned aria-hidden="true" className="size-4" />
+                                <Icons.DailyBase aria-hidden="true" className="size-4" />
                               </span>
                               <span className="min-w-0">
                                 <span className="block text-sm font-medium text-foreground">
@@ -2128,7 +2125,7 @@ export function ItineraryManager({
                             }}
                             variant="ghost"
                           >
-                            <NotebookPen aria-hidden="true" data-icon="inline-start" />
+                            <Icons.Notes aria-hidden="true" data-icon="inline-start" />
                             {selectedDay.notes ? t('editDayNote') : t('addDayNote')}
                           </Button>
                           {selectedDay.items.length ? (
@@ -2138,7 +2135,7 @@ export function ItineraryManager({
                                 onClick={() => openDayMove(selectedDay)}
                                 variant="outline"
                               >
-                                <CalendarClock aria-hidden="true" data-icon="inline-start" />
+                                <Icons.Itinerary aria-hidden="true" data-icon="inline-start" />
                                 {t('dayMove.action')}
                               </Button>
                               {/* The same dialog, opened already knowing the
@@ -2288,7 +2285,7 @@ export function ItineraryManager({
                         className="min-h-60 justify-center"
                         description={t('emptyDescription')}
                         headingLevel={2}
-                        icon={<CalendarClock aria-hidden="true" />}
+                        icon={<Icons.Itinerary aria-hidden="true" />}
                         title={t('emptyTitle')}
                       />
                     )}
@@ -2393,7 +2390,7 @@ export function ItineraryManager({
                   tabIndex={-1}
                 >
                   <ItemMedia variant="icon">
-                    <CalendarClock aria-hidden="true" />
+                    <Icons.Itinerary aria-hidden="true" />
                   </ItemMedia>
                   <ItemContent>
                     <ItemTitle>
@@ -2504,7 +2501,7 @@ export function ItineraryManager({
                       <div className="flex items-center gap-3">
                         <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-background text-muted-foreground shadow-xs">
                           {form.tripPlaceId ? (
-                            <MapPinned aria-hidden="true" className="size-4" />
+                            <Icons.Place aria-hidden="true" className="size-4" />
                           ) : (
                             <NotebookPen aria-hidden="true" className="size-4" />
                           )}
@@ -2608,7 +2605,10 @@ export function ItineraryManager({
                                 value={option}
                               >
                                 {option.kind === 'trip_place' ? (
-                                  <MapPinned aria-hidden="true" className="text-muted-foreground" />
+                                  <Icons.Place
+                                    aria-hidden="true"
+                                    className="text-muted-foreground"
+                                  />
                                 ) : option.kind === 'custom_label' ? (
                                   <NotebookPen
                                     aria-hidden="true"
@@ -2628,7 +2628,7 @@ export function ItineraryManager({
                                     </span>
                                     {option.kind === 'trip_place' && option.usageLabel ? (
                                       <Badge className="max-w-44" size="sm">
-                                        <CheckCircle2 aria-hidden="true" className="size-3" />
+                                        <Icons.Success aria-hidden="true" className="size-3" />
                                         <span className="truncate">{option.usageLabel}</span>
                                       </Badge>
                                     ) : null}

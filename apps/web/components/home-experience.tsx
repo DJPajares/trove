@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, CircleAlert, MapPinned, Plus } from 'lucide-react';
+import { ChevronRight, CircleAlert, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
@@ -28,6 +28,7 @@ import { fetchTrips, type Trip } from '@/lib/trips/api';
 import { selectPrimaryTrip } from '@/lib/trips/lifecycle';
 import { tripEditorialSubject } from '@/lib/trips/summary';
 import { queryKeys } from '@/lib/query/keys';
+import * as Icons from '@/lib/icons';
 
 type HomeStatus = 'error' | 'idle' | 'loading';
 
@@ -257,7 +258,7 @@ export function HomeExperience() {
           // With no trip there is no trip name, so this is the page's heading.
           // The greeting that used to hold it said nothing and is gone.
           headingLevel={1}
-          icon={<MapPinned aria-hidden="true" />}
+          icon={<Icons.Trips aria-hidden="true" />}
           kind="empty"
           scope="section"
           title={t('startTitle')}

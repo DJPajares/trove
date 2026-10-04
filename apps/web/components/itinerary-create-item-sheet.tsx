@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, CircleAlert, Clock3, MapPinned, NotebookPen, Search, X } from 'lucide-react';
+import { CircleAlert, Clock3, NotebookPen, Search, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
@@ -52,6 +52,7 @@ import {
   type ProviderSuggestion,
 } from '@/lib/saved/api';
 import { cn } from '@/lib/utils';
+import * as Icons from '@/lib/icons';
 
 type FormState = {
   customLabel: string;
@@ -547,7 +548,7 @@ export function ItineraryCreateItemSheet({
                   <div className="flex items-start gap-3">
                     <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-background text-muted-foreground shadow-xs">
                       {form.tripPlaceId ? (
-                        <MapPinned aria-hidden="true" className="size-4" />
+                        <Icons.Place aria-hidden="true" className="size-4" />
                       ) : (
                         <NotebookPen aria-hidden="true" className="size-4" />
                       )}
@@ -649,7 +650,7 @@ export function ItineraryCreateItemSheet({
                             value={option}
                           >
                             {option.kind === 'trip_place' ? (
-                              <MapPinned aria-hidden="true" className="text-muted-foreground" />
+                              <Icons.Place aria-hidden="true" className="text-muted-foreground" />
                             ) : option.kind === 'custom_label' ? (
                               <NotebookPen aria-hidden="true" className="text-muted-foreground" />
                             ) : (
@@ -666,7 +667,7 @@ export function ItineraryCreateItemSheet({
                                 </span>
                                 {option.kind === 'trip_place' && option.usageLabel ? (
                                   <Badge className="max-w-44" size="sm">
-                                    <CheckCircle2 aria-hidden="true" className="size-3" />
+                                    <Icons.Success aria-hidden="true" className="size-3" />
                                     <span className="truncate">{option.usageLabel}</span>
                                   </Badge>
                                 ) : null}

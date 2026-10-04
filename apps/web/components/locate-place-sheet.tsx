@@ -1,6 +1,6 @@
 'use client';
 
-import { CircleAlert, MapPinned, Search } from 'lucide-react';
+import { CircleAlert, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/sheet';
 import { fetchPlaceLocationCandidates, type PlaceLocationCandidate } from '@/lib/saved/api';
 import { linkTripPlaceToProvider } from '@/lib/trip-places/api';
+import * as Icons from '@/lib/icons';
 
 type LocatePlaceSheetProps = {
   onLocated: () => Promise<void> | void;
@@ -174,7 +175,7 @@ export function LocatePlaceSheet({
 
           {state === 'unavailable' ? (
             <Alert role="alert" variant="warning">
-              <CircleAlert aria-hidden="true" />
+              <Icons.Warning aria-hidden="true" />
               <AlertDescription>{t('locate.unavailable')}</AlertDescription>
             </Alert>
           ) : null}
@@ -191,7 +192,7 @@ export function LocatePlaceSheet({
                     className="size-10 rounded-[var(--radius-md)] bg-brand/10 text-brand"
                     variant="icon"
                   >
-                    <MapPinned aria-hidden="true" />
+                    <Icons.Places aria-hidden="true" />
                   </ItemMedia>
                   <ItemContent className="min-w-0">
                     <ItemTitle>{candidate.name}</ItemTitle>

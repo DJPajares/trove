@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, ChevronUp, ImagePlus, Trash2, TriangleAlert, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ImagePlus, Trash2, TriangleAlert, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -52,6 +52,7 @@ import {
   type MemoryPhoto,
 } from '@/lib/memories/api';
 import { resolveItineraryItemPlaceName } from '@/lib/trip-places/place-name';
+import * as Icons from '@/lib/icons';
 
 const NO_DAY = 'none';
 const NO_ITEM = 'none';
@@ -423,7 +424,7 @@ export function MemoryEditorSheet({
                           type="button"
                           variant="ghost"
                         >
-                          <ChevronUp aria-hidden="true" />
+                          <ArrowUp aria-hidden="true" />
                         </Button>
                         <Button
                           aria-label={t('movePhotoDown', { name: photo.fileName })}
@@ -433,7 +434,7 @@ export function MemoryEditorSheet({
                           type="button"
                           variant="ghost"
                         >
-                          <ChevronDown aria-hidden="true" />
+                          <ArrowDown aria-hidden="true" />
                         </Button>
                         <Button
                           aria-label={t('removePhoto', { name: photo.fileName })}
@@ -478,6 +479,7 @@ export function MemoryEditorSheet({
 
             {error ? (
               <Alert variant="destructive">
+                <Icons.Error aria-hidden="true" />
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             ) : null}

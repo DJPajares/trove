@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Bookmark, CircleAlert, MapPinned, NotebookPen, Pencil, Plus } from 'lucide-react';
+import { CircleAlert, Pencil, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
@@ -40,6 +40,7 @@ import { destinationLocationBias } from '@/lib/saved/provider-search-session';
 import { PROVIDER_SEARCH_RESULT_LIMIT } from '@/lib/saved/search-results';
 import { addTripPlace, type TripPlace } from '@/lib/trip-places/api';
 import { queryKeys } from '@/lib/query/keys';
+import * as Icons from '@/lib/icons';
 
 type AddTripPlaceSheetProps = {
   onAdded: (tripPlace: TripPlace) => void;
@@ -289,7 +290,7 @@ export function AddTripPlaceSheet({
             <p className="text-sm leading-6 text-muted-foreground">{t('searchHint')}</p>
           ) : searchStatus === 'unavailable' && !matchingSaved.length ? (
             <Alert role="alert" variant="warning">
-              <CircleAlert aria-hidden="true" />
+              <Icons.Warning aria-hidden="true" />
               <AlertDescription>{t('searchUnavailable')}</AlertDescription>
             </Alert>
           ) : matchingSaved.length || providerResults.length ? (
@@ -310,9 +311,9 @@ export function AddTripPlaceSheet({
                             variant="icon"
                           >
                             {savedPlace.place.kind === 'custom' ? (
-                              <NotebookPen aria-hidden="true" />
+                              <Icons.CustomPlace aria-hidden="true" />
                             ) : (
-                              <Bookmark aria-hidden="true" />
+                              <Icons.Saved aria-hidden="true" />
                             )}
                           </ItemMedia>
                           <ItemContent className="min-w-0">
@@ -368,7 +369,7 @@ export function AddTripPlaceSheet({
                           className="size-10 rounded-[var(--radius-md)] bg-brand/10 text-brand"
                           variant="icon"
                         >
-                          <MapPinned aria-hidden="true" />
+                          <Icons.Places aria-hidden="true" />
                         </ItemMedia>
                         <ItemContent className="min-w-0">
                           <ItemTitle>{suggestion.name}</ItemTitle>

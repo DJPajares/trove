@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, Sparkles } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { cancelAiPlanningSession, recoverAiPlanningSession } from '@/lib/ai-planning/api';
 import { queryKeys } from '@/lib/query/keys';
 import { formatTripDateRange } from '@/lib/trips/format';
+import * as Icons from '@/lib/icons';
 
 /**
  * The way back into a draft the traveller walked away from.
@@ -70,7 +71,7 @@ export function AiPlanningDraftCard() {
       className="rounded-[var(--radius-xl)] border border-border-strong bg-card p-4 shadow-[var(--shadow-card)] sm:p-5"
     >
       <p className="flex items-center gap-1.5 text-xs font-medium text-brand">
-        <Sparkles aria-hidden="true" className="size-3.5" />
+        <Icons.Ai aria-hidden="true" className="size-3.5" />
         {t('eyebrow')}
       </p>
       <h2

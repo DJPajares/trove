@@ -10,6 +10,7 @@ import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { getSafeRedirectPath } from '@/lib/auth/redirect';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import * as Icons from '@/lib/icons';
 
 type AuthMode = 'sign-in' | 'sign-up';
 
@@ -96,6 +97,7 @@ export function EmailAuthForm({ mode, nextPath }: Readonly<EmailAuthFormProps>) 
     <form className="space-y-6" onSubmit={handleSubmit}>
       {error ? (
         <Alert role="alert" variant="destructive">
+          <Icons.Error aria-hidden="true" />
           <AlertDescription className="text-destructive">{error}</AlertDescription>
         </Alert>
       ) : null}

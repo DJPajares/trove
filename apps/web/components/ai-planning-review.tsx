@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CircleAlert, CircleCheck, MapPinned, Sparkles } from 'lucide-react';
+import { ArrowLeft, CircleAlert, CircleCheck } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
@@ -68,6 +68,7 @@ import { motionDuration, motionEase } from '@/lib/motion';
 import { queryKeys } from '@/lib/query/keys';
 import { formatSegmentedTime } from '@/lib/time/time-segments';
 import type { Trip } from '@/lib/trips/api';
+import * as Icons from '@/lib/icons';
 
 const INITIAL_SESSION_POLL_MS = 3_000;
 const LATER_SESSION_POLL_MS = 5_000;
@@ -596,14 +597,14 @@ export function AiPlanningReview({
 
       {isAiPlanningSessionGenerating(session.status) ? (
         <Alert role="status" variant="info">
-          <Sparkles aria-hidden="true" />
+          <Icons.Ai aria-hidden="true" />
           <AlertTitle>{general(`stages.${session.stage}`)}</AlertTitle>
           <AlertDescription>{t('regeneratingHint')}</AlertDescription>
         </Alert>
       ) : null}
       {placeVerification.none ? (
         <Alert role="status" variant="warning">
-          <CircleAlert aria-hidden="true" />
+          <Icons.Warning aria-hidden="true" />
           <AlertTitle>{t('noVerifiedPlacesTitle')}</AlertTitle>
           <AlertDescription>{t('noVerifiedPlacesHint')}</AlertDescription>
         </Alert>
@@ -898,7 +899,7 @@ export function AiPlanningReview({
           ) : null}
           {session.countryContextChanged ? (
             <Alert variant="warning">
-              <CircleAlert aria-hidden="true" />
+              <Icons.Warning aria-hidden="true" />
               <AlertDescription>{t('countryTimeZoneWarning')}</AlertDescription>
             </Alert>
           ) : null}
@@ -908,7 +909,7 @@ export function AiPlanningReview({
           >
             {!selectedMapPoints.length ? (
               <div className="p-6 text-sm text-muted-foreground">
-                <MapPinned aria-hidden="true" className="mb-3 size-5 text-brand" />
+                <Icons.MapView aria-hidden="true" className="mb-3 size-5 text-brand" />
                 {t('mapUnavailable')}
               </div>
             ) : mapRevealed ? (
@@ -921,7 +922,7 @@ export function AiPlanningReview({
               />
             ) : (
               <div className="p-6">
-                <MapPinned aria-hidden="true" className="mb-3 size-5 text-brand" />
+                <Icons.MapView aria-hidden="true" className="mb-3 size-5 text-brand" />
                 <p className="text-sm text-muted-foreground">
                   {t('mapPlaceCount', { count: selectedMapPoints.length })}
                 </p>
@@ -959,7 +960,7 @@ export function AiPlanningReview({
               type="button"
               variant="outline"
             >
-              <Sparkles aria-hidden="true" data-icon="inline-start" />
+              <Icons.Ai aria-hidden="true" data-icon="inline-start" />
               {t('regenerateAction')}
             </Button>
           </section>

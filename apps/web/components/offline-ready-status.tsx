@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  CheckCircle2,
-  ChevronDown,
-  CloudDownload,
-  Clock3,
-  RefreshCw,
-  TriangleAlert,
-  Trash2,
-} from 'lucide-react';
+import { ChevronDown, CloudDownload, Clock3, RefreshCw, TriangleAlert, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 
@@ -36,6 +28,7 @@ import {
 } from '@/lib/offline/trip-store';
 import { prepareTripForOffline, removePreparedTrip } from '@/lib/offline/trip-preparation';
 import { getOfflineAuthContext } from '@/lib/offline/trip-sync';
+import * as Icons from '@/lib/icons';
 
 type ReadinessViewState = {
   hasSnapshot: boolean;
@@ -202,7 +195,7 @@ export function OfflineReadyStatus({
 
   const StatusIcon =
     state.readiness.state === 'ready'
-      ? CheckCircle2
+      ? Icons.Success
       : state.readiness.state === 'stale'
         ? Clock3
         : TriangleAlert;

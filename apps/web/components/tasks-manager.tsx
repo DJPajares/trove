@@ -1,6 +1,6 @@
 'use client';
 
-import { CircleAlert, ClipboardCheck, Layers, List, Pencil, Plus, Wrench } from 'lucide-react';
+import { CircleAlert, Layers, List, Pencil, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -43,6 +43,7 @@ import {
 import { groupTasksByContext } from '@/lib/tasks/grouping';
 import { queryKeys } from '@/lib/query/keys';
 import { useTripResource } from '@/lib/query/use-trip-resource';
+import * as Icons from '@/lib/icons';
 
 type EditorState =
   { mode: 'closed'; task: null } | { mode: 'create'; task: null } | { mode: 'edit'; task: Task };
@@ -270,7 +271,7 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
             render={<Link href="/tools/task-templates" />}
             variant="outline"
           >
-            <Wrench aria-hidden="true" data-icon="inline-start" />
+            <Icons.TaskTemplates aria-hidden="true" data-icon="inline-start" />
             {t('templates')}
           </Button>
         }
@@ -377,7 +378,7 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
           className="min-h-64 justify-center"
           description={t('emptyDescription')}
           headingLevel={2}
-          icon={<ClipboardCheck aria-hidden="true" />}
+          icon={<Icons.Tasks aria-hidden="true" />}
           title={t('emptyTitle')}
         />
       )}

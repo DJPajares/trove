@@ -10,7 +10,6 @@ import {
   ImagePlus,
   Pencil,
   Plus,
-  Sparkles,
   Star,
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
@@ -50,6 +49,7 @@ import { updateTripExperienceRating } from '@/lib/trips/api';
 import { tripEditorialSubject } from '@/lib/trips/summary';
 import { cn } from '@/lib/utils';
 import { queryKeys } from '@/lib/query/keys';
+import * as Icons from '@/lib/icons';
 
 type LoadState =
   | { data: null; status: 'error' }
@@ -200,7 +200,7 @@ function MemoryEntry({
       ) : null}
       <div className="flex items-center gap-2 text-xs text-text-subtle">
         {memory.isHighlight ? (
-          <Sparkles aria-hidden="true" className="size-3.5 shrink-0 text-brand" />
+          <Icons.Highlight aria-hidden="true" className="size-3.5 shrink-0 text-brand" />
         ) : null}
         <span className="min-w-0 truncate">{meta}</span>
         <DropdownMenu>
@@ -534,7 +534,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
           <Chip
             aria-label={`${option.label}, ${t('memoryCount', { count: option.count })}`}
             count={option.count}
-            icon={option.marked ? <Sparkles aria-hidden="true" /> : undefined}
+            icon={option.marked ? <Icons.Highlight aria-hidden="true" /> : undefined}
             key={option.id ?? ALL_LENS_VALUE}
             value={option.id ?? ALL_LENS_VALUE}
           >
@@ -663,7 +663,7 @@ export function TripMemoriesManager({ tripId }: Readonly<{ tripId: string }>) {
           className="min-h-64 justify-center"
           description={t('emptyDescription')}
           headingLevel={2}
-          icon={<Sparkles aria-hidden="true" />}
+          icon={<Icons.Memories aria-hidden="true" />}
           title={t('emptyTitle')}
         />
         {dialogs}

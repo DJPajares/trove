@@ -9,9 +9,51 @@
             "name": "@tanstack/react-query",
             "importNames": ["useMutation", "useMutationState", "useIsMutating"],
             "message": "TanStack Query is read-side only in Trove. Writes go through queueOfflineMutation/syncOfflineMutations in lib/offline/trip-sync.ts, which owns the offline queue, conflict states and replay. A second write path would race it."
+          },
+          {
+            "name": "lucide-react",
+            "importNames": [
+              "Backpack",
+              "BookMarked",
+              "Bookmark",
+              "ClipboardList",
+              "Compass",
+              "Flag",
+              "Gauge",
+              "Gem",
+              "ListChecks",
+              "Luggage",
+              "MapPinPen",
+              "MapPinned",
+              "Navigation",
+              "Shapes",
+              "Sparkles",
+              "Ticket",
+              "WalletCards"
+            ],
+            "message": "Concept icons come from '@/lib/icons' (import * as Icons from '@/lib/icons'), so each Trove concept keeps one glyph. See docs/brand/README.md."
           }
         ]
       }
     ]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["lib/icons.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@tanstack/react-query",
+                "importNames": ["useMutation", "useMutationState", "useIsMutating"],
+                "message": "TanStack Query is read-side only in Trove. Writes go through queueOfflineMutation/syncOfflineMutations in lib/offline/trip-sync.ts, which owns the offline queue, conflict states and replay. A second write path would race it."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

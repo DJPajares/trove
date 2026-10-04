@@ -1,6 +1,5 @@
 'use client';
 
-import { Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -12,6 +11,7 @@ import {
   type RequestedSchedule,
   type SuggestedTimeCandidate,
 } from '@/lib/itinerary/api';
+import * as Icons from '@/lib/icons';
 
 type SuggestedTimeRequest = {
   dayId: string;
@@ -95,7 +95,7 @@ export function SuggestedTimeAction({
         type="button"
         variant="outline"
       >
-        <Sparkles aria-hidden="true" />
+        <Icons.Ai aria-hidden="true" />
         {t('suggestedTime.action')}
       </Button>
       <p

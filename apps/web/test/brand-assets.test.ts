@@ -39,13 +39,16 @@ describe('Trove brand assets', () => {
     'app/icon.svg',
     'public/brand/trove-icon.svg',
     'public/brand/trove-icon-maskable.svg',
-    'public/brand/trove-lockup.svg',
     'public/brand/trove-mark.svg',
-    'public/brand/trove-mark-monochrome.svg',
     'public/brand/trove-mark-inverse.svg',
+    'public/brand/trove-mark-monochrome.svg',
+    'public/brand/trove-mark-monochrome-inverse.svg',
     'public/brand/trove-wordmark.svg',
     'public/brand/trove-wordmark-inverse.svg',
+    'public/brand/trove-lockup.svg',
     'public/brand/trove-lockup-inverse.svg',
+    'public/brand/trove-lockup-monochrome.svg',
+    'public/brand/trove-lockup-monochrome-inverse.svg',
   ])('%s stays flat and vector-first', async (relativePath) => {
     const source = await readFile(assetPath(relativePath), 'utf8');
 
@@ -56,10 +59,40 @@ describe('Trove brand assets', () => {
   test.each([
     'public/brand/trove-lockup.svg',
     'public/brand/trove-lockup-inverse.svg',
+    'public/brand/trove-lockup-monochrome.svg',
+    'public/brand/trove-lockup-monochrome-inverse.svg',
     'public/brand/trove-wordmark.svg',
     'public/brand/trove-wordmark-inverse.svg',
   ])('%s needs no installed font', async (relativePath) => {
     expect(await readFile(assetPath(relativePath), 'utf8')).not.toMatch(/<text\b|font-family/);
+  });
+
+  test('the share card is an opaque 1200x630 PNG', async () => {
+    const header = readPngHeader(await readFile(assetPath('public/brand/trove-og.png')));
+
+    expect(header).toStrictEqual({ colorType: 2, height: 630, width: 1200 });
+  });
+
+  // Android draws a notification badge from its alpha channel alone, so an
+  // opaque square would show as a solid white block in the status bar.
+  test('the notification badge is a white silhouette on transparency', async () => {
+    const path = assetPath('public/icons/trove-badge-96.png');
+    expect(readPngHeader(await readFile(path))).toStrictEqual({
+      colorType: 6,
+      height: 96,
+      width: 96,
+    });
+    const { data, info } = await sharp(path).raw().toBuffer({ resolveWithObject: true });
+    let inked = 0;
+    for (let pixel = 0; pixel < data.length; pixel += info.channels) {
+      const alpha = data[pixel + 3]!;
+      if (alpha === 0) continue;
+      inked += 1;
+      if (alpha === 255)
+        expect([data[pixel], data[pixel + 1], data[pixel + 2]]).toEqual([255, 255, 255]);
+    }
+    expect(data[3]).toBe(0);
+    expect(inked).toBeGreaterThan(0);
   });
 
   test('the favicon fallback contains opaque 16, 32, and 48px PNG frames', async () => {

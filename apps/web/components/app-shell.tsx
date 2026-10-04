@@ -39,7 +39,7 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
       )}
     >
       <Link className="inline-flex min-w-0 items-center text-sm text-foreground" href="/">
-        <BrandLogo markClassName="size-8 shadow-[var(--shadow-control)]" name={app('name')} />
+        <BrandLogo className="h-6" name={app('name')} />
       </Link>
 
       {/* On desktop, destinations sit immediately beside the quick-actions

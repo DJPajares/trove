@@ -78,7 +78,7 @@ export function BrandedFallback({
           thumbnail and a full-width cover. It was a fixed 48px before, which is
           most of a thumbnail and a speck on a hero. */}
       <span className="relative grid aspect-square w-[clamp(1.5rem,26cqmin,3.5rem)] place-items-center rounded-[26%] border border-media-fallback-foreground/20 bg-media-fallback-foreground/12 shadow-[inset_0_1px_0_oklch(1_0_0/0.18)]">
-        <Icon aria-hidden="true" className="size-1/2" strokeWidth={1.75} />
+        <Icon aria-hidden="true" className="size-1/2" />
       </span>
     </span>
   );

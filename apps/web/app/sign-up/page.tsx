@@ -20,7 +20,10 @@ export default async function SignUpPage({ searchParams }: Readonly<SignUpPagePr
     <AuthShell headingId="sign-up-heading">
       <Card className="w-full max-w-md sm:[--card-spacing:--spacing(6)]">
         <CardHeader>
-          <BrandMark className="mb-4 size-11 shadow-[var(--shadow-control)]" presentation="tile" />
+          <BrandMark
+            className="mb-4 size-11 rounded-[25%] shadow-[var(--shadow-control)]"
+            presentation="tile"
+          />
           <p className="text-sm font-medium tracking-[0.01em] text-brand">{t('eyebrow')}</p>
           <h1
             className="mt-2 text-[clamp(1.75rem,5vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-pretty text-foreground"

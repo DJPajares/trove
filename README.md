@@ -381,14 +381,16 @@ Production reconciliation loads `.env.production`; active refresh also requires
 
 ## Brand Assets
 
-The collected-journey symbol and outlined Trove wordmark share their geometry in
-`apps/web/lib/brand/identity.ts`; fixed export colours come from the existing
+The Keepsake symbol, outlined Trove wordmark and lockup share their geometry in
+`apps/web/lib/brand/identity.ts`; fixed export colours come from the
 `--brand-mark-*` CSS tokens. Run `pnpm --filter @trove/web brand:generate` after
-changing either. Commit the generated SVGs, PNGs, favicon, and asset revision;
-`brand:check` verifies them without writing and runs before every web build.
+changing either, and commit the generated SVGs, PNGs, favicon and asset
+revision. `brand:check` verifies them without writing and runs before every web
+build.
 
-Review the variants and actual-size favicon samples in
-[`docs/brand/collected-journey.svg`](docs/brand/collected-journey.svg).
+Construction, variants, colours, clear space and the icon rules live in
+[`docs/brand/README.md`](docs/brand/README.md), with every variant and
+actual-size favicon on [`docs/brand/keepsake.svg`](docs/brand/keepsake.svg).
 Asset URLs carry a content revision so installed browsers can detect new icons.
 Native launcher and splash updates follow the platform's update flow; the web
 app does not force an identity change or clear offline data.

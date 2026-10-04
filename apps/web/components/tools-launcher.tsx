@@ -1,10 +1,11 @@
-import { ArrowLeftRight, ArrowUpRight, ClipboardCheck } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
 import { PageHeader } from '@/components/page-header';
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
 import { toolNavigationDestinations } from '@/lib/navigation';
+import * as Icons from '@/lib/icons';
 
 export function ToolsLauncher() {
   const tools = useTranslations('tools');
@@ -13,13 +14,13 @@ export function ToolsLauncher() {
   const details = {
     currency: {
       description: currency('description'),
-      icon: ArrowLeftRight,
+      icon: Icons.Currency,
       title: currency('title'),
       useCase: tools('currencyUseCase'),
     },
     taskTemplates: {
       description: taskTemplates('description'),
-      icon: ClipboardCheck,
+      icon: Icons.TaskTemplates,
       title: taskTemplates('title'),
       useCase: tools('taskTemplatesUseCase'),
     },
@@ -71,7 +72,7 @@ export function ToolsLauncher() {
                     aria-hidden="true"
                     className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)] group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
                   >
-                    <ArrowUpRight aria-hidden="true" className="size-4" />
+                    <ChevronRight aria-hidden="true" className="size-4" />
                   </span>
                 </div>
               </div>

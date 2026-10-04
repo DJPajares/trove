@@ -3,7 +3,8 @@
     "name": "Trove",
     "description": "Plan it. Live it. Remember it.",
     "loading": "Opening Trove…",
-    "navigating": "Loading the next screen…"
+    "navigating": "Loading the next screen…",
+    "ogImageAlt": "The Trove logo: a T made of a bar and a bookmark ribbon"
   },
   "navigation": {
     "primary": "Primary navigation",

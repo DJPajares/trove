@@ -16,8 +16,9 @@ const badgeVariants = cva(
         solid: 'bg-primary text-primary-foreground',
       },
       size: {
-        default: "px-2 py-0.5 text-xs [&_svg:not([class*='size-'])]:size-3",
-        sm: "px-1.5 py-0.5 text-[11px] [&_svg:not([class*='size-'])]:size-3",
+        default:
+          "px-2 py-0.5 text-xs [--icon-stroke:var(--icon-stroke-compact)] [&_svg:not([class*='size-'])]:size-3",
+        sm: "px-1.5 py-0.5 text-[11px] [--icon-stroke:var(--icon-stroke-compact)] [&_svg:not([class*='size-'])]:size-3",
         count: 'min-w-4 justify-center px-1 text-[10px] leading-4 font-semibold',
       },
     },

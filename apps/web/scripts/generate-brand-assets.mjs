@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 import sharp from 'sharp';
 
-import { brandMark, brandWordmark } from '../lib/brand/identity.ts';
+import { brandLockup, brandMark, brandWordmark } from '../lib/brand/identity.ts';
+import { themeColor } from '../lib/theme-color.ts';
 
 const check = process.argv.includes('--check');
 const webRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -22,54 +23,140 @@ const palette = {
   olive: brandColor('surface'),
   ivory: brandColor('ink'),
   terracotta: brandColor('accent'),
-  walnut: '#33261f',
+  terracottaOnOlive: brandColor('accent-on-surface'),
+  walnut: brandColor('type'),
+  lightGround: themeColor.light,
+  darkGround: themeColor.dark,
 };
 
-function svgDocument(body, width = 64, height = 64, viewBox = brandMark.viewBox) {
+const { live } = brandMark;
+const symbolViewBox = `${live.x} ${live.y} ${live.width} ${live.height}`;
+const lockupViewBox = `0 0 ${brandLockup.width} ${brandLockup.height}`;
+
+function indent(text, spaces) {
+  const pad = ' '.repeat(spaces);
+  return text
+    .split('\n')
+    .map((line) => `${pad}${line}`)
+    .join('\n');
+}
+
+function svgDocument(body, width, height, viewBox) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${viewBox}">\n${body}\n</svg>\n`;
 }
 
-function markBody(ink, accent = ink, scale = 1) {
-  const { cx, cy, radius } = brandMark.terminal;
-  return `  <g transform="translate(32 32) scale(${scale}) translate(-32 -32)">\n    <path d="${brandMark.path}" fill="none" stroke="${ink}" stroke-width="${brandMark.strokeWidth}" stroke-linecap="round" stroke-linejoin="round" />\n    <circle cx="${cx}" cy="${cy}" r="${radius}" fill="${accent}" />\n  </g>`;
+function symbolParts({ bar, ribbon, small = false }) {
+  const geometry = small ? brandMark.small : brandMark;
+  return `<path d="${geometry.ribbon}" fill="${ribbon}" />\n<path d="${geometry.bar}" fill="${bar}" />`;
+}
+
+function symbolSvg(colors) {
+  return svgDocument(
+    indent(symbolParts(colors), 2),
+    live.width * 2,
+    live.height * 2,
+    symbolViewBox,
+  );
 }
 
 function wordmarkBody(ink) {
-  return `  <g fill="${ink}" fill-rule="evenodd">\n${brandWordmark.letters.map(({ offset, path }) => `    <path d="${path}" transform="translate(${offset} 0)" />`).join('\n')}\n  </g>`;
+  const letters = brandWordmark.letters
+    .map(({ path, x }) => `<path d="${path}" transform="translate(${x} 0)" />`)
+    .join('\n');
+  return `<g fill="${ink}">\n${indent(letters, 2)}\n</g>`;
 }
 
 function wordmarkSvg(ink) {
   return svgDocument(
-    wordmarkBody(ink),
-    brandWordmark.width,
-    brandWordmark.height,
+    indent(wordmarkBody(ink), 2),
+    brandWordmark.width * 2,
+    brandWordmark.height * 2,
     brandWordmark.viewBox,
   );
 }
 
+function lockupBody({ bar, ribbon, word }) {
+  const { symbol, wordmark } = brandLockup;
+  return [
+    `<g transform="translate(${symbol.x} ${symbol.y}) scale(${symbol.scale})">`,
+    indent(symbolParts({ bar, ribbon }), 2),
+    '</g>',
+    `<g transform="translate(${wordmark.x} ${wordmark.y})">`,
+    indent(wordmarkBody(word), 2),
+    '</g>',
+  ].join('\n');
+}
+
+function lockupSvg(colors) {
+  return svgDocument(
+    indent(lockupBody(colors), 2),
+    brandLockup.width * 2,
+    brandLockup.height * 2,
+    lockupViewBox,
+  );
+}
+
+/** The olive tile. Favicons take the small master in one ink. */
 function iconSvg({ maskable = false, favicon = false } = {}) {
-  const radius = maskable ? 0 : brandMark.tileRadius;
-  const scale = maskable ? brandMark.maskableScale : favicon ? brandMark.faviconScale : 1;
-  const body = `  <rect width="64" height="64" rx="${radius}" fill="${palette.olive}" />\n${markBody(palette.ivory, favicon ? palette.ivory : palette.terracotta, scale)}`;
-  return svgDocument(body, favicon ? 64 : 512, favicon ? 64 : 512);
+  const radius = maskable ? 0 : brandMark.tile.radius;
+  const scale = maskable
+    ? brandMark.maskableScale
+    : favicon
+      ? brandMark.faviconScale
+      : brandMark.tile.scale;
+  const parts = favicon
+    ? symbolParts({ bar: palette.ivory, ribbon: palette.ivory, small: true })
+    : symbolParts({ bar: palette.ivory, ribbon: palette.terracottaOnOlive });
+  const body = [
+    `<rect width="64" height="64" rx="${radius}" fill="${palette.olive}" />`,
+    `<g transform="translate(32 ${32 + brandMark.tile.offsetY}) scale(${scale}) translate(-32 -32)">`,
+    indent(parts, 2),
+    '</g>',
+  ].join('\n');
+  const size = favicon ? 64 : 512;
+  return svgDocument(indent(body, 2), size, size, brandMark.viewBox);
 }
 
-function lockupSvg(inverse = false) {
-  const ink = inverse ? palette.ivory : palette.olive;
-  const word = inverse ? palette.ivory : palette.walnut;
-  const body = `${markBody(ink, palette.terracotta)}\n  <svg x="72" y="13" width="120" height="34" viewBox="${brandWordmark.viewBox}">\n${wordmarkBody(word)}\n  </svg>`;
-  return svgDocument(body, 204, 64, '0 0 204 64');
+// Android reads only the alpha channel of a notification badge.
+const badgeSvg = svgDocument(
+  indent(
+    [
+      '<g transform="translate(32 32) scale(1.05) translate(-32 -32)">',
+      indent(symbolParts({ bar: '#ffffff', ribbon: '#ffffff', small: true }), 2),
+      '</g>',
+    ].join('\n'),
+    2,
+  ),
+  96,
+  96,
+  brandMark.viewBox,
+);
+
+// The share card carries no words beyond the wordmark, so it never needs translating.
+function ogSvg() {
+  const width = 1200;
+  const height = 630;
+  const scale = 640 / brandLockup.width;
+  const x = (width - brandLockup.width * scale) / 2;
+  const y = (height - brandLockup.height * scale) / 2;
+  const body = [
+    `<rect width="${width}" height="${height}" fill="${palette.olive}" />`,
+    `<g transform="translate(${x.toFixed(2)} ${y.toFixed(2)}) scale(${scale.toFixed(4)})">`,
+    indent(
+      lockupBody({ bar: palette.ivory, ribbon: palette.terracottaOnOlive, word: palette.ivory }),
+      2,
+    ),
+    '</g>',
+  ].join('\n');
+  return svgDocument(indent(body, 2), width, height, `0 0 ${width} ${height}`);
 }
 
-async function png(svg, size, alpha = false) {
-  const image = sharp(Buffer.from(svg), { density: 144 })
-    .resize(size, size)
-    .flatten({ background: palette.olive });
+async function png(svg, width, height = width, { alpha = false, transparent = false } = {}) {
+  let image = sharp(Buffer.from(svg), { density: 144 }).resize(width, height);
+  if (!transparent) image = image.flatten({ background: palette.olive });
   // Next's ICO decoder requires RGBA frames, even when every pixel is opaque.
-  const opaqueImage = alpha ? image.ensureAlpha() : image.removeAlpha();
-  return opaqueImage
-    .png({ adaptiveFiltering: false, compressionLevel: 9, palette: false })
-    .toBuffer();
+  const encoded = alpha || transparent ? image.ensureAlpha() : image.removeAlpha();
+  return encoded.png({ adaptiveFiltering: false, compressionLevel: 9, palette: false }).toBuffer();
 }
 
 // ICO can carry PNG frames directly; no second image-conversion library needed.
@@ -92,31 +179,49 @@ function ico(frames) {
   return Buffer.concat([directory, ...frames.map(({ bytes }) => bytes)]);
 }
 
+const color = { bar: palette.olive, ribbon: palette.terracotta };
+const colorInverse = { bar: palette.ivory, ribbon: palette.terracotta };
+const mono = { bar: palette.olive, ribbon: palette.olive };
+const monoInverse = { bar: palette.ivory, ribbon: palette.ivory };
+
 const favicon = iconSvg({ favicon: true });
 const launcher = iconSvg();
 const maskable = iconSvg({ maskable: true });
+const og = ogSvg();
 const assets = new Map([
   ['app/icon.svg', Buffer.from(favicon)],
   ['public/brand/trove-icon.svg', Buffer.from(launcher)],
   ['public/brand/trove-icon-maskable.svg', Buffer.from(maskable)],
-  [
-    'public/brand/trove-mark.svg',
-    Buffer.from(svgDocument(markBody(palette.olive, palette.terracotta))),
-  ],
-  ['public/brand/trove-mark-monochrome.svg', Buffer.from(svgDocument(markBody(palette.olive)))],
-  ['public/brand/trove-mark-inverse.svg', Buffer.from(svgDocument(markBody(palette.ivory)))],
+  ['public/brand/trove-mark.svg', Buffer.from(symbolSvg(color))],
+  ['public/brand/trove-mark-inverse.svg', Buffer.from(symbolSvg(colorInverse))],
+  ['public/brand/trove-mark-monochrome.svg', Buffer.from(symbolSvg(mono))],
+  ['public/brand/trove-mark-monochrome-inverse.svg', Buffer.from(symbolSvg(monoInverse))],
   ['public/brand/trove-wordmark.svg', Buffer.from(wordmarkSvg(palette.walnut))],
   ['public/brand/trove-wordmark-inverse.svg', Buffer.from(wordmarkSvg(palette.ivory))],
-  ['public/brand/trove-lockup.svg', Buffer.from(lockupSvg())],
-  ['public/brand/trove-lockup-inverse.svg', Buffer.from(lockupSvg(true))],
+  ['public/brand/trove-lockup.svg', Buffer.from(lockupSvg({ ...color, word: palette.walnut }))],
+  [
+    'public/brand/trove-lockup-inverse.svg',
+    Buffer.from(lockupSvg({ ...colorInverse, word: palette.ivory })),
+  ],
+  [
+    'public/brand/trove-lockup-monochrome.svg',
+    Buffer.from(lockupSvg({ ...mono, word: palette.olive })),
+  ],
+  [
+    'public/brand/trove-lockup-monochrome-inverse.svg',
+    Buffer.from(lockupSvg({ ...monoInverse, word: palette.ivory })),
+  ],
 ]);
 
 for (const size of [180, 192, 512]) {
   assets.set(`public/icons/trove-${size}.png`, await png(launcher, size));
 }
 assets.set('public/icons/trove-maskable-512.png', await png(maskable, 512));
+assets.set('public/icons/trove-badge-96.png', await png(badgeSvg, 96, 96, { transparent: true }));
+assets.set('public/brand/trove-og.png', await png(og, 1200, 630));
 const frames = [];
-for (const size of [16, 32, 48]) frames.push({ size, bytes: await png(favicon, size, true) });
+for (const size of [16, 32, 48])
+  frames.push({ size, bytes: await png(favicon, size, size, { alpha: true }) });
 assets.set('app/favicon.ico', ico(frames));
 
 const revisionHash = createHash('sha256');
@@ -131,56 +236,96 @@ assets.set(
   ),
 );
 
-function placedSvg(source, x, y, width, height) {
+/** Embeds a generated SVG document at a position and size on the review sheet. */
+function placed(source, x, y, width, height) {
   return `<g transform="translate(${x} ${y})">${source.replace(/width="[^"]+" height="[^"]+"/, `width="${width}" height="${height}"`)}</g>`;
 }
 
-// This is a design review artifact, never an application route or PWA screen.
+const sans = 'font-family="ui-sans-serif, system-ui, sans-serif"';
+const lockupRatio = brandLockup.height / brandLockup.width;
+const symbolRatio = live.height / live.width;
+const swatches = [
+  ['Olive', palette.olive, '--brand-mark-surface'],
+  ['Ivory', palette.ivory, '--brand-mark-ink'],
+  ['Terracotta', palette.terracotta, '--brand-mark-accent'],
+  ['Terracotta on olive', palette.terracottaOnOlive, '--brand-mark-accent-on-surface'],
+  ['Walnut', palette.walnut, '--brand-mark-type'],
+];
+
+// A design review artifact, never an application route or PWA screen.
 const reviewBody = [
-  '  <rect width="1160" height="820" fill="#f8f1e7" />',
-  placedSvg(wordmarkSvg(palette.walnut), 44, 36, 180, 51),
-  '  <g font-family="ui-sans-serif, system-ui, sans-serif" fill="#33261f">',
-  '    <text x="44" y="118" font-size="22">Plan it. Live it. Remember it.</text>',
-  '    <text x="1116" y="70" text-anchor="end" font-size="15">The collected journey</text>',
-  '  </g>',
-  '  <rect x="44" y="152" width="520" height="246" rx="16" fill="#fcf7ee" />',
-  placedSvg(lockupSvg(), 78, 231, 442, 139),
-  '  <rect x="584" y="152" width="532" height="246" rx="16" fill="#12130d" />',
-  placedSvg(lockupSvg(true), 624, 231, 442, 139),
-  '  <g font-family="ui-sans-serif, system-ui, sans-serif" font-size="14">',
-  '    <text x="70" y="185" fill="#515723">Primary lockup</text>',
-  '    <text x="610" y="185" fill="#fcf7ee">Inverse lockup</text>',
-  '  </g>',
-  placedSvg(svgDocument(markBody(palette.olive, palette.terracotta)), 44, 445, 100, 100),
-  placedSvg(svgDocument(markBody(palette.olive)), 208, 445, 100, 100),
-  '  <rect x="372" y="445" width="100" height="100" rx="12" fill="#12130d" />',
-  placedSvg(svgDocument(markBody(palette.ivory)), 372, 445, 100, 100),
-  placedSvg(launcher, 536, 445, 100, 100),
-  placedSvg(maskable, 700, 445, 100, 100),
-  '  <g font-family="ui-sans-serif, system-ui, sans-serif" font-size="14" fill="#33261f">',
-  '    <text x="44" y="578">Primary</text><text x="208" y="578">Monochrome</text>',
-  '    <text x="372" y="578">Inverse</text><text x="536" y="578">App icon</text>',
-  '    <text x="700" y="578">Maskable</text><text x="876" y="440">Actual-size favicons</text>',
-  '  </g>',
+  `<rect width="1200" height="1180" fill="${palette.lightGround}" />`,
+  placed(lockupSvg({ ...color, word: palette.walnut }), 48, 40, 230, 230 * lockupRatio),
+  `<g ${sans} fill="${palette.walnut}">`,
+  '  <text x="48" y="122" font-size="22">Plan it. Live it. Remember it.</text>',
+  '  <text x="1152" y="70" text-anchor="end" font-size="15">The Keepsake</text>',
+  '</g>',
+  `<rect x="48" y="156" width="540" height="250" rx="16" fill="${palette.ivory}" />`,
+  placed(lockupSvg({ ...color, word: palette.walnut }), 128, 248, 380, 380 * lockupRatio),
+  `<rect x="612" y="156" width="540" height="250" rx="16" fill="${palette.darkGround}" />`,
+  placed(lockupSvg({ ...colorInverse, word: palette.ivory }), 692, 248, 380, 380 * lockupRatio),
+  `<g ${sans} font-size="14">`,
+  `  <text x="72" y="188" fill="${palette.olive}">Lockup on light</text>`,
+  `  <text x="636" y="188" fill="${palette.ivory}">Lockup on dark</text>`,
+  '</g>',
+  placed(symbolSvg(color), 72, 452, 92, 92 * symbolRatio),
+  placed(symbolSvg(mono), 232, 452, 92, 92 * symbolRatio),
+  `<rect x="372" y="440" width="116" height="112" rx="12" fill="${palette.darkGround}" />`,
+  placed(symbolSvg(colorInverse), 384, 452, 92, 92 * symbolRatio),
+  `<rect x="512" y="440" width="116" height="112" rx="12" fill="${palette.darkGround}" />`,
+  placed(symbolSvg(monoInverse), 524, 452, 92, 92 * symbolRatio),
+  placed(launcher, 664, 440, 112, 112),
+  placed(maskable, 812, 440, 112, 112),
+  `<circle cx="868" cy="496" r="44.8" fill="none" stroke="${palette.ivory}" stroke-opacity="0.55" stroke-dasharray="3 4" />`,
+  `<rect x="960" y="440" width="112" height="112" rx="12" fill="#5c5e57" />`,
+  placed(badgeSvg, 980, 460, 72, 72),
+  `<g ${sans} font-size="14" fill="${palette.walnut}">`,
+  '  <text x="72" y="586">Symbol</text><text x="232" y="586">Monochrome</text>',
+  '  <text x="372" y="586">On dark</text><text x="512" y="586">Mono on dark</text>',
+  '  <text x="664" y="586">App icon</text><text x="812" y="586">Maskable, safe zone</text>',
+  '  <text x="960" y="586">Notification badge</text>',
+  '</g>',
+  `<path d="M48 620H1152" stroke="${palette.walnut}" stroke-opacity="0.16" />`,
+  `<g ${sans} font-size="14" fill="${palette.walnut}">`,
+  '  <text x="48" y="664">Actual-size favicons (small master)</text>',
+  '  <text x="560" y="664">Clear space: one ribbon width on every side</text>',
+  '</g>',
   ...[16, 24, 32, 48].map((size, index) =>
-    placedSvg(favicon, 876 + index * 60, 477 - size / 2, size, size),
+    placed(favicon, 48 + index * 72, 704 - size / 2, size, size),
   ),
-  '  <g font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" fill="#33261f">',
+  `<g ${sans} font-size="13" fill="${palette.walnut}">`,
   ...[16, 24, 32, 48].map(
-    (size, index) => `    <text x="${876 + index * 60}" y="526">${size}px</text>`,
+    (size, index) => `  <text x="${48 + index * 72}" y="760">${size}px</text>`,
   ),
-  '  </g>',
-  '  <path d="M44 620H1116" stroke="#d8cdbd" />',
-  '  <g font-family="ui-sans-serif, system-ui, sans-serif" fill="#33261f">',
-  '    <text x="44" y="667" font-size="19">One journey, gathered.</text>',
-  '    <text x="44" y="703" font-size="16">A single ribbon turns through planning, travelling, and remembering.</text>',
-  '    <text x="44" y="729" font-size="16">Its open pocket keeps a moment; the terracotta terminal gives it emphasis.</text>',
-  '    <text x="44" y="755" font-size="16">The same silhouette holds in one colour, with no lettering or literal travel pictogram.</text>',
-  '  </g>',
+  '</g>',
+  placed(
+    wordmarkSvg(palette.walnut),
+    344,
+    690,
+    150,
+    150 * (brandWordmark.height / brandWordmark.width),
+  ),
+  `<rect x="560" y="684" width="${48 * 3 + 14 * 3 * 2}" height="${46 * 3 + 14 * 3 * 2}" fill="none" stroke="${palette.olive}" stroke-opacity="0.5" stroke-dasharray="4 4" />`,
+  placed(symbolSvg(color), 560 + 42, 684 + 42, 144, 144 * symbolRatio),
+  `<g ${sans} font-size="13" fill="${palette.walnut}">`,
+  '  <text x="820" y="720">Symbol: 16px minimum, small master below 24px</text>',
+  '  <text x="820" y="746">App tile: 20px minimum</text>',
+  '  <text x="820" y="772">Lockup: 72px wide minimum</text>',
+  '  <text x="820" y="798">Never recolour, outline, rotate or separate the parts.</text>',
+  '</g>',
+  `<path d="M48 940H1152" stroke="${palette.walnut}" stroke-opacity="0.16" />`,
+  ...swatches.flatMap(([name, value, token], index) => [
+    `<rect x="${48 + index * 222}" y="972" width="200" height="72" rx="12" fill="${value}" stroke="${palette.walnut}" stroke-opacity="0.12" />`,
+    `<text ${sans} x="${48 + index * 222}" y="1068" font-size="14" fill="${palette.walnut}">${name} ${value}</text>`,
+    `<text ${sans} x="${48 + index * 222}" y="1090" font-size="12" fill="${palette.walnut}" fill-opacity="0.7">${token}</text>`,
+  ]),
+  `<g ${sans} font-size="15" fill="${palette.walnut}">`,
+  '  <text x="48" y="1140">A bar for the whole trip and a ribbon for what you keep: one T, read at any size, in one colour or two.</text>',
+  '</g>',
 ].join('\n');
 assets.set(
-  '../../docs/brand/collected-journey.svg',
-  Buffer.from(svgDocument(reviewBody, 1160, 820, '0 0 1160 820')),
+  '../../docs/brand/keepsake.svg',
+  Buffer.from(svgDocument(indent(reviewBody, 2), 1200, 1180, '0 0 1200 1180')),
 );
 
 let stale = false;

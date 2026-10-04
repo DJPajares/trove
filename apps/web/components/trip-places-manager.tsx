@@ -1,6 +1,6 @@
 'use client';
 
-import { CircleAlert, MapPinned, Plus } from 'lucide-react';
+import { CircleAlert, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 
@@ -38,6 +38,7 @@ import { useTripResource } from '@/lib/query/use-trip-resource';
 import { resolveTripPlaceName } from '@/lib/trip-places/place-name';
 import { sortTripPlaces, tripPlaceSorts, type TripPlaceSort } from '@/lib/trip-places/sort';
 import { useTripPlaces } from '@/lib/trip-places/use-trip-places';
+import * as Icons from '@/lib/icons';
 
 /**
  * The Places page. Navigation no longer points here — the itinerary opens the same
@@ -135,7 +136,7 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
           actions={addButton(t('addFirstPlace'))}
           description={t('emptyDescription')}
           headingLevel={2}
-          icon={<MapPinned aria-hidden="true" />}
+          icon={<Icons.Places aria-hidden="true" />}
           kind="empty"
           title={t('emptyTitle')}
         />

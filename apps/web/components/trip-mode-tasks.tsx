@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, ChevronDown, CircleAlert, ListChecks, Plus } from 'lucide-react';
+import { ChevronDown, CircleAlert, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import {
@@ -36,6 +36,7 @@ import {
 } from '@/lib/tasks/api';
 import { replaceTripModeTask, sortTripModeTasks, withTaskCompletion } from '@/lib/tasks/trip-mode';
 import { cn } from '@/lib/utils';
+import * as Icons from '@/lib/icons';
 
 type TaskLoadStatus = 'error' | 'loading' | 'ready';
 
@@ -270,7 +271,7 @@ export function TripModeTaskList({
       {completedTasks.length ? (
         <Collapsible>
           <CollapsibleTrigger className="group">
-            <CheckCircle2 aria-hidden="true" />
+            <Icons.Success aria-hidden="true" />
             {t('completedCount', { count: completedTasks.length })}
             <ChevronDown
               aria-hidden="true"
@@ -306,7 +307,7 @@ export function TripModeTaskDisclosure({
     <Collapsible className={className}>
       <CollapsibleTrigger className="group w-full justify-between gap-3 py-2 text-left">
         <span className="inline-flex min-w-0 items-center gap-2 text-foreground">
-          <ListChecks aria-hidden="true" className="text-brand" />
+          <Icons.Tasks aria-hidden="true" className="text-brand" />
           <span className="truncate">{title}</span>
         </span>
         <span className="inline-flex shrink-0 items-center gap-2 text-xs text-muted-foreground">

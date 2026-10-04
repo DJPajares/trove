@@ -50,6 +50,8 @@ self.addEventListener('push', (event) => {
       if (!shouldShowPush(payload, activeOwner)) return;
       await self.registration.showNotification(payload.title, {
         body: payload.body,
+        // Android paints the status bar icon from the badge's alpha alone.
+        badge: brandAssets.badge,
         icon: brandAssets.launcher192,
         tag: payload.tag,
         data: { ownerId: payload.ownerId, url: payload.url },

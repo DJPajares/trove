@@ -1,6 +1,5 @@
 import {
   BedDouble,
-  Compass,
   Landmark,
   ShoppingBag,
   TramFront,
@@ -9,6 +8,7 @@ import {
 } from 'lucide-react';
 
 import type { ExpenseCategory } from '@/lib/expenses/api';
+import * as Icons from '@/lib/icons';
 
 /** An expense with no category still has to sit somewhere in a breakdown. */
 export type SpendCategoryKey = ExpenseCategory | 'uncategorised';
@@ -49,7 +49,7 @@ type ExpenseCategoryPresentation = {
 const EXPENSE_CATEGORY_PRESENTATION: Record<ExpenseCategory, ExpenseCategoryPresentation> = {
   activities: { Icon: Landmark, barClassName: 'bg-category-activities' },
   food: { Icon: UtensilsCrossed, barClassName: 'bg-category-food' },
-  other: { Icon: Compass, barClassName: 'bg-category-other' },
+  other: { Icon: Icons.Other, barClassName: 'bg-category-other' },
   shopping: { Icon: ShoppingBag, barClassName: 'bg-category-shopping' },
   stay: { Icon: BedDouble, barClassName: 'bg-category-stay' },
   transport: { Icon: TramFront, barClassName: 'bg-category-transport' },

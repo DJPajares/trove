@@ -1219,6 +1219,8 @@ Location permission is optional and should only be requested contextually when l
 
 A day may have an explicit Daily Base.
 
+Travellers see the Daily Base as their **Stay**. "Daily Base" and "Departure Base" remain the internal names.
+
 Daily Base is distinct from trip Starting Location.
 
 For normal per-day base context, use this precedence:

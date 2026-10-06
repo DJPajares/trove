@@ -15,11 +15,33 @@ export type SignalsTranslator = (key: string, values?: Record<string, number | s
 const METRES_PER_MILE = 1609.344;
 const FEET_PER_METRE = 3.28084;
 
+/** A place's hours on a day, split so a row can set their age quieter than the hours themselves. */
+export type HoursParts = { checked: string; closed: boolean; label: string };
+
+/** A rating split into the number, its review count, and the full sentence for assistive tech. */
+export type RatingParts = { count: string | null; label: string; value: string };
+
+/** Everything a Trip Place row can say about a place without asking a provider. */
+export type TripPlaceRowSignals = {
+  distance?: { far: boolean; text: string };
+  hours?: HoursParts;
+  rating?: RatingParts;
+};
+
 /** "Open 9:00 AM – 5:00 PM", "Closed this day", or null when nothing is known. */
 export function describeHours(
   status: PlaceHoursStatus | undefined,
   options: { hour12: boolean; locale: string; t: SignalsTranslator },
 ): string | null {
+  const parts = describeHoursParts(status, options);
+  return parts ? `${parts.label} · ${parts.checked}` : null;
+}
+
+/** The same as `describeHours`, with the hours and the date they were checked kept apart. */
+export function describeHoursParts(
+  status: PlaceHoursStatus | undefined,
+  options: { hour12: boolean; locale: string; t: SignalsTranslator },
+): HoursParts | null {
   if (!status) return null;
   const { hour12, locale, t } = options;
   const checked = t('checked', {
@@ -28,7 +50,7 @@ export function describeHours(
     ),
   });
 
-  if (status.status === 'closed') return `${t('closed')} · ${checked}`;
+  if (status.status === 'closed') return { checked, closed: true, label: t('closed') };
 
   const allDay =
     status.spans.length === 1 &&
@@ -42,11 +64,11 @@ export function describeHours(
             `${formatSuggestedClock(span.open, locale, hour12)} – ${formatSuggestedClock(span.close, locale, hour12)}`,
         )
         .join(', ');
-  const main = allDay
+  const label = allDay
     ? t('allDay')
     : t(status.special ? 'specialHours' : 'openHours', { times: times ?? '' });
 
-  return `${main} · ${checked}`;
+  return { checked, closed: false, label };
 }
 
 /** "4.5 on Google (1.2K reviews)": the source is named because the number is theirs. */
@@ -54,16 +76,24 @@ export function describeRating(
   rating: TripPlaceSignals['rating'] | undefined,
   options: { locale: string; t: SignalsTranslator },
 ): string | null {
+  return describeRatingParts(rating, options)?.label ?? null;
+}
+
+/** The same as `describeRating`, with the number and the compact review count kept apart. */
+export function describeRatingParts(
+  rating: TripPlaceSignals['rating'] | undefined,
+  options: { locale: string; t: SignalsTranslator },
+): RatingParts | null {
   if (!rating) return null;
   const { locale, t } = options;
   const value = new Intl.NumberFormat(locale, {
     maximumFractionDigits: 1,
     minimumFractionDigits: 1,
   }).format(rating.value);
-  if (!rating.reviewCount) return t('rating', { rating: value });
+  if (!rating.reviewCount) return { count: null, label: t('rating', { rating: value }), value };
 
   const count = new Intl.NumberFormat(locale, { notation: 'compact' }).format(rating.reviewCount);
-  return t('ratingWithCount', { count, rating: value });
+  return { count, label: t('ratingWithCount', { count, rating: value }), value };
 }
 
 /** Straight-line distance to the closest of the day's stops, or null with nothing to measure from. */

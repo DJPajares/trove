@@ -7,37 +7,23 @@ import { useTranslations } from 'next-intl';
 import { AddTripPlaceSheet } from '@/components/add-trip-place-sheet';
 import { EditTripPlaceSheet } from '@/components/edit-trip-place-sheet';
 import { PageState } from '@/components/page-state';
+import { RemoveTripPlaceDialog } from '@/components/remove-trip-place-dialog';
 import { SavedPlacesForTrip } from '@/components/saved-places-for-trip';
 import { useTripPlaceSignals } from '@/hooks/use-trip-place-signals';
 import { TripPlacesPanel } from '@/components/trip-places-panel';
+import { TripPlacesNoMatches, TripPlacesToolbar } from '@/components/trip-places-toolbar';
 import { TripSectionHeader } from '@/components/trip-section-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import type { TripPlace } from '@/lib/trip-places/api';
 import { fetchItinerary } from '@/lib/itinerary/api';
 import { scheduledPlaceUse } from '@/lib/itinerary/places';
 import { queryKeys } from '@/lib/query/keys';
 import { useTripResource } from '@/lib/query/use-trip-resource';
 import { resolveTripPlaceName } from '@/lib/trip-places/place-name';
-import { sortTripPlaces, tripPlaceSorts, type TripPlaceSort } from '@/lib/trip-places/sort';
+import { tripPlaceSorts } from '@/lib/trip-places/sort';
 import { useTripPlaces } from '@/lib/trip-places/use-trip-places';
+import { useTripPlacesView } from '@/lib/trip-places/use-trip-places-view';
 import * as Icons from '@/lib/icons';
 
 /**
@@ -57,11 +43,10 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
   );
   // Ratings Trove already has stored; this page has no day, so no hours or distance.
   const { signalsFor } = useTripPlaceSignals(tripId);
-  const [sort, setSort] = useState<TripPlaceSort>('name');
-  const [addOpen, setAddOpen] = useState(false);
+  /** What the Add sheet opens with: null while it is closed, a search when one is carried over. */
+  const [addQuery, setAddQuery] = useState<string | null>(null);
   const [editPlace, setEditPlace] = useState<TripPlace | null>(null);
   const [removingPlace, setRemovingPlace] = useState<TripPlace | null>(null);
-  const [removing, setRemoving] = useState(false);
 
   const placeName = (tripPlace: TripPlace) =>
     resolveTripPlaceName(tripPlace, {
@@ -69,34 +54,17 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
       provider: t('providerPlace'),
     });
 
-  const sortedPlaces = useMemo(
-    () => sortTripPlaces(places.places, sort, placeName),
-    [places.places, sort, t],
-  );
-
-  async function removePlace() {
-    if (!removingPlace) return;
-    setRemoving(true);
-    const result = await places.remove(removingPlace);
-    setRemoving(false);
-    // A refusal (the Place is still scheduled somewhere) is not a completed
-    // removal: closing the dialog on it would read as success. It stays open
-    // with the reason inline instead, same as Saved's own unsave confirmation.
-    if (result.ok) setRemovingPlace(null);
-  }
-
-  const addButton = (label: string) => (
-    <Button onClick={() => setAddOpen(true)}>
-      <Plus aria-hidden="true" data-icon="inline-start" />
-      {label}
-    </Button>
-  );
+  const view = useTripPlacesView(places.places, {
+    nameOf: placeName,
+    placeUse,
+    sorts: tripPlaceSorts,
+  });
 
   return (
     <section className="space-y-7">
       <TripSectionHeader
         description={t('description')}
-        primaryAction={{ label: t('addPlace'), onSelect: () => setAddOpen(true) }}
+        primaryAction={{ label: t('addPlace'), onSelect: () => setAddQuery('') }}
       />
 
       {places.error && !removingPlace ? (
@@ -133,7 +101,12 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
         />
       ) : places.places.length === 0 ? (
         <PageState
-          actions={addButton(t('addFirstPlace'))}
+          actions={
+            <Button onClick={() => setAddQuery('')}>
+              <Plus aria-hidden="true" data-icon="inline-start" />
+              {t('addFirstPlace')}
+            </Button>
+          }
           description={t('emptyDescription')}
           headingLevel={2}
           icon={<Icons.Places aria-hidden="true" />}
@@ -142,48 +115,37 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
         />
       ) : (
         <div className="space-y-4">
-          <div className="flex justify-end">
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground">{t('sortLabel')}</span>
-              <Select
-                onValueChange={(value) => value && setSort(value as TripPlaceSort)}
-                value={sort}
-              >
-                <SelectTrigger aria-label={t('sortBy')} size="sm">
-                  <SelectValue>{t(`sort.${sort}`)}</SelectValue>
-                </SelectTrigger>
-                <SelectContent align="end">
-                  {tripPlaceSorts.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {t(`sort.${option}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <TripPlacesToolbar view={view} />
 
-          <TripPlacesPanel
-            placeUse={placeUse}
-            onEditPlace={setEditPlace}
-            onPlaceLocated={places.placeLocated}
-            onPriorityChange={(tripPlace, priority) => void places.setPriority(tripPlace, priority)}
-            onRemove={setRemovingPlace}
-            signalsFor={signalsFor}
-            tripId={tripId}
-            tripPlaces={sortedPlaces}
-          />
+          {view.visible.length ? (
+            <TripPlacesPanel
+              placeUse={placeUse}
+              onEditPlace={setEditPlace}
+              onPlaceLocated={places.placeLocated}
+              onPriorityChange={(tripPlace, priority) =>
+                void places.setPriority(tripPlace, priority)
+              }
+              onRemove={setRemovingPlace}
+              rowClassName="px-3"
+              signalsFor={signalsFor}
+              tripId={tripId}
+              tripPlaces={view.visible}
+            />
+          ) : (
+            <TripPlacesNoMatches onAddQuery={setAddQuery} view={view} />
+          )}
         </div>
       )}
 
-      {addOpen ? (
+      {addQuery !== null ? (
         <AddTripPlaceSheet
+          initialQuery={addQuery}
           onAdded={(tripPlace) =>
             places.setPlaces((current) =>
               current.some((item) => item.id === tripPlace.id) ? current : [...current, tripPlace],
             )
           }
-          onOpenChange={setAddOpen}
+          onOpenChange={(open) => !open && setAddQuery(null)}
           tripId={tripId}
           tripPlaces={places.places}
         />
@@ -196,40 +158,17 @@ export function TripPlacesManager({ tripId }: Readonly<{ tripId: string }>) {
         tripPlace={editPlace}
       />
 
-      <AlertDialog
-        onOpenChange={(open) => {
-          if (!open) {
-            setRemovingPlace(null);
-            places.clearError();
-          }
+      <RemoveTripPlaceDialog
+        error={places.error}
+        nameOf={placeName}
+        onClose={() => {
+          setRemovingPlace(null);
+          places.clearError();
         }}
-        open={Boolean(removingPlace)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('removeTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('removeDescription', { name: removingPlace ? placeName(removingPlace) : '' })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {places.error ? (
-            <Alert role="alert" variant="destructive">
-              <CircleAlert aria-hidden="true" />
-              <AlertDescription>{t(places.error.key, places.error.values)}</AlertDescription>
-            </Alert>
-          ) : null}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={removing}>{t('cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={removing}
-              onClick={() => void removePlace()}
-              variant="destructive"
-            >
-              {removing ? t('removing') : t('removePlace')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onRemove={places.remove}
+        placeUse={placeUse}
+        tripPlace={removingPlace}
+      />
     </section>
   );
 }

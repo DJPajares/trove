@@ -6,12 +6,14 @@ import { useCallback } from 'react';
 import { usePreferences } from '@/components/preferences-provider';
 import type { Coordinate } from '@/lib/maps/haversine';
 import type { TripPlace } from '@/lib/trip-places/api';
+import { isFarFromDay } from '@/lib/trip-places/list-view';
 import {
-  describeHours,
-  describeRating,
+  describeHoursParts,
+  describeRatingParts,
   formatNearbyDistance,
   nearestDistanceMeters,
   type SignalsTranslator,
+  type TripPlaceRowSignals,
 } from '@/lib/trip-places/signals';
 import { useTripPlaceHours } from '@/lib/trip-places/use-trip-place-hours';
 
@@ -44,23 +46,24 @@ export function useTripPlaceSignals(
   );
 
   const signalsFor = useCallback(
-    (tripPlace: TripPlace) => {
+    (tripPlace: TripPlace): TripPlaceRowSignals => {
       const entry = signals[tripPlace.id];
-      const lines: Array<{ emphasis?: boolean; text: string }> = [];
-      const hours = describeHours(entry?.hours, { hour12, locale, t });
-      if (hours) lines.push({ emphasis: entry?.hours?.status === 'closed', text: hours });
-      const rating = describeRating(entry?.rating, { locale, t });
-      if (rating) lines.push({ text: rating });
+      const facts: TripPlaceRowSignals = {};
+      const hours = describeHoursParts(entry?.hours, { hour12, locale, t });
+      if (hours) facts.hours = hours;
+      const rating = describeRatingParts(entry?.rating, { locale, t });
+      if (rating) facts.rating = rating;
       const distance = distanceOf(tripPlace);
       // A place that is already one of the day's stops needs no distance to itself.
       if (distance !== null && distance >= MIN_SHOWN_DISTANCE_METRES) {
-        lines.push({
+        facts.distance = {
+          far: isFarFromDay(distance),
           text: t('fromDay', {
             distance: formatNearbyDistance(distance, preferences.distanceUnit, locale),
           }),
-        });
+        };
       }
-      return lines;
+      return facts;
     },
     [distanceOf, hour12, locale, preferences.distanceUnit, signals, t],
   );

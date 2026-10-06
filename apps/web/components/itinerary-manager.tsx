@@ -34,9 +34,10 @@ import { ItineraryDayTimeSuggestions } from '@/components/itinerary-day-time-sug
 import { SuggestedTimeAction, useSuggestedTime } from '@/components/itinerary-suggested-time';
 import { PageState } from '@/components/page-state';
 import { ItineraryDayTimeline } from '@/components/itinerary-day-timeline';
-import { ItineraryOverview } from '@/components/itinerary-overview';
+import { ItineraryOverview, type ItineraryOverviewDisplay } from '@/components/itinerary-overview';
 import { TripDayWeather } from '@/components/trip-day-weather';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
+import { ItineraryTripMap } from '@/components/itinerary-trip-map';
 import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
 import { ItineraryPlacesDrawer } from '@/components/itinerary-places-drawer';
 import { LocatePlaceSheet } from '@/components/locate-place-sheet';
@@ -147,7 +148,7 @@ import {
 } from '@/lib/maps/itinerary-map';
 import { useTripPlaceHours } from '@/lib/trip-places/use-trip-place-hours';
 import { untimedItems } from '@/lib/itinerary/day-time-suggestions';
-import { planningMapLifecycle } from '@/lib/maps/map-retention';
+import { overviewMapLifecycle, planningMapLifecycle } from '@/lib/maps/map-retention';
 import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
 import { useInViewOnce } from '@/lib/plan-score/use-in-view-once';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
@@ -448,6 +449,22 @@ export function ItineraryManager({
   useEffect(() => {
     if (activeView === 'day' && desktopMapLayout === true) setPlanningMapMounted(true);
   }, [activeView, desktopMapLayout]);
+
+  // The whole trip's map waits to be asked for at every width, and is kept,
+  // hidden, once it has been - behind the list and behind the Day view alike.
+  const [overviewDisplay, setOverviewDisplay] = useState<ItineraryOverviewDisplay>('list');
+  const [tripMapMounted, setTripMapMounted] = useState(false);
+  const {
+    mount: shouldMountTripMap,
+    renderOverview,
+    visible: tripMapVisible,
+  } = overviewMapLifecycle({
+    activeView,
+    display: overviewDisplay,
+    mounted: tripMapMounted,
+  });
+  // A stop opened from the trip's map, waiting for its day to be on screen.
+  const [pendingDayItemId, setPendingDayItemId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -859,6 +876,24 @@ export function ItineraryManager({
     setSelectedMapPointId(null);
     setSelectedMapItemId(null);
   }, [selectedDayId]);
+
+  // Lands on the stop opened from the trip's map, picked out on its day's list
+  // and its day's map. Declared after the effect above, which clears the
+  // selection whenever the day changes and would otherwise undo this.
+  useEffect(() => {
+    if (!pendingDayItemId || activeView !== 'day' || !selectedDay) return;
+    const item = selectedDay.items.find((candidate) => candidate.id === pendingDayItemId);
+    setPendingDayItemId(null);
+    // Removed in the meantime: the day is still the right place to land.
+    if (!item) return;
+    setSelectedMapItemId(item.id);
+    setSelectedMapPointId(
+      item.tripPlace && placeLocation(item.tripPlace) ? item.tripPlace.id : null,
+    );
+    scrollToItem(item.id, true);
+    // `placeLocation` and `scrollToItem` read nothing that changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView, pendingDayItemId, selectedDay]);
 
   const clearMapSelection = useCallback(() => {
     setSelectedMapPointId(null);
@@ -1683,6 +1718,22 @@ export function ItineraryManager({
     openEdit(item);
   }
 
+  function openTripMapItem(itemId: string) {
+    const day = itinerary?.days.find((candidate) =>
+      candidate.items.some((item) => item.id === itemId),
+    );
+    if (!day) return;
+    // A phone shows the day's list, where the stop is read and changed.
+    setMobileView('list');
+    setPendingDayItemId(itemId);
+    openDay(day.id);
+  }
+
+  function changeOverviewDisplay(display: ItineraryOverviewDisplay) {
+    setOverviewDisplay(display);
+    if (display === 'map') setTripMapMounted(true);
+  }
+
   function changeItineraryView(value: string) {
     if (value === 'overview') {
       writeDayToUrl(null, 'push');
@@ -1745,16 +1796,42 @@ export function ItineraryManager({
           <AlertDescription>{t('timeZoneConsequence')}</AlertDescription>
         </Alert>
       ) : null}
-      {activeView === 'overview' ? (
-        <ItineraryOverview
-          days={itinerary.days}
-          locale={locale}
-          onEditItem={openOverviewItem}
-          onOpenDay={openDay}
-          resolveItemName={itemName}
-          timeFormat={preferences.timeFormat}
-          weather={weather}
-        />
+      {renderOverview ? (
+        <div className={activeView === 'overview' ? 'contents' : 'hidden'}>
+          <ItineraryOverview
+            days={itinerary.days}
+            display={overviewDisplay}
+            locale={locale}
+            mapPanel={
+              shouldMountTripMap ? (
+                <ItineraryTripMap
+                  days={itinerary.days}
+                  onOpenItem={openTripMapItem}
+                  onViewPlaceDetails={(point, focusDate) => {
+                    const tripPlace = tripPlaceById(point.tripPlaceId);
+                    if (tripPlace)
+                      openPlaceDetails(
+                        tripPlace,
+                        focusDate ?? placeVisitDate(placeUse[tripPlace.id]),
+                      );
+                  }}
+                  resolveItemName={itemName}
+                  resolvePlaceLocation={placeLocation}
+                  resolvePlaceName={(tripPlace) => placeName(tripPlace) ?? t('providerPlace')}
+                  suspendUpdates={!tripMapVisible}
+                  tripId={tripId}
+                  tripPlaces={itinerary.tripPlaces}
+                />
+              ) : null
+            }
+            onDisplayChange={changeOverviewDisplay}
+            onEditItem={openOverviewItem}
+            onOpenDay={openDay}
+            resolveItemName={itemName}
+            timeFormat={preferences.timeFormat}
+            weather={weather}
+          />
+        </div>
       ) : null}
       {renderDayView ? (
         <div className={activeView === 'day' ? 'contents' : 'hidden'}>

@@ -2,14 +2,27 @@ import type {
   Itinerary,
   ItineraryDay,
   ItineraryItem,
+  ItineraryRouteSegment,
   ItineraryTripPlace,
 } from '@/lib/itinerary/api';
-import type { DailyBaseIds, DayStopNumbers } from '@/lib/itinerary/day-sequence';
+import {
+  type DailyBaseIds,
+  type DayStopNumbers,
+  dayStopNumbers,
+  resolveDailyBases,
+} from '@/lib/itinerary/day-sequence';
 import type { ScheduledPlaceUse } from '@/lib/itinerary/places';
 
 export type ItineraryMapPoint = {
   /** Which end of the day a `base` point stands for. Absent on every other kind. */
   baseRole?: 'arrival' | 'both' | 'departure';
+  /**
+   * The 0-based day a `scheduled` point is tinted for. Only the whole-trip map
+   * sets it; a single day's map has one day and needs no colour to say which.
+   */
+  dayIndex?: number;
+  /** Every 1-based day this Place is on. Only the whole-trip map sets it. */
+  dayNumbers?: number[];
   id: string;
   itemId: string | null;
   kind: 'base' | 'considered' | 'scheduled';
@@ -183,4 +196,207 @@ export function dailyBasePoints(input: {
     arrivalId ? point(arrivalId, 'arrival', input.numbers.arrival) : null,
     departureId ? point(departureId, 'departure', input.numbers.departure) : null,
   ].filter((basePoint): basePoint is ItineraryMapPoint => basePoint !== null);
+}
+
+type TripMapDay = Pick<
+  ItineraryDay,
+  | 'dailyBaseDepartureTripPlaceId'
+  | 'dailyBaseTripPlaceId'
+  | 'defaultTimeZoneSource'
+  | 'defaultTimeZoneSourceTripPlaceId'
+  | 'id'
+  | 'items'
+>;
+
+export type TripMapPoints = {
+  /** The day the map shows, or null for the whole trip. Only a located day can be shown. */
+  focusDayId: string | null;
+  /** Days with something to put on the map: the only ones worth focusing on. */
+  locatedDayIds: Set<string>;
+  points: ItineraryMapPoint[];
+  /**
+   * Stops that name a location the map cannot draw: a Custom Place with no
+   * coordinates, or a location typed in as text. A plain label such as "Free
+   * afternoon" names no location, so it is not missing one.
+   */
+  unlocatedStopCount: number;
+};
+
+/**
+ * The whole trip on one map.
+ *
+ * A stop keeps the number it has on its own day, worked out by the same
+ * function from the same inputs as the Day view, and takes its day's colour so
+ * the days can be told apart. A Place on several days is one marker, on the
+ * first of them, that knows all of them.
+ *
+ * A stay is one marker however many nights it covers, and none at all when the
+ * same Place is already a stop. A booked stay is learnt from a day's legs, as
+ * the Day view learns it; a day whose legs are not in hand falls back to the
+ * accommodation its time zone comes from, as Trip Mode does, so the stay still
+ * shows without asking anyone for a route.
+ *
+ * The trip's other Places are shown too, quietly, and never frame the view.
+ * Focusing on a day narrows the map to that day's own stops and stay, numbered
+ * exactly as its timeline numbers them.
+ */
+export function buildTripMapPoints(input: {
+  days: TripMapDay[];
+  focusDayId: string | null;
+  resolveItemName: (item: ItineraryItem) => string;
+  resolvePlaceLocation: (tripPlace: ItineraryTripPlace) => ItineraryMapLocation | null;
+  resolvePlaceName: (tripPlace: ItineraryTripPlace) => string;
+  /** Legs already in hand, by day. Only read, never asked for. */
+  routeSegmentsByDayId?: Readonly<Record<string, ItineraryRouteSegment[] | undefined>>;
+  tripPlaces: ItineraryTripPlace[];
+}): TripMapPoints {
+  const tripPlaceById = new Map(input.tripPlaces.map((tripPlace) => [tripPlace.id, tripPlace]));
+  const located = (tripPlaceId: string | null) => {
+    const tripPlace = tripPlaceId ? tripPlaceById.get(tripPlaceId) : undefined;
+    const location = tripPlace ? input.resolvePlaceLocation(tripPlace) : null;
+    return tripPlace && location ? { location, tripPlace } : null;
+  };
+
+  const readings = input.days.map((day, dayIndex) => {
+    const bases = resolveDailyBases({ day, routeSegments: input.routeSegmentsByDayId?.[day.id] });
+    const numbers = dayStopNumbers({ bases, itemCount: day.items.length });
+    const stops = new Map<string, ItineraryMapPoint>();
+    let unlocated = 0;
+    day.items.forEach((item, index) => {
+      const tripPlace = item.tripPlace;
+      const location = tripPlace ? input.resolvePlaceLocation(tripPlace) : null;
+      if (!tripPlace || !location) {
+        if (tripPlace || item.customLocation) unlocated += 1;
+        return;
+      }
+      if (stops.has(tripPlace.id)) return;
+      stops.set(tripPlace.id, {
+        dayIndex,
+        id: tripPlace.id,
+        itemId: item.id,
+        kind: 'scheduled',
+        latitude: location.latitude,
+        longitude: location.longitude,
+        name: input.resolveItemName(item),
+        order: index + 1 + numbers.itemOffset,
+        tripPlaceId: tripPlace.id,
+      });
+    });
+    const accommodationId =
+      day.defaultTimeZoneSource === 'accommodation' ? day.defaultTimeZoneSourceTripPlaceId : null;
+    const fallbackStayId =
+      !bases.arrivalTripPlaceId && !bases.departureTripPlaceId ? accommodationId : null;
+    const stayIds = [
+      ...new Set(
+        [bases.arrivalTripPlaceId, bases.departureTripPlaceId, fallbackStayId].filter(
+          (id): id is string => Boolean(id && located(id)),
+        ),
+      ),
+    ];
+    return { bases, day, dayIndex, fallbackStayId, numbers, stayIds, stops, unlocated };
+  });
+
+  const dayNumbersByPlace = new Map<string, number[]>();
+  const noteDay = (tripPlaceId: string, dayNumber: number) => {
+    const numbers = dayNumbersByPlace.get(tripPlaceId) ?? [];
+    if (!numbers.includes(dayNumber)) numbers.push(dayNumber);
+    dayNumbersByPlace.set(tripPlaceId, numbers);
+  };
+  readings.forEach((reading) => {
+    reading.stops.forEach((_, tripPlaceId) => noteDay(tripPlaceId, reading.dayIndex + 1));
+    reading.stayIds.forEach((tripPlaceId) => noteDay(tripPlaceId, reading.dayIndex + 1));
+  });
+
+  const locatedDayIds = new Set(
+    readings
+      .filter((reading) => reading.stops.size > 0 || reading.stayIds.length > 0)
+      .map((reading) => reading.day.id),
+  );
+  const focus =
+    input.focusDayId && locatedDayIds.has(input.focusDayId)
+      ? readings.find((reading) => reading.day.id === input.focusDayId)
+      : undefined;
+
+  const stayPoint = (tripPlaceId: string): ItineraryMapPoint | null => {
+    const found = located(tripPlaceId);
+    if (!found) return null;
+    return {
+      dayNumbers: dayNumbersByPlace.get(tripPlaceId) ?? [],
+      id: `stay:${tripPlaceId}`,
+      itemId: null,
+      kind: 'base',
+      latitude: found.location.latitude,
+      longitude: found.location.longitude,
+      name: input.resolvePlaceName(found.tripPlace),
+      order: null,
+      tripPlaceId,
+    };
+  };
+
+  if (focus) {
+    const stops = [...focus.stops.values()].map((point) => ({
+      ...point,
+      dayNumbers: dayNumbersByPlace.get(point.tripPlaceId) ?? [],
+    }));
+    const scheduledTripPlaceIds = new Set(focus.stops.keys());
+    const bases = dailyBasePoints({
+      bases: focus.bases,
+      numbers: focus.numbers,
+      resolvePlaceLocation: input.resolvePlaceLocation,
+      resolvePlaceName: input.resolvePlaceName,
+      scheduledTripPlaceIds,
+      tripPlaces: input.tripPlaces,
+    });
+    // An inferred stay is not part of the day's numbering until its legs say
+    // so, so it is drawn the way a stay is drawn across the whole trip.
+    const fallback =
+      focus.fallbackStayId && !scheduledTripPlaceIds.has(focus.fallbackStayId)
+        ? stayPoint(focus.fallbackStayId)
+        : null;
+    return {
+      focusDayId: focus.day.id,
+      locatedDayIds,
+      points: [...stops, ...bases, ...(fallback ? [fallback] : [])],
+      unlocatedStopCount: focus.unlocated,
+    };
+  }
+
+  const points = new Map<string, ItineraryMapPoint>();
+  readings.forEach((reading) => {
+    reading.stops.forEach((point, tripPlaceId) => {
+      if (points.has(tripPlaceId)) return;
+      points.set(tripPlaceId, { ...point, dayNumbers: dayNumbersByPlace.get(tripPlaceId) ?? [] });
+    });
+  });
+  const stays = new Map<string, ItineraryMapPoint>();
+  readings.forEach((reading) => {
+    reading.stayIds.forEach((tripPlaceId) => {
+      if (points.has(tripPlaceId) || stays.has(tripPlaceId)) return;
+      const point = stayPoint(tripPlaceId);
+      if (point) stays.set(tripPlaceId, point);
+    });
+  });
+  const considered = input.tripPlaces.flatMap((tripPlace): ItineraryMapPoint[] => {
+    const location = input.resolvePlaceLocation(tripPlace);
+    if (!location || points.has(tripPlace.id) || stays.has(tripPlace.id)) return [];
+    return [
+      {
+        id: tripPlace.id,
+        itemId: null,
+        kind: 'considered',
+        latitude: location.latitude,
+        longitude: location.longitude,
+        name: input.resolvePlaceName(tripPlace),
+        order: null,
+        tripPlaceId: tripPlace.id,
+      },
+    ];
+  });
+
+  return {
+    focusDayId: null,
+    locatedDayIds,
+    points: [...points.values(), ...stays.values(), ...considered],
+    unlocatedStopCount: readings.reduce((total, reading) => total + reading.unlocated, 0),
+  };
 }

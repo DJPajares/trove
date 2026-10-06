@@ -1587,7 +1587,17 @@
       "configurationTitle": "Map unavailable",
       "configurationDescription": "The map is not configured in this environment. Your itinerary remains available.",
       "unavailableTitle": "Map unavailable",
-      "unavailableDescription": "Google Maps could not load. Your itinerary and place details remain available."
+      "unavailableDescription": "Google Maps could not load. Your itinerary and place details remain available.",
+      "tripRegionLabel": "Map of the whole trip",
+      "tripDaysLabel": "Days on the map",
+      "allDays": "All days",
+      "scheduledDayMarkerLabel": "{name}, day {day}, stop {order}",
+      "tripStopSelection": "Day {day} · Stop {order}",
+      "tripStopSelectionAlso": "{count, plural, one {Day {day} · Stop {order} · also on day {days}} other {Day {day} · Stop {order} · also on days {days}}}",
+      "tripStaySelection": "{count, plural, one {Stay · day {days}} other {Stay · days {days}}}",
+      "tripConsideredSelection": "Not on a day yet",
+      "openInDay": "Open in day",
+      "unlocatedStops": "{count, plural, one {# stop has no map location, so it isn’t shown.} other {# stops have no map location, so they aren’t shown.}}"
     },
     "routes": {
       "summaryLabel": "Daily travel summary",

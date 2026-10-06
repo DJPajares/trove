@@ -18,6 +18,7 @@ import {
   type ItineraryMapPoint,
   viewportPoints,
 } from '@/lib/maps/itinerary-map';
+import { mapDayTint } from '@/lib/maps/map-day-tints';
 import { retainWhileSuspended } from '@/lib/maps/map-retention';
 import { routeLineStyle } from '@/lib/maps/route-line-style';
 import { googleMapsCoordinatesHref } from '@/lib/saved/api';
@@ -38,6 +39,11 @@ type ItineraryPlanningMapProps = {
     longitude: number;
   } | null;
   /**
+   * Says what the selected pin is, in place of the card's own line. Lets the
+   * whole-trip map name the day a stop is on; returning null keeps the default.
+   */
+  describeSelection?: (point: ItineraryMapPoint) => string | null;
+  /**
    * Puts a Place that is not yet on the selected day onto it. Omitted by surfaces
    * with no day of their own to add to, which hides the action entirely.
    */
@@ -57,6 +63,8 @@ type ItineraryPlanningMapProps = {
   selectedPointId: string | null;
   /** Keeps a retained, hidden map from updating its viewport until it is visible again. */
   suspendUpdates?: boolean;
+  /** What "View item" is called where viewing it means going somewhere else. */
+  viewItemLabel?: string;
 };
 
 export type RouteLine = {
@@ -76,7 +84,12 @@ function markerContent(point: ItineraryMapPoint) {
   element.className = cn(
     'grid place-items-center border-2 font-semibold shadow-[var(--shadow-control)] transition-[transform,box-shadow] duration-[var(--motion-fast)]',
     point.kind === 'scheduled'
-      ? 'size-9 rounded-full border-background bg-primary text-xs text-primary-foreground'
+      ? cn(
+          'size-9 rounded-full border-background text-xs',
+          point.dayIndex === undefined
+            ? 'bg-primary text-primary-foreground'
+            : mapDayTint(point.dayIndex).marker,
+        )
       : point.kind === 'base'
         ? 'size-8 rounded-[var(--radius-sm)] border-primary bg-card text-[0.6875rem] text-primary'
         : 'size-7 rounded-full border-primary bg-card text-primary',
@@ -118,6 +131,7 @@ export function ItineraryPlanningMap({
   ariaLabel,
   className,
   currentLocation: liveCurrentLocation = null,
+  describeSelection,
   onAddToDay,
   onClearSelection,
   onSelectPoint,
@@ -127,6 +141,7 @@ export function ItineraryPlanningMap({
   routeLines: liveRouteLines,
   selectedPointId,
   suspendUpdates = false,
+  viewItemLabel,
 }: Readonly<ItineraryPlanningMapProps>) {
   const t = useTranslations('itinerary.map');
   const locale = useLocale();
@@ -295,7 +310,13 @@ export function ItineraryPlanningMap({
             position: { lat: point.latitude, lng: point.longitude },
             title:
               point.kind === 'scheduled'
-                ? t('scheduledMarkerLabel', { name: point.name, order: point.order ?? 0 })
+                ? point.dayIndex === undefined
+                  ? t('scheduledMarkerLabel', { name: point.name, order: point.order ?? 0 })
+                  : t('scheduledDayMarkerLabel', {
+                      day: point.dayIndex + 1,
+                      name: point.name,
+                      order: point.order ?? 0,
+                    })
                 : point.kind === 'base'
                   ? t(baseMarkerLabelKey(point.baseRole), { name: point.name })
                   : t('consideredMarkerLabel', { name: point.name }),
@@ -460,11 +481,12 @@ export function ItineraryPlanningMap({
             </Button>
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {selectedPoint.kind === 'scheduled'
-              ? t('scheduledSelection', { order: selectedPoint.order ?? 0 })
-              : selectedPoint.kind === 'base'
-                ? t(baseSelectionKey(selectedPoint.baseRole))
-                : t('consideredSelection')}
+            {describeSelection?.(selectedPoint) ??
+              (selectedPoint.kind === 'scheduled'
+                ? t('scheduledSelection', { order: selectedPoint.order ?? 0 })
+                : selectedPoint.kind === 'base'
+                  ? t(baseSelectionKey(selectedPoint.baseRole))
+                  : t('consideredSelection'))}
           </p>
           {/* A Place off this day may still be spoken for. Saying which day it is on
               is what stops the same Place being planned twice by accident. */}
@@ -492,7 +514,7 @@ export function ItineraryPlanningMap({
             {onViewItem && selectedPoint.itemId ? (
               <Button onClick={() => onViewItem(selectedPoint.itemId!)} size="sm" variant="outline">
                 <Eye aria-hidden="true" data-icon="inline-start" />
-                {t('viewItem')}
+                {viewItemLabel ?? t('viewItem')}
               </Button>
             ) : null}
             {onViewPlaceDetails ? (

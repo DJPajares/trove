@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 
 import {
+  overviewMapLifecycle,
   planningMapLifecycle,
   retainWhileSuspended,
   tripModeMapLifecycle,
@@ -81,4 +82,34 @@ test('a hidden map keeps working from what it last showed, even if the day empti
 
   expect(retainWhileSuspended(emptied, true, shown)).toBe(shown);
   expect(retainWhileSuspended(emptied, false, shown)).toBe(emptied);
+});
+
+test("the whole trip's map is built only once asked for, at any width", () => {
+  expect(
+    overviewMapLifecycle({ activeView: 'overview', display: 'list', mounted: false }),
+  ).toStrictEqual({ mount: false, renderOverview: true, visible: false });
+  expect(
+    overviewMapLifecycle({ activeView: 'overview', display: 'map', mounted: false }),
+  ).toStrictEqual({ mount: true, renderOverview: true, visible: true });
+});
+
+test('a built trip map survives the list and the Day view, hidden, and comes back', () => {
+  expect(
+    overviewMapLifecycle({ activeView: 'overview', display: 'list', mounted: true }),
+  ).toStrictEqual({ mount: true, renderOverview: true, visible: false });
+  // The Overview stays in the tree behind the day, or its map would be rebuilt.
+  expect(overviewMapLifecycle({ activeView: 'day', display: 'map', mounted: true })).toStrictEqual({
+    mount: true,
+    renderOverview: true,
+    visible: false,
+  });
+  expect(
+    overviewMapLifecycle({ activeView: 'overview', display: 'map', mounted: true }).visible,
+  ).toBe(true);
+});
+
+test('with no trip map built, the Day view drops the Overview as before', () => {
+  expect(overviewMapLifecycle({ activeView: 'day', display: 'map', mounted: false })).toStrictEqual(
+    { mount: false, renderOverview: false, visible: false },
+  );
 });

@@ -110,6 +110,20 @@
   --category-activities: oklch(0.54 0.12 75);
   --category-shopping: oklch(0.53 0.12 330);
   --category-other: oklch(0.55 0.03 79);
+  /* One tint per day on the whole-trip map, so a traveller can tell the days
+     apart at a glance. Day 1 is the brand's own colour, the one every single-day
+     map already draws its stops in; the rest keep to the earthy family of the
+     category tints. Each carries a numeral in --map-day-foreground at 12px, so
+     each clears 4.5:1 against it: the lowest, day 6, measures 5.3:1. Colour is
+     never the only signal - the numeral, the marker's name and the day chips
+     all say which day a stop is on. */
+  --map-day-1: oklch(0.455 0.07 115);
+  --map-day-2: oklch(0.52 0.13 40);
+  --map-day-3: oklch(0.49 0.08 195);
+  --map-day-4: oklch(0.48 0.12 330);
+  --map-day-5: oklch(0.48 0.1 255);
+  --map-day-6: oklch(0.52 0.12 70);
+  --map-day-foreground: oklch(0.978 0.013 80);
   --radius: 0.875rem;
   --layout-gutter: clamp(1rem, 2vw, 2rem);
   --layout-reading: 65ch;
@@ -254,6 +268,15 @@
   --category-activities: oklch(0.77 0.11 75);
   --category-shopping: oklch(0.75 0.11 330);
   --category-other: oklch(0.74 0.028 79);
+  /* The same hue angles as in :root, lightened for a dark map and carrying a
+     dark numeral instead; the lowest, day 4, measures 7.6:1 against it. */
+  --map-day-1: oklch(0.78 0.085 115);
+  --map-day-2: oklch(0.76 0.12 40);
+  --map-day-3: oklch(0.76 0.085 195);
+  --map-day-4: oklch(0.76 0.11 330);
+  --map-day-5: oklch(0.76 0.09 255);
+  --map-day-6: oklch(0.8 0.12 78);
+  --map-day-foreground: oklch(0.222 0.028 115);
   --shadow-surface: 0 1px 2px oklch(0.09 0.01 115 / 0.16), 0 16px 40px oklch(0.09 0.01 115 / 0.18);
   --shadow-overlay: 0 24px 72px oklch(0.09 0.01 115 / 0.48);
   --shadow-control: 0 1px 2px oklch(0.09 0.01 115 / 0.32);
@@ -309,6 +332,13 @@
   --color-category-activities: var(--category-activities);
   --color-category-shopping: var(--category-shopping);
   --color-category-other: var(--category-other);
+  --color-map-day-1: var(--map-day-1);
+  --color-map-day-2: var(--map-day-2);
+  --color-map-day-3: var(--map-day-3);
+  --color-map-day-4: var(--map-day-4);
+  --color-map-day-5: var(--map-day-5);
+  --color-map-day-6: var(--map-day-6);
+  --color-map-day-foreground: var(--map-day-foreground);
   --radius-sm: calc(var(--radius) * 0.625);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);

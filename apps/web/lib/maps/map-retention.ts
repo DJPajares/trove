@@ -36,6 +36,30 @@ export function planningMapLifecycle(input: {
 }
 
 /**
+ * The whole trip's map, on the Overview. It is opt-in at every width, so it is
+ * built only once the traveller asks for it, then kept, hidden, behind the
+ * itinerary list and behind the Day view.
+ *
+ * - `visible`: the map is on screen now.
+ * - `mount`: the map exists. Once built it stays.
+ * - `renderOverview`: the Overview stays in the tree while a map lives in it, so
+ *   coming back to it finds the map exactly as it was left.
+ */
+export function overviewMapLifecycle(input: {
+  activeView: ItineraryViewName;
+  display: 'list' | 'map';
+  mounted: boolean;
+}) {
+  const visible = input.activeView === 'overview' && input.display === 'map';
+
+  return {
+    mount: visible || input.mounted,
+    renderOverview: input.activeView === 'overview' || input.mounted,
+    visible,
+  };
+}
+
+/**
  * Trip Mode's Map tab. Its views are routes, so the map lives in the shell:
  * built on the first visit to the tab and kept, hidden, on the other views.
  */

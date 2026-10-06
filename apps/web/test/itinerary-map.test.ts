@@ -9,6 +9,7 @@ import type {
 import { dayStopNumbers, resolveDailyBases } from '../lib/itinerary/day-sequence.ts';
 import {
   buildItineraryMapPoints,
+  buildTripMapPoints,
   dailyBasePoints,
   type ItineraryMapPoint,
   viewportPoints,
@@ -341,4 +342,212 @@ test('a scheduled stop keeps its number and carries no cross-day note', () => {
   expect(points.map((entry) => [entry.kind, entry.order, entry.otherDayNumbers])).toStrictEqual([
     ['scheduled', 1, undefined],
   ]);
+});
+
+function unlocatedTripPlace(id: string): ItineraryTripPlace {
+  const located = tripPlace(id);
+  return { ...located, place: { ...located.place, location: null } };
+}
+
+function tripMap(input: {
+  days: ItineraryDay[];
+  focusDayId?: string | null;
+  routeSegmentsByDayId?: Record<string, ItineraryRouteSegment[]>;
+  tripPlaces: ItineraryTripPlace[];
+}) {
+  return buildTripMapPoints({
+    days: input.days,
+    focusDayId: input.focusDayId ?? null,
+    resolveItemName: (entry) => entry.customLabel ?? entry.tripPlace?.id ?? '',
+    resolvePlaceLocation: (place) => place.place.location,
+    resolvePlaceName: (place) => place.id,
+    routeSegmentsByDayId: input.routeSegmentsByDayId,
+    tripPlaces: input.tripPlaces,
+  });
+}
+
+function described(points: ItineraryMapPoint[]) {
+  return points.map(({ dayIndex, dayNumbers, id, kind, order }) => ({
+    dayIndex,
+    dayNumbers,
+    id,
+    kind,
+    order,
+  }));
+}
+
+test("every stop on the trip map keeps the number its own day gives it, in its day's colour", () => {
+  const result = tripMap({
+    days: [
+      day({ id: 'd1', items: [item('i1', 'museum'), item('i2', 'market')] }),
+      day({ dailyBaseTripPlaceId: 'hotel', id: 'd2', items: [item('i3', 'ghibli')] }),
+    ],
+    tripPlaces: ['museum', 'market', 'ghibli', 'hotel'].map(tripPlace),
+  });
+
+  expect(described(result.points)).toStrictEqual([
+    { dayIndex: 0, dayNumbers: [1], id: 'museum', kind: 'scheduled', order: 1 },
+    { dayIndex: 0, dayNumbers: [1], id: 'market', kind: 'scheduled', order: 2 },
+    // The stay took first place on day 2, so its first stop is its second.
+    { dayIndex: 1, dayNumbers: [2], id: 'ghibli', kind: 'scheduled', order: 2 },
+    { dayIndex: undefined, dayNumbers: [2], id: 'stay:hotel', kind: 'base', order: null },
+  ]);
+  expect(result.focusDayId).toBeNull();
+});
+
+test('a Place planned on two days is one marker, on the first, that knows both', () => {
+  const result = tripMap({
+    days: [
+      day({ id: 'd1', items: [item('i1', 'shrine')] }),
+      day({ id: 'd2', items: [] }),
+      day({ id: 'd3', items: [item('i2', 'market'), item('i3', 'shrine')] }),
+    ],
+    tripPlaces: ['shrine', 'market'].map(tripPlace),
+  });
+
+  const shrine = result.points.filter((entry) => entry.tripPlaceId === 'shrine');
+  expect(described(shrine)).toStrictEqual([
+    { dayIndex: 0, dayNumbers: [1, 3], id: 'shrine', kind: 'scheduled', order: 1 },
+  ]);
+  expect(shrine[0]?.itemId).toBe('i1');
+});
+
+test('a stay is one marker across its nights, and none when it is already a stop', () => {
+  const result = tripMap({
+    days: [
+      day({ dailyBaseTripPlaceId: 'hotel', id: 'd1', items: [item('i1', 'ryokan')] }),
+      day({ dailyBaseTripPlaceId: 'hotel', id: 'd2', items: [] }),
+      day({ dailyBaseTripPlaceId: 'ryokan', id: 'd3', items: [] }),
+    ],
+    tripPlaces: ['hotel', 'ryokan'].map(tripPlace),
+  });
+
+  expect(described(result.points)).toStrictEqual([
+    { dayIndex: 0, dayNumbers: [1, 3], id: 'ryokan', kind: 'scheduled', order: 2 },
+    { dayIndex: undefined, dayNumbers: [1, 2], id: 'stay:hotel', kind: 'base', order: null },
+  ]);
+});
+
+test("a booked stay comes from legs already in hand, or else from the day's accommodation", () => {
+  const result = tripMap({
+    days: [
+      day({ id: 'd1', items: [item('i1', 'museum')] }),
+      day({
+        defaultTimeZoneSource: 'accommodation',
+        defaultTimeZoneSourceTripPlaceId: 'inn',
+        id: 'd2',
+        items: [item('i2', 'market')],
+      }),
+    ],
+    routeSegmentsByDayId: {
+      d1: [
+        baseSegment({
+          destination: { id: 'i1', kind: 'itinerary_item', label: null },
+          origin: { id: 'inn', kind: 'daily_base', label: null },
+        }),
+      ],
+    },
+    tripPlaces: ['museum', 'market', 'inn'].map(tripPlace),
+  });
+
+  expect(described(result.points)).toStrictEqual([
+    // Day 1's legs start it at the inn, exactly as the Day view numbers it.
+    { dayIndex: 0, dayNumbers: [1], id: 'museum', kind: 'scheduled', order: 2 },
+    // Day 2's legs are not in hand: the inn is drawn, but takes no number.
+    { dayIndex: 1, dayNumbers: [2], id: 'market', kind: 'scheduled', order: 1 },
+    { dayIndex: undefined, dayNumbers: [1, 2], id: 'stay:inn', kind: 'base', order: null },
+  ]);
+});
+
+test('unplanned Places show across the trip, and never on a focused day', () => {
+  const input = {
+    days: [day({ id: 'd1', items: [item('i1', 'museum')] })],
+    tripPlaces: ['museum', 'someday'].map(tripPlace),
+  };
+
+  expect(tripMap(input).points.map((entry) => [entry.id, entry.kind])).toStrictEqual([
+    ['museum', 'scheduled'],
+    ['someday', 'considered'],
+  ]);
+  expect(tripMap({ ...input, focusDayId: 'd1' }).points.map((entry) => entry.id)).toStrictEqual([
+    'museum',
+  ]);
+});
+
+test('a focused day is numbered exactly as its own map numbers it', () => {
+  const focusedDay = day({
+    dailyBaseTripPlaceId: 'hotel',
+    id: 'd2',
+    items: [item('i1', 'museum'), item('i2', 'market')],
+  });
+  const tripPlaces = ['museum', 'market', 'hotel'].map(tripPlace);
+  const result = tripMap({
+    days: [day({ id: 'd1', items: [item('i0', 'market')] }), focusedDay],
+    focusDayId: 'd2',
+    tripPlaces,
+  });
+
+  const bases = resolveDailyBases({ day: focusedDay });
+  const numbers = dayStopNumbers({ bases, itemCount: 2 });
+  const ownMap = [
+    ...buildItineraryMapPoints({
+      itinerary: { tripPlaces: [], unscheduledItems: [] },
+      orderOffset: numbers.itemOffset,
+      resolveItemName: (entry) => entry.tripPlace?.id ?? '',
+      resolvePlaceName: (place) => place.id,
+      selectedDay: focusedDay,
+    }),
+    ...dailyBasePoints({
+      bases,
+      numbers,
+      resolvePlaceLocation: (place) => place.place.location,
+      resolvePlaceName: (place) => place.id,
+      scheduledTripPlaceIds: new Set(['museum', 'market']),
+      tripPlaces,
+    }),
+  ];
+
+  expect(result.focusDayId).toBe('d2');
+  expect(result.points.map((entry) => [entry.id, entry.order])).toStrictEqual(
+    ownMap.map((entry) => [entry.id, entry.order]),
+  );
+  // The card can still say the market is on day 1 as well.
+  expect(result.points.find((entry) => entry.id === 'market')?.dayNumbers).toStrictEqual([1, 2]);
+});
+
+test('a day with nothing located cannot be focused, so the map is never asked to show nothing', () => {
+  const result = tripMap({
+    days: [
+      day({ id: 'd1', items: [item('i1', 'museum')] }),
+      day({ id: 'd2', items: [item('Free afternoon', null)] }),
+    ],
+    focusDayId: 'd2',
+    tripPlaces: [tripPlace('museum')],
+  });
+
+  expect([...result.locatedDayIds]).toStrictEqual(['d1']);
+  expect(result.focusDayId).toBeNull();
+  expect(result.points.map((entry) => entry.id)).toStrictEqual(['museum']);
+});
+
+test('only a stop that names a location it cannot draw is counted as missing one', () => {
+  const typedLocation = {
+    ...item('Dinner with Sarah', null),
+    customLocation: { label: 'Her place', timeZone: null },
+  };
+  const unlocatedPlace = { ...item('i2', null), tripPlace: unlocatedTripPlace('corner-cafe') };
+  const days = [
+    day({
+      id: 'd1',
+      items: [item('Free afternoon', null), typedLocation, unlocatedPlace, item('i3', 'museum')],
+    }),
+    day({ id: 'd2', items: [{ ...unlocatedPlace, id: 'i4' }] }),
+  ];
+  const tripPlaces = [tripPlace('museum'), unlocatedTripPlace('corner-cafe')];
+
+  const whole = tripMap({ days, tripPlaces });
+  expect(whole.unlocatedStopCount).toBe(3);
+  // A Custom Place with no coordinates is never placed on a guess.
+  expect(whole.points.map((entry) => entry.id)).toStrictEqual(['museum']);
+  expect(tripMap({ days, focusDayId: 'd1', tripPlaces }).unlocatedStopCount).toBe(2);
 });

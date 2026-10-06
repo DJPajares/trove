@@ -2,7 +2,9 @@ import { expect, test } from 'vitest';
 
 import {
   describeHours,
+  describeHoursParts,
   describeRating,
+  describeRatingParts,
   formatNearbyDistance,
   nearestDistanceMeters,
   sortForDay,
@@ -34,6 +36,35 @@ test('hours say when the place is open, that it is closed, or nothing at all', (
       options,
     ),
   ).toMatch(/^allDay · checked:/);
+});
+
+test('hours keep the date they were checked apart, so a row can set it quieter', () => {
+  const options = { hour12: false, locale: 'en', t };
+  expect(describeHoursParts(undefined, options)).toBeNull();
+  expect(describeHoursParts({ asOf, status: 'closed' }, options)).toMatchObject({
+    closed: true,
+    label: 'closed',
+  });
+  const open = describeHoursParts(
+    { asOf, special: false, spans: [{ close: '17:00', open: '09:00' }], status: 'open' },
+    options,
+  );
+  expect(open).toMatchObject({ closed: false, label: 'openHours:{"times":"09:00 – 17:00"}' });
+  expect(open?.checked).toMatch(/^checked:/);
+});
+
+test('a rating splits into its number, a compact count, and a sentence to read aloud', () => {
+  expect(describeRatingParts(undefined, { locale: 'en', t })).toBeNull();
+  expect(describeRatingParts({ reviewCount: null, value: 4.5 }, { locale: 'en', t })).toStrictEqual(
+    { count: null, label: 'rating:{"rating":"4.5"}', value: '4.5' },
+  );
+  expect(
+    describeRatingParts({ reviewCount: 12_000, value: 4.1 }, { locale: 'en', t }),
+  ).toStrictEqual({
+    count: '12K',
+    label: 'ratingWithCount:{"count":"12K","rating":"4.1"}',
+    value: '4.1',
+  });
 });
 
 test('a rating names its count only when there is one', () => {

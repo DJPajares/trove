@@ -1427,7 +1427,9 @@
     "checked": "hours checked {date}",
     "rating": "{rating} on Google",
     "ratingWithCount": "{rating} on Google ({count} reviews)",
-    "fromDay": "{distance} from this day’s stops"
+    "ratingCompact": "<value>{rating}</value> ({count})",
+    "ratingCompactNoCount": "<value>{rating}</value>",
+    "fromDay": "{distance} from this day"
   },
   "itinerary": {
     "title": "Itinerary for {trip}",
@@ -1968,7 +1970,6 @@
     "viewDetailsAction": "View details",
     "editPlaceAction": "Edit place",
     "priorityMenuLabel": "Priority",
-    "sortLabel": "Sort",
     "sortBy": "Sort trip places",
     "sort": {
       "name": "Name A-Z",
@@ -1977,6 +1978,28 @@
       "nearest": "Nearest to this day",
       "open": "Open this day"
     },
+    "sortShort": {
+      "name": "Name",
+      "priority": "Priority",
+      "recent": "Recent",
+      "nearest": "Nearest",
+      "open": "Open"
+    },
+    "findLabel": "Search trip places",
+    "findPlaceholder": "{count, plural, one {Search # place} other {Search # places}}",
+    "show": {
+      "label": "Show",
+      "all": "All",
+      "unplanned": "Not on a day"
+    },
+    "placeCount": "{count, plural, one {# place} other {# places}}",
+    "matchCount": "{shown} of {total} places",
+    "noMatchesTitle": "No places match “{query}”",
+    "noMatchesDescription": "Try another name, or add it to this trip.",
+    "addQuery": "Add “{query}”",
+    "allPlannedTitle": "Every place is on a day",
+    "allPlannedDescription": "Show all places to plan one again, or add a new place.",
+    "showAll": "Show all",
     "removeAction": "Remove from trip",
     "customPlace": "Custom place",
     "customPlaceDescription": "Your personal place",
@@ -1989,14 +2012,17 @@
       "maybe": "Maybe"
     },
     "scheduledReference": "On your itinerary {count, plural, one {once} other {# times}}",
-    "onDays": "{count, plural, one {On day {days}} other {On days {days}}}",
-    "onDates": "Added on {dates}",
-    "inUnscheduled": "Kept in Unscheduled",
-    "addToDay": "Add to day {number}",
-    "addToNamedDay": "Add to {name}, Day {number}",
+    "onDays": "{count, plural, one {Day {days}} other {Days {days}}}",
+    "onDates": "Planned for {dates}",
+    "onThisDay": "On Day {number}",
+    "addPlaceToDay": "Add {name} to Day {number}",
+    "addPlaceAgainToDay": "Add to Day {number} again",
+    "personalPlace": "Personal place",
+    "notOnMap": "Not on the map",
     "openPlaces": "Places",
     "placesDrawerTitle": "Trip places",
-    "placesDrawerDescription": "Everything you are considering for this trip. Add one to the day you are planning.",
+    "planningDay": "Planning Day {number} · {date}",
+    "planningNamedDay": "Planning {name} · Day {number}, {date}",
     "addedToDay": "Added to day {number}.",
     "addedToNamedDay": "Added to {name}, Day {number}.",
     "addToDayError": "That place could not be added to the day. Try again.",
@@ -2044,6 +2070,7 @@
     "cancel": "Cancel",
     "close": "Close",
     "removeTitle": "Remove this place?",
+    "removeBlockedTitle": "Still on your itinerary",
     "removeDescription": "{name} will be removed from this trip only. It will stay in Saved Places if it is saved there.",
     "removePlace": "Remove place",
     "removing": "Removing…"

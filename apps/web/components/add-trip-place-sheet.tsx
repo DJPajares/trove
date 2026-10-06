@@ -43,6 +43,8 @@ import { queryKeys } from '@/lib/query/keys';
 import * as Icons from '@/lib/icons';
 
 type AddTripPlaceSheetProps = {
+  /** A search to start from, such as one that found nothing among the trip's own places. */
+  initialQuery?: string;
   onAdded: (tripPlace: TripPlace) => void;
   onOpenChange: (open: boolean) => void;
   /** Places already on the trip, so this never offers to add one twice. */
@@ -63,6 +65,7 @@ type AddTripPlaceSheetProps = {
 const EMPTY_SAVED_PLACES: SavedPlace[] = [];
 
 export function AddTripPlaceSheet({
+  initialQuery = '',
   onAdded,
   onOpenChange,
   tripId,
@@ -70,7 +73,7 @@ export function AddTripPlaceSheet({
 }: Readonly<AddTripPlaceSheetProps>) {
   const t = useTranslations('tripPlaces');
   const locale = useLocale();
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [busyId, setBusyId] = useState<string | null>(null);
   /** Which row has its name field open — only ever one, like `busyId`. */
   const [namingId, setNamingId] = useState<string | null>(null);

@@ -1427,8 +1427,8 @@
     "checked": "hours checked {date}",
     "rating": "{rating} on Google",
     "ratingWithCount": "{rating} on Google ({count} reviews)",
-    "ratingCompact": "<value>{rating}</value> ({count}) on Google",
-    "ratingCompactNoCount": "<value>{rating}</value> on Google",
+    "ratingCompact": "<value>{rating}</value> ({count})",
+    "ratingCompactNoCount": "<value>{rating}</value>",
     "fromDay": "{distance} from this day"
   },
   "itinerary": {
@@ -2014,7 +2014,6 @@
     "scheduledReference": "On your itinerary {count, plural, one {once} other {# times}}",
     "onDays": "{count, plural, one {Day {days}} other {Days {days}}}",
     "onDates": "Planned for {dates}",
-    "inUnscheduled": "In Unscheduled",
     "onThisDay": "On Day {number}",
     "addPlaceToDay": "Add {name} to Day {number}",
     "addPlaceAgainToDay": "Add to Day {number} again",

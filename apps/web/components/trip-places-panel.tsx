@@ -272,13 +272,6 @@ export function TripPlacesPanel({
         </Badge>,
       );
     }
-    if (use?.unscheduledCount) {
-      badges.push(
-        <Badge key="unscheduled" size="sm" variant="muted">
-          {t('inUnscheduled')}
-        </Badge>,
-      );
-    }
     // Only Must Go earns a badge: it is the priority the plan is checked against.
     // Interested is what a planner gives nearly everything, so a row that said
     // so would say nothing; the menu and the details still show any priority.
@@ -517,22 +510,19 @@ export function TripPlacesPanel({
                   </ItemActions>
                 </div>
 
-                {/* Hours carry the date they were checked: stored evidence is never
-                    passed off as current (PRD 11.7), but its age reads quieter. */}
+                {/* The row keeps to the hours themselves; the date they were
+                    checked stays a hover away, and in the place's details. */}
                 {facts.hours ? (
                   <p
                     className={cn(
-                      'text-xs leading-5',
+                      'text-xs leading-5 whitespace-nowrap',
                       facts.hours.closed
                         ? 'font-medium text-status-warning'
                         : 'text-muted-foreground',
                     )}
+                    title={facts.hours.checked}
                   >
-                    <span className="whitespace-nowrap">{facts.hours.label}</span>
-                    <span className="font-normal whitespace-nowrap text-text-subtle">
-                      {' · '}
-                      {facts.hours.checked}
-                    </span>
+                    {facts.hours.label}
                   </p>
                 ) : null}
 

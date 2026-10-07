@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { CloudOff, ImagePlus, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -32,6 +33,7 @@ import {
   maxMemoryPhotoSize,
   MemoriesApiError,
 } from '@/lib/memories/api';
+import { queryKeys } from '@/lib/query/keys';
 import { resolveItineraryItemPlaceName } from '@/lib/trip-places/place-name';
 import * as Icons from '@/lib/icons';
 
@@ -69,6 +71,7 @@ export function TripModeMemorySheet({
   tripId: string;
 }>) {
   const t = useTranslations('memories.capture');
+  const queryClient = useQueryClient();
   const online = useOnlineStatus();
   const fileInput = useRef<HTMLInputElement>(null);
   const [note, setNote] = useState('');
@@ -129,6 +132,14 @@ export function TripModeMemorySheet({
         photos,
       );
 
+      // The journal is not on screen while a moment is captured, so this marks
+      // its Memories stale for when it opens, and keeps the trip's own count
+      // current on Home and in the library.
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.memories(tripId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.trip(tripId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.trips() }),
+      ]);
       onSaved(result.queued);
       onOpenChange(false);
     } catch (error) {

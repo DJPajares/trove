@@ -80,6 +80,23 @@ export function primaryTripDestinations(
 }
 
 /**
+ * The row that moves between the screens sharing a trip's cover: the planner,
+ * and nothing else. Trip Mode and Memories each open as an experience of their
+ * own, with their own header and Exit, so neither is a tab beside the screens
+ * they leave. Both stay in the contract above, which the overview, Home and the
+ * library offer as themselves.
+ */
+export function tripTabDestinations(
+  tripId: string,
+  lifecycle: Trip['lifecycle'],
+  startDate: string,
+): TripDestination[] {
+  return primaryTripDestinations(tripId, lifecycle, startDate).filter(
+    (destination) => destination.section === 'itinerary',
+  );
+}
+
+/**
  * Trip Mode is live only during an active trip. Planning and completed trips can
  * still open the same experience when the traveller explicitly chooses Preview.
  */

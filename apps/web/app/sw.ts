@@ -111,7 +111,7 @@ const tripModeRscCacheKey: SerwistPlugin = {
 };
 
 const offlineTripPath =
-  /^\/trips\/[^/]+\/(?:expenses|info|itinerary|mode(?:\/[^/]+)?|places|reservations|tasks)\/?$/;
+  /^\/trips\/[^/]+\/(?:expenses|info|itinerary|memories|mode(?:\/[^/]+)?|places|reservations|tasks)\/?$/;
 
 const runtimeCaching: RuntimeCaching[] = [
   {
@@ -168,6 +168,22 @@ const runtimeCaching: RuntimeCaching[] = [
       ],
     }),
     matcher: ({ request, url }) => request.destination === 'image' && isSupabaseStorageObject(url),
+    method: 'GET',
+  },
+  {
+    /**
+     * Trove's own fonts. next/font serves them content-hashed from
+     * `_next/static/media`, but the precache manifest leaves `woff2` out, so a
+     * cold offline start would draw every screen - the Memories journal's serif
+     * included - in a fallback face. A hashed file never changes, so the first
+     * copy is the only one ever needed.
+     */
+    handler: new CacheFirst({
+      cacheName: 'trove-pwa-fonts',
+      plugins: [new ExpirationPlugin({ maxAgeSeconds: 365 * DAY_SECONDS, maxEntries: 30 })],
+    }),
+    matcher: ({ request, url }) =>
+      request.destination === 'font' && url.origin === self.location.origin,
     method: 'GET',
   },
   {

@@ -1,13 +1,12 @@
 'use client';
 
 import { Plus } from 'lucide-react';
-import { useEffect, useSyncExternalStore, type ReactNode } from 'react';
+import { useSyncExternalStore, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import { useRegisterPrimaryAction } from '@/components/primary-action-provider';
 import { useTripChrome } from '@/components/trip-chrome';
 import { Button } from '@/components/ui/button';
-import type { TripMediaSource } from '@/lib/media/trip-media';
 import type { TripSection } from '@/lib/trips/navigation';
 
 export type { TripSection };
@@ -22,10 +21,6 @@ export type TripSectionPrimaryAction = {
 type TripSectionHeaderProps = {
   /** Secondary actions, shown on the toolbar's trailing edge at every width. */
   actions?: ReactNode;
-  /** A control belonging on the cover itself, such as a trip's rating. */
-  coverMeta?: ReactNode;
-  /** Overrides the cover the trip would otherwise show, as Memories does. */
-  coverSource?: TripMediaSource;
   /** Trove's standing guidance for the screen, shown where there is room for it. */
   description?: string;
   /** The screen's own view control, such as the itinerary's Day and Overview. */
@@ -74,14 +69,11 @@ function useMediaQuery(query: string) {
  */
 export function TripSectionHeader({
   actions,
-  coverMeta,
-  coverSource,
   description,
   leading,
   primaryAction,
 }: Readonly<TripSectionHeaderProps>) {
   const chrome = useTripChrome();
-  const setCoverSource = chrome?.setCoverSource;
   const wideEnoughForGuidance = useMediaQuery(WIDE_ENOUGH_FOR_GUIDANCE);
   const withoutBottomBar = useMediaQuery(WITHOUT_BOTTOM_BAR);
 
@@ -90,13 +82,6 @@ export function TripSectionHeader({
     label: primaryAction?.label ?? '',
     onTrigger: () => primaryAction?.onSelect(),
   });
-
-  useEffect(() => {
-    if (!setCoverSource) return;
-    setCoverSource(coverSource ?? null);
-
-    return () => setCoverSource(null);
-  }, [coverSource, setCoverSource]);
 
   if (!chrome) return null;
 
@@ -132,7 +117,6 @@ export function TripSectionHeader({
       {trailingContent && chrome.actionsSlot
         ? createPortal(trailingContent, chrome.actionsSlot)
         : null}
-      {coverMeta && chrome.coverMetaSlot ? createPortal(coverMeta, chrome.coverMetaSlot) : null}
     </>
   );
 }

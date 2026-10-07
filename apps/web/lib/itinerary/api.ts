@@ -88,6 +88,18 @@ export type ItineraryDay = {
   name: string | null;
   notes: string | null;
   routeStartTravelMode: RouteTravelMode;
+  /**
+   * Where the day starts and ends, resolved by the server the way routing
+   * resolves it: a base set by hand, then a linked accommodation, then one
+   * whose dates span the day. Optional because offline snapshots saved before
+   * the server sent it do not carry it.
+   */
+  stay?: {
+    endSource: 'accommodation' | 'explicit' | null;
+    endTripPlaceId: string | null;
+    startSource: 'accommodation' | 'explicit' | null;
+    startTripPlaceId: string | null;
+  };
 };
 
 export type ItineraryRouteSegment = {

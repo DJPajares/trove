@@ -31,14 +31,14 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
-import { resolveTripMediaSource, type TripMediaSource } from '@/lib/media/trip-media';
+import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import { ITINERARY_EDIT_QUERY_ROOTS, invalidateTripQueries } from '@/lib/query/trip-invalidation';
 import type { Trip } from '@/lib/trips/api';
 import {
-  primaryTripDestinations,
   supportingTripDestinations,
   tripSectionFromPathname,
   tripSectionLabelKey,
+  tripTabDestinations,
   type TripDestination,
 } from '@/lib/trips/navigation';
 import { cn } from '@/lib/utils';
@@ -49,9 +49,6 @@ type TripChromeSlots = {
   leadingSlot: HTMLElement | null;
   /** The section toolbar's trailing edge: the actions that belong to the screen. */
   actionsSlot: HTMLElement | null;
-  /** Where a screen renders a control onto the cover itself. */
-  coverMetaSlot: HTMLElement | null;
-  setCoverSource: (source: TripMediaSource | null) => void;
 };
 
 const TripChromeContext = createContext<TripChromeSlots | null>(null);
@@ -120,8 +117,6 @@ export function TripChrome({
 
   const [leadingSlot, setLeadingSlot] = useState<HTMLElement | null>(null);
   const [actionsSlot, setActionsSlot] = useState<HTMLElement | null>(null);
-  const [coverMetaSlot, setCoverMetaSlot] = useState<HTMLElement | null>(null);
-  const [coverSource, setCoverSource] = useState<TripMediaSource | null>(null);
   const [sharing, setSharing] = useState(false);
   const [editing, setEditing] = useState(false);
 
@@ -129,9 +124,9 @@ export function TripChrome({
   const stickyNavigation = currentSection === 'itinerary';
 
   const lifecycle = trip?.lifecycle ?? 'planning';
-  const primary = primaryTripDestinations(tripId, lifecycle, trip?.startDate ?? '').filter(
-    (destination) => destination.section !== 'mode',
-  );
+  // Trip Mode and Memories each open as an experience of their own, so the row
+  // that moves between this trip's sections carries only the planner.
+  const primary = tripTabDestinations(tripId, lifecycle, trip?.startDate ?? '');
   const supporting = supportingTripDestinations(tripId);
   const activeSupporting = supporting.find((entry) => entry.section === currentSection);
   const onCoreExperience = primary.some((entry) => entry.section === currentSection);
@@ -166,8 +161,8 @@ export function TripChrome({
   }
 
   const slots = useMemo<TripChromeSlots>(
-    () => ({ actionsSlot, coverMetaSlot, leadingSlot, setCoverSource }),
-    [actionsSlot, coverMetaSlot, leadingSlot],
+    () => ({ actionsSlot, leadingSlot }),
+    [actionsSlot, leadingSlot],
   );
 
   return (
@@ -196,23 +191,10 @@ export function TripChrome({
                 className="rounded-none md:rounded-t-[var(--radius-2xl)] md:rounded-b-none"
                 preload
                 sizes="(max-width: 1023px) 100vw, 1024px"
-                source={
-                  coverSource ??
-                  resolveTripMediaSource({ coverUrl: trip?.coverPhotoUrl, editorial })
-                }
+                source={resolveTripMediaSource({ coverUrl: trip?.coverPhotoUrl, editorial })}
                 variant="cover"
               />
-              <div className="pointer-events-none absolute inset-0 rounded-none bg-gradient-to-t from-surface-overlay/85 from-0% to-transparent to-42% md:rounded-t-[var(--radius-2xl)]">
-                {/* A screen's own control on the cover, such as Memories' rating,
-                  sits out of flow above the sheet's curve. In flow it would push
-                  whatever shares its row, so the name would sit at a different
-                  height depending on whether a screen has put a control here.
-                  Positioned instead, it never moves anything at all. */}
-                <div
-                  className="pointer-events-auto absolute right-5 bottom-11 empty:hidden md:right-7 md:bottom-14"
-                  ref={setCoverMetaSlot}
-                />
-              </div>
+              <div className="pointer-events-none absolute inset-0 rounded-none bg-gradient-to-t from-surface-overlay/85 from-0% to-transparent to-42% md:rounded-t-[var(--radius-2xl)]" />
               <Link
                 aria-label={t('backToTrips')}
                 className="absolute top-[max(1rem,var(--safe-top))] left-[max(1rem,var(--safe-left))] z-10 flex size-10 items-center justify-center rounded-full border border-media-fallback-foreground/18 bg-neutral-950/58 text-media-fallback-foreground backdrop-blur-sm outline-none transition-colors hover:bg-neutral-950/78 focus-visible:ring-3 focus-visible:ring-ring/50"

@@ -7,7 +7,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
 import { EditorialSection } from '@/components/editorial-section';
-import { ExperienceRatingSummary } from '@/components/experience-rating-field';
+import { ExperienceRatingSummary } from '@/components/experience-rating';
 import { HomeFocalTrip } from '@/components/home-focal-trip';
 import { HomeNowStrip } from '@/components/home-now-strip';
 import { HomeTripDeck } from '@/components/home-trip-deck';

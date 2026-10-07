@@ -1,8 +1,8 @@
-import { TripMemoriesManager } from '@/components/trip-memories-manager';
+import { MemoriesJournal } from '@/components/memories/memories-journal';
 
 export default async function TripMemoriesPage({
   params,
 }: Readonly<{ params: Promise<{ tripId: string }> }>) {
   const { tripId } = await params;
-  return <TripMemoriesManager tripId={tripId} />;
+  return <MemoriesJournal tripId={tripId} />;
 }

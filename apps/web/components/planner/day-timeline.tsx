@@ -78,6 +78,7 @@ export function DayTimeline({
   itemCount,
   label,
   menuActions,
+  onEditTiming,
   onInsert,
   onModeChange,
   onReorder,
@@ -99,6 +100,8 @@ export function DayTimeline({
   itemCount: number;
   label: string;
   menuActions: StopMenuActions;
+  /** Opens a stop's timing on its own. */
+  onEditTiming?: (item: ItineraryItem) => void;
   /** Adds a stop at `position` among the day's stops, after the stop named `afterName`. */
   onInsert: (position: number, afterName: string | null) => void;
   onModeChange: (segment: ItineraryRouteSegment, mode: RouteTravelMode) => void;
@@ -277,6 +280,7 @@ export function DayTimeline({
           />
         }
         number={entry.stopNumber}
+        onEditTiming={onEditTiming ? () => onEditTiming(item) : undefined}
         onSelectOnMap={() => onSelectItem(item)}
         onViewDetails={() => onViewItemDetails(item)}
         view={view}

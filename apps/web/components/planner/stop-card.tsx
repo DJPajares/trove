@@ -1,5 +1,6 @@
 'use client';
 
+import { Clock3 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import type { CSSProperties, ReactNode, Ref } from 'react';
 
@@ -126,6 +127,7 @@ export function StopCard({
   item,
   menu,
   number,
+  onEditTiming,
   onSelectOnMap,
   onViewDetails,
   placeholder = false,
@@ -144,6 +146,8 @@ export function StopCard({
   item: ItineraryItem;
   menu: ReactNode;
   number: number;
+  /** Opens the stop's timing on its own - the edit made most often. */
+  onEditTiming?: () => void;
   onSelectOnMap: () => void;
   onViewDetails: () => void;
   /** This stop is the one being dragged: what stays behind is where it came from. */
@@ -179,9 +183,8 @@ export function StopCard({
           value: formatTravelDuration(item.durationMinutes * 60, locale),
         })
       : null;
+  const timing = [when, duration].filter((fact): fact is string => Boolean(fact)).join(' · ');
   const facts = [
-    when,
-    duration,
     view.locality ?? item.customLocation?.label ?? null,
     item.plannedCost
       ? t('costValue', { amount: item.plannedCost.amount, currency: item.plannedCost.currencyCode })
@@ -257,7 +260,7 @@ export function StopCard({
                 view.name
               )}
             </h3>
-            {facts.length || priority === 'must_go' ? (
+            {timing || facts.length || priority === 'must_go' || onEditTiming ? (
               <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm text-muted-foreground tabular-nums">
                 {priority === 'must_go' ? (
                   <span className="inline-flex items-center gap-1 font-medium text-brand">
@@ -265,9 +268,40 @@ export function StopCard({
                     {t('priority.must_go')}
                   </span>
                 ) : null}
+                {priority === 'must_go' && (timing || onEditTiming) ? (
+                  <span aria-hidden="true" className="text-text-subtle">
+                    ·
+                  </span>
+                ) : null}
+                {/* The time is the part of a stop changed most, so it opens its
+                    own sheet - above the claim the name makes on the card. */}
+                {onEditTiming ? (
+                  <button
+                    aria-label={
+                      timing
+                        ? plannerT('changeTiming', { name: view.name, timing })
+                        : plannerT('addTimingFor', { name: view.name })
+                    }
+                    className={cn(
+                      'relative z-10 rounded-[var(--radius-sm)] outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40',
+                      !timing && 'inline-flex items-center gap-1 font-medium text-primary',
+                    )}
+                    onClick={onEditTiming}
+                    type="button"
+                  >
+                    {timing || (
+                      <>
+                        <Clock3 aria-hidden="true" className="size-3.5" />
+                        {plannerT('addTiming')}
+                      </>
+                    )}
+                  </button>
+                ) : timing ? (
+                  <span>{timing}</span>
+                ) : null}
                 {facts.map((fact, index) => (
                   <span className="inline-flex items-center gap-1.5" key={`${fact}-${index}`}>
-                    {index || priority === 'must_go' ? (
+                    {index || timing || onEditTiming || priority === 'must_go' ? (
                       <span aria-hidden="true" className="text-text-subtle">
                         ·
                       </span>

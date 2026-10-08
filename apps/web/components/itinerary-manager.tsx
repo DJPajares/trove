@@ -23,13 +23,15 @@ import { PlanScoreChip, PlanScorePanel } from '@/components/plan-score-panel';
 import { ScoreProblemNote, AttentionNote } from '@/components/planner/attention-note';
 import { DayMasthead, type DayStay } from '@/components/planner/day-masthead';
 import { DAY_SKETCH_BOX, DayRouteSketch } from '@/components/planner/day-route-sketch';
-import { DaySettingsMenu } from '@/components/planner/day-settings-menu';
+import { DayMenu } from '@/components/planner/day-menu';
 import { DayTimeline } from '@/components/planner/day-timeline';
 import { PlanScoreSheet } from '@/components/planner/plan-score-sheet';
 import { PlannerDayView } from '@/components/planner/planner-day-view';
 import { PlannerMapPane } from '@/components/planner/planner-map-pane';
 import { MoveToDaySheet } from '@/components/planner/move-to-day-sheet';
 import { PlannerRibbon } from '@/components/planner/planner-ribbon';
+import { StaySheet } from '@/components/planner/stay-sheet';
+import { TimingSheet } from '@/components/planner/timing-sheet';
 import {
   StopEditorSheet,
   type StopEditorRequest,
@@ -301,7 +303,9 @@ export function ItineraryManager({
   const [dayNoteEditor, setDayNoteEditor] = useState<ItineraryDay | null>(null);
   const [contextDay, setContextDay] = useState<ItineraryDay | null>(null);
   const [dayNameEditor, setDayNameEditor] = useState<ItineraryDay | null>(null);
-  const [daySettingsOpen, setDaySettingsOpen] = useState(false);
+  // Where the open day starts and ends, and the stop whose time is being changed.
+  const [stayOpen, setStayOpen] = useState(false);
+  const [timingItem, setTimingItem] = useState<ItineraryItem | null>(null);
   const [dayTimesOpen, setDayTimesOpen] = useState(false);
   const [betterOrderDay, setBetterOrderDay] = useState<ItineraryDay | null>(null);
   const { compact, setCompactItinerary } = useCompactItinerary();
@@ -682,12 +686,6 @@ export function ItineraryManager({
     tripPlaceId
       ? (itinerary?.tripPlaces.find((tripPlace) => tripPlace.id === tripPlaceId) ?? null)
       : null;
-  const dailyBaseStart = placeName(tripPlaceById(selectedDay?.dailyBaseTripPlaceId ?? null));
-  const dailyBaseEnd = placeName(tripPlaceById(selectedDay?.dailyBaseDepartureTripPlaceId ?? null));
-  const dailyBaseSummary =
-    dailyBaseStart && dailyBaseEnd && dailyBaseStart !== dailyBaseEnd
-      ? t('dailyBaseSummary', { from: dailyBaseStart, to: dailyBaseEnd })
-      : (dailyBaseStart ?? dailyBaseEnd ?? t('noDailyBase'));
   const alphabeticalTripPlaces = useMemo(
     () =>
       sortTripPlaces(
@@ -1270,7 +1268,6 @@ export function ItineraryManager({
   }
 
   function openDayMove(day: ItineraryDay, strategy: 'append' | 'swap' = 'append') {
-    setDaySettingsOpen(false);
     setDayMoveSourceId(day.id);
     setDayMoveTargetId('');
     setDayMoveStrategy(strategy);
@@ -1541,15 +1538,12 @@ export function ItineraryManager({
                     <Icons.Preview aria-hidden="true" data-icon="inline-start" />
                     {plannerT('masthead.preview')}
                   </Button>
-                  <DaySettingsMenu
+                  <DayMenu
                     canSuggestTimes={online && untimedItems(selectedDay).length > 0}
                     compact={compact}
-                    dailyBaseSummary={dailyBaseSummary}
                     day={selectedDay}
+                    onCheckOrder={() => setBetterOrderDay(selectedDay)}
                     onCompactChange={setCompactItinerary}
-                    onDailyBaseChange={(tripPlaceId, departureTripPlaceId) =>
-                      void handleDailyBase(selectedDay, tripPlaceId, departureTripPlaceId)
-                    }
                     onEditContext={() => setContextDay(selectedDay)}
                     onEditName={() => {
                       setDayNameEditor(selectedDay);
@@ -1560,12 +1554,9 @@ export function ItineraryManager({
                       setDayNoteEditor(selectedDay);
                       setDayNoteValue(selectedDay.notes ?? '');
                     }}
+                    onEditStay={() => setStayOpen(true)}
                     onMoveDay={(strategy) => openDayMove(selectedDay, strategy)}
-                    onOpenChange={setDaySettingsOpen}
                     onSuggestTimes={() => setDayTimesOpen(true)}
-                    open={daySettingsOpen}
-                    placeName={placeName}
-                    tripPlaces={alphabeticalTripPlaces}
                   />
                 </>
               }
@@ -1591,7 +1582,7 @@ export function ItineraryManager({
               }
               onOpenMap={openPhoneMap}
               onPreviousDay={selectedIndex > 0 ? () => selectAdjacentDay(-1) : undefined}
-              onStayClick={() => setDaySettingsOpen(true)}
+              onStayClick={() => setStayOpen(true)}
               routeNotes={
                 !compact &&
                 (routes?.source === 'cache' ||
@@ -1709,6 +1700,7 @@ export function ItineraryManager({
                   selectedDayId: selectedDay.id,
                 }}
                 onInsert={(position, afterName) => openInsert(selectedDay, position, afterName)}
+                onEditTiming={setTimingItem}
                 onModeChange={(segment, mode) => void handleRouteModeChange(segment, mode)}
                 onReorder={(item, position) => void handleOrganize(item, selectedDay.id, position)}
                 onSelectBase={selectBaseOnMap}
@@ -1816,6 +1808,35 @@ export function ItineraryManager({
           name: itemName(item),
         })}
       />
+
+      {selectedDay ? (
+        <StaySheet
+          day={selectedDay}
+          onChange={(tripPlaceId, departureTripPlaceId) =>
+            void handleDailyBase(selectedDay, tripPlaceId, departureTripPlaceId)
+          }
+          onOpenChange={setStayOpen}
+          open={stayOpen}
+          placeName={placeName}
+          tripPlaces={alphabeticalTripPlaces}
+        />
+      ) : null}
+
+      {selectedDay ? (
+        <TimingSheet
+          dayId={selectedDay.id}
+          item={timingItem}
+          name={timingItem ? itemName(timingItem) : ''}
+          onClose={() => setTimingItem(null)}
+          onSaved={async ({ timeZoneConsequence: consequence }) => {
+            setTimeZoneConsequence(consequence);
+            setTimingItem(null);
+            await refresh();
+          }}
+          open={Boolean(timingItem)}
+          tripId={tripId}
+        />
+      ) : null}
 
       {moveTarget ? (
         <MoveToDaySheet

@@ -2,7 +2,7 @@
 
 import { Clock3 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import type { CSSProperties, ReactNode, Ref } from 'react';
+import { Fragment, type CSSProperties, type ReactNode, type Ref } from 'react';
 
 import { PlaceHoursNote } from '@/components/place-hours-note';
 import { usePreferences } from '@/components/preferences-provider';
@@ -130,6 +130,7 @@ export function StopCard({
   onEditTiming,
   onSelectOnMap,
   onViewDetails,
+  partial,
   placeholder = false,
   rowRef,
   rowStyle,
@@ -150,6 +151,8 @@ export function StopCard({
   onEditTiming?: () => void;
   onSelectOnMap: () => void;
   onViewDetails: () => void;
+  /** What the stop is missing that one tap can add - a location, a Place. */
+  partial?: { label: string; onAction: () => void } | null;
   /** This stop is the one being dragged: what stays behind is where it came from. */
   placeholder?: boolean;
   rowRef?: Ref<HTMLLIElement>;
@@ -183,7 +186,18 @@ export function StopCard({
           value: formatTravelDuration(item.durationMinutes * 60, locale),
         })
       : null;
-  const timing = [when, duration].filter((fact): fact is string => Boolean(fact)).join(' · ');
+  const timingParts = [when, duration].filter((fact): fact is string => Boolean(fact));
+  const timing = timingParts.join(' · ');
+  // A narrow card breaks the time between its parts, never inside one.
+  const timingText = timingParts.map((part, index) => (
+    <Fragment key={`${part}-${index}`}>
+      {index ? ' ' : null}
+      <span className="whitespace-nowrap">
+        {part}
+        {index < timingParts.length - 1 ? ' ·' : null}
+      </span>
+    </Fragment>
+  ));
   const facts = [
     view.locality ?? item.customLocation?.label ?? null,
     item.plannedCost
@@ -283,13 +297,15 @@ export function StopCard({
                         : plannerT('addTimingFor', { name: view.name })
                     }
                     className={cn(
-                      'relative z-10 rounded-[var(--radius-sm)] outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40',
+                      'relative z-10 rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40',
                       !timing && 'inline-flex items-center gap-1 font-medium text-primary',
                     )}
                     onClick={onEditTiming}
                     type="button"
                   >
-                    {timing || (
+                    {timing ? (
+                      timingText
+                    ) : (
                       <>
                         <Clock3 aria-hidden="true" className="size-3.5" />
                         {plannerT('addTiming')}
@@ -297,7 +313,7 @@ export function StopCard({
                     )}
                   </button>
                 ) : timing ? (
-                  <span>{timing}</span>
+                  <span>{timingText}</span>
                 ) : null}
                 {facts.map((fact, index) => (
                   <span className="inline-flex items-center gap-1.5" key={`${fact}-${index}`}>
@@ -312,6 +328,16 @@ export function StopCard({
               </p>
             ) : null}
             <div className="group-data-[reordering]/day:hidden">
+              {partial ? (
+                <button
+                  className="relative z-10 mt-1 inline-flex items-center gap-1 rounded-[var(--radius-sm)] text-sm font-medium text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+                  onClick={partial.onAction}
+                  type="button"
+                >
+                  <Icons.Place aria-hidden="true" className="size-3.5" />
+                  {partial.label}
+                </button>
+              ) : null}
               <StopHoursLine item={item} status={hours} />
               {item.notes ? (
                 <p className="mt-1 line-clamp-1 text-sm text-text-subtle">{item.notes}</p>

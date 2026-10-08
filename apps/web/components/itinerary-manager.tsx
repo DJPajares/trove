@@ -22,6 +22,7 @@ import { PlanScoreChip, PlanScorePanel } from '@/components/plan-score-panel';
 import { ScoreProblemNote, AttentionNote } from '@/components/planner/attention-note';
 import { DayMasthead, type DayStay } from '@/components/planner/day-masthead';
 import { DAY_SKETCH_BOX, DayRouteSketch } from '@/components/planner/day-route-sketch';
+import { DayEmpty } from '@/components/planner/day-empty';
 import { DayMenu } from '@/components/planner/day-menu';
 import { DayTimeline } from '@/components/planner/day-timeline';
 import { PlanScoreSheet } from '@/components/planner/plan-score-sheet';
@@ -826,7 +827,9 @@ export function ItineraryManager({
   );
   // Where the day already is - its Stay or a stop on it, else the trip's own
   // destination - so a Google search from the stop editor prefers what is near.
-  const tripDestinations = useTripContext()?.trip?.destinations;
+  const tripContext = useTripContext();
+  const tripDestinations = tripContext?.trip?.destinations;
+  const tripLifecycle = tripContext?.trip?.lifecycle;
   const editorLocationBias = useMemo(
     () =>
       destinationLocationBias([
@@ -988,6 +991,21 @@ export function ItineraryManager({
     setStopEditor((current) => ({ ...current, open: false }));
   }
 
+  /** What a stop is missing that one tap can add: its Place, or a location for it. */
+  function stopPartial(item: ItineraryItem) {
+    // A plan meant to be somewhere can be given its Place; a free afternoon, a
+    // transfer, a call or a workday is not missing one.
+    if (!item.tripPlace) {
+      return !item.blockType || item.blockType === 'activity'
+        ? { label: plannerT('stop.linkPlace'), onAction: () => openEdit(item, 'place') }
+        : null;
+    }
+    const tripPlace = item.tripPlace;
+    return canLocate(tripPlace) && !placeLocation(tripPlace) && online
+      ? { label: plannerT('stop.addLocation'), onAction: () => setLocatePlace(tripPlace) }
+      : null;
+  }
+
   function resolveScoreAction(
     explanation: import('@trove/types').PlanScoreExplanation,
   ): import('@/lib/plan-score/presentation').ScoreAction | null {
@@ -997,7 +1015,10 @@ export function ItineraryManager({
         ...itinerary.days.flatMap((day) => day.items),
         ...itinerary.unscheduledItems,
       ].find((item) => item.id === reference);
-      if (item) return { onSelect: () => openEdit(item) };
+      if (item) {
+        const partial = explanation.action === 'LINK_PLACE' ? stopPartial(item) : null;
+        return { onSelect: partial?.onAction ?? (() => openEdit(item)) };
+      }
       const day = itinerary.days.find((day) => day.id === reference);
       // The order Plan Score compared against can be previewed and applied,
       // rather than leaving the traveller to find it by hand.
@@ -1555,7 +1576,25 @@ export function ItineraryManager({
                     <Icons.Preview aria-hidden="true" data-icon="inline-start" />
                     {plannerT('masthead.preview')}
                   </Button>
+                  {/* A day that has been lived has its memories; the journal opens on it. */}
+                  {(tripLifecycle === 'active' || tripLifecycle === 'completed') &&
+                  (!today || selectedDay.date <= today) ? (
+                    <Button
+                      nativeButton={false}
+                      render={
+                        <Link
+                          href={`/trips/${tripId}/memories?date=${encodeURIComponent(selectedDay.date)}`}
+                        />
+                      }
+                      size="sm"
+                      variant="outline"
+                    >
+                      <Icons.Memories aria-hidden="true" data-icon="inline-start" />
+                      {plannerT('masthead.memories')}
+                    </Button>
+                  ) : null}
                   <DayMenu
+                    canCheckOrder={online && selectedDay.items.length > 1}
                     canSuggestTimes={online && untimedItems(selectedDay).length > 0}
                     compact={compact}
                     day={selectedDay}
@@ -1668,7 +1707,11 @@ export function ItineraryManager({
             {selectedDay.items.length ? (
               <DayTimeline
                 attentionFor={(item) => {
-                  const problems = dayProblems.byItem.get(item.id) ?? [];
+                  // A stop already offering its missing Place or location in one
+                  // tap is not told about it twice.
+                  const problems = (dayProblems.byItem.get(item.id) ?? []).filter(
+                    (problem) => problem.action !== 'LINK_PLACE' || !stopPartial(item),
+                  );
                   const holidays = (hoursNotices?.notices ?? []).filter(
                     (notice) =>
                       notice.kind === 'holiday_check' &&
@@ -1755,22 +1798,31 @@ export function ItineraryManager({
                     selected: selectedMapItemId === item.id,
                   };
                 }}
+                partialFor={stopPartial}
                 routesStale={routes?.stale ?? false}
                 savingRouteOwner={savingRouteOwner}
               />
             ) : (
-              <PageState
-                actions={
-                  <Button onClick={() => openCreate(selectedDay)} variant="outline">
-                    <Plus aria-hidden="true" data-icon="inline-start" />
-                    {t('addFirstItem')}
-                  </Button>
-                }
-                className="min-h-60 justify-center"
-                description={t('emptyDescription')}
-                headingLevel={2}
-                icon={<Icons.Itinerary aria-hidden="true" />}
-                title={t('emptyTitle')}
+              <DayEmpty
+                dayNumber={selectedIndex + 1}
+                mustGo={itinerary.tripPlaces.filter(
+                  (tripPlace) =>
+                    tripPlace.priority === 'must_go' && !placeUse[tripPlace.id]?.dayDates.length,
+                )}
+                onAddMustGo={async (tripPlace) => {
+                  // An idea already kept for it in Unscheduled is scheduled, with
+                  // its notes and timing, rather than added a second time.
+                  const idea = itinerary.unscheduledItems.find(
+                    (item) => item.tripPlace?.id === tripPlace.id,
+                  );
+                  if (idea) await handleOrganize(idea, selectedDay.id, selectedDay.items.length);
+                  else await addTripPlaceToSelectedDay(tripPlace.id);
+                }}
+                onAddStop={() => openCreate(selectedDay)}
+                onBrowsePlaces={() => setPlacesDrawerOpen(true)}
+                placeName={(tripPlace) => placeName(tripPlace) ?? t('providerPlace')}
+                town={selectedRibbonDay?.town ?? null}
+                tripIsEmpty={itinerary.days.every((day) => !day.items.length)}
               />
             )}
 

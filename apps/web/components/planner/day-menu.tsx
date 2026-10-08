@@ -25,6 +25,7 @@ import * as Icons from '@/lib/icons';
  * attention it does not need.
  */
 export function DayMenu({
+  canCheckOrder,
   canSuggestTimes,
   compact,
   day,
@@ -37,6 +38,8 @@ export function DayMenu({
   onMoveDay,
   onSuggestTimes,
 }: Readonly<{
+  /** Checking the order asks the server; offline it is not offered. */
+  canCheckOrder: boolean;
   canSuggestTimes: boolean;
   compact: boolean;
   day: ItineraryDay;
@@ -79,14 +82,14 @@ export function DayMenu({
           {menuT('stay')}
         </DropdownMenuItem>
 
-        {day.items.length > 1 || canSuggestTimes ? <DropdownMenuSeparator /> : null}
+        {canCheckOrder || canSuggestTimes ? <DropdownMenuSeparator /> : null}
         {canSuggestTimes ? (
           <DropdownMenuItem onClick={onSuggestTimes}>
             <Icons.Ai aria-hidden="true" />
             {t('dayTimes.action')}
           </DropdownMenuItem>
         ) : null}
-        {day.items.length > 1 ? (
+        {canCheckOrder ? (
           <DropdownMenuItem onClick={onCheckOrder}>
             <ListOrdered aria-hidden="true" />
             {menuT('checkOrder')}

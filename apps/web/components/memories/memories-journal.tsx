@@ -95,13 +95,16 @@ export function MemoriesJournal({ tripId }: Readonly<{ tripId: string }>) {
   const [ratingTarget, setRatingTarget] = useState<RatingTarget>(null);
   const [coverPickerOpen, setCoverPickerOpen] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const focusedMemoryId = useSearchParams().get('memory');
+  const searchParams = useSearchParams();
+  const focusedMemoryId = searchParams.get('memory');
+  const focusedDate = searchParams.get('date');
 
   const headRef = useRef<HTMLElement>(null);
   const coverRef = useRef<HTMLElement>(null);
   const pendingJump = useRef<string | null>(null);
   const pendingFocus = useRef<string | null>(null);
   const deepLinkHandled = useRef(false);
+  const dateLinkHandled = useRef(false);
 
   const journal = useMemo(
     () => (story ? buildJournal({ days, lens, story }) : null),
@@ -120,6 +123,16 @@ export function MemoriesJournal({ tripId }: Readonly<{ tripId: string }>) {
     deepLinkHandled.current = true;
     bringIntoView(document.getElementById(`memory-${focusedMemoryId}`), 'center');
   }, [focusedMemoryId, journal]);
+
+  // The planner's "Memories" on a day opens the journal at that day: its
+  // chapter, or the run of quiet days it falls in.
+  useEffect(() => {
+    if (!focusedDate || !journal || dateLinkHandled.current) return;
+    const entry = journal.contents.find((candidate) => candidate.day.date === focusedDate);
+    if (!entry) return;
+    dateLinkHandled.current = true;
+    bringIntoView(document.getElementById(entry.anchorId));
+  }, [focusedDate, journal]);
 
   // A jump into a day the lens was hiding waits for the lens to clear first;
   // focus after a deletion waits for the journal to be read again.

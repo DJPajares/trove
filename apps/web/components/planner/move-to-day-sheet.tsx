@@ -98,6 +98,10 @@ export function MoveToDaySheet({
           <ul className="space-y-1.5">
             {days.map((day) => {
               const current = day.id === currentDayId;
+              const dayDate = date.format(new Date(`${day.date}T00:00:00.000Z`));
+              // The date is said once: under a name or a town, or as the title.
+              const title = day.name ?? day.town;
+              const fullness = current ? t('thisDay') : t('stops', { count: day.stopCount });
               return (
                 <li key={day.id}>
                   <button
@@ -115,13 +119,9 @@ export function MoveToDaySheet({
                       {paddedDayNumber(day.number)}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">
-                        {day.name ?? day.town ?? date.format(new Date(`${day.date}T00:00:00.000Z`))}
-                      </span>
+                      <span className="block truncate text-sm font-medium">{title ?? dayDate}</span>
                       <span className="block truncate text-xs text-muted-foreground">
-                        {date.format(new Date(`${day.date}T00:00:00.000Z`))}
-                        {' · '}
-                        {current ? t('thisDay') : t('stops', { count: day.stopCount })}
+                        {title ? `${dayDate} · ${fullness}` : fullness}
                       </span>
                     </span>
                   </button>

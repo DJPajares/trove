@@ -86,6 +86,7 @@ export function DayTimeline({
   onSelectItem,
   onViewBaseDetails,
   onViewItemDetails,
+  partialFor,
   resolveBase,
   resolveItem,
   routesStale,
@@ -111,6 +112,8 @@ export function DayTimeline({
   onSelectItem: (item: ItineraryItem) => void;
   onViewBaseDetails: (tripPlaceId: string) => void;
   onViewItemDetails: (item: ItineraryItem) => void;
+  /** What a stop is missing that one tap can add, if anything. */
+  partialFor?: (item: ItineraryItem) => { label: string; onAction: () => void } | null;
   resolveBase: (
     tripPlaceId: string,
   ) => { located: boolean; name: string; selected: boolean } | null;
@@ -283,6 +286,7 @@ export function DayTimeline({
         onEditTiming={onEditTiming ? () => onEditTiming(item) : undefined}
         onSelectOnMap={() => onSelectItem(item)}
         onViewDetails={() => onViewItemDetails(item)}
+        partial={partialFor?.(item) ?? null}
         view={view}
       />,
     );

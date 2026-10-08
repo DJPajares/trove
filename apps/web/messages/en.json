@@ -1472,7 +1472,8 @@
         "addStop": "Add stop",
         "preview": "Preview",
         "previewLabel": "Preview day {number} in Trip Mode",
-        "scoreLabel": "Plan Score for day {number}"
+        "scoreLabel": "Plan Score for day {number}",
+        "memories": "Memories"
       },
       "stop": {
         "midnight": "midnight",
@@ -1488,6 +1489,8 @@
         "changeTiming": "Change when {name} is: {timing}",
         "addTimingFor": "Add a time for {name}",
         "addTiming": "Add a time",
+        "linkPlace": "Link a place",
+        "addLocation": "Add a location",
         "holidayCheck": "It’s {holiday} that day, so its hours may change."
       },
       "stay": {
@@ -1553,6 +1556,17 @@
         "nights": "{count, plural, one {# night} other {# nights}}",
         "stops": "{count, plural, =0 {Nothing planned yet} one {# stop} other {# stops}}",
         "more": "+{count} more"
+      },
+      "empty": {
+        "tripTitle": "Start with the places you can’t miss",
+        "tripDescription": "Add a first stop, or pick from the places already saved to this trip.",
+        "dayTitle": "Nothing planned for Day {number} yet",
+        "dayTitleTown": "Nothing planned for Day {number} in {town} yet",
+        "dayDescription": "Add a stop, or pick one from this trip’s Places.",
+        "mustGoTitle": "Must Go, not on a day yet",
+        "addMustGo": "Add {name}",
+        "addStop": "Add a stop",
+        "browsePlaces": "Browse Places"
       }
     },
     "overview": {
@@ -1598,9 +1612,6 @@
     "viewDetailsFor": "View details for {name}",
     "itemListLabel": "Items for this day",
     "addItem": "Add item",
-    "addFirstItem": "Add the first item",
-    "emptyTitle": "This day is open.",
-    "emptyDescription": "Add a place or a simple label. You can decide the timing later.",
     "unscheduled": "Unscheduled",
     "unscheduledDescription": "Ideas kept here retain their details until you assign a day.",
     "dailyBase": "Stay",

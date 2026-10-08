@@ -122,6 +122,8 @@ const createItemSchema = z
     ...itemFields,
     clientItemId: z.uuid().optional(),
     itineraryDayId: z.uuid(),
+    // Where among the day's stops the new one goes; omitted, it joins the end.
+    position: z.number().int().min(0).max(10_000).optional(),
     schedule: scheduleSchema.default({ kind: 'none' }),
   })
   .strict()

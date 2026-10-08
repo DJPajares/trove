@@ -23,20 +23,12 @@ import type { Trip } from '@/lib/trips/api';
 import { formatTripDate, formatTripDateRange } from '@/lib/trips/format';
 import { daysUntilTripStart, resolveCountdown } from '@/lib/trips/lifecycle';
 import { primaryTripDestinations, withLiveTripModeFirst } from '@/lib/trips/navigation';
+import type { TripNextUp } from '@/lib/trips/next-up';
 import { tripDestinationSummary } from '@/lib/trips/summary';
-
-/**
- * What the trip's day says right now, or null when it says nothing worth a line.
- *
- * Null covers both "still loading" and "no day at all", because neither is a
- * fact about the traveller's schedule and both used to render as one.
- */
-export type HomeNextUp =
-  { kind: 'current' | 'next'; label: string } | { kind: 'nothingScheduled'; label: null };
 
 export type HomeFocalTripProps = {
   editorial: EditorialImageReference | null;
-  nextUp: HomeNextUp | null;
+  nextUp: TripNextUp | null;
   onDismissPrompt: (tripId: string) => void;
   promptKey: CompletedPromptKey | null;
   trip: Trip;

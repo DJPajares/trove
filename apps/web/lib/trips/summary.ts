@@ -110,7 +110,7 @@ export function tripSecondaryEditorialSubject(trip: Trip): EditorialSubject | nu
  * would be a second request for the same screen.
  */
 export function libraryEditorialSubjects(groups: TripLibraryGroups): EditorialSubject[] {
-  return [groups.featured, ...groups.upcomingReady, ...groups.upcomingInProgress, ...groups.past]
+  return [groups.featured, ...groups.ahead, ...groups.past]
     .flatMap((trip) => (trip ? (tripEditorialSubject(trip) ?? []) : []))
     .slice(0, MAX_EDITORIAL_IMAGE_SUBJECTS);
 }

@@ -8,13 +8,14 @@ import type { Trip } from './api';
 const RECENTLY_COMPLETED_DAYS = 30;
 
 /**
- * How much of the archive the library shows before offering the rest.
+ * How many finished trips the library shows before offering the rest.
  *
- * Four rows is one comfortable section: enough that a traveller sees the trips
- * they most recently took, few enough that where they have been never
+ * The most recent one is told as a story and the next six sit beneath it as
+ * prints - two rows on a tablet, three on a phone. Enough that a traveller
+ * sees where they have lately been, few enough that where they have been never
  * out-weighs where they are going.
  */
-export const PAST_TRIPS_PREVIEW_COUNT = 4;
+export const PAST_TRIPS_PREVIEW_COUNT = 7;
 
 /**
  * How close departure has to be before an unmarked plan is worth mentioning.
@@ -184,14 +185,17 @@ export function selectPrimaryTrip(
 }
 
 export type TripLibraryGroups = {
+  /**
+   * Every trip still ahead of the traveller apart from the featured one, in the
+   * order they happen: trips already under way first, then departures soonest
+   * first. Readiness never moves a trip within it - Ready is a marker on the
+   * trip, not a place in the line (PRD 6.2).
+   */
+  ahead: Trip[];
   /** The trip the library leads with, or null when everything is finished. */
   featured: Trip | null;
   /** Finished trips, most recent first. */
   past: Trip[];
-  /** Trips still ahead whose plan the traveller has not yet called done. */
-  upcomingInProgress: Trip[];
-  /** Trips still ahead that the traveller has marked Ready. */
-  upcomingReady: Trip[];
 };
 
 /**
@@ -204,7 +208,7 @@ export type TripLibraryGroups = {
 export function groupTripsForLibrary(trips: Trip[], now = new Date()): TripLibraryGroups {
   const featured = selectPrimaryTrip(trips, now, { includeRecentlyCompleted: false });
 
-  const upcoming = trips
+  const ahead = trips
     .filter((trip) => trip.id !== featured?.id && trip.lifecycle !== 'completed')
     .toSorted((left, right) => {
       // An active trip outranks a planned one however the dates fall.
@@ -212,19 +216,9 @@ export function groupTripsForLibrary(trips: Trip[], now = new Date()): TripLibra
       return left.startDate.localeCompare(right.startDate);
     });
 
-  // Readiness separates the list; it never reorders it. Partitioning an
-  // already-sorted list keeps each group in departure order, so a marker can
-  // never lift a trip above one that leaves sooner. An active trip stays with
-  // the unmarked ones whatever its readiness says: Ready is a planning-phase
-  // declaration, and that phase is over.
-  const isMarkedReady = (trip: Trip) =>
-    trip.lifecycle === 'planning' && trip.planningReadiness === 'ready';
-  const upcomingReady = upcoming.filter(isMarkedReady);
-  const upcomingInProgress = upcoming.filter((trip) => !isMarkedReady(trip));
-
   const past = trips
     .filter((trip) => trip.lifecycle === 'completed')
     .toSorted((left, right) => right.endDate.localeCompare(left.endDate));
 
-  return { featured, past, upcomingInProgress, upcomingReady };
+  return { ahead, featured, past };
 }

@@ -2,36 +2,45 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ChevronDown, CircleAlert, Plus } from 'lucide-react';
+import { CircleAlert, Plus } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 
 import { AiPlanningDraftCard } from '@/components/ai-planning-draft-card';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
 import { useTripCreation } from '@/components/trip-creation-provider';
-import { TripFeaturedCard } from '@/components/trip-featured-card';
-import { TripListRow } from '@/components/trip-list-row';
-import { TripShareDialog } from '@/components/trip-share-dialog';
+import { LibraryAhead } from '@/components/trips-library/library-ahead';
+import { LibraryEmpty, LibraryNothingAhead } from '@/components/trips-library/library-empty';
+import { LibraryLead } from '@/components/trips-library/library-lead';
+import { LibraryRemembered } from '@/components/trips-library/library-remembered';
+import { LibrarySkeleton } from '@/components/trips-library/library-skeleton';
+import { Button } from '@/components/ui/button';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { deviceTimeZone, fetchTripModeContext } from '@/lib/itinerary/api';
 import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
-import { groupTripsForLibrary, PAST_TRIPS_PREVIEW_COUNT } from '@/lib/trips/lifecycle';
-import { libraryEditorialSubjects, tripEditorialSubject } from '@/lib/trips/summary';
-import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Button } from '@/components/ui/button';
-import { fetchTrips, type Trip } from '@/lib/trips/api';
 import { queryKeys } from '@/lib/query/keys';
-import * as Icons from '@/lib/icons';
+import { fetchTrips, type Trip } from '@/lib/trips/api';
+import { libraryLedger } from '@/lib/trips/library';
+import { groupTripsForLibrary } from '@/lib/trips/lifecycle';
+import { resolveTripNextUp } from '@/lib/trips/next-up';
+import { libraryEditorialSubjects, tripEditorialSubject } from '@/lib/trips/summary';
 
-/**
- * The library creates trips; editing and deleting a trip belong to the trip's
- * own route, where the traveller can see what they are changing.
- */
 const EMPTY_TRIPS: Trip[] = [];
 
+/**
+ * The traveller's trips, as a library in three tenses (PRD 10): the journey
+ * they are on or leaving for next, the trips ahead of them as a calendar of
+ * departures, and the trips they have taken, kept as stories. Each tense opens
+ * the experience it belongs to - planning, Trip Mode, Memories - so the page is
+ * the bridge between the three rather than a list of records.
+ *
+ * The library creates trips; editing, sharing and deleting a trip belong to
+ * the trip's own screens, where the traveller can see what they are changing.
+ */
 export function TripsManager() {
   const t = useTranslations('trips');
+  const libraryT = useTranslations('trips.library');
   const { latestCreatedTrip, openCreateTrip } = useTripCreation();
   const pathname = usePathname();
   const router = useRouter();
@@ -42,46 +51,27 @@ export function TripsManager() {
   const trips = tripsQuery.data?.trips ?? EMPTY_TRIPS;
   const status = tripsQuery.isPending ? 'loading' : tripsQuery.error ? 'error' : 'idle';
 
-  // The library owns one dialog for whichever trip asked for it, rather than a
-  // mounted dialog per card.
-  const [sharingTripId, setSharingTripId] = useState<string | null>(null);
-  const sharingTrip = trips.find((trip) => trip.id === sharingTripId) ?? null;
+  const library = useMemo(() => groupTripsForLibrary(trips), [trips]);
+  const ledger = useMemo(() => libraryLedger(trips), [trips]);
+  const lead = library.featured;
 
-  const groupedTrips = useMemo(() => groupTripsForLibrary(trips), [trips]);
-
-  // Only the featured card draws the leg to the next stop, and only a trip
-  // actually under way has one. The key and its options match Home's, so a
-  // traveller moving between the two screens re-reads one answer rather than
-  // buying a second - this endpoint can reach Routes.
-  const featuredActiveTripId =
-    groupedTrips.featured?.lifecycle === 'active' ? groupedTrips.featured.id : null;
-  // Trip Mode runs on the traveller's own clock, and these surfaces show the
-  // same answer, so they have to ask the same question.
+  // Only the lead trip says what is next, and only a trip actually under way
+  // has a next. The key and its options match Home's and Trip Mode's, so moving
+  // between the three re-reads one answer rather than buying another - this
+  // endpoint can reach Routes.
+  const leadActiveTripId = lead?.lifecycle === 'active' ? lead.id : null;
   const clockTimeZone = deviceTimeZone();
-  // Including the language is what makes this the same query as Trip Mode's.
   const languageCode = useLocale();
   const tripModeContextQuery = useQuery({
-    enabled: featuredActiveTripId !== null,
+    enabled: leadActiveTripId !== null,
     queryFn: ({ signal }) =>
-      fetchTripModeContext(featuredActiveTripId as string, {
-        clockTimeZone,
-        languageCode,
-        signal,
-      }),
-    queryKey: queryKeys.tripModeContext(featuredActiveTripId ?? '', {
-      clockTimeZone,
-      languageCode,
-    }),
+      fetchTripModeContext(leadActiveTripId as string, { clockTimeZone, languageCode, signal }),
+    queryKey: queryKeys.tripModeContext(leadActiveTripId ?? '', { clockTimeZone, languageCode }),
   });
 
-  // Readiness only earns headings when it actually divides something: a
-  // traveller who has marked nothing Ready keeps the single flat list.
-  const readinessDividesTheList =
-    groupedTrips.upcomingReady.length > 0 && groupedTrips.upcomingInProgress.length > 0;
-
   // One request for the whole library, in priority order and capped, however
-  // many trips a traveller has. Rows read from the answer; none of them ask.
-  const editorialImages = useEditorialImages(libraryEditorialSubjects(groupedTrips));
+  // many trips a traveller has. Every trip reads from the answer; none asks.
+  const editorialImages = useEditorialImages(libraryEditorialSubjects(library));
   const editorialFor = (trip: Trip) => {
     const subject = tripEditorialSubject(trip);
     return subject
@@ -109,30 +99,31 @@ export function TripsManager() {
     });
   }, [latestCreatedTrip, queryClient]);
 
+  // The line under the title counts what the library holds, and leaves out
+  // whatever it holds none of rather than announcing a zero.
+  const ledgerParts = [
+    ledger.ahead ? libraryT('ledger.ahead', { count: ledger.ahead }) : null,
+    ledger.remembered ? libraryT('ledger.remembered', { count: ledger.remembered }) : null,
+    ledger.countries ? libraryT('ledger.countries', { count: ledger.countries }) : null,
+  ].filter(Boolean);
+
   return (
-    <section className="mx-auto w-full max-w-5xl space-y-8">
+    <section className="mx-auto w-full max-w-5xl space-y-10 sm:space-y-12">
       <PageHeader
         actions={
-          <Button onClick={openCreateTrip}>
+          // A phone already carries Create at the centre of its bottom bar,
+          // and the lead trip deserves the first screen more than a second one.
+          <Button className="max-md:hidden" onClick={openCreateTrip}>
             <Plus aria-hidden="true" data-icon="inline-start" />
             {t('newTrip')}
           </Button>
         }
+        meta={status === 'idle' && ledgerParts.length ? ledgerParts.join(' · ') : undefined}
         title={t('title')}
       />
 
-      {/* Above the library and outside its loading states: a draft is reachable
-          on a traveller's very first visit, when there are no trips yet. */}
-      <AiPlanningDraftCard />
-
       {status === 'loading' ? (
-        <PageState
-          headingLevel={2}
-          kind="loading"
-          loadingShape="list"
-          scope="section"
-          title={t('loading')}
-        />
+        <LibrarySkeleton label={t('loading')} />
       ) : status === 'error' ? (
         <PageState
           actions={<Button onClick={() => window.location.reload()}>{t('tryAgain')}</Button>}
@@ -143,132 +134,39 @@ export function TripsManager() {
           title={t('loadError')}
         />
       ) : trips.length === 0 ? (
-        <PageState
-          actions={
-            <Button onClick={openCreateTrip}>
-              <Plus aria-hidden="true" data-icon="inline-start" />
-              {t('createFirstTrip')}
-            </Button>
-          }
-          description={t('emptyDescription')}
-          headingLevel={2}
-          icon={<Icons.Trips aria-hidden="true" />}
-          kind="empty"
-          title={t('emptyTitle')}
-        />
+        <>
+          {/* A draft is reachable on a traveller's very first visit, before
+              there is any trip for it to sit among. */}
+          <AiPlanningDraftCard />
+          <LibraryEmpty onCreateTrip={openCreateTrip} />
+        </>
       ) : (
-        <div className="space-y-8">
-          {groupedTrips.featured ? (
-            <TripFeaturedCard
-              editorial={editorialFor(groupedTrips.featured)}
-              onShare={() => setSharingTripId(groupedTrips.featured?.id ?? null)}
-              trip={groupedTrips.featured}
-              tripModeContext={tripModeContextQuery.data ?? null}
+        <>
+          {lead ? (
+            <LibraryLead
+              editorial={editorialFor(lead)}
+              nextUp={resolveTripNextUp(tripModeContextQuery.data ?? null)}
+              trip={lead}
+            />
+          ) : (
+            <>
+              <LibraryNothingAhead onCreateTrip={openCreateTrip} />
+              <AiPlanningDraftCard />
+            </>
+          )}
+
+          {lead ? (
+            <LibraryAhead
+              editorialFor={editorialFor}
+              leading={<AiPlanningDraftCard headingLevel={3} />}
+              onCreateTrip={openCreateTrip}
+              trips={library.ahead}
             />
           ) : null}
 
-          {groupedTrips.upcomingReady.length > 0 || groupedTrips.upcomingInProgress.length > 0 ? (
-            <section aria-labelledby="upcoming-trips-heading" className="space-y-4">
-              <h2
-                className="text-[length:var(--text-section-title)] font-semibold tracking-[-0.02em] text-foreground"
-                id="upcoming-trips-heading"
-              >
-                {t('sections.planning')}
-              </h2>
-              {(
-                [
-                  ['ready', groupedTrips.upcomingReady],
-                  ['inProgress', groupedTrips.upcomingInProgress],
-                ] as const
-              ).map(([group, trips]) =>
-                trips.length ? (
-                  <div className="space-y-3" key={group}>
-                    {readinessDividesTheList ? (
-                      <h3 className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-                        {t(`readinessGroups.${group}`)}
-                      </h3>
-                    ) : null}
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {trips.map((trip) => (
-                        <TripListRow editorial={editorialFor(trip)} key={trip.id} trip={trip} />
-                      ))}
-                    </div>
-                  </div>
-                ) : null,
-              )}
-            </section>
-          ) : null}
-
-          {groupedTrips.past.length ? (
-            <section aria-labelledby="past-trips-heading" className="space-y-4">
-              <h2
-                className="text-[length:var(--text-section-title)] font-semibold tracking-[-0.02em] text-foreground"
-                id="past-trips-heading"
-              >
-                {t('sections.completed')}
-              </h2>
-              <div className="grid gap-3">
-                {groupedTrips.past.slice(0, PAST_TRIPS_PREVIEW_COUNT).map((trip) => (
-                  <TripListRow
-                    editorial={editorialFor(trip)}
-                    key={trip.id}
-                    trip={trip}
-                    variant="archive"
-                  />
-                ))}
-              </div>
-              {groupedTrips.past.length > PAST_TRIPS_PREVIEW_COUNT ? (
-                <Collapsible>
-                  <CollapsiblePanel>
-                    <div className="mt-3 grid gap-3">
-                      {groupedTrips.past.slice(PAST_TRIPS_PREVIEW_COUNT).map((trip) => (
-                        <TripListRow
-                          editorial={editorialFor(trip)}
-                          key={trip.id}
-                          trip={trip}
-                          variant="archive"
-                        />
-                      ))}
-                    </div>
-                  </CollapsiblePanel>
-                  <CollapsibleTrigger className="group mt-3">
-                    <ChevronDown
-                      aria-hidden="true"
-                      className="transition-transform duration-[var(--motion-standard)] group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
-                    />
-                    <span className="group-data-[panel-open]:hidden">
-                      {t('showAllPast', { count: groupedTrips.past.length })}
-                    </span>
-                    <span className="hidden group-data-[panel-open]:inline">
-                      {t('showFewerPast')}
-                    </span>
-                  </CollapsibleTrigger>
-                </Collapsible>
-              ) : null}
-            </section>
-          ) : null}
-        </div>
+          <LibraryRemembered editorialFor={editorialFor} trips={library.past} />
+        </>
       )}
-
-      {/* The saved trip is written straight back into the library's own cache, so
-          the card the traveller just shared reflects it without a refetch. */}
-      {sharingTrip ? (
-        <TripShareDialog
-          onOpenChange={(open) => !open && setSharingTripId(null)}
-          onTripChange={(updated) =>
-            queryClient.setQueryData(queryKeys.trips(), (current: { trips: Trip[] } | undefined) =>
-              current
-                ? {
-                    ...current,
-                    trips: current.trips.map((trip) => (trip.id === updated.id ? updated : trip)),
-                  }
-                : current,
-            )
-          }
-          open
-          trip={sharingTrip}
-        />
-      ) : null}
     </section>
   );
 }

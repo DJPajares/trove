@@ -33,7 +33,13 @@ import * as Icons from '@/lib/icons';
  * machine belongs to the creation sheet. The key is shared, so this costs no
  * request of its own.
  */
-export function AiPlanningDraftCard() {
+export function AiPlanningDraftCard({
+  headingLevel = 2,
+}: Readonly<{
+  /** Inside the library's Ahead section the draft is one of its entries. */
+  headingLevel?: 2 | 3;
+}> = {}) {
+  const Heading = `h${headingLevel}` as const;
   const t = useTranslations('trips.aiPlanning.draftCard');
   const locale = useLocale();
   const queryClient = useQueryClient();
@@ -65,29 +71,34 @@ export function AiPlanningDraftCard() {
   // saying it twice on the same screen would be two answers to one question.
   if (!session || !draft) return null;
 
+  // Dashed, like the open slot the Ahead calendar ends on: a trip in waiting,
+  // drawn as one that has not been made yet.
   return (
     <section
       aria-labelledby="ai-planning-draft-heading"
-      className="rounded-[var(--radius-xl)] border border-border-strong bg-card p-4 shadow-[var(--shadow-card)] sm:p-5"
+      className="flex flex-col gap-4 rounded-[var(--radius-xl)] border border-dashed border-brand/50 bg-surface-tint/70 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:p-5"
+      data-slot="ai-planning-draft-card"
     >
-      <p className="flex items-center gap-1.5 text-xs font-medium text-brand">
-        <Icons.Ai aria-hidden="true" className="size-3.5" />
-        {t('eyebrow')}
-      </p>
-      <h2
-        className="mt-2 text-[length:var(--text-section-title)] font-semibold tracking-[-0.02em]"
-        id="ai-planning-draft-heading"
-      >
-        {draft.trip.name}
-      </h2>
-      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
-        <CalendarDays aria-hidden="true" className="size-3.5 shrink-0" />
-        {formatTripDateRange(draft.trip.startDate, draft.trip.endDate, locale)}
-        {planScore === null ? null : ` · ${t('planScore', { score: planScore })}`}
-      </p>
-      <p className="mt-3 text-sm text-muted-foreground">{t('description')}</p>
+      <div className="min-w-0">
+        <p className="flex items-center gap-1.5 text-[length:var(--text-metadata)] font-semibold tracking-[0.12em] text-brand uppercase">
+          <Icons.Ai aria-hidden="true" className="size-3.5" />
+          {t('eyebrow')}
+        </p>
+        <Heading
+          className="mt-2 text-lg leading-[1.2] font-semibold tracking-[-0.02em] text-balance text-foreground"
+          id="ai-planning-draft-heading"
+        >
+          {draft.trip.name}
+        </Heading>
+        <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
+          <CalendarDays aria-hidden="true" className="size-3.5 shrink-0" />
+          {formatTripDateRange(draft.trip.startDate, draft.trip.endDate, locale)}
+          {planScore === null ? null : ` · ${t('planScore', { score: planScore })}`}
+        </p>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">{t('description')}</p>
+      </div>
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="flex shrink-0 flex-wrap gap-2">
         {/* Going back to a draft is navigation, not an action. */}
         <Button nativeButton={false} render={<Link href={`/trips/ai/${session.id}`} />}>
           {t('continue')}

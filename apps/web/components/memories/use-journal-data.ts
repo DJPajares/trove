@@ -11,19 +11,12 @@ import { fetchMemories, type MemoryPhoto } from '@/lib/memories/api';
 import { journalDays } from '@/lib/memories/journal';
 import { routeSketch } from '@/lib/maps/route-sketch';
 import { locatedMemoryPlaces } from '@/lib/memories/route-sketch';
-import { shouldRefreshSignedMedia } from '@/lib/memories/signed-media';
+import { canDecodeHeic, shouldRefreshSignedMedia } from '@/lib/memories/signed-media';
 import { buildTripStory } from '@/lib/memories/story';
 import { queryKeys } from '@/lib/query/keys';
 
 /** The box the route is drawn into; the SVG scales it to whatever width it is given. */
 export const ROUTE_SKETCH_BOX = { height: 140, padding: 14, width: 360 } as const;
-
-/** Safari decodes HEIC; other browsers get the file as taken and cannot. */
-function canDecodeHeic() {
-  return typeof navigator !== 'undefined'
-    ? /^((?!chrome|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent)
-    : false;
-}
 
 /**
  * Everything the journal reads, from the owners that already hold it.

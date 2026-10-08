@@ -15,6 +15,11 @@ import { MEMORY_PHOTOS_BUCKET } from './memories.js';
 import { resolvedPlaceTimeZone } from './place-data.js';
 import { RESERVATION_DOCUMENTS_BUCKET } from './reservations.js';
 import { attemptNewTripMediaCleanup } from './trip-media-cleanup.js';
+import {
+  selectTripMemoryPreview,
+  TRIP_MEMORY_PREVIEW_LIMIT,
+  type MemoryPreviewPhotoRecord,
+} from './trip-memory-preview.js';
 import { placeProviderRefInclude, serializeCanonicalPlace } from './place-serializer.js';
 import { createAuthenticatedSupabaseClient } from './supabase-auth.js';
 import {
@@ -136,6 +141,63 @@ const tripInclude = {
 
 type TripRecord = Awaited<ReturnType<typeof findOwnedTrip>>;
 
+const memoryPreviewPhotoSelect = { contentType: true, id: true, path: true } as const;
+
+/**
+ * The library's own read: the trip, plus the few photographs a finished trip
+ * is remembered by (`selectTripMemoryPreview`). Only the list asks for these -
+ * a trip's own screens read its Memories from the journal's endpoint - and a
+ * trip without photographed Memories costs nothing beyond the empty relation.
+ *
+ * One more memory than the limit, so a story cover that is also a Highlight's
+ * first photograph still leaves a full fan once the repeat is dropped.
+ */
+const libraryTripInclude = {
+  ...tripInclude,
+  memories: {
+    where: { photos: { some: {} } },
+    orderBy: [
+      { isHighlight: 'desc' as const },
+      { highlightPosition: 'asc' as const },
+      { capturedInstant: 'asc' as const },
+    ],
+    take: TRIP_MEMORY_PREVIEW_LIMIT + 1,
+    select: {
+      photos: {
+        orderBy: { position: 'asc' as const },
+        take: 1,
+        select: memoryPreviewPhotoSelect,
+      },
+    },
+  },
+  storyCoverPhoto: { select: memoryPreviewPhotoSelect },
+} satisfies Prisma.TripInclude;
+
+/**
+ * Signs a finished trip's preview photographs in one request. A photograph
+ * whose link cannot be made is left out rather than sent broken: the library
+ * falls back to the trip's cover, which is what it shows without any.
+ */
+async function createMemoryPreview(
+  supabase: SupabaseClient | null,
+  photos: MemoryPreviewPhotoRecord[],
+) {
+  if (!supabase || !photos.length) return [];
+
+  const { data, error } = await supabase.storage.from(MEMORY_PHOTOS_BUCKET).createSignedUrls(
+    photos.map((photo) => photo.path),
+    60 * 60,
+  );
+  if (error || !data) return [];
+
+  return photos.flatMap((photo, index) => {
+    const signed = data[index];
+    return signed?.signedUrl && !signed.error
+      ? [{ contentType: photo.contentType, id: photo.id, url: signed.signedUrl }]
+      : [];
+  });
+}
+
 function mapReadiness(value: string) {
   return value === 'READY' ? ('ready' as const) : ('in_progress' as const);
 }
@@ -177,9 +239,11 @@ async function serializeTrip(
   trip: NonNullable<TripRecord>,
   supabase: SupabaseClient | null,
   now = new Date(),
+  memoryPreview?: MemoryPreviewPhotoRecord[],
 ) {
   const startDate = formatDateOnly(trip.startDate);
   const endDate = formatDateOnly(trip.endDate);
+  const lifecycle = deriveTripLifecycle(startDate, endDate, trip.referenceTimeZone, now);
   const effectiveStartingPlace = trip.startingPlace;
   const itineraryDays = (trip.itineraryDays ?? []).map((day) => ({
     date: day.date,
@@ -253,8 +317,15 @@ async function serializeTrip(
     experienceRating: trip.experienceRating,
     id: trip.id,
     itineraryCoverage,
-    lifecycle: deriveTripLifecycle(startDate, endDate, trip.referenceTimeZone, now),
+    lifecycle,
     memoryCount: trip._count.memories,
+    // Only the library asks, and only a finished trip is shown by its photographs.
+    ...(memoryPreview
+      ? {
+          memoryPhotos:
+            lifecycle === 'completed' ? await createMemoryPreview(supabase, memoryPreview) : [],
+        }
+      : {}),
     hasStoryContent: trip._count.memories > 0 || trip._count.dayExperiences > 0,
     name: trip.name,
     partySize: trip.partySize,
@@ -439,12 +510,22 @@ function toProfileHomeCandidate(profile: { homeTimeZone: string | null }) {
 export async function listTrips(userId: string, accessToken: string) {
   const trips = await getPrismaClient().trip.findMany({
     where: { ownerId: userId },
-    include: tripInclude,
+    include: libraryTripInclude,
     orderBy: [{ startDate: 'asc' }, { createdAt: 'asc' }],
   });
   const supabase = createAuthenticatedSupabaseClient(accessToken);
+  const now = new Date();
 
-  return Promise.all(trips.map((trip) => serializeTrip(trip, supabase)));
+  return Promise.all(
+    trips.map((trip) =>
+      serializeTrip(
+        trip,
+        supabase,
+        now,
+        selectTripMemoryPreview(trip.storyCoverPhoto, trip.memories),
+      ),
+    ),
+  );
 }
 
 export async function getTrip(userId: string, accessToken: string, tripId: string) {

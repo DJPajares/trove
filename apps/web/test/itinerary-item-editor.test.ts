@@ -1,12 +1,16 @@
 import { expect, test } from 'vitest';
 
 import {
+  buildStopInput,
   durationMinutesFromParts,
   durationParts,
   filterItineraryTripPlaces,
   itineraryIdentityChoice,
   itineraryIdentityLegacyPatch,
   itineraryProviderSuggestions,
+  stopEditorCustomDuration,
+  stopEditorForm,
+  stopTimingInput,
 } from '../lib/itinerary/item-editor.ts';
 import { formatItineraryTimeRange, itineraryLocalEndTime } from '../lib/itinerary/item-timing.ts';
 import type { ProviderSuggestion } from '../lib/saved/api.ts';
@@ -96,4 +100,112 @@ test('derives and formats the end of a duration while preserving start-only item
       '24h',
     ),
   ).toBe('9:00');
+});
+
+const blankCustom = { hours: '', minutes: '', open: false };
+
+test('a stop opens in the editor with its own timing, or empty at the Place it was asked for', () => {
+  expect(stopEditorForm(null, 'temple')).toMatchObject({
+    schedule: 'none',
+    timingMode: 'duration',
+    tripPlaceId: 'temple',
+  });
+  const timed = stopEditorForm({
+    customLabel: null,
+    dayPart: null,
+    durationMinutes: 150,
+    localEndTime: '11:30',
+    localStartTime: '09:00',
+    notes: 'Tickets at the gate',
+    tripPlace: { id: 'museum' },
+  });
+  expect(timed).toMatchObject({
+    durationMinutes: '',
+    exactTime: '09:00',
+    localEndTime: '11:30',
+    schedule: 'exact',
+    timingMode: 'end_time',
+    tripPlaceId: 'museum',
+  });
+  expect(
+    stopEditorCustomDuration({ ...timed, durationMinutes: '75', timingMode: 'duration' }),
+  ).toStrictEqual({ hours: '1', minutes: '15', open: true });
+  expect(
+    stopEditorCustomDuration({ ...timed, durationMinutes: '60', timingMode: 'duration' }).open,
+  ).toBe(false);
+});
+
+test('a stop is saved only once it says what and when well enough', () => {
+  const form = stopEditorForm(null);
+
+  expect(buildStopInput(form, blankCustom)).toStrictEqual({ error: 'minimumContentError' });
+  expect(
+    buildStopInput({ ...form, customLabel: 'Lunch', schedule: 'exact' }, blankCustom),
+  ).toStrictEqual({ error: 'exactTimeError' });
+  expect(
+    buildStopInput({ ...form, customLabel: 'Lunch' }, { hours: '0', minutes: '0', open: true }),
+  ).toStrictEqual({ error: 'durationError' });
+  expect(
+    buildStopInput(
+      { ...form, customLabel: 'Lunch', localEndTime: '13:00', timingMode: 'end_time' },
+      blankCustom,
+    ),
+  ).toStrictEqual({ error: 'endTimeStartRequired' });
+  expect(
+    buildStopInput(
+      {
+        ...form,
+        customLabel: 'Lunch',
+        exactTime: '13:00',
+        localEndTime: '12:00',
+        schedule: 'exact',
+        timingMode: 'end_time',
+      },
+      blankCustom,
+    ),
+  ).toStrictEqual({ error: 'endTimeError' });
+
+  expect(
+    buildStopInput(
+      { ...form, durationMinutes: '90', schedule: 'afternoon', tripPlaceId: 'museum' },
+      blankCustom,
+    ),
+  ).toStrictEqual({
+    input: {
+      customLabel: null,
+      durationMinutes: 90,
+      localEndTime: null,
+      notes: null,
+      schedule: { dayPart: 'afternoon', kind: 'day_part' },
+      tripPlaceId: 'museum',
+    },
+  });
+});
+
+test('an edit to a different stop drops what the old editor wrote; an ordinary edit keeps it', () => {
+  const form = { ...stopEditorForm(null), customLabel: 'Lunch' };
+  const changed = buildStopInput(form, blankCustom, { identityChanged: true });
+  const same = buildStopInput(form, blankCustom, { identityChanged: false });
+
+  expect('input' in changed && changed.input).toMatchObject({
+    customLocation: null,
+    priority: null,
+  });
+  expect('input' in same && 'priority' in same.input).toBe(false);
+});
+
+test('the timing sheet saves only timing', () => {
+  expect(
+    stopTimingInput({
+      customLabel: 'Lunch',
+      durationMinutes: 45,
+      notes: 'kept as is',
+      schedule: { kind: 'exact', localTime: '12:00' },
+      tripPlaceId: 'cafe',
+    }),
+  ).toStrictEqual({
+    durationMinutes: 45,
+    localEndTime: null,
+    schedule: { kind: 'exact', localTime: '12:00' },
+  });
 });

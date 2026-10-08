@@ -1495,6 +1495,18 @@
       },
       "map": {
         "backToDay": "Back to the day"
+      },
+      "editor": {
+        "addTitle": "Add a stop to {day}",
+        "insertAfterTitle": "Add a stop after {name}",
+        "insertFirstTitle": "Add a stop at the start of the day",
+        "add": "Add stop",
+        "addCustomPlace": "Add “{name}” as a custom place",
+        "savedBadge": "Saved"
+      },
+      "insert": {
+        "before": "Add a stop before {name}",
+        "end": "Add a stop at the end of the day"
       }
     },
     "overview": {
@@ -1695,7 +1707,6 @@
       "evening": "Evening",
       "anytime": "Anytime"
     },
-    "createTitle": "Add to this day",
     "createDescription": "Choose a trip place or add a flexible plan.",
     "editTitle": "Edit itinerary item",
     "editDescription": "Change the plan, timing, or notes that will help.",

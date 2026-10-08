@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { Fragment, type CSSProperties, type ReactNode, type Ref } from 'react';
 
 import { PlaceHoursNote } from '@/components/place-hours-note';
+import { MediaFrame } from '@/components/media-frame';
 import { usePreferences } from '@/components/preferences-provider';
 import type { ItineraryItem, PlaceHoursStatus } from '@/lib/itinerary/api';
 import { formatSuggestedClock } from '@/lib/itinerary/day-time-suggestions';
@@ -12,6 +13,7 @@ import { formatItineraryTimeRange, itineraryLocalEndTime } from '@/lib/itinerary
 import { formatTravelDuration } from '@/lib/itinerary/route-format';
 import { stopHoursAt } from '@/lib/itinerary/stop-hours';
 import { resolvePlaceCategoryFallback } from '@/lib/media/place-category-fallback';
+import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import type { TrovePlaceCategory } from '@/lib/place-categories';
 import { cn } from '@/lib/utils';
 import * as Icons from '@/lib/icons';
@@ -31,6 +33,7 @@ export type StopView = {
   located: boolean;
   mapsHref: string | null;
   name: string;
+  photo?: EditorialImageReference | null;
   selected: boolean;
 };
 
@@ -52,7 +55,7 @@ const CATEGORY_TILES: Record<TrovePlaceCategory, string> = {
 };
 
 const nameClassName =
-  'rounded-[var(--radius-sm)] text-left outline-none after:absolute after:inset-0 after:rounded-[var(--radius-xl)] hover:underline focus-visible:ring-3 focus-visible:ring-ring/40';
+  'max-w-full rounded-[var(--radius-sm)] text-left break-words outline-none after:absolute after:inset-0 after:rounded-[var(--radius-xl)] hover:underline focus-visible:ring-3 focus-visible:ring-ring/40';
 
 function StopHoursLine({
   item,
@@ -188,11 +191,11 @@ export function StopCard({
       : null;
   const timingParts = [when, duration].filter((fact): fact is string => Boolean(fact));
   const timing = timingParts.join(' · ');
-  // A narrow card breaks the time between its parts, never inside one.
+  // Keep time parts together when space permits, but let enlarged text reflow.
   const timingText = timingParts.map((part, index) => (
     <Fragment key={`${part}-${index}`}>
       {index ? ' ' : null}
-      <span className="whitespace-nowrap">
+      <span className="@min-[14rem]:whitespace-nowrap">
         {part}
         {index < timingParts.length - 1 ? ' ·' : null}
       </span>
@@ -240,7 +243,7 @@ export function StopCard({
     >
       <article
         className={cn(
-          'relative my-1.5 rounded-[var(--radius-xl)] border bg-card p-3 transition-[border-color,box-shadow,background-color] duration-[var(--motion-standard)] motion-reduce:transition-none',
+          '@container relative my-1.5 rounded-[var(--radius-xl)] border bg-card p-3 transition-[border-color,box-shadow,background-color] duration-[var(--motion-standard)] motion-reduce:transition-none',
           view.selected
             ? 'border-primary/45 bg-secondary/45 shadow-[var(--shadow-card)]'
             : 'border-border-subtle hover:border-border',
@@ -249,102 +252,112 @@ export function StopCard({
         )}
         data-selected={view.selected || undefined}
       >
-        <div className="flex items-start gap-3">
-          <span
-            aria-hidden="true"
+        <div className="grid grid-cols-[48px_minmax(0,1fr)] items-start gap-x-3 gap-y-0.5 @min-[14rem]:grid-cols-[48px_minmax(0,1fr)_auto]">
+          <MediaFrame
+            alt=""
             className={cn(
-              'grid size-10 shrink-0 place-items-center rounded-[var(--radius-md)]',
+              'size-[48px] rounded-[var(--radius-md)] @min-[14rem]:row-span-3',
               CATEGORY_TILES[category],
             )}
-          >
-            <Icon className="size-[1.125rem]" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h3 className="text-base leading-snug font-semibold tracking-[-0.01em] text-foreground">
-              {view.detailed ? (
-                <button
-                  aria-label={t('viewDetailsFor', { name: view.name })}
-                  className={nameClassName}
-                  onClick={onViewDetails}
-                  type="button"
-                >
-                  {view.name}
-                </button>
-              ) : (
-                view.name
-              )}
-            </h3>
-            {timing || facts.length || priority === 'must_go' || onEditTiming ? (
-              <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm text-muted-foreground tabular-nums">
-                {priority === 'must_go' ? (
-                  <span className="inline-flex items-center gap-1 font-medium text-brand">
-                    <Icons.MustGo aria-hidden="true" className="size-3.5" />
-                    {t('priority.must_go')}
-                  </span>
-                ) : null}
-                {priority === 'must_go' && (timing || onEditTiming) ? (
-                  <span aria-hidden="true" className="text-text-subtle">
-                    ·
-                  </span>
-                ) : null}
-                {/* The time is the part of a stop changed most, so it opens its
+            dataSlot="planner-stop-photo"
+            fallbackContent={
+              <span aria-hidden="true" className="absolute inset-0 grid place-items-center">
+                <Icon className="size-[1.125rem]" />
+              </span>
+            }
+            sizes="48px"
+            source={
+              view.photo ? { kind: 'editorial', reference: view.photo } : { kind: 'fallback' }
+            }
+            variant="thumbnail"
+          />
+          <h3 className="col-start-2 row-start-1 min-w-0 text-base leading-snug font-semibold tracking-[-0.01em] break-words text-foreground">
+            {view.detailed ? (
+              <button
+                aria-label={t('viewDetailsFor', { name: view.name })}
+                className={nameClassName}
+                onClick={onViewDetails}
+                type="button"
+              >
+                {view.name}
+              </button>
+            ) : (
+              view.name
+            )}
+          </h3>
+          {timing || facts.length || priority === 'must_go' || onEditTiming ? (
+            <p className="col-span-2 col-start-1 row-start-2 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm break-words text-muted-foreground tabular-nums @min-[14rem]:col-start-2">
+              {priority === 'must_go' ? (
+                <span className="inline-flex items-center gap-1 font-medium text-brand">
+                  <Icons.MustGo aria-hidden="true" className="size-3.5" />
+                  {t('priority.must_go')}
+                </span>
+              ) : null}
+              {priority === 'must_go' && (timing || onEditTiming) ? (
+                <span aria-hidden="true" className="text-text-subtle">
+                  ·
+                </span>
+              ) : null}
+              {/* The time is the part of a stop changed most, so it opens its
                     own sheet - above the claim the name makes on the card. */}
-                {onEditTiming ? (
-                  <button
-                    aria-label={
-                      timing
-                        ? plannerT('changeTiming', { name: view.name, timing })
-                        : plannerT('addTimingFor', { name: view.name })
-                    }
-                    className={cn(
-                      'relative z-10 rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40',
-                      !timing && 'inline-flex items-center gap-1 font-medium text-primary',
-                    )}
-                    onClick={onEditTiming}
-                    type="button"
-                  >
-                    {timing ? (
-                      timingText
-                    ) : (
-                      <>
-                        <Clock3 aria-hidden="true" className="size-3.5" />
-                        {plannerT('addTiming')}
-                      </>
-                    )}
-                  </button>
-                ) : timing ? (
-                  <span>{timingText}</span>
-                ) : null}
-                {facts.map((fact, index) => (
-                  <span className="inline-flex items-center gap-1.5" key={`${fact}-${index}`}>
-                    {index || timing || onEditTiming || priority === 'must_go' ? (
-                      <span aria-hidden="true" className="text-text-subtle">
-                        ·
-                      </span>
-                    ) : null}
-                    {fact}
-                  </span>
-                ))}
-              </p>
-            ) : null}
-            <div className="group-data-[reordering]/day:hidden">
-              {partial ? (
+              {onEditTiming ? (
                 <button
-                  className="relative z-10 mt-1 inline-flex items-center gap-1 rounded-[var(--radius-sm)] text-sm font-medium text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
-                  onClick={partial.onAction}
+                  aria-label={
+                    timing
+                      ? plannerT('changeTiming', { name: view.name, timing })
+                      : plannerT('addTimingFor', { name: view.name })
+                  }
+                  className={cn(
+                    'relative z-10 max-w-full rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40',
+                    !timing && 'inline-flex items-center gap-1 font-medium text-primary',
+                  )}
+                  onClick={onEditTiming}
                   type="button"
                 >
-                  <Icons.Place aria-hidden="true" className="size-3.5" />
-                  {partial.label}
+                  {timing ? (
+                    timingText
+                  ) : (
+                    <>
+                      <Clock3 aria-hidden="true" className="size-3.5" />
+                      {plannerT('addTiming')}
+                    </>
+                  )}
                 </button>
+              ) : timing ? (
+                <span>{timingText}</span>
               ) : null}
-              <StopHoursLine item={item} status={hours} />
-              {item.notes ? (
-                <p className="mt-1 line-clamp-1 text-sm text-text-subtle">{item.notes}</p>
-              ) : null}
-            </div>
+              {facts.map((fact, index) => (
+                <span
+                  className="inline-flex max-w-full items-center gap-1.5"
+                  key={`${fact}-${index}`}
+                >
+                  {index || timing || onEditTiming || priority === 'must_go' ? (
+                    <span aria-hidden="true" className="text-text-subtle">
+                      ·
+                    </span>
+                  ) : null}
+                  {fact}
+                </span>
+              ))}
+            </p>
+          ) : null}
+          <div className="col-span-2 col-start-1 row-start-3 min-w-0 group-data-[reordering]/day:hidden @min-[14rem]:col-start-2">
+            {partial ? (
+              <button
+                className="relative z-10 mt-1 inline-flex items-center gap-1 rounded-[var(--radius-sm)] text-sm font-medium text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+                onClick={partial.onAction}
+                type="button"
+              >
+                <Icons.Place aria-hidden="true" className="size-3.5" />
+                {partial.label}
+              </button>
+            ) : null}
+            <StopHoursLine item={item} status={hours} />
+            {item.notes ? (
+              <p className="mt-1 line-clamp-1 text-sm text-text-subtle">{item.notes}</p>
+            ) : null}
           </div>
-          <div className="relative z-10 -mt-1 -mr-1 flex items-center">
+          <div className="relative z-10 col-span-2 col-start-1 row-start-4 -mt-1 -mr-1 flex items-center justify-end @min-[14rem]:col-span-1 @min-[14rem]:col-start-3 @min-[14rem]:row-start-1">
             {dragHandle}
             <span className="group-data-[reordering]/day:invisible">{menu}</span>
           </div>

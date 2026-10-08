@@ -59,6 +59,13 @@
      single-gradient version this replaced had the mirror-image problem: it
      inverted in dark mode, where --brand-strong is lighter than --surface-media. */
   --media-fallback-foreground: oklch(0.978 0.013 80);
+  /* A score printed on photography has its own opaque surface. These values
+     stay fixed in both themes; the photo never controls text or ring contrast. */
+  --score-media-background: oklch(0.222 0.028 115);
+  --score-media-foreground: oklch(0.978 0.013 80);
+  --score-media-muted: oklch(0.83 0.017 80);
+  --score-media-brand: oklch(0.78 0.085 115);
+  --score-media-warning: oklch(0.806 0.113 74);
   --media-fallback-destination-from: oklch(0.3 0.056 115);
   --media-fallback-destination-to: oklch(0.338 0.056 115);
   --media-fallback-things-to-do-from: oklch(0.3 0.052 75);
@@ -344,6 +351,11 @@
   --color-paper-print: var(--paper-print);
   --color-paper-rule: var(--paper-rule);
   --color-media-fallback-foreground: var(--media-fallback-foreground);
+  --color-score-media-background: var(--score-media-background);
+  --color-score-media-foreground: var(--score-media-foreground);
+  --color-score-media-muted: var(--score-media-muted);
+  --color-score-media-brand: var(--score-media-brand);
+  --color-score-media-warning: var(--score-media-warning);
   --color-surface-overlay: var(--surface-overlay);
   --color-text-subtle: var(--text-subtle);
   --color-brand: var(--brand);

@@ -86,6 +86,7 @@ export function DayTimeline({
   onSelectItem,
   onViewBaseDetails,
   onViewItemDetails,
+  observeItem,
   partialFor,
   resolveBase,
   resolveItem,
@@ -112,6 +113,8 @@ export function DayTimeline({
   onSelectItem: (item: ItineraryItem) => void;
   onViewBaseDetails: (tripPlaceId: string) => void;
   onViewItemDetails: (item: ItineraryItem) => void;
+  /** Gates photo work without replacing the sortable row's measurement ref. */
+  observeItem?: (id: string) => (node: HTMLLIElement | null) => void;
   /** What a stop is missing that one tap can add, if anything. */
   partialFor?: (item: ItineraryItem) => { label: string; onAction: () => void } | null;
   resolveBase: (
@@ -286,6 +289,7 @@ export function DayTimeline({
         onEditTiming={onEditTiming ? () => onEditTiming(item) : undefined}
         onSelectOnMap={() => onSelectItem(item)}
         onViewDetails={() => onViewItemDetails(item)}
+        observeRef={observeItem?.(item.id)}
         partial={partialFor?.(item) ?? null}
         view={view}
       />,

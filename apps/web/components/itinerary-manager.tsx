@@ -100,6 +100,8 @@ import { useTripContext } from '@/components/trip-provider';
 import { useCompactItinerary } from '@/hooks/use-compact-itinerary';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { useDayHeaderPhotos } from '@/hooks/use-day-header-photos';
+import { useVisibleKeys } from '@/hooks/use-visible-keys';
+import { plannerStopPhoto, plannerStopPhotoSubjects } from '@/lib/itinerary/stop-photos';
 import { withDayPartBands } from '@/lib/itinerary/day-bands';
 import { dayFacts, dayHeading } from '@/lib/itinerary/day-facts';
 import { localityFromAddress, sameTown } from '@/lib/itinerary/day-place';
@@ -601,17 +603,8 @@ export function ItineraryManager({
   /**
    * The place whose details are open, and the one photograph that goes with it.
    *
-   * Planning asks for no photography of its own - its rows are numbered markers,
-   * not thumbnails - so the subject list is empty until someone opens a place,
-   * and `useEditorialImages` sends nothing for an empty list. Opening one place
-   * asks for one subject, under the provider's name for it rather than the
-   * traveller's nickname, exactly as the Places list does.
-   *
-   * Trip Mode's day does carry a photograph on every row, and the two are not
-   * in disagreement. This is a dense editing surface, where a column of
-   * pictures is noise between the traveller and the thing they came to change.
-   * That one is read standing up, deciding which of these is the place in front
-   * of them, where a picture is the fastest answer there is.
+   * Opening details shares canonical Place keys with the visible stop previews.
+   * The resolver shares cached and in-flight work between both requests.
    */
   const [detailsPlace, setDetailsPlace] = useState<ItineraryTripPlace | null>(null);
   const [detailsVisitDate, setDetailsVisitDate] = useState<string | null>();
@@ -730,7 +723,14 @@ export function ItineraryManager({
     [itinerary, ribbonDays],
   );
 
-  const dayPhotos = useDayHeaderPhotos(selectedDay ?? null, itinerary?.tripPlaces ?? []);
+  const { observe: observeStop, visibleKeys: visibleStopIds } = useVisibleKeys();
+  const stopSubjects = plannerStopPhotoSubjects(selectedDay?.items ?? [], visibleStopIds);
+  const stopImages = useEditorialImages(stopSubjects, { progressive: true });
+  const dayPhotos = useDayHeaderPhotos(
+    selectedDay ?? null,
+    itinerary?.tripPlaces ?? [],
+    stopImages,
+  );
 
   // Special hours and holiday checks for the trip's stops, from stored evidence
   // only - the same entry the Insights card reads, so it is one request.
@@ -1681,6 +1681,7 @@ export function ItineraryManager({
 
             {selectedDay.items.length ? (
               <DayTimeline
+                observeItem={observeStop}
                 attentionFor={(item) => {
                   // A stop already offering its missing Place or location in one
                   // tap is not told about it twice.
@@ -1770,6 +1771,7 @@ export function ItineraryManager({
                     located: Boolean(item.tripPlace && placeLocation(item.tripPlace)),
                     mapsHref: item.tripPlace ? googleMapsPlaceHref(item.tripPlace.place) : null,
                     name: itemName(item),
+                    photo: plannerStopPhoto(item, stopImages),
                     selected: selectedMapItemId === item.id,
                   };
                 }}

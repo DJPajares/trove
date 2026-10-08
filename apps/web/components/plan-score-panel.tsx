@@ -66,11 +66,13 @@ function ScoreRing({
   label,
   score,
   size = 'md',
+  tone = 'surface',
 }: {
   label: string;
   score: number;
   /** `sm` is the chip a day's header carries; `md` is the panel's own. */
   size?: 'md' | 'sm';
+  tone?: 'media' | 'surface';
 }) {
   const t = useTranslations('planScore');
   const locale = useLocale();
@@ -87,11 +89,24 @@ function ScoreRing({
       value={score}
     >
       <svg aria-hidden="true" className="absolute inset-0 size-full -rotate-90" viewBox="0 0 36 36">
-        <circle className="stroke-muted" cx="18" cy="18" fill="none" r="16" strokeWidth="3" />
+        <circle
+          className={tone === 'media' ? 'stroke-score-media-foreground/20' : 'stroke-muted'}
+          cx="18"
+          cy="18"
+          fill="none"
+          r="16"
+          strokeWidth="3"
+        />
         <circle
           className={cn(
             'transition-[stroke-dashoffset] duration-[var(--motion-slow)] ease-[var(--ease-standard)] motion-reduce:transition-none',
-            toneFor(score) === 'warning' ? 'stroke-status-warning' : 'stroke-brand',
+            tone === 'media'
+              ? toneFor(score) === 'warning'
+                ? 'stroke-score-media-warning'
+                : 'stroke-score-media-brand'
+              : toneFor(score) === 'warning'
+                ? 'stroke-status-warning'
+                : 'stroke-brand',
           )}
           cx="18"
           cy="18"
@@ -107,7 +122,7 @@ function ScoreRing({
       <Meter.Value
         className={cn(
           'relative font-semibold leading-none tracking-tight tabular-nums',
-          size === 'sm' ? 'text-xs' : 'text-lg',
+          size === 'sm' ? (tone === 'media' ? 'text-sm' : 'text-xs') : 'text-lg',
         )}
       />
     </Meter.Root>
@@ -307,7 +322,7 @@ export function PlanScoreChip({
   onOpen: () => void;
   score: number | null;
   status: PlanScoreLoadStatus;
-  /** `media` sits on a photograph, as frosted glass rather than a card. */
+  /** `media` uses an opaque, theme-invariant surface and contrasting ring. */
   tone?: 'media' | 'surface';
 }>) {
   const t = useTranslations('planScore');
@@ -328,23 +343,23 @@ export function PlanScoreChip({
     <button
       aria-label={label}
       className={cn(
-        'inline-flex min-h-11 items-center gap-2.5 rounded-full border py-1 pr-3.5 pl-1 text-left outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none',
+        'inline-flex max-w-full min-h-11 items-center gap-2.5 border py-1 pr-3.5 pl-1 text-left outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 motion-reduce:transition-none',
         tone === 'media'
-          ? 'border-media-fallback-foreground/18 bg-neutral-950/45 text-media-fallback-foreground backdrop-blur-sm hover:bg-neutral-950/60'
-          : 'border-border-subtle bg-card hover:bg-surface-hover',
+          ? 'rounded-[var(--radius-lg)] border-score-media-foreground/20 bg-score-media-background text-score-media-foreground hover:border-score-media-foreground/40 focus-visible:ring-score-media-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-score-media-background'
+          : 'rounded-full border-border-subtle bg-card hover:bg-surface-hover focus-visible:ring-ring/50',
         className,
       )}
       onClick={onOpen}
       type="button"
     >
-      <ScoreRing label={label} score={displayScore} size="sm" />
-      <span className="flex min-w-0 flex-col leading-tight">
+      <ScoreRing label={label} score={displayScore} size="sm" tone={tone} />
+      <span className="flex min-w-0 flex-col leading-tight break-words">
         <span className="text-sm font-semibold">{t(`verdict.${scoreBand(displayScore)}`)}</span>
         {issues.length ? (
           <span
             className={cn(
               'text-xs',
-              tone === 'media' ? 'text-media-fallback-foreground/80' : 'text-muted-foreground',
+              tone === 'media' ? 'text-score-media-muted' : 'text-muted-foreground',
             )}
           >
             {t('worthALook', { count: issues.length })}

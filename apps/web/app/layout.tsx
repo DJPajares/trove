@@ -14,7 +14,7 @@ import { PreferencesProvider } from '@/components/preferences-provider';
 import { AppearanceCookie } from '@/components/appearance-cookie';
 import { ThemeProvider } from '@/components/theme-provider';
 import { TroveMotionProvider } from '@/components/trove-motion-provider';
-import { getAuthUserId } from '@/lib/auth/session';
+import { getAuthSessionIdentity } from '@/lib/auth/session';
 import { brandAssets } from '@/lib/brand/assets';
 import { statusBarColor, statusBarStyle } from '@/lib/theme-color';
 
@@ -77,7 +77,8 @@ export async function generateViewport(): Promise<Viewport> {
 }
 
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
-  const [locale, authUserId] = await Promise.all([getLocale(), getAuthUserId()]);
+  const [locale, authIdentity] = await Promise.all([getLocale(), getAuthSessionIdentity()]);
+  const authUserId = authIdentity?.userId ?? null;
 
   return (
     <html lang={locale} className={instrumentSans.variable} suppressHydrationWarning>
@@ -92,7 +93,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <AppearanceCookie />
           <TroveMotionProvider>
             <NextIntlClientProvider>
-              <AuthSessionListener userId={authUserId} />
+              <AuthSessionListener
+                userId={authUserId}
+                sessionId={authIdentity?.sessionId ?? null}
+              />
               <QueryProvider userId={authUserId}>
                 <PwaProvider>
                   <PreferencesProvider locale={locale}>

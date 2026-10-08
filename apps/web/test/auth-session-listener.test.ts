@@ -25,7 +25,7 @@ const navigate = vi.fn();
 let callback: (event: AuthChangeEvent, session: Session | null) => void;
 const session = (token: string) => ({ access_token: token }) as Session;
 
-function open(path: string, userId = 'current-user') {
+function open(path: string, userId = 'current-user', sessionId = 'rendered-session') {
   const url = new URL(path, 'https://trove.wndrhive.com');
   vi.stubGlobal('window', {
     location: {
@@ -36,7 +36,8 @@ function open(path: string, userId = 'current-user') {
       replace: navigate,
     },
   });
-  AuthSessionListener({ userId });
+  const renderedIdentity = { userId, sessionId };
+  AuthSessionListener(renderedIdentity);
 }
 
 beforeEach(() => {
@@ -61,6 +62,68 @@ afterEach(() => {
 });
 
 describe('already-open authentication navigation', () => {
+  it('keeps the rendered recovery form stable when SIGNED_IN precedes INITIAL_SESSION', async () => {
+    open('/reset-password?next=%2Ftrips', 'current-user', 'recovery-session');
+    callback('SIGNED_IN', session('restored-token'));
+    callback('INITIAL_SESSION', session('restored-token'));
+    await vi.runAllTimersAsync();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(mocks.clear).not.toHaveBeenCalled();
+  });
+  it('keeps a restored OTP recovery form stable after server receipt validation', async () => {
+    mocks.identity.mockResolvedValue({
+      user: { id: 'current-user' },
+      claims: { session_id: 'receipt-session', amr: [{ method: 'otp' }] },
+      recovery: null,
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          recovery: true,
+          userId: 'current-user',
+          sessionId: 'receipt-session',
+        }),
+      }),
+    );
+    open('/reset-password?next=%2Ftrips', 'current-user', 'receipt-session');
+    callback('SIGNED_IN', session('restored-otp'));
+    await vi.runAllTimersAsync();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+  it('does not reload the rendered recovery form for repeated recovery or refreshed tokens', async () => {
+    open('/reset-password?next=%2Ftrips', 'current-user', 'recovery-session');
+    callback('PASSWORD_RECOVERY', session('current-token'));
+    callback('PASSWORD_RECOVERY', session('current-token'));
+    await vi.runAllTimersAsync();
+    callback('TOKEN_REFRESHED', session('refreshed-token'));
+    callback('SIGNED_IN', session('refreshed-token'));
+    callback('PASSWORD_RECOVERY', session('refreshed-token'));
+    await vi.runAllTimersAsync();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+  it('navigates once for duplicate recovery events while a new session replaces the form', async () => {
+    open('/reset-password?next=%2Ftrips');
+    callback('PASSWORD_RECOVERY', session('new-token'));
+    callback('PASSWORD_RECOVERY', session('new-token'));
+    callback('SIGNED_IN', session('another-token-for-new-session'));
+    await vi.runAllTimersAsync();
+    expect(navigate).toHaveBeenCalledExactlyOnceWith('/reset-password?next=%2Ftrips');
+  });
+  it('still clears private data and reloads the form for a different recovery account', async () => {
+    mocks.identity.mockResolvedValue({
+      user: { id: 'another-user' },
+      claims: { session_id: 'recovery-session', amr: [{ method: 'recovery' }] },
+      recovery: { sessionId: 'recovery-session' },
+    });
+    mocks.clear.mockImplementation(async () => expect(navigate).not.toHaveBeenCalled());
+    open('/reset-password?next=%2Ftrips', 'current-user', 'recovery-session');
+    callback('PASSWORD_RECOVERY', session('another-account-token'));
+    await vi.runAllTimersAsync();
+    expect(mocks.clear).toHaveBeenCalledOnce();
+    expect(navigate).toHaveBeenCalledExactlyOnceWith('/reset-password?next=%2Ftrips');
+  });
   it.each(['/forgot-password?next=%2Ftrips', '/reset-password?next=%2Ftrips', '/trips'])(
     'follows a verified new recovery session from %s',
     async (path) => {

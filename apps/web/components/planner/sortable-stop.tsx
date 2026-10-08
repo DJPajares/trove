@@ -5,7 +5,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import type { ComponentProps } from 'react';
+import { useCallback, type ComponentProps } from 'react';
 
 import { resolvePlaceCategoryFallback } from '@/lib/media/place-category-fallback';
 import type { TrovePlaceCategory } from '@/lib/place-categories';
@@ -24,8 +24,13 @@ import { StopCard } from './stop-card';
 export function SortableStopCard({
   dragDisabled,
   dragLabel,
+  observeRef,
   ...card
-}: ComponentProps<typeof StopCard> & { dragDisabled: boolean; dragLabel: string }) {
+}: ComponentProps<typeof StopCard> & {
+  dragDisabled: boolean;
+  dragLabel: string;
+  observeRef?: (node: HTMLLIElement | null) => void;
+}) {
   const {
     attributes,
     isDragging,
@@ -35,6 +40,14 @@ export function SortableStopCard({
     transform,
     transition,
   } = useSortable({ disabled: dragDisabled, id: card.item.id });
+
+  const rowRef = useCallback(
+    (node: HTMLLIElement | null) => {
+      setNodeRef(node);
+      observeRef?.(node);
+    },
+    [setNodeRef, observeRef],
+  );
 
   return (
     <StopCard
@@ -55,7 +68,7 @@ export function SortableStopCard({
         )
       }
       placeholder={isDragging}
-      rowRef={setNodeRef}
+      rowRef={rowRef}
       rowStyle={{ transform: CSS.Translate.toString(transform), transition }}
     />
   );

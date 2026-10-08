@@ -148,7 +148,7 @@ export function DayMasthead({
         <DayHeaderMedia
           alt=""
           category="destination"
-          className="h-44 rounded-none sm:h-52 lg:h-56"
+          className="absolute inset-0 h-full w-full rounded-none"
           dataSlot="day-masthead-photo"
           preload
           sizes="(max-width: 1023px) 100vw, 640px"
@@ -159,16 +159,20 @@ export function DayMasthead({
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 bg-gradient-to-t from-neutral-950/80 via-neutral-950/30 to-neutral-950/5"
         />
-        {scoreChip ? <div className="absolute top-3 right-3">{scoreChip}</div> : null}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 p-4 text-media-fallback-foreground sm:p-6">
-          <p aria-hidden="true" className="flex items-end gap-2 leading-none">
-            <span className="pb-1 text-[length:var(--text-metadata)] font-semibold tracking-[0.14em] uppercase opacity-85">
-              {isToday ? t('today') : t('kicker')}
-            </span>
-            <span className="text-[2.75rem] font-semibold tracking-[-0.045em] tabular-nums sm:text-[3.25rem]">
-              {paddedDayNumber(dayNumber)}
-            </span>
-          </p>
+        <div className="pointer-events-none relative flex min-h-44 flex-col justify-end p-4 text-media-fallback-foreground sm:min-h-52 sm:p-6 lg:min-h-56">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <p aria-hidden="true" className="flex shrink-0 items-end gap-2 leading-none">
+              <span className="pb-1 text-[length:var(--text-metadata)] font-semibold tracking-[0.14em] uppercase opacity-85">
+                {isToday ? t('today') : t('kicker')}
+              </span>
+              <span className="text-[2.75rem] font-semibold tracking-[-0.045em] tabular-nums sm:text-[3.25rem]">
+                {paddedDayNumber(dayNumber)}
+              </span>
+            </p>
+            {scoreChip ? (
+              <div className="pointer-events-auto ms-auto max-w-full">{scoreChip}</div>
+            ) : null}
+          </div>
           <h2
             className="mt-1.5 text-[length:var(--text-section-title)] leading-tight font-semibold tracking-[-0.015em] text-balance break-words outline-none"
             id={`itinerary-day-${dayId}`}

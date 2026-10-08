@@ -7,6 +7,7 @@ import {
   editorialSubjectKey,
   readCachedEditorialImages,
   resolveEditorialImages,
+  resolveEditorialImageBatches,
   type EditorialImageReference,
   type EditorialSubject,
 } from '@/lib/media/editorial-images';
@@ -30,7 +31,10 @@ const EMPTY_IMAGES: ReadonlyMap<string, EditorialImageReference[]> = new Map();
  * without a round trip. Photography changes on a 90-day cadence, so neither is
  * ever refetched on a timer.
  */
-export function useEditorialImageResolution(subjects: EditorialSubject[]) {
+export function useEditorialImageResolution(
+  subjects: EditorialSubject[],
+  { progressive = false }: { progressive?: boolean } = {},
+) {
   // The subjects array is rebuilt on every render, so everything below keys on
   // what is actually being asked for rather than on the array's identity.
   const subjectKeys = subjects.map(editorialSubjectKey).sort();
@@ -41,12 +45,14 @@ export function useEditorialImageResolution(subjects: EditorialSubject[]) {
     // have been bundled into a local trip copy anyway.
     enabled: subjectKeys.length > 0 && !(typeof navigator !== 'undefined' && !navigator.onLine),
     queryFn: async () => {
-      const resolved = await resolveEditorialImages(subjects);
+      const resolved = await (progressive
+        ? resolveEditorialImageBatches(subjects)
+        : resolveEditorialImages(subjects));
       // A Map does not survive the JSON round trip this cache is persisted
       // through, so what is stored is a plain record.
       return Object.fromEntries(resolved) as Record<string, EditorialImageReference[]>;
     },
-    queryKey: queryKeys.editorialImages(subjectKeys),
+    queryKey: [...queryKeys.editorialImages(subjectKeys), ...(progressive ? ['progressive'] : [])],
   });
 
   const images = useMemo(() => {
@@ -65,6 +71,9 @@ export function useEditorialImageResolution(subjects: EditorialSubject[]) {
   return { images, isResolved: subjectKeys.length === 0 || data !== undefined };
 }
 
-export function useEditorialImages(subjects: EditorialSubject[]) {
-  return useEditorialImageResolution(subjects).images;
+export function useEditorialImages(
+  subjects: EditorialSubject[],
+  options?: { progressive?: boolean },
+) {
+  return useEditorialImageResolution(subjects, options).images;
 }

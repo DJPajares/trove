@@ -17,37 +17,43 @@ export function useVisibleKeys(rootMargin = '400px') {
 
   const observer = useMemo(
     () =>
-      new IntersectionObserver(
-        (entries) => {
-          const newlyVisible = entries
-            .filter((entry) => entry.isIntersecting)
-            .map((entry) => entry.target.getAttribute('data-visible-key'))
-            .filter((key): key is string => key !== null);
-          if (newlyVisible.length === 0) return;
+      typeof IntersectionObserver === 'undefined'
+        ? null
+        : new IntersectionObserver(
+            (entries) => {
+              const newlyVisible = entries
+                .filter((entry) => entry.isIntersecting)
+                .map((entry) => entry.target.getAttribute('data-visible-key'))
+                .filter((key): key is string => key !== null);
+              if (newlyVisible.length === 0) return;
 
-          setVisibleKeys((prev) => {
-            if (newlyVisible.every((key) => prev.has(key))) return prev;
-            return new Set([...prev, ...newlyVisible]);
-          });
-        },
-        { rootMargin },
-      ),
+              setVisibleKeys((prev) => {
+                if (newlyVisible.every((key) => prev.has(key))) return prev;
+                return new Set([...prev, ...newlyVisible]);
+              });
+            },
+            { rootMargin },
+          ),
     [rootMargin],
   );
 
-  useEffect(() => () => observer.disconnect(), [observer]);
+  useEffect(() => () => observer?.disconnect(), [observer]);
 
   const observe = useCallback(
     (key: string) => (element: Element | null) => {
       const previous = elements.current.get(key);
       if (previous) {
-        observer.unobserve(previous);
+        observer?.unobserve(previous);
         elements.current.delete(key);
       }
 
       if (element) {
         element.setAttribute('data-visible-key', key);
-        observer.observe(element);
+        if (observer) observer.observe(element);
+        else
+          setVisibleKeys((previous) =>
+            previous.has(key) ? previous : new Set([...previous, key]),
+          );
         elements.current.set(key, element);
       }
     },

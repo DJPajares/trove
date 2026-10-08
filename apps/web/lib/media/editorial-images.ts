@@ -265,3 +265,18 @@ export async function resolveEditorialImages(subjects: EditorialSubject[]) {
   );
   return resolved;
 }
+
+/** Viewed-row lists may overflow one batch. Resolve them serially, with the same cache and cap. */
+export async function resolveEditorialImageBatches(subjects: EditorialSubject[]) {
+  const unique = [
+    ...new Map(subjects.map((subject) => [editorialSubjectKey(subject), subject])).values(),
+  ];
+  const images = new Map<string, EditorialImageReference[]>();
+  for (let offset = 0; offset < unique.length; offset += MAX_EDITORIAL_IMAGE_SUBJECTS) {
+    const batch = await resolveEditorialImages(
+      unique.slice(offset, offset + MAX_EDITORIAL_IMAGE_SUBJECTS),
+    );
+    for (const [key, references] of batch) images.set(key, references);
+  }
+  return images;
+}

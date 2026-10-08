@@ -20,6 +20,7 @@ const {
   readCachedEditorialImages,
   resetEditorialImageCache,
   resolveEditorialImages,
+  resolveEditorialImageBatches,
 } = await import('../lib/media/editorial-images.ts');
 
 const attribution = {
@@ -105,6 +106,28 @@ test('a screen asks for each distinct subject once', async () => {
   expect(fetchMock).toHaveBeenCalledTimes(1);
   expect(sentSubjects(fetchMock.mock.calls)[0]).toHaveLength(1);
   expect(resolved.get('destination:lisbon')?.[0]?.attribution).toStrictEqual(attribution);
+});
+
+test('progressive viewed-row batches are serial, capped, deduplicated and cache verified misses', async () => {
+  let active = 0;
+  let peakActive = 0;
+  const fetchMock = vi.fn(async (...call: FetchCall) => {
+    active += 1;
+    peakActive = Math.max(peakActive, active);
+    const subjects = JSON.parse(call[1].body).subjects as Array<{ name: string }>;
+    await Promise.resolve();
+    active -= 1;
+    return respond(
+      subjects.map((subject) => ({ status: 'empty', subjectKey: editorialSubjectKey(subject) })),
+    );
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const subjects = Array.from({ length: 35 }, (_, index) => ({ name: `Place ${index}` }));
+  await resolveEditorialImageBatches([...subjects, subjects[0]!]);
+  expect(sentSubjects(fetchMock.mock.calls).map((batch) => batch.length)).toEqual([25, 10]);
+  expect(peakActive).toBe(1);
+  await resolveEditorialImageBatches(subjects);
+  expect(fetchMock).toHaveBeenCalledTimes(2);
 });
 
 test('overlapping concurrent surface batches share in-flight subject resolution', async () => {

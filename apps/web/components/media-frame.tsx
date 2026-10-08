@@ -2,7 +2,7 @@
 
 import { cva } from 'class-variance-authority';
 import Image from 'next/image';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
@@ -53,6 +53,8 @@ export type MediaFrameProps = {
   sizes?: string;
   source: TripMediaSource;
   fallbackSources?: readonly TripMediaSource[];
+  /** A surface-specific tile shown during loading and when a source fails. */
+  fallbackContent?: ReactNode;
   /** An embedded photographic underlay, available even before a local image loads. */
   photographicPlaceholder?: string;
   variant?: TripMediaVariant;
@@ -112,26 +114,29 @@ function EditorialImage({
   reference,
   sizes,
   hasPhotographicPlaceholder = false,
+  fallbackContent,
 }: Readonly<{
   alt: string;
   onError: () => void;
   preload: boolean;
   reference: EditorialImageReference;
   hasPhotographicPlaceholder?: boolean;
+  fallbackContent?: ReactNode;
   sizes?: string;
 }>) {
   const [loaded, setLoaded] = useState(false);
 
   return (
     <>
-      {hasPhotographicPlaceholder ? null : (
-        <Skeleton
-          className={cn(
-            'absolute inset-0 rounded-none transition-opacity duration-[var(--motion-standard)]',
-            loaded ? 'pointer-events-none opacity-0' : 'opacity-100',
-          )}
-        />
-      )}
+      {fallbackContent ??
+        (hasPhotographicPlaceholder ? null : (
+          <Skeleton
+            className={cn(
+              'absolute inset-0 rounded-none transition-opacity duration-[var(--motion-standard)]',
+              loaded ? 'pointer-events-none opacity-0' : 'opacity-100',
+            )}
+          />
+        ))}
       <Image
         alt={alt}
         className={cn(
@@ -170,6 +175,7 @@ export function MediaFrame({
   variant = 'card',
   fallbackSources = [],
   photographicPlaceholder,
+  fallbackContent,
 }: Readonly<MediaFrameProps>) {
   const [unreachableSourceKeys, setUnreachableSourceKeys] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -209,7 +215,8 @@ export function MediaFrame({
         data-slot={dataSlot}
         style={photographicStyle}
       >
-        {photographicPlaceholder ? null : <BrandedFallback alt={alt} category={category} />}
+        {fallbackContent ??
+          (photographicPlaceholder ? null : <BrandedFallback alt={alt} category={category} />)}
       </span>
     );
   }
@@ -222,7 +229,9 @@ export function MediaFrame({
         data-slot={dataSlot}
         style={{
           ...photographicStyle,
-          backgroundColor: resolved.reference.dominantColor ?? undefined,
+          backgroundColor: fallbackContent
+            ? undefined
+            : (resolved.reference.dominantColor ?? undefined),
         }}
       >
         <EditorialImage
@@ -232,6 +241,7 @@ export function MediaFrame({
           preload={preload}
           reference={resolved.reference}
           hasPhotographicPlaceholder={Boolean(photographicPlaceholder)}
+          fallbackContent={fallbackContent}
           sizes={sizes}
         />
       </span>
@@ -246,14 +256,15 @@ export function MediaFrame({
         data-slot={dataSlot}
         style={photographicStyle}
       >
-        {photographicPlaceholder ? null : (
-          <Skeleton
-            className={cn(
-              'absolute inset-0 rounded-none transition-opacity duration-[var(--motion-standard)]',
-              loaded ? 'pointer-events-none opacity-0' : 'opacity-100',
-            )}
-          />
-        )}
+        {fallbackContent ??
+          (photographicPlaceholder ? null : (
+            <Skeleton
+              className={cn(
+                'absolute inset-0 rounded-none transition-opacity duration-[var(--motion-standard)]',
+                loaded ? 'pointer-events-none opacity-0' : 'opacity-100',
+              )}
+            />
+          ))}
         {/* Offline Memory previews use browser-local URLs that Next Image cannot optimize. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -283,14 +294,15 @@ export function MediaFrame({
       data-slot={dataSlot}
       style={photographicStyle}
     >
-      {photographicPlaceholder ? null : (
-        <Skeleton
-          className={cn(
-            'absolute inset-0 rounded-none transition-opacity duration-[var(--motion-standard)]',
-            loaded ? 'pointer-events-none opacity-0' : 'opacity-100',
-          )}
-        />
-      )}
+      {fallbackContent ??
+        (photographicPlaceholder ? null : (
+          <Skeleton
+            className={cn(
+              'absolute inset-0 rounded-none transition-opacity duration-[var(--motion-standard)]',
+              loaded ? 'pointer-events-none opacity-0' : 'opacity-100',
+            )}
+          />
+        ))}
       <Image
         alt={alt}
         className={cn(

@@ -31,6 +31,7 @@ const MODES = ['drive', 'transit', 'walk', 'flight'] as const satisfies readonly
  * estimate Trove did not get is said plainly, never filled in.
  */
 export function LegConnector({
+  className,
   distanceUnit,
   insert,
   onModeChange,
@@ -38,6 +39,7 @@ export function LegConnector({
   segment,
   stale,
 }: Readonly<{
+  className?: string;
   distanceUnit: 'km' | 'mi';
   /** Adding a stop on this leg - splitting it - is the "+" on its line. */
   insert?: { label: string; onInsert: () => void };
@@ -82,6 +84,7 @@ export function LegConnector({
       above={line}
       align="center"
       below={line}
+      className={className}
       marker={insert ? <InsertButton label={insert.label} onInsert={insert.onInsert} /> : undefined}
     >
       <div className="flex min-h-11 items-center gap-2 py-0.5">

@@ -2,7 +2,7 @@
 import { DayPlanningContextSheet } from '@/components/day-planning-context';
 
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CircleAlert, Clock3, Copy, Plus, Trash2 } from 'lucide-react';
+import { CircleAlert, Clock3, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useSearchParams } from 'next/navigation';
@@ -28,11 +28,13 @@ import { DayTimeline } from '@/components/planner/day-timeline';
 import { PlanScoreSheet } from '@/components/planner/plan-score-sheet';
 import { PlannerDayView } from '@/components/planner/planner-day-view';
 import { PlannerMapPane } from '@/components/planner/planner-map-pane';
+import { MoveToDaySheet } from '@/components/planner/move-to-day-sheet';
 import { PlannerRibbon } from '@/components/planner/planner-ribbon';
 import {
   StopEditorSheet,
   type StopEditorRequest,
 } from '@/components/planner/stop-editor/stop-editor-sheet';
+import { UnscheduledTray } from '@/components/planner/unscheduled-tray';
 import { TripInsights } from '@/components/trip-insights';
 import { useRegisterPrimaryAction } from '@/components/primary-action-provider';
 import { usePreferences } from '@/components/preferences-provider';
@@ -50,15 +52,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemMedia,
-  ItemTitle,
-} from '@/components/ui/item';
 import {
   Select,
   SelectContent,
@@ -114,6 +107,7 @@ import {
   refreshedItineraryContainsCopy,
 } from '@/lib/itinerary/duplicate-attempt';
 import { placeVisitDate, scheduledPlaceUse } from '@/lib/itinerary/places';
+import { optimisticItineraryEdit } from '@/lib/itinerary/optimistic';
 import { itineraryDayRouteRevision } from '@/lib/itinerary/routes';
 import { itineraryViewHref, resolveItineraryView } from '@/lib/itinerary/view';
 import {
@@ -142,7 +136,6 @@ import { setTripPlacePriority } from '@/lib/trip-places/priority';
 import { sortTripPlaces } from '@/lib/trip-places/sort';
 import { destinationLocationBias } from '@/lib/saved/provider-search-session';
 import { dayPreviewHref } from '@/lib/trips/navigation';
-import { cn } from '@/lib/utils';
 import { tripWeatherForDate, useTripWeather } from '@/lib/weather/use-trip-weather';
 import { queryKeys } from '@/lib/query/keys';
 import {
@@ -324,6 +317,11 @@ export function ItineraryManager({
   const [movingDay, setMovingDay] = useState(false);
   const [timeZoneConsequence, setTimeZoneConsequence] = useState(false);
   const [organizingItemId, setOrganizingItemId] = useState<string | null>(null);
+  // A stop on its way to another day, or out of Unscheduled onto one.
+  const [moveTarget, setMoveTarget] = useState<{
+    allowUnscheduled: boolean;
+    item: ItineraryItem;
+  } | null>(null);
   const duplicateAttempts = useRef(new DuplicateAttemptTracker());
   // A phone shows the day's map in place of the day only once it is asked for.
   const [phoneMapOpen, setPhoneMapOpen] = useState(false);
@@ -1098,7 +1096,19 @@ export function ItineraryManager({
     setOrganizingItemId(item.id);
     setError(null);
     try {
-      await organizeItineraryItem(tripId, item.id, { itineraryDayId, position });
+      // Shown at once - dropped, moved earlier, sent to another day - through the
+      // same replay the offline queue uses, and put back if the server says no.
+      await optimisticItineraryEdit({
+        commit: () => organizeItineraryItem(tripId, item.id, { itineraryDayId, position }),
+        operation: {
+          baseItem: item,
+          input: { itineraryDayId, position },
+          itemId: item.id,
+          kind: 'itinerary_item_organize',
+        },
+        queryClient,
+        tripId,
+      });
       await refresh();
     } catch {
       setError(t('organizeError'));
@@ -1686,24 +1696,21 @@ export function ItineraryManager({
                 itemCount={selectedDay.items.length}
                 label={t('itemListLabel')}
                 menuActions={{
-                  dayOptions: itinerary.days.map((day, dayIndex) => ({
-                    id: day.id,
-                    label: dayOption(day, dayIndex),
-                  })),
                   onDeleteItem: setItemToDelete,
                   onDuplicateItem: (item) => void handleDuplicate(item),
                   onEditItem: openEdit,
                   onMoveItem: (item, dayId, position) => void handleOrganize(item, dayId, position),
+                  onMoveToDay: (item) => setMoveTarget({ allowUnscheduled: true, item }),
                   onPlacePriorityChange: (item, priority) =>
                     void changePlacePriority(item, priority),
                   onSelectItem: selectItemOnMap,
                   organizingItemId,
                   savingPriorityIds,
                   selectedDayId: selectedDay.id,
-                  unscheduledLabel: t('unscheduled'),
                 }}
                 onInsert={(position, afterName) => openInsert(selectedDay, position, afterName)}
                 onModeChange={(segment, mode) => void handleRouteModeChange(segment, mode)}
+                onReorder={(item, position) => void handleOrganize(item, selectedDay.id, position)}
                 onSelectBase={selectBaseOnMap}
                 onSelectItem={selectItemOnMap}
                 onViewBaseDetails={(tripPlaceId) =>
@@ -1797,88 +1804,30 @@ export function ItineraryManager({
         />
       ) : null}
 
-      {itinerary.unscheduledItems.length ? (
-        <section className="space-y-3">
-          <div>
-            <h2 className="text-lg font-semibold">
-              {t('unscheduledSummary', { count: itinerary.unscheduledItems.length })}
-            </h2>
-            <p className="text-sm text-muted-foreground">{t('unscheduledDescription')}</p>
-          </div>
-          <ItemGroup aria-label={t('unscheduled')} variant="list">
-            {itinerary.unscheduledItems.map((item) => {
-              const name = itemName(item);
-              const hasMapLocation = Boolean(item.tripPlace && placeLocation(item.tripPlace));
-              const isMapSelected = selectedMapItemId === item.id;
-              return (
-                <Item
-                  className={cn('relative px-3 py-3', isMapSelected && 'bg-secondary/70')}
-                  id={`itinerary-item-${item.id}`}
-                  key={item.id}
-                  tabIndex={-1}
-                >
-                  <ItemMedia variant="icon">
-                    <Icons.Itinerary aria-hidden="true" />
-                  </ItemMedia>
-                  <ItemContent>
-                    <ItemTitle>
-                      {hasMapLocation ? (
-                        <button
-                          aria-label={t('viewDetailsFor', { name })}
-                          // The whole row opens the place, the same as a
-                          // scheduled stop; the controls sit above the claim.
-                          className="rounded-[var(--radius-sm)] text-left outline-none after:absolute after:inset-0 hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
-                          onClick={() => openPlaceDetails(item.tripPlace)}
-                          type="button"
-                        >
-                          {name}
-                        </button>
-                      ) : (
-                        name
-                      )}
-                    </ItemTitle>
-                    <ItemDescription>{item.notes}</ItemDescription>
-                  </ItemContent>
-                  <ItemActions className="relative z-10">
-                    <Select
-                      onValueChange={(value) =>
-                        void handleOrganize(item, (value ?? null) as string | null, 999)
-                      }
-                    >
-                      <SelectTrigger aria-label={t('scheduleItem', { name })} size="sm">
-                        <SelectValue>{t('moveToDay')}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {itinerary.days.map((day, index) => (
-                          <SelectItem key={day.id} value={day.id}>
-                            {dayOption(day, index)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      aria-label={t('duplicateItem', { name })}
-                      disabled={organizingItemId === item.id}
-                      onClick={() => void handleDuplicate(item)}
-                      size="icon-sm"
-                      variant="ghost"
-                    >
-                      <Copy aria-hidden="true" />
-                    </Button>
-                    <Button
-                      aria-label={t('deleteItem', { name })}
-                      onClick={() => setItemToDelete(item)}
-                      size="icon-sm"
-                      variant="ghost"
-                    >
-                      <Trash2 aria-hidden="true" />
-                    </Button>
-                  </ItemActions>
-                </Item>
-              );
-            })}
-          </ItemGroup>
-        </section>
+      <UnscheduledTray
+        items={itinerary.unscheduledItems}
+        onDelete={setItemToDelete}
+        onDuplicate={(item) => void handleDuplicate(item)}
+        onSchedule={(item) => setMoveTarget({ allowUnscheduled: false, item })}
+        onViewDetails={(item) => openPlaceDetails(item.tripPlace)}
+        organizingItemId={organizingItemId}
+        resolveItem={(item) => ({
+          category: item.tripPlace?.place.snapshot?.category,
+          name: itemName(item),
+        })}
+      />
+
+      {moveTarget ? (
+        <MoveToDaySheet
+          allowUnscheduled={moveTarget.allowUnscheduled}
+          currentDayId={moveTarget.item.itineraryDayId}
+          days={ribbonDays}
+          itemName={itemName(moveTarget.item)}
+          key={moveTarget.item.id}
+          onMove={(dayId, position) => void handleOrganize(moveTarget.item, dayId, position)}
+          onOpenChange={(open) => !open && setMoveTarget(null)}
+          open
+        />
       ) : null}
 
       {planScoreEnabled && selectedDay ? (

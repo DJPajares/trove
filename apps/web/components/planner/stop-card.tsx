@@ -1,7 +1,7 @@
 'use client';
 
 import { useLocale, useTranslations } from 'next-intl';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode, Ref } from 'react';
 
 import { PlaceHoursNote } from '@/components/place-hours-note';
 import { usePreferences } from '@/components/preferences-provider';
@@ -121,12 +121,16 @@ export function StopCard({
   attention,
   below,
   defaultTimeZone,
+  dragHandle,
   hours,
   item,
   menu,
   number,
   onSelectOnMap,
   onViewDetails,
+  placeholder = false,
+  rowRef,
+  rowStyle,
   view,
 }: Readonly<{
   above: SpineLine;
@@ -134,12 +138,18 @@ export function StopCard({
   attention?: ReactNode;
   below: SpineLine;
   defaultTimeZone: string;
+  /** The grip a stop is dragged by, when the day can be reordered. */
+  dragHandle?: ReactNode;
   hours: PlaceHoursStatus | undefined;
   item: ItineraryItem;
   menu: ReactNode;
   number: number;
   onSelectOnMap: () => void;
   onViewDetails: () => void;
+  /** This stop is the one being dragged: what stays behind is where it came from. */
+  placeholder?: boolean;
+  rowRef?: Ref<HTMLLIElement>;
+  rowStyle?: CSSProperties;
   view: StopView;
 }>) {
   const t = useTranslations('itinerary');
@@ -207,6 +217,8 @@ export function StopCard({
           </span>
         )
       }
+      ref={rowRef}
+      style={rowStyle}
       tabIndex={-1}
     >
       <article
@@ -216,6 +228,7 @@ export function StopCard({
             ? 'border-primary/45 bg-secondary/45 shadow-[var(--shadow-card)]'
             : 'border-border-subtle hover:border-border',
           item.travelStatus === 'skipped' && 'opacity-70',
+          placeholder && 'border-dashed opacity-40',
         )}
         data-selected={view.selected || undefined}
       >
@@ -264,14 +277,23 @@ export function StopCard({
                 ))}
               </p>
             ) : null}
-            <StopHoursLine item={item} status={hours} />
-            {item.notes ? (
-              <p className="mt-1 line-clamp-1 text-sm text-text-subtle">{item.notes}</p>
-            ) : null}
+            <div className="group-data-[reordering]/day:hidden">
+              <StopHoursLine item={item} status={hours} />
+              {item.notes ? (
+                <p className="mt-1 line-clamp-1 text-sm text-text-subtle">{item.notes}</p>
+              ) : null}
+            </div>
           </div>
-          <div className="relative z-10 -mt-1 -mr-1">{menu}</div>
+          <div className="relative z-10 -mt-1 -mr-1 flex items-center">
+            {dragHandle}
+            <span className="group-data-[reordering]/day:invisible">{menu}</span>
+          </div>
         </div>
-        {attention ? <div className="relative z-10 mt-2.5 space-y-2">{attention}</div> : null}
+        {attention ? (
+          <div className="relative z-10 mt-2.5 space-y-2 group-data-[reordering]/day:hidden">
+            {attention}
+          </div>
+        ) : null}
       </article>
     </SpineRow>
   );

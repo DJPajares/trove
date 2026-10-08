@@ -1507,6 +1507,30 @@
       "insert": {
         "before": "Add a stop before {name}",
         "end": "Add a stop at the end of the day"
+      },
+      "reorder": {
+        "handle": "Reorder {name}",
+        "instructions": "To move a stop, press Space or Enter to pick it up, use the up and down arrow keys to move it, then press Space or Enter to put it down. Press Escape to cancel.",
+        "pickedUp": "Picked up {name}, stop {position} of {count}.",
+        "moved": "{name} is now at position {position} of {count}.",
+        "dropped": "{name} put down at position {position} of {count}.",
+        "cancelled": "Move cancelled. {name} is back at position {position}."
+      },
+      "move": {
+        "menuItem": "Move to another day…",
+        "title": "Move {name}",
+        "scheduleTitle": "Schedule {name}",
+        "description": "Choose the day it belongs to.",
+        "placeLabel": "Where on the day",
+        "atEnd": "At the end",
+        "atStart": "At the start",
+        "thisDay": "This day",
+        "stops": "{count, plural, =0 {nothing planned} one {# stop} other {# stops}}",
+        "unscheduledHint": "Keep it without a day for now"
+      },
+      "unscheduled": {
+        "title": "{count, plural, one {Unscheduled · # stop} other {Unscheduled · # stops}}",
+        "schedule": "Schedule…"
       }
     },
     "overview": {
@@ -1562,7 +1586,6 @@
     "addFirstItem": "Add the first item",
     "emptyTitle": "This day is open.",
     "emptyDescription": "Add a place or a simple label. You can decide the timing later.",
-    "unscheduledSummary": "{count, plural, one {One item is} other {# items are}} safely kept in Unscheduled after date changes.",
     "unscheduled": "Unscheduled",
     "unscheduledDescription": "Ideas kept here retain their details until you assign a day.",
     "dailyBase": "Stay",
@@ -1591,7 +1614,6 @@
     "moveLater": "Move {name} later",
     "moveItem": "Move {name}",
     "move": "Move",
-    "moveToDay": "Move to day",
     "scheduleItem": "Assign {name} to a day",
     "duplicateItem": "Duplicate {name}",
     "deleteItem": "Delete item",

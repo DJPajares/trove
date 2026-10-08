@@ -38,15 +38,22 @@ export function InsertButton({
 export function InsertGap({
   above,
   below = above,
+  className,
   label,
   onInsert,
-}: Readonly<{ above: SpineLine; below?: SpineLine; label: string; onInsert: () => void }>) {
+}: Readonly<{
+  above: SpineLine;
+  below?: SpineLine;
+  className?: string;
+  label: string;
+  onInsert: () => void;
+}>) {
   return (
     <SpineRow
       above={above}
       align="center"
       below={below}
-      className="min-h-8"
+      className={cn('min-h-8', className)}
       marker={<InsertButton label={label} onInsert={onInsert} />}
     >
       {null}

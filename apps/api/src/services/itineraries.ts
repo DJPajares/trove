@@ -134,7 +134,13 @@ function mapPriorityInput(value: 'interested' | 'maybe' | 'must_go' | null) {
   return value ? values[value] : null;
 }
 
-function mapTravelMode(value: string) {
+/**
+ * Every stored mode by name. A flight used to fall through to "drive" here, so
+ * the planner drew a leg the traveller flew as one they drove, while the routes
+ * payload and Trip Mode - which map the same column themselves - said "flight".
+ */
+export function mapTravelMode(value: string) {
+  if (value === 'FLIGHT') return 'flight' as const;
   if (value === 'TRANSIT') return 'transit' as const;
   if (value === 'WALK') return 'walk' as const;
   return 'drive' as const;

@@ -178,7 +178,7 @@ export function JournalContents({
               <li className="snap-start" key={entry.day.date}>
                 <a
                   className={cn(
-                    'group/day flex w-[4.75rem] flex-col items-center gap-2 rounded-[var(--radius-md)] px-1 pt-1 pb-2 text-center outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+                    'group/day relative flex w-[4.75rem] flex-col items-center gap-2 rounded-[var(--radius-md)] px-1 pt-1 pb-2 text-center outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
                     entry.hasChapter ? 'text-foreground' : 'text-muted-foreground',
                   )}
                   href={`#${entry.anchorId}`}

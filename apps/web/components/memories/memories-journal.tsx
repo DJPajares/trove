@@ -384,12 +384,7 @@ export function MemoriesJournal({ tripId }: Readonly<{ tripId: string }>) {
         <JournalEpilogue trip={trip} />
       </div>
 
-      <JournalDock
-        hasCover={Boolean(data.storyCover)}
-        onAdd={openCreate}
-        onChooseCover={() => setCoverPickerOpen(true)}
-        onContents={isEmpty ? null : showContents}
-      />
+      <JournalDock onAdd={openCreate} onContents={isEmpty ? null : showContents} />
 
       <p aria-live="polite" className="sr-only" role="status">
         {feedback}

@@ -87,19 +87,17 @@ function useRevealOnScrollDown() {
 
 /**
  * The dock: on a phone, where the global bar has stepped aside, the journal's
- * three actions float in the thumb's reach - the contents, adding a memory,
- * and the journal's options. From `lg` the same actions live in the header.
+ * two actions float in the thumb's reach - the contents and adding a memory.
+ * From `lg` the same actions, and the cover's options, live in the header.
  *
  * Sticky at the end of the journal rather than fixed to the screen: it centres
  * on the journal's own column, so it can never be pushed off the page by a
  * viewport that reports a different width than the page is laid out at.
  */
 export function JournalDock({
-  hasCover,
   onAdd,
-  onChooseCover,
   onContents,
-}: Readonly<JournalActionsProps>) {
+}: Readonly<Pick<JournalActionsProps, 'onAdd' | 'onContents'>>) {
   const t = useTranslations('memories.journal');
   const visible = useRevealOnScrollDown();
 
@@ -136,11 +134,6 @@ export function JournalDock({
           <Plus aria-hidden="true" data-icon="inline-start" />
           {t('addMemory')}
         </Button>
-        <JournalStoryMenu
-          className="rounded-full"
-          hasCover={hasCover}
-          onChooseCover={onChooseCover}
-        />
       </div>
     </div>
   );

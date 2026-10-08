@@ -4,7 +4,7 @@ import { AuthPanel } from '@/components/auth-panel';
 import { AuthLinkError } from '@/components/auth-link-error';
 import { PasswordResetForm } from '@/components/password-reset-form';
 import { getSafeRedirectPath } from '@/lib/auth/redirect';
-import { getValidatedAuthIdentity } from '@/lib/auth/recovery';
+import { getServerRecoveryIdentity } from '@/lib/auth/recovery-cookie';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export default async function ResetPasswordPage({
@@ -23,7 +23,7 @@ export default async function ResetPasswordPage({
     ? 'invalidLink'
     : 'configurationError';
   try {
-    if (supabase) identity = (await getValidatedAuthIdentity(supabase))?.recovery ?? null;
+    if (supabase) identity = await getServerRecoveryIdentity(supabase);
   } catch {
     error = 'networkError';
   }

@@ -4,7 +4,7 @@ export const RECOVERY_WINDOW_SECONDS = 3600;
 export type RecoveryIdentity = { userId: string; sessionId: string; email: string };
 
 /** Only call with claims already verified by Supabase, never decoded URL tokens. */
-export function recoveryIdentityFromClaims(
+export function sessionIdentityFromClaims(
   claims: Record<string, unknown>,
   user: { id: string; email?: string },
   now = Date.now() / 1000,
@@ -16,10 +16,19 @@ export function recoveryIdentityFromClaims(
     !claims.session_id ||
     !user.email ||
     typeof claims.exp !== 'number' ||
-    claims.exp <= now ||
-    !Array.isArray(claims.amr)
+    claims.exp <= now
   )
     return null;
+  return { userId: user.id, sessionId: claims.session_id, email: user.email };
+}
+
+export function recoveryIdentityFromClaims(
+  claims: Record<string, unknown>,
+  user: { id: string; email?: string },
+  now = Date.now() / 1000,
+): RecoveryIdentity | null {
+  const identity = sessionIdentityFromClaims(claims, user, now);
+  if (!identity || !Array.isArray(claims.amr)) return null;
   const recentRecovery = claims.amr.some((entry: unknown) => {
     if (!entry || typeof entry !== 'object') return false;
     const method = entry as Record<string, unknown>;
@@ -30,9 +39,7 @@ export function recoveryIdentityFromClaims(
       method.timestamp > now - RECOVERY_WINDOW_SECONDS
     );
   });
-  return recentRecovery
-    ? { userId: user.id, sessionId: claims.session_id, email: user.email }
-    : null;
+  return recentRecovery ? identity : null;
 }
 
 export async function getValidatedAuthIdentity(supabase: SupabaseClient, accessToken?: string) {

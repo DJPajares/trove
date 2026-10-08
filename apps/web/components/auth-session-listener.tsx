@@ -44,11 +44,41 @@ export function AuthSessionListener({ userId }: Readonly<{ userId: string | null
         void (async () => {
           const identity = await getValidatedAuthIdentity(supabase, session.access_token);
           if (!active || !identity) return;
+          let recovery = !!identity.recovery;
+          if (
+            !recovery &&
+            Array.isArray(identity.claims.amr) &&
+            identity.claims.amr.some(
+              (method) => typeof method === 'object' && method !== null && method.method === 'otp',
+            )
+          ) {
+            // Recovery hash verification creates an OTP JWT. Its server-signed
+            // receipt is HttpOnly and must be checked on the server, not decoded here.
+            try {
+              const response = await fetch('/auth/recovery-session', { cache: 'no-store' });
+              if (response.ok) {
+                const status = (await response.json()) as {
+                  recovery: boolean;
+                  userId: string;
+                  sessionId: string;
+                };
+                recovery =
+                  status.recovery === true &&
+                  status.userId === identity.user.id &&
+                  status.sessionId === identity.claims.session_id;
+              }
+            } catch {
+              // Recovery fails closed; a verified account switch must still clear
+              // the previous account's private data when the status request fails.
+              recovery = false;
+            }
+          }
+          if (!active) return;
           if (identity.user.id !== userId) await clearLocalPrivateData();
           if (!active) return;
           const current = new URL(window.location.href);
           if (['/auth/confirm', '/auth/callback'].includes(current.pathname)) return;
-          if (identity.recovery) {
+          if (recovery) {
             const next =
               current.searchParams.get('next') ??
               `${current.pathname}${current.search}${current.hash}`;

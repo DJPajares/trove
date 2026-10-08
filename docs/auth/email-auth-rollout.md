@@ -70,6 +70,36 @@ Retain current Auth password requirements, confirmation settings, OTP expiry
 [Resend SMTP](https://resend.com/docs/send-with-smtp) and
 [Supabase custom SMTP](https://supabase.com/docs/guides/auth/auth-smtp).
 
+## Recovery signing key
+
+Before deploying the recovery fix, configure `TROVE_AUTH_RECOVERY_SECRET` on the
+**Trove web** Vercel project (not trove-api). Use a Secret/sensitive variable with
+separate random values for Production and Preview. For local development, keep a
+separate value in the gitignored `apps/web/.env.local`. Generate each value with:
+
+```sh
+node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("base64url"))'
+```
+
+Enter the output directly into the environment-variable field, keep it out of
+chat/source/screenshots, and redeploy the approved app after saving. This is an
+internal signing key, separate from the Resend API key and Supabase keys.
+
+Supabase's token-hash recovery verification returns `amr: otp`, not `recovery`.
+After successful provider verification, Trove signs a one-hour HttpOnly,
+SameSite=Strict, host-only receipt bound to the verified user and session. Server
+pages and password updates verify its signature, expiry, and current Auth identity.
+Ordinary OTP claims and URL hints alone cannot authorize recovery. The receipt is
+cleared after a successful password change or a different confirmation sign-in.
+Production uses a Secure `__Host-` cookie. Missing signing configuration fails
+before consuming the one-use email link. Key rotation invalidates outstanding
+receipts; request a fresh recovery email afterward. Retain the key across normal
+builds so refresh and redeploy do not interrupt an active reset.
+
+Legacy PKCE callbacks with provider-signed recovery AMR retain their existing
+validation. Legacy bearer fragments without that signed marker require a fresh
+email; their unsigned `type=recovery` hint cannot prove the authentication method.
+
 ## Templates and release order
 
 1. Merge the human-reviewed implementation PR and deploy the app through the
@@ -86,10 +116,11 @@ Retain current Auth password requirements, confirmation settings, OTP expiry
    relies on the project-specific allow list above; never allow unrelated
    `trove-*` hosts in this shared project. Do not classify requests by user metadata.
 5. Loading Trove's link consumes nothing. An explicit button POST verifies the
-   token and writes the SSR session. Recovery is authorized from Supabase-verified
-   `amr: recovery`, matching user/session, and a one-hour recovery window; query
-   `type`/`flow` alone grant nothing. Existing code and fragment callbacks remain
-   supported. Previously consumed/expired links require a fresh email.
+   token and writes the SSR session. Recovery is authorized by successful recovery-hash verification and its signed
+   receipt, or provider-signed recovery AMR for legacy PKCE; both require the
+   matching user/session and a one-hour recovery window. Query `type`/`flow` alone
+   grant nothing. Existing PKCE callbacks and fragments with signed recovery AMR
+   remain supported. Previously consumed/expired links require a fresh email.
 6. Keep `TROVE_SIGN_UP_DISABLED` unchanged in production. Exercise signup in an
    approved test environment; existing-account recovery remains available while
    signup is closed.

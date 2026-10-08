@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
   factory: vi.fn(),
   setCookie: vi.fn(),
+  getCookie: vi.fn(),
   getClaims: vi.fn(),
   getUser: vi.fn(),
   getSession: vi.fn(),
@@ -12,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('@supabase/ssr', () => ({ createServerClient: mocks.factory }));
 vi.mock('next/headers', () => ({
-  cookies: async () => ({ getAll: () => [], set: mocks.setCookie }),
+  cookies: async () => ({ getAll: () => [], get: mocks.getCookie, set: mocks.setCookie }),
 }));
 vi.mock('@/lib/supabase/environment', () => ({
   getSupabaseEnvironment: () => ({
@@ -22,6 +23,8 @@ vi.mock('@/lib/supabase/environment', () => ({
 }));
 
 import { POST as confirmPost } from '@/app/auth/session/route';
+import { GET as recoveryStatus } from '@/app/auth/recovery-session/route';
+import { createRecoveryGrant } from '@/lib/auth/recovery-grant';
 import { POST as resetPost } from '@/app/auth/reset-password/route';
 import { updateSupabaseSession } from '@/lib/supabase/proxy';
 
@@ -50,6 +53,8 @@ const cookie = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv('TROVE_AUTH_RECOVERY_SECRET', Buffer.alloc(32, 1).toString('base64url'));
+  mocks.getCookie.mockReturnValue(undefined);
   mocks.factory.mockImplementation((_url, _key, options) => {
     adapter = options.cookies;
     return {
@@ -71,6 +76,8 @@ beforeEach(() => {
   });
   mocks.updateUser.mockResolvedValue({ data: { user }, error: null });
 });
+
+afterEach(() => vi.unstubAllEnvs());
 
 const request = (path: string, body: unknown, origin = 'https://trove.wndrhive.com') =>
   new Request(`https://trove.wndrhive.com${path}`, {
@@ -169,4 +176,102 @@ describe('proxy redirects', () => {
       expect(response.headers.get('Referrer-Policy')).toBe('no-referrer');
     },
   );
+});
+
+describe('recovery receipt transport', () => {
+  const link = {
+    kind: 'otp',
+    tokenHash: 'a'.repeat(64),
+    type: 'recovery',
+    recovery: true,
+    next: '/trips',
+  };
+  const form = {
+    userId: user.id,
+    sessionId: claims.session_id,
+    password: 'new-password',
+    confirmation: 'new-password',
+  };
+  const identity = { userId: user.id, sessionId: claims.session_id, email: user.email };
+  const useOtpClaims = () =>
+    mocks.getClaims.mockResolvedValue({
+      data: { claims: { ...claims, amr: [{ method: 'otp', timestamp: now }] } },
+      error: null,
+    });
+
+  it('accepts the real Supabase OTP recovery response and writes a private receipt', async () => {
+    useOtpClaims();
+    const response = await confirmPost(request('/auth/session', link));
+    expect(response.status).toBe(200);
+    expect(mocks.setCookie).toHaveBeenCalledWith(
+      'trove-recovery',
+      expect.any(String),
+      expect.objectContaining({ httpOnly: true, sameSite: 'strict', path: '/', maxAge: 3600 }),
+    );
+    const body = await response.json();
+    expect(body.redirect).toBe('/reset-password?next=%2Ftrips');
+    expect(body).not.toHaveProperty('recovery');
+  });
+  it('does not consume the link when its signing key is missing', async () => {
+    vi.stubEnv('TROVE_AUTH_RECOVERY_SECRET', '');
+    const response = await confirmPost(request('/auth/session', link));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'configurationError' });
+    expect(mocks.verifyOtp).not.toHaveBeenCalled();
+  });
+  it('uses a host-only secure cookie in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    useOtpClaims();
+    await confirmPost(request('/auth/session', link));
+    expect(mocks.setCookie).toHaveBeenCalledWith(
+      '__Host-trove-recovery',
+      expect.any(String),
+      expect.objectContaining({ httpOnly: true, secure: true, path: '/' }),
+    );
+  });
+  it('retains recovery after refresh, then clears the receipt on password update', async () => {
+    useOtpClaims();
+    mocks.getCookie.mockReturnValue({ value: createRecoveryGrant(identity) });
+    const status = await recoveryStatus();
+    expect(await status.json()).toEqual({
+      recovery: true,
+      userId: user.id,
+      sessionId: claims.session_id,
+    });
+    expect(status.headers.get('Cache-Control')).toContain('no-store');
+    const response = await resetPost(request('/auth/reset-password', form));
+    expect(response.status).toBe(200);
+    expect(mocks.updateUser).toHaveBeenCalledExactlyOnceWith({ password: form.password });
+    expect(mocks.setCookie).toHaveBeenCalledWith(
+      'trove-recovery',
+      '',
+      expect.objectContaining({ maxAge: 0 }),
+    );
+  });
+  it.each([undefined, 'unsigned-receipt'])(
+    'denies an ordinary OTP session with %s',
+    async (value) => {
+      useOtpClaims();
+      mocks.getCookie.mockReturnValue(value ? { value } : undefined);
+      expect((await resetPost(request('/auth/reset-password', form))).status).toBe(400);
+      expect(mocks.updateUser).not.toHaveBeenCalled();
+      expect((await (await recoveryStatus()).json()).recovery).toBe(false);
+    },
+  );
+  it('does not transfer a recovery receipt to a different session', async () => {
+    useOtpClaims();
+    mocks.getCookie.mockReturnValue({
+      value: createRecoveryGrant({ ...identity, sessionId: 'another-session' }),
+    });
+    expect((await resetPost(request('/auth/reset-password', form))).status).toBe(400);
+    expect(mocks.updateUser).not.toHaveBeenCalled();
+  });
+  it('preserves a previous receipt when another invalid link fails', async () => {
+    mocks.verifyOtp.mockResolvedValue({
+      data: { session: null },
+      error: { code: 'otp_expired', status: 403 },
+    });
+    await confirmPost(request('/auth/session', link));
+    expect(mocks.setCookie).not.toHaveBeenCalled();
+  });
 });

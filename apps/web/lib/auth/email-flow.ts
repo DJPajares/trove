@@ -2,7 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { validateEmailLink, type EmailLinkError } from '@/lib/auth/email-link';
 import { getSafeRedirectPath, withAuthNext } from '@/lib/auth/redirect';
-import { getValidatedAuthIdentity } from '@/lib/auth/recovery';
+import { getValidatedAuthIdentity, sessionIdentityFromClaims } from '@/lib/auth/recovery';
+import { recoveryFromGrant, type RecoveryGrant } from '@/lib/auth/recovery-grant';
 
 export function authErrorKey(error: { code?: string; status?: number } | null): EmailLinkError {
   if (
@@ -40,10 +41,18 @@ export async function completeEmailAuth(supabase: SupabaseClient, input: unknown
           });
   if (result.error || !result.data.session) return { error: authErrorKey(result.error) };
   const identity = await getValidatedAuthIdentity(supabase, result.data.session.access_token);
-  if (!identity || (link.recovery && !identity.recovery)) return { error: 'invalidLink' as const };
+  if (!identity) return { error: 'invalidLink' as const };
+  // POST /verify issues amr: otp even for recovery. Only successful verification
+  // of a recovery token hash proves this path; an ordinary OTP JWT does not.
+  const recovery =
+    link.kind === 'otp' && link.type === 'recovery'
+      ? sessionIdentityFromClaims(identity.claims, identity.user)
+      : identity.recovery;
+  if (link.recovery && !recovery) return { error: 'invalidLink' as const };
   return {
     userId: identity.user.id,
-    redirect: identity.recovery ? withAuthNext('/reset-password', link.next) : link.next,
+    redirect: recovery ? withAuthNext('/reset-password', link.next) : link.next,
+    recovery,
     // The browser owns these credentials already. Installing this verified
     // session there keeps its cookie store and other open tabs in sync.
     session: {
@@ -53,15 +62,16 @@ export async function completeEmailAuth(supabase: SupabaseClient, input: unknown
   };
 }
 
-export async function resetRecoveryPassword(supabase: SupabaseClient, input: unknown) {
+export async function resetRecoveryPassword(
+  supabase: SupabaseClient,
+  input: unknown,
+  grant?: RecoveryGrant | null,
+) {
   if (!input || typeof input !== 'object') return { error: 'invalidLink' as const };
   const form = input as Record<string, unknown>;
   const identity = await getValidatedAuthIdentity(supabase);
-  if (
-    !identity?.recovery ||
-    identity.recovery.userId !== form.userId ||
-    identity.recovery.sessionId !== form.sessionId
-  )
+  const recovery = identity?.recovery ?? recoveryFromGrant(identity, grant);
+  if (!recovery || recovery.userId !== form.userId || recovery.sessionId !== form.sessionId)
     return { error: 'invalidLink' as const };
   if (typeof form.password !== 'string' || form.password.length < 6) {
     return { error: 'passwordTooShort' as const };

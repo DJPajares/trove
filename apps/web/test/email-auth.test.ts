@@ -172,6 +172,29 @@ describe('session establishment', () => {
       redirect: '/reset-password?next=%2Ftrips%2F123%3Fday%3D2%23place',
     });
   });
+  it('accepts recovery verified by token hash when Supabase signs amr as otp', async () => {
+    const { client } = fakeClient({
+      getClaims: vi.fn().mockResolvedValue({
+        data: { claims: { ...claims, amr: [{ method: 'otp', timestamp: now }] } },
+        error: null,
+      }),
+    });
+    expect(await completeEmailAuth(client, otp)).toMatchObject({
+      redirect: '/reset-password?next=%2Ftrips%2F123%3Fday%3D2%23place',
+      recovery: { userId: user.id, sessionId: claims.session_id },
+    });
+  });
+  it('does not treat signup OTP verification as recovery', async () => {
+    const { client } = fakeClient({
+      getClaims: vi.fn().mockResolvedValue({
+        data: { claims: { ...claims, amr: [{ method: 'otp', timestamp: now }] } },
+        error: null,
+      }),
+    });
+    expect(
+      await completeEmailAuth(client, { ...otp, type: 'email', recovery: false }),
+    ).toMatchObject({ redirect: otp.next, recovery: null });
+  });
   it('routes verified signup to its destination', async () => {
     const { client } = fakeClient({
       getClaims: vi.fn().mockResolvedValue({

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { dayLocality, localityFromAddress } from '../lib/itinerary/day-place.ts';
+import { dayLocality, localityFromAddress, sameTown } from '../lib/itinerary/day-place.ts';
 
 test('the town is read from the segment before the country', () => {
   // The shapes Trove actually caches, postcode trailing the town.
@@ -80,4 +80,12 @@ test('a day that scatters is left unnamed', () => {
   // A single stop is a visit, not a day.
   expect(dayLocality(['501 Buckland Road, Matamata 3472, New Zealand'])).toBeNull();
   expect(dayLocality([])).toBeNull();
+});
+
+test('one town written with and without its accents is still one town', () => {
+  expect(sameTown('Đà Nẵng', 'Da Nang')).toBe(true);
+  expect(sameTown('Hội An', 'hoi an')).toBe(true);
+  expect(sameTown('Kyoto', 'Tokyo')).toBe(false);
+  expect(sameTown(null, 'Kyoto')).toBe(false);
+  expect(sameTown('', '')).toBe(false);
 });

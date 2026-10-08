@@ -1,7 +1,7 @@
 import type { DayExperience } from '@trove/types';
 
-import { dayLocality, localityFromAddress } from '@/lib/itinerary/day-place';
-import type { Itinerary, ItineraryDay } from '@/lib/itinerary/api';
+import { dayTown } from '@/lib/itinerary/day-place';
+import type { Itinerary } from '@/lib/itinerary/api';
 import type { Trip } from '@/lib/trips/api';
 import { calendarDayDistance, getLocalDate } from '@/lib/trips/lifecycle';
 
@@ -131,29 +131,6 @@ export function journalLensOptions(story: TripStory): JournalLensOption[] {
 }
 
 /**
- * The town a day happened in. Its Stay decides first - where the traveller
- * ended the day, else where they started it, else a base set by hand - read
- * from that place's address rather than named after it, because a hotel is not
- * a town. A day with no Stay to go on is named after the town most of its stops
- * share, and a day that says nothing safely is left unnamed.
- */
-export function journalDayPlace(day: ItineraryDay, tripPlaces: Itinerary['tripPlaces']) {
-  const stayId =
-    day.stay?.endTripPlaceId ?? day.stay?.startTripPlaceId ?? day.dailyBaseTripPlaceId ?? null;
-  const stay = stayId ? tripPlaces.find((tripPlace) => tripPlace.id === stayId) : null;
-  const stayLocality = stay
-    ? localityFromAddress(stay.place.snapshot?.address ?? stay.place.providerAddress)
-    : null;
-  if (stayLocality) return stayLocality;
-
-  return dayLocality(
-    day.items.map(
-      (item) => item.tripPlace?.place.snapshot?.address ?? item.tripPlace?.place.providerAddress,
-    ),
-  );
-}
-
-/**
  * Every day of the trip, in order. The itinerary carries each day's own name
  * and Stay; without it - still loading, or not on this device - the trip's
  * dates alone lay the days out, so the journal never waits on the planner.
@@ -181,7 +158,7 @@ export function journalDays(
         dayNumber: dayNumber(day.date),
         isToday: day.date === today,
         name: day.name?.trim() ? day.name.trim() : null,
-        place: journalDayPlace(day, itinerary.tripPlaces),
+        place: dayTown(day, itinerary.tripPlaces),
       }));
   }
 

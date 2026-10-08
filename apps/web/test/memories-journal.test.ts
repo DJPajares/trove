@@ -1,11 +1,11 @@
 import { expect, test } from 'vitest';
 
 import type { ItineraryDay, ItineraryItem, ItineraryTripPlace } from '../lib/itinerary/api.ts';
+import { dayTown } from '../lib/itinerary/day-place.ts';
 import type { Memory, MemoryTripPlace } from '../lib/memories/api.ts';
 import {
   buildJournal,
   HIGHLIGHTS_LENS,
-  journalDayPlace,
   journalDays,
   journalLensOptions,
   type JournalTrip,
@@ -254,9 +254,9 @@ test('the itinerary names the day and its town, never its hotel', () => {
     items: [item('one', shrine), item('two', market)],
   });
 
-  expect(journalDayPlace(stayDay, [hotel])).toBe('Tokyo');
-  expect(journalDayPlace(stopsDay, [hotel, shrine, market])).toBe('Kyoto');
-  expect(journalDayPlace(itineraryDay('2026-09-03'), [hotel])).toBeNull();
+  expect(dayTown(stayDay, [hotel])).toBe('Tokyo');
+  expect(dayTown(stopsDay, [hotel, shrine, market])).toBe('Kyoto');
+  expect(dayTown(itineraryDay('2026-09-03'), [hotel])).toBeNull();
 
   const days = journalDays(
     TRIP,

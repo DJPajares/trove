@@ -46,6 +46,7 @@ beforeEach(() => {
   mocks.clear.mockResolvedValue(undefined);
   mocks.identity.mockResolvedValue({
     user: { id: 'current-user' },
+    claims: { session_id: 'recovery-session', amr: [{ method: 'recovery' }] },
     recovery: { sessionId: 'recovery-session' },
   });
   mocks.subscribe.mockImplementation((listener: typeof callback) => {
@@ -69,6 +70,43 @@ describe('already-open authentication navigation', () => {
       expect(navigate).toHaveBeenCalledExactlyOnceWith('/reset-password?next=%2Ftrips');
     },
   );
+  it('follows OTP recovery only after the server confirms its receipt and matching session', async () => {
+    mocks.identity.mockResolvedValue({
+      user: { id: 'current-user' },
+      claims: { session_id: 'receipt-session', amr: [{ method: 'otp' }] },
+      recovery: null,
+    });
+    const fetchStatus = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        recovery: true,
+        userId: 'current-user',
+        sessionId: 'receipt-session',
+      }),
+    });
+    vi.stubGlobal('fetch', fetchStatus);
+    open('/forgot-password?next=%2Ftrips');
+    callback('SIGNED_IN', session('otp-token'));
+    await vi.runAllTimersAsync();
+    expect(fetchStatus).toHaveBeenCalledWith('/auth/recovery-session', { cache: 'no-store' });
+    expect(navigate).toHaveBeenCalledExactlyOnceWith('/reset-password?next=%2Ftrips');
+  });
+  it.each([
+    { recovery: false, userId: 'current-user', sessionId: 'receipt-session' },
+    { recovery: true, userId: 'other-user', sessionId: 'receipt-session' },
+    { recovery: true, userId: 'current-user', sessionId: 'other-session' },
+  ])('does not route ordinary/mismatched OTP session %j to reset', async (status) => {
+    mocks.identity.mockResolvedValue({
+      user: { id: 'current-user' },
+      claims: { session_id: 'receipt-session', amr: [{ method: 'otp' }] },
+      recovery: null,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => status }));
+    open('/trips');
+    callback('SIGNED_IN', session('otp-token'));
+    await vi.runAllTimersAsync();
+    expect(navigate).not.toHaveBeenCalled();
+  });
   it('does not reroute an unchanged recovery session when the tab regains focus', async () => {
     open('/trips');
     callback('INITIAL_SESSION', session('existing-token'));
@@ -76,6 +114,19 @@ describe('already-open authentication navigation', () => {
     await vi.runAllTimersAsync();
     expect(mocks.identity).not.toHaveBeenCalled();
     expect(navigate).not.toHaveBeenCalled();
+  });
+  it('still clears the previous account when OTP recovery status is unavailable', async () => {
+    mocks.identity.mockResolvedValue({
+      user: { id: 'another-user' },
+      claims: { session_id: 'otp-session', amr: [{ method: 'otp' }] },
+      recovery: null,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    open('/trips');
+    callback('SIGNED_IN', session('another-user-otp'));
+    await vi.runAllTimersAsync();
+    expect(mocks.clear).toHaveBeenCalledOnce();
+    expect(navigate).toHaveBeenCalledExactlyOnceWith('/trips');
   });
   it('lets the confirmation screen finish its own verified session installation', async () => {
     open('/auth/confirm?next=%2Ftrips');
@@ -93,7 +144,11 @@ describe('already-open authentication navigation', () => {
     expect(mocks.clear).not.toHaveBeenCalled();
   });
   it('clears private data before navigating after another tab changes accounts', async () => {
-    mocks.identity.mockResolvedValue({ user: { id: 'another-user' }, recovery: null });
+    mocks.identity.mockResolvedValue({
+      user: { id: 'another-user' },
+      claims: { amr: [{ method: 'password' }] },
+      recovery: null,
+    });
     mocks.clear.mockImplementation(async () => {
       expect(navigate).not.toHaveBeenCalled();
     });

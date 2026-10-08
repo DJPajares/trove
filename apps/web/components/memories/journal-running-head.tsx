@@ -50,11 +50,13 @@ export function JournalRunningHead({
       ref={ref}
     >
       <Link
+        // The same pill in the same place whether the header is over the cover
+        // or over paper; only its colours change, so Exit never jumps.
         className={cn(
-          'inline-flex min-h-11 items-center justify-self-start gap-1.5 rounded-full px-3 text-sm font-medium outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none',
+          'inline-flex min-h-11 items-center justify-self-start gap-1.5 rounded-full border px-3 text-sm font-medium outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none',
           overCover
-            ? 'border border-media-fallback-foreground/18 bg-neutral-950/45 text-media-fallback-foreground backdrop-blur-sm hover:bg-neutral-950/65'
-            : '-ms-2 text-muted-foreground hover:text-foreground',
+            ? 'border-media-fallback-foreground/18 bg-neutral-950/45 text-media-fallback-foreground backdrop-blur-sm hover:bg-neutral-950/65'
+            : 'border-transparent text-muted-foreground hover:text-foreground',
         )}
         href={`/trips/${tripId}`}
       >

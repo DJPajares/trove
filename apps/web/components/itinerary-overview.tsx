@@ -22,6 +22,8 @@ import {
 export type ItineraryOverviewDisplay = 'list' | 'map';
 
 type ItineraryOverviewProps = {
+  /** The planner's own actions for the whole trip, such as opening its Places. */
+  actions?: ReactNode;
   days: ItineraryDay[];
   display: ItineraryOverviewDisplay;
   locale: string;
@@ -46,6 +48,7 @@ type ItineraryOverviewProps = {
  * owns those capabilities.
  */
 export function ItineraryOverview({
+  actions,
   days,
   display,
   locale,
@@ -94,19 +97,22 @@ export function ItineraryOverview({
             {t('overview.description', { count: days.length })}
           </p>
         </div>
-        {display === 'list' && dayIds.length ? (
-          <Button
-            onClick={() =>
-              setExpandedDayIds((current) =>
-                setAllOverviewDaysExpanded(current, dayIds, !allDaysExpanded),
-              )
-            }
-            size="xs"
-            variant="ghost"
-          >
-            {allDaysExpanded ? t('overview.collapseAll') : t('overview.expandAll')}
-          </Button>
-        ) : null}
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {display === 'list' && dayIds.length ? (
+            <Button
+              onClick={() =>
+                setExpandedDayIds((current) =>
+                  setAllOverviewDaysExpanded(current, dayIds, !allDaysExpanded),
+                )
+              }
+              size="xs"
+              variant="ghost"
+            >
+              {allDaysExpanded ? t('overview.collapseAll') : t('overview.expandAll')}
+            </Button>
+          ) : null}
+          {actions}
+        </div>
       </header>
 
       {/* The same switch the day's own card carries, so a list and a map are one

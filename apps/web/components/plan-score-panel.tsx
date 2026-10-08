@@ -42,6 +42,8 @@ type Props = Readonly<{
   completeness?: number | null;
   confidence?: number | null;
   dayId?: string;
+  /** Opens with the breakdown showing, for a surface the traveller opened to read it. */
+  defaultDetailsOpen?: boolean;
   disabled?: boolean;
   explanations: PlanScoreExplanationGroups;
   factors?: Record<PlanScoreFactorId, PlanScoreFactorOutcome>;
@@ -60,13 +62,25 @@ const WARNING_BANDS = new Set<ScoreBand>(['refine', 'attention']);
 function toneFor(score: number) {
   return WARNING_BANDS.has(scoreBand(score)) ? 'warning' : 'brand';
 }
-function ScoreRing({ label, score }: { label: string; score: number }) {
+function ScoreRing({
+  label,
+  score,
+  size = 'md',
+}: {
+  label: string;
+  score: number;
+  /** `sm` is the chip a day's header carries; `md` is the panel's own. */
+  size?: 'md' | 'sm';
+}) {
   const t = useTranslations('planScore');
   const locale = useLocale();
   return (
     <Meter.Root
       aria-label={label}
-      className="relative grid size-14 shrink-0 place-items-center"
+      className={cn(
+        'relative grid shrink-0 place-items-center',
+        size === 'sm' ? 'size-9' : 'size-14',
+      )}
       format={{ maximumFractionDigits: 0 }}
       getAriaValueText={(value) => t('scoreValue', { score: value })}
       locale={locale}
@@ -90,7 +104,12 @@ function ScoreRing({ label, score }: { label: string; score: number }) {
           strokeWidth="3"
         />
       </svg>
-      <Meter.Value className="relative text-lg font-semibold leading-none tracking-tight tabular-nums" />
+      <Meter.Value
+        className={cn(
+          'relative font-semibold leading-none tracking-tight tabular-nums',
+          size === 'sm' ? 'text-xs' : 'text-lg',
+        )}
+      />
     </Meter.Root>
   );
 }
@@ -228,6 +247,114 @@ function Reasons({
   );
 }
 
+/**
+ * What a score can honestly show right now: the number only while the
+ * assessment is current, and the problems worth a look only alongside it. The
+ * panel and the day header's chip both read it, so the chip never shows a
+ * number the panel it opens would withhold.
+ */
+function scoreDisplay({
+  assessment,
+  explanations,
+  now,
+  score,
+  status,
+}: {
+  assessment: TripPlanScore | null | undefined;
+  explanations: PlanScoreExplanationGroups;
+  now: number;
+  score: number | null;
+  status: PlanScoreLoadStatus;
+}) {
+  const assessmentCurrent = Boolean(assessment && currentAssessment(assessment, serverNow(now)));
+  const unavailable =
+    ['loading', 'offline', 'syncing'].includes(status) ||
+    (!assessmentCurrent && (status !== 'idle' || Boolean(assessment)));
+  const { issues, highlights } = unavailable
+    ? { issues: [], highlights: [] }
+    : travelerInsightGroups(explanations);
+  return {
+    displayScore: unavailable ? null : score,
+    highlights,
+    issues,
+    reasonStatus: status === 'idle' && unavailable ? 'expired' : status,
+    unavailable,
+  };
+}
+
+/**
+ * A day's score as a chip: the ring, the verdict, and how many problems are
+ * worth a look. It is the default, compact level PRD 29.4 asks for; opening it
+ * shows the breakdown. Nothing at all while there is no number to show - the
+ * opened panel says why, and a chip saying "unavailable" on every day would be
+ * noise on the one line it shares.
+ */
+export function PlanScoreChip({
+  assessment,
+  className,
+  explanations,
+  label,
+  onOpen,
+  score,
+  status,
+  tone = 'surface',
+}: Readonly<{
+  assessment: TripPlanScore | null;
+  className?: string;
+  explanations: PlanScoreExplanationGroups;
+  /** What the chip opens, for assistive tech: "Day 3's Plan Score". */
+  label: string;
+  onOpen: () => void;
+  score: number | null;
+  status: PlanScoreLoadStatus;
+  /** `media` sits on a photograph, as frosted glass rather than a card. */
+  tone?: 'media' | 'surface';
+}>) {
+  const t = useTranslations('planScore');
+  const [now] = useState(() => Date.now());
+  if (status === 'disabled' || assessment?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')) {
+    return null;
+  }
+  const { displayScore, issues } = scoreDisplay({
+    assessment,
+    explanations,
+    now: Math.max(now, Date.now()),
+    score,
+    status,
+  });
+  if (displayScore === null) return null;
+
+  return (
+    <button
+      aria-label={label}
+      className={cn(
+        'inline-flex min-h-11 items-center gap-2.5 rounded-full border py-1 pr-3.5 pl-1 text-left outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none',
+        tone === 'media'
+          ? 'border-media-fallback-foreground/18 bg-neutral-950/45 text-media-fallback-foreground backdrop-blur-sm hover:bg-neutral-950/60'
+          : 'border-border-subtle bg-card hover:bg-surface-hover',
+        className,
+      )}
+      onClick={onOpen}
+      type="button"
+    >
+      <ScoreRing label={label} score={displayScore} size="sm" />
+      <span className="flex min-w-0 flex-col leading-tight">
+        <span className="text-sm font-semibold">{t(`verdict.${scoreBand(displayScore)}`)}</span>
+        {issues.length ? (
+          <span
+            className={cn(
+              'text-xs',
+              tone === 'media' ? 'text-media-fallback-foreground/80' : 'text-muted-foreground',
+            )}
+          >
+            {t('worthALook', { count: issues.length })}
+          </span>
+        ) : null}
+      </span>
+    </button>
+  );
+}
+
 /** One traveler-facing summary shared by itinerary, Preview and AI review. */
 export function PlanScorePanel({
   assessment,
@@ -246,9 +373,10 @@ export function PlanScorePanel({
   surface = 'card',
   title,
   tripPlacesHref,
+  defaultDetailsOpen = false,
 }: Props) {
   const t = useTranslations('planScore');
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(defaultDetailsOpen);
   const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
     if (!assessment) return;
@@ -271,20 +399,22 @@ export function PlanScorePanel({
     assessment?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')
   )
     return null;
-  const assessmentCurrent = Boolean(
-    assessment && currentAssessment(assessment, serverNow(Math.max(clock, Date.now()))),
-  );
-  const unavailable =
-    ['loading', 'offline', 'syncing'].includes(status) ||
-    (!assessmentCurrent && (status !== 'idle' || Boolean(assessment)));
-  const displayScore = unavailable ? null : score;
-  const reasonStatus = status === 'idle' && unavailable ? 'expired' : status;
+  const {
+    displayScore,
+    highlights,
+    issues: allIssues,
+    reasonStatus,
+    unavailable,
+  } = scoreDisplay({
+    assessment,
+    explanations,
+    now: Math.max(clock, Date.now()),
+    score,
+    status,
+  });
   const day = assessment?.days.find((entry) => entry.dayId === dayId);
   const scopedAssessment = scope === 'day' ? day : assessment;
   const assessmentStatus = scopedAssessment?.assessmentStatus;
-  const { issues: allIssues, highlights } = unavailable
-    ? { issues: [], highlights: [] }
-    : travelerInsightGroups(explanations);
   const specificGap =
     displayScore === null && !unavailable
       ? allIssues.find((reason) =>

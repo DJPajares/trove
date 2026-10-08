@@ -75,3 +75,30 @@ test('a day with no items still has a stable revision, and no day has none', () 
   expect(itineraryDayRouteRevision(null)).toBe('');
   expect(itineraryDayRouteRevision(day([]))).not.toBe('');
 });
+
+/**
+ * The server renumbers a reordered day from zero and leaves gaps on a day a stop
+ * left; an optimistic reorder numbers from zero everywhere. Both are the same day
+ * in the same order, so both must ask for the same legs - once.
+ */
+test('the same order with different position numbers has the same route revision', () => {
+  const packed = itineraryDayRouteRevision(day([item('a', 0), item('b', 1), item('c', 2)]));
+  const gapped = itineraryDayRouteRevision(day([item('a', 0), item('b', 3), item('c', 7)]));
+
+  expect(gapped).toBe(packed);
+});
+
+test('a Stay inferred from a booking changes the route revision', () => {
+  const withoutStay = day([item('a', 0)]);
+  const withStay = {
+    ...withoutStay,
+    stay: {
+      endSource: 'accommodation' as const,
+      endTripPlaceId: 'hotel',
+      startSource: 'accommodation' as const,
+      startTripPlaceId: 'hotel',
+    },
+  };
+
+  expect(itineraryDayRouteRevision(withStay)).not.toBe(itineraryDayRouteRevision(withoutStay));
+});

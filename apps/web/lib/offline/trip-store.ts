@@ -83,7 +83,8 @@ export type OfflineMutationOperation =
     }
   | {
       clientItemId: string;
-      input: ItineraryItemInput & { itineraryDayId: string };
+      /** `position` inserts it among the day's stops; omitted, it joins the end. */
+      input: ItineraryItemInput & { itineraryDayId: string; position?: number };
       kind: 'itinerary_item_create';
     }
   | {
@@ -1317,7 +1318,11 @@ export function applyOfflineMutation(
       updatedAt: now,
     };
     applyInput(item, mutation.input, next);
-    day.items.push(item);
+    // Where the server will put it: at the asked-for position among the day's
+    // stops, then wherever its own time says, exactly as the API orders it.
+    const position = mutation.input.position;
+    if (position === undefined) day.items.push(item);
+    else day.items.splice(Math.min(Math.max(position, 0), day.items.length), 0, item);
     reslotItemByTime(day.items, item.id);
     normalizePositions(day.items);
     return next;

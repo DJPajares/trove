@@ -219,12 +219,18 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
   );
   /**
    * A reservation decides a day's fixed commitments and whether the item it is
-   * attached to is anchored, both of which the Plan Score reads. Its documents
-   * decide neither, so only the reservation itself clears the score.
+   * attached to is anchored, both of which the Plan Score reads. A stay also
+   * decides where each of its days starts and ends - the Stay the itinerary
+   * shows at the top of the day and draws its first and last legs from - so the
+   * itinerary is read again too. Its documents decide none of it, so only the
+   * reservation itself clears these.
    */
   const refreshWithPlanScore = async () => {
     await refresh();
-    await invalidateTripQueries(queryClient, tripId, PLAN_SCORE_INPUT_QUERY_ROOTS);
+    await invalidateTripQueries(queryClient, tripId, [
+      ...PLAN_SCORE_INPUT_QUERY_ROOTS,
+      'itinerary',
+    ]);
   };
   const [error, setError] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState>({ mode: 'closed', reservation: null });

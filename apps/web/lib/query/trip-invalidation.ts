@@ -56,14 +56,20 @@ export function removeTripQueries(
 /**
  * The roots an itinerary edit invalidates.
  *
- * Editing an item moves what Trip Mode considers "now", changes the leg chain
- * for its day and changes the Plan Score inputs, so all four travel together.
+ * Editing an item moves what Trip Mode considers "now" and changes the Plan
+ * Score inputs, so those travel together. A day's travel legs are deliberately
+ * absent: they are keyed by `itineraryDayRouteRevision`, which changes with
+ * everything a leg is built from - the order, the Places, the Stay and the
+ * modes - so an edit that changes a leg asks for it under a new key by itself.
+ * Invalidating them as well only refetched an unchanged key after a note or a
+ * rename, which is a provider request for the same answer. A Place gaining
+ * coordinates is the one change the key cannot see, and
+ * `PLACE_LOCATION_QUERY_ROOTS` still refreshes legs for it.
  */
 export const ITINERARY_EDIT_QUERY_ROOTS: readonly TripScopedQueryRoot[] = [
   'itinerary',
   'gap-suggestions',
   'hours-notices',
-  'itinerary-day-routes',
   'place-groupings',
   'place-hours',
   'plan-score',

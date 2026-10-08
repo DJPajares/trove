@@ -46,6 +46,7 @@ async function cacheTripPages(tripId: string) {
     'expenses',
     'info',
     'itinerary',
+    'memories',
     'mode',
     'mode/map',
     'mode/trip',

@@ -36,10 +36,9 @@ const TripContext = createContext<TripContextValue | null>(null);
  * mid-page and pushed the traveller's plan down the screen.
  *
  * A layout does not unmount when its children change, so the trip stays warm
- * across itinerary, memories and every supporting tool: the cover is fetched on
- * the way into a trip and never again while the traveller is inside it. The
- * shared query key extends that past the layout - Trip Mode reads the same
- * entry rather than fetching the trip a third time.
+ * across the itinerary, Trip Mode, the Memories journal and every supporting
+ * tool: the cover is fetched on the way into a trip and never again while the
+ * traveller is inside it.
  */
 export function TripProvider({
   children,

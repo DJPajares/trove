@@ -250,9 +250,9 @@ On mobile, where the signed-in shell has no header, the floating control yields 
 
 The Tools launcher introduces Currency and Task Templates through short purpose-led summaries and links to their independent pages. It never embeds every tool interface into one screen.
 
-Trip Mode may introduce its own Now / Today / Map / Trip navigation, and on mobile that navigation takes the bottom bar for the duration: two navigations stacked on one phone screen is one too many, and the traveller's thumb can only reach the lower one. The global bar and its Create action step aside while a Trip Mode route is open, and return the moment it is left.
+Trip Mode may introduce its own Now / Today / Map / Trip navigation, and on mobile that navigation takes the bottom bar for the duration: two navigations stacked on one phone screen is one too many, and the traveller's thumb can only reach the lower one. The Memories journal likewise brings its own controls to the bottom of the phone. The global bar and its Create action step aside while a Trip Mode route or the Memories journal is open, and return the moment it is left.
 
-Trip Mode must not become the only way out. Wherever it replaces the global bar it must carry a permanent, visible Exit that returns to the trip it belongs to, from which the stable global navigation is one further tap — on every supported form factor. On desktop and tablet, where there is no thumb zone to compete for, the global navigation stays where it is and Trip Mode's own navigation sits beneath its header.
+Neither Trip Mode nor the Memories journal may become the only way out. Wherever either replaces the global bar it must carry a permanent, visible Exit that returns to the trip it belongs to, from which the stable global navigation is one further tap — on every supported form factor. On desktop and tablet, where there is no thumb zone to compete for, the global navigation stays where it is and the experience's own controls sit in or beneath its header.
 
 ### Trip Navigation
 
@@ -264,13 +264,13 @@ Trove offers three core trip experiences:
 - **Trip Mode** — Live it.
 - **Memories** — Remember it.
 
-**Strict requirement:** Trip Mode and Preview must never appear in the shared trip page tab row, including Itinerary, Memories, Expenses, Tasks, Reservations, Trip Info, and Places, regardless of trip lifecycle, viewport, or entry point. That tab row contains only **Itinerary** and **Memories**, in that order. Trip Mode and Preview remain reachable through contextual CTAs, including Home and trip overview entry points. Their opening behavior and their own **Now / Today / Map / Trip** navigation remain unchanged.
+**Strict requirement:** Trip Mode, Preview and Memories must never appear in the shared trip page tab row — the row on Itinerary, Expenses, Tasks, Reservations, Trip Info, and Places — regardless of trip lifecycle, viewport, or entry point. That tab row contains only **Itinerary**, beside the supporting-tools menu. Trip Mode and Memories each open as an experience of their own, with their own header and Exit, from contextual entry points: the trip overview's primary action and tiles, Home, the Trips library, and, for Memories, search results that open the journal at the matching Memory. Trip Mode's opening behavior and its own **Now / Today / Map / Trip** navigation remain unchanged. The Memories journal lives at the trip's `memories` address and is described in Section 31.2.
 
 Supporting tools — Tasks, Reservations, Expenses, Trip Info — are reachable in one interaction from a single grouped menu on every trip screen, and must never occupy the primary navigation.
 
 The trip's Places collection is not a destination in that menu. The itinerary opens it directly, as Section 16.1 describes, so listing it again would be a second door to the same room. Wherever a trip is summarised outside its own screens — the Trips library, for example — the same rule holds: the three experiences are offered as themselves, and the tools listed are only the four above.
 
-Trip lifecycle changes emphasis only. All three core experiences remain reachable at every stage through contextual entry points. The shared trip page tab row always contains only Itinerary and Memories; lifecycle-aware CTAs retain the emphasis below.
+Trip lifecycle changes emphasis only. All three core experiences remain reachable at every stage through contextual entry points. The shared trip page tab row always contains only Itinerary; lifecycle-aware CTAs retain the emphasis below.
 
 - **Planning:** Itinerary leads. Trip Mode is offered as Preview, opening at the first day.
 - **Active:** Trip Mode leads.
@@ -2056,6 +2056,8 @@ Rules:
 - The MVP does not create Place-level or Memory-level Experience Ratings.
 - Live Memory capture does not require a rating.
 
+Presentation: a rating reads as five dots, filled up to the value, and a word for it — 1 Hard going, 2 Mixed, 3 Good, 4 Wonderful, 5 Unforgettable — never as stars, a number or a meter, so it cannot be mistaken for a public review score or for Plan Score. Assistive technology hears the word and the value out of five. A rating not yet given is five hollow dots, the single quiet control described in Section 31.2.
+
 ---
 
 # 31. Memories
@@ -2123,6 +2125,16 @@ The reading experience must be visual:
 Experience Rating for the trip and for a day must remain reachable from the story itself. Rating is offered, never asked: a rating already given is shown as itself, and one not yet given is a single quiet control on the trip and on a day's own chapter marker. It must never appear as a prompt, a question, or a call to action soliciting a rating, and must never stand beside the reading flow as something the page is waiting on. Rating is a deliberate act.
 
 Curation must remain reachable, including by keyboard and screen reader, without those controls narrating the page. Reveal them on request.
+
+### 31.2.1 The Journal
+
+The story is read as a journal, an experience of its own (Section 4.5), and it is designed to feel like one — calm, warm, and personal rather than a review page or a feed:
+
+- **Cover:** the cover ladder above, full-bleed on a phone, with the trip's name set in the journal's serif and the trip's single rating control.
+- **Contents:** every trip day in a strip, each shown by its lead photograph or a faint date stamp when nothing was kept, with Highlights and Places as filters beneath. Where at least three of the trip's Memories were kept at located Places, an ink line may be drawn through them in the order they were kept: decorative, drawn from coordinates Trove already holds, never from a map or provider request.
+- **Chapters:** one per day with something kept, titled with the traveller's own name for the day or its date, with a date stamp, the day's reflection, and the day's rating control. Consecutive days with nothing kept fold into a single quiet line between chapters; they are never presented as gaps to fill. A day kept only as a rating takes a single line.
+- **Moments:** photographs as prints, note-only Memories as field notes, laid out deterministically per Memory so the page looks the same on every visit. Opening a moment shows it whole, and that is where it is curated: edit, Highlight, use as cover, reorder within Highlights, delete.
+- **Epilogue:** how the trip felt, read from the trip's rating and its note, without a second control.
 
 The Trip Story should derive from the user's actual trip, itinerary context, notes, highlights, Places, and user-uploaded photos.
 

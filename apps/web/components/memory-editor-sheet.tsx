@@ -51,11 +51,22 @@ import {
   type Memory,
   type MemoryPhoto,
 } from '@/lib/memories/api';
-import { resolveItineraryItemPlaceName } from '@/lib/trip-places/place-name';
+import {
+  memoryDraftFrom,
+  memoryEditPatch,
+  type MemoryPlaceChoice,
+  withDay,
+} from '@/lib/memories/edit-patch';
+import { placeName } from '@/lib/memories/story';
+import { resolveItineraryItemPlaceName, resolveTripPlaceName } from '@/lib/trip-places/place-name';
 import * as Icons from '@/lib/icons';
 
 const NO_DAY = 'none';
 const NO_ITEM = 'none';
+/** The Place a Memory already has with no stop standing for it. */
+const CURRENT_PLACE = 'current';
+/** A Place kept from a stop the Memory left behind when its day changed. */
+const KEPT_PLACE = 'kept';
 
 type SaveResult = { localDateChanged: boolean; queued: boolean };
 
@@ -89,7 +100,7 @@ export function MemoryEditorSheet({
   const [note, setNote] = useState('');
   const [isHighlight, setIsHighlight] = useState(false);
   const [dayId, setDayId] = useState(NO_DAY);
-  const [itemId, setItemId] = useState(NO_ITEM);
+  const [place, setPlace] = useState<MemoryPlaceChoice>({ kind: 'none' });
   const [localDate, setLocalDate] = useState('');
   const [localTime, setLocalTime] = useState('');
   const [existingPhotos, setExistingPhotos] = useState<MemoryPhoto[]>([]);
@@ -104,12 +115,13 @@ export function MemoryEditorSheet({
 
   useEffect(() => {
     if (!open) return;
-    setNote(memory?.note ?? '');
-    setIsHighlight(memory?.isHighlight ?? false);
-    setDayId(memory?.itineraryDay?.id ?? NO_DAY);
-    setItemId(memory?.itineraryItem?.id ?? NO_ITEM);
-    setLocalDate(memory?.capturedLocalDate ?? '');
-    setLocalTime(memory?.capturedLocalTime ?? '');
+    const draft = memory ? memoryDraftFrom(memory) : null;
+    setNote(draft?.note ?? '');
+    setIsHighlight(draft?.isHighlight ?? false);
+    setDayId(draft?.dayId ?? NO_DAY);
+    setPlace(draft?.place ?? { kind: 'none' });
+    setLocalDate(draft?.localDate ?? '');
+    setLocalTime(draft?.localTime ?? '');
     setExistingPhotos(memory?.photos ?? []);
     setNewPhotos([]);
     setError(null);
@@ -124,11 +136,61 @@ export function MemoryEditorSheet({
     () => selectedDay?.items.filter((item) => item.tripPlace || item.customLabel) ?? [],
     [selectedDay],
   );
-  const selectedItem = dayItems.find((item) => item.id === itemId) ?? null;
+  const selectedItem =
+    place.kind === 'item' ? (dayItems.find((item) => item.id === place.itemId) ?? null) : null;
+  const placeValue =
+    place.kind === 'item'
+      ? place.itemId
+      : place.kind === 'current'
+        ? CURRENT_PLACE
+        : place.kind === 'place'
+          ? KEPT_PLACE
+          : NO_ITEM;
+
+  // The Place a Memory keeps without a stop, named the way the rest of the trip names it.
+  function tripPlaceLabel(tripPlaceId: string | null) {
+    const tripPlace = itinerary?.tripPlaces.find((candidate) => candidate.id === tripPlaceId);
+    if (tripPlace) {
+      return resolveTripPlaceName(tripPlace, { custom: t('noContext'), provider: t('noContext') });
+    }
+    if (memory?.tripPlace && memory.tripPlace.id === tripPlaceId) {
+      return (
+        placeName(memory.tripPlace, memory.tripPlace.snapshot?.name ?? null, null) ?? t('noContext')
+      );
+    }
+    return t('noContext');
+  }
+  const currentPlaceLabel =
+    memory?.tripPlace && !memory.itineraryItem ? tripPlaceLabel(memory.tripPlace.id) : null;
+  const keptPlaceLabel = place.kind === 'place' ? tripPlaceLabel(place.tripPlaceId) : null;
+
+  function selectPlace(value: string) {
+    if (value === NO_ITEM) setPlace({ kind: 'none' });
+    else if (value === CURRENT_PLACE) setPlace({ kind: 'current' });
+    else if (value !== KEPT_PLACE) {
+      const item = dayItems.find((candidate) => candidate.id === value);
+      if (item)
+        setPlace({ itemId: item.id, kind: 'item', tripPlaceId: item.tripPlace?.id ?? null });
+    }
+  }
 
   function selectDay(value: string) {
+    if (!isCreate) {
+      // Moving a Memory to another day moves its date and keeps its time; a
+      // stop from the old day is let go, but the Place it stood for is kept.
+      const day = itinerary?.days.find((candidate) => candidate.id === value) ?? null;
+      const moved = withDay(
+        { dayId: null, isHighlight, localDate, localTime, note, place },
+        value === NO_DAY ? null : day ? { date: day.date, id: day.id } : null,
+      );
+      setDayId(moved.dayId ?? NO_DAY);
+      setLocalDate(moved.localDate);
+      setPlace(moved.place);
+      return;
+    }
+
     setDayId(value);
-    setItemId(NO_ITEM);
+    setPlace({ kind: 'none' });
     if (value === NO_DAY) {
       if (isCreate) {
         setLocalDate('');
@@ -242,8 +304,8 @@ export function MemoryEditorSheet({
 
     const context = {
       itineraryDayId: dayId === NO_DAY ? null : dayId,
-      itineraryItemId: selectedItem?.id ?? null,
-      tripPlaceId: selectedItem?.tripPlace?.id ?? null,
+      itineraryItemId: place.kind === 'item' ? place.itemId : null,
+      tripPlaceId: place.kind === 'item' ? place.tripPlaceId : null,
     };
     const local =
       localDate && localTime ? { capturedLocalDate: localDate, capturedLocalTime: localTime } : {};
@@ -262,13 +324,20 @@ export function MemoryEditorSheet({
         );
         onSaved({ localDateChanged: false, queued: result.queued });
       } else {
-        const result = await updateMemory(tripId, memory.id, {
-          ...context,
-          ...local,
+        // Only what changed: unchanged context sent back is read as a
+        // correction, which rewrites the captured time and can drop a Place.
+        const patch = memoryEditPatch(memory, {
+          dayId: dayId === NO_DAY ? null : dayId,
           isHighlight,
-          note: note.trim() ? note.trim() : null,
+          localDate,
+          localTime,
+          note,
+          place,
         });
-        onSaved({ localDateChanged: result.localDateChanged, queued: false });
+        if (Object.keys(patch).length) {
+          const result = await updateMemory(tripId, memory.id, patch);
+          onSaved({ localDateChanged: result.localDateChanged, queued: false });
+        }
       }
       onClose();
     } catch (saveError) {
@@ -332,14 +401,29 @@ export function MemoryEditorSheet({
 
               <Field>
                 <FieldLabel htmlFor="memory-editor-item">{t('place')}</FieldLabel>
-                <Select onValueChange={(value) => setItemId(value ?? NO_ITEM)} value={itemId}>
-                  <SelectTrigger disabled={dayId === NO_DAY} id="memory-editor-item">
+                <Select onValueChange={(value) => selectPlace(value ?? NO_ITEM)} value={placeValue}>
+                  <SelectTrigger
+                    disabled={dayId === NO_DAY && place.kind !== 'current'}
+                    id="memory-editor-item"
+                  >
                     <SelectValue>
-                      {selectedItem ? itemLabel(selectedItem) : t('noContext')}
+                      {selectedItem
+                        ? itemLabel(selectedItem)
+                        : place.kind === 'current'
+                          ? currentPlaceLabel
+                          : place.kind === 'place'
+                            ? keptPlaceLabel
+                            : t('noContext')}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NO_ITEM}>{t('noContext')}</SelectItem>
+                    {currentPlaceLabel ? (
+                      <SelectItem value={CURRENT_PLACE}>{currentPlaceLabel}</SelectItem>
+                    ) : null}
+                    {keptPlaceLabel ? (
+                      <SelectItem value={KEPT_PLACE}>{keptPlaceLabel}</SelectItem>
+                    ) : null}
                     {dayItems.map((item) => (
                       <SelectItem key={item.id} value={item.id}>
                         {itemLabel(item)}

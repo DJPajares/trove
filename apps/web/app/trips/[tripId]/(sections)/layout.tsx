@@ -5,8 +5,8 @@ import { TripChrome } from '@/components/trip-chrome';
 /**
  * The trip's sections share one cover and one navigation row. Mounting them
  * here rather than inside each screen is what keeps the cover still when the
- * traveller moves between them. Trip Mode sits outside this group on purpose —
- * it has a shell of its own.
+ * traveller moves between them. Trip Mode and the Memories journal sit outside
+ * this group on purpose — each is an experience with a shell of its own.
  */
 export default async function TripSectionsLayout({
   children,

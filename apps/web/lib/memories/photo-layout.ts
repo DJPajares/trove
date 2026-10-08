@@ -61,3 +61,30 @@ export function selectPhotoLayout(
   const template = bucket[stableHash(memoryId) % bucket.length];
   return template ?? bucket[0] ?? null;
 }
+
+/**
+ * How far each of a Memory's prints leans, in degrees: between half a degree
+ * and two either way, settled once from the Memory's id so a print lies at the
+ * same angle on every visit. Neighbouring prints always lean opposite ways, so
+ * a pair reads as two prints laid down by hand rather than one tilted block.
+ */
+export function printTilts(memoryId: string, count: number): number[] {
+  const seed = stableHash(memoryId);
+  const firstDirection = seed % 2 === 0 ? 1 : -1;
+
+  return Array.from({ length: Math.max(0, count) }, (_, index) => {
+    // 0.5 to 2.0 in steps of 0.1, from a different slice of the hash per print.
+    const magnitude = 0.5 + ((seed >>> (index * 3)) % 16) / 10;
+    const direction = index % 2 === 0 ? firstDirection : -firstDirection;
+    return Math.round(direction * magnitude * 10) / 10;
+  });
+}
+
+/**
+ * Which side a moment leans to on a narrow page. Alternating keeps a column of
+ * prints from reading as a feed; it follows the moment's place in the reading
+ * order, so the rhythm holds however the journal is filtered.
+ */
+export function momentLean(index: number): 'end' | 'start' {
+  return index % 2 === 0 ? 'start' : 'end';
+}

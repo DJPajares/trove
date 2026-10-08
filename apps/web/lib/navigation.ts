@@ -15,15 +15,17 @@ export function isNavigationPathActive(pathname: string, href: string) {
 }
 
 /**
- * Whether a path is inside Trip Mode.
+ * Whether a path is inside one of a trip's own experiences - Trip Mode, or the
+ * Memories journal.
  *
- * Trip Mode brings its own bottom bar - Now / Today / Map / Trip - and two
- * stacked navigations on one phone screen is one too many, so the global bar
- * and its create action step aside while a traveller is in it. Leaving is never
- * more than the Exit in Trip Mode's own top bar.
+ * Each brings its own controls to the bottom of the phone - Trip Mode its Now /
+ * Today / Map / Trip bar, the journal its dock - and two stacked navigations on
+ * one phone screen is one too many, so the global bar and its create action
+ * step aside while a traveller is in either. Leaving is never more than the
+ * Exit in the experience's own top bar.
  */
-export function isTripModePath(pathname: string) {
-  return /^\/trips\/[^/]+\/mode(?:\/|$)/.test(pathname);
+export function isImmersiveTripPath(pathname: string) {
+  return /^\/trips\/[^/]+\/(?:mode|memories)(?:\/|$)/.test(pathname);
 }
 
 export function isToolsPath(pathname: string) {

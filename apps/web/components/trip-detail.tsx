@@ -22,7 +22,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, useState, type ComponentType, type ReactNode } from 'react';
 
 import { EditorialSection } from '@/components/editorial-section';
-import { ExperienceRatingSummary } from '@/components/experience-rating-field';
+import { ExperienceRatingSummary } from '@/components/experience-rating';
 import { OfflineReadyStatus } from '@/components/offline-ready-status';
 import { PageState } from '@/components/page-state';
 import { PlanScorePanel } from '@/components/plan-score-panel';

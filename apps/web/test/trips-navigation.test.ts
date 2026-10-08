@@ -8,6 +8,7 @@ import {
   tripDestinationEmphasisVariant,
   tripOverviewDestinations,
   tripSectionLabelKey,
+  tripTabDestinations,
   type TripSection,
   withLiveTripModeFirst,
 } from '../lib/trips/navigation.ts';
@@ -77,7 +78,7 @@ test('Trip Mode is live only for active trips, while Preview is available before
   expect(isTripModeAvailable('completed', true)).toBe(true);
 });
 
-test('trip section navigation carries all three experiences, live only while travelling', () => {
+test('the navigation contract carries all three experiences, live only while travelling', () => {
   const tabs = (lifecycle: 'active' | 'completed' | 'planning') =>
     primaryTripDestinations(TRIP, lifecycle, START).map((entry) => [
       entry.section,
@@ -102,6 +103,24 @@ test('trip section navigation carries all three experiences, live only while tra
     ['mode', 'preview', preview],
     ['memories', 'memories', `/trips/${TRIP}/memories`],
   ]);
+});
+
+test('the shared tab row carries only the planner, while the overview still offers all three', () => {
+  for (const lifecycle of ['planning', 'active', 'completed'] as const) {
+    // Trip Mode and the Memories journal each open as their own experience, so
+    // neither is a tab beside the screens that share the trip's cover.
+    expect(
+      tripTabDestinations(TRIP, lifecycle, START).map((entry) => [entry.section, entry.href]),
+      `tab row changed for ${lifecycle}`,
+    ).toStrictEqual([['itinerary', `/trips/${TRIP}/itinerary`]]);
+
+    // Leaving the row must never leave the journal unreachable.
+    const overview = tripOverviewDestinations(TRIP, lifecycle, START);
+    const memories = [overview.primary, ...overview.secondary].find(
+      (entry) => entry.section === 'memories',
+    );
+    expect(memories?.href, `Memories unreachable for ${lifecycle}`).toBe(`/trips/${TRIP}/memories`);
+  }
 });
 
 test('supporting tools stay complete and out of the primary set', () => {

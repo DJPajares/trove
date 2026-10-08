@@ -17,6 +17,15 @@ test('the town is read from the segment before the country', () => {
   );
 });
 
+test('a Japanese address gives its town, whether the postcode rides with it or stands alone', () => {
+  expect(localityFromAddress('1 Chome-19-1 Kabukicho, Shinjuku City, Tokyo 160-8466, Japan')).toBe(
+    'Tokyo',
+  );
+  expect(
+    localityFromAddress('68 Fukakusa Yabunouchicho, Fushimi Ward, Kyoto, 612-0882, Japan'),
+  ).toBe('Kyoto');
+});
+
 test('a street is never returned as a town', () => {
   // "370J Alexandra Rd, Singapore 159953" counts back onto the road, which is
   // the failure this guard exists for.

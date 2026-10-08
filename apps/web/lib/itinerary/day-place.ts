@@ -52,13 +52,22 @@ export function localityFromAddress(address: string | null | undefined): string 
   // way to tell which, so it is left alone.
   if (segments.length < 3) return null;
 
-  const candidate = segments.at(-2);
+  // Some countries give the postcode a segment of its own - a Japanese address
+  // ends "Kyoto, 612-0882, Japan" - and then the town is the segment before it.
+  // Only with a segment to spare, so a bare postcode in the town's own place
+  // still reads as nothing.
+  const beforeCountry = segments.at(-2);
+  const candidate =
+    beforeCountry && /^[\d\s-]+$/.test(beforeCountry) && segments.length >= 4
+      ? segments.at(-3)
+      : beforeCountry;
   if (!candidate) return null;
 
-  // The postcode rides with the town in most countries and leads it in a few.
+  // The postcode rides with the town in most countries and leads it in a few,
+  // and in some it is hyphenated (Japan's "160-8466").
   const withoutPostcode = candidate
     .replace(/\b[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d?[A-Z]{0,2}\b/g, ' ')
-    .replace(/\b\d{3,}\b/g, ' ')
+    .replace(/\b\d{3,}(?:-\d{2,})?\b/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 

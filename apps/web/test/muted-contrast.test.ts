@@ -33,6 +33,9 @@ const FILL_TOKENS = [
   '--surface-raised',
   '--surface-sunken',
   '--surface-tint',
+  // The Memories journal's page, and the prints laid on it.
+  '--paper',
+  '--paper-print',
 ] as const;
 
 type Oklch = readonly [l: number, c: number, h: number];

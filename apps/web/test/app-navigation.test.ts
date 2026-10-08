@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 
 import {
+  isImmersiveTripPath,
   isNavigationPathActive,
   isToolsPath,
   primaryNavigationDestinations,
@@ -43,4 +44,15 @@ test('the tools destination owns its launcher and child routes without claiming 
   expect(isToolsPath('/toolsmith')).toBe(false);
   expect(isToolsPath('/profile')).toBe(false);
   expect(isToolsPath('/trips')).toBe(false);
+});
+
+test('the global bar steps aside inside Trip Mode and the Memories journal, and nowhere else', () => {
+  expect(isImmersiveTripPath('/trips/trip-1/mode')).toBe(true);
+  expect(isImmersiveTripPath('/trips/trip-1/mode/today')).toBe(true);
+  expect(isImmersiveTripPath('/trips/trip-1/memories')).toBe(true);
+  expect(isImmersiveTripPath('/trips/trip-1/memories/')).toBe(true);
+  expect(isImmersiveTripPath('/trips/trip-1')).toBe(false);
+  expect(isImmersiveTripPath('/trips/trip-1/itinerary')).toBe(false);
+  expect(isImmersiveTripPath('/trips/trip-1/memories-old')).toBe(false);
+  expect(isImmersiveTripPath('/trips/mode')).toBe(false);
 });

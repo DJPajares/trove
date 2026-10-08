@@ -13,8 +13,8 @@ import { useTripCreation } from '@/components/trip-creation-provider';
 import { Button } from '@/components/ui/button';
 import { navigationTransition } from '@/lib/motion';
 import {
+  isImmersiveTripPath,
   isNavigationPathActive,
-  isTripModePath,
   primaryNavigationDestinations,
 } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
@@ -50,9 +50,10 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
     label: t(key),
   }));
 
-  // Trip Mode owns the bottom of the screen while a traveller is in it. The
-  // desktop rail stays: there is no thumb zone to compete for up there.
-  if (variant === 'mobile' && isTripModePath(pathname)) return null;
+  // Trip Mode and the Memories journal own the bottom of the screen while a
+  // traveller is in them. The desktop rail stays: there is no thumb zone to
+  // compete for up there.
+  if (variant === 'mobile' && isImmersiveTripPath(pathname)) return null;
 
   if (variant === 'desktop') {
     return (

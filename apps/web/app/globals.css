@@ -43,6 +43,15 @@
   --surface-hover: oklch(0.94 0.022 79);
   --surface-tint: oklch(0.944 0.028 86);
   --surface-media: oklch(0.36 0.052 115);
+  /* The Memories journal's page and the prints laid on it. Warmer and a step
+     deeper than --background, so a print's near-white border reads as an object
+     on the page rather than a gap in it (1.13:1, carried the rest of the way by
+     --shadow-print). Muted text clears AA on both - 5.43:1 on paper, 6.11:1 on
+     a print - and the stamp ink, --accent-strong, measures 5.36:1 on paper. */
+  --paper: oklch(0.95 0.024 82);
+  --paper-print: oklch(0.99 0.006 85);
+  /* A field note's ruled lines. Decorative, so alpha is fine and no ratio applies. */
+  --paper-rule: oklch(0.49 0.03 74 / 0.16);
   /* The branded media fallback, one tint per place category. Every pair stays
      dark in both themes, so its ink is the same ivory in both themes too -
      --primary-foreground could not do that job, because it flips to a dark walnut
@@ -89,8 +98,8 @@
      down to muted; the brighter amber a rating usually gets measures about 2:1
      on background and would fail. */
   --rating: oklch(0.62 0.13 80);
-  /* Stars over the cover scrim, which is dark in both themes, so this value does
-     not flip with the theme - the same reasoning as --media-fallback-foreground. */
+  /* Rating dots over the cover scrim, which is dark in both themes, so this value
+     does not flip with the theme - the same reasoning as --media-fallback-foreground. */
   --rating-on-media: oklch(0.85 0.13 82);
   --status-success: oklch(0.488 0.115 155);
   /* Dark enough to carry small warning text at WCAG AA on background, card,
@@ -191,6 +200,11 @@
   --shadow-card: 0 1px 2px oklch(0.285 0.039 47 / 0.05), 0 10px 28px oklch(0.455 0.07 115 / 0.09);
   --shadow-elevated:
     0 2px 4px oklch(0.285 0.039 47 / 0.07), 0 18px 44px oklch(0.455 0.07 115 / 0.14);
+  /* A print lying on the journal's page: a hairline contact shadow and a soft
+     fall-off that lifts it a few millimetres, never a floating card. */
+  --shadow-print:
+    0 1px 1px oklch(0.285 0.039 47 / 0.1), 0 8px 18px -6px oklch(0.285 0.039 47 / 0.22),
+    0 22px 40px -18px oklch(0.285 0.039 47 / 0.28);
   --layer-sticky: 40;
   /* Non-modal notices: above sticky chrome so they are never buried by it,
      below overlays so a dialog is never argued with by a toast. */
@@ -232,6 +246,12 @@
   --surface-hover: oklch(0.275 0.013 115);
   --surface-tint: oklch(0.248 0.026 112);
   --surface-media: oklch(0.288 0.046 115);
+  /* Night paper: warmer than the olive-black ground, with prints a step lighter
+     than the page they lie on. Muted text measures 7.70:1 on paper and 6.00:1
+     on a print; the stamp ink 8.56:1. */
+  --paper: oklch(0.2 0.014 75);
+  --paper-print: oklch(0.29 0.012 75);
+  --paper-rule: oklch(0.735 0.031 77 / 0.14);
   /* Deliberately the same value as in :root. The tints below it are dark in
      both themes, so their ink does not flip with the theme. */
   --media-fallback-foreground: oklch(0.978 0.013 80);
@@ -282,11 +302,16 @@
   --shadow-control: 0 1px 2px oklch(0.09 0.01 115 / 0.32);
   --shadow-card: 0 1px 2px oklch(0.09 0.01 115 / 0.22), 0 10px 28px oklch(0.09 0.01 115 / 0.24);
   --shadow-elevated: 0 2px 4px oklch(0.09 0.01 115 / 0.28), 0 18px 44px oklch(0.09 0.01 115 / 0.36);
+  --shadow-print: 0 1px 1px oklch(0.09 0.01 115 / 0.5), 0 10px 24px -8px oklch(0.09 0.01 115 / 0.7);
 }
 
 @theme inline {
   --font-sans: var(--font-instrument-sans), 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  /* The journal's serif. Its variable exists only inside the journal and on its
+     popups, so the fallback sits inside var(): outside them the face degrades
+     to a system serif instead of invalidating the whole declaration. */
+  --font-journal: var(--font-instrument-serif, ui-serif, Georgia, serif);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -315,6 +340,9 @@
   --color-surface-hover: var(--surface-hover);
   --color-surface-tint: var(--surface-tint);
   --color-surface-media: var(--surface-media);
+  --color-paper: var(--paper);
+  --color-paper-print: var(--paper-print);
+  --color-paper-rule: var(--paper-rule);
   --color-media-fallback-foreground: var(--media-fallback-foreground);
   --color-surface-overlay: var(--surface-overlay);
   --color-text-subtle: var(--text-subtle);
@@ -484,6 +512,43 @@ body {
   main:has([data-slot='trip-mode-shell']) {
     padding-top: var(--safe-top);
     padding-bottom: 0;
+  }
+}
+
+/* The Memories journal is the same kind of experience, but it opens on a cover
+   that runs to the top of a phone - under the status bar, beneath its own
+   header - and its dock floats rather than taking the bar's place. Below `md`,
+   where the global bar would have stood, the shell's reservations go. */
+@media (width < 48rem) {
+  main:has([data-slot='memories-journal']) {
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}
+
+/* The journal is read on paper. The canvas behind it - the page and the shell,
+   which outlast the journal's own box and show past its edges - turns to paper
+   while the journal is open and back the moment it closes. The grain is one
+   tiled layer for the whole page rather than a filter per element, so it is
+   rasterised once; it scrolls with the page, and steps aside for anyone who
+   has asked for more contrast. */
+html:has([data-slot='memories-journal']),
+html:has([data-slot='memories-journal']) body,
+[data-slot='app-shell']:has([data-slot='memories-journal']) {
+  background-color: var(--paper);
+}
+
+[data-slot='app-shell']:has([data-slot='memories-journal']) {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.2 0 0 0 0 0.15 0 0 0 0 0.1 0 0 0 0.07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+
+:where(.dark) [data-slot='app-shell']:has([data-slot='memories-journal']) {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.95 0 0 0 0 0.85 0 0 0 0.045 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+
+@media (prefers-contrast: more) {
+  [data-slot='app-shell']:has([data-slot='memories-journal']) {
+    background-image: none;
   }
 }
 

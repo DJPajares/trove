@@ -80,6 +80,9 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
         'min-h-dvh bg-surface text-foreground',
         isSignedIn && '[--header-offset:0px] md:[--header-offset:var(--header-height)]',
       )}
+      // Named so a screen can restyle the canvas around it without a prop: the
+      // Memories journal turns it to paper (globals.css).
+      data-slot="app-shell"
     >
       <a
         // Parks itself a full height above its own resting offset, so it stays

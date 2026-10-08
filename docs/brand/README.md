@@ -53,6 +53,10 @@ App and platform icons:
 
 The bare symbol switches only its bar between appearances (`--brand-symbol-bar`). The tile never changes.
 
+## Typography
+
+Instrument Sans sets the whole interface. Instrument Serif (SIL OFL 1.1), its serif companion, appears only in the Memories journal - the cover, chapter titles, notes and captions - and only that route loads it. It has one weight in regular and italic, so it is never set bold.
+
 ## Clear space and minimum size
 
 - Clear space is one ribbon width (14/64 of the symbol's size) on every side.

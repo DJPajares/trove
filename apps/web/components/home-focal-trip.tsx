@@ -4,7 +4,7 @@ import { X } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 
-import { ExperienceRatingSummary } from '@/components/experience-rating-field';
+import { ExperienceRatingSummary } from '@/components/experience-rating';
 import { TripCountries } from '@/components/trip-countries';
 import { TripDestinationActions } from '@/components/trip-destination-actions';
 import { TripFactChips } from '@/components/trip-fact-chips';

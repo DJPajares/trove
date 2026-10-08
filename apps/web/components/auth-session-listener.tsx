@@ -8,7 +8,10 @@ import { clearLocalPrivateData } from '@/lib/auth/sign-out';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 /** Keep already-open tabs aligned with a completed recovery or account switch. */
-export function AuthSessionListener({ userId }: Readonly<{ userId: string | null }>) {
+export function AuthSessionListener({
+  userId,
+  sessionId,
+}: Readonly<{ userId: string | null; sessionId: string | null }>) {
   useEffect(() => {
     const incoming = new URL(window.location.href);
     if (!['/auth/confirm', '/auth/callback'].includes(incoming.pathname)) {
@@ -27,6 +30,7 @@ export function AuthSessionListener({ userId }: Readonly<{ userId: string | null
     const supabase = createBrowserSupabaseClient();
     if (!supabase) return;
     let active = true;
+    let navigating = false;
     let lastToken: string | undefined;
     const subscription = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
@@ -34,7 +38,7 @@ export function AuthSessionListener({ userId }: Readonly<{ userId: string | null
         return;
       }
       if (event !== 'SIGNED_IN' && event !== 'PASSWORD_RECOVERY') return;
-      if (!session || (event === 'SIGNED_IN' && lastToken === session.access_token)) return;
+      if (!session || navigating || lastToken === session.access_token) return;
       lastToken = session.access_token;
       // Confirmation owns its own navigation. Other auth screens, including an
       // already-open reset form, must follow a new recovery session.
@@ -73,22 +77,34 @@ export function AuthSessionListener({ userId }: Readonly<{ userId: string | null
               recovery = false;
             }
           }
-          if (!active) return;
+          if (!active || navigating) return;
           if (identity.user.id !== userId) await clearLocalPrivateData();
-          if (!active) return;
+          if (!active || navigating) return;
           const current = new URL(window.location.href);
           if (['/auth/confirm', '/auth/callback'].includes(current.pathname)) return;
           if (recovery) {
+            // Restoring a stored session can emit SIGNED_IN before INITIAL_SESSION.
+            // Keep the form rendered for this user/session; a different session
+            // still reloads it so the server replaces the stale reset identity.
+            if (
+              current.pathname === '/reset-password' &&
+              identity.user.id === userId &&
+              identity.claims.session_id === sessionId
+            )
+              return;
             const next =
               current.searchParams.get('next') ??
               `${current.pathname}${current.search}${current.hash}`;
+            navigating = true;
             window.location.replace(withAuthNext('/reset-password', next));
-          } else if (identity.user.id !== userId && !isAuthFlowPath(current.pathname))
+          } else if (identity.user.id !== userId && !isAuthFlowPath(current.pathname)) {
+            navigating = true;
             window.location.replace(
               getSafeRedirectPath(
                 `${window.location.pathname}${window.location.search}${window.location.hash}`,
               ),
             );
+          }
         })().catch(() => undefined);
       }, 0);
     }).data.subscription;
@@ -96,6 +112,6 @@ export function AuthSessionListener({ userId }: Readonly<{ userId: string | null
       active = false;
       subscription.unsubscribe();
     };
-  }, [userId]);
+  }, [userId, sessionId]);
   return null;
 }

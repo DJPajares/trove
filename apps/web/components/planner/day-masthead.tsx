@@ -159,8 +159,11 @@ export function DayMasthead({
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 bg-gradient-to-t from-neutral-950/80 via-neutral-950/30 to-neutral-950/5"
         />
-        <div className="pointer-events-none relative flex min-h-44 flex-col justify-end p-4 text-media-fallback-foreground sm:min-h-52 sm:p-6 lg:min-h-56">
-          <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="pointer-events-none relative flex min-h-44 flex-col p-4 text-media-fallback-foreground sm:min-h-52 sm:p-6 lg:min-h-56">
+          {scoreChip ? (
+            <div className="pointer-events-auto max-w-full self-end">{scoreChip}</div>
+          ) : null}
+          <div className={cn('flex flex-1 flex-col justify-end', scoreChip && 'mt-3')}>
             <p aria-hidden="true" className="flex shrink-0 items-end gap-2 leading-none">
               <span className="pb-1 text-[length:var(--text-metadata)] font-semibold tracking-[0.14em] uppercase opacity-85">
                 {isToday ? t('today') : t('kicker')}
@@ -169,19 +172,18 @@ export function DayMasthead({
                 {paddedDayNumber(dayNumber)}
               </span>
             </p>
-            {scoreChip ? (
-              <div className="pointer-events-auto ms-auto max-w-full">{scoreChip}</div>
-            ) : null}
+            <h2
+              className="mt-1.5 text-[length:var(--text-section-title)] leading-tight font-semibold tracking-[-0.015em] text-balance break-words outline-none"
+              id={`itinerary-day-${dayId}`}
+              tabIndex={-1}
+            >
+              <span className="sr-only">{t('dayLabel', { number: dayNumber })}: </span>
+              {heading.source === 'date' ? longDate : heading.title}
+            </h2>
+            {heading.source === 'date' ? null : (
+              <p className="mt-1 text-sm opacity-85">{longDate}</p>
+            )}
           </div>
-          <h2
-            className="mt-1.5 text-[length:var(--text-section-title)] leading-tight font-semibold tracking-[-0.015em] text-balance break-words outline-none"
-            id={`itinerary-day-${dayId}`}
-            tabIndex={-1}
-          >
-            <span className="sr-only">{t('dayLabel', { number: dayNumber })}: </span>
-            {heading.source === 'date' ? longDate : heading.title}
-          </h2>
-          {heading.source === 'date' ? null : <p className="mt-1 text-sm opacity-85">{longDate}</p>}
         </div>
       </motion.div>
 

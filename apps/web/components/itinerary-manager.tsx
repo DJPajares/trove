@@ -1629,9 +1629,6 @@ export function ItineraryManager({
                         })}
                       </span>
                     ) : null}
-                    {routes?.segments.some((segment) => segment.mode === 'walk') ? (
-                      <span className="text-muted-foreground">{t('routes.walkingBeta')}</span>
-                    ) : null}
                   </p>
                 ) : null
               }

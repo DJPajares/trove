@@ -41,7 +41,6 @@ export function ItineraryRouteSummary({
   // "0 min, 0 km" would read as a failed estimate rather than an absent one.
   const noLocalTravel =
     summary !== undefined && summary.localSegmentCount === 0 && summary.totalSegmentCount > 0;
-  const hasWalkingRoute = data?.segments.some((segment) => segment.mode === 'walk') ?? false;
 
   return (
     <section
@@ -92,7 +91,6 @@ export function ItineraryRouteSummary({
             })}
           </span>
         ) : null}
-        {hasWalkingRoute ? <span className="text-muted-foreground">{t('walkingBeta')}</span> : null}
       </div>
     </section>
   );

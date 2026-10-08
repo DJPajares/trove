@@ -54,36 +54,32 @@ function JournalStoryMenu({
   );
 }
 
-/** How close to the end of the page counts as having reached it. */
-const END_OF_PAGE_PX = 160;
+/** Scrolling less than this either way is a tremor, not a direction. */
+const SCROLL_INTENT_PX = 8;
+/** On the cover, before the journal has begun, there is nothing to act on yet. */
+const NEAR_TOP_PX = 80;
 
 /**
- * The dock stays out of the way while the journal is read and appears only
- * once the reader has scrolled to the end; scrolling back up puts it away
- * again. The reading itself is never covered by controls.
+ * The dock follows the reader's direction: scrolling down brings it in,
+ * scrolling up puts it away, so it is there while the journal is being read
+ * on and out of the way when they go back. It stays away on the cover.
  */
-function useRevealAtEnd() {
+function useRevealOnScrollDown() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     let lastY = window.scrollY;
     const update = () => {
       const y = window.scrollY;
-      const atEnd =
-        window.innerHeight + y >= document.documentElement.scrollHeight - END_OF_PAGE_PX;
-      if (y < lastY - 1) setVisible(false);
-      else if (atEnd) setVisible(true);
-      else setVisible(false);
+      if (y <= NEAR_TOP_PX) setVisible(false);
+      else if (y > lastY + SCROLL_INTENT_PX) setVisible(true);
+      else if (y < lastY - SCROLL_INTENT_PX) setVisible(false);
+      else return;
       lastY = y;
     };
 
-    update();
     window.addEventListener('scroll', update, { passive: true });
-    window.addEventListener('resize', update);
-    return () => {
-      window.removeEventListener('scroll', update);
-      window.removeEventListener('resize', update);
-    };
+    return () => window.removeEventListener('scroll', update);
   }, []);
 
   return visible;
@@ -105,7 +101,7 @@ export function JournalDock({
   onContents,
 }: Readonly<JournalActionsProps>) {
   const t = useTranslations('memories.journal');
-  const visible = useRevealAtEnd();
+  const visible = useRevealOnScrollDown();
 
   return (
     <div

@@ -58,7 +58,7 @@ export function ItineraryRouteSummary({
     return (
       <div
         aria-label={t('loading')}
-        className="flex min-h-16 items-center gap-3 border-b border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground sm:px-6"
+        className="flex items-center gap-3 border-b border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground sm:px-6"
         role="status"
       >
         <Route aria-hidden="true" className="size-4 animate-pulse motion-reduce:animate-none" />
@@ -73,7 +73,6 @@ export function ItineraryRouteSummary({
   // "0 min, 0 km" would read as a failed estimate rather than an absent one.
   const noLocalTravel =
     summary !== undefined && summary.localSegmentCount === 0 && summary.totalSegmentCount > 0;
-  const hasGoogleRoutes = data?.segments.some((segment) => segment.provider === 'google') ?? false;
   const hasWalkingRoute = data?.segments.some((segment) => segment.mode === 'walk') ?? false;
 
   return (
@@ -81,7 +80,7 @@ export function ItineraryRouteSummary({
       aria-label={t('summaryLabel')}
       // The same minimum the loading row holds, so the summary and its
       // attribution land in a box that was already their size.
-      className="min-h-16 border-b border-border bg-muted/20 px-4 py-3 sm:px-6"
+      className="border-b border-border bg-muted/20 px-4 py-3 sm:px-6"
     >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         <span className="inline-flex items-center gap-2 font-medium">
@@ -114,7 +113,7 @@ export function ItineraryRouteSummary({
           renders — the Google attribution is an obligation, not a nicety — but
           on a phone they cost one row instead of four, which is four rows of
           the day the traveller gets to see instead. */}
-      <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
+      <div className="flex flex-wrap items-baseline text-xs">
         {data?.source === 'cache' ? (
           <span className="text-status-warning">
             {t('cachedRoute', {
@@ -126,9 +125,6 @@ export function ItineraryRouteSummary({
           </span>
         ) : null}
         {hasWalkingRoute ? <span className="text-muted-foreground">{t('walkingBeta')}</span> : null}
-        {hasGoogleRoutes ? (
-          <span className="text-[0.6875rem] text-muted-foreground">{t('googleAttribution')}</span>
-        ) : null}
       </div>
     </section>
   );

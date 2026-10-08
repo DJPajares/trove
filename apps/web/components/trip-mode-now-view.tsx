@@ -474,9 +474,6 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
               {route.distanceMeters !== null ? (
                 <span>{formatDistance(route.distanceMeters)}</span>
               ) : null}
-              {route.provider === 'google' ? (
-                <span className="w-full text-xs text-text-subtle">{t('googleAttribution')}</span>
-              ) : null}
             </div>
           ) : nextLegIsFlight ? (
             <p className="mt-4 border-t border-border pt-4 text-sm leading-6 text-muted-foreground">

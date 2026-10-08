@@ -13,7 +13,6 @@ import { ItineraryPlaceGroups } from '@/components/itinerary-place-groups';
 import { ItineraryBetterOrder } from '@/components/itinerary-better-order';
 import { ItineraryDayTimeSuggestions } from '@/components/itinerary-day-time-suggestions';
 import { PageState } from '@/components/page-state';
-import { ItineraryOverview, type ItineraryOverviewDisplay } from '@/components/itinerary-overview';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { ItineraryTripMap } from '@/components/itinerary-trip-map';
 import { ItineraryPlacesDrawer } from '@/components/itinerary-places-drawer';
@@ -29,6 +28,7 @@ import { PlanScoreSheet } from '@/components/planner/plan-score-sheet';
 import { PlannerDayView } from '@/components/planner/planner-day-view';
 import { PlannerMapPane } from '@/components/planner/planner-map-pane';
 import { MoveToDaySheet } from '@/components/planner/move-to-day-sheet';
+import { TripBoard, type TripBoardDisplay } from '@/components/planner/overview/trip-board';
 import { PlannerRibbon } from '@/components/planner/planner-ribbon';
 import { StaySheet } from '@/components/planner/stay-sheet';
 import { TimingSheet } from '@/components/planner/timing-sheet';
@@ -104,6 +104,7 @@ import { localityFromAddress, sameTown } from '@/lib/itinerary/day-place';
 import { buildDaySequence, dayStopNumbers, resolveDailyBases } from '@/lib/itinerary/day-sequence';
 import { daySketchPlaces } from '@/lib/itinerary/day-sketch';
 import { plannerDays } from '@/lib/itinerary/planner-days';
+import { stayChapters } from '@/lib/itinerary/stay-chapters';
 import {
   DuplicateAttemptTracker,
   refreshedItineraryContainsCopy,
@@ -356,7 +357,7 @@ export function ItineraryManager({
 
   // The whole trip's map waits to be asked for at every width, and is kept,
   // hidden, once it has been - behind the list and behind the Day view alike.
-  const [overviewDisplay, setOverviewDisplay] = useState<ItineraryOverviewDisplay>('list');
+  const [overviewDisplay, setOverviewDisplay] = useState<TripBoardDisplay>('list');
   const [tripMapMounted, setTripMapMounted] = useState(false);
   const {
     mount: shouldMountTripMap,
@@ -726,6 +727,11 @@ export function ItineraryManager({
     [currentScore, itinerary, today],
   );
   const selectedRibbonDay = ribbonDays.find((day) => day.id === selectedDayId) ?? null;
+  // The whole trip by where each night is spent, for the Overview.
+  const chapters = useMemo(
+    () => (itinerary ? stayChapters({ days: itinerary.days, plannerDays: ribbonDays }) : []),
+    [itinerary, ribbonDays],
+  );
 
   /**
    * A photograph of each day's town, asked for once for the whole trip: the
@@ -1353,7 +1359,7 @@ export function ItineraryManager({
     openDay(day.id);
   }
 
-  function changeOverviewDisplay(display: ItineraryOverviewDisplay) {
+  function changeOverviewDisplay(display: TripBoardDisplay) {
     setOverviewDisplay(display);
     if (display === 'map') setTripMapMounted(true);
   }
@@ -1418,16 +1424,17 @@ export function ItineraryManager({
       ) : null}
       {renderOverview ? (
         <div className={activeView === 'overview' ? 'contents' : 'hidden'}>
-          <ItineraryOverview
+          <TripBoard
             actions={
               <Button onClick={() => setPlacesDrawerOpen(true)} size="sm" variant="outline">
                 <Icons.Places aria-hidden="true" data-icon="inline-start" />
                 {tripPlacesTranslations('openPlaces')}
               </Button>
             }
+            chapters={chapters}
             days={itinerary.days}
             display={overviewDisplay}
-            locale={locale}
+            itemName={itemName}
             mapPanel={
               shouldMountTripMap ? (
                 <ItineraryTripMap
@@ -1453,9 +1460,19 @@ export function ItineraryManager({
             onDisplayChange={changeOverviewDisplay}
             onEditItem={openOverviewItem}
             onOpenDay={openDay}
-            resolveItemName={itemName}
+            sketchFor={(day) => {
+              // Drawn from coordinates the trip already holds: no leg is routed
+              // for the whole trip's view.
+              const places = daySketchPlaces(
+                buildDaySequence({ bases: resolveDailyBases({ day }), items: day.items }),
+                itinerary.tripPlaces,
+              );
+              const sketch = routeSketch(places, DAY_SKETCH_BOX, { minDistinct: 2 });
+              return sketch ? <DayRouteSketch places={places} sketch={sketch} /> : null;
+            }}
+            stayName={(tripPlaceId) => placeName(tripPlaceById(tripPlaceId))}
             timeFormat={preferences.timeFormat}
-            weather={weather}
+            weatherFor={(date) => tripWeatherForDate(weather ?? null, date)}
           />
         </div>
       ) : null}

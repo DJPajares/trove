@@ -1547,6 +1547,12 @@
       "timing": {
         "title": "When is {name}?",
         "description": "Choose a part of the day or an exact time, and how long it takes."
+      },
+      "board": {
+        "days": "{count, plural, one {Day {first}} other {Days {first}–{last}}}",
+        "nights": "{count, plural, one {# night} other {# nights}}",
+        "stops": "{count, plural, =0 {Nothing planned yet} one {# stop} other {# stops}}",
+        "more": "+{count} more"
       }
     },
     "overview": {
@@ -1554,12 +1560,7 @@
       "description": "{count, plural, one {One day in one view.} other {All # days in one view.}}",
       "itemsForDay": "Plans for day {number}",
       "editItem": "Open {name} in day view",
-      "collapseAll": "Collapse all",
-      "expandAll": "Expand all",
-      "collapseDay": "Collapse plans for {day}",
-      "expandDay": "Expand plans for {day}",
-      "emptyDay": "No plans yet",
-      "openDay": "Open day"
+      "emptyDay": "No plans yet"
     },
     "stopNumber": "Stop {number}",
     "daySettings": "Day settings",

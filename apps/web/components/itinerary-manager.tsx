@@ -99,6 +99,7 @@ import { useOnlineStatus } from '@/components/trip-sync-status';
 import { useTripContext } from '@/components/trip-provider';
 import { useCompactItinerary } from '@/hooks/use-compact-itinerary';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
+import { useDayHeaderPhotos } from '@/hooks/use-day-header-photos';
 import { withDayPartBands } from '@/lib/itinerary/day-bands';
 import { dayFacts, dayHeading } from '@/lib/itinerary/day-facts';
 import { localityFromAddress, sameTown } from '@/lib/itinerary/day-place';
@@ -123,12 +124,7 @@ import { useTripPlaceHours } from '@/lib/trip-places/use-trip-place-hours';
 import { untimedItems } from '@/lib/itinerary/day-time-suggestions';
 import { overviewMapLifecycle, planningMapLifecycle } from '@/lib/maps/map-retention';
 import { routeSketch } from '@/lib/maps/route-sketch';
-import {
-  editorialSubjectKey,
-  type EditorialImageReference,
-  type EditorialSubject,
-  MAX_EDITORIAL_IMAGE_SUBJECTS,
-} from '@/lib/media/editorial-images';
+import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
 import { problemsByStop } from '@/lib/plan-score/attention';
 import { serverNow } from '@/lib/plan-score/clock';
 import { currentAssessment } from '@/lib/plan-score/presentation';
@@ -734,28 +730,7 @@ export function ItineraryManager({
     [itinerary, ribbonDays],
   );
 
-  /**
-   * A photograph of each day's town, asked for once for the whole trip: the
-   * subjects are the trip's distinct towns, so moving between days asks for
-   * nothing. Only a town's name goes with it. A trip id would have the
-   * service pin the answer to the trip, as its cover.
-   */
-  const townSubjects = useMemo<EditorialSubject[]>(
-    () =>
-      [...new Set(ribbonDays.flatMap((day) => (day.town ? [day.town] : [])))]
-        .slice(0, MAX_EDITORIAL_IMAGE_SUBJECTS)
-        .map((name) => ({ category: 'destination', name })),
-    [ribbonDays],
-  );
-  const townImages = useEditorialImages(townSubjects);
-  // Only a picture of the town itself; a generic draw is a picture of nowhere.
-  const heroImage: EditorialImageReference | null = (() => {
-    const town = selectedRibbonDay?.town;
-    const first = town
-      ? townImages.get(editorialSubjectKey({ category: 'destination', name: town }))?.[0]
-      : undefined;
-    return first && first.matchKind !== 'generic' ? first : null;
-  })();
+  const dayPhotos = useDayHeaderPhotos(selectedDay ?? null, itinerary?.tripPlaces ?? []);
 
   // Special hours and holiday checks for the trip's stops, from stored evidence
   // only - the same entry the Insights card reads, so it is one request.
@@ -1630,7 +1605,7 @@ export function ItineraryManager({
               dayNumber={selectedIndex + 1}
               facts={dayFacts(selectedDay, routes)}
               heading={dayHeading(selectedDay, selectedRibbonDay?.town ?? null)}
-              hero={heroImage}
+              photos={dayPhotos}
               isToday={selectedRibbonDay?.isToday ?? false}
               note={selectedDay.notes}
               onNextDay={

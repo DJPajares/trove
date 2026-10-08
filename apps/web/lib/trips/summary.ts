@@ -65,8 +65,11 @@ function countryEditorialName(code: string | undefined): string | null {
  * "Mum's 60th" gets a literal photograph of that under a caption promising
  * travel, while a trip to Japan can always be pictured by Japan.
  */
-export function tripEditorialSubject(trip: Trip): EditorialSubject | null {
-  if (trip.coverPhotoUrl) return null;
+export function tripEditorialSubject(
+  trip: Trip,
+  options: { includeUploadedCover?: boolean } = {},
+): EditorialSubject | null {
+  if (trip.coverPhotoUrl && !options.includeUploadedCover) return null;
 
   const destinationName = trip.destinations[0]?.name.trim();
   const name = destinationName || countryEditorialName(trip.countries?.[0]) || trip.name.trim();
@@ -84,6 +87,12 @@ export function tripEditorialSubject(trip: Trip): EditorialSubject | null {
     ...(destinationName ? { placeId: trip.destinations[0]?.placeId } : {}),
     tripId: trip.id,
   };
+}
+
+/** Shared country imagery is supplemental and must never replace the cover pin. */
+export function tripSecondaryEditorialSubject(trip: Trip): EditorialSubject | null {
+  const name = countryEditorialName(trip.countries?.[0]);
+  return name ? { category: 'destination', name } : null;
 }
 
 /**

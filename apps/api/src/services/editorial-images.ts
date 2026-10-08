@@ -1,4 +1,5 @@
 import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
+import { contextualEditorialSubjectKey, type EditorialImageContext } from '@trove/types';
 import type { TrovePlaceCategory } from './places.js';
 
 export const EDITORIAL_IMAGE_PROVIDERS = ['pexels'] as const;
@@ -15,7 +16,7 @@ export const EDITORIAL_IMAGE_RESOLUTION_VERSION = 4;
  */
 export const MAX_GENERIC_IMAGES = 8;
 
-export type EditorialImageMatchKind = 'exact' | 'generic';
+export type EditorialImageMatchKind = 'exact' | 'generic' | 'contextual';
 
 /**
  * What Trove asks a photograph for. A trip asks by destination name; a place
@@ -23,6 +24,7 @@ export type EditorialImageMatchKind = 'exact' | 'generic';
  * depending on which one the traveller means.
  */
 export type EditorialImageSubject = {
+  context?: EditorialImageContext;
   address?: string | null;
   category?: TrovePlaceCategory;
   kind?: 'exact' | 'generic';
@@ -150,6 +152,7 @@ export function normalizeEditorialSubjectText(value: string) {
 }
 
 export function editorialSubjectKey(subject: EditorialImageSubject) {
+  if (subject.context) return contextualEditorialSubjectKey(subject.name, subject.context);
   const name = normalizeEditorialSubjectText(subject.name);
 
   if (subject.kind === 'generic') {
@@ -161,6 +164,10 @@ export function editorialSubjectKey(subject: EditorialImageSubject) {
   }
 
   return `${subject.category ?? 'destination'}:${name}`;
+}
+
+export function editorialMatchKind(subject: EditorialImageSubject): EditorialImageMatchKind {
+  return subject.kind === 'generic' ? 'generic' : subject.context ? 'contextual' : 'exact';
 }
 
 function requestSubject(request: EditorialImageResolveRequest): EditorialImageSubject {
@@ -248,7 +255,7 @@ export class EditorialImagesService {
       return images.length > 0
         ? {
             images,
-            matchKind: subject.kind === 'generic' ? 'generic' : 'exact',
+            matchKind: editorialMatchKind(subject),
             status: 'ok',
             subjectKey,
           }

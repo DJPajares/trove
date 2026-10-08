@@ -4,6 +4,7 @@ import {
   EDITORIAL_IMAGE_RESOLUTION_VERSION,
   MAX_GENERIC_IMAGES,
   editorialSubjectKey,
+  editorialMatchKind,
   EditorialImagesService,
   type EditorialImageProvider,
   type EditorialImageReference,
@@ -148,7 +149,7 @@ export class CachedEditorialImagesService extends EditorialImagesService {
         });
         results.set(request.subjectKey, {
           images: cached.images,
-          matchKind: request.subject.kind === 'generic' ? 'generic' : 'exact',
+          matchKind: editorialMatchKind(request.subject),
           status: 'ok',
           subjectKey: request.subjectKey,
         });
@@ -164,7 +165,7 @@ export class CachedEditorialImagesService extends EditorialImagesService {
           provider: 'pexels',
           source: this.source,
         });
-        if (cached.verifiedMiss) {
+        if (cached.verifiedMiss && !request.subject.context) {
           fallback.push(request);
         } else {
           results.set(request.subjectKey, { status: 'empty', subjectKey: request.subjectKey });
@@ -183,7 +184,11 @@ export class CachedEditorialImagesService extends EditorialImagesService {
 
         if (result.status === 'empty') {
           await this.persistVerifiedMiss(request);
-          fallback.push(request);
+          if (request.subject.context) {
+            results.set(request.subjectKey, result);
+          } else {
+            fallback.push(request);
+          }
           return;
         }
 
@@ -477,7 +482,7 @@ export class CachedEditorialImagesService extends EditorialImagesService {
       pins.push(this.pin(request, row?.id, context));
       return {
         images: existing,
-        matchKind: request.subject.kind === 'generic' ? 'generic' : 'exact',
+        matchKind: editorialMatchKind(request.subject),
         status: 'ok',
         subjectKey: request.subjectKey,
       };
@@ -542,7 +547,7 @@ export class CachedEditorialImagesService extends EditorialImagesService {
     pins.push(this.pin(request, imageSetId, context));
     return {
       images,
-      matchKind: request.subject.kind === 'generic' ? 'generic' : 'exact',
+      matchKind: editorialMatchKind(request.subject),
       status: 'ok',
       subjectKey: request.subjectKey,
     };
@@ -554,7 +559,7 @@ export class CachedEditorialImagesService extends EditorialImagesService {
     editorialImageSetId: string | undefined,
     context: EditorialImageResolveContext,
   ) {
-    if (!editorialImageSetId) return;
+    if (!editorialImageSetId || request.subject.context) return;
 
     const prisma = getPrismaClient();
 

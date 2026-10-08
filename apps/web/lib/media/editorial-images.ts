@@ -1,4 +1,5 @@
 import type { TrovePlaceCategory } from '@/lib/place-categories';
+import { contextualEditorialSubjectKey, type EditorialImageContext } from '@trove/types';
 import { getBrowserSession } from '@/lib/supabase/client';
 
 /**
@@ -13,7 +14,7 @@ export type EditorialImageAttribution = {
   providerPageUrl: string;
 };
 
-export type EditorialImageMatchKind = 'exact' | 'generic';
+export type EditorialImageMatchKind = 'exact' | 'generic' | 'contextual';
 
 /**
  * A reference to a photograph, never the photograph. `sourceUrl` is the
@@ -37,6 +38,7 @@ export type EditorialImageReference = {
  * of that row costs nothing.
  */
 export type EditorialSubject = {
+  context?: EditorialImageContext;
   category?: TrovePlaceCategory;
   name: string;
   placeId?: string;
@@ -76,10 +78,12 @@ const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
  * subjects with it and the server caches its answers under it.
  */
 export function editorialSubjectKey(subject: {
+  context?: EditorialImageContext;
   category?: TrovePlaceCategory;
   name: string;
   placeId?: string;
 }) {
+  if (subject.context) return contextualEditorialSubjectKey(subject.name, subject.context);
   if (subject.placeId) return `place:${subject.placeId.toLowerCase()}`;
 
   const name = subject.name
@@ -98,6 +102,7 @@ export function editorialSubjectKey(subject: {
  * a list or returning to a route must not ask again.
  */
 const resolvedImages = new Map<string, EditorialImageReference[] | null>();
+const inFlightImages = new Map<string, Promise<EditorialImageReference[] | null | undefined>>();
 
 /** Reads session-cached imagery without starting work, so revisiting a route paints it immediately. */
 export function readCachedEditorialImages(subjects: EditorialSubject[]) {
@@ -113,6 +118,7 @@ export function readCachedEditorialImages(subjects: EditorialSubject[]) {
 /** Test seam, and the only way this module's memory is ever discarded. */
 export function resetEditorialImageCache() {
   resolvedImages.clear();
+  inFlightImages.clear();
 }
 
 /** The stable representative image used by every non-gallery surface. */
@@ -193,53 +199,69 @@ async function requestEditorialImages(subjects: EditorialSubject[], accessToken:
  */
 export async function resolveEditorialImages(subjects: EditorialSubject[]) {
   const resolved = new Map<string, EditorialImageReference[]>();
-
   const pending = new Map<string, EditorialSubject>();
+  const waiting = new Map<string, Promise<EditorialImageReference[] | null | undefined>>();
   for (const subject of subjects) {
     if (!subject.name.trim()) continue;
-
     const key = editorialSubjectKey(subject);
     if (resolvedImages.has(key)) {
       const cached = resolvedImages.get(key);
       if (cached) resolved.set(key, cached);
-      continue;
+    } else if (inFlightImages.has(key)) {
+      waiting.set(key, inFlightImages.get(key)!);
+    } else if (!pending.has(key)) {
+      pending.set(key, subject);
     }
-    if (!pending.has(key)) pending.set(key, subject);
   }
 
-  if (pending.size === 0) return resolved;
-
-  try {
-    const accessToken = await getAccessToken();
-    if (!accessToken) return resolved;
-
-    // One resolve is one request, always. Splitting the overflow into parallel
-    // requests would turn a screen that asked for too much into several times
-    // the cost, silently - so the cap is enforced here rather than trusted to
-    // every call site, and the subjects past it render the branded fallback.
-    const batch = [...pending.values()].slice(0, MAX_EDITORIAL_IMAGE_SUBJECTS);
-
-    for (const image of await requestEditorialImages(batch, accessToken)) {
-      if (image.status === 'ok') {
-        const matchKind: EditorialImageMatchKind =
-          image.matchKind === 'generic' ? 'generic' : 'exact';
-        const references = image.images
-          .slice(0, matchKind === 'generic' ? MAX_GENERIC_IMAGES : image.images.length)
-          .map((reference) => ({ ...reference, matchKind }));
-
-        resolvedImages.set(image.subjectKey, references);
-        resolved.set(image.subjectKey, references);
-        continue;
+  const batch = [...pending.values()].slice(0, MAX_EDITORIAL_IMAGE_SUBJECTS);
+  if (batch.length) {
+    // Register before awaiting auth so overlapping surface batches share the
+    // same work even when the session itself has not returned yet.
+    const work = (async () => {
+      const results = new Map<string, EditorialImageReference[] | null>();
+      try {
+        const accessToken = await getAccessToken();
+        if (!accessToken) return results;
+        for (const image of await requestEditorialImages(batch, accessToken)) {
+          if (image.status === 'ok') {
+            const matchKind: EditorialImageMatchKind =
+              image.matchKind === 'generic'
+                ? 'generic'
+                : image.matchKind === 'contextual'
+                  ? 'contextual'
+                  : 'exact';
+            const references = image.images
+              .slice(0, matchKind === 'generic' ? MAX_GENERIC_IMAGES : image.images.length)
+              .map((reference) => ({ ...reference, matchKind }));
+            resolvedImages.set(image.subjectKey, references);
+            results.set(image.subjectKey, references);
+          } else if (image.status === 'empty') {
+            resolvedImages.set(image.subjectKey, null);
+            results.set(image.subjectKey, null);
+          }
+        }
+      } catch {
+        // Outages are not negative answers and remain retryable next visit.
       }
-
-      // An outage is not an answer, so only a definitive "no photograph" is
-      // remembered; retrying an unavailable subject on the next screen is
-      // cheaper than showing a fallback for the rest of the session.
-      if (image.status === 'empty') resolvedImages.set(image.subjectKey, null);
+      return results;
+    })();
+    for (const subject of batch) {
+      const key = editorialSubjectKey(subject);
+      const promise = work.then((results) => results.get(key));
+      inFlightImages.set(key, promise);
+      waiting.set(key, promise);
+      void promise.finally(() => {
+        if (inFlightImages.get(key) === promise) inFlightImages.delete(key);
+      });
     }
-  } catch {
-    return resolved;
   }
 
+  await Promise.all(
+    [...waiting].map(async ([key, promise]) => {
+      const references = await promise;
+      if (references) resolved.set(key, references);
+    }),
+  );
   return resolved;
 }

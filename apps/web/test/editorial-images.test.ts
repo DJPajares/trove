@@ -107,6 +107,38 @@ test('a screen asks for each distinct subject once', async () => {
   expect(resolved.get('destination:lisbon')?.[0]?.attribution).toStrictEqual(attribution);
 });
 
+test('overlapping concurrent surface batches share in-flight subject resolution', async () => {
+  let finish!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const fetchMock = vi.fn(async () => {
+    await gate;
+    return respond([image('destination:lisbon')]);
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const first = resolveEditorialImages([{ name: 'Lisbon' }]);
+  const second = resolveEditorialImages([{ name: 'Lisbon' }]);
+  finish();
+  const results = await Promise.all([first, second]);
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(results[0]?.get('destination:lisbon')).toEqual(results[1]?.get('destination:lisbon'));
+});
+
+test('contextual provenance survives the browser cache without becoming exact', async () => {
+  const subject = { name: 'Tokyo', context: { area: 'Tokyo', countryCode: 'JP' } };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      respond([{ ...image(editorialSubjectKey(subject)), matchKind: 'contextual' }]),
+    ),
+  );
+  const first = await resolveEditorialImages([subject]);
+  const second = await resolveEditorialImages([subject]);
+  expect(first.get(editorialSubjectKey(subject))?.[0]?.matchKind).toBe('contextual');
+  expect(second).toEqual(first);
+});
+
 test('same-name places are requested separately while repeat canonical IDs are deduplicated', async () => {
   const fetchMock = vi.fn(async (..._call: FetchCall) =>
     respond([image('place:place-a'), image('place:place-b')]),

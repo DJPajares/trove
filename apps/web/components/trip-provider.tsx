@@ -3,20 +3,24 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
 
-import { useEditorialImages } from '@/hooks/use-editorial-images';
+import { useEditorialImageResolution } from '@/hooks/use-editorial-images';
+import { tripSecondaryImages } from '@/lib/media/day-header-photos';
 import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { apiErrorStatus } from '@/lib/query/client';
 import { queryKeys } from '@/lib/query/keys';
 import { fetchTrip, type Trip } from '@/lib/trips/api';
 import { cacheSavedTrip } from '@/lib/trips/cache';
-import { tripEditorialSubject } from '@/lib/trips/summary';
+import { tripEditorialSubject, tripSecondaryEditorialSubject } from '@/lib/trips/summary';
 
 export type TripLoadStatus = 'error' | 'loading' | 'missing' | 'ready';
+
+const EMPTY_IMAGES: EditorialImageReference[] = [];
 
 type TripContextValue = {
   /** The photograph the trip's cover falls back to, or null while unresolved. */
   editorial: EditorialImageReference | null;
+  dayFallbackImages: EditorialImageReference[];
   refresh: () => void;
   /** Writes back a trip the traveller just saved, without a second round trip. */
   setTrip: (trip: Trip) => void;
@@ -62,13 +66,31 @@ export function TripProvider({
         : 'error'
       : 'ready';
 
-  // One subject for the whole trip, and none at all once the traveller has
-  // given the trip a cover of its own.
-  const subject = trip ? tripEditorialSubject(trip) : null;
-  const editorialImages = useEditorialImages(subject ? [subject] : []);
-  const editorial = subject
-    ? editorialCoverImage(editorialImages.get(editorialSubjectKey(subject)), trip?.id ?? tripId)
-    : null;
+  // Resolve the secondary role even when the traveller supplied a cover.
+  const subject = trip ? tripEditorialSubject(trip, { includeUploadedCover: true }) : null;
+  const { images: editorialImages, isResolved } = useEditorialImageResolution(
+    subject ? [subject] : [],
+  );
+  const collection = subject
+    ? (editorialImages.get(editorialSubjectKey(subject)) ?? EMPTY_IMAGES)
+    : EMPTY_IMAGES;
+  const editorial = editorialCoverImage(collection, trip?.id ?? tripId);
+  const secondary = tripSecondaryImages(collection, trip?.id ?? tripId);
+  const supplementalSubject =
+    trip && isResolved && secondary.length === 0 ? tripSecondaryEditorialSubject(trip) : null;
+  const needsSupplement =
+    supplementalSubject &&
+    (!subject || editorialSubjectKey(supplementalSubject) !== editorialSubjectKey(subject));
+  const { images: supplementalImages } = useEditorialImageResolution(
+    needsSupplement ? [supplementalSubject] : [],
+  );
+  const supplemental = supplementalSubject
+    ? (supplementalImages.get(editorialSubjectKey(supplementalSubject)) ?? EMPTY_IMAGES)
+    : EMPTY_IMAGES;
+  const dayFallbackImages = useMemo(
+    () => tripSecondaryImages(collection, trip?.id ?? tripId, supplemental),
+    [collection, supplemental, trip?.id, tripId],
+  );
 
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.trip(tripId) });
@@ -82,8 +104,8 @@ export function TripProvider({
   );
 
   const value = useMemo<TripContextValue>(
-    () => ({ editorial, refresh, setTrip: replaceTrip, status, trip, tripId }),
-    [editorial, refresh, replaceTrip, status, trip, tripId],
+    () => ({ dayFallbackImages, editorial, refresh, setTrip: replaceTrip, status, trip, tripId }),
+    [dayFallbackImages, editorial, refresh, replaceTrip, status, trip, tripId],
   );
 
   return <TripContext.Provider value={value}>{children}</TripContext.Provider>;

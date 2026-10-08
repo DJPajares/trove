@@ -17,11 +17,10 @@ const EMPTY_IMAGES: ReadonlyMap<string, EditorialImageReference[]> = new Map();
 /**
  * Resolves a surface's editorial photography, keyed by subject.
  *
- * It starts empty so first paint is the branded fallback rather than a hole,
- * and it never surfaces a failure: an unresolved subject is simply absent from
- * the map. Callers pass the subjects they still need - a trip with its own
- * cover should not be in the list at all - and read the result back with
- * `editorialSubjectKey`.
+ * It starts empty so callers can paint their fallback immediately, and it
+ * never surfaces a failure: an unresolved subject is simply absent from the
+ * map. Callers pass the subjects their media roles need and read the result
+ * back with `editorialSubjectKey`.
  *
  * Two caches sit behind this, and they answer different questions. The module
  * memo inside `resolveEditorialImages` dedupes across *overlapping* subject
@@ -31,7 +30,7 @@ const EMPTY_IMAGES: ReadonlyMap<string, EditorialImageReference[]> = new Map();
  * without a round trip. Photography changes on a 90-day cadence, so neither is
  * ever refetched on a timer.
  */
-export function useEditorialImages(subjects: EditorialSubject[]) {
+export function useEditorialImageResolution(subjects: EditorialSubject[]) {
   // The subjects array is rebuilt on every render, so everything below keys on
   // what is actually being asked for rather than on the array's identity.
   const subjectKeys = subjects.map(editorialSubjectKey).sort();
@@ -50,7 +49,7 @@ export function useEditorialImages(subjects: EditorialSubject[]) {
     queryKey: queryKeys.editorialImages(subjectKeys),
   });
 
-  return useMemo(() => {
+  const images = useMemo(() => {
     if (!subjectSignature) return EMPTY_IMAGES;
 
     // The session memo wins where it has an answer, because it stays correct
@@ -63,4 +62,9 @@ export function useEditorialImages(subjects: EditorialSubject[]) {
     return images.size > 0 ? images : EMPTY_IMAGES;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, subjectSignature]);
+  return { images, isResolved: subjectKeys.length === 0 || data !== undefined };
+}
+
+export function useEditorialImages(subjects: EditorialSubject[]) {
+  return useEditorialImageResolution(subjects).images;
 }

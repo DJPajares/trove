@@ -5,13 +5,13 @@ import { motion, useReducedMotion, type PanInfo } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Fragment, type ReactNode } from 'react';
 
-import { MediaFrame } from '@/components/media-frame';
+import { DayHeaderMedia } from '@/components/day-header-media';
 import { usePreferences } from '@/components/preferences-provider';
 import { TripDayWeather } from '@/components/trip-day-weather';
 import type { DayFacts, dayHeading } from '@/lib/itinerary/day-facts';
 import { formatDistanceValue } from '@/lib/itinerary/format-distance';
 import { formatPlannedDuration, formatTravelDuration } from '@/lib/itinerary/route-format';
-import type { EditorialImageReference } from '@/lib/media/editorial-images';
+import type { TripMediaSource } from '@/lib/media/trip-media';
 import { cn } from '@/lib/utils';
 import type { TripWeatherDay } from '@/lib/weather/api';
 import * as Icons from '@/lib/icons';
@@ -50,8 +50,8 @@ function FactsLine({ children }: Readonly<{ children: ReactNode[] }>) {
 /**
  * The top of a day: what it is called, where it is, and what shape it is in.
  *
- * It opens on a photograph of the day's town - editorial, free and cached, and
- * only ever a picture of that town; anything less exact is the branded tile -
+ * It opens on the shared content-aware day photograph, with a trip secondary
+ * image and a bundled photographic fallback keeping the frame complete,
  * with the day's number and name set over it. Beneath, one line of facts, the
  * Stay it runs from, and the day's route as a sketch that opens the real map.
  *
@@ -68,7 +68,7 @@ export function DayMasthead({
   dayNumber,
   facts,
   heading,
-  hero,
+  photos,
   isToday,
   note,
   onNextDay,
@@ -92,7 +92,7 @@ export function DayMasthead({
   dayNumber: number;
   facts: DayFacts;
   heading: ReturnType<typeof dayHeading>;
-  hero: EditorialImageReference | null;
+  photos: readonly TripMediaSource[];
   isToday: boolean;
   note: string | null;
   onNextDay?: () => void;
@@ -145,14 +145,14 @@ export function DayMasthead({
         dragSnapToOrigin
         onDragEnd={onSwipe}
       >
-        <MediaFrame
+        <DayHeaderMedia
           alt=""
           category="destination"
           className="h-44 rounded-none sm:h-52 lg:h-56"
           dataSlot="day-masthead-photo"
           preload
           sizes="(max-width: 1023px) 100vw, 640px"
-          source={hero ? { kind: 'editorial', reference: hero } : { kind: 'fallback' }}
+          photos={photos}
           variant="banner"
         />
         <div

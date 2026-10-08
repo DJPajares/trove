@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { DAY_PHOTO_THEME_TERMS } from '@trove/types';
 
 import type { EditorialImagesService } from '../services/editorial-images.js';
 import { TROVE_PLACE_CATEGORIES } from '../services/places.js';
@@ -16,12 +17,31 @@ const resolveEditorialImagesSchema = z
       .array(
         z
           .object({
+            context: z
+              .object({
+                area: z.string().trim().min(1).max(200),
+                countryCode: z
+                  .string()
+                  .regex(/^[A-Z]{2}$/)
+                  .optional(),
+                theme: z
+                  .enum(
+                    Object.keys(DAY_PHOTO_THEME_TERMS) as [
+                      keyof typeof DAY_PHOTO_THEME_TERMS,
+                      ...Array<keyof typeof DAY_PHOTO_THEME_TERMS>,
+                    ],
+                  )
+                  .optional(),
+              })
+              .strict()
+              .optional(),
             category: z.enum(TROVE_PLACE_CATEGORIES).optional(),
             name: z.string().trim().min(1).max(200),
             placeId: z.uuid().optional(),
             tripId: z.uuid().optional(),
           })
-          .strict(),
+          .strict()
+          .refine((subject) => !subject.context || (!subject.placeId && !subject.tripId)),
       )
       .min(1)
       .max(MAX_EDITORIAL_IMAGE_SUBJECTS),
@@ -47,9 +67,9 @@ export function createEditorialImagesControllers(service: EditorialImagesService
       }
 
       const images = await service.resolveMany(
-        parsed.data.subjects.map(({ category, name, placeId, tripId }) => ({
+        parsed.data.subjects.map(({ category, context, name, placeId, tripId }) => ({
           placeId,
-          subject: { category, name },
+          subject: { category, context, name },
           tripId,
         })),
         { ownerId: request.authUserId },

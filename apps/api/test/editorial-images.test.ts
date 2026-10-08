@@ -1099,3 +1099,54 @@ test('cover fit prefers a wide frame over a tall one, and size breaks the rest',
   expect(editorialCoverFitScore({ height: null, width: null })).toBe(0);
   expect(editorialCoverFitScore({ height: 0, width: 0 })).toBe(0);
 });
+
+test('contextual photos must corroborate geography and the requested theme', () => {
+  const subject: EditorialImageSubject = {
+    name: 'Tokyo',
+    context: { area: 'Tokyo', countryCode: 'JP', theme: 'nightlife' },
+  };
+  expect(buildPexelsQuery(subject)).toBe('Tokyo Japan night');
+  expect(
+    editorialMatchScore(subject, { altText: 'Tokyo Japan illuminated at night' }),
+  ).toBeGreaterThan(0);
+  expect(editorialMatchScore(subject, { altText: 'Tokyo skyline Japan during the day' })).toBe(0);
+  expect(editorialMatchScore(subject, { altText: 'Paris France at night' })).toBe(0);
+  expect(editorialMatchScore(subject, { altText: 'Tokyo nightlife in the United States' })).toBe(0);
+});
+
+test('contextual collections use isolated keys, retain provenance and never pin domain rows', async () => {
+  const { provider, subjects } = countingProvider();
+  const service = new CachedEditorialImagesService(
+    provider,
+    () => new Date('2026-10-08T00:00:00.000Z'),
+  );
+  const subject: EditorialImageSubject = {
+    name: 'Tokyo',
+    context: { area: 'Tokyo', countryCode: 'JP' },
+  };
+  const first = await service.resolveMany([{ subject, tripId: 'trip', placeId: 'place' }], owner);
+  const second = await service.resolveMany([{ subject }], owner);
+  expect(first[0]).toMatchObject({ status: 'ok', matchKind: 'contextual' });
+  expect(second[0]).toMatchObject({ status: 'ok', matchKind: 'contextual' });
+  expect(subjects).toHaveLength(1);
+  expect(tripUpdates).toHaveLength(0);
+  expect(placeUpdates).toHaveLength(0);
+  expect(editorialSubjectKey(subject)).toBe('day:v1:["tokyo","tokyo","JP",""]');
+});
+
+test('a contextual miss is negatively cached without fetching an irrelevant generic pool', async () => {
+  const { provider, subjects } = countingProvider(() => []);
+  const service = new CachedEditorialImagesService(
+    provider,
+    () => new Date('2026-10-08T00:00:00.000Z'),
+  );
+  const subject: EditorialImageSubject = {
+    name: 'Tokyo',
+    context: { area: 'Tokyo', countryCode: 'JP', theme: 'market' },
+  };
+  const first = await service.resolveMany([{ subject }], owner);
+  const second = await service.resolveMany([{ subject }], owner);
+  expect(first[0]?.status).toBe('empty');
+  expect(second[0]?.status).toBe('empty');
+  expect(subjects).toHaveLength(1);
+});

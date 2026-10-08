@@ -22,6 +22,16 @@ export type PlaceMediaSource =
 
 export type TripMediaVariant = 'banner' | 'card' | 'cover' | 'hero' | 'thumbnail';
 
+export function mediaSourceKey(source: TripMediaSource) {
+  return source.kind === 'editorial'
+    ? `editorial:${source.reference.sourceUrl}`
+    : source.kind === 'fallback'
+      ? 'fallback'
+      : source.kind === 'local'
+        ? `local:${source.src.src}`
+        : `${source.kind}:${source.url}`;
+}
+
 type ResolveTripMediaSourceInput = {
   coverUrl?: string | null;
   editorial?: EditorialImageReference | null;

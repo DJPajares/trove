@@ -1,4 +1,5 @@
 import { getAllCountries } from 'countries-and-timezones';
+import { DAY_PHOTO_THEME_TERMS } from '@trove/types';
 
 import { categorizePlaceTypes } from './place-categories.js';
 import { normalizeEditorialSubjectText, type EditorialImageSubject } from './editorial-images.js';
@@ -113,6 +114,10 @@ function normalizedTokens(value: string) {
     .split(/\s+/)
     .filter(Boolean);
 }
+
+const COUNTRY_NAMES_BY_CODE = new Map<string, string>(
+  Object.values(getAllCountries()).map((country) => [country.id, country.name]),
+);
 
 const COUNTRY_CODES_BY_NAME = new Map(
   Object.values(getAllCountries()).map((country) => [
@@ -250,6 +255,18 @@ function appendUniquePart(parts: string[], value: string | null | undefined) {
 /** Pexels supports keywords, not coordinates or Google Place identifiers. */
 export function buildEditorialSearchQuery(subject: EditorialImageSubject) {
   const parts: string[] = [];
+  if (subject.context) {
+    appendUniquePart(parts, subject.context.area);
+    appendUniquePart(
+      parts,
+      subject.context.countryCode ? COUNTRY_NAMES_BY_CODE.get(subject.context.countryCode) : null,
+    );
+    appendUniquePart(
+      parts,
+      subject.context.theme ? DAY_PHOTO_THEME_TERMS[subject.context.theme][0] : null,
+    );
+    return parts.join(' ').slice(0, MAX_EDITORIAL_QUERY_LENGTH);
+  }
   appendUniquePart(parts, subject.name);
 
   if (subject.kind !== 'generic') {
@@ -317,8 +334,30 @@ function photoDescription(photo: EditorialPhotoEvidence) {
  * suffix. Country/locality corroborates abbreviated names, while a conflicting
  * country rules out an otherwise convincing namesake.
  */
-export function editorialMatchScore(subject: EditorialImageSubject, photo: EditorialPhotoEvidence) {
+export function editorialMatchScore(
+  subject: EditorialImageSubject,
+  photo: EditorialPhotoEvidence,
+): number {
   if (subject.kind === 'generic') return 1;
+
+  if (subject.context) {
+    const { area, countryCode, theme } = subject.context;
+    const country = countryCode ? COUNTRY_NAMES_BY_CODE.get(countryCode) : undefined;
+    const geographicScore = editorialMatchScore(
+      {
+        category: 'destination',
+        name: area,
+        address: country ? `${area}, ${area}, ${country}` : undefined,
+      },
+      photo,
+    );
+    if (!geographicScore) return 0;
+    if (!theme) return geographicScore;
+    const tokens = new Set(photoDescription(photo).flatMap(tokenVariants));
+    return DAY_PHOTO_THEME_TERMS[theme].some((term) => evidenceContainsToken(tokens, term))
+      ? geographicScore + 20
+      : 0;
+  }
 
   const nameTokens = normalizedTokens(subject.name).filter(
     (token) => !PLACE_NAME_STOP_WORDS.has(token),

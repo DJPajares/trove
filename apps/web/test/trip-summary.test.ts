@@ -76,6 +76,10 @@ test('a trip the traveller gave a cover to asks for no photograph', () => {
   });
 
   expect(tripEditorialSubject(withCover)).toBeNull();
+  expect(tripEditorialSubject(withCover, { includeUploadedCover: true })).toMatchObject({
+    name: 'Tokyo',
+    tripId: 'a',
+  });
 });
 
 test('a trip is pictured by its first destination, or failing that its own name', () => {

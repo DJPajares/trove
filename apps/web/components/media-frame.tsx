@@ -8,9 +8,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { pexelsImageLoader } from '@/lib/media/pexels-loader';
 import { resolvePlaceCategoryFallback } from '@/lib/media/place-category-fallback';
-import type { TripMediaSource, TripMediaVariant } from '@/lib/media/trip-media';
+import {
+  mediaSourceKey,
+  type TripMediaSource,
+  type TripMediaVariant,
+} from '@/lib/media/trip-media';
 import type { TrovePlaceCategory } from '@/lib/place-categories';
 import { cn } from '@/lib/utils';
+
+// Day-photo failures are shared across planner and Trip Mode for this session.
+const failedDayPhotoSources = new Set<string>();
 
 const frameVariants = cva(
   'relative isolate block overflow-hidden bg-surface-media text-primary-foreground',
@@ -45,6 +52,9 @@ export type MediaFrameProps = {
   preload?: boolean;
   sizes?: string;
   source: TripMediaSource;
+  fallbackSources?: readonly TripMediaSource[];
+  /** An embedded photographic underlay, available even before a local image loads. */
+  photographicPlaceholder?: string;
   variant?: TripMediaVariant;
 };
 
@@ -92,9 +102,8 @@ export function BrandedFallback({
  * plain opacity transition on a duration token, which the global reduced-motion
  * rule collapses to nothing.
  *
- * `onError` is the whole of Trove's resilience story for hotlinked imagery: a
- * blocked host, an offline device and a provider outage all end here, and all
- * end as the branded fallback rather than as a broken image.
+ * Errors advance an opt-in photo chain; other media surfaces retain their
+ * branded fallback. Day headers keep a photographic underlay while loading.
  */
 function EditorialImage({
   alt,
@@ -102,23 +111,27 @@ function EditorialImage({
   preload,
   reference,
   sizes,
+  hasPhotographicPlaceholder = false,
 }: Readonly<{
   alt: string;
   onError: () => void;
   preload: boolean;
   reference: EditorialImageReference;
+  hasPhotographicPlaceholder?: boolean;
   sizes?: string;
 }>) {
   const [loaded, setLoaded] = useState(false);
 
   return (
     <>
-      <Skeleton
-        className={cn(
-          'absolute inset-0 rounded-none transition-opacity duration-[var(--motion-standard)]',
-          loaded ? 'pointer-events-none opacity-0' : 'opacity-100',
-        )}
-      />
+      {hasPhotographicPlaceholder ? null : (
+        <Skeleton
+          className={cn(
+            'absolute inset-0 rounded-none transition-opacity duration-[var(--motion-standard)]',
+            loaded ? 'pointer-events-none opacity-0' : 'opacity-100',
+          )}
+        />
+      )}
       <Image
         alt={alt}
         className={cn(
@@ -155,29 +168,48 @@ export function MediaFrame({
   sizes,
   source,
   variant = 'card',
+  fallbackSources = [],
+  photographicPlaceholder,
 }: Readonly<MediaFrameProps>) {
-  const sourceKey =
-    source.kind === 'editorial'
-      ? `editorial:${source.reference.sourceUrl}`
-      : source.kind === 'fallback'
-        ? 'fallback'
-        : source.kind === 'local'
-          ? `local:${source.src.src}`
-          : `${source.kind}:${source.url}`;
-  const [unreachableSourceKey, setUnreachableSourceKey] = useState<string | null>(null);
+  const [unreachableSourceKeys, setUnreachableSourceKeys] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [loadedSourceKey, setLoadedSourceKey] = useState<string | null>(null);
+  const photoChain = Boolean(photographicPlaceholder || fallbackSources.length);
+  const resolved =
+    [source, ...fallbackSources].find((candidate) => {
+      const key = mediaSourceKey(candidate);
+      return !unreachableSourceKeys.has(key) && !(photoChain && failedDayPhotoSources.has(key));
+    }) ?? ({ kind: 'fallback' } as const);
+  const sourceKey = mediaSourceKey(resolved);
   const markUnreachable = () => {
-    setUnreachableSourceKey(sourceKey);
+    if (photoChain) {
+      failedDayPhotoSources.add(sourceKey);
+      if (failedDayPhotoSources.size > 256)
+        failedDayPhotoSources.delete(failedDayPhotoSources.values().next().value!);
+    }
+    setUnreachableSourceKeys((keys) => new Set([...keys, sourceKey]));
     onUnreachable?.();
   };
   const frameClassName = cn(frameVariants({ variant }), className);
-  const resolved = unreachableSourceKey === sourceKey ? ({ kind: 'fallback' } as const) : source;
   const loaded = loadedSourceKey === sourceKey;
+  const photographicStyle = photographicPlaceholder
+    ? {
+        backgroundImage: `url("${photographicPlaceholder}")`,
+        backgroundPosition: 'center',
+        backgroundSize: 'cover',
+      }
+    : undefined;
 
   if (resolved.kind === 'fallback') {
     return (
-      <span className={frameClassName} data-media-kind="fallback" data-slot={dataSlot}>
-        <BrandedFallback alt={alt} category={category} />
+      <span
+        className={frameClassName}
+        data-media-kind={photographicPlaceholder ? 'local-preview' : 'fallback'}
+        data-slot={dataSlot}
+        style={photographicStyle}
+      >
+        {photographicPlaceholder ? null : <BrandedFallback alt={alt} category={category} />}
       </span>
     );
   }
@@ -188,11 +220,10 @@ export function MediaFrame({
         className={frameClassName}
         data-media-kind="editorial"
         data-slot={dataSlot}
-        style={
-          resolved.reference.dominantColor
-            ? { backgroundColor: resolved.reference.dominantColor }
-            : undefined
-        }
+        style={{
+          ...photographicStyle,
+          backgroundColor: resolved.reference.dominantColor ?? undefined,
+        }}
       >
         <EditorialImage
           alt={alt}
@@ -200,6 +231,7 @@ export function MediaFrame({
           onError={markUnreachable}
           preload={preload}
           reference={resolved.reference}
+          hasPhotographicPlaceholder={Boolean(photographicPlaceholder)}
           sizes={sizes}
         />
       </span>
@@ -208,13 +240,20 @@ export function MediaFrame({
 
   if (resolved.kind === 'memory' && /^(blob:|data:)/.test(resolved.url)) {
     return (
-      <span className={frameClassName} data-media-kind="memory" data-slot={dataSlot}>
-        <Skeleton
-          className={cn(
-            'absolute inset-0 rounded-none transition-opacity duration-[var(--motion-standard)]',
-            loaded ? 'pointer-events-none opacity-0' : 'opacity-100',
-          )}
-        />
+      <span
+        className={frameClassName}
+        data-media-kind="memory"
+        data-slot={dataSlot}
+        style={photographicStyle}
+      >
+        {photographicPlaceholder ? null : (
+          <Skeleton
+            className={cn(
+              'absolute inset-0 rounded-none transition-opacity duration-[var(--motion-standard)]',
+              loaded ? 'pointer-events-none opacity-0' : 'opacity-100',
+            )}
+          />
+        )}
         {/* Offline Memory previews use browser-local URLs that Next Image cannot optimize. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -238,13 +277,20 @@ export function MediaFrame({
   const src = resolved.kind === 'local' ? resolved.src : resolved.url;
 
   return (
-    <span className={frameClassName} data-media-kind={resolved.kind} data-slot={dataSlot}>
-      <Skeleton
-        className={cn(
-          'absolute inset-0 rounded-none transition-opacity duration-[var(--motion-standard)]',
-          loaded ? 'pointer-events-none opacity-0' : 'opacity-100',
-        )}
-      />
+    <span
+      className={frameClassName}
+      data-media-kind={resolved.kind}
+      data-slot={dataSlot}
+      style={photographicStyle}
+    >
+      {photographicPlaceholder ? null : (
+        <Skeleton
+          className={cn(
+            'absolute inset-0 rounded-none transition-opacity duration-[var(--motion-standard)]',
+            loaded ? 'pointer-events-none opacity-0' : 'opacity-100',
+          )}
+        />
+      )}
       <Image
         alt={alt}
         className={cn(
@@ -257,7 +303,7 @@ export function MediaFrame({
         preload={preload}
         sizes={sizes}
         src={src}
-        unoptimized={resolved.kind !== 'local'}
+        unoptimized={resolved.kind !== 'local' || Boolean(photographicPlaceholder)}
       />
     </span>
   );

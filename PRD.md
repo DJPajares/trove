@@ -321,16 +321,26 @@ Rules:
 
 - Sourced from a free editorial photography provider, resolved on demand for a destination name, or a place name and its category.
 - Resolution is deterministic. The same subject resolves the same ordered collection across sessions and across travellers. The first photograph is the stable representative image used by covers and thumbnails.
-- A collection contains at least one and at most three photographs. Place details may present the full collection as a carousel when Google has no usable photo of the place (11.5); other surfaces use its first photograph.
+- A collection contains at least one and at most three photographs. Place details may present the full collection as a carousel when Google has no usable photo of the place (11.5); other surfaces use its first photograph except day headers, which may use a distinct secondary trip photograph as fallback.
 - Only each photograph's **reference** is stored: one unsized source URL, attribution metadata, intrinsic dimensions, provider alt text, and a dominant colour used as a loading placeholder. Responsive display URLs are derived at render time. Image bytes are never copied into Trove Storage, which stays user-owned media only.
 - A stored collection is dated and re-resolved once stale, in the same spirit as 11.7. Fresh collections are read from Trove's database and never call the editorial provider.
 - Attribution metadata is required whenever an image URL is returned, even where an authenticated surface intentionally does not render a visible credit. Public editorial surfaces may render the provider credit in their own layout; authenticated Home, Trips, and place details do not show photo-credit captions.
 - Source permissions and attribution requirements must be compatible with this design. A hidden caption preference is not permission to omit attribution that a provider requires; use a compatible source or the branded fallback.
 - Provider alt text is treated as a photographic description of the editorial image, not as factual information about the destination or Place. Place details may show it beneath the active photograph with that distinction clear.
 - A subject with no photograph of its own draws on a **shared fallback pool**: photographs of its category rather than of it, resolved once and shared by every subject and every traveller. The pool is not a subject collection and is not bound by the three-photograph limit or the first-photograph rule — a surface picks from it by a stable seed of its own, so one trip keeps its photograph for life while the trip beside it shows a different one. A pool of one is what makes every trip look identical, which is the failure this exists to prevent.
-- A global kill switch disables the service. Every surface degrades to the branded fallback, and so does an unreachable provider, an exhausted rate limit, or a subject with no photograph and an empty pool.
+- A global kill switch disables the service. Day headers retain bundled photographic artwork; other surfaces degrade to the branded fallback. The same final fallbacks apply to an unreachable provider, an exhausted rate limit, or a subject with no photograph and an empty pool.
 
-The branded fallback stays load-bearing rather than becoming a stopgap: hotlinked photography cannot be bundled into an offline trip copy, so an offline traveller sees it by design. It is specific to the place's category, using the taxonomy in section 13, so a hotel, a restaurant, and a museum never render the same placeholder. A place with no resolvable category — including every Custom Place — falls back to `other`.
+The branded fallback stays load-bearing on Place and other media surfaces: live hotlinked editorial collections are not bundled into an offline trip copy. Day headers instead retain fixed, licensed photographic application artwork, shipped and precached with the app separately from live editorial collections. A tiny embedded photographic preview remains visible while an image loads or if every image URL fails. This build-time artwork retains its provenance and is never stored in user-owned Trove Storage.
+
+The branded Place fallback is specific to the place's category, using the taxonomy in section 13, so a hotel, a restaurant, and a museum never render the same placeholder. A place with no resolvable category — including every Custom Place — falls back to `other`.
+
+### Trip and day photo roles
+
+- The primary trip cover preserves the traveller's uploaded cover preference, otherwise the stable editorial representative. A distinct secondary trip photo is selected automatically from the same cached collection; when insufficient, one shared country collection may supplement it without replacing the primary cover association. No secondary-photo management UI is required.
+- Planner and Trip Mode day headers share one deterministic photo ladder: a title-named Place/area or clear geographically grounded title theme, a prominent planned stop, the day's area, the secondary trip photo, the primary cover as an emergency fallback, then bundled photographic artwork. Empty days use the trip fallback rather than fabricating a day-area signal from the trip destination.
+- Day imagery uses existing title, destination and Place context only. A small supported theme vocabulary guides decorative photography; generic or unsupported titles fall through. Unverified/generic results never masquerade as day-specific matches. Stop localities precede the overnight base; one stop may support photography without relaxing the stricter visible day-name rule.
+- Resolve only the viewed day's bounded candidate batch: at most one title query, two stop queries and one area query. Reuse existing collections and in-flight work. Contextual query identity includes its geographic anchor and theme, cannot collide with canonical Place keys, and never overwrites trip-cover or Place associations. Contextual misses are negatively cached without requesting irrelevant generic imagery.
+- Image-load failures advance the ordered photo ladder without repeatedly retrying failed URLs during a session. Header dimensions remain stable; photography stays decorative, readable text overlays remain, and reduced-motion preferences apply.
 
 ---
 
@@ -1115,7 +1125,7 @@ Users must not be forced to classify item type upfront.
 
 The itinerary is the primary planning workspace and should stay readable before it is capable.
 
-- A day states its date once. The day picker identifies the day being chosen; the day heading names the day being planned.
+- A day states its date once. The day picker identifies the day being chosen; the day heading names the day being planned. Its photographic masthead always renders through the shared day-photo ladder in Section 4.8, including empty and unnamed days.
 - Day configuration — resolved timezone, accommodation base, Daily Base, and optional day intent/availability (Section 29.6) — is available on request rather than displayed permanently. It describes how the day resolves, not what is planned in it.
 - A day note is optional content, shown quietly when written and never presented as a field the day is waiting on.
 - Item actions are grouped in a single per-item menu rather than rendered as a permanent row of controls. The menu behaves identically on every form factor, so no action depends on hover.
@@ -1353,6 +1363,8 @@ Trip Mode eligibility is date-derived for the selected owned trip using the life
 Global navigation must remain reachable while Trip Mode provides its own Now / Today / Map / Trip navigation, under the terms in Section 4.5.
 
 Trip Mode is read standing up, one-handed, outdoors, often while walking. Its header contains only a visible Exit and the trip's name as a quiet anchor. On live and Preview screens, at every viewport, center the name on the horizontal screen midpoint with equal space reserved for Exit and the menu FAB; long names truncate without overlapping either control. On mobile, the header is at least 68px tall, providing 12px of vertical space above and below the existing 44px menu FAB without changing its fixed position. Exit and the title are vertically centered in that header; desktop and tablet retain their existing header sizing, with the FAB in the global header. The header must not show a time, location/country, Preview badge, or their loading placeholders. Preview remains clearly identified by its day/time controls below the header. Loading and loaded headers retain the same height and title position. A trip's cover photograph, its country and its date range belong to the surfaces that introduce a trip, not to the one that runs it — on a phone they cost most of the first screen, and the answer to "what do I need right now" must not begin below the fold.
+
+Trip Mode's existing Today day hero uses the same photographic selection and failure ladder as the planner (Section 4.8), including empty or unnamed days. Its heading uses the day name, safely inferred town, or date, and says the date once. The compact Trip Mode chrome remains separate from this day card.
 
 ## 20.1 Views
 

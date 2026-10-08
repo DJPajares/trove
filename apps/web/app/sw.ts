@@ -241,7 +241,14 @@ const serwist = new Serwist({
     ],
   },
   navigationPreload: true,
-  precacheEntries: self.__SW_MANIFEST,
+  precacheEntries: [
+    ...(self.__SW_MANIFEST ?? []).filter((entry) =>
+      typeof entry === 'string'
+        ? entry !== '/media/day-header-fallback.webp'
+        : entry.url !== '/media/day-header-fallback.webp',
+    ),
+    { url: '/media/day-header-fallback.webp', revision: 'wdl-361-v1' },
+  ],
   runtimeCaching,
   // A new build waits until the user accepts it. Taking over an open tab
   // immediately would leave the running page requesting chunks the new

@@ -76,6 +76,8 @@ import type { Reservation } from '@/lib/reservations/api';
 import { tasksForItem, todayTaskRollup } from '@/lib/tasks/trip-mode';
 import { cn } from '@/lib/utils';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
+import { useDayHeaderPhotos } from '@/hooks/use-day-header-photos';
+import { DayHeaderMedia } from '@/components/day-header-media';
 import { useVisibleKeys } from '@/hooks/use-visible-keys';
 import {
   editorialCoverImage,
@@ -84,7 +86,7 @@ import {
   type EditorialSubject,
 } from '@/lib/media/editorial-images';
 import { PlaceMedia } from '@/components/place-media';
-import { dayLocality } from '@/lib/itinerary/day-place';
+import { dayTown } from '@/lib/itinerary/day-place';
 import { resolvePlaceMediaSource } from '@/lib/media/trip-media';
 import {
   resolveItineraryItemPlaceName,
@@ -250,6 +252,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     })
     .slice(0, MAX_EDITORIAL_IMAGE_SUBJECTS);
   const editorialImages = useEditorialImages(editorialSubjects);
+  const dayPhotos = useDayHeaderPhotos(day, itinerary?.tripPlaces ?? [], editorialImages);
   /**
    * A photograph for this stop's tile, whatever kind the provider found.
    *
@@ -598,32 +601,9 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   // Legs are left out here: Trip Mode never asked the API for route segments,
   // and a day list is not worth a new round of them.
   const entries = buildDaySequence({ bases: resolveDailyBases({ day }), items: day.items });
-  /**
-   * What to call the day, in the order that is true.
-   *
-   * The traveller's own title wins. Failing that the town the day is mostly
-   * spent in, which is read from addresses already in hand - almost no day is
-   * ever named by anyone, so without this rung the hero would be blank on
-   * nearly all of them. Failing both, nothing: the date is already on screen
-   * and inventing a title for a day is how a mockup ends up saying
-   * "Discovering local gems in a curated the North Drive".
-   */
-  const dayLocalityName = dayLocality(
-    (day?.items ?? []).map((item) => item.tripPlace?.place.snapshot?.address ?? null),
-  );
-  const heroTitle =
-    day?.name?.trim() || (dayLocalityName ? t('heroLocality', { place: dayLocalityName }) : null);
-  /**
-   * The day is pictured by its first stop that has a photograph of itself. A
-   * day whose stops Trove cannot picture simply has no hero - the date below
-   * already says what day it is.
-   *
-   * It costs no request of its own: the batch above has already resolved every
-   * stop.
-   */
-  const heroItem = (day?.items ?? []).find((item) => editorialFor(item)?.matchKind === 'exact');
-  const heroEditorial = heroItem ? editorialFor(heroItem) : null;
-  const heroShown = Boolean(heroEditorial && heroTitle);
+  // Use the day's own name, safe town, or date with the shared photo ladder.
+  const dayLocalityName = dayTown(day, itinerary.tripPlaces);
+  const heroTitle = day.name?.trim() || dayLocalityName || date;
 
   const dailyTasks = todayTaskRollup({
     date: day.date,
@@ -694,57 +674,44 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
         </ul>
       </nav>
 
-      {/* The day as a place rather than a date. The photograph sits inset
-          within the card rather than bleeding to its edge, which is what makes
-          it read as a framed print instead of a banner. It appears only when
-          there is both something to show and something true to call it. */}
-      {heroShown ? (
-        <section
-          aria-labelledby="trip-mode-day-hero-heading"
-          className="rounded-[var(--radius-2xl)] border border-border-subtle bg-card p-2 shadow-[var(--shadow-card)]"
-        >
-          <div className="relative isolate overflow-hidden rounded-[var(--radius-xl)]">
-            <PlaceMedia
-              alt=""
-              category={heroItem?.tripPlace?.place.snapshot?.category}
-              className="h-36 w-full rounded-none sm:h-44 lg:h-64"
-              sizes="(max-width: 72rem) 100vw, 72rem"
-              source={resolvePlaceMediaSource({ editorial: heroEditorial })}
-              variant="banner"
-            />
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0 bg-gradient-to-t from-surface-overlay/85 from-0% to-transparent to-42%"
-            />
-            <h2
-              className="absolute inset-x-0 bottom-0 p-3 text-[length:var(--text-section-title)] leading-[1.18] font-semibold tracking-[-0.022em] text-balance text-white"
-              id="trip-mode-day-hero-heading"
-            >
-              {heroTitle}
-            </h2>
-          </div>
-          <p className="px-1 pt-2 pb-0.5 text-[length:var(--text-metadata)] leading-5 text-text-subtle">
-            {day.notes?.trim() || t('heroStops', { count: day.items.length })}
-          </p>
-        </section>
-      ) : null}
+      {/* Every day has a photographic header, including an empty or unnamed day. */}
+      <section
+        aria-labelledby="trip-mode-day-hero-heading"
+        className="rounded-[var(--radius-2xl)] border border-border-subtle bg-card p-2 shadow-[var(--shadow-card)]"
+      >
+        <div className="relative isolate overflow-hidden rounded-[var(--radius-xl)]">
+          <DayHeaderMedia
+            alt=""
+            dataSlot="trip-mode-day-photo"
+            photos={dayPhotos}
+            className="h-36 w-full rounded-none sm:h-44 lg:h-64"
+            sizes="(max-width: 72rem) 100vw, 72rem"
+            variant="banner"
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-gradient-to-t from-surface-overlay/85 from-0% to-transparent to-42%"
+          />
+          <h2
+            className="absolute inset-x-0 bottom-0 p-3 text-[length:var(--text-section-title)] leading-[1.18] font-semibold tracking-[-0.022em] text-balance text-white"
+            id="trip-mode-day-hero-heading"
+          >
+            {heroTitle}
+          </h2>
+        </div>
+        <p className="px-1 pt-2 pb-0.5 text-[length:var(--text-metadata)] leading-5 text-text-subtle">
+          {day.notes?.trim() || t('heroStops', { count: day.items.length })}
+        </p>
+      </section>
 
       <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          {/* The hero above is the day's heading when it is there, so this one
-              steps back to being the date rather than saying the same words a
-              second time. */}
-          {day.name && !heroShown ? (
-            <h2 className="text-[length:var(--text-section-title)] leading-[1.18] font-semibold tracking-[-0.022em] text-pretty">
-              {day.name}
-            </h2>
-          ) : (
-            <h2 className="sr-only">{day.name ?? t('title')}</h2>
-          )}
-          <p className="text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
-            {day.name ? itineraryT('dayOption', { date, number: dayNumber }) : date}
-          </p>
-        </div>
+        {day.name?.trim() || dayLocalityName ? (
+          <div className="min-w-0">
+            <p className="text-[length:var(--text-metadata)] leading-5 font-medium text-muted-foreground tabular-nums">
+              {day.name?.trim() ? itineraryT('dayOption', { date, number: dayNumber }) : date}
+            </p>
+          </div>
+        ) : null}
         {/* Adding to the day is the one action worth a control of its own here;
             the rest of what a day collects lives under the row it belongs to. */}
         <div className="flex flex-wrap gap-2">

@@ -5,7 +5,7 @@ import { AuthShell } from '@/components/auth-shell';
 import { BrandMark } from '@/components/brand-logo';
 import { EmailAuthForm } from '@/components/email-auth-form';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { getSafeRedirectPath } from '@/lib/auth/redirect';
+import { getSafeRedirectPath, withAuthNext } from '@/lib/auth/redirect';
 import { isSignUpEnabled } from '@/lib/auth/config.server';
 
 type SignUpPageProps = {
@@ -43,7 +43,7 @@ export default async function SignUpPage({ searchParams }: Readonly<SignUpPagePr
             {t('alreadyHaveAccount')}{' '}
             <Link
               className="font-medium text-foreground underline underline-offset-4 transition-colors duration-[var(--motion-standard)] hover:text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-              href="/sign-in"
+              href={withAuthNext('/sign-in', getSafeRedirectPath(next))}
             >
               {t('signIn')}
             </Link>

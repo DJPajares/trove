@@ -125,9 +125,9 @@ explains the current publishable/secret key model.
   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` go in `apps/web/.env.local` for the
   browser. A publishable key is intended to be public; never put a secret or
   legacy `service_role` key in a `NEXT_PUBLIC_` variable.
-- Add the local and production `/auth/callback` URLs in **Authentication → URL
-  Configuration**. Keep existing entries for other applications; see
-  [Supabase redirect URL guidance](https://supabase.com/docs/guides/auth/redirect-urls).
+- Configure production Site URL, scoped development/preview callbacks, and custom
+  SMTP using the [email auth rollout guide](docs/auth/email-auth-rollout.md).
+  Keep other applications' redirects; deploy Trove's callbacks before its templates.
 - Copy the exact database strings from **Connect** rather than constructing
   them. `DATABASE_URL` is the Supavisor transaction pooler URL on port `6543`
   with `pgbouncer=true` for runtime access. `DIRECT_URL` is the session/direct
@@ -299,7 +299,7 @@ secret is exposed, revoke or rotate it in the provider dashboard immediately.
 
 ## Authentication Configuration
 
-Trove uses the existing Supabase Auth user pool with email/password as its initial sign-in method. Enable the Email provider, keep existing Auth redirect URLs for other applications, then add Trove's local and production `/auth/callback` URLs to the Supabase Auth allow list. Configure the environment values in [`.env.example`](.env.example) and [`apps/web/.env.example`](apps/web/.env.example); do not commit credentials.
+Trove uses the existing Supabase Auth user pool with email/password as its initial sign-in method. Verification and password recovery return to the requesting environment and establish the SSR session through an explicit in-app confirmation. Follow the [email auth rollout guide](docs/auth/email-auth-rollout.md) for the shared project's redirect, Resend SMTP and template configuration. Configure the environment values in [`.env.example`](.env.example) and [`apps/web/.env.example`](apps/web/.env.example); do not commit credentials.
 
 Prepared offline trip data is reserved for the last authenticated Trove user on that device. Offline access never authorizes server operations. Future offline storage must register a local-data clearer with `signOutFromTrove`, and Settings must warn about unsynced changes before invoking it.
 

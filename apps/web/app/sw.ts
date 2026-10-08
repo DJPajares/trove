@@ -22,6 +22,7 @@ import {
 import { readPushAccount } from '@/lib/notifications/push-account';
 import { shouldShowPush } from '@/lib/notifications/push-payload';
 import { brandAssets } from '@/lib/brand/assets';
+import { isSensitiveAuthUrl } from '@/lib/auth/redirect';
 
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
@@ -114,6 +115,11 @@ const offlineTripPath =
   /^\/trips\/[^/]+\/(?:expenses|info|itinerary|memories|mode(?:\/[^/]+)?|places|reservations|tasks)\/?$/;
 
 const runtimeCaching: RuntimeCaching[] = [
+  {
+    handler: new NetworkOnly(),
+    matcher: ({ url }) => isSensitiveAuthUrl(url),
+    method: 'GET',
+  },
   {
     /**
      * Editorial photography, hotlinked from the provider.
@@ -241,7 +247,12 @@ const serwist = new Serwist({
     ],
   },
   navigationPreload: true,
-  precacheEntries: self.__SW_MANIFEST,
+  precacheEntries: self.__SW_MANIFEST?.filter(
+    (entry) =>
+      !isSensitiveAuthUrl(
+        new URL(typeof entry === 'string' ? entry : entry.url, self.location.origin),
+      ),
+  ),
   runtimeCaching,
   // A new build waits until the user accepts it. Taking over an open tab
   // immediately would leave the running page requesting chunks the new

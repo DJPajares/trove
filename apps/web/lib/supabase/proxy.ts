@@ -1,7 +1,8 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { getSafeRedirectPath } from '@/lib/auth/redirect';
+import { getSafeRedirectPath, isSensitiveAuthUrl } from '@/lib/auth/redirect';
+import { AUTH_RESPONSE_HEADERS } from '@/lib/auth/http';
 import { getSupabaseEnvironment } from '@/lib/supabase/environment';
 
 const protectedPathnames = ['/profile', '/saved', '/tools', '/trips'];
@@ -30,6 +31,9 @@ function redirectFromAuthPath(request: NextRequest, response: NextResponse) {
   const redirectResponse = NextResponse.redirect(target);
 
   response.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
+  Object.entries(AUTH_RESPONSE_HEADERS).forEach(([key, value]) =>
+    redirectResponse.headers.set(key, value),
+  );
 
   return redirectResponse;
 }
@@ -37,17 +41,29 @@ function redirectFromAuthPath(request: NextRequest, response: NextResponse) {
 function redirectToSignIn(request: NextRequest, response: NextResponse) {
   const signInUrl = request.nextUrl.clone();
   signInUrl.pathname = '/sign-in';
-  signInUrl.searchParams.set('next', request.nextUrl.pathname);
+  signInUrl.search = '';
+  signInUrl.searchParams.set('next', request.nextUrl.pathname + request.nextUrl.search);
 
   const redirectResponse = NextResponse.redirect(signInUrl);
 
   response.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
+  Object.entries(AUTH_RESPONSE_HEADERS).forEach(([key, value]) =>
+    redirectResponse.headers.set(key, value),
+  );
 
   return redirectResponse;
 }
 
 export async function updateSupabaseSession(request: NextRequest) {
   let response = NextResponse.next({ request });
+  const applyAuthHeaders = () => {
+    if (isSensitiveAuthUrl(request.nextUrl)) {
+      Object.entries(AUTH_RESPONSE_HEADERS).forEach(([key, value]) =>
+        response.headers.set(key, value),
+      );
+    }
+  };
+  applyAuthHeaders();
   const environment = getSupabaseEnvironment();
 
   if (!environment) {
@@ -68,6 +84,7 @@ export async function updateSupabaseSession(request: NextRequest) {
           response.cookies.set(name, value, options),
         );
         Object.entries(headers).forEach(([key, value]) => response.headers.set(key, value));
+        applyAuthHeaders();
       },
     },
   });

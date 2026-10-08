@@ -17,14 +17,20 @@ let browserClient: SupabaseClient | null | undefined;
 export function createBrowserSupabaseClient() {
   if (typeof window === 'undefined') {
     const environment = getSupabaseEnvironment();
-    return environment ? createBrowserClient(environment.url, environment.publishableKey) : null;
+    return environment
+      ? createBrowserClient(environment.url, environment.publishableKey, {
+          auth: { detectSessionInUrl: false },
+        })
+      : null;
   }
 
   if (browserClient !== undefined) return browserClient;
 
   const environment = getSupabaseEnvironment();
   browserClient = environment
-    ? createBrowserClient(environment.url, environment.publishableKey)
+    ? createBrowserClient(environment.url, environment.publishableKey, {
+        auth: { detectSessionInUrl: false },
+      })
     : null;
 
   return browserClient;

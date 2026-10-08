@@ -42,6 +42,7 @@ export async function buildManifest(theme: ThemeName): Promise<MetadataRoute.Man
     // A stable id keeps an installed Trove tied to this app across deploys
     // even if start_url ever changes.
     id: '/',
+    launch_handler: { client_mode: 'navigate-existing' },
     icons: [
       {
         purpose: 'any',

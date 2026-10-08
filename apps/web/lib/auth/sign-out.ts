@@ -4,11 +4,21 @@ import { clearPushForSignOut } from '@/lib/notifications/push';
 type LocalPrivateDataClearer = () => Promise<void> | void;
 
 const localPrivateDataClearers = new Set<LocalPrivateDataClearer>();
+let clearingPrivateData: Promise<void> | null = null;
 
 export function registerLocalPrivateDataClearer(clearer: LocalPrivateDataClearer) {
   localPrivateDataClearers.add(clearer);
 
   return () => localPrivateDataClearers.delete(clearer);
+}
+
+export async function clearLocalPrivateData() {
+  clearingPrivateData ??= Promise.all([...localPrivateDataClearers].map((clearer) => clearer()))
+    .then(() => undefined)
+    .finally(() => {
+      clearingPrivateData = null;
+    });
+  await clearingPrivateData;
 }
 
 export async function signOutFromTrove() {
@@ -26,6 +36,6 @@ export async function signOutFromTrove() {
       throw error;
     }
   } finally {
-    await Promise.all([...localPrivateDataClearers].map((clearer) => clearer()));
+    await clearLocalPrivateData();
   }
 }

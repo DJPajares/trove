@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 
 import { getSupabaseEnvironment } from '@/lib/supabase/environment';
 
-export async function createServerSupabaseClient() {
+export async function createServerSupabaseClient(responseHeaders?: Headers) {
   const environment = getSupabaseEnvironment();
 
   if (!environment) {
@@ -17,7 +17,8 @@ export async function createServerSupabaseClient() {
       getAll() {
         return cookieStore.getAll();
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet, headers) {
+        Object.entries(headers).forEach(([key, value]) => responseHeaders?.set(key, value));
         try {
           cookiesToSet.forEach(({ name, options, value }) => cookieStore.set(name, value, options));
         } catch {

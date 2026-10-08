@@ -6,6 +6,7 @@ import { getLocale, getTranslations } from 'next-intl/server';
 
 import './globals.css';
 import { AppShell } from '@/components/app-shell';
+import { AuthSessionListener } from '@/components/auth-session-listener';
 import { OnboardingGate } from '@/components/onboarding-gate';
 import { PwaProvider } from '@/components/pwa-provider';
 import { QueryProvider } from '@/components/query-provider';
@@ -91,6 +92,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <AppearanceCookie />
           <TroveMotionProvider>
             <NextIntlClientProvider>
+              <AuthSessionListener userId={authUserId} />
               <QueryProvider userId={authUserId}>
                 <PwaProvider>
                   <PreferencesProvider locale={locale}>

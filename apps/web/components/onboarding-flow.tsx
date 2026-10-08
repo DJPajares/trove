@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import * as Icons from '@/lib/icons';
+import { getSafeRedirectPath } from '@/lib/auth/redirect';
 import {
   firstIncompleteStep,
   isProfileOnboarded,
@@ -37,9 +38,10 @@ const stepIcons: Record<OnboardingStep, typeof UserRound> = {
 
 const stepOrder: OnboardingStep[] = ['name', 'location', 'currency'];
 
-export function OnboardingFlow() {
+export function OnboardingFlow({ next = '/' }: Readonly<{ next?: string }>) {
   const t = useTranslations('onboarding');
   const router = useRouter();
+  const nextPath = getSafeRedirectPath(next);
   const { profile, saveProfileChanges, status: preferencesStatus } = usePreferences();
 
   const [step, setStep] = useState<OnboardingStep | null>(null);
@@ -50,7 +52,7 @@ export function OnboardingFlow() {
   useEffect(() => {
     if (!profile || step) return;
     if (isProfileOnboarded(profile)) {
-      router.replace('/');
+      router.replace(nextPath);
       return;
     }
     setForm({
@@ -59,7 +61,7 @@ export function OnboardingFlow() {
       homeCurrencyCode: profile.homeCurrencyCode ?? '',
     });
     setStep(firstIncompleteStep(profile));
-  }, [profile, router, step]);
+  }, [nextPath, profile, router, step]);
 
   if (preferencesStatus === 'unavailable') {
     return <PageState kind="error" title={t('loadError')} />;
@@ -102,7 +104,7 @@ export function OnboardingFlow() {
         setStep('currency');
       } else {
         await saveProfileChanges({ homeCurrencyCode: trimmed.homeCurrencyCode });
-        router.replace('/');
+        router.replace(nextPath);
         return;
       }
     } catch {

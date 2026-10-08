@@ -8,7 +8,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { getSafeRedirectPath } from '@/lib/auth/redirect';
+import Link from 'next/link';
+import { buildEmailRedirectUrl, getSafeRedirectPath, withAuthNext } from '@/lib/auth/redirect';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import * as Icons from '@/lib/icons';
 
@@ -52,45 +53,48 @@ export function EmailAuthForm({ mode, nextPath }: Readonly<EmailAuthFormProps>) 
     }
 
     setIsPending(true);
+    try {
+      if (!isSignUp) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
 
-    if (!isSignUp) {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+        if (signInError) {
+          setError(t('error'));
+          setIsPending(false);
+          return;
+        }
+
+        window.location.assign(redirectPath);
+        return;
+      }
+
+      const callbackUrl = buildEmailRedirectUrl(window.location.origin, redirectPath, 'signup');
+
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
+        options: { emailRedirectTo: callbackUrl },
       });
 
-      if (signInError) {
+      if (signUpError) {
         setError(t('error'));
         setIsPending(false);
         return;
       }
 
-      window.location.assign(redirectPath);
-      return;
-    }
+      if (data.session) {
+        window.location.assign(redirectPath);
+        return;
+      }
 
-    const callbackUrl = new URL('/auth/callback', window.location.origin);
-    callbackUrl.searchParams.set('next', redirectPath);
-
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: { emailRedirectTo: callbackUrl.toString() },
-    });
-
-    if (signUpError) {
-      setError(t('error'));
+      setConfirmationSent(true);
+    } catch {
+      setError(t('networkError'));
+    } finally {
       setIsPending(false);
-      return;
     }
-
-    if (data.session) {
-      window.location.assign(redirectPath);
-      return;
-    }
-
-    setConfirmationSent(true);
-    setIsPending(false);
   }
 
   return (
@@ -148,6 +152,17 @@ export function EmailAuthForm({ mode, nextPath }: Readonly<EmailAuthFormProps>) 
           </Field>
         ) : null}
       </FieldGroup>
+
+      {!isSignUp ? (
+        <p className="text-right text-sm">
+          <Link
+            className="font-medium text-foreground underline underline-offset-4 hover:text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            href={withAuthNext('/forgot-password', redirectPath)}
+          >
+            {t('forgotPassword')}
+          </Link>
+        </p>
+      ) : null}
 
       <Button className="w-full" disabled={isPending} size="lg" type="submit">
         {isPending ? (isSignUp ? t('pendingSignUp') : t('pendingSignIn')) : t(mode)}

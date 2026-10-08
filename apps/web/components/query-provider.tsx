@@ -2,7 +2,10 @@
 
 import { QueryClientProvider } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
+import { isAuthFlowPath } from '@/lib/auth/redirect';
+import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 import {
   createQueryClient,
@@ -42,24 +45,38 @@ function SignedInQueryProvider({
  * manager is what clears this cache when a traveller signs out or a different
  * account signs in.
  *
- * `userId` comes from the server render, so it lags a client-side sign-in by
- * one navigation. That direction is safe: an unknown user persists nothing and
- * runs on an in-memory cache, so the worst case is a cache that is not written
- * to disk yet, never one attributed to the wrong traveller. The `key` below
- * rebuilds the client outright if the account does change.
+ * Auth events partition the cache immediately when an open tab changes
+ * accounts, before the server layout catches up. Auth screens always use an
+ * in-memory cache. The `key` rebuilds the persisted client for each account.
  */
 export function QueryProvider({
   children,
   userId,
 }: Readonly<{ children: ReactNode; userId: string | null }>) {
   const [signedOutClient] = useState(createQueryClient);
+  const [liveUserId, setLiveUserId] = useState(userId);
+  const pathname = usePathname();
 
-  if (!userId) {
+  useEffect(() => {
+    setLiveUserId(userId);
+  }, [userId]);
+  useEffect(() => {
+    const subscription = createBrowserSupabaseClient()?.auth.onAuthStateChange((event, session) => {
+      // Partition data immediately when another tab changes accounts; waiting
+      // for the server layout would persist the new user's data under the old ID.
+      if (event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY' || event === 'SIGNED_OUT') {
+        setLiveUserId(session?.user.id ?? null);
+      }
+    }).data.subscription;
+    return () => subscription?.unsubscribe();
+  }, []);
+
+  if (!liveUserId || isAuthFlowPath(pathname)) {
     return <QueryClientProvider client={signedOutClient}>{children}</QueryClientProvider>;
   }
 
   return (
-    <SignedInQueryProvider key={userId} userId={userId}>
+    <SignedInQueryProvider key={liveUserId} userId={liveUserId}>
       {children}
     </SignedInQueryProvider>
   );

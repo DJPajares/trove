@@ -5,11 +5,15 @@ import { useEffect } from 'react';
 
 import { usePreferences } from '@/components/preferences-provider';
 import { isProfileOnboarded } from '@/lib/profile/onboarding';
+import { isAuthFlowPath, withAuthNext } from '@/lib/auth/redirect';
 
 const EXEMPT_PATHS = ['/onboarding', '/sign-in', '/sign-up'];
 
 function isExempt(pathname: string) {
-  return EXEMPT_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  return (
+    isAuthFlowPath(pathname) ||
+    EXEMPT_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))
+  );
 }
 
 /**
@@ -24,7 +28,11 @@ export function OnboardingGate() {
 
   useEffect(() => {
     if (status !== 'ready' || isExempt(pathname)) return;
-    if (!isProfileOnboarded(profile)) router.replace('/onboarding');
+    if (!isProfileOnboarded(profile)) {
+      router.replace(
+        withAuthNext('/onboarding', `${pathname}${window.location.search}${window.location.hash}`),
+      );
+    }
   }, [pathname, profile, router, status]);
 
   return null;

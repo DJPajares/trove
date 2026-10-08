@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 
 import { registerLocalPrivateDataClearer } from '@/lib/auth/sign-out';
+import { isAuthFlowPath } from '@/lib/auth/redirect';
 import {
   clearAllOfflineTripData,
   getRememberedOfflineUser,
@@ -28,7 +29,8 @@ export function OfflineSyncManager() {
     );
 
     const sync = () => {
-      if (navigator.onLine) void syncOfflineMutations().catch(() => undefined);
+      if (navigator.onLine && !isAuthFlowPath(window.location.pathname))
+        void syncOfflineMutations().catch(() => undefined);
     };
 
     /**
@@ -54,7 +56,7 @@ export function OfflineSyncManager() {
 
     const supabase = createBrowserSupabaseClient();
     const subscription = supabase?.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN') {
+      if (event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') {
         const previousUserId = getRememberedOfflineUser();
         if (previousUserId && session && previousUserId !== session.user.id) {
           void forgetPrivateData(previousUserId).then(sync);

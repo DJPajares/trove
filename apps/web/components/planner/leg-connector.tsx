@@ -16,6 +16,7 @@ import { routePresentationState } from '@/lib/itinerary/route-presentation';
 import { TravelModeIcon } from '@/lib/itinerary/travel-mode';
 import { cn } from '@/lib/utils';
 
+import { InsertButton } from './insert-gap';
 import { SpineRow } from './spine';
 
 const MODES = ['drive', 'transit', 'walk', 'flight'] as const satisfies readonly RouteTravelMode[];
@@ -30,13 +31,18 @@ const MODES = ['drive', 'transit', 'walk', 'flight'] as const satisfies readonly
  * estimate Trove did not get is said plainly, never filled in.
  */
 export function LegConnector({
+  className,
   distanceUnit,
+  insert,
   onModeChange,
   saving,
   segment,
   stale,
 }: Readonly<{
+  className?: string;
   distanceUnit: 'km' | 'mi';
+  /** Adding a stop on this leg - splitting it - is the "+" on its line. */
+  insert?: { label: string; onInsert: () => void };
   onModeChange: (segment: ItineraryRouteSegment, mode: RouteTravelMode) => void;
   saving: boolean;
   segment: ItineraryRouteSegment;
@@ -74,7 +80,13 @@ export function LegConnector({
   const line = leavesStay || returnsToStay ? 'dashed' : 'solid';
 
   return (
-    <SpineRow above={line} align="center" below={line}>
+    <SpineRow
+      above={line}
+      align="center"
+      below={line}
+      className={className}
+      marker={insert ? <InsertButton label={insert.label} onInsert={insert.onInsert} /> : undefined}
+    >
       <div className="flex min-h-11 items-center gap-2 py-0.5">
         <p className="min-w-0 flex-1 text-xs leading-5 text-muted-foreground tabular-nums">
           <span className="font-medium text-foreground">{t(`mode.${segment.mode}`)}</span>

@@ -30,18 +30,18 @@ import type { ItineraryItem, ItineraryPriority } from '@/lib/itinerary/api';
 import * as Icons from '@/lib/icons';
 
 export type StopMenuActions = {
-  dayOptions: Array<{ id: string; label: string }>;
   onDeleteItem: (item: ItineraryItem) => void;
   onDuplicateItem: (item: ItineraryItem) => void;
   onEditItem: (item: ItineraryItem) => void;
   onMoveItem: (item: ItineraryItem, dayId: string | null, position: number) => void;
+  /** Opens the sheet that moves the stop to another day or to Unscheduled. */
+  onMoveToDay: (item: ItineraryItem) => void;
   onPlacePriorityChange?: (item: ItineraryItem, priority: ItineraryPriority | null) => void;
   /** Shows the stop's pin on the map. */
   onSelectItem: (item: ItineraryItem) => void;
   organizingItemId: string | null;
   savingPriorityIds?: ReadonlySet<string>;
   selectedDayId: string;
-  unscheduledLabel: string;
 };
 
 /**
@@ -73,17 +73,16 @@ export function StopMenu({
   const t = useTranslations('itinerary');
   const placesT = useTranslations('tripPlaces');
   const {
-    dayOptions,
     onDeleteItem,
     onDuplicateItem,
     onEditItem,
     onMoveItem,
+    onMoveToDay,
     onPlacePriorityChange,
     onSelectItem,
     organizingItemId,
     savingPriorityIds,
     selectedDayId,
-    unscheduledLabel,
   } = actions;
 
   return (
@@ -117,27 +116,10 @@ export function StopMenu({
           {t('itemMenu.moveLater')}
         </DropdownMenuItem>
 
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <Icons.Itinerary aria-hidden="true" />
-            {t('moveToDay')}
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="max-h-80 overflow-y-auto">
-            <DropdownMenuRadioGroup
-              onValueChange={(value) =>
-                onMoveItem(item, value === 'unscheduled' ? null : value, 999)
-              }
-              value={selectedDayId}
-            >
-              {dayOptions.map((day) => (
-                <DropdownMenuRadioItem key={day.id} value={day.id}>
-                  {day.label}
-                </DropdownMenuRadioItem>
-              ))}
-              <DropdownMenuRadioItem value="unscheduled">{unscheduledLabel}</DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
+        <DropdownMenuItem onClick={() => onMoveToDay(item)}>
+          <Icons.Itinerary aria-hidden="true" />
+          {t('planner.move.menuItem')}
+        </DropdownMenuItem>
 
         <DropdownMenuSeparator />
 

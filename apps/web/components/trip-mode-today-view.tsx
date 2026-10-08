@@ -18,7 +18,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { PageState } from '@/components/page-state';
 import { PlaceHoursNote } from '@/components/place-hours-note';
-import { ItineraryCreateItemSheet } from '@/components/itinerary-create-item-sheet';
+import { StopEditorSheet } from '@/components/planner/stop-editor/stop-editor-sheet';
 import { usePreferences } from '@/components/preferences-provider';
 import { TimelineGroup, TimelineMarker, TimelineRow } from '@/components/timeline-row';
 import { useTripModeData } from '@/components/trip-mode-data';
@@ -1203,20 +1203,27 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
       />
 
       {createItemOpen ? (
-        <ItineraryCreateItemSheet
-          dayId={day.id}
-          onCreated={async () => {
+        <StopEditorSheet
+          id={0}
+          locationBias={null}
+          onClose={() => setCreateItemOpen(false)}
+          onSaved={async () => {
+            setCreateItemOpen(false);
             await refresh();
             setError(null);
             setUndoAction(null);
             setFeedback(t('feedback.added'));
           }}
-          onOpenChange={setCreateItemOpen}
           onTripPlaceAdded={() => {
             void refresh().catch(() => undefined);
           }}
           open
           placeUse={placeUse}
+          request={{
+            dayId: day.id,
+            dayLabel: itineraryT('dayNumber', { number: dayNumber }),
+            kind: 'create',
+          }}
           tripId={tripId}
           tripPlaces={itinerary.tripPlaces}
         />

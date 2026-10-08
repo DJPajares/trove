@@ -2,7 +2,12 @@ import type { ItineraryDay } from './api';
 
 type RevisionDay = Pick<
   ItineraryDay,
-  'dailyBaseDepartureTripPlaceId' | 'dailyBaseTripPlaceId' | 'id' | 'items' | 'routeStartTravelMode'
+  | 'dailyBaseDepartureTripPlaceId'
+  | 'dailyBaseTripPlaceId'
+  | 'id'
+  | 'items'
+  | 'routeStartTravelMode'
+  | 'stay'
 >;
 
 /**
@@ -14,9 +19,15 @@ type RevisionDay = Pick<
  * ends at, the travel modes — has to change this signature, or a leg computed
  * for one ordering can be presented as the answer for another.
  *
- * The item order is carried by the string's own order rather than by `position`
- * alone, so a signature stays honest even if positions are ever renumbered
- * without changing.
+ * The order is carried by the string's own order, never by `position`. The
+ * server renumbers a day's positions when it reorders it and leaves gaps on a
+ * day a stop left, while an optimistic reorder on the device numbers from
+ * zero; a signature that read positions would see two different days where
+ * there is one, and ask for - and pay for - the same legs twice.
+ *
+ * The Stay the server inferred from a booking counts too: it is where the
+ * first leg leaves from and the last one returns to, whether or not a base
+ * was set by hand.
  */
 export function itineraryDayRouteRevision(day: RevisionDay | null): string {
   if (!day) return '';
@@ -24,10 +35,11 @@ export function itineraryDayRouteRevision(day: RevisionDay | null): string {
     day.id,
     day.dailyBaseTripPlaceId ?? '',
     day.dailyBaseDepartureTripPlaceId ?? '',
+    day.stay?.startTripPlaceId ?? '',
+    day.stay?.endTripPlaceId ?? '',
     day.routeStartTravelMode,
     ...day.items.flatMap((item) => [
       item.id,
-      String(item.position),
       item.tripPlace?.id ?? '',
       item.travelModeToNext ?? '',
     ]),

@@ -830,19 +830,34 @@ async function applyOnlineMutation(
   await applyMutationToStoredItinerary(userId, tripId, operation).catch(() => undefined);
 }
 
-export async function createItineraryItem(tripId: string, input: ItineraryItemInput) {
+/**
+ * Adds a stop to a day. `position` puts it among the day's stops - between
+ * two others - rather than at the end; a timed stop still lands where its
+ * time puts it. The position travels in the queued operation's own input, so
+ * an insert made offline replays as the same insert.
+ */
+export async function createItineraryItem(
+  tripId: string,
+  input: ItineraryItemInput,
+  options: { position?: number } = {},
+) {
   if (!input.itineraryDayId) throw new ItineraryApiError('invalid_itinerary_item', 400);
   const auth = await getAuthContext();
   const clientItemId = crypto.randomUUID();
+  const createInput = {
+    ...input,
+    itineraryDayId: input.itineraryDayId,
+    ...(options.position === undefined ? {} : { position: options.position }),
+  };
   const operation: OfflineMutationOperation = {
     clientItemId,
-    input: { ...input, itineraryDayId: input.itineraryDayId },
+    input: createInput,
     kind: 'itinerary_item_create',
   };
   try {
     const result = await itineraryRequest<{ item: ItineraryItem }>(
       `/trips/${tripId}/itinerary/items`,
-      { body: JSON.stringify({ ...input, clientItemId }), method: 'POST' },
+      { body: JSON.stringify({ ...createInput, clientItemId }), method: 'POST' },
       auth,
     );
     await applyOnlineMutation(auth.userId, tripId, operation);

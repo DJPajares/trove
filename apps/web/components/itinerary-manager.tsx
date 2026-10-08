@@ -2,20 +2,17 @@
 import { DayPlanningContextSheet } from '@/components/day-planning-context';
 
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CircleAlert, Clock3, Copy, NotebookPen, Plus, Search, Trash2, X } from 'lucide-react';
+import { CircleAlert, Clock3, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
-import { ItineraryCreateItemSheet } from '@/components/itinerary-create-item-sheet';
 import { ItineraryGapSuggestions } from '@/components/itinerary-gap-suggestions';
 import { ItineraryPlaceGroups } from '@/components/itinerary-place-groups';
 import { ItineraryBetterOrder } from '@/components/itinerary-better-order';
 import { ItineraryDayTimeSuggestions } from '@/components/itinerary-day-time-suggestions';
-import { SuggestedTimeAction, useSuggestedTime } from '@/components/itinerary-suggested-time';
 import { PageState } from '@/components/page-state';
-import { ItineraryOverview, type ItineraryOverviewDisplay } from '@/components/itinerary-overview';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { ItineraryTripMap } from '@/components/itinerary-trip-map';
 import { ItineraryPlacesDrawer } from '@/components/itinerary-places-drawer';
@@ -25,17 +22,25 @@ import { PlanScoreChip, PlanScorePanel } from '@/components/plan-score-panel';
 import { ScoreProblemNote, AttentionNote } from '@/components/planner/attention-note';
 import { DayMasthead, type DayStay } from '@/components/planner/day-masthead';
 import { DAY_SKETCH_BOX, DayRouteSketch } from '@/components/planner/day-route-sketch';
-import { DaySettingsMenu } from '@/components/planner/day-settings-menu';
+import { DayEmpty } from '@/components/planner/day-empty';
+import { DayMenu } from '@/components/planner/day-menu';
 import { DayTimeline } from '@/components/planner/day-timeline';
 import { PlanScoreSheet } from '@/components/planner/plan-score-sheet';
 import { PlannerDayView } from '@/components/planner/planner-day-view';
 import { PlannerMapPane } from '@/components/planner/planner-map-pane';
+import { MoveToDaySheet } from '@/components/planner/move-to-day-sheet';
+import { TripBoard, type TripBoardDisplay } from '@/components/planner/overview/trip-board';
 import { PlannerRibbon } from '@/components/planner/planner-ribbon';
+import { StaySheet } from '@/components/planner/stay-sheet';
+import { TimingSheet } from '@/components/planner/timing-sheet';
+import {
+  StopEditorSheet,
+  type StopEditorRequest,
+} from '@/components/planner/stop-editor/stop-editor-sheet';
+import { UnscheduledTray } from '@/components/planner/unscheduled-tray';
 import { TripInsights } from '@/components/trip-insights';
 import { useRegisterPrimaryAction } from '@/components/primary-action-provider';
 import { usePreferences } from '@/components/preferences-provider';
-import { TimeInput } from '@/components/time-input';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -48,25 +53,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-} from '@/components/ui/combobox';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemMedia,
-  ItemTitle,
-} from '@/components/ui/item';
 import {
   Select,
   SelectContent,
@@ -94,7 +82,6 @@ import {
   ItineraryApiError,
   type ItineraryDay,
   type ItineraryItem,
-  type ItineraryItemInput,
   type ItineraryRouteSegment,
   type ItineraryTripPlace,
   localDateInTimeZone,
@@ -106,10 +93,10 @@ import {
   updateItineraryDayName,
   updateItineraryDayPlanningContext,
   updateItineraryDayRouteMode,
-  updateItineraryItem,
   updateItineraryItemRouteMode,
 } from '@/lib/itinerary/api';
 import { useOnlineStatus } from '@/components/trip-sync-status';
+import { useTripContext } from '@/components/trip-provider';
 import { useCompactItinerary } from '@/hooks/use-compact-itinerary';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { withDayPartBands } from '@/lib/itinerary/day-bands';
@@ -118,11 +105,13 @@ import { localityFromAddress, sameTown } from '@/lib/itinerary/day-place';
 import { buildDaySequence, dayStopNumbers, resolveDailyBases } from '@/lib/itinerary/day-sequence';
 import { daySketchPlaces } from '@/lib/itinerary/day-sketch';
 import { plannerDays } from '@/lib/itinerary/planner-days';
+import { stayChapters } from '@/lib/itinerary/stay-chapters';
 import {
   DuplicateAttemptTracker,
   refreshedItineraryContainsCopy,
 } from '@/lib/itinerary/duplicate-attempt';
 import { placeVisitDate, scheduledPlaceUse } from '@/lib/itinerary/places';
+import { optimisticItineraryEdit } from '@/lib/itinerary/optimistic';
 import { itineraryDayRouteRevision } from '@/lib/itinerary/routes';
 import { itineraryViewHref, resolveItineraryView } from '@/lib/itinerary/view';
 import {
@@ -145,29 +134,13 @@ import { serverNow } from '@/lib/plan-score/clock';
 import { currentAssessment } from '@/lib/plan-score/presentation';
 import { useInViewOnce } from '@/lib/plan-score/use-in-view-once';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
-import {
-  googleMapsPlaceHref,
-  type ProviderSuggestion,
-  resolveProviderPlace,
-  searchProviderPlaces,
-} from '@/lib/saved/api';
-import { addTripPlace, type TripPlace, type TripPlacePriority } from '@/lib/trip-places/api';
+import { googleMapsPlaceHref } from '@/lib/saved/api';
+import { type TripPlace, type TripPlacePriority } from '@/lib/trip-places/api';
 import { setTripPlacePriority } from '@/lib/trip-places/priority';
 import { sortTripPlaces } from '@/lib/trip-places/sort';
+import { destinationLocationBias } from '@/lib/saved/provider-search-session';
 import { dayPreviewHref } from '@/lib/trips/navigation';
-import { cn } from '@/lib/utils';
 import { tripWeatherForDate, useTripWeather } from '@/lib/weather/use-trip-weather';
-import {
-  durationMinutesFromParts,
-  durationParts,
-  filterItineraryTripPlaces,
-  isDurationPreset,
-  itineraryIdentityChoice,
-  itineraryIdentityLegacyPatch,
-  itineraryProviderSuggestions,
-  ITINERARY_DURATION_PRESETS,
-  normalizeItineraryPlaceQuery,
-} from '@/lib/itinerary/item-editor';
 import { queryKeys } from '@/lib/query/keys';
 import {
   ITINERARY_EDIT_QUERY_ROOTS,
@@ -175,45 +148,6 @@ import {
   PLACE_LOCATION_QUERY_ROOTS,
 } from '@/lib/query/trip-invalidation';
 import * as Icons from '@/lib/icons';
-
-type EditorState =
-  | { dayId: null; item: null; mode: 'closed' }
-  | { dayId: string; item: ItineraryItem; mode: 'edit' };
-
-type FormState = {
-  customLabel: string;
-  durationMinutes: string;
-  exactTime: string;
-  localEndTime: string;
-  notes: string;
-  schedule: 'afternoon' | 'anytime' | 'evening' | 'exact' | 'morning' | 'none';
-  timingMode: 'duration' | 'end_time';
-  tripPlaceId: string;
-};
-
-function createFormState(item: ItineraryItem | null): FormState {
-  return {
-    customLabel: item?.customLabel ?? '',
-    durationMinutes: item?.localEndTime ? '' : (item?.durationMinutes?.toString() ?? ''),
-    exactTime: item?.localStartTime ?? '',
-    localEndTime: item?.localEndTime ?? '',
-    notes: item?.notes ?? '',
-    schedule: item?.localStartTime ? 'exact' : (item?.dayPart ?? 'none'),
-    timingMode: item?.localEndTime ? 'end_time' : 'duration',
-    tripPlaceId: item?.tripPlace?.id ?? '',
-  };
-}
-
-type ProviderSearchCacheEntry = {
-  sessionToken: string | null;
-  status: 'empty' | 'loading' | 'ok' | 'unavailable';
-  suggestions: ProviderSuggestion[];
-};
-
-type PlacePickerOption =
-  | { kind: 'custom_label'; label: string }
-  | { kind: 'provider'; suggestion: ProviderSuggestion }
-  | { kind: 'trip_place'; label: string; tripPlace: ItineraryTripPlace; usageLabel: string | null };
 
 /** The Places drawer responds with its richer collection shape; the itinerary only
  * needs the compatible subset it normally receives from its own endpoint. */
@@ -358,18 +292,22 @@ export function ItineraryManager({
   const [error, setError] = useState<string | null>(null);
   const prioritySaves = useRef(new Set<string>());
   const [savingPriorityIds, setSavingPriorityIds] = useState<ReadonlySet<string>>(() => new Set());
-  const [editor, setEditor] = useState<EditorState>({ dayId: null, item: null, mode: 'closed' });
-  const [createDay, setCreateDay] = useState<ItineraryDay | null>(null);
-  const [form, setForm] = useState<FormState>(() => createFormState(null));
-  const [formError, setFormError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  // The stop editor: what it was opened for, whether it is showing, and an id
+  // that changes with every opening, so each one starts from its own stop.
+  const [stopEditor, setStopEditor] = useState<{
+    id: number;
+    open: boolean;
+    request: StopEditorRequest | null;
+  }>({ id: 0, open: false, request: null });
   const [itemToDelete, setItemToDelete] = useState<ItineraryItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [dayNoteEditor, setDayNoteEditor] = useState<ItineraryDay | null>(null);
   const [contextDay, setContextDay] = useState<ItineraryDay | null>(null);
   const [dayNameEditor, setDayNameEditor] = useState<ItineraryDay | null>(null);
-  const [daySettingsOpen, setDaySettingsOpen] = useState(false);
+  // Where the open day starts and ends, and the stop whose time is being changed.
+  const [stayOpen, setStayOpen] = useState(false);
+  const [timingItem, setTimingItem] = useState<ItineraryItem | null>(null);
   const [dayTimesOpen, setDayTimesOpen] = useState(false);
   const [betterOrderDay, setBetterOrderDay] = useState<ItineraryDay | null>(null);
   const { compact, setCompactItinerary } = useCompactItinerary();
@@ -384,30 +322,12 @@ export function ItineraryManager({
   const [dayMoveError, setDayMoveError] = useState<string | null>(null);
   const [movingDay, setMovingDay] = useState(false);
   const [timeZoneConsequence, setTimeZoneConsequence] = useState(false);
-  const [placeQuery, setPlaceQuery] = useState('');
-  const [providerResults, setProviderResults] = useState<ProviderSuggestion[]>([]);
-  const [providerSessionToken, setProviderSessionToken] = useState<string | null>(null);
-  const [placeSearchStatus, setPlaceSearchStatus] = useState<'idle' | 'loading' | 'unavailable'>(
-    'idle',
-  );
-  const [identityChanged, setIdentityChanged] = useState(false);
-  const [identityPickerOpen, setIdentityPickerOpen] = useState(false);
-  const [timingExpanded, setTimingExpanded] = useState(false);
-  const [customDurationOpen, setCustomDurationOpen] = useState(false);
-  const [customDurationHours, setCustomDurationHours] = useState('');
-  const [customDurationMinutes, setCustomDurationMinutes] = useState('');
-  // Accepting the proposal commits to the time the field now shows, since a
-  // daypart is what constrained it.
-  const suggestedTime = useSuggestedTime(tripId, (localTime) => {
-    setForm((current) => ({ ...current, exactTime: localTime, schedule: 'exact' }));
-    setFormError(null);
-  });
-  const providerSearchRequest = useRef<AbortController | null>(null);
-  const providerSearchRequestQuery = useRef<string | null>(null);
-  const providerSearchCache = useRef(new Map<string, ProviderSearchCacheEntry>());
-  const currentPlaceQuery = useRef('');
-  const [selectingPlace, setSelectingPlace] = useState(false);
   const [organizingItemId, setOrganizingItemId] = useState<string | null>(null);
+  // A stop on its way to another day, or out of Unscheduled onto one.
+  const [moveTarget, setMoveTarget] = useState<{
+    allowUnscheduled: boolean;
+    item: ItineraryItem;
+  } | null>(null);
   const duplicateAttempts = useRef(new DuplicateAttemptTracker());
   // A phone shows the day's map in place of the day only once it is asked for.
   const [phoneMapOpen, setPhoneMapOpen] = useState(false);
@@ -438,7 +358,7 @@ export function ItineraryManager({
 
   // The whole trip's map waits to be asked for at every width, and is kept,
   // hidden, once it has been - behind the list and behind the Day view alike.
-  const [overviewDisplay, setOverviewDisplay] = useState<ItineraryOverviewDisplay>('list');
+  const [overviewDisplay, setOverviewDisplay] = useState<TripBoardDisplay>('list');
   const [tripMapMounted, setTripMapMounted] = useState(false);
   const {
     mount: shouldMountTripMap,
@@ -654,14 +574,6 @@ export function ItineraryManager({
       }),
     [locale],
   );
-  const placeUseDateFormatter = useMemo(
-    () => new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' }),
-    [locale],
-  );
-  const placeUseListFormatter = useMemo(
-    () => new Intl.ListFormat(locale, { style: 'short', type: 'conjunction' }),
-    [locale],
-  );
   const formatDate = (date: string, long = false) =>
     (long ? longDateFormatter : dateFormatter).format(new Date(`${date}T00:00:00.000Z`));
 
@@ -776,12 +688,6 @@ export function ItineraryManager({
     tripPlaceId
       ? (itinerary?.tripPlaces.find((tripPlace) => tripPlace.id === tripPlaceId) ?? null)
       : null;
-  const dailyBaseStart = placeName(tripPlaceById(selectedDay?.dailyBaseTripPlaceId ?? null));
-  const dailyBaseEnd = placeName(tripPlaceById(selectedDay?.dailyBaseDepartureTripPlaceId ?? null));
-  const dailyBaseSummary =
-    dailyBaseStart && dailyBaseEnd && dailyBaseStart !== dailyBaseEnd
-      ? t('dailyBaseSummary', { from: dailyBaseStart, to: dailyBaseEnd })
-      : (dailyBaseStart ?? dailyBaseEnd ?? t('noDailyBase'));
   const alphabeticalTripPlaces = useMemo(
     () =>
       sortTripPlaces(
@@ -822,6 +728,11 @@ export function ItineraryManager({
     [currentScore, itinerary, today],
   );
   const selectedRibbonDay = ribbonDays.find((day) => day.id === selectedDayId) ?? null;
+  // The whole trip by where each night is spent, for the Overview.
+  const chapters = useMemo(
+    () => (itinerary ? stayChapters({ days: itinerary.days, plannerDays: ribbonDays }) : []),
+    [itinerary, ribbonDays],
+  );
 
   /**
    * A photograph of each day's town, asked for once for the whole trip: the
@@ -913,6 +824,21 @@ export function ItineraryManager({
   const dayAnchors = useMemo(
     () => mapPoints.filter((point) => point.kind !== 'considered'),
     [mapPoints],
+  );
+  // Where the day already is - its Stay or a stop on it, else the trip's own
+  // destination - so a Google search from the stop editor prefers what is near.
+  const tripContext = useTripContext();
+  const tripDestinations = tripContext?.trip?.destinations;
+  const tripLifecycle = tripContext?.trip?.lifecycle;
+  const editorLocationBias = useMemo(
+    () =>
+      destinationLocationBias([
+        ...dayAnchors.map((point) => ({
+          location: { latitude: point.latitude, longitude: point.longitude },
+        })),
+        ...(tripDestinations ?? []),
+      ]),
+    [dayAnchors, tripDestinations],
   );
 
   /**
@@ -1021,38 +947,63 @@ export function ItineraryManager({
     scrollToItem(itemId, true);
   }
 
-  function openCreate(day: ItineraryDay) {
-    setCreateDay(day);
+  /** A new stop at the end of a day - already at a Trip Place when one was asked for. */
+  function openCreate(day: ItineraryDay, options: { tripPlaceId?: string | null } = {}) {
+    const number = (itinerary?.days.findIndex((candidate) => candidate.id === day.id) ?? -1) + 1;
+    setStopEditor((current) => ({
+      id: current.id + 1,
+      open: true,
+      request: {
+        dayId: day.id,
+        dayLabel: t('dayNumber', { number }),
+        kind: 'create',
+        tripPlaceId: options.tripPlaceId ?? null,
+      },
+    }));
   }
 
-  function openEdit(item: ItineraryItem) {
-    if (!item.itineraryDayId) return;
-    setForm(createFormState(item));
-    setFormError(null);
-    setPlaceQuery('');
-    currentPlaceQuery.current = '';
-    setProviderResults([]);
-    setProviderSessionToken(null);
-    setPlaceSearchStatus('idle');
-    setIdentityChanged(false);
-    setIdentityPickerOpen(false);
-    setTimingExpanded(Boolean(item.localStartTime || item.dayPart));
-    setCustomDurationOpen(
-      Boolean(
-        !item.localEndTime &&
-        item.durationMinutes &&
-        !isDurationPreset(item.durationMinutes.toString()),
-      ),
-    );
-    const parts = durationParts(item.localEndTime ? '' : (item.durationMinutes?.toString() ?? ''));
-    setCustomDurationHours(parts.hours);
-    setCustomDurationMinutes(parts.minutes);
-    providerSearchRequest.current?.abort();
-    providerSearchRequest.current = null;
-    providerSearchRequestQuery.current = null;
-    providerSearchCache.current = new Map();
-    suggestedTime.reset();
-    setEditor({ dayId: item.itineraryDayId, item, mode: 'edit' });
+  /** A new stop between two others: `position` among the day's stops, after `afterName`. */
+  function openInsert(day: ItineraryDay, position: number, afterName: string | null) {
+    const number = (itinerary?.days.findIndex((candidate) => candidate.id === day.id) ?? -1) + 1;
+    setStopEditor((current) => ({
+      id: current.id + 1,
+      open: true,
+      request: {
+        dayId: day.id,
+        dayLabel: t('dayNumber', { number }),
+        insert: { afterName, position },
+        kind: 'create',
+      },
+    }));
+  }
+
+  function openEdit(item: ItineraryItem, focus?: 'place' | 'timing') {
+    const dayId = item.itineraryDayId;
+    if (!dayId) return;
+    setStopEditor((current) => ({
+      id: current.id + 1,
+      open: true,
+      request: { dayId, focus, item, kind: 'edit' },
+    }));
+  }
+
+  function closeEditor() {
+    setStopEditor((current) => ({ ...current, open: false }));
+  }
+
+  /** What a stop is missing that one tap can add: its Place, or a location for it. */
+  function stopPartial(item: ItineraryItem) {
+    // A plan meant to be somewhere can be given its Place; a free afternoon, a
+    // transfer, a call or a workday is not missing one.
+    if (!item.tripPlace) {
+      return !item.blockType || item.blockType === 'activity'
+        ? { label: plannerT('stop.linkPlace'), onAction: () => openEdit(item, 'place') }
+        : null;
+    }
+    const tripPlace = item.tripPlace;
+    return canLocate(tripPlace) && !placeLocation(tripPlace) && online
+      ? { label: plannerT('stop.addLocation'), onAction: () => setLocatePlace(tripPlace) }
+      : null;
   }
 
   function resolveScoreAction(
@@ -1064,7 +1015,10 @@ export function ItineraryManager({
         ...itinerary.days.flatMap((day) => day.items),
         ...itinerary.unscheduledItems,
       ].find((item) => item.id === reference);
-      if (item) return { onSelect: () => openEdit(item) };
+      if (item) {
+        const partial = explanation.action === 'LINK_PLACE' ? stopPartial(item) : null;
+        return { onSelect: partial?.onAction ?? (() => openEdit(item)) };
+      }
       const day = itinerary.days.find((day) => day.id === reference);
       // The order Plan Score compared against can be previewed and applied,
       // rather than leaving the traveller to find it by hand.
@@ -1097,8 +1051,7 @@ export function ItineraryManager({
           onSelect: () => {
             const targetDay = selectedDay ?? itinerary.days[0];
             if (!targetDay) return;
-            openCreate(targetDay);
-            selectTripPlace(place.id);
+            openCreate(targetDay, { tripPlaceId: place.id });
           },
         };
     }
@@ -1118,8 +1071,7 @@ export function ItineraryManager({
     const place = itinerary.tripPlaces.find((place) => place.id === scorePlaceId);
     const day = itinerary.days.find((day) => day.id === requestedDayId) ?? itinerary.days[0];
     if (place && day) {
-      openCreate(day);
-      selectTripPlace(place.id);
+      openCreate(day, { tripPlaceId: place.id });
     }
     // Editor state owns the pending proposal after opening; reload must not reopen it.
     const params = new URLSearchParams(searchParams.toString());
@@ -1145,409 +1097,6 @@ export function ItineraryManager({
     window.history.replaceState(null, '', `${pathname}${params.size ? `?${params}` : ''}`);
   }, [scoreItemId, itinerary]);
 
-  function closeEditor() {
-    setEditor({ dayId: null, item: null, mode: 'closed' });
-    setFormError(null);
-    setPlaceQuery('');
-    currentPlaceQuery.current = '';
-    setProviderResults([]);
-    setProviderSessionToken(null);
-    setPlaceSearchStatus('idle');
-    setIdentityChanged(false);
-    setIdentityPickerOpen(false);
-    setTimingExpanded(false);
-    setCustomDurationOpen(false);
-    providerSearchRequest.current?.abort();
-    providerSearchRequest.current = null;
-    providerSearchRequestQuery.current = null;
-    providerSearchCache.current = new Map();
-    suggestedTime.reset();
-  }
-
-  function updateForm<Key extends keyof FormState>(key: Key, value: FormState[Key]) {
-    setForm((current) => ({ ...current, [key]: value }));
-    setFormError(null);
-  }
-
-  // Editing only here: a stop being added asks from the add sheet instead.
-  // Offline only hides it; the answer depends on the day as the server holds it,
-  // and a queued read would help nobody.
-  const canSuggestTime = editor.mode === 'edit' && online;
-
-  const matchingTripPlaces = useMemo(() => {
-    return sortTripPlaces(
-      filterItineraryTripPlaces(itinerary?.tripPlaces ?? [], placeQuery, (tripPlace) => [
-        placeName(tripPlace),
-        tripPlace.place.snapshot?.address,
-        tripPlace.place.providerAddress,
-      ]),
-      'name',
-      (tripPlace) => placeName(tripPlace) ?? t('providerPlace'),
-    );
-  }, [itinerary?.tripPlaces, placeQuery, t]);
-
-  const usageLabel = (tripPlace: ItineraryTripPlace) => {
-    const dates = placeUse[tripPlace.id]?.dayDates ?? [];
-    if (!dates.length) return null;
-    return tripPlacesTranslations('onDates', {
-      dates: placeUseListFormatter.format(
-        dates.map((date) => placeUseDateFormatter.format(new Date(`${date}T00:00:00Z`))),
-      ),
-    });
-  };
-
-  const existingExternalPlaceIds = useMemo(
-    () =>
-      new Set(
-        (itinerary?.tripPlaces ?? []).flatMap((tripPlace) =>
-          tripPlace.place.providerRefs.map((reference) => reference.externalPlaceId),
-        ),
-      ),
-    [itinerary?.tripPlaces],
-  );
-
-  const visibleProviderResults = useMemo(
-    () => itineraryProviderSuggestions(providerResults, existingExternalPlaceIds),
-    [existingExternalPlaceIds, providerResults],
-  );
-
-  const placePickerOptions = useMemo<PlacePickerOption[]>(() => {
-    const customLabel = placeQuery.trim();
-    return [
-      ...matchingTripPlaces.map((tripPlace) => ({
-        kind: 'trip_place' as const,
-        label: placeName(tripPlace) ?? t('providerPlace'),
-        tripPlace,
-        usageLabel: usageLabel(tripPlace),
-      })),
-      ...(customLabel ? [{ kind: 'custom_label' as const, label: customLabel }] : []),
-      ...visibleProviderResults.map((suggestion) => ({
-        kind: 'provider' as const,
-        suggestion,
-      })),
-    ];
-  }, [
-    matchingTripPlaces,
-    placeQuery,
-    placeUse,
-    placeUseDateFormatter,
-    placeUseListFormatter,
-    t,
-    tripPlacesTranslations,
-    visibleProviderResults,
-  ]);
-
-  function clearProviderResultState() {
-    setProviderResults([]);
-    setProviderSessionToken(null);
-    setPlaceSearchStatus('idle');
-  }
-
-  function handlePlaceQueryChange(value: string) {
-    currentPlaceQuery.current = value;
-    setPlaceQuery(value);
-    setFormError(null);
-    const queryKey = normalizeItineraryPlaceQuery(value);
-    const cached = providerSearchCache.current.get(queryKey);
-    if (!cached) {
-      clearProviderResultState();
-      return;
-    }
-    setProviderResults(cached.suggestions);
-    setProviderSessionToken(cached.sessionToken);
-    setPlaceSearchStatus(
-      cached.status === 'unavailable'
-        ? 'unavailable'
-        : cached.status === 'loading'
-          ? 'loading'
-          : 'idle',
-    );
-  }
-
-  async function searchGooglePlaces() {
-    const query = placeQuery.trim();
-    const queryKey = normalizeItineraryPlaceQuery(query);
-    if (!online || query.length < 3 || providerSearchCache.current.has(queryKey)) return;
-
-    if (providerSearchRequest.current && providerSearchRequestQuery.current) {
-      providerSearchRequest.current.abort();
-      providerSearchCache.current.set(providerSearchRequestQuery.current, {
-        sessionToken: null,
-        status: 'unavailable',
-        suggestions: [],
-      });
-    }
-    const controller = new AbortController();
-    providerSearchRequest.current = controller;
-    providerSearchRequestQuery.current = queryKey;
-    providerSearchCache.current.set(queryKey, {
-      sessionToken: null,
-      status: 'loading',
-      suggestions: [],
-    });
-    setPlaceSearchStatus('loading');
-    try {
-      const result = await searchProviderPlaces(query, controller.signal);
-      if (controller.signal.aborted) return;
-      const entry: ProviderSearchCacheEntry = {
-        sessionToken: result.sessionToken,
-        status:
-          result.status === 'ok' ? 'ok' : result.status === 'unavailable' ? 'unavailable' : 'empty',
-        suggestions: result.status === 'ok' ? result.suggestions : [],
-      };
-      providerSearchCache.current.set(queryKey, entry);
-      if (normalizeItineraryPlaceQuery(currentPlaceQuery.current) !== queryKey) return;
-      setProviderResults(entry.suggestions);
-      setProviderSessionToken(entry.sessionToken);
-      setPlaceSearchStatus(entry.status === 'unavailable' ? 'unavailable' : 'idle');
-    } catch {
-      if (controller.signal.aborted) return;
-      const entry: ProviderSearchCacheEntry = {
-        sessionToken: null,
-        status: 'unavailable',
-        suggestions: [],
-      };
-      providerSearchCache.current.set(queryKey, entry);
-      if (normalizeItineraryPlaceQuery(currentPlaceQuery.current) !== queryKey) return;
-      setProviderResults([]);
-      setProviderSessionToken(null);
-      setPlaceSearchStatus('unavailable');
-    } finally {
-      if (providerSearchRequest.current === controller) {
-        providerSearchRequest.current = null;
-        providerSearchRequestQuery.current = null;
-      }
-    }
-  }
-
-  function selectTripPlace(tripPlaceId: string) {
-    setForm((current) => ({
-      ...current,
-      ...itineraryIdentityChoice(current, { kind: 'trip_place', tripPlaceId }),
-    }));
-    setIdentityChanged(true);
-    setIdentityPickerOpen(false);
-    setPlaceQuery('');
-    currentPlaceQuery.current = '';
-    clearProviderResultState();
-    setFormError(null);
-  }
-
-  function selectCustomLabel(label: string) {
-    setForm((current) => ({
-      ...current,
-      ...itineraryIdentityChoice(current, { kind: 'custom_label', label }),
-    }));
-    setIdentityChanged(true);
-    setIdentityPickerOpen(false);
-    setPlaceQuery('');
-    currentPlaceQuery.current = '';
-    clearProviderResultState();
-    setFormError(null);
-  }
-
-  function clearIdentity() {
-    setForm((current) => ({
-      ...current,
-      ...itineraryIdentityChoice(current, { kind: 'clear' }),
-    }));
-    setIdentityChanged(true);
-    setIdentityPickerOpen(true);
-    setPlaceQuery('');
-    currentPlaceQuery.current = '';
-    clearProviderResultState();
-  }
-
-  async function selectProviderPlace(suggestion: ProviderSuggestion) {
-    setSelectingPlace(true);
-    try {
-      const { place } = await resolveProviderPlace(
-        suggestion.externalPlaceId,
-        { address: suggestion.description, name: suggestion.name },
-        locale,
-        providerSessionToken ?? undefined,
-        'itinerary',
-      );
-      const { tripPlace } = await addTripPlace(tripId, place.id);
-      setItinerary((current) =>
-        current
-          ? {
-              ...current,
-              tripPlaces: current.tripPlaces.some((item) => item.id === tripPlace.id)
-                ? current.tripPlaces
-                : [
-                    ...current.tripPlaces,
-                    {
-                      customName: tripPlace.customName,
-                      id: tripPlace.id,
-                      note: tripPlace.note,
-                      place: {
-                        id: tripPlace.place.id,
-                        kind: tripPlace.place.kind,
-                        location: tripPlace.place.location,
-                        name: tripPlace.place.name,
-                        note: tripPlace.place.note,
-                        providerAddress: tripPlace.place.providerAddress,
-                        providerLabel: tripPlace.place.providerLabel,
-                        providerRefs: tripPlace.place.providerRefs,
-                        timeZone: tripPlace.place.location?.timeZone ?? null,
-                      },
-                      priority: tripPlace.priority,
-                    },
-                  ],
-            }
-          : current,
-      );
-      selectTripPlace(tripPlace.id);
-    } catch {
-      setFormError(t('placeSelectionError'));
-    } finally {
-      setSelectingPlace(false);
-    }
-  }
-
-  function selectPlacePickerOption(option: PlacePickerOption | null) {
-    if (!option) return;
-    if (option.kind === 'trip_place') {
-      selectTripPlace(option.tripPlace.id);
-      return;
-    }
-    if (option.kind === 'custom_label') {
-      selectCustomLabel(option.label);
-      return;
-    }
-    void selectProviderPlace(option.suggestion);
-  }
-
-  const selectedTripPlace = form.tripPlaceId
-    ? (itinerary?.tripPlaces.find((tripPlace) => tripPlace.id === form.tripPlaceId) ?? null)
-    : null;
-  const hasItemIdentity = Boolean(form.customLabel.trim() || form.tripPlaceId);
-  const providerQueryKey = normalizeItineraryPlaceQuery(placeQuery);
-  const providerQueryCached = providerSearchCache.current.has(providerQueryKey);
-  const selectedPlaceName = selectedTripPlace ? placeName(selectedTripPlace) : null;
-
-  function chooseDurationPreset(minutes: number) {
-    updateForm('durationMinutes', minutes.toString());
-    setCustomDurationOpen(false);
-    const parts = durationParts(minutes.toString());
-    setCustomDurationHours(parts.hours);
-    setCustomDurationMinutes(parts.minutes);
-  }
-
-  function showCustomDuration() {
-    const parts = durationParts(form.durationMinutes);
-    setCustomDurationHours(parts.hours);
-    setCustomDurationMinutes(parts.minutes);
-    setCustomDurationOpen(true);
-  }
-
-  function updateCustomDuration(kind: 'hours' | 'minutes', value: string) {
-    const parts = {
-      hours: kind === 'hours' ? value : customDurationHours,
-      minutes: kind === 'minutes' ? value : customDurationMinutes,
-    };
-    setCustomDurationHours(parts.hours);
-    setCustomDurationMinutes(parts.minutes);
-    updateForm('durationMinutes', durationMinutesFromParts(parts));
-  }
-
-  function removeTiming() {
-    setForm((current) => ({
-      ...current,
-      durationMinutes: current.timingMode === 'end_time' ? '' : current.durationMinutes,
-      exactTime: '',
-      localEndTime: '',
-      schedule: 'none',
-      timingMode: 'duration',
-    }));
-    setTimingExpanded(false);
-    suggestedTime.reset();
-    setFormError(null);
-  }
-
-  function buildInput(): ItineraryItemInput | null {
-    const customLabel = form.customLabel.trim();
-    if (!customLabel && !form.tripPlaceId) {
-      setFormError(t('minimumContentError'));
-      return null;
-    }
-    if (form.schedule === 'exact' && !form.exactTime) {
-      setFormError(t('exactTimeError'));
-      return null;
-    }
-    const duration =
-      form.timingMode === 'duration' && form.durationMinutes ? Number(form.durationMinutes) : null;
-    const customDurationHasInput = Boolean(
-      customDurationHours.trim() || customDurationMinutes.trim(),
-    );
-    if (duration !== null && (!Number.isInteger(duration) || duration <= 0)) {
-      setFormError(t('durationError'));
-      return null;
-    }
-    if (
-      form.timingMode === 'duration' &&
-      customDurationOpen &&
-      customDurationHasInput &&
-      duration === null
-    ) {
-      setFormError(t('durationError'));
-      return null;
-    }
-    if (form.timingMode === 'end_time' && form.localEndTime) {
-      if (form.schedule !== 'exact' || !form.exactTime) {
-        setFormError(t('endTimeStartRequired'));
-        return null;
-      }
-      if (form.localEndTime <= form.exactTime) {
-        setFormError(t('endTimeError'));
-        return null;
-      }
-    }
-    const input: ItineraryItemInput = {
-      customLabel: customLabel || null,
-      durationMinutes: duration,
-      localEndTime: form.timingMode === 'end_time' ? form.localEndTime || null : null,
-      notes: form.notes.trim() || null,
-      schedule:
-        form.schedule === 'exact'
-          ? { kind: 'exact', localTime: form.exactTime }
-          : form.schedule === 'none'
-            ? { kind: 'none' }
-            : { dayPart: form.schedule, kind: 'day_part' },
-      tripPlaceId: form.tripPlaceId || null,
-    };
-
-    // Omitted legacy fields survive an ordinary edit. A new identity must not
-    // inherit an old custom location or item-level priority, though.
-    Object.assign(input, itineraryIdentityLegacyPatch(identityChanged));
-
-    return input;
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const input = buildInput();
-    if (!input || editor.mode !== 'edit') return;
-    setSaving(true);
-    setFormError(null);
-    setTimeZoneConsequence(false);
-    try {
-      const result = await updateItineraryItem(tripId, editor.item.id, input);
-      setTimeZoneConsequence(Boolean(result.timeZoneConsequence));
-      await refresh();
-      closeEditor();
-    } catch (error) {
-      setFormError(
-        error instanceof ItineraryApiError && error.code === 'invalid_local_end_time'
-          ? t('endTimeError')
-          : t('saveError'),
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function handleDelete() {
     if (!itemToDelete) return;
     setDeleting(true);
@@ -1572,7 +1121,19 @@ export function ItineraryManager({
     setOrganizingItemId(item.id);
     setError(null);
     try {
-      await organizeItineraryItem(tripId, item.id, { itineraryDayId, position });
+      // Shown at once - dropped, moved earlier, sent to another day - through the
+      // same replay the offline queue uses, and put back if the server says no.
+      await optimisticItineraryEdit({
+        commit: () => organizeItineraryItem(tripId, item.id, { itineraryDayId, position }),
+        operation: {
+          baseItem: item,
+          input: { itineraryDayId, position },
+          itemId: item.id,
+          kind: 'itinerary_item_organize',
+        },
+        queryClient,
+        tripId,
+      });
       await refresh();
     } catch {
       setError(t('organizeError'));
@@ -1734,7 +1295,6 @@ export function ItineraryManager({
   }
 
   function openDayMove(day: ItineraryDay, strategy: 'append' | 'swap' = 'append') {
-    setDaySettingsOpen(false);
     setDayMoveSourceId(day.id);
     setDayMoveTargetId('');
     setDayMoveStrategy(strategy);
@@ -1820,7 +1380,7 @@ export function ItineraryManager({
     openDay(day.id);
   }
 
-  function changeOverviewDisplay(display: ItineraryOverviewDisplay) {
+  function changeOverviewDisplay(display: TripBoardDisplay) {
     setOverviewDisplay(display);
     if (display === 'map') setTripMapMounted(true);
   }
@@ -1885,16 +1445,17 @@ export function ItineraryManager({
       ) : null}
       {renderOverview ? (
         <div className={activeView === 'overview' ? 'contents' : 'hidden'}>
-          <ItineraryOverview
+          <TripBoard
             actions={
               <Button onClick={() => setPlacesDrawerOpen(true)} size="sm" variant="outline">
                 <Icons.Places aria-hidden="true" data-icon="inline-start" />
                 {tripPlacesTranslations('openPlaces')}
               </Button>
             }
+            chapters={chapters}
             days={itinerary.days}
             display={overviewDisplay}
-            locale={locale}
+            itemName={itemName}
             mapPanel={
               shouldMountTripMap ? (
                 <ItineraryTripMap
@@ -1920,9 +1481,19 @@ export function ItineraryManager({
             onDisplayChange={changeOverviewDisplay}
             onEditItem={openOverviewItem}
             onOpenDay={openDay}
-            resolveItemName={itemName}
+            sketchFor={(day) => {
+              // Drawn from coordinates the trip already holds: no leg is routed
+              // for the whole trip's view.
+              const places = daySketchPlaces(
+                buildDaySequence({ bases: resolveDailyBases({ day }), items: day.items }),
+                itinerary.tripPlaces,
+              );
+              const sketch = routeSketch(places, DAY_SKETCH_BOX, { minDistinct: 2 });
+              return sketch ? <DayRouteSketch places={places} sketch={sketch} /> : null;
+            }}
+            stayName={(tripPlaceId) => placeName(tripPlaceById(tripPlaceId))}
             timeFormat={preferences.timeFormat}
-            weather={weather}
+            weatherFor={(date) => tripWeatherForDate(weather ?? null, date)}
           />
         </div>
       ) : null}
@@ -2005,15 +1576,30 @@ export function ItineraryManager({
                     <Icons.Preview aria-hidden="true" data-icon="inline-start" />
                     {plannerT('masthead.preview')}
                   </Button>
-                  <DaySettingsMenu
+                  {/* A day that has been lived has its memories; the journal opens on it. */}
+                  {(tripLifecycle === 'active' || tripLifecycle === 'completed') &&
+                  (!today || selectedDay.date <= today) ? (
+                    <Button
+                      nativeButton={false}
+                      render={
+                        <Link
+                          href={`/trips/${tripId}/memories?date=${encodeURIComponent(selectedDay.date)}`}
+                        />
+                      }
+                      size="sm"
+                      variant="outline"
+                    >
+                      <Icons.Memories aria-hidden="true" data-icon="inline-start" />
+                      {plannerT('masthead.memories')}
+                    </Button>
+                  ) : null}
+                  <DayMenu
+                    canCheckOrder={online && selectedDay.items.length > 1}
                     canSuggestTimes={online && untimedItems(selectedDay).length > 0}
                     compact={compact}
-                    dailyBaseSummary={dailyBaseSummary}
                     day={selectedDay}
+                    onCheckOrder={() => setBetterOrderDay(selectedDay)}
                     onCompactChange={setCompactItinerary}
-                    onDailyBaseChange={(tripPlaceId, departureTripPlaceId) =>
-                      void handleDailyBase(selectedDay, tripPlaceId, departureTripPlaceId)
-                    }
                     onEditContext={() => setContextDay(selectedDay)}
                     onEditName={() => {
                       setDayNameEditor(selectedDay);
@@ -2024,12 +1610,9 @@ export function ItineraryManager({
                       setDayNoteEditor(selectedDay);
                       setDayNoteValue(selectedDay.notes ?? '');
                     }}
+                    onEditStay={() => setStayOpen(true)}
                     onMoveDay={(strategy) => openDayMove(selectedDay, strategy)}
-                    onOpenChange={setDaySettingsOpen}
                     onSuggestTimes={() => setDayTimesOpen(true)}
-                    open={daySettingsOpen}
-                    placeName={placeName}
-                    tripPlaces={alphabeticalTripPlaces}
                   />
                 </>
               }
@@ -2055,7 +1638,7 @@ export function ItineraryManager({
               }
               onOpenMap={openPhoneMap}
               onPreviousDay={selectedIndex > 0 ? () => selectAdjacentDay(-1) : undefined}
-              onStayClick={() => setDaySettingsOpen(true)}
+              onStayClick={() => setStayOpen(true)}
               routeNotes={
                 !compact &&
                 (routes?.source === 'cache' ||
@@ -2124,7 +1707,11 @@ export function ItineraryManager({
             {selectedDay.items.length ? (
               <DayTimeline
                 attentionFor={(item) => {
-                  const problems = dayProblems.byItem.get(item.id) ?? [];
+                  // A stop already offering its missing Place or location in one
+                  // tap is not told about it twice.
+                  const problems = (dayProblems.byItem.get(item.id) ?? []).filter(
+                    (problem) => problem.action !== 'LINK_PLACE' || !stopPartial(item),
+                  );
                   const holidays = (hoursNotices?.notices ?? []).filter(
                     (notice) =>
                       notice.kind === 'holiday_check' &&
@@ -2160,23 +1747,22 @@ export function ItineraryManager({
                 itemCount={selectedDay.items.length}
                 label={t('itemListLabel')}
                 menuActions={{
-                  dayOptions: itinerary.days.map((day, dayIndex) => ({
-                    id: day.id,
-                    label: dayOption(day, dayIndex),
-                  })),
                   onDeleteItem: setItemToDelete,
                   onDuplicateItem: (item) => void handleDuplicate(item),
                   onEditItem: openEdit,
                   onMoveItem: (item, dayId, position) => void handleOrganize(item, dayId, position),
+                  onMoveToDay: (item) => setMoveTarget({ allowUnscheduled: true, item }),
                   onPlacePriorityChange: (item, priority) =>
                     void changePlacePriority(item, priority),
                   onSelectItem: selectItemOnMap,
                   organizingItemId,
                   savingPriorityIds,
                   selectedDayId: selectedDay.id,
-                  unscheduledLabel: t('unscheduled'),
                 }}
+                onInsert={(position, afterName) => openInsert(selectedDay, position, afterName)}
+                onEditTiming={setTimingItem}
                 onModeChange={(segment, mode) => void handleRouteModeChange(segment, mode)}
+                onReorder={(item, position) => void handleOrganize(item, selectedDay.id, position)}
                 onSelectBase={selectBaseOnMap}
                 onSelectItem={selectItemOnMap}
                 onViewBaseDetails={(tripPlaceId) =>
@@ -2212,22 +1798,31 @@ export function ItineraryManager({
                     selected: selectedMapItemId === item.id,
                   };
                 }}
+                partialFor={stopPartial}
                 routesStale={routes?.stale ?? false}
                 savingRouteOwner={savingRouteOwner}
               />
             ) : (
-              <PageState
-                actions={
-                  <Button onClick={() => openCreate(selectedDay)} variant="outline">
-                    <Plus aria-hidden="true" data-icon="inline-start" />
-                    {t('addFirstItem')}
-                  </Button>
-                }
-                className="min-h-60 justify-center"
-                description={t('emptyDescription')}
-                headingLevel={2}
-                icon={<Icons.Itinerary aria-hidden="true" />}
-                title={t('emptyTitle')}
+              <DayEmpty
+                dayNumber={selectedIndex + 1}
+                mustGo={itinerary.tripPlaces.filter(
+                  (tripPlace) =>
+                    tripPlace.priority === 'must_go' && !placeUse[tripPlace.id]?.dayDates.length,
+                )}
+                onAddMustGo={async (tripPlace) => {
+                  // An idea already kept for it in Unscheduled is scheduled, with
+                  // its notes and timing, rather than added a second time.
+                  const idea = itinerary.unscheduledItems.find(
+                    (item) => item.tripPlace?.id === tripPlace.id,
+                  );
+                  if (idea) await handleOrganize(idea, selectedDay.id, selectedDay.items.length);
+                  else await addTripPlaceToSelectedDay(tripPlace.id);
+                }}
+                onAddStop={() => openCreate(selectedDay)}
+                onBrowsePlaces={() => setPlacesDrawerOpen(true)}
+                placeName={(tripPlace) => placeName(tripPlace) ?? t('providerPlace')}
+                town={selectedRibbonDay?.town ?? null}
+                tripIsEmpty={itinerary.days.every((day) => !day.items.length)}
               />
             )}
 
@@ -2270,88 +1865,59 @@ export function ItineraryManager({
         />
       ) : null}
 
-      {itinerary.unscheduledItems.length ? (
-        <section className="space-y-3">
-          <div>
-            <h2 className="text-lg font-semibold">
-              {t('unscheduledSummary', { count: itinerary.unscheduledItems.length })}
-            </h2>
-            <p className="text-sm text-muted-foreground">{t('unscheduledDescription')}</p>
-          </div>
-          <ItemGroup aria-label={t('unscheduled')} variant="list">
-            {itinerary.unscheduledItems.map((item) => {
-              const name = itemName(item);
-              const hasMapLocation = Boolean(item.tripPlace && placeLocation(item.tripPlace));
-              const isMapSelected = selectedMapItemId === item.id;
-              return (
-                <Item
-                  className={cn('relative px-3 py-3', isMapSelected && 'bg-secondary/70')}
-                  id={`itinerary-item-${item.id}`}
-                  key={item.id}
-                  tabIndex={-1}
-                >
-                  <ItemMedia variant="icon">
-                    <Icons.Itinerary aria-hidden="true" />
-                  </ItemMedia>
-                  <ItemContent>
-                    <ItemTitle>
-                      {hasMapLocation ? (
-                        <button
-                          aria-label={t('viewDetailsFor', { name })}
-                          // The whole row opens the place, the same as a
-                          // scheduled stop; the controls sit above the claim.
-                          className="rounded-[var(--radius-sm)] text-left outline-none after:absolute after:inset-0 hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
-                          onClick={() => openPlaceDetails(item.tripPlace)}
-                          type="button"
-                        >
-                          {name}
-                        </button>
-                      ) : (
-                        name
-                      )}
-                    </ItemTitle>
-                    <ItemDescription>{item.notes}</ItemDescription>
-                  </ItemContent>
-                  <ItemActions className="relative z-10">
-                    <Select
-                      onValueChange={(value) =>
-                        void handleOrganize(item, (value ?? null) as string | null, 999)
-                      }
-                    >
-                      <SelectTrigger aria-label={t('scheduleItem', { name })} size="sm">
-                        <SelectValue>{t('moveToDay')}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {itinerary.days.map((day, index) => (
-                          <SelectItem key={day.id} value={day.id}>
-                            {dayOption(day, index)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      aria-label={t('duplicateItem', { name })}
-                      disabled={organizingItemId === item.id}
-                      onClick={() => void handleDuplicate(item)}
-                      size="icon-sm"
-                      variant="ghost"
-                    >
-                      <Copy aria-hidden="true" />
-                    </Button>
-                    <Button
-                      aria-label={t('deleteItem', { name })}
-                      onClick={() => setItemToDelete(item)}
-                      size="icon-sm"
-                      variant="ghost"
-                    >
-                      <Trash2 aria-hidden="true" />
-                    </Button>
-                  </ItemActions>
-                </Item>
-              );
-            })}
-          </ItemGroup>
-        </section>
+      <UnscheduledTray
+        items={itinerary.unscheduledItems}
+        onDelete={setItemToDelete}
+        onDuplicate={(item) => void handleDuplicate(item)}
+        onSchedule={(item) => setMoveTarget({ allowUnscheduled: false, item })}
+        onViewDetails={(item) => openPlaceDetails(item.tripPlace)}
+        organizingItemId={organizingItemId}
+        resolveItem={(item) => ({
+          category: item.tripPlace?.place.snapshot?.category,
+          name: itemName(item),
+        })}
+      />
+
+      {selectedDay ? (
+        <StaySheet
+          day={selectedDay}
+          onChange={(tripPlaceId, departureTripPlaceId) =>
+            void handleDailyBase(selectedDay, tripPlaceId, departureTripPlaceId)
+          }
+          onOpenChange={setStayOpen}
+          open={stayOpen}
+          placeName={placeName}
+          tripPlaces={alphabeticalTripPlaces}
+        />
+      ) : null}
+
+      {selectedDay ? (
+        <TimingSheet
+          dayId={selectedDay.id}
+          item={timingItem}
+          name={timingItem ? itemName(timingItem) : ''}
+          onClose={() => setTimingItem(null)}
+          onSaved={async ({ timeZoneConsequence: consequence }) => {
+            setTimeZoneConsequence(consequence);
+            setTimingItem(null);
+            await refresh();
+          }}
+          open={Boolean(timingItem)}
+          tripId={tripId}
+        />
+      ) : null}
+
+      {moveTarget ? (
+        <MoveToDaySheet
+          allowUnscheduled={moveTarget.allowUnscheduled}
+          currentDayId={moveTarget.item.itineraryDayId}
+          days={ribbonDays}
+          itemName={itemName(moveTarget.item)}
+          key={moveTarget.item.id}
+          onMove={(dayId, position) => void handleOrganize(moveTarget.item, dayId, position)}
+          onOpenChange={(open) => !open && setMoveTarget(null)}
+          open
+        />
       ) : null}
 
       {planScoreEnabled && selectedDay ? (
@@ -2418,503 +1984,32 @@ export function ItineraryManager({
         />
       ) : null}
 
-      <Sheet open={editor.mode !== 'closed'} onOpenChange={(open) => !open && closeEditor()}>
-        <SheetContent
-          className="w-full md:data-[side=right]:w-[min(38rem,calc(100%-0.5rem))]"
-          closeLabel={t('close')}
-        >
-          <SheetHeader className="border-b">
-            <SheetTitle>{t('editTitle')}</SheetTitle>
-            <SheetDescription>{t('editDescription')}</SheetDescription>
-          </SheetHeader>
-          {editor.mode !== 'closed' ? (
-            <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-              <div className="min-h-0 flex-1 overflow-y-auto p-5">
-                <FieldGroup>
-                  {formError ? (
-                    <Alert role="alert" variant="destructive">
-                      <CircleAlert aria-hidden="true" />
-                      <AlertDescription>{formError}</AlertDescription>
-                    </Alert>
-                  ) : null}
-
-                  {hasItemIdentity ? (
-                    <div className="rounded-[var(--radius-lg)] border bg-muted/30 p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-background text-muted-foreground shadow-xs">
-                          {form.tripPlaceId ? (
-                            <Icons.Place aria-hidden="true" className="size-4" />
-                          ) : (
-                            <NotebookPen aria-hidden="true" className="size-4" />
-                          )}
-                        </div>
-                        <div className="flex min-h-9 min-w-0 flex-1 flex-col justify-center">
-                          <p className="truncate text-sm font-medium">
-                            {form.customLabel || selectedPlaceName}
-                          </p>
-                          {form.customLabel && selectedPlaceName ? (
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                              {t('linkedPlace', { place: selectedPlaceName })}
-                            </p>
-                          ) : selectedTripPlace?.place.snapshot?.address ||
-                            selectedTripPlace?.place.providerAddress ? (
-                            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                              {selectedTripPlace.place.snapshot?.address ??
-                                selectedTripPlace.place.providerAddress}
-                            </p>
-                          ) : null}
-                          {selectedTripPlace?.priority ? (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {t('inheritedPriority', {
-                                priority: tripPlacesTranslations(
-                                  `priority.${selectedTripPlace.priority}`,
-                                ),
-                              })}
-                            </p>
-                          ) : null}
-                        </div>
-                        <div className="flex shrink-0 gap-1">
-                          <Button
-                            aria-label={t('changeIdentity')}
-                            onClick={() => setIdentityPickerOpen(true)}
-                            size="sm"
-                            type="button"
-                            variant="ghost"
-                          >
-                            {t('change')}
-                          </Button>
-                          <Button
-                            aria-label={t('clearIdentity')}
-                            onClick={clearIdentity}
-                            size="icon-sm"
-                            type="button"
-                            variant="ghost"
-                          >
-                            <X aria-hidden="true" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {!hasItemIdentity || identityPickerOpen ? (
-                    <Field>
-                      <FieldLabel htmlFor="itinerary-place-or-plan">{t('placeOrPlan')}</FieldLabel>
-                      <Combobox<PlacePickerOption>
-                        disabled={selectingPlace}
-                        filteredItems={placePickerOptions}
-                        inputValue={placeQuery}
-                        items={placePickerOptions}
-                        itemToStringLabel={(option) =>
-                          !option
-                            ? ''
-                            : option.kind === 'provider'
-                              ? option.suggestion.name
-                              : option.label
-                        }
-                        onInputValueChange={(value) => handlePlaceQueryChange(value)}
-                        onValueChange={(option) => selectPlacePickerOption(option)}
-                      >
-                        <ComboboxInput
-                          autoComplete="off"
-                          autoFocus={!hasItemIdentity}
-                          className="h-11 w-full min-w-0 rounded-[var(--radius-md)] border border-input bg-background py-2 text-base shadow-[var(--shadow-control)] md:text-sm"
-                          clearLabel={t('clearPlaceQuery')}
-                          id="itinerary-place-or-plan"
-                          placeholder={t('placeOrPlanPlaceholder')}
-                          showClear={Boolean(placeQuery)}
-                          triggerLabel={t('openPlacePicker')}
-                        />
-                        <ComboboxContent>
-                          <ComboboxEmpty>{t('placePickerEmpty')}</ComboboxEmpty>
-                          <ComboboxList>
-                            {(option) => (
-                              <ComboboxItem
-                                className={cn(
-                                  'min-h-12 gap-3 px-3 py-2 pr-9',
-                                  option.kind === 'provider' && 'bg-muted/25',
-                                  option.kind === 'trip_place' &&
-                                    option.usageLabel &&
-                                    'bg-brand/5 data-highlighted:bg-brand/10',
-                                )}
-                                key={
-                                  option.kind === 'trip_place'
-                                    ? option.tripPlace.id
-                                    : option.kind === 'provider'
-                                      ? option.suggestion.externalPlaceId
-                                      : `custom-${option.label}`
-                                }
-                                value={option}
-                              >
-                                {option.kind === 'trip_place' ? (
-                                  <Icons.Place
-                                    aria-hidden="true"
-                                    className="text-muted-foreground"
-                                  />
-                                ) : option.kind === 'custom_label' ? (
-                                  <NotebookPen
-                                    aria-hidden="true"
-                                    className="text-muted-foreground"
-                                  />
-                                ) : (
-                                  <Search aria-hidden="true" className="text-muted-foreground" />
-                                )}
-                                <span className="min-w-0 flex-1">
-                                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium">
-                                    <span className="min-w-0 truncate">
-                                      {option.kind === 'custom_label'
-                                        ? t('useCustomPlan', { label: option.label })
-                                        : option.kind === 'provider'
-                                          ? option.suggestion.name
-                                          : option.label}
-                                    </span>
-                                    {option.kind === 'trip_place' && option.usageLabel ? (
-                                      <Badge className="max-w-44" size="sm">
-                                        <Icons.Success aria-hidden="true" className="size-3" />
-                                        <span className="truncate">{option.usageLabel}</span>
-                                      </Badge>
-                                    ) : null}
-                                  </span>
-                                  {option.kind === 'trip_place' &&
-                                  (option.tripPlace.place.snapshot?.address ||
-                                    option.tripPlace.place.providerAddress) ? (
-                                    <span className="block truncate text-xs text-muted-foreground">
-                                      {option.tripPlace.place.snapshot?.address ??
-                                        option.tripPlace.place.providerAddress}
-                                    </span>
-                                  ) : option.kind === 'provider' &&
-                                    option.suggestion.description ? (
-                                    <span className="block truncate text-xs text-muted-foreground">
-                                      {option.suggestion.description}
-                                    </span>
-                                  ) : null}
-                                </span>
-                              </ComboboxItem>
-                            )}
-                          </ComboboxList>
-                          {placeQuery.trim() ? (
-                            <div className="space-y-2 border-t p-2">
-                              {visibleProviderResults.length ? (
-                                <p className="px-1 text-right text-xs font-normal tracking-normal text-muted-foreground">
-                                  <span translate="no">{t('googleMapsAttribution')}</span>
-                                </p>
-                              ) : placeSearchStatus === 'loading' ? (
-                                <p className="px-1 text-xs text-muted-foreground" role="status">
-                                  {t('searchingPlaces')}
-                                </p>
-                              ) : placeSearchStatus === 'unavailable' ? (
-                                <p className="px-1 text-xs text-muted-foreground" role="status">
-                                  {t('providerSearchUnavailable')}
-                                </p>
-                              ) : providerQueryCached ? (
-                                <p className="px-1 text-xs text-muted-foreground" role="status">
-                                  {t('googleSearchEmpty')}
-                                </p>
-                              ) : !online ? (
-                                <p className="px-1 text-xs text-muted-foreground">
-                                  {t('googleSearchOffline')}
-                                </p>
-                              ) : placeQuery.trim().length < 3 ? (
-                                <p className="px-1 text-xs text-muted-foreground">
-                                  {t('googleSearchMinimum')}
-                                </p>
-                              ) : (
-                                <Button
-                                  className="w-full justify-start"
-                                  onClick={() => void searchGooglePlaces()}
-                                  size="sm"
-                                  type="button"
-                                  variant="ghost"
-                                >
-                                  <Search aria-hidden="true" />
-                                  {t('searchGoogle', { query: placeQuery.trim() })}
-                                </Button>
-                              )}
-                            </div>
-                          ) : null}
-                        </ComboboxContent>
-                      </Combobox>
-                      <FieldDescription>{t('placeOrPlanHint')}</FieldDescription>
-                      {hasItemIdentity ? (
-                        <Button
-                          className="self-start px-0"
-                          onClick={() => {
-                            setIdentityPickerOpen(false);
-                            setPlaceQuery('');
-                            currentPlaceQuery.current = '';
-                            clearProviderResultState();
-                          }}
-                          size="sm"
-                          type="button"
-                          variant="link"
-                        >
-                          {t('keepCurrentIdentity')}
-                        </Button>
-                      ) : null}
-                    </Field>
-                  ) : null}
-
-                  {hasItemIdentity ? (
-                    <>
-                      {!timingExpanded ? (
-                        <Button
-                          className="w-full justify-start"
-                          onClick={() => setTimingExpanded(true)}
-                          type="button"
-                          variant="outline"
-                        >
-                          <Clock3 aria-hidden="true" />
-                          {t('addTiming')}
-                        </Button>
-                      ) : (
-                        <Field className="rounded-[var(--radius-lg)] border p-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <FieldLabel>{t('scheduleLabel')}</FieldLabel>
-                            <Button onClick={removeTiming} size="sm" type="button" variant="ghost">
-                              <X aria-hidden="true" />
-                              {t('removeTiming')}
-                            </Button>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {(['anytime', 'morning', 'afternoon', 'evening', 'exact'] as const).map(
-                              (value) => (
-                                <Button
-                                  aria-pressed={form.schedule === value}
-                                  key={value}
-                                  onClick={() =>
-                                    setForm((current) => ({
-                                      ...current,
-                                      ...(value !== 'exact' && current.timingMode === 'end_time'
-                                        ? {
-                                            durationMinutes: '',
-                                            localEndTime: '',
-                                            timingMode: 'duration' as const,
-                                          }
-                                        : {}),
-                                      schedule: value,
-                                    }))
-                                  }
-                                  size="sm"
-                                  type="button"
-                                  variant={form.schedule === value ? 'secondary' : 'outline'}
-                                >
-                                  {t(`schedule.${value}`)}
-                                </Button>
-                              ),
-                            )}
-                          </div>
-                          {form.schedule === 'exact' ? (
-                            <div className="space-y-2">
-                              <FieldLabel htmlFor="itinerary-exact-time">
-                                {t('exactTime')}
-                              </FieldLabel>
-                              <TimeInput
-                                aria-describedby="itinerary-exact-time-hint"
-                                id="itinerary-exact-time"
-                                onValueChange={(value) => updateForm('exactTime', value)}
-                                required
-                                value={form.exactTime}
-                              />
-                              <FieldDescription id="itinerary-exact-time-hint">
-                                {t('localTimeHint')}
-                              </FieldDescription>
-                            </div>
-                          ) : null}
-                          {canSuggestTime && editor.mode === 'edit' && editor.dayId ? (
-                            <SuggestedTimeAction
-                              loading={suggestedTime.loading}
-                              message={suggestedTime.message}
-                              onRequest={() =>
-                                void suggestedTime.request({
-                                  dayId: editor.dayId,
-                                  itemId: editor.item.id,
-                                  schedule: form.schedule,
-                                })
-                              }
-                            />
-                          ) : null}
-                        </Field>
-                      )}
-
-                      <Field>
-                        <FieldLabel>{t('durationQuestion')}</FieldLabel>
-                        <FieldDescription>{t('durationHint')}</FieldDescription>
-                        <div
-                          aria-label={t('timingModeLabel')}
-                          className="flex flex-wrap gap-2"
-                          role="group"
-                        >
-                          <Button
-                            aria-pressed={form.timingMode === 'duration'}
-                            onClick={() =>
-                              setForm((current) => ({
-                                ...current,
-                                localEndTime: '',
-                                timingMode: 'duration',
-                              }))
-                            }
-                            size="sm"
-                            type="button"
-                            variant={form.timingMode === 'duration' ? 'secondary' : 'outline'}
-                          >
-                            {t('durationMode')}
-                          </Button>
-                          <Button
-                            aria-pressed={form.timingMode === 'end_time'}
-                            disabled={form.schedule !== 'exact' || !form.exactTime}
-                            onClick={() => {
-                              setForm((current) => ({
-                                ...current,
-                                durationMinutes: '',
-                                timingMode: 'end_time',
-                              }));
-                              setCustomDurationOpen(false);
-                              setCustomDurationHours('');
-                              setCustomDurationMinutes('');
-                            }}
-                            size="sm"
-                            type="button"
-                            variant={form.timingMode === 'end_time' ? 'secondary' : 'outline'}
-                          >
-                            {t('endTimeMode')}
-                          </Button>
-                        </div>
-                        {form.timingMode === 'duration' ? (
-                          <>
-                            <div className="flex flex-wrap gap-2">
-                              {ITINERARY_DURATION_PRESETS.map((minutes) => (
-                                <Button
-                                  aria-pressed={form.durationMinutes === minutes.toString()}
-                                  key={minutes}
-                                  onClick={() => chooseDurationPreset(minutes)}
-                                  size="sm"
-                                  type="button"
-                                  variant={
-                                    form.durationMinutes === minutes.toString()
-                                      ? 'secondary'
-                                      : 'outline'
-                                  }
-                                >
-                                  {t(`durationPreset.${minutes}`)}
-                                </Button>
-                              ))}
-                              <Button
-                                aria-pressed={customDurationOpen}
-                                onClick={showCustomDuration}
-                                size="sm"
-                                type="button"
-                                variant={customDurationOpen ? 'secondary' : 'outline'}
-                              >
-                                {t('customDuration')}
-                              </Button>
-                              {form.durationMinutes ? (
-                                <Button
-                                  aria-label={t('clearDuration')}
-                                  onClick={() => {
-                                    updateForm('durationMinutes', '');
-                                    setCustomDurationOpen(false);
-                                    setCustomDurationHours('');
-                                    setCustomDurationMinutes('');
-                                  }}
-                                  size="icon-sm"
-                                  type="button"
-                                  variant="ghost"
-                                >
-                                  <X aria-hidden="true" />
-                                </Button>
-                              ) : null}
-                            </div>
-                            {customDurationOpen ? (
-                              <div className="grid grid-cols-2 gap-3 rounded-[var(--radius-lg)] bg-muted/40 p-3">
-                                <Field>
-                                  <FieldLabel htmlFor="itinerary-duration-hours">
-                                    {t('hours')}
-                                  </FieldLabel>
-                                  <Input
-                                    id="itinerary-duration-hours"
-                                    inputMode="numeric"
-                                    min="0"
-                                    onChange={(event) =>
-                                      updateCustomDuration('hours', event.target.value)
-                                    }
-                                    type="number"
-                                    value={customDurationHours}
-                                  />
-                                </Field>
-                                <Field>
-                                  <FieldLabel htmlFor="itinerary-duration-minutes">
-                                    {t('minutes')}
-                                  </FieldLabel>
-                                  <Input
-                                    id="itinerary-duration-minutes"
-                                    inputMode="numeric"
-                                    max="59"
-                                    min="0"
-                                    onChange={(event) =>
-                                      updateCustomDuration('minutes', event.target.value)
-                                    }
-                                    type="number"
-                                    value={customDurationMinutes}
-                                  />
-                                </Field>
-                              </div>
-                            ) : null}
-                          </>
-                        ) : (
-                          <div className="space-y-2">
-                            <FieldLabel htmlFor="itinerary-end-time">{t('endTime')}</FieldLabel>
-                            <TimeInput
-                              aria-describedby="itinerary-end-time-hint"
-                              aria-invalid={Boolean(
-                                form.localEndTime && form.localEndTime <= form.exactTime,
-                              )}
-                              id="itinerary-end-time"
-                              onValueChange={(value) => updateForm('localEndTime', value)}
-                              value={form.localEndTime}
-                            />
-                            <FieldDescription id="itinerary-end-time-hint">
-                              {t('endTimeHint')}
-                            </FieldDescription>
-                          </div>
-                        )}
-                      </Field>
-
-                      <Field>
-                        <FieldLabel htmlFor="itinerary-notes">{t('notes')}</FieldLabel>
-                        <Textarea
-                          id="itinerary-notes"
-                          maxLength={5_000}
-                          onChange={(event) => updateForm('notes', event.target.value)}
-                          placeholder={t('notesPlaceholder')}
-                          value={form.notes}
-                        />
-                      </Field>
-                    </>
-                  ) : null}
-                </FieldGroup>
-              </div>
-              <SheetFooter className="sm:flex-row sm:items-center sm:justify-between">
-                <Button
-                  onClick={() => setItemToDelete(editor.item)}
-                  type="button"
-                  variant="destructive"
-                >
-                  <Trash2 aria-hidden="true" data-icon="inline-start" />
-                  {t('deleteItem')}
-                </Button>
-                <div className="flex flex-col-reverse gap-2 sm:flex-row">
-                  <Button disabled={saving} onClick={closeEditor} type="button" variant="outline">
-                    {t('cancel')}
-                  </Button>
-                  <Button disabled={saving || selectingPlace || !hasItemIdentity} type="submit">
-                    {saving ? t('saving') : t('save')}
-                  </Button>
-                </div>
-              </SheetFooter>
-            </form>
-          ) : null}
-        </SheetContent>
-      </Sheet>
+      <StopEditorSheet
+        id={stopEditor.id}
+        locationBias={editorLocationBias}
+        onClose={closeEditor}
+        onDelete={setItemToDelete}
+        onSaved={async ({ timeZoneConsequence: consequence }) => {
+          setTimeZoneConsequence(consequence);
+          closeEditor();
+          await refresh();
+        }}
+        onTripPlaceAdded={(tripPlace) =>
+          setItinerary((current) =>
+            current && !current.tripPlaces.some((place) => place.id === tripPlace.id)
+              ? {
+                  ...current,
+                  tripPlaces: [...current.tripPlaces, itineraryTripPlaceFromTripPlace(tripPlace)],
+                }
+              : current,
+          )
+        }
+        open={stopEditor.open}
+        placeUse={placeUse}
+        request={stopEditor.request}
+        tripId={tripId}
+        tripPlaces={itinerary?.tripPlaces ?? []}
+      />
 
       <ItineraryBetterOrder
         day={betterOrderDay}
@@ -2932,28 +2027,6 @@ export function ItineraryManager({
           onOpenChange={setDayTimesOpen}
           open={dayTimesOpen}
           tripId={tripId}
-        />
-      ) : null}
-
-      {createDay ? (
-        <ItineraryCreateItemSheet
-          dayId={createDay.id}
-          onCreated={refresh}
-          onOpenChange={(open) => !open && setCreateDay(null)}
-          onTripPlaceAdded={(tripPlace) =>
-            setItinerary((current) =>
-              current && !current.tripPlaces.some((place) => place.id === tripPlace.id)
-                ? {
-                    ...current,
-                    tripPlaces: [...current.tripPlaces, itineraryTripPlaceFromTripPlace(tripPlace)],
-                  }
-                : current,
-            )
-          }
-          open
-          placeUse={placeUse}
-          tripId={tripId}
-          tripPlaces={itinerary?.tripPlaces ?? []}
         />
       ) : null}
 

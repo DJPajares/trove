@@ -13,6 +13,7 @@ import { dayFacts, dayHeading, plannedStopMinutes } from '../lib/itinerary/day-f
 import { buildDaySequence } from '../lib/itinerary/day-sequence.ts';
 import { daySketchPlaces } from '../lib/itinerary/day-sketch.ts';
 import { plannerDays } from '../lib/itinerary/planner-days.ts';
+import { stayChapters } from '../lib/itinerary/stay-chapters.ts';
 import { formatPlannedDuration, formatTravelDuration } from '../lib/itinerary/route-format.ts';
 import { stopHoursAt } from '../lib/itinerary/stop-hours.ts';
 import { dayNeedsAttention, problemsByStop } from '../lib/plan-score/attention.ts';
@@ -401,4 +402,45 @@ test('travel and planned time read the way people say them', () => {
   expect(formatTravelDuration(2 * 60 * 60, 'en')).toBe('2 hr');
   expect(formatPlannedDuration(45, 'en')).toBe('45 min');
   expect(formatPlannedDuration(5 * 60 + 20, 'en')).toBe('5 hr 15 min');
+});
+
+test('the trip falls into chapters by where each night is spent, in the order lived', () => {
+  const stayAt = (id: string, date: string, tripPlaceId: string | null) =>
+    day(id, {
+      date,
+      stay: tripPlaceId
+        ? {
+            endSource: 'accommodation',
+            endTripPlaceId: tripPlaceId,
+            startSource: 'accommodation',
+            startTripPlaceId: tripPlaceId,
+          }
+        : undefined,
+    });
+  const days = [
+    stayAt('d1', '2026-09-05', 'hotel'),
+    stayAt('d2', '2026-09-06', 'hotel'),
+    stayAt('d3', '2026-09-07', 'beach-house'),
+    stayAt('d4', '2026-09-08', null),
+    stayAt('d5', '2026-09-09', null),
+    stayAt('d6', '2026-09-10', 'hotel'),
+  ];
+  const ribbon = plannerDays({ days, today: null, tripPlaces: [HOTEL] }).map((entry, index) => ({
+    ...entry,
+    // Days 4 and 5 are in one town written two ways; the rest name nothing new.
+    town: index === 3 ? 'Hội An' : index === 4 ? 'Hoi An' : entry.town,
+  }));
+
+  const chapters = stayChapters({ days, plannerDays: ribbon });
+
+  expect(
+    chapters.map((chapter) => [chapter.kind, chapter.days.map((entry) => entry.id)]),
+  ).toStrictEqual([
+    ['stay', ['d1', 'd2']],
+    ['stay', ['d3']],
+    ['town', ['d4', 'd5']],
+    // Back at the first hotel later on is a chapter of its own.
+    ['stay', ['d6']],
+  ]);
+  expect(chapters[0]?.stayTripPlaceId).toBe('hotel');
 });

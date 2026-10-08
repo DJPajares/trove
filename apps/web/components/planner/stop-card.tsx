@@ -1,7 +1,8 @@
 'use client';
 
+import { Clock3 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import type { ReactNode } from 'react';
+import { Fragment, type CSSProperties, type ReactNode, type Ref } from 'react';
 
 import { PlaceHoursNote } from '@/components/place-hours-note';
 import { usePreferences } from '@/components/preferences-provider';
@@ -121,12 +122,18 @@ export function StopCard({
   attention,
   below,
   defaultTimeZone,
+  dragHandle,
   hours,
   item,
   menu,
   number,
+  onEditTiming,
   onSelectOnMap,
   onViewDetails,
+  partial,
+  placeholder = false,
+  rowRef,
+  rowStyle,
   view,
 }: Readonly<{
   above: SpineLine;
@@ -134,12 +141,22 @@ export function StopCard({
   attention?: ReactNode;
   below: SpineLine;
   defaultTimeZone: string;
+  /** The grip a stop is dragged by, when the day can be reordered. */
+  dragHandle?: ReactNode;
   hours: PlaceHoursStatus | undefined;
   item: ItineraryItem;
   menu: ReactNode;
   number: number;
+  /** Opens the stop's timing on its own - the edit made most often. */
+  onEditTiming?: () => void;
   onSelectOnMap: () => void;
   onViewDetails: () => void;
+  /** What the stop is missing that one tap can add - a location, a Place. */
+  partial?: { label: string; onAction: () => void } | null;
+  /** This stop is the one being dragged: what stays behind is where it came from. */
+  placeholder?: boolean;
+  rowRef?: Ref<HTMLLIElement>;
+  rowStyle?: CSSProperties;
   view: StopView;
 }>) {
   const t = useTranslations('itinerary');
@@ -169,9 +186,19 @@ export function StopCard({
           value: formatTravelDuration(item.durationMinutes * 60, locale),
         })
       : null;
+  const timingParts = [when, duration].filter((fact): fact is string => Boolean(fact));
+  const timing = timingParts.join(' · ');
+  // A narrow card breaks the time between its parts, never inside one.
+  const timingText = timingParts.map((part, index) => (
+    <Fragment key={`${part}-${index}`}>
+      {index ? ' ' : null}
+      <span className="whitespace-nowrap">
+        {part}
+        {index < timingParts.length - 1 ? ' ·' : null}
+      </span>
+    </Fragment>
+  ));
   const facts = [
-    when,
-    duration,
     view.locality ?? item.customLocation?.label ?? null,
     item.plannedCost
       ? t('costValue', { amount: item.plannedCost.amount, currency: item.plannedCost.currencyCode })
@@ -207,6 +234,8 @@ export function StopCard({
           </span>
         )
       }
+      ref={rowRef}
+      style={rowStyle}
       tabIndex={-1}
     >
       <article
@@ -216,6 +245,7 @@ export function StopCard({
             ? 'border-primary/45 bg-secondary/45 shadow-[var(--shadow-card)]'
             : 'border-border-subtle hover:border-border',
           item.travelStatus === 'skipped' && 'opacity-70',
+          placeholder && 'border-dashed opacity-40',
         )}
         data-selected={view.selected || undefined}
       >
@@ -244,7 +274,7 @@ export function StopCard({
                 view.name
               )}
             </h3>
-            {facts.length || priority === 'must_go' ? (
+            {timing || facts.length || priority === 'must_go' || onEditTiming ? (
               <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm text-muted-foreground tabular-nums">
                 {priority === 'must_go' ? (
                   <span className="inline-flex items-center gap-1 font-medium text-brand">
@@ -252,9 +282,42 @@ export function StopCard({
                     {t('priority.must_go')}
                   </span>
                 ) : null}
+                {priority === 'must_go' && (timing || onEditTiming) ? (
+                  <span aria-hidden="true" className="text-text-subtle">
+                    ·
+                  </span>
+                ) : null}
+                {/* The time is the part of a stop changed most, so it opens its
+                    own sheet - above the claim the name makes on the card. */}
+                {onEditTiming ? (
+                  <button
+                    aria-label={
+                      timing
+                        ? plannerT('changeTiming', { name: view.name, timing })
+                        : plannerT('addTimingFor', { name: view.name })
+                    }
+                    className={cn(
+                      'relative z-10 rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40',
+                      !timing && 'inline-flex items-center gap-1 font-medium text-primary',
+                    )}
+                    onClick={onEditTiming}
+                    type="button"
+                  >
+                    {timing ? (
+                      timingText
+                    ) : (
+                      <>
+                        <Clock3 aria-hidden="true" className="size-3.5" />
+                        {plannerT('addTiming')}
+                      </>
+                    )}
+                  </button>
+                ) : timing ? (
+                  <span>{timingText}</span>
+                ) : null}
                 {facts.map((fact, index) => (
                   <span className="inline-flex items-center gap-1.5" key={`${fact}-${index}`}>
-                    {index || priority === 'must_go' ? (
+                    {index || timing || onEditTiming || priority === 'must_go' ? (
                       <span aria-hidden="true" className="text-text-subtle">
                         ·
                       </span>
@@ -264,14 +327,33 @@ export function StopCard({
                 ))}
               </p>
             ) : null}
-            <StopHoursLine item={item} status={hours} />
-            {item.notes ? (
-              <p className="mt-1 line-clamp-1 text-sm text-text-subtle">{item.notes}</p>
-            ) : null}
+            <div className="group-data-[reordering]/day:hidden">
+              {partial ? (
+                <button
+                  className="relative z-10 mt-1 inline-flex items-center gap-1 rounded-[var(--radius-sm)] text-sm font-medium text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+                  onClick={partial.onAction}
+                  type="button"
+                >
+                  <Icons.Place aria-hidden="true" className="size-3.5" />
+                  {partial.label}
+                </button>
+              ) : null}
+              <StopHoursLine item={item} status={hours} />
+              {item.notes ? (
+                <p className="mt-1 line-clamp-1 text-sm text-text-subtle">{item.notes}</p>
+              ) : null}
+            </div>
           </div>
-          <div className="relative z-10 -mt-1 -mr-1">{menu}</div>
+          <div className="relative z-10 -mt-1 -mr-1 flex items-center">
+            {dragHandle}
+            <span className="group-data-[reordering]/day:invisible">{menu}</span>
+          </div>
         </div>
-        {attention ? <div className="relative z-10 mt-2.5 space-y-2">{attention}</div> : null}
+        {attention ? (
+          <div className="relative z-10 mt-2.5 space-y-2 group-data-[reordering]/day:hidden">
+            {attention}
+          </div>
+        ) : null}
       </article>
     </SpineRow>
   );

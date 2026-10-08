@@ -1472,7 +1472,8 @@
         "addStop": "Add stop",
         "preview": "Preview",
         "previewLabel": "Preview day {number} in Trip Mode",
-        "scoreLabel": "Plan Score for day {number}"
+        "scoreLabel": "Plan Score for day {number}",
+        "memories": "Memories"
       },
       "stop": {
         "midnight": "midnight",
@@ -1485,6 +1486,11 @@
         "durationApproximate": "≈{value}",
         "showOnMap": "Show stop {number} on the map",
         "noLocation": "No location yet",
+        "changeTiming": "Change when {name} is: {timing}",
+        "addTimingFor": "Add a time for {name}",
+        "addTiming": "Add a time",
+        "linkPlace": "Link a place",
+        "addLocation": "Add a location",
         "holidayCheck": "It’s {holiday} that day, so its hours may change."
       },
       "stay": {
@@ -1495,6 +1501,72 @@
       },
       "map": {
         "backToDay": "Back to the day"
+      },
+      "editor": {
+        "addTitle": "Add a stop to {day}",
+        "insertAfterTitle": "Add a stop after {name}",
+        "insertFirstTitle": "Add a stop at the start of the day",
+        "add": "Add stop",
+        "addCustomPlace": "Add “{name}” as a custom place",
+        "savedBadge": "Saved"
+      },
+      "insert": {
+        "before": "Add a stop before {name}",
+        "end": "Add a stop at the end of the day"
+      },
+      "reorder": {
+        "handle": "Reorder {name}",
+        "instructions": "To move a stop, press Space or Enter to pick it up, use the up and down arrow keys to move it, then press Space or Enter to put it down. Press Escape to cancel.",
+        "pickedUp": "Picked up {name}, stop {position} of {count}.",
+        "moved": "{name} is now at position {position} of {count}.",
+        "dropped": "{name} put down at position {position} of {count}.",
+        "cancelled": "Move cancelled. {name} is back at position {position}."
+      },
+      "move": {
+        "menuItem": "Move to another day…",
+        "title": "Move {name}",
+        "scheduleTitle": "Schedule {name}",
+        "description": "Choose the day it belongs to.",
+        "placeLabel": "Where on the day",
+        "atEnd": "At the end",
+        "atStart": "At the start",
+        "thisDay": "This day",
+        "stops": "{count, plural, =0 {nothing planned} one {# stop} other {# stops}}",
+        "unscheduledHint": "Keep it without a day for now"
+      },
+      "unscheduled": {
+        "title": "{count, plural, one {Unscheduled · # stop} other {Unscheduled · # stops}}",
+        "schedule": "Schedule…"
+      },
+      "dayMenu": {
+        "stay": "Where we’re staying…",
+        "checkOrder": "Check the order",
+        "travel": "Show travel between stops"
+      },
+      "staySheet": {
+        "fromBooking": "From your booking: {name}",
+        "useBooking": "From your booking"
+      },
+      "timing": {
+        "title": "When is {name}?",
+        "description": "Choose a part of the day or an exact time, and how long it takes."
+      },
+      "board": {
+        "days": "{count, plural, one {Day {first}} other {Days {first}–{last}}}",
+        "nights": "{count, plural, one {# night} other {# nights}}",
+        "stops": "{count, plural, =0 {Nothing planned yet} one {# stop} other {# stops}}",
+        "more": "+{count} more"
+      },
+      "empty": {
+        "tripTitle": "Start with the places you can’t miss",
+        "tripDescription": "Add a first stop, or pick from the places already saved to this trip.",
+        "dayTitle": "Nothing planned for Day {number} yet",
+        "dayTitleTown": "Nothing planned for Day {number} in {town} yet",
+        "dayDescription": "Add a stop, or pick one from this trip’s Places.",
+        "mustGoTitle": "Must Go, not on a day yet",
+        "addMustGo": "Add {name}",
+        "addStop": "Add a stop",
+        "browsePlaces": "Browse Places"
       }
     },
     "overview": {
@@ -1502,17 +1574,10 @@
       "description": "{count, plural, one {One day in one view.} other {All # days in one view.}}",
       "itemsForDay": "Plans for day {number}",
       "editItem": "Open {name} in day view",
-      "collapseAll": "Collapse all",
-      "expandAll": "Expand all",
-      "collapseDay": "Collapse plans for {day}",
-      "expandDay": "Expand plans for {day}",
-      "emptyDay": "No plans yet",
-      "openDay": "Open day"
+      "emptyDay": "No plans yet"
     },
     "stopNumber": "Stop {number}",
     "daySettings": "Day settings",
-    "distance": "Distance",
-    "distanceHelp": "Show routes, travel times, and distances.",
     "dayMove": {
       "action": "Move day plan",
       "swapAction": "Swap with another day",
@@ -1547,15 +1612,10 @@
     "viewDetailsFor": "View details for {name}",
     "itemListLabel": "Items for this day",
     "addItem": "Add item",
-    "addFirstItem": "Add the first item",
-    "emptyTitle": "This day is open.",
-    "emptyDescription": "Add a place or a simple label. You can decide the timing later.",
-    "unscheduledSummary": "{count, plural, one {One item is} other {# items are}} safely kept in Unscheduled after date changes.",
     "unscheduled": "Unscheduled",
     "unscheduledDescription": "Ideas kept here retain their details until you assign a day.",
     "dailyBase": "Stay",
     "dailyBaseHelp": "Where this day starts and ends, usually where you're staying. Leave it unset to use an accommodation booked for this day.",
-    "dailyBaseSummary": "{from} to {to}",
     "dailyBaseArrival": "Start the day at",
     "dailyBaseDeparture": "End the day at",
     "dailyBaseSameAsArrival": "Same as the start",
@@ -1579,7 +1639,6 @@
     "moveLater": "Move {name} later",
     "moveItem": "Move {name}",
     "move": "Move",
-    "moveToDay": "Move to day",
     "scheduleItem": "Assign {name} to a day",
     "duplicateItem": "Duplicate {name}",
     "deleteItem": "Delete item",
@@ -1695,7 +1754,6 @@
       "evening": "Evening",
       "anytime": "Anytime"
     },
-    "createTitle": "Add to this day",
     "createDescription": "Choose a trip place or add a flexible plan.",
     "editTitle": "Edit itinerary item",
     "editDescription": "Change the plan, timing, or notes that will help.",

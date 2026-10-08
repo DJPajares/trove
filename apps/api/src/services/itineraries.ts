@@ -1124,10 +1124,46 @@ export async function updateDatedExperienceRating(
   );
 }
 
+/**
+ * Puts `itemId` at `position` among its day's items, the way the traveller
+ * asked for it to be inserted - between two stops rather than at the end. The
+ * writes go through `planReorderWrites` because position is uniquely indexed
+ * per day, and a position past the end is the end.
+ */
+async function placeItemAt(
+  transaction: Prisma.TransactionClient,
+  tripId: string,
+  itineraryDayId: string,
+  itemId: string,
+  position: number,
+) {
+  const day = await transaction.itineraryItem.findMany({
+    where: { itineraryDayId, tripId },
+    orderBy: { position: 'asc' },
+    select: { id: true, position: true },
+  });
+  const orderedIds = day.filter((candidate) => candidate.id !== itemId).map(({ id }) => id);
+  orderedIds.splice(Math.min(Math.max(position, 0), orderedIds.length), 0, itemId);
+  if (sameIds(day, orderedIds)) return;
+
+  const above = (day.at(-1)?.position ?? -1) + 1;
+  for (const write of planReorderWrites(orderedIds, above)) {
+    await transaction.itineraryItem.update({
+      where: { id: write.id },
+      data: { position: write.position },
+    });
+  }
+}
+
 export async function createItineraryItem(
   userId: string,
   tripId: string,
-  input: ItineraryItemInput & { itineraryDayId: string; schedule: ItineraryScheduleInput },
+  input: ItineraryItemInput & {
+    itineraryDayId: string;
+    /** Where among the day's items it goes. A timed item still goes where its time puts it. */
+    position?: number;
+    schedule: ItineraryScheduleInput;
+  },
 ) {
   const prisma = getPrismaClient();
   const itemId = await prisma.$transaction(async (transaction) => {
@@ -1186,6 +1222,9 @@ export async function createItineraryItem(
         tripPlaceId: tripPlace?.id ?? null,
       },
     });
+    if (input.position !== undefined) {
+      await placeItemAt(transaction, tripId, day.id, item.id, input.position);
+    }
     await reslotItemByTime(transaction, tripId, day.id, item.id, schedule);
     await refreshDayDefaultTimeZone(transaction, tripId, day.id);
     return item.id;

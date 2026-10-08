@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode, Ref } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -39,6 +39,8 @@ export function SpineRow({
   className,
   id,
   marker,
+  ref,
+  style,
   tabIndex,
 }: Readonly<{
   above?: SpineLine;
@@ -48,6 +50,9 @@ export function SpineRow({
   className?: string;
   id?: string;
   marker?: ReactNode;
+  /** A stop that can be dragged is measured and moved through these. */
+  ref?: Ref<HTMLLIElement>;
+  style?: CSSProperties;
   tabIndex?: number;
 }>) {
   return (
@@ -55,6 +60,8 @@ export function SpineRow({
       className={cn('grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-3 outline-none', className)}
       data-slot="planner-row"
       id={id}
+      ref={ref}
+      style={style}
       tabIndex={tabIndex}
     >
       <div className="flex flex-col items-center">

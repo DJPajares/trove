@@ -1,6 +1,8 @@
 import type { ProviderSuggestion } from '@/lib/saved/api';
 import { PROVIDER_SEARCH_RESULT_LIMIT } from '../saved/search-results';
 
+import type { ItineraryItem, ItineraryItemInput } from './api';
+
 export const ITINERARY_DURATION_PRESETS = [30, 60, 90, 120] as const;
 
 export type DurationParts = {
@@ -89,4 +91,130 @@ export function durationMinutesFromParts(parts: DurationParts) {
 export function isDurationPreset(value: string) {
   const total = Number(value);
   return ITINERARY_DURATION_PRESETS.some((preset) => preset === total);
+}
+
+export type StopEditorSchedule = 'afternoon' | 'anytime' | 'evening' | 'exact' | 'morning' | 'none';
+
+/** The stop editor's fields, as text, the way the form holds them. */
+export type StopEditorForm = ItineraryIdentity & {
+  durationMinutes: string;
+  exactTime: string;
+  localEndTime: string;
+  notes: string;
+  schedule: StopEditorSchedule;
+  timingMode: 'duration' | 'end_time';
+};
+
+/** The custom length's own boxes, which can hold text the length does not yet read as. */
+export type StopEditorCustomDuration = DurationParts & { open: boolean };
+
+/**
+ * The editor opened on a stop, or on nothing for a new one - which may already
+ * be at a Trip Place, when it was asked for by name (a Must Go to schedule).
+ */
+export function stopEditorForm(
+  item:
+    | (Pick<
+        ItineraryItem,
+        'customLabel' | 'dayPart' | 'durationMinutes' | 'localEndTime' | 'localStartTime' | 'notes'
+      > & { tripPlace: { id: string } | null })
+    | null,
+  tripPlaceId?: string | null,
+): StopEditorForm {
+  return {
+    customLabel: item?.customLabel ?? '',
+    durationMinutes: item?.localEndTime ? '' : (item?.durationMinutes?.toString() ?? ''),
+    exactTime: item?.localStartTime ?? '',
+    localEndTime: item?.localEndTime ?? '',
+    notes: item?.notes ?? '',
+    schedule: item?.localStartTime ? 'exact' : (item?.dayPart ?? 'none'),
+    timingMode: item?.localEndTime ? 'end_time' : 'duration',
+    tripPlaceId: item?.tripPlace?.id ?? tripPlaceId ?? '',
+  };
+}
+
+/** The custom length boxes as the editor opens: open only for a length no preset covers. */
+export function stopEditorCustomDuration(form: StopEditorForm): StopEditorCustomDuration {
+  const parts = durationParts(form.timingMode === 'end_time' ? '' : form.durationMinutes);
+  return {
+    ...parts,
+    open: Boolean(
+      form.timingMode === 'duration' &&
+      form.durationMinutes &&
+      !isDurationPreset(form.durationMinutes),
+    ),
+  };
+}
+
+/** The message key a stop that cannot be saved yet is explained by. */
+export type StopEditorError =
+  | 'durationError'
+  | 'endTimeError'
+  | 'endTimeStartRequired'
+  | 'exactTimeError'
+  | 'minimumContentError';
+
+/**
+ * What the form saves, or why it cannot be saved yet.
+ *
+ * A stop is a Place, a plan, or both; an exact time needs its time; a length
+ * is a whole number of minutes; and an end needs an exact start before it. An
+ * edit passes whether its Place or plan changed, so the fields an older
+ * version of the editor wrote - and this one no longer shows - survive an
+ * ordinary edit but never ride along onto a different stop.
+ */
+export function buildStopInput(
+  form: StopEditorForm,
+  customDuration: StopEditorCustomDuration,
+  options: { identityChanged?: boolean } = {},
+): { error: StopEditorError } | { input: ItineraryItemInput } {
+  const customLabel = form.customLabel.trim();
+  if (!customLabel && !form.tripPlaceId) return { error: 'minimumContentError' };
+  if (form.schedule === 'exact' && !form.exactTime) return { error: 'exactTimeError' };
+
+  const duration =
+    form.timingMode === 'duration' && form.durationMinutes ? Number(form.durationMinutes) : null;
+  if (duration !== null && (!Number.isInteger(duration) || duration <= 0)) {
+    return { error: 'durationError' };
+  }
+  const customHasInput = Boolean(customDuration.hours.trim() || customDuration.minutes.trim());
+  if (
+    form.timingMode === 'duration' &&
+    customDuration.open &&
+    customHasInput &&
+    duration === null
+  ) {
+    return { error: 'durationError' };
+  }
+  if (form.timingMode === 'end_time' && form.localEndTime) {
+    if (form.schedule !== 'exact' || !form.exactTime) return { error: 'endTimeStartRequired' };
+    if (form.localEndTime <= form.exactTime) return { error: 'endTimeError' };
+  }
+
+  const input: ItineraryItemInput = {
+    customLabel: customLabel || null,
+    durationMinutes: duration,
+    localEndTime: form.timingMode === 'end_time' ? form.localEndTime || null : null,
+    notes: form.notes.trim() || null,
+    schedule:
+      form.schedule === 'exact'
+        ? { kind: 'exact', localTime: form.exactTime }
+        : form.schedule === 'none'
+          ? { kind: 'none' }
+          : { dayPart: form.schedule, kind: 'day_part' },
+    tripPlaceId: form.tripPlaceId || null,
+  };
+  if (options.identityChanged !== undefined) {
+    Object.assign(input, itineraryIdentityLegacyPatch(options.identityChanged));
+  }
+  return { input };
+}
+
+/** Only what a stop's timing is: what the timing sheet saves, leaving the rest alone. */
+export function stopTimingInput(input: ItineraryItemInput): ItineraryItemInput {
+  return {
+    durationMinutes: input.durationMinutes ?? null,
+    localEndTime: input.localEndTime ?? null,
+    schedule: input.schedule ?? { kind: 'none' },
+  };
 }

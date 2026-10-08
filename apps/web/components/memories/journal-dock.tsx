@@ -2,6 +2,7 @@
 
 import { Ellipsis, ImagePlus, Plus, TableOfContents } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -53,6 +54,41 @@ function JournalStoryMenu({
   );
 }
 
+/** How close to the end of the page counts as having reached it. */
+const END_OF_PAGE_PX = 160;
+
+/**
+ * The dock stays out of the way while the journal is read and appears only
+ * once the reader has scrolled to the end; scrolling back up puts it away
+ * again. The reading itself is never covered by controls.
+ */
+function useRevealAtEnd() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    let lastY = window.scrollY;
+    const update = () => {
+      const y = window.scrollY;
+      const atEnd =
+        window.innerHeight + y >= document.documentElement.scrollHeight - END_OF_PAGE_PX;
+      if (y < lastY - 1) setVisible(false);
+      else if (atEnd) setVisible(true);
+      else setVisible(false);
+      lastY = y;
+    };
+
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+
+  return visible;
+}
+
 /**
  * The dock: on a phone, where the global bar has stepped aside, the journal's
  * three actions float in the thumb's reach - the contents, adding a memory,
@@ -69,15 +105,24 @@ export function JournalDock({
   onContents,
 }: Readonly<JournalActionsProps>) {
   const t = useTranslations('memories.journal');
+  const visible = useRevealAtEnd();
 
   return (
     <div
+      aria-hidden={!visible}
       className="pointer-events-none sticky bottom-[calc(var(--safe-bottom)+1rem)] z-[var(--layer-sticky)] mt-6 mb-[calc(var(--safe-bottom)+1rem)] flex justify-center lg:hidden"
       data-slot="journal-dock"
     >
       <div
-        className="pointer-events-auto flex items-center gap-1 rounded-full border border-border-subtle bg-paper-print/95 p-1 shadow-[var(--shadow-elevated)] backdrop-blur supports-[backdrop-filter]:bg-paper-print/85"
+        className={cn(
+          'flex items-center gap-1 rounded-full border border-border-subtle bg-paper-print/95 p-1 shadow-[var(--shadow-elevated)] backdrop-blur transition-[opacity,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none supports-[backdrop-filter]:bg-paper-print/85',
+          visible
+            ? 'pointer-events-auto translate-y-0 opacity-100'
+            : 'pointer-events-none translate-y-4 opacity-0',
+        )}
         data-translucent-surface
+        // Hidden, it is also out of the tab order and the accessibility tree.
+        inert={!visible}
       >
         {onContents ? (
           <Button

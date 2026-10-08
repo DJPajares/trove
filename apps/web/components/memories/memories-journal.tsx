@@ -343,7 +343,7 @@ export function MemoriesJournal({ tripId }: Readonly<{ tripId: string }>) {
         trip={trip}
       />
 
-      <div className="mt-12 space-y-20 pb-[calc(var(--safe-bottom)+7.5rem)] md:mt-16 lg:space-y-24 lg:pb-20">
+      <div className="mt-12 space-y-20 pb-4 md:mt-16 lg:space-y-24 lg:pb-20">
         {isEmpty ? (
           <JournalEmpty lifecycle={trip.lifecycle} onAdd={openCreate} />
         ) : (

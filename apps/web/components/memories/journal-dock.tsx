@@ -57,6 +57,10 @@ function JournalStoryMenu({
  * The dock: on a phone, where the global bar has stepped aside, the journal's
  * three actions float in the thumb's reach - the contents, adding a memory,
  * and the journal's options. From `lg` the same actions live in the header.
+ *
+ * Sticky at the end of the journal rather than fixed to the screen: it centres
+ * on the journal's own column, so it can never be pushed off the page by a
+ * viewport that reports a different width than the page is laid out at.
  */
 export function JournalDock({
   hasCover,
@@ -68,7 +72,7 @@ export function JournalDock({
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--safe-bottom)+1rem)] z-[var(--layer-sticky)] flex justify-center px-[var(--gutter-inline-start)] lg:hidden"
+      className="pointer-events-none sticky bottom-[calc(var(--safe-bottom)+1rem)] z-[var(--layer-sticky)] mt-6 mb-[calc(var(--safe-bottom)+1rem)] flex justify-center lg:hidden"
       data-slot="journal-dock"
     >
       <div

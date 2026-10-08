@@ -2627,6 +2627,13 @@
       "refine": "Needs refinement",
       "attention": "Needs attention"
     },
+    "compactVerdict": {
+      "excellent": "Excellent",
+      "strong": "Strong",
+      "good": "Good",
+      "refine": "Fair",
+      "attention": "Needs work"
+    },
     "improvementLead": "One thing worth a look:",
     "showDetails": "Show breakdown",
     "hideDetails": "Hide breakdown",

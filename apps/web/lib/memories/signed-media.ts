@@ -12,6 +12,17 @@
  */
 export const SIGNED_MEDIA_REFRESH_INTERVAL_MS = 60_000;
 
+/** Safari decodes HEIC; other browsers get the file as taken and cannot. */
+export function canDecodeHeic() {
+  return typeof navigator !== 'undefined'
+    ? /^((?!chrome|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent)
+    : false;
+}
+
+export function isHeicContentType(contentType: string | null | undefined) {
+  return /^image\/hei[cf]$/i.test(contentType ?? '');
+}
+
 export function shouldRefreshSignedMedia({
   canDecodeHeic,
   contentType,
@@ -29,7 +40,7 @@ export function shouldRefreshSignedMedia({
 }>): boolean {
   if (!url || url.startsWith('blob:') || url.startsWith('data:')) return false;
   if (!online) return false;
-  if (!canDecodeHeic && /^image\/hei[cf]$/i.test(contentType ?? '')) return false;
+  if (!canDecodeHeic && isHeicContentType(contentType)) return false;
   if (lastRefreshAt !== null && now - lastRefreshAt < SIGNED_MEDIA_REFRESH_INTERVAL_MS)
     return false;
   return true;

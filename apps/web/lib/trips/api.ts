@@ -54,6 +54,12 @@ export type Trip = {
   itineraryCoverage?: { percentage: number; plannedDays: number; totalDays: number };
   lifecycle: 'active' | 'completed' | 'planning';
   memoryCount: number;
+  /**
+   * Up to three of a finished trip's own photographs, signed for an hour, in
+   * the order the library shows them (story cover, Highlights, then the rest).
+   * Only the trips list carries it, and only a completed trip has any.
+   */
+  memoryPhotos?: { contentType: string; id: string; url: string }[];
   hasStoryContent?: boolean;
   name: string;
   partySize: number;

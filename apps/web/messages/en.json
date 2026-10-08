@@ -177,18 +177,11 @@
       "in_progress": "In progress",
       "ready": "Ready"
     },
-    "sections": {
-      "active": "Active",
-      "completed": "Past",
-      "planning": "Planning and upcoming"
-    },
     "startingLocation": "Starting location override",
     "startingLocationUnavailable": "No starting location set",
     "travellerCount": "{count, plural, one {# traveller} other {# travellers}}",
     "travellers": "Travellers",
     "viewTripLabel": "Open {name}",
-    "showAllPast": "{count, plural, one {Show # past trip} other {Show all # past trips}}",
-    "showFewerPast": "Show fewer",
     "moreDetails": "More details",
     "moreDetailsHint": "Travellers and planning readiness.",
     "coverEditorialHint": "Until you add your own photo, Trove shows a travel photograph of {name}.",
@@ -495,9 +488,63 @@
     },
     "markReady": "Mark as ready",
     "markInProgress": "Move back to in progress",
-    "readinessGroups": {
-      "ready": "Ready",
-      "inProgress": "Still planning"
+    "library": {
+      "ledger": {
+        "ahead": "{count} ahead",
+        "remembered": "{count} remembered",
+        "countries": "{count, plural, one {# country} other {# countries}}"
+      },
+      "lead": {
+        "kickerPlanning": "Up next",
+        "kickerActive": "On the road",
+        "countdownUnit": "{unit, select, day {{count, plural, one {day to go} other {days to go}}} week {{count, plural, one {week to go} other {weeks to go}}} other {{count, plural, one {month to go} other {months to go}}}}",
+        "dayKicker": "Day",
+        "dayOf": "of {total}",
+        "dayProgress": "Day {day} of {total}",
+        "next": "Next: {name}",
+        "current": "Right now: {name}",
+        "nothingScheduled": "Nothing else planned today.",
+        "planned": "{plannedDays} of {totalDays} days planned"
+      },
+      "ahead": {
+        "title": "Ahead",
+        "now": "On the road",
+        "underway": "Underway",
+        "dayKicker": "Day",
+        "dayProgress": "Day {day} of {total}",
+        "planned": "{plannedDays}/{totalDays} planned",
+        "whereNext": "Where next?",
+        "whereNextDescription": "Start planning another trip"
+      },
+      "remembered": {
+        "title": "Remembered",
+        "moments": "{count, plural, one {# moment} other {# moments}}",
+        "openStory": "Open the story",
+        "tripDetails": "Trip details",
+        "showMore": "{count, plural, one {Show # more journey} other {Show # more journeys}}",
+        "showFewer": "Show fewer",
+        "emptyTitle": "Your stories gather here",
+        "emptyDescription": "When a trip ends it moves here, told with the moments you keep along the way."
+      },
+      "nothingAhead": {
+        "title": "Nothing on the horizon",
+        "description": "A name and dates are all it takes to begin the next one.",
+        "action": "Plan a trip"
+      },
+      "empty": {
+        "plan": {
+          "title": "Plan it",
+          "description": "Trips you are shaping wait here, in the order you leave."
+        },
+        "live": {
+          "title": "Live it",
+          "description": "The trip you are on comes first, with what is next."
+        },
+        "remember": {
+          "title": "Remember it",
+          "description": "Finished trips become stories, told with the photos you keep."
+        }
+      }
     },
     "readinessPrompt": {
       "action": "Mark as ready",

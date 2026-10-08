@@ -17,15 +17,11 @@ import { useTripCreation } from '@/components/trip-creation-provider';
 import { Button } from '@/components/ui/button';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { selectCompletedPrompt } from '@/lib/home/completed-prompt';
-import {
-  deviceTimeZone,
-  fetchTripModeContext,
-  type ItineraryItem,
-  type TripModeContext,
-} from '@/lib/itinerary/api';
+import { deviceTimeZone, fetchTripModeContext } from '@/lib/itinerary/api';
 import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
 import { fetchTrips, type Trip } from '@/lib/trips/api';
 import { selectPrimaryTrip } from '@/lib/trips/lifecycle';
+import { resolveTripNextUp } from '@/lib/trips/next-up';
 import { tripEditorialSubject } from '@/lib/trips/summary';
 import { queryKeys } from '@/lib/query/keys';
 import * as Icons from '@/lib/icons';
@@ -47,10 +43,6 @@ function readDismissedPrompts() {
   } catch {
     return [];
   }
-}
-
-function itemLabel(item: ItineraryItem) {
-  return item.customLabel ?? item.customLocation?.label ?? item.tripPlace?.place.name ?? null;
 }
 
 const EMPTY_TRIPS: Trip[] = [];
@@ -213,26 +205,10 @@ export function HomeExperience() {
 
   /**
    * What the trip's day actually says, or nothing while it is still being asked.
-   *
-   * The line this feeds used to read "Your schedule is clear for now" whenever
-   * a name could not be found - including while the context was still loading,
-   * and for an item that simply has no label - so it claimed a clear schedule
-   * that was not clear. The server already distinguishes those cases; Home now
-   * reads the distinction instead of collapsing it.
+   * The context only exists once it has loaded, so a pending answer is null
+   * rather than a claim that the schedule is clear.
    */
-  const nextItemId = tripModeContext?.nextItemId ?? tripModeContext?.currentOrRelevant?.itemId;
-  const nextItemName = itemLabelFor(tripModeContext, nextItemId);
-  const nextUp =
-    tripModeContextStatus !== 'ready' || !tripModeContext
-      ? null
-      : nextItemName
-        ? {
-            kind: tripModeContext.nextItemId ? ('next' as const) : ('current' as const),
-            label: nextItemName,
-          }
-        : tripModeContext.state === 'no_next_item'
-          ? { kind: 'nothingScheduled' as const, label: null }
-          : null;
+  const nextUp = tripModeContextStatus === 'ready' ? resolveTripNextUp(tripModeContext) : null;
   return (
     <div className="mx-auto w-full max-w-5xl space-y-9">
       <HomeNowStrip />
@@ -293,9 +269,4 @@ export function HomeExperience() {
       ) : null}
     </div>
   );
-}
-
-function itemLabelFor(context: TripModeContext | null, itemId: string | undefined) {
-  const item = context?.day?.items.find((entry) => entry.id === itemId);
-  return item ? itemLabel(item) : null;
 }

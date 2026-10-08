@@ -7,21 +7,28 @@ export type DailyBaseIds = {
 
 /**
  * Where the day begins and ends. The day's own fields are the truth when set.
- * When they are not, the API may still have inferred a base from that day's
- * accommodation reservations; the only place that inference surfaces on the
- * client is the route segments, so they are the fallback rather than a second
- * guess at the same rule.
+ * When they are not, the API may still have inferred a Stay from that day's
+ * accommodation reservations, and it sends that answer with the day itself as
+ * `stay` - resolved the way routing resolves it.
+ *
+ * Reading `stay` first is what keeps the day's numbering still. The route
+ * segments carry the same inference, but they arrive after the day does, so a
+ * day read from them alone numbered its stops from one and then renumbered
+ * every stop the moment its legs came in. The segments stay as the last resort
+ * for a day saved offline before the server sent `stay`.
  */
 export function resolveDailyBases(input: {
-  day: Pick<ItineraryDay, 'dailyBaseDepartureTripPlaceId' | 'dailyBaseTripPlaceId'> | null;
+  day: Pick<ItineraryDay, 'dailyBaseDepartureTripPlaceId' | 'dailyBaseTripPlaceId' | 'stay'> | null;
   routeSegments?: ItineraryRouteSegment[];
 }): DailyBaseIds {
   if (!input.day) return { arrivalTripPlaceId: null, departureTripPlaceId: null };
   const segments = input.routeSegments ?? [];
+  const stay = input.day.stay;
 
   return {
     arrivalTripPlaceId:
       input.day.dailyBaseTripPlaceId ??
+      stay?.startTripPlaceId ??
       segments.find(
         (segment) => segment.modeOwner.kind === 'day_start' && segment.origin.kind === 'daily_base',
       )?.origin.id ??
@@ -29,6 +36,7 @@ export function resolveDailyBases(input: {
     departureTripPlaceId:
       input.day.dailyBaseDepartureTripPlaceId ??
       input.day.dailyBaseTripPlaceId ??
+      stay?.endTripPlaceId ??
       segments.find((segment) => segment.destination.kind === 'daily_base')?.destination.id ??
       null,
   };

@@ -38,6 +38,19 @@ function isTripCoreExperience(destination: TripDestination): destination is Trip
   return ['itinerary', 'memories', 'mode'].includes(destination.section);
 }
 
+/** Before the traveller's own day has been planned, Preview opens on its morning. */
+const DEFAULT_PREVIEW_TIME = '09:00';
+
+/**
+ * Trip Mode rehearsing one day of the plan, at the moment given: the planner's
+ * "Preview this day" and the planning trip's own way into Trip Mode both open
+ * it here, so a day previewed from either place is the same rehearsal.
+ */
+export function dayPreviewHref(tripId: string, date: string, time = DEFAULT_PREVIEW_TIME) {
+  const query = new URLSearchParams({ preview: '1', date, time });
+  return `/trips/${tripId}/mode?${query.toString()}`;
+}
+
 /**
  * A trip is planned, then lived, then remembered, and the interface should lean
  * toward whichever of those the traveller is actually in. Emphasis shifts; the set
@@ -65,7 +78,7 @@ export function primaryTripDestinations(
       // in Preview at the first day rather than pretending the trip is live.
       href:
         lifecycle === 'planning' || lifecycle === 'completed'
-          ? `${base}/mode?preview=1&date=${encodeURIComponent(startDate)}&time=09%3A00`
+          ? dayPreviewHref(tripId, startDate)
           : `${base}/mode`,
       labelKey: lifecycle === 'active' ? 'tripMode' : 'preview',
       section: 'mode',

@@ -2,30 +2,12 @@
 import { DayPlanningContextSheet } from '@/components/day-planning-context';
 
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  ArrowLeftRight,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  CircleAlert,
-  Clock3,
-  Copy,
-  List,
-  Map as MapIcon,
-  NotebookPen,
-  Pencil,
-  Plus,
-  Ruler,
-  Search,
-  Settings2,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { CircleAlert, Clock3, Copy, NotebookPen, Plus, Search, Trash2, X } from 'lucide-react';
+import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
-import { DatePicker } from '@/components/date-picker';
 import { ItineraryCreateItemSheet } from '@/components/itinerary-create-item-sheet';
 import { ItineraryGapSuggestions } from '@/components/itinerary-gap-suggestions';
 import { ItineraryPlaceGroups } from '@/components/itinerary-place-groups';
@@ -33,30 +15,27 @@ import { ItineraryBetterOrder } from '@/components/itinerary-better-order';
 import { ItineraryDayTimeSuggestions } from '@/components/itinerary-day-time-suggestions';
 import { SuggestedTimeAction, useSuggestedTime } from '@/components/itinerary-suggested-time';
 import { PageState } from '@/components/page-state';
-import { ItineraryDayTimeline } from '@/components/itinerary-day-timeline';
 import { ItineraryOverview, type ItineraryOverviewDisplay } from '@/components/itinerary-overview';
-import { TripDayWeather } from '@/components/trip-day-weather';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { ItineraryTripMap } from '@/components/itinerary-trip-map';
-import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
 import { ItineraryPlacesDrawer } from '@/components/itinerary-places-drawer';
 import { LocatePlaceSheet } from '@/components/locate-place-sheet';
 import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
-import { PlanScorePanel } from '@/components/plan-score-panel';
+import { PlanScoreChip, PlanScorePanel } from '@/components/plan-score-panel';
+import { ScoreProblemNote, AttentionNote } from '@/components/planner/attention-note';
+import { DayMasthead, type DayStay } from '@/components/planner/day-masthead';
+import { DAY_SKETCH_BOX, DayRouteSketch } from '@/components/planner/day-route-sketch';
+import { DaySettingsMenu } from '@/components/planner/day-settings-menu';
+import { DayTimeline } from '@/components/planner/day-timeline';
+import { PlanScoreSheet } from '@/components/planner/plan-score-sheet';
+import { PlannerDayView } from '@/components/planner/planner-day-view';
+import { PlannerMapPane } from '@/components/planner/planner-map-pane';
+import { PlannerRibbon } from '@/components/planner/planner-ribbon';
 import { TripInsights } from '@/components/trip-insights';
 import { useRegisterPrimaryAction } from '@/components/primary-action-provider';
-import {
-  Popover,
-  PopoverContent,
-  PopoverHeader,
-  PopoverTitle,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import { usePreferences } from '@/components/preferences-provider';
 import { TimeInput } from '@/components/time-input';
-import { TripSectionHeader } from '@/components/trip-section-header';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsIndicator, TabsList, TabsTab } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -69,7 +48,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Combobox,
   ComboboxContent,
@@ -104,7 +82,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import {
   createItineraryItem,
@@ -112,6 +89,7 @@ import {
   duplicateItineraryItem,
   fetchItinerary,
   fetchItineraryDayRoutes,
+  fetchPlaceHoursNotices,
   type Itinerary,
   ItineraryApiError,
   type ItineraryDay,
@@ -119,6 +97,7 @@ import {
   type ItineraryItemInput,
   type ItineraryRouteSegment,
   type ItineraryTripPlace,
+  localDateInTimeZone,
   type RouteTravelMode,
   organizeItineraryItem,
   moveItineraryDayPlan,
@@ -133,7 +112,12 @@ import {
 import { useOnlineStatus } from '@/components/trip-sync-status';
 import { useCompactItinerary } from '@/hooks/use-compact-itinerary';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
+import { withDayPartBands } from '@/lib/itinerary/day-bands';
+import { dayFacts, dayHeading } from '@/lib/itinerary/day-facts';
+import { localityFromAddress, sameTown } from '@/lib/itinerary/day-place';
 import { buildDaySequence, dayStopNumbers, resolveDailyBases } from '@/lib/itinerary/day-sequence';
+import { daySketchPlaces } from '@/lib/itinerary/day-sketch';
+import { plannerDays } from '@/lib/itinerary/planner-days';
 import {
   DuplicateAttemptTracker,
   refreshedItineraryContainsCopy,
@@ -149,7 +133,16 @@ import {
 import { useTripPlaceHours } from '@/lib/trip-places/use-trip-place-hours';
 import { untimedItems } from '@/lib/itinerary/day-time-suggestions';
 import { overviewMapLifecycle, planningMapLifecycle } from '@/lib/maps/map-retention';
-import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
+import { routeSketch } from '@/lib/maps/route-sketch';
+import {
+  editorialSubjectKey,
+  type EditorialImageReference,
+  type EditorialSubject,
+  MAX_EDITORIAL_IMAGE_SUBJECTS,
+} from '@/lib/media/editorial-images';
+import { problemsByStop } from '@/lib/plan-score/attention';
+import { serverNow } from '@/lib/plan-score/clock';
+import { currentAssessment } from '@/lib/plan-score/presentation';
 import { useInViewOnce } from '@/lib/plan-score/use-in-view-once';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 import {
@@ -161,6 +154,7 @@ import {
 import { addTripPlace, type TripPlace, type TripPlacePriority } from '@/lib/trip-places/api';
 import { setTripPlacePriority } from '@/lib/trip-places/priority';
 import { sortTripPlaces } from '@/lib/trip-places/sort';
+import { dayPreviewHref } from '@/lib/trips/navigation';
 import { cn } from '@/lib/utils';
 import { tripWeatherForDate, useTripWeather } from '@/lib/weather/use-trip-weather';
 import {
@@ -247,69 +241,59 @@ function useDesktopMapLayout() {
   return matches;
 }
 
-function ItineraryScoreAndInsights({
+/**
+ * The whole trip's score and what is worth knowing about it, on the Overview.
+ * The score is the planner's own - asked for when the planner opened - so this
+ * shows it and asks for nothing; Insights waits until it is scrolled to.
+ */
+function TripScoreAndInsights({
+  planScore,
   planScoreEnabled,
   resolveAction,
-  selectedDayId,
   tripId,
 }: Readonly<{
+  planScore: ReturnType<typeof useTripPlanScore>;
   planScoreEnabled: boolean;
   resolveAction: (
     explanation: import('@trove/types').PlanScoreExplanation,
   ) => import('@/lib/plan-score/presentation').ScoreAction | null;
-  selectedDayId: string | null;
   tripId: string;
 }>) {
   const planScoreTranslations = useTranslations('planScore');
-  const { hasBeenVisible: planScoreVisible, ref: planScoreSentinelRef } =
-    useInViewOnce<HTMLDivElement>();
-  const planScore = useTripPlanScore(planScoreEnabled && planScoreVisible ? tripId : null);
-  const planScoreDay =
-    selectedDayId === null
-      ? planScore.data
-      : (planScore.data?.days.find((day) => day.dayId === selectedDayId) ?? null);
+  const { hasBeenVisible, ref } = useInViewOnce<HTMLDivElement>();
   const planScoreHidden =
     !planScoreEnabled ||
     planScore.status === 'disabled' ||
     Boolean(planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED'));
 
-  // One element, so a surrounding `space-y` spaces the sentinel and the cards
-  // as a single block instead of adding its gap twice around a 1px marker.
-  // How good the plan is comes first; what to know about it follows.
+  // One element, so a surrounding `gap` spaces the sentinel and the cards as a
+  // single block. How good the plan is comes first; what to know follows.
   return (
-    <div className={selectedDayId === null ? 'space-y-4' : 'mt-6 space-y-6'}>
-      <div aria-hidden="true" className="h-px" ref={planScoreSentinelRef} />
-      {!planScoreHidden && planScoreVisible ? (
+    <div className="space-y-4">
+      <div aria-hidden="true" className="h-px" ref={ref} />
+      {!planScoreHidden ? (
         <PlanScorePanel
           tripPlacesHref={`/trips/${tripId}/places`}
-          completeness={planScoreDay?.completeness ?? null}
-          confidence={planScoreDay?.confidence ?? null}
-          disabled={planScoreDay?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')}
+          completeness={planScore.data?.completeness ?? null}
+          confidence={planScore.data?.confidence ?? null}
           explanations={
-            planScoreDay?.explanations ?? {
-              uncertainty: [],
-              whatWorks: [],
-              worthImproving: [],
-            }
+            planScore.data?.explanations ?? { uncertainty: [], whatWorks: [], worthImproving: [] }
           }
           assessment={planScore.data}
-          dayId={selectedDayId ?? undefined}
-          change={planScore.changeFor(selectedDayId ?? 'trip')}
-          factors={planScoreDay && 'factors' in planScoreDay ? planScoreDay.factors : undefined}
+          change={planScore.changeFor('trip')}
           onRetry={planScore.retry}
           resolveAction={resolveAction}
-          score={planScoreDay?.score ?? null}
-          scope={selectedDayId === null ? 'trip' : 'day'}
+          score={planScore.data?.score ?? null}
+          scope="trip"
           status={planScore.status}
-          surface={selectedDayId === null ? 'card' : 'inset'}
-          title={planScoreTranslations(selectedDayId === null ? 'title' : 'dayTitle')}
+          surface="card"
+          title={planScoreTranslations('title')}
         />
       ) : null}
       <TripInsights
-        dayId={selectedDayId ?? undefined}
-        enabled={planScoreVisible}
+        enabled={hasBeenVisible}
         resolveAction={resolveAction}
-        surface={selectedDayId === null ? 'card' : 'inset'}
+        surface="card"
         tripId={tripId}
       />
     </div>
@@ -321,8 +305,9 @@ export function ItineraryManager({
   tripId,
 }: Readonly<{ planScoreEnabled: boolean; tripId: string }>) {
   const t = useTranslations('itinerary');
-  const dayContextT = useTranslations('dayPlanningContext');
   const tripPlacesTranslations = useTranslations('tripPlaces');
+  const plannerT = useTranslations('itinerary.planner');
+  const planScoreTranslations = useTranslations('planScore');
   const locale = useLocale();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -424,7 +409,8 @@ export function ItineraryManager({
   const [selectingPlace, setSelectingPlace] = useState(false);
   const [organizingItemId, setOrganizingItemId] = useState<string | null>(null);
   const duplicateAttempts = useRef(new DuplicateAttemptTracker());
-  const [mobileView, setMobileView] = useState<'list' | 'map'>('list');
+  // A phone shows the day's map in place of the day only once it is asked for.
+  const [phoneMapOpen, setPhoneMapOpen] = useState(false);
   const [planningMapMounted, setPlanningMapMounted] = useState(false);
   const [selectedMapPointId, setSelectedMapPointId] = useState<string | null>(null);
   const [selectedMapItemId, setSelectedMapItemId] = useState<string | null>(null);
@@ -440,7 +426,7 @@ export function ItineraryManager({
   } = planningMapLifecycle({
     activeView,
     desktopMapLayout,
-    mobileView,
+    mobileView: phoneMapOpen ? 'map' : 'list',
     mounted: planningMapMounted,
   });
 
@@ -645,10 +631,6 @@ export function ItineraryManager({
   );
 
   const selectedIndex = itinerary?.days.findIndex((day) => day.id === selectedDayId) ?? -1;
-  const dayActivityCounts = useMemo(
-    () => Object.fromEntries((itinerary?.days ?? []).map((day) => [day.date, day.items.length])),
-    [itinerary?.days],
-  );
   // Shown in the Places drawer so nothing gets added to a day twice unnoticed.
   const placeUse = useMemo(() => (itinerary ? scheduledPlaceUse(itinerary) : {}), [itinerary]);
   const dateFormatter = useMemo(
@@ -810,6 +792,90 @@ export function ItineraryManager({
     [itinerary?.tripPlaces, t],
   );
 
+  /**
+   * The trip's one assessment, asked for as soon as the planner opens (PRD
+   * 29.5) rather than when its card scrolls into view: the ribbon marks the days
+   * with a problem worth a look, and each stop carries its own. It reads stored
+   * evidence only. A number that is not current is not shown, here as anywhere.
+   */
+  const planScore = useTripPlanScore(planScoreEnabled ? tripId : null);
+  const currentScore =
+    planScore.data &&
+    !['disabled', 'loading', 'offline', 'syncing'].includes(planScore.status) &&
+    currentAssessment(planScore.data, serverNow())
+      ? planScore.data
+      : null;
+  const [scoreSheetOpen, setScoreSheetOpen] = useState(false);
+
+  // Read in the trip's own zone, so "today" is the traveller's today on the trip.
+  const today = itinerary ? localDateInTimeZone(itinerary.trip.referenceTimeZone) : null;
+  const ribbonDays = useMemo(
+    () =>
+      itinerary
+        ? plannerDays({
+            days: itinerary.days,
+            planScoreDays: currentScore?.days,
+            today,
+            tripPlaces: itinerary.tripPlaces,
+          })
+        : [],
+    [currentScore, itinerary, today],
+  );
+  const selectedRibbonDay = ribbonDays.find((day) => day.id === selectedDayId) ?? null;
+
+  /**
+   * A photograph of each day's town, asked for once for the whole trip: the
+   * subjects are the trip's distinct towns, so moving between days asks for
+   * nothing. Only a town's name goes with it. A trip id would have the
+   * service pin the answer to the trip, as its cover.
+   */
+  const townSubjects = useMemo<EditorialSubject[]>(
+    () =>
+      [...new Set(ribbonDays.flatMap((day) => (day.town ? [day.town] : [])))]
+        .slice(0, MAX_EDITORIAL_IMAGE_SUBJECTS)
+        .map((name) => ({ category: 'destination', name })),
+    [ribbonDays],
+  );
+  const townImages = useEditorialImages(townSubjects);
+  // Only a picture of the town itself; a generic draw is a picture of nowhere.
+  const heroImage: EditorialImageReference | null = (() => {
+    const town = selectedRibbonDay?.town;
+    const first = town
+      ? townImages.get(editorialSubjectKey({ category: 'destination', name: town }))?.[0]
+      : undefined;
+    return first && first.matchKind !== 'generic' ? first : null;
+  })();
+
+  // Special hours and holiday checks for the trip's stops, from stored evidence
+  // only - the same entry the Insights card reads, so it is one request.
+  const { data: hoursNotices } = useQuery({
+    enabled: activeView === 'day',
+    queryFn: ({ signal }) => fetchPlaceHoursNotices(tripId, { signal }),
+    queryKey: queryKeys.hoursNotices(tripId),
+    retry: false,
+  });
+
+  const scoreDay = planScore.data?.days.find((day) => day.dayId === selectedDayId) ?? null;
+  const dayProblems = useMemo(
+    () =>
+      problemsByStop(
+        currentScore?.days.find((day) => day.dayId === selectedDayId)?.explanations,
+        selectedDay?.items.map((item) => item.id) ?? [],
+      ),
+    [currentScore, selectedDay, selectedDayId],
+  );
+  const bandedSequence = useMemo(() => withDayPartBands(shownSequence), [shownSequence]);
+  const sketchPlaces = useMemo(
+    () => (itinerary ? daySketchPlaces(daySequence, itinerary.tripPlaces) : []),
+    [daySequence, itinerary],
+  );
+  const daySketch = useMemo(
+    () => routeSketch(sketchPlaces, DAY_SKETCH_BOX, { minDistinct: 2 }),
+    [sketchPlaces],
+  );
+  const { hasBeenVisible: insightsVisible, ref: insightsSentinelRef } =
+    useInViewOnce<HTMLDivElement>();
+
   const mapPoints = useMemo(() => {
     if (activeView !== 'day' || !itinerary || !selectedDay) return [];
     const points = buildItineraryMapPoints({
@@ -850,6 +916,29 @@ export function ItineraryManager({
   );
 
   /**
+   * Shows the day's map on a phone. It is built on the first opening and kept,
+   * hidden, after that, whichever way it was opened - the sketch, a stop's
+   * number, or a Stay's - so going back and forth never builds a second one.
+   */
+  function openPhoneMap() {
+    setPlanningMapMounted(true);
+    setPhoneMapOpen(true);
+  }
+
+  // Leaving the map by its own way back returns focus to the control that
+  // opened it; leaving it for a stop ("View item") puts focus on the stop.
+  const restoreMapTrigger = useRef(false);
+  const closePhoneMap = useCallback(() => {
+    restoreMapTrigger.current = true;
+    setPhoneMapOpen(false);
+  }, []);
+  useEffect(() => {
+    if (phoneMapOpen || !restoreMapTrigger.current) return;
+    restoreMapTrigger.current = false;
+    document.querySelector<HTMLElement>('[data-planner-open-map]')?.focus();
+  }, [phoneMapOpen]);
+
+  /**
    * A base is a stop of the day, so it reads like one: numbered in travel order,
    * named, opening its place when clicked, and findable on the map from its own
    * menu. What that menu does not carry is a way to change it — where a day
@@ -862,7 +951,7 @@ export function ItineraryManager({
     if (!point) return;
     setSelectedMapPointId(point.id);
     setSelectedMapItemId(null);
-    if (!desktopMapLayout) setMobileView('map');
+    if (!desktopMapLayout) openPhoneMap();
   }
 
   useEffect(() => {
@@ -917,7 +1006,7 @@ export function ItineraryManager({
     if (!item.tripPlace || !placeLocation(item.tripPlace)) return;
     setSelectedMapPointId(item.tripPlace.id);
     setSelectedMapItemId(item.id);
-    if (!desktopMapLayout) setMobileView('map');
+    if (!desktopMapLayout) openPhoneMap();
   }
 
   function handleMapPointSelection(point: ItineraryMapPoint) {
@@ -928,7 +1017,7 @@ export function ItineraryManager({
 
   function viewMapItem(itemId: string) {
     setSelectedMapItemId(itemId);
-    if (!desktopMapLayout) setMobileView('list');
+    if (!desktopMapLayout) setPhoneMapOpen(false);
     scrollToItem(itemId, true);
   }
 
@@ -966,7 +1055,9 @@ export function ItineraryManager({
     setEditor({ dayId: item.itineraryDayId, item, mode: 'edit' });
   }
 
-  function resolveScoreAction(explanation: import('@trove/types').PlanScoreExplanation) {
+  function resolveScoreAction(
+    explanation: import('@trove/types').PlanScoreExplanation,
+  ): import('@/lib/plan-score/presentation').ScoreAction | null {
     if (!explanation.action || !itinerary) return null;
     for (const reference of explanation.references) {
       const item = [
@@ -1724,7 +1815,7 @@ export function ItineraryManager({
     );
     if (!day) return;
     // A phone shows the day's list, where the stop is read and changed.
-    setMobileView('list');
+    setPhoneMapOpen(false);
     setPendingDayItemId(itemId);
     openDay(day.id);
   }
@@ -1745,7 +1836,7 @@ export function ItineraryManager({
   }
 
   if (status === 'loading') {
-    return <PageState kind="loading" loadingShape="tripSection" title={t('loading')} />;
+    return <PageState kind="loading" loadingShape="planner" title={t('loading')} />;
   }
   if (status === 'error' || !itinerary) {
     return (
@@ -1762,26 +1853,22 @@ export function ItineraryManager({
   return (
     // `gap` rather than `space-y`: the Day view can sit in a `contents` wrapper,
     // and its children still need to be spaced as this section's own.
-    <section className="flex flex-col gap-7">
-      <TripSectionHeader
-        actions={
-          <Button onClick={() => setPlacesDrawerOpen(true)} variant="outline">
-            <Icons.Places aria-hidden="true" data-icon="inline-start" />
-            {tripPlacesTranslations('openPlaces')}
-          </Button>
-        }
-        // The day or the whole trip is the itinerary's own way of looking at
-        // itself, so it leads the toolbar beside the Places it plans from. The
-        // traveller's description of the trip lives on the trip's overview.
-        leading={
-          <Tabs onValueChange={changeItineraryView} value={activeView}>
-            <TabsList aria-label={t('view.navigation')}>
-              <TabsTab value="day">{t('view.day')}</TabsTab>
-              <TabsTab value="overview">{t('view.overview')}</TabsTab>
-              <TabsIndicator />
-            </TabsList>
-          </Tabs>
-        }
+    <section
+      // The height of the sticky stack the day scrolls under - the trip's tab
+      // row on a phone, and the ribbon everywhere - so the map and a scrolled-to
+      // stop can land just below it.
+      className="flex flex-col gap-7 [--planner-sticky:calc(var(--safe-top)+var(--header-offset)+9.5rem)] md:[--planner-sticky:calc(var(--safe-top)+var(--header-offset)+6.25rem)]"
+    >
+      <PlannerRibbon
+        days={ribbonDays}
+        onSelectDay={(dayId) => (activeView === 'day' ? setSelectedDayId(dayId) : openDay(dayId))}
+        onSelectOverview={() => {
+          setPhoneMapOpen(false);
+          changeItineraryView('overview');
+        }}
+        overviewActive={activeView === 'overview'}
+        selectedDayId={selectedDayId}
+        weatherFor={(date) => tripWeatherForDate(weather ?? null, date)}
       />
 
       {error ? (
@@ -1799,6 +1886,12 @@ export function ItineraryManager({
       {renderOverview ? (
         <div className={activeView === 'overview' ? 'contents' : 'hidden'}>
           <ItineraryOverview
+            actions={
+              <Button onClick={() => setPlacesDrawerOpen(true)} size="sm" variant="outline">
+                <Icons.Places aria-hidden="true" data-icon="inline-start" />
+                {tripPlacesTranslations('openPlaces')}
+              </Button>
+            }
             days={itinerary.days}
             display={overviewDisplay}
             locale={locale}
@@ -1833,596 +1926,327 @@ export function ItineraryManager({
           />
         </div>
       ) : null}
-      {renderDayView ? (
+      {renderDayView && selectedDay ? (
         <div className={activeView === 'day' ? 'contents' : 'hidden'}>
-          {/* The bridge keeps the two mobile sticky rows visually contiguous. The
-              tab row sits one layer above it so its active underline remains crisp
-              while scrolling content stays covered. */}
-          <div className="relative sticky top-[calc(var(--safe-top)+var(--header-offset)+3.25rem)] z-[calc(var(--layer-sticky)-1)] -mx-1 bg-background pb-3 backdrop-blur before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-background before:content-[''] md:hidden">
-            <div className="flex items-center gap-2.5">
-              <Button
-                aria-label={t('previousDay')}
-                disabled={selectedIndex <= 0}
-                onClick={() => selectAdjacentDay(-1)}
-                size="icon"
-                variant="outline"
+          <PlannerDayView
+            map={
+              <PlannerMapPane
+                label={t('map.regionLabel')}
+                mounted={shouldMountPlanningMap}
+                onClose={closePhoneMap}
+                open={phoneMapOpen}
               >
-                <ChevronLeft aria-hidden="true" />
-              </Button>
-              <DatePicker
-                activityCounts={dayActivityCounts}
-                className="min-w-0 flex-1"
-                clearable={false}
-                id="itinerary-day-picker"
-                label={t('chooseDay')}
-                max={itinerary.trip.endDate}
-                min={itinerary.trip.startDate}
-                onChange={(date) => {
-                  const day = itinerary.days.find((candidate) => candidate.date === date);
-                  if (day) setSelectedDayId(day.id);
-                }}
-                required
-                value={selectedDay?.date ?? ''}
-              />
-              <Button
-                aria-label={t('nextDay')}
-                disabled={selectedIndex < 0 || selectedIndex >= itinerary.days.length - 1}
-                onClick={() => selectAdjacentDay(1)}
-                size="icon"
-                variant="outline"
-              >
-                <ChevronRight aria-hidden="true" />
-              </Button>
-            </div>
-          </div>
-
-          <div className="overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card shadow-[var(--shadow-surface)] md:grid md:min-h-[34rem] md:grid-cols-[15rem_minmax(0,1fr)]">
-            <nav
-              aria-label={t('dayNavigation')}
-              className="relative hidden border-r border-border md:block"
-            >
-              {/* Filled rather than stretched: absolute content adds nothing to the grid
-              row, so a long trip's day list scrolls inside the panel instead of
-              making the rail taller than the day being planned beside it. */}
-              <div className="flex flex-col md:absolute md:inset-0">
-                <div className="border-b border-border px-4 py-3">
-                  <p className="text-sm font-semibold">{t('days')}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {t('dayCount', { count: itinerary.days.length })}
-                  </p>
-                </div>
-                <div className="min-h-0 flex-1 overflow-y-auto p-2">
-                  {itinerary.days.map((day, index) => {
-                    const active = day.id === selectedDayId;
-                    return (
-                      <button
-                        aria-current={active ? 'date' : undefined}
-                        className={cn(
-                          'flex min-h-14 w-full items-center justify-between gap-3 rounded-[var(--radius-md)] px-3 py-2 text-left transition-colors duration-[var(--motion-standard)] outline-none focus-visible:ring-3 focus-visible:ring-ring/40',
-                          active
-                            ? 'bg-secondary text-secondary-foreground'
-                            : 'hover:bg-surface-hover',
-                        )}
-                        key={day.id}
-                        onClick={() => setSelectedDayId(day.id)}
-                        type="button"
-                      >
-                        <span className="min-w-0 flex-1">
-                          {day.name ? (
-                            <>
-                              <span className="block truncate text-sm font-medium">{day.name}</span>
-                              <span className="block truncate text-xs text-muted-foreground">
-                                {t('dayOption', { date: formatDate(day.date), number: index + 1 })}
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <span className="block text-xs text-muted-foreground">
-                                {t('dayNumber', { number: index + 1 })}
-                              </span>
-                              <span className="block text-sm font-medium">
-                                {formatDate(day.date)}
-                              </span>
-                            </>
-                          )}
-                        </span>
-                        <span className="flex shrink-0 flex-col items-end gap-0.5">
-                          <span className="text-xs tabular-nums text-muted-foreground">
-                            {day.items.length}
-                          </span>
-                          <TripDayWeather forecast={tripWeatherForDate(weather, day.date)} />
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </nav>
-
-            {selectedDay ? (
-              <div className="min-w-0">
-                <div className="flex flex-col gap-4 border-b border-border px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6 sm:py-4">
-                  <div className="min-w-0 flex-1">
-                    {/* The picker carries calendar navigation. This block gives a saved
-                    name enough room to be the day's identity. */}
-                    {selectedDay.name ? (
-                      <>
-                        <h2
-                          id={`itinerary-day-${selectedDay.id}`}
-                          tabIndex={-1}
-                          className="text-lg leading-6 font-semibold tracking-tight break-words text-balance"
-                        >
-                          {selectedDay.name}
-                        </h2>
-                        <p className="mt-1 text-sm leading-5 text-muted-foreground">
-                          {t('dayOption', {
-                            date: formatDate(selectedDay.date, true),
-                            number: selectedIndex + 1,
-                          })}
-                        </p>
-                      </>
-                    ) : (
-                      <h2
-                        id={`itinerary-day-${selectedDay.id}`}
-                        tabIndex={-1}
-                        className="text-lg leading-6 font-semibold tracking-tight break-words text-balance"
-                      >
-                        {formatDate(selectedDay.date, true)}
-                      </h2>
-                    )}
-                    <TripDayWeather
-                      className="mt-1.5"
-                      forecast={tripWeatherForDate(weather, selectedDay.date)}
-                      variant="detailed"
-                    />
-                    {selectedDay.notes ? (
-                      <p className="mt-1.5 max-w-2xl whitespace-pre-wrap text-sm leading-6 text-text-subtle">
-                        {selectedDay.notes}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:shrink-0">
-                    <Button className="w-full sm:w-auto" onClick={() => openCreate(selectedDay)}>
-                      <Plus aria-hidden="true" data-icon="inline-start" />
-                      {t('addItem')}
-                    </Button>
-                    <Popover onOpenChange={setDaySettingsOpen} open={daySettingsOpen}>
-                      <PopoverTrigger
-                        render={
-                          <Button
-                            aria-label={t('daySettings')}
-                            className="border border-border-subtle bg-background shadow-[var(--shadow-control)] sm:border-transparent sm:bg-transparent sm:shadow-none"
-                            size="icon"
-                            type="button"
-                            variant="ghost"
-                          />
-                        }
-                      >
-                        <Settings2 aria-hidden="true" />
-                      </PopoverTrigger>
-                      <PopoverContent
-                        align="end"
-                        className="max-h-[min(36rem,var(--available-height))] w-[min(22rem,calc(100vw-2rem))] gap-0 overflow-y-auto p-0"
-                        collisionAvoidance={{
-                          align: 'shift',
-                          fallbackAxisSide: 'none',
-                          side: 'shift',
-                        }}
-                        collisionPadding={16}
-                        positionMethod="fixed"
-                        sideOffset={8}
-                      >
-                        <PopoverHeader className="border-b border-border px-4 py-3.5">
-                          <PopoverTitle className="text-sm">{t('daySettings')}</PopoverTitle>
-                        </PopoverHeader>
-
-                        <div className="border-b border-border p-2">
-                          <Button
-                            className="w-full justify-start px-3"
-                            type="button"
-                            variant="ghost"
-                            onClick={() => {
-                              setDaySettingsOpen(false);
-                              setContextDay(selectedDay);
-                            }}
-                          >
-                            {dayContextT('title')}
-                          </Button>
-                          {online && untimedItems(selectedDay).length > 0 ? (
-                            <Button
-                              className="w-full justify-start px-3"
-                              onClick={() => {
-                                setDaySettingsOpen(false);
-                                setDayTimesOpen(true);
-                              }}
-                              type="button"
-                              variant="ghost"
-                            >
-                              <Icons.Ai aria-hidden="true" data-icon="inline-start" />
-                              {t('dayTimes.action')}
-                            </Button>
-                          ) : null}
-                          <Button
-                            className="w-full justify-start px-3"
-                            onClick={() => {
-                              setDaySettingsOpen(false);
-                              setDayNameEditor(selectedDay);
-                              setDayNameValue(selectedDay.name ?? '');
-                              setDayNameError(null);
-                            }}
-                            variant="ghost"
-                          >
-                            <Pencil aria-hidden="true" data-icon="inline-start" />
-                            {selectedDay.name ? t('editDayName') : t('addDayName')}
-                          </Button>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-4 px-4 py-4">
-                          <div className="flex min-w-0 items-start gap-3">
-                            <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-secondary text-secondary-foreground">
-                              <Ruler aria-hidden="true" className="size-4" />
-                            </span>
-                            <div className="min-w-0">
-                              <label
-                                className="text-sm font-medium text-foreground"
-                                htmlFor="itinerary-travel-details"
-                              >
-                                {t('distance')}
-                              </label>
-                              <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                                {t('distanceHelp')}
-                              </p>
-                            </div>
-                          </div>
-                          <Switch
-                            checked={!compact}
-                            id="itinerary-travel-details"
-                            onCheckedChange={(checked) => setCompactItinerary(!checked)}
-                          />
-                        </div>
-
-                        <Collapsible className="border-t border-border px-4 py-3">
-                          <CollapsibleTrigger className="group w-full justify-between gap-3 text-left">
-                            <span className="flex min-w-0 items-center gap-3">
-                              <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-secondary text-secondary-foreground">
-                                <Icons.DailyBase aria-hidden="true" className="size-4" />
-                              </span>
-                              <span className="min-w-0">
-                                <span className="block text-sm font-medium text-foreground">
-                                  {t('dailyBase')}
-                                </span>
-                                <span className="mt-0.5 block truncate text-xs font-normal text-muted-foreground">
-                                  {dailyBaseSummary}
-                                </span>
-                              </span>
-                            </span>
-                            <ChevronDown
-                              aria-hidden="true"
-                              className="shrink-0 transition-transform duration-[var(--motion-standard)] group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
-                            />
-                          </CollapsibleTrigger>
-                          <CollapsiblePanel>
-                            <div className="space-y-3 pt-4">
-                              <p className="text-xs leading-5 text-muted-foreground">
-                                {t('dailyBaseHelp')}
-                              </p>
-                              <div className="space-y-1.5">
-                                <p className="text-xs font-medium text-muted-foreground">
-                                  {t('dailyBaseArrival')}
-                                </p>
-                                <Select
-                                  onValueChange={(value) =>
-                                    void handleDailyBase(
-                                      selectedDay,
-                                      value === 'none' ? null : value,
-                                    )
-                                  }
-                                  value={selectedDay.dailyBaseTripPlaceId ?? 'none'}
-                                >
-                                  <SelectTrigger
-                                    aria-label={t('dailyBaseArrival')}
-                                    className="w-full"
-                                    size="sm"
-                                  >
-                                    <SelectValue>
-                                      {selectedDay.dailyBaseTripPlaceId
-                                        ? placeName(
-                                            itinerary.tripPlaces.find(
-                                              (place) =>
-                                                place.id === selectedDay.dailyBaseTripPlaceId,
-                                            ) ?? null,
-                                          )
-                                        : t('noDailyBase')}
-                                    </SelectValue>
-                                  </SelectTrigger>
-                                  <SelectContent align="end">
-                                    <SelectItem value="none">{t('noDailyBase')}</SelectItem>
-                                    {alphabeticalTripPlaces.map((place) => (
-                                      <SelectItem key={place.id} value={place.id}>
-                                        {placeName(place)}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-1.5">
-                                <p className="text-xs font-medium text-muted-foreground">
-                                  {t('dailyBaseDeparture')}
-                                </p>
-                                <Select
-                                  onValueChange={(value) =>
-                                    void handleDailyBase(
-                                      selectedDay,
-                                      selectedDay.dailyBaseTripPlaceId,
-                                      value === 'same' ? null : value,
-                                    )
-                                  }
-                                  value={selectedDay.dailyBaseDepartureTripPlaceId ?? 'same'}
-                                >
-                                  <SelectTrigger
-                                    aria-label={t('dailyBaseDeparture')}
-                                    className="w-full"
-                                    size="sm"
-                                  >
-                                    <SelectValue>
-                                      {selectedDay.dailyBaseDepartureTripPlaceId
-                                        ? placeName(
-                                            itinerary.tripPlaces.find(
-                                              (place) =>
-                                                place.id ===
-                                                selectedDay.dailyBaseDepartureTripPlaceId,
-                                            ) ?? null,
-                                          )
-                                        : t('dailyBaseSameAsArrival')}
-                                    </SelectValue>
-                                  </SelectTrigger>
-                                  <SelectContent align="end">
-                                    <SelectItem value="same">
-                                      {t('dailyBaseSameAsArrival')}
-                                    </SelectItem>
-                                    {alphabeticalTripPlaces.map((place) => (
-                                      <SelectItem key={place.id} value={place.id}>
-                                        {placeName(place)}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-                          </CollapsiblePanel>
-                        </Collapsible>
-
-                        <div className="space-y-0.5 border-t border-border p-2">
-                          <Button
-                            className="w-full justify-start px-3"
-                            onClick={() => {
-                              setDaySettingsOpen(false);
-                              setDayNoteEditor(selectedDay);
-                              setDayNoteValue(selectedDay.notes ?? '');
-                            }}
-                            variant="ghost"
-                          >
-                            <Icons.Notes aria-hidden="true" data-icon="inline-start" />
-                            {selectedDay.notes ? t('editDayNote') : t('addDayNote')}
-                          </Button>
-                          {selectedDay.items.length ? (
-                            <>
-                              <Button
-                                className="mt-2 w-full justify-start px-3"
-                                onClick={() => openDayMove(selectedDay)}
-                                variant="outline"
-                              >
-                                <Icons.Itinerary aria-hidden="true" data-icon="inline-start" />
-                                {t('dayMove.action')}
-                              </Button>
-                              {/* The same dialog, opened already knowing the
-                              answer. Swapping was only ever reachable as a
-                              second question asked after choosing a day, which
-                              is not where anyone goes looking for it. */}
-                              <Button
-                                className="mt-2 w-full justify-start px-3"
-                                onClick={() => openDayMove(selectedDay, 'swap')}
-                                variant="outline"
-                              >
-                                <ArrowLeftRight aria-hidden="true" data-icon="inline-start" />
-                                {t('dayMove.swapAction')}
-                              </Button>
-                            </>
-                          ) : null}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </div>
-
-                {compact ? null : (
-                  <ItineraryRouteSummary
-                    data={routes}
-                    distanceUnit={preferences.distanceUnit}
-                    locale={locale}
-                    status={routeStatus}
-                  />
-                )}
-
-                <Tabs
-                  onValueChange={(value) => {
-                    const view = value as 'list' | 'map';
-                    setMobileView(view);
-                    if (view === 'map') setPlanningMapMounted(true);
+                <ItineraryPlanningMap
+                  className="h-full min-h-0 lg:min-h-0"
+                  onAddToDay={(point) => addTripPlaceToSelectedDay(point.tripPlaceId)}
+                  onClearSelection={clearMapSelection}
+                  onSelectPoint={handleMapPointSelection}
+                  onViewItem={viewMapItem}
+                  onViewPlaceDetails={(point) => {
+                    const tripPlace = tripPlaceById(point.tripPlaceId);
+                    if (tripPlace)
+                      openPlaceDetails(
+                        tripPlace,
+                        point.kind === 'considered'
+                          ? placeVisitDate(placeUse[tripPlace.id])
+                          : selectedDay.date,
+                      );
                   }}
-                  value={mobileView}
-                >
-                  <div className="border-b border-border px-3 py-3 lg:hidden">
-                    <TabsList
-                      aria-label={t('map.viewNavigation')}
-                      className="grid w-full grid-cols-2"
-                    >
-                      <TabsTab
-                        aria-controls="itinerary-list-panel"
-                        className="gap-2"
-                        id="itinerary-list-tab"
-                        value="list"
-                      >
-                        <List aria-hidden="true" data-icon="inline-start" />
-                        {t('map.listView')}
-                      </TabsTab>
-                      <TabsTab
-                        aria-controls="itinerary-map-panel"
-                        className="gap-2"
-                        id="itinerary-map-tab"
-                        value="map"
-                      >
-                        <MapIcon aria-hidden="true" data-icon="inline-start" />
-                        {t('map.mapView')}
-                      </TabsTab>
-                      <TabsIndicator />
-                    </TabsList>
-                  </div>
-                </Tabs>
-
-                <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.9fr)]">
-                  <div
-                    aria-labelledby="itinerary-list-tab"
-                    className={cn('p-4 sm:p-6', mobileView === 'map' && 'hidden lg:block')}
-                    id="itinerary-list-panel"
-                    role="tabpanel"
-                    tabIndex={mobileView === 'list' ? 0 : -1}
+                  points={mapPoints}
+                  routeLines={routeLines}
+                  selectedPointId={selectedMapPointId}
+                  suspendUpdates={!planningMapVisible}
+                />
+              </PlannerMapPane>
+            }
+            phoneMapOpen={phoneMapOpen}
+          >
+            <DayMasthead
+              actions={
+                <>
+                  {/* A phone adds a stop with the bottom bar's plus button. */}
+                  <Button
+                    className="hidden md:inline-flex"
+                    onClick={() => openCreate(selectedDay)}
+                    size="sm"
+                    type="button"
                   >
-                    {selectedDay.items.length ? (
-                      <ItineraryDayTimeline
-                        dayOptions={itinerary.days.map((day, dayIndex) => ({
-                          id: day.id,
-                          label: dayOption(day, dayIndex),
-                        }))}
-                        defaultTimeZone={selectedDay.defaultTimeZone}
-                        distanceUnit={preferences.distanceUnit}
-                        entries={shownSequence}
-                        hoursFor={(item) =>
-                          item.tripPlace ? dayPlaceSignals[item.tripPlace.id]?.hours : undefined
-                        }
-                        itemCount={selectedDay.items.length}
-                        label={t('itemListLabel')}
-                        locale={locale}
-                        onDeleteItem={setItemToDelete}
-                        onDuplicateItem={(item) => void handleDuplicate(item)}
-                        onEditItem={openEdit}
-                        onPlacePriorityChange={(item, priority) =>
-                          void changePlacePriority(item, priority)
-                        }
-                        savingPriorityIds={savingPriorityIds}
-                        onModeChange={(segment, mode) => void handleRouteModeChange(segment, mode)}
-                        onMoveItem={(item, dayId, position) =>
-                          void handleOrganize(item, dayId, position)
-                        }
-                        onSelectBase={selectBaseOnMap}
-                        onSelectItem={selectItemOnMap}
-                        onViewBaseDetails={(tripPlaceId) =>
-                          openPlaceDetails(tripPlaceById(tripPlaceId) ?? null, selectedDay.date)
-                        }
-                        onViewItemDetails={(item) =>
-                          openPlaceDetails(item.tripPlace, selectedDay.date)
-                        }
-                        organizingItemId={organizingItemId}
-                        resolveBase={(tripPlaceId) => {
-                          const tripPlace = tripPlaceById(tripPlaceId);
-                          if (!tripPlace) return null;
-                          const point = mapPoints.find(
-                            (candidate) =>
-                              candidate.kind === 'base' && candidate.tripPlaceId === tripPlace.id,
-                          );
-                          return {
-                            located: Boolean(point),
-                            name: placeName(tripPlace) ?? t('providerPlace'),
-                            selected: Boolean(point && selectedMapPointId === point.id),
-                          };
-                        }}
-                        resolveItem={(item) => ({
-                          detailed: Boolean(item.tripPlace),
-                          located: Boolean(item.tripPlace && placeLocation(item.tripPlace)),
-                          mapsHref: item.tripPlace
-                            ? googleMapsPlaceHref(item.tripPlace.place)
-                            : null,
-                          name: itemName(item),
-                          selected: selectedMapItemId === item.id,
+                    <Plus aria-hidden="true" data-icon="inline-start" />
+                    {plannerT('masthead.addStop')}
+                  </Button>
+                  <Button
+                    onClick={() => setPlacesDrawerOpen(true)}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    <Icons.Places aria-hidden="true" data-icon="inline-start" />
+                    {tripPlacesTranslations('openPlaces')}
+                  </Button>
+                  <Button
+                    aria-label={plannerT('masthead.previewLabel', {
+                      number: selectedIndex + 1,
+                    })}
+                    nativeButton={false}
+                    render={
+                      <Link
+                        href={dayPreviewHref(
+                          tripId,
+                          selectedDay.date,
+                          selectedDay.items
+                            .flatMap((item) => (item.localStartTime ? [item.localStartTime] : []))
+                            .toSorted()[0],
+                        )}
+                      />
+                    }
+                    size="sm"
+                    variant="outline"
+                  >
+                    <Icons.Preview aria-hidden="true" data-icon="inline-start" />
+                    {plannerT('masthead.preview')}
+                  </Button>
+                  <DaySettingsMenu
+                    canSuggestTimes={online && untimedItems(selectedDay).length > 0}
+                    compact={compact}
+                    dailyBaseSummary={dailyBaseSummary}
+                    day={selectedDay}
+                    onCompactChange={setCompactItinerary}
+                    onDailyBaseChange={(tripPlaceId, departureTripPlaceId) =>
+                      void handleDailyBase(selectedDay, tripPlaceId, departureTripPlaceId)
+                    }
+                    onEditContext={() => setContextDay(selectedDay)}
+                    onEditName={() => {
+                      setDayNameEditor(selectedDay);
+                      setDayNameValue(selectedDay.name ?? '');
+                      setDayNameError(null);
+                    }}
+                    onEditNote={() => {
+                      setDayNoteEditor(selectedDay);
+                      setDayNoteValue(selectedDay.notes ?? '');
+                    }}
+                    onMoveDay={(strategy) => openDayMove(selectedDay, strategy)}
+                    onOpenChange={setDaySettingsOpen}
+                    onSuggestTimes={() => setDayTimesOpen(true)}
+                    open={daySettingsOpen}
+                    placeName={placeName}
+                    tripPlaces={alphabeticalTripPlaces}
+                  />
+                </>
+              }
+              attention={
+                dayProblems.day[0] ? (
+                  <ScoreProblemNote
+                    problem={dayProblems.day[0]}
+                    resolveAction={resolveScoreAction}
+                  />
+                ) : null
+              }
+              compactTravel={compact}
+              date={selectedDay.date}
+              dayId={selectedDay.id}
+              dayNumber={selectedIndex + 1}
+              facts={dayFacts(selectedDay, routes)}
+              heading={dayHeading(selectedDay, selectedRibbonDay?.town ?? null)}
+              hero={heroImage}
+              isToday={selectedRibbonDay?.isToday ?? false}
+              note={selectedDay.notes}
+              onNextDay={
+                selectedIndex < itinerary.days.length - 1 ? () => selectAdjacentDay(1) : undefined
+              }
+              onOpenMap={openPhoneMap}
+              onPreviousDay={selectedIndex > 0 ? () => selectAdjacentDay(-1) : undefined}
+              onStayClick={() => setDaySettingsOpen(true)}
+              routeNotes={
+                !compact &&
+                (routes?.source === 'cache' ||
+                  routes?.segments.some((segment) => segment.mode === 'walk')) ? (
+                  <p className="flex flex-wrap gap-x-2 text-xs leading-5">
+                    {routes?.source === 'cache' ? (
+                      <span className="text-status-warning">
+                        {t('routes.cachedRoute', {
+                          date: new Intl.DateTimeFormat(locale, {
+                            dateStyle: 'medium',
+                            timeStyle: 'short',
+                          }).format(new Date(routes.generatedAt)),
                         })}
-                        routesStale={routes?.stale ?? false}
-                        savingRouteOwner={savingRouteOwner}
-                        selectedDayId={selectedDay.id}
-                        timeFormat={preferences.timeFormat}
-                        unscheduledLabel={t('unscheduled')}
-                      />
-                    ) : (
-                      <PageState
-                        actions={
-                          <Button onClick={() => openCreate(selectedDay)} variant="outline">
-                            <Plus aria-hidden="true" data-icon="inline-start" />
-                            {t('addFirstItem')}
-                          </Button>
-                        }
-                        className="min-h-60 justify-center"
-                        description={t('emptyDescription')}
-                        headingLevel={2}
-                        icon={<Icons.Itinerary aria-hidden="true" />}
-                        title={t('emptyTitle')}
-                      />
-                    )}
-                    <ItineraryGapSuggestions
-                      dayId={selectedDay.id}
-                      onAdded={refresh}
-                      placeName={(tripPlace) => placeName(tripPlace) ?? t('providerPlace')}
-                      tripId={tripId}
-                      tripPlaces={itinerary.tripPlaces}
-                    />
-                    <ItineraryScoreAndInsights
-                      planScoreEnabled={planScoreEnabled}
-                      resolveAction={resolveScoreAction}
-                      selectedDayId={selectedDayId}
-                      tripId={tripId}
-                    />
-                  </div>
+                      </span>
+                    ) : null}
+                    {routes?.segments.some((segment) => segment.mode === 'walk') ? (
+                      <span className="text-muted-foreground">{t('routes.walkingBeta')}</span>
+                    ) : null}
+                  </p>
+                ) : null
+              }
+              routesLoading={routeStatus === 'loading'}
+              scoreChip={
+                planScoreEnabled ? (
+                  <PlanScoreChip
+                    assessment={planScore.data}
+                    explanations={
+                      scoreDay?.explanations ?? {
+                        uncertainty: [],
+                        whatWorks: [],
+                        worthImproving: [],
+                      }
+                    }
+                    label={plannerT('masthead.scoreLabel', { number: selectedIndex + 1 })}
+                    onOpen={() => setScoreSheetOpen(true)}
+                    score={scoreDay?.score ?? null}
+                    status={planScore.status}
+                    tone="media"
+                  />
+                ) : null
+              }
+              sketch={
+                daySketch ? <DayRouteSketch places={sketchPlaces} sketch={daySketch} /> : null
+              }
+              stay={(() => {
+                const start = tripPlaceById(dailyBases.arrivalTripPlaceId);
+                const end = tripPlaceById(dailyBases.departureTripPlaceId);
+                if (start && end && start.id !== end.id) {
+                  return {
+                    from: placeName(start) ?? t('providerPlace'),
+                    kind: 'transition',
+                    to: placeName(end) ?? t('providerPlace'),
+                  } satisfies DayStay;
+                }
+                const stay = start ?? end;
+                return stay
+                  ? ({
+                      kind: 'same',
+                      name: placeName(stay) ?? t('providerPlace'),
+                    } satisfies DayStay)
+                  : ({ kind: 'none' } satisfies DayStay);
+              })()}
+              weather={tripWeatherForDate(weather ?? null, selectedDay.date)}
+            />
 
-                  <aside
-                    aria-label={t('map.regionLabel')}
-                    className={cn(
-                      'min-w-0 border-border lg:block lg:border-l',
-                      mobileView === 'list' && 'hidden',
-                    )}
-                    id="itinerary-map-panel"
-                    role="tabpanel"
-                    tabIndex={mobileView === 'map' ? 0 : -1}
-                  >
-                    {shouldMountPlanningMap ? (
-                      <ItineraryPlanningMap
-                        onAddToDay={(point) => addTripPlaceToSelectedDay(point.tripPlaceId)}
-                        onClearSelection={clearMapSelection}
-                        onSelectPoint={handleMapPointSelection}
-                        onViewItem={viewMapItem}
-                        onViewPlaceDetails={(point) => {
-                          const tripPlace = tripPlaceById(point.tripPlaceId);
-                          if (tripPlace)
-                            openPlaceDetails(
-                              tripPlace,
-                              point.kind === 'considered'
-                                ? placeVisitDate(placeUse[tripPlace.id])
-                                : selectedDay.date,
-                            );
-                        }}
-                        points={mapPoints}
-                        routeLines={routeLines}
-                        selectedPointId={selectedMapPointId}
-                        suspendUpdates={!planningMapVisible}
-                      />
-                    ) : (
-                      <div
-                        aria-hidden="true"
-                        className="hidden min-h-[34rem] bg-muted/40 lg:block"
-                      />
-                    )}
-                  </aside>
-                </div>
-              </div>
-            ) : null}
-          </div>
+            {selectedDay.items.length ? (
+              <DayTimeline
+                attentionFor={(item) => {
+                  const problems = dayProblems.byItem.get(item.id) ?? [];
+                  const holidays = (hoursNotices?.notices ?? []).filter(
+                    (notice) =>
+                      notice.kind === 'holiday_check' &&
+                      notice.dayId === selectedDay.id &&
+                      notice.tripPlaceId === item.tripPlace?.id,
+                  );
+                  if (!problems.length && !holidays.length) return null;
+                  return (
+                    <>
+                      {problems.map((problem, index) => (
+                        <ScoreProblemNote
+                          key={`${problem.code}-${index}`}
+                          problem={problem}
+                          resolveAction={resolveScoreAction}
+                        />
+                      ))}
+                      {holidays.map((notice) =>
+                        notice.kind === 'holiday_check' ? (
+                          <AttentionNote key={`${notice.dayId}-${notice.tripPlaceId}`}>
+                            {plannerT('stop.holidayCheck', { holiday: notice.holidayName })}
+                          </AttentionNote>
+                        ) : null,
+                      )}
+                    </>
+                  );
+                }}
+                defaultTimeZone={selectedDay.defaultTimeZone}
+                distanceUnit={preferences.distanceUnit}
+                entries={bandedSequence}
+                hoursFor={(item) =>
+                  item.tripPlace ? dayPlaceSignals[item.tripPlace.id]?.hours : undefined
+                }
+                itemCount={selectedDay.items.length}
+                label={t('itemListLabel')}
+                menuActions={{
+                  dayOptions: itinerary.days.map((day, dayIndex) => ({
+                    id: day.id,
+                    label: dayOption(day, dayIndex),
+                  })),
+                  onDeleteItem: setItemToDelete,
+                  onDuplicateItem: (item) => void handleDuplicate(item),
+                  onEditItem: openEdit,
+                  onMoveItem: (item, dayId, position) => void handleOrganize(item, dayId, position),
+                  onPlacePriorityChange: (item, priority) =>
+                    void changePlacePriority(item, priority),
+                  onSelectItem: selectItemOnMap,
+                  organizingItemId,
+                  savingPriorityIds,
+                  selectedDayId: selectedDay.id,
+                  unscheduledLabel: t('unscheduled'),
+                }}
+                onModeChange={(segment, mode) => void handleRouteModeChange(segment, mode)}
+                onSelectBase={selectBaseOnMap}
+                onSelectItem={selectItemOnMap}
+                onViewBaseDetails={(tripPlaceId) =>
+                  openPlaceDetails(tripPlaceById(tripPlaceId) ?? null, selectedDay.date)
+                }
+                onViewItemDetails={(item) => openPlaceDetails(item.tripPlace, selectedDay.date)}
+                resolveBase={(tripPlaceId) => {
+                  const tripPlace = tripPlaceById(tripPlaceId);
+                  if (!tripPlace) return null;
+                  const point = mapPoints.find(
+                    (candidate) =>
+                      candidate.kind === 'base' && candidate.tripPlaceId === tripPlace.id,
+                  );
+                  return {
+                    located: Boolean(point),
+                    name: placeName(tripPlace) ?? t('providerPlace'),
+                    selected: Boolean(point && selectedMapPointId === point.id),
+                  };
+                }}
+                resolveItem={(item) => {
+                  const locality = localityFromAddress(
+                    item.tripPlace?.place.snapshot?.address ??
+                      item.tripPlace?.place.providerAddress,
+                  );
+                  return {
+                    category: item.tripPlace?.place.snapshot?.category,
+                    detailed: Boolean(item.tripPlace),
+                    locality:
+                      locality && !sameTown(locality, selectedRibbonDay?.town) ? locality : null,
+                    located: Boolean(item.tripPlace && placeLocation(item.tripPlace)),
+                    mapsHref: item.tripPlace ? googleMapsPlaceHref(item.tripPlace.place) : null,
+                    name: itemName(item),
+                    selected: selectedMapItemId === item.id,
+                  };
+                }}
+                routesStale={routes?.stale ?? false}
+                savingRouteOwner={savingRouteOwner}
+              />
+            ) : (
+              <PageState
+                actions={
+                  <Button onClick={() => openCreate(selectedDay)} variant="outline">
+                    <Plus aria-hidden="true" data-icon="inline-start" />
+                    {t('addFirstItem')}
+                  </Button>
+                }
+                className="min-h-60 justify-center"
+                description={t('emptyDescription')}
+                headingLevel={2}
+                icon={<Icons.Itinerary aria-hidden="true" />}
+                title={t('emptyTitle')}
+              />
+            )}
+
+            <ItineraryGapSuggestions
+              dayId={selectedDay.id}
+              onAdded={refresh}
+              placeName={(tripPlace) => placeName(tripPlace) ?? t('providerPlace')}
+              tripId={tripId}
+              tripPlaces={itinerary.tripPlaces}
+            />
+            <div aria-hidden="true" className="h-px" ref={insightsSentinelRef} />
+            <TripInsights
+              dayId={selectedDay.id}
+              enabled={insightsVisible}
+              resolveAction={resolveScoreAction}
+              surface="card"
+              tripId={tripId}
+            />
+          </PlannerDayView>
         </div>
       ) : null}
 
@@ -2438,10 +2262,10 @@ export function ItineraryManager({
       ) : null}
 
       {activeView === 'overview' ? (
-        <ItineraryScoreAndInsights
+        <TripScoreAndInsights
+          planScore={planScore}
           planScoreEnabled={planScoreEnabled}
           resolveAction={resolveScoreAction}
-          selectedDayId={null}
           tripId={tripId}
         />
       ) : null}
@@ -2528,6 +2352,47 @@ export function ItineraryManager({
             })}
           </ItemGroup>
         </section>
+      ) : null}
+
+      {planScoreEnabled && selectedDay ? (
+        <PlanScoreSheet
+          onOpenChange={setScoreSheetOpen}
+          open={scoreSheetOpen}
+          panel={{
+            assessment: planScore.data,
+            change: planScore.changeFor(selectedDay.id),
+            completeness: scoreDay?.completeness ?? null,
+            confidence: scoreDay?.confidence ?? null,
+            dayId: selectedDay.id,
+            disabled: scoreDay?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED'),
+            explanations: scoreDay?.explanations ?? {
+              uncertainty: [],
+              whatWorks: [],
+              worthImproving: [],
+            },
+            factors: scoreDay?.factors,
+            onRetry: planScore.retry,
+            // An action that opens something here closes the sheet first, so
+            // what it opens is not behind it.
+            resolveAction: (explanation) => {
+              const action = resolveScoreAction(explanation);
+              return action && 'onSelect' in action
+                ? {
+                    onSelect: () => {
+                      setScoreSheetOpen(false);
+                      action.onSelect();
+                    },
+                  }
+                : action;
+            },
+            score: scoreDay?.score ?? null,
+            scope: 'day',
+            status: planScore.status,
+            title: planScoreTranslations('dayTitle'),
+            tripPlacesHref: `/trips/${tripId}/places`,
+          }}
+          title={dayOption(selectedDay, selectedIndex)}
+        />
       ) : null}
 
       {placesDrawerOpen && selectedDay ? (

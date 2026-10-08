@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 
 import {
+  dayPreviewHref,
   isEmphasisAtLeast,
   isTripModeAvailable,
   primaryTripDestinations,
@@ -293,4 +294,13 @@ test('reordering a focal card does not move the navigation contract itself', () 
   // The same destinations, and the same objects - only the order differs.
   expect(reordered).toHaveLength(contract.length);
   expect(reordered.every((destination) => contract.includes(destination))).toBe(true);
+});
+
+test('a day previews in Trip Mode at the time it starts, or on its morning', () => {
+  expect(dayPreviewHref('trip-1', '2026-09-07')).toBe(
+    '/trips/trip-1/mode?preview=1&date=2026-09-07&time=09%3A00',
+  );
+  expect(dayPreviewHref('trip-1', '2026-09-07', '07:30')).toBe(
+    '/trips/trip-1/mode?preview=1&date=2026-09-07&time=07%3A30',
+  );
 });

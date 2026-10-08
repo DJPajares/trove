@@ -4,6 +4,7 @@ import type { ItineraryItem, ItineraryRouteSegment } from '../lib/itinerary/api.
 import {
   buildDaySequence,
   dayStopNumbers,
+  resolveDailyBases,
   type DailyBaseIds,
   type DayTimelineEntry,
 } from '../lib/itinerary/day-sequence.ts';
@@ -240,4 +241,56 @@ test('the sequence counts exactly as dayStopNumbers does', () => {
       numbers.departure,
     );
   }
+});
+
+test('a Stay the server inferred numbers the day before its legs arrive', () => {
+  const day = {
+    dailyBaseDepartureTripPlaceId: null,
+    dailyBaseTripPlaceId: null,
+    stay: {
+      endSource: 'accommodation' as const,
+      endTripPlaceId: 'new-hotel',
+      startSource: 'accommodation' as const,
+      startTripPlaceId: 'old-hotel',
+    },
+  };
+  const legs = [
+    segment({
+      destination: { id: 'a', kind: 'itinerary_item', label: 'a' },
+      id: 'leg-a',
+      origin: { id: 'old-hotel', kind: 'daily_base', label: 'Old hotel' },
+    }),
+    segment({
+      destination: { id: 'new-hotel', kind: 'daily_base', label: 'New hotel' },
+      id: 'leg-home',
+      modeOwner: { id: 'a', kind: 'item_departure' },
+      origin: { id: 'a', kind: 'itinerary_item', label: 'a' },
+    }),
+  ];
+
+  const before = resolveDailyBases({ day });
+  // The same answer once the legs are in, so no stop is renumbered under the reader.
+  expect(resolveDailyBases({ day, routeSegments: legs })).toStrictEqual(before);
+  expect(before).toStrictEqual({
+    arrivalTripPlaceId: 'old-hotel',
+    departureTripPlaceId: 'new-hotel',
+  });
+});
+
+test('a base set by hand still outranks the Stay the server inferred', () => {
+  const day = {
+    dailyBaseDepartureTripPlaceId: null,
+    dailyBaseTripPlaceId: 'chosen',
+    stay: {
+      endSource: 'accommodation' as const,
+      endTripPlaceId: 'booked',
+      startSource: 'accommodation' as const,
+      startTripPlaceId: 'booked',
+    },
+  };
+
+  expect(resolveDailyBases({ day })).toStrictEqual({
+    arrivalTripPlaceId: 'chosen',
+    departureTripPlaceId: 'chosen',
+  });
 });

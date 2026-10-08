@@ -2,7 +2,8 @@ import { expect, test } from 'vitest';
 
 import type { ItineraryTripPlace } from '../lib/itinerary/api.ts';
 import type { Memory } from '../lib/memories/api.ts';
-import { locatedMemoryPlaces, routeSketch } from '../lib/memories/route-sketch.ts';
+import { routeSketch } from '../lib/maps/route-sketch.ts';
+import { locatedMemoryPlaces } from '../lib/memories/route-sketch.ts';
 
 const BOX = { height: 120, padding: 10, width: 320 };
 
@@ -116,4 +117,13 @@ test('a route across the antimeridian is drawn as the short hop it was', () => {
 
   // Strictly west to east, rather than doubling back around the world.
   expect(xs).toStrictEqual([...xs].sort((left, right) => left - right));
+});
+
+test('a planned day draws from two places, where the journal waits for three', () => {
+  expect(routeSketch([TOKYO, KYOTO], BOX)).toBeNull();
+
+  const day = routeSketch([TOKYO, KYOTO], BOX, { minDistinct: 2 });
+  expect(day?.points).toHaveLength(2);
+  // The same place twice is still one place, however many times it is passed.
+  expect(routeSketch([TOKYO, TOKYO], BOX, { minDistinct: 2 })).toBeNull();
 });

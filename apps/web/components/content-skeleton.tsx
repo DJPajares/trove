@@ -7,6 +7,7 @@ const skeletonVariants = cva('w-full', {
   variants: {
     shape: {
       list: 'space-y-3',
+      planner: 'w-full space-y-6',
       media: 'grid gap-5 sm:grid-cols-[minmax(0,1.2fr)_minmax(16rem,0.8fr)]',
       text: 'max-w-2xl space-y-4',
       timeline: 'max-w-3xl space-y-0',
@@ -19,7 +20,7 @@ const skeletonVariants = cva('w-full', {
 });
 
 export type LoadingShape =
-  'list' | 'media' | 'text' | 'timeline' | 'trip' | 'tripHero' | 'tripSection';
+  'list' | 'media' | 'planner' | 'text' | 'timeline' | 'trip' | 'tripHero' | 'tripSection';
 
 export function ContentSkeleton({
   className,
@@ -70,6 +71,38 @@ export function ContentSkeleton({
             </div>
           </div>
         ))}
+      </div>
+    );
+  }
+
+  // The planner below the trip's chrome: the ribbon of days, the day's photo
+  // header with its facts, and the first stops on the day's spine - the same
+  // boxes the day lands in, so nothing moves when it does.
+  if (shape === 'planner') {
+    return (
+      <div aria-hidden="true" className={cn(skeletonVariants({ shape }), className)}>
+        <div className="flex gap-1.5 overflow-hidden">
+          {[0, 1, 2, 3, 4, 5].map((tile) => (
+            <Skeleton
+              className="h-[5.25rem] w-[4.5rem] shrink-0 rounded-[var(--radius-lg)]"
+              key={tile}
+            />
+          ))}
+        </div>
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(19rem,0.85fr)] lg:gap-8">
+          <div className="space-y-4">
+            <Skeleton className="h-44 w-full rounded-[var(--radius-2xl)] sm:h-52 lg:h-56" />
+            <Skeleton className="h-4 w-3/5" />
+            <Skeleton className="h-4 w-2/5" />
+            {[0, 1, 2].map((row) => (
+              <div className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-3" key={row}>
+                <Skeleton className="mx-auto mt-4 size-8 rounded-full" />
+                <Skeleton className="my-1.5 h-20 w-full rounded-[var(--radius-xl)]" />
+              </div>
+            ))}
+          </div>
+          <Skeleton className="hidden h-[34rem] w-full rounded-[var(--radius-xl)] lg:block" />
+        </div>
       </div>
     );
   }

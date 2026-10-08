@@ -183,7 +183,14 @@ export function TripChrome({
             resizes under the traveller as they open a section. */}
           <section
             aria-labelledby="trip-section-cover-heading"
-            className="-mx-[var(--gutter-inline-start)] -mt-8 md:mx-0 md:mt-0"
+            className={cn(
+              '-mx-[var(--gutter-inline-start)] -mt-8 md:mx-0 md:mt-0',
+              // The planner is a workspace: its cover gives way to a band so
+              // the day starts on the first screen, where the full cover would
+              // fill it. Every other screen keeps the trip's full cover - a
+              // height decided per screen rather than one that changes on it.
+              stickyNavigation && '[--trip-cover-height:9.5rem] md:[--trip-cover-height:12rem]',
+            )}
           >
             <div className="relative isolate">
               <TripMedia

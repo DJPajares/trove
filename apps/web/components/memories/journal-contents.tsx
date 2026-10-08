@@ -9,7 +9,7 @@ import { Chip, ChipGroup } from '@/components/ui/chip';
 import type { MemoryPhoto } from '@/lib/memories/api';
 import type { JournalContentsDay, JournalLens } from '@/lib/memories/journal';
 import { printTilts } from '@/lib/memories/photo-layout';
-import type { RouteSketch } from '@/lib/memories/route-sketch';
+import type { RouteSketch } from '@/lib/maps/route-sketch';
 import { cn } from '@/lib/utils';
 import * as Icons from '@/lib/icons';
 

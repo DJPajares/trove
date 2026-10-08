@@ -298,11 +298,9 @@ function scoreDisplay({
 }
 
 /**
- * A day's score as a chip: the ring, the verdict, and how many problems are
- * worth a look. It is the default, compact level PRD 29.4 asks for; opening it
- * shows the breakdown. Nothing at all while there is no number to show - the
- * opened panel says why, and a chip saying "unavailable" on every day would be
- * noise on the one line it shares.
+ * A day's compact score: its numeric ring and short verdict. Opening it shows
+ * the breakdown and advice. Render nothing while there is no number to show;
+ * the opened panel explains availability.
  */
 export function PlanScoreChip({
   assessment,
@@ -330,7 +328,7 @@ export function PlanScoreChip({
   if (status === 'disabled' || assessment?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')) {
     return null;
   }
-  const { displayScore, issues } = scoreDisplay({
+  const { displayScore } = scoreDisplay({
     assessment,
     explanations,
     now: Math.max(now, Date.now()),
@@ -353,18 +351,8 @@ export function PlanScoreChip({
       type="button"
     >
       <ScoreRing label={label} score={displayScore} size="sm" tone={tone} />
-      <span className="flex min-w-0 flex-col leading-tight break-words">
-        <span className="text-sm font-semibold">{t(`verdict.${scoreBand(displayScore)}`)}</span>
-        {issues.length ? (
-          <span
-            className={cn(
-              'text-xs',
-              tone === 'media' ? 'text-score-media-muted' : 'text-muted-foreground',
-            )}
-          >
-            {t('worthALook', { count: issues.length })}
-          </span>
-        ) : null}
+      <span className="min-w-0 text-sm leading-tight font-semibold break-words">
+        {t(`compactVerdict.${scoreBand(displayScore)}`)}
       </span>
     </button>
   );

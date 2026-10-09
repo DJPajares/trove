@@ -12,8 +12,8 @@ describe('floating action stack order', () => {
     expect(floatingActionOrder[0]).toBe('search');
   });
 
-  it('then reads identity, what is waiting, and how the app looks', () => {
-    expect(floatingActionOrder).toEqual(['search', 'account', 'notifications', 'appearance']);
+  it('follows with notifications and appearance, then account at the bottom', () => {
+    expect(floatingActionOrder).toEqual(['search', 'notifications', 'appearance', 'account']);
   });
 });
 

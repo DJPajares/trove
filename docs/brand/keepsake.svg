@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1180" viewBox="0 0 1200 1180">
-  <rect width="1200" height="1180" fill="#f8f1e7" />
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1340" viewBox="0 0 1200 1340">
+  <rect width="1200" height="1340" fill="#f8f1e7" />
   <g transform="translate(48 40)"><svg xmlns="http://www.w3.org/2000/svg" width="230" height="60.34075488767151" viewBox="0 0 198.97 52.2">
     <g transform="translate(-9.08 -10.21) scale(1.1348)">
       <path d="M26.5 23.5H37.5A1.5 1.5 0 0 1 39 25V55L32 48L25 55V25A1.5 1.5 0 0 1 26.5 23.5Z" fill="#c2603d" />
@@ -81,17 +81,17 @@
   </svg>
   </g>
   <g transform="translate(664 440)"><svg xmlns="http://www.w3.org/2000/svg" width="112" height="112" viewBox="0 0 64 64">
-    <rect width="64" height="64" rx="16" fill="#515723" />
+    <rect width="64" height="64" rx="16" fill="#41482b" />
     <g transform="translate(32 32.5) scale(0.76) translate(-32 -32)">
-      <path d="M26.5 23.5H37.5A1.5 1.5 0 0 1 39 25V55L32 48L25 55V25A1.5 1.5 0 0 1 26.5 23.5Z" fill="#d27350" />
+      <path d="M26.5 23.5H37.5A1.5 1.5 0 0 1 39 25V55L32 48L25 55V25A1.5 1.5 0 0 1 26.5 23.5Z" fill="#fcf7ee" />
       <path d="M11 9H53A3 3 0 0 1 56 12V18A3 3 0 0 1 53 21H11A3 3 0 0 1 8 18V12A3 3 0 0 1 11 9Z" fill="#fcf7ee" />
     </g>
   </svg>
   </g>
   <g transform="translate(812 440)"><svg xmlns="http://www.w3.org/2000/svg" width="112" height="112" viewBox="0 0 64 64">
-    <rect width="64" height="64" rx="0" fill="#515723" />
+    <rect width="64" height="64" rx="0" fill="#41482b" />
     <g transform="translate(32 32.5) scale(0.66) translate(-32 -32)">
-      <path d="M26.5 23.5H37.5A1.5 1.5 0 0 1 39 25V55L32 48L25 55V25A1.5 1.5 0 0 1 26.5 23.5Z" fill="#d27350" />
+      <path d="M26.5 23.5H37.5A1.5 1.5 0 0 1 39 25V55L32 48L25 55V25A1.5 1.5 0 0 1 26.5 23.5Z" fill="#fcf7ee" />
       <path d="M11 9H53A3 3 0 0 1 56 12V18A3 3 0 0 1 53 21H11A3 3 0 0 1 8 18V12A3 3 0 0 1 11 9Z" fill="#fcf7ee" />
     </g>
   </svg>
@@ -117,7 +117,7 @@
     <text x="560" y="664">Clear space: one ribbon width on every side</text>
   </g>
   <g transform="translate(48 696)"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 64 64">
-    <rect width="64" height="64" rx="16" fill="#515723" />
+    <rect width="64" height="64" rx="16" fill="#41482b" />
     <g transform="translate(32 32.5) scale(0.8) translate(-32 -32)">
       <path d="M24.5 20H39.5V56L32 48.5L24.5 56Z" fill="#fcf7ee" />
       <path d="M10 8H54A3 3 0 0 1 57 11V18.5A3 3 0 0 1 54 21.5H10A3 3 0 0 1 7 18.5V11A3 3 0 0 1 10 8Z" fill="#fcf7ee" />
@@ -125,7 +125,7 @@
   </svg>
   </g>
   <g transform="translate(120 692)"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 64 64">
-    <rect width="64" height="64" rx="16" fill="#515723" />
+    <rect width="64" height="64" rx="16" fill="#41482b" />
     <g transform="translate(32 32.5) scale(0.8) translate(-32 -32)">
       <path d="M24.5 20H39.5V56L32 48.5L24.5 56Z" fill="#fcf7ee" />
       <path d="M10 8H54A3 3 0 0 1 57 11V18.5A3 3 0 0 1 54 21.5H10A3 3 0 0 1 7 18.5V11A3 3 0 0 1 10 8Z" fill="#fcf7ee" />
@@ -133,7 +133,7 @@
   </svg>
   </g>
   <g transform="translate(192 688)"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 64 64">
-    <rect width="64" height="64" rx="16" fill="#515723" />
+    <rect width="64" height="64" rx="16" fill="#41482b" />
     <g transform="translate(32 32.5) scale(0.8) translate(-32 -32)">
       <path d="M24.5 20H39.5V56L32 48.5L24.5 56Z" fill="#fcf7ee" />
       <path d="M10 8H54A3 3 0 0 1 57 11V18.5A3 3 0 0 1 54 21.5H10A3 3 0 0 1 7 18.5V11A3 3 0 0 1 10 8Z" fill="#fcf7ee" />
@@ -141,7 +141,7 @@
   </svg>
   </g>
   <g transform="translate(264 680)"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 64 64">
-    <rect width="64" height="64" rx="16" fill="#515723" />
+    <rect width="64" height="64" rx="16" fill="#41482b" />
     <g transform="translate(32 32.5) scale(0.8) translate(-32 -32)">
       <path d="M24.5 20H39.5V56L32 48.5L24.5 56Z" fill="#fcf7ee" />
       <path d="M10 8H54A3 3 0 0 1 57 11V18.5A3 3 0 0 1 54 21.5H10A3 3 0 0 1 7 18.5V11A3 3 0 0 1 10 8Z" fill="#fcf7ee" />
@@ -177,22 +177,28 @@
     <text x="820" y="798">Never recolour, outline, rotate or separate the parts.</text>
   </g>
   <path d="M48 940H1152" stroke="#33261f" stroke-opacity="0.16" />
-  <rect x="48" y="972" width="200" height="72" rx="12" fill="#515723" stroke="#33261f" stroke-opacity="0.12" />
+  <rect x="48" y="972" width="252" height="72" rx="12" fill="#515723" stroke="#33261f" stroke-opacity="0.12" />
   <text font-family="ui-sans-serif, system-ui, sans-serif" x="48" y="1068" font-size="14" fill="#33261f">Olive #515723</text>
   <text font-family="ui-sans-serif, system-ui, sans-serif" x="48" y="1090" font-size="12" fill="#33261f" fill-opacity="0.7">--brand-mark-surface</text>
-  <rect x="270" y="972" width="200" height="72" rx="12" fill="#fcf7ee" stroke="#33261f" stroke-opacity="0.12" />
-  <text font-family="ui-sans-serif, system-ui, sans-serif" x="270" y="1068" font-size="14" fill="#33261f">Ivory #fcf7ee</text>
-  <text font-family="ui-sans-serif, system-ui, sans-serif" x="270" y="1090" font-size="12" fill="#33261f" fill-opacity="0.7">--brand-mark-ink</text>
-  <rect x="492" y="972" width="200" height="72" rx="12" fill="#c2603d" stroke="#33261f" stroke-opacity="0.12" />
-  <text font-family="ui-sans-serif, system-ui, sans-serif" x="492" y="1068" font-size="14" fill="#33261f">Terracotta #c2603d</text>
-  <text font-family="ui-sans-serif, system-ui, sans-serif" x="492" y="1090" font-size="12" fill="#33261f" fill-opacity="0.7">--brand-mark-accent</text>
-  <rect x="714" y="972" width="200" height="72" rx="12" fill="#d27350" stroke="#33261f" stroke-opacity="0.12" />
-  <text font-family="ui-sans-serif, system-ui, sans-serif" x="714" y="1068" font-size="14" fill="#33261f">Terracotta on olive #d27350</text>
-  <text font-family="ui-sans-serif, system-ui, sans-serif" x="714" y="1090" font-size="12" fill="#33261f" fill-opacity="0.7">--brand-mark-accent-on-surface</text>
-  <rect x="936" y="972" width="200" height="72" rx="12" fill="#33261f" stroke="#33261f" stroke-opacity="0.12" />
-  <text font-family="ui-sans-serif, system-ui, sans-serif" x="936" y="1068" font-size="14" fill="#33261f">Walnut #33261f</text>
-  <text font-family="ui-sans-serif, system-ui, sans-serif" x="936" y="1090" font-size="12" fill="#33261f" fill-opacity="0.7">--brand-mark-type</text>
+  <rect x="324" y="972" width="252" height="72" rx="12" fill="#fcf7ee" stroke="#33261f" stroke-opacity="0.12" />
+  <text font-family="ui-sans-serif, system-ui, sans-serif" x="324" y="1068" font-size="14" fill="#33261f">Ivory #fcf7ee</text>
+  <text font-family="ui-sans-serif, system-ui, sans-serif" x="324" y="1090" font-size="12" fill="#33261f" fill-opacity="0.7">--brand-mark-ink</text>
+  <rect x="600" y="972" width="252" height="72" rx="12" fill="#c2603d" stroke="#33261f" stroke-opacity="0.12" />
+  <text font-family="ui-sans-serif, system-ui, sans-serif" x="600" y="1068" font-size="14" fill="#33261f">Terracotta #c2603d</text>
+  <text font-family="ui-sans-serif, system-ui, sans-serif" x="600" y="1090" font-size="12" fill="#33261f" fill-opacity="0.7">--brand-mark-accent</text>
+  <rect x="876" y="972" width="252" height="72" rx="12" fill="#d27350" stroke="#33261f" stroke-opacity="0.12" />
+  <text font-family="ui-sans-serif, system-ui, sans-serif" x="876" y="1068" font-size="14" fill="#33261f">Terracotta on olive #d27350</text>
+  <text font-family="ui-sans-serif, system-ui, sans-serif" x="876" y="1090" font-size="12" fill="#33261f" fill-opacity="0.7">--brand-mark-accent-on-surface</text>
+  <rect x="48" y="1120" width="252" height="72" rx="12" fill="#33261f" stroke="#33261f" stroke-opacity="0.12" />
+  <text font-family="ui-sans-serif, system-ui, sans-serif" x="48" y="1216" font-size="14" fill="#33261f">Walnut #33261f</text>
+  <text font-family="ui-sans-serif, system-ui, sans-serif" x="48" y="1238" font-size="12" fill="#33261f" fill-opacity="0.7">--brand-mark-type</text>
+  <rect x="324" y="1120" width="252" height="72" rx="12" fill="#41482b" stroke="#33261f" stroke-opacity="0.12" />
+  <text font-family="ui-sans-serif, system-ui, sans-serif" x="324" y="1216" font-size="14" fill="#33261f">Icon deep olive #41482b</text>
+  <text font-family="ui-sans-serif, system-ui, sans-serif" x="324" y="1238" font-size="12" fill="#33261f" fill-opacity="0.7">--brand-tile-surface</text>
+  <rect x="600" y="1120" width="252" height="72" rx="12" fill="#fcf7ee" stroke="#33261f" stroke-opacity="0.12" />
+  <text font-family="ui-sans-serif, system-ui, sans-serif" x="600" y="1216" font-size="14" fill="#33261f">Icon ivory #fcf7ee</text>
+  <text font-family="ui-sans-serif, system-ui, sans-serif" x="600" y="1238" font-size="12" fill="#33261f" fill-opacity="0.7">--brand-tile-ink</text>
   <g font-family="ui-sans-serif, system-ui, sans-serif" font-size="15" fill="#33261f">
-    <text x="48" y="1140">A bar for the whole trip and a ribbon for what you keep: one T, read at any size, in one colour or two.</text>
+    <text x="48" y="1298">A bar for the whole trip and a ribbon for what you keep: one T, read at any size, in one colour or two.</text>
   </g>
 </svg>

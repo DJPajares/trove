@@ -86,17 +86,19 @@
   --text-subtle: oklch(0.49 0.03 74);
   --brand: oklch(0.455 0.07 115);
   --brand-strong: oklch(0.385 0.058 115);
-  /* The Keepsake's fixed colours, which every export reads as hex. In its olive
-     tile the mark never changes with the appearance. The bare symbol keeps its
+  /* The Keepsake's fixed colours, which every export reads as hex. The bare symbol keeps its
      terracotta ribbon (3.9:1 on ivory, 4.5:1 on the olive-black ground) and
-     changes only its bar: olive on light grounds, ivory on dark ones. On the
-     tile the ribbon lightens to clear the olive, where the base terracotta
-     measures only 1.8:1. */
+     changes only its bar: olive on light grounds, ivory on dark ones. The share
+     artwork uses a lighter terracotta on the original olive ground. */
   --brand-mark-surface: #515723;
   --brand-mark-ink: #fcf7ee;
   --brand-mark-accent: #c2603d;
   --brand-mark-accent-on-surface: #d27350;
   --brand-mark-type: #33261f;
+  /* App tiles and favicons use one ivory ink on deep olive (9:1 contrast),
+     fixed across appearances and separate from the standalone logo palette. */
+  --brand-tile-surface: #41482b;
+  --brand-tile-ink: #fcf7ee;
   --brand-symbol-bar: var(--brand-mark-surface);
   --brand-symbol-ribbon: var(--brand-mark-accent);
   /* Experience Rating has a colour of its own rather than borrowing the brand's:

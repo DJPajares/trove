@@ -26,11 +26,17 @@ export type TripWeatherQuery = {
  * split the key would have made each crossing a fresh round trip for a forecast
  * already in hand.
  */
-export function useTripWeather(tripId: string): TripWeatherQuery {
+export function useTripWeather(
+  tripId: string,
+  // Home asks only once a trip's first day is within the forecast's reach;
+  // before that the answer could only be empty.
+  { enabled = true }: { enabled?: boolean } = {},
+): TripWeatherQuery {
   const { preferences } = usePreferences();
   const temperatureUnit = preferences.temperatureUnit;
 
   const query = useQuery({
+    enabled,
     queryFn: ({ signal }) => getTripWeather(tripId, { signal, temperatureUnit }),
     queryKey: queryKeys.tripWeather(tripId, temperatureUnit),
     // Mount/reconnect reuse fresh persisted evidence. After expiry the shared

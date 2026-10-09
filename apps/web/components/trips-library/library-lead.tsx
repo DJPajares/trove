@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { TripCountries } from '@/components/trip-countries';
+import { TripDaySegments } from '@/components/trip-day-segments';
 import { TripDestinationActions } from '@/components/trip-destination-actions';
 import { TripMedia } from '@/components/trip-media';
 import { TripReadinessBadge } from '@/components/trip-readiness-badge';
@@ -21,48 +22,8 @@ import type { TripNextUp } from '@/lib/trips/next-up';
 import { tripDestinationSummary } from '@/lib/trips/summary';
 import { cn } from '@/lib/utils';
 
-/** Beyond this a day per segment stops reading as days and starts reading as a texture. */
-const MAX_DAY_SEGMENTS = 21;
-
 const KICKER =
   'text-[length:var(--text-metadata)] font-semibold tracking-[0.12em] text-white/85 uppercase';
-
-/**
- * The days of a trip under way, one segment each: the ones lived, today, and
- * the ones still to come. It repeats the "Day 3 of 5" set beside it, so it is
- * drawn for the eye only.
- */
-function DaySegments({ day, total }: Readonly<{ day: number; total: number }>) {
-  if (total > MAX_DAY_SEGMENTS) {
-    return (
-      <span
-        aria-hidden="true"
-        className="block h-1 w-full overflow-hidden rounded-full bg-white/22"
-      >
-        <span
-          className="block h-full rounded-full bg-primary-on-media"
-          style={{ width: `${(day / total) * 100}%` }}
-        />
-      </span>
-    );
-  }
-
-  return (
-    <span aria-hidden="true" className="flex w-full gap-1">
-      {Array.from({ length: total }, (_, index) => (
-        <span
-          className={cn(
-            'h-1 flex-1 rounded-full',
-            index + 1 < day && 'bg-white/70',
-            index + 1 === day && 'bg-primary-on-media shadow-[0_0_12px_oklch(0.78_0.085_115/0.7)]',
-            index + 1 > day && 'bg-white/22',
-          )}
-          key={index}
-        />
-      ))}
-    </span>
-  );
-}
 
 /**
  * How far away a planned trip is, as one large number and the words it counts.
@@ -116,7 +77,7 @@ function DayCount({ trip }: Readonly<{ trip: Trip }>) {
         </span>
         <span className="sr-only">{t('dayProgress', { day, total })}</span>
       </p>
-      <DaySegments day={day} total={total} />
+      <TripDaySegments day={day} total={total} />
     </div>
   );
 }

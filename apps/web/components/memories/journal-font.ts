@@ -5,10 +5,10 @@ import { Instrument_Serif } from 'next/font/google';
  * Sans the rest of Trove is set in. It comes in one weight and two styles, so
  * every use sets `font-normal` and the browser never synthesises a bold.
  *
- * Only the Memories journal and the Trips library - whose finished journeys
- * are set in the journal's voice - import this, so no other screen downloads
- * it. The variable is set on the journal's layout, on each of its popups,
- * which render into <body> outside that layout, and on the library's page.
+ * Only the Memories journal, and Home and the Trips library - which set
+ * finished journeys in the journal's voice - import this, so no other screen
+ * downloads it. The variable is set on the journal's layout, on each of its
+ * popups, which render into <body> outside that layout, and on those two pages.
  */
 export const journalSerif = Instrument_Serif({
   display: 'swap',

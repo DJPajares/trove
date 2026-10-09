@@ -5,10 +5,11 @@ import { ArrowLeft, ChevronDown, Ellipsis, Pencil, Share2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import { TripCountries } from '@/components/trip-countries';
 import { TripForm } from '@/components/trip-form';
+import { TripHeaderDetails } from '@/components/trip-header-details';
 import { TripMedia } from '@/components/trip-media';
 import { TripShareDialog } from '@/components/trip-share-dialog';
 import { useTripContext } from '@/components/trip-provider';
@@ -108,7 +109,6 @@ export function TripChrome({
 }: Readonly<{ children: ReactNode; tripId: string }>) {
   const t = useTranslations('trips');
   const share = useTranslations('trips.share');
-  const locale = useLocale();
   const queryClient = useQueryClient();
   const pathname = usePathname();
   const context = useTripContext();
@@ -138,11 +138,6 @@ export function TripChrome({
       : currentSection
         ? t(tripSectionLabelKey(currentSection))
         : undefined;
-
-  const formatDate = (value: string) =>
-    new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
-      new Date(`${value}T00:00:00.000Z`),
-    );
 
   // The saved trip goes straight back into the query the whole subtree reads,
   // so the cover and the dates update without a second fetch. What the trip's
@@ -204,10 +199,9 @@ export function TripChrome({
               </Link>
             </div>
 
-            <div className="relative -mt-8 space-y-1.5 rounded-t-[var(--trip-sheet-radius)] bg-background px-[var(--gutter-inline-start)] pt-6 md:-mt-10 md:px-7 md:pt-7">
-              {/* The name and the dates are the only part of this that waits on
-                the trip, and they wait inside boxes the right size, so the
-                answer arriving never moves anything below. */}
+            <div className="relative -mt-8 rounded-t-[var(--trip-sheet-radius)] bg-background px-[var(--gutter-inline-start)] pt-6 md:-mt-10 md:px-7 md:pt-7">
+              {/* The cover and metadata reserve their room before the trip's
+                photograph and labels arrive. */}
               {/* The same eyebrow the trip's overview carries, so the country
                   does not disappear the moment a traveller moves from Overview
                   into the planner. A trip from before the field existed keeps
@@ -224,28 +218,31 @@ export function TripChrome({
               )}
               {trip ? (
                 <h1
-                  className="text-[length:var(--text-page-title)] leading-[1.06] font-semibold tracking-[-0.035em] text-balance text-foreground"
+                  className={cn(
+                    'text-[length:var(--text-page-title)] leading-[1.06] font-semibold tracking-[-0.035em] text-balance text-foreground',
+                    trip.countries?.length && 'mt-1.5',
+                  )}
                   id="trip-section-cover-heading"
                 >
                   {trip.name}
                 </h1>
               ) : (
-                <div aria-busy="true" aria-live="polite" role="status">
+                <div aria-busy="true" aria-live="polite" className="mt-1.5" role="status">
                   <span className="sr-only">{t('titleLoading')}</span>
                   <Skeleton className="h-[calc(var(--text-page-title)*1.06)] w-3/5 max-w-sm" />
                 </div>
               )}
               {trip ? (
-                <p className="text-[length:var(--text-metadata)] font-medium text-muted-foreground tabular-nums">
-                  {t('dateRange', {
-                    endDate: formatDate(trip.endDate),
-                    startDate: formatDate(trip.startDate),
-                  })}
-                  {' · '}
-                  {t(`lifecycle.${trip.lifecycle}`)}
-                </p>
+                <TripHeaderDetails trip={trip} />
               ) : (
-                <Skeleton className="h-[length:var(--text-metadata)] w-2/5 max-w-56" />
+                <div
+                  className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1"
+                  aria-hidden="true"
+                >
+                  <Skeleton className="h-5 w-36" />
+                  <Skeleton className="h-5 w-10" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                </div>
               )}
             </div>
           </section>

@@ -1,10 +1,11 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { onlineManager, useQuery } from '@tanstack/react-query';
+import { useSyncExternalStore } from 'react';
 
 import {
   editorialSubjectKey,
+  areEditorialImagesCached,
   readCachedEditorialImages,
   resolveEditorialImages,
   resolveEditorialImageBatches,
@@ -14,14 +15,17 @@ import {
 import { queryKeys } from '@/lib/query/keys';
 
 const EMPTY_IMAGES: ReadonlyMap<string, EditorialImageReference[]> = new Map();
+const subscribeOnline = (onChange: () => void) => onlineManager.subscribe(onChange);
+const readOnline = () =>
+  onlineManager.isOnline() && (typeof navigator === 'undefined' || navigator.onLine);
+const serverOnline = () => true;
 
 /**
  * Resolves a surface's editorial photography, keyed by subject.
  *
- * It starts empty so callers can paint their fallback immediately, and it
- * never surfaces a failure: an unresolved subject is simply absent from the
- * map. Callers pass the subjects their media roles need and read the result
- * back with `editorialSubjectKey`.
+ * Missing subjects stay absent from the map. Resolution state lets surfaces
+ * distinguish an in-flight choice from a completed miss or unavailable work,
+ * rather than briefly painting a fallback while a better photograph resolves.
  *
  * Two caches sit behind this, and they answer different questions. The module
  * memo inside `resolveEditorialImages` dedupes across *overlapping* subject
@@ -35,15 +39,15 @@ export function useEditorialImageResolution(
   subjects: EditorialSubject[],
   { progressive = false }: { progressive?: boolean } = {},
 ) {
-  // The subjects array is rebuilt on every render, so everything below keys on
-  // what is actually being asked for rather than on the array's identity.
+  // The subjects array is rebuilt on every render; the query identity stays
+  // tied to what is actually being asked for.
   const subjectKeys = subjects.map(editorialSubjectKey).sort();
-  const subjectSignature = subjectKeys.join('\n');
+  const online = useSyncExternalStore(subscribeOnline, readOnline, serverOnline);
 
-  const { data } = useQuery({
+  const { data, isError, fetchStatus } = useQuery({
     // Offline the request can only fail, and hotlinked photography could not
     // have been bundled into a local trip copy anyway.
-    enabled: subjectKeys.length > 0 && !(typeof navigator !== 'undefined' && !navigator.onLine),
+    enabled: subjectKeys.length > 0 && online,
     queryFn: async () => {
       const resolved = await (progressive
         ? resolveEditorialImageBatches(subjects)
@@ -55,20 +59,27 @@ export function useEditorialImageResolution(
     queryKey: [...queryKeys.editorialImages(subjectKeys), ...(progressive ? ['progressive'] : [])],
   });
 
-  const images = useMemo(() => {
-    if (!subjectSignature) return EMPTY_IMAGES;
-
-    // The session memo wins where it has an answer, because it stays correct
-    // across overlapping subject lists that the query key cannot share.
-    const images = new Map(Object.entries(data ?? {}));
-    for (const [key, references] of readCachedEditorialImages(subjects)) {
-      images.set(key, references);
-    }
-
-    return images.size > 0 ? images : EMPTY_IMAGES;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, subjectSignature]);
-  return { images, isResolved: subjectKeys.length === 0 || data !== undefined };
+  // Read the bounded session cache in the same render as readiness. Another
+  // overlapping query can fill it before this query publishes its own data;
+  // memoizing only on that data could settle the header with an older map.
+  const images = new Map(Object.entries(data ?? {}));
+  for (const [key, references] of readCachedEditorialImages(subjects)) {
+    images.set(key, references);
+  }
+  const isResolved =
+    subjectKeys.length === 0 || data !== undefined || areEditorialImagesCached(subjects);
+  const status = isResolved
+    ? 'resolved'
+    : !online || fetchStatus === 'paused'
+      ? 'offline'
+      : isError
+        ? 'unavailable'
+        : 'pending';
+  return {
+    images: images.size > 0 ? images : EMPTY_IMAGES,
+    isResolved: status !== 'pending',
+    status,
+  };
 }
 
 export function useEditorialImages(

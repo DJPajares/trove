@@ -55,8 +55,11 @@ export type MediaFrameProps = {
   fallbackSources?: readonly TripMediaSource[];
   /** A surface-specific tile shown during loading and when a source fails. */
   fallbackContent?: ReactNode;
-  /** An embedded photographic underlay, available even before a local image loads. */
+  /** Calm frames defer the embedded artwork until the entire photo chain fails. */
   photographicPlaceholder?: string;
+  loadingTreatment?: 'default' | 'calm';
+  /** Wait for the surface's intended source before mounting any photograph. */
+  isResolving?: boolean;
   variant?: TripMediaVariant;
 };
 
@@ -105,7 +108,7 @@ export function BrandedFallback({
  * rule collapses to nothing.
  *
  * Errors advance an opt-in photo chain; other media surfaces retain their
- * branded fallback. Day headers keep a photographic underlay while loading.
+ * branded fallback. Day headers use a quiet colour and a slower reveal.
  */
 function EditorialImage({
   alt,
@@ -115,6 +118,7 @@ function EditorialImage({
   sizes,
   hasPhotographicPlaceholder = false,
   fallbackContent,
+  calmLoading = false,
 }: Readonly<{
   alt: string;
   onError: () => void;
@@ -123,13 +127,14 @@ function EditorialImage({
   hasPhotographicPlaceholder?: boolean;
   fallbackContent?: ReactNode;
   sizes?: string;
+  calmLoading?: boolean;
 }>) {
   const [loaded, setLoaded] = useState(false);
 
   return (
     <>
       {fallbackContent ??
-        (hasPhotographicPlaceholder ? null : (
+        (hasPhotographicPlaceholder || calmLoading ? null : (
           <Skeleton
             className={cn(
               'absolute inset-0 rounded-none transition-opacity duration-[var(--motion-standard)]',
@@ -140,7 +145,10 @@ function EditorialImage({
       <Image
         alt={alt}
         className={cn(
-          'object-cover transition-opacity duration-[var(--motion-standard)] ease-[var(--ease-standard)]',
+          'object-cover transition-opacity ease-[var(--ease-standard)]',
+          calmLoading
+            ? 'duration-[var(--motion-slow)] motion-reduce:transition-none'
+            : 'duration-[var(--motion-standard)]',
           loaded ? 'opacity-100' : 'opacity-0',
         )}
         fill
@@ -176,6 +184,8 @@ export function MediaFrame({
   fallbackSources = [],
   photographicPlaceholder,
   fallbackContent,
+  loadingTreatment = 'default',
+  isResolving = false,
 }: Readonly<MediaFrameProps>) {
   const [unreachableSourceKeys, setUnreachableSourceKeys] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -199,13 +209,19 @@ export function MediaFrame({
   };
   const frameClassName = cn(frameVariants({ variant }), className);
   const loaded = loadedSourceKey === sourceKey;
-  const photographicStyle = photographicPlaceholder
-    ? {
-        backgroundImage: `url("${photographicPlaceholder}")`,
-        backgroundPosition: 'center',
-        backgroundSize: 'cover',
-      }
-    : undefined;
+  const calmLoading = loadingTreatment === 'calm';
+  const photographicStyle =
+    photographicPlaceholder && (!calmLoading || resolved.kind === 'fallback')
+      ? {
+          backgroundImage: `url("${photographicPlaceholder}")`,
+          backgroundPosition: 'center',
+          backgroundSize: 'cover',
+        }
+      : undefined;
+
+  if (isResolving) {
+    return <span className={frameClassName} data-media-kind="pending" data-slot={dataSlot} />;
+  }
 
   if (resolved.kind === 'fallback') {
     return (
@@ -242,6 +258,7 @@ export function MediaFrame({
           reference={resolved.reference}
           hasPhotographicPlaceholder={Boolean(photographicPlaceholder)}
           fallbackContent={fallbackContent}
+          calmLoading={calmLoading}
           sizes={sizes}
         />
       </span>
@@ -257,7 +274,7 @@ export function MediaFrame({
         style={photographicStyle}
       >
         {fallbackContent ??
-          (photographicPlaceholder ? null : (
+          (photographicPlaceholder || calmLoading ? null : (
             <Skeleton
               className={cn(
                 'absolute inset-0 rounded-none transition-opacity duration-[var(--motion-standard)]',
@@ -270,7 +287,10 @@ export function MediaFrame({
         <img
           alt={alt}
           className={cn(
-            'absolute inset-0 size-full object-cover transition-opacity duration-[var(--motion-standard)]',
+            'absolute inset-0 size-full object-cover transition-opacity',
+            calmLoading
+              ? 'duration-[var(--motion-slow)] ease-[var(--ease-standard)] motion-reduce:transition-none'
+              : 'duration-[var(--motion-standard)]',
             loaded ? 'opacity-100' : 'opacity-0',
           )}
           decoding="async"
@@ -295,7 +315,7 @@ export function MediaFrame({
       style={photographicStyle}
     >
       {fallbackContent ??
-        (photographicPlaceholder ? null : (
+        (photographicPlaceholder || calmLoading ? null : (
           <Skeleton
             className={cn(
               'absolute inset-0 rounded-none transition-opacity duration-[var(--motion-standard)]',
@@ -306,10 +326,14 @@ export function MediaFrame({
       <Image
         alt={alt}
         className={cn(
-          'object-cover transition-opacity duration-[var(--motion-standard)]',
+          'object-cover transition-opacity',
+          calmLoading
+            ? 'duration-[var(--motion-slow)] ease-[var(--ease-standard)] motion-reduce:transition-none'
+            : 'duration-[var(--motion-standard)]',
           loaded ? 'opacity-100' : 'opacity-0',
         )}
         fill
+        key={sourceKey}
         onError={markUnreachable}
         onLoad={() => setLoadedSourceKey(sourceKey)}
         preload={preload}

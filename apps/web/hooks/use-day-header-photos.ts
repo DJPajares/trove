@@ -1,27 +1,36 @@
 'use client';
 
+import { useState } from 'react';
+
 import { useTripContext } from '@/components/trip-provider';
 import type { ItineraryDay, ItineraryTripPlace } from '@/lib/itinerary/api';
 import { dayHeaderFallback } from '@/lib/media/day-header-fallback';
-import { dayHeaderPhotoSources, dayPhotoCandidates } from '@/lib/media/day-header-photos';
-import { editorialSubjectKey, type EditorialImageReference } from '@/lib/media/editorial-images';
+import {
+  dayHeaderPhotoSources,
+  dayPhotoCandidates,
+  settleDayHeaderPhotos,
+  type DayHeaderPhotoResolution,
+} from '@/lib/media/day-header-photos';
+import { editorialSubjectKey } from '@/lib/media/editorial-images';
 import type { TripMediaSource } from '@/lib/media/trip-media';
 
-import { useEditorialImages } from './use-editorial-images';
+import { useEditorialImageResolution } from './use-editorial-images';
 
 export function useDayHeaderPhotos(
   day: ItineraryDay | null,
   tripPlaces: readonly ItineraryTripPlace[],
-  existingImages?: ReadonlyMap<string, EditorialImageReference[]>,
 ) {
   const context = useTripContext();
-  const candidates = dayPhotoCandidates(day, tripPlaces, context?.trip ?? null);
-  const images = useEditorialImages(
-    candidates
-      .map((candidate) => candidate.subject)
-      .filter((subject) => !existingImages?.has(editorialSubjectKey(subject))),
+  const candidates = dayPhotoCandidates(
+    context?.status === 'loading' ? null : day,
+    tripPlaces,
+    context?.trip ?? null,
   );
-  const allImages = new Map([...images, ...(existingImages ?? [])]);
+  // Keep the full query identity stable while row photography comes into view.
+  // The resolver already shares cached collections and overlapping in-flight work.
+  const { images, isResolved } = useEditorialImageResolution(
+    candidates.map((candidate) => candidate.subject),
+  );
   const fallbackSources: TripMediaSource[] = (context?.dayFallbackImages ?? []).map(
     (reference) => ({ kind: 'editorial', reference }),
   );
@@ -29,5 +38,20 @@ export function useDayHeaderPhotos(
     fallbackSources.push({ kind: 'trip-cover', url: context.trip.coverPhotoUrl });
   if (context?.editorial) fallbackSources.push({ kind: 'editorial', reference: context.editorial });
   fallbackSources.push({ kind: 'local', src: dayHeaderFallback.src });
-  return dayHeaderPhotoSources(candidates, allImages, fallbackSources);
+  const resolutionKey = JSON.stringify([
+    context?.tripId,
+    day?.id,
+    candidates.map((candidate) => editorialSubjectKey(candidate.subject)),
+    context?.dayFallbackResolutionKey,
+  ]);
+  const isResolving = !day || !isResolved || Boolean(context && !context.dayFallbackImagesResolved);
+  const [previous, setPrevious] = useState<DayHeaderPhotoResolution | null>(null);
+  const selection = settleDayHeaderPhotos(previous, {
+    photos: dayHeaderPhotoSources(candidates, images, fallbackSources),
+    isResolving,
+    resolutionKey,
+  });
+  // Adjust during render so a changed day never commits the previous day's image.
+  if (selection !== previous) setPrevious(selection);
+  return selection;
 }

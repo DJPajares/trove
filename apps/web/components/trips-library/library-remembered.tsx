@@ -6,12 +6,10 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useState, type CSSProperties } from 'react';
 
 import { ExperienceRatingMark } from '@/components/experience-rating';
-import { MediaFrame } from '@/components/media-frame';
+import { JourneyPrint, JourneyPrintFan, journeyPrints } from '@/components/journey-prints';
 import { Button } from '@/components/ui/button';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
-import { resolveTripMediaSource, type TripMediaSource } from '@/lib/media/trip-media';
 import { printTilts } from '@/lib/memories/photo-layout';
-import { canDecodeHeic, isHeicContentType } from '@/lib/memories/signed-media';
 import type { Trip } from '@/lib/trips/api';
 import { tripDayCount } from '@/lib/trips/facts';
 import { groupPastByYear } from '@/lib/trips/library';
@@ -24,74 +22,12 @@ const KICKER =
 /** The fewest older journeys worth folding behind a button. */
 const MIN_FOLDED = 3;
 
-/** Where each print in a fan lies, front last so it paints on top. */
-const FAN_POSITIONS = [
-  'start-[3%] top-[12%] z-0',
-  'end-[3%] top-[4%] z-10',
-  'start-[22%] top-[16%] z-20',
-] as const;
-
-/**
- * The photographs a finished trip is remembered by: its own Memories when it
- * has decodable ones, otherwise the cover every other trip surface shows.
- *
- * A Memory photograph can outlive its hour-long link in a page left open, so
- * each one falls back to the cover rather than to an empty tile.
- */
-function rememberedPrints(trip: Trip, editorial: EditorialImageReference | null) {
-  const cover = resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial });
-  const heic = canDecodeHeic();
-  const photos = (trip.memoryPhotos ?? [])
-    .filter((photo) => heic || !isHeicContentType(photo.contentType))
-    .map((photo) => ({ kind: 'memory', url: photo.url }) satisfies TripMediaSource);
-
-  return { cover, prints: photos.length ? photos : [cover] };
-}
-
 function monthYear(date: string, locale: string) {
   return new Intl.DateTimeFormat(locale, {
     month: 'long',
     timeZone: 'UTC',
     year: 'numeric',
   }).format(new Date(`${date}T00:00:00.000Z`));
-}
-
-/**
- * One photograph as a print, in the journal's own paper and lean, so a trip
- * looks on this shelf the way its story looks inside (PRD 31.2).
- */
-function Print({
-  className,
-  cover,
-  sizes,
-  source,
-  style,
-}: Readonly<{
-  className?: string;
-  cover: TripMediaSource;
-  sizes: string;
-  source: TripMediaSource;
-  style?: CSSProperties;
-}>) {
-  return (
-    <span
-      className={cn(
-        'block rotate-[var(--tilt)] rounded-[3px] bg-paper-print p-[clamp(0.35rem,1.4vw,0.6rem)] pb-[clamp(1.1rem,4vw,1.75rem)] shadow-[var(--shadow-print)] transition-transform duration-[var(--motion-slow)] ease-[var(--ease-standard)] motion-reduce:transition-none',
-        className,
-      )}
-      style={style}
-    >
-      <MediaFrame
-        alt=""
-        className="aspect-[4/5] rounded-[1px]"
-        dataSlot="library-print"
-        fallbackSources={source === cover ? [] : [cover]}
-        sizes={sizes}
-        source={source}
-        variant="card"
-      />
-    </span>
-  );
 }
 
 /**
@@ -107,11 +43,6 @@ function StoryFeature({
   const tripsT = useTranslations('trips');
   const itineraryT = useTranslations('itinerary');
   const locale = useLocale();
-  const { cover, prints } = rememberedPrints(trip, editorial);
-  const tilts = printTilts(trip.id, prints.length);
-  // The fan is built back to front, so the first photograph - the story's own
-  // cover - is the one laid on top.
-  const positions = FAN_POSITIONS.slice(FAN_POSITIONS.length - prints.length);
   const line = trip.experienceNote?.trim() || trip.description?.trim() || null;
 
   return (
@@ -120,24 +51,7 @@ function StoryFeature({
       className="group grid items-center gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-12"
       data-slot="library-story"
     >
-      <div aria-hidden="true" className="relative mx-auto aspect-[6/5] w-full max-w-[26rem]">
-        {prints
-          .map((source, index) => ({ index, source }))
-          .toReversed()
-          .map(({ index, source }, order) => (
-            <Print
-              className={cn(
-                'absolute w-[58%] [@media(hover:hover)]:group-hover:rotate-[calc(var(--tilt)*1.6)]',
-                prints.length === 1 ? 'start-[21%] top-[8%]' : positions[order],
-              )}
-              cover={cover}
-              key={index}
-              sizes="(max-width: 767px) 52vw, 15rem"
-              source={source}
-              style={{ '--tilt': `${(tilts[index] ?? 0) * 2.5}deg` } as CSSProperties}
-            />
-          ))}
-      </div>
+      <JourneyPrintFan editorial={editorial} sizes="(max-width: 767px) 52vw, 15rem" trip={trip} />
 
       <div className="min-w-0">
         <p className={cn(KICKER, 'tabular-nums')}>
@@ -191,7 +105,7 @@ function Postcard({
   const t = useTranslations('trips.library.remembered');
   const itineraryT = useTranslations('itinerary');
   const locale = useLocale();
-  const { cover, prints } = rememberedPrints(trip, editorial);
+  const { cover, prints } = journeyPrints(trip, editorial);
   const tilt = printTilts(trip.id, 1)[0] ?? 0;
   const month = new Intl.DateTimeFormat(locale, { month: 'short', timeZone: 'UTC' }).format(
     new Date(`${trip.startDate}T00:00:00.000Z`),
@@ -203,7 +117,7 @@ function Postcard({
       data-slot="library-postcard"
       href={`/trips/${trip.id}/memories`}
     >
-      <Print
+      <JourneyPrint
         className="[@media(hover:hover)]:group-hover:-translate-y-1 [@media(hover:hover)]:group-hover:rotate-[calc(var(--tilt)*0.3)]"
         cover={cover}
         sizes="(max-width: 639px) 44vw, (max-width: 1023px) 30vw, 14rem"

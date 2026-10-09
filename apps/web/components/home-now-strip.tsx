@@ -17,8 +17,8 @@ import { useWeatherEvidenceDescription } from '@/lib/weather/use-evidence-descri
  * subject is a photograph of somewhere else. Identity already lives in the
  * account button; the first line orients instead.
  *
- * It is deliberately not a heading. The page's heading is the trip, one section
- * down, which is what the page is actually about.
+ * It is deliberately not a heading. The page's heading is the line beneath it,
+ * which says what the traveller's moment is - that is what the page is about.
  */
 export function HomeNowStrip() {
   return <HomeNowStripContent {...useHereWeather()} />;

@@ -11,7 +11,8 @@ import type { ItineraryItem, TripModeContext } from '@/lib/itinerary/api';
 export type TripNextUp =
   { kind: 'current' | 'next'; label: string } | { kind: 'nothingScheduled'; label: null };
 
-function itemLabel(item: ItineraryItem) {
+/** What a stop is called: the traveller's own label first, then its place. */
+export function itemLabel(item: ItineraryItem) {
   return item.customLabel ?? item.customLocation?.label ?? item.tripPlace?.place.name ?? null;
 }
 

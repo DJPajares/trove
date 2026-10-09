@@ -1,32 +1,31 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, CircleAlert, Plus } from 'lucide-react';
-import Link from 'next/link';
+import { CircleAlert } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
-import { EditorialSection } from '@/components/editorial-section';
-import { ExperienceRatingSummary } from '@/components/experience-rating';
-import { HomeFocalTrip } from '@/components/home-focal-trip';
+import { AiPlanningDraftCard } from '@/components/ai-planning-draft-card';
+import { HomeBeforeYouGo } from '@/components/home/home-before-you-go';
+import { HomeComingUp } from '@/components/home/home-coming-up';
+import { HomeEmpty, HomeHeadline, HomeIdle, HomeSkeleton } from '@/components/home/home-front-door';
+import { HomeHero } from '@/components/home/home-hero';
+import { HomeJourney } from '@/components/home/home-journey';
+import { HomeToday } from '@/components/home/home-today';
 import { HomeNowStrip } from '@/components/home-now-strip';
-import { HomeTripDeck } from '@/components/home-trip-deck';
 import { PageState } from '@/components/page-state';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useTripCreation } from '@/components/trip-creation-provider';
 import { Button } from '@/components/ui/button';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { selectCompletedPrompt } from '@/lib/home/completed-prompt';
+import { resolveHomeMoment } from '@/lib/home/moment';
 import { deviceTimeZone, fetchTripModeContext } from '@/lib/itinerary/api';
 import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
-import { fetchTrips, type Trip } from '@/lib/trips/api';
-import { selectPrimaryTrip } from '@/lib/trips/lifecycle';
-import { resolveTripNextUp } from '@/lib/trips/next-up';
-import { tripEditorialSubject } from '@/lib/trips/summary';
 import { queryKeys } from '@/lib/query/keys';
-import * as Icons from '@/lib/icons';
-
-type HomeStatus = 'error' | 'idle' | 'loading';
+import { fetchTrips, type Trip } from '@/lib/trips/api';
+import { tripDayProgress } from '@/lib/trips/library';
+import { daysUntilTripStart, resolveCountdown } from '@/lib/trips/lifecycle';
+import { tripEditorialSubject } from '@/lib/trips/summary';
 
 /**
  * A traveller who skips Memories or a rating should be asked once, not every
@@ -45,8 +44,29 @@ function readDismissedPrompts() {
   }
 }
 
+/** Where in a trip under way today falls, as the headline says it. */
+function dayPosition(day: number, total: number) {
+  if (total === 1) return 'only';
+  if (day === 1) return 'first';
+  if (day === total) return 'last';
+  return 'other';
+}
+
 const EMPTY_TRIPS: Trip[] = [];
 
+/**
+ * Home: the front door to the traveller's world in Trove, and the one screen
+ * that changes with where they are in it (PRD 9).
+ *
+ * It opens on a single sentence about right now - "12 days until Kyoto in
+ * November", "Day 3 of Singapore Art and Eats", "Welcome back from Lisbon" -
+ * and then shows only what that moment needs. A trip being planned brings the
+ * few things it still asks for; a trip under way brings the rest of today; a
+ * trip just finished brings its photographs and the way into its story. After
+ * that, a glance at what is coming and one past journey worth returning to.
+ * Everything else lives where it belongs - the Trips library, the planner,
+ * Trip Mode, the journal - and Home only ever points there.
+ */
 export function HomeExperience() {
   const t = useTranslations('home');
   const { latestCreatedTrip, openCreateTrip } = useTripCreation();
@@ -72,7 +92,7 @@ export function HomeExperience() {
   }
 
   const trips = tripsQuery.data?.trips ?? EMPTY_TRIPS;
-  const status: HomeStatus = tripsQuery.isPending ? 'loading' : tripsQuery.error ? 'error' : 'idle';
+  const status = tripsQuery.isPending ? 'loading' : tripsQuery.error ? 'error' : 'idle';
 
   useEffect(() => {
     if (!latestCreatedTrip) return;
@@ -83,30 +103,35 @@ export function HomeExperience() {
     );
   }, [latestCreatedTrip, queryClient]);
 
-  const primary = useMemo(() => selectPrimaryTrip(trips), [trips]);
-  // Only a trip actually under way has a "now" worth asking about.
-  const primaryTripId = primary?.lifecycle === 'active' ? primary.id : null;
+  const { comingUp, journey, lead } = useMemo(() => resolveHomeMoment(trips), [trips]);
 
-  const otherTrips = useMemo(
-    () => (primary ? trips.filter((trip) => trip.id !== primary.id).slice(0, 3) : []),
-    [primary, trips],
-  );
+  /**
+   * Home asks for one trip's "now", never one per trip - this endpoint can
+   * reach Routes and Places, and a per-trip loop over it is exactly the shape
+   * that turns a home screen into a bill. Trip Mode and the Trips library read
+   * the same key, so moving between them reuses this answer.
+   */
+  const activeTripId = lead?.lifecycle === 'active' ? lead.id : null;
+  // Trip Mode runs on the traveller's own clock, and including the language is
+  // what makes this the same query as Trip Mode's rather than a second one.
+  const clockTimeZone = deviceTimeZone();
+  const languageCode = useLocale();
+  const tripModeContextQuery = useQuery({
+    enabled: activeTripId !== null,
+    queryFn: ({ signal }) =>
+      fetchTripModeContext(activeTripId as string, { clockTimeZone, languageCode, signal }),
+    queryKey: queryKeys.tripModeContext(activeTripId ?? '', { clockTimeZone, languageCode }),
+  });
+
+  // One capped request resolves every photograph Home may draw. Nothing below
+  // asks the editorial service itself.
   const shownTrips = useMemo(
-    () => (primary ? [primary, ...otherTrips] : otherTrips),
-    [otherTrips, primary],
+    () => [lead, ...comingUp, journey?.trip].filter((trip): trip is Trip => Boolean(trip)),
+    [comingUp, journey, lead],
   );
-  // One capped request resolves every photograph Home may render. Cards only
-  // read this map and never ask the editorial service themselves.
-  const editorialSubjects = useMemo(
-    () => shownTrips.flatMap((trip) => tripEditorialSubject(trip) ?? []),
-    [shownTrips],
+  const editorialImages = useEditorialImages(
+    shownTrips.flatMap((trip) => tripEditorialSubject(trip) ?? []),
   );
-  const editorialImages = useEditorialImages(editorialSubjects);
-  const focalSubject = primary ? tripEditorialSubject(primary) : null;
-  const focalEditorial =
-    focalSubject && primary
-      ? editorialCoverImage(editorialImages.get(editorialSubjectKey(focalSubject)), primary.id)
-      : null;
   const editorialFor = (trip: Trip) => {
     const subject = tripEditorialSubject(trip);
     return subject
@@ -114,75 +139,11 @@ export function HomeExperience() {
       : null;
   };
 
-  /**
-   * Home asks for one trip's "now", never one per trip in the list - this
-   * endpoint can reach Routes and Places, and a per-trip loop over it is
-   * exactly the shape that turns a home screen into a bill.
-   *
-   * Trip Mode reads the same key, so walking from Home into Trip Mode reuses
-   * this answer instead of buying it twice.
-   */
-  // Trip Mode runs on the traveller's own clock, and these surfaces show the
-  // same answer, so they have to ask the same question.
-  const clockTimeZone = deviceTimeZone();
-  // Including the language is what makes this the same query as Trip Mode's,
-  // rather than a second request for the same answer.
-  const languageCode = useLocale();
-  const tripModeContextQuery = useQuery({
-    enabled: primaryTripId !== null,
-    queryFn: ({ signal }) =>
-      fetchTripModeContext(primaryTripId as string, { clockTimeZone, languageCode, signal }),
-    queryKey: queryKeys.tripModeContext(primaryTripId ?? '', { clockTimeZone, languageCode }),
-  });
-
-  const tripModeContext = tripModeContextQuery.data ?? null;
-  // A context that would not load is not an error worth showing on Home; the
-  // section simply renders without it.
-  const tripModeContextStatus = !primaryTripId
-    ? 'idle'
-    : tripModeContextQuery.isPending
-      ? 'loading'
-      : 'ready';
-
   if (status === 'loading') {
-    // Home is a greeting, one tall card, and the deck beneath it, so that is
-    // what waits here — at the card's real height, inside the same measure.
-    //
-    // The greeting waits as bars rather than as real copy: the name comes with
-    // the profile and the line beneath it is keyed off the focal trip's
-    // lifecycle, which is exactly what has not arrived yet.
     return (
-      <div
-        aria-busy="true"
-        aria-live="polite"
-        className="mx-auto w-full max-w-5xl space-y-9"
-        role="status"
-      >
-        <span className="sr-only">{t('loading')}</span>
-        <div aria-hidden="true" className="flex flex-col gap-4 sm:flex-row sm:justify-between">
-          <div className="min-w-0 pe-[3.25rem] sm:pe-0">
-            <Skeleton className="h-[calc(var(--text-page-title)*1.08)] w-2/3 max-w-sm" />
-            {/* Each bar sits in a line box the height of the real description's
-                leading, so the greeting keeps its height when the copy arrives. */}
-            <div className="mt-2 max-w-[var(--layout-reading)]">
-              <div className="flex h-[1.65rem] items-center">
-                <Skeleton className="h-4 w-full" />
-              </div>
-              <div className="flex h-[1.65rem] items-center">
-                <Skeleton className="h-4 w-4/5" />
-              </div>
-            </div>
-          </div>
-          <Skeleton className="h-9 w-44 shrink-0 rounded-full sm:mt-1" />
-        </div>
-        <Skeleton className="min-h-[33rem] w-full rounded-[var(--radius-2xl)] sm:min-h-[31rem] lg:min-h-[34rem]" />
-        <div aria-hidden="true" className="space-y-4">
-          <Skeleton className="h-7 w-44" />
-          <div className="flex gap-4">
-            <Skeleton className="h-[17rem] w-[86%] shrink-0 rounded-[var(--radius-2xl)] sm:w-[58%] lg:w-[38%]" />
-            <Skeleton className="hidden h-[17rem] w-[58%] shrink-0 rounded-[var(--radius-2xl)] sm:block lg:w-[38%]" />
-          </div>
-        </div>
+      <div className="mx-auto w-full max-w-5xl space-y-5">
+        <HomeNowStrip />
+        <HomeSkeleton label={t('loading')} />
       </div>
     );
   }
@@ -199,73 +160,87 @@ export function HomeExperience() {
     );
   }
 
-  const recentCompleted = trips
-    .filter((trip) => trip.lifecycle === 'completed')
-    .toSorted((left, right) => right.endDate.localeCompare(left.endDate))[0];
+  const headline = (() => {
+    if (!lead) {
+      return trips.length
+        ? { lead: t('headline.idleLead'), subject: t('headline.idleSubject') }
+        : { lead: t('headline.emptyLead'), subject: t('headline.emptySubject') };
+    }
+    if (lead.lifecycle === 'active') {
+      const { day, total } = tripDayProgress(lead);
+      return {
+        lead: t('headline.active', { day, position: dayPosition(day, total) }),
+        subject: lead.name,
+      };
+    }
+    if (lead.lifecycle === 'planning') {
+      const countdown = resolveCountdown(daysUntilTripStart(lead));
+      return {
+        lead: t('headline.planning', { count: countdown.value, unit: countdown.unit }),
+        subject: lead.name,
+      };
+    }
+    return { lead: t('headline.returned'), subject: lead.name };
+  })();
 
-  /**
-   * What the trip's day actually says, or nothing while it is still being asked.
-   * The context only exists once it has loaded, so a pending answer is null
-   * rather than a claim that the schedule is clear.
-   */
-  const nextUp = tripModeContextStatus === 'ready' ? resolveTripNextUp(tripModeContext) : null;
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-9">
-      <HomeNowStrip />
+    <div className="mx-auto w-full max-w-5xl space-y-10 sm:space-y-12">
+      <header className="space-y-5">
+        <HomeNowStrip />
+        <HomeHeadline lead={headline.lead} subject={headline.subject} />
+        {!lead && trips.length ? <HomeIdle onCreateTrip={openCreateTrip} /> : null}
+      </header>
 
-      {primary ? (
-        <HomeFocalTrip
-          editorial={focalEditorial}
-          nextUp={nextUp}
-          onDismissPrompt={dismissCompletedPrompt}
-          promptKey={selectCompletedPrompt(primary, dismissedPrompts)}
-          trip={primary}
-          tripModeContext={tripModeContext}
-        />
-      ) : (
-        <PageState
-          actions={
-            <Button onClick={openCreateTrip}>
-              <Plus aria-hidden="true" data-icon="inline-start" />
-              {t('createTrip')}
-            </Button>
-          }
-          description={t('startDescription')}
-          // With no trip there is no trip name, so this is the page's heading.
-          // The greeting that used to hold it said nothing and is gone.
-          headingLevel={1}
-          icon={<Icons.Trips aria-hidden="true" />}
-          kind="empty"
-          scope="section"
-          title={t('startTitle')}
-        />
-      )}
+      {trips.length === 0 ? (
+        <>
+          {/* A draft is reachable on a traveller's very first visit, before
+              there is any trip for it to sit among. */}
+          <AiPlanningDraftCard />
+          <HomeEmpty onCreateTrip={openCreateTrip} />
+        </>
+      ) : null}
 
-      {otherTrips.length ? <HomeTripDeck editorialFor={editorialFor} trips={otherTrips} /> : null}
-
-      {!primary && recentCompleted ? (
-        <EditorialSection density="compact" title={t('pastTripTitle')} treatment="ruled">
-          <p className="text-sm leading-6 text-muted-foreground">
-            {t('pastTripDescription', { name: recentCompleted.name })}
-          </p>
-          {recentCompleted.experienceRating === null ? null : (
-            <ExperienceRatingSummary
-              className="mt-2"
-              label={t('yourRating')}
-              rating={recentCompleted.experienceRating}
+      {lead && lead.lifecycle !== 'completed' ? (
+        <section
+          aria-labelledby="home-heading"
+          className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:items-start lg:gap-8"
+        >
+          <HomeHero editorial={editorialFor(lead)} trip={lead} />
+          {lead.lifecycle === 'active' ? (
+            <HomeToday
+              context={tripModeContextQuery.data ?? null}
+              loading={tripModeContextQuery.isPending}
+              trip={lead}
             />
+          ) : (
+            <HomeBeforeYouGo trip={lead} />
           )}
-          <Button
-            className="mt-3"
-            nativeButton={false}
-            render={<Link href={`/trips/${recentCompleted.id}/memories`} />}
-            size="sm"
-            variant="ghost"
-          >
-            {t('viewMemories')}
-            <ChevronRight aria-hidden="true" data-icon="inline-end" />
-          </Button>
-        </EditorialSection>
+        </section>
+      ) : null}
+
+      {lead?.lifecycle === 'completed' ? (
+        <HomeJourney
+          editorial={editorialFor(lead)}
+          onDismissPrompt={dismissCompletedPrompt}
+          promptKey={selectCompletedPrompt(lead, dismissedPrompts)}
+          trip={lead}
+          variant="returned"
+        />
+      ) : null}
+
+      {trips.length ? <AiPlanningDraftCard /> : null}
+
+      {comingUp.length ? <HomeComingUp editorialFor={editorialFor} trips={comingUp} /> : null}
+
+      {/* One paper band per screen: a trip just finished already is Home's
+          story, so no second journey is offered beneath it. */}
+      {journey && lead?.lifecycle !== 'completed' ? (
+        <HomeJourney
+          editorial={editorialFor(journey.trip)}
+          journey={journey}
+          trip={journey.trip}
+          variant="journey"
+        />
       ) : null}
     </div>
   );

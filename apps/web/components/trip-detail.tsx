@@ -25,13 +25,12 @@ import { TripInsights } from '@/components/trip-insights';
 import { TripCountries } from '@/components/trip-countries';
 import { TripForm } from '@/components/trip-form';
 import { TripHeaderDetails } from '@/components/trip-header-details';
-import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
 import { TripDetailSkeleton } from '@/components/trip-detail-skeleton';
 import { useTripCreation } from '@/components/trip-creation-provider';
 import { useTripContext } from '@/components/trip-provider';
 import { TripShareDialog } from '@/components/trip-share-dialog';
 import { TripMedia } from '@/components/trip-media';
-import { TripReadinessBadge } from '@/components/trip-readiness-badge';
+import { TripStatusBadge } from '@/components/trip-status-badge';
 import { TripReadinessPrompt } from '@/components/trip-readiness-prompt';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -370,8 +369,7 @@ export function TripDetail({
           </div>
           <div className="relative -mt-8 rounded-t-[var(--trip-sheet-radius)] bg-background px-[var(--gutter-inline-start)] pt-6 text-foreground md:mt-0 md:rounded-none md:bg-transparent md:px-7 md:pt-20 md:pb-8 md:text-white">
             <div className="mb-4 hidden flex-wrap gap-2 md:flex">
-              <TripLifecycleBadge lifecycle={trip.lifecycle} tone="onMedia" />
-              <TripReadinessBadge
+              <TripStatusBadge
                 lifecycle={trip.lifecycle}
                 readiness={trip.planningReadiness}
                 tone="onMedia"

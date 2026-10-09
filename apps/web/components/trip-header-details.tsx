@@ -2,8 +2,7 @@
 
 import { useLocale, useTranslations } from 'next-intl';
 
-import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
-import { TripReadinessBadge } from '@/components/trip-readiness-badge';
+import { TripStatusBadge } from '@/components/trip-status-badge';
 import type { Trip } from '@/lib/trips/api';
 import { formatTripDateRange } from '@/lib/trips/format';
 import { calendarDayDistance } from '@/lib/trips/lifecycle';
@@ -34,8 +33,7 @@ export function TripHeaderDetails({
       <span>{formatTripDateRange(trip.startDate, trip.endDate, locale)}</span>
       <span aria-hidden="true">·</span>
       <span>{t('duration', { count: calendarDayDistance(trip.startDate, trip.endDate) + 1 })}</span>
-      <TripLifecycleBadge className={badgeClassName} lifecycle={trip.lifecycle} />
-      <TripReadinessBadge
+      <TripStatusBadge
         className={badgeClassName}
         lifecycle={trip.lifecycle}
         readiness={trip.planningReadiness}

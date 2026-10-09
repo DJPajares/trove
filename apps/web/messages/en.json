@@ -2448,6 +2448,8 @@
     "signUpDescription": "Create an account to keep your travel plans private and available across devices.",
     "email": "Email",
     "password": "Password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
     "confirmPassword": "Confirm password",
     "sign-in": "Sign in",
     "sign-up": "Create account",
@@ -2461,6 +2463,7 @@
     "passwordMismatch": "Passwords do not match.",
     "confirmationSent": "Check your email. Open the link to confirm your account and continue in Trove.",
     "configurationError": "Authentication is unavailable. Please try again later.",
+    "invalidCredentials": "Incorrect email or password. Check your details and try again.",
     "error": "We couldn't complete that request. Check your details and try again.",
     "signUpClosedTitle": "Sign-ups are closed",
     "signUpClosedDescription": "Trove is not open for public sign-up yet. If you already have an account, sign in below."

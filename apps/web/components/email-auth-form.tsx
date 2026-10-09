@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 
+import { PasswordInput } from '@/components/password-input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
@@ -61,7 +62,7 @@ export function EmailAuthForm({ mode, nextPath }: Readonly<EmailAuthFormProps>) 
         });
 
         if (signInError) {
-          setError(t('error'));
+          setError(t(signInError.code === 'invalid_credentials' ? 'invalidCredentials' : 'error'));
           setIsPending(false);
           return;
         }
@@ -126,13 +127,12 @@ export function EmailAuthForm({ mode, nextPath }: Readonly<EmailAuthFormProps>) 
 
         <Field>
           <FieldLabel htmlFor="auth-password">{t('password')}</FieldLabel>
-          <Input
+          <PasswordInput
             autoComplete={isSignUp ? 'new-password' : 'current-password'}
             id="auth-password"
             minLength={6}
             onChange={(event) => setPassword(event.target.value)}
             required
-            type="password"
             value={password}
           />
         </Field>
@@ -140,13 +140,12 @@ export function EmailAuthForm({ mode, nextPath }: Readonly<EmailAuthFormProps>) 
         {isSignUp ? (
           <Field>
             <FieldLabel htmlFor="auth-confirmation">{t('confirmPassword')}</FieldLabel>
-            <Input
+            <PasswordInput
               autoComplete="new-password"
               id="auth-confirmation"
               minLength={6}
               onChange={(event) => setConfirmation(event.target.value)}
               required
-              type="password"
               value={confirmation}
             />
           </Field>

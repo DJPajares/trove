@@ -130,6 +130,8 @@ test('a cold cell asks once per past year and caches; a warm cell asks nothing',
     dayIds: ['a', 'b', 'c'],
     month: 10,
     years: { from: 2021, to: 2025 },
+    area: { latitude: 1.3, longitude: 103.8 },
+    fetchedAt: NOW.toISOString(),
     temperatureMaxC: 30,
     temperatureMinC: 24,
     wetDayShare: 0.5,
@@ -148,7 +150,7 @@ test('a cold cell asks once per past year and caches; a warm cell asks nothing',
   expect(warm.upsert).not.toHaveBeenCalled();
 });
 
-test('a failed fetch is remembered for an hour, and cache-only reads never fetch', async () => {
+test('a failed fetch is remembered for five minutes, and cache-only reads never fetch', async () => {
   const fetcher = vi.fn(async () => new Response('', { status: 503 }));
   const days = [{ id: 'a', date: '2026-10-16', coordinates: { latitude: 1.3, longitude: 103.8 } }];
   const failure = {

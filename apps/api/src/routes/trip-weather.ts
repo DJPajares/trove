@@ -9,6 +9,12 @@ export function registerTripWeatherRoutes(app: FastifyInstance) {
   const controllers = createTripWeatherControllers(new TripWeatherService());
 
   app.get(
+    '/trips/:tripId/weather/locations',
+    { preHandler: requireAuthenticatedUser },
+    controllers.getLocations,
+  );
+
+  app.get(
     '/trips/:tripId/weather',
     { config: PROVIDER_SEARCH_RATE_LIMIT, preHandler: requireAuthenticatedUser },
     controllers.getTripWeather,

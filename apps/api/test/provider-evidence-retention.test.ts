@@ -36,6 +36,7 @@ let legs: Row[];
 let grounding: Row[];
 let weather: Row[];
 let weatherContext: Row[];
+let climate: Row[];
 
 const ago = (ms: number) => new Date(NOW.getTime() - ms);
 
@@ -45,12 +46,14 @@ beforeEach(() => {
   grounding = [];
   weather = [];
   weatherContext = [];
+  climate = [];
   vi.stubGlobal('trovePrismaClient', {
     aiPlaceGroundingCache: table(grounding),
     placeProviderRef: table(refs),
     travelLegCache: table(legs),
     weatherForecastSnapshot: table(weather),
     weatherContextSnapshot: table(weatherContext),
+    climateNormSnapshot: table(climate),
   });
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -78,6 +81,7 @@ test('nothing is removed before the end of its 30 days, whichever dataset it is 
     deletedTravelLegs: 0,
     deletedWeatherSnapshots: 0,
     deletedWeatherContextSnapshots: 0,
+    deletedClimateNormSnapshots: 0,
   });
 
   expect(refs[0]).toMatchObject({
@@ -117,6 +121,7 @@ test('everything is removed at exactly 30 days, keeping the link to the place', 
     deletedTravelLegs: 1,
     deletedWeatherSnapshots: 1,
     deletedWeatherContextSnapshots: 0,
+    deletedClimateNormSnapshots: 0,
   });
 
   expect(refs[0]).toMatchObject({
@@ -161,14 +166,22 @@ test('each dataset expires on its own clock', async () => {
   });
 });
 
-test('current/hourly snapshots expire at three hours independently of daily retention', async () => {
-  weatherContext.push({ fetchedAt: ago(3 * 60 * 60 * 1_000 - 1) });
-  weatherContext.push({ fetchedAt: ago(3 * 60 * 60 * 1_000) });
-  weather.push({ fetchedAt: ago(3 * 60 * 60 * 1_000) });
+test('current/hourly snapshots expire at one hour independently of daily retention', async () => {
+  weatherContext.push({ fetchedAt: ago(60 * 60 * 1_000 - 1) });
+  weatherContext.push({ fetchedAt: ago(60 * 60 * 1_000) });
+  weather.push({ fetchedAt: ago(60 * 60 * 1_000) });
   await expect(cleanupProviderEvidence(NOW)).resolves.toMatchObject({
     deletedWeatherContextSnapshots: 1,
     deletedWeatherSnapshots: 0,
   });
   expect(weatherContext).toHaveLength(1);
   expect(weather).toHaveLength(1);
+});
+
+test('seasonal retention keeps original age and expires at 30 days', async () => {
+  climate.push({ fetchedAt: ago(LIFETIME - 1) }, { fetchedAt: ago(LIFETIME) });
+  await expect(cleanupProviderEvidence(NOW)).resolves.toMatchObject({
+    deletedClimateNormSnapshots: 1,
+  });
+  expect(climate).toHaveLength(1);
 });

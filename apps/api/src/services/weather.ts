@@ -76,6 +76,7 @@ export type WeatherHourlyForecast = {
 
 /** One coordinate the daily forecast is asked about. */
 export type WeatherPoint = {
+  timeZone?: string;
   latitude: number;
   longitude: number;
 };
@@ -372,7 +373,9 @@ export class OpenMeteoWeatherProvider implements WeatherProvider {
       longitude: input.points.map((point) => String(point.longitude)).join(','),
       start_date: input.startDate,
       temperature_unit: 'celsius',
-      timezone: 'auto',
+      timezone: input.points.some((point) => point.timeZone)
+        ? input.points.map((point) => point.timeZone ?? 'auto').join(',')
+        : 'auto',
     }).toString();
 
     const payload = await this.requestJson<OpenMeteoResponse | OpenMeteoResponse[]>(url);
@@ -393,7 +396,11 @@ export class OpenMeteoWeatherProvider implements WeatherProvider {
 
       return {
         days: mapForecast(entry.daily),
-        location: { latitude: point.latitude, longitude: point.longitude, timeZone },
+        location: {
+          latitude: point.latitude,
+          longitude: point.longitude,
+          timeZone: point.timeZone ?? timeZone,
+        },
         point,
       };
     });

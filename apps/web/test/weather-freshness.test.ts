@@ -57,11 +57,11 @@ function locationWeather(): LocationWeather {
 }
 afterEach(() => vi.useRealTimers());
 
-test('the three-hour window uses the observation and preserves its exact boundary', () => {
-  const observed = '2026-10-03T09:00';
+test('the one-hour window uses the observation and preserves its exact boundary', () => {
+  const observed = '2026-10-03T11:00';
   expect(isCurrentReadingStale(observed, 'Asia/Tokyo', NOW)).toBe(false);
   expect(isCurrentReadingStale(observed, 'Asia/Tokyo', new Date(NOW.getTime() + 1))).toBe(true);
-  expect(WEATHER_CURRENT_MAX_AGE_MS).toBe(10_800_000);
+  expect(WEATHER_CURRENT_MAX_AGE_MS).toBe(3_600_000);
 });
 
 test('re-reading an unchanged response updates query receipt age without renewing its observation', () => {

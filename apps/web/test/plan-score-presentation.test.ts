@@ -301,7 +301,7 @@ test('ordinary acquisition invalidates cached scoring without invoking any acqui
   client.clear();
 });
 
-test('loading the trip context refreshes that trip score, so seasonal fit can fill', async () => {
+test('local context reuse leaves scores alone; changed source acquisitions refresh existing scores', async () => {
   const client = createQueryClient();
   client.setQueryData(['plan-score', 'trip'], assessment());
   client.setQueryData(['plan-score', 'other'], assessment());
@@ -309,6 +309,9 @@ test('loading the trip context refreshes that trip score, so seasonal fit can fi
     queryKey: ['trip-context', 'trip', 1, 'en'],
     queryFn: async () => ({ climate: [] }),
   });
+  expect(client.getQueryState(['plan-score', 'trip'])?.isInvalidated).toBe(false);
+  const { refreshScoresAfterWeatherAcquisition } = await import('../lib/plan-score/lifecycle.ts');
+  refreshScoresAfterWeatherAcquisition(client, ['trip']);
   expect(client.getQueryState(['plan-score', 'trip'])?.isInvalidated).toBe(true);
   expect(client.getQueryState(['plan-score', 'other'])?.isInvalidated).toBe(false);
   client.clear();

@@ -5,7 +5,7 @@
  * Insights presents it. Plan Score reads the same context from its caches only,
  * never fetching, for holiday date suitability and seasonal fit.
  */
-export const TRIP_CONTEXT_VERSION = 1;
+export const TRIP_CONTEXT_VERSION = 2;
 
 export type TripContextHoliday = {
   /** The local calendar date in the holiday's country. */
@@ -18,6 +18,9 @@ export type TripContextHoliday = {
 };
 
 export type TripContextClimate = {
+  /** Source cell and acquisition time; optional only for legacy offline records. */
+  area?: { latitude: number; longitude: number };
+  fetchedAt?: string;
   dayIds: string[];
   /** Calendar month, 1-12. */
   month: number;

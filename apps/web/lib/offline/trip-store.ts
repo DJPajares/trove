@@ -380,8 +380,10 @@ export async function writeTripWeatherHistory(
   userId: string,
   tripId: string,
   days: ArchivedTripWeatherDay[],
+  canWrite: () => boolean = () => true,
 ) {
   const database = await openDatabase();
+  if (!canWrite()) return;
   const transaction = database.transaction(WEATHER_HISTORY_STORE, 'readwrite');
   transaction.objectStore(WEATHER_HISTORY_STORE).put({
     days,
@@ -1759,8 +1761,13 @@ export async function readQueryCacheEntry(key: string) {
   return record?.value ?? null;
 }
 
-export async function writeQueryCacheEntry(key: string, value: string) {
+export async function writeQueryCacheEntry(
+  key: string,
+  value: string,
+  canWrite: () => boolean = () => true,
+) {
   const database = await openDatabase();
+  if (!canWrite()) return;
   const transaction = database.transaction(QUERY_CACHE_STORE, 'readwrite');
   transaction.objectStore(QUERY_CACHE_STORE).put({ key, value });
   await transactionDone(transaction);
@@ -1771,4 +1778,39 @@ export async function deleteQueryCacheEntry(key: string) {
   const transaction = database.transaction(QUERY_CACHE_STORE, 'readwrite');
   transaction.objectStore(QUERY_CACHE_STORE).delete(key);
   await transactionDone(transaction);
+}
+
+/** Atomic, short IndexedDB transaction; no network work holds this transaction open. */
+export async function claimWeatherLease(key: string, owner: string, expiresAt: number) {
+  const database = await openDatabase();
+  const transaction = database.transaction(QUERY_CACHE_STORE, 'readwrite');
+  const store = transaction.objectStore(QUERY_CACHE_STORE);
+  const done = transactionDone(transaction);
+  const record = await requestResult<{ key: string; value: string } | undefined>(store.get(key));
+  let lease: { owner: string; expiresAt: number } | null = null;
+  try {
+    lease = record ? JSON.parse(record.value) : null;
+  } catch {
+    /* Replace a malformed lease. */
+  }
+  const claimed = !lease || lease.expiresAt <= Date.now() || lease.owner === owner;
+  if (claimed) store.put({ key, value: JSON.stringify({ owner, expiresAt }) });
+  await done;
+  return claimed;
+}
+
+export async function releaseWeatherLease(key: string, owner: string) {
+  const database = await openDatabase();
+  const transaction = database.transaction(QUERY_CACHE_STORE, 'readwrite');
+  const store = transaction.objectStore(QUERY_CACHE_STORE);
+  const done = transactionDone(transaction);
+  const record = await requestResult<{ key: string; value: string } | undefined>(store.get(key));
+  if (record) {
+    try {
+      if (JSON.parse(record.value).owner === owner) store.delete(key);
+    } catch {
+      store.delete(key);
+    }
+  }
+  await done;
 }

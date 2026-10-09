@@ -1,3 +1,4 @@
+import { weatherDayLocations, WEATHER_MAX_LOCATIONS, type WeatherLocations } from '@trove/types';
 import { resolveDayStay, stayAccommodationsInclude, toStayAccommodations } from './day-stay.js';
 import { getPrismaClient } from '@trove/db';
 
@@ -23,7 +24,7 @@ import { isWithinForecastWindow, resolveForecastWindow } from './weather-window.
  * unbounded fan-out. Past the cap a day falls back to the trip's own location,
  * which is a blunter answer rather than a missing one.
  */
-export const MAX_WEATHER_LOCATIONS = 10;
+export const MAX_WEATHER_LOCATIONS = WEATHER_MAX_LOCATIONS;
 
 export class TripWeatherNotFoundError extends Error {
   constructor() {
@@ -39,6 +40,7 @@ export type TripWeatherLocation = {
 };
 
 export type TripWeatherDay = {
+  fetchedAt?: string;
   date: string;
   itineraryDayId: string;
   location: TripWeatherLocation;
@@ -53,6 +55,7 @@ export type TripWeather = {
   current: WeatherCurrentConditions | null;
   days: TripWeatherDay[];
   fetchedAt: string;
+  currentFetchedAt: string | null;
   horizon: { endDate: string; startDate: string };
   /**
    * The next week of hours, empty whenever `current` is - the two come from the
@@ -132,11 +135,19 @@ export function resolveDayWeatherLocation(
   fallback: TripWeatherLocation | null,
 ): TripWeatherLocation | null {
   const base = placeLocation(day.dailyBaseTripPlace?.place);
-  if (base) return { ...base, timeZone: base.timeZone ?? day.defaultTimeZone };
+  if (base)
+    return {
+      ...base,
+      timeZone: base.timeZone ?? day.defaultTimeZone,
+    };
 
   for (const item of day.items) {
     const location = placeLocation(item.tripPlace?.place);
-    if (location) return { ...location, timeZone: location.timeZone ?? day.defaultTimeZone };
+    if (location)
+      return {
+        ...location,
+        timeZone: location.timeZone ?? day.defaultTimeZone,
+      };
   }
 
   return fallback;
@@ -165,17 +176,7 @@ export function resolveDayWeatherLocations(
 ): (TripWeatherLocation | null)[] {
   const own = days.map((day) => resolveDayWeatherLocation(day, null));
 
-  return own.map((location, index) => {
-    if (location) return location;
-    if (destination) return destination;
-
-    for (let distance = 1; distance < own.length; distance += 1) {
-      const nearest = own[index - distance] ?? own[index + distance];
-      if (nearest) return nearest;
-    }
-
-    return null;
-  });
+  return weatherDayLocations(own, destination);
 }
 
 async function findOwnedTrip(userId: string, tripId: string) {
@@ -208,37 +209,12 @@ export class TripWeatherService {
     tripId: string,
     options: TripWeatherOptions,
   ): Promise<TripWeather> {
-    const trip = await findOwnedTrip(userId, tripId);
+    const mapping = await this.getLocations(userId, tripId);
     const now = this.now();
-
-    const destination = resolveTripWeatherLocation(
-      trip.destinations.map((entry) => ({
-        location: placeLocation(entry.place),
-        timeZone: entry.timeZone,
-      })),
-      trip.referenceTimeZone,
+    const located = mapping.days.flatMap((day) =>
+      day.location ? [{ date: day.date, day: { id: day.id }, location: day.location }] : [],
     );
-
-    // The stay a day starts from answers first, whether the traveller set it
-    // or a booking supplies it.
-    const accommodations = toStayAccommodations(trip.reservations);
-    const dayLocations = resolveDayWeatherLocations(
-      trip.itineraryDays.map((day) => ({
-        ...day,
-        dailyBaseTripPlace:
-          resolveDayStay({ ...day, dailyBaseDepartureTripPlace: null }, accommodations).start
-            ?.place ?? null,
-      })),
-      destination,
-    );
-    const located = trip.itineraryDays.flatMap((day, index) => {
-      const location = dayLocations[index];
-      return location ? [{ date: formatDateOnly(day.date), day, location }] : [];
-    });
-
-    // The point every day can borrow from: the destination when the trip has a
-    // located one, and otherwise the first answer the days themselves gave.
-    const tripLocation = destination ?? located[0]?.location ?? null;
+    const tripLocation = mapping.fallback;
 
     const window = resolveForecastWindow(
       [...new Set(located.map((entry) => entry.location.timeZone))],
@@ -257,14 +233,29 @@ export class TripWeatherService {
       points.set(weatherPointKey(tripLocation), {
         latitude: tripLocation.latitude,
         longitude: tripLocation.longitude,
+        timeZone: tripLocation.timeZone,
       });
     }
     for (const entry of reachable) {
       const key = weatherPointKey(entry.location);
       if (points.has(key) || points.size >= MAX_WEATHER_LOCATIONS) continue;
-      points.set(key, { latitude: entry.location.latitude, longitude: entry.location.longitude });
+      points.set(key, { ...entry.location });
     }
 
+    const today = reachable.find(
+      (entry) => entry.date === getLocalDate(now, entry.location.timeZone),
+    );
+    let prefetched: Awaited<ReturnType<WeatherService['getWeather']>> | null = null;
+    if (today) {
+      try {
+        prefetched = await this.currentConditions.getWeather({
+          ...today.location,
+          temperatureUnit: options.temperatureUnit,
+        });
+      } catch {
+        /* Daily evidence can still answer independently. */
+      }
+    }
     const answers: Map<string, CachedPointForecast> = points.size
       ? await this.forecasts.getForecasts([...points.values()], window)
       : new Map();
@@ -285,6 +276,7 @@ export class TripWeatherService {
       }
 
       days.push({
+        fetchedAt: forecast.fetchedAt.toISOString(),
         date: entry.date,
         itineraryDayId: entry.day.id,
         location: forecast.location,
@@ -295,13 +287,14 @@ export class TripWeatherService {
       });
     }
 
-    const live = await this.readNow(days, options.temperatureUnit, now);
+    const live = await this.readNow(days, options.temperatureUnit, now, prefetched);
 
     return {
       attribution: WEATHER_ATTRIBUTION,
       current: live.current,
+      currentFetchedAt: live.fetchedAt,
       days,
-      fetchedAt: (oldestFetchedAt ?? now).toISOString(),
+      fetchedAt: oldestFetchedAt?.toISOString() ?? live.fetchedAt ?? '',
       horizon: window,
       hours: live.hours,
       hoursDate: live.date,
@@ -310,10 +303,40 @@ export class TripWeatherService {
     };
   }
 
+  /** Metadata only: this path never reads weather tables or calls a provider. */
+  async getLocations(userId: string, tripId: string): Promise<WeatherLocations> {
+    const trip = await findOwnedTrip(userId, tripId);
+    const destination = resolveTripWeatherLocation(
+      trip.destinations.map((entry) => ({
+        location: placeLocation(entry.place),
+        timeZone: entry.timeZone,
+      })),
+      trip.referenceTimeZone,
+    );
+    const accommodations = toStayAccommodations(trip.reservations);
+    const locations = resolveDayWeatherLocations(
+      trip.itineraryDays.map((day) => ({
+        ...day,
+        dailyBaseTripPlace:
+          resolveDayStay({ ...day, dailyBaseDepartureTripPlace: null }, accommodations).start
+            ?.place ?? null,
+      })),
+      destination,
+    );
+    return {
+      days: trip.itineraryDays.map((day, index) => ({
+        id: day.id,
+        date: formatDateOnly(day.date),
+        location: locations[index] ?? null,
+      })),
+      fallback: destination ?? locations.find(Boolean) ?? null,
+    };
+  }
+
   /**
    * What is true right now, and the hours just after it.
    *
-   * Neither ever comes from the daily snapshot. That snapshot may be three
+   * Neither ever comes from the daily snapshot. That snapshot may be six
    * hours old, and PRD 11 is explicit that cached weather must not be presented
    * as the weather right now, so this reads the short-lived tier and returns
    * nothing rather than something stale. The hours ride along on the same
@@ -329,12 +352,14 @@ export class TripWeatherService {
     days: readonly TripWeatherDay[],
     temperatureUnit: TemperatureUnit,
     now: Date,
+    prefetched: Awaited<ReturnType<WeatherService['getWeather']>> | null = null,
   ): Promise<{
     current: WeatherCurrentConditions | null;
+    fetchedAt: string | null;
     date: string | null;
     hours: WeatherHourlyForecast[];
   }> {
-    const nothing = { current: null, date: null, hours: [] };
+    const nothing = { current: null, fetchedAt: null, date: null, hours: [] };
 
     // Each day is asked whether it is today in its own zone, rather than one
     // zone being asked what day it is everywhere. The trip's anchor is its
@@ -348,13 +373,20 @@ export class TripWeatherService {
     if (!today) return nothing;
 
     try {
-      const weather = await this.currentConditions.getWeather({
-        latitude: today.location.latitude,
-        longitude: today.location.longitude,
-        temperatureUnit,
-        timeZone: today.location.timeZone,
-      });
-      return { current: weather.current, date: today.date, hours: weather.hours ?? [] };
+      const weather =
+        prefetched ??
+        (await this.currentConditions.getWeather({
+          latitude: today.location.latitude,
+          longitude: today.location.longitude,
+          temperatureUnit,
+          timeZone: today.location.timeZone,
+        }));
+      return {
+        current: weather.current,
+        fetchedAt: weather.fetchedAt,
+        date: today.date,
+        hours: weather.hours ?? [],
+      };
     } catch {
       // A fortnight of forecasts is worth serving even when the reading for this
       // minute is not.

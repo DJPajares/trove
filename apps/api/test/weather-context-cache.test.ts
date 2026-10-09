@@ -1,3 +1,4 @@
+import { weatherMemory } from '../src/services/weather-memory.js';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { WEATHER_CACHE_TTL_MS } from '@trove/types';
 import {
@@ -89,7 +90,7 @@ test('separate service instances reuse evidence without renewing its timestamps'
   expect(second.current?.observedAt).toBe('2026-10-03T12:00');
 });
 
-test('expiry at exactly three hours acquires a new response', async () => {
+test('expiry at exactly one hour acquires a new response', async () => {
   await new WeatherService(provider).getWeather(INPUT);
   vi.setSystemTime(new Date(NOW.getTime() + WEATHER_CACHE_TTL_MS));
   const result = await new WeatherService(provider).getWeather(INPUT);
@@ -159,6 +160,9 @@ test('provider failure preserves expired dated forecasts with their original age
   });
   expect(upsert).toHaveBeenCalledTimes(1);
   await service.getWeather(INPUT);
+  expect(acquire).toHaveBeenCalledTimes(2);
+  vi.advanceTimersByTime(5 * 60_000);
+  await service.getWeather(INPUT);
   expect(acquire).toHaveBeenCalledTimes(3);
 });
 
@@ -166,6 +170,8 @@ test('provider failure without a stored forecast propagates and permits retry', 
   acquire.mockRejectedValueOnce(new Error('provider failed'));
   const service = new WeatherService(provider);
   await expect(service.getWeather(INPUT)).rejects.toThrow('provider failed');
+  await expect(service.getWeather(INPUT)).rejects.toThrow('provider failed');
+  vi.advanceTimersByTime(5 * 60_000);
   await expect(service.getWeather(INPUT)).resolves.toMatchObject({ current: { temperature: 20 } });
 });
 
@@ -177,6 +183,7 @@ test.each(['future', 'malformed'] as const)(
     const row = [...rows.values()][0]!;
     if (kind === 'future') row.fetchedAt = new Date(NOW.getTime() + 1);
     else row.payload = {} as Row['payload'];
+    weatherMemory().clear();
     await service.getWeather(INPUT);
     expect(acquire).toHaveBeenCalledTimes(2);
   },

@@ -1,5 +1,7 @@
 import { getPrismaClient } from '@trove/db';
-import type { TripContextClimate } from '@trove/types';
+import { WEATHER_CACHE_POLICY, weatherEvidenceFresh, type TripContextClimate } from '@trove/types';
+import { singleFlight } from './single-flight.js';
+import { weatherMemory } from './weather-memory.js';
 
 import { mapWithConcurrency } from './concurrency.js';
 import {
@@ -30,7 +32,7 @@ const COORDINATE_PRECISION = 10;
 const SAME_AREA_DEGREES = 0.5;
 /** A trip spanning many cities still asks about at most this many cell-months. */
 export const MAX_CLIMATE_CELLS = 4;
-export const CLIMATE_NEGATIVE_CACHE_MS = 60 * 60_000;
+export const CLIMATE_NEGATIVE_CACHE_MS = WEATHER_CACHE_POLICY.retryMs;
 const REQUEST_TIMEOUT_MS = 8_000;
 const WET_DAY_MM = 1;
 /** Fewer usable days than this is not a pattern worth describing. */
@@ -40,6 +42,7 @@ type Fetcher = (input: string | URL, init?: RequestInit) => Promise<Response>;
 type Coordinates = { latitude: number; longitude: number };
 type Sample = { max: number; min: number; precipitation: number };
 type Norm = Pick<TripContextClimate, 'temperatureMaxC' | 'temperatureMinC' | 'wetDayShare'>;
+type DatedNorm = Norm & { fetchedAt: string };
 
 export type ClimateDay = { id: string; date: string; coordinates: Coordinates | null };
 export type ClimateOptions = {
@@ -129,12 +132,12 @@ type Snapshot = {
   wetDayShare: { toNumber(): number } | null;
 };
 
-async function readClimateNorm(
+async function acquireClimateNorm(
   point: Coordinates,
   month: number,
   years: { from: number; to: number },
   options: ClimateOptions,
-): Promise<Norm | null> {
+): Promise<DatedNorm | null> {
   const now = options.now ?? new Date();
   const key = {
     provider: 'open_meteo',
@@ -145,6 +148,19 @@ async function readClimateNorm(
     yearTo: years.to,
   };
   const prisma = getPrismaClient();
+  const memory = weatherMemory();
+  const memoryKey = `climate:${JSON.stringify(key)}`;
+  const remembered = memory.get<DatedNorm>(memoryKey);
+  if (
+    remembered &&
+    weatherEvidenceFresh(remembered.fetchedAt, WEATHER_CACHE_POLICY.seasonalMs, now.getTime())
+  )
+    return remembered;
+  const failure = memory.get<{ retryAt: number; fallback: DatedNorm | null }>(
+    `${memoryKey}:failure`,
+  );
+  if (failure && failure.retryAt > now.getTime())
+    return options.allowFetch ? failure.fallback : null;
   let snapshot: Snapshot | null = null;
   let reason: ProviderCacheMissReason = 'missing_snapshot';
   try {
@@ -160,15 +176,27 @@ async function readClimateNorm(
     provider: 'open_meteo',
     source: options.source,
   } as const;
-  if (snapshot?.temperatureMaxCelsius && snapshot.temperatureMinCelsius && snapshot.wetDayShare) {
+  if (
+    snapshot?.temperatureMaxCelsius &&
+    snapshot.temperatureMinCelsius &&
+    snapshot.wetDayShare &&
+    weatherEvidenceFresh(
+      snapshot.fetchedAt.getTime(),
+      WEATHER_CACHE_POLICY.seasonalMs,
+      now.getTime(),
+    )
+  ) {
     recordProviderCacheEvent({ ...event, cache: 'climate-norm', kind: 'cache_hit' });
-    return {
+    const cached = {
+      fetchedAt: snapshot.fetchedAt.toISOString(),
       temperatureMaxC: snapshot.temperatureMaxCelsius.toNumber(),
       temperatureMinC: snapshot.temperatureMinCelsius.toNumber(),
       wetDayShare: snapshot.wetDayShare.toNumber(),
     };
+    memory.set(memoryKey, cached);
+    return cached;
   }
-  if (snapshot) {
+  if (snapshot && !snapshot.temperatureMaxCelsius) {
     if (now.getTime() - snapshot.fetchedAt.getTime() < CLIMATE_NEGATIVE_CACHE_MS) {
       recordProviderCacheEvent({ ...event, cache: 'climate-norm', kind: 'negative_cache_hit' });
       return null;
@@ -193,8 +221,28 @@ async function readClimateNorm(
   } catch {
     norm = null;
   }
+  if (!norm) {
+    const fallback =
+      snapshot &&
+      snapshot.fetchedAt.getTime() <= now.getTime() &&
+      snapshot.temperatureMaxCelsius &&
+      snapshot.temperatureMinCelsius &&
+      snapshot.wetDayShare
+        ? {
+            fetchedAt: snapshot.fetchedAt.toISOString(),
+            temperatureMaxC: snapshot.temperatureMaxCelsius.toNumber(),
+            temperatureMinC: snapshot.temperatureMinCelsius.toNumber(),
+            wetDayShare: snapshot.wetDayShare.toNumber(),
+          }
+        : (remembered ?? null);
+    memory.set(`${memoryKey}:failure`, {
+      retryAt: now.getTime() + WEATHER_CACHE_POLICY.retryMs,
+      fallback,
+    });
+    if (fallback) return fallback;
+  }
   // A failure is stored too, without statistics, so the next read within the
-  // hour does not ask again.
+  // cooldown does not ask again.
   const stats = {
     temperatureMaxCelsius: norm?.temperatureMaxC ?? null,
     temperatureMinCelsius: norm?.temperatureMinC ?? null,
@@ -211,7 +259,21 @@ async function readClimateNorm(
   } catch {
     // Not caching an answer only costs the next reader a request.
   }
-  return norm;
+  const dated = norm ? { ...norm, fetchedAt: now.toISOString() } : null;
+  if (dated) memory.set(memoryKey, dated);
+  return dated;
+}
+
+function readClimateNorm(
+  point: Coordinates,
+  month: number,
+  years: { from: number; to: number },
+  options: ClimateOptions,
+) {
+  return singleFlight(
+    `climate:${JSON.stringify({ latitude: point.latitude, longitude: point.longitude })}:${month}:${years.from}:${years.to}:${options.allowFetch}`,
+    () => acquireClimateNorm(point, month, years, options),
+  );
 }
 
 /** Typical conditions for each distinct place and month the trip's days fall in. */
@@ -254,6 +316,16 @@ export async function tripClimate(
     norm: await readClimateNorm(group, group.month, years, options),
   }));
   return results.flatMap(({ group, norm }) =>
-    norm ? [{ dayIds: group.dayIds, month: group.month, years, ...norm }] : [],
+    norm
+      ? [
+          {
+            dayIds: group.dayIds,
+            month: group.month,
+            years,
+            area: { latitude: group.latitude, longitude: group.longitude },
+            ...norm,
+          },
+        ]
+      : [],
   );
 }

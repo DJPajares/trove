@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import { invalidateWeatherMapping } from '@/lib/weather/client-service';
 import { TRIP_SCOPED_QUERY_ROOTS, type TripScopedQueryRoot } from '@/lib/query/keys';
 
 /**
@@ -15,11 +16,12 @@ import { TRIP_SCOPED_QUERY_ROOTS, type TripScopedQueryRoot } from '@/lib/query/k
  * so leaving one out of a mutation's list shows up as a screen that will not
  * update rather than as an expense.
  */
-export function invalidateTripQueries(
+export async function invalidateTripQueries(
   queryClient: QueryClient,
   tripId: string,
   roots: readonly TripScopedQueryRoot[] = TRIP_SCOPED_QUERY_ROOTS,
 ) {
+  if (roots.includes('trip-weather')) await invalidateWeatherMapping(queryClient, tripId);
   return Promise.all([
     ...roots.map((root) => queryClient.invalidateQueries({ queryKey: [root, tripId] })),
     // Located Places are shared across trips. Only the other derived assessments

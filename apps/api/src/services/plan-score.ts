@@ -1,6 +1,12 @@
 import { planScoreReferenceTargets } from './plan-score-reference-targets.js';
 import { getPrismaClient, Prisma } from '@trove/db';
-import { type PlanScoreExplanation, type TripContext, type TripPlanScore } from '@trove/types';
+import {
+  weatherDailyTtl,
+  WEATHER_CACHE_POLICY,
+  type PlanScoreExplanation,
+  type TripContext,
+  type TripPlanScore,
+} from '@trove/types';
 import { z } from 'zod';
 
 import { contextPlaceFromOwnedData, type OwnedContextPlace } from './owned-place-location.js';
@@ -44,11 +50,7 @@ import {
   type ScoringReservation,
 } from './plan-score-normalization.js';
 import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
-import {
-  readCachedForecast,
-  weatherPointKey,
-  WEATHER_FORECAST_TTL_MS,
-} from './weather-evidence-cache.js';
+import { readCachedForecast, weatherPointKey } from './weather-evidence-cache.js';
 import { resolveForecastWindow } from './weather-window.js';
 import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
 import { explainDay, explainTrip } from './plan-score-explanations.js';
@@ -1155,6 +1157,7 @@ export async function getTripPlanScore(
   const destinationRevision = scoringInputRevision({
     holidays: [...destination.holidays],
     climate: [...destination.climate],
+    climateTimes: destination.climateTimes,
   });
   const evidenceRevision = tripPlanScoreRevision({
     days: [],
@@ -1165,7 +1168,11 @@ export async function getTripPlanScore(
       places: [...placeEvidence.places],
       forecasts: forecastEvidence.forecasts,
       destination: destinationRevision,
-      evidenceTimes: [...placeEvidence.evidenceTimes, ...forecastEvidence.times],
+      evidenceTimes: [
+        ...placeEvidence.evidenceTimes,
+        ...forecastEvidence.times,
+        ...destination.climateTimes,
+      ],
       routes: routeResults.map(({ id, routes }) => ({
         id,
         segments: routes.segments,
@@ -1194,7 +1201,8 @@ export async function getTripPlanScore(
       const own = contextPlaceFromOwnedData(row.place, now);
       return scheduledTripPlaceIds.has(row.id) && own.expiresAt ? [Date.parse(own.expiresAt)] : [];
     }),
-    ...forecastEvidence.times.map((at) => Date.parse(at) + WEATHER_FORECAST_TTL_MS),
+    ...forecastEvidence.deadlines,
+    ...destination.climateTimes.map((at) => Date.parse(at) + WEATHER_CACHE_POLICY.seasonalMs),
     ...placeEvidence.evidenceTimes.map((at) => Date.parse(at) + PLACE_EVIDENCE_TTL_MS),
     ...placeHoursDeadlines(placeEvidence.hours, dayRecords).map(Date.parse),
     ...routeResults.flatMap(({ routes }) =>
@@ -1234,6 +1242,7 @@ export async function getTripPlanScore(
       evidenceTimes: [
         ...(placeEvidence.evidenceTimes ?? []),
         ...forecastEvidence.times,
+        ...destination.climateTimes,
         ...routeResults.flatMap(({ routes }) =>
           routes.segments.flatMap((segment) =>
             segment.evidenceAsOf ? [segment.evidenceAsOf] : [],
@@ -1301,7 +1310,11 @@ export function destinationContextByDay(context: Pick<TripContext, 'holidays' | 
         temperatureMinC: norm.temperatureMinC,
         wetDayShare: norm.wetDayShare,
       });
-  return { holidays, climate };
+  return {
+    holidays,
+    climate,
+    climateTimes: context.climate.flatMap((norm) => (norm.fetchedAt ? [norm.fetchedAt] : [])),
+  };
 }
 
 /**
@@ -1332,7 +1345,12 @@ export async function loadScoringForecasts(
 ) {
   const grouped = new Map<
     string,
-    { point: { latitude: number; longitude: number }; ids: string[]; dates: string[]; zone: string }
+    {
+      point: { latitude: number; longitude: number; timeZone?: string };
+      ids: string[];
+      dates: string[];
+      zone: string;
+    }
   >();
   for (const day of days) {
     const horizon = resolveForecastWindow([day.timeZone], now);
@@ -1340,9 +1358,10 @@ export async function loadScoringForecasts(
     for (const item of day.items) {
       const place = item.tripPlaceId ? places.get(item.tripPlaceId) : null;
       if (!place?.coordinates) continue;
-      const key = weatherPointKey(place.coordinates);
+      const point = { ...place.coordinates, timeZone: day.timeZone };
+      const key = weatherPointKey(point);
       const group = grouped.get(key) ?? {
-        point: place.coordinates,
+        point,
         ids: [],
         dates: [],
         zone: day.timeZone,
@@ -1353,7 +1372,8 @@ export async function loadScoringForecasts(
     }
   }
   const forecasts: ScoringForecast[] = [],
-    times: string[] = [];
+    times: string[] = [],
+    deadlines: number[] = [];
   await mapWithConcurrency([...grouped.values()], PROVIDER_CONCURRENCY_LIMIT, async (group) => {
     const dates = group.dates.toSorted();
     const result = await readCachedForecast(
@@ -1363,6 +1383,13 @@ export async function loadScoringForecasts(
     );
     if (result.kind !== 'hit') return;
     times.push(result.forecast.fetchedAt.toISOString());
+    deadlines.push(
+      ...dates.map(
+        (date) =>
+          result.forecast.fetchedAt.getTime() +
+          weatherDailyTtl(date, result.forecast.location.timeZone, now),
+      ),
+    );
     for (const day of result.forecast.days)
       if (dates.includes(day.date))
         forecasts.push({
@@ -1377,6 +1404,7 @@ export async function loadScoringForecasts(
       (a, b) => a.date.localeCompare(b.date) || a.placeIds.join().localeCompare(b.placeIds.join()),
     ),
     times: [...new Set(times)].sort(),
+    deadlines,
   };
 }
 

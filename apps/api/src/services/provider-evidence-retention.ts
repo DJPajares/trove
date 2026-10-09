@@ -3,13 +3,13 @@ import { PLACE_CACHE_TTL_MS } from './cached-places.js';
 import { PLACE_DETAILS_FAILURE_TTL_MS } from './place-details-failures.js';
 import { PLACE_EVIDENCE_TTL_MS } from './place-evidence-cache.js';
 import { TRAVEL_LEG_CACHE_TTL_MS } from './route-evidence-cache.js';
-import { WEATHER_CACHE_TTL_MS } from '@trove/types';
+import { WEATHER_CACHE_TTL_MS, WEATHER_CACHE_POLICY } from '@trove/types';
 
 /** Grounding decisions are reused for as long as the place snapshot they point at. */
 export const GROUNDING_CACHE_TTL_MS = PLACE_CACHE_TTL_MS;
 
 /**
- * A stored forecast is served past its 3 hour freshness only when the weather
+ * A stored forecast is served past its one/six-hour freshness only when the weather
  * provider is down, so it is kept for the same 30 days as other provider data.
  */
 export const WEATHER_SNAPSHOT_RETENTION_MS = PLACE_CACHE_TTL_MS;
@@ -76,6 +76,10 @@ export async function cleanupProviderEvidence(now = new Date()) {
     where: { fetchedAt: { lte: before(WEATHER_CACHE_TTL_MS) } },
   });
 
+  const climate = await prisma.climateNormSnapshot.deleteMany({
+    where: { fetchedAt: { lte: before(WEATHER_CACHE_POLICY.seasonalMs) } },
+  });
+
   return {
     clearedFailureMarkers: failures.count,
     clearedPlaceEvidence: evidence.count,
@@ -84,5 +88,6 @@ export async function cleanupProviderEvidence(now = new Date()) {
     deletedTravelLegs: legs.count,
     deletedWeatherSnapshots: weather.count,
     deletedWeatherContextSnapshots: weatherContext.count,
+    deletedClimateNormSnapshots: climate.count,
   };
 }

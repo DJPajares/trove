@@ -133,6 +133,7 @@ beforeEach(() => {
       deleteMany: vi.fn(async () => ({ count: 0 })),
       findUnique: vi.fn(async () => forecast),
     },
+    climateNormSnapshot: { deleteMany: vi.fn(async () => ({ count: 0 })) },
     weatherContextSnapshot: { deleteMany: vi.fn(async () => ({ count: 0 })) },
   });
 });
@@ -823,7 +824,7 @@ test('a rainy outdoor stop is offered indoor places from the traveller’s own l
     cachedEvidence: evidenceFor[args.where.provider_externalPlaceId.externalPlaceId] ?? null,
   });
   forecast = {
-    fetchedAt: new Date(NOW.getTime() - 3600000),
+    fetchedAt: new Date(NOW.getTime() - 3599999),
     latitude: 1,
     longitude: 2,
     timeZone: 'UTC',
@@ -854,5 +855,6 @@ test('a rainy outdoor stop is offered indoor places from the traveller’s own l
 
   // A dry day offers nothing.
   forecast.days[0].precipitationProbability = 10;
+  (await import('../src/services/weather-memory.js')).weatherMemory().clear();
   expect((await getRainAlternatives('owner', 'trip', 'day', { now: NOW })).stops).toStrictEqual([]);
 });

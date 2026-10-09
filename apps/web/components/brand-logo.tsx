@@ -19,8 +19,8 @@ type BrandMarkProps = Omit<SVGProps<SVGSVGElement>, 'children'> & {
  * The Keepsake, drawn from the same geometry as the generated brand assets.
  *
  * `symbol` is the bare mark, cropped to what it draws: an olive bar (ivory on the
- * dark ground) over the terracotta ribbon. `tile` is the app icon, identical in
- * every appearance.
+ * dark ground) over the terracotta ribbon. `tile` is the ivory app icon on deep
+ * olive, identical in every appearance.
  *
  * The mark is decorative in product chrome. Its surrounding live text owns the
  * accessible name, so the SVG never makes a screen reader repeat "Trove".
@@ -39,16 +39,12 @@ export function BrandMark({
       <path
         d={brandMark.ribbon}
         fill={
-          mono
-            ? 'currentColor'
-            : tiled
-              ? 'var(--brand-mark-accent-on-surface)'
-              : 'var(--brand-symbol-ribbon)'
+          mono ? 'currentColor' : tiled ? 'var(--brand-tile-ink)' : 'var(--brand-symbol-ribbon)'
         }
       />
       <path
         d={brandMark.bar}
-        fill={mono ? 'currentColor' : tiled ? 'var(--brand-mark-ink)' : 'var(--brand-symbol-bar)'}
+        fill={mono ? 'currentColor' : tiled ? 'var(--brand-tile-ink)' : 'var(--brand-symbol-bar)'}
       />
     </>
   );
@@ -64,7 +60,7 @@ export function BrandMark({
     >
       {tiled ? (
         <>
-          <rect fill="var(--brand-mark-surface)" height="64" rx={radius} width="64" />
+          <rect fill="var(--brand-tile-surface)" height="64" rx={radius} width="64" />
           <g transform={`translate(32 ${32 + offsetY}) scale(${scale}) translate(-32 -32)`}>
             {parts}
           </g>

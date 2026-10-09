@@ -10,7 +10,7 @@ One idea, one silhouette. The mark reads as a T at 16px, holds in a single flat 
 
 ## Source of truth
 
-Every asset is drawn from `apps/web/lib/brand/identity.ts` and the `--brand-mark-*` tokens in `apps/web/app/globals.css`. After changing either, run `pnpm --filter @trove/web brand:generate` and commit the output; `brand:check` runs before every web build and fails on stale assets. In the app, use `BrandMark` and `BrandLogo` from `components/brand-logo.tsx`; never redraw the mark inline.
+Every asset is drawn from `apps/web/lib/brand/identity.ts` and the `--brand-mark-*` and `--brand-tile-*` tokens in `apps/web/app/globals.css`. After changing either, run `pnpm --filter @trove/web brand:generate` and commit the output; `brand:check` runs before every web build and fails on stale assets. In the app, use `BrandMark` and `BrandLogo` from `components/brand-logo.tsx`; never redraw the mark inline.
 
 ## Construction
 
@@ -35,9 +35,9 @@ All generated into `apps/web/public/brand` and `apps/web/public/icons`:
 
 App and platform icons:
 
-- **App tile:** `trove-icon.svg`, plus `icons/trove-{180,192,512}.png`. Olive tile, radius 25%, mark at 76%.
+- **App tile:** `trove-icon.svg`, plus `icons/trove-{180,192,512}.png`. Ivory mark on deep olive, radius 25%, mark at 76%. Opaque raster exports fill their corners with the same deep olive so platform masks introduce no colour seams.
 - **Maskable:** `trove-icon-maskable.svg` and `icons/trove-maskable-512.png`. Full bleed, mark at 66%, inside the 40% safe-zone radius (tested).
-- **Favicon:** `app/icon.svg` and `app/favicon.ico` (16, 32, 48), small master in ivory on olive.
+- **Favicon:** `app/icon.svg` and `app/favicon.ico` (16, 32, 48), small master in ivory on deep olive.
 - **Notification badge:** `icons/trove-badge-96.png`, a white silhouette on transparency.
 - **Share card:** `trove-og.png`, 1200 × 630, the lockup on olive with no other words.
 
@@ -45,13 +45,15 @@ App and platform icons:
 
 | Token | Value | Use |
 |---|---|---|
-| `--brand-mark-surface` | `#515723` olive | App tile; the bar on light grounds |
-| `--brand-mark-ink` | `#fcf7ee` ivory | The bar on the tile and on dark grounds |
+| `--brand-mark-surface` | `#515723` olive | The bar on light grounds; share artwork background |
+| `--brand-mark-ink` | `#fcf7ee` ivory | The bar on dark grounds; share artwork foreground |
 | `--brand-mark-accent` | `#c2603d` terracotta | The ribbon on light (3.9:1) and dark (4.5:1) grounds |
-| `--brand-mark-accent-on-surface` | `#d27350` | The ribbon on the olive tile, where the base terracotta measures 1.8:1 |
+| `--brand-mark-accent-on-surface` | `#d27350` | The ribbon on olive share artwork |
 | `--brand-mark-type` | `#33261f` walnut | The wordmark in exports; in the app it follows the text colour |
+| `--brand-tile-surface` | `#41482b` deep olive | App tile, launcher, Apple touch icon and favicon background |
+| `--brand-tile-ink` | `#fcf7ee` warm ivory | Both parts of the app icon and favicon, approximately 9:1 contrast |
 
-The bare symbol switches only its bar between appearances (`--brand-symbol-bar`). The tile never changes.
+The bare symbol switches only its bar between appearances (`--brand-symbol-bar`). The app tile uses one warm ivory ink for the entire Keepsake on a deeper, quieter olive, fixed across light and dark appearances. Equal contrast keeps the bar and ribbon balanced at home-screen sizes; terracotta remains part of the standalone logo and wider brand palette.
 
 ## Typography
 

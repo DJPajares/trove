@@ -12,9 +12,10 @@ const check = process.argv.includes('--check');
 const webRoot = fileURLToPath(new URL('../', import.meta.url));
 const css = await readFile(resolve(webRoot, 'app/globals.css'), 'utf8');
 
-function brandColor(token) {
-  const value = new RegExp(`--brand-mark-${token}:\\s*(#[\\da-f]{6});`, 'i').exec(css)?.[1];
-  if (!value) throw new Error(`Missing fixed --brand-mark-${token} colour`);
+function brandColor(token, group = 'mark') {
+  const name = `--brand-${group}-${token}`;
+  const value = new RegExp(`${name}:\\s*(#[\\da-f]{6});`, 'i').exec(css)?.[1];
+  if (!value) throw new Error(`Missing fixed ${name} colour`);
   return value;
 }
 
@@ -25,6 +26,8 @@ const palette = {
   terracotta: brandColor('accent'),
   terracottaOnOlive: brandColor('accent-on-surface'),
   walnut: brandColor('type'),
+  tileSurface: brandColor('surface', 'tile'),
+  tileInk: brandColor('ink', 'tile'),
   lightGround: themeColor.light,
   darkGround: themeColor.dark,
 };
@@ -96,7 +99,7 @@ function lockupSvg(colors) {
   );
 }
 
-/** The olive tile. Favicons take the small master in one ink. */
+/** Ivory on deep olive. Favicons take the small master. */
 function iconSvg({ maskable = false, favicon = false } = {}) {
   const radius = maskable ? 0 : brandMark.tile.radius;
   const scale = maskable
@@ -104,11 +107,9 @@ function iconSvg({ maskable = false, favicon = false } = {}) {
     : favicon
       ? brandMark.faviconScale
       : brandMark.tile.scale;
-  const parts = favicon
-    ? symbolParts({ bar: palette.ivory, ribbon: palette.ivory, small: true })
-    : symbolParts({ bar: palette.ivory, ribbon: palette.terracottaOnOlive });
+  const parts = symbolParts({ bar: palette.tileInk, ribbon: palette.tileInk, small: favicon });
   const body = [
-    `<rect width="64" height="64" rx="${radius}" fill="${palette.olive}" />`,
+    `<rect width="64" height="64" rx="${radius}" fill="${palette.tileSurface}" />`,
     `<g transform="translate(32 ${32 + brandMark.tile.offsetY}) scale(${scale}) translate(-32 -32)">`,
     indent(parts, 2),
     '</g>',
@@ -151,9 +152,14 @@ function ogSvg() {
   return svgDocument(indent(body, 2), width, height, `0 0 ${width} ${height}`);
 }
 
-async function png(svg, width, height = width, { alpha = false, transparent = false } = {}) {
+async function png(
+  svg,
+  width,
+  height = width,
+  { alpha = false, transparent = false, background = palette.olive } = {},
+) {
   let image = sharp(Buffer.from(svg), { density: 144 }).resize(width, height);
-  if (!transparent) image = image.flatten({ background: palette.olive });
+  if (!transparent) image = image.flatten({ background });
   // Next's ICO decoder requires RGBA frames, even when every pixel is opaque.
   const encoded = alpha || transparent ? image.ensureAlpha() : image.removeAlpha();
   return encoded.png({ adaptiveFiltering: false, compressionLevel: 9, palette: false }).toBuffer();
@@ -214,14 +220,23 @@ const assets = new Map([
 ]);
 
 for (const size of [180, 192, 512]) {
-  assets.set(`public/icons/trove-${size}.png`, await png(launcher, size));
+  assets.set(
+    `public/icons/trove-${size}.png`,
+    await png(launcher, size, size, { background: palette.tileSurface }),
+  );
 }
-assets.set('public/icons/trove-maskable-512.png', await png(maskable, 512));
+assets.set(
+  'public/icons/trove-maskable-512.png',
+  await png(maskable, 512, 512, { background: palette.tileSurface }),
+);
 assets.set('public/icons/trove-badge-96.png', await png(badgeSvg, 96, 96, { transparent: true }));
 assets.set('public/brand/trove-og.png', await png(og, 1200, 630));
 const frames = [];
 for (const size of [16, 32, 48])
-  frames.push({ size, bytes: await png(favicon, size, size, { alpha: true }) });
+  frames.push({
+    size,
+    bytes: await png(favicon, size, size, { alpha: true, background: palette.tileSurface }),
+  });
 assets.set('app/favicon.ico', ico(frames));
 
 const revisionHash = createHash('sha256');
@@ -250,11 +265,13 @@ const swatches = [
   ['Terracotta', palette.terracotta, '--brand-mark-accent'],
   ['Terracotta on olive', palette.terracottaOnOlive, '--brand-mark-accent-on-surface'],
   ['Walnut', palette.walnut, '--brand-mark-type'],
+  ['Icon deep olive', palette.tileSurface, '--brand-tile-surface'],
+  ['Icon ivory', palette.tileInk, '--brand-tile-ink'],
 ];
 
 // A design review artifact, never an application route or PWA screen.
 const reviewBody = [
-  `<rect width="1200" height="1180" fill="${palette.lightGround}" />`,
+  `<rect width="1200" height="1340" fill="${palette.lightGround}" />`,
   placed(lockupSvg({ ...color, word: palette.walnut }), 48, 40, 230, 230 * lockupRatio),
   `<g ${sans} fill="${palette.walnut}">`,
   '  <text x="48" y="122" font-size="22">Plan it. Live it. Remember it.</text>',
@@ -315,17 +332,17 @@ const reviewBody = [
   '</g>',
   `<path d="M48 940H1152" stroke="${palette.walnut}" stroke-opacity="0.16" />`,
   ...swatches.flatMap(([name, value, token], index) => [
-    `<rect x="${48 + index * 222}" y="972" width="200" height="72" rx="12" fill="${value}" stroke="${palette.walnut}" stroke-opacity="0.12" />`,
-    `<text ${sans} x="${48 + index * 222}" y="1068" font-size="14" fill="${palette.walnut}">${name} ${value}</text>`,
-    `<text ${sans} x="${48 + index * 222}" y="1090" font-size="12" fill="${palette.walnut}" fill-opacity="0.7">${token}</text>`,
+    `<rect x="${48 + (index % 4) * 276}" y="${972 + Math.floor(index / 4) * 148}" width="252" height="72" rx="12" fill="${value}" stroke="${palette.walnut}" stroke-opacity="0.12" />`,
+    `<text ${sans} x="${48 + (index % 4) * 276}" y="${1068 + Math.floor(index / 4) * 148}" font-size="14" fill="${palette.walnut}">${name} ${value}</text>`,
+    `<text ${sans} x="${48 + (index % 4) * 276}" y="${1090 + Math.floor(index / 4) * 148}" font-size="12" fill="${palette.walnut}" fill-opacity="0.7">${token}</text>`,
   ]),
   `<g ${sans} font-size="15" fill="${palette.walnut}">`,
-  '  <text x="48" y="1140">A bar for the whole trip and a ribbon for what you keep: one T, read at any size, in one colour or two.</text>',
+  '  <text x="48" y="1298">A bar for the whole trip and a ribbon for what you keep: one T, read at any size, in one colour or two.</text>',
   '</g>',
 ].join('\n');
 assets.set(
   '../../docs/brand/keepsake.svg',
-  Buffer.from(svgDocument(indent(reviewBody, 2), 1200, 1180, '0 0 1200 1180')),
+  Buffer.from(svgDocument(indent(reviewBody, 2), 1200, 1340, '0 0 1200 1340')),
 );
 
 let stale = false;

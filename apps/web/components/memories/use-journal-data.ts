@@ -73,7 +73,12 @@ export function useJournalData(tripId: string) {
   });
 
   const refresh = useCallback(
-    () => queryClient.invalidateQueries({ queryKey: queryKeys.memories(tripId) }),
+    () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.memories(tripId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.trip(tripId) }),
+        queryClient.invalidateQueries({ queryKey: ['trip-overview', tripId] }),
+      ]),
     [queryClient, tripId],
   );
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, CircleAlert, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
@@ -69,6 +70,7 @@ export function TripModeTasksProvider({
   tripId,
 }: Readonly<{ children: ReactNode; tripId: string }>) {
   const t = useTranslations('tripMode.tasks');
+  const queryClient = useQueryClient();
   const offlineDataRefreshKey = useOfflineDataRefreshKey();
   const [data, setData] = useState<TasksResponse | null>(null);
   const [status, setStatus] = useState<TaskLoadStatus>('loading');
@@ -112,9 +114,10 @@ export function TripModeTasksProvider({
             }
           : current,
       );
+      void queryClient.invalidateQueries({ queryKey: ['trip-overview', tripId] });
       return task;
     },
-    [tripId],
+    [queryClient, tripId],
   );
 
   const toggleTask = useCallback(
@@ -141,6 +144,7 @@ export function TripModeTasksProvider({
               }
             : current,
         );
+        void queryClient.invalidateQueries({ queryKey: ['trip-overview', tripId] });
       } catch {
         setData((current) =>
           current
@@ -159,7 +163,7 @@ export function TripModeTasksProvider({
         });
       }
     },
-    [t, tripId],
+    [queryClient, t, tripId],
   );
 
   const retry = useCallback(() => setReloadKey((current) => current + 1), []);

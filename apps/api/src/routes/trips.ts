@@ -4,6 +4,7 @@ import {
   createTripController,
   deleteTripController,
   getTripController,
+  getTripOverviewController,
   listTripsController,
   updateTripController,
   updateTripExperienceRatingController,
@@ -15,6 +16,11 @@ export function registerTripRoutes(app: FastifyInstance) {
   app.get('/trips', { preHandler: requireAuthenticatedUser }, listTripsController);
   app.post('/trips', { preHandler: requireAuthenticatedUser }, createTripController);
   app.get('/trips/:tripId', { preHandler: requireAuthenticatedUser }, getTripController);
+  app.get(
+    '/trips/:tripId/overview',
+    { preHandler: requireAuthenticatedUser },
+    getTripOverviewController,
+  );
   app.patch('/trips/:tripId', { preHandler: requireAuthenticatedUser }, updateTripController);
   app.patch(
     '/trips/:tripId/experience-rating',

@@ -67,6 +67,7 @@ export function removeTripQueries(
  * `PLACE_LOCATION_QUERY_ROOTS` still refreshes legs for it.
  */
 export const ITINERARY_EDIT_QUERY_ROOTS: readonly TripScopedQueryRoot[] = [
+  'trip-overview',
   'itinerary',
   'gap-suggestions',
   'hours-notices',
@@ -105,6 +106,7 @@ export const PLAN_SCORE_INPUT_QUERY_ROOTS: readonly TripScopedQueryRoot[] = ['pl
  * had before.
  */
 export const TRIP_DATE_QUERY_ROOTS: readonly TripScopedQueryRoot[] = [
+  'trip-overview',
   'memories',
   'itinerary',
   'plan-score',
@@ -122,6 +124,7 @@ export const TRIP_DATE_QUERY_ROOTS: readonly TripScopedQueryRoot[] = [
  * is written out rather than left to the default.
  */
 export const PLACE_LOCATION_QUERY_ROOTS: readonly TripScopedQueryRoot[] = [
+  'trip-overview',
   'itinerary',
   'gap-suggestions',
   'hours-notices',

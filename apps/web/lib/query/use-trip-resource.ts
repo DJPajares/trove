@@ -24,7 +24,10 @@ export function useTripResource<T>(queryKey: readonly unknown[], queryFn: () => 
 
   const refresh = useCallback(
     async () => {
-      await queryClient.invalidateQueries({ queryKey });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey }),
+        queryClient.invalidateQueries({ queryKey: ['trip-overview', queryKey[1]] }),
+      ]);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [queryClient, ...queryKey],
@@ -34,6 +37,7 @@ export function useTripResource<T>(queryKey: readonly unknown[], queryFn: () => 
   const setData = useCallback(
     (update: (current: T | undefined) => T | undefined) => {
       queryClient.setQueryData(queryKey, update);
+      void queryClient.invalidateQueries({ queryKey: ['trip-overview', queryKey[1]] });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [queryClient, ...queryKey],

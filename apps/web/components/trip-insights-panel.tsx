@@ -184,6 +184,7 @@ export function TripInsightsPanel({
   className,
   extraFor,
   headingLevel = 3,
+  initialItemLimit = INITIAL_ITEMS,
   insights,
   resolveAction,
   showDays,
@@ -194,6 +195,7 @@ export function TripInsightsPanel({
   /** Extra content under an item, for surfaces that can act on it. */
   extraFor?: (insight: Insight) => ReactNode;
   headingLevel?: 2 | 3;
+  initialItemLimit?: number;
   insights: readonly Insight[];
   resolveAction?: (explanation: PlanScoreExplanation) => ScoreAction | null;
   /** Trip-wide views name the days an item applies to. */
@@ -215,8 +217,8 @@ export function TripInsightsPanel({
       totalDays={totalDays}
     />
   );
-  const initial = insights.slice(0, INITIAL_ITEMS);
-  const more = insights.slice(INITIAL_ITEMS);
+  const initial = insights.slice(0, initialItemLimit);
+  const more = insights.slice(initialItemLimit);
 
   return (
     <section

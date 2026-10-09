@@ -188,3 +188,22 @@ test('a flight keeps the instant it was given, whatever the phone says', () => {
   expect(result.currentOrRelevant).toBeNull();
   expect(result.nextItem).toMatchObject({ id: 'flight' });
 });
+
+test('overlapping stops choose the latest traveller-clock start even without a stored instant', () => {
+  const result = select(
+    [
+      item('earlier', null, {
+        localStartTime: new Date('1970-01-01T09:00:00Z'),
+        timeSemantics: 'FLOATING_LOCAL',
+        durationMinutes: 180,
+      }),
+      item('later', null, {
+        localStartTime: new Date('1970-01-01T10:00:00Z'),
+        timeSemantics: 'FLOATING_LOCAL',
+        durationMinutes: 120,
+      }),
+    ],
+    '2026-09-05T02:30:00Z',
+  );
+  expect(result.currentOrRelevant?.item.id).toBe('later');
+});

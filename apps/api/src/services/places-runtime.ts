@@ -23,7 +23,12 @@ export function createPlacesService(options: {
   }
 
   return new CachedPlacesService(
-    new GooglePlacesProvider({ apiKey: placesEnvironment.googlePlacesApiKey, budget, source }),
+    new GooglePlacesProvider({
+      apiKey: placesEnvironment.googlePlacesApiKey,
+      photoLimit: placesEnvironment.googlePlacePhotoLimit,
+      budget,
+      source,
+    }),
     () => new Date(),
     logger,
     source,

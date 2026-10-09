@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import { expect, test, vi } from 'vitest';
 
 import { createPlacesControllers } from '../src/controllers/places.js';
-import { getPlacesEnvironment } from '../src/environment.js';
+import { getGooglePlacePhotoLimit, getPlacesEnvironment } from '../src/environment.js';
 import {
   GOOGLE_AUTOCOMPLETE_FIELD_MASK,
   GOOGLE_PLACE_LOCATION_FIELD_MASK,
@@ -173,8 +173,33 @@ test('enriched Text Search returns scoring evidence and distinguishes missing fi
 test('reads the Google API key only from server environment', () => {
   expect(getPlacesEnvironment({ GOOGLE_PLACES_API_KEY: ' secret ' })).toStrictEqual({
     googlePlacesApiKey: 'secret',
+    googlePlacePhotoLimit: 3,
   });
   expect(getPlacesEnvironment({})).toBe(null);
+});
+
+test('photo limits default to three, accept zero through three, and fail closed with one warning', () => {
+  for (const value of [undefined, '', '  ']) {
+    expect(getGooglePlacePhotoLimit({ GOOGLE_PLACE_PHOTO_LIMIT: value })).toBe(3);
+  }
+  for (const limit of [0, 1, 2, 3]) {
+    expect(getGooglePlacePhotoLimit({ GOOGLE_PLACE_PHOTO_LIMIT: ` ${limit} ` })).toBe(limit);
+  }
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  try {
+    for (const value of ['-1', '4', '1.5', 'NaN', 'Infinity', 'false', 'invalid']) {
+      expect(
+        getPlacesEnvironment({
+          GOOGLE_PLACES_API_KEY: 'key',
+          GOOGLE_PLACE_PHOTO_LIMIT: value,
+        }),
+      ).toEqual({ googlePlacesApiKey: 'key', googlePlacePhotoLimit: 0 });
+    }
+    expect(warning).toHaveBeenCalledTimes(1);
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('GOOGLE_PLACE_PHOTO_LIMIT'));
+  } finally {
+    warning.mockRestore();
+  }
 });
 
 test('evidence Details accepts hours and ratings without unrequested name or location fields', async () => {
@@ -288,7 +313,7 @@ test('a photo is resolved to a Google image URL and nothing else', async () => {
       return Response.json({ name: 'places/museum/photos/p1/media', photoUri });
     },
   });
-  const request = { maxWidthPx: 1200, name: 'places/museum/photos/p1' };
+  const request = { maxWidthPx: 1200, name: 'places/museum/photos/p1', photoIndex: 0 };
 
   await expect(provider.getPhotoMedia(request)).resolves.toBe(photoUri);
   const url = new URL(requested[0] ?? '');
@@ -308,10 +333,37 @@ test('a photo is resolved to a Google image URL and nothing else', async () => {
 
   const before = requested.length;
   await expect(
-    provider.getPhotoMedia({ maxWidthPx: 1200, name: 'places/museum/../../v1/places:searchText' }),
+    provider.getPhotoMedia({
+      maxWidthPx: 1200,
+      name: 'places/museum/../../v1/places:searchText',
+      photoIndex: 0,
+    }),
   ).rejects.toThrow('invalid_request');
   expect(requested).toHaveLength(before);
 });
+
+test.each([0, 1, 2, 3])(
+  'the Google media boundary enforces limit %i before fetching',
+  async (photoLimit) => {
+    const fetcher = vi.fn(async () =>
+      Response.json({ photoUri: 'https://lh3.googleusercontent.com/photo' }),
+    );
+    const provider = new GooglePlacesProvider({ apiKey: 'key', fetcher, photoLimit });
+    for (const photoIndex of [0, 1, 2, 3, -1, NaN, 0.5, undefined as unknown as number]) {
+      const result = provider.getPhotoMedia({
+        name: 'places/museum/photos/p1',
+        maxWidthPx: 1200,
+        photoIndex,
+      });
+      if (Number.isInteger(photoIndex) && photoIndex >= 0 && photoIndex < photoLimit) {
+        await expect(result).resolves.toBe('https://lh3.googleusercontent.com/photo');
+      } else {
+        await expect(result).rejects.toThrow('provider_unavailable');
+      }
+    }
+    expect(fetcher).toHaveBeenCalledTimes(photoLimit);
+  },
+);
 
 test('Google search uses location bias, a session token, and an explicit field mask', async () => {
   let capturedUrl = '';
@@ -867,6 +919,10 @@ test('per-photo endpoint validates input and ownership before resolving an image
       languageCode: 'en',
       evidenceFetchedAt,
     });
+    getPhoto.mockResolvedValueOnce({ status: 'disabled' });
+    const disabled = await app.inject({ ...request, headers: { authorization: 'test' } });
+    expect(disabled.statusCode).toBe(200);
+    expect(disabled.json()).toEqual({ status: 'disabled' });
     getPhoto.mockResolvedValueOnce({ status: 'stale' });
     expect((await app.inject({ ...request, headers: { authorization: 'test' } })).statusCode).toBe(
       409,

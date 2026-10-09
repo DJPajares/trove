@@ -159,6 +159,7 @@ export function createPlaceLocationCandidatesService(
   return new PlaceLocationCandidatesService(
     new GooglePlacesProvider({
       apiKey: placesEnvironment.googlePlacesApiKey,
+      photoLimit: placesEnvironment.googlePlacePhotoLimit,
       source: options.source ?? 'place-locate',
     }),
   );

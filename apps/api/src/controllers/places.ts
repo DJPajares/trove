@@ -141,8 +141,8 @@ function sendServiceResult(
 
 /**
  * What an opened sheet renders, and nothing else. A photo's provider resource
- * name stays on the server, and a photo whose image could not be resolved is
- * left out rather than sent as a hole for the page to fill.
+ * name stays on the server. The service has already excluded unresolved slots
+ * that the current policy cannot fetch, while preserving cached image URLs.
  */
 function serializeRichDetails(result: PlaceDetailsResult) {
   if (result.status !== 'ok') return result;

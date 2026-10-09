@@ -23,6 +23,7 @@ export function createAiPlannerProviderContext(
   const placesProvider = placesEnvironment
     ? new GooglePlacesProvider({
         apiKey: placesEnvironment.googlePlacesApiKey,
+        photoLimit: placesEnvironment.googlePlacePhotoLimit,
         budget,
         source,
       })

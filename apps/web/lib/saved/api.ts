@@ -393,8 +393,11 @@ export function fetchPlacePhoto(
   languageCode: string,
   evidenceFetchedAt: string,
 ) {
-  return savedRequest<{ status: 'ok'; uri: string }>(`/places/${placeId}/photos/${photoId}`, {
-    method: 'POST',
-    body: JSON.stringify({ languageCode, evidenceFetchedAt }),
-  });
+  return savedRequest<{ status: 'ok'; uri: string } | { status: 'disabled' }>(
+    `/places/${placeId}/photos/${photoId}`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ languageCode, evidenceFetchedAt }),
+    },
+  );
 }

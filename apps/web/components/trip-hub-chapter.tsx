@@ -37,12 +37,14 @@ function StopLine({ stop, clockTimeZone }: { stop: TripOverviewStop; clockTimeZo
       <span className="w-14 shrink-0 text-[length:var(--text-metadata)] text-text-subtle">
         {t(`stopKind.${stop.kind}`)}
       </span>
-      <span className="min-w-0 flex-1 text-pretty font-medium">
-        {stop.label ?? t('unnamedStop')}
-      </span>
-      {time ? (
-        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{time}</span>
-      ) : null}
+      <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="min-w-0 flex-1 basis-32 text-pretty font-medium break-words">
+          {stop.label ?? t('unnamedStop')}
+        </span>
+        {time ? (
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{time}</span>
+        ) : null}
+      </div>
     </div>
   );
 }

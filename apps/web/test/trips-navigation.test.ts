@@ -124,23 +124,33 @@ test('the shared tab row carries only the planner, while the overview still offe
   }
 });
 
-test('supporting tools stay complete and out of the primary set', () => {
+test('supporting tools put Places first and stay out of the primary set', () => {
   const supporting = supportingTripDestinations(TRIP);
 
   expect(supporting.map((entry) => entry.section)).toStrictEqual([
+    'places',
     'tasks',
     'reservations',
     'expenses',
     'info',
   ]);
   expect(supporting.map((entry) => entry.href)).toStrictEqual([
+    `/trips/${TRIP}/places`,
     `/trips/${TRIP}/tasks`,
     `/trips/${TRIP}/reservations`,
     `/trips/${TRIP}/expenses`,
     `/trips/${TRIP}/info`,
   ]);
-  // The itinerary opens Places itself, so listing it here would be a second door.
-  expect(supporting.every((entry) => entry.section !== 'places')).toBeTruthy();
+  expect(supporting.map((entry) => entry.labelKey)).toStrictEqual([
+    'places',
+    'tasks',
+    'reservations',
+    'expenses',
+    'tripInfo',
+  ]);
+  expect(
+    supporting.every((entry) => !['itinerary', 'mode', 'memories'].includes(entry.section)),
+  ).toBeTruthy();
   // Trip Info's route and its label have never matched; the mapping must survive.
   expect(supporting.at(-1)?.labelKey).toBe('tripInfo');
 });

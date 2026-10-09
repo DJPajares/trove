@@ -12,9 +12,16 @@ export function TripDetailSkeleton({ label }: Readonly<{ label: string }>) {
       <span className="sr-only">{label}</span>
       <div
         aria-hidden="true"
-        className="-mx-[var(--gutter-inline-start)] -mt-8 overflow-hidden bg-surface-raised md:mx-0 md:mt-0 md:grid md:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] md:rounded-[var(--radius-2xl)]"
+        className="-mx-[var(--gutter-inline-start)] -mt-8 overflow-hidden bg-background md:mx-0 md:mt-0 md:grid md:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] md:rounded-[var(--radius-2xl)] md:bg-surface-raised"
       >
-        <Skeleton className="h-80 rounded-none md:h-[25rem]" />
+        <div>
+          <Skeleton className="h-[var(--trip-cover-height)] rounded-none md:h-[25rem]" />
+          <div className="relative -mt-8 space-y-3 rounded-t-[var(--trip-sheet-radius)] bg-background px-[var(--gutter-inline-start)] pt-6 md:hidden">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-8 w-4/5" />
+            <Skeleton className="h-5 w-3/5" />
+          </div>
+        </div>
         <div className="space-y-4 p-6">
           <Skeleton className="h-3 w-20" />
           <Skeleton className="h-7 w-4/5" />

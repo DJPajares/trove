@@ -6,14 +6,14 @@ Trove is a travel companion built around:
 
 > **Plan it. Live it. Remember it.**
 
-The current approved product requirements live in `PRD.md`. Linear is the implementation task source of truth; shipped behavior and task status do not silently amend the product contract.
+The current approved product requirements live in `PRD.md`. Linear is the source of truth for issue-backed implementation; shipped behavior and task status do not silently amend the product contract.
 
 ## Working Rules
 
 - Follow the accepted product decisions and avoid reopening scope unless a task requires it.
 - Keep UX simple, contextual, and progressively disclosed.
 - Prefer the smallest implementation that satisfies the task and acceptance criteria.
-- Do not introduce future features unless explicitly included in the current Linear task.
+- Do not introduce future features unless explicitly included in the current task.
 - Preserve future extensibility without building unused parallel systems.
 - Do not hard-code user-facing text; keep the app localization-ready.
 - Follow the existing Trove Design System and established UX patterns. Apply TasteSkill principles when making UI/UX decisions without overriding the PRD or established Trove patterns.
@@ -51,16 +51,15 @@ The current approved product requirements live in `PRD.md`. Linear is the implem
 
 ## Linear Workflow
 
-Linear is the implementation source of truth.
+Linear is the implementation source of truth for Linear-backed tasks.
 
 Every Trove issue belongs to the `Trove` project on the `wonderland` team. Never
 file one outside it.
 
-When a request comes from a prompt, first evaluate its size and risk. Small,
-self-contained, low-risk changes with clear scope may be processed immediately
-without a Linear issue. Larger, cross-cutting, ambiguous, or otherwise
-meaningful implementation work must have a Linear issue created before work
-begins. Requests that already come from Linear should use the existing issue.
+Implement chat-originated requests directly. Do not create a Linear issue unless
+the user explicitly asks to create one, regardless of task size, complexity, or
+risk. Requests that come from Linear or reference an existing Linear issue use
+that existing issue.
 
 Never commit to `main`. Before the first edit, confirm the current branch is not
 `main` and create a task branch if it is. Every change reaches `main` only through
@@ -68,7 +67,7 @@ a Pull Request a human has reviewed and merged.
 
 For each Linear-backed task:
 
-1. Read the current Linear issue, creating it first when a prompt-originated task does not qualify for immediate processing.
+1. Read the current Linear issue, creating it first only when the user explicitly requested a new Linear issue.
 2. Check `Blocked by` dependencies before implementation.
 3. Move the issue to `In Progress`.
 4. Read only the relevant PRD sections and code.
@@ -84,10 +83,10 @@ For each Linear-backed task:
 14. Move the next suggested task to `Todo`.
 15. Stop for human review.
 
-For a small prompt-originated task that qualifies for immediate processing,
-skip the Linear-specific steps, but still confirm the branch, implement only
-the requested scope, run focused validation, self-review, and follow the
-applicable GitHub and human-review rules.
+For chat-originated tasks without a Linear issue, skip all Linear-specific steps,
+including creating or advancing a suggested next issue. Still confirm the branch,
+implement only the requested scope, run focused validation, self-review, and
+follow the applicable GitHub and human-review rules.
 
 Do not auto-merge PRs. A user must manually review and approve.
 
@@ -141,7 +140,7 @@ Example:
 - Never auto-merge.
 - Human approval is required before merge.
 - Mark the Linear issue `Done` only after the relevant PR is merged, unless the issue is explicitly non-code work.
-- Give the branch the `gitBranchName` Linear returns with the issue, and put
+- For Linear-backed tasks, give the branch the `gitBranchName` Linear returns with the issue, and put
   `Fixes <issue-id>` in the PR description. Linear closes an issue when a PR it
   recognises as linked is merged, and it recognises one by the branch name or by
   that phrase - not by an attachment added through the API. A PR carrying only an
@@ -152,7 +151,11 @@ Example:
 
 Keep completion responses short.
 
-Use:
+For chat-originated tasks without a Linear issue, briefly summarize the changes
+and validation. Include a PR link if one was created. Omit Linear task links and
+the Current/Next format; do not propose follow-up Linear tasks unless requested.
+
+For Linear-backed tasks, use:
 
 ### Current
 - PR: `<link>`

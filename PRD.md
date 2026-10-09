@@ -244,7 +244,7 @@ Primary global destinations:
 
 On desktop and tablet, the header contains Home, Trips, Saved, and Tools. On mobile, the bottom bar contains Home, Trips, a centered Create action, Saved, and Tools. Tools opens a dedicated launcher page and remains the current destination on each child tool route.
 
-Search, Account, Notifications, and the Light/Dark toggle share one floating button in the upper right on every signed-in form factor. The button unfolds them downwards in that order and becomes a close control in the same position. Search leads because it is the only one of the four that starts something rather than reporting on the app.
+Search, Notifications, the Light/Dark toggle, and Account share one floating button in the upper right on every signed-in form factor. The button unfolds them downwards in that order, with the Account/Profile control at the bottom, and becomes a close control in the same position. Search leads because it is the only one of the four that starts something rather than reporting on the app.
 
 On mobile, where the signed-in shell has no header, the floating control yields to the scroll direction so it never sits on top of a sticky trip or Trip Mode header. On desktop and tablet, it occupies the header's open right rail and remains available while the stable header is visible.
 

@@ -252,7 +252,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     })
     .slice(0, MAX_EDITORIAL_IMAGE_SUBJECTS);
   const editorialImages = useEditorialImages(editorialSubjects);
-  const dayPhotos = useDayHeaderPhotos(day, itinerary?.tripPlaces ?? [], editorialImages);
+  const dayPhotos = useDayHeaderPhotos(day, itinerary?.tripPlaces ?? []);
   /**
    * A photograph for this stop's tile, whatever kind the provider found.
    *
@@ -683,7 +683,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
           <DayHeaderMedia
             alt=""
             dataSlot="trip-mode-day-photo"
-            photos={dayPhotos}
+            resolution={dayPhotos}
             className="h-36 w-full rounded-none sm:h-44 lg:h-64"
             sizes="(max-width: 72rem) 100vw, 72rem"
             variant="banner"

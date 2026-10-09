@@ -18,6 +18,24 @@ export type DayPhotoCandidate = {
   subject: EditorialSubject;
 };
 
+export type DayHeaderPhotoResolution = {
+  photos: readonly TripMediaSource[];
+  isResolving: boolean;
+  resolutionKey: string;
+};
+
+const EMPTY_PHOTOS: readonly TripMediaSource[] = [];
+
+/** Publish one complete ladder per photo context, never a partially resolved choice. */
+export function settleDayHeaderPhotos(
+  previous: DayHeaderPhotoResolution | null,
+  next: DayHeaderPhotoResolution,
+): DayHeaderPhotoResolution {
+  if (previous?.resolutionKey === next.resolutionKey && (!previous.isResolving || next.isResolving))
+    return previous;
+  return next.isResolving ? { ...next, photos: EMPTY_PHOTOS } : next;
+}
+
 function words(value: string) {
   return normalizeEditorialText(value)
     .replace(/[^\p{Letter}\p{Number}]+/gu, ' ')

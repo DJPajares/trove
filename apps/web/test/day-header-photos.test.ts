@@ -8,6 +8,7 @@ import {
   dayPhotoCandidates,
   dayPhotoTheme,
   tripSecondaryImages,
+  settleDayHeaderPhotos,
 } from '../lib/media/day-header-photos.ts';
 import {
   editorialCoverImage,
@@ -189,4 +190,90 @@ test('context identity distinguishes namesake areas, themes, and canonical Place
   expect(editorialSubjectKey(uk)).not.toBe(
     editorialSubjectKey({ ...uk, context: { ...uk.context, theme: 'nightlife' } }),
   );
+});
+
+test('partial day results and a cached trip fallback stay hidden until the complete ladder settles', () => {
+  const candidates = dayPhotoCandidates(day([stop('Sensoji')], 'Night lights'), [], trip);
+  const fallbacks: TripMediaSource[] = [
+    { kind: 'editorial', reference: photo('secondary') },
+    local,
+  ];
+  const images = new Map([[editorialSubjectKey(candidates[1]!.subject), [photo('stop')]]]);
+  const pending = settleDayHeaderPhotos(null, {
+    photos: dayHeaderPhotoSources(candidates, images, fallbacks),
+    isResolving: true,
+    resolutionKey: 'day-1',
+  });
+  expect(pending.photos).toEqual([]);
+  expect(pending.isResolving).toBe(true);
+
+  images.set(editorialSubjectKey(candidates[0]!.subject), [photo('title', 'contextual')]);
+  const resolved = settleDayHeaderPhotos(pending, {
+    photos: dayHeaderPhotoSources(candidates, images, fallbacks),
+    isResolving: false,
+    resolutionKey: 'day-1',
+  });
+  expect(resolved.photos[0]).toEqual({
+    kind: 'editorial',
+    reference: photo('title', 'contextual'),
+  });
+});
+
+test('an empty day waits for the secondary supplement instead of briefly showing the primary cover', () => {
+  const primary: TripMediaSource = { kind: 'trip-cover', url: 'https://example.com/cover.jpg' };
+  const pending = settleDayHeaderPhotos(null, {
+    photos: [primary, local],
+    isResolving: true,
+    resolutionKey: 'empty-day',
+  });
+  expect(pending.photos).toEqual([]);
+  const complete = settleDayHeaderPhotos(pending, {
+    photos: [{ kind: 'editorial', reference: photo('country') }, primary, local],
+    isResolving: false,
+    resolutionKey: 'empty-day',
+  });
+  expect(complete.photos[0]).toEqual({ kind: 'editorial', reference: photo('country') });
+});
+
+test('a settled ladder survives rerenders and later row results, but a changed photo context resets it', () => {
+  const settled = settleDayHeaderPhotos(null, {
+    photos: [{ kind: 'editorial', reference: photo('chosen') }, local],
+    isResolving: false,
+    resolutionKey: 'day-1:title-a',
+  });
+  for (const isResolving of [true, false]) {
+    expect(
+      settleDayHeaderPhotos(settled, {
+        photos: [{ kind: 'editorial', reference: photo('late-row-photo') }, local],
+        isResolving,
+        resolutionKey: settled.resolutionKey,
+      }),
+    ).toBe(settled);
+  }
+  for (const resolutionKey of ['day-2:title-a', 'day-1:title-b', 'other-trip:day-1']) {
+    expect(
+      settleDayHeaderPhotos(settled, { photos: settled.photos, isResolving: true, resolutionKey }),
+    ).toEqual({
+      photos: [],
+      isResolving: true,
+      resolutionKey,
+    });
+  }
+});
+
+test('confirmed misses publish the existing fallback ladder only after resolution finishes', () => {
+  const candidates = dayPhotoCandidates(day([stop('Sensoji')]), [], trip);
+  const sources = dayHeaderPhotoSources(candidates, new Map(), [local]);
+  const pending = settleDayHeaderPhotos(null, {
+    photos: sources,
+    isResolving: true,
+    resolutionKey: 'miss',
+  });
+  expect(
+    settleDayHeaderPhotos(pending, { photos: sources, isResolving: true, resolutionKey: 'miss' }),
+  ).toBe(pending);
+  expect(
+    settleDayHeaderPhotos(pending, { photos: sources, isResolving: false, resolutionKey: 'miss' })
+      .photos,
+  ).toEqual([local]);
 });

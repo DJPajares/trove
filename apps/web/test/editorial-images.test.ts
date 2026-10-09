@@ -18,6 +18,7 @@ const {
   MAX_EDITORIAL_IMAGE_SUBJECTS,
   primaryEditorialImage,
   readCachedEditorialImages,
+  areEditorialImagesCached,
   resetEditorialImageCache,
   resolveEditorialImages,
   resolveEditorialImageBatches,
@@ -146,6 +147,56 @@ test('overlapping concurrent surface batches share in-flight subject resolution'
   const results = await Promise.all([first, second]);
   expect(fetchMock).toHaveBeenCalledTimes(1);
   expect(results[0]?.get('destination:lisbon')).toEqual(results[1]?.get('destination:lisbon'));
+});
+
+test('a cached lower-priority photo cannot settle a batch with a pending higher-priority subject', async () => {
+  const lower = { name: 'Lower' };
+  const higher = { name: 'Higher' };
+  const fetchMock = vi.fn(async (..._call: FetchCall) =>
+    respond([image(editorialSubjectKey(lower))]),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  await resolveEditorialImages([lower]);
+  expect(areEditorialImagesCached([lower])).toBe(true);
+
+  let finish!: (response: ReturnType<typeof respond>) => void;
+  fetchMock.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const batch = resolveEditorialImages([higher, lower]);
+  // Allow the shared session lookup to finish and the request to start.
+  await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+  expect(areEditorialImagesCached([higher, lower])).toBe(false);
+  expect(readCachedEditorialImages([higher, lower]).has(editorialSubjectKey(lower))).toBe(true);
+  finish(respond([image(editorialSubjectKey(higher))]));
+  await batch;
+  expect(areEditorialImagesCached([higher, lower])).toBe(true);
+  expect(sentSubjects(fetchMock.mock.calls)).toEqual([[lower], [higher]]);
+});
+
+test('confirmed misses settle cached batches while unavailable answers remain retryable', async () => {
+  const missing = { name: 'Missing' };
+  const unavailable = { name: 'Unavailable' };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      respond([
+        { status: 'empty', subjectKey: editorialSubjectKey(missing) },
+        {
+          status: 'unavailable',
+          code: 'provider_unavailable',
+          subjectKey: editorialSubjectKey(unavailable),
+        },
+      ]),
+    ),
+  );
+  await resolveEditorialImages([missing, unavailable]);
+  expect(areEditorialImagesCached([missing])).toBe(true);
+  expect(areEditorialImagesCached([missing, unavailable])).toBe(false);
+  expect(areEditorialImagesCached([])).toBe(true);
 });
 
 test('contextual provenance survives the browser cache without becoming exact', async () => {

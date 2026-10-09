@@ -115,6 +115,13 @@ export function readCachedEditorialImages(subjects: EditorialSubject[]) {
   return cached;
 }
 
+/** A confirmed miss is settled too; an outage is deliberately never cached. */
+export function areEditorialImagesCached(subjects: readonly EditorialSubject[]) {
+  return subjects.every(
+    (subject) => !subject.name.trim() || resolvedImages.has(editorialSubjectKey(subject)),
+  );
+}
+
 /** Test seam, and the only way this module's memory is ever discarded. */
 export function resetEditorialImageCache() {
   resolvedImages.clear();

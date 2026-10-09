@@ -726,11 +726,7 @@ export function ItineraryManager({
   const { observe: observeStop, visibleKeys: visibleStopIds } = useVisibleKeys();
   const stopSubjects = plannerStopPhotoSubjects(selectedDay?.items ?? [], visibleStopIds);
   const stopImages = useEditorialImages(stopSubjects, { progressive: true });
-  const dayPhotos = useDayHeaderPhotos(
-    selectedDay ?? null,
-    itinerary?.tripPlaces ?? [],
-    stopImages,
-  );
+  const dayPhotos = useDayHeaderPhotos(selectedDay ?? null, itinerary?.tripPlaces ?? []);
 
   // Special hours and holiday checks for the trip's stops, from stored evidence
   // only - the same entry the Insights card reads, so it is one request.

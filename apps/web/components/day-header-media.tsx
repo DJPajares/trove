@@ -1,21 +1,27 @@
 import { MediaFrame, type MediaFrameProps } from '@/components/media-frame';
 import { dayHeaderFallback } from '@/lib/media/day-header-fallback';
-import type { TripMediaSource } from '@/lib/media/trip-media';
+import type { DayHeaderPhotoResolution } from '@/lib/media/day-header-photos';
 
-/** Both day surfaces keep a photograph beneath every asynchronous source. */
+/** Both day surfaces reveal only the settled photo choice, over a calm colour. */
 export function DayHeaderMedia({
-  photos,
+  resolution,
   ...props
 }: Readonly<
-  Omit<MediaFrameProps, 'source' | 'fallbackSources' | 'photographicPlaceholder'> & {
-    photos: readonly TripMediaSource[];
+  Omit<
+    MediaFrameProps,
+    'source' | 'fallbackSources' | 'photographicPlaceholder' | 'loadingTreatment' | 'isResolving'
+  > & {
+    resolution: DayHeaderPhotoResolution;
   }
 >) {
   return (
     <MediaFrame
       {...props}
-      source={photos[0] ?? { kind: 'local', src: dayHeaderFallback.src }}
-      fallbackSources={photos.slice(1)}
+      key={resolution.resolutionKey}
+      source={resolution.photos[0] ?? { kind: 'local', src: dayHeaderFallback.src }}
+      fallbackSources={resolution.photos.slice(1)}
+      isResolving={resolution.isResolving}
+      loadingTreatment="calm"
       photographicPlaceholder={dayHeaderFallback.preview}
     />
   );

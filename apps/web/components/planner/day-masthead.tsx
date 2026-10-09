@@ -11,7 +11,7 @@ import { TripDayWeather } from '@/components/trip-day-weather';
 import type { DayFacts, dayHeading } from '@/lib/itinerary/day-facts';
 import { formatDistanceValue } from '@/lib/itinerary/format-distance';
 import { formatPlannedDuration, formatTravelDuration } from '@/lib/itinerary/route-format';
-import type { TripMediaSource } from '@/lib/media/trip-media';
+import type { DayHeaderPhotoResolution } from '@/lib/media/day-header-photos';
 import { cn } from '@/lib/utils';
 import type { TripWeatherDay } from '@/lib/weather/api';
 import * as Icons from '@/lib/icons';
@@ -51,7 +51,7 @@ function FactsLine({ children }: Readonly<{ children: ReactNode[] }>) {
  * The top of a day: what it is called, where it is, and what shape it is in.
  *
  * It opens on the shared content-aware day photograph, with a trip secondary
- * image and a bundled photographic fallback keeping the frame complete,
+ * image and bundled photographic artwork reserved for genuine failures,
  * with the day's number and name set over it. Beneath, one line of facts, the
  * Stay it runs from, and the day's route as a sketch that opens the real map.
  *
@@ -92,7 +92,7 @@ export function DayMasthead({
   dayNumber: number;
   facts: DayFacts;
   heading: ReturnType<typeof dayHeading>;
-  photos: readonly TripMediaSource[];
+  photos: DayHeaderPhotoResolution;
   isToday: boolean;
   note: string | null;
   onNextDay?: () => void;
@@ -148,11 +148,11 @@ export function DayMasthead({
         <DayHeaderMedia
           alt=""
           category="destination"
-          className="absolute inset-0 h-full w-full rounded-none"
+          className="absolute inset-0 h-full w-full rounded-none sm:h-full"
           dataSlot="day-masthead-photo"
           preload
           sizes="(max-width: 1023px) 100vw, 640px"
-          photos={photos}
+          resolution={photos}
           variant="banner"
         />
         <div

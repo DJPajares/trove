@@ -21,6 +21,8 @@ type TripContextValue = {
   /** The photograph the trip's cover falls back to, or null while unresolved. */
   editorial: EditorialImageReference | null;
   dayFallbackImages: EditorialImageReference[];
+  dayFallbackImagesResolved: boolean;
+  dayFallbackResolutionKey: string;
   refresh: () => void;
   /** Writes back a trip the traveller just saved, without a second round trip. */
   setTrip: (trip: Trip) => void;
@@ -76,14 +78,13 @@ export function TripProvider({
     : EMPTY_IMAGES;
   const editorial = editorialCoverImage(collection, trip?.id ?? tripId);
   const secondary = tripSecondaryImages(collection, trip?.id ?? tripId);
-  const supplementalSubject =
-    trip && isResolved && secondary.length === 0 ? tripSecondaryEditorialSubject(trip) : null;
+  const countrySubject = trip ? tripSecondaryEditorialSubject(trip) : null;
+  const supplementalSubject = isResolved && secondary.length === 0 ? countrySubject : null;
   const needsSupplement =
     supplementalSubject &&
     (!subject || editorialSubjectKey(supplementalSubject) !== editorialSubjectKey(subject));
-  const { images: supplementalImages } = useEditorialImageResolution(
-    needsSupplement ? [supplementalSubject] : [],
-  );
+  const { images: supplementalImages, isResolved: supplementResolved } =
+    useEditorialImageResolution(needsSupplement ? [supplementalSubject] : []);
   const supplemental = supplementalSubject
     ? (supplementalImages.get(editorialSubjectKey(supplementalSubject)) ?? EMPTY_IMAGES)
     : EMPTY_IMAGES;
@@ -91,6 +92,16 @@ export function TripProvider({
     () => tripSecondaryImages(collection, trip?.id ?? tripId, supplemental),
     [collection, supplemental, trip?.id, tripId],
   );
+  const dayFallbackImagesResolved =
+    status !== 'loading' && isResolved && (!needsSupplement || supplementResolved);
+  // Include the potential supplement before it starts, so its arrival does not
+  // create a new selection context and replace an already chosen photograph.
+  const dayFallbackResolutionKey = JSON.stringify([
+    tripId,
+    subject ? editorialSubjectKey(subject) : null,
+    countrySubject ? editorialSubjectKey(countrySubject) : null,
+    trip?.coverPhotoPath ?? trip?.coverPhotoUrl,
+  ]);
 
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.trip(tripId) });
@@ -104,8 +115,28 @@ export function TripProvider({
   );
 
   const value = useMemo<TripContextValue>(
-    () => ({ dayFallbackImages, editorial, refresh, setTrip: replaceTrip, status, trip, tripId }),
-    [dayFallbackImages, editorial, refresh, replaceTrip, status, trip, tripId],
+    () => ({
+      dayFallbackImages,
+      dayFallbackImagesResolved,
+      dayFallbackResolutionKey,
+      editorial,
+      refresh,
+      setTrip: replaceTrip,
+      status,
+      trip,
+      tripId,
+    }),
+    [
+      dayFallbackImages,
+      dayFallbackImagesResolved,
+      dayFallbackResolutionKey,
+      editorial,
+      refresh,
+      replaceTrip,
+      status,
+      trip,
+      tripId,
+    ],
   );
 
   return <TripContext.Provider value={value}>{children}</TripContext.Provider>;

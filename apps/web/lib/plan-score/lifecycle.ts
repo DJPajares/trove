@@ -95,10 +95,8 @@ export function watchScoringAcquisition(client: QueryClient) {
       ![
         'itinerary-day-routes',
         'trip-mode-context',
-        'trip-weather',
         'place-rich-details',
         // Holidays and typical conditions feed holiday suitability and seasonal fit.
-        'trip-context',
       ].includes(String(root))
     )
       return;
@@ -138,3 +136,15 @@ export const planScoreReadPolicy = {
   refetchOnWindowFocus: true,
   refetchOnReconnect: true,
 } as const;
+
+/** Local reuse and unit conversion never schedule score reads; new server evidence may. */
+export function refreshScoresAfterWeatherAcquisition(
+  client: QueryClient,
+  tripIds: readonly string[],
+) {
+  const ids = new Set(tripIds);
+  for (const query of client.getQueryCache().findAll({
+    predicate: (query) => query.queryKey[0] === 'plan-score' && ids.has(String(query.queryKey[1])),
+  }))
+    refreshAfterAcquisition(client, query);
+}

@@ -13,14 +13,36 @@ import {
   QUERY_CACHE_VERSION,
   shouldDehydrateQuery,
 } from '@/lib/query/client';
+import {
+  bindWeatherAccount,
+  disposeWeatherAccount,
+  hasWeatherAccount,
+} from '@/lib/weather/client-service';
 import { createQueryPersister } from '@/lib/query/persister';
 
 function SignedInQueryProvider({
   children,
   userId,
 }: Readonly<{ children: ReactNode; userId: string }>) {
-  const [client] = useState(createQueryClient);
-  const [persister] = useState(() => createQueryPersister(userId));
+  const [client] = useState(() => {
+    const next = createQueryClient();
+    bindWeatherAccount(next, userId);
+    return next;
+  });
+  useEffect(() => {
+    bindWeatherAccount(client, userId);
+    return () => disposeWeatherAccount(client);
+  }, [client, userId]);
+  useEffect(() => {
+    const subscription = createBrowserSupabaseClient()?.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || (event === 'SIGNED_IN' && session?.user.id !== userId))
+        disposeWeatherAccount(client, true);
+    }).data.subscription;
+    return () => subscription?.unsubscribe();
+  }, [client, userId]);
+  const [persister] = useState(() =>
+    createQueryPersister(userId, () => hasWeatherAccount(client, userId)),
+  );
 
   return (
     <PersistQueryClientProvider

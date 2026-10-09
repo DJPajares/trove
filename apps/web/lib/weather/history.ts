@@ -9,7 +9,7 @@ export type ArchivedTripWeatherDay = Omit<
   TripWeatherDay,
   'location' | 'temperatureMax' | 'temperatureMin'
 > & {
-  location: Pick<TripWeatherDay['location'], 'timeZone'>;
+  location: TripWeatherDay['location'];
   temperatureMaxCelsius: number;
   temperatureMinCelsius: number;
 };
@@ -22,8 +22,8 @@ function fromCelsius(value: number, unit: TemperatureUnit) {
   return unit === 'fahrenheit' ? value * (9 / 5) + 32 : value;
 }
 
-function archiveKey(day: Pick<TripWeatherDay, 'date' | 'itineraryDayId'>) {
-  return `${day.itineraryDayId}:${day.date}`;
+function archiveKey(day: Pick<TripWeatherDay, 'date' | 'itineraryDayId' | 'location'>) {
+  return `${day.itineraryDayId}:${day.date}:${day.location.latitude ?? 'legacy'},${day.location.longitude ?? 'legacy'}:${day.location.timeZone}`;
 }
 
 export function mergeArchivedTripWeather(
@@ -38,7 +38,7 @@ export function mergeArchivedTripWeather(
       date: day.date,
       ...(day.fetchedAt !== undefined ? { fetchedAt: day.fetchedAt } : {}),
       itineraryDayId: day.itineraryDayId,
-      location: { timeZone: day.location.timeZone },
+      location: { ...day.location },
       precipitationProbability: day.precipitationProbability,
       temperatureMaxCelsius: toCelsius(day.temperatureMax, unit),
       temperatureMinCelsius: toCelsius(day.temperatureMin, unit),
@@ -61,7 +61,7 @@ export function restoreArchivedTripWeather(
     date: day.date,
     ...(day.fetchedAt !== undefined ? { fetchedAt: day.fetchedAt } : {}),
     itineraryDayId: day.itineraryDayId,
-    location: { timeZone: day.location.timeZone },
+    location: { ...day.location },
     precipitationProbability: day.precipitationProbability,
     temperatureMax: fromCelsius(day.temperatureMaxCelsius, unit),
     temperatureMin: fromCelsius(day.temperatureMinCelsius, unit),

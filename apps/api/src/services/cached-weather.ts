@@ -1,37 +1,26 @@
-import { singleFlight } from './single-flight.js';
 import { getPrismaClient } from '@trove/db';
-
+import { WEATHER_CACHE_POLICY } from '@trove/types';
 import {
   recordProviderCacheEvent,
   recordProviderCall,
   type ProviderCallSource,
 } from './provider-usage.js';
+import { OpenMeteoWeatherProvider, type WeatherPoint, type WeatherProvider } from './weather.js';
+import type { ForecastWindow } from './weather-window.js';
+import { waitForLiveWeather } from './weather-context-cache.js';
+import { weatherMemory, weatherFailureKey } from './weather-memory.js';
 import {
-  OpenMeteoWeatherProvider,
-  type WeatherPoint,
-  type WeatherPointForecast,
-  type WeatherProvider,
-} from './weather.js';
-import { type ForecastWindow } from './weather-window.js';
-
-export type { CachedPointForecast } from './weather-evidence-cache.js';
-export { WEATHER_FORECAST_TTL_MS, weatherPointKey } from './weather-evidence-cache.js';
-import {
-  readCachedForecast,
+  readCachedForecastBatch,
   weatherPointKey,
-  snapshotKey,
+  writeForecastSnapshot,
+  forecastIsFresh,
   type CachedPointForecast,
 } from './weather-evidence-cache.js';
+export type { CachedPointForecast } from './weather-evidence-cache.js';
+export { WEATHER_FORECAST_TTL_MS, weatherPointKey } from './weather-evidence-cache.js';
 
-/**
- * The trip's day-by-day forecast, bought once and shared by everyone.
- *
- * A forecast is not private and not personal: two travellers in the same city
- * want the same numbers, and so does the same traveller on Today, on the day
- * rail, and on the trip overview. Asking per screen turned one answer into
- * dozens of identical requests, which is the shape AGENTS.md warns about even
- * where, as here, the provider bills nothing.
- */
+const pendingByClient = new WeakMap<object, Map<string, Promise<CachedPointForecast | null>>>();
+/** Point-level ownership prevents overlapping batches from acquiring the same point twice. */
 export class CachedWeatherService {
   constructor(
     private readonly provider: WeatherProvider = new OpenMeteoWeatherProvider(),
@@ -39,22 +28,107 @@ export class CachedWeatherService {
     private readonly source: ProviderCallSource = 'weather',
   ) {}
 
-  /**
-   * Every point's forecast for `window`, refreshing only the points whose
-   * snapshot cannot answer it. A batch where nothing is stale makes no outbound
-   * request at all.
-   */
   async getForecasts(
     points: readonly WeatherPoint[],
     window: ForecastWindow,
+    required?: ReadonlyMap<string, ForecastWindow>,
+    followUp = true,
   ): Promise<Map<string, CachedPointForecast>> {
-    const answers = new Map<string, CachedPointForecast>();
-    const stale: WeatherPoint[] = [];
-    const storedForStale = new Map<string, CachedPointForecast>();
+    const owner = getPrismaClient();
+    let pending = pendingByClient.get(owner);
+    if (!pending) pendingByClient.set(owner, (pending = new Map()));
+    const unique = [...new Map(points.map((point) => [weatherPointKey(point), point])).values()];
+    const claimed: WeatherPoint[] = [];
+    const joined = new Set<string>();
+    const settlers = new Map<
+      string,
+      { resolve: (value: CachedPointForecast | null) => void; reject: (error: unknown) => void }
+    >();
+    const promises = unique.map((point) => {
+      const key = weatherPointKey(point);
+      const existing = pending!.get(key);
+      if (existing) {
+        joined.add(key);
+        return existing;
+      }
+      const promise = new Promise<CachedPointForecast | null>((resolve, reject) =>
+        settlers.set(key, { resolve, reject }),
+      );
+      pending!.set(key, promise);
+      claimed.push(point);
+      void promise
+        .finally(() => {
+          if (pending!.get(key) === promise) pending!.delete(key);
+        })
+        .catch(() => undefined);
+      return promise;
+    });
+    if (claimed.length)
+      void this.acquire(claimed, window, required).then(
+        (answers) => {
+          for (const point of claimed)
+            settlers
+              .get(weatherPointKey(point))!
+              .resolve(answers.get(weatherPointKey(point)) ?? null);
+        },
+        (error) => {
+          for (const point of claimed) settlers.get(weatherPointKey(point))!.reject(error);
+        },
+      );
+    const results = await Promise.all(promises);
+    if (followUp) {
+      const missing = unique.filter(
+        (point, index) =>
+          joined.has(weatherPointKey(point)) &&
+          results[index] &&
+          !forecastIsFresh(
+            results[index]!,
+            required?.get(weatherPointKey(point)) ?? window,
+            this.now(),
+          ) &&
+          !(
+            (weatherMemory().get<{ retryAt: number }>(`daily-failure:${weatherPointKey(point)}`)
+              ?.retryAt ?? 0) > this.now().getTime()
+          ),
+      );
+      if (missing.length) {
+        const refreshed = await this.getForecasts(missing, window, required, false);
+        for (const [index, point] of unique.entries())
+          if (refreshed.has(weatherPointKey(point)))
+            results[index] = refreshed.get(weatherPointKey(point))!;
+      }
+    }
+    return new Map(
+      results.flatMap((forecast, index) =>
+        forecast ? [[weatherPointKey(unique[index]!), forecast] as const] : [],
+      ),
+    );
+  }
 
-    for (const point of new Map(points.map((point) => [weatherPointKey(point), point])).values()) {
-      const cached = await readCachedForecast(point, window, this.now());
-      if (cached.kind === 'hit') {
+  private async acquire(
+    points: readonly WeatherPoint[],
+    window: ForecastWindow,
+    required?: ReadonlyMap<string, ForecastWindow>,
+  ) {
+    const answers = new Map<string, CachedPointForecast>();
+    const memory = weatherMemory();
+    const cooling = points.filter((point) => {
+      const failure = memory.get<{ retryAt: number; error: unknown }>(
+        `daily-failure:${weatherPointKey(point)}`,
+      );
+      if (!failure || failure.retryAt <= this.now().getTime()) return false;
+      const stored = memory.get<CachedPointForecast>(`daily:${weatherPointKey(point)}`);
+      if (stored) answers.set(weatherPointKey(point), stored);
+      else throw failure.error;
+      return true;
+    });
+    const remaining = points.filter((point) => !cooling.includes(point));
+    await waitForLiveWeather(remaining);
+    const cached = await readCachedForecastBatch(remaining, window, this.now(), required);
+    let stale: WeatherPoint[] = [];
+    for (const point of remaining) {
+      const result = cached.get(weatherPointKey(point))!;
+      if (result.kind === 'hit') {
         recordProviderCacheEvent({
           cache: 'weather-forecast',
           kind: 'cache_hit',
@@ -62,93 +136,52 @@ export class CachedWeatherService {
           provider: 'open_meteo',
           source: this.source,
         });
-        answers.set(weatherPointKey(point), cached.forecast);
-        continue;
+        answers.set(weatherPointKey(point), result.forecast);
+      } else {
+        const failure = memory.get<{ retryAt: number; error: unknown }>(weatherFailureKey(point));
+        if (failure && failure.retryAt > this.now().getTime()) {
+          memory.set(`daily-failure:${weatherPointKey(point)}`, failure);
+          if (result.stored) answers.set(weatherPointKey(point), result.stored);
+          else throw failure.error;
+        } else stale.push(point);
       }
-      if (cached.stored) storedForStale.set(weatherPointKey(point), cached.stored);
-      stale.push(point);
     }
-
-    if (!stale.length) return answers;
-
-    // One request for every stale point, not one per point.
-    let acquired;
-    try {
-      acquired = await singleFlight(
-        `weather:${window.startDate}:${window.endDate}:${stale.map(weatherPointKey).toSorted().join(';')}`,
-        async () => {
-          recordProviderCall({
-            endpoint: '/v1/forecast',
-            expectedSku: 'weather-forecast-free',
-            operation: 'getForecast',
-            provider: 'open_meteo',
-            source: this.source,
-          });
-
-          const forecasts = await this.provider.getDailyForecasts({
-            endDate: window.endDate,
-            points: stale,
-            startDate: window.startDate,
-          });
-          const fetchedAt = this.now();
-          for (const forecast of forecasts) await this.writeSnapshot(forecast, fetchedAt);
-          return { forecasts, fetchedAt };
-        },
-      );
-    } catch (error) {
-      // A refused forecast is not a refused trip. Yesterday's answer for the
-      // same place is worth more than nothing, and the surfaces already say how
-      // old what they are showing is - so the stored snapshot stands in.
-      //
-      // With nothing stored for any of them there is genuinely nothing to show,
-      // and the caller should hear why rather than receive a silent blank.
-      let servedAny = false;
-      for (const point of stale) {
-        const fallback = storedForStale.get(weatherPointKey(point));
-        if (!fallback) continue;
-        answers.set(weatherPointKey(point), fallback);
-        servedAny = true;
-      }
-      if (!servedAny) throw error;
-
-      return answers;
-    }
-    const { forecasts, fetchedAt } = acquired;
-
-    for (const forecast of forecasts) {
-      answers.set(weatherPointKey(forecast.point), { ...forecast, fetchedAt });
-    }
-
-    return answers;
-  }
-
-  private async writeSnapshot(forecast: WeatherPointForecast, fetchedAt: Date) {
-    const key = snapshotKey(forecast.point);
-
-    try {
-      await getPrismaClient().$transaction(async (transaction) => {
-        const snapshot = await transaction.weatherForecastSnapshot.upsert({
-          create: { ...key, fetchedAt, timeZone: forecast.location.timeZone },
-          update: { fetchedAt, timeZone: forecast.location.timeZone },
-          where: { weather_forecast_snapshot_point: key },
-        });
-
-        await transaction.weatherForecastSnapshotDay.deleteMany({
-          where: { snapshotId: snapshot.id },
-        });
-        await transaction.weatherForecastSnapshotDay.createMany({
-          data: forecast.days.map((day) => ({
-            date: new Date(`${day.date}T00:00:00.000Z`),
-            precipitationProbability: day.precipitationProbability,
-            snapshotId: snapshot.id,
-            temperatureMaxCelsius: day.temperatureMax,
-            temperatureMinCelsius: day.temperatureMin,
-            weatherCode: day.weatherCode,
-          })),
-        });
+    if (stale.length && (await waitForLiveWeather(stale))) {
+      const seeded = await readCachedForecastBatch(stale, window, this.now(), required);
+      stale = stale.filter((point) => {
+        const result = seeded.get(weatherPointKey(point))!;
+        if (result.kind !== 'hit') return true;
+        answers.set(weatherPointKey(point), result.forecast);
+        return false;
       });
-    } catch {
-      // Failing to cache must never fail the request that produced the data.
     }
+    if (!stale.length) return answers;
+    try {
+      recordProviderCall({
+        endpoint: '/v1/forecast',
+        expectedSku: 'weather-forecast-free',
+        operation: 'getForecast',
+        provider: 'open_meteo',
+        source: this.source,
+      });
+      const acquired = await this.provider.getDailyForecasts({ points: stale, ...window });
+      const fetchedAt = this.now();
+      for (const forecast of acquired) {
+        const result = { ...forecast, fetchedAt };
+        await writeForecastSnapshot(result);
+        answers.set(weatherPointKey(forecast.point), result);
+      }
+    } catch (error) {
+      for (const point of stale) {
+        const key = weatherPointKey(point);
+        const failed = { error, retryAt: this.now().getTime() + WEATHER_CACHE_POLICY.retryMs };
+        memory.set(`daily-failure:${key}`, failed);
+        memory.set(weatherFailureKey(point), failed);
+        const result = cached.get(key)!;
+        if (result.kind === 'miss' && result.stored) answers.set(key, result.stored);
+      }
+      if (!answers.size) throw error;
+    }
+    return answers;
   }
 }

@@ -1,15 +1,14 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useWeatherQuery } from '@/lib/weather/use-weather-query';
+import { locationWeatherUnit } from '@/lib/weather/client-service';
 
 import { usePreferences } from '@/components/preferences-provider';
 import { useTravellerPosition } from '@/hooks/use-traveller-position';
 import { useNowTick } from '@/hooks/use-now-tick';
 import { deviceTimeZone } from '@/lib/itinerary/api';
 import { queryKeys } from '@/lib/query/keys';
-import { getLocationWeather } from '@/lib/weather/api';
 import { selectLocationWeather } from '@/lib/weather/freshness';
-import { weatherQueryStaleTime } from '@/lib/weather/cache-policy';
 
 export type HereWeather = {
   /** Where the reading came from, so the strip can link back to it. */
@@ -41,30 +40,22 @@ export function useHereWeather() {
   const { position } = useTravellerPosition({ askOnce: true });
   const now = useNowTick(true, true);
 
-  const query = useQuery({
-    enabled: Boolean(timeZone),
-    queryFn: ({ signal }) =>
-      getLocationWeather({
-        ...(position
-          ? { latitude: position.latitude, longitude: position.longitude }
-          : ({} as { latitude?: number; longitude?: number })),
-        signal,
-        temperatureUnit,
-        timeZone: timeZone as string,
-      }),
-    queryKey: queryKeys.locationWeather(
+  const query = useWeatherQuery(
+    queryKeys.locationWeather(
       position?.latitude ?? null,
       position?.longitude ?? null,
-      temperatureUnit,
+      'celsius',
       timeZone ?? null,
     ),
-    // Match Trip Mode's three-hour cache, measured from original retrieval.
-    refetchOnMount: true,
-    refetchOnReconnect: true,
-    staleTime: weatherQueryStaleTime,
-  });
-
-  const data = query.data;
+    (service) =>
+      service.location({
+        ...(position ? { latitude: position.latitude, longitude: position.longitude } : {}),
+        temperatureUnit: 'celsius',
+        timeZone: timeZone!,
+      }),
+    Boolean(timeZone),
+  );
+  const data = query.data ? locationWeatherUnit(query.data, temperatureUnit) : null;
   const selected = data ? selectLocationWeather(data, now) : null;
   if (!data || !selected)
     return { status: query.isPending ? 'loading' : 'error', weather: null } as const;

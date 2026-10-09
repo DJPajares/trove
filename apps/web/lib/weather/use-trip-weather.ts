@@ -1,12 +1,12 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useWeatherQuery } from './use-weather-query';
+import { tripWeatherUnit } from './client-service';
 
 import { usePreferences } from '@/components/preferences-provider';
 import { queryKeys } from '@/lib/query/keys';
-import { getTripWeather, type TripWeather } from '@/lib/weather/api';
+import { type TripWeather } from '@/lib/weather/api';
 import { forecastForDate } from '@/lib/weather/freshness';
-import { weatherQueryStaleTime } from '@/lib/weather/cache-policy';
 
 export type TripWeatherQuery = {
   data: TripWeather | null;
@@ -35,19 +35,14 @@ export function useTripWeather(
   const { preferences } = usePreferences();
   const temperatureUnit = preferences.temperatureUnit;
 
-  const query = useQuery({
+  const query = useWeatherQuery(
+    queryKeys.tripWeather(tripId, 'celsius'),
+    (service) => service.trip(tripId),
     enabled,
-    queryFn: ({ signal }) => getTripWeather(tripId, { signal, temperatureUnit }),
-    queryKey: queryKeys.tripWeather(tripId, temperatureUnit),
-    // Mount/reconnect reuse fresh persisted evidence. After expiry the shared
-    // server cache decides whether provider acquisition is needed.
-    refetchOnMount: true,
-    refetchOnReconnect: true,
-    staleTime: weatherQueryStaleTime,
-  });
+  );
 
   return {
-    data: query.data ?? null,
+    data: query.data ? tripWeatherUnit(query.data, temperatureUnit) : null,
     dataUpdatedAt: query.dataUpdatedAt,
     isPending: query.isPending,
     refetch: () => void query.refetch(),

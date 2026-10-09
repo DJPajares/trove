@@ -1,3 +1,4 @@
+import type { WeatherLocations, WeatherPointEvidence, WeatherResolvePoint } from '@trove/types';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import { readTripWeatherHistory, writeTripWeatherHistory } from '@/lib/offline/trip-store';
 import {
@@ -15,7 +16,7 @@ import type { TemperatureUnit } from '@/lib/profile/preferences';
  * a version in the key a returning traveller keeps reading an answer the server
  * has already stopped producing.
  */
-export const WEATHER_CONTRACT_VERSION = 'v5';
+export const WEATHER_CONTRACT_VERSION = 'v6';
 
 export type WeatherCurrentConditions = {
   apparentTemperature: number;
@@ -40,6 +41,8 @@ export type WeatherHourlyForecast = {
 };
 
 export type TripWeatherLocation = {
+  latitude?: number;
+  longitude?: number;
   timeZone: string;
 };
 
@@ -73,6 +76,8 @@ export type TripWeather = {
   current: WeatherCurrentConditions | null;
   days: TripWeatherDay[];
   fetchedAt: string;
+  currentFetchedAt?: string | null;
+  refreshAfter?: number;
   horizon: { endDate: string; startDate: string };
   /**
    * The next stretch of hours where the traveller is today, empty whenever
@@ -182,6 +187,9 @@ export async function getTripWeather(
 export type LocationWeather = {
   attribution: { label: string; url: string };
   current: WeatherCurrentConditions | null;
+  currentFetchedAt?: string | null;
+  refreshAfter?: number;
+  hours?: WeatherHourlyForecast[];
   forecast: Omit<TripWeatherDay, 'itineraryDayId' | 'location'>[];
   fetchedAt: string;
   location: { latitude: number; longitude: number; timeZone: string };
@@ -232,7 +240,9 @@ export async function getLocationWeather({
   try {
     response = await fetch(`${apiUrl}/weather?${query.toString()}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
-      signal,
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
+        : AbortSignal.timeout(30_000),
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
@@ -248,4 +258,35 @@ export async function getLocationWeather({
   }
 
   return response.json() as Promise<LocationWeather>;
+}
+
+async function weatherRequest<T>(path: string, signal?: AbortSignal, body?: unknown): Promise<T> {
+  const accessToken = await getAccessToken();
+  const response = await fetch(`${apiUrl}${path}`, {
+    method: body === undefined ? 'GET' : 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
+      : AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) {
+    const error = (await response.json().catch(() => ({}))) as { code?: string };
+    throw new WeatherApiError(error.code ?? 'weather_unavailable', response.status);
+  }
+  return response.json() as Promise<T>;
+}
+export function getTripWeatherLocations(tripId: string, signal?: AbortSignal) {
+  return weatherRequest<WeatherLocations>(`/trips/${tripId}/weather/locations`, signal);
+}
+export async function resolveWeatherPoints(
+  points: readonly WeatherResolvePoint[],
+  signal?: AbortSignal,
+) {
+  return (
+    await weatherRequest<{ points: WeatherPointEvidence[] }>('/weather/resolve', signal, { points })
+  ).points;
 }

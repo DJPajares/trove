@@ -4,7 +4,7 @@ import type { PlanScoreExplanation, PlanScoreExplanationGroups, TripContext } fr
 import { climateAdvice, composeInsights } from '../lib/insights/compose';
 
 const context: TripContext = {
-  version: 1,
+  version: 2,
   days: [
     { id: 'd1', date: '2026-10-11' },
     { id: 'd2', date: '2026-10-12' },

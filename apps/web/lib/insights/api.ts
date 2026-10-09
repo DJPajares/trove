@@ -27,7 +27,9 @@ export async function fetchTripContext(
   const query = new URLSearchParams({ languageCode: options.languageCode });
   const response = await fetch(`${apiUrl}/trips/${tripId}/context?${query}`, {
     headers: { Authorization: `Bearer ${data.session.access_token}` },
-    signal: options.signal,
+    signal: options.signal
+      ? AbortSignal.any([options.signal, AbortSignal.timeout(30_000)])
+      : AbortSignal.timeout(30_000),
   });
 
   if (!response.ok) {

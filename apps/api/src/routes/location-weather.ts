@@ -1,3 +1,7 @@
+import { z } from 'zod';
+import { WEATHER_MAX_LOCATIONS } from '@trove/types';
+import { WeatherResolver } from '../services/weather-resolver.js';
+import { isValidIanaTimeZone } from '../services/trip-rules.js';
 import type { FastifyInstance } from 'fastify';
 
 import { createLocationWeatherControllers } from '../controllers/location-weather.js';
@@ -16,6 +20,38 @@ import { PROVIDER_SEARCH_RATE_LIMIT } from './rate-limits.js';
  */
 export function registerLocationWeatherRoutes(app: FastifyInstance) {
   const controllers = createLocationWeatherControllers(new WeatherService());
+  const resolver = new WeatherResolver();
+  const bodySchema = z
+    .object({
+      points: z
+        .array(
+          z
+            .object({
+              latitude: z.number().min(-90).max(90),
+              longitude: z.number().min(-180).max(180),
+              timeZone: z.string().max(100).refine(isValidIanaTimeZone),
+              dates: z.array(z.iso.date()).max(16),
+              current: z.boolean().optional(),
+            })
+            .strict(),
+        )
+        .min(1)
+        .max(WEATHER_MAX_LOCATIONS),
+    })
+    .strict();
+  app.post(
+    '/weather/resolve',
+    { config: PROVIDER_SEARCH_RATE_LIMIT, preHandler: requireAuthenticatedUser },
+    async (request, reply) => {
+      const body = bodySchema.safeParse(request.body);
+      if (!body.success) return reply.code(400).send({ code: 'invalid_weather_request' });
+      try {
+        return reply.send({ points: await resolver.resolve(body.data.points) });
+      } catch {
+        return reply.code(503).send({ code: 'weather_unavailable' });
+      }
+    },
+  );
 
   app.get(
     '/weather',

@@ -180,13 +180,15 @@ test('a Plan Score input change clears that trip and no other', async () => {
  * provider in it would blunt what the set means - the hook carries its own stale
  * time instead.
  */
-test('trip weather persists across reloads without joining the billable roots', () => {
+test('the weather service owns persistence separately from generic query roots', () => {
   const key = queryKeys.tripWeather('trip-1', 'celsius');
 
   expect(key[0]).toBe('trip-weather');
-  expect(PERSISTED_QUERY_ROOTS.has('trip-weather')).toBe(true);
+  expect(PERSISTED_QUERY_ROOTS.has('trip-weather')).toBe(false);
   expect(PROVIDER_BILLABLE_QUERY_ROOTS.has('trip-weather')).toBe(false);
-  expect(shouldDehydrateQuery({ queryKey: key, state: { status: 'success' } } as never)).toBe(true);
+  expect(shouldDehydrateQuery({ queryKey: key, state: { status: 'success' } } as never)).toBe(
+    false,
+  );
 });
 
 /**
@@ -278,5 +280,5 @@ test('Home weather persists and separates timezone fallbacks from real coordinat
   expect(tokyo).not.toEqual(utc);
   expect(utc).not.toEqual(queryKeys.locationWeather(0, 0, 'celsius', 'UTC'));
   client.setQueryData(tokyo, { fetchedAt: '2026-10-03T00:00:00Z' });
-  expect(shouldDehydrateQuery(client.getQueryCache().find({ queryKey: tokyo })!)).toBe(true);
+  expect(shouldDehydrateQuery(client.getQueryCache().find({ queryKey: tokyo })!)).toBe(false);
 });

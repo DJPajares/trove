@@ -5,6 +5,7 @@ import {
   readQueryCacheEntry,
   writeQueryCacheEntry,
 } from '@/lib/offline/trip-store';
+import { migratePersistedWeather } from '@/lib/weather/migrate';
 import { QUERY_CACHE_VERSION } from '@/lib/query/client';
 
 /**
@@ -25,6 +26,7 @@ function cacheKey(userId: string) {
  */
 export function createQueryPersister(
   userId: string,
+  canWrite: () => boolean = () => true,
 ): ReturnType<typeof createAsyncStoragePersister> {
   const key = cacheKey(userId);
 
@@ -34,12 +36,14 @@ export function createQueryPersister(
       getItem: async (itemKey: string) => {
         const stored = await readQueryCacheEntry(itemKey);
         if (!stored) return stored;
-        const cleaned = stripPersistedPlanScores(stored);
-        if (cleaned !== stored) await writeQueryCacheEntry(itemKey, cleaned);
+        const cleaned = stripPersistedPlanScores(
+          await migratePersistedWeather(userId, stored, canWrite),
+        );
+        if (cleaned !== stored) await writeQueryCacheEntry(itemKey, cleaned, canWrite);
         return cleaned;
       },
       removeItem: (itemKey: string) => deleteQueryCacheEntry(itemKey),
-      setItem: (itemKey: string, value: string) => writeQueryCacheEntry(itemKey, value),
+      setItem: (itemKey: string, value: string) => writeQueryCacheEntry(itemKey, value, canWrite),
     },
     // Storage is unavailable in private-mode browsers and inside some
     // in-app webviews. Persistence is an optimisation, so a failure to write

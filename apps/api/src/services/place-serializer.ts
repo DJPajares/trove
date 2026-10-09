@@ -1,3 +1,4 @@
+import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
 import {
   type PlaceSnapshot,
   type PlaceSnapshotSource,
@@ -121,7 +122,13 @@ export function serializeCanonicalPlace(
   const customLocation =
     customLatitude === null || customLongitude === null
       ? null
-      : { latitude: customLatitude, longitude: customLongitude, timeZone };
+      : {
+          latitude: customLatitude,
+          longitude: customLongitude,
+          timeZone:
+            timeZone ??
+            timeZoneAtCoordinates({ latitude: customLatitude, longitude: customLongitude }),
+        };
 
   // The provider's offset cannot represent daylight-saving transitions. Resolve
   // an IANA zone from its recent coordinate snapshot without another API call.

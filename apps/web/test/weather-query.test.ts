@@ -4,7 +4,8 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   now: new Date('2026-10-03T03:00:00Z'),
 }));
-vi.mock('@tanstack/react-query', () => ({ useQuery: mocks.query }));
+vi.mock('react', () => ({ useEffect: vi.fn() }));
+vi.mock('@tanstack/react-query', () => ({ useQuery: mocks.query, useQueryClient: () => ({}) }));
 vi.mock('@/components/preferences-provider', () => ({
   usePreferences: () => ({ preferences: { temperatureUnit: 'celsius' } }),
 }));
@@ -57,6 +58,7 @@ test('a failed trip refresh retains forecasts and its error state without changi
   expect(useTripWeather('trip')).toMatchObject({ status: 'error', data });
   expect(mocks.query.mock.calls[0]![0]).toMatchObject({
     staleTime: weatherQueryStaleTime,
+    networkMode: 'always',
     refetchOnMount: true,
     refetchOnReconnect: true,
   });
@@ -79,13 +81,13 @@ test('an error without evidence leaves trip unavailable and Home date-only', () 
   expect(useHereWeather()).toMatchObject({ weather: null, status: 'error' });
 });
 
-test('cached responses retain their original three-hour expiry in browser scheduling', () => {
+test('cached responses retain their original one-hour expiry in browser scheduling', () => {
   const fetchedAt = '2026-10-03T00:00:00Z';
   expect(
     weatherQueryStaleTime({
-      state: { data: { fetchedAt }, dataUpdatedAt: Date.parse('2026-10-03T01:00:00Z') },
+      state: { data: { fetchedAt }, dataUpdatedAt: Date.parse('2026-10-03T00:30:00Z') },
     }),
-  ).toBe(7_200_000);
+  ).toBe(1_800_000);
   expect(
     weatherQueryStaleTime({
       state: { data: { fetchedAt }, dataUpdatedAt: Date.parse('2026-10-03T03:00:00Z') },
@@ -94,5 +96,5 @@ test('cached responses retain their original three-hour expiry in browser schedu
   expect(
     weatherQueryStaleTime({ state: { data: { fetchedAt: 'invalid' }, dataUpdatedAt: Date.now() } }),
   ).toBe(0);
-  expect(weatherQueryStaleTime({ state: { data: undefined, dataUpdatedAt: 0 } })).toBe(10_800_000);
+  expect(weatherQueryStaleTime({ state: { data: undefined, dataUpdatedAt: 0 } })).toBe(3_600_000);
 });

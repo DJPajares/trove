@@ -1,10 +1,42 @@
 import { getPrismaClient } from '@trove/db';
-import { WEATHER_CACHE_TTL_MS } from '@trove/types';
+import { WEATHER_CACHE_TTL_MS, WEATHER_CACHE_POLICY } from '@trove/types';
 import { z } from 'zod';
 
 import { recordProviderCacheEvent, recordProviderCall } from './provider-usage.js';
-import { singleFlight } from './single-flight.js';
-import { snapshotKey } from './weather-evidence-cache.js';
+const pendingByClient = new WeakMap<object, Map<string, Promise<WeatherContext>>>();
+function livePending() {
+  const owner = getPrismaClient();
+  let pending = pendingByClient.get(owner);
+  if (!pending) pendingByClient.set(owner, (pending = new Map()));
+  return pending;
+}
+export async function waitForLiveWeather(
+  points: readonly { latitude: number; longitude: number }[],
+) {
+  const pending = livePending();
+  const work = points.flatMap((input) => {
+    const point = snapshotKey(input);
+    return [...pending]
+      .filter(([key]) =>
+        key.startsWith(`weather-context:${point.provider}:${point.latitude}:${point.longitude}:`),
+      )
+      .map(([, value]) => value);
+  });
+  await Promise.allSettled(work);
+  return work.length > 0;
+}
+function coalesceLive(key: string, acquire: () => Promise<WeatherContext>) {
+  const pending = livePending();
+  const existing = pending.get(key);
+  if (existing) return existing;
+  const promise = acquire().finally(() => {
+    if (pending.get(key) === promise) pending.delete(key);
+  });
+  pending.set(key, promise);
+  return promise;
+}
+import { weatherMemory, weatherFailureKey } from './weather-memory.js';
+import { snapshotKey, writeForecastSnapshot } from './weather-evidence-cache.js';
 import type { WeatherContext, WeatherProvider, WeatherRequest } from './weather.js';
 
 const payloadSchema = z.object({
@@ -44,8 +76,20 @@ const payloadSchema = z.object({
 export async function getCachedWeatherContext(provider: WeatherProvider, input: WeatherRequest) {
   const point = { ...snapshotKey(input), timeZone: input.timeZone };
   const key = `weather-context:${point.provider}:${point.latitude}:${point.longitude}:${point.timeZone}`;
-  const result = await singleFlight(key, async (): Promise<WeatherContext> => {
-    let stored: WeatherContext | null = null;
+  const result = await coalesceLive(key, async (): Promise<WeatherContext> => {
+    const memory = weatherMemory();
+    let stored: WeatherContext | null = memory.get<WeatherContext>(key) ?? null;
+    const failure = memory.get<{ retryAt: number; error: unknown }>(`${key}:failure`);
+    if (failure && failure.retryAt > Date.now()) {
+      if (!stored) throw failure.error;
+      return { ...stored, current: null, hours: [] };
+    }
+    if (
+      stored &&
+      Date.now() - Date.parse(stored.fetchedAt) >= 0 &&
+      Date.now() - Date.parse(stored.fetchedAt) < WEATHER_CACHE_TTL_MS
+    )
+      return stored;
     try {
       const snapshot = await getPrismaClient().weatherContextSnapshot.findUnique({
         where: { weather_context_snapshot_point: point },
@@ -54,6 +98,7 @@ export async function getCachedWeatherContext(provider: WeatherProvider, input: 
         const parsed = payloadSchema.safeParse(snapshot.payload);
         if (parsed.success) {
           stored = { ...parsed.data, fetchedAt: snapshot.fetchedAt.toISOString() };
+          memory.set(key, stored);
           if (Date.now() - snapshot.fetchedAt.getTime() < WEATHER_CACHE_TTL_MS) {
             recordProviderCacheEvent({
               cache: 'weather-context',
@@ -68,6 +113,12 @@ export async function getCachedWeatherContext(provider: WeatherProvider, input: 
       }
     } catch {
       // An unavailable cache must not prevent normal provider acquisition.
+    }
+
+    const sharedFailure = memory.get<{ retryAt: number; error: unknown }>(weatherFailureKey(point));
+    if (sharedFailure && sharedFailure.retryAt > Date.now()) {
+      if (!stored) throw sharedFailure.error;
+      return { ...stored, current: null, hours: [] };
     }
 
     let acquired: WeatherContext;
@@ -90,11 +141,21 @@ export async function getCachedWeatherContext(provider: WeatherProvider, input: 
         fetchedAt: new Date().toISOString(),
       };
     } catch (error) {
+      const failed = { error, retryAt: Date.now() + WEATHER_CACHE_POLICY.retryMs };
+      memory.set(`${key}:failure`, failed);
+      memory.set(weatherFailureKey(point), failed);
       if (!stored) throw error;
       // Dated forecasts remain useful; expired current/hourly evidence is withheld.
       return { ...stored, current: null, hours: [] };
     }
 
+    memory.set(key, acquired);
+    await writeForecastSnapshot({
+      days: acquired.forecast,
+      fetchedAt: new Date(acquired.fetchedAt),
+      location: acquired.location,
+      point,
+    });
     try {
       const { fetchedAt, ...payload } = acquired;
       await getPrismaClient().weatherContextSnapshot.upsert({

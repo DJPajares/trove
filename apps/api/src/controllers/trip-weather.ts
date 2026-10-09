@@ -47,6 +47,17 @@ function sendProviderError(reply: FastifyReply, error: unknown) {
 
 export function createTripWeatherControllers(tripWeatherService: TripWeatherService) {
   return {
+    async getLocations(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      if (!userId) return reply;
+      const params = tripParamsSchema.safeParse(request.params);
+      if (!params.success) return reply.code(400).send({ code: 'invalid_weather_request' });
+      try {
+        return reply.send(await tripWeatherService.getLocations(userId, params.data.tripId));
+      } catch (error) {
+        return sendProviderError(reply, error);
+      }
+    },
     async getTripWeather(request: FastifyRequest, reply: FastifyReply) {
       const userId = getUserId(request, reply);
       if (!userId) return reply;

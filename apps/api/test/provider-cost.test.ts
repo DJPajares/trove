@@ -39,6 +39,8 @@ import {
   type ProviderPlaceDetails,
 } from '../src/services/places.js';
 import { AiPlaceGrounder } from '../src/services/ai-place-grounding.js';
+import { createAiPlannerProviderContext } from '../src/services/ai-planner-provider-context.js';
+import { createPlacesService } from '../src/services/places-runtime.js';
 import { groundableDraftPlaceIds } from '../src/services/ai-planning-draft-places.js';
 import {
   assembleAiPlanningDraft,
@@ -2449,6 +2451,190 @@ test('an opened sheet buys only its cover; selected photos resolve once and surv
   expect(row.cachedEvidenceAt).toEqual(now);
   expect(getProviderCallCounts()['google:getPhotoMedia']).toBe(3);
 });
+
+test.each([0, 1, 2, 3])(
+  'limit %i bounds new media requests, including direct requests for hidden slots',
+  async (photoLimit) => {
+    const now = new Date('2026-10-01T00:00:00Z');
+    seedProviderRef('ChIJmuseum');
+    const { provider, details, media } = photoPlacesProvider();
+    const service = () => new CachedPlacesService({ ...provider, photoLimit }, () => now);
+    const request = {
+      detail: 'evidence' as const,
+      externalPlaceId: 'ChIJmuseum',
+      purpose: 'details' as const,
+    };
+    const opened = await service().getDetails(request);
+    expect(opened.status === 'ok' && opened.place.photos).toHaveLength(photoLimit);
+    expect(media()).toBe(photoLimit === 0 ? 0 : 1);
+    const results = await Promise.all(
+      [1, 2, 3].map((number) =>
+        service().getPhoto({
+          externalPlaceId: request.externalPlaceId,
+          evidenceFetchedAt: now.toISOString(),
+          photoId: placePhotoId(`places/ChIJmuseum/photos/p${number}`),
+        }),
+      ),
+    );
+    expect(results.map((result) => result.status)).toEqual(
+      [1, 2, 3].map((number) => (number <= photoLimit ? 'ok' : 'disabled')),
+    );
+    await service().getDetails(request);
+    expect(details()).toBe(1);
+    expect(media()).toBe(photoLimit);
+    expect(providerRefs.get('ChIJmuseum')?.cachedEvidence?.photos).toHaveLength(3);
+    expect(providerRefs.get('ChIJmuseum')?.cachedEvidenceAt).toEqual(now);
+  },
+);
+
+test('lowering and raising limits preserves cached URLs, references and their original expiry', async () => {
+  const now = new Date('2026-10-01T00:00:00Z');
+  seedProviderRef('ChIJmuseum');
+  const { provider, details, media } = photoPlacesProvider();
+  const service = (photoLimit: number, clock = now) =>
+    new CachedPlacesService({ ...provider, photoLimit }, () => clock);
+  const request = {
+    detail: 'evidence' as const,
+    externalPlaceId: 'ChIJmuseum',
+    purpose: 'details' as const,
+  };
+  const selected = (number: number) => ({
+    externalPlaceId: request.externalPlaceId,
+    evidenceFetchedAt: now.toISOString(),
+    photoId: placePhotoId(`places/ChIJmuseum/photos/p${number}`),
+  });
+  await service(3).getDetails(request);
+  await service(3).getPhoto(selected(3));
+  const original = structuredClone(providerRefs.get('ChIJmuseum')!.cachedEvidence);
+  resetCachedPlacesMemo();
+  for (const limit of [1, 0]) {
+    const opened = await service(limit).getDetails(request);
+    expect(opened.status === 'ok' && opened.place.photos?.map((photo) => photo.name)).toEqual([
+      'places/ChIJmuseum/photos/p1',
+      'places/ChIJmuseum/photos/p3',
+    ]);
+    expect((await service(limit).getPhoto(selected(3))).status).toBe('ok');
+    expect(await service(limit).getPhoto(selected(2))).toEqual({ status: 'disabled' });
+    expect(providerRefs.get('ChIJmuseum')?.cachedEvidence).toEqual(original);
+    expect(providerRefs.get('ChIJmuseum')?.cachedEvidenceAt).toEqual(now);
+  }
+  expect(details()).toBe(1);
+  expect(media()).toBe(2);
+  await service(2).getDetails(request);
+  await service(2).getPhoto(selected(2));
+  expect(details()).toBe(1);
+  expect(media()).toBe(3);
+  expect(providerRefs.get('ChIJmuseum')?.cachedEvidenceAt).toEqual(now);
+  resetCachedPlacesMemo();
+  const expired = new Date(now.getTime() + 30 * DAY_MS);
+  expect(await service(0, expired).getPhoto(selected(1))).toEqual({ status: 'stale' });
+  const refreshed = await service(0, expired).getDetails(request);
+  expect(refreshed.status === 'ok' && refreshed.place.photos).toEqual([]);
+  expect(details()).toBe(2);
+  expect(media()).toBe(3);
+});
+
+test('limit zero still exposes memoized images when database photo writes fail', async () => {
+  const now = new Date('2026-10-01T00:00:00Z');
+  seedProviderRef('ChIJmuseum');
+  const { provider, media } = photoPlacesProvider();
+  const prisma = (globalThis as { trovePrismaClient?: { $queryRaw: () => Promise<unknown> } })
+    .trovePrismaClient!;
+  const write = vi.spyOn(prisma, '$queryRaw').mockRejectedValue(new Error('Database unavailable'));
+  const request = {
+    detail: 'evidence' as const,
+    externalPlaceId: 'ChIJmuseum',
+    purpose: 'details' as const,
+  };
+  try {
+    await new CachedPlacesService(provider, () => now).getDetails(request);
+    const photoRequest = {
+      externalPlaceId: request.externalPlaceId,
+      evidenceFetchedAt: now.toISOString(),
+      photoId: placePhotoId('places/ChIJmuseum/photos/p2'),
+    };
+    await new CachedPlacesService(provider, () => now).getPhoto(photoRequest);
+    const disabled = new CachedPlacesService({ ...provider, photoLimit: 0 }, () => now);
+    const opened = await disabled.getDetails(request);
+    expect(opened.status === 'ok' && opened.place.photos).toHaveLength(2);
+    expect(opened.status === 'ok' && opened.place.photos?.every((photo) => photo.uri)).toBe(true);
+    expect((await disabled.getPhoto(photoRequest)).status).toBe('ok');
+    expect(media()).toBe(2);
+    expect(
+      providerRefs.get('ChIJmuseum')?.cachedEvidence?.photos?.every((photo) => photo.uri === null),
+    ).toBe(true);
+  } finally {
+    write.mockRestore();
+  }
+});
+
+test.each(['normal', 'ai'] as const)(
+  '%s factory keeps functional evidence and cached photos available at zero',
+  async (factory) => {
+    const now = new Date('2026-10-01T00:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    seedProviderRef('ChIJmuseum');
+    const { provider } = photoPlacesProvider();
+    await new CachedPlacesService(provider, () => now).getDetails({
+      externalPlaceId: 'ChIJmuseum',
+      detail: 'evidence',
+      purpose: 'saved',
+    });
+    const fetcher = vi.fn(async () =>
+      Response.json({
+        id: 'ChIJcold',
+        displayName: { text: 'Museum' },
+        location: { latitude: 1.29, longitude: 103.84 },
+        rating: 4.5,
+        userRatingCount: 120,
+        types: ['museum'],
+        websiteUri: 'https://museum.example/',
+        photos: [1, 2, 3].map((number) => ({ name: `places/ChIJcold/photos/p${number}` })),
+      }),
+    );
+    vi.stubGlobal('fetch', fetcher);
+    try {
+      const environment = { GOOGLE_PLACES_API_KEY: 'key', GOOGLE_PLACE_PHOTO_LIMIT: '0' };
+      const service =
+        factory === 'normal'
+          ? createPlacesService({ environment, source: 'test' })!
+          : createAiPlannerProviderContext({ environment, source: 'test' }).placesService!;
+      const result = await service.getDetails({
+        externalPlaceId: 'ChIJmuseum',
+        detail: 'evidence',
+        purpose: 'details',
+      });
+      expect(result.status === 'ok' && result.place.photos).toEqual([]);
+      expect(result.status === 'ok' && result.place.websiteUri).toBe('https://museum.example/');
+      expect(
+        (
+          await service.getPhoto({
+            externalPlaceId: 'ChIJmuseum',
+            photoId: placePhotoId('places/ChIJmuseum/photos/p2'),
+            evidenceFetchedAt: now.toISOString(),
+          })
+        ).status,
+      ).toBe('disabled');
+      expect(fetcher).not.toHaveBeenCalled();
+      // A cold functional lookup still succeeds; photos remain presentation only.
+      seedProviderRef('ChIJcold');
+      const cold = await service.getDetails({
+        externalPlaceId: 'ChIJcold',
+        detail: 'evidence',
+        purpose: 'details',
+      });
+      expect(cold.status === 'ok' && cold.place.rating).toBe(4.5);
+      expect(cold.status === 'ok' && cold.place.websiteUri).toBe('https://museum.example/');
+      expect(cold.status === 'ok' && cold.place.photos).toEqual([]);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect(providerRefs.get('ChIJcold')?.cachedEvidence?.photos).toHaveLength(3);
+      expect(getProviderCallCounts()['google:getPhotoMedia'] ?? 0).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  },
+);
 
 test('only an opened sheet buys photo images; every other evidence reader buys none', async () => {
   const now = new Date('2026-10-01T00:00:00Z');

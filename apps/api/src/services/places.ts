@@ -112,6 +112,8 @@ export type PlacePriceLevel = 0 | 1 | 2 | 3 | 4;
 export type PlacePhotoMediaRequest = {
   maxWidthPx: number;
   name: string;
+  /** Server-derived position in the unfiltered evidence snapshot. */
+  photoIndex: number;
   signal?: AbortSignal;
 };
 
@@ -127,7 +129,7 @@ export type PlacePhotoRequest = Omit<PlaceDetailsRequest, 'detail' | 'purpose'> 
   photoId: string;
   evidenceFetchedAt: string;
 };
-export type PlacePhotoResult = PlacePhotoMediaResult | { status: 'stale' };
+export type PlacePhotoResult = PlacePhotoMediaResult | { status: 'stale' | 'disabled' };
 
 export type ProviderPlaceDetails = {
   attributions: ProviderAttribution[];
@@ -191,6 +193,8 @@ export class PlaceProviderError extends Error {
 
 export interface PlacesProvider {
   readonly name: PlaceProviderName;
+  /** Applies only to new photo media requests; absent preserves the three-photo default. */
+  readonly photoLimit?: number;
   getDetails(request: PlaceDetailsRequest): Promise<ProviderPlaceDetails>;
   /** Billed per photo. Only an opened Place details sheet reaches for it. */
   getPhotoMedia?(request: PlacePhotoMediaRequest): Promise<string>;

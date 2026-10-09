@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { config } from 'dotenv';
 
+import { MAX_PLACE_PHOTOS } from './services/place-photo-policy.js';
+
 config({ path: resolve(dirname(fileURLToPath(import.meta.url)), '../../../.env') });
 
 type AuthenticationEnvironment = {
@@ -13,6 +15,7 @@ type AuthenticationEnvironment = {
 
 type PlacesEnvironment = {
   googlePlacesApiKey: string;
+  googlePlacePhotoLimit: number;
 };
 
 type RoutesEnvironment = {
@@ -330,7 +333,31 @@ export function getPlacesEnvironment(
 
   const googlePlacesApiKey = environment.GOOGLE_PLACES_API_KEY?.trim();
 
-  return googlePlacesApiKey ? { googlePlacesApiKey } : null;
+  return googlePlacesApiKey
+    ? { googlePlacesApiKey, googlePlacePhotoLimit: getGooglePlacePhotoLimit(environment) }
+    : null;
+}
+
+let warnedInvalidPhotoLimit = false;
+
+/** Photo configuration cannot disable functional Places requests or silently increase spend. */
+export function getGooglePlacePhotoLimit(
+  environment: Record<string, string | undefined> = process.env,
+) {
+  const limit = parseBoundedInteger(
+    environment.GOOGLE_PLACE_PHOTO_LIMIT,
+    MAX_PLACE_PHOTOS,
+    0,
+    MAX_PLACE_PHOTOS,
+  );
+  if (limit !== null) return limit;
+  if (!warnedInvalidPhotoLimit) {
+    warnedInvalidPhotoLimit = true;
+    console.warn(
+      'GOOGLE_PLACE_PHOTO_LIMIT must be an integer from 0 to 3; using 0 to disable new Google photo requests.',
+    );
+  }
+  return 0;
 }
 
 export function getRoutesEnvironment(

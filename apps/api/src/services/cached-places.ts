@@ -15,6 +15,7 @@ import {
   type PlaceDetailsFailureCode,
 } from './place-details-failures.js';
 import { normalizePlaceLanguageCode } from './place-language.js';
+import { canFetchPlacePhoto, normalizePlacePhotoLimit } from './place-photo-policy.js';
 import {
   providerTargetFingerprint,
   recordProviderCacheEvent,
@@ -135,6 +136,7 @@ export class CachedPlacesService extends PlacesService {
   private readonly providerName: PlacesProvider['name'];
   private readonly now: () => Date;
   private readonly source: ProviderCallSource;
+  private readonly photoLimit: number;
 
   constructor(
     provider: PlacesProvider,
@@ -146,6 +148,7 @@ export class CachedPlacesService extends PlacesService {
     this.providerName = provider.name;
     this.now = clock;
     this.source = source;
+    this.photoLimit = normalizePlacePhotoLimit(provider.photoLimit);
   }
 
   override async getDetails(request: PlaceDetailsRequest): Promise<PlaceDetailsResult> {
@@ -225,25 +228,20 @@ export class CachedPlacesService extends PlacesService {
     result: PlaceDetailsResult,
   ): Promise<PlaceDetailsResult> {
     if (request.purpose !== 'details' || result.status !== 'ok') return result;
-    const cover = result.place.photos?.[0];
-    if (!cover || cover.uri !== null) return result;
-    const media = await this.getPhoto({
-      externalPlaceId: request.externalPlaceId,
-      languageCode: request.languageCode,
-      regionCode: request.regionCode,
-      signal: request.signal,
-      evidenceFetchedAt: result.freshness.fetchedAt,
-      photoId: placePhotoId(cover.name),
-    });
-    const latest = this.readMemo({ ...request, detail: 'evidence' });
-    const answer =
-      latest.kind === 'hit' &&
-      latest.result.status === 'ok' &&
-      latest.result.freshness.fetchedAt === result.freshness.fetchedAt
-        ? latest.result
-        : result;
-    return media.status === 'ok'
-      ? {
+    let answer = this.withKnownPhotoUris(request, result);
+    const cover = answer.place.photos?.[0];
+    if (cover && cover.uri === null && canFetchPlacePhoto(0, this.photoLimit)) {
+      const media = await this.getPhoto({
+        externalPlaceId: request.externalPlaceId,
+        languageCode: request.languageCode,
+        regionCode: request.regionCode,
+        signal: request.signal,
+        evidenceFetchedAt: result.freshness.fetchedAt,
+        photoId: placePhotoId(cover.name),
+      });
+      answer = this.withKnownPhotoUris(request, answer);
+      if (media.status === 'ok') {
+        answer = {
           ...answer,
           place: {
             ...answer.place,
@@ -251,8 +249,45 @@ export class CachedPlacesService extends PlacesService {
               photo.name === cover.name ? { ...photo, uri: media.uri } : photo,
             ),
           },
-        }
-      : answer;
+        };
+      }
+    }
+    // Filter the presentation only. Persisted evidence and the memo keep every
+    // reference and resolved URL, so a policy change never renews or erases them.
+    return {
+      ...answer,
+      place: {
+        ...answer.place,
+        photos: answer.place.photos?.filter(
+          (photo, index) => Boolean(photo.uri) || canFetchPlacePhoto(index, this.photoLimit),
+        ),
+      },
+    };
+  }
+
+  /** A failed database URI update must still be reusable after lowering the limit. */
+  private withKnownPhotoUris(
+    request: PlaceDetailsRequest,
+    result: Extract<PlaceDetailsResult, { status: 'ok' }>,
+  ): Extract<PlaceDetailsResult, { status: 'ok' }> {
+    const memo = this.readMemo({ ...request, detail: 'evidence' });
+    if (
+      memo.kind !== 'hit' ||
+      memo.result.status !== 'ok' ||
+      memo.result.freshness.fetchedAt !== result.freshness.fetchedAt
+    )
+      return result;
+    const knownPhotos = memo.result.place.photos;
+    return {
+      ...result,
+      place: {
+        ...result.place,
+        photos: result.place.photos?.map((photo) => {
+          const uri = photo.uri ?? knownPhotos?.find((known) => known.name === photo.name)?.uri;
+          return uri ? { ...photo, uri } : photo;
+        }),
+      },
+    };
   }
 
   override async getPhoto(request: PlacePhotoRequest): Promise<PlacePhotoResult> {
@@ -269,9 +304,10 @@ export class CachedPlacesService extends PlacesService {
           result.freshness.fetchedAt !== request.evidenceFetchedAt
         )
           return { status: 'stale' };
-        const photo = result.place.photos?.find(
-          (item) => placePhotoId(item.name) === request.photoId,
-        );
+        const photoIndex =
+          result.place.photos?.findIndex((item) => placePhotoId(item.name) === request.photoId) ??
+          -1;
+        const photo = result.place.photos?.[photoIndex];
         if (!photo) return { status: 'not_found' };
         const memoPhoto =
           memo.kind === 'hit' &&
@@ -281,9 +317,11 @@ export class CachedPlacesService extends PlacesService {
             : null;
         const knownUri = photo.uri ?? memoPhoto?.uri;
         if (knownUri) return { status: 'ok', uri: knownUri };
+        if (!canFetchPlacePhoto(photoIndex, this.photoLimit)) return { status: 'disabled' };
         const media = await this.resolvePhotoMedia({
           maxWidthPx: PLACE_PHOTO_MAX_WIDTH_PX,
           name: photo.name,
+          photoIndex,
           signal: request.signal,
         });
         if (media.status !== 'ok') return media;

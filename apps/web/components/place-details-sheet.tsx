@@ -107,6 +107,9 @@ export function PlaceDetailsSheet({
           )
         : 0,
     gcTime: 5 * 60 * 1000,
+    // Recheck presentation policy on opening; the API still reuses the same
+    // bounded evidence and resolved images. Cached content stays visible offline.
+    refetchOnMount: 'always',
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
@@ -122,14 +125,22 @@ export function PlaceDetailsSheet({
       const result = await queryClient.fetchQuery({
         queryKey: [...detailsKey, fetchedAt, photoId],
         queryFn: () => fetchPlacePhoto(place.id, photoId, locale, fetchedAt),
-        staleTime: Math.max(0, Date.parse(fetchedAt) + EVIDENCE_LIFETIME_MS - Date.now()),
+        staleTime: (query) =>
+          query.state.data?.status === 'disabled'
+            ? 0
+            : Math.max(0, Date.parse(fetchedAt) + EVIDENCE_LIFETIME_MS - Date.now()),
         retry: false,
       });
       queryClient.setQueryData<RichPlaceDetails | null>(detailsKey, (current) => {
         if (!current || current.freshness.fetchedAt !== fetchedAt) return current;
-        const slots = current.place.photoSlots?.map((photo) =>
-          photo.id === photoId ? { ...photo, uri: result.uri } : photo,
-        );
+        // Keep cached imagery while policy refreshes. Another unresolved slot
+        // must not become an endless loader if that refresh fails.
+        const slots =
+          result.status === 'disabled'
+            ? current.place.photoSlots?.filter((photo) => Boolean(photo.uri))
+            : current.place.photoSlots?.map((photo) =>
+                photo.id === photoId ? { ...photo, uri: result.uri } : photo,
+              );
         return {
           ...current,
           place: {
@@ -146,6 +157,9 @@ export function PlaceDetailsSheet({
         delete next[requestKey];
         return next;
       });
+      // An already-open sheet may hold slots from before an API policy change.
+      // An intentional refusal refreshes the slots without a failure or retry UI.
+      if (result.status === 'disabled') void richDetails.refetch();
     } catch (error) {
       setPhotoRequests((current) => ({ ...current, [requestKey]: 'failed' }));
       // Refresh an expired/replaced snapshot only in response to this user action.

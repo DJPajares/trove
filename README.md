@@ -259,6 +259,19 @@ APIs named in the example comments:
 Set `TROVE_GOOGLE_PROVIDERS_DISABLED=1` in the API environment to stop outbound
 Places and Routes requests while keeping manual planning available.
 
+Set API-only `GOOGLE_PLACE_PHOTO_LIMIT` to `0`, `1`, `2`, or `3` to control new
+Google Places Photo API requests per place. Unset or blank defaults to `3`;
+invalid or out-of-range values disable new photo requests with a warning.
+`1` allows only the first photo to be fetched, and `0` uses cached Google images
+or the existing Pexels editorial fallback. Previously resolved photos remain
+usable until their existing expiry, even above the new limit. Photo references
+stay in the rich metadata cache; lowering or raising the limit never clears
+caches or refreshes evidence just for photos. Opening details still resolves
+only the eligible cover; other eligible photos require selection. Restart or
+redeploy the API after changing the value. Place search, planning, hours, and
+scoring remain available at `0`; unavailable editorial imagery falls back to
+Trove's branded artwork.
+
 ### Editorial imagery
 
 Create `PEXELS_API_KEY` in the [Pexels API dashboard](https://www.pexels.com/api/)

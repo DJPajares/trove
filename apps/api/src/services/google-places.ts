@@ -1,5 +1,10 @@
 import { categorizePlaceTypes } from './place-categories.js';
 import {
+  canFetchPlacePhoto,
+  MAX_PLACE_PHOTOS,
+  normalizePlacePhotoLimit,
+} from './place-photo-policy.js';
+import {
   providerTargetFingerprint,
   type ProviderCallBudget,
   recordProviderCall,
@@ -102,8 +107,7 @@ export const GOOGLE_PLACE_EVIDENCE_FIELD_MASK = [
   'priceLevel',
 ].join(',');
 
-/** The most photos one Place keeps; the sheet's cover never shows more. */
-export const MAX_PLACE_PHOTOS = 3;
+export { MAX_PLACE_PHOTOS } from './place-photo-policy.js';
 
 /**
  * The widest a cover renders is a full-width phone at 3x, so 1200 is enough
@@ -208,6 +212,7 @@ type GoogleErrorResponse = {
 
 type GooglePlacesProviderOptions = {
   apiKey: string;
+  photoLimit?: number;
   baseUrl?: string;
   fetcher?: Fetcher;
   requestTimeoutMs?: number;
@@ -454,6 +459,7 @@ function mapPlaceIdentity(response: GooglePlaceDetails): ProviderPlaceIdentity |
 
 export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProvider {
   readonly name = 'google' as const;
+  readonly photoLimit: number;
 
   private readonly apiKey: string;
   private readonly baseUrl: string;
@@ -464,6 +470,7 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
 
   constructor(options: GooglePlacesProviderOptions) {
     this.apiKey = options.apiKey.trim();
+    this.photoLimit = normalizePlacePhotoLimit(options.photoLimit);
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '');
     this.fetcher = options.fetcher ?? globalThis.fetch;
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -746,6 +753,10 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
   async getPhotoMedia(request: PlacePhotoMediaRequest): Promise<string> {
     if (!PHOTO_NAME_PATTERN.test(request.name)) {
       throw new PlaceProviderError('invalid_request');
+    }
+    // Backstop before budget claims, telemetry or fetch, even for a direct provider caller.
+    if (!canFetchPlacePhoto(request.photoIndex, this.photoLimit)) {
+      throw new PlaceProviderError('provider_unavailable');
     }
 
     const url = new URL(`/v1/${request.name}/media`, this.baseUrl);

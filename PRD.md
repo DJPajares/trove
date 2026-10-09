@@ -256,7 +256,7 @@ Neither Trip Mode nor the Memories journal may become the only way out. Wherever
 
 ### Trip Navigation
 
-Inside a trip, the trip itself is the subject: its name is the page heading on every trip screen, with its dates and lifecycle beneath.
+Inside a trip, the trip itself is the subject: its name is the page heading on every trip screen. The shared trip tool headers use the hub's compact details row beneath the title: localized date range, inclusive day count, and lifecycle badge, with a Ready badge when applicable. The row shares the hub's typography and spacing and wraps naturally on narrow screens; the desktop hub retains its badges above the photograph's title.
 
 Trove offers three core trip experiences:
 

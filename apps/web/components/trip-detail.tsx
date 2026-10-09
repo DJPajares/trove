@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { useRef, useState, type ComponentType } from 'react';
 
 import { EditorialSection } from '@/components/editorial-section';
@@ -24,6 +24,7 @@ import { PageState } from '@/components/page-state';
 import { TripInsights } from '@/components/trip-insights';
 import { TripCountries } from '@/components/trip-countries';
 import { TripForm } from '@/components/trip-form';
+import { TripHeaderDetails } from '@/components/trip-header-details';
 import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
 import { TripDetailSkeleton } from '@/components/trip-detail-skeleton';
 import { useTripCreation } from '@/components/trip-creation-provider';
@@ -65,7 +66,6 @@ import { forgetCachedMediaUrls } from '@/lib/media/storage-cache-key';
 import { shouldRefreshSignedMedia } from '@/lib/memories/signed-media';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import { deleteTrip, type Trip } from '@/lib/trips/api';
-import { formatTripDateRange } from '@/lib/trips/format';
 import { supportingTripDestinations } from '@/lib/trips/navigation';
 import { tripDestinationSummary } from '@/lib/trips/summary';
 import { useTripDateMove } from '@/lib/trips/use-trip-date-move';
@@ -82,7 +82,6 @@ import { TripHubScore } from '@/components/trip-hub-score';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useTripOverview } from '@/lib/trips/use-trip-overview';
 import { overviewLifecycle } from '@/lib/trips/overview';
-import { calendarDayDistance } from '@/lib/trips/lifecycle';
 const supportingIcons: Record<
   'expenses' | 'info' | 'places' | 'reservations' | 'tasks',
   ComponentType<{ className?: string }>
@@ -102,7 +101,6 @@ export function TripDetail({
   const share = useTranslations('trips.share');
   const hub = useTranslations('trips.hub');
   const mediaTranslations = useTranslations('media');
-  const locale = useLocale();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { forgetCreatedTrip } = useTripCreation();
@@ -395,19 +393,11 @@ export function TripDetail({
             >
               {trip.name}
             </h1>
-            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground md:text-white/85">
-              <span>{formatTripDateRange(trip.startDate, trip.endDate, locale)}</span>
-              <span aria-hidden="true">·</span>
-              <span>
-                {hub('duration', { count: calendarDayDistance(trip.startDate, trip.endDate) + 1 })}
-              </span>
-              <TripLifecycleBadge className="md:hidden" lifecycle={trip.lifecycle} />
-              <TripReadinessBadge
-                className="md:hidden"
-                lifecycle={trip.lifecycle}
-                readiness={trip.planningReadiness}
-              />
-            </div>
+            <TripHeaderDetails
+              badgeClassName="md:hidden"
+              className="md:text-white/85"
+              trip={trip}
+            />
           </div>
         </section>
         <TripHubChapter

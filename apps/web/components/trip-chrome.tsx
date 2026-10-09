@@ -130,9 +130,7 @@ export function TripChrome({
   const supporting = supportingTripDestinations(tripId);
   const activeSupporting = supporting.find((entry) => entry.section === currentSection);
   const onCoreExperience = primary.some((entry) => entry.section === currentSection);
-  // Places is reached from the itinerary rather than from the menu, so it belongs to
-  // neither set. It is still a screen the traveller can be standing on, and a header
-  // that reads "More" there tells them nothing about where they are.
+  // Every supporting screen names itself, even when reached through a direct link.
   const currentLabel = activeSupporting
     ? t(activeSupporting.labelKey)
     : onCoreExperience
@@ -178,18 +176,13 @@ export function TripChrome({
           navigation row stays anchored to the full planning section. Desktop
           keeps the ordinary header box and flow. */}
         <header className={cn(stickyNavigation && 'contents md:block')} data-slot="trip-chrome">
-          {/* The overview draws the same cover and the same sheet at the same
-            sizes. Any change to one shape belongs in both, or the cover
-            resizes under the traveller as they open a section. */}
+          {/* On mobile, every trip section and the hub use the same cover height
+            and overlapping sheet. Desktop keeps the planner's compact band. */}
           <section
             aria-labelledby="trip-section-cover-heading"
             className={cn(
               '-mx-[var(--gutter-inline-start)] -mt-8 md:mx-0 md:mt-0',
-              // The planner is a workspace: its cover gives way to a band so
-              // the day starts on the first screen, where the full cover would
-              // fill it. Every other screen keeps the trip's full cover - a
-              // height decided per screen rather than one that changes on it.
-              stickyNavigation && '[--trip-cover-height:9.5rem] md:[--trip-cover-height:12rem]',
+              stickyNavigation && 'md:[--trip-cover-height:12rem]',
             )}
           >
             <div className="relative isolate">

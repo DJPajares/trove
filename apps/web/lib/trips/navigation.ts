@@ -235,17 +235,13 @@ export function tripSectionLabelKey(section: TripSection): string {
   return sectionLabelKeys[section];
 }
 
-/**
- * Everything a trip needs but should not have to look at. Places sits here until
- * the itinerary carries it directly.
- */
+/** The trip's supporting destinations, with Places first in every tools menu. */
 export function supportingTripDestinations(tripId: string): TripDestination[] {
   const base = `/trips/${tripId}`;
 
-  // Places is not here: the itinerary opens the collection directly, so listing it
-  // again would be a second door to the same room. The route still works.
   return (
     [
+      ['places', 'places'],
       ['tasks', 'tasks'],
       ['reservations', 'reservations'],
       ['expenses', 'expenses'],

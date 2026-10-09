@@ -84,11 +84,12 @@ import { useTripOverview } from '@/lib/trips/use-trip-overview';
 import { overviewLifecycle } from '@/lib/trips/overview';
 import { calendarDayDistance } from '@/lib/trips/lifecycle';
 const supportingIcons: Record<
-  'expenses' | 'info' | 'reservations' | 'tasks',
+  'expenses' | 'info' | 'places' | 'reservations' | 'tasks',
   ComponentType<{ className?: string }>
 > = {
   expenses: tripSectionIcons.expenses,
   info: tripSectionIcons.info,
+  places: tripSectionIcons.places,
   reservations: tripSectionIcons.reservations,
   tasks: tripSectionIcons.tasks,
 };
@@ -320,55 +321,57 @@ export function TripDetail({
 
   return (
     <article className="mx-auto w-full max-w-5xl space-y-6 md:space-y-8" data-slot="trip-hub">
-      <div className="-mx-[var(--gutter-inline-start)] -mt-8 overflow-hidden bg-surface-raised md:mx-0 md:mt-0 md:grid md:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] md:rounded-[var(--radius-2xl)]">
+      <div className="-mx-[var(--gutter-inline-start)] -mt-8 overflow-hidden bg-background md:mx-0 md:mt-0 md:grid md:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] md:rounded-[var(--radius-2xl)] md:bg-surface-raised">
         <section
           aria-labelledby="trip-detail-heading"
-          className="relative isolate flex min-h-80 flex-col justify-end md:min-h-[25rem]"
+          className="relative isolate md:flex md:min-h-[25rem] md:flex-col md:justify-end"
         >
-          <TripMedia
-            alt={
-              editorial
-                ? mediaTranslations('alt.tripEditorial', { name: destinations ?? trip.name })
-                : ''
-            }
-            preload
-            fallbackSources={editorial ? [{ kind: 'editorial', reference: editorial }] : []}
-            onUnreachable={() => {
-              const now = Date.now();
-              if (
-                shouldRefreshSignedMedia({
-                  canDecodeHeic: true,
-                  contentType: null,
-                  lastRefreshAt: lastCoverRefreshAt.current,
-                  now,
-                  online: navigator.onLine,
-                  url: trip.coverPhotoUrl,
-                })
-              ) {
-                lastCoverRefreshAt.current = now;
-                void forgetCachedMediaUrls([trip.coverPhotoUrl]).finally(() =>
-                  tripContext?.refresh(),
-                );
+          <div className="relative md:contents">
+            <TripMedia
+              alt={
+                editorial
+                  ? mediaTranslations('alt.tripEditorial', { name: destinations ?? trip.name })
+                  : ''
               }
-            }}
-            className="absolute inset-0 h-full w-full rounded-none"
-            sizes="(max-width: 767px) 100vw, 660px"
-            source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
-            variant="cover"
-          />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 bg-gradient-to-t from-neutral-950/90 via-neutral-950/35 to-neutral-950/10"
-          />
-          <Link
-            aria-label={t('backToTrips')}
-            className="absolute top-[max(1rem,var(--safe-top))] left-[max(1rem,var(--safe-left))] z-10 grid size-10 place-items-center rounded-full bg-neutral-950/50 text-white backdrop-blur-sm outline-none hover:bg-neutral-950/75 focus-visible:ring-3 focus-visible:ring-white/60"
-            href="/trips"
-          >
-            <ArrowLeft aria-hidden="true" className="size-4" />
-          </Link>
-          <div className="relative px-5 pt-20 pb-6 text-white md:px-7 md:pb-8">
-            <div className="mb-4 flex flex-wrap gap-2">
+              preload
+              fallbackSources={editorial ? [{ kind: 'editorial', reference: editorial }] : []}
+              onUnreachable={() => {
+                const now = Date.now();
+                if (
+                  shouldRefreshSignedMedia({
+                    canDecodeHeic: true,
+                    contentType: null,
+                    lastRefreshAt: lastCoverRefreshAt.current,
+                    now,
+                    online: navigator.onLine,
+                    url: trip.coverPhotoUrl,
+                  })
+                ) {
+                  lastCoverRefreshAt.current = now;
+                  void forgetCachedMediaUrls([trip.coverPhotoUrl]).finally(() =>
+                    tripContext?.refresh(),
+                  );
+                }
+              }}
+              className="w-full rounded-none md:absolute md:inset-0 md:h-full"
+              sizes="(max-width: 767px) 100vw, 660px"
+              source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
+              variant="cover"
+            />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 bg-gradient-to-t from-surface-overlay/85 from-0% to-transparent to-42% md:from-neutral-950/90 md:via-neutral-950/35 md:to-neutral-950/10 md:to-100%"
+            />
+            <Link
+              aria-label={t('backToTrips')}
+              className="absolute top-[max(1rem,var(--safe-top))] left-[max(1rem,var(--safe-left))] z-10 grid size-10 place-items-center rounded-full bg-neutral-950/50 text-white backdrop-blur-sm outline-none hover:bg-neutral-950/75 focus-visible:ring-3 focus-visible:ring-white/60"
+              href="/trips"
+            >
+              <ArrowLeft aria-hidden="true" className="size-4" />
+            </Link>
+          </div>
+          <div className="relative -mt-8 rounded-t-[var(--trip-sheet-radius)] bg-background px-[var(--gutter-inline-start)] pt-6 text-foreground md:mt-0 md:rounded-none md:bg-transparent md:px-7 md:pt-20 md:pb-8 md:text-white">
+            <div className="mb-4 hidden flex-wrap gap-2 md:flex">
               <TripLifecycleBadge lifecycle={trip.lifecycle} tone="onMedia" />
               <TripReadinessBadge
                 lifecycle={trip.lifecycle}
@@ -378,11 +381,11 @@ export function TripDetail({
             </div>
             {trip.countries?.length ? (
               <TripCountries
-                className="text-xs font-medium tracking-[0.1em] text-white/85 uppercase"
+                className="text-xs font-medium tracking-[0.1em] text-brand uppercase md:text-white/85"
                 countries={trip.countries}
               />
             ) : destinations ? (
-              <p className="text-xs font-medium tracking-[0.1em] text-white/85 uppercase">
+              <p className="text-xs font-medium tracking-[0.1em] text-brand uppercase md:text-white/85">
                 {destinations}
               </p>
             ) : null}
@@ -392,13 +395,19 @@ export function TripDetail({
             >
               {trip.name}
             </h1>
-            <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-white/85">
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground md:text-white/85">
               <span>{formatTripDateRange(trip.startDate, trip.endDate, locale)}</span>
               <span aria-hidden="true">·</span>
               <span>
                 {hub('duration', { count: calendarDayDistance(trip.startDate, trip.endDate) + 1 })}
               </span>
-            </p>
+              <TripLifecycleBadge className="md:hidden" lifecycle={trip.lifecycle} />
+              <TripReadinessBadge
+                className="md:hidden"
+                lifecycle={trip.lifecycle}
+                readiness={trip.planningReadiness}
+              />
+            </div>
           </div>
         </section>
         <TripHubChapter

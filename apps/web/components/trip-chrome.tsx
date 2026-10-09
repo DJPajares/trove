@@ -209,27 +209,24 @@ export function TripChrome({
               {trip ? (
                 trip.countries?.length ? (
                   <TripCountries
-                    className="block text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase"
+                    className="text-xs font-medium tracking-[0.1em] text-brand uppercase"
                     countries={trip.countries}
                   />
                 ) : null
               ) : (
-                <Skeleton className="h-[length:var(--text-metadata)] w-24" />
+                <Skeleton className="inline-block h-4 w-24" />
               )}
               {trip ? (
                 <h1
-                  className={cn(
-                    'text-[length:var(--text-page-title)] leading-[1.06] font-semibold tracking-[-0.035em] text-balance text-foreground',
-                    trip.countries?.length && 'mt-1.5',
-                  )}
+                  className="mt-2 text-[length:var(--text-page-title)] leading-[1.08] font-semibold tracking-[-0.035em] text-balance break-words text-foreground md:text-4xl"
                   id="trip-section-cover-heading"
                 >
                   {trip.name}
                 </h1>
               ) : (
-                <div aria-busy="true" aria-live="polite" className="mt-1.5" role="status">
+                <div aria-busy="true" aria-live="polite" className="mt-2" role="status">
                   <span className="sr-only">{t('titleLoading')}</span>
-                  <Skeleton className="h-[calc(var(--text-page-title)*1.06)] w-3/5 max-w-sm" />
+                  <Skeleton className="h-[calc(var(--text-page-title)*1.08)] w-3/5 max-w-sm md:h-[calc(2.25rem*1.08)]" />
                 </div>
               )}
               {trip ? (

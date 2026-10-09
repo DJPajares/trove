@@ -4,10 +4,10 @@ import { useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { AuthLinkError } from '@/components/auth-link-error';
+import { PasswordInput } from '@/components/password-input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
 import type { RecoveryIdentity } from '@/lib/auth/recovery';
 import type { EmailLinkError } from '@/lib/auth/email-link';
 
@@ -103,27 +103,25 @@ export function PasswordResetForm({
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="reset-password">{t('newPassword')}</FieldLabel>
-          <Input
+          <PasswordInput
             autoComplete="new-password"
             id="reset-password"
             minLength={6}
             maxLength={1024}
             onChange={(event) => setPassword(event.target.value)}
             required
-            type="password"
             value={password}
           />
         </Field>
         <Field>
           <FieldLabel htmlFor="reset-confirmation">{t('confirmPassword')}</FieldLabel>
-          <Input
+          <PasswordInput
             autoComplete="new-password"
             id="reset-confirmation"
             minLength={6}
             maxLength={1024}
             onChange={(event) => setConfirmation(event.target.value)}
             required
-            type="password"
             value={confirmation}
           />
         </Field>

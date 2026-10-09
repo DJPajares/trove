@@ -1,15 +1,12 @@
 'use client';
 
-import { dayActionLink } from '@/lib/plan-score/presentation';
-
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   CalendarSync,
   ChevronRight,
   CircleAlert,
   CircleCheck,
-  ClipboardCheck,
   Ellipsis,
   Pencil,
   RefreshCw,
@@ -19,19 +16,16 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import { useMemo, useState, type ComponentType, type ReactNode } from 'react';
+import { useRef, useState, type ComponentType } from 'react';
 
 import { EditorialSection } from '@/components/editorial-section';
-import { ExperienceRatingSummary } from '@/components/experience-rating';
 import { OfflineReadyStatus } from '@/components/offline-ready-status';
 import { PageState } from '@/components/page-state';
-import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripInsights } from '@/components/trip-insights';
 import { TripCountries } from '@/components/trip-countries';
 import { TripForm } from '@/components/trip-form';
 import { TripLifecycleBadge } from '@/components/trip-lifecycle-badge';
 import { TripDetailSkeleton } from '@/components/trip-detail-skeleton';
-import { TripFactChips } from '@/components/trip-fact-chips';
 import { useTripCreation } from '@/components/trip-creation-provider';
 import { useTripContext } from '@/components/trip-provider';
 import { TripShareDialog } from '@/components/trip-share-dialog';
@@ -49,15 +43,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuLinkItem,
-  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -70,17 +61,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { forgetCachedMediaUrls } from '@/lib/media/storage-cache-key';
+import { shouldRefreshSignedMedia } from '@/lib/memories/signed-media';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
-import { useTripContext as useDestinationContext } from '@/lib/insights/use-trip-context';
-import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
-import { fetchTripInfo, type TripInfoEntry } from '@/lib/trip-info/api';
 import { deleteTrip, type Trip } from '@/lib/trips/api';
 import { formatTripDateRange } from '@/lib/trips/format';
-import {
-  supportingTripDestinations,
-  tripOverviewDestinations,
-  type TripOverviewDestination,
-} from '@/lib/trips/navigation';
+import { supportingTripDestinations } from '@/lib/trips/navigation';
 import { tripDestinationSummary } from '@/lib/trips/summary';
 import { useTripDateMove } from '@/lib/trips/use-trip-date-move';
 import { useTripReadiness } from '@/lib/trips/use-trip-readiness';
@@ -90,7 +76,13 @@ import { removeTripQueries } from '@/lib/query/trip-invalidation';
 import * as Icons from '@/lib/icons';
 import { tripSectionIcons } from '@/lib/icons';
 
-/** The tools' icons. Which tools there are, and their order, is the navigation contract's. */
+import { TripHubChapter, TripHubExperienceLinks } from '@/components/trip-hub-chapter';
+import { selectNextSteps } from '@/lib/home/next-steps';
+import { TripHubScore } from '@/components/trip-hub-score';
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useTripOverview } from '@/lib/trips/use-trip-overview';
+import { overviewLifecycle } from '@/lib/trips/overview';
+import { calendarDayDistance } from '@/lib/trips/lifecycle';
 const supportingIcons: Record<
   'expenses' | 'info' | 'reservations' | 'tasks',
   ComponentType<{ className?: string }>
@@ -101,133 +93,13 @@ const supportingIcons: Record<
   tasks: tripSectionIcons.tasks,
 };
 
-const experienceIcons: Record<
-  'itinerary' | 'memories' | 'mode',
-  ComponentType<{ className?: string }>
-> = {
-  itinerary: tripSectionIcons.itinerary,
-  memories: tripSectionIcons.memories,
-  mode: tripSectionIcons.mode,
-};
-
-function TripDetailPlanScore({ tripId }: Readonly<{ tripId: string }>) {
-  const planScoreTranslations = useTranslations('planScore');
-  const planScore = useTripPlanScore(tripId);
-  const planScoreHidden =
-    planScore.status === 'disabled' ||
-    Boolean(planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED'));
-  // Seasonal fit reads the typical conditions Insights caches. Asking for them
-  // with the score means the trip's breakdown need not wait for Insights to
-  // scroll into view; the score refreshes once they arrive.
-  useDestinationContext(planScoreHidden ? null : tripId);
-
-  if (planScoreHidden) return null;
-
-  return (
-    <PlanScorePanel
-      tripPlacesHref={`/trips/${tripId}/places`}
-      completeness={planScore.data?.completeness ?? null}
-      confidence={planScore.data?.confidence ?? null}
-      disabled={planScore.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')}
-      explanations={
-        planScore.data?.explanations ?? {
-          uncertainty: [],
-          whatWorks: [],
-          worthImproving: [],
-        }
-      }
-      // The trip name is the only h1 here, so the panel sits at the top level
-      // of the route's outline alongside the trip-info section.
-      headingLevel={2}
-      assessment={planScore.data}
-      change={planScore.changeFor('trip')}
-      resolveAction={(explanation) =>
-        planScore.data ? dayActionLink(tripId, planScore.data, explanation) : null
-      }
-      onRetry={planScore.retry}
-      score={planScore.data?.score ?? null}
-      scope="trip"
-      status={planScore.status}
-      title={planScoreTranslations('title')}
-    />
-  );
-}
-
-/** One fact in the overview's semantic description list. */
-function OverviewFact({
-  Icon,
-  label,
-  value,
-}: Readonly<{
-  Icon: ComponentType<{ className?: string }>;
-  label: string;
-  value: ReactNode;
-}>) {
-  return (
-    <div className="flex gap-3 border-b border-border-subtle py-4">
-      <Icon aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-text-subtle" />
-      <div className="min-w-0">
-        <dt className="text-[length:var(--text-metadata)] font-medium text-text-subtle">{label}</dt>
-        <dd className="mt-0.5 text-sm break-words text-foreground">{value}</dd>
-      </div>
-    </div>
-  );
-}
-
-function PinnedTripInfoEntry({ label, value }: Readonly<{ label: string; value: ReactNode }>) {
-  return (
-    <div>
-      <p className="text-[length:var(--text-metadata)] font-medium text-text-subtle">{label}</p>
-      <p className="mt-1 text-sm break-words text-foreground">{value}</p>
-    </div>
-  );
-}
-
-function TripExperienceTile({
-  description,
-  destination,
-  label,
-}: Readonly<{ description: string; destination: TripOverviewDestination; label: string }>) {
-  const Icon = experienceIcons[destination.section];
-
-  return (
-    <Link
-      className="group flex min-h-32 flex-col justify-between rounded-[var(--radius-xl)] border border-border-subtle bg-card p-4 shadow-[var(--shadow-control)] outline-none transition-[background-color,border-color,box-shadow,transform] duration-[var(--motion-standard)] hover:border-border-strong hover:bg-surface-hover hover:shadow-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px"
-      data-slot="trip-overview-secondary-action"
-      href={destination.href}
-    >
-      <span className="flex items-start justify-between gap-3">
-        <Icon aria-hidden="true" className="size-5 text-brand" />
-        <ChevronRight
-          aria-hidden="true"
-          className="size-4 text-text-subtle transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5"
-        />
-      </span>
-      <span className="mt-5 block">
-        <span className="block font-semibold text-foreground">{label}</span>
-        <span className="mt-1 block text-sm leading-5 text-muted-foreground">{description}</span>
-      </span>
-    </Link>
-  );
-}
-
-/**
- * The trip's own screen.
- *
- * A cover photograph carries the identity, and everything the trip says about
- * itself outside its sub-routes follows underneath: the stage's actions, the
- * score or the reflection, the facts, the supporting tools, and the details the
- * traveller pinned.
- */
-const EMPTY_TRIP_INFO: TripInfoEntry[] = [];
-
 export function TripDetail({
   planScoreEnabled,
   tripId,
 }: Readonly<{ planScoreEnabled: boolean; tripId: string }>) {
   const t = useTranslations('trips');
   const share = useTranslations('trips.share');
-  const experienceRatingTranslations = useTranslations('experienceRating');
+  const hub = useTranslations('trips.hub');
   const mediaTranslations = useTranslations('media');
   const locale = useLocale();
   const router = useRouter();
@@ -238,9 +110,13 @@ export function TripDetail({
   // inside the trip is showing, and fetching it here as well is what used to
   // make the cover arrive twice.
   const tripContext = useTripContext();
-  const trip = tripContext?.trip ?? null;
+  const loadedTrip = tripContext?.trip ?? null;
+  const trip = loadedTrip
+    ? { ...loadedTrip, lifecycle: overviewLifecycle(loadedTrip, new Date()) }
+    : null;
   const status = tripContext?.status ?? 'loading';
   const editorial = tripContext?.editorial ?? null;
+  const lastCoverRefreshAt = useRef<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -258,22 +134,8 @@ export function TripDetail({
   } = useTripDateMove();
   const movingDates = dateMovePendingTripId !== null;
   const readinessPending = readinessPendingTripId !== null;
-  // The same entry the Trip Info screen reads, so opening this overview after
-  // editing trip info shows the edit without asking again.
-  const tripInfoQuery = useQuery({
-    queryFn: () => fetchTripInfo(tripId),
-    queryKey: queryKeys.tripInfo(tripId),
-  });
-  const tripInfo = useMemo(
-    () => tripInfoQuery.data?.entries.filter((entry) => entry.isPinned) ?? EMPTY_TRIP_INFO,
-    [tripInfoQuery.data],
-  );
-  const tripInfoStatus = tripInfoQuery.isPending
-    ? 'loading'
-    : tripInfoQuery.error
-      ? 'error'
-      : 'idle';
-
+  const overviewQuery = useTripOverview(tripId, Boolean(trip));
+  const overview = overviewQuery.data;
   const backToTrips = (
     <Link
       className="inline-flex min-h-9 items-center gap-2 rounded-[var(--radius-md)] px-2 text-sm font-medium text-muted-foreground outline-none transition-colors duration-[var(--motion-standard)] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
@@ -329,14 +191,20 @@ export function TripDetail({
 
   const destinations = tripDestinationSummary(trip);
   const supporting = supportingTripDestinations(trip.id);
-  const overviewDestinations = tripOverviewDestinations(trip.id, trip.lifecycle, trip.startDate);
-  const primaryActionLabel =
-    trip.lifecycle === 'planning'
-      ? t('continuePlanning')
-      : trip.lifecycle === 'active'
-        ? t('continueTrip')
-        : t('viewMemories');
-
+  const routeDestinations = (overview?.destinations ?? trip.destinations).filter((destination) =>
+    destination.name?.trim(),
+  );
+  const nextSteps = selectNextSteps({
+    trip,
+    tasks: null,
+    taskSummary: overview?.tasks.next
+      ? { count: overview.tasks.openCount, next: overview.tasks.next }
+      : null,
+    offlineReady: null,
+    weather: null,
+  })
+    .filter((step) => step.kind !== 'openDays')
+    .slice(0, 2);
   async function handleDelete() {
     if (!trip) return;
     setDeleting(true);
@@ -367,48 +235,140 @@ export function TripDetail({
     }
   }
 
-  return (
-    <article className="mx-auto w-full max-w-5xl space-y-7">
-      {/*
-        The cover, and the sheet that rides up over it.
-
-        The title used to float on the scrim. Moving it into the sheet gives the
-        photograph its whole frame back and puts the trip's name on the surface
-        the rest of the page is written on, which is where it can carry chips
-        beside it without fighting whatever the photograph is doing underneath.
-        `trip-chrome` draws the same two shapes at the same sizes, so the cover
-        does not change height or curve when the traveller opens a section.
-      */}
-      <section
-        aria-labelledby="trip-detail-heading"
-        className="-mx-[var(--gutter-inline-start)] -mt-8 md:mx-0 md:mt-0"
+  const manageMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            aria-label={t('tripActions')}
+            className="shrink-0"
+            size="icon"
+            type="button"
+            variant="ghost"
+          />
+        }
       >
-        <div className="relative isolate">
+        {/* The menu closes the moment a date is chosen, so without this the
+                only sign the trip is moving would be the trip eventually
+                changing underneath the traveller. */}
+        {movingDates ? (
+          <RefreshCw aria-hidden="true" className="animate-spin motion-reduce:animate-none" />
+        ) : (
+          <Ellipsis aria-hidden="true" />
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-52" sideOffset={8}>
+        <DropdownMenuItem onClick={() => setEditing(true)}>
+          <Pencil aria-hidden="true" />
+          {t('editTrip')}
+        </DropdownMenuItem>
+        {/* Shifting a trip is otherwise a trip through the edit form to a
+                date field, which is a lot of steps for "a week later". The plan
+                comes along on its own: both ends move by the same amount, so
+                the trip keeps its length and nothing has to be unscheduled. */}
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger disabled={movingDates}>
+            <CalendarSync aria-hidden="true" />
+            {t('moveDates.action')}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            {(
+              [
+                ['dayEarlier', -1],
+                ['dayLater', 1],
+                ['weekEarlier', -7],
+                ['weekLater', 7],
+              ] as const
+            ).map(([key, days]) => (
+              <DropdownMenuItem key={key} onClick={() => void moveTripDates(trip, days)}>
+                {t(`moveDates.${key}`)}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        {/* Sharing sits with editing rather than among the tools: both are
+                things done to the trip itself, and this menu is the one the
+                overview offers. It is also the first stop from a trip in the
+                library, so a trip can be shared without opening its plan. */}
+        <DropdownMenuItem onClick={() => setSharing(true)}>
+          <Share2 aria-hidden="true" />
+          {share('action')}
+        </DropdownMenuItem>
+        {/* Readiness was previously reachable only by opening the edit form
+                and expanding a panel, which is a long way round for a marker
+                the traveller is meant to flip as their plan settles. It stays
+                out of the menu once the trip is under way: by then the plan is
+                no longer the thing being declared done. */}
+        {trip.lifecycle === 'planning' ? (
+          <DropdownMenuItem
+            disabled={readinessPending}
+            onClick={() =>
+              void setReadiness(trip, trip.planningReadiness === 'ready' ? 'in_progress' : 'ready')
+            }
+          >
+            {trip.planningReadiness === 'ready' ? (
+              <RotateCcw aria-hidden="true" />
+            ) : (
+              <CircleCheck aria-hidden="true" />
+            )}
+            {t(trip.planningReadiness === 'ready' ? 'markInProgress' : 'markReady')}
+          </DropdownMenuItem>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  return (
+    <article className="mx-auto w-full max-w-5xl space-y-6 md:space-y-8" data-slot="trip-hub">
+      <div className="-mx-[var(--gutter-inline-start)] -mt-8 overflow-hidden bg-surface-raised md:mx-0 md:mt-0 md:grid md:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] md:rounded-[var(--radius-2xl)]">
+        <section
+          aria-labelledby="trip-detail-heading"
+          className="relative isolate flex min-h-80 flex-col justify-end md:min-h-[25rem]"
+        >
           <TripMedia
             alt={
               editorial
                 ? mediaTranslations('alt.tripEditorial', { name: destinations ?? trip.name })
                 : ''
             }
-            // The page's Largest Contentful Paint by a distance.
             preload
-            className="rounded-none md:rounded-t-[var(--radius-2xl)] md:rounded-b-none"
-            sizes="(max-width: 1023px) 100vw, 1024px"
+            fallbackSources={editorial ? [{ kind: 'editorial', reference: editorial }] : []}
+            onUnreachable={() => {
+              const now = Date.now();
+              if (
+                shouldRefreshSignedMedia({
+                  canDecodeHeic: true,
+                  contentType: null,
+                  lastRefreshAt: lastCoverRefreshAt.current,
+                  now,
+                  online: navigator.onLine,
+                  url: trip.coverPhotoUrl,
+                })
+              ) {
+                lastCoverRefreshAt.current = now;
+                void forgetCachedMediaUrls([trip.coverPhotoUrl]).finally(() =>
+                  tripContext?.refresh(),
+                );
+              }
+            }}
+            className="absolute inset-0 h-full w-full rounded-none"
+            sizes="(max-width: 767px) 100vw, 660px"
             source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
             variant="cover"
           />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-gradient-to-t from-neutral-950/90 via-neutral-950/35 to-neutral-950/10"
+          />
           <Link
             aria-label={t('backToTrips')}
-            className="absolute top-[max(1rem,var(--safe-top))] left-[max(1rem,var(--safe-left))] z-10 flex size-10 items-center justify-center rounded-full border border-media-fallback-foreground/18 bg-neutral-950/58 text-media-fallback-foreground backdrop-blur-sm outline-none transition-colors hover:bg-neutral-950/78 focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="absolute top-[max(1rem,var(--safe-top))] left-[max(1rem,var(--safe-left))] z-10 grid size-10 place-items-center rounded-full bg-neutral-950/50 text-white backdrop-blur-sm outline-none hover:bg-neutral-950/75 focus-visible:ring-3 focus-visible:ring-white/60"
             href="/trips"
           >
             <ArrowLeft aria-hidden="true" className="size-4" />
           </Link>
-          {/* Only the foot of the cover is darkened now: the sheet carries the
-              text, so the scrim is here to keep the badges legible and to stop
-              the curve meeting a bright edge. */}
-          <div className="pointer-events-none absolute inset-0 flex flex-col justify-end rounded-none bg-gradient-to-t from-surface-overlay/85 from-0% to-transparent to-42% p-5 md:rounded-t-[var(--radius-2xl)] md:p-7">
-            <div className="flex flex-wrap items-center justify-end gap-1.5 pb-6 md:pb-8">
+          <div className="relative px-5 pt-20 pb-6 text-white md:px-7 md:pb-8">
+            <div className="mb-4 flex flex-wrap gap-2">
               <TripLifecycleBadge lifecycle={trip.lifecycle} tone="onMedia" />
               <TripReadinessBadge
                 lifecycle={trip.lifecycle}
@@ -416,156 +376,122 @@ export function TripDetail({
                 tone="onMedia"
               />
             </div>
+            {trip.countries?.length ? (
+              <TripCountries
+                className="text-xs font-medium tracking-[0.1em] text-white/85 uppercase"
+                countries={trip.countries}
+              />
+            ) : destinations ? (
+              <p className="text-xs font-medium tracking-[0.1em] text-white/85 uppercase">
+                {destinations}
+              </p>
+            ) : null}
+            <h1
+              className="mt-2 text-[length:var(--text-page-title)] leading-[1.08] font-semibold tracking-[-0.035em] text-balance break-words md:text-4xl"
+              id="trip-detail-heading"
+            >
+              {trip.name}
+            </h1>
+            <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-white/85">
+              <span>{formatTripDateRange(trip.startDate, trip.endDate, locale)}</span>
+              <span aria-hidden="true">·</span>
+              <span>
+                {hub('duration', { count: calendarDayDistance(trip.startDate, trip.endDate) + 1 })}
+              </span>
+            </p>
+          </div>
+        </section>
+        <TripHubChapter
+          trip={trip}
+          overview={overview}
+          loading={overviewQuery.isPending}
+          failed={Boolean(overviewQuery.error)}
+          onRetry={() => void overviewQuery.refetch()}
+        />
+      </div>
+
+      <TripHubExperienceLinks trip={trip} />
+
+      <section aria-label={hub('journeyDetails')} className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-base font-semibold">{hub('routeTitle')}</h2>
+          <div className="flex items-center gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button size="sm" variant="outline" />}>
+                {t('tripTools')}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {supporting.map((destination) => {
+                  const Icon = supportingIcons[destination.section as keyof typeof supportingIcons];
+                  return (
+                    <DropdownMenuLinkItem
+                      key={destination.section}
+                      render={<Link href={destination.href} />}
+                    >
+                      <Icon aria-hidden="true" />
+                      {t(destination.labelKey)}
+                    </DropdownMenuLinkItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {manageMenu}
           </div>
         </div>
-
-        <div className="relative -mt-8 rounded-t-[var(--trip-sheet-radius)] bg-background px-[var(--gutter-inline-start)] pt-6 md:-mt-10 md:px-7 md:pt-7">
-          {/* The countries a trip declares are what it is, so they lead. A trip
-              from before the field existed falls back to the destinations it
-              does have, and one with neither says nothing rather than filling
-              the space. */}
-          {trip.countries?.length ? (
-            <TripCountries
-              className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase"
-              countries={trip.countries}
-            />
-          ) : destinations ? (
-            <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
-              {destinations}
-            </p>
-          ) : null}
-          <h1
-            className="mt-1.5 text-[length:var(--text-page-title)] leading-[1.06] font-semibold tracking-[-0.035em] text-balance text-foreground md:text-[length:var(--text-immersive-title)] md:leading-[1.02]"
-            id="trip-detail-heading"
-          >
-            {trip.name}
-          </h1>
-          <TripFactChips
-            className="mt-4"
-            leading={
-              <span className="tabular-nums">
-                {formatTripDateRange(trip.startDate, trip.endDate, locale)}
-              </span>
-            }
-            trip={trip}
-          />
-        </div>
-      </section>
-
-      {/* The trip in its own words sits beside its own actions, rather than
-          each claiming a full row: the menu is held out of the cover's
-          top-right corner, which belongs to the app-wide quick-actions
-          button on mobile, but a row of its own here would leave nothing
-          beside it but air. */}
-      <div className="flex items-start justify-between gap-4">
-        {trip.description ? (
-          <p className="min-w-0 max-w-[var(--layout-reading)] text-base leading-[1.6] text-pretty whitespace-pre-wrap text-muted-foreground">
-            {trip.description}
-          </p>
-        ) : (
-          <span />
-        )}
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                aria-label={t('tripActions')}
-                className="shrink-0"
-                size="icon"
-                type="button"
-                variant="ghost"
-              />
-            }
-          >
-            {/* The menu closes the moment a date is chosen, so without this the
-                only sign the trip is moving would be the trip eventually
-                changing underneath the traveller. */}
-            {movingDates ? (
-              <RefreshCw aria-hidden="true" className="animate-spin motion-reduce:animate-none" />
-            ) : (
-              <Ellipsis aria-hidden="true" />
-            )}
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-52" sideOffset={8}>
-            <DropdownMenuItem onClick={() => setEditing(true)}>
-              <Pencil aria-hidden="true" />
-              {t('editTrip')}
-            </DropdownMenuItem>
-            {/* Shifting a trip is otherwise a trip through the edit form to a
-                date field, which is a lot of steps for "a week later". The plan
-                comes along on its own: both ends move by the same amount, so
-                the trip keeps its length and nothing has to be unscheduled. */}
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger disabled={movingDates}>
-                <CalendarSync aria-hidden="true" />
-                {t('moveDates.action')}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                {(
-                  [
-                    ['dayEarlier', -1],
-                    ['dayLater', 1],
-                    ['weekEarlier', -7],
-                    ['weekLater', 7],
-                  ] as const
-                ).map(([key, days]) => (
-                  <DropdownMenuItem key={key} onClick={() => void moveTripDates(trip, days)}>
-                    {t(`moveDates.${key}`)}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-            {/* Sharing sits with editing rather than among the tools: both are
-                things done to the trip itself, and this menu is the one the
-                overview offers. It is also the first stop from a trip in the
-                library, so a trip can be shared without opening its plan. */}
-            <DropdownMenuItem onClick={() => setSharing(true)}>
-              <Share2 aria-hidden="true" />
-              {share('action')}
-            </DropdownMenuItem>
-            {/* Readiness was previously reachable only by opening the edit form
-                and expanding a panel, which is a long way round for a marker
-                the traveller is meant to flip as their plan settles. It stays
-                out of the menu once the trip is under way: by then the plan is
-                no longer the thing being declared done. */}
-            {trip.lifecycle === 'planning' ? (
-              <DropdownMenuItem
-                disabled={readinessPending}
-                onClick={() =>
-                  void setReadiness(
-                    trip,
-                    trip.planningReadiness === 'ready' ? 'in_progress' : 'ready',
-                  )
-                }
-              >
-                {trip.planningReadiness === 'ready' ? (
-                  <RotateCcw aria-hidden="true" />
-                ) : (
-                  <CircleCheck aria-hidden="true" />
-                )}
-                {t(trip.planningReadiness === 'ready' ? 'markInProgress' : 'markReady')}
-              </DropdownMenuItem>
+        {routeDestinations.length ? (
+          <Collapsible>
+            <ol
+              aria-label={hub('destinations')}
+              className="flex flex-wrap items-baseline gap-x-3 gap-y-2"
+            >
+              {routeDestinations.slice(0, 3).map((destination, index) => (
+                <li className="flex min-w-0 items-baseline gap-3" key={destination.id}>
+                  {index ? (
+                    <span aria-hidden="true" className="text-text-subtle">
+                      →
+                    </span>
+                  ) : null}
+                  <span className="text-sm text-foreground">{destination.name}</span>
+                </li>
+              ))}
+            </ol>
+            {routeDestinations.length > 3 ? (
+              <>
+                <CollapsibleTrigger className="mt-3 text-xs">
+                  {hub('moreDestinations', { count: routeDestinations.length - 3 })}
+                </CollapsibleTrigger>
+                <CollapsiblePanel>
+                  <ol className="mt-3 flex flex-wrap gap-3" start={4}>
+                    {routeDestinations.slice(3).map((destination) => (
+                      <li className="text-sm text-muted-foreground" key={destination.id}>
+                        {destination.name}
+                      </li>
+                    ))}
+                  </ol>
+                </CollapsiblePanel>
+              </>
             ) : null}
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>{t('tripTools')}</DropdownMenuLabel>
-            </DropdownMenuGroup>
-            {supporting.map((destination) => {
-              const Icon = supportingIcons[destination.section as keyof typeof supportingIcons];
-
-              return (
-                <DropdownMenuLinkItem
-                  key={destination.section}
-                  render={<Link href={destination.href} />}
-                >
-                  <Icon aria-hidden="true" />
-                  {t(destination.labelKey)}
-                </DropdownMenuLinkItem>
-              );
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+          </Collapsible>
+        ) : null}
+        <Link
+          className="inline-flex min-h-9 items-center gap-2 rounded-sm text-sm font-medium text-brand outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+          href={`/trips/${trip.id}/places`}
+        >
+          <Icons.Place aria-hidden="true" className="size-4" />
+          {hub(trip.lifecycle === 'completed' ? 'placesRemembered' : 'placesToExplore')}
+          <ChevronRight aria-hidden="true" className="size-3" />
+        </Link>
+        {trip.description ? (
+          <Collapsible>
+            <CollapsibleTrigger className="text-xs">{hub('aboutTrip')}</CollapsibleTrigger>
+            <CollapsiblePanel>
+              <p className="max-w-[var(--layout-reading)] pt-3 text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">
+                {trip.description}
+              </p>
+            </CollapsiblePanel>
+          </Collapsible>
+        ) : null}
+      </section>
 
       {deleteError ? (
         <Alert role="alert" variant="destructive">
@@ -573,20 +499,15 @@ export function TripDetail({
           <AlertDescription>{deleteError}</AlertDescription>
         </Alert>
       ) : null}
-
-      {/* Announced rather than only drawn: the menu that started this has
-          already closed, and a spinner on a button says nothing out loud. */}
       <span aria-live="polite" className="sr-only">
         {movingDates ? t('moveDates.moving') : ''}
       </span>
-
       {dateMoveFailedTripId === trip.id ? (
         <Alert role="alert" variant="destructive">
           <CircleAlert aria-hidden="true" />
           <AlertDescription>{t('moveDates.error')}</AlertDescription>
         </Alert>
       ) : null}
-
       {readinessFailedTripId === trip.id ? (
         <Alert role="alert" variant="destructive">
           <CircleAlert aria-hidden="true" />
@@ -594,87 +515,49 @@ export function TripDetail({
         </Alert>
       ) : null}
 
-      <section aria-label={t('tripExperiences')} className="space-y-3">
-        <Link
-          className={buttonVariants({ className: 'w-full', size: 'lg' })}
-          data-slot="trip-overview-primary-action"
-          href={overviewDestinations.primary.href}
-        >
-          {primaryActionLabel}
-        </Link>
-        <div className="grid grid-cols-2 gap-3">
-          {overviewDestinations.secondary.map((destination) => (
-            <TripExperienceTile
-              description={t(`experienceDescription.${destination.descriptionKey}`)}
-              destination={destination}
-              key={destination.section}
-              label={t(destination.displayLabelKey)}
-            />
-          ))}
-        </div>
-      </section>
-
-      {/*
-        Plan Score judges the plan and Insights says what to know about it; both
-        only apply while there is still planning or travelling to do. Experience
-        Rating is the traveller's own reflection afterwards. They never occupy
-        this slot at the same time.
-      */}
-      {trip.lifecycle === 'completed' ? (
-        trip.experienceRating === null ? null : (
-          <ExperienceRatingSummary
-            label={experienceRatingTranslations('summaryLabel')}
-            rating={trip.experienceRating}
-          />
-        )
-      ) : (
-        <>
-          {planScoreEnabled ? <TripDetailPlanScore tripId={trip.id} /> : null}
-          <TripInsights headingLevel={2} tripId={trip.id} />
-        </>
-      )}
-
-      <TripReadinessPrompt trip={trip} />
-
-      {/* Destinations and travellers are chips under the title now. They were
-          being said twice on this screen even before that - once in the cover's
-          kicker and again here - and a fact list is for what the header has no
-          room to say, not for repeating what it just did. */}
-      <dl className="grid border-t border-border-subtle sm:grid-cols-2 sm:gap-x-8">
-        <OverviewFact
-          Icon={ClipboardCheck}
-          label={t('planningReadiness')}
-          value={t(`readinessState.${trip.planningReadiness}`)}
-        />
-        <OverviewFact
-          Icon={Icons.Place}
-          label={t('startingLocation')}
-          value={trip.startingLocation?.name ?? t('startingLocationUnavailable')}
-        />
-      </dl>
-
-      {/* A peer of the trip-info section below it, not a child of anything. */}
       {trip.lifecycle !== 'completed' ? (
-        <OfflineReadyStatus headingLevel={2} tripId={trip.id} />
+        <div className="grid gap-6 border-t border-border-subtle pt-6 md:grid-cols-2 md:gap-8">
+          <div className="space-y-5">
+            {nextSteps.some((step) => step.kind === 'readiness') ? (
+              <TripReadinessPrompt trip={trip} />
+            ) : null}
+            {overview?.tasks.next &&
+            (trip.lifecycle === 'active' || nextSteps.some((step) => step.kind === 'tasks')) ? (
+              <section aria-labelledby="hub-tasks-heading">
+                <h2 className="text-sm font-semibold" id="hub-tasks-heading">
+                  {hub(trip.lifecycle === 'active' ? 'todayTask' : 'nextStep')}
+                </h2>
+                <Link
+                  className="mt-2 flex items-center justify-between gap-4 rounded-sm py-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+                  href={`/trips/${trip.id}/tasks`}
+                >
+                  <span className="min-w-0">
+                    <span className="block font-medium">{overview.tasks.next.label}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      {hub('openTasks', { count: overview.tasks.openCount })}
+                    </span>
+                  </span>
+                  <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-text-subtle" />
+                </Link>
+              </section>
+            ) : null}
+            <OfflineReadyStatus headingLevel={2} tripId={trip.id} variant="compact" />
+          </div>
+          <div className="space-y-5">
+            {planScoreEnabled ? <TripHubScore tripId={trip.id} /> : null}
+            {trip.lifecycle !== 'active' || overview?.day ? (
+              <TripInsights
+                dayId={trip.lifecycle === 'active' ? overview?.day?.id : undefined}
+                headingLevel={2}
+                initialItemLimit={1}
+                tripId={trip.id}
+              />
+            ) : null}
+          </div>
+        </div>
       ) : null}
 
-      {tripInfoStatus === 'loading' ? (
-        <section
-          aria-busy="true"
-          aria-live="polite"
-          className="space-y-2 border-t border-border-subtle pt-5"
-        >
-          <h2 className="text-base font-semibold">{t('tripInfo')}</h2>
-          <p className="text-sm text-muted-foreground">{t('tripInfoLoading')}</p>
-        </section>
-      ) : null}
-      {tripInfoStatus === 'error' ? (
-        <section className="border-t border-border-subtle pt-5">
-          <h2 className="text-base font-semibold">{t('tripInfo')}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t('tripInfoUnavailable')}</p>
-        </section>
-      ) : null}
-      {tripInfoStatus === 'idle' && tripInfo.length ? (
+      {overview?.pinnedInfo.length ? (
         <EditorialSection
           actions={
             <Button
@@ -691,14 +574,16 @@ export function TripDetail({
           title={t('tripInfo')}
           treatment="ruled"
         >
-          <div className="space-y-3">
-            {tripInfo.map((entry) => (
-              <PinnedTripInfoEntry key={entry.id} label={entry.label} value={entry.value} />
+          <dl className="grid gap-4 sm:grid-cols-3">
+            {overview.pinnedInfo.map((entry) => (
+              <div key={entry.id}>
+                <dt className="text-xs font-medium text-text-subtle">{entry.label}</dt>
+                <dd className="mt-1 text-sm break-words text-foreground">{entry.value}</dd>
+              </div>
             ))}
-          </div>
+          </dl>
         </EditorialSection>
       ) : null}
-
       <TripShareDialog
         onOpenChange={setSharing}
         onTripChange={(updated) => tripContext?.setTrip(updated)}

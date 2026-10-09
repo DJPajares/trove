@@ -27,6 +27,7 @@ export function TripInsights({
   dayId,
   enabled = true,
   headingLevel,
+  initialItemLimit,
   resolveAction,
   surface,
   tripId,
@@ -37,6 +38,7 @@ export function TripInsights({
   /** False holds the request until the panel is worth asking for. */
   enabled?: boolean;
   headingLevel?: 2 | 3;
+  initialItemLimit?: number;
   resolveAction?: (explanation: PlanScoreExplanation) => ScoreAction | null;
   surface?: PanelSurface;
   tripId: string;
@@ -81,6 +83,7 @@ export function TripInsights({
         return rainDayId ? <RainIndoorOptions dayId={rainDayId} tripId={tripId} /> : null;
       }}
       headingLevel={headingLevel}
+      initialItemLimit={initialItemLimit}
       insights={insights}
       resolveAction={
         resolveAction ?? ((explanation) => dayActionLink(tripId, planScore ?? null, explanation))

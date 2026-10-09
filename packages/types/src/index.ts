@@ -6,3 +6,4 @@ export * from './planning-context.js';
 export * from './trip-context.js';
 export * from './weather.js';
 export * from './editorial.js';
+export * from './trip-overview.js';

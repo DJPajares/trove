@@ -13,7 +13,7 @@ export type HomeNextStep =
   | { kind: 'offline' }
   | { kind: 'openDays'; open: number; total: number }
   | { kind: 'readiness'; prompt: 'nudge' | 'suggest' }
-  | { count: number; kind: 'tasks'; next: Task }
+  | { count: number; kind: 'tasks'; next: Pick<Task, 'label' | 'dueDate'> }
   | { day: TripWeatherDay; kind: 'weather' };
 
 export type HomeNextStepInput = {
@@ -25,6 +25,8 @@ export type HomeNextStepInput = {
   offlineReady: boolean | null;
   /** The trip's tasks, or null when they have not loaded. */
   tasks: Task[] | null;
+  /** A bounded hub read can supply the same priority without downloading the checklist. */
+  taskSummary?: { count: number; next: Pick<Task, 'label' | 'dueDate'> } | null;
   trip: Trip;
   /** The forecast for the trip's first day, once it is within the provider's reach. */
   weather: TripWeatherDay | null;
@@ -56,6 +58,7 @@ export function selectNextSteps({
   now = new Date(),
   offlineReady,
   tasks,
+  taskSummary,
   trip,
   weather,
 }: HomeNextStepInput): HomeNextStep[] {
@@ -80,7 +83,8 @@ export function selectNextSteps({
   }
 
   const open = tasks ? openTasks(tasks) : [];
-  if (open[0]) steps.push({ count: open.length, kind: 'tasks', next: open[0] });
+  if (taskSummary?.count) steps.push({ ...taskSummary, kind: 'tasks' });
+  else if (open[0]) steps.push({ count: open.length, kind: 'tasks', next: open[0] });
 
   if (weather) steps.push({ day: weather, kind: 'weather' });
 

@@ -410,13 +410,14 @@ export function MemoriesJournal({ tripId }: Readonly<{ tripId: string }>) {
         isCover={(photoId) => data.storyCover?.photoId === photoId}
         memory={viewerMemory}
         onClosed={() => setViewer(null)}
-        onCoverChanged={(storyCover) =>
+        onCoverChanged={(storyCover) => {
+          void queryClient.invalidateQueries({ queryKey: ['trip-overview', tripId] });
           queryClient.setQueryData(
             queryKeys.memories(tripId),
             (current: MemoriesResponse | undefined) =>
               current ? { ...current, storyCover } : current,
-          )
-        }
+          );
+        }}
         onDeleted={handleDeleted}
         onEdit={(memory) => {
           setViewer((current) => (current ? { ...current, open: false } : current));
@@ -452,13 +453,14 @@ export function MemoriesJournal({ tripId }: Readonly<{ tripId: string }>) {
       <StoryCoverPicker
         memories={data.memories}
         onOpenChange={setCoverPickerOpen}
-        onSelected={(storyCover) =>
+        onSelected={(storyCover) => {
+          void queryClient.invalidateQueries({ queryKey: ['trip-overview', tripId] });
           queryClient.setQueryData(
             queryKeys.memories(tripId),
             (current: MemoriesResponse | undefined) =>
               current ? { ...current, storyCover } : current,
-          )
-        }
+          );
+        }}
         open={coverPickerOpen}
         storyCover={data.storyCover}
         tripId={tripId}

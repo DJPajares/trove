@@ -3,6 +3,8 @@ import { timeZoneForCountry } from '@trove/types/countries';
 import { z } from 'zod';
 import { tripPlanningPreferencesSchema } from '@trove/types';
 
+import { getTripOverview } from '../services/trip-overview.js';
+import { isValidIanaTimeZone } from '../services/trip-rules.js';
 import { getBearerToken } from '../services/request-auth.js';
 import {
   createTrip,
@@ -177,6 +179,29 @@ export async function getTripController(request: FastifyRequest, reply: FastifyR
 
   try {
     return { trip: await getTrip(context.userId, context.accessToken, tripId) };
+  } catch (error) {
+    return handleTripError(error, reply);
+  }
+}
+
+export async function getTripOverviewController(request: FastifyRequest, reply: FastifyReply) {
+  const context = getRequestContext(request, reply);
+  const tripId = parseTripId(request, reply);
+  if (!context || !tripId) return;
+  const parsed = z
+    .object({ clockTimeZone: z.string().max(100).refine(isValidIanaTimeZone) })
+    .strict()
+    .safeParse(request.query);
+  if (!parsed.success) return reply.code(400).send({ code: 'invalid_time_zone' });
+  try {
+    return {
+      overview: await getTripOverview(
+        context.userId,
+        context.accessToken,
+        tripId,
+        parsed.data.clockTimeZone,
+      ),
+    };
   } catch (error) {
     return handleTripError(error, reply);
   }

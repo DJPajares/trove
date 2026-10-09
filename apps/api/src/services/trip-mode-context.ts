@@ -326,10 +326,12 @@ function resolveItemPhase(
 function selectCurrentOrRelevant<T extends ContextScheduleItem>(
   items: readonly T[],
   phases: ReadonlyMap<string, ItemPhase>,
+  starts: ReadonlyMap<string, number | null>,
 ) {
   const currentExact = items.reduce<T | null>((latest, item) => {
     if (phases.get(item.id) !== 'current_exact') return latest;
-    if (!latest || item.startInstant!.getTime() >= latest.startInstant!.getTime()) return item;
+    if (!latest || (starts.get(item.id) ?? -Infinity) >= (starts.get(latest.id) ?? -Infinity))
+      return item;
     return latest;
   }, null);
   if (currentExact) {
@@ -403,7 +405,10 @@ export function resolveTripModeItemSelection<T extends ContextScheduleItem>(
       resolveItemPhase(item, itemDate, clockTimeZone, at, scheduledStarts),
     ]),
   );
-  const currentOrRelevant = selectCurrentOrRelevant(items, phases);
+  const starts = new Map(
+    items.map((item) => [item.id, travellerItemStart(item, itemDate, clockTimeZone)]),
+  );
+  const currentOrRelevant = selectCurrentOrRelevant(items, phases, starts);
   const nextItem = selectNextItem(items, phases, currentOrRelevant, itemDate, clockTimeZone);
 
   return { currentOrRelevant, nextItem };

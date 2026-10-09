@@ -93,6 +93,8 @@ export const queryKeys = {
   savedPlaces: () => ['saved'] as const,
   taskTemplates: () => ['task-templates'] as const,
   tasks: (tripId: string) => ['tasks', tripId] as const,
+  tripOverview: (tripId: string, clockTimeZone: string) =>
+    ['trip-overview', tripId, clockTimeZone] as const,
   trip: (tripId: string) => ['trip', tripId] as const,
   tripInfo: (tripId: string) => ['trip-info', tripId] as const,
   tripPlaces: (tripId: string) => ['trip-places', tripId] as const,
@@ -212,6 +214,7 @@ export const TRIP_SCOPED_QUERY_ROOTS = [
   'trip',
   'trip-context',
   'trip-info',
+  'trip-overview',
   'trip-mode-context',
   'trip-places',
   'trip-weather',

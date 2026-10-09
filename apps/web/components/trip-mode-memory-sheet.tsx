@@ -136,6 +136,7 @@ export function TripModeMemorySheet({
       // its Memories stale for when it opens, and keeps the trip's own count
       // current on Home and in the library.
       void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['trip-overview', tripId] }),
         queryClient.invalidateQueries({ queryKey: queryKeys.memories(tripId) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.trip(tripId) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.trips() }),

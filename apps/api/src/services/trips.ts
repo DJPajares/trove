@@ -178,7 +178,7 @@ const libraryTripInclude = {
  * whose link cannot be made is left out rather than sent broken: the library
  * falls back to the trip's cover, which is what it shows without any.
  */
-async function createMemoryPreview(
+export async function createMemoryPreview(
   supabase: SupabaseClient | null,
   photos: MemoryPreviewPhotoRecord[],
 ) {

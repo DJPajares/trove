@@ -200,17 +200,17 @@ not enough. Verify with `pnpm --filter @trove/api ai:verify`, or check that
 
 | Environment key | Description | Sample values |
 | --- | --- | --- |
-| `TROVE_AI_PROVIDER` | Provider adapter. Only `vertex` is currently supported. | `vertex` |
-| `TROVE_AI_MODEL` | Vertex model ID. Gemini 2.5 overrides are no longer supported. Use an available model from [Vertex AI Model Garden](https://cloud.google.com/vertex-ai/generative-ai/docs/model-garden/explore-models). | `gemini-3.8-flash` (default), `gemini-<supported-model>` |
+| `AI_PROVIDER` | Provider adapter. Only `vertex` is currently supported. | `vertex` |
+| `AI_MODEL` | Vertex model ID. Gemini 2.5 overrides are no longer supported. Use an available model from [Vertex AI Model Garden](https://cloud.google.com/vertex-ai/generative-ai/docs/model-garden/explore-models). | `gemini-3.8-flash` (default), `gemini-<supported-model>` |
 | `GOOGLE_VERTEX_PROJECT` | Required Google Cloud project ID with Vertex AI enabled. Find it in the [Google Cloud project selector](https://console.cloud.google.com/projectselector/home/dashboard). | `trove-prod`, `my-gcp-project` |
 | `GOOGLE_VERTEX_LOCATION` | Vertex AI location/endpoint. `global` is the default; regional support depends on the selected model. | `global`, `us-central1`, `<supported-region>` |
-| `TROVE_AI_TIMEOUT_MS` | Per-request timeout in milliseconds. Valid range: `1,000–300,000`. | `120000` (default), `60000`, `300000` |
-| `TROVE_AI_MAX_OUTPUT_TOKENS` | Maximum generated tokens. Reasoning tokens count against this same allowance. Valid range: `1–65,536`. | `16384` (default), `8192`, `65536` |
-| `TROVE_AI_THINKING_LEVEL` | Gemini 3.8 Flash reasoning level. Valid values: `low`, `medium`, `high`; `minimal` is unsupported. | `medium` (default), `low`, `high` |
+| `AI_TIMEOUT_MS` | Per-request timeout in milliseconds. Valid range: `1,000–300,000`. | `120000` (default), `60000`, `300000` |
+| `AI_MAX_OUTPUT_TOKENS` | Maximum generated tokens. Reasoning tokens count against this same allowance. Valid range: `1–65,536`. | `16384` (default), `8192`, `65536` |
+| `AI_THINKING_LEVEL` | Gemini 3.8 Flash reasoning level. Valid values: `low`, `medium`, `high`; `minimal` is unsupported. | `medium` (default), `low`, `high` |
 | `GOOGLE_VERTEX_CLIENT_EMAIL` | Service-account email. Set it together with the private key. Both may be left blank only when a Google ADC source is discoverable on the host. | `vertex-runtime@my-gcp-project.iam.gserviceaccount.com`, *(blank)* |
 | `GOOGLE_VERTEX_PRIVATE_KEY` | Service-account private key. Preserve escaped `\\n` line breaks and never commit it. | `"<private-key-with-escaped-newlines>"`, *(blank)* |
-| `TROVE_AI_DISABLED` | Emergency global AI stop. | *(blank)*, `1`, `true` |
-| `TROVE_AI_BUDGET_DISABLED` | Budget kill switch that prevents AI provider usage. | *(blank)*, `1`, `true` |
+| `AI_DISABLED` | Emergency global AI stop. | *(blank)*, `1`, `true` |
+| `AI_BUDGET_DISABLED` | Budget kill switch that prevents AI provider usage. | *(blank)*, `1`, `true` |
 
 Leaving the credential pair blank is only valid when the host exposes
 Application Default Credentials — `GOOGLE_APPLICATION_CREDENTIALS`, or a
@@ -236,8 +236,8 @@ a change.
   **Keys**, and set both `GOOGLE_VERTEX_CLIENT_EMAIL` and
   `GOOGLE_VERTEX_PRIVATE_KEY`. Preserve escaped newlines in the private key and
   never commit it.
-- `TROVE_AI_DISABLED=1` is the emergency global AI stop. Use
-  `TROVE_AI_BUDGET_DISABLED=1` when provider spend must be halted without
+- `AI_DISABLED=1` is the emergency global AI stop. Use
+  `AI_BUDGET_DISABLED=1` when provider spend must be halted without
   changing the rest of the app.
 
 ### Google Maps Platform and Places
@@ -256,7 +256,7 @@ APIs named in the example comments:
   where the JavaScript vector map ID is created. It is safe to expose with the
   browser key.
 
-Set `TROVE_GOOGLE_PROVIDERS_DISABLED=1` in the API environment to stop outbound
+Set `GOOGLE_PROVIDERS_DISABLED=1` in the API environment to stop outbound
 Places and Routes requests while keeping manual planning available.
 
 Set API-only `GOOGLE_PLACE_PHOTO_LIMIT` to `0`, `1`, `2`, or `3` to control new
@@ -277,8 +277,8 @@ Trove's branded artwork.
 Create `PEXELS_API_KEY` in the [Pexels API dashboard](https://www.pexels.com/api/)
 and keep it server-only in the root `.env` or API deployment. It is used for
 decorative editorial imagery, not Google Places data. Use
-`TROVE_EDITORIAL_IMAGES_DISABLED=1` for an emergency stop or set
-`TROVE_EDITORIAL_IMAGE_HOURLY_BUDGET` to a lower request ceiling.
+`EDITORIAL_IMAGES_DISABLED=1` for an emergency stop or set
+`EDITORIAL_IMAGE_HOURLY_BUDGET` to a lower request ceiling.
 
 ### App and deployment values
 
@@ -287,16 +287,16 @@ decorative editorial imagery, not Google Places data. Use
   `trove-api`; choose Preview and Production explicitly rather than sharing a
   secret with the web project. See [`ops/vercel/README.md`](ops/vercel/README.md)
   for the deployment-specific list.
-- `NEXT_PUBLIC_TROVE_API_URL` belongs in `apps/web/.env.local`. Use
+- `NEXT_PUBLIC_API_URL` belongs in `apps/web/.env.local`. Use
   `http://localhost:3001` locally; for a deployment, copy the public API URL
   from the `trove-api` Vercel project. `NEXT_PUBLIC_` values are bundled into
   the browser and must not contain secrets.
-- `TROVE_WEB_ORIGINS` belongs in the API environment and is a comma-separated
+- `WEB_ORIGINS` belongs in the API environment and is a comma-separated
   allow list of web origins, including the local origin and the deployed web
   origin.
-- `TROVE_ENVIRONMENT=production` belongs only in the gitignored
+- `ENVIRONMENT=production` belongs only in the gitignored
   `.env.production` used by production database operations.
-- `TROVE_PLAN_SCORE_DISABLED=1` is the server-side Plan Score kill switch. Keep
+- `PLAN_SCORE_DISABLED=1` is the server-side Plan Score kill switch. Keep
   the API and web values aligned when disabling that feature.
 - `SUPABASE_SECRET_KEY` belongs only in the API environment. It has broad
   Supabase Storage access and is used to remove queued private trip covers,
@@ -349,7 +349,7 @@ counts. It never prints the prompt or generated object.
 Copy `.env.production.example` to the gitignored `.env.production` and fill in
 the exact connection strings from Supabase Dashboard > Connect. Prisma uses
 `DIRECT_URL` on port `5432`; runtime database access uses `DATABASE_URL` on port
-`6543` with `pgbouncer=true`. Keep `TROVE_ENVIRONMENT="production"` in that file.
+`6543` with `pgbouncer=true`. Keep `ENVIRONMENT="production"` in that file.
 
 Deploy committed migrations after validating the production target:
 
@@ -457,4 +457,4 @@ tracked in Linear rather than inferred from the product contract.
 
 https://github.com/DJPajares/trove
 
-Plan Score evaluates stored trips and retained AI drafts using owned data and existing caches only. Explicit itinerary Place selections request reusable identity, coordinates, types, ratings, review counts and hours in one rich Details acquisition (Google Enterprise tier); autocomplete, decorative and routing-only paths remain lightweight. AI Text Search evidence is reused without another Details call when sufficient. Necessary Google place and route evidence has a 30-day maximum retention; date-specific hours and weather retain shorter deadlines (current/hourly and today: one hour; upcoming forecasts: six hours; seasonal context: 30 days). Weather reads memory and private IndexedDB before shared database/provider acquisition, preserves original source age, shares canonical Celsius evidence across surfaces and tabs, and skips out-of-horizon acquisitions. The generic 24-hour query cache does not own weather persistence. A five-minute cooldown bounds failed refreshes. A 24-hour local score recheck never refreshes providers. Apply the additive `preserve_itinerary_block_type` migration before deploying these APIs. Set `TROVE_PLAN_SCORE_DISABLED=false` on the API and web servers and restart them to enable scoring on existing trips. Unknown locations or transfer details may still require traveler repair before a holistic number is available.
+Plan Score evaluates stored trips and retained AI drafts using owned data and existing caches only. Explicit itinerary Place selections request reusable identity, coordinates, types, ratings, review counts and hours in one rich Details acquisition (Google Enterprise tier); autocomplete, decorative and routing-only paths remain lightweight. AI Text Search evidence is reused without another Details call when sufficient. Necessary Google place and route evidence has a 30-day maximum retention; date-specific hours and weather retain shorter deadlines (current/hourly and today: one hour; upcoming forecasts: six hours; seasonal context: 30 days). Weather reads memory and private IndexedDB before shared database/provider acquisition, preserves original source age, shares canonical Celsius evidence across surfaces and tabs, and skips out-of-horizon acquisitions. The generic 24-hour query cache does not own weather persistence. A five-minute cooldown bounds failed refreshes. A 24-hour local score recheck never refreshes providers. Apply the additive `preserve_itinerary_block_type` migration before deploying these APIs. Set `PLAN_SCORE_DISABLED=false` on the API and web servers and restart them to enable scoring on existing trips. Unknown locations or transfer details may still require traveler repair before a holistic number is available.

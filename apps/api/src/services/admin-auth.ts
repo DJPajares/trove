@@ -29,9 +29,7 @@ export function authenticateAdmin(
 ): { principal: AdminPrincipal; status: 200 } | { code: string; status: 401 | 403 | 503 } {
   let credentials: z.infer<typeof credentialsSchema>;
   try {
-    credentials = credentialsSchema.parse(
-      JSON.parse(environment.TROVE_ADMIN_CREDENTIALS ?? 'null'),
-    );
+    credentials = credentialsSchema.parse(JSON.parse(environment.ADMIN_CREDENTIALS ?? 'null'));
   } catch {
     return { code: 'admin_configuration_missing', status: 503 };
   }

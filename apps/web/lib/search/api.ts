@@ -40,7 +40,7 @@ export class SearchApiError extends Error {
   }
 }
 
-const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 export async function searchTrove(
   query: string,

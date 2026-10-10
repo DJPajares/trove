@@ -8,7 +8,7 @@ import { createPrismaClient } from '../src/index.js';
  * A complete, browsable Japan trip for local development.
  *
  * Trove profiles are keyed by the Supabase auth user id, so the seed writes
- * against whichever account you actually sign in with: set `TROVE_SEED_USER_ID`
+ * against whichever account you actually sign in with: set `SEED_USER_ID`
  * to your Supabase user UUID. Locally the `auth.users` table is the compatibility
  * stub from `docker/postgres/init`, so the seed inserts the row itself; against a
  * hosted project the row already exists and the insert is a no-op. Nothing here
@@ -28,7 +28,7 @@ config({ path: resolve(import.meta.dirname, '../../../.env') });
 
 const prisma = createPrismaClient();
 
-const userId = process.env.TROVE_SEED_USER_ID ?? '';
+const userId = process.env.SEED_USER_ID ?? '';
 const reset = process.argv.includes('--reset');
 
 const TRIP_TIME_ZONE = 'Asia/Tokyo';
@@ -626,7 +626,7 @@ async function seedMemories() {
 async function main() {
   if (!/^[0-9a-f-]{36}$/i.test(userId)) {
     throw new Error(
-      'Set TROVE_SEED_USER_ID to your Supabase auth user UUID.\n' +
+      'Set SEED_USER_ID to your Supabase auth user UUID.\n' +
         'Find it in the Supabase dashboard under Authentication, or run:\n' +
         '  (await supabase.auth.getUser()).data.user.id  — in the browser console while signed in.',
     );

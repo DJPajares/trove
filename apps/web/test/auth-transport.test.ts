@@ -53,7 +53,7 @@ const cookie = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv('TROVE_AUTH_RECOVERY_SECRET', Buffer.alloc(32, 1).toString('base64url'));
+  vi.stubEnv('AUTH_RECOVERY_SECRET', Buffer.alloc(32, 1).toString('base64url'));
   mocks.getCookie.mockReturnValue(undefined);
   mocks.factory.mockImplementation((_url, _key, options) => {
     adapter = options.cookies;
@@ -213,7 +213,7 @@ describe('recovery receipt transport', () => {
     expect(body).not.toHaveProperty('recovery');
   });
   it('does not consume the link when its signing key is missing', async () => {
-    vi.stubEnv('TROVE_AUTH_RECOVERY_SECRET', '');
+    vi.stubEnv('AUTH_RECOVERY_SECRET', '');
     const response = await confirmPost(request('/auth/session', link));
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: 'configurationError' });

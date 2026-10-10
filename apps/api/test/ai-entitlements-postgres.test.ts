@@ -11,7 +11,7 @@ import {
 import { performAdminEntitlementOperation } from '../src/services/admin-entitlements.js';
 
 // Opt-in isolated PostgreSQL test. Never use the application's configured production database.
-const testUrl = process.env.TROVE_ENTITLEMENTS_TEST_DATABASE_URL;
+const testUrl = process.env.ENTITLEMENTS_TEST_DATABASE_URL;
 test.skipIf(!testUrl)(
   'PostgreSQL serializes credit races, keeps durable idempotency and preserves audit/reset history',
   async () => {

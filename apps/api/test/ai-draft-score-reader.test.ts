@@ -15,7 +15,7 @@ afterEach(() => {
 
 for (const state of ['cold', 'warm', 'expired'] as const)
   test(`retained ${state} AI drafts read only cached evidence and preserve the draft`, async () => {
-    vi.stubEnv('TROVE_PLAN_SCORE_DISABLED', 'false');
+    vi.stubEnv('PLAN_SCORE_DISABLED', 'false');
     const draft = explicitDraft();
     draft.days[1]!.items[0]!.placeRefId = 'place:museum';
     const original = structuredClone(draft);

@@ -20,7 +20,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const NOW = new Date('2026-08-31T12:00:00.000Z');
 
 /**
- * Names that must never leave the API. `TROVE_WEB_ORIGINS` and the rest of the
+ * Names that must never leave the API. `WEB_ORIGINS` and the rest of the
  * server environment are equally server-only, but these are the ones whose
  * exposure would hand a stranger a billable Vertex project.
  */

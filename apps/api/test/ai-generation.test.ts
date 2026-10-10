@@ -68,8 +68,8 @@ test('the gateway returns typed output and content-free metadata after one provi
 });
 
 test.each([
-  ['TROVE_AI_DISABLED', 'ai_disabled'],
-  ['TROVE_AI_BUDGET_DISABLED', 'ai_budget_disabled'],
+  ['AI_DISABLED', 'ai_disabled'],
+  ['AI_BUDGET_DISABLED', 'ai_budget_disabled'],
 ] as const)('%s prevents provider construction and dispatch', async (switchName, code) => {
   const providerFactory = vi.fn();
   const gateway = createAiGateway({

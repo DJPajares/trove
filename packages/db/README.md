@@ -53,7 +53,7 @@ Stop the container with `docker compose stop postgres`; remove its persisted loc
 Trove profiles are keyed by the Supabase auth user id, so the seed writes against the account you actually sign in with:
 
 ```bash
-TROVE_SEED_USER_ID="<your-supabase-user-uuid>" pnpm db:seed
+SEED_USER_ID="<your-supabase-user-uuid>" pnpm db:seed
 ```
 
 Find the UUID in the Supabase dashboard under Authentication, or run `(await supabase.auth.getUser()).data.user.id` in the browser console while signed in. Against the local database the seed inserts the matching `auth.users` compatibility row itself.
@@ -71,7 +71,7 @@ Memory photos are not seeded, because rows without matching objects in the priva
 5. Regenerate the client with `pnpm --filter @trove/db db:generate` whenever the schema changes.
 
 For a production deployment from your terminal, copy `.env.production.example`
-to the gitignored root `.env.production`, set `TROVE_ENVIRONMENT="production"`,
+to the gitignored root `.env.production`, set `ENVIRONMENT="production"`,
 and provide the production session/direct `DIRECT_URL` on port `5432`. Run
 `pnpm db:migrate:prod`; it validates the target before invoking
 `prisma migrate deploy` and never prints the connection string.

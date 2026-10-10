@@ -27,7 +27,7 @@ reports the effective tier; its response fields are unchanged. Subscription
 status is internal; no status-management endpoint is introduced.
 
 Operational settings remain API environment variables. In particular,
-`TROVE_AI_PLANNER_STARTS_PER_MINUTE` defaults to five accepted starts per account
+`AI_PLANNER_STARTS_PER_MINUTE` defaults to five accepted starts per account
 per minute across API instances and accepts integers from 1–1,000. Kill switches,
 provider settings and credentials remain environment-owned.
 
@@ -52,7 +52,7 @@ operation alongside the existing effective entitlement snapshot.
 
 ## Operator credentials
 
-Keep `TROVE_ADMIN_CREDENTIALS` in API server secrets. Leave it empty to disable
+Keep `ADMIN_CREDENTIALS` in API server secrets. Leave it empty to disable
 admin operations. Each operator gets an independently revocable credential:
 
 ```json
@@ -127,8 +127,8 @@ A reset restores the configured allowance using a new allocation sequence,
 preserves the current renewal date, and retains prior periods/actions/events.
 It does not delete telemetry, trip content, or durable idempotency records.
 The existing `pnpm ai:reset-quota <uuid> "<reason>"`
-command wraps this endpoint; set `TROVE_ADMIN_TOKEN` locally and
-`TROVE_ADMIN_API_URL` to the intended API. It no longer edits the database directly.
+command wraps this endpoint; set `ADMIN_TOKEN` locally and
+`ADMIN_API_URL` to the intended API. It no longer edits the database directly.
 
 ## Migration and verification
 
@@ -143,7 +143,7 @@ future work.
 
 Deploy through the normal human-reviewed release process. Before applying
 `20261010010000_plan_entitlements`, disable new AI dispatches with
-`TROVE_AI_DISABLED=1` and let old in-flight requests finish. Apply the migration,
+`AI_DISABLED=1` and let old in-flight requests finish. Apply the migration,
 deploy the new API/web code, verify configuration, then re-enable generation.
 Existing users lazily receive fresh Free credits, without retrospective charges.
 Existing valid drafts remain reviewable/applicable under their original 14-day
@@ -163,7 +163,7 @@ Late and repeated callbacks cannot change a terminal settlement.
 
 Focused tests cover plan rules, preflight, settlement, auth and lifecycle. An
 opt-in PostgreSQL test verifies locks, last-credit races, constraints, durable
-idempotency, reset replay and RLS. Set `TROVE_ENTITLEMENTS_TEST_DATABASE_URL` to
+idempotency, reset replay and RLS. Set `ENTITLEMENTS_TEST_DATABASE_URL` to
 an isolated localhost database whose name contains `entitlements`, with the
 repository migrations applied, then run the API tests. It refuses remote URLs.
 Browser verification should inspect Free/Paid meters, renewal text, exhaustion

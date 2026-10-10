@@ -120,22 +120,22 @@ export function getAiGenerationEnvironment(
   hasApplicationDefaultCredentials = detectApplicationDefaultCredentials,
 ): AiEnvironment {
   const timeoutMs = parseBoundedInteger(
-    environment.TROVE_AI_TIMEOUT_MS,
+    environment.AI_TIMEOUT_MS,
     DEFAULT_AI_TIMEOUT_MS,
     MIN_AI_TIMEOUT_MS,
     MAX_AI_TIMEOUT_MS,
   );
   const maxOutputTokens = parseBoundedInteger(
-    environment.TROVE_AI_MAX_OUTPUT_TOKENS,
+    environment.AI_MAX_OUTPUT_TOKENS,
     DEFAULT_AI_MAX_OUTPUT_TOKENS,
     1,
     MAX_AI_OUTPUT_TOKENS,
   );
-  const thinkingLevel = environment.TROVE_AI_THINKING_LEVEL?.trim() || DEFAULT_AI_THINKING_LEVEL;
+  const thinkingLevel = environment.AI_THINKING_LEVEL?.trim() || DEFAULT_AI_THINKING_LEVEL;
   const safeTimeoutMs = timeoutMs ?? DEFAULT_AI_TIMEOUT_MS;
   const safeMaxOutputTokens = maxOutputTokens ?? DEFAULT_AI_MAX_OUTPUT_TOKENS;
 
-  if (isEnabled(environment.TROVE_AI_DISABLED)) {
+  if (isEnabled(environment.AI_DISABLED)) {
     return {
       code: 'ai_disabled',
       maxOutputTokens: safeMaxOutputTokens,
@@ -144,7 +144,7 @@ export function getAiGenerationEnvironment(
     };
   }
 
-  if (isEnabled(environment.TROVE_AI_BUDGET_DISABLED)) {
+  if (isEnabled(environment.AI_BUDGET_DISABLED)) {
     return {
       code: 'ai_budget_disabled',
       maxOutputTokens: safeMaxOutputTokens,
@@ -162,10 +162,10 @@ export function getAiGenerationEnvironment(
     };
   }
 
-  const provider = environment.TROVE_AI_PROVIDER?.trim() || DEFAULT_AI_PROVIDER;
+  const provider = environment.AI_PROVIDER?.trim() || DEFAULT_AI_PROVIDER;
   const project = environment.GOOGLE_VERTEX_PROJECT?.trim();
   const location = environment.GOOGLE_VERTEX_LOCATION?.trim() || DEFAULT_AI_LOCATION;
-  const model = environment.TROVE_AI_MODEL?.trim() || DEFAULT_AI_MODEL;
+  const model = environment.AI_MODEL?.trim() || DEFAULT_AI_MODEL;
   const clientEmail = environment.GOOGLE_VERTEX_CLIENT_EMAIL?.trim();
   const privateKey = environment.GOOGLE_VERTEX_PRIVATE_KEY?.trim();
 
@@ -271,7 +271,7 @@ export function getMaintenanceEnvironment(
 }
 
 export function getWebOrigins(environment: Record<string, string | undefined> = process.env) {
-  return (environment.TROVE_WEB_ORIGINS ?? 'http://localhost:3000')
+  return (environment.WEB_ORIGINS ?? 'http://localhost:3000')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
@@ -286,7 +286,7 @@ export function getWebOrigins(environment: Record<string, string | undefined> = 
 export function areGoogleProvidersDisabled(
   environment: Record<string, string | undefined> = process.env,
 ) {
-  const value = environment.TROVE_GOOGLE_PROVIDERS_DISABLED?.trim().toLowerCase();
+  const value = environment.GOOGLE_PROVIDERS_DISABLED?.trim().toLowerCase();
 
   return value === '1' || value === 'true';
 }
@@ -300,7 +300,7 @@ export function areGoogleProvidersDisabled(
 export function arePlanScoreProvidersDisabled(
   environment: Record<string, string | undefined> = process.env,
 ) {
-  const value = environment.TROVE_PLAN_SCORE_DISABLED?.trim().toLowerCase();
+  const value = environment.PLAN_SCORE_DISABLED?.trim().toLowerCase();
 
   return value === '1' || value === 'true';
 }
@@ -363,7 +363,7 @@ export function getRoutesEnvironment(
 export function areEditorialImagesDisabled(
   environment: Record<string, string | undefined> = process.env,
 ) {
-  const value = environment.TROVE_EDITORIAL_IMAGES_DISABLED?.trim().toLowerCase();
+  const value = environment.EDITORIAL_IMAGES_DISABLED?.trim().toLowerCase();
 
   return value === '1' || value === 'true';
 }
@@ -381,7 +381,7 @@ export function getEditorialImagesEnvironment(
     return null;
   }
 
-  const parsedBudget = Number(environment.TROVE_EDITORIAL_IMAGE_HOURLY_BUDGET?.trim());
+  const parsedBudget = Number(environment.EDITORIAL_IMAGE_HOURLY_BUDGET?.trim());
   const hourlyBudget = Number.isInteger(parsedBudget) && parsedBudget > 0 ? parsedBudget : null;
 
   return { hourlyBudget, pexelsApiKey };

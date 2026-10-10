@@ -72,7 +72,7 @@ Retain current Auth password requirements, confirmation settings, OTP expiry
 
 ## Recovery signing key
 
-Before deploying the recovery fix, configure `TROVE_AUTH_RECOVERY_SECRET` on the
+Before deploying the recovery fix, configure `AUTH_RECOVERY_SECRET` on the
 **Trove web** Vercel project (not trove-api). Use a Secret/sensitive variable with
 separate random values for Production and Preview. For local development, keep a
 separate value in the gitignored `apps/web/.env.local`. Generate each value with:
@@ -121,7 +121,7 @@ email; their unsigned `type=recovery` hint cannot prove the authentication metho
    matching user/session and a one-hour recovery window. Query `type`/`flow` alone
    grant nothing. Existing PKCE callbacks and fragments with signed recovery AMR
    remain supported. Previously consumed/expired links require a fresh email.
-6. Keep `TROVE_SIGN_UP_DISABLED` unchanged in production. Exercise signup in an
+6. Keep `SIGN_UP_DISABLED` unchanged in production. Exercise signup in an
    approved test environment; existing-account recovery remains available while
    signup is closed.
 

@@ -15,7 +15,7 @@ export type RecoveryGrant = {
 
 /** Server-only signing material. Never use a publishable key or session token. */
 export function recoverySigningKey() {
-  const value = process.env.TROVE_AUTH_RECOVERY_SECRET;
+  const value = process.env.AUTH_RECOVERY_SECRET;
   return value && /^[A-Za-z0-9_-]{43,}$/.test(value) && Buffer.from(value, 'base64url').length >= 32
     ? Buffer.from(value, 'base64url')
     : null;

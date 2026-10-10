@@ -43,9 +43,9 @@ const subscription = {
 
 beforeEach(() => {
   const keys = webPush.default.generateVAPIDKeys();
-  process.env.TROVE_VAPID_PUBLIC_KEY = keys.publicKey;
-  process.env.TROVE_VAPID_PRIVATE_KEY = keys.privateKey;
-  process.env.TROVE_VAPID_SUBJECT = 'mailto:trove@example.com';
+  process.env.VAPID_PUBLIC_KEY = keys.publicKey;
+  process.env.VAPID_PRIVATE_KEY = keys.privateKey;
+  process.env.VAPID_SUBJECT = 'mailto:trove@example.com';
   candidates.listDueNotificationCandidates.mockResolvedValue([{ candidate, ownerId: OWNER }]);
   candidates.currentDueCandidate.mockResolvedValue(candidate);
   candidates.upsertCandidate.mockResolvedValue({
@@ -57,9 +57,9 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
-  delete process.env.TROVE_VAPID_PUBLIC_KEY;
-  delete process.env.TROVE_VAPID_PRIVATE_KEY;
-  delete process.env.TROVE_VAPID_SUBJECT;
+  delete process.env.VAPID_PUBLIC_KEY;
+  delete process.env.VAPID_PRIVATE_KEY;
+  delete process.env.VAPID_SUBJECT;
 });
 
 function installDatabase() {
@@ -186,7 +186,7 @@ test('a durable pre-send claim prevents concurrent sweeps from sending twice', a
   expect(send).toHaveBeenCalledTimes(1);
   expect(state()).toBe('ACCEPTED');
   expect(client.pushDelivery.updateMany).toHaveBeenCalled();
-  expect(JSON.stringify(send.mock.calls)).not.toContain('TROVE_VAPID_PRIVATE_KEY');
+  expect(JSON.stringify(send.mock.calls)).not.toContain('VAPID_PRIVATE_KEY');
 });
 
 test('past deliveries cannot fill the send cap ahead of an unsent reminder', async () => {

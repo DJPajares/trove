@@ -28,8 +28,8 @@ export function validateProductionEnvironment(
   operation: ProductionOperation,
   options: { activeRefresh?: boolean } = {},
 ) {
-  if (environment.TROVE_ENVIRONMENT !== 'production') {
-    throw new Error('TROVE_ENVIRONMENT=production is required in .env.production.');
+  if (environment.ENVIRONMENT !== 'production') {
+    throw new Error('ENVIRONMENT=production is required in .env.production.');
   }
 
   const direct = parseProductionUrl(environment.DIRECT_URL, 'DIRECT_URL');

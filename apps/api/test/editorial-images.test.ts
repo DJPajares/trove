@@ -1033,7 +1033,7 @@ test('every resolved photo carries its attribution and is recorded as provider u
 test('the kill switch and a missing key are the same no-service answer', () => {
   expect(
     createEditorialImagesService({
-      environment: { PEXELS_API_KEY: 'server-key', TROVE_EDITORIAL_IMAGES_DISABLED: '1' },
+      environment: { PEXELS_API_KEY: 'server-key', EDITORIAL_IMAGES_DISABLED: '1' },
       source: 'editorial-images',
     }),
     'switched off',

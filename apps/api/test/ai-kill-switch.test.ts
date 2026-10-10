@@ -40,8 +40,8 @@ function sourceFiles(root: string): string[] {
 }
 
 test.each([
-  ['TROVE_AI_DISABLED', 'ai_disabled'],
-  ['TROVE_AI_BUDGET_DISABLED', 'ai_budget_disabled'],
+  ['AI_DISABLED', 'ai_disabled'],
+  ['AI_BUDGET_DISABLED', 'ai_budget_disabled'],
 ] as const)('%s stops dispatch before a provider is ever constructed', async (variable, code) => {
   const providerFactory = vi.fn();
   const gateway = createAiGateway({
@@ -60,8 +60,8 @@ test.each([
 });
 
 test.each([
-  ['TROVE_AI_DISABLED', 'ai_disabled'],
-  ['TROVE_AI_BUDGET_DISABLED', 'ai_budget_disabled'],
+  ['AI_DISABLED', 'ai_disabled'],
+  ['AI_BUDGET_DISABLED', 'ai_budget_disabled'],
 ] as const)(
   '%s reports availability without spending a database round trip',
   async (variable, code) => {
@@ -85,7 +85,7 @@ test('a disabled gateway rejects without emitting planner telemetry', async () =
 
   try {
     const gateway = createAiGateway({
-      environment: { GOOGLE_VERTEX_PROJECT: 'trove-prod', TROVE_AI_DISABLED: 'true' },
+      environment: { GOOGLE_VERTEX_PROJECT: 'trove-prod', AI_DISABLED: 'true' },
       providerFactory: () => {
         throw new Error('a disabled gateway must not build a provider');
       },
@@ -105,7 +105,7 @@ test('a disabled gateway rejects without emitting planner telemetry', async () =
 
 test('the kill switches can only disable AI, never manual trip creation', () => {
   const environmentModule = join(apiRoot, 'src/environment.ts');
-  const switches = ['TROVE_AI_DISABLED', 'TROVE_AI_BUDGET_DISABLED'];
+  const switches = ['AI_DISABLED', 'AI_BUDGET_DISABLED'];
 
   const readers = sourceFiles(join(apiRoot, 'src')).filter((path) => {
     const contents = readFileSync(path, 'utf8');

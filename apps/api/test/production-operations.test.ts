@@ -8,7 +8,7 @@ const production = {
   DIRECT_URL:
     'postgresql://postgres.project:example@aws-0-region.pooler.supabase.com:5432/postgres?schema=trove',
   PEXELS_API_KEY: 'example-provider-key',
-  TROVE_ENVIRONMENT: 'production',
+  ENVIRONMENT: 'production',
 };
 
 test('a production migration accepts only an explicitly marked Supabase session connection', () => {
@@ -16,8 +16,8 @@ test('a production migration accepts only an explicitly marked Supabase session 
     host: 'aws-0-region.pooler.supabase.com',
   });
   expect(() =>
-    validateProductionEnvironment({ ...production, TROVE_ENVIRONMENT: undefined }, 'migrate'),
-  ).toThrow('TROVE_ENVIRONMENT=production');
+    validateProductionEnvironment({ ...production, ENVIRONMENT: undefined }, 'migrate'),
+  ).toThrow('ENVIRONMENT=production');
   expect(() =>
     validateProductionEnvironment(
       {

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { expect, test, vi } from 'vitest';
+import { expect, test } from 'vitest';
 import { creditModels } from './support/fake-ai-credits.js';
 import { asPlanKey, creditPeriod, getPlanEntitlements } from '../src/services/plan-entitlements.js';
 import {
@@ -41,24 +41,19 @@ async function reserve(
   return reserveAiCredit(tx, run, new Date(now.getTime() + 90_000), now, resolved, {});
 }
 
-test('code-defined plans preserve product limits and ignore legacy environment overrides', () => {
-  vi.stubEnv('TROVE_PAID_AI_PLANNER_CREDITS', '75');
-  try {
-    expect(getPlanEntitlements('free').aiPlanner).toEqual({
-      credits: 10,
-      maxItineraryDays: 10,
-      renewal: 'lifetime',
-    });
-    expect(getPlanEntitlements('paid').aiPlanner).toEqual({
-      credits: 50,
-      maxItineraryDays: 20,
-      renewal: 'monthly',
-    });
-    for (const key of ['unknown', 'toString', '__proto__'])
-      expect(() => asPlanKey(key)).toThrow('configuration_invalid');
-  } finally {
-    vi.unstubAllEnvs();
-  }
+test('code-defined plans preserve product limits and reject unsupported plans', () => {
+  expect(getPlanEntitlements('free').aiPlanner).toEqual({
+    credits: 10,
+    maxItineraryDays: 10,
+    renewal: 'lifetime',
+  });
+  expect(getPlanEntitlements('paid').aiPlanner).toEqual({
+    credits: 50,
+    maxItineraryDays: 20,
+    renewal: 'monthly',
+  });
+  for (const key of ['unknown', 'toString', '__proto__'])
+    expect(() => asPlanKey(key)).toThrow('configuration_invalid');
 });
 
 test('missing assignment defaults to active Free without a monthly anchor', async () => {

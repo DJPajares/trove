@@ -1,8 +1,9 @@
-import { TripPlacesManager } from '@/components/trip-places-manager';
+import { redirect } from 'next/navigation';
+import { tripPlacesHref } from '@/lib/trip-places/navigation';
 
 export default async function TripPlacesPage({
   params,
 }: Readonly<{ params: Promise<{ tripId: string }> }>) {
   const { tripId } = await params;
-  return <TripPlacesManager tripId={tripId} />;
+  redirect(tripPlacesHref(tripId));
 }

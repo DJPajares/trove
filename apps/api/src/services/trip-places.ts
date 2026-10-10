@@ -127,14 +127,13 @@ export async function listTripPlaces(userId: string, tripId: string, languageCod
     orderBy: [{ priority: 'asc' }, { createdAt: 'desc' }],
   });
 
-  // The collection is rendered from what the database holds. This only reaches
-  // the provider for Places it has never resolved or whose snapshot has aged
-  // out, and it is bounded, so opening this screen is not a per-place bill.
+  // Opening a supporting collection must never acquire provider data. Explicit
+  // additions and opened details handle resolution; this read keeps its age.
   const snapshots = await hydratePlaceSnapshots(
     tripPlaces.flatMap((tripPlace) =>
       tripPlace.place.providerRefs.map((reference) => reference.externalPlaceId),
     ),
-    { languageCode, source: 'trip-places' },
+    { languageCode, placesService: null, source: 'trip-places' },
   );
 
   return {

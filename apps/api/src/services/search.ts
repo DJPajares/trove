@@ -327,7 +327,7 @@ async function searchOwnedContent(userId: string, input: string) {
     if (primaryScore && tripPlace.place.customName) {
       results.push({
         description: null,
-        href: `/trips/${tripPlace.trip.id}/places`,
+        href: `/trips/${tripPlace.trip.id}?places=1`,
         id: tripPlace.id,
         kind: 'trip_place',
         noteSource: null,
@@ -347,7 +347,7 @@ async function searchOwnedContent(userId: string, input: string) {
     if (note && noteText) {
       results.push({
         description: excerpt(noteText),
-        href: `/trips/${tripPlace.trip.id}/places`,
+        href: `/trips/${tripPlace.trip.id}?places=1`,
         id: `trip-place:${tripPlace.id}`,
         kind: 'note',
         noteSource: 'trip_place',
@@ -548,7 +548,7 @@ async function resolveOwnedProviderResults(
     for (const tripPlace of membership.place.tripPlaces) {
       owned.push({
         description: suggestion.description,
-        href: `/trips/${tripPlace.trip.id}/places`,
+        href: `/trips/${tripPlace.trip.id}?places=1`,
         id: tripPlace.id,
         kind: 'trip_place',
         noteSource: null,

@@ -15,7 +15,8 @@ import { ItineraryDayTimeSuggestions } from '@/components/itinerary-day-time-sug
 import { PageState } from '@/components/page-state';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { ItineraryTripMap } from '@/components/itinerary-trip-map';
-import { ItineraryPlacesDrawer } from '@/components/itinerary-places-drawer';
+import { useRegisterTripPlacesDay, useTripPlacesDrawer } from '@/components/trip-places-provider';
+import type { TripPlacesDayContext } from '@/components/trip-places-drawer';
 import { LocatePlaceSheet } from '@/components/locate-place-sheet';
 import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
 import { PlanScoreChip, PlanScorePanel } from '@/components/plan-score-panel';
@@ -113,7 +114,11 @@ import {
   DuplicateAttemptTracker,
   refreshedItineraryContainsCopy,
 } from '@/lib/itinerary/duplicate-attempt';
-import { placeVisitDate, scheduledPlaceUse } from '@/lib/itinerary/places';
+import {
+  itineraryTripPlaceFromTripPlace,
+  placeVisitDate,
+  scheduledPlaceUse,
+} from '@/lib/itinerary/places';
 import { optimisticItineraryEdit } from '@/lib/itinerary/optimistic';
 import { itineraryDayRouteRevision } from '@/lib/itinerary/routes';
 import { itineraryViewHref, resolveItineraryView } from '@/lib/itinerary/view';
@@ -146,18 +151,6 @@ import {
   PLACE_LOCATION_QUERY_ROOTS,
 } from '@/lib/query/trip-invalidation';
 import * as Icons from '@/lib/icons';
-
-/** The Places drawer responds with its richer collection shape; the itinerary only
- * needs the compatible subset it normally receives from its own endpoint. */
-function itineraryTripPlaceFromTripPlace(tripPlace: TripPlace): ItineraryTripPlace {
-  return {
-    customName: tripPlace.customName,
-    id: tripPlace.id,
-    note: tripPlace.note,
-    place: { ...tripPlace.place, timeZone: tripPlace.place.location?.timeZone ?? null },
-    priority: tripPlace.priority,
-  };
-}
 
 function useDesktopMapLayout() {
   const [matches, setMatches] = useState<boolean | null>(null);
@@ -192,6 +185,7 @@ function TripScoreAndInsights({
   tripId: string;
 }>) {
   const planScoreTranslations = useTranslations('planScore');
+  const { openPlaces } = useTripPlacesDrawer();
   const { hasBeenVisible, ref } = useInViewOnce<HTMLDivElement>();
   const planScoreHidden =
     !planScoreEnabled ||
@@ -205,7 +199,7 @@ function TripScoreAndInsights({
       <div aria-hidden="true" className="h-px" ref={ref} />
       {!planScoreHidden ? (
         <PlanScorePanel
-          tripPlacesHref={`/trips/${tripId}/places`}
+          onOpenTripPlaces={openPlaces}
           completeness={planScore.data?.completeness ?? null}
           confidence={planScore.data?.confidence ?? null}
           explanations={
@@ -333,7 +327,7 @@ export function ItineraryManager({
   const [selectedMapPointId, setSelectedMapPointId] = useState<string | null>(null);
   const [selectedMapItemId, setSelectedMapItemId] = useState<string | null>(null);
   const [savingRouteOwner, setSavingRouteOwner] = useState<string | null>(null);
-  const [placesDrawerOpen, setPlacesDrawerOpen] = useState(false);
+  const { openPlaces } = useTripPlacesDrawer();
   const desktopMapLayout = useDesktopMapLayout();
   // A map that has been built is kept, hidden, while Overview is showing, so
   // coming back to the day does not build (and pay for) another one.
@@ -1153,24 +1147,44 @@ export function ItineraryManager({
    * having the collection beside the plan. Reached from the Places drawer and
    * from a map marker for a Place that is not on this day yet.
    */
-  async function addTripPlaceToSelectedDay(tripPlaceId: string) {
-    if (!selectedDay) return false;
-    try {
-      await createItineraryItem(tripId, {
-        itineraryDayId: selectedDay.id,
-        schedule: { kind: 'none' },
-        tripPlaceId,
-      });
-      await refresh();
-      return true;
-    } catch {
-      return false;
-    }
-  }
+  const addTripPlaceToSelectedDay = useCallback(
+    async (tripPlaceId: string) => {
+      if (!selectedDay) return false;
+      try {
+        await createItineraryItem(tripId, {
+          itineraryDayId: selectedDay.id,
+          schedule: { kind: 'none' },
+          tripPlaceId,
+        });
+        await refresh();
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [refresh, selectedDay, tripId],
+  );
 
-  function addPlaceToSelectedDay(tripPlace: TripPlace) {
-    return addTripPlaceToSelectedDay(tripPlace.id);
-  }
+  const addPlaceToSelectedDay = useCallback(
+    (tripPlace: TripPlace) => addTripPlaceToSelectedDay(tripPlace.id),
+    [addTripPlaceToSelectedDay],
+  );
+
+  const placesDayContext = useMemo<TripPlacesDayContext | null>(
+    () =>
+      activeView === 'day' && selectedDay && status === 'idle'
+        ? {
+            anchors: dayAnchors,
+            date: selectedDay.date,
+            dayName: selectedDay.name,
+            dayNumber: selectedIndex + 1,
+            onAddToDay: addPlaceToSelectedDay,
+            placeUse,
+          }
+        : null,
+    [activeView, selectedDay, status, dayAnchors, selectedIndex, addPlaceToSelectedDay, placeUse],
+  );
+  useRegisterTripPlacesDay(placesDayContext);
 
   async function handleDailyBase(
     day: ItineraryDay,
@@ -1418,7 +1432,13 @@ export function ItineraryManager({
         <div className={activeView === 'overview' ? 'contents' : 'hidden'}>
           <TripBoard
             actions={
-              <Button onClick={() => setPlacesDrawerOpen(true)} size="sm" variant="outline">
+              <Button
+                aria-haspopup="dialog"
+                data-trip-places-trigger
+                onClick={openPlaces}
+                size="sm"
+                variant="outline"
+              >
                 <Icons.Places aria-hidden="true" data-icon="inline-start" />
                 {tripPlacesTranslations('openPlaces')}
               </Button>
@@ -1517,7 +1537,9 @@ export function ItineraryManager({
                     {plannerT('masthead.addStop')}
                   </Button>
                   <Button
-                    onClick={() => setPlacesDrawerOpen(true)}
+                    aria-haspopup="dialog"
+                    data-trip-places-trigger
+                    onClick={openPlaces}
                     size="sm"
                     type="button"
                     variant="outline"
@@ -1789,7 +1811,7 @@ export function ItineraryManager({
                   else await addTripPlaceToSelectedDay(tripPlace.id);
                 }}
                 onAddStop={() => openCreate(selectedDay)}
-                onBrowsePlaces={() => setPlacesDrawerOpen(true)}
+                onBrowsePlaces={openPlaces}
                 placeName={(tripPlace) => placeName(tripPlace) ?? t('providerPlace')}
                 town={selectedRibbonDay?.town ?? null}
                 tripIsEmpty={itinerary.days.every((day) => !day.items.length)}
@@ -1925,32 +1947,9 @@ export function ItineraryManager({
             scope: 'day',
             status: planScore.status,
             title: planScoreTranslations('dayTitle'),
-            tripPlacesHref: `/trips/${tripId}/places`,
+            onOpenTripPlaces: openPlaces,
           }}
           title={dayOption(selectedDay, selectedIndex)}
-        />
-      ) : null}
-
-      {placesDrawerOpen && selectedDay ? (
-        <ItineraryPlacesDrawer
-          anchors={dayAnchors}
-          date={selectedDay.date}
-          dayName={selectedDay.name}
-          dayNumber={selectedIndex + 1}
-          onAddToDay={addPlaceToSelectedDay}
-          onTripPlaceAdded={(tripPlace) =>
-            setItinerary((current) =>
-              current && !current.tripPlaces.some((place) => place.id === tripPlace.id)
-                ? {
-                    ...current,
-                    tripPlaces: [...current.tripPlaces, itineraryTripPlaceFromTripPlace(tripPlace)],
-                  }
-                : current,
-            )
-          }
-          onOpenChange={setPlacesDrawerOpen}
-          placeUse={placeUse}
-          tripId={tripId}
         />
       ) : null}
 

@@ -43,6 +43,7 @@ import { queryKeys } from '@/lib/query/keys';
 import * as Icons from '@/lib/icons';
 
 type AddTripPlaceSheetProps = {
+  finalFocus?: () => HTMLElement | boolean;
   /** A search to start from, such as one that found nothing among the trip's own places. */
   initialQuery?: string;
   onAdded: (tripPlace: TripPlace) => void;
@@ -65,6 +66,7 @@ type AddTripPlaceSheetProps = {
 const EMPTY_SAVED_PLACES: SavedPlace[] = [];
 
 export function AddTripPlaceSheet({
+  finalFocus,
   initialQuery = '',
   onAdded,
   onOpenChange,
@@ -265,6 +267,7 @@ export function AddTripPlaceSheet({
   return (
     <Sheet onOpenChange={onOpenChange} open>
       <SheetContent
+        finalFocus={finalFocus}
         className="w-full md:data-[side=right]:w-[min(34rem,calc(100%-0.5rem))]"
         closeLabel={t('close')}
       >

@@ -6,7 +6,7 @@ import type { Trip } from './api';
  * the header component means the lifecycle rules can be read and tested on their own.
  */
 export type TripSection =
-  'expenses' | 'info' | 'itinerary' | 'memories' | 'mode' | 'places' | 'reservations' | 'tasks';
+  'expenses' | 'info' | 'itinerary' | 'memories' | 'mode' | 'reservations' | 'tasks';
 
 export type TripDestination = {
   /** Drives visual weight only; every destination is always present. */
@@ -226,7 +226,6 @@ const sectionLabelKeys: Record<TripSection, string> = {
   itinerary: 'itinerary',
   memories: 'memories',
   mode: 'tripMode',
-  places: 'places',
   reservations: 'reservations',
   tasks: 'tasks',
 };
@@ -235,13 +234,12 @@ export function tripSectionLabelKey(section: TripSection): string {
   return sectionLabelKeys[section];
 }
 
-/** The trip's supporting destinations, with Places first in every tools menu. */
+/** Supporting destinations; Places opens contextually as a drawer. */
 export function supportingTripDestinations(tripId: string): TripDestination[] {
   const base = `/trips/${tripId}`;
 
   return (
     [
-      ['places', 'places'],
       ['tasks', 'tasks'],
       ['reservations', 'reservations'],
       ['expenses', 'expenses'],
@@ -271,7 +269,6 @@ export function tripSectionFromPathname(pathname: string, tripId: string): TripS
     'itinerary',
     'memories',
     'mode',
-    'places',
     'reservations',
     'tasks',
   ];

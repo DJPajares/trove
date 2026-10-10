@@ -32,6 +32,7 @@ import {
 export type PlaceDetailsRow = { label: string; value: string };
 
 type PlaceDetailsSheetProps = {
+  finalFocus?: () => HTMLElement | boolean;
   /**
    * The photograph the surface already resolved for this place. Passed in
    * rather than resolved here: a sheet that asked for its own would turn one
@@ -71,6 +72,7 @@ const EVIDENCE_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
  * and a generic one is labelled as illustrative.
  */
 export function PlaceDetailsSheet({
+  finalFocus,
   editorialImages,
   meta = [],
   name,
@@ -235,6 +237,7 @@ export function PlaceDetailsSheet({
   return (
     <Sheet onOpenChange={onOpenChange} open>
       <SheetContent
+        finalFocus={finalFocus}
         className="gap-0 overflow-hidden md:data-[side=right]:w-[min(30rem,calc(100%-0.5rem))]"
         closeLabel={t('close')}
         side="right"

@@ -9,6 +9,7 @@ import {
   tripDestinationEmphasisVariant,
   tripOverviewDestinations,
   tripSectionLabelKey,
+  tripSectionFromPathname,
   tripTabDestinations,
   type TripSection,
   withLiveTripModeFirst,
@@ -124,25 +125,22 @@ test('the shared tab row carries only the planner, while the overview still offe
   }
 });
 
-test('supporting tools put Places first and stay out of the primary set', () => {
+test('supporting tools omit contextual Places and stay out of the primary set', () => {
   const supporting = supportingTripDestinations(TRIP);
 
   expect(supporting.map((entry) => entry.section)).toStrictEqual([
-    'places',
     'tasks',
     'reservations',
     'expenses',
     'info',
   ]);
   expect(supporting.map((entry) => entry.href)).toStrictEqual([
-    `/trips/${TRIP}/places`,
     `/trips/${TRIP}/tasks`,
     `/trips/${TRIP}/reservations`,
     `/trips/${TRIP}/expenses`,
     `/trips/${TRIP}/info`,
   ]);
   expect(supporting.map((entry) => entry.labelKey)).toStrictEqual([
-    'places',
     'tasks',
     'reservations',
     'expenses',
@@ -264,7 +262,6 @@ test('every section can say its own name, including the ones no menu lists', () 
     'itinerary',
     'memories',
     'mode',
-    'places',
     'reservations',
     'tasks',
   ];
@@ -273,9 +270,7 @@ test('every section can say its own name, including the ones no menu lists', () 
     expect(tripSectionLabelKey(section), `${section} has no label`).toBeTruthy();
   }
 
-  // Places is in neither set, and it is exactly the screen that would otherwise be
-  // left describing itself as "More".
-  expect(tripSectionLabelKey('places')).toBe('places');
+  // Trip Info keeps its readable label despite its short route segment.
   expect(tripSectionLabelKey('info')).toBe('tripInfo');
 });
 
@@ -313,4 +308,8 @@ test('a day previews in Trip Mode at the time it starts, or on its morning', () 
   expect(dayPreviewHref('trip-1', '2026-09-07', '07:30')).toBe(
     '/trips/trip-1/mode?preview=1&date=2026-09-07&time=07%3A30',
   );
+});
+
+test('Places is a contextual workspace rather than a trip section', () => {
+  expect(tripSectionFromPathname(`/trips/${TRIP}/places`, TRIP)).toBeNull();
 });

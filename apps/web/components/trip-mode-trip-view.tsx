@@ -3,7 +3,7 @@
 import { BedDouble, CalendarDays, ChevronDown, ChevronRight, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 
 import { EditorialSection } from '@/components/editorial-section';
 import { PageState } from '@/components/page-state';
@@ -18,6 +18,7 @@ import {
 } from '@/components/trip-mode-tasks';
 import { TripDayWeather } from '@/components/trip-day-weather';
 import { useTripContext } from '@/components/trip-provider';
+import { useTripPlacesDrawer } from '@/components/trip-places-provider';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
@@ -51,10 +52,30 @@ type Tool = {
     | 'notesDescription'
     | 'placesDescription'
     | 'reservationsDescription';
-  href: string;
   icon: typeof CalendarDays;
   key: 'expenses' | 'info' | 'itinerary' | 'notes' | 'places' | 'reservations';
-};
+} & ({ href: string; onSelect?: never } | { href?: never; onSelect: () => void });
+
+/** Navigation remains a link; the collection is an action over the current view. */
+function TripToolTile({ tool, children }: Readonly<{ tool: Tool; children: ReactNode }>) {
+  const className =
+    'group flex min-h-28 flex-col justify-between rounded-[var(--radius-xl)] border border-border-subtle bg-card p-3.5 shadow-[var(--shadow-control)] outline-none transition-[background-color,border-color,box-shadow,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:border-border-strong hover:bg-surface-hover hover:shadow-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:transition-none';
+  return tool.href ? (
+    <Link className={className} href={tool.href}>
+      {children}
+    </Link>
+  ) : (
+    <Button
+      aria-haspopup="dialog"
+      className={cn(className, 'h-auto items-stretch whitespace-normal text-left')}
+      data-trip-places-trigger
+      onClick={tool.onSelect}
+      variant="ghost"
+    >
+      {children}
+    </Button>
+  );
+}
 
 function TripViewSkeleton({ label }: Readonly<{ label: string }>) {
   return (
@@ -125,6 +146,7 @@ function ContextualTaskGroups({ data }: Readonly<{ data: TasksResponse }>) {
 
 export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripMode.views.trip');
+  const { openPlaces } = useTripPlacesDrawer();
   const itineraryT = useTranslations('itinerary');
   const tasksT = useTranslations('tripMode.tasks');
   const locale = useLocale();
@@ -230,7 +252,7 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
     },
     {
       descriptionKey: 'placesDescription',
-      href: `/trips/${tripId}/places`,
+      onSelect: openPlaces,
       icon: tripSectionIcons.places,
       key: 'places',
     },
@@ -540,42 +562,40 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
             headingLevel={3}
             title={t('tripTools')}
           >
-            {/* Tiles rather than a list, the same shape the trip's own
-                overview uses for the same six places - so stepping out of Trip
-                Mode into Places or Reservations looks like the app a traveller
-                came from rather than a settings screen. */}
+            {/* Places stays over Trip Mode; the other tiles navigate to their tools. */}
             <div className="grid grid-cols-2 gap-3">
-              {tools.map(({ descriptionKey, href, icon: Icon, key }) => (
-                <Link
-                  className="group flex min-h-28 flex-col justify-between rounded-[var(--radius-xl)] border border-border-subtle bg-card p-3.5 shadow-[var(--shadow-control)] outline-none transition-[background-color,border-color,box-shadow,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:border-border-strong hover:bg-surface-hover hover:shadow-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:transition-none"
-                  href={href}
-                  key={key}
-                >
-                  <Icon aria-hidden="true" className="size-5 text-brand" />
-                  <span>
-                    <span className="block font-semibold text-foreground">{t(`tools.${key}`)}</span>
-                    <span className="mt-0.5 flex items-center gap-1 text-[length:var(--text-metadata)] leading-5 text-muted-foreground">
-                      <span className="min-w-0 truncate">
-                        {key === 'places'
-                          ? t('tools.placesDescription', { count: itinerary.tripPlaces.length })
-                          : key === 'reservations' && supportingCounts.reservations !== null
-                            ? t('tools.reservationsCount', {
-                                count: supportingCounts.reservations,
-                              })
-                            : key === 'expenses' && supportingCounts.expenses !== null
-                              ? t('tools.expensesCount', { count: supportingCounts.expenses })
-                              : key === 'notes'
-                                ? t('tools.notesCount', { count: notes.length })
-                                : t(`tools.${descriptionKey}`)}
+              {tools.map((tool) => {
+                const { descriptionKey, icon: Icon, key } = tool;
+                return (
+                  <TripToolTile key={key} tool={tool}>
+                    <Icon aria-hidden="true" className="size-5 text-brand" />
+                    <span>
+                      <span className="block font-semibold text-foreground">
+                        {t(`tools.${key}`)}
                       </span>
-                      <ChevronRight
-                        aria-hidden="true"
-                        className="size-3.5 shrink-0 text-text-subtle transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
-                      />
+                      <span className="mt-0.5 flex items-center gap-1 text-[length:var(--text-metadata)] leading-5 text-muted-foreground">
+                        <span className="min-w-0 truncate">
+                          {key === 'places'
+                            ? t('tools.placesDescription', { count: itinerary.tripPlaces.length })
+                            : key === 'reservations' && supportingCounts.reservations !== null
+                              ? t('tools.reservationsCount', {
+                                  count: supportingCounts.reservations,
+                                })
+                              : key === 'expenses' && supportingCounts.expenses !== null
+                                ? t('tools.expensesCount', { count: supportingCounts.expenses })
+                                : key === 'notes'
+                                  ? t('tools.notesCount', { count: notes.length })
+                                  : t(`tools.${descriptionKey}`)}
+                        </span>
+                        <ChevronRight
+                          aria-hidden="true"
+                          className="size-3.5 shrink-0 text-text-subtle transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
+                        />
+                      </span>
                     </span>
-                  </span>
-                </Link>
-              ))}
+                  </TripToolTile>
+                );
+              })}
             </div>
           </EditorialSection>
 

@@ -12,7 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 
 import { LocatePlaceSheet } from '@/components/locate-place-sheet';
 import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
@@ -60,7 +60,7 @@ const priorities = ['none', 'must_go', 'interested', 'maybe'] as const;
 type TripPlacesPanelProps = {
   /** Places whose addition to the day is still on its way to the server. */
   busyPlaceIds?: ReadonlySet<string>;
-  /** The day being planned. Only the itinerary's drawer has one, so only it adds to a day. */
+  /** The day being planned. Only the active planner day supplies one. */
   day?: { date: string; number: number };
   /** Places just added to the day here, whose check arrives with a little motion. */
   justAddedIds?: ReadonlySet<string>;
@@ -76,6 +76,7 @@ type TripPlacesPanelProps = {
   placeUse?: Readonly<Record<string, ScheduledPlaceUse>>;
   /** The rows' inline inset, so they line up with the edge of whatever holds the list. */
   rowClassName?: string;
+  returnFocusToPlace?: (id: string | null) => HTMLElement | boolean;
   /** What Trove already knows that bears on a row: open that day, how far, how rated. */
   signalsFor?: (tripPlace: TripPlace) => TripPlaceRowSignals;
   tripId: string;
@@ -83,9 +84,9 @@ type TripPlacesPanelProps = {
 };
 
 /**
- * The trip's Place collection, rendered the same way wherever it appears: on the
- * Places page, and in the drawer the itinerary opens beside the day being planned.
- * One list means a priority set in either place looks and behaves identically.
+ * The trip's Place collection, rendered the same way wherever it appears: in the
+ * hub, planner and Trip Mode drawers. One list means every entry point behaves
+ * identically, with day-specific actions only beside the day being planned.
  *
  * A row reads in the order a planner asks: what the place is, where it is, how
  * it fits the day, and where it already sits in the plan. Each line appears only
@@ -105,11 +106,13 @@ export function TripPlacesPanel({
   onRemove,
   placeUse,
   rowClassName,
+  returnFocusToPlace,
   signalsFor,
   tripId,
   tripPlaces,
 }: Readonly<TripPlacesPanelProps>) {
   const t = useTranslations('tripPlaces');
+  const nestedPlaceId = useRef<string | null>(null);
   const signalsT = useTranslations('placeSignals');
   const mediaTranslations = useTranslations('media');
   // The locate copy belongs to the Place, not to this list, so it says the same
@@ -316,6 +319,7 @@ export function TripPlacesPanel({
                 'relative flex-nowrap items-start gap-3 py-3 hover:bg-surface-hover',
                 rowClassName,
               )}
+              data-trip-place-id={tripPlace.id}
               key={tripPlace.id}
               ref={observeRow(tripPlace.id)}
               role="listitem"
@@ -359,7 +363,10 @@ export function TripPlacesPanel({
                       <button
                         aria-label={t('viewDetails', { name })}
                         className="block w-full rounded-[var(--radius-sm)] text-left outline-none after:absolute after:inset-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/40 focus-visible:after:ring-inset"
-                        onClick={() => setDetailsPlace(tripPlace)}
+                        onClick={() => {
+                          nestedPlaceId.current = tripPlace.id;
+                          setDetailsPlace(tripPlace);
+                        }}
                         type="button"
                       >
                         <span className="line-clamp-2 break-words">{name}</span>
@@ -481,7 +488,12 @@ export function TripPlacesPanel({
 
                         {/* A Custom Place has details worth showing too, so this is no
                             longer conditional on having a Google listing to link out to. */}
-                        <DropdownMenuItem onClick={() => setDetailsPlace(tripPlace)}>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            nestedPlaceId.current = tripPlace.id;
+                            setDetailsPlace(tripPlace);
+                          }}
+                        >
                           <Eye aria-hidden="true" />
                           {t('viewDetailsAction')}
                         </DropdownMenuItem>
@@ -493,7 +505,12 @@ export function TripPlacesPanel({
                             than permanently unmappable, but only a Custom Place has
                             coordinates of its own to be given. */}
                         {canLocate(tripPlace) ? (
-                          <DropdownMenuItem onClick={() => setLocatePlace(tripPlace)}>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              nestedPlaceId.current = tripPlace.id;
+                              setLocatePlace(tripPlace);
+                            }}
+                          >
                             <MapPin aria-hidden="true" />
                             {locateTranslations('locate.action')}
                           </DropdownMenuItem>
@@ -545,6 +562,9 @@ export function TripPlacesPanel({
         <PlaceDetailsSheet
           key={detailsPlace.place.id}
           editorialImages={editorialImagesFor(detailsPlace)}
+          finalFocus={
+            returnFocusToPlace ? () => returnFocusToPlace(nestedPlaceId.current) : undefined
+          }
           meta={detailsMeta(detailsPlace)}
           name={placeName(detailsPlace)}
           officialName={officialName(detailsPlace)}
@@ -565,6 +585,9 @@ export function TripPlacesPanel({
       ) : null}
 
       <LocatePlaceSheet
+        finalFocus={
+          returnFocusToPlace ? () => returnFocusToPlace(nestedPlaceId.current) : undefined
+        }
         onLocated={onPlaceLocated}
         onOpenChange={(open) => !open && setLocatePlace(null)}
         place={

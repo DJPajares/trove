@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import type { ComponentProps } from 'react';
+import { useRef, type ComponentProps } from 'react';
 
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -27,9 +27,19 @@ export function PlanScoreSheet({
   title: string;
 }>) {
   const t = useTranslations('itinerary');
+  const placesPending = useRef(false);
 
   return (
-    <Sheet onOpenChange={onOpenChange} open={open}>
+    <Sheet
+      onOpenChange={onOpenChange}
+      onOpenChangeComplete={(next) => {
+        if (!next && placesPending.current) {
+          placesPending.current = false;
+          panel.onOpenTripPlaces?.();
+        }
+      }}
+      open={open}
+    >
       <SheetContent
         className="w-full md:data-[side=right]:w-[min(32rem,calc(100%-0.5rem))]"
         closeLabel={t('close')}
@@ -41,6 +51,14 @@ export function PlanScoreSheet({
           {open ? (
             <PlanScorePanel
               {...panel}
+              onOpenTripPlaces={
+                panel.onOpenTripPlaces
+                  ? () => {
+                      placesPending.current = true;
+                      onOpenChange(false);
+                    }
+                  : undefined
+              }
               className="border-t-0 pt-4"
               defaultDetailsOpen
               headingLevel={2}

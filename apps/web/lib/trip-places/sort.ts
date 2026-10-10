@@ -15,8 +15,7 @@ function priorityRank(priority: TripPlacePriority | null) {
 
 /**
  * Sorts the trip's collection at the surface that owns the choice. The drawer
- * always uses its name order, while the Places page lets the traveller switch it
- * for this visit without storing a preference.
+ * lets the traveller switch the order for this visit without storing a preference.
  */
 export function sortTripPlaces<T extends SortableTripPlace>(
   places: readonly T[],

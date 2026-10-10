@@ -264,11 +264,11 @@ Trove offers three core trip experiences:
 - **Trip Mode** — Live it.
 - **Memories** — Remember it.
 
-**Strict requirement:** Trip Mode, Preview and Memories must never appear in the shared trip page tab row — the row on Itinerary, Expenses, Tasks, Reservations, Trip Info, and Places — regardless of trip lifecycle, viewport, or entry point. That tab row contains only **Itinerary**, beside the supporting-tools menu. Trip Mode and Memories each open as an experience of their own, with their own header and Exit, from contextual entry points: the trip hub's current chapter and contextual links, Home, the Trips library, and, for Memories, search results that open the journal at the matching Memory. Trip Mode's opening behavior and its own **Now / Today / Map / Trip** navigation remain unchanged. The Memories journal lives at the trip's `memories` address and is described in Section 31.2.
+**Strict requirement:** Trip Mode, Preview and Memories must never appear in the shared trip page tab row — the row on Itinerary, Expenses, Tasks, Reservations, and Trip Info — regardless of trip lifecycle, viewport, or entry point. That tab row contains only **Itinerary**, beside the supporting-tools menu. Trip Mode and Memories each open as an experience of their own, with their own header and Exit, from contextual entry points: the trip hub's current chapter and contextual links, Home, the Trips library, and, for Memories, search results that open the journal at the matching Memory. Trip Mode's opening behavior and its own **Now / Today / Map / Trip** navigation remain unchanged. The Memories journal lives at the trip's `memories` address and is described in Section 31.2.
 
-Supporting tools — Places, Tasks, Reservations, Expenses, Trip Info, in that order — are reachable in one interaction from a single grouped menu on every trip screen, and must never occupy the primary navigation.
+Supporting tool pages — Tasks, Reservations, Expenses, Trip Info, in that order — are reachable in one interaction from a single grouped menu on every trip screen, and must never occupy the primary navigation.
 
-The trip's Places collection is the first destination in the supporting-tools menu. The itinerary also opens it directly, as Section 16.1 describes, and the Trip hub retains its contextual Places link alongside the journey’s destinations. Wherever a trip is summarised outside its own screens — the Trips library, for example — the three experiences are offered as themselves, with any supporting-tools menu following the same order.
+The trip's Places collection is a contextual drawer, never a standalone destination or an item in the supporting-tools menu. The itinerary opens it directly, as Section 16.1 describes; the Trip hub opens it alongside the journey’s destinations, and Trip Mode's Trip view retains a contextual drawer action. Plan Score prompts open the same drawer after closing any score sheet. Existing Places bookmarks and trip-place search results open the drawer over the Trip hub. Closing the drawer returns to the underlying screen; browser Back and Forward dismiss and reopen a locally opened drawer. Wherever a trip is summarised outside its own screens — the Trips library, for example — the three experiences are offered as themselves, with any supporting-tools menu following the same order.
 
 The individual Trip landing page is the journey’s lifecycle-aware hub: identity, current context, and one purposeful next action. It keeps the uploaded or editorial trip cover stable across all stages. On mobile, the hub and every trip tool screen use the shared cover height and curved content sheet overlapping the photograph; the hub's identity sits on that sheet above its current chapter. Desktop retains the hub's split photograph/chapter composition and Itinerary's compact cover. Planning leads with coverage and the first open day (or the first day when all are planned); departure within seven days changes the emphasis to reviewing the itinerary. Active travel follows the traveller’s clock, showing today’s day title and at most the current/relevant and next stop. Completed travel leads with up to three personal memory photographs and the traveller’s existing reflection/rating, with an intentional empty state when nothing has been captured. It never fabricates highlights or prompts for a rating here.
 
@@ -280,7 +280,7 @@ Trip lifecycle changes emphasis only. All three core experiences remain reachabl
 - **Active:** Trip Mode leads.
 - **Completed:** Memories leads. Trip Mode remains reachable as Preview, opening at the first day.
 
-Whenever the current screen is not one of the three core experiences, its name must remain visible in the navigation so the user can always tell where they are. That includes screens reached from somewhere other than the menu, such as Places opened directly.
+Whenever the current screen is not one of the three core experiences, its name must remain visible in the navigation so the user can always tell where they are. That includes tool pages reached from somewhere other than the menu. The Places drawer identifies itself in its sheet heading without changing the underlying screen’s navigation.
 
 ## 4.6 Accessibility
 
@@ -1016,7 +1016,7 @@ Optional priority:
 - Interested
 - Maybe
 
-Trip Place priority is editable from Trip places and a linked itinerary stop’s menu. It applies to every occurrence of that place within this trip. The Plan Score prompt to mark Must Go places explains the priority menu and links to Trip places for an existing trip.
+Trip Place priority is editable from Trip places and a linked itinerary stop’s menu. It applies to every occurrence of that place within this trip. The Plan Score prompt to mark Must Go places explains the priority menu and opens the Trip Places drawer for an existing trip.
 
 Sources:
 
@@ -1061,7 +1061,7 @@ Selecting a Saved Place creates/reuses the Trip Place relationship.
 
 Custom Place creation remains available without requiring provider search. It is offered alongside the results in the same field rather than behind a separate mode, so the user is never asked what kind of Place they want before knowing whether it already exists. When a search is in progress, the custom option carries what was typed.
 
-Trip Places are a trip-level collection, not a property of a day. The itinerary opens them in an on-demand workspace beside the day being planned, entered from the trip level rather than from the day, where a Place can be added to the trip, reviewed, prioritised, annotated, removed, or added to the open day without leaving the itinerary. The same collection appears wherever it is shown; neither surface is a separate copy.
+Trip Places are a trip-level collection, not a property of a day. The itinerary opens them in an on-demand workspace beside the day being planned, entered from the trip level rather than from the day, where a Place can be added to the trip, reviewed, prioritised, annotated, removed, or added to the open day without leaving the itinerary. The same drawer and collection serve the Trip hub, itinerary and Trip Mode. Only the active itinerary day supplies day-specific hours, distance and Add to day actions; the hub, itinerary Overview and Trip Mode show collection management without selecting a day. Nearby Saved Place suggestions, individual and bulk additions, and all Place management remain available inside the drawer.
 
 ## 16.2 Adding to an Itinerary Day
 

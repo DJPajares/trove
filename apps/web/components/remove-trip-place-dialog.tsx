@@ -21,14 +21,14 @@ import { itineraryReferences } from '@/lib/trip-places/list-view';
 import type { TripPlacesError } from '@/lib/trip-places/use-trip-places';
 
 /**
- * Removing a Place from the trip, for the Places page and the itinerary's
- * drawer alike. The API refuses while any itinerary stop still uses the Place,
+ * Removing a Place from the trip, from any contextual drawer. The API refuses while any itinerary stop still uses the Place,
  * and the list already knows when that is so - so instead of offering a removal
  * that is bound to fail, the dialog says up front what has to happen first. The
  * API's own refusal still lands here if the list's count was out of date.
  */
 export function RemoveTripPlaceDialog({
   error,
+  finalFocus,
   nameOf,
   onClose,
   onRemove,
@@ -36,6 +36,7 @@ export function RemoveTripPlaceDialog({
   tripPlace,
 }: Readonly<{
   error: TripPlacesError | null;
+  finalFocus?: () => HTMLElement | boolean;
   nameOf: (tripPlace: TripPlace) => string;
   onClose: () => void;
   onRemove: (tripPlace: TripPlace) => Promise<{ ok: boolean }>;
@@ -68,7 +69,7 @@ export function RemoveTripPlaceDialog({
       }}
       open={Boolean(tripPlace)}
     >
-      <AlertDialogContent size="sm">
+      <AlertDialogContent finalFocus={finalFocus} size="sm">
         <AlertDialogHeader>
           <AlertDialogTitle>
             {references ? t('removeBlockedTitle') : t('removeTitle')}

@@ -22,8 +22,11 @@ import {
 } from '../services/itineraries.js';
 
 const tripParamsSchema = z.object({ tripId: z.uuid() }).strict();
-const languageQuerySchema = z
-  .object({ languageCode: z.string().trim().min(2).max(35).optional() })
+const itineraryReadQuerySchema = z
+  .object({
+    cachedOnly: z.enum(['1']).optional(),
+    languageCode: z.string().trim().min(2).max(35).optional(),
+  })
   .strict();
 const itemParamsSchema = z.object({ itemId: z.uuid(), tripId: z.uuid() }).strict();
 const duplicateItemSchema = z.object({ clientItemId: z.uuid().optional() }).strict();
@@ -249,12 +252,15 @@ export function createItineraryControllers() {
     async getItinerary(request: FastifyRequest, reply: FastifyReply) {
       const userId = getUserId(request, reply);
       const params = tripParamsSchema.safeParse(request.params);
-      const query = languageQuerySchema.safeParse(request.query);
+      const query = itineraryReadQuerySchema.safeParse(request.query);
       if (!userId) return;
       if (!params.success) return reply.code(400).send({ code: 'invalid_trip_id' });
+      if (!query.success) return reply.code(400).send({ code: 'invalid_itinerary_query' });
       try {
         return reply.send(
-          await listItinerary(userId, params.data.tripId, query.data?.languageCode),
+          await listItinerary(userId, params.data.tripId, query.data?.languageCode, {
+            cachedOnly: query.data?.cachedOnly === '1',
+          }),
         );
       } catch (error) {
         return handleError(reply, error);

@@ -14,9 +14,9 @@ const NOTHING_KEPT: ReadonlySet<string> = new Set();
 
 /**
  * What a list of the trip's places is showing right now: the search, the
- * "not on a day" filter and the order, all held for this visit only. Both the
- * Places page and the itinerary's drawer read the collection through this, so
- * a search behaves the same in either.
+ * "not on a day" filter and the order, all held for this visit only. Every
+ * contextual drawer reads the collection through this, so a search behaves
+ * the same at every entry point.
  *
  * Searching is local. It reads the names and addresses Trove already holds and
  * never asks a provider, however long the collection grows.
@@ -24,7 +24,7 @@ const NOTHING_KEPT: ReadonlySet<string> = new Set();
 export function useTripPlacesView(
   places: readonly TripPlace[],
   options: {
-    /** Only a day can be near or open, so only the drawer passes this. */
+    /** Only an active planner day can supply nearby and open-on-day sorts. */
     dayContext?: {
       distanceOf: (tripPlace: TripPlace) => number | null;
       hoursOf: (tripPlace: TripPlace) => PlaceHoursStatus['status'] | null;
@@ -54,6 +54,7 @@ export function useTripPlacesView(
   }, []);
 
   const { dayContext, nameOf, placeUse, sorts } = options;
+  const activeSort = sorts.includes(sort) ? sort : 'name';
   const filtered = filterTripPlaces(places, {
     fieldsOf: (tripPlace) => [
       nameOf(tripPlace),
@@ -69,9 +70,9 @@ export function useTripPlacesView(
     show,
   });
   const visible =
-    isDaySort(sort) && dayContext
-      ? sortForDay(filtered, sort, nameOf, dayContext)
-      : sortTripPlaces(filtered, isDaySort(sort) ? 'name' : sort, nameOf);
+    isDaySort(activeSort) && dayContext
+      ? sortForDay(filtered, activeSort, nameOf, dayContext)
+      : sortTripPlaces(filtered, isDaySort(activeSort) ? 'name' : activeSort, nameOf);
 
   return {
     counts: countTripPlaces(places, placeUse),
@@ -83,7 +84,7 @@ export function useTripPlacesView(
     setShow,
     setSort,
     show,
-    sort,
+    sort: activeSort,
     sorts,
     visible,
   };

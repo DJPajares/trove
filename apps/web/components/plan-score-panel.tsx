@@ -55,7 +55,7 @@ type Props = Readonly<{
   status: PlanScoreLoadStatus;
   surface?: PanelSurface;
   title: string;
-  tripPlacesHref?: string;
+  onOpenTripPlaces?: () => void;
 }>;
 /** Colour follows the verdict band; the words always carry the meaning. */
 const WARNING_BANDS = new Set<ScoreBand>(['refine', 'attention']);
@@ -167,10 +167,10 @@ export function SuggestedAction({
 }
 function ScoreMeterRows({
   rows,
-  tripPlacesHref,
+  onOpenTripPlaces,
 }: {
   rows: BreakdownRow[];
-  tripPlacesHref?: string;
+  onOpenTripPlaces?: () => void;
 }) {
   const t = useTranslations('planScore');
   return (
@@ -184,7 +184,7 @@ function ScoreMeterRows({
             <span className="text-xs text-muted-foreground">{t('notApplicableRow')}</span>
           </div>
         ) : (
-          <ScoreMeterRow key={row.id} {...row} tripPlacesHref={tripPlacesHref} />
+          <ScoreMeterRow key={row.id} {...row} onOpenTripPlaces={onOpenTripPlaces} />
         ),
       )}
     </div>
@@ -195,8 +195,8 @@ function ScoreMeterRow({
   score,
   estimated,
   reasonKey,
-  tripPlacesHref,
-}: Extract<BreakdownRow, { score: number }> & { tripPlacesHref?: string }) {
+  onOpenTripPlaces,
+}: Extract<BreakdownRow, { score: number }> & { onOpenTripPlaces?: () => void }) {
   const t = useTranslations('planScore');
   const locale = useLocale();
   return (
@@ -231,13 +231,16 @@ function ScoreMeterRow({
         </Meter.Track>
       </Meter.Root>
       {reasonKey ? <p className="text-xs text-muted-foreground">{t(reasonKey)}</p> : null}
-      {reasonKey === 'rowReasons.DESTINATION_UTILIZATION' && tripPlacesHref ? (
-        <Link
-          className={cn(buttonVariants({ size: 'sm', variant: 'link' }), 'h-auto px-0 text-sm')}
-          href={tripPlacesHref}
+      {reasonKey === 'rowReasons.DESTINATION_UTILIZATION' && onOpenTripPlaces ? (
+        <Button
+          aria-haspopup="dialog"
+          className="h-auto px-0 text-sm"
+          onClick={onOpenTripPlaces}
+          size="sm"
+          variant="link"
         >
           {t('openTripPlaces')}
-        </Link>
+        </Button>
       ) : null}
     </div>
   );
@@ -375,7 +378,7 @@ export function PlanScorePanel({
   status,
   surface = 'card',
   title,
-  tripPlacesHref,
+  onOpenTripPlaces,
   defaultDetailsOpen = false,
 }: Props) {
   const t = useTranslations('planScore');
@@ -511,7 +514,7 @@ export function PlanScorePanel({
             <div className="mt-4 space-y-5 border-t border-border-subtle pt-4">
               {rows.length ? (
                 <div className="space-y-2">
-                  <ScoreMeterRows rows={rows} tripPlacesHref={tripPlacesHref} />
+                  <ScoreMeterRows rows={rows} onOpenTripPlaces={onOpenTripPlaces} />
                   {rows.some((row) => 'estimated' in row && row.estimated) ? (
                     <p className="text-xs leading-relaxed text-muted-foreground">
                       {t('estimatedNote')}

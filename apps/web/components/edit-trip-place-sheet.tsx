@@ -19,6 +19,7 @@ import { updateCustomPlace } from '@/lib/saved/api';
 import type { TripPlace } from '@/lib/trip-places/api';
 
 type EditTripPlaceSheetProps = {
+  finalFocus?: () => HTMLElement | boolean;
   onOpenChange: (open: boolean) => void;
   /** Renaming a custom Place changes the Place itself, so the collection is reloaded. */
   onRefresh: () => Promise<void> | void;
@@ -38,6 +39,7 @@ type EditTripPlaceSheetProps = {
  * empty simply hands the Place back to whatever Google calls it.
  */
 export function EditTripPlaceSheet({
+  finalFocus,
   onOpenChange,
   onRefresh,
   onSave,
@@ -93,6 +95,7 @@ export function EditTripPlaceSheet({
   return (
     <Sheet onOpenChange={onOpenChange} open={Boolean(tripPlace)}>
       <SheetContent
+        finalFocus={finalFocus}
         className="w-full md:data-[side=right]:w-[min(34rem,calc(100%-0.5rem))]"
         closeLabel={t('close')}
       >

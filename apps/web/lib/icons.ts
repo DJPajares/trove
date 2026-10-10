@@ -91,4 +91,4 @@ export const tripSectionIcons = {
   places: MapPinned,
   reservations: Ticket,
   tasks: ListChecks,
-} as const satisfies Record<TripSection | 'notes', LucideIcon>;
+} as const satisfies Record<TripSection | 'notes' | 'places', LucideIcon>;

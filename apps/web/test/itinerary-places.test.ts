@@ -1,7 +1,12 @@
 import { expect, test } from 'vitest';
 
 import type { Itinerary, ItineraryDay, ItineraryItem } from '../lib/itinerary/api.ts';
-import { placeVisitDate, scheduledPlaceUse } from '../lib/itinerary/places.ts';
+import {
+  mergeItineraryTripPlace,
+  placeVisitDate,
+  scheduledPlaceUse,
+} from '../lib/itinerary/places.ts';
+import type { TripPlace } from '../lib/trip-places/api';
 
 function tripPlace(id: string) {
   return {
@@ -77,6 +82,40 @@ function itinerary(days: ItineraryDay[], unscheduledItems: ItineraryItem[] = [])
     unscheduledItems,
   };
 }
+
+test('collection additions and edits synchronize all uses while retaining stop metadata', () => {
+  const original = itinerary(
+    [
+      day('2026-09-05', [
+        { ...item('first', 'park'), notes: 'Visit before lunch', priority: 'maybe' },
+        item('other', 'cafe'),
+      ]),
+    ],
+    [item('idea', 'park')],
+  );
+  original.tripPlaces = [tripPlace('park')];
+  const updated = {
+    ...tripPlace('park'),
+    customName: 'Our park',
+    note: 'Bring a picnic',
+    priority: 'must_go',
+    createdAt: '2026-09-05T00:00:00.000Z',
+    isSaved: true,
+    referenceCount: 2,
+  } as TripPlace;
+  const next = mergeItineraryTripPlace(original, updated);
+  expect(next.tripPlaces).toHaveLength(1);
+  expect(next.tripPlaces[0]?.customName).toBe('Our park');
+  expect(next.days[0]?.items[0]).toMatchObject({
+    notes: 'Visit before lunch',
+    priority: 'maybe',
+    tripPlace: { customName: 'Our park', note: 'Bring a picnic', priority: 'must_go' },
+  });
+  expect(next.unscheduledItems[0]?.tripPlace).toEqual(next.tripPlaces[0]);
+  expect(next.days[0]?.items[1]).toBe(original.days[0]?.items[1]);
+  expect(original.tripPlaces[0]?.customName).toBeNull();
+  expect(mergeItineraryTripPlace(next, { ...updated, id: 'new-place' }).tripPlaces).toHaveLength(2);
+});
 
 test('a library uses the sole scheduled visit, even when another day is being viewed', () => {
   const uses = scheduledPlaceUse(itinerary([day('2026-09-05', [item('visit', 'park')])]));

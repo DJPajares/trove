@@ -441,7 +441,12 @@ export async function refreshDayDefaultTimeZone(
   }
 }
 
-export async function listItinerary(userId: string, tripId: string, languageCode?: string) {
+export async function listItinerary(
+  userId: string,
+  tripId: string,
+  languageCode?: string,
+  readOptions: { cachedOnly?: boolean } = {},
+) {
   const prisma = getPrismaClient();
   const trip = await prisma.trip.findFirst({
     where: { id: tripId, ownerId: userId },
@@ -501,7 +506,12 @@ export async function listItinerary(userId: string, tripId: string, languageCode
     trip.tripPlaces.flatMap((tripPlace) =>
       tripPlace.place.providerRefs.map((reference) => reference.externalPlaceId),
     ),
-    { languageCode, source: 'itinerary' },
+    {
+      languageCode,
+      // Supporting tools need scheduled-use data without buying a snapshot refresh.
+      placesService: readOptions.cachedOnly ? null : undefined,
+      source: 'itinerary',
+    },
   );
   const options = { snapshots };
 

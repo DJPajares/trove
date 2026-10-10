@@ -1,4 +1,31 @@
-import type { Itinerary } from './api';
+import type { TripPlace } from '@/lib/trip-places/api';
+import type { Itinerary, ItineraryTripPlace } from './api';
+
+/** The authoritative collection response also supplies the planner's compatible subset. */
+export function itineraryTripPlaceFromTripPlace(tripPlace: TripPlace): ItineraryTripPlace {
+  return {
+    customName: tripPlace.customName,
+    id: tripPlace.id,
+    note: tripPlace.note,
+    place: { ...tripPlace.place, timeZone: tripPlace.place.location?.timeZone ?? null },
+    priority: tripPlace.priority,
+  };
+}
+
+/** Collection edits update every occurrence without changing the stop's own metadata. */
+export function mergeItineraryTripPlace(itinerary: Itinerary, tripPlace: TripPlace): Itinerary {
+  const updated = itineraryTripPlaceFromTripPlace(tripPlace);
+  const updateItem = (item: Itinerary['unscheduledItems'][number]) =>
+    item.tripPlace?.id === updated.id ? { ...item, tripPlace: updated } : item;
+  return {
+    ...itinerary,
+    tripPlaces: itinerary.tripPlaces.some((place) => place.id === updated.id)
+      ? itinerary.tripPlaces.map((place) => (place.id === updated.id ? updated : place))
+      : [...itinerary.tripPlaces, updated],
+    days: itinerary.days.map((day) => ({ ...day, items: day.items.map(updateItem) })),
+    unscheduledItems: itinerary.unscheduledItems.map(updateItem),
+  };
+}
 
 export type ScheduledPlaceUse = {
   /** ISO dates, in itinerary order, where this Place appears. */

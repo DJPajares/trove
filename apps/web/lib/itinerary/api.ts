@@ -646,7 +646,7 @@ export function offlineTripModeContext(
   };
 }
 
-export async function fetchItinerary(tripId: string) {
+export async function fetchItinerary(tripId: string, options: { cachedOnly?: boolean } = {}) {
   const auth = await getAuthContext();
   const snapshot = await readTripSnapshot(auth.userId, tripId).catch(() => undefined);
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -654,7 +654,11 @@ export async function fetchItinerary(tripId: string) {
     throw new ItineraryApiError('offline_trip_not_prepared', 503);
   }
   try {
-    const server = await itineraryRequest<Itinerary>(`/trips/${tripId}/itinerary`, undefined, auth);
+    const server = await itineraryRequest<Itinerary>(
+      `/trips/${tripId}/itinerary${options.cachedOnly ? '?cachedOnly=1' : ''}`,
+      undefined,
+      auth,
+    );
     const itinerary = await mergeQueuedMutations(auth.userId, tripId, server);
     await saveItinerarySnapshot(auth.userId, tripId, itinerary);
     return itinerary;

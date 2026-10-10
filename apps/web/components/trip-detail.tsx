@@ -28,6 +28,7 @@ import { TripHeaderDetails } from '@/components/trip-header-details';
 import { TripDetailSkeleton } from '@/components/trip-detail-skeleton';
 import { useTripCreation } from '@/components/trip-creation-provider';
 import { useTripContext } from '@/components/trip-provider';
+import { useTripPlacesDrawer } from '@/components/trip-places-provider';
 import { TripShareDialog } from '@/components/trip-share-dialog';
 import { TripMedia } from '@/components/trip-media';
 import { TripStatusBadge } from '@/components/trip-status-badge';
@@ -82,12 +83,11 @@ import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/
 import { useTripOverview } from '@/lib/trips/use-trip-overview';
 import { overviewLifecycle } from '@/lib/trips/overview';
 const supportingIcons: Record<
-  'expenses' | 'info' | 'places' | 'reservations' | 'tasks',
+  'expenses' | 'info' | 'reservations' | 'tasks',
   ComponentType<{ className?: string }>
 > = {
   expenses: tripSectionIcons.expenses,
   info: tripSectionIcons.info,
-  places: tripSectionIcons.places,
   reservations: tripSectionIcons.reservations,
   tasks: tripSectionIcons.tasks,
 };
@@ -101,6 +101,7 @@ export function TripDetail({
   const hub = useTranslations('trips.hub');
   const mediaTranslations = useTranslations('media');
   const router = useRouter();
+  const { openPlaces } = useTripPlacesDrawer();
   const queryClient = useQueryClient();
   const { forgetCreatedTrip } = useTripCreation();
 
@@ -470,14 +471,17 @@ export function TripDetail({
             ) : null}
           </Collapsible>
         ) : null}
-        <Link
-          className="inline-flex min-h-9 items-center gap-2 rounded-sm text-sm font-medium text-brand outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
-          href={`/trips/${trip.id}/places`}
+        <Button
+          className="h-auto px-0 inline-flex min-h-9 items-center gap-2 rounded-sm text-sm font-medium text-brand outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+          aria-haspopup="dialog"
+          data-trip-places-trigger
+          onClick={openPlaces}
+          variant="link"
         >
           <Icons.Place aria-hidden="true" className="size-4" />
           {hub(trip.lifecycle === 'completed' ? 'placesRemembered' : 'placesToExplore')}
           <ChevronRight aria-hidden="true" className="size-3" />
-        </Link>
+        </Button>
         {trip.description ? (
           <Collapsible>
             <CollapsibleTrigger className="text-xs">{hub('aboutTrip')}</CollapsibleTrigger>

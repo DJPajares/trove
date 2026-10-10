@@ -29,6 +29,7 @@ import { linkTripPlaceToProvider } from '@/lib/trip-places/api';
 import * as Icons from '@/lib/icons';
 
 type LocatePlaceSheetProps = {
+  finalFocus?: () => HTMLElement | boolean;
   onLocated: () => Promise<void> | void;
   onOpenChange: (open: boolean) => void;
   /** The trip's Custom Place being repaired, and the name to search on first. */
@@ -55,6 +56,7 @@ type SearchState = 'empty' | 'idle' | 'results' | 'searching' | 'unavailable';
  * trip moves: Saved Places and other trips keep the Custom Place (PRD 12).
  */
 export function LocatePlaceSheet({
+  finalFocus,
   onLocated,
   onOpenChange,
   place,
@@ -116,6 +118,7 @@ export function LocatePlaceSheet({
   return (
     <Sheet onOpenChange={onOpenChange} open={Boolean(place)}>
       <SheetContent
+        finalFocus={finalFocus}
         className="w-full md:data-[side=right]:w-[min(34rem,calc(100%-0.5rem))]"
         closeLabel={t('locate.close')}
       >

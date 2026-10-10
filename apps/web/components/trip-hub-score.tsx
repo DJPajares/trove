@@ -1,5 +1,7 @@
 'use client';
 
+import { useTripPlacesDrawer } from '@/components/trip-places-provider';
+
 import { ChevronRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
@@ -11,6 +13,7 @@ import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 
 export function TripHubScore({ tripId }: { tripId: string }) {
   const t = useTranslations('planScore');
+  const { openPlaces } = useTripPlacesDrawer();
   const hub = useTranslations('trips.hub');
   const [open, setOpen] = useState(false);
   const score = useTripPlanScore(tripId);
@@ -47,7 +50,7 @@ export function TripHubScore({ tripId }: { tripId: string }) {
         open={open}
         title={t('title')}
         panel={{
-          tripPlacesHref: `/trips/${tripId}/places`,
+          onOpenTripPlaces: openPlaces,
           completeness: score.data?.completeness ?? null,
           confidence: score.data?.confidence ?? null,
           explanations: score.data?.explanations ?? {

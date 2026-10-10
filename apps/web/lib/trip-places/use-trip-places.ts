@@ -4,6 +4,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 
 import { queryKeys } from '@/lib/query/keys';
+import { fetchItinerary, type Itinerary } from '@/lib/itinerary/api';
+import { mergeItineraryTripPlace } from '@/lib/itinerary/places';
 import {
   invalidateTripQueries,
   PLACE_LOCATION_QUERY_ROOTS,
@@ -27,9 +29,8 @@ export type TripPlacesStatus = 'error' | 'idle' | 'loading';
 export type TripPlacesError = { key: string; values?: Record<string, number> };
 
 /**
- * The trip's Place collection and the three ways it changes. Both the Places page
- * and the itinerary's Places drawer read from this, so a priority set in one is
- * the same collection the other is looking at rather than a second copy of it.
+ * The trip's Place collection and the three ways it changes. Every contextual
+ * drawer reads this shared cache, so all entry points see the same collection.
  *
  * Each Place arrives named and located: the API serves the snapshot Trove stored
  * when it was added, so opening this screen asks Google for nothing.
@@ -53,7 +54,7 @@ export function useTripPlaces(tripId: string) {
   /**
    * Writes an edited Place straight back into the cache. The server has already
    * confirmed it, so a refetch would only ask for what is now in hand - and the
-   * Places page and the itinerary's drawer both read this entry, so both move
+   * drawer and itinerary both read shared entries, so both move
    * together without either re-fetching.
    */
   const setPlaces = useCallback(
@@ -71,8 +72,11 @@ export function useTripPlaces(tripId: string) {
       setPlaces((current) =>
         current.map((entry) => (entry.id === tripPlace.id ? tripPlace : entry)),
       );
+      queryClient.setQueryData<Itinerary>(queryKeys.itinerary(tripId), (current) =>
+        current ? mergeItineraryTripPlace(current, tripPlace) : current,
+      );
     },
-    [setPlaces],
+    [queryClient, setPlaces, tripId],
   );
 
   const setPriority = useCallback(
@@ -127,6 +131,28 @@ export function useTripPlaces(tripId: string) {
       try {
         await removeTripPlace(tripId, tripPlace.id);
         setPlaces((current) => current.filter((entry) => entry.id !== tripPlace.id));
+        queryClient.setQueryData<Itinerary>(queryKeys.itinerary(tripId), (current) =>
+          current
+            ? {
+                ...current,
+                tripPlaces: current.tripPlaces.filter((entry) => entry.id !== tripPlace.id),
+              }
+            : current,
+        );
+        // Removal may also detach a daily base and re-resolve its timezone.
+        // Reconcile those server-owned settings without acquiring provider data.
+        void queryClient
+          .fetchQuery({
+            queryFn: () => fetchItinerary(tripId, { cachedOnly: true }),
+            queryKey: queryKeys.itinerary(tripId),
+            staleTime: 0,
+          })
+          .catch(() =>
+            queryClient.invalidateQueries({
+              queryKey: queryKeys.itinerary(tripId),
+              refetchType: 'none',
+            }),
+          );
         // Removal is refused while the itinerary schedules the Place, so this can
         // only ever drop an unscheduled one - which is exactly the Must Go the
         // score was counting as unmet.

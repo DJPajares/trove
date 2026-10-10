@@ -1,5 +1,7 @@
 'use client';
 
+import { useTripPlacesDrawer } from '@/components/trip-places-provider';
+
 import { dayActionLink } from '@/lib/plan-score/presentation';
 
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
@@ -271,6 +273,7 @@ function TripModePreviewPlanScore({
   tripId,
 }: Readonly<{ className?: string; date: string; tripId: string }>) {
   const planScoreTranslations = useTranslations('planScore');
+  const { openPlaces } = useTripPlacesDrawer();
   const planScore = useTripPlanScore(tripId);
   const previewDayScore = planScore.data?.days.find((day) => day.date === date) ?? null;
   const planScoreHidden =
@@ -284,7 +287,7 @@ function TripModePreviewPlanScore({
 
   return (
     <PlanScorePanel
-      tripPlacesHref={`/trips/${tripId}/places`}
+      onOpenTripPlaces={openPlaces}
       className={className}
       completeness={previewDayScore?.completeness ?? null}
       confidence={previewDayScore?.confidence ?? null}

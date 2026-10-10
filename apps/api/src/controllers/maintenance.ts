@@ -4,6 +4,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { getMaintenanceEnvironment } from '../environment.js';
 import { cleanupAiPlanningRetention } from '../services/ai-planning-retention.js';
+import { reconcileOverdueAiCredits } from '../services/ai-planner-credits.js';
 import {
   createStorageCleanupClient,
   processTripMediaCleanup,
@@ -42,6 +43,7 @@ export async function aiPlanningRetentionController(request: FastifyRequest, rep
 
   let report;
   try {
+    await reconcileOverdueAiCredits();
     report = await cleanupAiPlanningRetention();
   } catch {
     request.log.error({ kind: 'ai_planning_retention' }, 'ai planning retention failed');

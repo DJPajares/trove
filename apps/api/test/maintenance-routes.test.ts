@@ -5,6 +5,10 @@ import { registerMaintenanceRoutes } from '../src/routes/maintenance.js';
 import { cleanupAiPlanningRetention } from '../src/services/ai-planning-retention.js';
 import { dispatchNotifications } from '../src/services/web-push.js';
 
+vi.mock('../src/services/ai-planner-credits.js', () => ({
+  reconcileOverdueAiCredits: vi.fn(async () => 0),
+}));
+
 const SECRET = 'a-long-scheduler-secret-value';
 
 vi.mock('../src/services/ai-planning-retention.js', () => ({

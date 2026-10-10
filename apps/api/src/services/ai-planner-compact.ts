@@ -96,6 +96,21 @@ export const aiPlannerCompactProposalSchema = z
 
 export type AiPlannerCompactProposal = z.infer<typeof aiPlannerCompactProposalSchema>;
 
+export function createAiPlannerCompactProposalSchema(maxItineraryDays: number) {
+  return aiPlannerCompactProposalSchema.extend({
+    items: z.array(
+      aiPlannerCompactProposalSchema.shape.items.element.extend({
+        dayIndex: z
+          .number()
+          .int()
+          .min(0)
+          .max(maxItineraryDays - 1)
+          .nullable(),
+      }),
+    ),
+  });
+}
+
 const WEEKDAYS = [
   'sunday',
   'monday',
@@ -416,7 +431,17 @@ export function expandAiPlannerProposal(
     };
   });
   const daySummaries = compact.daySummaries
-    ?.filter((summary) => summary.dayIndex >= 0 && summary.dayIndex < 14)
+    ?.filter(
+      (summary) =>
+        summary.dayIndex >= 0 &&
+        summary.dayIndex <
+          (compact.normalizedRequest.datePreference.kind === 'exact'
+            ? enumerateDateRange(
+                compact.normalizedRequest.datePreference.startDate,
+                compact.normalizedRequest.datePreference.endDate,
+              ).length
+            : (compact.selectedDurationDays ?? 0)),
+    )
     .map((summary) => ({
       dayIndex: summary.dayIndex,
       name: summary.name,

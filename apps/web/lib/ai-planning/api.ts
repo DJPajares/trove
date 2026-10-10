@@ -1,4 +1,4 @@
-import type { TripContext } from '@trove/types';
+import type { AiPlannerEntitlementSnapshot, TripContext } from '@trove/types';
 
 import type { TripPlanScore } from '@/lib/plan-score/api';
 import { observeServerTime } from '@/lib/plan-score/clock';
@@ -139,7 +139,7 @@ export type AiPlanningSession = {
   warningAcknowledgement: { acknowledgedAt: string; revision: number } | null;
 };
 
-export type AiPlanningAvailability = {
+export type AiPlanningAvailability = Partial<AiPlannerEntitlementSnapshot> & {
   code: string | null;
   remainingDispatches: number | null;
   retryAt: string | null;

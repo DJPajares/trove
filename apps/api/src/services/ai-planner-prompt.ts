@@ -10,6 +10,7 @@ import {
   AI_PLANNER_DEFAULT_PARTY_SIZE,
   AI_PLANNER_DEFAULT_TRIP_LENGTH_DAYS,
 } from './ai-planning-rules.js';
+import { plannerContractMaxDays } from './plan-entitlements.js';
 
 type Pace = NonNullable<AiPlannerNormalizedRequest['pace']>;
 
@@ -74,6 +75,7 @@ export type AiPlannerPromptContext = {
   homeLocation: string | null;
   itemsPerDay: Record<Pace, string>;
   maxRealPlaceItems: number;
+  maxItineraryDays: number;
   maxTripDescription: number;
   naming: { tone: AiPlannerNameTone; toneBrief: string };
   /** Venues the traveller saved, to prefer where the trip goes near them. */
@@ -87,6 +89,7 @@ export type AiPlannerPromptContext = {
  */
 export function buildAiPlannerContext(input: {
   generationDate: Date;
+  maxItineraryDays?: number;
   homeLocation: string | null;
   /** Pinned by tests; a run that leaves it out gets a fresh tone every time. */
   nameTone?: AiPlannerNameTone;
@@ -103,6 +106,7 @@ export function buildAiPlannerContext(input: {
     homeLocation: input.homeLocation,
     itemsPerDay: AI_PLANNER_ITEMS_PER_DAY,
     maxRealPlaceItems: AI_PLANNER_MAX_REAL_PLACE_ITEMS,
+    maxItineraryDays: input.maxItineraryDays ?? plannerContractMaxDays(),
     maxTripDescription: AI_PLANNER_MAX_TRIP_DESCRIPTION,
     naming: { tone, toneBrief: AI_PLANNER_NAME_TONES[tone] },
     ...(input.savedPlaces?.length ? { savedPlaces: input.savedPlaces } : {}),
@@ -160,6 +164,7 @@ export function buildAiPlannerPrompt(rawPrompt: string, context: AiPlannerPrompt
     '',
     'For a destination with source "user", candidatePlaceIndex must refer to the city or locality itself, never a hotel or venue; set destinationIntentIndex to its request destination and rationale to null. For a model-suggested destination, use a null destinationIntentIndex and explain it in rationale. Optional destinations may be omitted when they make the trip impractical; list their names in omittedOptionalDestinations. Never omit a required destination. If a hotel is requested, show it as an unbooked arrival-day suggestion, never as the destination; do not imply availability, price, or suitability was checked.',
     '',
+    "Never propose more than planner_context.maxItineraryDays inclusive days. Preserve a traveller's exact date range in normalizedRequest even if it exceeds that limit; Trove will reject the request rather than silently shorten it.",
     'For exact dates set selectedDurationDays to null and count days inclusively from startDate to endDate. If the traveller omitted a year, use the next upcoming occurrence from planner_context.generationDate. Otherwise select a 3, 5, or 7 day tier, defaulting to planner_context.defaults.durationDays; application code assigns those dates. Use planner_context defaults for pace and party size only when the traveller did not supply them.',
     '',
     'Plan each day around one or two neighbourhoods, ordered so consecutive stops are a short walk apart. Travellers walk or take public transport between stops, not a car, so never put far-apart stops back to back in the same day part.',

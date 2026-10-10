@@ -2107,6 +2107,7 @@ test('six venues use one Places call each, with persisted identity and transient
     async claim(_ownerId, runId) {
       return {
         baseDraftRevision: 0,
+        maxItineraryDays: 20,
         deadlineAt: new Date(Date.now() + 60_000),
         model: 'test',
         prompt: 'Tokyo trip',

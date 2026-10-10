@@ -244,9 +244,9 @@
         "queenstownAdventure": "Plan five active days around Queenstown for a solo traveller, with hiking, cycling, and one adventure activity. Keep one lighter day and offer alternatives for bad weather.",
         "vietnamFriends": "Plan seven days split between Hanoi and Ninh Binh for six friends. Mix food, history, and cycling, keep costs moderate, and leave room for different energy levels."
       },
-      "availability": "{count, plural, =0 {No AI plans available right now} one {# AI plan available in the next 24 hours} other {# AI plans available in the next 24 hours}}",
+      "availability": "{count, plural, one {# AI Planner credit available} other {# AI Planner credits available}}",
       "quotaRetryAt": "Your next AI plan is available after {retryAt}.",
-      "quotaRetryUnknown": "Try again later.",
+      "quotaRetryUnknown": "Your credits do not renew automatically. You can still create a trip manually.",
       "reviewReadyTitle": "Your plan is ready",
       "reviewReadyDescription": "You can review the itinerary details in the next step.",
       "reviewReadyAction": "Continue reviewing",
@@ -306,11 +306,13 @@
         "invalid_response": "The generated itinerary didn't pass our checks. Try again or create the trip manually.",
         "place_unresolved": "That place could not be verified",
         "provider_unavailable": "Planning is temporarily unavailable. Please try again shortly.",
-        "quota_exceeded": "You have used your AI planning allowance",
+        "quota_exceeded": "No AI Planner credits available",
         "schedule_conflict": "Some itinerary times overlap. Adjust the request or regenerate before creating the trip.",
         "request_failed": "We could not reach planning right now",
         "session_expired": "This planning session has expired",
-        "timeout": "Planning took too long. Your saved draft is safe; try generating again."
+        "timeout": "Planning took too long. Your saved draft is safe; try generating again.",
+        "itinerary_day_limit_exceeded": "This trip exceeds your plan’s day limit. Request a shorter trip.",
+        "rate_limited": "You’ve started several plans quickly. Wait a minute and try again."
       },
       "review": {
         "eyebrow": "AI itinerary draft",
@@ -386,7 +388,14 @@
         "applying": "Creating trip…",
         "close": "Close",
         "errorHint": "Your latest saved draft remains available. Try again when you are ready."
-      }
+      },
+      "planCredits": "{tier} · {count, plural, one {# AI Planner credit available} other {# AI Planner credits available}}",
+      "tiers": {
+        "free": "Free",
+        "paid": "Paid"
+      },
+      "dayLimit": "Trips up to {days} days",
+      "creditRenewal": "Credits renew on {date}."
     },
     "editTitle": "Edit trip",
     "editDescription": "Adjust the trip without locking the plan.",

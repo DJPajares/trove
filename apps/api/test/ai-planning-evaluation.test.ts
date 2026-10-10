@@ -160,6 +160,7 @@ async function evaluate(options: {
       async claim() {
         return {
           baseDraftRevision: 0,
+          maxItineraryDays: 20,
           deadlineAt: new Date(NOW.getTime() + 60_000),
           model: METADATA.model,
           prompt: options.prompt,

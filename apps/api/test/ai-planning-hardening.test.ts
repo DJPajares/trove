@@ -1,8 +1,4 @@
-import {
-  AI_PLANNER_MAX_DAYS,
-  aiPlannerModelProposalSchema,
-  parseAiPlannerModelProposal,
-} from '@trove/types';
+import { aiPlannerModelProposalSchema, parseAiPlannerModelProposal } from '@trove/types';
 import { expect, test } from 'vitest';
 
 import {
@@ -91,7 +87,7 @@ test('malformed and hostile model output never becomes a draft', () => {
   expect(parseAiPlannerModelProposal(null).success).toBe(false);
   expect(parseAiPlannerModelProposal('{"schemaVersion":1}').success).toBe(false);
 
-  const beyondLastDay = proposal.items.map((item) => ({ ...item, dayIndex: AI_PLANNER_MAX_DAYS }));
+  const beyondLastDay = proposal.items.map((item) => ({ ...item, dayIndex: -1 }));
   expect(parseAiPlannerModelProposal({ ...proposal, items: beyondLastDay }).success).toBe(false);
 
   // Structured output arrives as parsed JSON, so `__proto__` would be an own

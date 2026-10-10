@@ -10,7 +10,7 @@ This checklist follows the current PRD. Results below are historical observation
 
 | #   | Check                                                                                                                                                                      | Cost         |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| 1   | Composer opens from **New trip**, defaults to **Plan with AI**, and shows the remaining daily quota                                                                        | free         |
+| 1   | Composer opens from **New trip**, defaults to **Plan with AI**, and shows plan credits, itinerary-day limit, and renewal date when applicable                              | free         |
 | 2   | **Create manually** switches to the manual form and creating a trip there still works                                                                                      | free         |
 | 3   | Every control in both tabs is reachable and operable by keyboard, with tab/tabpanel roles and labelled date buttons                                                        | free         |
 | 4   | No string is hardcoded - every label resolves through `next-intl`                                                                                                          | free         |

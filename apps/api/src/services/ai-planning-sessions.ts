@@ -7,7 +7,6 @@ import {
   DEFAULT_AI_MODEL,
   DEFAULT_AI_PROVIDER,
   getAiGenerationEnvironment,
-  getAiPlanningDispatchLimit,
 } from '../environment.js';
 import type { AiGenerationErrorCode, AiGenerationMetadata } from './ai-generation.js';
 import {
@@ -35,9 +34,19 @@ import {
   type AiPlanningDispatchRejectionCode,
 } from './ai-planning-telemetry.js';
 
+import {
+  lockAiCreditOwner,
+  getAiCreditSnapshot,
+  resolveAiCreditPeriod,
+  reserveAiCredit,
+  settleAiCredit,
+} from './ai-planner-credits.js';
+import { EntitlementError } from './plan-entitlements.js';
+import { checkAiPlannerPromptDays } from './ai-planner-preflight.js';
+import type { AiPlannerEntitlementSnapshot } from '@trove/types';
+
 export const AI_PLANNING_PROMPT_MAX_LENGTH = 10_000;
 export const AI_PLANNING_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
-export const AI_PLANNING_DISPATCH_WINDOW_MS = 24 * 60 * 60 * 1_000;
 
 const ACTIVE_STATUSES = ['FAILED', 'GENERATING', 'PENDING', 'REVIEWING'] as const;
 /**
@@ -63,6 +72,7 @@ type SessionRecord = {
   createdAt: Date;
   draft: Prisma.JsonValue | null;
   draftRevision: number;
+  draftMaxDays?: number;
   expiresAt: Date;
   id: string;
   lastErrorCode: string | null;
@@ -99,6 +109,8 @@ export type AiPlanningSessionErrorCode =
   | 'provider_unavailable'
   | 'invalid_prompt'
   | 'quota_exceeded'
+  | 'itinerary_day_limit_exceeded'
+  | 'rate_limited'
   | 'regenerate_required'
   | 'run_already_claimed'
   | 'schedule_conflict'
@@ -108,7 +120,7 @@ export type AiPlanningSessionErrorCode =
   | 'session_not_reviewable'
   | 'warnings_not_acknowledged';
 
-export type AiPlanningAvailability = {
+export type AiPlanningAvailability = Partial<AiPlannerEntitlementSnapshot> & {
   code: Extract<
     AiPlanningSessionErrorCode,
     'ai_budget_disabled' | 'ai_disabled' | 'configuration_invalid' | 'configuration_missing'
@@ -145,62 +157,39 @@ export function normalizeAiPlanningPrompt(value: string) {
   return prompt;
 }
 
-/**
- * A read-only, advisory view of the same limits `claimAiPlanningDispatch`
- * enforces. It intentionally does not lock the Profile row: another request
- * may dispatch between this read and a Generate click, and the claim remains
- * the only authority for that race.
- */
+/** Advisory display; transactional dispatch remains authoritative. */
 export async function getAiPlanningAvailability(
   ownerId: string,
   options: PlanningOptions = {},
 ): Promise<AiPlanningAvailability> {
   const configuration = getAiGenerationEnvironment(options.environment);
-  if (configuration.status === 'unavailable') {
+  if (configuration.status === 'unavailable')
     return {
       code: configuration.code,
       remainingDispatches: null,
       retryAt: null,
       status: 'unavailable',
     };
-  }
-
-  const prisma = prismaFrom(options);
-  const now = nowFrom(options);
-  const dispatchLimit = getAiPlanningDispatchLimit(options.environment);
-  if (dispatchLimit === 0) {
+  try {
+    const snapshot = await getAiCreditSnapshot(ownerId, {
+      prisma: prismaFrom(options),
+      now: nowFrom(options),
+      environment: options.environment,
+    });
     return {
+      ...snapshot,
       code: null,
-      remainingDispatches: null,
-      retryAt: null,
-      status: 'available',
+      remainingDispatches: snapshot.availableCredits,
+      retryAt:
+        snapshot.availableCredits <= 0 && snapshot.nextRenewalAt
+          ? new Date(snapshot.nextRenewalAt)
+          : null,
+      status: snapshot.availableCredits > 0 ? 'available' : 'quota_exhausted',
     };
+  } catch (error) {
+    if (!(error instanceof EntitlementError) || error.code !== 'configuration_invalid') throw error;
+    return { code: error.code, remainingDispatches: null, retryAt: null, status: 'unavailable' };
   }
-  const cutoff = new Date(now.getTime() - AI_PLANNING_DISPATCH_WINDOW_MS);
-  const [dispatched, oldest] = await Promise.all([
-    prisma.aiGenerationRun.count({ where: { dispatchedAt: { gt: cutoff }, ownerId } }),
-    prisma.aiGenerationRun.findFirst({
-      where: { dispatchedAt: { gt: cutoff }, ownerId },
-      orderBy: { dispatchedAt: 'asc' },
-      select: { dispatchedAt: true },
-    }),
-  ]);
-
-  if (dispatched >= dispatchLimit) {
-    return {
-      code: null,
-      remainingDispatches: 0,
-      retryAt: new Date((oldest?.dispatchedAt ?? now).getTime() + AI_PLANNING_DISPATCH_WINDOW_MS),
-      status: 'quota_exhausted',
-    };
-  }
-
-  return {
-    code: null,
-    remainingDispatches: dispatchLimit - dispatched,
-    retryAt: null,
-    status: 'available',
-  };
 }
 
 function reservationProvider(environment?: Record<string, string | undefined>) {
@@ -221,11 +210,17 @@ const sessionInclude = {
 
 export function serializeAiPlanningSession(session: SessionRecord, now = new Date()) {
   const terminal = ['APPLIED', 'CANCELLED', 'EXPIRED'].includes(session.status);
-  const draft = terminal || !session.draft ? null : validateAiPlannerDraft(session.draft);
+  const draft =
+    terminal || !session.draft
+      ? null
+      : validateAiPlannerDraft(session.draft, { maxItineraryDays: session.draftMaxDays });
   const timingConflict =
     draft && !draft.success && draft.issues.some((issue) => issue.code === 'overlapping_items');
   const readableDraft = timingConflict
-    ? validateAiPlannerDraft(session.draft, { allowExactTimeOverlaps: true })
+    ? validateAiPlannerDraft(session.draft, {
+        allowExactTimeOverlaps: true,
+        maxItineraryDays: session.draftMaxDays,
+      })
     : draft;
   const planScore = parseStoredPlanScore(session.planScore);
   return {
@@ -277,7 +272,9 @@ async function serializeAiPlanningSessionWithCountries(
     !session.countryContextChanged &&
     !arePlanScoreProvidersDisabled()
   ) {
-    const retained = validateAiPlannerDraft(session.draft);
+    const retained = validateAiPlannerDraft(session.draft, {
+      maxItineraryDays: session.draftMaxDays,
+    });
     const cached = parseStoredPlanScore(session.planScore);
     if (
       retained.success &&
@@ -317,7 +314,10 @@ async function serializeAiPlanningSessionWithCountries(
   if (!serialized.draft || !['REVIEWING', 'FAILED'].includes(current.status)) {
     return serialized;
   }
-  const draft = validateAiPlannerDraft(serialized.draft, { allowExactTimeOverlaps: true });
+  const draft = validateAiPlannerDraft(serialized.draft, {
+    allowExactTimeOverlaps: true,
+    maxItineraryDays: session.draftMaxDays,
+  });
   if (!draft.success) return serialized;
   return {
     ...serialized,
@@ -351,7 +351,7 @@ export async function setAiPlanningCountries(
     if (found.draftRevision !== expectedRevision) {
       throw new AiPlanningSessionError('draft_conflict', 409);
     }
-    const draft = parseStoredDraft(found.draft, true);
+    const draft = parseStoredDraft(found.draft, true, found.draftMaxDays);
     const countryContextChanged = await countryCorrectionChangesTimeContext(
       transaction,
       ownerId,
@@ -388,14 +388,7 @@ export async function setAiPlanningCountries(
 }
 
 async function ensureAndLockOwner(transaction: PlanningTransaction, ownerId: string) {
-  await transaction.profile.upsert({
-    where: { id: ownerId },
-    create: { id: ownerId },
-    update: {},
-  });
-  await transaction.$queryRaw(
-    Prisma.sql`SELECT "id" FROM "trove"."profiles" WHERE "id" = ${ownerId}::uuid FOR UPDATE`,
-  );
+  await lockAiCreditOwner(transaction, ownerId);
 }
 
 async function scrubExpiredSession(
@@ -418,6 +411,12 @@ async function scrubExpiredSession(
     },
   });
   if (expired.count !== 1) return false;
+  const expiring = await transaction.aiGenerationRun.findMany({
+    where: { ownerId, result: 'PENDING', sessionId },
+    select: { id: true },
+  });
+  for (const run of expiring)
+    await settleAiCredit(transaction, ownerId, run.id, false, 'session_expired', now);
   await transaction.aiGenerationRun.updateMany({
     where: { ownerId, result: 'PENDING', sessionId },
     data: { completedAt: now, result: 'CANCELLED' },
@@ -486,6 +485,7 @@ async function failOverdueRun(
     },
   });
   if (stopped.count !== 1) return false;
+  await settleAiCredit(transaction, session.ownerId, run.id, false, 'timeout', now);
   const restoresDraft = session.draft !== null;
   await transaction.aiPlanningSession.updateMany({
     where: { id: session.id, ownerId: session.ownerId, status: 'GENERATING' },
@@ -524,10 +524,15 @@ export async function createAiPlanningSession(
 
   const session = await prisma.$transaction(async (transaction) => {
     await ensureAndLockOwner(transaction, ownerId);
-    const existing = await transaction.aiGenerationRun.findUnique({
-      where: { ownerId_idempotencyKey: { idempotencyKey, ownerId } },
-      select: { sessionId: true },
-    });
+    const existing =
+      (await transaction.aiCreditAction.findUnique({
+        where: { ownerId_idempotencyKey: { idempotencyKey, ownerId } },
+        select: { sessionId: true },
+      })) ??
+      (await transaction.aiGenerationRun.findUnique({
+        where: { ownerId_idempotencyKey: { idempotencyKey, ownerId } },
+        select: { sessionId: true },
+      }));
     if (existing) {
       const replay = await transaction.aiPlanningSession.findFirstOrThrow({
         where: { id: existing.sessionId, ownerId },
@@ -536,6 +541,9 @@ export async function createAiPlanningSession(
       if (await expireIfNeeded(transaction, replay, now)) return SESSION_EXPIRED;
       return replay;
     }
+
+    const entitlement = await resolveAiCreditPeriod(transaction, ownerId, now, options.environment);
+    checkAiPlannerPromptDays(prompt, entitlement.limits.maxItineraryDays);
 
     // The run inherits both `sessionId` and `ownerId` from the parent session
     // through the compound relation, so neither may be passed here.
@@ -657,10 +665,15 @@ export async function regenerateAiPlanningSession(
     if (await failOverdueRun(transaction, found, now)) {
       found = await findOwnedSession(transaction, ownerId, sessionId);
     }
-    const existing = await transaction.aiGenerationRun.findUnique({
-      where: { ownerId_idempotencyKey: { idempotencyKey, ownerId } },
-      select: { sessionId: true },
-    });
+    const existing =
+      (await transaction.aiCreditAction.findUnique({
+        where: { ownerId_idempotencyKey: { idempotencyKey, ownerId } },
+        select: { sessionId: true },
+      })) ??
+      (await transaction.aiGenerationRun.findUnique({
+        where: { ownerId_idempotencyKey: { idempotencyKey, ownerId } },
+        select: { sessionId: true },
+      }));
     if (existing) {
       if (existing.sessionId !== sessionId) {
         throw new AiPlanningSessionError('draft_conflict', 409);
@@ -678,6 +691,9 @@ export async function regenerateAiPlanningSession(
       throw new AiPlanningSessionError('draft_conflict', 409);
     }
     if (found.runs.length > 0) throw new AiPlanningSessionError('session_busy', 409);
+
+    const entitlement = await resolveAiCreditPeriod(transaction, ownerId, now, options.environment);
+    checkAiPlannerPromptDays(prompt, entitlement.limits.maxItineraryDays);
 
     // A top-level create owns both relation scalars directly, unlike the
     // nested reservation in `createAiPlanningSession`.
@@ -708,8 +724,12 @@ export async function regenerateAiPlanningSession(
   return serializeAiPlanningSessionWithCountries(session, prisma, now);
 }
 
-function parseStoredDraft(value: Prisma.JsonValue | null, allowExactTimeOverlaps = false) {
-  const validated = validateAiPlannerDraft(value, { allowExactTimeOverlaps });
+function parseStoredDraft(
+  value: Prisma.JsonValue | null,
+  allowExactTimeOverlaps = false,
+  maxItineraryDays?: number,
+) {
+  const validated = validateAiPlannerDraft(value, { allowExactTimeOverlaps, maxItineraryDays });
   if (!validated.success) {
     const timingConflict = validated.issues.some((issue) =>
       ['overlapping_items', 'conflicting_hard_constraints'].includes(issue.code),
@@ -834,6 +854,19 @@ export async function cancelAiPlanningSession(
       throw new AiPlanningSessionError('session_not_reviewable', 409);
     }
     if (found.status !== 'CANCELLED') {
+      const cancelledRuns = await transaction.aiGenerationRun.findMany({
+        where: { ownerId, result: 'PENDING', sessionId },
+        select: { id: true, dispatchedAt: true },
+      });
+      for (const run of cancelledRuns)
+        await settleAiCredit(
+          transaction,
+          ownerId,
+          run.id,
+          run.dispatchedAt !== null,
+          'user_cancelled',
+          now,
+        );
       await transaction.aiGenerationRun.updateMany({
         where: { ownerId, result: 'PENDING', sessionId },
         data: { completedAt: now, result: 'CANCELLED' },
@@ -857,6 +890,7 @@ export async function cancelAiPlanningSession(
 }
 
 type ClaimDispatchResult = {
+  maxItineraryDays: number;
   baseDraftRevision: number;
   deadlineAt: Date;
   model: string;
@@ -881,7 +915,7 @@ async function failRunInTransaction(
     ownerId: string;
     session: { draft: Prisma.JsonValue | null; id: string; status: string };
   },
-  code: AiGenerationErrorCode,
+  code: AiGenerationErrorCode | EntitlementError['code'],
   now: Date,
   metadata: AiGenerationMetadata | null = null,
   details: AiRunFailureDetails | null = null,
@@ -909,6 +943,7 @@ async function failRunInTransaction(
       validationPaths: details?.validationPaths?.slice(0, 12) ?? [],
     },
   });
+  await settleAiCredit(transaction, run.ownerId, run.id, false, code, now);
   const restoresDraft = run.baseDraftRevision > 0 && run.session.draft !== null;
   await transaction.aiPlanningSession.updateMany({
     where: {
@@ -930,9 +965,10 @@ export async function claimAiPlanningDispatch(
   options: PlanningOptions = {},
 ): Promise<ClaimDispatchResult> {
   const prisma = prismaFrom(options);
-  const now = nowFrom(options);
+  let now = nowFrom(options);
   const outcome = await prisma.$transaction(async (transaction) => {
     await ensureAndLockOwner(transaction, ownerId);
+    now = nowFrom(options);
     const run = await transaction.aiGenerationRun.findFirst({
       where: { id: runId, ownerId },
       include: { session: true },
@@ -958,33 +994,35 @@ export async function claimAiPlanningDispatch(
       };
     }
 
-    const dispatchLimit = getAiPlanningDispatchLimit(options.environment);
-    if (dispatchLimit > 0) {
-      const cutoff = new Date(now.getTime() - AI_PLANNING_DISPATCH_WINDOW_MS);
-      const dispatched = await transaction.aiGenerationRun.count({
-        where: { dispatchedAt: { gt: cutoff }, ownerId },
-      });
-      if (dispatched >= dispatchLimit) {
-        const oldest = await transaction.aiGenerationRun.findFirst({
-          where: { dispatchedAt: { gt: cutoff }, ownerId },
-          orderBy: { dispatchedAt: 'asc' },
-          select: { dispatchedAt: true },
-        });
-        return {
-          kind: 'quota' as const,
-          retryAt: new Date(
-            (oldest?.dispatchedAt ?? now).getTime() + AI_PLANNING_DISPATCH_WINDOW_MS,
-          ),
-        };
-      }
-    }
-
     const deadlineAt = new Date(now.getTime() + configuration.timeoutMs + 30_000);
+    let maxItineraryDays: number;
+    try {
+      const entitlement = await resolveAiCreditPeriod(
+        transaction,
+        ownerId,
+        now,
+        options.environment,
+      );
+      checkAiPlannerPromptDays(run.session.rawPrompt, entitlement.limits.maxItineraryDays);
+      maxItineraryDays = await reserveAiCredit(
+        transaction,
+        run,
+        deadlineAt,
+        now,
+        options.environment,
+      );
+    } catch (error) {
+      if (!(error instanceof EntitlementError)) throw error;
+      // A rejected dispatch must leave a recoverable failure, not a forever-pending session.
+      await failRunInTransaction(transaction, run, error.code, now);
+      return { kind: 'rejected' as const, error };
+    }
     const claimed = await transaction.aiGenerationRun.updateMany({
       where: { dispatchedAt: null, id: runId, ownerId, result: 'PENDING' },
       data: {
         deadlineAt,
         dispatchedAt: now,
+        maxItineraryDays,
         model: configuration.vertex.model,
         provider: configuration.provider,
       },
@@ -1005,6 +1043,7 @@ export async function claimAiPlanningDispatch(
       kind: 'claimed' as const,
       value: {
         baseDraftRevision: run.baseDraftRevision,
+        maxItineraryDays,
         deadlineAt,
         model: configuration.vertex.model,
         prompt: run.session.rawPrompt,
@@ -1015,15 +1054,15 @@ export async function claimAiPlanningDispatch(
     };
   });
 
+  if (outcome.kind === 'rejected') {
+    recordAiPlanningDispatchRejected(outcome.error.code as AiPlanningDispatchRejectionCode, now);
+    throw outcome.error;
+  }
   if (outcome.kind === 'unavailable') {
     recordAiPlanningDispatchRejected(outcome.code as AiPlanningDispatchRejectionCode, now);
     throw new AiPlanningSessionError(outcome.code, 503);
   }
   if (outcome.kind === 'expired') throw new AiPlanningSessionError('session_expired', 410);
-  if (outcome.kind === 'quota') {
-    recordAiPlanningDispatchRejected('quota_exceeded', now);
-    throw new AiPlanningSessionError('quota_exceeded', 429, outcome.retryAt);
-  }
   return outcome.value;
 }
 
@@ -1074,8 +1113,6 @@ export async function completeAiPlanningRunSuccess(
   metadata: AiGenerationMetadata,
   options: PlanningOptions = {},
 ) {
-  const validated = validateAiPlannerDraft(draftInput);
-  if (!validated.success) throw new AiPlanningSessionError('draft_invalid', 400);
   const prisma = prismaFrom(options);
   const now = nowFrom(options);
   const outcome = await prisma.$transaction(async (transaction) => {
@@ -1098,6 +1135,10 @@ export async function completeAiPlanningRunSuccess(
     ) {
       throw new AiPlanningSessionError('draft_conflict', 409);
     }
+    const validated = validateAiPlannerDraft(draftInput, {
+      maxItineraryDays: run.maxItineraryDays ?? run.session.draftMaxDays,
+    });
+    if (!validated.success) throw new AiPlanningSessionError('draft_invalid', 400);
     const updated = await transaction.aiPlanningSession.updateMany({
       where: {
         draftRevision: run.baseDraftRevision,
@@ -1109,6 +1150,7 @@ export async function completeAiPlanningRunSuccess(
       data: {
         draft: validated.data as unknown as Prisma.InputJsonValue,
         draftRevision: { increment: 1 },
+        draftMaxDays: run.maxItineraryDays ?? run.session.draftMaxDays,
         reviewedCountries: [],
         countriesReviewedRevision: null,
         countryContextChanged: false,
@@ -1139,6 +1181,7 @@ export async function completeAiPlanningRunSuccess(
       },
     });
     if (completed.count !== 1) throw new AiPlanningSessionError('draft_conflict', 409);
+    await settleAiCredit(transaction, ownerId, runId, true, 'valid_draft', now);
     return { draftRevision: run.baseDraftRevision + 1, sessionId: run.sessionId };
   });
   if (outcome === SESSION_EXPIRED) throw new AiPlanningSessionError('session_expired', 410);
@@ -1236,7 +1279,7 @@ export async function loadAiPlanningSessionForApplyInTransaction(
   }
 
   return {
-    draft: parseStoredDraft(session.draft),
+    draft: parseStoredDraft(session.draft, false, session.draftMaxDays),
     kind: 'reviewable' as const,
     sessionId: session.id,
     planScore: session.countryContextChanged ? null : parseStoredPlanScore(session.planScore),

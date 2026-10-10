@@ -1,5 +1,5 @@
+import { plannerContractMaxDays } from './plan-entitlements.js';
 import {
-  AI_PLANNER_MAX_DAYS,
   AI_PLANNER_MAX_REAL_PLACE_ITEMS,
   parseAiPlannerDraft,
   parseAiPlannerModelProposal,
@@ -83,10 +83,11 @@ export function resolveAiPlannerDateRange(
   request: AiPlannerNormalizedRequest,
   selectedDurationDays: 3 | 5 | 7 | null,
   generationDate: Date | string,
+  maxItineraryDays = plannerContractMaxDays(),
 ) {
   if (request.datePreference.kind === 'exact') {
     const dates = tripDates(request.datePreference.startDate, request.datePreference.endDate);
-    if (dates.length > AI_PLANNER_MAX_DAYS) throw new AiPlannerRulesError('too_many_days');
+    if (dates.length > maxItineraryDays) throw new AiPlannerRulesError('too_many_days');
 
     return {
       assumption: null,
@@ -160,9 +161,15 @@ export function resolveAiPlannerDefaults(
   request: AiPlannerNormalizedRequest,
   proposal: AiPlannerModelProposal,
   generationDate: Date | string,
+  maxItineraryDays = plannerContractMaxDays(),
 ) {
   const assumptions = [...proposal.assumptions];
-  const dates = resolveAiPlannerDateRange(request, proposal.selectedDurationDays, generationDate);
+  const dates = resolveAiPlannerDateRange(
+    request,
+    proposal.selectedDurationDays,
+    generationDate,
+    maxItineraryDays,
+  );
   if (dates.assumption && !assumptionById(assumptions, dates.assumption.id)) {
     assumptions.push(dates.assumption);
   }
@@ -311,9 +318,20 @@ function hasUserMustGoConstraint(
   });
 }
 
-function modelProposalRuleIssues(proposal: AiPlannerModelProposal) {
+function modelProposalRuleIssues(proposal: AiPlannerModelProposal, maxItineraryDays: number) {
   const issues: AiPlannerRuleIssue[] = [];
   const request = proposal.normalizedRequest;
+  if (request.datePreference.kind === 'exact') {
+    try {
+      if (
+        tripDates(request.datePreference.startDate, request.datePreference.endDate).length >
+        maxItineraryDays
+      )
+        issues.push({ code: 'too_many_days', path: ['normalizedRequest', 'datePreference'] });
+    } catch {
+      issues.push({ code: 'invalid_date_range', path: ['normalizedRequest', 'datePreference'] });
+    }
+  }
   const candidates = new Set(proposal.places.map((place) => place.id));
   const destinationIntents = new Set(request.destinations.map((destination) => destination.id));
   const constraints = new Map(request.constraints.map((constraint) => [constraint.id, constraint]));
@@ -438,6 +456,7 @@ function modelProposalRuleIssues(proposal: AiPlannerModelProposal) {
 
 export function validateAiPlannerModelProposal(
   value: unknown,
+  maxItineraryDays = plannerContractMaxDays(),
 ): AiPlannerValidationResult<AiPlannerModelProposal> {
   const parsed = parseAiPlannerModelProposal(value);
   if (!parsed.success) {
@@ -447,7 +466,7 @@ export function validateAiPlannerModelProposal(
     };
   }
 
-  const issues = modelProposalRuleIssues(parsed.data);
+  const issues = modelProposalRuleIssues(parsed.data, maxItineraryDays);
   return issues.length > 0 ? { issues, success: false } : { data: parsed.data, success: true };
 }
 
@@ -583,7 +602,7 @@ function hardConstraintIssues(draft: AiPlannerDraft, items: LocatedDraftItem[]) 
   return issues;
 }
 
-function draftRuleIssues(draft: AiPlannerDraft) {
+function draftRuleIssues(draft: AiPlannerDraft, maxItineraryDays: number) {
   const issues: AiPlannerRuleIssue[] = [];
   const items = allDraftItems(draft);
   const placeIds = new Set(draft.places.map((place) => place.id));
@@ -612,7 +631,7 @@ function draftRuleIssues(draft: AiPlannerDraft) {
   let expectedDates: string[] = [];
   try {
     expectedDates = tripDates(draft.trip.startDate, draft.trip.endDate);
-    if (expectedDates.length > AI_PLANNER_MAX_DAYS) {
+    if (expectedDates.length > maxItineraryDays) {
       issues.push({ code: 'too_many_days', path: ['trip', 'endDate'] });
     }
   } catch (error) {
@@ -823,7 +842,7 @@ function draftRuleIssues(draft: AiPlannerDraft) {
 
 export function validateAiPlannerDraft(
   value: unknown,
-  options: { allowExactTimeOverlaps?: boolean } = {},
+  options: { allowExactTimeOverlaps?: boolean; maxItineraryDays?: number } = {},
 ): AiPlannerValidationResult<AiPlannerDraft> {
   const parsed = parseAiPlannerDraft(value);
   if (!parsed.success) {
@@ -833,8 +852,9 @@ export function validateAiPlannerDraft(
     };
   }
 
-  const issues = draftRuleIssues(parsed.data).filter(
-    (issue) => !options.allowExactTimeOverlaps || issue.code !== 'overlapping_items',
-  );
+  const issues = draftRuleIssues(
+    parsed.data,
+    options.maxItineraryDays ?? plannerContractMaxDays(),
+  ).filter((issue) => !options.allowExactTimeOverlaps || issue.code !== 'overlapping_items');
   return issues.length > 0 ? { issues, success: false } : { data: parsed.data, success: true };
 }

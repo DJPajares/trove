@@ -21,6 +21,10 @@ test('only active lifecycle states are polled for progress', () => {
 });
 
 test('unexpected server codes never become user-facing API details', () => {
+  expect(aiPlanningErrorMessageKey('itinerary_day_limit_exceeded')).toBe(
+    'itinerary_day_limit_exceeded',
+  );
+  expect(aiPlanningErrorMessageKey('rate_limited')).toBe('rate_limited');
   expect(aiPlanningErrorMessageKey('timeout')).toBe('timeout');
   expect(aiPlanningErrorMessageKey('provider_unavailable')).toBe('provider_unavailable');
   expect(aiPlanningErrorMessageKey('sensitive_provider_error')).toBe('request_failed');

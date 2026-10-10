@@ -274,7 +274,7 @@ test('Custom Places and label blocks do not consume the real-place item limit', 
   expect(validateAiPlannerDraft(draft).success).toBe(true);
 });
 
-test('drafts beyond fourteen days or twenty-four real-place items are rejected', () => {
+test('drafts beyond the supplied plan limit or twenty-four real-place items are rejected', () => {
   const tooLong = explicitDraft();
   tooLong.trip.endDate = '2026-10-16';
   tooLong.days = Array.from({ length: 15 }, (_, index) => ({
@@ -284,7 +284,9 @@ test('drafts beyond fourteen days or twenty-four real-place items are rejected',
     destinationId: 'draft-destination:tokyo',
     items: [],
   }));
-  expect(issueCodes(validateAiPlannerDraft(tooLong))).toContain('too_many_days');
+  expect(issueCodes(validateAiPlannerDraft(tooLong, { maxItineraryDays: 14 }))).toContain(
+    'too_many_days',
+  );
 
   const tooManyPlaces = explicitDraft();
   const template = tooManyPlaces.days[1]!.items[1]!;

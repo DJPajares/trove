@@ -2,11 +2,16 @@ import type { FastifyInstance } from 'fastify';
 
 import { createAiPlanningSessionControllers } from '../controllers/ai-planning-sessions.js';
 import { requireAuthenticatedUser } from '../services/request-auth.js';
+import { PROVIDER_FANOUT_RATE_LIMIT } from './rate-limits.js';
 
 export function registerAiPlanningSessionRoutes(app: FastifyInstance) {
   const controllers = createAiPlanningSessionControllers();
 
-  app.post('/ai/planning-sessions', { preHandler: requireAuthenticatedUser }, controllers.create);
+  app.post(
+    '/ai/planning-sessions',
+    { config: PROVIDER_FANOUT_RATE_LIMIT, preHandler: requireAuthenticatedUser },
+    controllers.create,
+  );
   app.get(
     '/ai/planning-sessions/availability',
     { preHandler: requireAuthenticatedUser },
@@ -43,7 +48,7 @@ export function registerAiPlanningSessionRoutes(app: FastifyInstance) {
   );
   app.post(
     '/ai/planning-sessions/:sessionId/regenerate',
-    { preHandler: requireAuthenticatedUser },
+    { config: PROVIDER_FANOUT_RATE_LIMIT, preHandler: requireAuthenticatedUser },
     controllers.regenerate,
   );
   app.post(

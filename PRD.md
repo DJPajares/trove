@@ -378,28 +378,28 @@ Tools is the fourth stable global navigation destination. Its launcher provides 
 
 ## 5.1 Core Concepts
 
-| Concept | Meaning and boundary |
-| --- | --- |
-| Trip | One owned journey with inclusive dates, a description, and a shared planning/travel/memory context. |
-| Place | An internal identity for a provider-backed location or a private Custom Place; it is not a visit. |
-| Saved Place | A user's global relationship to a Place for reuse across trips. |
-| Trip Place | A trip's working relationship to a Place, whether scheduled or only being considered. |
-| Itinerary item / stop | One occurrence of a Place or a label-only block, assigned to a day or Unscheduled. Repeated visits remain distinct. |
-| Reservation | A record of a booking or logistics, optionally linked to a stop; it does not itself schedule a stop or record actual spend. |
-| Memory | Private user-authored media or text about the experience, with correctable captured context. |
-| Trip description | The traveller's framing of the trip; distinct from contextual reminders and from the post-trip story summary. |
+| Concept               | Meaning and boundary                                                                                                        |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Trip                  | One owned journey with inclusive dates, a description, and a shared planning/travel/memory context.                         |
+| Place                 | An internal identity for a provider-backed location or a private Custom Place; it is not a visit.                           |
+| Saved Place           | A user's global relationship to a Place for reuse across trips.                                                             |
+| Trip Place            | A trip's working relationship to a Place, whether scheduled or only being considered.                                       |
+| Itinerary item / stop | One occurrence of a Place or a label-only block, assigned to a day or Unscheduled. Repeated visits remain distinct.         |
+| Reservation           | A record of a booking or logistics, optionally linked to a stop; it does not itself schedule a stop or record actual spend. |
+| Memory                | Private user-authored media or text about the experience, with correctable captured context.                                |
+| Trip description      | The traveller's framing of the trip; distinct from contextual reminders and from the post-trip story summary.               |
 
 ## 5.2 Independent Trip Signals
 
-| Signal | Question it answers |
-| --- | --- |
-| Lifecycle | Is the trip before, within, or after its dates in its reference timezone? |
-| Manual readiness | Has the traveller declared the plan Ready? |
-| Itinerary coverage | How many trip days contain a scheduled item? |
-| Trip preparedness | How much activity/base context is recorded? It does not judge actual preparedness. |
-| Ready Offline | Is the full required trip payload available on this device, and how fresh is it? |
-| Plan Score | How does the plan evaluate against the available evidence? |
-| Experience Rating | How did the traveller rate the actual experience? |
+| Signal             | Question it answers                                                                |
+| ------------------ | ---------------------------------------------------------------------------------- |
+| Lifecycle          | Is the trip before, within, or after its dates in its reference timezone?          |
+| Manual readiness   | Has the traveller declared the plan Ready?                                         |
+| Itinerary coverage | How many trip days contain a scheduled item?                                       |
+| Trip preparedness  | How much activity/base context is recorded? It does not judge actual preparedness. |
+| Ready Offline      | Is the full required trip payload available on this device, and how fresh is it?   |
+| Plan Score         | How does the plan evaluate against the available evidence?                         |
+| Experience Rating  | How did the traveller rate the actual experience?                                  |
 
 None substitutes for another. A Ready plan can be unavailable offline; an offline-ready trip can be sparsely planned; a high Plan Score does not predict enjoyment.
 
@@ -566,7 +566,7 @@ AI-assisted trip creation is the first approved AI product capability. It is an 
 - Generation is synchronous from the traveller's perspective but resumable: refreshing the client recovers the same session, current stage, and latest valid revision rather than starting another run.
 - A failed initial Generate creates no Trip. A failed Regenerate preserves the prior valid draft and revision.
 - A content-free `AiGenerationRun` records provider, model, token counts, latency, result/error classification, and timestamps for operations. Durable credit accounting is separate from this telemetry. It stores no prompt or model output.
-- Plan entitlements are server-owned and configurable. Free receives **10 AI Planner credits once per account**. Paid temporarily receives **50 credits per month**, renewed on its UTC activation anniversary with month-end clamping and no rollover. Existing accounts receive a fresh Free allowance at cutover, with no retrospective charges.
+- Plan entitlements are server-owned and defined in a centralized, type-safe code configuration; user assignments, subscription status, usage and renewal periods live in the database. Free receives **10 AI Planner credits once per account**. Paid temporarily receives **50 credits per month**, renewed on its UTC activation anniversary with month-end clamping and no rollover. Existing accounts receive a fresh Free allowance at cutover, with no retrospective charges. Assignments default to active. An inactive Paid assignment uses Free entitlements and its existing Free lifetime balance while retaining its Paid history and monthly anchor; reactivation does not replenish usage.
 - An accepted dispatch atomically reserves one credit. A valid completed draft consumes it. Provider/system failure, invalid output, timeout, or expiry releases it. Explicit user cancellation after dispatch consumes the credit; cancellation before dispatch is free. Reads, review metadata corrections, and Apply use no credits. Durable action idempotency and settlement records survive the 30-day telemetry window.
 - A separate configurable per-account burst guard defaults to **five starts per minute**, independent of the credit allowance. The former rolling daily quota is removed.
 - Explicit requests beyond the plan’s itinerary-day limit are rejected locally before model or Google calls. Normalized excessive date ranges are rejected before Google grounding, with the reservation released; Trove never silently shortens them.
@@ -1820,14 +1820,14 @@ The sync system must:
 
 The offline write contract is:
 
-| Domain | Supported offline writes |
-| --- | --- |
-| Itinerary | Create label-only items or use already available Trip Places; complete/skip and undo; reorder/move; edit local timing/daypart/duration and item notes; delete/unschedule. |
-| Day context | Edit day name and note; move/swap planning contents between existing days without retiming real-world records. |
-| Tasks | Create, edit, complete/reopen, and delete within the prepared trip. |
-| Expenses | Create, edit, and delete while preserving original amount/currency and dated context. |
-| Trip Info | Create, edit, and delete. |
-| Memories | Capture note-only or photo Memories, queue media upload, and delete/cancel queued captures without uploading them later. |
+| Domain      | Supported offline writes                                                                                                                                                  |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Itinerary   | Create label-only items or use already available Trip Places; complete/skip and undo; reorder/move; edit local timing/daypart/duration and item notes; delete/unschedule. |
+| Day context | Edit day name and note; move/swap planning contents between existing days without retiming real-world records.                                                            |
+| Tasks       | Create, edit, complete/reopen, and delete within the prepared trip.                                                                                                       |
+| Expenses    | Create, edit, and delete while preserving original amount/currency and dated context.                                                                                     |
+| Trip Info   | Create, edit, and delete.                                                                                                                                                 |
+| Memories    | Capture note-only or photo Memories, queue media upload, and delete/cancel queued captures without uploading them later.                                                  |
 
 Offline support does not imply provider search/grounding, AI generation or Apply, new routing, reservation editing/document download, public-share changes, or trip creation/date-range changes/deletion. Those require connectivity; cached reads remain available. Other contextual notes are readable when prepared, but write support is limited to the domains above. Post-trip Memory curation beyond capture/deletion requires connectivity.
 
@@ -1890,13 +1890,13 @@ Scoring and explanations are deterministic and advisory. They do not require an 
 
 Expose at most these five daily categories. Each has a 0–100 score when evaluable, or an explicit **unknown** / **not applicable** state. Internal weights and formulas are versioned product calibration, not normal user-facing UI.
 
-| Category | Base weight | Evaluation |
-| --- | ---: | --- |
-| Feasibility & Resilience | 35% | Whether the whole schedule works, including operating hours, durations, reservations, connections, buffers, and sensitivity to delays. |
-| Route & Time Efficiency | 20% | Local travel burden, selected transport mode, geographic clustering, unnecessary movement, and demonstrably avoidable travel. |
-| Pace & Comfort | 20% | Preference-aware activity/transport load, walking, downtime, stop fragmentation, and accumulated fatigue. |
-| Experience Quality | 15% | Interest fit, distinctive value for time, date/time suitability, and supporting public-rating evidence. |
-| Plan Composition | 10% | Coherent flow, purposeful variety, area use, and relevant opportunities within available time. |
+| Category                 | Base weight | Evaluation                                                                                                                             |
+| ------------------------ | ----------: | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Feasibility & Resilience |         35% | Whether the whole schedule works, including operating hours, durations, reservations, connections, buffers, and sensitivity to delays. |
+| Route & Time Efficiency  |         20% | Local travel burden, selected transport mode, geographic clustering, unnecessary movement, and demonstrably avoidable travel.          |
+| Pace & Comfort           |         20% | Preference-aware activity/transport load, walking, downtime, stop fragmentation, and accumulated fatigue.                              |
+| Experience Quality       |         15% | Interest fit, distinctive value for time, date/time suitability, and supporting public-rating evidence.                                |
+| Plan Composition         |         10% | Coherent flow, purposeful variety, area use, and relevant opportunities within available time.                                         |
 
 The day score is the weighted mean of supported applicable categories, followed by feasibility caps. At each weighted aggregation boundary use nominal weight × evaluated coverage, then renormalize. Coverage must not be applied twice within the same boundary; sparse provider evidence contributes proportionately without becoming a quality penalty or a perfect contribution, while detail only the traveller can add counts low (29.2). Renormalize unavailable/inapplicable weights rather than inserting zero. Missing evidence affects coverage/confidence under 29.2. A sparse category must not claim complete coverage because a single signal is known.
 
@@ -1931,12 +1931,12 @@ Combine local travel burden and avoidable movement at **60/40** within the categ
 Avoidable movement compares the planned order with the best order of the same stops, with the day's Stay fixed at both ends (or the first and last stops when there is no Stay). Booked stops and stops at a time the traveller chose keep their place; stops with an estimated time or a daypart may move, up to eight movable stops. Only the planned chain is routed, so every alternative is estimated from straight-line distance scaled by the day's own routed pace, and the result is **estimated** evidence. It makes no provider request. A long-distance leg, or an unrouted leg between located stops, leaves the signal unknown. A stop with no location sits out, so the located stops around it are still compared and it cannot hide their order; a comparison it leaves impossible counts as missing detail (29.2, rubric version 11). Suggest a reorder only when it cuts the planned travel by more than 10% **and** by at least 10 minutes. Introducing this comparison is rubric version 8.
 
 | Known local travel minutes | Burden score |
-| --- | ---: |
-| 0–60 | 100 |
-| More than 60–120 | 85 |
-| More than 120–180 | 70 |
-| More than 180–240 | 50 |
-| More than 240 | 30 |
+| -------------------------- | -----------: |
+| 0–60                       |          100 |
+| More than 60–120           |           85 |
+| More than 120–180          |           70 |
+| More than 180–240          |           50 |
+| More than 240              |           30 |
 
 Zero travel is evaluable only when all required local segments are actually known to total zero. Partial routes cannot masquerade as a complete low-burden day: a known or estimated subtotal counts only when it already proves more than the lightest band. A day containing only long-distance transport has no local travel burden. With fewer than two movable stops, or stops all within about 0.5 km, there is no other order to compare, so avoidable movement does not apply.
 
@@ -2058,7 +2058,7 @@ Calibration is an initial reproducible product judgment, not a scientifically me
 
 Plan Score answers **"How good is the plan?"** Insights answers **"What should the traveller know or consider?"** They are separate surfaces, and the Insights card never changes a score.
 
-Insights draws only on provider-backed or already-computed data; Trove authors no destination catalogue. Public holidays come from the open `date-holidays` dataset, read locally, placed on a day by its time zone and the trip's countries, and labelled *expected* where the date depends on a moon sighting. Typical conditions come from Open-Meteo's historical archive: the mean high and low and the share of wet days for the same calendar month over the last five complete years, cached per ~11 km area and month, and always presented as a pattern, never a forecast. The day advisories the Plan Score evaluator already computes (rain forecast on an outdoor stop, daylight, long walking legs, continuous activity) are surfaced here rather than in the score. Scoring reads the same holidays and typical conditions for holiday date suitability and seasonal fit (29.1, 29.3), from the bundled dataset and the climate cache only: it never fetches. The trip view asks for the trip's context alongside its score, through the same cached request Insights uses, so seasonal fit fills without waiting for Insights to be opened; the score then refreshes from the cache. Until then, or if conditions are unavailable, seasonal fit shows the missing-detail value. AI review reads trip context from the cache only.
+Insights draws only on provider-backed or already-computed data; Trove authors no destination catalogue. Public holidays come from the open `date-holidays` dataset, read locally, placed on a day by its time zone and the trip's countries, and labelled _expected_ where the date depends on a moon sighting. Typical conditions come from Open-Meteo's historical archive: the mean high and low and the share of wet days for the same calendar month over the last five complete years, cached per ~11 km area and month, and always presented as a pattern, never a forecast. The day advisories the Plan Score evaluator already computes (rain forecast on an outdoor stop, daylight, long walking legs, continuous activity) are surfaced here rather than in the score. Scoring reads the same holidays and typical conditions for holiday date suitability and seasonal fit (29.1, 29.3), from the bundled dataset and the climate cache only: it never fetches. The trip view asks for the trip's context alongside its score, through the same cached request Insights uses, so seasonal fit fills without waiting for Insights to be opened; the score then refreshes from the cache. Until then, or if conditions are unavailable, seasonal fit shows the missing-detail value. AI review reads trip context from the cache only.
 
 Show only what is useful: holidays on the trip's days, at most one typical-conditions line per area and month, advisories only where they apply, and nothing when nothing applies. Hedge patterns ("typically") and label every item's certainty (forecast, public holiday, expected date, estimate, typical pattern). Credit the holiday dataset and Open-Meteo in the card's sources. Insights appears on the trip overview, the itinerary (trip and day), Trip Mode's day view in both Preview and live travel, and AI review.
 

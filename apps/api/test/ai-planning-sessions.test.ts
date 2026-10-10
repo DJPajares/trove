@@ -446,6 +446,42 @@ describe('planning-session routes', () => {
 });
 
 describe('planning-session reservations and recovery', () => {
+  test.each([
+    { subscriptionStatus: 'active', tier: 'paid', credits: 50, days: 20, renewal: 'monthly' },
+    { subscriptionStatus: 'inactive', tier: 'free', credits: 10, days: 10, renewal: 'lifetime' },
+  ])(
+    'availability resolves $subscriptionStatus Paid and preserves legacy fields',
+    async (expected) => {
+      const store = createPlanningStore();
+      await store.credits.models.userEntitlement.create({
+        data: {
+          ownerId: OWNER_ID,
+          planKey: 'paid',
+          subscriptionStatus: expected.subscriptionStatus,
+          monthlyAnchorAt: NOW,
+        },
+      });
+      const availability = await getAiPlanningAvailability(OWNER_ID, {
+        environment: AVAILABLE_ENVIRONMENT,
+        now: () => NOW,
+        prisma: store.prisma,
+      });
+      expect(availability).toMatchObject({
+        tier: expected.tier,
+        allowance: expected.credits,
+        availableCredits: expected.credits,
+        remainingDispatches: expected.credits,
+        maxItineraryDays: expected.days,
+        renewalPolicy: expected.renewal,
+        status: 'available',
+        code: null,
+        retryAt: null,
+      });
+      expect(availability).not.toHaveProperty('subscriptionStatus');
+      expect(availability).not.toHaveProperty('assignedPlan');
+    },
+  );
+
   test('new accounts receive fresh lifetime credits independently of legacy telemetry', async () => {
     const store = createPlanningStore();
     const sessionId = '00000000-0000-4000-8000-000000000010';
@@ -954,6 +990,57 @@ describe('review session safety', () => {
 });
 
 describe('dispatch quota and lifecycle completion', () => {
+  test.each([
+    { days: 3, accepted: true },
+    { days: 14, accepted: false },
+  ])(
+    'dispatch rechecks status after Paid preflight for a $days-day request',
+    async ({ days, accepted }) => {
+      const store = createPlanningStore();
+      const options = { environment: AVAILABLE_ENVIRONMENT, now: () => NOW, prisma: store.prisma };
+      await store.credits.models.userEntitlement.create({
+        data: { ownerId: OWNER_ID, planKey: 'paid', monthlyAnchorAt: NOW },
+      });
+      const session = await createAiPlanningSession(
+        OWNER_ID,
+        `Plan a ${days}-day trip to Tokyo`,
+        '00000000-0000-4000-8000-000000000995',
+        options,
+      );
+      const paidPeriod = await store.credits.models.aiCreditPeriod.findFirst({
+        where: { ownerId: OWNER_ID, planKey: 'paid' },
+      });
+      await store.credits.models.userEntitlement.update({
+        where: { ownerId: OWNER_ID },
+        data: { subscriptionStatus: 'inactive' },
+      });
+      if (accepted) {
+        await expect(
+          claimAiPlanningDispatch(OWNER_ID, session.pendingRunId!, options),
+        ).resolves.toMatchObject({ maxItineraryDays: 10 });
+        const action = await store.credits.models.aiCreditAction.findFirst({
+          where: { ownerId: OWNER_ID },
+        });
+        const freePeriod = await store.credits.models.aiCreditPeriod.findFirst({
+          where: { ownerId: OWNER_ID, planKey: 'free' },
+        });
+        expect(action.periodId).toBe(freePeriod.id);
+        expect(freePeriod.reserved).toBe(1);
+      } else {
+        await expect(
+          claimAiPlanningDispatch(OWNER_ID, session.pendingRunId!, options),
+        ).rejects.toMatchObject({ code: 'itinerary_day_limit_exceeded' });
+        expect(
+          await store.credits.models.aiCreditAction.count({ where: { ownerId: OWNER_ID } }),
+        ).toBe(0);
+        expect(store.runs.get(session.pendingRunId!)?.result).toBe('FAILED');
+      }
+      expect(
+        await store.credits.models.aiCreditPeriod.findUnique({ where: { id: paidPeriod.id } }),
+      ).toMatchObject({ used: 0, reserved: 0 });
+    },
+  );
+
   test('a valid draft consumes one reserved credit and a duplicate completion cannot consume another', async () => {
     const store = createPlanningStore();
     const options = { environment: AVAILABLE_ENVIRONMENT, now: () => NOW, prisma: store.prisma };

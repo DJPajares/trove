@@ -13,8 +13,20 @@ export class EntitlementError extends Error {
 }
 
 export type PlanEntitlements = {
-  aiPlanner: { credits: number; maxItineraryDays: number; renewal: CreditRenewalPolicy };
+  readonly aiPlanner: {
+    readonly credits: number;
+    readonly maxItineraryDays: number;
+    readonly renewal: CreditRenewalPolicy;
+  };
 };
+
+/** Product definitions, grouped by feature and independent of payment providers. */
+export const SUBSCRIPTION_PLANS = {
+  free: { aiPlanner: { credits: 10, maxItineraryDays: 10, renewal: 'lifetime' } },
+  paid: { aiPlanner: { credits: 50, maxItineraryDays: 20, renewal: 'monthly' } },
+} as const satisfies Readonly<Record<PlanKey, PlanEntitlements>>;
+
+export const subscriptionPlanKeys = Object.keys(SUBSCRIPTION_PLANS) as readonly PlanKey[];
 
 function integer(
   env: Record<string, string | undefined>,
@@ -32,22 +44,8 @@ function integer(
   return value;
 }
 
-/** A registry by feature, independent of subscription and AI providers. */
-export function getPlanEntitlements(
-  plan: PlanKey,
-  env: Record<string, string | undefined> = process.env,
-): PlanEntitlements {
-  const prefix = `TROVE_${plan.toUpperCase()}_AI_PLANNER`;
-  const renewal = env[`${prefix}_RENEWAL`]?.trim() || (plan === 'free' ? 'lifetime' : 'monthly');
-  if (renewal !== 'lifetime' && renewal !== 'monthly')
-    throw new EntitlementError('configuration_invalid', 503);
-  return {
-    aiPlanner: {
-      credits: integer(env, `${prefix}_CREDITS`, plan === 'free' ? 10 : 50, 0, 1_000_000),
-      maxItineraryDays: integer(env, `${prefix}_MAX_DAYS`, plan === 'free' ? 10 : 20, 7, 365),
-      renewal,
-    },
-  };
+export function getPlanEntitlements(plan: PlanKey): PlanEntitlements {
+  return SUBSCRIPTION_PLANS[asPlanKey(plan)];
 }
 
 export function getAiPlannerBurstLimit(env: Record<string, string | undefined> = process.env) {
@@ -55,17 +53,16 @@ export function getAiPlannerBurstLimit(env: Record<string, string | undefined> =
 }
 
 /** Storage has structural contracts; entitlement limits are enforced with a run snapshot. */
-export function plannerContractMaxDays(env: Record<string, string | undefined> = process.env) {
+export function plannerContractMaxDays() {
   return Math.max(
-    getPlanEntitlements('free', env).aiPlanner.maxItineraryDays,
-    getPlanEntitlements('paid', env).aiPlanner.maxItineraryDays,
+    ...Object.values(SUBSCRIPTION_PLANS).map((plan) => plan.aiPlanner.maxItineraryDays),
   );
 }
 
 export function asPlanKey(value: string): PlanKey {
-  if (value !== 'free' && value !== 'paid')
+  if (!Object.hasOwn(SUBSCRIPTION_PLANS, value))
     throw new EntitlementError('configuration_invalid', 503);
-  return value;
+  return value as PlanKey;
 }
 
 export function creditPeriod(anchor: Date, now: Date, renewal: CreditRenewalPolicy) {

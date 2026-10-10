@@ -2774,7 +2774,11 @@
     "title": "Update available",
     "reload": "Reload",
     "reloading": "Reloading...",
-    "later": "Later"
+    "later": "Later",
+    "whatsNew": "What’s new",
+    "showMore": "Show {count} more",
+    "showLess": "Show less",
+    "reloadError": "We couldn’t update just yet. Please try again."
   },
   "privacySecurity": {
     "title": "Privacy & Security",

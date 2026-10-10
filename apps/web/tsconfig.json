@@ -2,6 +2,7 @@
   "extends": "@trove/config/tsconfig.base.json",
   "compilerOptions": {
     "allowJs": false,
+    "allowImportingTsExtensions": true,
     "incremental": true,
     "jsx": "preserve",
     "module": "Preserve",

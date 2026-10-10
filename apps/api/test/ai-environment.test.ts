@@ -7,7 +7,17 @@ import {
   DEFAULT_AI_THINKING_LEVEL,
   DEFAULT_AI_TIMEOUT_MS,
   getAiGenerationEnvironment,
+  getWebOrigins,
 } from '../src/environment.js';
+
+test('WEB_ORIGINS preserves the configured CORS allowlist and local default', () => {
+  expect(getWebOrigins({})).toEqual(['http://localhost:3000']);
+  expect(
+    getWebOrigins({
+      WEB_ORIGINS: ' https://app.example.com, ,https://preview-*.example.com ',
+    }),
+  ).toEqual(['https://app.example.com', 'https://preview-*.example.com']);
+});
 
 test('Vertex uses discoverable ADC and bounded generation settings', () => {
   expect(

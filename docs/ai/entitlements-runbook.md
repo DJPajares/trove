@@ -130,6 +130,154 @@ The existing `pnpm ai:reset-quota <uuid> "<reason>"`
 command wraps this endpoint; set `ADMIN_TOKEN` locally and
 `ADMIN_API_URL` to the intended API. It no longer edits the database directly.
 
+## Beginner walkthrough: one user or all users
+
+These are dummy examples, not real user IDs or credentials. Replace them before
+sending requests. Creating or reading this guide does not execute a reset.
+
+Choose what “reset” means:
+
+| Goal                                       | Operation                 | Result                                                      |
+| ------------------------------------------ | ------------------------- | ----------------------------------------------------------- |
+| Restore credits, keep the user's plan      | Reset endpoint            | Free receives 10 available credits; active Paid receives 50 |
+| Move a user to Free or Paid                | Assign endpoint           | Activates the chosen plan and keeps its existing balance    |
+| Move a user to Free with a fresh allowance | Assign `free`, then reset | Active Free with 10 available credits and a 10-day limit    |
+
+Resetting does not restart a Paid billing month, delete trips, erase usage
+history, or change subscription status. Inactive Paid users have effective Free
+entitlements, so resetting them restores Free credits only. To reactivate Paid,
+assign `paid` first; reset separately if a fresh Paid allowance is intended.
+
+### Set up Postman once
+
+1. Obtain an operator token using **Operator credentials** above. For credit
+   resets it needs `ai_planner:reset`; changing plans also needs
+   `entitlements:write`. Put the credential's hash/configuration in API-only
+   `ADMIN_CREDENTIALS`, then restart locally or use the approved deployment
+   process. A normal user's login token will not work.
+2. Create a private Postman environment with `baseUrl` set to the intended API
+   (`http://localhost:3001` locally, HTTPS otherwise) and `adminToken` set to the
+   operator token. Keep the token local/private; omit it from exports.
+3. Find the target in `trove.profiles` using trusted database access. Use its
+   `id`, not an email, trip ID, or credential ID. Accounts without an entitlement
+   row are still valid targets: their Free assignment is created lazily.
+4. Generate a UUID for each new operation and save it before sending:
+   `node -p "require('node:crypto').randomUUID()"`. Reuse that UUID and the exact
+   target/body for retries. Do not use `{{$guid}}` in the header: it changes on
+   retries. Assignment and reset must have different keys.
+
+### Example A: restore one user's credits
+
+Set these Postman environment variables:
+
+```text
+userId = 11111111-1111-4111-8111-111111111111
+resetKey = aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+reason = Sandbox walkthrough: restore allowance
+```
+
+Save a request named **Reset AI credits** with method **POST**:
+
+```http
+{{baseUrl}}/admin/users/{{userId}}/ai-planner/reset
+Authorization: Bearer {{adminToken}}
+Idempotency-Key: {{resetKey}}
+Content-Type: application/json
+```
+
+Choose **Body → raw → JSON**:
+
+```json
+{ "reason": "{{reason}}" }
+```
+
+Send once. A successful Free reset returns HTTP 200, an `auditId`,
+`changed: true`, and an `entitlements` object with `tier: "free"`,
+`allowance: 10`, `usedCredits: 0`, `reservedCredits: 0`,
+`availableCredits: 10`, and `maxItineraryDays: 10`. Free has no next renewal;
+Paid keeps its current renewal boundary. Keep the audit ID with the support
+record. Refresh/reopen the planner once its availability query refetches.
+
+To change this user to Free first, create a separate **PUT** request to
+`{{baseUrl}}/admin/users/{{userId}}/plan`, using the same Authorization and
+Content-Type headers but a different saved UUID as `Idempotency-Key`. Send
+`{"planKey":"free","reason":"Sandbox walkthrough: restore Free plan"}`.
+Only after HTTP 200 should you send the reset. Use `"paid"` instead to activate
+Paid (50 credits, 20-day limit, monthly renewal). Assignment by itself does not
+replenish previously used credits. A same-active-plan assignment can correctly
+return `changed: false`.
+
+### Example B: restore credits for all existing users
+
+There is no `/admin/users/all` operation. “All users” means one audited reset per
+profile in a reviewed, fixed list; the batch is not atomic. Users created after
+the list is exported are not included. Some users can succeed while others fail.
+
+1. In the intended Supabase project's SQL editor, use this **read-only** query
+   to prepare the list. It includes profiles without entitlement rows. Export
+   the result to a local CSV and review its project, row count, and targets.
+   Never directly update/delete the credit tables to perform a reset.
+
+   ```sql
+   SELECT id AS "userId",
+          gen_random_uuid() AS "resetKey",
+          'Sandbox batch: restore allowance' AS reason
+   FROM trove.profiles
+   ORDER BY id;
+   ```
+
+   A dummy two-user CSV looks like this:
+
+   ```csv
+   userId,resetKey,reason
+   11111111-1111-4111-8111-111111111111,aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa,Sandbox batch: restore allowance
+   22222222-2222-4222-8222-222222222222,bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb,Sandbox batch: restore allowance
+   ```
+
+2. Put **only Reset AI credits** in a collection/folder. Test one intended
+   sandbox user first, then open a **Functional → Local** collection run. Select
+   the correct environment and the local CSV as iteration data. Preview it and
+   set iterations to its row count and delay to **7,000 ms**. Data-file columns
+   supply `userId`, `resetKey`, and `reason` for each request. Current Postman
+   versions require a paid Postman plan for custom data files; if unavailable,
+   send each row manually using the same saved keys. See Postman's
+   [data-file guide](https://learning.postman.com/docs/tests-and-scripts/running-collections/test-data/working-with-data-files/)
+   and [runner settings](https://learning.postman.com/docs/tests-and-scripts/running-collections/intro-to-collection-runs).
+3. Run sequentially and review **every HTTP status**, not just whether the run
+   completed. Each route is limited to 10 requests/minute; other requests from
+   the same source can still cause 429. Save the per-user results/audit IDs and
+   reconcile successes against the original row count.
+4. Retry failed or uncertain rows using the **same exported keys, bodies, and
+   operator actor identity**. Replaying successful rows returns their original
+   result without replenishing again. Do not re-export the SQL list for retries:
+   it generates new keys and would create new resets.
+
+To move **all users to Free and replenish them**, first run a separate
+assignment-only collection over the reviewed list with `planKey: "free"` and a
+unique saved assignment key per user. Then reset only the users whose assignment
+returned HTTP 200, with their separate reset keys. Resolve failed assignments
+before adding those users to the reset batch. Two requests per user are two
+separate transactions; this is not a single global rollback-capable operation.
+
+### If a request fails
+
+| HTTP / code                      | Action                                                                                                                                    |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| 400                              | Check profile UUID, saved UUID key, and JSON body; reason is required, 1–500 nonblank characters, with no extra fields                    |
+| 401 / 403                        | Check operator token, expiry, and the scope for this operation                                                                            |
+| 404                              | Verify the profile exists in the same environment as `baseUrl`                                                                            |
+| 409 `ai_generation_active`       | Wait for generation to settle, then retry the same request; cancelling a dispatched generation consumes its credit before the later reset |
+| 409 `admin_idempotency_conflict` | The key already belongs to a different target/body; inspect the original operation before making a genuinely new request with a new key   |
+| 429                              | Wait for the rate limit to clear and retry with the same key                                                                              |
+| 503                              | Check API `ADMIN_CREDENTIALS` configuration                                                                                               |
+| Timeout / connection error / 5xx | Keep the key; investigate and retry the same request because the first attempt may have committed                                         |
+
+Use a new key only for an intentional new operation. The CLI convenience
+command generates a new key on every invocation, so use the saved-key Postman
+requests above when retrying an uncertain outcome. Resetting cannot restore the
+previous balance automatically: history remains available for audit, but there
+is no undo endpoint.
+
 ## Migration and verification
 
 For the code-defined plan refactor, apply `20261010053353_subscription_status`

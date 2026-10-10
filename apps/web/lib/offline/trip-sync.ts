@@ -1,3 +1,4 @@
+import { publishTimingReview } from '@/lib/itinerary/timing-review';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import { uploadMemoryPhotoObject } from '@/lib/memories/storage';
 
@@ -193,7 +194,11 @@ function requestFor(
   }
   if (operation.kind === 'itinerary_item_create') {
     return {
-      body: JSON.stringify({ ...operation.input, clientItemId: operation.clientItemId }),
+      body: JSON.stringify({
+        ...operation.input,
+        scheduleRevision: undefined,
+        clientItemId: operation.clientItemId,
+      }),
       headers,
       method: 'POST',
       path: `/trips/${tripId}/itinerary/items`,
@@ -216,7 +221,7 @@ function requestFor(
   }
   if (operation.kind === 'itinerary_item_update') {
     return {
-      body: JSON.stringify(operation.input),
+      body: JSON.stringify({ ...operation.input, scheduleRevision: undefined }),
       headers,
       method: 'PATCH',
       path: `/trips/${tripId}/itinerary/items/${operation.itemId}`,
@@ -625,7 +630,14 @@ async function replayItineraryMutation(
     operation.kind === 'itinerary_item_create' ? operation.clientItemId : operation.itemId;
   const current = findItem(serverItinerary, itemId);
 
-  if (itineraryOperationAlreadyApplied(operation, current)) {
+  if (
+    itineraryOperationAlreadyApplied(operation, current) &&
+    !(
+      'input' in operation &&
+      'timingPolicy' in operation.input &&
+      operation.input.timingPolicy === 'reconcile_flexible'
+    )
+  ) {
     await removeOfflineMutation(mutation.id);
     return;
   }
@@ -643,6 +655,17 @@ async function replayItineraryMutation(
     requestFor(operation, mutation.tripId, current?.updatedAt),
   );
   if (response.ok || (response.status === 404 && operation.kind === 'itinerary_item_delete')) {
+    if (response.ok && response.status !== 204) {
+      const result = (await response.json().catch(() => null)) as {
+        scheduling?: import('@trove/types').SchedulingOutcome;
+        item?: { scheduling?: import('@trove/types').SchedulingOutcome };
+      } | null;
+      publishTimingReview(
+        mutation.userId,
+        mutation.tripId,
+        result?.scheduling ?? result?.item?.scheduling,
+      );
+    }
     await removeOfflineMutation(mutation.id);
     return;
   }

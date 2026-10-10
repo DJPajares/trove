@@ -691,6 +691,7 @@ export function buildTripPlanScore(
 export async function loadPlaceEvidence(
   tripPlaces: Array<{ externalPlaceId: string | null; id: string }>,
   now: Date,
+  readEvidence: typeof readScoringPlace = readScoringPlace,
 ) {
   const hours: PlaceHoursEvidence = new Map();
   const ratings = new Map<string, number>();
@@ -704,7 +705,7 @@ export async function loadPlaceEvidence(
       requests,
       PROVIDER_CONCURRENCY_LIMIT,
       async (externalPlaceId) =>
-        [externalPlaceId, await readScoringPlace({ externalPlaceId }, now)] as const,
+        [externalPlaceId, await readEvidence({ externalPlaceId }, now)] as const,
     ),
   );
   const times: string[] = [];
@@ -798,6 +799,8 @@ function toPlanScoreDayRecord(
       startInstant: Date | null;
       timeSemantics: string | null;
       timeProvenance: string | null;
+      timingFlexibility?: string | null;
+      travelStatus?: string;
       timeZone: string | null;
       tripPlaceId: string | null;
     }>;
@@ -821,6 +824,8 @@ function toPlanScoreDayRecord(
       startInstant: item.startInstant,
       timeSemantics: item.timeSemantics,
       timeProvenance: item.timeProvenance,
+      timingFlexibility: item.timingFlexibility,
+      travelStatus: item.travelStatus,
       timeZone: item.timeZone,
       tripPlaceId: item.tripPlaceId,
     })),
@@ -908,6 +913,8 @@ export type PlanScoreTripRows = {
       startInstant: Date | null;
       timeSemantics: string | null;
       timeProvenance: string | null;
+      timingFlexibility?: string | null;
+      travelStatus?: string;
       timeZone: string | null;
       travelModeToNext: string | null;
       tripPlaceId: string | null;

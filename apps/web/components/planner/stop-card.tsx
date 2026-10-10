@@ -185,9 +185,14 @@ export function StopCard({
       : null;
   const duration =
     item.durationMinutes && !item.localEndTime
-      ? plannerT(item.durationProvenance === 'ai_estimated' ? 'durationApproximate' : 'duration', {
-          value: formatTravelDuration(item.durationMinutes * 60, locale),
-        })
+      ? plannerT(
+          ['ai_estimated', 'app_estimated'].includes(item.durationProvenance ?? '')
+            ? 'durationApproximate'
+            : 'duration',
+          {
+            value: formatTravelDuration(item.durationMinutes * 60, locale),
+          },
+        )
       : null;
   const timingParts = [when, duration].filter((fact): fact is string => Boolean(fact));
   const timing = timingParts.join(' · ');

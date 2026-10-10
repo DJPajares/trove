@@ -1,5 +1,16 @@
 import { resolveDayStay, stayAccommodationsInclude, toStayAccommodations } from './day-stay.js';
-import { readDayPlanningContext, type DayPlanningContext } from '@trove/types';
+import {
+  reconcileItineraryTiming,
+  getItineraryDayTimeSuggestions,
+} from './itinerary-time-suggestions.js';
+import {
+  readDayPlanningContext,
+  type DayPlanningContext,
+  type SchedulingOutcome,
+  type TimingFlexibility,
+  type TimingPolicy,
+  type TimingProvenance,
+} from '@trove/types';
 import { getPrismaClient, type Prisma } from '@trove/db';
 
 import { DAY_PART_WINDOWS } from './day-part-windows.js';
@@ -23,9 +34,14 @@ import { formatDateOnly, isValidIanaTimeZone, parseDateOnly } from './trip-rules
 export type ItineraryScheduleInput =
   | { kind: 'none' }
   | { dayPart: 'afternoon' | 'anytime' | 'evening' | 'morning'; kind: 'day_part' }
-  | { kind: 'exact'; localTime: string };
+  | { kind: 'exact'; localTime: string; dayPart?: 'afternoon' | 'anytime' | 'evening' | 'morning' };
 
 export type ItineraryItemInput = {
+  timingPolicy?: TimingPolicy;
+  timingFlexibility?: TimingFlexibility;
+  timeProvenance?: TimingProvenance;
+  durationProvenance?: TimingProvenance;
+  scheduleRevision?: string;
   blockType?: import('@trove/types').ItineraryBlockType | null;
   clientItemId?: string;
   customLabel?: string | null;
@@ -56,7 +72,10 @@ export type ItineraryDayBase = {
 
 export class ItineraryConflictError extends Error {
   constructor(
-    code: 'itinerary_day_conflict' | 'itinerary_item_conflict' = 'itinerary_item_conflict',
+    code:
+      | 'itinerary_day_conflict'
+      | 'itinerary_item_conflict'
+      | 'itinerary_schedule_conflict' = 'itinerary_item_conflict',
   ) {
     super(code);
   }
@@ -84,6 +103,7 @@ export class ItineraryValidationError extends Error {
 }
 
 export const itineraryItemInclude = {
+  _count: { select: { reservations: true } },
   itineraryDay: { select: { date: true, defaultTimeZone: true } },
   tripPlace: {
     include: {
@@ -153,7 +173,11 @@ function mapTravelStatus(value: string) {
 }
 
 function mapDurationProvenance(value: string) {
-  return value === 'AI_ESTIMATED' ? ('ai_estimated' as const) : ('user_owned' as const);
+  return value === 'AI_ESTIMATED'
+    ? ('ai_estimated' as const)
+    : value === 'APP_ESTIMATED'
+      ? ('app_estimated' as const)
+      : ('user_owned' as const);
 }
 
 function mapDayTimeZoneSource(value: string) {
@@ -207,6 +231,17 @@ export function serializeItineraryItem(
     blockType: item.blockType ?? null,
     durationProvenance: mapDurationProvenance(item.durationProvenance),
     id: item.id,
+    timingFlexibility:
+      item.timingFlexibility === 'FLEXIBLE' ||
+      (!item.timingFlexibility &&
+        ['AI_ESTIMATED', 'APP_ESTIMATED'].includes(item.timeProvenance ?? ''))
+        ? ('flexible' as const)
+        : ('fixed' as const),
+    timingProtected:
+      (item._count?.reservations ?? 0) > 0 ||
+      item.timeSemantics === 'AUTHORITATIVE_INSTANT' ||
+      ['COMPLETED', 'SKIPPED'].includes(item.travelStatus),
+    timeProvenance: item.timeProvenance ? mapDurationProvenance(item.timeProvenance) : null,
     itineraryDayId: item.itineraryDayId,
     localEndTime: formatLocalTime(item.localEndTime),
     localStartTime: formatLocalTime(item.localStartTime),
@@ -309,6 +344,7 @@ function resolveItemTiming(
   input: Pick<ItineraryItemInput, 'durationMinutes' | 'localEndTime'>,
   localStartTime: Date | null,
   current?: Pick<ItineraryItemRecord, 'durationMinutes' | 'localEndTime'>,
+  context?: { date: string; timeZone: string },
 ) {
   if (input.localEndTime && input.durationMinutes) {
     throw new ItineraryValidationError('invalid_local_end_time');
@@ -335,7 +371,11 @@ function resolveItemTiming(
 
   try {
     return {
-      durationMinutes: durationMinutesUntilLocalEnd(formatLocalTime(localStartTime), localEndTime),
+      durationMinutes: durationMinutesUntilLocalEnd(
+        formatLocalTime(localStartTime),
+        localEndTime,
+        context,
+      ),
       localEndTime: parseLocalTime(localEndTime),
     };
   } catch {
@@ -363,7 +403,7 @@ function scheduleData(schedule: ItineraryScheduleInput, date: string, timeZone: 
 
   try {
     return {
-      dayPart: null,
+      dayPart: schedule.dayPart ? mapDayPartInput(schedule.dayPart) : null,
       localStartTime: parseLocalTime(schedule.localTime),
       startInstant: floatingLocalTimeToInstant(date, schedule.localTime, timeZone),
       timeSemantics: 'FLOATING_LOCAL' as const,
@@ -856,94 +896,122 @@ export async function organizeItineraryItem(
   userId: string,
   tripId: string,
   itemId: string,
-  input: { itineraryDayId: string | null; position: number },
+  input: { itineraryDayId: string | null; position: number; timingPolicy?: TimingPolicy },
   expectedUpdatedAt?: string,
 ) {
   const prisma = getPrismaClient();
-  await prisma.$transaction(async (transaction) => {
-    await findOwnedTrip(transaction, userId, tripId);
-    const current = await transaction.itineraryItem.findFirst({
-      where: { id: itemId, tripId },
-      include: itineraryItemInclude,
-    });
-    if (!current) throw new ItineraryNotFoundError('itinerary_item_not_found');
-    if (expectedUpdatedAt && current.updatedAt.toISOString() !== expectedUpdatedAt) {
-      throw new ItineraryConflictError();
-    }
-    const targetDay = input.itineraryDayId
-      ? await findDay(transaction, tripId, input.itineraryDayId)
-      : null;
-    const siblings = await transaction.itineraryItem.findMany({
-      where: {
-        id: { not: itemId },
-        itineraryDayId: input.itineraryDayId,
-        tripId,
-      },
-      orderBy: { position: 'asc' },
-      select: { id: true },
-    });
-    const position = Math.min(Math.max(input.position, 0), siblings.length);
-    siblings.splice(position, 0, { id: itemId });
-    const highestPosition = await transaction.itineraryItem.aggregate({
-      where: { itineraryDayId: input.itineraryDayId, tripId },
-      _max: { position: true },
-    });
-    const writes = planReorderWrites(
-      siblings.map((item) => item.id),
-      (highestPosition._max.position ?? -1) + 1,
-    );
-    for (const write of writes) {
-      await transaction.itineraryItem.update({
-        where: { id: write.id },
-        // Setting the day on every write is what moves the item being reordered onto
-        // the target day, and it frees its old slot on the parking pass rather than
-        // on the final one.
-        data: { itineraryDayId: input.itineraryDayId, position: write.position },
+  return prisma.$transaction(
+    async (transaction) => {
+      await findOwnedTrip(transaction, userId, tripId);
+      const current = await transaction.itineraryItem.findFirst({
+        where: { id: itemId, tripId },
+        include: itineraryItemInclude,
       });
-    }
-
-    const movingDay = current.itineraryDayId !== input.itineraryDayId;
-    const targetTripPlace = movingDay
-      ? await findTripPlace(transaction, tripId, current.tripPlaceId)
-      : null;
-    const timeZone = targetDay
-      ? resolveItemTimeZone({
-          customLocationTimeZone: current.customLocationTimeZone,
-          dayTimeZone: targetDay.defaultTimeZone,
-          tripPlaceTimeZone: targetTripPlace?.place
-            ? resolvedPlaceTimeZone(targetTripPlace.place)
-            : null,
-        })
-      : null;
-    const schedule =
-      targetDay && current.localStartTime && current.timeSemantics === 'FLOATING_LOCAL' && timeZone
-        ? scheduleData(
-            { kind: 'exact', localTime: formatLocalTime(current.localStartTime) ?? '' },
-            formatDateOnly(targetDay.date),
-            timeZone.timeZone,
-          )
+      if (!current) throw new ItineraryNotFoundError('itinerary_item_not_found');
+      if (expectedUpdatedAt && current.updatedAt.toISOString() !== expectedUpdatedAt) {
+        throw new ItineraryConflictError();
+      }
+      const targetDay = input.itineraryDayId
+        ? await findDay(transaction, tripId, input.itineraryDayId)
         : null;
-    await transaction.itineraryItem.update({
-      where: { id: itemId },
-      data: {
-        itineraryDayId: input.itineraryDayId,
-        position,
-        ...(timeZone
-          ? {
-              startInstant: schedule?.startInstant ?? current.startInstant,
-              timeZone: timeZone.timeZone,
-              timeZoneResolvedAt: new Date(),
-              timeZoneSource: timeZone.source,
-            }
-          : {}),
-      },
-    });
-    if (current.itineraryDayId)
-      await refreshDayDefaultTimeZone(transaction, tripId, current.itineraryDayId);
-    if (targetDay && targetDay.id !== current.itineraryDayId) {
-      await refreshDayDefaultTimeZone(transaction, tripId, targetDay.id);
-    }
-  });
+      const siblings = await transaction.itineraryItem.findMany({
+        where: {
+          id: { not: itemId },
+          itineraryDayId: input.itineraryDayId,
+          tripId,
+        },
+        orderBy: { position: 'asc' },
+        select: { id: true },
+      });
+      const position = Math.min(Math.max(input.position, 0), siblings.length);
+      siblings.splice(position, 0, { id: itemId });
+      const highestPosition = await transaction.itineraryItem.aggregate({
+        where: { itineraryDayId: input.itineraryDayId, tripId },
+        _max: { position: true },
+      });
+      const writes = planReorderWrites(
+        siblings.map((item) => item.id),
+        (highestPosition._max.position ?? -1) + 1,
+      );
+      for (const write of writes) {
+        await transaction.itineraryItem.update({
+          where: { id: write.id },
+          // Setting the day on every write is what moves the item being reordered onto
+          // the target day, and it frees its old slot on the parking pass rather than
+          // on the final one.
+          data: { itineraryDayId: input.itineraryDayId, position: write.position },
+        });
+      }
+
+      const movingDay = current.itineraryDayId !== input.itineraryDayId;
+      const targetTripPlace = movingDay
+        ? await findTripPlace(transaction, tripId, current.tripPlaceId)
+        : null;
+      const protectedTiming =
+        (current._count?.reservations ?? 0) > 0 ||
+        current.timeSemantics === 'AUTHORITATIVE_INSTANT' ||
+        ['COMPLETED', 'SKIPPED'].includes(current.travelStatus);
+      const timeZone =
+        targetDay && !(input.timingPolicy === 'reconcile_flexible' && protectedTiming)
+          ? resolveItemTimeZone({
+              customLocationTimeZone: current.customLocationTimeZone,
+              dayTimeZone: targetDay.defaultTimeZone,
+              tripPlaceTimeZone: targetTripPlace?.place
+                ? resolvedPlaceTimeZone(targetTripPlace.place)
+                : null,
+            })
+          : null;
+      const schedule =
+        targetDay &&
+        current.localStartTime &&
+        current.timeSemantics === 'FLOATING_LOCAL' &&
+        timeZone
+          ? scheduleData(
+              { kind: 'exact', localTime: formatLocalTime(current.localStartTime) ?? '' },
+              formatDateOnly(targetDay.date),
+              timeZone.timeZone,
+            )
+          : null;
+      await transaction.itineraryItem.update({
+        where: { id: itemId },
+        data: {
+          itineraryDayId: input.itineraryDayId,
+          position,
+          ...(timeZone
+            ? {
+                startInstant: schedule?.startInstant ?? current.startInstant,
+                timeZone: timeZone.timeZone,
+                timeZoneResolvedAt: new Date(),
+                timeZoneSource: timeZone.source,
+              }
+            : {}),
+        },
+      });
+      if (current.itineraryDayId)
+        await refreshDayDefaultTimeZone(transaction, tripId, current.itineraryDayId);
+      if (targetDay && targetDay.id !== current.itineraryDayId) {
+        await refreshDayDefaultTimeZone(transaction, tripId, targetDay.id);
+      }
+      if (input.timingPolicy === 'reconcile_flexible') {
+        const scheduling: SchedulingOutcome = { changes: [], issues: [] };
+        for (const dayId of new Set([current.itineraryDayId, input.itineraryDayId])) {
+          if (!dayId) continue;
+          const result = await reconcileItineraryTiming(
+            transaction,
+            userId,
+            tripId,
+            dayId,
+            dayId === input.itineraryDayId ? itemId : undefined,
+          );
+          scheduling.changes.push(...result.changes);
+          scheduling.issues.push(...result.issues);
+        }
+        return { scheduling };
+      }
+      return undefined;
+    },
+    { isolationLevel: 'Serializable' },
+  );
 }
 
 export async function duplicateItineraryItem(
@@ -1170,82 +1238,142 @@ export async function createItineraryItem(
   tripId: string,
   input: ItineraryItemInput & {
     itineraryDayId: string;
-    /** Where among the day's items it goes. A timed item still goes where its time puts it. */
+    /** Planner insertion positions remain authoritative during reconciliation. */
     position?: number;
     schedule: ItineraryScheduleInput;
   },
 ) {
   const prisma = getPrismaClient();
-  const itemId = await prisma.$transaction(async (transaction) => {
-    await findOwnedTrip(transaction, userId, tripId);
-    if (input.clientItemId) {
-      const existing = await transaction.itineraryItem.findUnique({
-        where: { id: input.clientItemId },
-        select: { id: true, tripId: true },
-      });
-      if (existing?.tripId === tripId) return existing.id;
-      if (existing) throw new ItineraryValidationError('invalid_itinerary_item');
-    }
-    const day = await findDay(transaction, tripId, input.itineraryDayId);
-    const tripPlace = await findTripPlace(transaction, tripId, input.tripPlaceId ?? null);
-    const customLabel = normalizeContent(input.customLabel, tripPlace?.id ?? null);
-    const customLocation = normalizeLocation(input.customLocation);
-    const timeZone = resolveItemTimeZone({
-      customLocationTimeZone: customLocation.timeZone,
-      dayTimeZone: day.defaultTimeZone,
-      tripPlaceTimeZone: tripPlace?.place ? resolvedPlaceTimeZone(tripPlace.place) : null,
-    });
-    const position =
-      (
-        await transaction.itineraryItem.aggregate({
-          where: { itineraryDayId: day.id, tripId },
-          _max: { position: true },
-        })
-      )._max.position ?? -1;
-    const schedule = scheduleData(input.schedule, formatDateOnly(day.date), timeZone.timeZone);
-    const timing = resolveItemTiming(input, schedule.localStartTime);
-    const item = await transaction.itineraryItem.create({
-      data: {
-        blockType: input.blockType ?? null,
-        ...(input.clientItemId ? { id: input.clientItemId } : {}),
-        customLabel,
-        customLocation: customLocation.label,
+  let scheduling: SchedulingOutcome | undefined;
+  const itemId = await prisma.$transaction(
+    async (transaction) => {
+      await findOwnedTrip(transaction, userId, tripId);
+      if (input.clientItemId) {
+        const existing = await transaction.itineraryItem.findUnique({
+          where: { id: input.clientItemId },
+          select: { id: true, tripId: true },
+        });
+        if (existing?.tripId === tripId) {
+          if (input.timingPolicy === 'reconcile_flexible') {
+            const saved = await transaction.itineraryItem.findUnique({
+              where: { id: existing.id },
+              select: { itineraryDayId: true },
+            });
+            if (saved?.itineraryDayId)
+              scheduling = await reconcileItineraryTiming(
+                transaction,
+                userId,
+                tripId,
+                saved.itineraryDayId,
+              );
+          }
+          return existing.id;
+        }
+        if (existing) throw new ItineraryValidationError('invalid_itinerary_item');
+      }
+      if (input.scheduleRevision) {
+        const preview = await getItineraryDayTimeSuggestions(
+          userId,
+          tripId,
+          input.itineraryDayId,
+          {},
+          { transaction },
+        );
+        if (preview.scheduleRevision !== input.scheduleRevision)
+          throw new ItineraryConflictError('itinerary_schedule_conflict');
+      }
+      const day = await findDay(transaction, tripId, input.itineraryDayId);
+      const tripPlace = await findTripPlace(transaction, tripId, input.tripPlaceId ?? null);
+      const customLabel = normalizeContent(input.customLabel, tripPlace?.id ?? null);
+      const customLocation = normalizeLocation(input.customLocation);
+      const timeZone = resolveItemTimeZone({
         customLocationTimeZone: customLocation.timeZone,
-        dayPart: schedule.dayPart,
-        durationMinutes: timing.durationMinutes,
-        durationProvenance: 'USER_OWNED',
-        itineraryDayId: day.id,
-        localEndTime: timing.localEndTime,
-        localStartTime: schedule.localStartTime,
-        notes: input.notes?.trim() || null,
-        plannedCostAmount: input.plannedCost?.amount ?? null,
-        plannedCostCurrencyCode: input.plannedCost?.currencyCode ?? null,
-        position: position + 1,
-        priority: mapPriorityInput(input.priority ?? null),
-        startInstant: schedule.startInstant,
-        timeSemantics: schedule.timeSemantics,
-        timeProvenance: schedule.localStartTime ? 'USER_OWNED' : null,
+        dayTimeZone: day.defaultTimeZone,
+        tripPlaceTimeZone: tripPlace?.place ? resolvedPlaceTimeZone(tripPlace.place) : null,
+      });
+      const position =
+        (
+          await transaction.itineraryItem.aggregate({
+            where: { itineraryDayId: day.id, tripId },
+            _max: { position: true },
+          })
+        )._max.position ?? -1;
+      const schedule = scheduleData(input.schedule, formatDateOnly(day.date), timeZone.timeZone);
+      const timing = resolveItemTiming(input, schedule.localStartTime, undefined, {
+        date: formatDateOnly(day.date),
         timeZone: timeZone.timeZone,
-        timeZoneResolvedAt: new Date(),
-        timeZoneSource: timeZone.source,
-        tripId,
-        tripPlaceId: tripPlace?.id ?? null,
-      },
-    });
-    if (input.position !== undefined) {
-      await placeItemAt(transaction, tripId, day.id, item.id, input.position);
-    }
-    await reslotItemByTime(transaction, tripId, day.id, item.id, schedule);
-    await refreshDayDefaultTimeZone(transaction, tripId, day.id);
-    return item.id;
-  });
+      });
+      const item = await transaction.itineraryItem.create({
+        data: {
+          blockType: input.blockType ?? null,
+          ...(input.clientItemId ? { id: input.clientItemId } : {}),
+          customLabel,
+          customLocation: customLocation.label,
+          customLocationTimeZone: customLocation.timeZone,
+          dayPart:
+            schedule.localStartTime && input.timingFlexibility !== 'flexible'
+              ? null
+              : schedule.dayPart,
+          durationMinutes: timing.durationMinutes,
+          durationProvenance:
+            input.durationProvenance === 'app_estimated'
+              ? 'APP_ESTIMATED'
+              : input.durationProvenance === 'ai_estimated'
+                ? 'AI_ESTIMATED'
+                : 'USER_OWNED',
+          timingFlexibility:
+            input.timingFlexibility === 'flexible'
+              ? 'FLEXIBLE'
+              : schedule.localStartTime
+                ? 'FIXED'
+                : null,
+          itineraryDayId: day.id,
+          localEndTime: timing.localEndTime,
+          localStartTime: schedule.localStartTime,
+          notes: input.notes?.trim() || null,
+          plannedCostAmount: input.plannedCost?.amount ?? null,
+          plannedCostCurrencyCode: input.plannedCost?.currencyCode ?? null,
+          position: position + 1,
+          priority: mapPriorityInput(input.priority ?? null),
+          startInstant: schedule.startInstant,
+          timeSemantics: schedule.timeSemantics,
+          timeProvenance: schedule.localStartTime
+            ? input.timeProvenance === 'app_estimated'
+              ? 'APP_ESTIMATED'
+              : 'USER_OWNED'
+            : null,
+          timeZone: timeZone.timeZone,
+          timeZoneResolvedAt: new Date(),
+          timeZoneSource: timeZone.source,
+          tripId,
+          tripPlaceId: tripPlace?.id ?? null,
+        },
+      });
+      if (input.position !== undefined) {
+        await placeItemAt(transaction, tripId, day.id, item.id, input.position);
+      }
+      if (input.timingPolicy !== 'reconcile_flexible')
+        await reslotItemByTime(transaction, tripId, day.id, item.id, schedule);
+      await refreshDayDefaultTimeZone(transaction, tripId, day.id);
+      if (input.timingPolicy === 'reconcile_flexible')
+        scheduling = await reconcileItineraryTiming(
+          transaction,
+          userId,
+          tripId,
+          day.id,
+          schedule.localStartTime && input.timeProvenance !== 'app_estimated' ? undefined : item.id,
+        );
+      return item.id;
+    },
+    { isolationLevel: 'Serializable' },
+  );
 
   const item = await prisma.itineraryItem.findFirst({
     where: { id: itemId, trip: { ownerId: userId }, tripId },
     include: itineraryItemInclude,
   });
   if (!item) throw new ItineraryNotFoundError('itinerary_item_not_found');
-  return serializeItineraryItem(item);
+  return { ...serializeItineraryItem(item), ...(scheduling ? { scheduling } : {}) };
 }
 
 export async function updateItineraryItem(
@@ -1256,132 +1384,207 @@ export async function updateItineraryItem(
   expectedUpdatedAt?: string,
 ) {
   const prisma = getPrismaClient();
-  const result = await prisma.$transaction(async (transaction) => {
-    await findOwnedTrip(transaction, userId, tripId);
-    const current = await transaction.itineraryItem.findFirst({
-      where: { id: itemId, tripId },
-      include: itineraryItemInclude,
-    });
-    if (!current || !current.itineraryDayId || !current.itineraryDay) {
-      throw new ItineraryNotFoundError('itinerary_item_not_found');
-    }
-    if (expectedUpdatedAt && current.updatedAt.toISOString() !== expectedUpdatedAt) {
-      throw new ItineraryConflictError();
-    }
+  const result = await prisma.$transaction(
+    async (transaction) => {
+      await findOwnedTrip(transaction, userId, tripId);
+      const current = await transaction.itineraryItem.findFirst({
+        where: { id: itemId, tripId },
+        include: itineraryItemInclude,
+      });
+      if (!current || !current.itineraryDayId || !current.itineraryDay) {
+        throw new ItineraryNotFoundError('itinerary_item_not_found');
+      }
+      if (expectedUpdatedAt && current.updatedAt.toISOString() !== expectedUpdatedAt) {
+        throw new ItineraryConflictError();
+      }
 
-    const tripPlaceId = input.tripPlaceId === undefined ? current.tripPlaceId : input.tripPlaceId;
-    const tripPlace = await findTripPlace(transaction, tripId, tripPlaceId);
-    const customLabel = normalizeContent(
-      input.customLabel === undefined ? current.customLabel : input.customLabel,
-      tripPlace?.id ?? null,
-    );
-    const customLocation =
-      input.customLocation === undefined
-        ? {
-            label: current.customLocation,
-            timeZone: current.customLocationTimeZone,
-          }
-        : normalizeLocation(input.customLocation);
-    const previousLocalTime = formatLocalTime(current.localStartTime);
-    const nextLocalTime =
-      input.schedule?.kind === 'exact'
-        ? input.schedule.localTime
-        : input.schedule
-          ? null
-          : previousLocalTime;
-    const shouldResolveTimeZone =
-      tripPlaceId !== current.tripPlaceId ||
-      customLocation.label !== current.customLocation ||
-      customLocation.timeZone !== current.customLocationTimeZone ||
-      nextLocalTime !== previousLocalTime;
-    const timeZone = shouldResolveTimeZone
-      ? resolveItemTimeZone({
-          customLocationTimeZone: customLocation.timeZone,
-          dayTimeZone: current.itineraryDay.defaultTimeZone,
-          tripPlaceTimeZone: tripPlace?.place ? resolvedPlaceTimeZone(tripPlace.place) : null,
-        })
-      : {
-          source: current.timeZoneSource ?? ('DAY_DEFAULT' as const),
-          timeZone: current.timeZone ?? current.itineraryDay.defaultTimeZone,
-        };
-    const schedule = input.schedule
-      ? scheduleData(input.schedule, formatDateOnly(current.itineraryDay.date), timeZone.timeZone)
-      : current.localStartTime && current.timeSemantics === 'FLOATING_LOCAL'
-        ? scheduleData(
-            { kind: 'exact', localTime: formatLocalTime(current.localStartTime) ?? '' },
-            formatDateOnly(current.itineraryDay.date),
-            timeZone.timeZone,
-          )
+      if (input.scheduleRevision) {
+        const preview = await getItineraryDayTimeSuggestions(
+          userId,
+          tripId,
+          current.itineraryDayId,
+          {},
+          { transaction },
+        );
+        if (preview.scheduleRevision !== input.scheduleRevision)
+          throw new ItineraryConflictError('itinerary_schedule_conflict');
+      }
+      const tripPlaceId = input.tripPlaceId === undefined ? current.tripPlaceId : input.tripPlaceId;
+      const tripPlace = await findTripPlace(transaction, tripId, tripPlaceId);
+      const customLabel = normalizeContent(
+        input.customLabel === undefined ? current.customLabel : input.customLabel,
+        tripPlace?.id ?? null,
+      );
+      const customLocation =
+        input.customLocation === undefined
+          ? {
+              label: current.customLocation,
+              timeZone: current.customLocationTimeZone,
+            }
+          : normalizeLocation(input.customLocation);
+      const previousLocalTime = formatLocalTime(current.localStartTime);
+      const nextLocalTime =
+        input.schedule?.kind === 'exact'
+          ? input.schedule.localTime
+          : input.schedule
+            ? null
+            : previousLocalTime;
+      const shouldResolveTimeZone =
+        tripPlaceId !== current.tripPlaceId ||
+        customLocation.label !== current.customLocation ||
+        customLocation.timeZone !== current.customLocationTimeZone ||
+        nextLocalTime !== previousLocalTime;
+      const timeZone = shouldResolveTimeZone
+        ? resolveItemTimeZone({
+            customLocationTimeZone: customLocation.timeZone,
+            dayTimeZone: current.itineraryDay.defaultTimeZone,
+            tripPlaceTimeZone: tripPlace?.place ? resolvedPlaceTimeZone(tripPlace.place) : null,
+          })
         : {
-            dayPart: current.dayPart,
-            localStartTime: current.localStartTime,
-            startInstant: current.startInstant,
-            timeSemantics: current.timeSemantics,
+            source: current.timeZoneSource ?? ('DAY_DEFAULT' as const),
+            timeZone: current.timeZone ?? current.itineraryDay.defaultTimeZone,
           };
-    const timing = resolveItemTiming(input, schedule.localStartTime, current);
-    const durationChanged = timing.durationMinutes !== current.durationMinutes;
+      const schedule =
+        input.schedule &&
+        !(current.timeSemantics === 'AUTHORITATIVE_INSTANT' && nextLocalTime === previousLocalTime)
+          ? scheduleData(
+              input.schedule,
+              formatDateOnly(current.itineraryDay.date),
+              timeZone.timeZone,
+            )
+          : current.localStartTime && current.timeSemantics === 'FLOATING_LOCAL'
+            ? scheduleData(
+                { kind: 'exact', localTime: formatLocalTime(current.localStartTime) ?? '' },
+                formatDateOnly(current.itineraryDay.date),
+                timeZone.timeZone,
+              )
+            : {
+                dayPart: current.dayPart,
+                localStartTime: current.localStartTime,
+                startInstant: current.startInstant,
+                timeSemantics: current.timeSemantics,
+              };
+      const timing = resolveItemTiming(input, schedule.localStartTime, current, {
+        date: formatDateOnly(current.itineraryDay.date),
+        timeZone: timeZone.timeZone,
+      });
+      const durationChanged =
+        timing.durationMinutes !== current.durationMinutes ||
+        formatLocalTime(timing.localEndTime) !== formatLocalTime(current.localEndTime);
+      const timeChanged = nextLocalTime !== previousLocalTime;
+      const protectedTiming =
+        (current._count?.reservations ?? 0) > 0 ||
+        current.timeSemantics === 'AUTHORITATIVE_INSTANT' ||
+        ['COMPLETED', 'SKIPPED'].includes(current.travelStatus);
 
-    const updated = await transaction.itineraryItem.update({
-      where: { id: itemId },
-      data: {
-        ...(input.blockType !== undefined ? { blockType: input.blockType } : {}),
-        customLabel,
-        customLocation: customLocation.label,
-        customLocationTimeZone: customLocation.timeZone,
-        dayPart: schedule.dayPart,
-        durationMinutes: timing.durationMinutes,
-        ...(input.durationMinutes !== undefined ||
-        input.localEndTime !== undefined ||
-        durationChanged
-          ? { durationProvenance: 'USER_OWNED' as const }
-          : {}),
-        localEndTime: timing.localEndTime,
-        localStartTime: schedule.localStartTime,
-        ...(input.notes !== undefined ? { notes: input.notes?.trim() || null } : {}),
-        ...(input.plannedCost !== undefined
-          ? {
-              plannedCostAmount: input.plannedCost?.amount ?? null,
-              plannedCostCurrencyCode: input.plannedCost?.currencyCode ?? null,
-            }
-          : {}),
-        ...(input.priority !== undefined ? { priority: mapPriorityInput(input.priority) } : {}),
-        startInstant: schedule.startInstant,
-        timeSemantics: schedule.timeSemantics,
-        ...(input.schedule !== undefined
-          ? { timeProvenance: schedule.localStartTime ? ('USER_OWNED' as const) : null }
-          : {}),
-        ...(shouldResolveTimeZone || !current.timeZone
-          ? {
-              timeZone: timeZone.timeZone,
-              timeZoneResolvedAt: new Date(),
-              timeZoneSource: timeZone.source,
-            }
-          : {}),
-        tripPlaceId: tripPlace?.id ?? null,
-      },
-      include: itineraryItemInclude,
-    });
-    // Retiming an item should move it, but only when the clock actually changed —
-    // an unrelated edit must never disturb an order the traveller arranged.
-    if (itemSortMinute(current) !== itemSortMinute(updated)) {
-      await reslotItemByTime(transaction, tripId, current.itineraryDayId, itemId, updated);
-    }
-    await refreshDayDefaultTimeZone(transaction, tripId, current.itineraryDayId);
+      const updated = await transaction.itineraryItem.update({
+        where: { id: itemId },
+        data: {
+          ...(input.blockType !== undefined ? { blockType: input.blockType } : {}),
+          customLabel,
+          customLocation: customLocation.label,
+          customLocationTimeZone: customLocation.timeZone,
+          dayPart:
+            input.timingFlexibility === 'fixed'
+              ? null
+              : timeChanged ||
+                  input.schedule?.kind === 'none' ||
+                  input.schedule?.kind === 'day_part'
+                ? schedule.dayPart
+                : (schedule.dayPart ?? current.dayPart),
+          durationMinutes: timing.durationMinutes,
+          ...(durationChanged
+            ? {
+                durationProvenance:
+                  input.durationProvenance === 'app_estimated'
+                    ? ('APP_ESTIMATED' as const)
+                    : ('USER_OWNED' as const),
+              }
+            : {}),
+          localEndTime: timing.localEndTime,
+          localStartTime: schedule.localStartTime,
+          ...(input.notes !== undefined ? { notes: input.notes?.trim() || null } : {}),
+          ...(input.plannedCost !== undefined
+            ? {
+                plannedCostAmount: input.plannedCost?.amount ?? null,
+                plannedCostCurrencyCode: input.plannedCost?.currencyCode ?? null,
+              }
+            : {}),
+          ...(input.priority !== undefined ? { priority: mapPriorityInput(input.priority) } : {}),
+          startInstant: schedule.startInstant,
+          timeSemantics: schedule.timeSemantics,
+          ...(timeChanged
+            ? {
+                timeProvenance: schedule.localStartTime
+                  ? input.timeProvenance === 'app_estimated'
+                    ? ('APP_ESTIMATED' as const)
+                    : ('USER_OWNED' as const)
+                  : null,
+              }
+            : {}),
+          ...(shouldResolveTimeZone || !current.timeZone
+            ? {
+                timeZone: timeZone.timeZone,
+                timeZoneResolvedAt: new Date(),
+                timeZoneSource: timeZone.source,
+              }
+            : {}),
+          ...(input.timingFlexibility !== undefined && !protectedTiming
+            ? {
+                timingFlexibility:
+                  input.timingFlexibility === 'flexible'
+                    ? ('FLEXIBLE' as const)
+                    : ('FIXED' as const),
+              }
+            : timeChanged && !protectedTiming
+              ? {
+                  timingFlexibility:
+                    input.timeProvenance === 'app_estimated'
+                      ? ('FLEXIBLE' as const)
+                      : ('FIXED' as const),
+                }
+              : {}),
+          tripPlaceId: tripPlace?.id ?? null,
+        },
+        include: itineraryItemInclude,
+      });
+      // Retiming an item should move it, but only when the clock actually changed —
+      // an unrelated edit must never disturb an order the traveller arranged.
+      if (
+        input.timingPolicy !== 'reconcile_flexible' &&
+        itemSortMinute(current) !== itemSortMinute(updated)
+      ) {
+        await reslotItemByTime(transaction, tripId, current.itineraryDayId, itemId, updated);
+      }
+      await refreshDayDefaultTimeZone(transaction, tripId, current.itineraryDayId);
 
-    const previousInstant = current.startInstant?.toISOString() ?? null;
-    const nextInstant = updated.startInstant?.toISOString() ?? null;
-    return {
-      item: serializeItineraryItem(updated),
-      timeZoneConsequence:
-        previousInstant && nextInstant && previousInstant !== nextInstant
-          ? {
-              kind: 'derived_instant_changed' as const,
-              previousStartInstant: previousInstant,
-              startInstant: nextInstant,
-            }
-          : null,
-    };
-  });
+      const scheduling =
+        input.timingPolicy === 'reconcile_flexible'
+          ? await reconcileItineraryTiming(transaction, userId, tripId, current.itineraryDayId)
+          : undefined;
+      const finalItem = scheduling
+        ? await transaction.itineraryItem.findFirst({
+            where: { id: itemId },
+            include: itineraryItemInclude,
+          })
+        : updated;
+      const previousInstant = current.startInstant?.toISOString() ?? null;
+      const nextInstant = updated.startInstant?.toISOString() ?? null;
+      return {
+        item: serializeItineraryItem(finalItem!),
+        ...(scheduling ? { scheduling } : {}),
+        timeZoneConsequence:
+          previousInstant && nextInstant && previousInstant !== nextInstant
+            ? {
+                kind: 'derived_instant_changed' as const,
+                previousStartInstant: previousInstant,
+                startInstant: nextInstant,
+              }
+            : null,
+      };
+    },
+    { isolationLevel: 'Serializable' },
+  );
 
   return result;
 }

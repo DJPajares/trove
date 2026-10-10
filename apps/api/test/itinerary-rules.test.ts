@@ -184,3 +184,24 @@ test('resolves task timezone from its item, then day, then trip reference', () =
     }),
   ).toStrictEqual({ source: 'TRIP_REFERENCE', timeZone: 'Europe/London' });
 });
+
+test('explicit ends use elapsed duration across daylight-saving transitions', () => {
+  expect(
+    durationMinutesUntilLocalEnd('01:30', '03:30', {
+      date: '2026-03-08',
+      timeZone: 'America/New_York',
+    }),
+  ).toBe(60);
+  expect(
+    durationMinutesUntilLocalEnd('00:30', '02:30', {
+      date: '2026-11-01',
+      timeZone: 'America/New_York',
+    }),
+  ).toBe(180);
+  expect(() =>
+    durationMinutesUntilLocalEnd('01:30', '02:30', {
+      date: '2026-03-08',
+      timeZone: 'America/New_York',
+    }),
+  ).toThrow('invalid_local_time');
+});

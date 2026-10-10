@@ -1946,21 +1946,21 @@
       "close": "Close"
     },
     "dayTimes": {
-      "action": "Suggest times for this day",
-      "title": "Suggest times",
-      "description": "A time for each stop that has none, from what Trove already knows. Nothing changes until you apply.",
+      "action": "Suggest timing for this day",
+      "title": "Suggested slots",
+      "description": "Compatible slots from the day’s stored details. Choose which to apply together.",
       "loading": "Working out times...",
       "empty": "Every stop on this day already has a time.",
-      "error": "Times could not be suggested or saved. Try again.",
+      "error": "Slots could not be saved. Close and reopen to refresh the day.",
       "include": "Use the suggested time for {name}",
-      "apply": "Apply times",
+      "apply": "Apply slots",
       "applying": "Applying..."
     },
     "suggestedTime": {
-      "action": "Suggest a time",
+      "action": "Suggest timing",
       "loading": "Working out a time...",
-      "applied": "Filled in a time that fits this day.",
-      "none": "Nothing fits this day. Try a different day or a shorter stay.",
+      "applied": "Fits the available time in this day.",
+      "none": "This stop cannot fit here. Choose another position or day.",
       "unavailable": "Not enough is known about this day to suggest a time.",
       "reason": {
         "AFTER_PREVIOUS_ITEM": "Leaves enough time to get here from the stop before.",
@@ -1971,15 +1971,18 @@
         "FROM_STAY": "Leaves time to get here from where you’re staying.",
         "OPENING_HOURS": "Set to when this place opens.",
         "PREVIOUS_ITEM_ENDS": "Set for after the stop before ends.",
-        "SUITS_PLACE": "Set to a usual time for a place like this."
+        "SUITS_PLACE": "Set to a usual time for a place like this.",
+        "DAY_START": "Fits from the start of your day."
       },
       "caveat": {
         "DURATION_ESTIMATED": "Based on typical visit lengths.",
         "DURATION_UNKNOWN": "Add a duration for a closer fit.",
         "OPENING_HOURS_UNKNOWN": "Opening hours are not known, so check them.",
         "TRAVEL_ESTIMATED": "Travel times are estimates.",
-        "TRAVEL_UNKNOWN": "Travel time from the stop before is not known."
-      }
+        "TRAVEL_UNKNOWN": "Travel time from the stop before is not known.",
+        "TIGHT_TRANSITION": "Less than 15 minutes to spare before a fixed activity."
+      },
+      "use": "Use this slot"
     },
     "durationQuestion": "How long?",
     "durationHint": "Optional. Choose a duration or an exact end time.",
@@ -2031,7 +2034,44 @@
     "deleteTitle": "Delete this item?",
     "deleteDescription": "{name} will be removed from this itinerary. Linked tasks, reservations, and expenses will stay on the trip.",
     "deleting": "Deleting…",
-    "deleteError": "We couldn't delete that itinerary item. Try again."
+    "deleteError": "We couldn't delete that itinerary item. Try again.",
+    "connectedTiming": {
+      "question": "When and how long?",
+      "flexibility": "Timing",
+      "flexible": "Flexible",
+      "fixed": "Fixed",
+      "flexibleHint": "Trove can adjust this slot when the day changes.",
+      "fixedHint": "Trove keeps this time when the day changes.",
+      "protected": "Booking, journey or completed timing is protected from automatic changes.",
+      "minutes": "{minutes} min",
+      "untimed": "No exact time",
+      "changed": "Timing adjusted to fit the day.",
+      "needsReview": "Some timing needs a review.",
+      "review": "Review changes",
+      "reviewHint": "Flexible slots adjusted around the day. Protected times were kept.",
+      "pending": "Timing review pending. Trove will check the day when you reconnect.",
+      "stale": "The day changed since this preview. Suggest timing again before saving.",
+      "stop": "Stop",
+      "issue": {
+        "NO_ROOM": "Not enough room for this visit and travel. Choose another position or day.",
+        "OPENING_HOURS": "This visit does not fit the known opening hours. Review its timing or day.",
+        "DURATION_UNKNOWN": "Add a duration to check whether this stop fits.",
+        "TRAVEL_UNKNOWN": "Travel time cannot be checked. Add a location or review the connection.",
+        "FIXED_CONFLICT": "A protected time conflicts with this order. Review the stop position or commitment.",
+        "BOOKING_DATE": "This stop is on a different day from its booking. Move it to the booked day.",
+        "TIGHT_TRANSITION": "This fits, with less than 15 minutes to spare before a fixed activity.",
+        "CONTEXT_UNKNOWN": "Add a daypart, availability or location to support a timing suggestion."
+      },
+      "hours": "{hours} hr",
+      "hoursMinutes": "{hours} hr {minutes} min",
+      "affected": "{count, plural, one {Another flexible stop may adjust when you save.} other {# other flexible stops may adjust when you save.}}",
+      "reviewUnresolvedHint": "These stops need a timing check. Choose a different slot, position or day.",
+      "issueLabel": {
+        "conflict": "Timing conflict",
+        "review": "Timing needs checking",
+        "notice": "Connection notice"
+      }
+    }
   },
   "tasks": {
     "title": "Tasks for {trip}",

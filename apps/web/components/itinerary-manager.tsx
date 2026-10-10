@@ -1,4 +1,12 @@
 'use client';
+import type { SchedulingOutcome } from '@trove/types';
+import { TimingReviewNotice } from '@/components/planner/timing-review';
+import { TIMING_REVIEW_EVENT } from '@/lib/itinerary/timing-review';
+import {
+  fetchItineraryDayTimeSuggestions,
+  readItineraryTimingPending,
+  readItineraryTimingReview,
+} from '@/lib/itinerary/api';
 import { DayPlanningContextSheet } from '@/components/day-planning-context';
 
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -314,6 +322,31 @@ export function ItineraryManager({
   const [dayMoveError, setDayMoveError] = useState<string | null>(null);
   const [movingDay, setMovingDay] = useState(false);
   const [timeZoneConsequence, setTimeZoneConsequence] = useState(false);
+  const [timingReview, setTimingReview] = useState<SchedulingOutcome | null>(null);
+  const [timingPending, setTimingPending] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void readItineraryTimingReview(tripId).then((outcome) => {
+      if (active) setTimingReview(outcome);
+    });
+    void readItineraryTimingPending(tripId).then((pending) => {
+      if (active) setTimingPending(pending);
+    });
+    const receive = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{ tripId: string; outcome?: SchedulingOutcome; pending?: boolean }>
+      ).detail;
+      if (detail.tripId === tripId) {
+        if (detail.outcome) setTimingReview(detail.outcome);
+        setTimingPending(Boolean(detail.pending));
+      }
+    };
+    window.addEventListener(TIMING_REVIEW_EVENT, receive);
+    return () => {
+      active = false;
+      window.removeEventListener(TIMING_REVIEW_EVENT, receive);
+    };
+  }, [tripId]);
   const [organizingItemId, setOrganizingItemId] = useState<string | null>(null);
   // A stop on its way to another day, or out of Unscheduled onto one.
   const [moveTarget, setMoveTarget] = useState<{
@@ -429,6 +462,19 @@ export function ItineraryManager({
     () => itinerary?.days.find((day) => day.id === selectedDayId) ?? null,
     [itinerary, selectedDayId],
   );
+  const timingAssessment = useQuery({
+    queryKey: [
+      'itinerary-timing',
+      tripId,
+      selectedDay?.id,
+      JSON.stringify([
+        selectedDay?.planningContext,
+        selectedDay?.items.map((item) => [item.id, item.updatedAt, item.position]),
+      ]),
+    ],
+    enabled: online && Boolean(selectedDay),
+    queryFn: () => fetchItineraryDayTimeSuggestions(tripId, selectedDay!.id),
+  });
 
   // What Trove has stored about each place on the selected day: whether it is
   // open that day, and how it is rated. Stored evidence only.
@@ -1089,16 +1135,22 @@ export function ItineraryManager({
       // Shown at once - dropped, moved earlier, sent to another day - through the
       // same replay the offline queue uses, and put back if the server says no.
       await optimisticItineraryEdit({
-        commit: () => organizeItineraryItem(tripId, item.id, { itineraryDayId, position }),
+        commit: () =>
+          organizeItineraryItem(tripId, item.id, {
+            itineraryDayId,
+            position,
+            timingPolicy: 'reconcile_flexible',
+          }),
         operation: {
           baseItem: item,
-          input: { itineraryDayId, position },
+          input: { itineraryDayId, position, timingPolicy: 'reconcile_flexible' },
           itemId: item.id,
           kind: 'itinerary_item_organize',
         },
         queryClient,
         tripId,
       });
+      if (!online) setTimingPending(true);
       await refresh();
     } catch {
       setError(t('organizeError'));
@@ -1142,20 +1194,21 @@ export function ItineraryManager({
   }
 
   /**
-   * Adds a Place straight onto the open day, unscheduled within it. Timing is the
-   * traveller's to decide afterwards; getting it onto the day is the point of
-   * having the collection beside the plan. Reached from the Places drawer and
+   * Adds a Place onto the open day and reconciles a supported flexible slot.
+   * Reached from the Places drawer and
    * from a map marker for a Place that is not on this day yet.
    */
   const addTripPlaceToSelectedDay = useCallback(
     async (tripPlaceId: string) => {
       if (!selectedDay) return false;
       try {
-        await createItineraryItem(tripId, {
+        const result = await createItineraryItem(tripId, {
           itineraryDayId: selectedDay.id,
+          timingPolicy: 'reconcile_flexible',
           schedule: { kind: 'none' },
           tripPlaceId,
         });
+        if (!result.item.scheduling) setTimingPending(true);
         await refresh();
         return true;
       } catch {
@@ -1422,6 +1475,14 @@ export function ItineraryManager({
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
+      <TimingReviewNotice
+        outcome={timingReview}
+        pending={timingPending}
+        nameFor={(id) => {
+          const item = itinerary?.days.flatMap((day) => day.items).find((item) => item.id === id);
+          return item ? itemName(item) : t('connectedTiming.stop');
+        }}
+      />
       {timeZoneConsequence ? (
         <Alert role="status" variant="info">
           <Clock3 aria-hidden="true" />
@@ -1709,9 +1770,34 @@ export function ItineraryManager({
                       notice.dayId === selectedDay.id &&
                       notice.tripPlaceId === item.tripPlace?.id,
                   );
-                  if (!problems.length && !holidays.length) return null;
+                  const timingIssues = (timingAssessment.data?.issues ?? []).filter(
+                    (issue) => issue.itemId === item.id,
+                  );
+                  if (!problems.length && !holidays.length && !timingIssues.length) return null;
                   return (
                     <>
+                      {timingIssues.map((issue) => (
+                        <AttentionNote
+                          className={
+                            issue.severity === 'conflict'
+                              ? 'bg-destructive/8 [&_svg]:text-destructive'
+                              : undefined
+                          }
+                          key={issue.code}
+                        >
+                          <Button
+                            className="h-auto whitespace-normal px-0 text-left text-sm"
+                            type="button"
+                            variant="link"
+                            onClick={() => setTimingItem(item)}
+                          >
+                            <span className="sr-only">
+                              {t(`connectedTiming.issueLabel.${issue.severity}`)}:{' '}
+                            </span>
+                            {t(`connectedTiming.issue.${issue.code}`)}
+                          </Button>
+                        </AttentionNote>
+                      ))}
                       {problems.map((problem, index) => (
                         <ScoreProblemNote
                           key={`${problem.code}-${index}`}
@@ -1889,7 +1975,9 @@ export function ItineraryManager({
           item={timingItem}
           name={timingItem ? itemName(timingItem) : ''}
           onClose={() => setTimingItem(null)}
-          onSaved={async ({ timeZoneConsequence: consequence }) => {
+          onSaved={async ({ timeZoneConsequence: consequence, scheduling }) => {
+            if (scheduling) setTimingReview(scheduling);
+            if (!scheduling) setTimingPending(true);
             setTimeZoneConsequence(consequence);
             setTimingItem(null);
             await refresh();
@@ -1958,7 +2046,9 @@ export function ItineraryManager({
         locationBias={editorLocationBias}
         onClose={closeEditor}
         onDelete={setItemToDelete}
-        onSaved={async ({ timeZoneConsequence: consequence }) => {
+        onSaved={async ({ timeZoneConsequence: consequence, scheduling }) => {
+          if (scheduling) setTimingReview(scheduling);
+          if (!scheduling) setTimingPending(true);
           setTimeZoneConsequence(consequence);
           closeEditor();
           await refresh();

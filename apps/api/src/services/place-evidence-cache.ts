@@ -67,10 +67,13 @@ const evidenceSchema = z.object({
 export async function readCachedPlaceEvidence(
   request: Omit<PlaceDetailsRequest, 'detail'>,
   now = new Date(),
-  options: { languageIndependent?: boolean } = {},
+  options: {
+    languageIndependent?: boolean;
+    client?: Pick<Prisma.TransactionClient, 'placeProviderRef'>;
+  } = {},
 ): Promise<Extract<PlaceDetailsResult, { status: 'ok' }> | null> {
   try {
-    const row = await getPrismaClient().placeProviderRef.findUnique({
+    const row = await (options.client ?? getPrismaClient()).placeProviderRef.findUnique({
       where: {
         provider_externalPlaceId: { provider: 'GOOGLE', externalPlaceId: request.externalPlaceId },
       },

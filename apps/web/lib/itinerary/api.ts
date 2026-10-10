@@ -1,4 +1,13 @@
-import type { DayPlanningContext } from '@trove/types';
+import { localPreviewInstant } from './local-instant';
+export { localPreviewInstant } from './local-instant';
+import type {
+  ItineraryDayTimeSuggestions,
+  SchedulingOutcome,
+  TimingFlexibility,
+  TimingPolicy,
+  TimingProvenance,
+  DayPlanningContext,
+} from '@trove/types';
 import { resolveOfflineTripModeLeg } from '@/lib/itinerary/trip-mode-leg';
 import type { PlaceSnapshot } from '@/lib/saved/api';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
@@ -16,6 +25,12 @@ import {
   saveSupportingSnapshot,
   setOfflineApiReachable,
 } from '@/lib/offline/trip-store';
+import {
+  publishPendingTimingReview,
+  publishTimingReview,
+  storedTimingPending,
+  storedTimingReview,
+} from './timing-review';
 import { offlineLeaveBy } from '@/lib/itinerary/offline-leave-by';
 
 export type ItineraryDayPart = 'afternoon' | 'anytime' | 'evening' | 'morning';
@@ -25,7 +40,7 @@ export type RouteTravelMode = 'drive' | 'flight' | 'transit' | 'walk';
 export type ItineraryScheduleInput =
   | { kind: 'none' }
   | { dayPart: ItineraryDayPart; kind: 'day_part' }
-  | { kind: 'exact'; localTime: string };
+  | { kind: 'exact'; localTime: string; dayPart?: ItineraryDayPart };
 
 export type ItineraryTripPlace = {
   customName: string | null;
@@ -53,7 +68,11 @@ export type ItineraryItem = {
   customLocation: { label: string; timeZone: string | null } | null;
   dayPart: ItineraryDayPart | null;
   durationMinutes: number | null;
-  durationProvenance?: 'ai_estimated' | 'user_owned';
+  durationProvenance?: TimingProvenance;
+  timingFlexibility?: TimingFlexibility;
+  timeProvenance?: TimingProvenance | null;
+  timingProtected?: boolean;
+  scheduling?: SchedulingOutcome;
   id: string;
   itineraryDayId: string | null;
   localEndTime?: string | null;
@@ -165,7 +184,11 @@ export type SuggestedTimeCaveat =
   | 'TRAVEL_UNKNOWN';
 
 /** A stop still being added: it has no id yet and joins the end of the day. */
-export type SuggestedTimeCandidate = { durationMinutes: number | null; tripPlaceId: string | null };
+export type SuggestedTimeCandidate = {
+  durationMinutes: number | null;
+  tripPlaceId: string | null;
+  position?: number;
+};
 
 /** The id a candidate stop's suggestion answers under. */
 export const CANDIDATE_SUGGESTION_ID = 'candidate';
@@ -177,26 +200,7 @@ export type RequestedSchedule = 'afternoon' | 'anytime' | 'evening' | 'exact' | 
  * The server sends codes and item ids only; the client owns the wording, the
  * same convention Plan Score explanations follow.
  */
-export type ItineraryDayTimeSuggestion = {
-  itemId: string;
-  /** Day-local `HH:MM`, ready for the exact-time field. Null unless status is ok. */
-  localTime: string | null;
-} & (
-  | { caveats: SuggestedTimeCaveat[]; reasons: SuggestedTimeReason[]; status: 'ok' }
-  | { blockedBy: SuggestedTimeReasonCode[]; status: 'no_feasible_time' }
-  | { missing: SuggestedTimeCaveat[]; status: 'insufficient_evidence' }
-);
-
-export type SuggestedTimeReason = {
-  code: SuggestedTimeReasonCode;
-  references: string[];
-};
-
-export type ItineraryDayTimeSuggestions = {
-  generatedAt: string;
-  itineraryDayId: string;
-  suggestions: ItineraryDayTimeSuggestion[];
-};
+export type { ItineraryDayTimeSuggestion, ItineraryDayTimeSuggestions } from '@trove/types';
 
 export type Itinerary = {
   days: ItineraryDay[];
@@ -326,6 +330,11 @@ export function deviceTimeZone() {
 }
 
 export type ItineraryItemInput = {
+  timingPolicy?: TimingPolicy;
+  timingFlexibility?: TimingFlexibility;
+  timeProvenance?: TimingProvenance;
+  durationProvenance?: TimingProvenance;
+  scheduleRevision?: string;
   blockType?: import('@trove/types').ItineraryBlockType | null;
   customLabel?: string | null;
   customLocation?: { label: string; timeZone?: string | null } | null;
@@ -437,34 +446,6 @@ function localTimeInTimeZone(at: Date, timeZone: string) {
   }).formatToParts(at);
   const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${value.hour}:${value.minute}`;
-}
-
-export function localPreviewInstant(date: string, time: string, timeZone: string) {
-  const [year = 1970, month = 1, day = 1] = date.split('-').map(Number);
-  const [hour = 0, minute = 0] = time.split(':').map(Number);
-  const desired = Date.UTC(year, month - 1, day, hour, minute);
-  let guess = desired;
-  for (let index = 0; index < 3; index += 1) {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      day: '2-digit',
-      hour: '2-digit',
-      hourCycle: 'h23',
-      minute: '2-digit',
-      month: '2-digit',
-      timeZone,
-      year: 'numeric',
-    }).formatToParts(new Date(guess));
-    const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-    const represented = Date.UTC(
-      Number(value.year),
-      Number(value.month) - 1,
-      Number(value.day),
-      Number(value.hour),
-      Number(value.minute),
-    );
-    guess += desired - represented;
-  }
-  return new Date(guess);
 }
 
 function minuteOfDay(value: string) {
@@ -764,6 +745,9 @@ export async function fetchItineraryDayTimeSuggestions(
   options: {
     candidate?: SuggestedTimeCandidate;
     itemId?: string;
+    durationMinutes?: number | null;
+    localTime?: string;
+    localEndTime?: string;
     schedule?: RequestedSchedule;
     signal?: AbortSignal;
   } = {},
@@ -772,11 +756,20 @@ export async function fetchItineraryDayTimeSuggestions(
   if (options.itemId) query.set('itemId', options.itemId);
   if (options.candidate) {
     query.set('candidate', '1');
+    if (options.candidate.position !== undefined)
+      query.set('candidatePosition', String(options.candidate.position));
     if (options.candidate.tripPlaceId)
       query.set('candidateTripPlaceId', options.candidate.tripPlaceId);
     if (options.candidate.durationMinutes)
       query.set('candidateDurationMinutes', String(options.candidate.durationMinutes));
   }
+  if (options.durationMinutes !== undefined)
+    query.set(
+      'durationMinutes',
+      options.durationMinutes === null ? 'none' : String(options.durationMinutes),
+    );
+  if (options.localTime) query.set('localTime', options.localTime);
+  if (options.localEndTime) query.set('localEndTime', options.localEndTime);
   // Sent so the answer reflects the timing on screen rather than the timing on
   // disk; the editor can ask while a daypart change is still unsaved.
   if (options.schedule) query.set('schedule', options.schedule);
@@ -788,6 +781,22 @@ export async function fetchItineraryDayTimeSuggestions(
     { signal: options.signal },
     auth,
   );
+}
+
+export async function applyItineraryDayTiming(
+  tripId: string,
+  dayId: string,
+  scheduleRevision: string,
+  itemIds: string[],
+) {
+  const auth = await getAuthContext();
+  const result = await itineraryRequest<{ scheduling: SchedulingOutcome }>(
+    `/trips/${tripId}/itinerary/days/${dayId}/timing`,
+    { body: JSON.stringify({ scheduleRevision, itemIds }), method: 'POST' },
+    auth,
+  );
+  publishTimingReview(auth.userId, tripId, result.scheduling);
+  return result;
 }
 
 function createMutation(
@@ -817,6 +826,12 @@ async function queueOrThrow(
 ) {
   if (!canUseOfflineFallback(error)) throw error;
   await queueOfflineMutation(createMutation(userId, tripId, operation));
+  if (
+    'input' in operation &&
+    'timingPolicy' in operation.input &&
+    operation.input.timingPolicy === 'reconcile_flexible'
+  )
+    publishPendingTimingReview(userId, tripId);
 }
 
 async function baseItem(userId: string, tripId: string, itemId: string) {
@@ -836,8 +851,7 @@ async function applyOnlineMutation(
 
 /**
  * Adds a stop to a day. `position` puts it among the day's stops - between
- * two others - rather than at the end; a timed stop still lands where its
- * time puts it. The position travels in the queued operation's own input, so
+ * two others. Planner reconciliation preserves that explicit position. The position travels in the queued operation's own input, so
  * an insert made offline replays as the same insert.
  */
 export async function createItineraryItem(
@@ -865,6 +879,7 @@ export async function createItineraryItem(
       auth,
     );
     await applyOnlineMutation(auth.userId, tripId, operation);
+    publishTimingReview(auth.userId, tripId, result.item.scheduling);
     return result;
   } catch (error) {
     await queueOrThrow(error, auth.userId, tripId, operation);
@@ -893,6 +908,7 @@ export async function updateItineraryItem(
   try {
     const result = await itineraryRequest<{
       item: ItineraryItem;
+      scheduling?: SchedulingOutcome;
       timeZoneConsequence: {
         kind: 'derived_instant_changed';
         previousStartInstant: string;
@@ -904,6 +920,7 @@ export async function updateItineraryItem(
       auth,
     );
     if (operation) await applyOnlineMutation(auth.userId, tripId, operation);
+    publishTimingReview(auth.userId, tripId, result?.scheduling);
     return result;
   } catch (error) {
     if (!operation) throw error;
@@ -942,7 +959,7 @@ export async function deleteItineraryItem(tripId: string, itemId: string) {
 export async function organizeItineraryItem(
   tripId: string,
   itemId: string,
-  input: { itineraryDayId: string | null; position: number },
+  input: { itineraryDayId: string | null; position: number; timingPolicy?: TimingPolicy },
 ) {
   const auth = await getAuthContext();
   const storedBaseItem = await baseItem(auth.userId, tripId, itemId).catch(() => null);
@@ -955,12 +972,13 @@ export async function organizeItineraryItem(
       }
     : null;
   try {
-    const result = await itineraryRequest<void>(
+    const result = await itineraryRequest<{ scheduling: SchedulingOutcome } | undefined>(
       `/trips/${tripId}/itinerary/items/${itemId}/organization`,
       { body: JSON.stringify(input), method: 'PATCH' },
       auth,
     );
     if (operation) await applyOnlineMutation(auth.userId, tripId, operation);
+    publishTimingReview(auth.userId, tripId, result?.scheduling);
     return result;
   } catch (error) {
     if (!operation) throw error;
@@ -1392,4 +1410,14 @@ export async function fetchRainAlternatives(
     { signal: options.signal },
     auth,
   );
+}
+
+export async function readItineraryTimingReview(tripId: string) {
+  const auth = await getAuthContext();
+  return storedTimingReview(auth.userId, tripId);
+}
+
+export async function readItineraryTimingPending(tripId: string) {
+  const auth = await getAuthContext();
+  return storedTimingPending(auth.userId, tripId);
 }

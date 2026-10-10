@@ -16,6 +16,7 @@ import type { TripInfoEntry, TripInfoInput, TripInfoResponse } from '@/lib/trip-
 import type { Trip } from '@/lib/trips/api';
 import type { ArchivedTripWeatherDay } from '@/lib/weather/history';
 import { sumByCurrency } from '@/lib/currency/money';
+import { localPreviewInstant } from '@/lib/itinerary/local-instant';
 import { applyItineraryDayMove } from '@/lib/itinerary/day-move';
 import { itemSortMinute, reslotItemByTime } from '@/lib/itinerary/item-order';
 import { PRIVATE_MEDIA_CACHES } from '@/lib/media/storage-cache-key';
@@ -94,7 +95,11 @@ export type OfflineMutationOperation =
     }
   | {
       baseItem: ItineraryItem;
-      input: { itineraryDayId: string | null; position: number };
+      input: {
+        itineraryDayId: string | null;
+        position: number;
+        timingPolicy?: import('@trove/types').TimingPolicy;
+      };
       itemId: string;
       kind: 'itinerary_item_organize';
     }
@@ -1204,7 +1209,7 @@ function normalizePositions(items: ItineraryItem[]) {
 
 function applySchedule(item: ItineraryItem, schedule: ItineraryScheduleInput) {
   if (schedule.kind === 'exact') {
-    item.dayPart = null;
+    item.dayPart = schedule.dayPart ?? null;
     item.localStartTime = schedule.localTime;
     item.startInstant = null;
     item.timeSemantics = 'floating_local';
@@ -1218,6 +1223,8 @@ function applySchedule(item: ItineraryItem, schedule: ItineraryScheduleInput) {
 
 function applyInput(item: ItineraryItem, input: ItineraryItemInput, itinerary?: Itinerary) {
   const previousDurationMinutes = item.durationMinutes;
+  const previousStart = item.localStartTime;
+  const previousEnd = item.localEndTime;
   if (input.blockType !== undefined) item.blockType = input.blockType;
   if (input.customLabel !== undefined) item.customLabel = input.customLabel?.trim() || null;
   if (input.customLocation !== undefined) {
@@ -1240,17 +1247,26 @@ function applyInput(item: ItineraryItem, input: ItineraryItemInput, itinerary?: 
   if (item.localEndTime && item.localStartTime) {
     const [startHour = 0, startMinute = 0] = item.localStartTime.split(':').map(Number);
     const [endHour = 0, endMinute = 0] = item.localEndTime.split(':').map(Number);
-    item.durationMinutes = (endHour - startHour) * 60 + endMinute - startMinute;
+    const day = itinerary?.days.find((day) => day.id === item.itineraryDayId);
+    const timeZone = item.timeZone ?? day?.defaultTimeZone;
+    item.durationMinutes =
+      day && timeZone
+        ? (localPreviewInstant(day.date, item.localEndTime, timeZone).getTime() -
+            localPreviewInstant(day.date, item.localStartTime, timeZone).getTime()) /
+          60_000
+        : (endHour - startHour) * 60 + endMinute - startMinute;
   } else if (input.localEndTime === null && input.durationMinutes === undefined) {
     item.durationMinutes = null;
   }
-  if (
-    input.durationMinutes !== undefined ||
-    input.localEndTime !== undefined ||
-    item.durationMinutes !== previousDurationMinutes
-  ) {
-    item.durationProvenance = 'user_owned';
+  if (item.localEndTime !== previousEnd || item.durationMinutes !== previousDurationMinutes) {
+    item.durationProvenance = input.durationProvenance ?? 'user_owned';
   }
+  if (previousStart !== item.localStartTime) {
+    item.timeProvenance = item.localStartTime ? (input.timeProvenance ?? 'user_owned') : null;
+    item.timingFlexibility =
+      input.timingFlexibility ?? (input.timeProvenance === 'app_estimated' ? 'flexible' : 'fixed');
+  }
+  if (input.timingFlexibility !== undefined) item.timingFlexibility = input.timingFlexibility;
   item.updatedAt = new Date().toISOString();
 }
 
@@ -1301,7 +1317,7 @@ export function applyOfflineMutation(
         : null,
       dayPart: null,
       durationMinutes: mutation.input.durationMinutes ?? null,
-      durationProvenance: 'user_owned',
+      durationProvenance: mutation.input.durationProvenance ?? 'user_owned',
       id: mutation.clientItemId,
       itineraryDayId: day.id,
       localEndTime: mutation.input.localEndTime ?? null,
@@ -1320,12 +1336,11 @@ export function applyOfflineMutation(
       updatedAt: now,
     };
     applyInput(item, mutation.input, next);
-    // Where the server will put it: at the asked-for position among the day's
-    // stops, then wherever its own time says, exactly as the API orders it.
+    // Reconciliation preserves the asked-for position. Legacy callers retain time ordering.
     const position = mutation.input.position;
     if (position === undefined) day.items.push(item);
     else day.items.splice(Math.min(Math.max(position, 0), day.items.length), 0, item);
-    reslotItemByTime(day.items, item.id);
+    if (mutation.input.timingPolicy !== 'reconcile_flexible') reslotItemByTime(day.items, item.id);
     normalizePositions(day.items);
     return next;
   }
@@ -1347,7 +1362,7 @@ export function applyOfflineMutation(
   if (mutation.kind === 'itinerary_item_update') {
     const before = itemSortMinute(item);
     applyInput(item, mutation.input, next);
-    if (itemSortMinute(item) !== before) {
+    if (mutation.input.timingPolicy !== 'reconcile_flexible' && itemSortMinute(item) !== before) {
       const day = next.days.find((candidate) =>
         candidate.items.some((candidateItem) => candidateItem.id === item.id),
       );

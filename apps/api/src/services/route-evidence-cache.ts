@@ -1,4 +1,4 @@
-import { getPrismaClient } from '@trove/db';
+import { getPrismaClient, type Prisma } from '@trove/db';
 import type { ProviderCacheMissReason } from './provider-usage.js';
 import type { RouteCoordinates, RouteRequest, RouteResult, RoutableTravelMode } from './routes.js';
 
@@ -41,13 +41,14 @@ export function routeCacheKey(
 export async function readCachedRoute(
   request: RouteRequest,
   now = new Date(),
+  client: Pick<Prisma.TransactionClient, 'travelLegCache'> = getPrismaClient(),
 ): Promise<
   { kind: 'hit'; result: RouteResult } | { kind: 'miss'; reason: ProviderCacheMissReason }
 > {
   let leg;
 
   try {
-    leg = await getPrismaClient().travelLegCache.findUnique({
+    leg = await client.travelLegCache.findUnique({
       where: {
         travel_leg_cache_leg: routeCacheKey(request.origin, request.destination, request.mode),
       },

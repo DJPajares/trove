@@ -43,8 +43,13 @@ export function registerItineraryRoutes(app: FastifyInstance) {
   );
   app.get(
     '/trips/:tripId/itinerary/days/:itineraryDayId/time-suggestions',
-    providerBacked,
+    authenticated,
     timeSuggestionControllers.getDayTimeSuggestions,
+  );
+  app.post(
+    '/trips/:tripId/itinerary/days/:itineraryDayId/timing',
+    authenticated,
+    timeSuggestionControllers.applyDayTiming,
   );
   // Stored evidence only, so no provider fan-out: an ordinary authenticated read.
   app.get('/trips/:tripId/place-hours', authenticated, tripPlaceHoursControllers.getTripPlaceHours);

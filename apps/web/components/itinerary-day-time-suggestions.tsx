@@ -18,7 +18,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import {
   fetchItineraryDayTimeSuggestions,
-  updateItineraryItem,
+  applyItineraryDayTiming,
   type ItineraryDay,
   type ItineraryItem,
 } from '@/lib/itinerary/api';
@@ -26,8 +26,8 @@ import {
   defaultSelection,
   describeSuggestedTime,
   formatSuggestedClock,
+  formatSuggestedDuration,
   isApplicable,
-  orderedUpdates,
   untimedItems,
   type DayTimeRow,
   type ItineraryTranslator,
@@ -59,6 +59,7 @@ export function ItineraryDayTimeSuggestions({
   const locale = useLocale();
   const { preferences } = usePreferences();
   const [status, setStatus] = useState<'applying' | 'error' | 'loading' | 'ready'>('loading');
+  const [revision, setRevision] = useState<string>();
   const [rows, setRows] = useState<DayTimeRow[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const describe = t as unknown as ItineraryTranslator;
@@ -77,6 +78,7 @@ export function ItineraryDayTimeSuggestions({
           const suggestion = byItem.get(item.id);
           return suggestion ? [{ itemId: item.id, name: itemName(item), suggestion }] : [];
         });
+        setRevision(response.scheduleRevision);
         setRows(next);
         setSelected(defaultSelection(next));
         setStatus('ready');
@@ -92,12 +94,8 @@ export function ItineraryDayTimeSuggestions({
   async function apply() {
     setStatus('applying');
     try {
-      // Earliest first, so the day settles into its order in one pass.
-      for (const update of orderedUpdates(rows, selected)) {
-        await updateItineraryItem(tripId, update.itemId, {
-          schedule: { kind: 'exact', localTime: update.localTime },
-        });
-      }
+      if (!revision) throw new Error('missing_schedule_revision');
+      await applyItineraryDayTiming(tripId, day.id, revision, [...selected]);
       await onApplied();
       onOpenChange(false);
     } catch {
@@ -137,7 +135,7 @@ export function ItineraryDayTimeSuggestions({
                       <p className="truncate text-sm font-medium">{row.name}</p>
                       <p className="mt-0.5 text-sm text-muted-foreground">
                         {canApply && localTime
-                          ? `${formatSuggestedClock(localTime, locale, preferences.timeFormat === '12h')} · `
+                          ? `${formatSuggestedClock(localTime, locale, preferences.timeFormat === '12h')}${row.suggestion.localEndTime ? `–${formatSuggestedClock(row.suggestion.localEndTime, locale, preferences.timeFormat === '12h')}` : ''} · ${formatSuggestedDuration(row.suggestion.durationMinutes ?? 0, t)} · `
                           : ''}
                         {describeSuggestedTime(row.suggestion, describe)}
                       </p>

@@ -1,6 +1,8 @@
 import { expect, test } from 'vitest';
 
 import {
+  acceptSuggestedSlot,
+  manualTimingPatch,
   buildStopInput,
   durationMinutesFromParts,
   durationParts,
@@ -208,4 +210,54 @@ test('the timing sheet saves only timing', () => {
     localEndTime: null,
     schedule: { kind: 'exact', localTime: '12:00' },
   });
+});
+
+test('accepting a slot retains estimated evidence and manual changes invalidate its revision', () => {
+  const initial = { ...stopEditorForm(null), schedule: 'morning' as const };
+  const accepted = acceptSuggestedSlot(
+    initial,
+    {
+      itemId: 'candidate',
+      status: 'ok',
+      localTime: '10:30',
+      localEndTime: '12:00',
+      durationMinutes: 90,
+      durationProvenance: 'app_estimated',
+      timeZone: 'Asia/Singapore',
+      reasons: [],
+      caveats: [],
+    },
+    'revision',
+  );
+  expect(accepted).toMatchObject({
+    exactTime: '10:30',
+    durationMinutes: '90',
+    timingFlexibility: 'flexible',
+    timeProvenance: 'app_estimated',
+    durationProvenance: 'app_estimated',
+    dayPartIntent: 'morning',
+    scheduleRevision: 'revision',
+  });
+  const edited = manualTimingPatch(accepted, { exactTime: '10:45' });
+  expect(edited).toMatchObject({
+    timingFlexibility: 'fixed',
+    timeProvenance: 'user_owned',
+    durationProvenance: 'app_estimated',
+    scheduleRevision: undefined,
+  });
+  expect(manualTimingPatch(accepted, { durationMinutes: '120' })).toMatchObject({
+    durationProvenance: 'user_owned',
+    scheduleRevision: undefined,
+  });
+});
+
+test('duration ends render across a daylight-saving jump using the stored instant', () => {
+  expect(
+    itineraryLocalEndTime({
+      localStartTime: '01:30',
+      durationMinutes: 60,
+      startInstant: '2026-03-08T06:30:00Z',
+      timeZone: 'America/New_York',
+    }),
+  ).toBe('03:30');
 });

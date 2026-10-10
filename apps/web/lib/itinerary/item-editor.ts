@@ -1,3 +1,4 @@
+import type { ItineraryDayTimeSuggestion, TimingFlexibility, TimingProvenance } from '@trove/types';
 import type { ProviderSuggestion } from '@/lib/saved/api';
 import { PROVIDER_SEARCH_RESULT_LIMIT } from '../saved/search-results';
 
@@ -103,6 +104,11 @@ export type StopEditorForm = ItineraryIdentity & {
   notes: string;
   schedule: StopEditorSchedule;
   timingMode: 'duration' | 'end_time';
+  timingFlexibility?: TimingFlexibility;
+  timeProvenance?: TimingProvenance;
+  durationProvenance?: TimingProvenance;
+  dayPartIntent?: ItineraryItem['dayPart'];
+  scheduleRevision?: string;
 };
 
 /** The custom length's own boxes, which can hold text the length does not yet read as. */
@@ -117,11 +123,24 @@ export function stopEditorForm(
     | (Pick<
         ItineraryItem,
         'customLabel' | 'dayPart' | 'durationMinutes' | 'localEndTime' | 'localStartTime' | 'notes'
-      > & { tripPlace: { id: string } | null })
+      > & {
+        tripPlace: { id: string } | null;
+        timingFlexibility?: TimingFlexibility;
+        timeProvenance?: TimingProvenance | null;
+        durationProvenance?: TimingProvenance;
+      })
     | null,
   tripPlaceId?: string | null,
 ): StopEditorForm {
   return {
+    ...(item?.timingFlexibility
+      ? {
+          timingFlexibility: item.timingFlexibility,
+          timeProvenance: item.timeProvenance ?? 'user_owned',
+          durationProvenance: item.durationProvenance,
+          dayPartIntent: item.dayPart,
+        }
+      : {}),
     customLabel: item?.customLabel ?? '',
     durationMinutes: item?.localEndTime ? '' : (item?.durationMinutes?.toString() ?? ''),
     exactTime: item?.localStartTime ?? '',
@@ -198,12 +217,22 @@ export function buildStopInput(
     notes: form.notes.trim() || null,
     schedule:
       form.schedule === 'exact'
-        ? { kind: 'exact', localTime: form.exactTime }
+        ? {
+            kind: 'exact',
+            localTime: form.exactTime,
+            ...(form.timingFlexibility === 'flexible' && form.dayPartIntent
+              ? { dayPart: form.dayPartIntent }
+              : {}),
+          }
         : form.schedule === 'none'
           ? { kind: 'none' }
           : { dayPart: form.schedule, kind: 'day_part' },
     tripPlaceId: form.tripPlaceId || null,
   };
+  if (form.timingFlexibility) input.timingFlexibility = form.timingFlexibility;
+  if (form.timeProvenance) input.timeProvenance = form.timeProvenance;
+  if (form.durationProvenance) input.durationProvenance = form.durationProvenance;
+  if (form.scheduleRevision) input.scheduleRevision = form.scheduleRevision;
   if (options.identityChanged !== undefined) {
     Object.assign(input, itineraryIdentityLegacyPatch(options.identityChanged));
   }
@@ -216,5 +245,58 @@ export function stopTimingInput(input: ItineraryItemInput): ItineraryItemInput {
     durationMinutes: input.durationMinutes ?? null,
     localEndTime: input.localEndTime ?? null,
     schedule: input.schedule ?? { kind: 'none' },
+    ...(input.timingFlexibility ? { timingFlexibility: input.timingFlexibility } : {}),
+    ...(input.timeProvenance ? { timeProvenance: input.timeProvenance } : {}),
+    ...(input.durationProvenance ? { durationProvenance: input.durationProvenance } : {}),
+    ...(input.scheduleRevision ? { scheduleRevision: input.scheduleRevision } : {}),
+  };
+}
+
+export function acceptSuggestedSlot(
+  form: StopEditorForm,
+  slot: ItineraryDayTimeSuggestion,
+  scheduleRevision?: string,
+): StopEditorForm {
+  if (!slot.durationMinutes) return form;
+  if (slot.status !== 'ok' || !slot.localTime)
+    return {
+      ...form,
+      durationMinutes: String(slot.durationMinutes),
+      durationProvenance: slot.durationProvenance,
+      scheduleRevision: undefined,
+    };
+
+  return {
+    ...form,
+    dayPartIntent:
+      form.schedule !== 'exact' && form.schedule !== 'none' ? form.schedule : form.dayPartIntent,
+    exactTime: slot.localTime,
+    durationMinutes: String(slot.durationMinutes),
+    localEndTime: '',
+    timingMode: 'duration',
+    schedule: 'exact',
+    timingFlexibility: 'flexible',
+    timeProvenance: 'app_estimated',
+    durationProvenance: slot.durationProvenance,
+    scheduleRevision,
+  };
+}
+
+export function manualTimingPatch(
+  form: StopEditorForm,
+  patch: Partial<StopEditorForm>,
+): StopEditorForm {
+  const startChanged =
+    (patch.exactTime !== undefined && patch.exactTime !== form.exactTime) ||
+    (patch.schedule !== undefined && patch.schedule !== form.schedule);
+  const durationChanged =
+    (patch.durationMinutes !== undefined && patch.durationMinutes !== form.durationMinutes) ||
+    (patch.localEndTime !== undefined && patch.localEndTime !== form.localEndTime);
+  return {
+    ...form,
+    ...patch,
+    scheduleRevision: undefined,
+    ...(startChanged ? { timeProvenance: 'user_owned', timingFlexibility: 'fixed' } : {}),
+    ...(durationChanged ? { durationProvenance: 'user_owned' } : {}),
   };
 }

@@ -75,13 +75,20 @@ export function formatLocalTime(value: Date | null) {
   return value?.toISOString().slice(11, 16) ?? null;
 }
 
-export function durationMinutesUntilLocalEnd(startTime: string | null, endTime: string) {
+export function durationMinutesUntilLocalEnd(
+  startTime: string | null,
+  endTime: string,
+  context?: { date: string; timeZone: string },
+) {
   if (!startTime || !LOCAL_TIME_PATTERN.test(startTime) || !LOCAL_TIME_PATTERN.test(endTime)) {
     throw new Error('invalid_local_end_time');
   }
 
   const durationMinutes =
-    (parseLocalTime(endTime).getTime() - parseLocalTime(startTime).getTime()) / 60_000;
+    (context
+      ? floatingLocalTimeToInstant(context.date, endTime, context.timeZone).getTime() -
+        floatingLocalTimeToInstant(context.date, startTime, context.timeZone).getTime()
+      : parseLocalTime(endTime).getTime() - parseLocalTime(startTime).getTime()) / 60_000;
   if (durationMinutes <= 0) throw new Error('invalid_local_end_time');
 
   return durationMinutes;

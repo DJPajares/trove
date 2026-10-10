@@ -7,7 +7,7 @@
  * and they are reached once where search is reached again and again. Notifications
  * and appearance follow, with the account/profile control at the bottom.
  */
-export const floatingActionOrder = ['search', 'notifications', 'appearance', 'account'] as const;
+export const floatingActionOrder = ['search', 'appearance', 'notifications', 'account'] as const;
 
 export type FloatingAction = (typeof floatingActionOrder)[number];
 

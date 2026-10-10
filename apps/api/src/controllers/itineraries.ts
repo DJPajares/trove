@@ -52,7 +52,11 @@ const moveDaySchema = z
   })
   .strict();
 const organizeItemSchema = z
-  .object({ itineraryDayId: z.uuid().nullable(), position: z.number().int().min(0) })
+  .object({
+    itineraryDayId: z.uuid().nullable(),
+    position: z.number().int().min(0),
+    timingPolicy: z.enum(['preserve', 'reconcile_flexible']).optional(),
+  })
   .strict();
 const dayBaseSchema = z
   .object({
@@ -79,6 +83,7 @@ const scheduleSchema = z.discriminatedUnion('kind', [
     .strict(),
   z
     .object({
+      dayPart: z.enum(['morning', 'afternoon', 'evening', 'anytime']).optional(),
       kind: z.literal('exact'),
       localTime: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
     })
@@ -95,6 +100,14 @@ const plannedCostSchema = z
   })
   .strict();
 const itemFields = {
+  timingPolicy: z.enum(['preserve', 'reconcile_flexible']).optional(),
+  timingFlexibility: z.enum(['fixed', 'flexible']).optional(),
+  timeProvenance: z.enum(['user_owned', 'ai_estimated', 'app_estimated']).optional(),
+  durationProvenance: z.enum(['user_owned', 'ai_estimated', 'app_estimated']).optional(),
+  scheduleRevision: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
   blockType: z
     .enum(['activity', 'free_time', 'meeting', 'transport', 'work'])
     .nullable()
@@ -275,14 +288,14 @@ export function createItineraryControllers() {
       if (!params.success || !body.success)
         return reply.code(400).send({ code: 'invalid_itinerary_item' });
       try {
-        await organizeItineraryItem(
+        const result = await organizeItineraryItem(
           userId,
           params.data.tripId,
           params.data.itemId,
           body.data,
           getExpectedUpdatedAt(request),
         );
-        return reply.code(204).send();
+        return result ? reply.send(result) : reply.code(204).send();
       } catch (error) {
         return handleError(reply, error);
       }

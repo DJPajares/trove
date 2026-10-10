@@ -2,6 +2,8 @@ type TimedItineraryItem = {
   durationMinutes: number | null;
   localEndTime?: string | null;
   localStartTime: string | null;
+  startInstant?: string | null;
+  timeZone?: string | null;
 };
 
 export function itineraryLocalEndTime(item: TimedItineraryItem) {
@@ -9,6 +11,16 @@ export function itineraryLocalEndTime(item: TimedItineraryItem) {
   if (item.localEndTime) return item.localEndTime;
   if (!item.durationMinutes) return null;
 
+  if (item.startInstant && item.timeZone) {
+    const end = new Date(Date.parse(item.startInstant) + item.durationMinutes * 60_000);
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+      timeZone: item.timeZone,
+    }).formatToParts(end);
+    return `${parts.find((part) => part.type === 'hour')!.value}:${parts.find((part) => part.type === 'minute')!.value}`;
+  }
   const [hour = 0, minute = 0] = item.localStartTime.split(':').map(Number);
   const totalMinutes = (hour * 60 + minute + item.durationMinutes) % (24 * 60);
 

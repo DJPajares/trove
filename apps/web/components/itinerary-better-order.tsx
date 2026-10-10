@@ -77,13 +77,15 @@ export function ItineraryBetterOrder({
     if (!day || proposal?.status !== 'ok') return;
     setStatus('applying');
     try {
-      for (const move of reorderMoves(
+      const moves = reorderMoves(
         day.items.map((item) => item.id),
         proposal.order,
-      )) {
+      );
+      for (const [index, move] of moves.entries()) {
         await organizeItineraryItem(tripId, move.itemId, {
           itineraryDayId: day.id,
           position: move.position,
+          timingPolicy: index === moves.length - 1 ? 'reconcile_flexible' : 'preserve',
         });
       }
       await onApplied();

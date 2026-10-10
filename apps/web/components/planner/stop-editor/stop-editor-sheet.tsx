@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { CircleAlert, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useMemo, useState, type FormEvent } from 'react';
 
 import { useSuggestedTime } from '@/components/itinerary-suggested-time';
 import { useOnlineStatus } from '@/components/trip-sync-status';
@@ -28,6 +28,8 @@ import {
   updateItineraryItem,
 } from '@/lib/itinerary/api';
 import {
+  acceptSuggestedSlot,
+  manualTimingPatch,
   buildStopInput,
   type ItineraryIdentityChoice,
   itineraryIdentityChoice,
@@ -61,7 +63,10 @@ export type StopEditorRequest =
     }
   | { dayId: string; focus?: 'place' | 'timing'; item: ItineraryItem; kind: 'edit' };
 
-export type StopEditorSaved = { timeZoneConsequence: boolean };
+export type StopEditorSaved = {
+  timeZoneConsequence: boolean;
+  scheduling?: import('@trove/types').SchedulingOutcome;
+};
 
 function itineraryTripPlaceFrom(tripPlace: TripPlace): ItineraryTripPlace {
   return {
@@ -120,8 +125,10 @@ function StopEditorBody({
   const [saving, setSaving] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [added, setAdded] = useState<ItineraryTripPlace[]>([]);
-  const suggestedTime = useSuggestedTime(tripId, (localTime) => {
-    setForm((current) => ({ ...current, exactTime: localTime, schedule: 'exact' }));
+  const timingTouched = useRef(false);
+  const suggestedTime = useSuggestedTime(tripId, (slot, revision) => {
+    setForm((current) => acceptSuggestedSlot(current, slot, revision));
+    setTimingExpanded(true);
     setFormError(null);
   });
 
@@ -155,14 +162,25 @@ function StopEditorBody({
   // the day - so it is not offered there; nor offline, where there is no day as
   // the server holds it to ask about.
   const suggest =
-    online && !(request.kind === 'create' && request.insert)
+    online && !editing?.timingProtected
       ? {
           loading: suggestedTime.loading,
           message: suggestedTime.message,
+          suggestion: suggestedTime.suggestion,
+          onApply: suggestedTime.apply,
           onRequest: () =>
             void suggestedTime.request(
               request.kind === 'edit'
-                ? { dayId: request.dayId, itemId: request.item.id, schedule: form.schedule }
+                ? {
+                    dayId: request.dayId,
+                    itemId: request.item.id,
+                    schedule: form.schedule,
+                    durationMinutes: form.durationMinutes
+                      ? Number(form.durationMinutes)
+                      : undefined,
+                    localTime: form.exactTime || undefined,
+                    localEndTime: form.localEndTime || undefined,
+                  }
                 : {
                     candidate: {
                       durationMinutes:
@@ -170,16 +188,45 @@ function StopEditorBody({
                           ? Number(form.durationMinutes)
                           : null,
                       tripPlaceId: form.tripPlaceId || null,
+                      position: request.insert?.position,
                     },
                     dayId: request.dayId,
                     schedule: form.schedule,
+                    localTime: form.exactTime || undefined,
+                    localEndTime: form.localEndTime || undefined,
                   },
             ),
         }
       : null;
 
+  useEffect(() => {
+    if (!online || request.kind !== 'create' || !form.tripPlaceId || timingTouched.current) return;
+    setTimingExpanded(true);
+    void suggestedTime.request({
+      dayId: request.dayId,
+      schedule: form.schedule,
+      candidate: {
+        tripPlaceId: form.tripPlaceId,
+        durationMinutes: form.durationMinutes ? Number(form.durationMinutes) : null,
+        position: request.insert?.position,
+      },
+      autoApply: true,
+    });
+    return suggestedTime.reset;
+    // Initial identity selection prefills once; manual timing edits own subsequent values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.tripPlaceId, online, request.dayId]);
+
   function choose(choice: ItineraryIdentityChoice) {
-    setForm((current) => ({ ...current, ...itineraryIdentityChoice(current, choice) }));
+    suggestedTime.reset();
+    setForm((current) => ({
+      ...current,
+      ...itineraryIdentityChoice(current, choice),
+      scheduleRevision: undefined,
+      ...(request.kind === 'create' && !timingTouched.current
+        ? { exactTime: '', schedule: 'none' as const, durationMinutes: '' }
+        : {}),
+    }));
     if (editing) setIdentityChanged(true);
     setPickerOpen(choice.kind === 'clear');
     setFormError(null);
@@ -192,8 +239,10 @@ function StopEditorBody({
       exactTime: '',
       localEndTime: '',
       schedule: 'none',
+      scheduleRevision: undefined,
       timingMode: 'duration',
     }));
+    timingTouched.current = true;
     setTimingExpanded(false);
     suggestedTime.reset();
     setFormError(null);
@@ -210,21 +259,29 @@ function StopEditorBody({
     setFormError(null);
     try {
       if (request.kind === 'edit') {
-        const result = await updateItineraryItem(tripId, request.item.id, built.input);
-        await onSaved({ timeZoneConsequence: Boolean(result.timeZoneConsequence) });
+        const result = await updateItineraryItem(tripId, request.item.id, {
+          ...built.input,
+          timingPolicy: 'reconcile_flexible',
+        });
+        await onSaved({
+          timeZoneConsequence: Boolean(result.timeZoneConsequence),
+          scheduling: result.scheduling,
+        });
       } else {
-        await createItineraryItem(
+        const result = await createItineraryItem(
           tripId,
-          { ...built.input, itineraryDayId: request.dayId },
+          { ...built.input, itineraryDayId: request.dayId, timingPolicy: 'reconcile_flexible' },
           { position: request.insert?.position },
         );
-        await onSaved({ timeZoneConsequence: false });
+        await onSaved({ timeZoneConsequence: false, scheduling: result.item.scheduling });
       }
     } catch (error) {
       setFormError(
         error instanceof ItineraryApiError && error.code === 'invalid_local_end_time'
           ? t('endTimeError')
-          : t('saveError'),
+          : error instanceof ItineraryApiError && error.code === 'itinerary_schedule_conflict'
+            ? t('connectedTiming.stale')
+            : t('saveError'),
       );
     } finally {
       setSaving(false);
@@ -291,12 +348,15 @@ function StopEditorBody({
                   expanded={timingExpanded}
                   form={form}
                   onChange={(patch) => {
-                    setForm((current) => ({ ...current, ...patch }));
+                    timingTouched.current = true;
+                    suggestedTime.reset();
+                    setForm((current) => manualTimingPatch(current, patch));
                     setFormError(null);
                   }}
                   onCustomDurationChange={setCustomDuration}
                   onExpand={() => setTimingExpanded(true)}
                   onRemove={removeTiming}
+                  protectedTiming={editing?.timingProtected}
                   suggest={suggest}
                 />
                 <Field>
@@ -335,7 +395,10 @@ function StopEditorBody({
             <Button disabled={saving} onClick={onClose} type="button" variant="outline">
               {t('cancel')}
             </Button>
-            <Button disabled={saving || selecting || !hasIdentity} type="submit">
+            <Button
+              disabled={saving || selecting || suggestedTime.loading || !hasIdentity}
+              type="submit"
+            >
               {saving ? t('saving') : editing ? t('save') : plannerT('add')}
             </Button>
           </div>

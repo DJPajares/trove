@@ -11,9 +11,17 @@ export function describeSuggestedTime(
   suggestion: ItineraryDayTimeSuggestion,
   t: ItineraryTranslator,
 ): string {
-  if (suggestion.status === 'no_feasible_time') return t('suggestedTime.none');
+  if (suggestion.status === 'no_feasible_time')
+    return suggestion.blockedBy[0]
+      ? t(`connectedTiming.issue.${suggestion.blockedBy[0]}`)
+      : t('suggestedTime.none');
   // Section 29.4: say it cannot, without itemising what was missing.
-  if (suggestion.status === 'insufficient_evidence') return t('suggestedTime.unavailable');
+  if (suggestion.status === 'insufficient_evidence')
+    return ['DURATION_UNKNOWN', 'TRAVEL_UNKNOWN', 'CONTEXT_UNKNOWN'].includes(
+      suggestion.missing[0] ?? '',
+    )
+      ? t(`connectedTiming.issue.${suggestion.missing[0]}`)
+      : t('suggestedTime.unavailable');
 
   // The last constraint that actually moved the clock explains the answer best.
   // The day start is only a floor, and the following-item check validates the
@@ -22,7 +30,10 @@ export function describeSuggestedTime(
     (reason) => reason.code !== 'DAY_START' && reason.code !== 'BEFORE_FIXED_ITEM',
   );
   const reason = moved.at(-1);
-  const caveat = suggestion.caveats[0];
+  const caveat =
+    ['TIGHT_TRANSITION', 'OPENING_HOURS_UNKNOWN', 'TRAVEL_ESTIMATED', 'DURATION_ESTIMATED'].find(
+      (code) => suggestion.caveats.includes(code),
+    ) ?? suggestion.caveats[0];
 
   return [
     reason ? t(`suggestedTime.reason.${reason.code}`) : t('suggestedTime.applied'),
@@ -77,4 +88,20 @@ export function formatSuggestedClock(localTime: string, locale: string, hour12: 
     minute: '2-digit',
     timeZone: 'UTC',
   }).format(new Date(Date.UTC(2000, 0, 1, hour, minute)));
+}
+
+export function formatSuggestedDuration(
+  minutes: number,
+  t: (key: string, values: Record<string, number>) => string,
+) {
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return t(
+    hours
+      ? remainder
+        ? 'connectedTiming.hoursMinutes'
+        : 'connectedTiming.hours'
+      : 'connectedTiming.minutes',
+    { hours, minutes: remainder || (hours ? 0 : minutes) },
+  );
 }

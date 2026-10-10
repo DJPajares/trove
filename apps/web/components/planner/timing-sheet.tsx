@@ -19,6 +19,8 @@ import {
 } from '@/components/ui/sheet';
 import { ItineraryApiError, type ItineraryItem, updateItineraryItem } from '@/lib/itinerary/api';
 import {
+  acceptSuggestedSlot,
+  manualTimingPatch,
   buildStopInput,
   stopEditorCustomDuration,
   stopEditorForm,
@@ -50,8 +52,8 @@ function TimingBody({
   const [customDuration, setCustomDuration] = useState(() => stopEditorCustomDuration(form));
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const suggestedTime = useSuggestedTime(tripId, (localTime) => {
-    setForm((current) => ({ ...current, exactTime: localTime, schedule: 'exact' }));
+  const suggestedTime = useSuggestedTime(tripId, (slot, revision) => {
+    setForm((current) => acceptSuggestedSlot(current, slot, revision));
     setFormError(null);
   });
 
@@ -65,13 +67,21 @@ function TimingBody({
     setSaving(true);
     setFormError(null);
     try {
-      const result = await updateItineraryItem(tripId, item.id, stopTimingInput(built.input));
-      await onSaved({ timeZoneConsequence: Boolean(result.timeZoneConsequence) });
+      const result = await updateItineraryItem(tripId, item.id, {
+        ...stopTimingInput(built.input),
+        timingPolicy: 'reconcile_flexible',
+      });
+      await onSaved({
+        timeZoneConsequence: Boolean(result.timeZoneConsequence),
+        scheduling: result.scheduling,
+      });
     } catch (error) {
       setFormError(
         error instanceof ItineraryApiError && error.code === 'invalid_local_end_time'
           ? t('endTimeError')
-          : t('saveError'),
+          : error instanceof ItineraryApiError && error.code === 'itinerary_schedule_conflict'
+            ? t('connectedTiming.stale')
+            : t('saveError'),
       );
     } finally {
       setSaving(false);
@@ -98,7 +108,8 @@ function TimingBody({
               expanded
               form={form}
               onChange={(patch) => {
-                setForm((current) => ({ ...current, ...patch }));
+                suggestedTime.reset();
+                setForm((current) => manualTimingPatch(current, patch));
                 setFormError(null);
               }}
               onCustomDurationChange={setCustomDuration}
@@ -110,20 +121,29 @@ function TimingBody({
                   exactTime: '',
                   localEndTime: '',
                   schedule: 'none',
+                  scheduleRevision: undefined,
                   timingMode: 'duration',
                 }));
                 suggestedTime.reset();
               }}
+              protectedTiming={item.timingProtected}
               suggest={
-                online
+                online && !item.timingProtected
                   ? {
                       loading: suggestedTime.loading,
                       message: suggestedTime.message,
+                      suggestion: suggestedTime.suggestion,
+                      onApply: suggestedTime.apply,
                       onRequest: () =>
                         void suggestedTime.request({
                           dayId,
                           itemId: item.id,
                           schedule: form.schedule,
+                          durationMinutes: form.durationMinutes
+                            ? Number(form.durationMinutes)
+                            : undefined,
+                          localTime: form.exactTime || undefined,
+                          localEndTime: form.localEndTime || undefined,
                         }),
                     }
                   : null

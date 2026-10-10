@@ -68,7 +68,9 @@ export function dayFacts(
   const planned =
     day.items.length > 0 && durations.every((minutes) => minutes !== null)
       ? {
-          approximate: day.items.some((item) => item.durationProvenance === 'ai_estimated'),
+          approximate: day.items.some((item) =>
+            ['ai_estimated', 'app_estimated'].includes(item.durationProvenance ?? ''),
+          ),
           minutes: durations.reduce<number>((total, minutes) => total + (minutes ?? 0), 0),
         }
       : null;

@@ -71,7 +71,7 @@ test('the explanation is the reason that moved the clock, then the first caveat'
   expect(describeSuggestedTime(ok('x', '10:00', 'OPENING_HOURS'), t)).toBe(
     'suggestedTime.reason.OPENING_HOURS',
   );
-  expect(describeSuggestedTime(none('x'), t)).toBe('suggestedTime.none');
+  expect(describeSuggestedTime(none('x'), t)).toBe('connectedTiming.issue.OPENING_HOURS');
   const withCaveat = {
     ...ok('x', '10:00'),
     caveats: ['TRAVEL_ESTIMATED'],

@@ -41,6 +41,8 @@ export type ItineraryDayItemRecord = {
   startInstant: Date | null;
   timeSemantics: string | null;
   timeProvenance: string | null;
+  timingFlexibility?: string | null;
+  travelStatus?: string;
   timeZone: string | null;
   tripPlaceId: string | null;
 };
@@ -159,14 +161,21 @@ export function toDayEvidenceItems(
           ? null
           : {
               minutes: item.durationMinutes,
-              source: item.durationProvenance === 'AI_ESTIMATED' ? 'ESTIMATED' : 'USER_OWNED',
+              source: ['AI_ESTIMATED', 'APP_ESTIMATED'].includes(item.durationProvenance ?? '')
+                ? 'ESTIMATED'
+                : 'USER_OWNED',
             },
       // AI-planned exact starts remain movable estimates. A traveller-owned
       // local time, a reservation, or an authoritative instant is fixed.
       fixed:
         item.reservationCount > 0 ||
         item.timeSemantics === 'AUTHORITATIVE_INSTANT' ||
-        (item.timeSemantics === 'FLOATING_LOCAL' && item.timeProvenance !== 'AI_ESTIMATED'),
+        item.travelStatus === 'COMPLETED' ||
+        item.travelStatus === 'SKIPPED' ||
+        (startMinutes !== null &&
+          (item.timingFlexibility === 'FIXED' ||
+            (item.timingFlexibility !== 'FLEXIBLE' &&
+              !['AI_ESTIMATED', 'APP_ESTIMATED'].includes(item.timeProvenance ?? '')))),
       id: item.id,
       inboundTravel:
         travelMinutes === null
@@ -181,7 +190,9 @@ export function toDayEvidenceItems(
           ? null
           : {
               minutes: startMinutes,
-              source: item.timeProvenance === 'AI_ESTIMATED' ? 'ESTIMATED' : 'USER_OWNED',
+              source: ['AI_ESTIMATED', 'APP_ESTIMATED'].includes(item.timeProvenance ?? '')
+                ? 'ESTIMATED'
+                : 'USER_OWNED',
             },
       // Exact and coarse timings are mutually exclusive, regardless of whether
       // the exact start came from the traveller or the AI planning pass.

@@ -172,10 +172,19 @@ enum ItineraryTimeSemantics {
 }
 
 enum ItineraryTimeProvenance {
-  USER_OWNED   @map("user_owned")
-  AI_ESTIMATED @map("ai_estimated")
+  USER_OWNED    @map("user_owned")
+  AI_ESTIMATED  @map("ai_estimated")
+  APP_ESTIMATED @map("app_estimated")
 
   @@map("itinerary_time_provenance")
+  @@schema("trove")
+}
+
+enum ItineraryTimingFlexibility {
+  FIXED    @map("fixed")
+  FLEXIBLE @map("flexible")
+
+  @@map("itinerary_timing_flexibility")
   @@schema("trove")
 }
 
@@ -189,8 +198,9 @@ enum ItineraryTravelStatus {
 }
 
 enum ItineraryDurationProvenance {
-  USER_OWNED   @map("user_owned")
-  AI_ESTIMATED @map("ai_estimated")
+  USER_OWNED    @map("user_owned")
+  AI_ESTIMATED  @map("ai_estimated")
+  APP_ESTIMATED @map("app_estimated")
 
   @@map("itinerary_duration_provenance")
   @@schema("trove")
@@ -1058,6 +1068,7 @@ model ItineraryItem {
   localEndTime            DateTime?                   @map("local_end_time") @db.Time(0)
   startInstant            DateTime?                   @map("start_instant") @db.Timestamptz(3)
   timeSemantics           ItineraryTimeSemantics?     @map("time_semantics")
+  timingFlexibility       ItineraryTimingFlexibility? @map("timing_flexibility")
   timeProvenance          ItineraryTimeProvenance?    @map("time_provenance")
   timeZone                String?                     @map("time_zone")
   timeZoneSource          ItemTimeZoneSource?         @map("time_zone_source")

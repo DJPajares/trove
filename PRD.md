@@ -1087,7 +1087,7 @@ Relationship rules:
 - Custom Place → ensure Trip Place exists, then create itinerary item.
 - Plain custom label → create label-only itinerary item with no Place requirement.
 
-None of these itinerary flows automatically create a global Saved relationship.
+None of these itinerary flows automatically create a global Saved relationship. Planner additions, including quick-add and first/between/last insertion, use the connected timing rules in §17.2.2. An explicit insertion position remains authoritative.
 
 ## 16.3 Global Search
 
@@ -1142,6 +1142,18 @@ The itinerary is the primary planning workspace and should stay readable before 
 - Item actions are grouped in a single per-item menu rather than rendered as a permanent row of controls. The menu behaves identically on every form factor, so no action depends on hover.
 - A linked stop may replace its quiet category tile with a compact exact editorial photograph for recognition. Resolve only the viewed day's rows near the viewport, using canonical Place names and shared reference caches; generic/area imagery and free-text activity captions do not qualify. Loading, missing matches, offline use and image failures retain the same category-tile footprint. Provider and named Custom Places follow the same rule; timeline structure, metadata and actions remain primary.
 - The day map frames the day's own locations. Other trip Places stay visible as markers because knowing what is nearby is useful, but they must not drag the viewport away from where the traveller is actually going. A day with nothing located yet frames everything instead of framing nothing.
+
+## 17.2.2 Connected Planner Timing
+
+One deterministic, cache-only scheduling engine proposes complete start, duration and end slots and reconciles Planner additions and item moves. It uses actual itinerary order, day availability, retained daypart intent, explicit durations/end times, existing place-type visit estimates, applicable split opening intervals, reservations, authoritative journeys and resolved start/end stays. Every proposed connection is rebuilt for the proposed order, including both insertion legs and stay legs. Cached routes take precedence over existing coordinate estimates; expired evidence becomes unknown. These paths make zero provider or model requests, including on cold caches.
+
+Preserve workable flexible times and gaps. Recalculate the moved stop, then surrounding flexible stops only as needed; reassess source and destination days for cross-day moves. Explicit positions win over time sorting. Fixed times, bookings, authoritative transport and completed/skipped history never change automatically; incompatible booking dates/times receive a warning. Never shorten a visit or infer duration from available space. Missing duration or required travel leaves timing for review. Unknown hours qualify a suggestion instead of implying closure. No-fit insertions stay at the requested position without exact timing. Infeasible moved flexible stops lose their stale exact slot, retain duration/daypart intent, and receive a conflict. Unresolvable blocks preserve neighboring times. Reserve return travel within availability; round new slots to five minutes with the existing 08:00 fallback, which alone is insufficient evidence. Prefer 15 minutes of slack before fixed activities, accept tighter feasible connections with a notice, and never shift workable stops solely to add slack.
+
+Both editors combine timing into **When and how long?**. **Suggest timing** previews a complete range and duration with one useful explanation and consequential limitations. **Use this slot** fills editable form state; Save persists. Supported Place additions prefill their proposed slot, while manual edits invalidate pending previews and take precedence. A labelled **Flexible / Fixed** Select describes whether Trove may adjust timing. Suggested slots default to Flexible; manually entered exact times default to Fixed. Booked/authoritative timing explains its protection. After automatic adjustments, a compact **Review changes** notice opens a sheet with affected stops and before/after ranges. Actionable per-stop messages distinguish conflicts from missing duration/travel evidence. Whole-day previews are mutually compatible and selected rows apply atomically.
+
+Persist `timingFlexibility` independently of provenance, and classify `APP_ESTIMATED` time/duration as estimated evidence. Unchanged suggested values retain their provenance; actual edits become traveller-owned. Legacy traveller/unclassified exact times remain fixed, legacy AI estimates remain flexible unless protected. Flexible exact slots retain daypart intent. Timing metadata participates in Plan Score revisions without changing weights. Derived warnings are recomputed rather than permanently stored.
+
+Planner mutations request `timingPolicy: reconcile_flexible`; other callers default to `preserve`, keeping Live Trip Mode and Preview editing behavior. Structural edits and successful timing adjustments share one transaction and return changes/review outcomes. Slot previews carry local start/end, duration, zone, instants, reasons, limitations, references and a schedule revision, retaining `localTime` compatibility. Save revalidates revisions, and stale atomic batch application returns a refresh conflict. Offline manual edits and queued moves remain available; timing review stays pending until canonical reconciliation during sync, whose changes are surfaced for review. Preserve localization, clock preferences, keyboard access, mobile layout, theme contrast and reduced motion.
 
 ## 17.3 Optional Item Data
 
@@ -2026,7 +2038,7 @@ Travel advice that does not change the score (forecast weather, walking effort, 
 
 Return stable reason codes, localization keys, affected item/day references, severity, and suggested actions. Explain score changes using changed inputs, evidence, or rubric; never compare incompatible assessments as the same measurement. Do not persist expired raw provider values in explanation parameters or historical comparisons.
 
-No suggestion silently adds, replaces, removes, or reorders anything. Replace preserves compatible item metadata; incompatible linked data requires review. Add identifies its target day/position or Unscheduled location and requires confirmation. Deterministic suggestions may prefill an editable field only when requested and supported by evidence; Save remains the mutation boundary.
+No suggestion silently adds, replaces, removes, or reorders anything. Replace preserves compatible item metadata; incompatible linked data requires review. Add identifies its target day/position or Unscheduled location and requires confirmation. Deterministic suggestions may prefill an editable field when requested or when adding a Place at a chosen Planner position, and only when supported by evidence; Save remains the mutation boundary.
 
 ## 29.5 Shared Evidence, Recalculation, and Boundaries
 

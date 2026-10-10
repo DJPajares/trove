@@ -4,11 +4,21 @@ import { Clock3, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useId } from 'react';
 
-import { SuggestedTimeAction } from '@/components/itinerary-suggested-time';
+import {
+  SuggestedTimeAction,
+  type SuggestedTimeActionProps,
+} from '@/components/itinerary-suggested-time';
 import { TimeInput } from '@/components/time-input';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   durationMinutesFromParts,
   durationParts,
@@ -35,6 +45,7 @@ export function TimingField({
   onExpand,
   onRemove,
   suggest,
+  protectedTiming,
 }: Readonly<{
   customDuration: StopEditorCustomDuration;
   /** Collapsed, the "when" is a single "Add timing" button. */
@@ -45,7 +56,8 @@ export function TimingField({
   onExpand: () => void;
   onRemove: () => void;
   /** Offered only where a suggestion can be honest - online, for a stop the server can place. */
-  suggest: { loading: boolean; message: string; onRequest: () => void } | null;
+  suggest: SuggestedTimeActionProps | null;
+  protectedTiming?: boolean;
 }>) {
   const t = useTranslations('itinerary');
   const id = useId();
@@ -65,14 +77,18 @@ export function TimingField({
   }
 
   return (
-    <>
+    <section
+      className="space-y-4 rounded-[var(--radius-lg)] border p-4"
+      aria-label={t('connectedTiming.question')}
+    >
+      <p className="text-sm font-medium">{t('connectedTiming.question')}</p>
       {!expanded ? (
         <Button className="w-full justify-start" onClick={onExpand} type="button" variant="outline">
           <Clock3 aria-hidden="true" />
           {t('addTiming')}
         </Button>
       ) : (
-        <Field className="rounded-[var(--radius-lg)] border p-4">
+        <Field className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <FieldLabel>{t('scheduleLabel')}</FieldLabel>
             <Button onClick={onRemove} size="sm" type="button" variant="ghost">
@@ -115,13 +131,45 @@ export function TimingField({
               <FieldDescription id={`${id}-exact-hint`}>{t('localTimeHint')}</FieldDescription>
             </div>
           ) : null}
-          {suggest ? (
-            <SuggestedTimeAction
-              loading={suggest.loading}
-              message={suggest.message}
-              onRequest={suggest.onRequest}
-            />
+          {form.schedule === 'exact' ? (
+            <Field>
+              <FieldLabel htmlFor={`${id}-flexibility`}>
+                {t('connectedTiming.flexibility')}
+              </FieldLabel>
+              <Select
+                disabled={protectedTiming}
+                value={protectedTiming ? 'fixed' : (form.timingFlexibility ?? 'fixed')}
+                onValueChange={(value) => {
+                  if (value === 'flexible' || value === 'fixed')
+                    onChange({ timingFlexibility: value });
+                }}
+              >
+                <SelectTrigger
+                  id={`${id}-flexibility`}
+                  className="w-full"
+                  aria-describedby={`${id}-flexibility-hint`}
+                >
+                  <SelectValue>
+                    {t(`connectedTiming.${form.timingFlexibility ?? 'fixed'}`)}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="flexible">{t('connectedTiming.flexible')}</SelectItem>
+                  <SelectItem value="fixed">{t('connectedTiming.fixed')}</SelectItem>
+                </SelectContent>
+              </Select>
+              <FieldDescription id={`${id}-flexibility-hint`}>
+                {t(
+                  protectedTiming
+                    ? 'connectedTiming.protected'
+                    : form.timingFlexibility === 'flexible'
+                      ? 'connectedTiming.flexibleHint'
+                      : 'connectedTiming.fixedHint',
+                )}
+              </FieldDescription>
+            </Field>
           ) : null}
+          {suggest ? <SuggestedTimeAction {...suggest} /> : null}
         </Field>
       )}
 
@@ -235,6 +283,6 @@ export function TimingField({
           </div>
         )}
       </Field>
-    </>
+    </section>
   );
 }

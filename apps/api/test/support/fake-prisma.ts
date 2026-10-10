@@ -96,6 +96,11 @@ function hydrateTripPlace(row: Row | undefined) {
 function hydrateItem(row: Row) {
   return {
     ...row,
+    _count: {
+      reservations: store.reservation.filter(
+        (reservation) => reservation.itineraryItemId === row.id,
+      ).length,
+    },
     // `itineraryItemInclude` selects the day's date and zone, which the update
     // path reads to re-resolve a schedule.
     itineraryDay: store.itineraryDay.find((day) => day.id === row.itineraryDayId) ?? null,
@@ -139,6 +144,8 @@ function hydrate(name: ModelName, row: Row): Row {
   }
   if (name === 'reservation')
     return {
+      checkInDate: null,
+      checkOutDate: null,
       ...row,
       accommodationDays: row.accommodationDays ?? [],
       attachments: store.reservationAttachment.filter(
@@ -164,7 +171,13 @@ function hydrate(name: ModelName, row: Row): Row {
           photos: store.memoryPhoto.filter((photo) => photo.memoryId === memory.id),
         })),
       owner: { homeTimeZone: null },
-      startingPlace: null,
+      reservations: store.reservation
+        .filter((r) => r.tripId === row.id)
+        .map((r) => hydrate('reservation', r)),
+      tripPlaces: store.tripPlace
+        .filter((p) => p.tripId === row.id)
+        .map((p) => hydrate('tripPlace', p)),
+      startingPlace: store.place.find((p) => p.id === row.startingPlaceId) ?? null,
       storyCoverPhoto:
         store.memoryPhoto.find((photo) => photo.id === row.storyCoverMemoryPhotoId) ?? null,
     };

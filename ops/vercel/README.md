@@ -85,8 +85,9 @@ responses.
 
 Application environment names no longer include the `TROVE_` prefix. Remove
 only that segment when migrating existing keys; retain `NEXT_PUBLIC_` on the
-browser-visible API URL. Defaults, parsing, values, and scopes are unchanged,
-and the updated code does not read legacy names.
+browser-visible API URL. Defaults, parsing, and scopes are unchanged, and the
+updated code does not read legacy names. Editable entries retain their values.
+The approved Sensitive-entry replacements below are the only value changes.
 
 1. Update code and rename local dotenv keys together. Preserve values, quoting,
    multiline secrets, and existing file precedence. Restart local API/web
@@ -95,19 +96,18 @@ and the updated code does not read legacy names.
    keys and reject destination-name collisions. Rename editable Vercel entries
    in place by ID, sending only the new key, so values, types, environment
    targets, and branch/custom-environment scopes remain intact. Vercel rejects
-   key changes for entries marked Sensitive. Their owner must populate
-   replacement entries directly in Vercel from the original secure source,
-   preserving each entry's exact value, Sensitive type, and scope. In particular,
-   preserve separate Preview/Production `AUTH_RECOVERY_SECRET` values on `trove`
-   and the Preview/Production `WEB_ORIGINS` entry on `trove-api`. Keep the old
-   Sensitive entries until replacements are verified, then remove them. If the
-   original values are unavailable, stop the hosted cutover: rotation requires
-   a separate decision and is not part of this naming migration. Correct stale
-   configuration comments without changing their values.
+   key changes for entries marked Sensitive. Create replacements with the exact
+   values from their secure source when available, preserving Sensitive type
+   and scope. If the originals are unavailable, obtain explicit approval for
+   replacement values before proceeding. For this cutover, the owner approved
+   independent 256-bit `AUTH_RECOVERY_SECRET` replacements for Preview and
+   Production on `trove`, plus a `WEB_ORIGINS` replacement for API
+   Preview/Production containing exactly
+   `https://trove.wndrhive.com,https://trove-git-*-djpajares-projects.vercel.app`.
+   Keep the old Sensitive entries until replacements are verified, then remove
+   them. Correct stale configuration comments without changing their values.
 3. Verify hosted key names and scopes without exposing values, then push the
-   updated task branch for its Git-triggered preview. Missing Sensitive
-   replacements block release; draft PR previews may fail configuration checks
-   until the owner supplies them. Subsequent builds must
+   updated task branch for its Git-triggered preview. Subsequent builds must
    use the updated code. Keep older branches from rebuilding during the
    cutover; coordinate the reviewed merge and production release with a human.
    Settings changes affect subsequent deployments, not running deployments.
@@ -116,9 +116,17 @@ and the updated code does not read legacy names.
    requests, allowance display, recovery configuration, and feature switches.
 
 For rollback, reuse a previous deployment with its original configuration.
-Before rebuilding older code, reverse the hosted and local key renames first;
-do not rebuild an older revision with only the new keys. Never copy credentials
-into a PR, command argument, build log, or public variable.
+Before rebuilding older code, restore its expected environment names and
+configuration first; do not rebuild an older revision with only the new keys.
+Unavailable Sensitive values cannot be reconstructed, so reuse the existing
+previous deployment rather than rebuilding it. Never copy credentials into a
+PR, command argument, build log, or public variable.
+
+Recovery-key rotation takes effect when the updated web deployment is released.
+Receipts signed with the old key then fail verification, including any recovery
+flow started within the previous one-hour receipt window. Those users must
+request a fresh recovery link. This does not rotate Supabase credentials or
+normal session tokens. Local development keeps its independent signing key.
 
 `ENVIRONMENT=production` remains a separate safety confirmation for local
 production-operation scripts, not a replacement for `NODE_ENV`. Keep

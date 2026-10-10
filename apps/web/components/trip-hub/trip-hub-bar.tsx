@@ -15,9 +15,11 @@ import {
   Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
+import { useTripActions } from '@/components/trip-actions-provider';
 import { OfflineReadyStatus } from '@/components/offline-ready-status';
 import { TripTabs } from '@/components/trip-tabs';
 import { Button } from '@/components/ui/button';
@@ -37,10 +39,15 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
+  SheetTrigger,
 } from '@/components/ui/sheet';
 import { tripSectionIcons } from '@/lib/icons';
 import type { Trip } from '@/lib/trips/api';
-import { supportingTripDestinations } from '@/lib/trips/navigation';
+import {
+  supportingTripDestinations,
+  tripSectionFromPathname,
+  tripSectionLabelKey,
+} from '@/lib/trips/navigation';
 
 const DATE_MOVES = [
   ['dayEarlier', -1],
@@ -55,26 +62,23 @@ const DATE_MOVES = [
  * an action changes the trip - and neither is a grid of shortcuts on the page.
  */
 export function TripHubBar({
-  movingDates,
-  onDelete,
-  onEdit,
-  onMoveDates,
-  onShare,
-  onToggleReadiness,
   overview,
-  readinessPending,
   trip,
 }: Readonly<{
-  movingDates: boolean;
-  onDelete: () => void;
-  onEdit: () => void;
-  onMoveDates: (days: number) => void;
-  onShare: () => void;
-  onToggleReadiness: () => void;
   overview: TripOverviewData | undefined;
-  readinessPending: boolean;
   trip: Trip;
 }>) {
+  const {
+    movingDates,
+    onDelete,
+    onEdit,
+    onMoveDates,
+    onShare,
+    onToggleReadiness,
+    readinessPending,
+  } = useTripActions();
+  const pathname = usePathname();
+  const currentSection = tripSectionFromPathname(pathname, trip.id);
   const t = useTranslations('trips');
   const hub = useTranslations('trips.hub');
   const share = useTranslations('trips.share');
@@ -82,6 +86,10 @@ export function TripHubBar({
   const [toolsOpen, setToolsOpen] = useState(false);
   const [offlineOpen, setOfflineOpen] = useState(false);
   const supporting = supportingTripDestinations(trip.id);
+  const currentLabel =
+    currentSection && currentSection !== 'itinerary'
+      ? t(tripSectionLabelKey(currentSection))
+      : undefined;
   const nextTask = overview?.tasks.next;
   const summary = {
     expenses: hub('toolSummary.expenses'),
@@ -99,17 +107,63 @@ export function TripHubBar({
     <div className="flex items-center justify-between gap-2 border-b border-border-subtle">
       <TripTabs lifecycle={trip.lifecycle} startDate={trip.startDate} tripId={trip.id} />
       <div className="flex shrink-0 items-center gap-1">
-        <Button
-          aria-haspopup="dialog"
-          className="rounded-full"
-          onClick={() => setToolsOpen(true)}
-          size="sm"
-          type="button"
-          variant="outline"
-        >
-          {t('tripTools')}
-          <ChevronDown aria-hidden="true" data-icon="inline-end" />
-        </Button>
+        <Sheet onOpenChange={setToolsOpen} open={toolsOpen}>
+          <SheetTrigger
+            render={
+              <Button
+                aria-label={
+                  currentLabel ? t('moreLabelCurrent', { section: currentLabel }) : t('tripTools')
+                }
+                className="rounded-full"
+                size="sm"
+                type="button"
+                variant="outline"
+              />
+            }
+          >
+            {currentLabel ?? t('tripTools')}
+            <ChevronDown aria-hidden="true" data-icon="inline-end" />
+          </SheetTrigger>
+          <SheetContent closeLabel={t('close')}>
+            <SheetHeader>
+              <SheetTitle>{t('tripTools')}</SheetTitle>
+              <SheetDescription>{hub('toolsDescription')}</SheetDescription>
+            </SheetHeader>
+            <ul className="px-4 pb-4">
+              {supporting.map((destination) => {
+                const Icon = tripSectionIcons[destination.section];
+                const section = destination.section as keyof typeof summary;
+                return (
+                  <li className="border-b border-border-subtle last:border-b-0" key={section}>
+                    <Link
+                      className="group flex min-h-18 items-center gap-4 rounded-[var(--radius-md)] py-3 outline-none focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=page]:bg-surface-tint aria-[current=page]:px-3"
+                      aria-current={destination.section === currentSection ? 'page' : undefined}
+                      href={destination.href}
+                      onClick={() => setToolsOpen(false)}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="grid size-11 shrink-0 place-items-center rounded-[var(--radius-lg)] bg-surface-tint text-brand"
+                      >
+                        <Icon className="size-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold">{t(destination.labelKey)}</span>
+                        <span className="block truncate text-sm text-muted-foreground">
+                          {summary[section]}
+                        </span>
+                      </span>
+                      <ChevronRight
+                        aria-hidden="true"
+                        className="size-4 shrink-0 text-text-subtle transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
+                      />
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </SheetContent>
+        </Sheet>
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -178,47 +232,6 @@ export function TripHubBar({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-
-      <Sheet onOpenChange={setToolsOpen} open={toolsOpen}>
-        <SheetContent closeLabel={t('close')}>
-          <SheetHeader>
-            <SheetTitle>{t('tripTools')}</SheetTitle>
-            <SheetDescription>{hub('toolsDescription')}</SheetDescription>
-          </SheetHeader>
-          <ul className="px-4 pb-4">
-            {supporting.map((destination) => {
-              const Icon = tripSectionIcons[destination.section];
-              const section = destination.section as keyof typeof summary;
-              return (
-                <li className="border-b border-border-subtle last:border-b-0" key={section}>
-                  <Link
-                    className="group flex min-h-18 items-center gap-4 rounded-[var(--radius-md)] py-3 outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
-                    href={destination.href}
-                    onClick={() => setToolsOpen(false)}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className="grid size-11 shrink-0 place-items-center rounded-[var(--radius-lg)] bg-surface-tint text-brand"
-                    >
-                      <Icon className="size-5" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-semibold">{t(destination.labelKey)}</span>
-                      <span className="block truncate text-sm text-muted-foreground">
-                        {summary[section]}
-                      </span>
-                    </span>
-                    <ChevronRight
-                      aria-hidden="true"
-                      className="size-4 shrink-0 text-text-subtle transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
-                    />
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </SheetContent>
-      </Sheet>
 
       <Sheet onOpenChange={setOfflineOpen} open={offlineOpen}>
         <SheetContent closeLabel={t('close')}>

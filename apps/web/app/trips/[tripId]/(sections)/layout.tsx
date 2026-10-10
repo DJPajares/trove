@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import { journalSerif } from '@/components/memories/journal-font';
 import { TripChrome } from '@/components/trip-chrome';
 
 /**
@@ -14,5 +15,9 @@ export default async function TripSectionsLayout({
 }: Readonly<{ children: ReactNode; params: Promise<{ tripId: string }> }>) {
   const { tripId } = await params;
 
-  return <TripChrome tripId={tripId}>{children}</TripChrome>;
+  return (
+    <div className={journalSerif.variable}>
+      <TripChrome tripId={tripId}>{children}</TripChrome>
+    </div>
+  );
 }

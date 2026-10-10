@@ -1,5 +1,7 @@
 {
   "$schema": "https://v2-11-7.turborepo.dev/schema.json",
+  "cacheMaxAge": "7d",
+  "cacheMaxSize": "10GB",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -12,7 +14,7 @@
         "SUPABASE_URL",
         "WEB_ORIGINS"
       ],
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "dev": {
       "dependsOn": ["^build"],

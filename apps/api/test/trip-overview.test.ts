@@ -33,12 +33,32 @@ function trip(start = '2026-10-09', end = '2026-10-10', counts = [2, 0]) {
     referenceTimeZone: 'Asia/Singapore',
     tripInfoEntries: [],
     destinations: [],
+    tripPlaces: [] as { id: string; place: ReturnType<typeof place> }[],
+    reservations: [],
+    _count: { tripPlaces: 0 },
     itineraryDays: counts.map((count, index) => ({
       id: `day-${index + 1}`,
       name: index ? 'A slower day' : 'City walks',
       date: new Date(date(start).getTime() + index * 86_400_000),
+      dailyBaseTripPlaceId: null as string | null,
+      dailyBaseDepartureTripPlaceId: null as string | null,
+      items: [] as { tripPlaceId: string | null }[],
       _count: { items: count },
     })),
+  };
+}
+function place(id: string, providerAddress: string | null) {
+  return {
+    id,
+    kind: 'PROVIDER' as const,
+    customName: null,
+    customNote: null,
+    customTimeZone: null,
+    customLatitude: null,
+    customLongitude: null,
+    providerAddress,
+    providerLabel: null,
+    providerRefs: [],
   };
 }
 function item(id: string, time: string, overrides: Record<string, unknown> = {}) {
@@ -222,4 +242,29 @@ test('a clock change that skips midnight still provides a usable refresh deadlin
     new Date('2026-09-05T18:00:00Z'),
   );
   expect(Date.parse(result.refreshAt)).toBeGreaterThan(Date.parse(result.generatedAt));
+});
+
+test('every day carries its town from stored addresses, stay first, without provider reads', async () => {
+  const hydrate = vi.spyOn(placeData, 'hydratePlaceSnapshots');
+  const stored = trip('2026-11-01', '2026-11-03', [2, 2, 0]);
+  stored.tripPlaces = [
+    { id: 'hotel', place: place('p-hotel', '12 Hang Bac, Hoan Kiem, Hanoi, 100000, Vietnam') },
+    { id: 'cave', place: place('p-cave', 'Bai Chay, Ha Long, Vietnam') },
+    { id: 'pier', place: place('p-pier', 'Tuan Chau, Ha Long, Vietnam') },
+  ];
+  stored._count.tripPlaces = 3;
+  stored.itineraryDays[0]!.dailyBaseTripPlaceId = 'hotel';
+  stored.itineraryDays[1]!.items = [{ tripPlaceId: 'cave' }, { tripPlaceId: 'pier' }];
+  db.trip.findFirst.mockResolvedValue(stored);
+
+  const result = await getTripOverview('owner', 'token', 'trip', 'Asia/Singapore', now);
+
+  expect(result.days.map((day) => [day.number, day.town, day.stopCount])).toEqual([
+    [1, 'Hanoi', 2],
+    [2, 'Ha Long', 2],
+    [3, null, 0],
+  ]);
+  expect(result.tripPlaceCount).toBe(3);
+  expect(hydrate).not.toHaveBeenCalled();
+  hydrate.mockRestore();
 });

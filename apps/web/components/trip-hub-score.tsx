@@ -1,50 +1,75 @@
 'use client';
 
-import { useTripPlacesDrawer } from '@/components/trip-places-provider';
-
 import { ChevronRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
+
 import { PlanScoreSheet } from '@/components/planner/plan-score-sheet';
-import { Button } from '@/components/ui/button';
+import { ScoreRing, scoreDisplay } from '@/components/plan-score-panel';
+import { useTripPlacesDrawer } from '@/components/trip-places-provider';
 import { useTripContext as useDestinationContext } from '@/lib/insights/use-trip-context';
-import { dayActionLink } from '@/lib/plan-score/presentation';
+import { dayActionLink, scoreBand } from '@/lib/plan-score/presentation';
 import { useTripPlanScore } from '@/lib/plan-score/use-trip-plan-score';
 
-export function TripHubScore({ tripId }: { tripId: string }) {
+const NO_EXPLANATIONS = { uncertainty: [], whatWorks: [], worthImproving: [] };
+
+/**
+ * The trip's Plan Score as one quiet row: its ring and verdict, opening the
+ * breakdown on request. The ring shows only a number the breakdown would show.
+ */
+export function TripHubScore({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('planScore');
-  const { openPlaces } = useTripPlacesDrawer();
   const hub = useTranslations('trips.hub');
+  const { openPlaces } = useTripPlacesDrawer();
   const [open, setOpen] = useState(false);
+  const [now] = useState(() => Date.now());
   const score = useTripPlanScore(tripId);
   const hidden =
     score.status === 'disabled' ||
     Boolean(score.data?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED'));
   useDestinationContext(hidden ? null : tripId);
   if (hidden) return null;
+
+  const explanations = score.data?.explanations ?? NO_EXPLANATIONS;
+  const { displayScore } = scoreDisplay({
+    assessment: score.data,
+    explanations,
+    now: Math.max(now, Date.now()),
+    score: score.data?.score ?? null,
+    status: score.status,
+  });
+
   return (
     <>
-      <Button
+      <button
         aria-haspopup="dialog"
-        className="h-auto w-full justify-between gap-4 rounded-[var(--radius-lg)] border border-border-subtle px-4 py-4 text-left whitespace-normal"
+        className="group flex w-full items-center gap-4 rounded-[var(--radius-xl)] border border-border-subtle bg-card p-3.5 pr-4 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
         onClick={() => setOpen(true)}
-        variant="ghost"
+        type="button"
       >
-        <span className="flex min-w-0 flex-col gap-1">
-          <span className="text-sm font-semibold">{t('title')}</span>
-          <span className="text-xs font-normal text-muted-foreground">{hub('scoreHint')}</span>
-        </span>
-        <span className="flex shrink-0 items-center gap-3">
-          <span className="text-lg font-semibold text-brand tabular-nums">
-            {score.status === 'idle' &&
-            score.data?.score !== null &&
-            score.data?.score !== undefined
-              ? score.data.score
-              : hub('scorePending')}
+        {displayScore === null ? (
+          <span
+            aria-hidden="true"
+            className="grid size-14 shrink-0 place-items-center rounded-full border-[3px] border-muted text-lg font-semibold text-text-subtle"
+          >
+            {hub('scorePending')}
           </span>
-          <ChevronRight aria-hidden="true" className="size-4 text-text-subtle" />
+        ) : (
+          <ScoreRing label={t('title')} score={displayScore} />
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="block text-xs font-medium text-muted-foreground">{t('title')}</span>
+          <span className="mt-0.5 block text-[0.9375rem] leading-snug font-semibold text-balance">
+            {displayScore === null
+              ? hub('scoreHint')
+              : t(`compactVerdict.${scoreBand(displayScore)}`)}
+          </span>
         </span>
-      </Button>
+        <ChevronRight
+          aria-hidden="true"
+          className="size-4 shrink-0 text-text-subtle transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
+        />
+      </button>
       <PlanScoreSheet
         onOpenChange={setOpen}
         open={open}
@@ -53,11 +78,7 @@ export function TripHubScore({ tripId }: { tripId: string }) {
           onOpenTripPlaces: openPlaces,
           completeness: score.data?.completeness ?? null,
           confidence: score.data?.confidence ?? null,
-          explanations: score.data?.explanations ?? {
-            uncertainty: [],
-            whatWorks: [],
-            worthImproving: [],
-          },
+          explanations,
           assessment: score.data,
           change: score.changeFor('trip'),
           resolveAction: (explanation) =>

@@ -38,6 +38,7 @@ import {
   lockAiCreditOwner,
   getAiCreditSnapshot,
   resolveAiCreditPeriod,
+  reconcileOwnerAiCredits,
   reserveAiCredit,
   settleAiCredit,
 } from './ai-planner-credits.js';
@@ -174,7 +175,6 @@ export async function getAiPlanningAvailability(
     const snapshot = await getAiCreditSnapshot(ownerId, {
       prisma: prismaFrom(options),
       now: nowFrom(options),
-      environment: options.environment,
     });
     return {
       ...snapshot,
@@ -542,7 +542,7 @@ export async function createAiPlanningSession(
       return replay;
     }
 
-    const entitlement = await resolveAiCreditPeriod(transaction, ownerId, now, options.environment);
+    const entitlement = await resolveAiCreditPeriod(transaction, ownerId, now);
     checkAiPlannerPromptDays(prompt, entitlement.limits.maxItineraryDays);
 
     // The run inherits both `sessionId` and `ownerId` from the parent session
@@ -692,7 +692,7 @@ export async function regenerateAiPlanningSession(
     }
     if (found.runs.length > 0) throw new AiPlanningSessionError('session_busy', 409);
 
-    const entitlement = await resolveAiCreditPeriod(transaction, ownerId, now, options.environment);
+    const entitlement = await resolveAiCreditPeriod(transaction, ownerId, now);
     checkAiPlannerPromptDays(prompt, entitlement.limits.maxItineraryDays);
 
     // A top-level create owns both relation scalars directly, unlike the
@@ -997,18 +997,15 @@ export async function claimAiPlanningDispatch(
     const deadlineAt = new Date(now.getTime() + configuration.timeoutMs + 30_000);
     let maxItineraryDays: number;
     try {
-      const entitlement = await resolveAiCreditPeriod(
-        transaction,
-        ownerId,
-        now,
-        options.environment,
-      );
+      await reconcileOwnerAiCredits(transaction, ownerId, now);
+      const entitlement = await resolveAiCreditPeriod(transaction, ownerId, now);
       checkAiPlannerPromptDays(run.session.rawPrompt, entitlement.limits.maxItineraryDays);
       maxItineraryDays = await reserveAiCredit(
         transaction,
         run,
         deadlineAt,
         now,
+        entitlement,
         options.environment,
       );
     } catch (error) {

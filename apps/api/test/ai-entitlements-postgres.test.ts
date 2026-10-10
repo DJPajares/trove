@@ -22,7 +22,6 @@ test.skipIf(!testUrl)(
     const clients = [createPrismaClient(), createPrismaClient()];
     const ownerId = randomUUID();
     const now = new Date();
-    const environment = { TROVE_FREE_AI_PLANNER_CREDITS: '1' };
     const runs = Array.from({ length: 2 }, () => ({
       id: randomUUID(),
       ownerId,
@@ -33,11 +32,18 @@ test.skipIf(!testUrl)(
       await clients[0]!.$executeRaw(
         Prisma.sql`INSERT INTO auth.users (id) VALUES (${ownerId}::uuid)`,
       );
+      await clients[0]!.$transaction(async (tx) => {
+        await lockAiCreditOwner(tx, ownerId);
+        const resolved = await resolveAiCreditPeriod(tx, ownerId, now);
+        expect(resolved.account.subscriptionStatus).toBe('active');
+        await tx.aiCreditPeriod.update({ where: { id: resolved.period.id }, data: { used: 9 } });
+      });
       const results = await Promise.allSettled(
         runs.map((run, i) =>
           clients[i]!.$transaction(async (tx) => {
             await lockAiCreditOwner(tx, ownerId);
-            return reserveAiCredit(tx, run, new Date(now.getTime() + 90_000), now, environment);
+            const resolved = await resolveAiCreditPeriod(tx, ownerId, now);
+            return reserveAiCredit(tx, run, new Date(now.getTime() + 90_000), now, resolved, {});
           }),
         ),
       );
@@ -62,7 +68,7 @@ test.skipIf(!testUrl)(
             requestId: 'active-test',
             principal: { actorId: 'test:active', credentialId: 'key' },
           },
-          { prisma: clients[0], now, environment },
+          { prisma: clients[0], now },
         ),
       ).rejects.toMatchObject({ code: 'ai_generation_active' });
       expect(await clients[0]!.adminOperationAudit.count({ where: { ownerId } })).toBe(0);
@@ -76,7 +82,7 @@ test.skipIf(!testUrl)(
             requestId: 'missing-test',
             principal: { actorId: 'test:missing', credentialId: 'key' },
           },
-          { prisma: clients[0], now, environment },
+          { prisma: clients[0], now },
         ),
       ).rejects.toMatchObject({ code: 'user_not_found' });
       await Promise.all(
@@ -91,9 +97,9 @@ test.skipIf(!testUrl)(
         1,
       );
       const snapshot = await clients[0]!.$transaction(async (tx) =>
-        creditSnapshot(await resolveAiCreditPeriod(tx, ownerId, now, environment)),
+        creditSnapshot(await resolveAiCreditPeriod(tx, ownerId, now)),
       );
-      expect(snapshot).toMatchObject({ usedCredits: 1, reservedCredits: 0, availableCredits: 0 });
+      expect(snapshot).toMatchObject({ usedCredits: 10, reservedCredits: 0, availableCredits: 0 });
       // The action survives absent generation/session telemetry by design.
       expect(await clients[0]!.aiGenerationRun.count({ where: { ownerId } })).toBe(0);
       await expect(
@@ -108,20 +114,32 @@ test.skipIf(!testUrl)(
         principal: { actorId: `test:${ownerId}`, credentialId: 'test-credential' },
       };
       const resets = await Promise.all(
-        clients.map((prisma) =>
-          performAdminEntitlementOperation(input, { prisma, now, environment }),
-        ),
+        clients.map((prisma) => performAdminEntitlementOperation(input, { prisma, now })),
       );
       expect(resets[0]).toEqual(resets[1]);
-      expect(resets[0]!.entitlements.availableCredits).toBe(1);
+      expect(resets[0]!.entitlements.availableCredits).toBe(10);
       expect(await clients[0]!.aiCreditPeriod.count({ where: { ownerId } })).toBe(2);
       expect(await clients[0]!.adminOperationAudit.count({ where: { ownerId } })).toBe(1);
       await expect(
         performAdminEntitlementOperation(
           { ...input, reason: 'Different request' },
-          { prisma: clients[0], now, environment },
+          { prisma: clients[0], now },
         ),
       ).rejects.toMatchObject({ code: 'admin_idempotency_conflict' });
+      await clients[0]!.userEntitlement.update({
+        where: { ownerId },
+        data: { subscriptionStatus: 'inactive' },
+      });
+      await expect(
+        clients[0]!.userEntitlement.update({
+          where: { ownerId },
+          data: { subscriptionStatus: 'unknown' },
+        }),
+      ).rejects.toThrow();
+      expect(
+        (await clients[0]!.userEntitlement.findUniqueOrThrow({ where: { ownerId } }))
+          .subscriptionStatus,
+      ).toBe('inactive');
       const rls = await clients[0]!.$queryRaw<Array<{ relname: string; relrowsecurity: boolean }>>(
         Prisma.sql`SELECT relname, relrowsecurity FROM pg_class WHERE relnamespace = 'trove'::regnamespace AND relname IN ('user_entitlements','ai_credit_periods','ai_credit_actions','ai_credit_events','admin_operation_audits')`,
       );

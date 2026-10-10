@@ -5,31 +5,50 @@ limits are advisory. No subscription or payment provider is involved yet.
 
 ## Configuration
 
-Set these on the API only. Invalid values fail closed rather than disabling limits.
+Product plans are defined in the readonly, type-checked `SUBSCRIPTION_PLANS`
+registry in `apps/api/src/services/plan-entitlements.ts`. They are grouped by
+feature and independent of subscription and AI providers. Changing them requires
+an API deployment; the former Free/Paid tier environment variables are ignored
+and should be removed from deployment settings.
 
-| Setting                              | Default    | Meaning                                      |
-| ------------------------------------ | ---------- | -------------------------------------------- |
-| `TROVE_FREE_AI_PLANNER_CREDITS`      | `10`       | Lifetime allowance                           |
-| `TROVE_FREE_AI_PLANNER_MAX_DAYS`     | `10`       | Inclusive itinerary days                     |
-| `TROVE_FREE_AI_PLANNER_RENEWAL`      | `lifetime` | `lifetime` or `monthly`                      |
-| `TROVE_PAID_AI_PLANNER_CREDITS`      | `50`       | Temporary monthly allowance                  |
-| `TROVE_PAID_AI_PLANNER_MAX_DAYS`     | `20`       | Temporary inclusive day limit                |
-| `TROVE_PAID_AI_PLANNER_RENEWAL`      | `monthly`  | `lifetime` or `monthly`                      |
-| `TROVE_AI_PLANNER_STARTS_PER_MINUTE` | `5`        | Per-account burst guard across API instances |
+| Plan | AI Planner credits | Maximum itinerary days | Renewal  |
+| ---- | ------------------ | ---------------------- | -------- |
+| Free | 10                 | 10                     | Lifetime |
+| Paid | 50                 | 20                     | Monthly  |
 
-Credits accept integers from 0 to 1,000,000; day limits accept 7–365, so every
-supported inferred 3/5/7-day duration fits. The burst guard accepts 1–1,000.
-Allowance and renewal boundaries are snapshotted at allocation. Configuration
-changes apply to new periods or explicit resets, not previously granted balances.
-Day limits apply to new dispatches; completed drafts retain their run limit.
-Changing renewal policy is an operational migration decision: existing period
-snapshots stay intact, and new boundary allocations use the new policy.
+`resolveUserEntitlements` is the central server-side boundary for subscription
+assignment and applicable plan definitions. Plan definitions currently require no
+database queries. `UserEntitlement` stores the assigned plan, `active`/`inactive`
+subscription status and renewal anchor in Supabase PostgreSQL. Existing and new
+assignments default to active. Inactive assignments use Free entitlements and the
+account's existing Free lifetime balance, while retaining their assigned plan,
+Paid usage and monthly anchor. Unknown plans or statuses fail closed. The API
+reports the effective tier; its response fields are unchanged. Subscription
+status is internal; no status-management endpoint is introduced.
+
+Operational settings remain API environment variables. In particular,
+`TROVE_AI_PLANNER_STARTS_PER_MINUTE` defaults to five accepted starts per account
+per minute across API instances and accepts integers from 1–1,000. Kill switches,
+provider settings and credentials remain environment-owned.
+
+Allowance and renewal boundaries are snapshotted at allocation. Plan changes
+apply to new periods or explicit resets, not previously granted balances. Day
+limits apply to new dispatches; completed drafts retain their run limit. Changing
+renewal policy is an operational migration decision: existing period snapshots
+stay intact, and new boundary allocations use the new policy. Mutable assignments
+and balances are resolved under the existing owner transaction lock rather than
+cached across requests; frontend availability caching remains advisory.
 
 Paid activation establishes a stable UTC monthly anchor. January 31 renews on
 February 28/29, then March 31 at the same UTC time. A later Paid reassignment
 retains that anchor and any current-period balance. Missed months are skipped;
 unused credits do not roll over. Returning to Free retains its existing lifetime
-usage. Assigning the same tier is an audited no-op, never a reset.
+usage. Plan assignment activates the assigned plan without resetting its balance.
+Assigning the same active tier is an audited no-op, never a reset. Reactivation
+retains the existing monthly anchor and current-period Paid balance. Resets act
+on the effective tier, so an inactive Paid assignment resets only Free usage.
+Audit records retain the assigned plan and subscription status before each
+operation alongside the existing effective entitlement snapshot.
 
 ## Operator credentials
 
@@ -112,6 +131,15 @@ command wraps this endpoint; set `TROVE_ADMIN_TOKEN` locally and
 `TROVE_ADMIN_API_URL` to the intended API. It no longer edits the database directly.
 
 ## Migration and verification
+
+For the code-defined plan refactor, apply `20261010053353_subscription_status`
+before deploying the updated API. It adds only an active-by-default status column
+and its constraint; existing balances, periods, ledger history and RLS remain
+unchanged. Remove the obsolete tier variables from deployment configuration after
+the refactor is deployed. Subscription status must only be changed through
+trusted server-side operations using the existing owner transaction lock;
+browser tokens cannot modify it. Provider-driven lifecycle management remains
+future work.
 
 Deploy through the normal human-reviewed release process. Before applying
 `20261010010000_plan_entitlements`, disable new AI dispatches with

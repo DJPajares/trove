@@ -1459,12 +1459,13 @@ model TripMediaCleanup {
 
 /// Only the API may assign plans. Never expose this through Profile updates.
 model UserEntitlement {
-  ownerId         String    @id @map("owner_id") @db.Uuid
-  planKey         String    @default("free") @map("plan_key") @db.VarChar(80)
-  monthlyAnchorAt DateTime? @map("monthly_anchor_at") @db.Timestamptz(3)
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
-  owner           Profile   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  ownerId            String    @id @map("owner_id") @db.Uuid
+  planKey            String    @default("free") @map("plan_key") @db.VarChar(80)
+  subscriptionStatus String    @default("active") @map("subscription_status") @db.VarChar(20)
+  monthlyAnchorAt    DateTime? @map("monthly_anchor_at") @db.Timestamptz(3)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  owner              Profile   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
   @@map("user_entitlements")
   @@schema("trove")

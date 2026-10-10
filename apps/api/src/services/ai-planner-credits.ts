@@ -1,13 +1,8 @@
 import { Prisma, getPrismaClient } from '@trove/db';
 import type { AiPlannerEntitlementSnapshot, CreditRenewalPolicy } from '@trove/types';
 
-import {
-  asPlanKey,
-  creditPeriod,
-  EntitlementError,
-  getAiPlannerBurstLimit,
-  getPlanEntitlements,
-} from './plan-entitlements.js';
+import { creditPeriod, EntitlementError, getAiPlannerBurstLimit } from './plan-entitlements.js';
+import { resolveUserEntitlements } from './user-entitlements.js';
 
 export type CreditTransaction = Prisma.TransactionClient;
 
@@ -23,27 +18,11 @@ export async function lockAiCreditOwner(tx: CreditTransaction, ownerId: string) 
   );
 }
 
-export async function resolveAiCreditPeriod(
-  tx: CreditTransaction,
-  ownerId: string,
-  now: Date,
-  environment?: Record<string, string | undefined>,
-) {
-  let account = await tx.userEntitlement.upsert({
-    where: { ownerId },
-    create: { ownerId, createdAt: now },
-    update: {},
-  });
-  const tier = asPlanKey(account.planKey);
-  const limits = getPlanEntitlements(tier, environment).aiPlanner;
-  if (limits.renewal === 'monthly' && tier === 'paid' && !account.monthlyAnchorAt) {
-    account = await tx.userEntitlement.update({
-      where: { ownerId },
-      data: { monthlyAnchorAt: now },
-    });
-  }
-  const anchor =
-    tier === 'paid' && limits.renewal === 'monthly' ? account.monthlyAnchorAt! : account.createdAt;
+export async function resolveAiCreditPeriod(tx: CreditTransaction, ownerId: string, now: Date) {
+  const subscription = await resolveUserEntitlements(tx, ownerId, now);
+  const { account, effectivePlan: tier } = subscription;
+  const limits = subscription.entitlements.aiPlanner;
+  const anchor = limits.renewal === 'monthly' ? account.monthlyAnchorAt! : account.createdAt;
   const boundary = creditPeriod(anchor, now, limits.renewal);
   let period = await tx.aiCreditPeriod.findFirst({
     where: { ownerId, planKey: tier, startAt: boundary.startAt },
@@ -72,15 +51,15 @@ export async function resolveAiCreditPeriod(
       },
     });
   }
-  return { account, limits, period };
+  return { ...subscription, limits, period };
 }
 
 export function creditSnapshot(
   resolved: Awaited<ReturnType<typeof resolveAiCreditPeriod>>,
 ): AiPlannerEntitlementSnapshot {
-  const { account, limits, period } = resolved;
+  const { effectivePlan, limits, period } = resolved;
   return {
-    tier: asPlanKey(account.planKey),
+    tier: effectivePlan,
     allowance: period.allowance,
     usedCredits: period.used,
     reservedCredits: period.reserved,
@@ -166,14 +145,13 @@ export async function getAiCreditSnapshot(
   options: {
     prisma?: ReturnType<typeof getPrismaClient>;
     now?: Date;
-    environment?: Record<string, string | undefined>;
   } = {},
 ) {
   return (options.prisma ?? getPrismaClient()).$transaction(async (tx) => {
     await lockAiCreditOwner(tx, ownerId);
     const now = options.now ?? new Date();
     await reconcileOwnerAiCredits(tx, ownerId, now);
-    return creditSnapshot(await resolveAiCreditPeriod(tx, ownerId, now, options.environment));
+    return creditSnapshot(await resolveAiCreditPeriod(tx, ownerId, now));
   });
 }
 
@@ -182,10 +160,12 @@ export async function reserveAiCredit(
   run: { id: string; ownerId: string; sessionId: string; idempotencyKey: string },
   deadlineAt: Date,
   now: Date,
+  resolved: Awaited<ReturnType<typeof resolveAiCreditPeriod>>,
   environment?: Record<string, string | undefined>,
 ) {
-  await reconcileOwnerAiCredits(tx, run.ownerId, now);
-  const resolved = await resolveAiCreditPeriod(tx, run.ownerId, now, environment);
+  // The caller reconciles and resolves once within this same owner-locked transaction.
+  if (resolved.account.ownerId !== run.ownerId)
+    throw new EntitlementError('configuration_invalid', 503);
   const snapshot = creditSnapshot(resolved);
   if (snapshot.availableCredits <= 0)
     throw new EntitlementError('quota_exceeded', 429, resolved.period.endAt);

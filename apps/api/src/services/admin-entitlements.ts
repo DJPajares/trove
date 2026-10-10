@@ -37,7 +37,6 @@ export async function performAdminEntitlementOperation(
   options: {
     prisma?: ReturnType<typeof getPrismaClient>;
     now?: Date;
-    environment?: Record<string, string | undefined>;
   } = {},
 ): Promise<AdminEntitlementResult> {
   const prisma = options.prisma ?? getPrismaClient();
@@ -88,9 +87,16 @@ export async function performAdminEntitlementOperation(
     ) {
       throw new AdminOperationError('ai_generation_active', 409);
     }
-    let resolved = await resolveAiCreditPeriod(tx, input.ownerId, now, options.environment);
-    const before = creditSnapshot(resolved);
-    const changed = input.operation === 'reset' || input.planKey !== before.tier;
+    let resolved = await resolveAiCreditPeriod(tx, input.ownerId, now);
+    const before = {
+      ...creditSnapshot(resolved),
+      assignedPlan: resolved.assignedPlan,
+      subscriptionStatus: resolved.status,
+    };
+    const changed =
+      input.operation === 'reset' ||
+      input.planKey !== resolved.assignedPlan ||
+      resolved.status !== 'active';
     if (input.operation === 'assign_plan') {
       if (!input.planKey) throw new AdminOperationError('plan_required', 409);
       if (changed) {
@@ -98,12 +104,13 @@ export async function performAdminEntitlementOperation(
           where: { ownerId: input.ownerId },
           data: {
             planKey: input.planKey,
+            subscriptionStatus: 'active',
             ...(input.planKey === 'paid' && !resolved.account.monthlyAnchorAt
               ? { monthlyAnchorAt: now }
               : {}),
           },
         });
-        resolved = await resolveAiCreditPeriod(tx, input.ownerId, now, options.environment);
+        resolved = await resolveAiCreditPeriod(tx, input.ownerId, now);
       }
     } else {
       // New allocation epoch keeps the old balance and every charge intact.

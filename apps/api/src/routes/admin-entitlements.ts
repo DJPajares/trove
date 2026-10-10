@@ -1,15 +1,16 @@
 import type { FastifyInstance } from 'fastify';
+import type { PlanKey } from '@trove/types';
 import { z } from 'zod';
 import { requireAdmin } from '../services/admin-auth.js';
 import {
   AdminOperationError,
   performAdminEntitlementOperation,
 } from '../services/admin-entitlements.js';
-import { EntitlementError } from '../services/plan-entitlements.js';
+import { EntitlementError, subscriptionPlanKeys } from '../services/plan-entitlements.js';
 
 const targetSchema = z.object({ userId: z.uuid() }).strict();
 const resetSchema = z.object({ reason: z.string().trim().min(1).max(500) }).strict();
-const planSchema = resetSchema.extend({ planKey: z.enum(['free', 'paid']) }).strict();
+const planSchema = resetSchema.extend({ planKey: z.enum(subscriptionPlanKeys) }).strict();
 const keySchema = z.uuid();
 
 export function registerAdminEntitlementRoutes(
@@ -37,7 +38,7 @@ export function registerAdminEntitlementRoutes(
             ownerId: params.data.userId,
             operation,
             reason: body.data.reason,
-            planKey: 'planKey' in body.data ? (body.data.planKey as 'free' | 'paid') : undefined,
+            planKey: 'planKey' in body.data ? (body.data.planKey as PlanKey) : undefined,
             idempotencyKey: key.data,
             requestId: request.id.slice(0, 120),
             principal: request.adminPrincipal,

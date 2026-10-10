@@ -72,7 +72,7 @@ export function creditModels(now: Date) {
           createdAt: now,
           updatedAt: now,
           ...(name === 'userEntitlement'
-            ? { planKey: 'free', monthlyAnchorAt: null }
+            ? { planKey: 'free', subscriptionStatus: 'active', monthlyAnchorAt: null }
             : name === 'aiCreditPeriod'
               ? { used: 0, reserved: 0, sequence: 0 }
               : name === 'aiCreditAction'

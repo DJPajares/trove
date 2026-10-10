@@ -110,6 +110,26 @@ test('offline derives current and next from the existing mutation-aware itinerar
   expect(result.pinnedInfo).toEqual([]);
 });
 
+test('offline lists every day with the town the planner would give it', () => {
+  const stored = snapshot();
+  const itinerary = stored.itinerary as unknown as {
+    days: Record<string, unknown>[];
+    tripPlaces: unknown[];
+  };
+  itinerary.tripPlaces = [
+    {
+      id: 'hotel',
+      place: { snapshot: null, providerAddress: '12 Hang Bac, Hoan Kiem, Hanoi, 100000, Vietnam' },
+    },
+  ];
+  itinerary.days[0] = { ...itinerary.days[0], dailyBaseTripPlaceId: 'hotel' };
+  const result = offlineTripOverview(stored, 'Asia/Singapore', now);
+  expect(result.days).toEqual([
+    { id: 'first', date, number: 1, name: 'City walks', town: 'Hanoi', stopCount: 3 },
+  ]);
+  expect(result.tripPlaceCount).toBe(1);
+});
+
 test('itinerary and supporting edits invalidate every clock variant of only this trip’s overview', async () => {
   const client = createQueryClient();
   for (const zone of ['UTC', 'Asia/Singapore'])

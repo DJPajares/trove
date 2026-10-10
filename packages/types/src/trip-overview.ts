@@ -15,12 +15,25 @@ export type TripOverviewData = {
     current: TripOverviewStop | null;
     next: TripOverviewStop | null;
   } | null;
+  /** Every day, in order: the shape of the journey. Towns come from stored addresses only. */
+  days: TripOverviewDay[];
+  tripPlaceCount: number;
   tasks: { openCount: number; next: { id: string; label: string; dueDate: string | null } | null };
   memories: {
     photos: { id: string; url: string; contentType: string }[];
     note: string | null;
   };
   pinnedInfo: { id: string; label: string; value: string }[];
+};
+
+export type TripOverviewDay = {
+  id: string;
+  date: string;
+  number: number;
+  name: string | null;
+  /** Where the day happens, read as the planner reads it; null when it cannot be said safely. */
+  town: string | null;
+  stopCount: number;
 };
 
 export type TripOverviewStop = {

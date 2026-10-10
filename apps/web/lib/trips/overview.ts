@@ -5,8 +5,9 @@ import {
   type TripOverviewStop,
 } from '@trove/types';
 import { offlineTripModeContext, type ItineraryItem } from '@/lib/itinerary/api';
+import { dayTown } from '@/lib/itinerary/day-place';
 import type { OfflineTripSnapshot } from '@/lib/offline/trip-store';
-import { calendarDayDistance, getLocalDate } from '@/lib/trips/lifecycle';
+import { calendarDayDistance, daysUntilTripStart, getLocalDate } from '@/lib/trips/lifecycle';
 import type { Trip } from '@/lib/trips/api';
 
 export function overviewLifecycle(
@@ -15,6 +16,19 @@ export function overviewLifecycle(
 ): TripOverviewData['lifecycle'] {
   const date = getLocalDate(now, trip.referenceTimeZone);
   return date < trip.startDate ? 'planning' : date > trip.endDate ? 'completed' : 'active';
+}
+
+export type TripHubStage = 'plan' | 'soon' | 'live' | 'remember';
+
+/**
+ * The hub's chapter. Lifecycle decides it, except that the last week before
+ * departure is a moment of its own: the plan is reviewed rather than built.
+ */
+export function tripHubStage(trip: Trip, now: Date): TripHubStage {
+  const lifecycle = overviewLifecycle(trip, now);
+  if (lifecycle === 'active') return 'live';
+  if (lifecycle === 'completed') return 'remember';
+  return daysUntilTripStart(trip, now) <= 7 ? 'soon' : 'plan';
 }
 
 export function overviewPlannerHref(tripId: string, dayId: string | null) {
@@ -144,6 +158,15 @@ export function offlineTripOverview(
           next,
         }
       : null,
+    days: days.map((entry) => ({
+      id: entry.id,
+      date: entry.date,
+      number: entry.number,
+      name: entry.name,
+      town: dayTown(entry, snapshot.itinerary?.tripPlaces ?? []),
+      stopCount: entry.stopCount,
+    })),
+    tripPlaceCount: snapshot.itinerary?.tripPlaces.length ?? 0,
     tasks: {
       openCount: tasks.length,
       next: tasks[0] ? { id: tasks[0].id, label: tasks[0].label, dueDate: tasks[0].dueDate } : null,

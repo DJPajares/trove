@@ -1,5 +1,13 @@
 import { getPrismaClient, type Prisma } from '@trove/db';
-import { selectTripOverviewDay, type TripOverviewData, type TripOverviewStop } from '@trove/types';
+import {
+  dayLocality,
+  localityFromAddress,
+  selectTripOverviewDay,
+  type TripOverviewData,
+  type TripOverviewStop,
+} from '@trove/types';
+
+import { resolveDayStay, stayAccommodationsInclude, toStayAccommodations } from './day-stay.js';
 
 import { formatLocalTime, floatingLocalTimeToInstant } from './itinerary-rules.js';
 import { placeProviderRefInclude, serializeCanonicalPlace } from './place-serializer.js';
@@ -51,7 +59,10 @@ function nextMidnight(zone: string, now: Date) {
   return now.getTime() + 60_000;
 }
 
-/** Reads one selected day, three prints and three pinned facts. No route or Place acquisition. */
+/**
+ * Reads every day's shape, one selected day, three prints and three pinned
+ * facts. No route or Place acquisition: towns are read from stored addresses.
+ */
 export async function getTripOverview(
   userId: string,
   accessToken: string,
@@ -72,8 +83,19 @@ export async function getTripOverview(
       },
       itineraryDays: {
         orderBy: { date: 'asc' },
-        select: { id: true, name: true, date: true, _count: { select: { items: true } } },
+        select: {
+          id: true,
+          name: true,
+          date: true,
+          dailyBaseTripPlaceId: true,
+          dailyBaseDepartureTripPlaceId: true,
+          items: { orderBy: { position: 'asc' }, select: { tripPlaceId: true } },
+          _count: { select: { items: true } },
+        },
       },
+      tripPlaces: { select: { id: true, place: { include: placeProviderRefInclude } } },
+      reservations: stayAccommodationsInclude({ select: { id: true } }),
+      _count: { select: { tripPlaces: true } },
       tripInfoEntries: {
         where: { isPinned: true },
         orderBy: { updatedAt: 'desc' },
@@ -90,12 +112,42 @@ export async function getTripOverview(
     now,
   );
   const today = getLocalDate(now, clockTimeZone);
+  // A day is named after the town it happens in, read the way the planner reads
+  // it: its stay's address first, else the town most of its stops share.
+  const addresses = new Map(
+    trip.tripPlaces.map((row) => {
+      const place = serializeCanonicalPlace(row.place, { now });
+      return [row.id, place.snapshot?.address ?? place.providerAddress];
+    }),
+  );
+  const accommodations = toStayAccommodations(trip.reservations);
+  const dayTown = (day: (typeof trip.itineraryDays)[number]) => {
+    const stay = resolveDayStay(
+      {
+        id: day.id,
+        date: day.date,
+        dailyBaseTripPlace: day.dailyBaseTripPlaceId ? { id: day.dailyBaseTripPlaceId } : null,
+        dailyBaseDepartureTripPlace: day.dailyBaseDepartureTripPlaceId
+          ? { id: day.dailyBaseDepartureTripPlaceId }
+          : null,
+      },
+      accommodations,
+    );
+    const stayId = stay.end?.place.id ?? stay.start?.place.id ?? day.dailyBaseTripPlaceId;
+    return (
+      (stayId ? localityFromAddress(addresses.get(stayId)) : null) ??
+      dayLocality(
+        day.items.map((item) => (item.tripPlaceId ? addresses.get(item.tripPlaceId) : null)),
+      )
+    );
+  };
   const days = trip.itineraryDays.map((day, index) => ({
     id: day.id,
     name: day.name,
     date: formatDateOnly(day.date),
     number: index + 1,
     stopCount: day._count.items,
+    town: dayTown(day),
   }));
   const day = selectTripOverviewDay(days, lifecycle, today);
   const items = day
@@ -214,7 +266,11 @@ export async function getTripOverview(
     }),
     day: day
       ? {
-          ...day,
+          id: day.id,
+          date: day.date,
+          number: day.number,
+          name: day.name,
+          stopCount: day.stopCount,
           state:
             day.stopCount === 0
               ? 'empty'
@@ -225,6 +281,8 @@ export async function getTripOverview(
           next,
         }
       : null,
+    days,
+    tripPlaceCount: trip._count.tripPlaces,
     tasks: {
       openCount,
       next: firstTask

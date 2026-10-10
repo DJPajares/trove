@@ -62,7 +62,7 @@ const WARNING_BANDS = new Set<ScoreBand>(['refine', 'attention']);
 function toneFor(score: number) {
   return WARNING_BANDS.has(scoreBand(score)) ? 'warning' : 'brand';
 }
-function ScoreRing({
+export function ScoreRing({
   label,
   score,
   size = 'md',
@@ -271,7 +271,7 @@ function Reasons({
  * panel and the day header's chip both read it, so the chip never shows a
  * number the panel it opens would withhold.
  */
-function scoreDisplay({
+export function scoreDisplay({
   assessment,
   explanations,
   now,

@@ -12,6 +12,7 @@ import { TripForm } from '@/components/trip-form';
 import { TripHeaderDetails } from '@/components/trip-header-details';
 import { TripMedia } from '@/components/trip-media';
 import { TripShareDialog } from '@/components/trip-share-dialog';
+import { TripTabs } from '@/components/trip-tabs';
 import { useTripContext } from '@/components/trip-provider';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,7 +41,6 @@ import {
   tripSectionFromPathname,
   tripSectionLabelKey,
   tripTabDestinations,
-  type TripDestination,
 } from '@/lib/trips/navigation';
 import { cn } from '@/lib/utils';
 import { tripSectionIcons } from '@/lib/icons';
@@ -79,17 +79,6 @@ function movesThePlan(before: Trip, after: Trip) {
     // to reach it - otherwise the chrome keeps showing the old one.
     (before.countries ?? []).join('\u0000') !== (after.countries ?? []).join('\u0000')
   );
-}
-
-function emphasisClasses(destination: TripDestination, active: boolean) {
-  if (active) return 'text-foreground';
-  if (destination.emphasis === 'leading') {
-    return 'text-foreground hover:bg-surface-hover';
-  }
-  if (destination.emphasis === 'quiet') {
-    return 'text-text-subtle hover:bg-surface-hover hover:text-foreground';
-  }
-  return 'text-muted-foreground hover:bg-surface-hover hover:text-foreground';
 }
 
 /**
@@ -251,32 +240,7 @@ export function TripChrome({
                 'sticky top-[calc(var(--safe-top)+var(--header-offset))] z-[var(--layer-sticky)] bg-background backdrop-blur md:static md:z-auto md:bg-transparent md:backdrop-blur-none',
             )}
           >
-            <nav aria-label={t('tripNavigation')} className="min-w-0">
-              {/* `overflow-x-auto` also clips vertically, which would cut the tabs'
-                focus ring. The negative margin buys it room without moving the
-                margin box, so each tab's active underline stays welded to the
-                section border below. */}
-              <ul className="-m-1 flex items-center gap-1 overflow-x-auto p-1">
-                {primary.map((destination) => {
-                  const active = destination.section === currentSection;
-                  return (
-                    <li key={destination.section}>
-                      <Link
-                        aria-current={active ? 'page' : undefined}
-                        className={cn(
-                          'relative inline-flex min-h-11 items-center whitespace-nowrap px-3 text-sm font-medium outline-none transition-colors duration-[var(--motion-standard)] after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:bg-transparent focus-visible:ring-3 focus-visible:ring-ring/40',
-                          active && 'after:bg-brand',
-                          emphasisClasses(destination, active),
-                        )}
-                        href={destination.href}
-                      >
-                        {t(destination.labelKey)}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </nav>
+            <TripTabs lifecycle={lifecycle} startDate={trip?.startDate ?? ''} tripId={tripId} />
 
             <DropdownMenu>
               <DropdownMenuTrigger

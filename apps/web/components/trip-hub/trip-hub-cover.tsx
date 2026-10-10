@@ -11,6 +11,7 @@ import { TripCountries } from '@/components/trip-countries';
 import { TripDaySegments } from '@/components/trip-day-segments';
 import { TripMedia } from '@/components/trip-media';
 import { TripStatusBadge } from '@/components/trip-status-badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { forgetCachedMediaUrls } from '@/lib/media/storage-cache-key';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
@@ -84,7 +85,9 @@ function CoverSignature({
   }
 
   const days = overview?.days ?? [];
-  const planned = trip.itineraryCoverage?.plannedDays ?? days.filter((day) => day.stopCount).length;
+  const planned = overview
+    ? days.filter((day) => day.stopCount).length
+    : (trip.itineraryCoverage?.plannedDays ?? 0);
   const total =
     trip.itineraryCoverage?.totalDays ?? calendarDayDistance(trip.startDate, trip.endDate) + 1;
   return (
@@ -125,12 +128,14 @@ function CoverSignature({
  */
 export function TripHubCover({
   editorial,
+  layout = 'hub',
   onCoverExpired,
   overview,
   stage,
   trip,
 }: Readonly<{
   editorial: EditorialImageReference | null;
+  layout?: 'hub' | 'section';
   /** The signed cover link expired; the trip must be re-read for a fresh one. */
   onCoverExpired: () => void;
   overview: TripOverviewData | undefined;
@@ -148,12 +153,15 @@ export function TripHubCover({
   return (
     <section
       aria-labelledby="trip-detail-heading"
-      className="relative isolate overflow-hidden bg-surface-media [--trip-cover-height:clamp(27rem,118vw,34rem)] lg:h-full lg:min-h-[33rem] lg:rounded-[var(--radius-2xl)]"
+      className={cn(
+        'relative isolate flex min-h-[var(--trip-cover-height)] flex-col justify-end overflow-hidden bg-surface-media [--trip-cover-height:clamp(27rem,118vw,34rem)] lg:min-h-[33rem] lg:rounded-[var(--radius-2xl)]',
+        layout === 'hub' ? 'lg:h-full' : 'lg:[--trip-cover-height:33rem]',
+      )}
       data-slot="trip-hub-cover"
     >
       <TripMedia
         alt={editorial ? media('alt.tripEditorial', { name: destinations ?? trip.name }) : ''}
-        className="w-full rounded-none lg:absolute lg:inset-0 lg:h-full"
+        className="absolute inset-0 h-full w-full rounded-none"
         fallbackSources={editorial ? [{ kind: 'editorial', reference: editorial }] : []}
         onUnreachable={() => {
           const now = Date.now();
@@ -172,7 +180,11 @@ export function TripHubCover({
           }
         }}
         preload
-        sizes="(max-width: 767px) 100vw, 720px"
+        sizes={
+          layout === 'hub'
+            ? '(max-width: 1023px) 100vw, 720px'
+            : '(max-width: 1023px) 100vw, 1024px'
+        }
         source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
         variant="cover"
       />
@@ -187,7 +199,12 @@ export function TripHubCover({
       >
         <ArrowLeft aria-hidden="true" className="size-5" />
       </Link>
-      <div className="absolute inset-x-0 bottom-0 flex flex-col items-start gap-2 px-[var(--gutter-inline-start)] pb-14 text-white lg:px-9 lg:pb-9">
+      <div
+        className={cn(
+          'relative flex flex-col items-start gap-2 px-[var(--gutter-inline-start)] pt-24 pb-14 text-white lg:px-9',
+          layout === 'hub' ? 'lg:pb-9' : 'lg:pb-14',
+        )}
+      >
         <TripStatusBadge
           lifecycle={trip.lifecycle}
           readiness={trip.planningReadiness}
@@ -219,5 +236,31 @@ export function TripHubCover({
         <CoverSignature overview={overview} stage={stage} trip={trip} />
       </div>
     </section>
+  );
+}
+
+/** Reserve the photograph and identity before the shared trip data arrives. */
+export function TripHubCoverSkeleton({
+  label,
+  layout = 'hub',
+}: Readonly<{ label: string; layout?: 'hub' | 'section' }>) {
+  return (
+    <div aria-busy="true" aria-live="polite" className="relative" role="status">
+      <span className="sr-only">{label}</span>
+      <Skeleton
+        className={cn(
+          'h-[clamp(27rem,118vw,34rem)] rounded-none lg:min-h-[33rem] lg:rounded-[var(--radius-2xl)]',
+          layout === 'hub' ? 'lg:h-full' : 'lg:h-[33rem]',
+        )}
+      />
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-0 bottom-0 space-y-3 px-[var(--gutter-inline-start)] pb-14 lg:px-9"
+      >
+        <Skeleton className="h-6 w-28 rounded-full bg-white/20" />
+        <Skeleton className="h-9 w-4/5 bg-white/20" />
+        <Skeleton className="h-4 w-2/5 bg-white/20" />
+      </div>
+    </div>
   );
 }

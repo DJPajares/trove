@@ -685,11 +685,9 @@ test('the kill switch stops the provider being configured at all', () => {
   const environment = { GOOGLE_PLACES_API_KEY: 'server-key' };
 
   expect(getPlacesEnvironment(environment)).not.toBe(null);
-  expect(getPlacesEnvironment({ ...environment, TROVE_GOOGLE_PROVIDERS_DISABLED: '1' })).toBe(null);
-  expect(getPlacesEnvironment({ ...environment, TROVE_GOOGLE_PROVIDERS_DISABLED: 'true' })).toBe(
-    null,
-  );
-  expect(areGoogleProvidersDisabled({ TROVE_GOOGLE_PROVIDERS_DISABLED: 'no' })).toBe(false);
+  expect(getPlacesEnvironment({ ...environment, GOOGLE_PROVIDERS_DISABLED: '1' })).toBe(null);
+  expect(getPlacesEnvironment({ ...environment, GOOGLE_PROVIDERS_DISABLED: 'true' })).toBe(null);
+  expect(areGoogleProvidersDisabled({ GOOGLE_PROVIDERS_DISABLED: 'no' })).toBe(false);
 });
 
 test('a location request asks for coordinates only, not the billable detail', async () => {
@@ -1164,7 +1162,7 @@ test('a day is routed from coordinates stored in another language, with no provi
  * `getTripPlanScore` reads its kill switches straight from `process.env`
  * (there is no injectable environment override, unlike `getPlacesEnvironment`),
  * so a test cannot assume either var starts unset - a developer's own `.env`
- * may have `TROVE_PLAN_SCORE_DISABLED` on locally. This snapshots and restores
+ * may have `PLAN_SCORE_DISABLED` on locally. This snapshots and restores
  * exactly the keys it touches rather than blindly deleting them.
  */
 async function withEnvOverride<T>(
@@ -1197,9 +1195,8 @@ test('Plan Score reads scheduled evidence without acquiring missing places', asy
   // leaving the injected `placesService` - the thing under test - untouched.
   // Plan Score itself must be explicitly enabled regardless of the ambient
   // environment, since this test verifies its normal (not disabled) behaviour.
-  await withEnvOverride(
-    { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
-    () => getTripPlanScore('user-1', 'trip-1', {}),
+  await withEnvOverride({ GOOGLE_PROVIDERS_DISABLED: '1', PLAN_SCORE_DISABLED: undefined }, () =>
+    getTripPlanScore('user-1', 'trip-1', {}),
   );
 
   const evidenceRequests = requests.filter((request) => request.detail === 'evidence');
@@ -1224,13 +1221,12 @@ test('suggesting a time for a new stop reads only what is stored', async () => {
   expect(getProviderCallCounts()).toStrictEqual({});
 });
 
-test('TROVE_PLAN_SCORE_DISABLED stops every provider call, even with a working service supplied', async () => {
+test('PLAN_SCORE_DISABLED stops every provider call, even with a working service supplied', async () => {
   tripFixture = buildPlanScoreTripFixture();
   const { requests } = detailRequestsProvider();
 
-  await withEnvOverride(
-    { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
-    () => getTripPlanScore('user-1', 'trip-1', {}),
+  await withEnvOverride({ GOOGLE_PROVIDERS_DISABLED: '1', PLAN_SCORE_DISABLED: undefined }, () =>
+    getTripPlanScore('user-1', 'trip-1', {}),
   );
   expect(requests.length, 'cache-only scoring must not reach a provider even when enabled').toBe(0);
 
@@ -1238,7 +1234,7 @@ test('TROVE_PLAN_SCORE_DISABLED stops every provider call, even with a working s
   resetCachedPlacesMemo();
   const tripFindFirstCallsBeforeDisabled = tripFindFirstCalls;
   const disabled = await withEnvOverride(
-    { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: '1' },
+    { GOOGLE_PROVIDERS_DISABLED: '1', PLAN_SCORE_DISABLED: '1' },
     () => getTripPlanScore('user-1', 'trip-1', {}),
   );
 
@@ -1258,7 +1254,7 @@ test('TROVE_PLAN_SCORE_DISABLED stops every provider call, even with a working s
  * nothing — asserted here because the guarantee is otherwise only an accident of
  * which module reads the flag.
  */
-test('TROVE_PLAN_SCORE_DISABLED cannot reach scoring that costs no provider call', async () => {
+test('PLAN_SCORE_DISABLED cannot reach scoring that costs no provider call', async () => {
   const { arePlanScoreProvidersDisabled } = await import('../src/environment.js');
   const planScore = await import('../src/services/plan-score.js');
   const pipelineSource = await readFile(
@@ -1270,7 +1266,7 @@ test('TROVE_PLAN_SCORE_DISABLED cannot reach scoring that costs no provider call
     'utf8',
   );
 
-  expect(arePlanScoreProvidersDisabled({ TROVE_PLAN_SCORE_DISABLED: '1' })).toBe(true);
+  expect(arePlanScoreProvidersDisabled({ PLAN_SCORE_DISABLED: '1' })).toBe(true);
 
   // The pipeline now uses the shared cache-only draft reader. Neither path
   // consults the provider kill switch or acquires missing evidence.
@@ -1279,7 +1275,7 @@ test('TROVE_PLAN_SCORE_DISABLED cannot reach scoring that costs no provider call
   expect(draftReaderSource).toContain('buildPlanScoreFromEvaluations');
   expect(draftReaderSource).not.toContain('arePlanScoreProvidersDisabled');
   expect(
-    await withEnvOverride({ TROVE_PLAN_SCORE_DISABLED: '1' }, async () =>
+    await withEnvOverride({ PLAN_SCORE_DISABLED: '1' }, async () =>
       planScore.buildPlanScoreFromEvaluations({ days: [], mustGoIds: [], scheduledIds: [] }),
     ),
   ).toMatchObject({ withheldReasons: ['NO_SCORABLE_DAY'] });
@@ -1296,9 +1292,8 @@ test('a stored Plan Score serves an unchanged trip with no provider call', async
   tripFixture = buildPlanScoreTripFixture();
   const { requests } = detailRequestsProvider();
   const scoreAt = (now: Date) =>
-    withEnvOverride(
-      { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
-      () => getTripPlanScore('user-1', 'trip-1', { now: () => now }),
+    withEnvOverride({ GOOGLE_PROVIDERS_DISABLED: '1', PLAN_SCORE_DISABLED: undefined }, () =>
+      getTripPlanScore('user-1', 'trip-1', { now: () => now }),
     );
 
   const first = await scoreAt(new Date('2026-09-01T09:00:00.000Z'));
@@ -1318,9 +1313,8 @@ test('the stored Plan Score is invalidated by what the rubric reads, and only th
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-09-01T09:00:00.000Z'));
   const scoreAt = (now: Date) =>
-    withEnvOverride(
-      { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
-      () => getTripPlanScore('user-1', 'trip-1', { now: () => now }),
+    withEnvOverride({ GOOGLE_PROVIDERS_DISABLED: '1', PLAN_SCORE_DISABLED: undefined }, () =>
+      getTripPlanScore('user-1', 'trip-1', { now: () => now }),
     );
   const NOW = new Date('2026-09-01T09:00:00.000Z');
 
@@ -1394,9 +1388,8 @@ test('a stored Plan Score expires even when nothing about the trip changed', asy
   tripFixture = buildPlanScoreTripFixture();
   const { requests } = detailRequestsProvider();
   const scoreAt = (now: Date) =>
-    withEnvOverride(
-      { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
-      () => getTripPlanScore('user-1', 'trip-1', { now: () => now }),
+    withEnvOverride({ GOOGLE_PROVIDERS_DISABLED: '1', PLAN_SCORE_DISABLED: undefined }, () =>
+      getTripPlanScore('user-1', 'trip-1', { now: () => now }),
     );
 
   const first = new Date('2026-09-01T09:00:00.000Z');
@@ -1434,7 +1427,7 @@ test('an inflated Apply timestamp cannot renew an expired generated assessment',
   };
   const { requests } = detailRequestsProvider();
   const result = await withEnvOverride(
-    { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
+    { GOOGLE_PROVIDERS_DISABLED: '1', PLAN_SCORE_DISABLED: undefined },
     () =>
       getTripPlanScore('user-1', 'trip-1', {
         now: () => now,
@@ -1465,7 +1458,7 @@ test('expired provider evidence still permits a cache-only partial timing assess
     planScoreRevision: readPlanScoreInputs(trip as never).revision,
   };
   const result = await withEnvOverride(
-    { TROVE_GOOGLE_PROVIDERS_DISABLED: '1', TROVE_PLAN_SCORE_DISABLED: undefined },
+    { GOOGLE_PROVIDERS_DISABLED: '1', PLAN_SCORE_DISABLED: undefined },
     () => getTripPlanScore('user-1', 'trip-1', { now: () => now }),
   );
   expect(result).toMatchObject({ assessmentStatus: 'provisional' });

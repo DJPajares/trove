@@ -7,14 +7,14 @@ async function main() {
   const ownerId = z.uuid().parse(process.argv[2]);
   const reason = z.string().trim().min(1).max(500).parse(process.argv[3]);
   if (process.argv.length !== 4) throw new Error('Usage: pnpm ai:reset-quota <user-id> <reason>');
-  const base = new URL(process.env.TROVE_ADMIN_API_URL ?? 'http://localhost:3001');
+  const base = new URL(process.env.ADMIN_API_URL ?? 'http://localhost:3001');
   if (
     base.protocol !== 'https:' &&
     !(base.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(base.hostname))
   )
     throw new Error('Admin API requires HTTPS outside localhost.');
-  const token = process.env.TROVE_ADMIN_TOKEN;
-  if (!token) throw new Error('Set TROVE_ADMIN_TOKEN to a scoped operator credential.');
+  const token = process.env.ADMIN_TOKEN;
+  if (!token) throw new Error('Set ADMIN_TOKEN to a scoped operator credential.');
   const response = await fetch(new URL(`/admin/users/${ownerId}/ai-planner/reset`, base), {
     method: 'POST',
     headers: {

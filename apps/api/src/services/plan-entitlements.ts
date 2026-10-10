@@ -49,7 +49,7 @@ export function getPlanEntitlements(plan: PlanKey): PlanEntitlements {
 }
 
 export function getAiPlannerBurstLimit(env: Record<string, string | undefined> = process.env) {
-  return integer(env, 'TROVE_AI_PLANNER_STARTS_PER_MINUTE', 5, 1, 1_000);
+  return integer(env, 'AI_PLANNER_STARTS_PER_MINUTE', 5, 1, 1_000);
 }
 
 /** Storage has structural contracts; entitlement limits are enforced with a run snapshot. */

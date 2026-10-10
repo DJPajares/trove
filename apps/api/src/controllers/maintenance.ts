@@ -72,7 +72,7 @@ export async function tripMediaCleanupController(request: FastifyRequest, reply:
 }
 
 export async function notificationDispatchController(request: FastifyRequest, reply: FastifyReply) {
-  const secret = process.env.TROVE_NOTIFICATION_DISPATCH_SECRET?.trim();
+  const secret = process.env.NOTIFICATION_DISPATCH_SECRET?.trim();
   if (!secret || !getPushEnvironment())
     return reply.code(503).send({ code: 'configuration_missing' });
   const presented = getBearerToken(request.headers.authorization);

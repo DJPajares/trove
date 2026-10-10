@@ -83,7 +83,7 @@ async function main() {
 
   if (!environment) {
     throw new Error(
-      'PEXELS_API_KEY is not configured (or TROVE_EDITORIAL_IMAGES_DISABLED is set). ' +
+      'PEXELS_API_KEY is not configured (or EDITORIAL_IMAGES_DISABLED is set). ' +
         'Set PEXELS_API_KEY in the repo-root .env before running this script.',
     );
   }

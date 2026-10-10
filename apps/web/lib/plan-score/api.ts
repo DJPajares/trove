@@ -22,7 +22,7 @@ export class PlanScoreApiError extends Error {
   }
 }
 
-const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 /**
  * Plan Score is derived from live route and provider evidence, so it is never

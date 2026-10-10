@@ -35,11 +35,11 @@ test('Vertex accepts explicit server credentials and configuration overrides', (
         GOOGLE_VERTEX_LOCATION: ' us-central1 ',
         GOOGLE_VERTEX_PRIVATE_KEY: 'line-one\\nline-two',
         GOOGLE_VERTEX_PROJECT: 'trove-preview',
-        TROVE_AI_MAX_OUTPUT_TOKENS: '4096',
-        TROVE_AI_MODEL: 'gemini-3.8-flash',
-        TROVE_AI_PROVIDER: 'vertex',
-        TROVE_AI_THINKING_LEVEL: 'high',
-        TROVE_AI_TIMEOUT_MS: '45000',
+        AI_MAX_OUTPUT_TOKENS: '4096',
+        AI_MODEL: 'gemini-3.8-flash',
+        AI_PROVIDER: 'vertex',
+        AI_THINKING_LEVEL: 'high',
+        AI_TIMEOUT_MS: '45000',
       },
       () => false,
     ),
@@ -74,11 +74,11 @@ test('GOOGLE_APPLICATION_CREDENTIALS is a discoverable ADC source', () => {
 });
 
 test('global and budget switches make AI unavailable before credential validation', () => {
-  expect(getAiGenerationEnvironment({ TROVE_AI_DISABLED: 'true' })).toMatchObject({
+  expect(getAiGenerationEnvironment({ AI_DISABLED: 'true' })).toMatchObject({
     code: 'ai_disabled',
     status: 'unavailable',
   });
-  expect(getAiGenerationEnvironment({ TROVE_AI_BUDGET_DISABLED: '1' })).toMatchObject({
+  expect(getAiGenerationEnvironment({ AI_BUDGET_DISABLED: '1' })).toMatchObject({
     code: 'ai_budget_disabled',
     status: 'unavailable',
   });
@@ -86,14 +86,11 @@ test('global and budget switches make AI unavailable before credential validatio
 
 test.each([
   [{}, 'configuration_missing'],
-  [{ GOOGLE_VERTEX_PROJECT: 'trove', TROVE_AI_PROVIDER: 'other' }, 'configuration_invalid'],
-  [{ GOOGLE_VERTEX_PROJECT: 'trove', TROVE_AI_TIMEOUT_MS: '999' }, 'configuration_invalid'],
-  [{ GOOGLE_VERTEX_PROJECT: 'trove', TROVE_AI_MODEL: 'gemini-2.5-pro' }, 'configuration_invalid'],
-  [{ GOOGLE_VERTEX_PROJECT: 'trove', TROVE_AI_THINKING_LEVEL: 'minimal' }, 'configuration_invalid'],
-  [
-    { GOOGLE_VERTEX_PROJECT: 'trove', TROVE_AI_MAX_OUTPUT_TOKENS: '65537' },
-    'configuration_invalid',
-  ],
+  [{ GOOGLE_VERTEX_PROJECT: 'trove', AI_PROVIDER: 'other' }, 'configuration_invalid'],
+  [{ GOOGLE_VERTEX_PROJECT: 'trove', AI_TIMEOUT_MS: '999' }, 'configuration_invalid'],
+  [{ GOOGLE_VERTEX_PROJECT: 'trove', AI_MODEL: 'gemini-2.5-pro' }, 'configuration_invalid'],
+  [{ GOOGLE_VERTEX_PROJECT: 'trove', AI_THINKING_LEVEL: 'minimal' }, 'configuration_invalid'],
+  [{ GOOGLE_VERTEX_PROJECT: 'trove', AI_MAX_OUTPUT_TOKENS: '65537' }, 'configuration_invalid'],
   [
     { GOOGLE_VERTEX_CLIENT_EMAIL: 'ai@example.test', GOOGLE_VERTEX_PROJECT: 'trove' },
     'configuration_invalid',
@@ -109,7 +106,7 @@ test('the thinking level accepts only supported Gemini 3.8 Flash values', () => 
   for (const level of ['low', 'medium', 'high']) {
     expect(
       getAiGenerationEnvironment(
-        { GOOGLE_VERTEX_PROJECT: 'trove-dev', TROVE_AI_THINKING_LEVEL: level },
+        { GOOGLE_VERTEX_PROJECT: 'trove-dev', AI_THINKING_LEVEL: level },
         () => true,
       ),
     ).toMatchObject({ status: 'available', vertex: { thinkingLevel: level } });

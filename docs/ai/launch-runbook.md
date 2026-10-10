@@ -18,7 +18,7 @@ that changes what travellers see.
    - `GOOGLE_VERTEX_LOCATION`
    - `GOOGLE_VERTEX_CLIENT_EMAIL`
    - `GOOGLE_VERTEX_PRIVATE_KEY` (escaped `\n` is accepted)
-   - `TROVE_AI_MODEL`, `TROVE_AI_THINKING_LEVEL`, `TROVE_AI_TIMEOUT_MS`, `TROVE_AI_MAX_OUTPUT_TOKENS`
+   - `AI_MODEL`, `AI_THINKING_LEVEL`, `AI_TIMEOUT_MS`, `AI_MAX_OUTPUT_TOKENS`
 3. Set a Google Cloud **budget with alerts** on the project before the first
    production generation, not after.
 4. Confirm no development or trial credential is present in Production, and that
@@ -77,30 +77,30 @@ Build:
 
 ## 4. Alerts
 
-| Alert                | Condition                                                                                 | First response                                                                                                                                                                                              |
-| -------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Provider failing     | `errorCode` in `provider_unavailable`/`timeout` above baseline over 15 min                | Check Vertex status; if sustained, set `TROVE_AI_DISABLED=1`                                                                                                                                                |
-| Credentials broken   | `errorCode = configuration_missing` on any generation attempt                             | Vertex could not authenticate. Check `GOOGLE_VERTEX_CLIENT_EMAIL`/`GOOGLE_VERTEX_PRIVATE_KEY`, not Vertex status                                                                                            |
-| Vertex rejecting     | `errorCode = configuration_invalid` on any generation attempt                             | Credentials load but Vertex refuses: confirm `aiplatform.googleapis.com` is enabled and the service account holds `roles/aiplatform.user`. Both propagate over several minutes after a change               |
-| Model change fallout | `errorCode` in `invalid_response`/`timeout` spiking right after a `TROVE_AI_MODEL` change | Reasoning shares `TROVE_AI_MAX_OUTPUT_TOKENS` with the answer. Lower `TROVE_AI_THINKING_LEVEL` from `high` to `medium` or `low`, or raise the output cap; a truncated answer reports finish reason `length` |
-| Latency regression   | p95 `latencyMs` above the agreed ceiling over 15 min                                      | Check model and region; consider a smaller model                                                                                                                                                            |
-| Model spend          | Google Cloud budget threshold crossed                                                     | Set `TROVE_AI_BUDGET_DISABLED=1`                                                                                                                                                                            |
-| Google spend         | planner-sourced `google provider request` volume above the agreed daily ceiling           | Set `TROVE_GOOGLE_PROVIDERS_DISABLED=1`; the planner degrades to Custom Places                                                                                                                              |
-| Cap violations       | `warningCounts.provider_cap_reached` rising                                               | Investigate fan-out before raising any cap                                                                                                                                                                  |
-| Cleanup failure      | No `ai planning retention` line in 26 h                                                   | Check `CRON_SECRET` and the cron run in Vercel                                                                                                                                                              |
-| Overdue review data  | `remainingOverdueSessions > 0` or a failed retention response                             | Restore maintenance access, rerun the guarded sweep, and confirm the remaining count reaches zero                                                                                                           |
-| Apply integrity      | `kind = apply_completed, outcome = rejected` above baseline                               | Read the `code` split; `draft_conflict` and `warnings_not_acknowledged` are expected, others are not                                                                                                        |
+| Alert                | Condition                                                                           | First response                                                                                                                                                                                  |
+| -------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Provider failing     | `errorCode` in `provider_unavailable`/`timeout` above baseline over 15 min          | Check Vertex status; if sustained, set `AI_DISABLED=1`                                                                                                                                          |
+| Credentials broken   | `errorCode = configuration_missing` on any generation attempt                       | Vertex could not authenticate. Check `GOOGLE_VERTEX_CLIENT_EMAIL`/`GOOGLE_VERTEX_PRIVATE_KEY`, not Vertex status                                                                                |
+| Vertex rejecting     | `errorCode = configuration_invalid` on any generation attempt                       | Credentials load but Vertex refuses: confirm `aiplatform.googleapis.com` is enabled and the service account holds `roles/aiplatform.user`. Both propagate over several minutes after a change   |
+| Model change fallout | `errorCode` in `invalid_response`/`timeout` spiking right after a `AI_MODEL` change | Reasoning shares `AI_MAX_OUTPUT_TOKENS` with the answer. Lower `AI_THINKING_LEVEL` from `high` to `medium` or `low`, or raise the output cap; a truncated answer reports finish reason `length` |
+| Latency regression   | p95 `latencyMs` above the agreed ceiling over 15 min                                | Check model and region; consider a smaller model                                                                                                                                                |
+| Model spend          | Google Cloud budget threshold crossed                                               | Set `AI_BUDGET_DISABLED=1`                                                                                                                                                                      |
+| Google spend         | planner-sourced `google provider request` volume above the agreed daily ceiling     | Set `GOOGLE_PROVIDERS_DISABLED=1`; the planner degrades to Custom Places                                                                                                                        |
+| Cap violations       | `warningCounts.provider_cap_reached` rising                                         | Investigate fan-out before raising any cap                                                                                                                                                      |
+| Cleanup failure      | No `ai planning retention` line in 26 h                                             | Check `CRON_SECRET` and the cron run in Vercel                                                                                                                                                  |
+| Overdue review data  | `remainingOverdueSessions > 0` or a failed retention response                       | Restore maintenance access, rerun the guarded sweep, and confirm the remaining count reaches zero                                                                                               |
+| Apply integrity      | `kind = apply_completed, outcome = rejected` above baseline                         | Read the `code` split; `draft_conflict` and `warnings_not_acknowledged` are expected, others are not                                                                                            |
 
 ## 5. Kill-switch drill
 
 Run this **before** launch, on Production, and confirm each step:
 
-1. Set `TROVE_AI_DISABLED=1` on `trove-api` and redeploy.
+1. Set `AI_DISABLED=1` on `trove-api` and redeploy.
 2. Composer reports AI unavailable; **manual trip creation still works**;
    **editing an existing trip still works**.
 3. Confirm `ai planning` `dispatch_rejected` with `code = ai_disabled`.
 4. Unset it, redeploy, confirm generation works again.
-5. Repeat steps 1-4 with `TROVE_AI_BUDGET_DISABLED=1` and
+5. Repeat steps 1-4 with `AI_BUDGET_DISABLED=1` and
    `code = ai_budget_disabled`.
 
 That the switches cannot reach anything but AI is enforced in
@@ -121,5 +121,5 @@ Only after 1-6 pass:
 3. Enable the feature for all signed-in users.
 4. Watch the dashboards in section 3 for the first day.
 
-Rollback is `TROVE_AI_DISABLED=1`. It leaves manual trip creation and all
+Rollback is `AI_DISABLED=1`. It leaves manual trip creation and all
 existing trip editing untouched.

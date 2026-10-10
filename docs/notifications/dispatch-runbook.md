@@ -12,10 +12,10 @@ evidence; it makes no provider requests.
    `push_subscriptions` and `push_deliveries` are private and browser roles have
    no privileges. Do not use `prisma db push` against production.
 2. Generate a VAPID key pair using the API workspace's `web-push` package.
-   Set `TROVE_VAPID_PUBLIC_KEY`, `TROVE_VAPID_PRIVATE_KEY`, and a contact
-   `TROVE_VAPID_SUBJECT` on **trove-api only**. Keep the pair stable across
+   Set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and a contact
+   `VAPID_SUBJECT` on **trove-api only**. Keep the pair stable across
    deployments; changing it invalidates existing browser subscriptions.
-3. Set a long random `TROVE_NOTIFICATION_DISPATCH_SECRET` on **trove-api only**.
+3. Set a long random `NOTIFICATION_DISPATCH_SECRET` on **trove-api only**.
    Deploy API before web, then deploy web. Confirm the authenticated
    `/notifications/push-config` reports available and a device can register.
 4. In the connected Supabase project, enable `pg_cron` and `pg_net` using the

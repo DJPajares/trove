@@ -33,7 +33,7 @@ vi.mock('../src/services/trip-media-cleanup.js', () => ({
 }));
 
 vi.mock('../src/services/web-push.js', () => ({
-  getPushEnvironment: vi.fn(() => (process.env.TROVE_VAPID_PRIVATE_KEY ? {} : null)),
+  getPushEnvironment: vi.fn(() => (process.env.VAPID_PRIVATE_KEY ? {} : null)),
   dispatchNotifications: vi.fn(async () => ({
     accepted: 1,
     attempted: 1,
@@ -58,8 +58,8 @@ afterEach(() => {
   });
   delete process.env.CRON_SECRET;
   delete process.env.SUPABASE_SECRET_KEY;
-  delete process.env.TROVE_NOTIFICATION_DISPATCH_SECRET;
-  delete process.env.TROVE_VAPID_PRIVATE_KEY;
+  delete process.env.NOTIFICATION_DISPATCH_SECRET;
+  delete process.env.VAPID_PRIVATE_KEY;
 });
 
 async function inject(
@@ -119,8 +119,8 @@ test('push dispatch requires its own secret and configured VAPID credentials', a
   const headers = { authorization: `Bearer ${SECRET}` };
   expect((await inject(headers, path, 'POST')).statusCode).toBe(503);
   process.env.CRON_SECRET = SECRET;
-  process.env.TROVE_NOTIFICATION_DISPATCH_SECRET = 'different-dispatch-secret';
-  process.env.TROVE_VAPID_PRIVATE_KEY = 'configured';
+  process.env.NOTIFICATION_DISPATCH_SECRET = 'different-dispatch-secret';
+  process.env.VAPID_PRIVATE_KEY = 'configured';
   expect((await inject(headers, path, 'POST')).statusCode).toBe(401);
   const accepted = await inject(
     { authorization: 'Bearer different-dispatch-secret' },

@@ -39,7 +39,7 @@ let update: ReturnType<typeof vi.fn>;
 let outbound: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  vi.stubEnv('TROVE_PLAN_SCORE_DISABLED', 'false');
+  vi.stubEnv('PLAN_SCORE_DISABLED', 'false');
   evidenceRow = {
     cachedEvidence: place,
     cachedEvidenceAt: new Date(NOW.getTime() - 2 * DAY),
@@ -393,9 +393,9 @@ test('local recheck after a day reuses valid provider evidence without renewing 
 });
 
 test('re-enabling evaluates the same existing trip and rejects legacy payloads without acquisition', async () => {
-  vi.stubEnv('TROVE_PLAN_SCORE_DISABLED', 'true');
+  vi.stubEnv('PLAN_SCORE_DISABLED', 'true');
   expect(await getTripPlanScore('owner', 'trip', { now: () => NOW })).toBeNull();
-  vi.stubEnv('TROVE_PLAN_SCORE_DISABLED', 'false');
+  vi.stubEnv('PLAN_SCORE_DISABLED', 'false');
   const first = await getTripPlanScore('owner', 'trip', { now: () => NOW });
   expect(first?.schemaVersion).toBe(8);
   trip.planScore = { ...first, schemaVersion: 7, rubricVersion: 10 };

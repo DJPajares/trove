@@ -46,7 +46,7 @@ export class CurrencyApiError extends Error {
   }
 }
 
-const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 const rateCachePrefix = 'trove:currency-rate:v1:';
 const currenciesCacheKey = 'trove:currencies:v1';
 const boardCacheKey = 'trove:currency-board:v1';

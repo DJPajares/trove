@@ -56,8 +56,8 @@ const AVAILABLE_ENVIRONMENT = {
   GOOGLE_VERTEX_CLIENT_EMAIL: 'ai@example.test',
   GOOGLE_VERTEX_PRIVATE_KEY: 'line-one\\nline-two',
   GOOGLE_VERTEX_PROJECT: 'trove-test',
-  TROVE_AI_MODEL: 'gemini-3.1-flash-lite',
-  TROVE_AI_PROVIDER: 'vertex',
+  AI_MODEL: 'gemini-3.1-flash-lite',
+  AI_PROVIDER: 'vertex',
 };
 
 type SessionState = {
@@ -514,7 +514,7 @@ describe('planning-session reservations and recovery', () => {
 
     await expect(
       getAiPlanningAvailability(OWNER_ID, {
-        environment: { TROVE_AI_DISABLED: 'true' },
+        environment: { AI_DISABLED: 'true' },
         now: () => NOW,
         prisma: store.prisma,
       }),
@@ -539,7 +539,7 @@ describe('planning-session reservations and recovery', () => {
 
     await expect(
       getAiPlanningAvailability(OWNER_ID, {
-        environment: { ...AVAILABLE_ENVIRONMENT, TROVE_AI_PLANNER_STARTS_PER_MINUTE: '6' },
+        environment: { ...AVAILABLE_ENVIRONMENT, AI_PLANNER_STARTS_PER_MINUTE: '6' },
         now: () => NOW,
         prisma: store.prisma,
       }),
@@ -554,8 +554,8 @@ describe('planning-session reservations and recovery', () => {
       getAiPlanningAvailability(OWNER_ID, {
         environment: {
           ...AVAILABLE_ENVIRONMENT,
-          TROVE_AI_DISABLED: 'true',
-          TROVE_AI_PLANNER_STARTS_PER_MINUTE: '6',
+          AI_DISABLED: 'true',
+          AI_PLANNER_STARTS_PER_MINUTE: '6',
         },
         now: () => NOW,
         prisma: store.prisma,
@@ -1178,7 +1178,7 @@ describe('dispatch quota and lifecycle completion', () => {
 
     await expect(
       claimAiPlanningDispatch(OWNER_ID, runId, {
-        environment: { ...AVAILABLE_ENVIRONMENT, TROVE_AI_PLANNER_STARTS_PER_MINUTE: '6' },
+        environment: { ...AVAILABLE_ENVIRONMENT, AI_PLANNER_STARTS_PER_MINUTE: '6' },
         now: () => NOW,
         prisma: store.prisma,
       }),
@@ -1220,7 +1220,7 @@ describe('dispatch quota and lifecycle completion', () => {
 
       await expect(
         claimAiPlanningDispatch(OWNER_ID, runId, {
-          environment: { ...AVAILABLE_ENVIRONMENT, TROVE_AI_DISABLED: '1' },
+          environment: { ...AVAILABLE_ENVIRONMENT, AI_DISABLED: '1' },
           now: () => NOW,
           prisma: store.prisma,
         }),
@@ -1305,9 +1305,9 @@ describe('dispatch quota and lifecycle completion', () => {
   });
 
   test.each([
-    [{ TROVE_AI_DISABLED: 'true' }, 'ai_disabled'],
-    [{ TROVE_AI_BUDGET_DISABLED: 'true' }, 'ai_budget_disabled'],
-    [{ GOOGLE_VERTEX_PROJECT: 'trove', TROVE_AI_PROVIDER: 'invalid' }, 'configuration_invalid'],
+    [{ AI_DISABLED: 'true' }, 'ai_disabled'],
+    [{ AI_BUDGET_DISABLED: 'true' }, 'ai_budget_disabled'],
+    [{ GOOGLE_VERTEX_PROJECT: 'trove', AI_PROVIDER: 'invalid' }, 'configuration_invalid'],
   ])('rejects %s before dispatch with %s', async (environment, code) => {
     const store = createPlanningStore();
     const sessionId = '00000000-0000-4000-8000-000000000130';
@@ -1539,9 +1539,9 @@ describe('dispatch quota and lifecycle completion', () => {
 });
 
 test('the administrative scoring kill switch hides an AI assessment without changing its draft', () => {
-  const previous = process.env.TROVE_PLAN_SCORE_DISABLED;
+  const previous = process.env.PLAN_SCORE_DISABLED;
   try {
-    process.env.TROVE_PLAN_SCORE_DISABLED = 'true';
+    process.env.PLAN_SCORE_DISABLED = 'true';
     const draft = explicitDraft();
     const session = makeSession('00000000-0000-4000-8000-000000000168', {
       draft,
@@ -1555,13 +1555,13 @@ test('the administrative scoring kill switch hides an AI assessment without chan
     expect(response.draft).toEqual(draft);
     expect(session.planScore).not.toBeNull();
   } finally {
-    if (previous === undefined) delete process.env.TROVE_PLAN_SCORE_DISABLED;
-    else process.env.TROVE_PLAN_SCORE_DISABLED = previous;
+    if (previous === undefined) delete process.env.PLAN_SCORE_DISABLED;
+    else process.env.PLAN_SCORE_DISABLED = previous;
   }
 });
 
 test('reopening null and legacy draft assessments recomputes locally without a generation run', async () => {
-  vi.stubEnv('TROVE_PLAN_SCORE_DISABLED', 'false');
+  vi.stubEnv('PLAN_SCORE_DISABLED', 'false');
   const outbound = vi.fn(() => {
     throw new Error('unexpected model/provider request');
   });
@@ -1607,7 +1607,7 @@ test('reopening null and legacy draft assessments recomputes locally without a g
 });
 
 test('a late draft score cannot overwrite or return a concurrently regenerated session', async () => {
-  vi.stubEnv('TROVE_PLAN_SCORE_DISABLED', 'false');
+  vi.stubEnv('PLAN_SCORE_DISABLED', 'false');
   const store = createPlanningStore();
   const session = makeSession('00000000-0000-4000-8000-000000000171', {
     draft: explicitDraft(),

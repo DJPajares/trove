@@ -9,6 +9,26 @@ vi.mock('@/lib/supabase/client', () => ({
 
 const { deleteTrip, saveTrip } = await import('../lib/trips/api.ts');
 
+test('AI availability uses the configured public API URL and authenticated session', async () => {
+  vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.example.com');
+  vi.resetModules();
+  const fetchMock = vi.fn(async () => Response.json({ availability: { status: 'available' } }));
+  vi.stubGlobal('fetch', fetchMock);
+  try {
+    const { fetchAiPlanningAvailability } = await import('../lib/ai-planning/api.ts');
+    await fetchAiPlanningAvailability();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.example.com/ai/planning-sessions/availability',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer token' }),
+      }),
+    );
+  } finally {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  }
+});
+
 test('shrink errors retain the reviewed impact and revision', async () => {
   const impact = { revision: 'revision', removedDays: [], retainedDays: [] };
   vi.stubGlobal(

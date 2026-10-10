@@ -19,9 +19,7 @@ const authenticated = {
     amr: [{ method: 'otp', timestamp: now }],
   },
 };
-beforeEach(() =>
-  vi.stubEnv('TROVE_AUTH_RECOVERY_SECRET', Buffer.alloc(32, 2).toString('base64url')),
-);
+beforeEach(() => vi.stubEnv('AUTH_RECOVERY_SECRET', Buffer.alloc(32, 2).toString('base64url')));
 afterEach(() => vi.unstubAllEnvs());
 
 describe('server-signed recovery receipts', () => {
@@ -52,7 +50,7 @@ describe('server-signed recovery receipts', () => {
   });
   it('rejects signatures after key rotation', () => {
     const receipt = createRecoveryGrant(identity, now);
-    vi.stubEnv('TROVE_AUTH_RECOVERY_SECRET', Buffer.alloc(32, 3).toString('base64url'));
+    vi.stubEnv('AUTH_RECOVERY_SECRET', Buffer.alloc(32, 3).toString('base64url'));
     expect(verifyRecoveryGrant(receipt, now)).toBeNull();
   });
   it('rejects future-dated receipts', () => {
@@ -61,7 +59,7 @@ describe('server-signed recovery receipts', () => {
   it.each(['', 'short', '<secret>', Buffer.alloc(16).toString('base64url')])(
     'fails closed with unusable signing material %s',
     (secret) => {
-      vi.stubEnv('TROVE_AUTH_RECOVERY_SECRET', secret);
+      vi.stubEnv('AUTH_RECOVERY_SECRET', secret);
       expect(recoverySigningKey()).toBeNull();
       expect(() => createRecoveryGrant(identity, now)).toThrow('recovery_not_configured');
     },

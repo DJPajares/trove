@@ -28,7 +28,7 @@ import type { MemoriesResponse } from '../memories/api';
 import type { Task, TasksResponse } from '../tasks/api';
 import type { TripInfoEntry, TripInfoResponse } from '../trip-info/api';
 
-const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 export class OfflineSyncError extends Error {
   constructor(public readonly code: string) {

@@ -36,9 +36,9 @@ function keyBytes(value: string) {
 }
 
 export function getPushEnvironment(environment: NodeJS.ProcessEnv = process.env) {
-  const publicKey = environment.TROVE_VAPID_PUBLIC_KEY?.trim();
-  const privateKey = environment.TROVE_VAPID_PRIVATE_KEY?.trim();
-  const subject = environment.TROVE_VAPID_SUBJECT?.trim();
+  const publicKey = environment.VAPID_PUBLIC_KEY?.trim();
+  const privateKey = environment.VAPID_PRIVATE_KEY?.trim();
+  const subject = environment.VAPID_SUBJECT?.trim();
   if (
     !publicKey ||
     !privateKey ||

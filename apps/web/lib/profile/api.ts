@@ -22,7 +22,7 @@ export type Profile = {
 
 export type ProfileUpdate = Partial<Omit<Profile, 'avatarUrl' | 'homeTimeZone' | 'id'>>;
 
-const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 async function getAuthContext() {
   const supabase = createBrowserSupabaseClient();

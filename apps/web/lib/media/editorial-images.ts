@@ -70,7 +70,7 @@ export const MAX_GENERIC_IMAGES = 8;
  */
 export const EDITORIAL_IMAGE_RESOLUTION_VERSION = 4;
 
-const apiUrl = process.env.NEXT_PUBLIC_TROVE_API_URL ?? 'http://localhost:3001';
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 /**
  * Mirrors `editorialSubjectKey` in the API exactly, because the same key has to

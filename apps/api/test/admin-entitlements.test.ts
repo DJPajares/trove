@@ -12,9 +12,9 @@ const credential = {
   expiresAt: '2099-01-01T00:00:00Z',
   scopes: ['ai_planner:reset'],
 };
-const env = { TROVE_ADMIN_CREDENTIALS: JSON.stringify([credential]) };
+const env = { ADMIN_CREDENTIALS: JSON.stringify([credential]) };
 afterEach(() => {
-  delete process.env.TROVE_ADMIN_CREDENTIALS;
+  delete process.env.ADMIN_CREDENTIALS;
 });
 
 test('admin authorization requires dedicated unexpired hashed keys with the operation scope', () => {
@@ -42,11 +42,11 @@ test('admin authorization requires dedicated unexpired hashed keys with the oper
     status: 503,
   });
   expect(
-    authenticateAdmin(`Bearer ${token}`, 'ai_planner:reset', { TROVE_ADMIN_CREDENTIALS: '[]' }),
+    authenticateAdmin(`Bearer ${token}`, 'ai_planner:reset', { ADMIN_CREDENTIALS: '[]' }),
   ).toMatchObject({ status: 503 });
 });
 test('protected routes require a single UUID target, strict body and an idempotency key before executing', async () => {
-  process.env.TROVE_ADMIN_CREDENTIALS = env.TROVE_ADMIN_CREDENTIALS;
+  process.env.ADMIN_CREDENTIALS = env.ADMIN_CREDENTIALS;
   const operate = vi.fn(async () => ({
     auditId: randomUUID(),
     changed: true,

@@ -1,6 +1,9 @@
 import { withSerwist } from '@serwist/turbopack';
 import type { NextConfig } from 'next';
+import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 import createNextIntlPlugin from 'next-intl/plugin';
+
+import { createReleaseManifest, parseReleaseManifest } from './lib/updates/release.ts';
 
 const supabaseHost = (() => {
   try {
@@ -35,4 +38,21 @@ const nextConfig: NextConfig = {
 };
 const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 
-export default withSerwist(withNextIntl(nextConfig));
+export default function config(phase: string) {
+  const release = parseReleaseManifest(JSON.parse(process.env.TROVE_WEB_RELEASE ?? 'null'));
+  if (phase === PHASE_PRODUCTION_BUILD && !release) {
+    throw new Error('Build through pnpm build so the app and worker share release metadata');
+  }
+  const manifest = release ?? createReleaseManifest([], 'development');
+  const { entries: _entries, ...installed } = manifest;
+  return withSerwist(
+    withNextIntl({
+      ...nextConfig,
+      env: {
+        TROVE_WEB_RELEASE: JSON.stringify(manifest),
+        NEXT_PUBLIC_TROVE_RELEASE: JSON.stringify(installed),
+      },
+      generateBuildId: async () => manifest.buildId,
+    }),
+  );
+}

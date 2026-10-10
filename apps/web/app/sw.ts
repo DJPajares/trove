@@ -23,6 +23,7 @@ import { readPushAccount } from '@/lib/notifications/push-account';
 import { shouldShowPush } from '@/lib/notifications/push-payload';
 import { brandAssets } from '@/lib/brand/assets';
 import { isSensitiveAuthUrl } from '@/lib/auth/redirect';
+import { RELEASE_MESSAGE, type ReleaseManifest } from '@/lib/updates/release';
 
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
@@ -31,6 +32,14 @@ declare global {
 }
 
 declare const self: ServiceWorkerGlobalScope;
+// Replaced with this worker's own immutable manifest by the Serwist build.
+declare const __TROVE_RELEASE__: ReleaseManifest;
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === RELEASE_MESSAGE) {
+    event.ports[0]?.postMessage(__TROVE_RELEASE__);
+  }
+});
 
 self.addEventListener('push', (event) => {
   event.waitUntil(

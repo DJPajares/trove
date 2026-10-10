@@ -2,7 +2,6 @@ export type ItineraryBlockType = 'activity' | 'free_time' | 'meeting' | 'transpo
 import { z } from 'zod';
 
 export const AI_PLANNER_SCHEMA_VERSION = 1 as const;
-export const AI_PLANNER_MAX_DAYS = 14;
 export const AI_PLANNER_MAX_REAL_PLACE_ITEMS = 24;
 export const AI_PLANNER_TRIP_LENGTH_TIERS = [3, 5, 7] as const;
 export const AI_PLANNER_MAX_TRIP_DESCRIPTION = 500;
@@ -159,12 +158,7 @@ export const aiPlannerProposalItemSchema = z
   .object({
     ...itemFields,
     candidatePlaceId: identifierSchema.nullable(),
-    dayIndex: z
-      .number()
-      .int()
-      .min(0)
-      .max(AI_PLANNER_MAX_DAYS - 1)
-      .nullable(),
+    dayIndex: z.number().int().min(0).nullable(),
     destinationIntentId: identifierSchema.nullable(),
     schedule: proposalItemScheduleSchema,
   })
@@ -188,11 +182,7 @@ export const aiPlannerModelProposalSchema = z
       .array(
         z
           .object({
-            dayIndex: z
-              .number()
-              .int()
-              .min(0)
-              .max(AI_PLANNER_MAX_DAYS - 1),
+            dayIndex: z.number().int().min(0),
             name: z.string().trim().max(500),
             itemIds: z.array(identifierSchema),
           })
@@ -213,16 +203,8 @@ export const aiPlannerModelProposalSchema = z
         z
           .object({
             candidatePlaceId: identifierSchema,
-            firstNightDayIndex: z
-              .number()
-              .int()
-              .min(0)
-              .max(AI_PLANNER_MAX_DAYS - 1),
-            lastNightDayIndex: z
-              .number()
-              .int()
-              .min(0)
-              .max(AI_PLANNER_MAX_DAYS - 1),
+            firstNightDayIndex: z.number().int().min(0),
+            lastNightDayIndex: z.number().int().min(0),
           })
           .strict(),
       )

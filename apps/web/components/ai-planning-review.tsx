@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
+import { AiPlanningAllowance } from '@/components/ai-planning-allowance';
 import { CountryMultiCombobox } from '@/components/country-multi-combobox';
 import { PageState } from '@/components/page-state';
 import { composeInsights } from '@/lib/insights/compose';
@@ -42,6 +43,7 @@ import {
   AiPlanningApiError,
   applyAiPlanningSession,
   fetchAiPlanningSession,
+  fetchAiPlanningAvailability,
   regenerateAiPlanningSession,
   setAiPlanningTripDescription,
   setAiPlanningTripName,
@@ -87,6 +89,10 @@ export function AiPlanningReview({
   const reducedMotion = useReducedMotion();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const allowanceQuery = useQuery({
+    queryKey: queryKeys.aiPlanningAvailability(),
+    queryFn: fetchAiPlanningAvailability,
+  });
   const [clock, setClock] = useState(() => Date.now());
   const sessionQuery = useQuery({
     queryFn: () => fetchAiPlanningSession(sessionId),
@@ -470,6 +476,7 @@ export function AiPlanningReview({
     } catch (cause) {
       setError(cause instanceof AiPlanningApiError ? cause.code : 'request_failed');
     } finally {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.aiPlanningAvailability() });
       setOperation('idle');
     }
   }
@@ -518,6 +525,7 @@ export function AiPlanningReview({
       setError(cause instanceof AiPlanningApiError ? cause.code : 'request_failed');
       setConfirmApply(false);
     } finally {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.aiPlanningAvailability() });
       setOperation('idle');
     }
   }
@@ -946,6 +954,7 @@ export function AiPlanningReview({
               {t('regenerate')}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">{t('regenerateDescription')}</p>
+            <AiPlanningAllowance availability={allowanceQuery.data?.availability} />
             <Textarea
               className="mt-3"
               disabled={publishing}
@@ -954,7 +963,11 @@ export function AiPlanningReview({
             />
             <Button
               className="mt-3"
-              disabled={publishing || !regeneratePrompt.trim()}
+              disabled={
+                publishing ||
+                !regeneratePrompt.trim() ||
+                allowanceQuery.data?.availability.status !== 'available'
+              }
               onClick={() => void regenerate()}
               size="sm"
               type="button"

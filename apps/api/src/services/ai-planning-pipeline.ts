@@ -1,3 +1,5 @@
+import { EntitlementError, plannerContractMaxDays } from './plan-entitlements.js';
+import { checkAiPlannerDateDays } from './ai-planner-preflight.js';
 import { createHash } from 'node:crypto';
 
 import { getPrismaClient } from '@trove/db';
@@ -17,7 +19,10 @@ import {
   coveredDayCount,
   isSparseProposal,
 } from './ai-planner-prompt.js';
-import { aiPlannerCompactProposalSchema, expandAiPlannerProposal } from './ai-planner-compact.js';
+import {
+  createAiPlannerCompactProposalSchema,
+  expandAiPlannerProposal,
+} from './ai-planner-compact.js';
 import { AiPlannerRepairLog } from './ai-planner-repair-log.js';
 import { repairAiPlannerModelProposal, repairCompactOutput } from './ai-planner-repair.js';
 import { createCanonicalPlacesService } from './canonical-places.js';
@@ -636,8 +641,14 @@ export function assembleAiPlanningDraft(
   proposal: AiPlannerModelProposal,
   generationDate: Date,
   log = new AiPlannerRepairLog(),
+  maxItineraryDays = plannerContractMaxDays(),
 ): AiPlannerDraft {
-  const defaults = resolveAiPlannerDefaults(proposal.normalizedRequest, proposal, generationDate);
+  const defaults = resolveAiPlannerDefaults(
+    proposal.normalizedRequest,
+    proposal,
+    generationDate,
+    maxItineraryDays,
+  );
   const dates = enumerateDateRange(defaults.startDate, defaults.endDate);
   const candidateIds = new Set(proposal.places.map((candidate) => candidate.id));
   const destinationIds = new Map<string, string>();
@@ -1409,6 +1420,7 @@ async function validateWithProviderEvidence(
   providerContext: ProviderContext,
   signal?: AbortSignal,
   log = new AiPlannerRepairLog(),
+  maxItineraryDays = plannerContractMaxDays(),
 ) {
   const contexts = new Map(
     grounding.flatMap((result) =>
@@ -1431,7 +1443,7 @@ async function validateWithProviderEvidence(
     signal,
     log,
   );
-  let validated = validateAiPlannerDraft(draft);
+  let validated = validateAiPlannerDraft(draft, { maxItineraryDays });
   // The evidence passes move and retime items; whatever they leave
   // inconsistent is settled here too, rather than failing a finished plan.
   const constraints = proposal.normalizedRequest.constraints;
@@ -1456,7 +1468,7 @@ async function validateWithProviderEvidence(
     if (!changed) break;
     for (const day of draft.days) assignDraftLegModes(day, contexts, legModes);
     for (const item of draft.unscheduledItems) delete item.travelModeToNext;
-    validated = validateAiPlannerDraft(draft);
+    validated = validateAiPlannerDraft(draft, { maxItineraryDays });
   }
   if (!validated.success) {
     throw new AiPlanningPipelineFailure(
@@ -1493,6 +1505,8 @@ function failureFrom(error: unknown, metadata: AiGenerationMetadata | null) {
   if (error instanceof AiPlanningPipelineFailure) {
     return { code: error.code, metadata: error.metadata ?? metadata };
   }
+  if (error instanceof EntitlementError && error.code === 'itinerary_day_limit_exceeded')
+    return { code: error.code, metadata };
   if (error instanceof AiGenerationError) return { code: error.code, metadata: error.metadata };
   if (error instanceof AiPlanningSessionError) {
     return {
@@ -1553,12 +1567,13 @@ export async function runAiPlanningPipeline(
     const gateway = options.gateway ?? createAiGateway({ environment: options.environment });
     const promptContext = buildAiPlannerContext({
       generationDate,
+      maxItineraryDays: claim.maxItineraryDays,
       homeLocation,
       savedPlaces: plannerSavedPlaces(savedPlaces),
     });
     const generation = await gateway.generateStructured({
       prompt: buildAiPlannerPrompt(claim.prompt, promptContext),
-      schema: aiPlannerCompactProposalSchema,
+      schema: createAiPlannerCompactProposalSchema(claim.maxItineraryDays),
       schemaDescription: AI_PLANNER_SCHEMA_DESCRIPTION,
       schemaName: 'trove_ai_planner_compact_v1',
       signal: controller.signal,
@@ -1574,15 +1589,24 @@ export async function runAiPlanningPipeline(
       if (!compact) {
         throw new AiPlanningPipelineFailure('invalid_response', metadata, ['unusable_output']);
       }
+      if (compact.normalizedRequest.datePreference.kind === 'exact') {
+        checkAiPlannerDateDays(
+          compact.normalizedRequest.datePreference.startDate,
+          compact.normalizedRequest.datePreference.endDate,
+          claim.maxItineraryDays,
+        );
+      }
       expanded = repairAiPlannerModelProposal(
         expandAiPlannerProposal(compact, claim.prompt, repairs),
         repairs,
+        claim.maxItineraryDays,
       );
     } catch (error) {
-      if (error instanceof AiPlanningPipelineFailure) throw error;
+      if (error instanceof AiPlanningPipelineFailure || error instanceof EntitlementError)
+        throw error;
       throw new AiPlanningPipelineFailure('invalid_response', metadata, ['repair_failed']);
     }
-    const proposal = validateAiPlannerModelProposal(expanded);
+    const proposal = validateAiPlannerModelProposal(expanded, claim.maxItineraryDays);
 
     if (!proposal.success) {
       throw new AiPlanningPipelineFailure(
@@ -1598,10 +1622,16 @@ export async function runAiPlanningPipeline(
     await lifecycle.updateStage(ownerId, runId, 'SCHEDULING');
     let draft: AiPlannerDraft;
     try {
-      draft = assembleAiPlanningDraft(proposal.data, generationDate, repairs);
+      draft = assembleAiPlanningDraft(
+        proposal.data,
+        generationDate,
+        repairs,
+        claim.maxItineraryDays,
+      );
     } catch {
       throw new AiPlanningPipelineFailure('invalid_response', metadata);
     }
+    checkAiPlannerDateDays(draft.trip.startDate, draft.trip.endDate, claim.maxItineraryDays);
     recordAiPlanningProposalCoverage(
       coveredDayCount(proposal.data.items),
       draft.days.length,
@@ -1649,6 +1679,7 @@ export async function runAiPlanningPipeline(
       providerContext,
       providerSignal,
       repairs,
+      claim.maxItineraryDays,
     );
     finalizeDraftDayTitles(validated.draft, proposal.data.daySummaries);
     // The provider run has finished acquiring its ordinary evidence. Reuse the

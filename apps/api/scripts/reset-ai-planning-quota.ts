@@ -1,33 +1,39 @@
-import { getPrismaClient } from '@trove/db';
+import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
+import '../src/environment.js';
 
-import { AI_PLANNING_DISPATCH_WINDOW_MS } from '../src/services/ai-planning-sessions.js';
-
-/**
- * Local dev only. The quota has no standalone counter row — availability and
- * dispatch both derive usage by counting `ai_generation_runs` dispatched within
- * the trailing 24h window, so resetting it means deleting those rows rather
- * than updating a value.
- *
- * Usage: pnpm --filter api ai-planning:reset-quota [ownerId]
- * With no ownerId, clears every owner's window — fine for a single-tenant
- * local database.
- */
+/** Same authenticated, audited operation as Postman. No direct database mutation. */
 async function main() {
-  const ownerId = process.argv[2];
-  const prisma = getPrismaClient();
-
-  try {
-    const cutoff = new Date(Date.now() - AI_PLANNING_DISPATCH_WINDOW_MS);
-    const { count } = await prisma.aiGenerationRun.deleteMany({
-      where: { dispatchedAt: { gt: cutoff }, ...(ownerId ? { ownerId } : {}) },
-    });
-    console.log(JSON.stringify({ deleted: count, ownerId: ownerId ?? 'all' }));
-  } finally {
-    await prisma.$disconnect();
-  }
+  const ownerId = z.uuid().parse(process.argv[2]);
+  const reason = z.string().trim().min(1).max(500).parse(process.argv[3]);
+  if (process.argv.length !== 4) throw new Error('Usage: pnpm ai:reset-quota <user-id> <reason>');
+  const base = new URL(process.env.TROVE_ADMIN_API_URL ?? 'http://localhost:3001');
+  if (
+    base.protocol !== 'https:' &&
+    !(base.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(base.hostname))
+  )
+    throw new Error('Admin API requires HTTPS outside localhost.');
+  const token = process.env.TROVE_ADMIN_TOKEN;
+  if (!token) throw new Error('Set TROVE_ADMIN_TOKEN to a scoped operator credential.');
+  const response = await fetch(new URL(`/admin/users/${ownerId}/ai-planner/reset`, base), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': randomUUID(),
+    },
+    body: JSON.stringify({ reason }),
+    signal: AbortSignal.timeout(15_000),
+    redirect: 'error',
+  });
+  const result = (await response.json()) as { code?: string };
+  if (!response.ok) throw new Error(result.code ?? 'Admin operation failed.');
+  console.log(JSON.stringify(result));
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : 'AI planning quota reset failed.');
+main().catch(() => {
+  console.error(
+    'AI credit reset failed. Check the target UUID, reason, admin credential and API configuration.',
+  );
   process.exitCode = 1;
 });

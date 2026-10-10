@@ -208,6 +208,7 @@ function createApplyStore(
   const transactionFor = (working: ApplyState) => ({
     $queryRaw: async () => [],
     aiGenerationRun: {
+      findMany: async () => [],
       async deleteMany() {
         return { count: 0 };
       },

@@ -17,6 +17,7 @@ import {
   aiPlanningErrorMessageKey,
 } from '@/lib/ai-planning/presentation';
 import * as Icons from '@/lib/icons';
+import { AiPlanningAllowance } from '@/components/ai-planning-allowance';
 
 function retryAtLabel(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(
@@ -128,11 +129,7 @@ export function AiPlanningComposer({ lifecycle }: Readonly<{ lifecycle: AiPlanni
           </p>
         </section>
 
-        {availability?.status === 'available' && availability.remainingDispatches !== null ? (
-          <p className="text-sm text-muted-foreground" role="status">
-            {t('availability', { count: availability.remainingDispatches })}
-          </p>
-        ) : null}
+        <AiPlanningAllowance availability={availability} />
         {availability?.status === 'quota_exhausted' ? (
           <Alert role="alert" variant="warning">
             <Icons.Warning aria-hidden="true" />

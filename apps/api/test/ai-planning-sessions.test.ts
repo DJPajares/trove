@@ -1,3 +1,4 @@
+import { creditModels } from './support/fake-ai-credits.js';
 import { draftPlanScoreInputRevision } from '../src/services/ai-planning-plan-score.js';
 import Fastify from 'fastify';
 import { Prisma } from '@trove/db';
@@ -5,7 +6,6 @@ import { describe, expect, test, vi } from 'vitest';
 
 import { registerAiPlanningSessionRoutes } from '../src/routes/ai-planning-sessions.js';
 import {
-  AI_PLANNING_DISPATCH_WINDOW_MS,
   AI_PLANNING_PROMPT_MAX_LENGTH,
   acknowledgeAiPlanningWarnings,
   cancelAiPlanningSession,
@@ -173,7 +173,9 @@ function createPlanningStore(
     }
   };
 
+  const credits = creditModels(NOW);
   const transaction = {
+    ...credits.models,
     $queryRaw(query: unknown) {
       queries.push(query);
       return Promise.resolve([{ id: OWNER_ID }]);
@@ -265,6 +267,9 @@ function createPlanningStore(
       },
     },
     aiGenerationRun: {
+      async findMany({ where = {} }: any) {
+        return [...runs.values()].filter((run) => runMatches(run, where));
+      },
       async count({ where }: any) {
         return [...runs.values()].filter(
           (run) =>
@@ -340,6 +345,7 @@ function createPlanningStore(
     },
     prisma: prisma as never,
     queries,
+    credits,
     runs,
     sessions,
   };
@@ -440,7 +446,7 @@ describe('planning-session routes', () => {
 });
 
 describe('planning-session reservations and recovery', () => {
-  test('reports a safe advisory quota state without provider telemetry', async () => {
+  test('new accounts receive fresh lifetime credits independently of legacy telemetry', async () => {
     const store = createPlanningStore();
     const sessionId = '00000000-0000-4000-8000-000000000010';
     for (let index = 0; index < 5; index += 1) {
@@ -460,11 +466,14 @@ describe('planning-session reservations and recovery', () => {
         now: () => NOW,
         prisma: store.prisma,
       }),
-    ).resolves.toStrictEqual({
+    ).resolves.toMatchObject({
       code: null,
-      remainingDispatches: 0,
-      retryAt: new Date(NOW.getTime() - 5_000 + AI_PLANNING_DISPATCH_WINDOW_MS),
-      status: 'quota_exhausted',
+      remainingDispatches: 10,
+      retryAt: null,
+      status: 'available',
+      tier: 'free',
+      maxItineraryDays: 10,
+      renewalPolicy: 'lifetime',
     });
 
     await expect(
@@ -481,7 +490,7 @@ describe('planning-session reservations and recovery', () => {
     });
   });
 
-  test('reports unlimited availability when the per-traveller limit is zero', async () => {
+  test('reports credits independently of recent burst-rate attempts', async () => {
     const store = createPlanningStore();
     const sessionId = '00000000-0000-4000-8000-000000000012';
     for (let index = 0; index < 7; index += 1) {
@@ -494,13 +503,13 @@ describe('planning-session reservations and recovery', () => {
 
     await expect(
       getAiPlanningAvailability(OWNER_ID, {
-        environment: { ...AVAILABLE_ENVIRONMENT, TROVE_AI_PLANNING_DISPATCH_LIMIT: '0' },
+        environment: { ...AVAILABLE_ENVIRONMENT, TROVE_AI_PLANNER_STARTS_PER_MINUTE: '6' },
         now: () => NOW,
         prisma: store.prisma,
       }),
-    ).resolves.toStrictEqual({
+    ).resolves.toMatchObject({
       code: null,
-      remainingDispatches: null,
+      remainingDispatches: 10,
       retryAt: null,
       status: 'available',
     });
@@ -510,7 +519,7 @@ describe('planning-session reservations and recovery', () => {
         environment: {
           ...AVAILABLE_ENVIRONMENT,
           TROVE_AI_DISABLED: 'true',
-          TROVE_AI_PLANNING_DISPATCH_LIMIT: '0',
+          TROVE_AI_PLANNER_STARTS_PER_MINUTE: '6',
         },
         now: () => NOW,
         prisma: store.prisma,
@@ -945,7 +954,128 @@ describe('review session safety', () => {
 });
 
 describe('dispatch quota and lifecycle completion', () => {
-  test('zero disables the rolling per-traveller cap for dispatch claims', async () => {
+  test('a valid draft consumes one reserved credit and a duplicate completion cannot consume another', async () => {
+    const store = createPlanningStore();
+    const options = { environment: AVAILABLE_ENVIRONMENT, now: () => NOW, prisma: store.prisma };
+    const session = await createAiPlanningSession(
+      OWNER_ID,
+      'Plan a 3-day trip to Tokyo',
+      '00000000-0000-4000-8000-000000000996',
+      options,
+    );
+    const runId = session.pendingRunId!;
+    await claimAiPlanningDispatch(OWNER_ID, runId, options);
+    const metadata = {
+      inputTokens: 10,
+      latencyMs: 50,
+      model: 'test',
+      outputTokens: 20,
+      provider: 'vertex',
+      totalTokens: 30,
+    };
+    await completeAiPlanningRunSuccess(
+      OWNER_ID,
+      runId,
+      explicitDraft(),
+      emptyPlanScore(),
+      metadata,
+      options,
+    );
+    await expect(
+      completeAiPlanningRunSuccess(
+        OWNER_ID,
+        runId,
+        explicitDraft(),
+        emptyPlanScore(),
+        metadata,
+        options,
+      ),
+    ).rejects.toMatchObject({ code: 'draft_conflict' });
+    expect(await getAiPlanningAvailability(OWNER_ID, options)).toMatchObject({
+      usedCredits: 1,
+      reservedCredits: 0,
+      availableCredits: 9,
+    });
+    expect(await store.credits.models.aiCreditEvent.count({ where: { kind: 'consume' } })).toBe(1);
+  });
+
+  test('explicit oversized requests create no generation or credit action', async () => {
+    const store = createPlanningStore();
+    await expect(
+      createAiPlanningSession(
+        OWNER_ID,
+        'Plan a 14-day trip to Japan',
+        '00000000-0000-4000-8000-000000000999',
+        {
+          environment: AVAILABLE_ENVIRONMENT,
+          now: () => NOW,
+          prisma: store.prisma,
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'itinerary_day_limit_exceeded', maxItineraryDays: 10 });
+    expect(store.runs.size).toBe(0);
+    expect(store.sessions.size).toBe(0);
+    expect(await store.credits.models.aiCreditAction.count({ where: {} })).toBe(0);
+  });
+
+  test.each([false, true])(
+    'user cancellation costs a credit only after dispatch (%s)',
+    async (dispatch) => {
+      const store = createPlanningStore();
+      const options = { environment: AVAILABLE_ENVIRONMENT, now: () => NOW, prisma: store.prisma };
+      const session = await createAiPlanningSession(
+        OWNER_ID,
+        'Plan a 3-day trip to Tokyo',
+        '00000000-0000-4000-8000-000000000998',
+        options,
+      );
+      if (dispatch) await claimAiPlanningDispatch(OWNER_ID, session.pendingRunId!, options);
+      await cancelAiPlanningSession(OWNER_ID, session.id, options);
+      await cancelAiPlanningSession(OWNER_ID, session.id, options);
+      expect(await getAiPlanningAvailability(OWNER_ID, options)).toMatchObject({
+        usedCredits: dispatch ? 1 : 0,
+        reservedCredits: 0,
+        availableCredits: dispatch ? 9 : 10,
+      });
+    },
+  );
+
+  test('failed generation refunds its reservation and telemetry deletion does not allow an idempotent redispatch', async () => {
+    const store = createPlanningStore();
+    const options = { environment: AVAILABLE_ENVIRONMENT, now: () => NOW, prisma: store.prisma };
+    const key = '00000000-0000-4000-8000-000000000997';
+    const session = await createAiPlanningSession(
+      OWNER_ID,
+      'Plan a 3-day trip to Tokyo',
+      key,
+      options,
+    );
+    await claimAiPlanningDispatch(OWNER_ID, session.pendingRunId!, options);
+    await completeAiPlanningRunFailure(
+      OWNER_ID,
+      session.pendingRunId!,
+      'provider_unavailable',
+      null,
+      options,
+    );
+    await completeAiPlanningRunFailure(OWNER_ID, session.pendingRunId!, 'timeout', null, options);
+    expect(await getAiPlanningAvailability(OWNER_ID, options)).toMatchObject({
+      availableCredits: 10,
+      usedCredits: 0,
+      reservedCredits: 0,
+    });
+    store.runs.clear();
+    const replay = await createAiPlanningSession(
+      OWNER_ID,
+      'Plan a 3-day trip to Tokyo',
+      key,
+      options,
+    );
+    expect(replay).toMatchObject({ id: session.id, pendingRunId: null });
+    expect(store.runs.size).toBe(0);
+  });
+
+  test('the minute burst limit is configurable independently of the credit allowance', async () => {
     const store = createPlanningStore();
     for (let index = 0; index < 5; index += 1) {
       const sessionId = `00000000-0000-4000-8000-${String(65 + index).padStart(12, '0')}`;
@@ -961,7 +1091,7 @@ describe('dispatch quota and lifecycle completion', () => {
 
     await expect(
       claimAiPlanningDispatch(OWNER_ID, runId, {
-        environment: { ...AVAILABLE_ENVIRONMENT, TROVE_AI_PLANNING_DISPATCH_LIMIT: '0' },
+        environment: { ...AVAILABLE_ENVIRONMENT, TROVE_AI_PLANNER_STARTS_PER_MINUTE: '6' },
         now: () => NOW,
         prisma: store.prisma,
       }),
@@ -969,7 +1099,7 @@ describe('dispatch quota and lifecycle completion', () => {
     expect([...store.runs.values()].filter((run) => run.dispatchedAt)).toHaveLength(6);
   });
 
-  test('serializes six concurrent claims so only five consume the rolling quota', async () => {
+  test('serializes six concurrent claims so the sixth hits the minute burst guard', async () => {
     const store = createPlanningStore();
     const claims = Array.from({ length: 6 }, (_, index) => {
       const sessionId = `00000000-0000-4000-8000-${String(70 + index).padStart(12, '0')}`;
@@ -985,7 +1115,7 @@ describe('dispatch quota and lifecycle completion', () => {
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(5);
     const rejected = results.find((result) => result.status === 'rejected');
     expect(rejected).toMatchObject({
-      reason: { code: 'quota_exceeded', statusCode: 429 },
+      reason: { code: 'rate_limited', statusCode: 429 },
       status: 'rejected',
     });
     expect([...store.runs.values()].filter((run) => run.dispatchedAt)).toHaveLength(5);
@@ -1028,7 +1158,7 @@ describe('dispatch quota and lifecycle completion', () => {
           now: () => NOW,
           prisma: quotaStore.prisma,
         }),
-      ).rejects.toMatchObject({ code: 'quota_exceeded' });
+      ).rejects.toMatchObject({ code: 'rate_limited' });
     } finally {
       setAiPlanningTelemetrySink(null);
     }
@@ -1037,13 +1167,13 @@ describe('dispatch quota and lifecycle completion', () => {
     // that says which traveller or which trip was refused.
     expect(events).toStrictEqual([
       { code: 'ai_disabled', kind: 'dispatch_rejected', occurredAt: NOW.toISOString() },
-      { code: 'quota_exceeded', kind: 'dispatch_rejected', occurredAt: NOW.toISOString() },
+      { code: 'rate_limited', kind: 'dispatch_rejected', occurredAt: NOW.toISOString() },
     ]);
   });
 
   test('uses a strict rolling boundary and reports the next retry time', async () => {
     const store = createPlanningStore();
-    const cutoff = new Date(NOW.getTime() - AI_PLANNING_DISPATCH_WINDOW_MS);
+    const cutoff = new Date(NOW.getTime() - 60_000);
     for (let index = 0; index < 5; index += 1) {
       const sessionId = `00000000-0000-4000-8000-${String(100 + index).padStart(12, '0')}`;
       const runId = `00000000-0000-4000-8000-${String(110 + index).padStart(12, '0')}`;
@@ -1076,10 +1206,15 @@ describe('dispatch quota and lifecycle completion', () => {
         prisma: store.prisma,
       }),
     ).rejects.toMatchObject({
-      code: 'quota_exceeded',
-      retryAt: new Date(cutoff.getTime() + 1_000 + AI_PLANNING_DISPATCH_WINDOW_MS),
+      code: 'rate_limited',
+      retryAt: new Date(cutoff.getTime() + 1_000 + 60_000),
     });
-    expect(store.runs.get(blockedRunId)?.dispatchedAt).toBeNull();
+    expect(store.runs.get(blockedRunId)).toMatchObject({
+      dispatchedAt: null,
+      result: 'FAILED',
+      errorCode: 'rate_limited',
+    });
+    expect(store.sessions.get(blockedSessionId)?.status).toBe('FAILED');
   });
 
   test.each([

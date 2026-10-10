@@ -1,6 +1,7 @@
+import { plannerContractMaxDays } from './plan-entitlements.js';
+import { checkAiPlannerDateDays } from './ai-planner-preflight.js';
 import type { z } from 'zod';
 import {
-  AI_PLANNER_MAX_DAYS,
   AI_PLANNER_TRIP_LENGTH_TIERS,
   type AiPlannerConstraint,
   type AiPlannerModelProposal,
@@ -393,12 +394,6 @@ function repairIssue(
   return 'drop';
 }
 
-function addDays(date: string, days: number) {
-  const value = new Date(`${date}T00:00:00Z`);
-  value.setUTCDate(value.getUTCDate() + days);
-  return value.toISOString().slice(0, 10);
-}
-
 function isCalendarDate(date: string) {
   return new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
 }
@@ -423,6 +418,7 @@ type ProposalItem = AiPlannerModelProposal['items'][number];
 export function repairAiPlannerModelProposal(
   proposal: AiPlannerModelProposal,
   log = new AiPlannerRepairLog(),
+  maxItineraryDays = plannerContractMaxDays(),
 ): AiPlannerModelProposal {
   const request = proposal.normalizedRequest;
   const constraints = new Map(request.constraints.map((constraint) => [constraint.id, constraint]));
@@ -440,11 +436,7 @@ export function repairAiPlannerModelProposal(
         [preference.startDate, preference.endDate] = [preference.endDate, preference.startDate];
         log.add('date_range_repaired');
       }
-      const lastAllowed = addDays(preference.startDate, AI_PLANNER_MAX_DAYS - 1);
-      if (preference.endDate > lastAllowed) {
-        preference.endDate = lastAllowed;
-        log.add('date_range_repaired');
-      }
+      checkAiPlannerDateDays(preference.startDate, preference.endDate, maxItineraryDays);
     }
   } else if (preference.kind === 'flexible') {
     for (const key of ['earliestStartDate', 'latestEndDate'] as const) {
@@ -476,7 +468,8 @@ export function repairAiPlannerModelProposal(
     request.datePreference.kind === 'exact'
       ? enumerateDateRange(request.datePreference.startDate, request.datePreference.endDate)
       : null;
-  const dayCount = dates?.length ?? proposal.selectedDurationDays ?? AI_PLANNER_MAX_DAYS;
+  const dayCount =
+    dates?.length ?? proposal.selectedDurationDays ?? AI_PLANNER_TRIP_LENGTH_TIERS[0];
 
   // A model may suggest; only the traveller makes something fixed.
   for (const constraint of request.constraints) {
@@ -578,7 +571,8 @@ function alignHardConstraints(
         : [],
     ),
   );
-  const dayCount = dates?.length ?? proposal.selectedDurationDays ?? AI_PLANNER_MAX_DAYS;
+  const dayCount =
+    dates?.length ?? proposal.selectedDurationDays ?? AI_PLANNER_TRIP_LENGTH_TIERS[0];
   for (const constraint of constraints.values()) {
     if (constraint.source !== 'user' || constraint.strength !== 'hard') continue;
     // A commitment dated outside the trip cannot be kept on it. It stays the

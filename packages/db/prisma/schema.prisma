@@ -356,6 +356,11 @@ model Profile {
   tripNotificationPreferences TripNotificationPreference[]
   aiPlanningSessions          AiPlanningSession[]
   aiGenerationRuns            AiGenerationRun[]
+  entitlement                 UserEntitlement?
+  aiCreditPeriods             AiCreditPeriod[]
+  aiCreditActions             AiCreditAction[]
+  aiCreditEvents              AiCreditEvent[]
+  adminOperationAudits        AdminOperationAudit[]
 
   @@map("profiles")
   @@schema("trove")
@@ -1109,6 +1114,8 @@ model AiPlanningSession {
   planScore                    Json?                   @map("plan_score") @db.JsonB
   schemaVersion                Int                     @default(1) @map("schema_version")
   draftRevision                Int                     @default(0) @map("draft_revision")
+  /// Policy under which the current draft was validated, retained across tier changes.
+  draftMaxDays                 Int                     @default(14) @map("draft_max_days")
   warningsAcknowledgedRevision Int?                    @map("warnings_acknowledged_revision")
   warningsAcknowledgedAt       DateTime?               @map("warnings_acknowledged_at") @db.Timestamptz(3)
   lastErrorCode                String?                 @map("last_error_code") @db.VarChar(120)
@@ -1134,6 +1141,7 @@ model AiGenerationRun {
   ownerId           String                @map("owner_id") @db.Uuid
   idempotencyKey    String                @map("idempotency_key") @db.Uuid
   baseDraftRevision Int                   @default(0) @map("base_draft_revision")
+  maxItineraryDays  Int?                  @map("max_itinerary_days")
   provider          String                @db.VarChar(120)
   model             String                @db.VarChar(120)
   inputTokens       Int?                  @map("input_tokens")
@@ -1446,5 +1454,105 @@ model TripMediaCleanup {
   @@index([nextAttemptAt, leaseUntil])
   @@index([tripId])
   @@map("trip_media_cleanup")
+  @@schema("trove")
+}
+
+/// Only the API may assign plans. Never expose this through Profile updates.
+model UserEntitlement {
+  ownerId         String    @id @map("owner_id") @db.Uuid
+  planKey         String    @default("free") @map("plan_key") @db.VarChar(80)
+  monthlyAnchorAt DateTime? @map("monthly_anchor_at") @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  owner           Profile   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@map("user_entitlements")
+  @@schema("trove")
+}
+
+model AiCreditPeriod {
+  id            String           @id @default(uuid(7)) @db.Uuid
+  ownerId       String           @map("owner_id") @db.Uuid
+  planKey       String           @map("plan_key") @db.VarChar(80)
+  renewalPolicy String           @map("renewal_policy") @db.VarChar(20)
+  startAt       DateTime         @map("start_at") @db.Timestamptz(3)
+  endAt         DateTime?        @map("end_at") @db.Timestamptz(3)
+  sequence      Int              @default(0)
+  allowance     Int
+  used          Int              @default(0)
+  reserved      Int              @default(0)
+  source        String           @db.VarChar(40)
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  owner         Profile          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  actions       AiCreditAction[]
+  events        AiCreditEvent[]
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, planKey, startAt, sequence])
+  @@map("ai_credit_periods")
+  @@schema("trove")
+}
+
+/// Durable idempotency and settlement; intentionally independent of run telemetry retention.
+model AiCreditAction {
+  runId            String         @id @map("run_id") @db.Uuid
+  ownerId          String         @map("owner_id") @db.Uuid
+  sessionId        String         @map("session_id") @db.Uuid
+  idempotencyKey   String         @map("idempotency_key") @db.Uuid
+  periodId         String         @map("period_id") @db.Uuid
+  state            String         @default("reserved") @db.VarChar(20)
+  maxItineraryDays Int            @map("max_itinerary_days")
+  deadlineAt       DateTime       @map("deadline_at") @db.Timestamptz(3)
+  reservedAt       DateTime       @default(now()) @map("reserved_at") @db.Timestamptz(3)
+  settledAt        DateTime?      @map("settled_at") @db.Timestamptz(3)
+  settlementReason String?        @map("settlement_reason") @db.VarChar(120)
+  owner            Profile        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  period           AiCreditPeriod @relation(fields: [periodId, ownerId], references: [id, ownerId], onDelete: Cascade)
+
+  @@unique([ownerId, idempotencyKey])
+  @@index([ownerId, state, deadlineAt])
+  @@index([state, deadlineAt])
+  @@map("ai_credit_actions")
+  @@schema("trove")
+}
+
+/// Append-only content-free accounting events. Additional grant sources can support promotions.
+model AiCreditEvent {
+  id        String         @id @default(uuid(7)) @db.Uuid
+  ownerId   String         @map("owner_id") @db.Uuid
+  periodId  String         @map("period_id") @db.Uuid
+  runId     String?        @map("run_id") @db.Uuid
+  kind      String         @db.VarChar(20)
+  amount    Int
+  source    String         @db.VarChar(120)
+  createdAt DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  owner     Profile        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  period    AiCreditPeriod @relation(fields: [periodId, ownerId], references: [id, ownerId], onDelete: Cascade)
+
+  @@unique([runId, kind])
+  @@index([ownerId, createdAt])
+  @@index([periodId])
+  @@map("ai_credit_events")
+  @@schema("trove")
+}
+
+model AdminOperationAudit {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  ownerId        String   @map("owner_id") @db.Uuid
+  actorId        String   @map("actor_id") @db.VarChar(120)
+  credentialId   String   @map("credential_id") @db.VarChar(120)
+  operation      String   @db.VarChar(40)
+  reason         String   @db.VarChar(500)
+  idempotencyKey String   @map("idempotency_key") @db.Uuid
+  requestHash    String   @map("request_hash") @db.Char(64)
+  requestId      String   @map("request_id") @db.VarChar(120)
+  before         Json     @db.JsonB
+  result         Json     @db.JsonB
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  owner          Profile  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([actorId, idempotencyKey])
+  @@index([ownerId, createdAt])
+  @@map("admin_operation_audits")
   @@schema("trove")
 }

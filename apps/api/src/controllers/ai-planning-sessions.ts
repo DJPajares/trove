@@ -21,6 +21,7 @@ import {
 import { applyAiPlanningSession } from '../services/ai-planning-apply.js';
 import { getBearerToken } from '../services/request-auth.js';
 import { getTrip } from '../services/trips.js';
+import { EntitlementError } from '../services/plan-entitlements.js';
 
 const sessionParamsSchema = z.object({ sessionId: z.uuid() }).strict();
 const promptSchema = z.object({ prompt: z.string() }).strict();
@@ -61,9 +62,13 @@ function getIdempotencyKey(request: FastifyRequest) {
 }
 
 function handleError(reply: FastifyReply, error: unknown) {
-  if (!(error instanceof AiPlanningSessionError)) throw error;
+  if (!(error instanceof AiPlanningSessionError) && !(error instanceof EntitlementError))
+    throw error;
   return reply.code(error.statusCode).send({
     code: error.code,
+    ...(error instanceof EntitlementError && error.maxItineraryDays !== null
+      ? { maxItineraryDays: error.maxItineraryDays }
+      : {}),
     ...(error.retryAt ? { retryAt: error.retryAt.toISOString() } : {}),
   });
 }

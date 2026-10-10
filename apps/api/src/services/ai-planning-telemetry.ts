@@ -44,7 +44,9 @@ export type AiPlanningDispatchRejectionCode =
   | 'ai_disabled'
   | 'configuration_invalid'
   | 'configuration_missing'
-  | 'quota_exceeded';
+  | 'quota_exceeded'
+  | 'rate_limited'
+  | 'itinerary_day_limit_exceeded';
 
 /**
  * Apply rejections reuse the session error union rather than a parallel list, so

@@ -1,9 +1,11 @@
+import { reconcileOverdueAiCredits } from '../src/services/ai-planner-credits.js';
 import { getPrismaClient } from '@trove/db';
 
 import { cleanupAiPlanningRetention } from '../src/services/ai-planning-retention.js';
 
 async function main() {
   try {
+    await reconcileOverdueAiCredits();
     const report = await cleanupAiPlanningRetention();
     console.log(JSON.stringify(report));
   } finally {

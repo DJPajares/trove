@@ -204,11 +204,11 @@ describe('repairAiPlannerModelProposal', () => {
       startDate: '2026-12-30',
     };
 
-    repairAiPlannerModelProposal(proposal);
+    expect(() => repairAiPlannerModelProposal(proposal)).toThrow('itinerary_day_limit_exceeded');
 
-    // Swapped into order, then held to the longest trip a run may plan.
+    // Date ordering can be repaired, but an excessive trip must never be shortened.
     expect(proposal.normalizedRequest.datePreference).toStrictEqual({
-      endDate: '2026-10-15',
+      endDate: '2026-12-30',
       kind: 'exact',
       startDate: '2026-10-02',
     });

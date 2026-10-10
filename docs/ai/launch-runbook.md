@@ -41,7 +41,7 @@ pending and must be visible in operations.
 3. The API denies review access at the exact seven-day cutoff and scrubs an
    expired session on access. The daily job physically scrubs untouched sessions
    on its next successful run; a Vercel delay or outage can make that later than
-   seven days. Generation-run telemetry has a separate 30-day deletion window.
+   seven days. Generation-run telemetry has a separate 30-day deletion window. The sweep first reconciles overdue credit reservations; durable credit and admin audit records are not telemetry and are not pruned. See [entitlement operations](entitlements-runbook.md).
    Clock-controlled tests cover the access and query boundaries; confirm the
    deployed cron and alert separately.
 

@@ -13,6 +13,7 @@ export const AI_GENERATION_ERROR_CODES = [
   'configuration_missing',
   'content_filtered',
   'invalid_response',
+  'itinerary_day_limit_exceeded',
   'provider_unavailable',
   'quota_exceeded',
   'schedule_conflict',

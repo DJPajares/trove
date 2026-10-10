@@ -8,6 +8,7 @@ import { setAiPlanningTelemetrySink } from './services/ai-planning-telemetry.js'
 import { setProviderUsageSink } from './services/provider-usage.js';
 import { registerAuthenticationRoutes } from './routes/auth.js';
 import { registerAiPlanningSessionRoutes } from './routes/ai-planning-sessions.js';
+import { registerAdminEntitlementRoutes } from './routes/admin-entitlements.js';
 import { registerCurrencyRoutes } from './routes/currency.js';
 import { registerEditorialImageRoutes } from './routes/editorial-images.js';
 import { registerExpenseRoutes } from './routes/expenses.js';
@@ -90,7 +91,10 @@ export function buildApp() {
   // default 100-char route param limit; `/places/:providerPlaceId` already
   // validates up to 512 chars, so the router needs the same ceiling or those
   // requests never reach the handler at all.
-  const app = Fastify({ logger: true, maxParamLength: 512 });
+  const app = Fastify({
+    logger: { redact: ['req.headers.authorization', 'headers.authorization'] },
+    maxParamLength: 512,
+  });
   const allowedOrigins = getWebOrigins();
 
   app.setErrorHandler((error: unknown, request, reply) => {
@@ -160,6 +164,7 @@ export function buildApp() {
 
     registerAuthenticationRoutes(instance);
     registerAiPlanningSessionRoutes(instance);
+    registerAdminEntitlementRoutes(instance);
     registerCurrencyRoutes(instance);
     registerLocationWeatherRoutes(instance);
     registerTripWeatherRoutes(instance);

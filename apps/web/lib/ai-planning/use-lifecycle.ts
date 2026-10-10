@@ -296,7 +296,8 @@ export function useAiPlanningLifecycle(enabled: boolean) {
     promptTouched.current = false;
     setCancelled(true);
     setOperation('idle');
-  }, [operation, queryClient, session?.id]);
+    await refreshAvailability();
+  }, [operation, queryClient, refreshAvailability, session?.id]);
 
   return {
     availability,

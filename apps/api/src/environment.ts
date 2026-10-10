@@ -33,12 +33,10 @@ export const DEFAULT_AI_LOCATION = 'global';
 export const DEFAULT_AI_TIMEOUT_MS = 120_000;
 export const DEFAULT_AI_MAX_OUTPUT_TOKENS = 16_384;
 export const DEFAULT_AI_THINKING_LEVEL = 'medium' as const;
-export const DEFAULT_AI_PLANNING_DISPATCH_LIMIT = 5;
 
 const MIN_AI_TIMEOUT_MS = 1_000;
 const MAX_AI_TIMEOUT_MS = 300_000;
 const MAX_AI_OUTPUT_TOKENS = 65_536;
-const MAX_AI_PLANNING_DISPATCH_LIMIT = 1_000;
 
 type AiThinkingLevel = 'low' | 'medium' | 'high';
 
@@ -223,23 +221,6 @@ export function getAiGenerationEnvironment(
       thinkingLevel,
     },
   };
-}
-
-/**
- * A soft limit, not a hard dependency like credentials — an invalid value falls
- * back to the default rather than becoming a new `configuration_invalid` gate.
- */
-export function getAiPlanningDispatchLimit(
-  environment: Record<string, string | undefined> = process.env,
-) {
-  return (
-    parseBoundedInteger(
-      environment.TROVE_AI_PLANNING_DISPATCH_LIMIT,
-      DEFAULT_AI_PLANNING_DISPATCH_LIMIT,
-      0,
-      MAX_AI_PLANNING_DISPATCH_LIMIT,
-    ) ?? DEFAULT_AI_PLANNING_DISPATCH_LIMIT
-  );
 }
 
 export function getAuthenticationEnvironment(

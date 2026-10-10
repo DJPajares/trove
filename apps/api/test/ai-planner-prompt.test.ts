@@ -44,6 +44,7 @@ test('the planner context resolves every default the model would otherwise inven
     generationDate: '2026-09-01',
     homeLocation: 'Auckland',
     itemsPerDay: AI_PLANNER_ITEMS_PER_DAY,
+    maxItineraryDays: 20,
     maxRealPlaceItems: AI_PLANNER_MAX_REAL_PLACE_ITEMS,
     maxTripDescription: AI_PLANNER_MAX_TRIP_DESCRIPTION,
     naming: { tone: 'understated', toneBrief: AI_PLANNER_NAME_TONES.understated },

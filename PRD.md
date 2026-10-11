@@ -1435,18 +1435,15 @@ Contextual Tasks in Now:
 
 Today opens on the day being lived, scrolled to the stop in progress rather than to the start of the day, and offers every other day of the trip without leaving Trip Mode. Reading another day never moves the traveller's own "now": no item outside the current day is ever marked as happening.
 
-Allow:
+Today favours moving through the day over configuring it. Allow:
 
 - complete / undo complete,
 - skip / undo skip,
-- reorder remaining items,
-- add,
-- edit time/daypart,
 - directions,
 - note/photo where supported,
-- expense.
+- expense, logged in a sheet over Trip Mode rather than by leaving it for the Expenses page.
 
-These actions update the actual itinerary/trip data.
+These actions update the actual itinerary/trip data. Reordering stops, adding stops and editing times or dayparts happen in the Itinerary Planner, which Today opens on the viewed day through a visible "Edit in planner" action.
 
 Contextual Tasks in Today:
 

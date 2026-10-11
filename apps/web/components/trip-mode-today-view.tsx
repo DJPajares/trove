@@ -1,16 +1,6 @@
 'use client';
 
-import {
-  ArrowDown,
-  ArrowUp,
-  CalendarDays,
-  Check,
-  ChevronDown,
-  Ellipsis,
-  MapPin,
-  Plus,
-  RotateCcw,
-} from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, MapPin, Plus, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
@@ -18,7 +8,6 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { PageState } from '@/components/page-state';
 import { PlaceHoursNote } from '@/components/place-hours-note';
-import { StopEditorSheet } from '@/components/planner/stop-editor/stop-editor-sheet';
 import { usePreferences } from '@/components/preferences-provider';
 import { useTripModeData } from '@/components/trip-mode-data';
 import { useTripPlaceHours } from '@/lib/trip-places/use-trip-place-hours';
@@ -34,40 +23,17 @@ import {
   TripModeTasksNotice,
   useTripModeTasks,
 } from '@/components/trip-mode-tasks';
+import { useTripModeExpense } from '@/components/trip-mode-expense-sheet';
 import { TripModeActionButton, tripModeCardClass } from '@/components/trip-mode-ui';
-import {
-  TripModeScheduleFields,
-  type TripModeSchedule,
-} from '@/components/trip-mode-schedule-fields';
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   deviceTimeZone,
   fetchItineraryDayRoutes,
-  organizeItineraryItem,
   type ItineraryItem,
   type ItineraryRouteSegment,
-  type ItineraryScheduleInput,
   type ItineraryTravelStatus,
-  updateItineraryItem,
   updateItineraryItemTravelStatus,
 } from '@/lib/itinerary/api';
 import { buildDaySequence, resolveDailyBases } from '@/lib/itinerary/day-sequence';
@@ -76,7 +42,6 @@ import { formatItineraryTimeRange, itineraryLocalEndTime } from '@/lib/itinerary
 import { formatTravelDuration } from '@/lib/itinerary/route-format';
 import { itineraryDayRouteRevision } from '@/lib/itinerary/routes';
 import { queryKeys } from '@/lib/query/keys';
-import { scheduledPlaceUse } from '@/lib/itinerary/places';
 import type { Reservation } from '@/lib/reservations/api';
 import { tasksForItem, todayTaskRollup } from '@/lib/tasks/trip-mode';
 import { cn } from '@/lib/utils';
@@ -86,32 +51,15 @@ import { dayTown } from '@/lib/itinerary/day-place';
 import { resolveItineraryItemPlaceName, resolveTripPlaceName } from '@/lib/trip-places/place-name';
 import * as Icons from '@/lib/icons';
 
-type UndoAction =
-  | { itemId: string; kind: 'organize'; itineraryDayId: string; position: number }
-  | {
-      durationMinutes: number | null;
-      itemId: string;
-      kind: 'schedule';
-      localEndTime: string | null;
-      schedule: ItineraryScheduleInput;
-    }
-  | { itemId: string; kind: 'status'; travelStatus: ItineraryTravelStatus };
+/**
+ * Trip Mode changes a stop's status and nothing else: reordering, moving and
+ * retiming a day belong to the planner, a tap away (PRD 20.1).
+ */
+type UndoAction = { itemId: string; kind: 'status'; travelStatus: ItineraryTravelStatus };
 
 function providerId(item: ItineraryItem) {
   return item.tripPlace?.place.providerRefs.find((ref) => ref.provider === 'google')
     ?.externalPlaceId;
-}
-
-function scheduleInput(schedule: TripModeSchedule, exactTime: string): ItineraryScheduleInput {
-  if (schedule === 'exact') return { kind: 'exact', localTime: exactTime };
-  if (schedule === 'none') return { kind: 'none' };
-  return { dayPart: schedule, kind: 'day_part' };
-}
-
-function scheduleInputFromItem(item: ItineraryItem): ItineraryScheduleInput {
-  if (item.localStartTime) return { kind: 'exact', localTime: item.localStartTime };
-  if (item.dayPart) return { dayPart: item.dayPart, kind: 'day_part' };
-  return { kind: 'none' };
 }
 
 function TodaySkeleton({ label }: Readonly<{ label: string }>) {
@@ -153,6 +101,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   } = useTripModeData();
   const { openPlaceDetails } = useTripModePlaceDetails();
   const tripModeTasks = useTripModeTasks();
+  const tripModeExpense = useTripModeExpense();
   const [mutatingItemId, setMutatingItemId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
@@ -171,13 +120,8 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
    */
   const [viewedDate, setViewedDate] = useState<string | null>(null);
   const activeDayChipRef = useRef<HTMLButtonElement | null>(null);
-  const [createItemOpen, setCreateItemOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [pendingMemoriesKey, setPendingMemoriesKey] = useState(0);
-  const [scheduleItem, setScheduleItem] = useState<ItineraryItem | null>(null);
-  const [schedule, setSchedule] = useState<TripModeSchedule>('none');
-  const [exactTime, setExactTime] = useState('');
-  const [scheduleError, setScheduleError] = useState<string | null>(null);
   /**
    * Whether the stops already behind the traveller are drawn. On a day under
    * way they fold into one line, so the list opens on what is left to do; a
@@ -206,7 +150,6 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     if (!selectedDate || !itinerary) return null;
     return itinerary.days.find((candidate) => candidate.date === selectedDate) ?? null;
   }, [itinerary, selectedDate]);
-  const placeUse = useMemo(() => (itinerary ? scheduledPlaceUse(itinerary) : {}), [itinerary]);
   // Stored hours for the day being shown; nothing is bought to fill a gap.
   const placeHours = useTripPlaceHours(tripId, day?.date ?? null, Boolean(day));
   const reservationsByItem = useMemo(() => {
@@ -404,11 +347,17 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     if (externalPlaceId) query.set('destination_place_id', externalPlaceId);
     return `https://www.google.com/maps/dir/?${query.toString()}`;
   };
-  const expenseHref = (itineraryItemId?: string) => {
-    const query = new URLSearchParams({ create: '1', date: shownDate });
-    if (itineraryItemId) query.set('itineraryItemId', itineraryItemId);
-    return `/trips/${tripId}/expenses?${query.toString()}`;
-  };
+  // Logged over Trip Mode rather than by leaving it for the Expenses page.
+  const logExpense = (itineraryItemId?: string) =>
+    tripModeExpense.openCreate({
+      itineraryItemId,
+      localDate: shownDate,
+      onSaved: () => setFeedback(t('feedback.expense')),
+    });
+  // Where the plan itself is edited: the planner, opened on this day.
+  const plannerHref = day
+    ? `/trips/${tripId}/itinerary?day=${encodeURIComponent(day.id)}`
+    : `/trips/${tripId}/itinerary`;
 
   const setLocalStatus = (itemId: string, travelStatus: ItineraryTravelStatus) => {
     setItinerary((current) => {
@@ -447,131 +396,13 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     }
   }
 
-  const upcomingItems = day?.items.filter((item) => item.travelStatus === 'upcoming') ?? [];
-
-  async function reorder(item: ItineraryItem, direction: 'earlier' | 'later') {
-    if (!day) return;
-    const upcomingIndex = upcomingItems.findIndex((candidate) => candidate.id === item.id);
-    const target = upcomingItems[upcomingIndex + (direction === 'earlier' ? -1 : 1)];
-    if (!target) return;
-    const previousPosition = day.items.findIndex((candidate) => candidate.id === item.id);
-    const targetPosition = day.items.findIndex((candidate) => candidate.id === target.id);
-    setMutatingItemId(item.id);
-    setError(null);
-    setFeedback(null);
-    setUndoAction(null);
-    try {
-      await organizeItineraryItem(tripId, item.id, {
-        itineraryDayId: day.id,
-        position: targetPosition,
-      });
-      await refresh();
-      if (isPreview) {
-        setUndoAction({
-          itemId: item.id,
-          itineraryDayId: day.id,
-          kind: 'organize',
-          position: previousPosition,
-        });
-      }
-      setFeedback(t('feedback.reordered'));
-    } catch {
-      setError(t('actionError'));
-    } finally {
-      setMutatingItemId(null);
-    }
-  }
-
-  async function moveToDay(item: ItineraryItem, itineraryDayId: string) {
-    if (!day) return;
-    const previousPosition = day.items.findIndex((candidate) => candidate.id === item.id);
-    setMutatingItemId(item.id);
-    setError(null);
-    setFeedback(null);
-    setUndoAction(null);
-    try {
-      await organizeItineraryItem(tripId, item.id, { itineraryDayId, position: 999 });
-      await refresh();
-      if (isPreview) {
-        setUndoAction({
-          itemId: item.id,
-          itineraryDayId: day.id,
-          kind: 'organize',
-          position: previousPosition,
-        });
-      }
-      setFeedback(t('feedback.moved'));
-    } catch {
-      setError(t('actionError'));
-    } finally {
-      setMutatingItemId(null);
-    }
-  }
-
-  function openSchedule(item: ItineraryItem) {
-    setScheduleItem(item);
-    setSchedule(item.localStartTime ? 'exact' : (item.dayPart ?? 'none'));
-    setExactTime(item.localStartTime ?? '');
-    setScheduleError(null);
-  }
-
-  async function saveSchedule() {
-    if (!scheduleItem) return;
-    if (schedule === 'exact' && !exactTime) {
-      setScheduleError(t('scheduleEditor.exactTimeError'));
-      return;
-    }
-    setMutatingItemId(scheduleItem.id);
-    setScheduleError(null);
-    setUndoAction(null);
-    try {
-      const previousSchedule = scheduleInputFromItem(scheduleItem);
-      const nextSchedule = scheduleInput(schedule, exactTime);
-      await updateItineraryItem(tripId, scheduleItem.id, {
-        ...(nextSchedule.kind === 'exact' || !scheduleItem.localEndTime
-          ? {}
-          : { localEndTime: null }),
-        schedule: nextSchedule,
-      });
-      await refresh();
-      if (isPreview) {
-        setUndoAction({
-          itemId: scheduleItem.id,
-          kind: 'schedule',
-          durationMinutes: scheduleItem.durationMinutes,
-          localEndTime: scheduleItem.localEndTime ?? null,
-          schedule: previousSchedule,
-        });
-      }
-      setScheduleItem(null);
-      setFeedback(t('feedback.schedule'));
-    } catch {
-      setScheduleError(t('scheduleEditor.saveError'));
-    } finally {
-      setMutatingItemId(null);
-    }
-  }
-
   async function undoLastAction() {
     const action = undoAction;
     if (!action) return;
     setMutatingItemId(action.itemId);
     setError(null);
     try {
-      if (action.kind === 'status') {
-        await updateItineraryItemTravelStatus(tripId, action.itemId, action.travelStatus);
-      } else if (action.kind === 'organize') {
-        await organizeItineraryItem(tripId, action.itemId, {
-          itineraryDayId: action.itineraryDayId,
-          position: action.position,
-        });
-      } else {
-        await updateItineraryItem(tripId, action.itemId, {
-          durationMinutes: action.localEndTime ? null : action.durationMinutes,
-          localEndTime: action.localEndTime,
-          schedule: action.schedule,
-        });
-      }
+      await updateItineraryItemTravelStatus(tripId, action.itemId, action.travelStatus);
       await refresh();
       setUndoAction(null);
       setFeedback(t('feedback.undone'));
@@ -710,18 +541,6 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     setMemoryItemId(itemId);
     setMemoryOpen(true);
   };
-  const moveToDayLabel = (candidate: (typeof itinerary.days)[number]) => {
-    const shortDate = new Intl.DateTimeFormat(locale, {
-      day: 'numeric',
-      month: 'short',
-      timeZone: 'UTC',
-    }).format(new Date(`${candidate.date}T00:00:00.000Z`));
-    const number = itinerary.days.indexOf(candidate) + 1;
-    return candidate.name
-      ? itineraryT('dayOptionNamed', { date: shortDate, name: candidate.name, number })
-      : t('dayOption', { date: shortDate, number });
-  };
-
   /** The marker on the rail: what the stop's state is, readable without colour. */
   const railNode = (kind: 'base' | 'completed' | 'current' | 'skipped' | 'upcoming'): ReactNode => (
     <span
@@ -842,15 +661,26 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
           ) : null}
         </p>
         {/* A task for the day is worth a control of its own here; the rest of
-            what a day collects lives under the stop it belongs to. */}
-        <TripModeActionButton
-          className="h-10"
-          disabled={tripModeTasks.status !== 'ready'}
-          onClick={() => tripModeTasks.openCreate({ itineraryDayId: day.id, kind: 'day' })}
-        >
-          <Plus aria-hidden="true" data-icon="inline-start" />
-          {t('taskShort')}
-        </TripModeActionButton>
+            what a day collects lives under the stop it belongs to. Changing
+            the plan itself is the planner's, one tap away. */}
+        <div className="flex gap-2">
+          <TripModeActionButton
+            className="h-10 bg-transparent hover:bg-muted"
+            nativeButton={false}
+            render={<Link href={plannerHref} />}
+          >
+            <Icons.Itinerary aria-hidden="true" data-icon="inline-start" />
+            {t('editInPlanner')}
+          </TripModeActionButton>
+          <TripModeActionButton
+            className="h-10"
+            disabled={tripModeTasks.status !== 'ready'}
+            onClick={() => tripModeTasks.openCreate({ itineraryDayId: day.id, kind: 'day' })}
+          >
+            <Plus aria-hidden="true" data-icon="inline-start" />
+            {t('taskShort')}
+          </TripModeActionButton>
+        </div>
       </header>
 
       <TripModeTasksNotice />
@@ -980,9 +810,6 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
               const expanded = expandedId === item.id;
               const busy = mutatingItemId === item.id;
               const upcoming = item.travelStatus === 'upcoming';
-              const upcomingIndex = upcomingItems.findIndex(
-                (candidate) => candidate.id === item.id,
-              );
               const linkedReservations = reservationsByItem.get(item.id) ?? [];
               const linkedTasks = tasksForItem(tripModeTasks.data?.tasks ?? [], item.id);
               const openTaskCount = linkedTasks.filter((task) => !task.completed).length;
@@ -1096,7 +923,20 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                         <PlaceHoursNote
                           status={tripPlace ? placeHours[tripPlace.id]?.hours : undefined}
                         />
-                        {where}
+                        {/* Where it is, and the way into everything known about
+                            the place - hours, contact - without a button of its own. */}
+                        {where && tripPlace ? (
+                          <button
+                            aria-label={itineraryT('viewDetailsFor', { name })}
+                            className="block w-full min-w-0 rounded-[var(--radius-sm)] text-left outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+                            onClick={() => openPlaceDetails(tripPlace, day.date)}
+                            type="button"
+                          >
+                            {where}
+                          </button>
+                        ) : (
+                          where
+                        )}
                         {item.notes || (tripPlace?.note && tripPlace.note !== item.notes) ? (
                           <p className="flex items-start gap-1.5 text-text-subtle">
                             <Icons.Notes aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
@@ -1124,7 +964,14 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                         ) : null}
                       </div>
 
-                      <div className="mt-3 grid grid-cols-3 gap-1.5">
+                      {/* Only what is done standing at a stop. Changing the plan
+                          itself - its order, its times - is the planner's job. */}
+                      <div
+                        className={cn(
+                          'mt-3 grid gap-1.5',
+                          directions ? 'grid-cols-3' : 'grid-cols-2',
+                        )}
+                      >
                         {upcoming ? (
                           <>
                             <Button
@@ -1172,110 +1019,26 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                           >
                             {t('directions')}
                           </Button>
-                        ) : (
-                          <Button
-                            className="h-11 rounded-[var(--radius-lg)] bg-muted px-1 text-[0.8125rem] font-semibold text-foreground hover:bg-surface-hover"
-                            disabled={busy}
-                            onClick={() => openSchedule(item)}
-                            variant="ghost"
-                          >
-                            {t('timeShort')}
-                          </Button>
-                        )}
+                        ) : null}
                       </div>
 
                       <div className="mt-2 flex flex-wrap gap-1.5">
-                        {directions ? (
-                          <Button
-                            className="h-9 rounded-full px-3.5 font-normal shadow-none"
-                            disabled={busy}
-                            onClick={() => openSchedule(item)}
-                            variant="outline"
-                          >
-                            {t('timeShort')}
-                          </Button>
-                        ) : null}
                         <Button
                           className="h-9 rounded-full px-3.5 font-normal shadow-none"
                           onClick={() => openMemoryFor(item.id)}
                           variant="outline"
                         >
+                          <Icons.Memories aria-hidden="true" data-icon="inline-start" />
                           {memoryTranslations('quickAction')}
                         </Button>
                         <Button
                           className="h-9 rounded-full px-3.5 font-normal shadow-none"
-                          nativeButton={false}
-                          render={<Link href={expenseHref(item.id)} />}
+                          onClick={() => logExpense(item.id)}
                           variant="outline"
                         >
+                          <Icons.Expenses aria-hidden="true" data-icon="inline-start" />
                           {t('expense')}
                         </Button>
-                        {tripPlace ? (
-                          <Button
-                            aria-label={itineraryT('viewDetailsFor', { name })}
-                            className="h-9 rounded-full px-3.5 font-normal shadow-none"
-                            onClick={() => openPlaceDetails(tripPlace, day.date)}
-                            variant="outline"
-                          >
-                            {t('details')}
-                          </Button>
-                        ) : null}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger
-                            aria-label={t('moreActions', { name })}
-                            disabled={busy}
-                            render={
-                              <Button
-                                className="size-9 rounded-full shadow-none"
-                                size="icon"
-                                type="button"
-                                variant="outline"
-                              />
-                            }
-                          >
-                            <Ellipsis aria-hidden="true" />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="min-w-52">
-                            {upcoming ? (
-                              <>
-                                <DropdownMenuItem
-                                  disabled={upcomingIndex <= 0}
-                                  onClick={() => void reorder(item, 'earlier')}
-                                >
-                                  <ArrowUp aria-hidden="true" />
-                                  {t('moveEarlier')}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  disabled={upcomingIndex >= upcomingItems.length - 1}
-                                  onClick={() => void reorder(item, 'later')}
-                                >
-                                  <ArrowDown aria-hidden="true" />
-                                  {t('moveLater')}
-                                </DropdownMenuItem>
-                              </>
-                            ) : null}
-                            {itinerary.days.length > 1 ? (
-                              <DropdownMenuSub>
-                                <DropdownMenuSubTrigger>
-                                  <CalendarDays aria-hidden="true" />
-                                  {t('moveToDay')}
-                                </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent className="max-h-80 overflow-y-auto">
-                                  {itinerary.days
-                                    .filter((candidate) => candidate.id !== day.id)
-                                    .map((candidate) => (
-                                      <DropdownMenuItem
-                                        key={candidate.id}
-                                        onClick={() => void moveToDay(item, candidate.id)}
-                                      >
-                                        {moveToDayLabel(candidate)}
-                                      </DropdownMenuItem>
-                                    ))}
-                                </DropdownMenuSubContent>
-                              </DropdownMenuSub>
-                            ) : null}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
                       </div>
 
                       <TripModeTaskDisclosure
@@ -1370,22 +1133,13 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
               );
             })}
           </ol>
-          {/* Adding to the day follows the day, where the next stop would go. */}
-          <Button
-            className="h-12 w-full rounded-[var(--radius-lg)] border-dashed border-border-strong bg-transparent shadow-none"
-            onClick={() => setCreateItemOpen(true)}
-            variant="outline"
-          >
-            <Plus aria-hidden="true" data-icon="inline-start" />
-            {t('addItem')}
-          </Button>
         </div>
       ) : (
         <PageState
           actions={
-            <Button onClick={() => setCreateItemOpen(true)}>
-              <Plus aria-hidden="true" data-icon="inline-start" />
-              {t('addFirstItem')}
+            <Button nativeButton={false} render={<Link href={plannerHref} />}>
+              <Icons.Itinerary aria-hidden="true" data-icon="inline-start" />
+              {t('editInPlanner')}
             </Button>
           }
           className="py-8"
@@ -1423,7 +1177,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        <TripModeActionButton nativeButton={false} render={<Link href={expenseHref()} />}>
+        <TripModeActionButton onClick={() => logExpense()}>
           <Icons.Expenses aria-hidden="true" data-icon="inline-start" />
           {t('expense')}
         </TripModeActionButton>
@@ -1450,76 +1204,6 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
         timeZone={day.defaultTimeZone}
         tripId={tripId}
       />
-
-      {createItemOpen ? (
-        <StopEditorSheet
-          id={0}
-          locationBias={null}
-          onClose={() => setCreateItemOpen(false)}
-          onSaved={async () => {
-            setCreateItemOpen(false);
-            await refresh();
-            setError(null);
-            setUndoAction(null);
-            setFeedback(t('feedback.added'));
-          }}
-          onTripPlaceAdded={() => {
-            void refresh().catch(() => undefined);
-          }}
-          open
-          placeUse={placeUse}
-          request={{
-            dayId: day.id,
-            dayLabel: itineraryT('dayNumber', { number: dayNumber }),
-            kind: 'create',
-          }}
-          tripId={tripId}
-          tripPlaces={itinerary.tripPlaces}
-        />
-      ) : null}
-
-      <Sheet
-        onOpenChange={(open) => {
-          if (!open) {
-            setScheduleItem(null);
-            setScheduleError(null);
-          }
-        }}
-        open={Boolean(scheduleItem)}
-      >
-        <SheetContent closeLabel={t('scheduleEditor.close')} side="right">
-          <SheetHeader>
-            <SheetTitle>{t('scheduleEditor.title')}</SheetTitle>
-            <SheetDescription>
-              {scheduleItem
-                ? t('scheduleEditor.description', { name: itemName(scheduleItem) })
-                : null}
-            </SheetDescription>
-          </SheetHeader>
-          <div className="overflow-y-auto px-5 pb-5">
-            {scheduleError ? (
-              <Alert className="mb-4" variant="destructive">
-                <Icons.Error aria-hidden="true" />
-                <AlertDescription>{scheduleError}</AlertDescription>
-              </Alert>
-            ) : null}
-            <TripModeScheduleFields
-              exactTime={exactTime}
-              onExactTimeChange={setExactTime}
-              onScheduleChange={setSchedule}
-              schedule={schedule}
-            />
-          </div>
-          <SheetFooter>
-            <Button
-              disabled={Boolean(scheduleItem && mutatingItemId === scheduleItem.id)}
-              onClick={() => void saveSchedule()}
-            >
-              {t('scheduleEditor.save')}
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }

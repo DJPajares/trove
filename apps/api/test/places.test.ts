@@ -74,6 +74,7 @@ test('Google Text Search requests five identity results with attribution', async
   }
   expect(places).toStrictEqual([
     {
+      addressComponents: [],
       attributions: [{ provider: 'Example Data', providerUri: 'https://example.com/source' }],
       category: 'things_to_do',
       externalPlaceId: 'ChIJmuseum',
@@ -931,4 +932,52 @@ test('per-photo endpoint validates input and ownership before resolving an image
     await app.close();
     vi.unstubAllGlobals();
   }
+});
+
+test('standalone autocomplete omits session tokens and honors cancellation', async () => {
+  const fetcher = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+    expect(JSON.parse(String(init?.body))).not.toHaveProperty('sessionToken');
+    expect(init?.signal).toBeDefined();
+    return Response.json({ suggestions: [] });
+  });
+  const provider = new GooglePlacesProvider({ apiKey: 'test', fetcher });
+  await provider.search({ input: 'Wat Pho Bangkok', signal: new AbortController().signal });
+  const controller = new AbortController();
+  controller.abort();
+  await expect(
+    provider.search({ input: 'Wat Pho Bangkok', signal: controller.signal }),
+  ).rejects.toMatchObject({ code: 'provider_unavailable' });
+  expect(fetcher).toHaveBeenCalledOnce();
+});
+
+test('AI Text Search can request twenty results and structured locality without changing manual defaults', async () => {
+  const fetcher = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+    expect(JSON.parse(String(init?.body)).pageSize).toBe(20);
+    expect(new Headers(init?.headers).get('X-Goog-FieldMask')).toContain(
+      'places.addressComponents',
+    );
+    return Response.json({
+      places: [
+        {
+          id: 'bangkok',
+          displayName: { text: 'Bangkok' },
+          location: { latitude: 13.75, longitude: 100.5 },
+          addressComponents: [{ longText: 'Thailand', shortText: 'TH', types: ['country'] }],
+        },
+      ],
+    });
+  });
+  const provider = new GooglePlacesProvider({ apiKey: 'test', fetcher });
+  const result = await provider.textSearch({
+    detail: 'location',
+    textQuery: 'Bangkok',
+    pageSize: 20,
+  });
+  expect(result[0]?.addressComponents).toEqual([
+    { longText: 'Thailand', shortText: 'TH', types: ['country'] },
+  ]);
+  await expect(
+    provider.textSearch({ detail: 'location', textQuery: 'Bangkok', pageSize: 21 }),
+  ).rejects.toMatchObject({ code: 'invalid_request' });
+  expect(fetcher).toHaveBeenCalledOnce();
 });

@@ -21,6 +21,7 @@ import {
   type PlacePhotoMediaRequest,
   type PlacePriceLevel,
   type PlaceSearchRequest,
+  type PlaceAutocompleteRequest,
   type PlaceTextSearchProvider,
   type PlaceTextSearchRequest,
   type PlacesProvider,
@@ -62,6 +63,7 @@ export const GOOGLE_PLACE_LOCATION_FIELD_MASK = [
 ].join(',');
 
 export const GOOGLE_TEXT_SEARCH_FIELD_MASK = [
+  'places.addressComponents',
   'places.attributions',
   'places.id',
   'places.displayName',
@@ -149,6 +151,7 @@ type GoogleAutocompleteResponse = {
 };
 
 type GooglePlaceDetails = {
+  addressComponents?: Array<{ longText?: string; shortText?: string; types?: string[] }>;
   attributions?: GoogleAttribution[];
   displayName?: GoogleText;
   formattedAddress?: string;
@@ -523,10 +526,10 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
     return body;
   }
 
-  async search(request: PlaceSearchRequest): Promise<PlaceSuggestion[]> {
+  async search(request: PlaceAutocompleteRequest): Promise<PlaceSuggestion[]> {
     if (
       !request.input.trim() ||
-      !SESSION_TOKEN_PATTERN.test(request.sessionToken) ||
+      (request.sessionToken !== undefined && !SESSION_TOKEN_PATTERN.test(request.sessionToken)) ||
       !isValidLocationBias(request)
     ) {
       throw new PlaceProviderError('invalid_request');
@@ -535,6 +538,7 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
     const response = await this.requestJson<GoogleAutocompleteResponse>(
       new URL('/v1/places:autocomplete', this.baseUrl),
       {
+        signal: request.signal,
         body: JSON.stringify({
           input: request.input,
           languageCode: request.languageCode,
@@ -573,7 +577,12 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
   }
 
   async textSearch(request: PlaceTextSearchRequest): Promise<ProviderPlaceSearchResult[]> {
-    if (!request.textQuery.trim() || !isValidLocationBias(request)) {
+    if (
+      !request.textQuery.trim() ||
+      !isValidLocationBias(request) ||
+      (request.pageSize !== undefined &&
+        (!Number.isInteger(request.pageSize) || request.pageSize < 1 || request.pageSize > 20))
+    ) {
       throw new PlaceProviderError('invalid_request');
     }
 
@@ -597,7 +606,7 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
           // Text Search is billed per request, not per result. A wider page
           // costs the same and is what lets grounding tell an ambiguous name
           // apart from one whose only good match was ranked third.
-          pageSize: 5,
+          pageSize: request.pageSize ?? 5,
           regionCode: request.regionCode,
           textQuery: request.textQuery,
         }),
@@ -628,6 +637,11 @@ export class GooglePlacesProvider implements PlacesProvider, PlaceTextSearchProv
       return [
         {
           ...identity,
+          addressComponents: (place.addressComponents ?? []).map((component) => ({
+            longText: cleanString(component.longText) ?? '',
+            shortText: cleanString(component.shortText) ?? '',
+            types: cleanStringList(component.types),
+          })),
           ...(request.detail === 'evidence'
             ? {
                 evidence: {

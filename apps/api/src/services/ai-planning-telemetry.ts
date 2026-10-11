@@ -68,6 +68,15 @@ export type AiPlanningDraftSummary = {
 };
 
 export type AiPlanningTelemetryEvent =
+  | {
+      kind: 'place_reconciliation';
+      occurredAt: string;
+      firstPassMatches: number;
+      recoveredMatches: number;
+      ambiguous: number;
+      unresolved: number;
+      skippedRetries: number;
+    }
   | ({ kind: 'draft_assembled'; occurredAt: string } & AiPlanningDraftSummary)
   | {
       coveredDays: number;

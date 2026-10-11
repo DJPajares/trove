@@ -156,7 +156,7 @@ export function buildAiPlannerPrompt(rawPrompt: string, context: AiPlannerPrompt
     '',
     'Use zero-based array indexes for candidatePlaceIndex, destinationIntentIndex, and constraintIndices. Every non-null index must point to an existing entry in the corresponding places, normalizedRequest.destinations, or normalizedRequest.constraints array. Reuse one place entry when multiple items visit the same venue.',
     '',
-    "In places, set name to the venue's own name exactly as Google Maps lists it, with no descriptive suffix, activity wording, or article added, and set searchQuery to that same name followed by the city it sits in. A name that reads as a label rather than a sign above the door cannot be matched to a real place.",
+    "In places, choose identifiable real venues. Keep name as the traveller-recognizable venue name, without activity wording; put activities in item labels. When known, provide searchName as the venue's official or local-language name and localityHint as its actual city, region and country. Set searchQuery to one venue name followed by that locality, not a category or several alternative names. Use null for unknown hints. You have not searched Google and must not claim a listing is verified or invent provider IDs or coordinates; Trove verifies your suggestions against Google before review.",
     '',
     'planner_context.savedPlaces, when present, lists venues the traveller has already saved, with their address. Where the trip goes near any of them, prefer them for stops they genuinely suit, and use the name exactly as listed. Never add one only because it is listed, and never move the trip somewhere because of it.',
     '',

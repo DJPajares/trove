@@ -1,5 +1,5 @@
 import { getPlacesEnvironment } from '../environment.js';
-import { normalizeIdentityText } from './ai-place-grounding.js';
+import { normalizeIdentityText } from './place-identity-matching.js';
 import { GooglePlacesProvider } from './google-places.js';
 import { normalizePlaceLanguageCode } from './place-language.js';
 import {

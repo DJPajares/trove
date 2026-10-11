@@ -537,6 +537,7 @@ AI-assisted trip creation is the first approved AI product capability. It is an 
 ### 7.6.3 Grounding and Validation
 
 - Generated destinations and real-place suggestions are resolved on demand through the provider rules in Sections 11 and 16. A confident provider identity reuses the canonical Trove Place.
+- Generation supplies known official/local search names and locality hints without claiming provider verification. Reconciliation resolves destinations first, uses their geographic context, and permits at most one initial lookup and one recovery lookup per place. Provider-confirmed alternate names can establish identity across languages; ranking, proximity, country-only agreement, or fuzzy names alone cannot. Equally supported matches remain ambiguous. Recovery uses existing Google search capabilities and shares the same run budget and deadline.
 - A suggestion that matches one of the traveller's Saved Places exactly, by name and locality, is grounded on that Place's stored identity and costs no Text Search. Anything less certain is resolved through the normal search.
 - The complete Generate or Regenerate run may make at most **50 outbound Google calls**, shared across Text Search (New), place/detail evidence, opening-hours checks, and route checks. Provider usage accounting records the AI-planner source and billable SKU.
 - Text Search and final checks request the cheapest field mask that satisfies the reviewed surface. Mutable provider data such as opening hours remains on-demand evidence and is never permanently cached as Trove-owned truth.

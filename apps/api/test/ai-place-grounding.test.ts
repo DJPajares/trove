@@ -395,6 +395,7 @@ function cachedSetup(
             cachedFormattedAddress: place.formattedAddress,
             cachedLatitude: place.location.latitude,
             cachedLongitude: place.location.longitude,
+            cachedTypes: place.rawTypes,
             cachedLanguageCode: options?.languageCode ?? 'en',
           };
           return { id: canonicalPlaceId };
@@ -429,6 +430,8 @@ test('a new run reuses the identity and original evidence without refreshing eit
   expect(writes[0]).toStrictEqual({
     checkedAt,
     outcome: 'verified',
+    identityFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
+    countryCode: null,
     externalPlaceId: 'ChIJmuseum',
     placeId: canonicalPlaceId,
   });
@@ -448,11 +451,12 @@ test('completed unresolved and ambiguous outcomes are shared, with the current c
   for (const answer of [[], [identity(), identity({ externalPlaceId: 'duplicate' })]]) {
     const { newGrounder, state, writes } = cachedSetup(answer);
     const first = await newGrounder().groundCandidate(candidate());
+    const paidSearches = state.searches;
     state.now = new Date(state.now.getTime() + 86_400_000);
     const second = await newGrounder().groundCandidate(
       candidate({ id: 'candidate:copy', note: 'New note' }),
     );
-    expect(state.searches).toBe(1);
+    expect(state.searches).toBe(paidSearches);
     expect(state.resolutions).toBe(0);
     expect(second.evidence.code).toBe(first.evidence.code);
     expect(second.evidence.checkedAt).toBe(first.evidence.checkedAt);
@@ -471,12 +475,13 @@ test('positive and negative decisions expire only after the 30-day ceiling', asy
   for (const answer of [[identity({ attributions: [] })], [], [identity(), identity()]]) {
     const { newGrounder, state } = cachedSetup(answer);
     await newGrounder().groundCandidate(candidate());
+    const paidSearches = state.searches;
     state.now = new Date(state.now.getTime() + PLACE_CACHE_TTL_MS);
     await newGrounder().groundCandidate(candidate());
-    expect(state.searches).toBe(1);
+    expect(state.searches).toBe(paidSearches);
     state.now = new Date(state.now.getTime() + 1);
     await newGrounder().groundCandidate(candidate());
-    expect(state.searches).toBe(2);
+    expect(state.searches).toBe(paidSearches * 2);
   }
 });
 
@@ -494,7 +499,7 @@ test('matching context isolates decisions even when the provider query is identi
     const { newGrounder, state } = cachedSetup();
     await newGrounder().groundCandidate(candidate());
     const result = await newGrounder().groundCandidate(candidate(change));
-    expect(state.searches, JSON.stringify(change)).toBe(2);
+    expect(state.searches, JSON.stringify(change)).toBe(change.localityHint === 'London' ? 3 : 2);
     if (change.name || change.localityHint === 'London')
       expect(result.place.resolution).toBe('custom');
   }

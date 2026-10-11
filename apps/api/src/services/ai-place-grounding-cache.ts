@@ -9,13 +9,21 @@ export type GroundingCacheReference = PlaceSnapshotSource & {
 };
 
 export type GroundingCacheEntry = {
+  countryCode?: string | null;
+  identityFingerprint?: string | null;
   checkedAt: Date;
   outcome: string;
   placeProviderRef: GroundingCacheReference | null;
 };
 
 export type GroundingCacheWrite = { checkedAt: Date } & (
-  | { outcome: 'verified'; externalPlaceId: string; placeId: string }
+  | {
+      outcome: 'verified';
+      externalPlaceId: string;
+      placeId: string;
+      identityFingerprint: string;
+      countryCode: string | null;
+    }
   | { outcome: 'unresolved' | 'ambiguous' }
 );
 
@@ -25,7 +33,7 @@ export interface AiPlaceGroundingCacheRepository {
 }
 
 /**
- * Stores an identity decision, never a search response. Only the grounder can
+ * Stores an identity decision and its bounded country context, never a search response. Only the grounder can
  * establish uniqueness: a lookup among known Place names cannot reproduce it.
  *
  * Google permits storing Place IDs (https://developers.google.com/maps/documentation/places/web-service/policies).
@@ -54,7 +62,13 @@ export class PrismaAiPlaceGroundingCacheRepository implements AiPlaceGroundingCa
       if (!reference) return;
       placeProviderRefId = reference.id;
     }
-    const data = { checkedAt: entry.checkedAt, outcome: entry.outcome, placeProviderRefId };
+    const data = {
+      checkedAt: entry.checkedAt,
+      outcome: entry.outcome,
+      placeProviderRefId,
+      identityFingerprint: entry.outcome === 'verified' ? entry.identityFingerprint : null,
+      countryCode: entry.outcome === 'verified' ? entry.countryCode : null,
+    };
     await prisma.aiPlaceGroundingCache.upsert({
       where: { key },
       create: { key, ...data },

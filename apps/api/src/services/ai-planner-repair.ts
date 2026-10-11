@@ -191,6 +191,9 @@ function fieldDefault(root: Json, path: Path, rawPrompt: string): { value: unkno
 
   if (inPlace) {
     switch (key) {
+      case 'searchName':
+      case 'localityHint':
+        return { value: null };
       case 'note':
         return { value: null };
       case 'name': {
@@ -306,6 +309,11 @@ function repairIssue(
   log: AiPlannerRepairLog,
 ): boolean | 'drop' {
   const path = issue.path;
+  if (path[0] === 'places' && (path[2] === 'searchName' || path[2] === 'localityHint')) {
+    setAt(root, path.slice(0, 3), null);
+    log.add('output_field_defaulted');
+    return true;
+  }
   const scheduleAt = path.indexOf('schedule');
   if (scheduleAt !== -1 && path[0] === 'items') {
     const schedulePath = path.slice(0, scheduleAt + 1);

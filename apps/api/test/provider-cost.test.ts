@@ -2042,6 +2042,10 @@ test('six venues use one Places call each, with persisted identity and transient
         const query = (JSON.parse(String(init?.body)) as { textQuery: string }).textQuery;
         const place = proposal.places.find((candidate) => candidate.searchQuery === query)!;
         expect(place).toBeDefined();
+        if (place.id !== 'candidate:tokyo')
+          expect(JSON.parse(String(init?.body)).locationBias).toEqual({
+            circle: { center: { latitude: 35.7, longitude: 139.776 }, radius: 50_000 },
+          });
         const mask = new Headers(init?.headers).get('X-Goog-FieldMask');
         expect(mask).toBe(
           place.id === 'candidate:tokyo'
@@ -2053,6 +2057,11 @@ test('six venues use one Places call each, with persisted identity and transient
             {
               id: `google-${place.id}`,
               displayName: { text: place.name },
+              types: place.id === 'candidate:tokyo' ? ['locality', 'political'] : ['museum'],
+              addressComponents: [
+                { longText: 'Tokyo', shortText: 'Tokyo', types: ['locality'] },
+                { longText: 'Japan', shortText: 'JP', types: ['country'] },
+              ],
               rating: 4.5,
               photos: [1, 2, 3].map((number) => ({
                 name: `places/google-${place.id.replaceAll(':', '_')}/photos/p${number}`,
@@ -2264,7 +2273,14 @@ test('six venues use one Places call each, with persisted identity and transient
   expect(planScores[3]!.score).not.toBeNull();
   expect(planScores[3]!.sourceInputRevision).toBe(draftPlanScoreInputRevision(drafts[3]!));
   for (const row of groundingMappings.values()) {
-    expect(Object.keys(row).sort()).toEqual(['checkedAt', 'key', 'outcome', 'placeProviderRefId']);
+    expect(Object.keys(row).sort()).toEqual([
+      'checkedAt',
+      'countryCode',
+      'identityFingerprint',
+      'key',
+      'outcome',
+      'placeProviderRefId',
+    ]);
   }
   for (const row of providerRefs.values()) {
     expect(row).not.toHaveProperty('rating');

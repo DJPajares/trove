@@ -462,13 +462,15 @@ model PlaceProviderRef {
 }
 
 /// A grounding decision for a versioned hash of the query and matching inputs.
-/// Only identity and Trove lookup metadata are stored, never provider content.
+/// Identity metadata and country context share the referenced snapshot's age.
 /// Both successful and negative decisions expire 30 days after checkedAt.
 model AiPlaceGroundingCache {
-  key                String   @id @db.VarChar(64)
-  outcome            String
-  checkedAt          DateTime @map("checked_at") @db.Timestamptz(3)
-  placeProviderRefId String?  @map("place_provider_ref_id") @db.Uuid
+  key                 String   @id @db.VarChar(64)
+  outcome             String
+  identityFingerprint String?  @map("identity_fingerprint") @db.VarChar(64)
+  countryCode         String?  @map("country_code") @db.VarChar(2)
+  checkedAt           DateTime @map("checked_at") @db.Timestamptz(3)
+  placeProviderRefId  String?  @map("place_provider_ref_id") @db.Uuid
 
   placeProviderRef PlaceProviderRef? @relation(fields: [placeProviderRefId], references: [id], onDelete: Cascade)
 

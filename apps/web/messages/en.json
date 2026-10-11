@@ -207,14 +207,16 @@
     "createTitle": "Create a trip",
     "createDescription": "Start with the essentials. The rest can wait.",
     "aiPlanning": {
-      "description": "Tell Trove where you want to go and what matters. You can also create a trip manually.",
-      "tab": "Plan with AI",
-      "manualTab": "Create manually",
-      "promptLabel": "What kind of trip are you planning?",
-      "promptPlaceholder": "Tokyo and Kyoto in October, with food, museums, a work afternoon, and time to explore.",
-      "promptHint": "Include places, dates, interests, work time, meetings, or anything else that matters.",
-      "examplesLabel": "Try an example",
-      "moreExamples": "More examples",
+      "sheetTitle": "Plan a trip",
+      "description": "Describe the trip in your own words. Trove drafts a plan for you to review before anything is created, or you can set it up yourself.",
+      "createManually": "Set it up yourself",
+      "backToAi": "Plan with AI instead",
+      "promptLabel": "Where to, and what matters?",
+      "promptPlaceholder": "Tokyo and Kyoto in October: food, small museums, one work afternoon and time to wander.",
+      "promptHint": "A sentence is enough. Anything you leave out, Trove fills in and shows you first.",
+      "savedPlacesHint": "Your saved places are used where they fit.",
+      "examplesLabel": "Start from an idea",
+      "moreExamples": "More ideas",
       "examplesUpdated": "New examples: {examples}.",
       "exampleLabels": {
         "tokyoFood": "Tokyo food weekend",
@@ -244,7 +246,117 @@
         "queenstownAdventure": "Plan five active days around Queenstown for a solo traveller, with hiking, cycling, and one adventure activity. Keep one lighter day and offer alternatives for bad weather.",
         "vietnamFriends": "Plan seven days split between Hanoi and Ninh Binh for six friends. Mix food, history, and cycling, keep costs moderate, and leave room for different energy levels."
       },
-      "availability": "{count, plural, one {# AI Planner credit available} other {# AI Planner credits available}}",
+      "exampleDetails": {
+        "tokyoFood": "3 days · solo · ramen",
+        "costaRicaOutdoors": "7 days · two · wildlife",
+        "singaporeWork": "5 days · work and hawker food",
+        "lisbonBudget": "3 days · two · €70 a day",
+        "scottishRoadTrip": "7 days · four friends",
+        "barcelonaFamily": "5 days · family · beach",
+        "romePacked": "3 days · two · early starts",
+        "icelandPhotography": "5 days · two · road trip",
+        "beachEscape": "5 days · two · from Singapore",
+        "bangkokFood": "3 days · two friends · markets",
+        "queenstownAdventure": "5 days · solo · active",
+        "vietnamFriends": "7 days · six friends"
+      },
+      "brief": {
+        "addTitle": "Add to your brief",
+        "nudgesTitle": "Quick changes",
+        "added": "Added “{sentence}”",
+        "undo": "Undo",
+        "removed": "Removed “{sentence}”",
+        "full": "Your brief is as long as it can be. Shorten it to add more.",
+        "ingredients": {
+          "when": "When",
+          "who": "Who's coming",
+          "pace": "Pace",
+          "mustSee": "Must-sees",
+          "work": "Work & plans",
+          "travel": "Getting there"
+        },
+        "starters": {
+          "mustSee": "Must see",
+          "work": "I need to work",
+          "travel": "We arrive by"
+        },
+        "trays": {
+          "when": "When are you going?",
+          "who": "Who's coming?",
+          "pace": "What pace suits you?"
+        },
+        "picks": {
+          "when": {
+            "thisWeekend": { "label": "This weekend", "sentence": "We're going this weekend." },
+            "nextMonth": { "label": "Next month", "sentence": "We're going next month." },
+            "flexibleShort": {
+              "label": "Flexible, about 5 days",
+              "sentence": "Dates are flexible, about five days."
+            },
+            "flexibleWeek": {
+              "label": "Flexible, about a week",
+              "sentence": "Dates are flexible, about a week."
+            }
+          },
+          "who": {
+            "solo": { "label": "Just me", "sentence": "It's just me." },
+            "couple": { "label": "Two of us", "sentence": "There are two of us." },
+            "family": { "label": "Family with kids", "sentence": "We're a family with kids." },
+            "friends": { "label": "Group of friends", "sentence": "We're a group of friends." }
+          },
+          "pace": {
+            "slow": { "label": "Slow", "sentence": "We'd like a slow pace." },
+            "balanced": { "label": "Balanced", "sentence": "A balanced pace suits us." },
+            "full": { "label": "Full days", "sentence": "We're happy with full days." },
+            "early": { "label": "Early starts", "sentence": "We don't mind early starts." }
+          }
+        },
+        "pickDates": "Or pick exact dates",
+        "startDate": "First day",
+        "endDate": "Last day",
+        "addDates": "Add dates",
+        "datesSentence": "We travel from {start} to {end}.",
+        "nudges": {
+          "moreFood": { "label": "More food", "sentence": "More food stops, especially markets." },
+          "slower": {
+            "label": "Slower pace",
+            "sentence": "Make it slower, with fewer stops each day."
+          },
+          "freeAfternoon": {
+            "label": "Add a free afternoon",
+            "sentence": "Leave one afternoon free."
+          },
+          "fewerSights": {
+            "label": "Fewer big sights",
+            "sentence": "Fewer big sights and more time in neighbourhoods."
+          },
+          "shorter": { "label": "Shorter trip", "sentence": "Make the trip a day or two shorter." }
+        }
+      },
+      "gaps": {
+        "title": "How Trove fills the gaps",
+        "dates": "No exact dates? The trip starts on a Friday at least two weeks away.",
+        "times": "Times you give are kept. Other stops get a time of day, and an exact time where one fits.",
+        "review": "You see every guess before anything becomes a trip."
+      },
+      "credits": {
+        "left": "{count, plural, one {# AI Planner credit left} other {# AI Planner credits left}}",
+        "use": "{count, plural, one {Uses your last AI Planner credit} other {Uses 1 of # AI Planner credits}}",
+        "dayLimit": "trips up to {days} days",
+        "renews": "renews {date}"
+      },
+      "noCredits": {
+        "eyebrow": "{tier} plan",
+        "title": "You've used all your AI plans",
+        "briefLabel": "Your brief",
+        "copy": "Copy",
+        "copied": "Copied",
+        "manualHint": "Setting it up yourself starts with a name and dates. Places, days and plans can come later."
+      },
+      "failed": {
+        "title": "We couldn't finish this plan",
+        "creditKept": "Your brief is kept, and your credit wasn't used."
+      },
       "quotaRetryAt": "Your next AI plan is available after {retryAt}.",
       "quotaRetryUnknown": "Your credits do not renew automatically. You can still create a trip manually.",
       "reviewReadyTitle": "Your plan is ready",
@@ -264,8 +376,8 @@
         "close": "Close"
       },
       "manualFallbackHint": "You can create a trip manually at any time.",
-      "generate": "Generate plan",
-      "regenerate": "Generate again",
+      "generate": "Plan my trip",
+      "regenerate": "Plan it again",
       "tryAgain": "Try again",
       "starting": "Starting plan…",
       "cancel": "Cancel planning",
@@ -315,8 +427,56 @@
         "rate_limited": "You’ve started several plans quickly. Wait a minute and try again."
       },
       "review": {
-        "eyebrow": "AI itinerary draft",
-        "description": "Review your plan, then create the trip. Regenerate if you want a different one.",
+        "eyebrow": "AI draft · not a trip yet",
+        "version": "Version {number}",
+        "tripFacts": "{days, plural, one {# day} other {# days}} · {travellers, plural, one {# traveller} other {# travellers}}",
+        "editDetails": "Edit name and description",
+        "editTitle": "Name and description",
+        "editDescription": "These carry over to the trip when you create it. The plan itself doesn't change.",
+        "save": "Save",
+        "cancel": "Cancel",
+        "scoreDetails": "Plan Score details",
+        "filledIn": "What we filled in",
+        "filledInHint": "Check these before you create the trip.",
+        "fromYou": "From you",
+        "wePicked": "We picked",
+        "needsYou": "Needs you",
+        "confirmed": "Confirmed",
+        "changeInBrief": "Change in brief",
+        "rows": {
+          "dates": "Dates",
+          "travellers": "Travellers",
+          "pace": "Pace",
+          "stays": "Where you stay",
+          "countries": "Countries"
+        },
+        "daysTitle": "Your {count, plural, one {# day} other {# days}}",
+        "jumpToDay": "Jump to a day",
+        "dayStops": "{count, plural, =0 {Nothing planned yet} one {# stop} other {# stops}}",
+        "mustGo": "Must Go",
+        "unscheduledTitle": "{count, plural, one {# idea didn't fit} other {# ideas didn't fit}}",
+        "unscheduledHint": "They come with the trip, unscheduled, so you can place them later.",
+        "showMapTitle": "See {count, plural, one {# place} other {# places}} on a map",
+        "dockHint": "Nothing is created until you choose Create trip.",
+        "adjust": "Adjust brief",
+        "regeneratingTitle": "Planning a new version",
+        "regeneratingDock": "Create trip comes back when the new version is ready.",
+        "adjustEyebrow": "Adjust the brief",
+        "adjustLabel": "What should change?",
+        "adjustHint": "Edit your words or add a quick change. Trove plans the whole trip again from this brief.",
+        "adjustKeepsTitle": "“{name}” stays until the new plan is ready",
+        "adjustKeepsHint": "If the new plan can't be finished, nothing changes and the credit isn't used.",
+        "keepPlan": "Keep this plan",
+        "planAgain": "Plan it again",
+        "changesTitle": "What changed",
+        "changesHint": "From your adjusted brief",
+        "changeDates": "Dates moved to {range}",
+        "changeAdded": "New · {day}",
+        "changeMoved": "Moved · {from} to {to}",
+        "changeRemoved": "Removed · was {day}",
+        "changesMore": "{count, plural, one {And # more change} other {And # more changes}}",
+        "changesNone": "The same places as before, planned again.",
+        "dismissChanges": "Got it",
         "loading": "Loading your itinerary draft",
         "unavailableTitle": "This itinerary draft is unavailable",
         "unavailableDescription": "It may have expired, been cancelled, or no longer be available to this account.",
@@ -329,7 +489,6 @@
         "countriesPlaceholder": "Search countries",
         "countriesSuggested": "Suggested from this draft's destinations. Check their order or correct them; creating the trip accepts the selection.",
         "countriesMissing": "We could not determine a country from the draft. Choose where this trip visits.",
-        "countriesConfirmed": "Countries saved for this draft.",
         "countriesSaving": "Saving countries…",
         "countriesRetry": "Retry saving countries",
         "countriesRequired": "Choose at least one country to continue.",
@@ -337,11 +496,9 @@
         "unscheduledScheduleConflict": "No reliable time fit on the suggested day.",
         "scheduleAdjusted": "Starts after {other}, which was set for the same time.",
         "countryTimeZoneWarning": "Your country correction changes the fallback time zone for part of this plan. Check its local times after creating the trip. The earlier score is withheld until the trip is assessed again.",
-        "partySize": "Party size",
         "tripDescription": "Trip description",
         "descriptionHint": "We drafted this from your request. Edit it, or leave it as is — it saves to the trip when you create it.",
         "descriptionSaving": "Saving description…",
-        "assumptions": "Details we filled in",
         "assumptionCodes": {
           "dates_defaulted": "You didn't provide exact dates, so we chose {startDate} to {endDate} from your requested trip length.",
           "date_year_inferred": "You didn't give a year, so we used {value} for these dates.",
@@ -352,8 +509,6 @@
           "party_size_defaulted": "You didn't provide a party size, so we planned for {count, plural, one {# traveler} other {# travelers}}.",
           "trip_name_inferred": "You didn't provide a trip name, so we suggested {name}."
         },
-        "itinerary": "Itinerary",
-        "itineraryDescription": "Everything the planner scheduled, day by day.",
         "day": "Day {number}",
         "dayParts": {
           "morning": "Morning",
@@ -361,9 +516,8 @@
           "evening": "Evening",
           "anytime": "Anytime"
         },
-        "duration": "{minutes} minutes",
         "verifiedPlace": "Verified",
-        "travelerSupplied": "Traveler-supplied",
+        "travelerSupplied": "From you",
         "placesVerified": "{verified} of {total} places verified",
         "noVerifiedPlacesTitle": "None of these places could be verified",
         "noVerifiedPlacesHint": "You can still apply this plan, but the trip will open without map pins, travel times, or weather. Regenerating usually resolves it.",
@@ -376,10 +530,7 @@
         "mapUnavailable": "Verified Places with coordinates will appear on the map. Custom Places never receive an invented pin.",
         "mapPlaceCount": "{count, plural, one {# verified place} other {# verified places}} ready to map.",
         "showMap": "Show map",
-        "regenerate": "Regenerate plan",
-        "regenerateDescription": "Change destinations or dates here. The current draft remains until a new plan succeeds.",
-        "regenerateAction": "Regenerate",
-        "regeneratingHint": "Your current draft is preserved while the new plan is prepared.",
+        "regeneratingHint": "You can keep reading this plan. It stays until the new version is ready.",
         "apply": "Create trip",
         "confirmTitle": "Create this trip?",
         "confirmDescription": "Trove will create one standard trip from this plan. You can edit it afterwards.",
@@ -389,12 +540,10 @@
         "close": "Close",
         "errorHint": "Your latest saved draft remains available. Try again when you are ready."
       },
-      "planCredits": "{tier} · {count, plural, one {# AI Planner credit available} other {# AI Planner credits available}}",
       "tiers": {
         "free": "Free",
         "paid": "Paid"
       },
-      "dayLimit": "Trips up to {days} days",
       "creditRenewal": "Credits renew on {date}."
     },
     "editTitle": "Edit trip",

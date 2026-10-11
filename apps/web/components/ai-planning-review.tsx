@@ -1,14 +1,25 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CircleAlert, CircleCheck } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowLeftRight,
+  CalendarRange,
+  ChevronDown,
+  CircleAlert,
+  CircleCheck,
+  CircleDashed,
+  Minus,
+  PencilLine,
+  Plus,
+} from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
+import { AiPlanningAdjustSheet } from '@/components/ai-planning-adjust-sheet';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
-import { AiPlanningAllowance } from '@/components/ai-planning-allowance';
 import { CountryMultiCombobox } from '@/components/country-multi-combobox';
 import { PageState } from '@/components/page-state';
 import { composeInsights } from '@/lib/insights/compose';
@@ -20,11 +31,10 @@ import {
   startCanonicalPlanScoreRead,
 } from '@/lib/plan-score/lifecycle';
 import { fetchTripPlanScore } from '@/lib/plan-score/api';
-import { PlanScorePanel } from '@/components/plan-score-panel';
+import { PlanScoreChip, PlanScorePanel } from '@/components/plan-score-panel';
 import { TripInsightsPanel } from '@/components/trip-insights-panel';
 import { usePreferences } from '@/components/preferences-provider';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +46,15 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -50,7 +69,9 @@ import {
   setAiPlanningCountries,
   type AiPlanningSession,
   type AiPlanningDraft,
+  type AiPlanningDraftItem,
 } from '@/lib/ai-planning/api';
+import type { AiPlanningBriefTray } from '@/lib/ai-planning/brief';
 import {
   activeAiPlanningAssumptions,
   aiPlanningAssumptionMessageValues,
@@ -60,22 +81,38 @@ import {
   prepareAiPlanningCountriesForApply,
   appliedAiPlanningSession,
   buildAiPlanningReviewMapPoints,
+  diffAiPlanningDrafts,
   isAiPlanningSessionExpired,
+  type AiPlanningDraftChanges,
 } from '@/lib/ai-planning/review';
 import {
   aiPlanningErrorMessageKey,
   isAiPlanningSessionGenerating,
+  type AiPlanningSessionStage,
 } from '@/lib/ai-planning/presentation';
+import { formatPlannedDuration } from '@/lib/itinerary/route-format';
 import { motionDuration, motionEase } from '@/lib/motion';
 import { queryKeys } from '@/lib/query/keys';
 import { formatSegmentedTime } from '@/lib/time/time-segments';
 import type { Trip } from '@/lib/trips/api';
 import * as Icons from '@/lib/icons';
+import { cn } from '@/lib/utils';
 
 const INITIAL_SESSION_POLL_MS = 3_000;
 const LATER_SESSION_POLL_MS = 5_000;
 
 type ReviewOperation = 'applying' | 'idle' | 'regenerating';
+
+/** The server's stages in the order a run walks them, for the inline progress. */
+const REGENERATE_STAGES: readonly AiPlanningSessionStage[] = [
+  'created',
+  'generating',
+  'scheduling',
+  'grounding',
+  'validating',
+];
+/** How many days open on arrival. The rest stay one tap away in the day strip. */
+const OPEN_DAYS_ON_ARRIVAL = 2;
 
 export function AiPlanningReview({
   sessionId,
@@ -84,6 +121,7 @@ export function AiPlanningReview({
   const t = useTranslations('trips.aiPlanning.review');
   const general = useTranslations('trips.aiPlanning');
   const planScoreCopy = useTranslations('planScore');
+  const paceCopy = useTranslations('planningPreferences');
   const locale = useLocale();
   const { preferences } = usePreferences();
   const reducedMotion = useReducedMotion();
@@ -174,6 +212,23 @@ export function AiPlanningReview({
   const [mapRevealed, setMapRevealed] = useState(false);
   const [confirmApply, setConfirmApply] = useState(false);
   const [regeneratePrompt, setRegeneratePrompt] = useState('');
+  const [adjust, setAdjust] = useState<{ open: boolean; tray: AiPlanningBriefTray | null }>({
+    open: false,
+    tray: null,
+  });
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [descriptionDraft, setDescriptionDraft] = useState('');
+  // Which days are open. Seeded per draft revision, so a new version opens on
+  // its own first days rather than on whatever the last one left open.
+  const [openDays, setOpenDays] = useState<{ days: ReadonlySet<string>; revision: number | null }>({
+    days: new Set(),
+    revision: null,
+  });
+  // The draft a regenerate started from, held only on this screen so the new
+  // version can say what changed. Nothing is stored or sent anywhere.
+  const regeneratedFrom = useRef<{ draft: AiPlanningDraft; revision: number } | null>(null);
+  const [changes, setChanges] = useState<AiPlanningDraftChanges | null>(null);
   const [description, setDescription] = useState('');
   const [savingDescription, setSavingDescription] = useState(false);
   const [name, setName] = useState('');
@@ -241,6 +296,30 @@ export function AiPlanningReview({
   useEffect(() => {
     sessionRef.current = expired || serverExpired ? null : session;
   }, [expired, serverExpired, session]);
+
+  useEffect(() => {
+    const origin = regeneratedFrom.current;
+    if (!origin || session?.status !== 'reviewing' || !session.draft) return;
+    // A failed regenerate keeps the earlier revision; only a new one has changes.
+    if (session.draftRevision === origin.revision) return;
+    regeneratedFrom.current = null;
+    setChanges(diffAiPlanningDrafts(origin.draft, session.draft));
+  }, [session?.draft, session?.draftRevision, session?.status]);
+
+  const draftRevision = session?.draftRevision ?? null;
+  const visibleOpenDays = useMemo(
+    () =>
+      openDays.revision === draftRevision
+        ? openDays.days
+        : new Set(draft?.days.slice(0, OPEN_DAYS_ON_ARRIVAL).map((day) => day.date) ?? []),
+    [draft, draftRevision, openDays],
+  );
+  function setDayOpen(date: string, open: boolean) {
+    const days = new Set(visibleOpenDays);
+    if (open) days.add(date);
+    else days.delete(date);
+    setOpenDays({ days, revision: draftRevision });
+  }
 
   // The model drafts a description and the traveller's edit overrides it, so the
   // field is seeded from the session's own copy first. It reads through
@@ -322,29 +401,6 @@ export function AiPlanningReview({
   const selectedMapPoints = useMemo(
     () => (draft ? buildAiPlanningReviewMapPoints(draft) : []),
     [draft],
-  );
-  const assumptionMessages = useMemo(
-    () =>
-      draft
-        ? [
-            ...new Set(
-              activeAiPlanningAssumptions(draft)
-                // The suggested-name line is a nudge to check the model's guess;
-                // once the traveller has set their own it has nothing left to say.
-                .filter(
-                  (assumption) =>
-                    assumption.code !== 'trip_name_inferred' || session?.tripName === null,
-                )
-                .map((assumption) =>
-                  t(
-                    `assumptionCodes.${assumption.code}`,
-                    aiPlanningAssumptionMessageValues(assumption, draft, locale),
-                  ),
-                ),
-            ),
-          ]
-        : [],
-    [draft, locale, session?.tripName, t],
   );
   /**
    * How much of the plan stands on a place the provider could actually find.
@@ -462,6 +518,9 @@ export function AiPlanningReview({
     if (!session || expired || serverExpired || publishing || !regeneratePrompt.trim()) return;
     setOperation('regenerating');
     setError(null);
+    setChanges(null);
+    setAdjust((current) => ({ ...current, open: false }));
+    if (draft) regeneratedFrom.current = { draft, revision: session.draftRevision };
     try {
       publish(
         (
@@ -572,43 +631,148 @@ export function AiPlanningReview({
         ),
     );
     if (!day) return null;
-    return { onSelect: () => document.getElementById(`ai-score-day-${day.date}`)?.focus() };
+    return {
+      onSelect: () => {
+        setDayOpen(day.date, true);
+        document.getElementById(`ai-score-day-${day.date}`)?.focus();
+      },
+    };
   }
 
-  return (
-    <section className="mx-auto max-w-7xl space-y-6 pb-28" aria-labelledby="ai-review-title">
-      <motion.header className="border-b border-border pb-6" {...arrive(0)}>
-        {/* Leaving is not discarding. The session outlives this screen, so the
-            way out needs no confirmation - and the Trips page keeps the draft
-            reachable, which is the only reason this can be a plain exit. */}
-        <Button
-          className="-ml-3 mb-2 text-muted-foreground"
-          onClick={() => router.push('/trips')}
-          size="sm"
-          type="button"
-          variant="ghost"
-        >
-          <ArrowLeft aria-hidden="true" data-icon="inline-start" />
-          {t('saveForLater')}
-        </Button>
-        <div className="max-w-2xl">
-          <p className="text-sm font-medium text-brand">{t('eyebrow')}</p>
-          <h1
-            className="mt-1 text-[length:var(--text-page-title)] font-semibold tracking-[-0.035em]"
-            id="ai-review-title"
-          >
-            {name || draft.trip.name}
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">{t('description')}</p>
-        </div>
-      </motion.header>
+  const regenerating =
+    operation === 'regenerating' || isAiPlanningSessionGenerating(session.status);
+  const scoreStatus =
+    sessionQuery.isFetching ||
+    (!session.planScore &&
+      lastDraftRefreshEvent.current !==
+        `${sessionId}:${session.draftRevision}:${session.countriesReviewedRevision}:${clock}`)
+      ? 'updating'
+      : sessionQuery.error
+        ? 'error'
+        : session.planScore && !currentAssessment(session.planScore)
+          ? 'expired'
+          : 'idle';
+  const scoreExplanations = session.planScore?.explanations ?? {
+    uncertainty: [],
+    whatWorks: [],
+    worthImproving: [],
+  };
+  const tripName = name || draft.trip.name;
+  const placeNames = new Map(draft.places.map((place) => [place.id, place.name]));
+  const destinationNames = [
+    ...new Set(
+      draft.trip.destinations.flatMap((destination) => {
+        const placeName = placeNames.get(destination.placeRefId);
+        return placeName ? [placeName] : [];
+      }),
+    ),
+  ];
+  const stayNames = [
+    ...new Set(
+      draft.days.flatMap((day) => {
+        const stay = day.dailyBasePlaceRefId ? placeNames.get(day.dailyBasePlaceRefId) : undefined;
+        return stay ? [stay] : [];
+      }),
+    ),
+  ];
+  const listFormatter = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' });
+  const rangeFormatter = new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+    weekday: 'short',
+  });
+  const formatDateRange = (startDate: string, endDate: string) =>
+    rangeFormatter.formatRange(
+      new Date(`${startDate}T00:00:00.000Z`),
+      new Date(`${endDate}T00:00:00.000Z`),
+    );
+  const assumptionMessage = (code: AiPlanningDraft['assumptions'][number]['code']) => {
+    const assumption = activeAiPlanningAssumptions(draft).find((entry) => entry.code === code);
+    return assumption
+      ? t(
+          `assumptionCodes.${assumption.code}`,
+          aiPlanningAssumptionMessageValues(assumption, draft, locale),
+        )
+      : null;
+  };
+  // Dates, travellers and pace get rows of their own below, so only the other
+  // inferences are listed as notes beneath them.
+  const otherAssumptions = activeAiPlanningAssumptions(draft)
+    .filter(
+      (assumption) =>
+        ![
+          'dates_defaulted',
+          'date_year_inferred',
+          'pace_defaulted',
+          'party_size_defaulted',
+        ].includes(assumption.code) &&
+        (assumption.code !== 'trip_name_inferred' || session.tripName === null),
+    )
+    .map((assumption) => ({
+      code: assumption.code,
+      message: t(
+        `assumptionCodes.${assumption.code}`,
+        aiPlanningAssumptionMessageValues(assumption, draft, locale),
+      ),
+    }));
+  const openAdjust = (tray: AiPlanningBriefTray | null = null) => {
+    if (!regeneratePrompt) setRegeneratePrompt(session.prompt ?? '');
+    setAdjust({ open: true, tray });
+  };
+  const stageIndex = Math.max(0, REGENERATE_STAGES.indexOf(session.stage));
 
-      {isAiPlanningSessionGenerating(session.status) ? (
-        <Alert role="status" variant="info">
-          <Icons.Ai aria-hidden="true" />
-          <AlertTitle>{general(`stages.${session.stage}`)}</AlertTitle>
-          <AlertDescription>{t('regeneratingHint')}</AlertDescription>
-        </Alert>
+  return (
+    <section className="mx-auto max-w-7xl space-y-5 pb-6" aria-labelledby="ai-review-title">
+      {/* Leaving is not discarding. The session outlives this screen, so the
+          way out needs no confirmation - and the Trips page keeps the draft
+          reachable, which is the only reason this can be a plain exit. */}
+      <Button
+        className="-ml-3 text-muted-foreground"
+        onClick={() => router.push('/trips')}
+        size="sm"
+        type="button"
+        variant="ghost"
+      >
+        <ArrowLeft aria-hidden="true" data-icon="inline-start" />
+        {t('saveForLater')}
+      </Button>
+
+      {regenerating ? (
+        <section
+          aria-labelledby="ai-review-regenerating"
+          aria-live="polite"
+          className="space-y-3 rounded-[var(--radius-xl)] border border-brand/35 bg-card p-4 shadow-[var(--shadow-surface)] sm:p-5"
+          role="status"
+        >
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-full bg-secondary text-secondary-foreground motion-safe:animate-pulse">
+              <Icons.Ai aria-hidden="true" className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="font-semibold" id="ai-review-regenerating">
+                {t('regeneratingTitle')}
+              </p>
+              <p className="text-sm text-muted-foreground">{general(`stages.${session.stage}`)}</p>
+            </div>
+          </div>
+          <div aria-hidden="true" className="grid grid-cols-5 gap-1">
+            {REGENERATE_STAGES.map((stage, index) => (
+              <span
+                className={cn(
+                  'h-1 rounded-full',
+                  index < stageIndex && 'bg-brand',
+                  index === stageIndex && 'bg-brand motion-safe:animate-pulse',
+                  index > stageIndex && 'bg-border',
+                )}
+                key={stage}
+              />
+            ))}
+          </div>
+          <p className="text-[length:var(--text-metadata)] text-muted-foreground">
+            {t('regeneratingHint')}
+          </p>
+        </section>
       ) : null}
       {placeVerification.none ? (
         <Alert role="status" variant="warning">
@@ -625,28 +789,174 @@ export function AiPlanningReview({
         </Alert>
       ) : null}
 
+      <motion.header
+        className="relative overflow-hidden rounded-[var(--radius-2xl)] bg-score-media-background p-5 text-score-media-foreground sm:p-8"
+        {...arrive(0)}
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-score-media-brand uppercase">
+            {t('eyebrow')}
+          </p>
+          {session.draftRevision > 1 ? (
+            <span className="rounded-full bg-score-media-brand px-2.5 py-0.5 text-xs font-semibold text-score-media-background">
+              {t('version', { number: session.draftRevision })}
+            </span>
+          ) : null}
+        </div>
+        <div className="mt-3 flex items-start gap-3">
+          <h1
+            className="min-w-0 flex-1 font-journal text-[2.75rem] leading-[0.98] font-normal tracking-[-0.01em] text-balance [overflow-wrap:anywhere] sm:text-[4.25rem]"
+            id="ai-review-title"
+          >
+            {tripName}
+          </h1>
+          <Button
+            aria-label={t('editDetails')}
+            className="shrink-0 rounded-full border-score-media-foreground/25 bg-transparent text-score-media-foreground shadow-none hover:bg-score-media-foreground/10 hover:text-score-media-foreground"
+            disabled={!reviewing || publishing}
+            onClick={() => {
+              setNameDraft(name);
+              setDescriptionDraft(description);
+              setEditingDetails(true);
+            }}
+            size="icon"
+            type="button"
+            variant="outline"
+          >
+            <PencilLine aria-hidden="true" />
+          </Button>
+        </div>
+        <p className="mt-3 text-base">
+          {formatDateRange(draft.trip.startDate, draft.trip.endDate)}
+          <span aria-hidden="true"> · </span>
+          {t('tripFacts', { days: draft.days.length, travellers: draft.trip.partySize })}
+        </p>
+        {destinationNames.length ? (
+          <p className="mt-0.5 text-base text-score-media-muted">
+            {listFormatter.format(destinationNames)}
+          </p>
+        ) : null}
+        {description ? (
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-score-media-muted">
+            {description}
+          </p>
+        ) : null}
+        <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-score-media-foreground/12 pt-4">
+          {planScoreEnabled && !session.countryContextChanged ? (
+            <PlanScoreChip
+              assessment={session.planScore}
+              explanations={scoreExplanations}
+              label={t('scoreDetails')}
+              onOpen={() => document.getElementById('ai-review-score')?.focus()}
+              score={session.planScore?.score ?? null}
+              status={scoreStatus}
+              tone="media"
+            />
+          ) : null}
+          {placeVerification.total ? (
+            <p className="flex items-center gap-1.5 text-sm text-score-media-muted">
+              <CircleCheck aria-hidden="true" className="size-4 text-score-media-brand" />
+              {t('placesVerified', {
+                total: placeVerification.total,
+                verified: placeVerification.verified,
+              })}
+            </p>
+          ) : null}
+        </div>
+      </motion.header>
+
+      {changes ? (
+        <ReviewChanges
+          changes={changes}
+          formatDateRange={formatDateRange}
+          onDismiss={() => setChanges(null)}
+        />
+      ) : null}
+
       <motion.div
-        className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]"
+        className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,26rem)] lg:grid-rows-[auto_1fr] lg:[grid-template-areas:'itinerary_filled''itinerary_extras']"
         {...arrive(reducedMotion ? 0 : 0.06)}
       >
-        <div className="space-y-6">
-          <section className="rounded-[var(--radius-xl)] border border-border bg-card p-4 shadow-[var(--shadow-surface)] sm:p-6">
-            <Field>
-              <FieldLabel htmlFor="review-trip-name">{t('tripName')}</FieldLabel>
-              <Input
-                disabled={!reviewing || publishing}
-                id="review-trip-name"
-                onBlur={(event) => void saveName(event.target.value)}
-                onChange={(event) => setName(event.target.value)}
-                value={name}
-              />
-              <FieldDescription aria-live="polite">
-                {savingName ? t('nameSaving') : t('nameHint')}
-              </FieldDescription>
-            </Field>
-            <Field className="mt-4">
-              <FieldLabel htmlFor="review-trip-countries">{t('countries')}</FieldLabel>
+        <section aria-labelledby="ai-review-filled" className="space-y-3 lg:[grid-area:filled]">
+          <div className="px-1">
+            <h2 className="text-lg font-semibold" id="ai-review-filled">
+              {t('filledIn')}
+            </h2>
+            <p className="text-sm text-muted-foreground">{t('filledInHint')}</p>
+          </div>
+          <ul className="divide-y divide-border-subtle rounded-[var(--radius-xl)] border border-border-subtle bg-card px-4 shadow-[var(--shadow-surface)] sm:px-5">
+            <FilledInRow
+              action={
+                draft.trip.dateSource === 'user' ? null : (
+                  <ChangeInBrief
+                    disabled={!reviewing || publishing}
+                    onClick={() => openAdjust('when')}
+                  />
+                )
+              }
+              detail={
+                assumptionMessage('dates_defaulted') ?? assumptionMessage('date_year_inferred')
+              }
+              label={t('rows.dates')}
+              source={draft.trip.dateSource === 'user' ? 'you' : 'picked'}
+              value={formatDateRange(draft.trip.startDate, draft.trip.endDate)}
+            />
+            <FilledInRow
+              action={
+                draft.trip.partySizeSource === 'user' ? null : (
+                  <ChangeInBrief
+                    disabled={!reviewing || publishing}
+                    onClick={() => openAdjust('who')}
+                  />
+                )
+              }
+              detail={assumptionMessage('party_size_defaulted')}
+              label={t('rows.travellers')}
+              source={draft.trip.partySizeSource === 'user' ? 'you' : 'picked'}
+              value={String(draft.trip.partySize)}
+            />
+            <FilledInRow
+              action={
+                draft.trip.paceSource === 'user' ? null : (
+                  <ChangeInBrief
+                    disabled={!reviewing || publishing}
+                    onClick={() => openAdjust('pace')}
+                  />
+                )
+              }
+              detail={assumptionMessage('pace_defaulted')}
+              label={t('rows.pace')}
+              source={draft.trip.paceSource === 'user' ? 'you' : 'picked'}
+              value={paceCopy(`paces.${draft.trip.pace}`)}
+            />
+            {stayNames.length ? (
+              <FilledInRow label={t('rows.stays')} value={listFormatter.format(stayNames)} />
+            ) : null}
+            {otherAssumptions.map((assumption) => (
+              <li className="flex items-start justify-between gap-3 py-3.5" key={assumption.code}>
+                <p className="text-sm leading-relaxed">{assumption.message}</p>
+                {assumption.code === 'interest_inferred' ? null : <SourceTag source="picked" />}
+              </li>
+            ))}
+            <li className="space-y-2.5 py-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <FieldLabel
+                  className="text-[length:var(--text-metadata)] font-normal text-muted-foreground"
+                  htmlFor="review-trip-countries"
+                >
+                  {t('rows.countries')}
+                </FieldLabel>
+                {countriesConfirmed ? (
+                  <span className="flex items-center gap-1 text-[length:var(--text-metadata)] font-semibold text-status-success">
+                    <CircleCheck aria-hidden="true" className="size-4" />
+                    {t('confirmed')}
+                  </span>
+                ) : (
+                  <SourceTag source="needed" />
+                )}
+              </div>
               <CountryMultiCombobox
+                aria-describedby="review-trip-countries-hint"
                 aria-label={t('countries')}
                 disabled={!reviewing || publishing || countrySaveInFlight}
                 id="review-trip-countries"
@@ -655,19 +965,18 @@ export function AiPlanningReview({
                 required
                 value={countries}
               />
-              <FieldDescription>
+              <p
+                className="text-[length:var(--text-metadata)] leading-snug text-muted-foreground"
+                id="review-trip-countries-hint"
+              >
                 {session.suggestedCountries.length
                   ? t('countriesSuggested')
                   : t('countriesMissing')}
-              </FieldDescription>
+              </p>
               {!countries.length ? (
                 <p className="text-sm text-destructive">{t('countriesRequired')}</p>
               ) : null}
-              {countriesConfirmed ? (
-                <p className="text-sm text-muted-foreground" role="status">
-                  {t('countriesConfirmed')}
-                </p>
-              ) : savingCountries ? (
+              {savingCountries && !countriesConfirmed ? (
                 <p className="text-sm text-muted-foreground" role="status">
                   {t('countriesSaving')}
                 </p>
@@ -682,56 +991,18 @@ export function AiPlanningReview({
                   {t('countriesRetry')}
                 </Button>
               ) : null}
-            </Field>
-            <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <dt className="text-sm text-muted-foreground">{t('partySize')}</dt>
-                <dd className="mt-1 font-medium">{draft.trip.partySize}</dd>
-              </div>
-            </dl>
-            <p className="mt-4 text-sm text-muted-foreground">
-              {draft.trip.startDate} - {draft.trip.endDate}
-            </p>
-            <Field className="mt-4">
-              <FieldLabel htmlFor="review-trip-description">{t('tripDescription')}</FieldLabel>
-              <Textarea
-                disabled={!reviewing || publishing}
-                id="review-trip-description"
-                onBlur={(event) => void saveDescription(event.target.value)}
-                onChange={(event) => setDescription(event.target.value)}
-                rows={3}
-                value={description}
-              />
-              <FieldDescription aria-live="polite">
-                {savingDescription ? t('descriptionSaving') : t('descriptionHint')}
-              </FieldDescription>
-            </Field>
-          </section>
+            </li>
+          </ul>
+        </section>
 
-          {assumptionMessages.length ? (
-            <section
-              className="rounded-[var(--radius-xl)] border border-border bg-card p-4 sm:p-6"
-              aria-labelledby="ai-review-assumptions"
-            >
-              <h2 className="font-semibold" id="ai-review-assumptions">
-                {t('assumptions')}
-              </h2>
-              <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-                {assumptionMessages.map((message) => (
-                  <li key={message}>{message}</li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          <section className="space-y-4" aria-labelledby="ai-review-itinerary">
-            <div>
+        <div className="space-y-6 lg:[grid-area:itinerary]">
+          <section aria-labelledby="ai-review-itinerary" className="space-y-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-1">
               <h2 className="text-lg font-semibold" id="ai-review-itinerary">
-                {t('itinerary')}
+                {t('daysTitle', { count: draft.days.length })}
               </h2>
-              <p className="mt-1 text-sm text-muted-foreground">{t('itineraryDescription')}</p>
               {placeVerification.total ? (
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="text-[length:var(--text-metadata)] text-muted-foreground">
                   {t('placesVerified', {
                     total: placeVerification.total,
                     verified: placeVerification.verified,
@@ -739,89 +1010,86 @@ export function AiPlanningReview({
                 </p>
               ) : null}
             </div>
-            {draft.days.map((day, dayIndex) => {
-              return (
-                <article
-                  className="overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card"
-                  id={`ai-score-day-${day.date}`}
-                  tabIndex={-1}
-                  key={day.date}
-                >
-                  <header className="border-b border-border px-4 py-4 sm:px-6">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      {t('day', { number: dayIndex + 1 })}
-                    </p>
-                    <h3 className="mt-1 font-semibold">
+            {draft.days.length > 1 ? (
+              <nav
+                aria-label={t('jumpToDay')}
+                className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0"
+              >
+                {draft.days.map((day, dayIndex) => (
+                  <a
+                    className="flex w-28 shrink-0 flex-col gap-0.5 rounded-[var(--radius-lg)] border border-border-subtle bg-card px-3 py-2.5 outline-none transition-colors duration-[var(--motion-standard)] hover:border-border-strong focus-visible:ring-3 focus-visible:ring-ring/40"
+                    href={`#ai-score-day-${day.date}`}
+                    key={day.date}
+                    onClick={() => setDayOpen(day.date, true)}
+                  >
+                    <span className="text-xs text-muted-foreground">
+                      {dateFormatter.format(new Date(`${day.date}T00:00:00.000Z`))}
+                    </span>
+                    <span className="line-clamp-2 text-sm leading-tight font-semibold">
+                      {day.name ?? t('day', { number: dayIndex + 1 })}
+                    </span>
+                  </a>
+                ))}
+              </nav>
+            ) : null}
+            {draft.days.map((day, dayIndex) => (
+              <Collapsible
+                className="overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card shadow-[var(--shadow-surface)] scroll-mt-24"
+                id={`ai-score-day-${day.date}`}
+                key={day.date}
+                onOpenChange={(open) => setDayOpen(day.date, open)}
+                open={visibleOpenDays.has(day.date)}
+                tabIndex={-1}
+              >
+                <CollapsibleTrigger className="group/day flex w-full items-center gap-4 px-4 py-4 text-left text-foreground hover:text-foreground sm:px-5">
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase">
+                      {t('day', { number: dayIndex + 1 })} ·{' '}
+                      {dateFormatter.format(new Date(`${day.date}T00:00:00.000Z`))}
+                    </span>
+                    <span className="mt-0.5 block font-journal text-[1.625rem] leading-[1.08] font-normal text-balance">
                       {day.name ?? dateFormatter.format(new Date(`${day.date}T00:00:00.000Z`))}
-                    </h3>
-                    {day.name ? (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {dateFormatter.format(new Date(`${day.date}T00:00:00.000Z`))}
-                      </p>
-                    ) : null}
-                  </header>
-                  <ol className="divide-y divide-border-subtle">
-                    {day.items.map((item) => {
-                      const place = item.placeRefId
-                        ? draft.places.find((candidate) => candidate.id === item.placeRefId)
-                        : null;
-                      return (
-                        <li className="p-4 sm:px-6" key={item.id}>
-                          <div>
-                            <p className="font-medium">{item.label}</p>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                              {item.schedule.kind === 'exact'
-                                ? formatSegmentedTime(
-                                    item.schedule.localTime,
-                                    locale,
-                                    preferences.timeFormat,
-                                  ).text
-                                : t(`dayParts.${item.schedule.dayPart}`)}{' '}
-                              · {t('duration', { minutes: item.durationMinutes })}
-                            </p>
-                            {item.origin === 'user' ? (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {t('travelerSupplied')}
-                              </p>
-                            ) : null}
-                            {adjustedAfter.has(item.id) ? (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {t('scheduleAdjusted', { other: adjustedAfter.get(item.id)! })}
-                              </p>
-                            ) : null}
-                            {/* Which provider found a place is Trove's problem, not
-                              the traveller's. What they are deciding here is
-                              whether to trust the plan, and for that the only
-                              thing that matters is that the place is real. */}
-                            {place ? (
-                              place.resolution === 'verified' ? (
-                                <Badge className="mt-1.5" size="sm" variant="success">
-                                  <CircleCheck aria-hidden="true" />
-                                  {t('verifiedPlace')}
-                                </Badge>
-                              ) : place.verification === 'not_checked' ? (
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                  {t('customPlace.not_checked')}
-                                </p>
-                              ) : null
-                            ) : null}
-                          </div>
-                        </li>
-                      );
-                    })}
-                    {!day.items.length ? (
-                      <li className="p-4 text-sm text-muted-foreground sm:px-6">{t('emptyDay')}</li>
-                    ) : null}
-                  </ol>
-                </article>
-              );
-            })}
+                    </span>
+                    <span className="mt-0.5 block text-sm font-normal text-muted-foreground">
+                      {t('dayStops', { count: day.items.length })}
+                    </span>
+                  </span>
+                  <ChevronDown
+                    aria-hidden="true"
+                    className="size-5 text-muted-foreground transition-transform duration-[var(--motion-standard)] group-data-[panel-open]/day:rotate-180 motion-reduce:transition-none"
+                  />
+                </CollapsibleTrigger>
+                <CollapsiblePanel>
+                  {day.items.length ? (
+                    <ol className="px-4 pb-3 sm:px-5">
+                      {day.items.map((item, itemIndex) => (
+                        <ItineraryStop
+                          adjustedAfter={adjustedAfter.get(item.id) ?? null}
+                          draft={draft}
+                          item={item}
+                          key={item.id}
+                          last={itemIndex === day.items.length - 1}
+                          locale={locale}
+                          timeFormat={preferences.timeFormat}
+                        />
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="px-4 pb-4 text-sm text-muted-foreground sm:px-5">
+                      {t('emptyDay')}
+                    </p>
+                  )}
+                </CollapsiblePanel>
+              </Collapsible>
+            ))}
           </section>
 
           {draft.unscheduledItems.length ? (
-            <section className="rounded-[var(--radius-xl)] border border-border bg-card p-4 sm:p-6">
-              <h2 className="font-semibold">{t('unscheduled')}</h2>
-              <ul className="mt-3 space-y-2 text-sm">
+            <section className="space-y-2 rounded-[var(--radius-xl)] border border-status-warning/30 bg-surface-tint p-4 sm:p-5">
+              <h2 className="font-semibold">
+                {t('unscheduledTitle', { count: draft.unscheduledItems.length })}
+              </h2>
+              <ul className="space-y-2 text-sm">
                 {draft.unscheduledItems.map((item) => {
                   const reason = draft.warnings.find(
                     (warning) =>
@@ -832,7 +1100,7 @@ export function AiPlanningReview({
                   )?.code;
                   return (
                     <li key={item.id}>
-                      {item.label}
+                      <p className="font-medium">{item.label}</p>
                       {reason ? (
                         <p className="text-muted-foreground">
                           {reason === 'arrival_time_unknown'
@@ -844,53 +1112,41 @@ export function AiPlanningReview({
                   );
                 })}
               </ul>
+              <p className="text-[length:var(--text-metadata)] text-muted-foreground">
+                {t('unscheduledHint')}
+              </p>
             </section>
           ) : null}
         </div>
 
-        <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
+        <aside className="space-y-6 lg:[grid-area:extras] lg:self-start">
           {planScoreEnabled && !session.countryContextChanged ? (
-            <PlanScorePanel
-              // Matches the review's own cards beside it in this column.
-              className="border-border sm:p-6"
-              change={assessmentChange(queryClient, `draft:${sessionId}`, 'trip')}
-              assessment={session.planScore}
-              resolveAction={resolveDraftScoreAction}
-              completeness={session.planScore?.completeness ?? null}
-              confidence={session.planScore?.confidence ?? null}
-              explanations={
-                session.planScore?.explanations ?? {
-                  uncertainty: [],
-                  whatWorks: [],
-                  worthImproving: [],
+            <div className="scroll-mt-24 outline-none" id="ai-review-score" tabIndex={-1}>
+              <PlanScorePanel
+                // Matches the review's own cards beside it in this column.
+                className="border-border-subtle sm:p-6"
+                change={assessmentChange(queryClient, `draft:${sessionId}`, 'trip')}
+                assessment={session.planScore}
+                resolveAction={resolveDraftScoreAction}
+                completeness={session.planScore?.completeness ?? null}
+                confidence={session.planScore?.confidence ?? null}
+                explanations={scoreExplanations}
+                score={session.planScore?.score ?? null}
+                scope="trip"
+                status={scoreStatus}
+                onRetry={() =>
+                  void queryClient.invalidateQueries(
+                    { queryKey: queryKeys.aiPlanningSession(sessionId), exact: true },
+                    { cancelRefetch: false },
+                  )
                 }
-              }
-              score={session.planScore?.score ?? null}
-              scope="trip"
-              status={
-                sessionQuery.isFetching ||
-                (!session.planScore &&
-                  lastDraftRefreshEvent.current !==
-                    `${sessionId}:${session.draftRevision}:${session.countriesReviewedRevision}:${clock}`)
-                  ? 'updating'
-                  : sessionQuery.error
-                    ? 'error'
-                    : session.planScore && !currentAssessment(session.planScore)
-                      ? 'expired'
-                      : 'idle'
-              }
-              onRetry={() =>
-                void queryClient.invalidateQueries(
-                  { queryKey: queryKeys.aiPlanningSession(sessionId), exact: true },
-                  { cancelRefetch: false },
-                )
-              }
-              title={planScoreCopy('title')}
-            />
+                title={planScoreCopy('title')}
+              />
+            </div>
           ) : null}
           {session.context ? (
             <TripInsightsPanel
-              className="border-border sm:p-6"
+              className="border-border-subtle sm:p-6"
               insights={composeInsights({
                 context: session.context,
                 // A draft's days are its dates, on the score and the context alike.
@@ -912,12 +1168,12 @@ export function AiPlanningReview({
             </Alert>
           ) : null}
           <section
-            className="overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card"
+            className="overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card"
             aria-label={t('mapLabel')}
           >
             {!selectedMapPoints.length ? (
-              <div className="p-6 text-sm text-muted-foreground">
-                <Icons.MapView aria-hidden="true" className="mb-3 size-5 text-brand" />
+              <div className="flex gap-3 p-4 text-sm text-muted-foreground sm:p-5">
+                <Icons.MapView aria-hidden="true" className="size-5 shrink-0 text-brand" />
                 {t('mapUnavailable')}
               </div>
             ) : mapRevealed ? (
@@ -929,62 +1185,125 @@ export function AiPlanningReview({
                 selectedPointId={selectedPointId}
               />
             ) : (
-              <div className="p-6">
-                <Icons.MapView aria-hidden="true" className="mb-3 size-5 text-brand" />
-                <p className="text-sm text-muted-foreground">
-                  {t('mapPlaceCount', { count: selectedMapPoints.length })}
-                </p>
-                <Button
-                  className="mt-3"
-                  onClick={() => setMapRevealed(true)}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  {t('showMap')}
-                </Button>
-              </div>
+              // Google bills a map per instantiation, so it loads only on request.
+              <button
+                className="flex min-h-16 w-full items-center gap-3.5 px-4 py-3 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:ring-inset sm:px-5"
+                onClick={() => setMapRevealed(true)}
+                type="button"
+              >
+                <span className="grid size-10 shrink-0 place-items-center rounded-[var(--radius-md)] bg-secondary text-secondary-foreground">
+                  <Icons.MapView aria-hidden="true" className="size-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold">
+                    {t('showMapTitle', { count: selectedMapPoints.length })}
+                  </span>
+                  <span className="block text-[length:var(--text-metadata)] text-muted-foreground">
+                    {t('mapPlaceCount', { count: selectedMapPoints.length })}
+                  </span>
+                </span>
+              </button>
             )}
-          </section>
-          <section
-            className="rounded-[var(--radius-xl)] border border-border bg-card p-4 sm:p-6"
-            aria-labelledby="ai-review-regenerate"
-          >
-            <h2 className="font-semibold" id="ai-review-regenerate">
-              {t('regenerate')}
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">{t('regenerateDescription')}</p>
-            <AiPlanningAllowance availability={allowanceQuery.data?.availability} />
-            <Textarea
-              className="mt-3"
-              disabled={publishing}
-              onChange={(event) => setRegeneratePrompt(event.target.value)}
-              value={regeneratePrompt}
-            />
-            <Button
-              className="mt-3"
-              disabled={
-                publishing ||
-                !regeneratePrompt.trim() ||
-                allowanceQuery.data?.availability.status !== 'available'
-              }
-              onClick={() => void regenerate()}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              <Icons.Ai aria-hidden="true" data-icon="inline-start" />
-              {t('regenerateAction')}
-            </Button>
           </section>
         </aside>
       </motion.div>
 
-      <div className="fixed right-[var(--gutter-inline-end)] bottom-[calc(var(--bottom-bar-height)+var(--safe-bottom)+1rem)] z-20">
-        <Button disabled={!canApply || publishing} onClick={() => setConfirmApply(true)}>
-          {t('apply')}
-        </Button>
+      <div className="sticky bottom-[calc(var(--bottom-bar-height)+var(--safe-bottom)+var(--nav-action-overhang)+0.5rem)] z-20 md:bottom-6">
+        <div className="mx-auto flex max-w-3xl flex-col gap-2.5 rounded-[var(--radius-2xl)] border border-border-subtle bg-card/95 p-3 shadow-[var(--shadow-elevated)] supports-backdrop-filter:backdrop-blur-md sm:flex-row sm:items-center sm:gap-4 sm:pl-5">
+          {/* On a phone the hero already says this is not a trip yet; the line
+              stays only while it explains why Create trip is unavailable. */}
+          <p
+            className={cn(
+              'px-1 text-[length:var(--text-metadata)] text-muted-foreground sm:block sm:flex-1 sm:px-0',
+              !regenerating && 'hidden',
+            )}
+          >
+            {regenerating ? t('regeneratingDock') : t('dockHint')}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              className="h-12 rounded-full px-5"
+              disabled={!reviewing || publishing || regenerating}
+              onClick={() => openAdjust()}
+              type="button"
+              variant="outline"
+            >
+              <PencilLine aria-hidden="true" data-icon="inline-start" />
+              {t('adjust')}
+            </Button>
+            <Button
+              className="h-12 flex-1 rounded-full px-6 sm:flex-none"
+              disabled={!canApply || publishing || regenerating}
+              onClick={() => setConfirmApply(true)}
+              type="button"
+            >
+              {t('apply')}
+            </Button>
+          </div>
+        </div>
       </div>
+
+      <AiPlanningAdjustSheet
+        availability={allowanceQuery.data?.availability}
+        busy={publishing}
+        initialTray={adjust.tray}
+        onOpenChange={(open) => setAdjust((current) => ({ ...current, open }))}
+        onSubmit={() => void regenerate()}
+        onValueChange={setRegeneratePrompt}
+        open={adjust.open}
+        tripName={tripName}
+        value={regeneratePrompt}
+      />
+
+      <Dialog onOpenChange={setEditingDetails} open={editingDetails}>
+        <DialogContent closeLabel={t('close')}>
+          <form
+            className="grid gap-6"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setName(nameDraft);
+              setDescription(descriptionDraft);
+              setEditingDetails(false);
+              void saveName(nameDraft);
+              void saveDescription(descriptionDraft);
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>{t('editTitle')}</DialogTitle>
+              <DialogDescription>{t('editDescription')}</DialogDescription>
+            </DialogHeader>
+            <Field>
+              <FieldLabel htmlFor="review-trip-name">{t('tripName')}</FieldLabel>
+              <Input
+                id="review-trip-name"
+                onChange={(event) => setNameDraft(event.target.value)}
+                value={nameDraft}
+              />
+              <FieldDescription>{t('nameHint')}</FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="review-trip-description">{t('tripDescription')}</FieldLabel>
+              <Textarea
+                id="review-trip-description"
+                onChange={(event) => setDescriptionDraft(event.target.value)}
+                rows={4}
+                value={descriptionDraft}
+              />
+              <FieldDescription>{t('descriptionHint')}</FieldDescription>
+            </Field>
+            <DialogFooter>
+              <Button onClick={() => setEditingDetails(false)} type="button" variant="outline">
+                {t('cancel')}
+              </Button>
+              <Button type="submit">{t('save')}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <p aria-live="polite" className="sr-only">
+        {savingName ? t('nameSaving') : savingDescription ? t('descriptionSaving') : ''}
+      </p>
+
       <AlertDialog onOpenChange={setConfirmApply} open={confirmApply}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1000,5 +1319,287 @@ export function AiPlanningReview({
         </AlertDialogContent>
       </AlertDialog>
     </section>
+  );
+}
+
+/** Whose word a detail is: the traveller's, Trove's guess, or one still needed from them. */
+function SourceTag({ source }: Readonly<{ source: 'needed' | 'picked' | 'you' }>) {
+  const t = useTranslations('trips.aiPlanning.review');
+  return (
+    <span
+      className={cn(
+        'inline-flex h-6 shrink-0 items-center rounded-full px-2.5 text-xs font-semibold whitespace-nowrap',
+        source === 'you' && 'bg-secondary text-secondary-foreground',
+        source === 'picked' &&
+          'border border-status-warning/30 bg-surface-tint text-status-warning',
+        source === 'needed' && 'bg-status-warning text-primary-foreground',
+      )}
+    >
+      {source === 'you' ? t('fromYou') : source === 'picked' ? t('wePicked') : t('needsYou')}
+    </span>
+  );
+}
+
+function ChangeInBrief({
+  disabled,
+  onClick,
+}: Readonly<{ disabled: boolean; onClick: () => void }>) {
+  const t = useTranslations('trips.aiPlanning.review');
+  return (
+    <Button
+      className="-ml-3 h-9 text-brand hover:text-brand-strong"
+      disabled={disabled}
+      onClick={onClick}
+      size="sm"
+      type="button"
+      variant="ghost"
+    >
+      {t('changeInBrief')}
+    </Button>
+  );
+}
+
+function FilledInRow({
+  action = null,
+  detail = null,
+  label,
+  source,
+  value,
+}: Readonly<{
+  action?: ReactNode;
+  detail?: string | null;
+  label: string;
+  source?: 'picked' | 'you';
+  value: string;
+}>) {
+  return (
+    <li className="space-y-1 py-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[length:var(--text-metadata)] text-muted-foreground">{label}</p>
+          <p className="font-semibold">{value}</p>
+        </div>
+        {source ? <SourceTag source={source} /> : null}
+      </div>
+      {detail ? (
+        <p className="text-[length:var(--text-metadata)] leading-snug text-muted-foreground">
+          {detail}
+        </p>
+      ) : null}
+      {action}
+    </li>
+  );
+}
+
+/**
+ * One stop on a day's timeline. An exact time is a filled marker; a time of
+ * day is an open one, so an estimate never reads as a booking.
+ */
+function ItineraryStop({
+  adjustedAfter,
+  draft,
+  item,
+  last,
+  locale,
+  timeFormat,
+}: Readonly<{
+  adjustedAfter: string | null;
+  draft: AiPlanningDraft;
+  item: AiPlanningDraftItem;
+  last: boolean;
+  locale: string;
+  timeFormat: '12h' | '24h';
+}>) {
+  const t = useTranslations('trips.aiPlanning.review');
+  const place = item.placeRefId
+    ? draft.places.find((candidate) => candidate.id === item.placeRefId)
+    : null;
+  const exact = item.schedule.kind === 'exact';
+  const mustGo = item.priority === 'must_go';
+  return (
+    <li className="grid grid-cols-[4.5rem_0.75rem_minmax(0,1fr)] gap-x-3">
+      <span
+        className={cn(
+          'pt-0.5 text-sm font-semibold tabular-nums',
+          !exact && 'font-medium text-muted-foreground',
+        )}
+      >
+        {item.schedule.kind === 'exact'
+          ? formatSegmentedTime(item.schedule.localTime, locale, timeFormat).text
+          : t(`dayParts.${item.schedule.dayPart}`)}
+      </span>
+      <span aria-hidden="true" className="flex flex-col items-center">
+        <span
+          className={cn(
+            'mt-1.5 size-2.5 shrink-0 rounded-full',
+            exact ? (mustGo ? 'bg-accent-strong' : 'bg-brand') : 'border-2 border-brand',
+          )}
+        />
+        {last ? null : <span className="mt-1 w-0.5 flex-1 rounded-full bg-border-subtle" />}
+      </span>
+      <div className="min-w-0 space-y-1 pb-4">
+        <p className="font-semibold [overflow-wrap:anywhere]">{item.label}</p>
+        <p className="text-[length:var(--text-metadata)] text-muted-foreground">
+          {formatPlannedDuration(item.durationMinutes, locale)}
+        </p>
+        {mustGo || item.origin === 'user' || place ? (
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+            {mustGo ? (
+              <span className="inline-flex h-6 items-center gap-1 rounded-full bg-accent-strong px-2.5 text-xs font-semibold text-primary-foreground">
+                <Icons.MustGo aria-hidden="true" className="size-3" />
+                {t('mustGo')}
+              </span>
+            ) : null}
+            {item.origin === 'user' ? (
+              <span className="inline-flex h-6 items-center rounded-full bg-secondary px-2.5 text-xs font-semibold text-secondary-foreground">
+                {t('travelerSupplied')}
+              </span>
+            ) : null}
+            {/* Which provider found a place is Trove's problem, not the
+                traveller's. What they are deciding here is whether to trust
+                the plan, and for that the only thing that matters is that the
+                place is real. */}
+            {place?.resolution === 'verified' ? (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-status-success">
+                <CircleCheck aria-hidden="true" className="size-3.5" />
+                {t('verifiedPlace')}
+              </span>
+            ) : place?.verification === 'not_checked' ? (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-status-warning">
+                <CircleDashed aria-hidden="true" className="size-3.5" />
+                {t('customPlace.not_checked')}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+        {adjustedAfter ? (
+          <p className="text-[length:var(--text-metadata)] text-muted-foreground">
+            {t('scheduleAdjusted', { other: adjustedAfter })}
+          </p>
+        ) : null}
+      </div>
+    </li>
+  );
+}
+
+const MAX_LISTED_CHANGES = 5;
+
+/** What a regenerate changed, so a new version never has to be reread from the top. */
+function ReviewChanges({
+  changes,
+  formatDateRange,
+  onDismiss,
+}: Readonly<{
+  changes: AiPlanningDraftChanges;
+  formatDateRange: (startDate: string, endDate: string) => string;
+  onDismiss: () => void;
+}>) {
+  const t = useTranslations('trips.aiPlanning.review');
+  const dayLabel = (day: number | null) =>
+    day === null ? t('unscheduled') : t('day', { number: day });
+  const listed = changes.items.slice(0, MAX_LISTED_CHANGES);
+  const hidden = changes.items.length - listed.length;
+  return (
+    <section
+      aria-labelledby="ai-review-changes"
+      className="rounded-[var(--radius-xl)] border border-brand/35 bg-card px-4 pt-4 shadow-[var(--shadow-surface)] sm:px-5"
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+        <h2 className="text-lg font-semibold" id="ai-review-changes">
+          {t('changesTitle')}
+        </h2>
+        <p className="text-[length:var(--text-metadata)] text-muted-foreground">
+          {t('changesHint')}
+        </p>
+      </div>
+      <ul className="mt-2 divide-y divide-border-subtle">
+        {changes.dates ? (
+          <ChangeRow icon={<CalendarRange aria-hidden="true" />} tone="neutral">
+            {t('changeDates', {
+              range: formatDateRange(changes.dates.to.startDate, changes.dates.to.endDate),
+            })}
+          </ChangeRow>
+        ) : null}
+        {listed.map((change) => (
+          <ChangeRow
+            detail={
+              change.kind === 'added'
+                ? t('changeAdded', { day: dayLabel(change.day) })
+                : change.kind === 'moved'
+                  ? t('changeMoved', { from: dayLabel(change.from), to: dayLabel(change.to) })
+                  : t('changeRemoved', { day: dayLabel(change.day) })
+            }
+            icon={
+              change.kind === 'added' ? (
+                <Plus aria-hidden="true" />
+              ) : change.kind === 'moved' ? (
+                <ArrowLeftRight aria-hidden="true" />
+              ) : (
+                <Minus aria-hidden="true" />
+              )
+            }
+            key={`${change.kind}:${change.label}`}
+            tone={
+              change.kind === 'added' ? 'added' : change.kind === 'removed' ? 'removed' : 'neutral'
+            }
+          >
+            {change.label}
+          </ChangeRow>
+        ))}
+        {!changes.dates && !changes.items.length ? (
+          <li className="py-3 text-sm text-muted-foreground">{t('changesNone')}</li>
+        ) : null}
+        {hidden > 0 ? (
+          <li className="py-3 text-sm text-muted-foreground">
+            {t('changesMore', { count: hidden })}
+          </li>
+        ) : null}
+      </ul>
+      <div className="border-t border-border-subtle py-1">
+        <Button
+          className="-ml-3 text-brand hover:text-brand-strong"
+          onClick={onDismiss}
+          type="button"
+          variant="ghost"
+        >
+          {t('dismissChanges')}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function ChangeRow({
+  children,
+  detail,
+  icon,
+  tone,
+}: Readonly<{
+  children: ReactNode;
+  detail?: string;
+  icon: ReactNode;
+  tone: 'added' | 'neutral' | 'removed';
+}>) {
+  return (
+    <li className="flex items-center gap-3 py-2.5">
+      <span
+        className={cn(
+          'grid size-7 shrink-0 place-items-center rounded-full [&_svg]:size-3.5',
+          tone === 'added' && 'bg-secondary text-secondary-foreground',
+          tone === 'neutral' && 'bg-muted text-foreground',
+          tone === 'removed' && 'bg-destructive/10 text-destructive',
+        )}
+      >
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block font-semibold [overflow-wrap:anywhere]">{children}</span>
+        {detail ? (
+          <span className="block text-[length:var(--text-metadata)] text-muted-foreground">
+            {detail}
+          </span>
+        ) : null}
+      </span>
+    </li>
   );
 }

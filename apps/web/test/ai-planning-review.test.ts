@@ -8,6 +8,7 @@ import {
   appliedAiPlanningSession,
   releasesMirroredAiPlanningSession,
   buildAiPlanningReviewMapPoints,
+  diffAiPlanningDrafts,
 } from '../lib/ai-planning/review.ts';
 
 function reviewDraft(): AiPlanningDraft {
@@ -261,4 +262,50 @@ test('a mirrored session is released exactly when recovery lets go of it', () =>
   // Nothing was being followed, and nothing is being followed now.
   expect(releasesMirroredAiPlanningSession(reviewing, null, null)).toBe(false);
   expect(releasesMirroredAiPlanningSession(null, 'session:review', null)).toBe(false);
+});
+
+test('a regenerated draft is compared by place identity, not by its new item IDs', () => {
+  const previous = reviewDraft();
+  const next = reviewDraft();
+  next.trip.startDate = '2026-10-04';
+  next.trip.endDate = '2026-10-05';
+  next.days = [
+    { ...previous.days[0]!, date: '2026-10-04', items: [] },
+    {
+      ...previous.days[0]!,
+      date: '2026-10-05',
+      items: [
+        // Same verified place under a new item ID: a move, not an add.
+        { ...previous.days[0]!.items[0]!, id: 'item:new-id', label: 'Verified museum' },
+        {
+          ...previous.days[0]!.items[0]!,
+          id: 'item:custom',
+          label: 'Morning market walk',
+          placeRefId: null,
+        },
+      ],
+    },
+  ];
+  previous.unscheduledItems = [
+    { ...previous.days[0]!.items[0]!, id: 'item:tea', label: 'Tea ceremony', placeRefId: null },
+  ];
+
+  expect(diffAiPlanningDrafts(previous, next)).toStrictEqual({
+    dates: {
+      from: { endDate: '2026-10-03', startDate: '2026-10-03' },
+      to: { endDate: '2026-10-05', startDate: '2026-10-04' },
+    },
+    items: [
+      { day: 2, kind: 'added', label: 'Morning market walk' },
+      { from: 1, kind: 'moved', label: 'Verified museum', to: 2 },
+      { day: null, kind: 'removed', label: 'Tea ceremony' },
+    ],
+  });
+});
+
+test('an unchanged draft reports no changes', () => {
+  expect(diffAiPlanningDrafts(reviewDraft(), reviewDraft())).toStrictEqual({
+    dates: null,
+    items: [],
+  });
 });

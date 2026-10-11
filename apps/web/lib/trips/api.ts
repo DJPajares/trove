@@ -1,3 +1,4 @@
+import { authenticatedFetch } from '@/lib/auth/transport';
 import type { TripPlanningPreferences } from '@trove/types';
 import type { DayNoteResolution, TripShrinkImpact } from '@trove/types';
 import { createBrowserSupabaseClient, getBrowserSession } from '@/lib/supabase/client';
@@ -160,7 +161,7 @@ async function tripRequest<T>(path: string, init?: RequestInit) {
   if (!accessToken) throw new TripApiError('offline_session', 503);
   let response: Response;
   try {
-    response = await fetch(`${apiUrl}${path}`, {
+    response = await authenticatedFetch(`${apiUrl}${path}`, {
       ...init,
       headers: {
         Authorization: `Bearer ${accessToken}`,

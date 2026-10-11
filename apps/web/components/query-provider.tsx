@@ -5,6 +5,8 @@ import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client
 import { useEffect, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { isAuthFlowPath } from '@/lib/auth/redirect';
+import { isAuthDeparting, subscribeAuthTransition } from '@/lib/auth/transition';
+import { registerLocalPrivateDataClearer } from '@/lib/auth/sign-out';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 import {
@@ -18,7 +20,7 @@ import {
   disposeWeatherAccount,
   hasWeatherAccount,
 } from '@/lib/weather/client-service';
-import { createQueryPersister } from '@/lib/query/persister';
+import { createQueryPersister, removePersistedQueryCache } from '@/lib/query/persister';
 
 function SignedInQueryProvider({
   children,
@@ -33,6 +35,26 @@ function SignedInQueryProvider({
     bindWeatherAccount(client, userId);
     return () => disposeWeatherAccount(client);
   }, [client, userId]);
+  useEffect(
+    () =>
+      registerLocalPrivateDataClearer(async () => {
+        await client.cancelQueries();
+        client.clear();
+        disposeWeatherAccount(client, true);
+        // Use the provider's owner even when no offline trip has been selected.
+        await removePersistedQueryCache(userId);
+      }),
+    [client, userId],
+  );
+  useEffect(
+    () =>
+      subscribeAuthTransition(() => {
+        // Cancel queries silently before transport aborts become cached errors.
+        // A failed manual logout can then restore the valid session safely.
+        if (isAuthDeparting()) void client.cancelQueries();
+      }),
+    [client],
+  );
   useEffect(() => {
     const subscription = createBrowserSupabaseClient()?.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || (event === 'SIGNED_IN' && session?.user.id !== userId))
@@ -41,7 +63,7 @@ function SignedInQueryProvider({
     return () => subscription?.unsubscribe();
   }, [client, userId]);
   const [persister] = useState(() =>
-    createQueryPersister(userId, () => hasWeatherAccount(client, userId)),
+    createQueryPersister(userId, () => !isAuthDeparting() && hasWeatherAccount(client, userId)),
   );
 
   return (
@@ -86,7 +108,10 @@ export function QueryProvider({
     const subscription = createBrowserSupabaseClient()?.auth.onAuthStateChange((event, session) => {
       // Partition data immediately when another tab changes accounts; waiting
       // for the server layout would persist the new user's data under the old ID.
-      if (event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY' || event === 'SIGNED_OUT') {
+      if (isAuthDeparting()) return;
+      // Departure owns cancellation and cleanup while retaining this client.
+      // Swapping it on SIGNED_OUT remounts the still-authenticated server tree.
+      if (event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') {
         setLiveUserId(session?.user.id ?? null);
       }
     }).data.subscription;

@@ -1,3 +1,4 @@
+import { getProtectedSession, authenticatedFetch } from '@/lib/auth/transport';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
@@ -31,7 +32,7 @@ async function getAuthContext() {
     throw new Error('supabase_not_configured');
   }
 
-  const { data, error } = await supabase.auth.getSession();
+  const { data, error } = await getProtectedSession(supabase);
 
   if (error || !data.session) {
     throw new Error('not_authenticated');
@@ -42,7 +43,7 @@ async function getAuthContext() {
 
 async function profileRequest(path: string, init?: RequestInit) {
   const { accessToken } = await getAuthContext();
-  const response = await fetch(`${apiUrl}${path}`, {
+  const response = await authenticatedFetch(`${apiUrl}${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${accessToken}`,

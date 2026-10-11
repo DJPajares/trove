@@ -1,3 +1,4 @@
+import { getProtectedSession, authenticatedFetch } from '@/lib/auth/transport';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 export type SearchResultKind =
@@ -48,7 +49,7 @@ export async function searchTrove(
 ) {
   const supabase = createBrowserSupabaseClient();
   if (!supabase) throw new SearchApiError('supabase_not_configured', 500);
-  const { data, error } = await supabase.auth.getSession();
+  const { data, error } = await getProtectedSession(supabase);
   if (error || !data.session) throw new SearchApiError('not_authenticated', 401);
 
   const parameters = new URLSearchParams({ q: query });
@@ -56,7 +57,7 @@ export async function searchTrove(
 
   let response: Response;
   try {
-    response = await fetch(`${apiUrl}/search?${parameters}`, {
+    response = await authenticatedFetch(`${apiUrl}/search?${parameters}`, {
       headers: { Authorization: `Bearer ${data.session.access_token}` },
       signal: options.signal,
     });

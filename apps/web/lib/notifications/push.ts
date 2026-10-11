@@ -111,7 +111,8 @@ export async function clearPushForSignOut() {
   const subscription = supportsBackgroundPush()
     ? await localSubscription().catch(() => null)
     : null;
-  if (subscription) await removePushSubscription(subscription.endpoint).catch(() => undefined);
+  if (subscription)
+    await removePushSubscription(subscription.endpoint, true).catch(() => undefined);
   await clearLocalPush();
 }
 

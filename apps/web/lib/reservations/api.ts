@@ -1,3 +1,4 @@
+import { getProtectedSession, authenticatedFetch } from '@/lib/auth/transport';
 import { compressImage, reservationImageTarget } from '@/lib/media/compress-image';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import {
@@ -134,7 +135,7 @@ const maxDocumentSize = 10 * 1024 * 1024;
 async function getAuthContext() {
   const supabase = createBrowserSupabaseClient();
   if (!supabase) throw new ReservationsApiError('supabase_not_configured', 500);
-  const { data, error } = await supabase.auth.getSession();
+  const { data, error } = await getProtectedSession(supabase);
   if (error || !data.session) throw new ReservationsApiError('not_authenticated', 401);
   return { accessToken: data.session.access_token, supabase, userId: data.session.user.id };
 }
@@ -143,7 +144,7 @@ async function reservationRequest<T>(path: string, init?: RequestInit) {
   const { accessToken } = await getAuthContext();
   let response: Response;
   try {
-    response = await fetch(`${apiUrl}${path}`, {
+    response = await authenticatedFetch(`${apiUrl}${path}`, {
       ...init,
       headers: {
         Authorization: `Bearer ${accessToken}`,

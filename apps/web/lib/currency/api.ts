@@ -1,3 +1,4 @@
+import { getProtectedSession, authenticatedFetch } from '@/lib/auth/transport';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 export type CurrencyMetadata = {
@@ -61,14 +62,14 @@ const BOARD_CACHE_TTL_MS = 12 * 60 * 60 * 1_000;
 async function getAccessToken() {
   const supabase = createBrowserSupabaseClient();
   if (!supabase) throw new CurrencyApiError('supabase_not_configured', 500);
-  const { data, error } = await supabase.auth.getSession();
+  const { data, error } = await getProtectedSession(supabase);
   if (error || !data.session) throw new CurrencyApiError('not_authenticated', 401);
   return data.session.access_token;
 }
 
 async function currencyRequest<T>(path: string) {
   const accessToken = await getAccessToken();
-  const response = await fetch(`${apiUrl}${path}`, {
+  const response = await authenticatedFetch(`${apiUrl}${path}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) {

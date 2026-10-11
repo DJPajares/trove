@@ -1,8 +1,13 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useSyncExternalStore } from 'react';
 
 import { signOutFromTrove } from '@/lib/auth/sign-out';
+import {
+  getAuthTransition,
+  getServerAuthTransition,
+  subscribeAuthTransition,
+} from '@/lib/auth/transition';
 import { hasUnsyncedOfflineChanges } from '@/lib/offline/trip-store';
 
 /**
@@ -10,25 +15,22 @@ import { hasUnsyncedOfflineChanges } from '@/lib/offline/trip-store';
  * local changes must be surfaced before session and local private data are cleared.
  */
 export function useSignOut(userId?: string) {
-  const [isSigningOut, setIsSigningOut] = useState(false);
-  const [hasSignOutError, setHasSignOutError] = useState(false);
+  const transition = useSyncExternalStore(
+    subscribeAuthTransition,
+    getAuthTransition,
+    getServerAuthTransition,
+  );
+  const isSigningOut = transition === 'signing-out';
+  const hasSignOutError = transition === 'sign-out-failed';
   const [showUnsyncedWarning, setShowUnsyncedWarning] = useState(false);
 
   const signOut = useCallback(async () => {
-    setHasSignOutError(false);
-    setIsSigningOut(true);
     try {
       await signOutFromTrove();
       setShowUnsyncedWarning(false);
-      // A full navigation makes server-rendered protected surfaces re-read the
-      // cleared auth cookie immediately instead of waiting for a client refresh.
-      window.location.replace('/sign-in');
       return true;
     } catch {
-      setHasSignOutError(true);
       return false;
-    } finally {
-      setIsSigningOut(false);
     }
   }, []);
 

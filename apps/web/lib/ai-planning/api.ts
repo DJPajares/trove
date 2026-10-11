@@ -1,3 +1,4 @@
+import { authenticatedFetch } from '@/lib/auth/transport';
 import type { AiPlannerEntitlementSnapshot, TripContext } from '@trove/types';
 
 import type { TripPlanScore } from '@/lib/plan-score/api';
@@ -167,7 +168,7 @@ async function aiPlanningRequest<T>(path: string, init?: RequestInit) {
 
   let response: Response;
   try {
-    response = await fetch(`${apiUrl}${path}`, {
+    response = await authenticatedFetch(`${apiUrl}${path}`, {
       ...init,
       headers: {
         Authorization: `Bearer ${session.access_token}`,

@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 
 import { registerLocalPrivateDataClearer } from '@/lib/auth/sign-out';
+import { isAuthDeparting } from '@/lib/auth/transition';
 import { isAuthFlowPath } from '@/lib/auth/redirect';
 import {
   clearAllOfflineTripData,
@@ -24,12 +25,13 @@ export function OfflineSyncManager() {
       await clearAllOfflineTripData();
     };
 
-    const unregisterClearer = registerLocalPrivateDataClearer(() =>
-      forgetPrivateData(getRememberedOfflineUser()),
+    const unregisterClearer = registerLocalPrivateDataClearer(
+      () => forgetPrivateData(getRememberedOfflineUser()),
+      { preserveOnSessionLoss: true },
     );
 
     const sync = () => {
-      if (navigator.onLine && !isAuthFlowPath(window.location.pathname))
+      if (!isAuthDeparting() && navigator.onLine && !isAuthFlowPath(window.location.pathname))
         void syncOfflineMutations().catch(() => undefined);
     };
 
@@ -41,6 +43,7 @@ export function OfflineSyncManager() {
      * stale window.
      */
     const invalidateAfterReconnect = () => {
+      if (isAuthDeparting()) return;
       void queryClient.invalidateQueries();
     };
 
@@ -65,7 +68,7 @@ export function OfflineSyncManager() {
         sync();
       }
       if (event === 'TOKEN_REFRESHED') sync();
-      if (event === 'SIGNED_OUT') void forgetPrivateData(getRememberedOfflineUser());
+      // Auth departure runs the registered clearer once, before navigation.
     }).data.subscription;
 
     return () => {

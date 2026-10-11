@@ -1,3 +1,4 @@
+import { getProtectedSession, authenticatedFetch } from '@/lib/auth/transport';
 import type { WeatherLocations, WeatherPointEvidence, WeatherResolvePoint } from '@trove/types';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import { readTripWeatherHistory, writeTripWeatherHistory } from '@/lib/offline/trip-store';
@@ -116,7 +117,7 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 async function getAuthContext() {
   const supabase = createBrowserSupabaseClient();
   if (!supabase) throw new WeatherApiError('supabase_not_configured', 500);
-  const { data, error } = await supabase.auth.getSession();
+  const { data, error } = await getProtectedSession(supabase);
   if (error || !data.session) throw new WeatherApiError('not_authenticated', 401);
   return { accessToken: data.session.access_token, userId: data.session.user.id };
 }
@@ -134,7 +135,7 @@ export async function getTripWeather(
 
   let response: Response;
   try {
-    response = await fetch(`${apiUrl}/trips/${tripId}/weather?${query.toString()}`, {
+    response = await authenticatedFetch(`${apiUrl}/trips/${tripId}/weather?${query.toString()}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
       signal,
     });
@@ -238,7 +239,7 @@ export async function getLocationWeather({
 
   let response: Response;
   try {
-    response = await fetch(`${apiUrl}/weather?${query.toString()}`, {
+    response = await authenticatedFetch(`${apiUrl}/weather?${query.toString()}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
       signal: signal
         ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
@@ -262,7 +263,7 @@ export async function getLocationWeather({
 
 async function weatherRequest<T>(path: string, signal?: AbortSignal, body?: unknown): Promise<T> {
   const accessToken = await getAccessToken();
-  const response = await fetch(`${apiUrl}${path}`, {
+  const response = await authenticatedFetch(`${apiUrl}${path}`, {
     method: body === undefined ? 'GET' : 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,

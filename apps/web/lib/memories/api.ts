@@ -1,3 +1,4 @@
+import { authenticatedFetch } from '@/lib/auth/transport';
 import type { DayExperience } from '@trove/types';
 import type { PlaceSnapshot } from '@/lib/saved/api';
 import { canUseSupportingOfflineFallback } from '@/lib/offline/supporting-sync';
@@ -132,7 +133,7 @@ async function memoryRequest<T>(path: string, init?: RequestInit) {
 
   let response: Response;
   try {
-    response = await fetch(`${apiUrl}${path}`, {
+    response = await authenticatedFetch(`${apiUrl}${path}`, {
       ...init,
       headers: {
         Authorization: `Bearer ${accessToken}`,

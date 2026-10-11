@@ -4,7 +4,14 @@ import { useEffect } from 'react';
 
 import { getSafeRedirectPath, isAuthFlowPath, withAuthNext } from '@/lib/auth/redirect';
 import { getValidatedAuthIdentity } from '@/lib/auth/recovery';
-import { clearLocalPrivateData } from '@/lib/auth/sign-out';
+import { clearLocalPrivateData, signOutFromTrove } from '@/lib/auth/sign-out';
+import {
+  expectAuthSession,
+  expireAuthSession,
+  getAuthTransition,
+  isAuthDeparting,
+  subscribeAuthTransition,
+} from '@/lib/auth/transition';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 /** Keep already-open tabs aligned with a completed recovery or account switch. */
@@ -32,7 +39,25 @@ export function AuthSessionListener({
     let active = true;
     let navigating = false;
     let lastToken: string | undefined;
+    expectAuthSession(userId !== null);
+    // Defer SDK methods out of its auth callback/lock. Rendering and request
+    // cancellation still happen synchronously when the transition begins.
+    const followDeparture = () => {
+      if (getAuthTransition() !== 'session-expired') return;
+      navigating = true;
+      setTimeout(() => {
+        if (active) void signOutFromTrove().catch(() => undefined);
+      }, 0);
+    };
+    const unsubscribeTransition = subscribeAuthTransition(followDeparture);
+    followDeparture();
     const subscription = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
+        lastToken = undefined;
+        expireAuthSession();
+        return;
+      }
+      if (isAuthDeparting()) return;
       if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
         lastToken = session?.access_token;
         return;
@@ -47,7 +72,7 @@ export function AuthSessionListener({
       setTimeout(() => {
         void (async () => {
           const identity = await getValidatedAuthIdentity(supabase, session.access_token);
-          if (!active || !identity) return;
+          if (!active || isAuthDeparting() || !identity) return;
           let recovery = !!identity.recovery;
           if (
             !recovery &&
@@ -77,9 +102,9 @@ export function AuthSessionListener({
               recovery = false;
             }
           }
-          if (!active || navigating) return;
+          if (!active || navigating || isAuthDeparting()) return;
           if (identity.user.id !== userId) await clearLocalPrivateData();
-          if (!active || navigating) return;
+          if (!active || navigating || isAuthDeparting()) return;
           const current = new URL(window.location.href);
           if (['/auth/confirm', '/auth/callback'].includes(current.pathname)) return;
           if (recovery) {
@@ -110,6 +135,7 @@ export function AuthSessionListener({
     }).data.subscription;
     return () => {
       active = false;
+      unsubscribeTransition();
       subscription.unsubscribe();
     };
   }, [userId, sessionId]);

@@ -1,3 +1,4 @@
+import { getProtectedSession, authenticatedFetch } from '@/lib/auth/transport';
 import type { TrovePlaceCategory } from '@/lib/place-categories';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
@@ -131,7 +132,7 @@ async function getAuthContext() {
   const supabase = createBrowserSupabaseClient();
   if (!supabase) throw new SavedApiError('supabase_not_configured', 500);
 
-  const { data, error } = await supabase.auth.getSession();
+  const { data, error } = await getProtectedSession(supabase);
   if (error || !data.session) throw new SavedApiError('not_authenticated', 401);
 
   return { accessToken: data.session.access_token };
@@ -139,7 +140,7 @@ async function getAuthContext() {
 
 async function savedRequest<T>(path: string, init?: RequestInit) {
   const { accessToken } = await getAuthContext();
-  const response = await fetch(`${apiUrl}${path}`, {
+  const response = await authenticatedFetch(`${apiUrl}${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${accessToken}`,

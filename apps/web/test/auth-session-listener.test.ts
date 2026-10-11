@@ -4,6 +4,7 @@ import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 const mocks = vi.hoisted(() => ({
   identity: vi.fn(),
   clear: vi.fn(),
+  signOut: vi.fn(),
   subscribe: vi.fn(),
   unsubscribe: vi.fn(),
   cleanup: undefined as (() => void) | undefined,
@@ -17,15 +18,23 @@ vi.mock('@/lib/supabase/client', () => ({
   createBrowserSupabaseClient: () => ({ auth: { onAuthStateChange: mocks.subscribe } }),
 }));
 vi.mock('@/lib/auth/recovery', () => ({ getValidatedAuthIdentity: mocks.identity }));
-vi.mock('@/lib/auth/sign-out', () => ({ clearLocalPrivateData: mocks.clear }));
+vi.mock('@/lib/auth/sign-out', () => ({
+  clearLocalPrivateData: mocks.clear,
+  signOutFromTrove: mocks.signOut,
+}));
 
 import { AuthSessionListener } from '@/components/auth-session-listener';
+import { getAuthTransition, setAuthTransition } from '@/lib/auth/transition';
 
 const navigate = vi.fn();
 let callback: (event: AuthChangeEvent, session: Session | null) => void;
 const session = (token: string) => ({ access_token: token }) as Session;
 
-function open(path: string, userId = 'current-user', sessionId = 'rendered-session') {
+function open(
+  path: string,
+  userId: string | null = 'current-user',
+  sessionId: string | null = 'rendered-session',
+) {
   const url = new URL(path, 'https://trove.wndrhive.com');
   vi.stubGlobal('window', {
     location: {
@@ -44,6 +53,8 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
   mocks.cleanup = undefined;
+  setAuthTransition('idle');
+  mocks.signOut.mockResolvedValue(undefined);
   mocks.clear.mockResolvedValue(undefined);
   mocks.identity.mockResolvedValue({
     user: { id: 'current-user' },
@@ -57,11 +68,41 @@ beforeEach(() => {
 });
 afterEach(() => {
   mocks.cleanup?.();
+  setAuthTransition('idle');
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
 describe('already-open authentication navigation', () => {
+  it.each(['SIGNED_OUT', 'INITIAL_SESSION'] as const)(
+    'enters departure immediately on %s without a session',
+    async (event) => {
+      open('/trips');
+      callback(event, null);
+      expect(getAuthTransition()).toBe('session-expired');
+      // SDK methods must run outside the event callback's auth lock.
+      expect(mocks.signOut).not.toHaveBeenCalled();
+      callback('SIGNED_OUT', null);
+      await vi.runAllTimersAsync();
+      expect(mocks.signOut).toHaveBeenCalledOnce();
+    },
+  );
+  it('leaves public auth screens alone when there is no rendered session', async () => {
+    open('/sign-in', null, null);
+    callback('INITIAL_SESSION', null);
+    callback('SIGNED_OUT', null);
+    await vi.runAllTimersAsync();
+    expect(getAuthTransition()).toBe('idle');
+    expect(mocks.signOut).not.toHaveBeenCalled();
+  });
+  it('does not revive recovery navigation after session loss', async () => {
+    open('/trips');
+    callback('PASSWORD_RECOVERY', session('recovery-token'));
+    callback('SIGNED_OUT', null);
+    await vi.runAllTimersAsync();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(mocks.signOut).toHaveBeenCalledOnce();
+  });
   it('keeps the rendered recovery form stable when SIGNED_IN precedes INITIAL_SESSION', async () => {
     open('/reset-password?next=%2Ftrips', 'current-user', 'recovery-session');
     callback('SIGNED_IN', session('restored-token'));

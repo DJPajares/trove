@@ -1,3 +1,4 @@
+import { authenticatedFetch } from '@/lib/auth/transport';
 import type { PlaceSnapshot } from '@/lib/saved/api';
 import {
   canUseSupportingOfflineFallback,
@@ -98,7 +99,7 @@ async function expenseRequest<T>(
   if (!auth.accessToken) throw new ExpensesApiError('offline_session', 503);
   let response: Response;
   try {
-    response = await fetch(`${apiUrl}${path}`, {
+    response = await authenticatedFetch(`${apiUrl}${path}`, {
       ...init,
       headers: {
         Authorization: `Bearer ${auth.accessToken}`,

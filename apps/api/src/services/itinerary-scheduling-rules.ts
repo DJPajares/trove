@@ -18,6 +18,8 @@ export type SchedulingInput = {
   dayEndMinute: number;
   returnTravel: { required: boolean; minutes: number | null; estimated?: boolean };
   targetIds: ReadonlySet<string>;
+  /** An explicit Planner move may adjust flexible daypart preferences to fit its order. */
+  allowDayPartAdjustment?: boolean;
 };
 export type ScheduledSlot = {
   startMinute: number;
@@ -128,11 +130,7 @@ function groupSlots(
     const earliest = running + (item.inboundTravel?.minutes ?? 0);
     const latest = latestStarts.get(item.id)!;
     let start: number | null = null;
-    if (
-      item.start &&
-      !input.targetIds.has(item.id) &&
-      valid(input, item, item.start.minutes, earliest, latest)
-    )
+    if (item.start && valid(input, item, item.start.minutes, earliest, latest))
       start = item.start.minutes;
     if (start === null) {
       // Prefer breathing room before a fixed activity, without making it a hard constraint.
@@ -174,6 +172,27 @@ export function scheduleItinerary(input: SchedulingInput): SchedulingResult {
     });
   };
   const isAnchor = (item: SchedulingItem) => Boolean((item.fixed || item.protected) && item.start);
+  const blockedIds = new Set<string>();
+  const blockIssue = (
+    group: SchedulingItem[],
+    code: TimingIssue['code'],
+    references: string[] = [],
+    cause?: SchedulingItem,
+  ) => {
+    const subject =
+      group.find((item) => input.targetIds.has(item.id)) ??
+      cause ??
+      group.find((item) => !item.start) ??
+      group[0]!;
+    group.forEach((item) => blockedIds.add(item.id));
+    issue(
+      subject,
+      code,
+      [...new Set([...references, ...group.map((item) => item.id)])].filter(
+        (id) => id !== subject.id,
+      ),
+    );
+  };
   let from = 0;
   while (from < input.items.length) {
     const first = input.items[from]!;
@@ -199,7 +218,9 @@ export function scheduleItinerary(input: SchedulingInput): SchedulingResult {
           issue(first, 'FIXED_CONFLICT');
       }
       const previousStart = previous
-        ? (slots.get(previous.id)?.startMinute ?? previous.start?.minutes)
+        ? blockedIds.has(previous.id)
+          ? undefined
+          : (slots.get(previous.id)?.startMinute ?? previous.start?.minutes)
         : undefined;
       if (
         previousStart !== undefined &&
@@ -228,7 +249,7 @@ export function scheduleItinerary(input: SchedulingInput): SchedulingResult {
     const next = input.items[to];
     const protectedUntimed = group.find((item) => item.protected && !item.start);
     if (protectedUntimed) {
-      for (const item of group) issue(item, 'FIXED_CONFLICT', [protectedUntimed.id]);
+      blockIssue(group, 'FIXED_CONFLICT', [protectedUntimed.id], protectedUntimed);
       from = to;
       continue;
     }
@@ -242,10 +263,12 @@ export function scheduleItinerary(input: SchedulingInput): SchedulingResult {
           input.availability && input.returnTravel.required && input.returnTravel.minutes === null,
         );
     if (missingDuration || unknownEnd || missingTravel || unknownOutgoing) {
-      for (const item of group)
-        issue(item, missingDuration || unknownEnd ? 'DURATION_UNKNOWN' : 'TRAVEL_UNKNOWN', [
-          missingDuration?.id ?? previous?.id ?? missingTravel?.id ?? next?.id ?? item.id,
-        ]);
+      blockIssue(
+        group,
+        missingDuration || unknownEnd ? 'DURATION_UNKNOWN' : 'TRAVEL_UNKNOWN',
+        [missingDuration?.id ?? previous?.id ?? missingTravel?.id ?? next?.id ?? first.id],
+        missingDuration ?? missingTravel,
+      );
       from = to;
       continue;
     }
@@ -262,20 +285,52 @@ export function scheduleItinerary(input: SchedulingInput): SchedulingResult {
           item.inboundRequired,
       )
     ) {
-      for (const item of group) issue(item, 'CONTEXT_UNKNOWN');
+      blockIssue(group, 'CONTEXT_UNKNOWN');
       from = to;
       continue;
     }
-    const planned = groupSlots(input, from, to, true) ?? groupSlots(input, from, to, false);
+    let planned = groupSlots(input, from, to, true) ?? groupSlots(input, from, to, false);
+    if (
+      !planned &&
+      input.allowDayPartAdjustment &&
+      group.some((item) => input.targetIds.has(item.id))
+    ) {
+      // Dayparts remain intent, while the explicit position wins. Hours, travel,
+      // durations, availability and protected anchors are still hard boundaries.
+      const relaxed = {
+        ...input,
+        items: input.items.map((item, index) =>
+          index >= from && index < to
+            ? {
+                ...item,
+                startWindow: null,
+                preferredWindows: [
+                  ...(item.startWindow
+                    ? [
+                        {
+                          startMinute: item.startWindow.earliestMinute,
+                          endMinute: item.startWindow.latestMinute + item.duration!.minutes,
+                          typicalMinute: item.startWindow.earliestMinute,
+                        },
+                      ]
+                    : []),
+                  ...(item.preferredWindows ?? []),
+                ],
+              }
+            : item,
+        ),
+      };
+      planned = groupSlots(relaxed, from, to, true) ?? groupSlots(relaxed, from, to, false);
+    }
     if (!planned) {
-      for (const item of group)
-        issue(
-          item,
-          item.openingHours.status === 'KNOWN' && item.openingHours.intervals.length === 0
-            ? 'OPENING_HOURS'
-            : 'NO_ROOM',
-          next ? [next.id] : [],
-        );
+      const closed = group.find(
+        (item) =>
+          item.openingHours.status === 'KNOWN' &&
+          !item.openingHours.intervals.some(
+            (interval) => interval.endMinute - interval.startMinute >= item.duration!.minutes,
+          ),
+      );
+      blockIssue(group, closed ? 'OPENING_HOURS' : 'NO_ROOM', next ? [next.id] : [], closed);
       from = to;
       continue;
     }
@@ -315,6 +370,7 @@ export function scheduleItinerary(input: SchedulingInput): SchedulingResult {
         !item.preferredWindows?.length &&
         !item.inboundRequired &&
         !next?.start &&
+        !group.some((neighbor) => neighbor.id !== item.id && neighbor.start) &&
         input.targetIds.has(item.id)
       ) {
         issue(item, 'CONTEXT_UNKNOWN');

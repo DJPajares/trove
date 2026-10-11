@@ -310,7 +310,9 @@ async function assessDay(
     const profile = placeProfile(item.placeId ? evidence.places.get(item.placeId)?.types : null);
     const typical =
       !item.blockType || item.blockType === 'activity' ? profile?.visit?.typical : null;
-    const intent = !item.fixed ? dayPartWindow(original.dayPart) : null;
+    // Like scoring, exact slots supersede retained coarse intent. Reapplying
+    // that intent as a hard window after a move makes a valid slot look broken.
+    const intent = !item.fixed && !item.start ? dayPartWindow(original.dayPart) : null;
     const startWindow = intent
       ? {
           earliestMinute: elapsedLocalMinute(
@@ -409,6 +411,7 @@ async function assessDay(
       estimated: returnLeg?.estimated,
     },
     targetIds: reconcile ? new Set(targetId ? [targetId] : []) : targets,
+    allowDayPartAdjustment: reconcile,
   });
   for (const item of day.items) {
     const linked = trip.reservations.filter((r) => r.itineraryItemId === item.id);
@@ -465,7 +468,9 @@ async function assessDay(
       day.timeZone;
     const startInstant = slot ? new Date(scoring.origin + slot.startMinute * 60000) : null;
     const endInstant = slot ? new Date(scoring.origin + slot.endMinute * 60000) : null;
-    const issues = result.issues.filter((issue) => issue.itemId === itemId);
+    const issues = result.issues.filter(
+      (issue) => issue.itemId === itemId || issue.references.includes(itemId),
+    );
     const missing = issues
       .filter((issue) => issue.severity === 'review')
       .map((issue) => issue.code);

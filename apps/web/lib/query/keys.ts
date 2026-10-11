@@ -45,6 +45,8 @@ export const queryKeys = {
 
   expenses: (tripId: string) => ['expenses', tripId] as const,
   itinerary: (tripId: string) => ['itinerary', tripId] as const,
+  itineraryTiming: (tripId: string, dayId?: string, revision?: string) =>
+    ['itinerary-timing', tripId, dayId, revision] as const,
 
   /**
    * `revision` is the ordering signature the caller is showing. It belongs in
@@ -201,6 +203,7 @@ export const TRIP_SCOPED_QUERY_ROOTS = [
   'gap-suggestions',
   'hours-notices',
   'itinerary',
+  'itinerary-timing',
   'itinerary-day-routes',
   'memories',
   'place-groupings',

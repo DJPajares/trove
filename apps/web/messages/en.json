@@ -2120,6 +2120,7 @@
       "changed": "Timing adjusted to fit the day.",
       "needsReview": "Some timing needs a review.",
       "review": "Review changes",
+      "reviewTiming": "Review timing",
       "reviewHint": "Flexible slots adjusted around the day. Protected times were kept.",
       "pending": "Timing review pending. Trove will check the day when you reconnect.",
       "stale": "The day changed since this preview. Suggest timing again before saving.",

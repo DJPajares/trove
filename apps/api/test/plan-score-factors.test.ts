@@ -242,3 +242,47 @@ test('existing replacement suggestions stay advisory and do not mutate evidence'
   ]);
   expect(candidates).toEqual(original);
 });
+
+test('an impossible flexible visit does not propagate imaginary late departures through the day', () => {
+  const result = evaluateFeasibility({
+    availability: { startMinute: 480, endMinute: 720 },
+    commitments: [],
+    items: [
+      item('anchor', { fixed: true, start: at(540), duration: at(60) }),
+      item('moved', {
+        duration: at(180),
+        inboundTravel: at(10),
+        startWindow: { earliestMinute: 480, latestMinute: 720, source: 'ESTIMATED' },
+      }),
+      item('neighbor', { start: at(620, 'ESTIMATED'), duration: at(60), inboundTravel: at(10) }),
+      item('booking', { fixed: true, start: at(710), duration: at(10), inboundTravel: at(10) }),
+    ],
+  });
+  expect(result.conflicts).toEqual([
+    expect.objectContaining({ kind: 'OUTSIDE_AVAILABILITY', subjectIds: ['moved'] }),
+  ]);
+});
+
+test('an independently closed neighbor remains a conflict after an impossible moved slot', () => {
+  const result = evaluateFeasibility({
+    availability: { startMinute: 480, endMinute: 720 },
+    commitments: [],
+    items: [
+      item('moved', { start: at(600), duration: at(300) }),
+      item('closed', {
+        start: at(600),
+        duration: at(60),
+        inboundTravel: at(10),
+        openingHours: { status: 'KNOWN', source: 'CACHED_PROVIDER', intervals: [] },
+      }),
+    ],
+  });
+  expect(result.conflicts).toHaveLength(2);
+  expect(result.conflicts).toContainEqual(
+    expect.objectContaining({
+      kind: 'OUTSIDE_OPENING_HOURS',
+      subjectIds: ['closed'],
+      verified: true,
+    }),
+  );
+});

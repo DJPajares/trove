@@ -43,7 +43,7 @@ function seed() {
       dailyBaseTripPlaceId: null,
       dailyBaseDepartureTripPlaceId: null,
       routeStartTravelMode: 'WALK',
-      planningContext: { availability: { start: '08:00', end: '20:00' } },
+      planningContext: { intent: null, availability: { start: '08:00', end: '20:00' } },
     });
   for (const id of ['a', 'b', 'new']) {
     store.place.push({
@@ -415,4 +415,58 @@ test('complete slots convert the item timezone independently of the day referenc
     startInstant: '2026-09-05T10:00:00.000Z',
     endInstant: '2026-09-05T11:00:00.000Z',
   });
+});
+
+test('reordering estimated exact stops supersedes stale dayparts and its canonical assessment stays clean', async () => {
+  seed();
+  store.itineraryDay[0]!.planningContext = { intent: null, availability: null };
+  item('a', 0, '14:00');
+  item('b', 1, '17:00');
+  store.itineraryItem[0]!.dayPart = 'AFTERNOON';
+  store.itineraryItem[1]!.dayPart = 'EVENING';
+  const result = await organizeItineraryItem('user', 'trip', 'b', {
+    itineraryDayId: 'day',
+    position: 0,
+    timingPolicy: 'reconcile_flexible',
+  });
+  expect(order()).toEqual(['b', 'a']);
+  expect(store.itineraryItem.find((i) => i.id === 'b')).toMatchObject({
+    localStartTime: parseLocalTime('08:00'),
+    dayPart: 'EVENING',
+    durationMinutes: 60,
+  });
+  expect(store.itineraryItem.find((i) => i.id === 'a')!.localStartTime).toEqual(
+    parseLocalTime('14:00'),
+  );
+  expect(result?.scheduling.issues).toEqual([]);
+  expect((await getItineraryDayTimeSuggestions('user', 'trip', 'day')).issues).toEqual([]);
+  expect(getProviderCallCounts()).toEqual({});
+});
+
+test('a no-fit move preserves neighboring flexible slots and canonical warnings stay on one untimed stop', async () => {
+  seed();
+  item('a', 0, '09:00', false);
+  item('b', 1, '10:00');
+  item('new', 2, '11:00');
+  store.itineraryItem.find((i) => i.id === 'new')!.durationMinutes = 180;
+  store.itineraryDay[0]!.planningContext = {
+    intent: null,
+    availability: { start: '08:00', end: '12:00' },
+  };
+  const result = await organizeItineraryItem('user', 'trip', 'new', {
+    itineraryDayId: 'day',
+    position: 1,
+    timingPolicy: 'reconcile_flexible',
+  });
+  expect(result?.scheduling.issues).toEqual([
+    expect.objectContaining({ itemId: 'new', code: 'NO_ROOM' }),
+  ]);
+  expect(store.itineraryItem.find((i) => i.id === 'new')!.localStartTime).toBe(null);
+  expect(store.itineraryItem.find((i) => i.id === 'b')!.localStartTime).toEqual(
+    parseLocalTime('10:00'),
+  );
+  expect((await getItineraryDayTimeSuggestions('user', 'trip', 'day')).issues).toEqual([
+    expect.objectContaining({ itemId: 'new', code: 'NO_ROOM' }),
+  ]);
+  expect(getProviderCallCounts()).toEqual({});
 });

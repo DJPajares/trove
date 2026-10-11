@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import { invalidateWeatherMapping } from '@/lib/weather/client-service';
+import { isItineraryEditing } from '@/lib/itinerary/edit-lifecycle';
 import { TRIP_SCOPED_QUERY_ROOTS, type TripScopedQueryRoot } from '@/lib/query/keys';
 
 /**
@@ -23,7 +24,17 @@ export async function invalidateTripQueries(
 ) {
   if (roots.includes('trip-weather')) await invalidateWeatherMapping(queryClient, tripId);
   return Promise.all([
-    ...roots.map((root) => queryClient.invalidateQueries({ queryKey: [root, tripId] })),
+    ...roots.map((root) =>
+      queryClient.invalidateQueries({
+        queryKey: [root, tripId],
+        // Reconciliation and the canonical itinerary refresh finish before derived
+        // reads resume, including invalidations initiated by route acquisition.
+        ...((root === 'plan-score' || root === 'itinerary-timing') &&
+        isItineraryEditing(queryClient, tripId)
+          ? { refetchType: 'none' as const }
+          : {}),
+      }),
+    ),
     // Located Places are shared across trips. Only the other derived assessments
     // need invalidation here; do not acquire routes for unopened trips.
     ...(roots === PLACE_LOCATION_QUERY_ROOTS
@@ -71,6 +82,7 @@ export function removeTripQueries(
 export const ITINERARY_EDIT_QUERY_ROOTS: readonly TripScopedQueryRoot[] = [
   'trip-overview',
   'itinerary',
+  'itinerary-timing',
   'gap-suggestions',
   'hours-notices',
   'place-groupings',

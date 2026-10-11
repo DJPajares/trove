@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import { fetchTripPlanScore } from '@/lib/plan-score/api';
+import { useItineraryEditing } from '@/lib/itinerary/use-itinerary-editing';
 import { queryKeys } from '@/lib/query/keys';
 import {
   getRememberedOfflineUser,
@@ -35,6 +36,7 @@ const AUTOMATIC_REFRESH_DELAYS_MS = [0, 2_000, 10_000] as const;
 /** One in-memory trip assessment. Every refresh reads existing evidence only. */
 export function useTripPlanScore(tripId: string | null) {
   const client = useQueryClient();
+  const editing = useItineraryEditing(tripId ?? '');
   const [clock, setClock] = useState(() => Date.now());
   const [refreshes, setRefreshes] = useState<{ tripId: string | null; count: number }>({
     tripId,
@@ -84,7 +86,7 @@ export function useTripPlanScore(tripId: string | null) {
     };
   }, [tripId]);
   const ready = connectivity.ready && connectivity.tripId === tripId;
-  const canRead = ready && connectivity.online && !connectivity.pending;
+  const canRead = ready && connectivity.online && !connectivity.pending && !editing;
   const query = useQuery({
     enabled: tripId !== null && canRead,
     queryFn: ({ signal }) => fetchTripPlanScore(tripId as string, signal),
@@ -162,17 +164,19 @@ export function useTripPlanScore(tripId: string | null) {
         ? 'offline'
         : connectivity.pending
           ? 'syncing'
-          : query.data === null && !query.isFetching
-            ? 'disabled'
-            : query.isPending
-              ? 'loading'
-              : query.isFetching || refreshing
-                ? 'updating'
-                : query.error
-                  ? 'error'
-                  : data && !current
-                    ? 'expired'
-                    : 'idle';
+          : editing
+            ? 'updating'
+            : query.data === null && !query.isFetching
+              ? 'disabled'
+              : query.isPending
+                ? 'loading'
+                : query.isFetching || refreshing
+                  ? 'updating'
+                  : query.error
+                    ? 'error'
+                    : data && !current
+                      ? 'expired'
+                      : 'idle';
   return {
     data,
     retry,

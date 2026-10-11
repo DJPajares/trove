@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus } from 'lucide-react';
+import { ChevronDown, Plus, Search } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useQueryClient } from '@tanstack/react-query';
@@ -11,9 +11,15 @@ import { PageState } from '@/components/page-state';
 import { RemoveTripPlaceDialog } from '@/components/remove-trip-place-dialog';
 import { SavedPlacesForTrip } from '@/components/saved-places-for-trip';
 import { TripPlacesPanel } from '@/components/trip-places-panel';
-import { TripPlacesNoMatches, TripPlacesToolbar } from '@/components/trip-places-toolbar';
+import {
+  TripPlacesNoMatches,
+  TripPlacesToolbar,
+  type TripPlacesLens,
+} from '@/components/trip-places-toolbar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { journalSerif } from '@/components/memories/journal-font';
 import {
   Sheet,
   SheetContent,
@@ -33,12 +39,14 @@ import { useTripResource } from '@/lib/query/use-trip-resource';
 import { invalidateTripQueries } from '@/lib/query/trip-invalidation';
 import type { Coordinate } from '@/lib/maps/haversine';
 import type { TripPlace } from '@/lib/trip-places/api';
+import { groupTripPlacesForDay } from '@/lib/trip-places/list-view';
 import { resolveTripPlaceName } from '@/lib/trip-places/place-name';
 import { tripPlaceDaySorts } from '@/lib/trip-places/signals';
 import { tripPlaceSorts } from '@/lib/trip-places/sort';
 import { useTripPlaces } from '@/lib/trip-places/use-trip-places';
 import { useTripPlacesView } from '@/lib/trip-places/use-trip-places-view';
 import * as Icons from '@/lib/icons';
+import { cn } from '@/lib/utils';
 
 export type TripPlacesDayContext = {
   /** The located stops (and base) of the day being planned, for "nearest to this day". */
@@ -119,10 +127,24 @@ export function TripPlacesDrawer({
 
   const view = useTripPlacesView(places.places, {
     dayContext: dayContext ? { distanceOf, hoursOf } : undefined,
+    initialSort: dayContext ? 'nearest' : 'name',
     nameOf: placeName,
     placeUse,
     sorts: dayContext ? tripPlaceDaySorts : tripPlaceSorts,
   });
+  // What the list is for right now. Beside a day it opens on that day; the
+  // lens maps onto the view's own filter, so search and order still apply.
+  const [lens, setLensValue] = useState<TripPlacesLens>(dayContext ? 'day' : 'all');
+  const activeLens = lens === 'day' && !dayContext ? 'all' : lens;
+  function setLens(next: TripPlacesLens) {
+    setLensValue(next);
+    view.setShow(next === 'unplanned' ? 'unplanned' : 'all');
+  }
+  const searching = view.query.trim() !== '';
+  const dayGroups =
+    activeLens === 'day' && dayContext && !searching
+      ? groupTripPlacesForDay(view.visible, { date: dayContext.date, distanceOf, placeUse })
+      : null;
 
   const dayDate = useMemo(
     () =>
@@ -170,6 +192,32 @@ export function TripPlacesDrawer({
   }
 
   const hasPlaces = places.status === 'idle' && places.places.length > 0;
+
+  /** The one list, shared by every group the drawer shows. */
+  const panel = (tripPlaces: readonly TripPlace[], rowClassName = 'px-5') => (
+    <TripPlacesPanel
+      busyPlaceIds={addingIds}
+      day={dayContext ? { date: dayContext.date, number: dayContext.dayNumber } : undefined}
+      justAddedIds={view.kept}
+      onAddToDay={dayContext ? (tripPlace) => void addToDay(tripPlace) : undefined}
+      onEditPlace={(place) => {
+        editedId.current = place.id;
+        setEditPlace(place);
+      }}
+      onPlaceLocated={places.placeLocated}
+      onPriorityChange={(tripPlace, priority) => void places.setPriority(tripPlace, priority)}
+      onRemove={(place) => {
+        removedId.current = place.id;
+        setRemovingPlace(place);
+      }}
+      placeUse={placeUse}
+      returnFocusToPlace={collectionFocus}
+      rowClassName={rowClassName}
+      signalsFor={signalsFor}
+      tripId={tripId}
+      tripPlaces={tripPlaces}
+    />
+  );
   const errorMessage = addFailed
     ? t('addToDayError')
     : places.error && !removingPlace
@@ -181,41 +229,66 @@ export function TripPlacesDrawer({
       {/* Pinned to its full height on a phone, so a search or filter narrowing
             the list never pulls the sheet down under the traveller's thumb. */}
       <SheetContent
-        className="gap-0 max-md:h-[90dvh] md:data-[side=right]:w-[min(28rem,calc(100%-0.5rem))]"
+        className={cn(
+          journalSerif.variable,
+          'gap-0 bg-background max-md:h-[90dvh] md:data-[side=right]:w-[min(28rem,calc(100%-0.5rem))]',
+        )}
         closeLabel={t('close')}
         finalFocus={finalFocus}
         side="right"
       >
-        <SheetHeader>
-          <SheetTitle>{t('placesDrawerTitle')}</SheetTitle>
+        <SheetHeader className="gap-1 border-b-0 pb-3">
+          <SheetTitle className="font-journal text-[2rem] leading-[1.04] font-normal tracking-[-0.01em]">
+            {t('placesDrawerTitle')}
+          </SheetTitle>
           <SheetDescription>
-            {dayContext
-              ? dayContext.dayName
-                ? t('planningNamedDay', {
-                    date: dayDate,
-                    name: dayContext.dayName,
-                    number: dayContext.dayNumber,
-                  })
-                : t('planningDay', { date: dayDate, number: dayContext.dayNumber })
+            {hasPlaces
+              ? t('collectionSummary', {
+                  planned: view.counts.all - view.counts.unplanned,
+                  total: view.counts.all,
+                })
               : t('description')}
           </SheetDescription>
+          {dayContext ? (
+            // The day the drawer is working for, said once and plainly, so
+            // every + below reads as "add to this day".
+            <p className="mt-2 flex min-h-10 items-center gap-2.5 rounded-full bg-score-media-background px-4 text-sm text-score-media-foreground">
+              <span
+                aria-hidden="true"
+                className="size-2 shrink-0 rounded-full bg-score-media-brand"
+              />
+              <span className="min-w-0 truncate">
+                <span className="font-semibold">
+                  {t('planningDayShort', { number: dayContext.dayNumber })}
+                </span>
+                <span className="text-score-media-muted">
+                  {' · '}
+                  {dayContext.dayName ?? dayDate}
+                </span>
+              </span>
+            </p>
+          ) : null}
         </SheetHeader>
 
         {hasPlaces ? (
           <TripPlacesToolbar
             action={
               <Button
-                className="shrink-0"
+                aria-label={t('addPlace')}
+                className="shrink-0 rounded-full"
                 ref={addButton}
                 onClick={() => setAddQuery('')}
+                size="icon"
                 type="button"
                 variant="outline"
               >
-                <Plus aria-hidden="true" data-icon="inline-start" />
-                {t('addPlace')}
+                <Plus aria-hidden="true" />
               </Button>
             }
-            className="px-5 pt-4 pb-3"
+            className="px-5 pb-3"
+            dayNumber={dayContext?.dayNumber}
+            lens={activeLens}
+            onLensChange={setLens}
             view={view}
           />
         ) : null}
@@ -248,12 +321,6 @@ export function TripPlacesDrawer({
             />
           ) : null}
 
-          {places.status === 'idle' ? (
-            <div className="px-5 pt-3 pb-2">
-              <SavedPlacesForTrip onAdded={placeAdded} tripId={tripId} tripPlaces={places.places} />
-            </div>
-          ) : null}
-
           {places.status === 'idle' && !places.places.length ? (
             <PageState
               actions={
@@ -272,34 +339,89 @@ export function TripPlacesDrawer({
           ) : null}
 
           {hasPlaces && !view.visible.length ? (
-            <TripPlacesNoMatches className="px-5" onAddQuery={setAddQuery} view={view} />
+            <TripPlacesNoMatches
+              className="px-5"
+              onAddQuery={setAddQuery}
+              onShowAll={activeLens === 'all' ? undefined : () => setLens('all')}
+              view={view}
+            />
           ) : null}
 
-          {view.visible.length ? (
-            <TripPlacesPanel
-              busyPlaceIds={addingIds}
-              day={dayContext ? { date: dayContext.date, number: dayContext.dayNumber } : undefined}
-              justAddedIds={view.kept}
-              onAddToDay={dayContext ? (tripPlace) => void addToDay(tripPlace) : undefined}
-              onEditPlace={(place) => {
-                editedId.current = place.id;
-                setEditPlace(place);
-              }}
-              onPlaceLocated={places.placeLocated}
-              onPriorityChange={(tripPlace, priority) =>
-                void places.setPriority(tripPlace, priority)
-              }
-              onRemove={(place) => {
-                removedId.current = place.id;
-                setRemovingPlace(place);
-              }}
-              placeUse={placeUse}
-              returnFocusToPlace={collectionFocus}
-              rowClassName="px-5"
-              signalsFor={signalsFor}
-              tripId={tripId}
-              tripPlaces={view.visible}
-            />
+          {dayGroups && dayContext ? (
+            <div className="space-y-4">
+              {dayGroups.onThisDay.length ? (
+                // Already planned for this day: worth knowing, not worth the
+                // space. One line, opened on request.
+                <Collapsible className="mx-5 rounded-[var(--radius-lg)] border border-dashed border-border-strong">
+                  <CollapsibleTrigger className="group/on flex min-h-11 w-full gap-2.5 px-3.5 text-left text-sm text-foreground hover:text-foreground">
+                    <Icons.Success aria-hidden="true" className="text-brand" />
+                    <span className="min-w-0 flex-1 truncate">
+                      <span className="font-semibold">
+                        {t('alreadyOnDay', {
+                          count: dayGroups.onThisDay.length,
+                          number: dayContext.dayNumber,
+                        })}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {' · '}
+                        {dayGroups.onThisDay.map(placeName).join(', ')}
+                      </span>
+                    </span>
+                    <ChevronDown
+                      aria-hidden="true"
+                      className="transition-transform duration-[var(--motion-standard)] group-data-[panel-open]/on:rotate-180 motion-reduce:transition-none"
+                    />
+                  </CollapsibleTrigger>
+                  <CollapsiblePanel>{panel(dayGroups.onThisDay, 'px-3.5')}</CollapsiblePanel>
+                </Collapsible>
+              ) : null}
+              {dayGroups.near.length ? (
+                <section aria-labelledby="trip-places-near">
+                  <h3
+                    className="px-5 pb-1 text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase"
+                    id="trip-places-near"
+                  >
+                    {t('nearDay', { number: dayContext.dayNumber })}
+                  </h3>
+                  {panel(dayGroups.near)}
+                </section>
+              ) : null}
+              {dayGroups.far.length ? (
+                <section aria-labelledby="trip-places-far">
+                  <h3
+                    className="px-5 pb-1 text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase"
+                    id="trip-places-far"
+                  >
+                    {t('furtherFromDay', { number: dayContext.dayNumber })}
+                  </h3>
+                  {panel(dayGroups.far)}
+                </section>
+              ) : null}
+            </div>
+          ) : view.visible.length ? (
+            panel(view.visible)
+          ) : null}
+
+          {/* A search here only reads the trip. The rest of the world is one
+              tap further, carrying what was typed. */}
+          {searching && view.visible.length ? (
+            <div className="px-5 pt-3">
+              <Button
+                className="h-auto min-h-12 w-full justify-start gap-3 rounded-[var(--radius-lg)] border-dashed px-4 py-2 text-left whitespace-normal"
+                onClick={() => setAddQuery(view.query.trim())}
+                type="button"
+                variant="outline"
+              >
+                <Search aria-hidden="true" className="text-brand" />
+                {t('searchBeyondTrip', { query: view.query.trim() })}
+              </Button>
+            </div>
+          ) : null}
+
+          {places.status === 'idle' ? (
+            <div className="px-5 pt-5">
+              <SavedPlacesForTrip onAdded={placeAdded} tripId={tripId} tripPlaces={places.places} />
+            </div>
           ) : null}
         </div>
       </SheetContent>

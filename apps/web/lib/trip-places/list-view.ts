@@ -128,3 +128,31 @@ export function itineraryReferences(
 ) {
   return Math.max(tripPlace.referenceCount, placeUse?.[tripPlace.id]?.itemCount ?? 0);
 }
+
+/**
+ * The day lens of the drawer: what is already on the day being planned, what
+ * sits near it, and what is further away. Order within each group is the
+ * caller's (already sorted), and a place with no distance to measure counts as
+ * near, so a place Trove cannot locate is never pushed out of sight.
+ */
+export function groupTripPlacesForDay<T extends { id: string }>(
+  places: readonly T[],
+  options: {
+    date: string;
+    distanceOf: (place: T) => number | null;
+    placeUse?: Readonly<Record<string, ScheduledPlaceUse>>;
+  },
+) {
+  const onThisDay: T[] = [];
+  const near: T[] = [];
+  const far: T[] = [];
+  for (const place of places) {
+    if (options.placeUse?.[place.id]?.dayDates.includes(options.date)) {
+      onThisDay.push(place);
+      continue;
+    }
+    const metres = options.distanceOf(place);
+    (metres !== null && isFarFromDay(metres) ? far : near).push(place);
+  }
+  return { far, near, onThisDay };
+}

@@ -7,12 +7,12 @@ import { Instrument_Serif } from 'next/font/google';
  *
  * Only the Memories journal, and Home, the Trips library and a trip's headers
  * - which set finished journeys in the journal's voice - Trip Mode, which
- * names the place being lived in it, and the AI planner's brief drawer and
- * draft review, which ask and answer in it, import this, so no other screen
- * downloads it. The variable is set on the journal's layout, on each of its
- * popups, which render into <body> outside that layout, on those pages, the
- * trip sections layout and the Trip Mode layout, and on the planner's sheets
- * and review page.
+ * names the place being lived in it, the AI planner's brief drawer and draft
+ * review, which ask and answer in it, and Saved and the Trip places drawer,
+ * which title collections in it, import this, so no other screen downloads it.
+ * The variable is set on the journal's layout, on each of its popups, which
+ * render into <body> outside that layout, on those pages, the trip sections
+ * layout and the Trip Mode layout, and on these sheets and pages.
  */
 export const journalSerif = Instrument_Serif({
   display: 'swap',

@@ -1,3 +1,4 @@
+import { getProtectedSession, authenticatedFetch } from '@/lib/auth/transport';
 import { localPreviewInstant } from './local-instant';
 export { localPreviewInstant } from './local-instant';
 import type {
@@ -362,7 +363,7 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 async function getAuthContext() {
   const supabase = createBrowserSupabaseClient();
   if (!supabase) throw new ItineraryApiError('supabase_not_configured', 500);
-  const { data, error } = await supabase.auth.getSession();
+  const { data, error } = await getProtectedSession(supabase);
   if (!error && data.session) {
     rememberOfflineUser(data.session.user.id);
     return { accessToken: data.session.access_token, userId: data.session.user.id };
@@ -382,7 +383,7 @@ async function itineraryRequest<T>(
   if (!accessToken) throw new ItineraryApiError('offline_session', 503);
   let response: Response;
   try {
-    response = await fetch(`${apiUrl}${path}`, {
+    response = await authenticatedFetch(`${apiUrl}${path}`, {
       ...init,
       headers: {
         Authorization: `Bearer ${accessToken}`,

@@ -1,3 +1,4 @@
+import { getProtectedSession, authenticatedFetch } from '@/lib/auth/transport';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import type { CanonicalPlace } from '@/lib/saved/api';
 
@@ -30,14 +31,14 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 async function getAccessToken() {
   const supabase = createBrowserSupabaseClient();
   if (!supabase) throw new TripPlaceApiError('supabase_not_configured', 500);
-  const { data, error } = await supabase.auth.getSession();
+  const { data, error } = await getProtectedSession(supabase);
   if (error || !data.session) throw new TripPlaceApiError('not_authenticated', 401);
   return data.session.access_token;
 }
 
 async function tripPlaceRequest<T>(path: string, init?: RequestInit) {
   const accessToken = await getAccessToken();
-  const response = await fetch(`${apiUrl}${path}`, {
+  const response = await authenticatedFetch(`${apiUrl}${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${accessToken}`,

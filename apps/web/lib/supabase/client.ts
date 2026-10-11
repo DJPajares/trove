@@ -2,6 +2,8 @@ import { createBrowserClient } from '@supabase/ssr';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 
 import { getSupabaseEnvironment } from '@/lib/supabase/environment';
+import { getProtectedSession } from '@/lib/auth/transport';
+import { assertAuthRequestsAllowed } from '@/lib/auth/transition';
 
 let browserClient: SupabaseClient | null | undefined;
 
@@ -48,13 +50,16 @@ let inFlightSession: Promise<Session | null> | null = null;
  * when that is due.
  */
 export async function getBrowserSession() {
+  assertAuthRequestsAllowed();
   const supabase = createBrowserSupabaseClient();
   if (!supabase) return null;
 
-  inFlightSession ??= supabase.auth
-    .getSession()
+  inFlightSession ??= getProtectedSession(supabase)
     .then(({ data, error }) => (error ? null : data.session))
-    .catch(() => null)
+    .catch((error: unknown) => {
+      if (error instanceof DOMException && error.name === 'AbortError') throw error;
+      return null;
+    })
     .finally(() => {
       inFlightSession = null;
     });

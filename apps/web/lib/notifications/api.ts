@@ -1,3 +1,4 @@
+import { getProtectedSession, authenticatedFetch } from '@/lib/auth/transport';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 export type TroveNotification = {
@@ -32,15 +33,19 @@ export class NotificationsApiError extends Error {
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
-async function notificationRequest<T>(path: string, init?: RequestInit) {
+async function notificationRequest<T>(path: string, init?: RequestInit, forSignOut = false) {
   const supabase = createBrowserSupabaseClient();
   if (!supabase) throw new NotificationsApiError('supabase_not_configured', 500);
-  const { data, error } = await supabase.auth.getSession();
+  // Only the departure coordinator may revoke this device's push subscription
+  // using the outgoing session while ordinary app requests are blocked.
+  const { data, error } = await (forSignOut
+    ? supabase.auth.getSession()
+    : getProtectedSession(supabase));
   if (error || !data.session) throw new NotificationsApiError('not_authenticated', 401);
 
   let response: Response;
   try {
-    response = await fetch(`${apiUrl}${path}`, {
+    response = await (forSignOut ? fetch : authenticatedFetch)(`${apiUrl}${path}`, {
       ...init,
       headers: {
         Authorization: `Bearer ${data.session.access_token}`,
@@ -84,11 +89,15 @@ export function registerPushSubscription(subscription: PushSubscriptionJSON, loc
   });
 }
 
-export function removePushSubscription(endpoint: string) {
-  return notificationRequest<void>('/notifications/push-subscription', {
-    method: 'DELETE',
-    body: JSON.stringify({ endpoint }),
-  });
+export function removePushSubscription(endpoint: string, forSignOut = false) {
+  return notificationRequest<void>(
+    '/notifications/push-subscription',
+    {
+      method: 'DELETE',
+      body: JSON.stringify({ endpoint }),
+    },
+    forSignOut,
+  );
 }
 
 export function fetchPushSubscriptionStatus(endpoint: string) {

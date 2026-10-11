@@ -1,3 +1,4 @@
+import { authenticatedFetch } from '@/lib/auth/transport';
 import {
   canUseSupportingOfflineFallback,
   queueSupportingMutation,
@@ -63,7 +64,7 @@ async function tripInfoRequest<T>(
   if (!auth.accessToken) throw new TripInfoApiError('offline_session', 503);
   let response: Response;
   try {
-    response = await fetch(`${apiUrl}${path}`, {
+    response = await authenticatedFetch(`${apiUrl}${path}`, {
       ...init,
       headers: {
         Authorization: `Bearer ${auth.accessToken}`,

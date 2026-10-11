@@ -1,5 +1,6 @@
 import { QueryClient, type Query } from '@tanstack/react-query';
 import { watchScoringAcquisition } from '@/lib/plan-score/lifecycle';
+import { isAuthDeparting } from '@/lib/auth/transition';
 
 import { PERSISTED_QUERY_ROOTS, PROVIDER_BILLABLE_QUERY_ROOTS } from '@/lib/query/keys';
 
@@ -94,6 +95,8 @@ export function createQueryClient() {
         // A 404 is an answer, not a failure, and a 401 will not fix itself on
         // a second try either. Only retry what a retry could actually change.
         retry: (failureCount, error) => {
+          if (isAuthDeparting() || (error instanceof DOMException && error.name === 'AbortError'))
+            return false;
           const status = apiErrorStatus(error);
           if (status !== null && status >= 400 && status < 500) return false;
           return failureCount < 1;

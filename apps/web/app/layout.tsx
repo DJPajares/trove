@@ -7,6 +7,7 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import './globals.css';
 import { AppShell } from '@/components/app-shell';
 import { AuthSessionListener } from '@/components/auth-session-listener';
+import { AuthTransitionBoundary } from '@/components/auth-transition-boundary';
 import { OnboardingGate } from '@/components/onboarding-gate';
 import { PwaProvider } from '@/components/pwa-provider';
 import { QueryProvider } from '@/components/query-provider';
@@ -99,10 +100,12 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               />
               <QueryProvider userId={authUserId}>
                 <PwaProvider>
-                  <PreferencesProvider locale={locale}>
-                    <OnboardingGate />
-                    <AppShell isSignedIn={authUserId !== null}>{children}</AppShell>
-                  </PreferencesProvider>
+                  <AuthTransitionBoundary>
+                    <PreferencesProvider locale={locale}>
+                      <OnboardingGate />
+                      <AppShell isSignedIn={authUserId !== null}>{children}</AppShell>
+                    </PreferencesProvider>
+                  </AuthTransitionBoundary>
                 </PwaProvider>
               </QueryProvider>
             </NextIntlClientProvider>

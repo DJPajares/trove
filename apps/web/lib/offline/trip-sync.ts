@@ -1,3 +1,5 @@
+import { authenticatedFetch, getProtectedSession } from '@/lib/auth/transport';
+import { isAuthDeparting } from '@/lib/auth/transition';
 import { publishTimingReview } from '@/lib/itinerary/timing-review';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import { uploadMemoryPhotoObject } from '@/lib/memories/storage';
@@ -40,7 +42,7 @@ export class OfflineSyncError extends Error {
 export async function getOfflineAuthContext() {
   const supabase = createBrowserSupabaseClient();
   if (!supabase) throw new OfflineSyncError('supabase_not_configured');
-  const { data, error } = await supabase.auth.getSession();
+  const { data, error } = await getProtectedSession(supabase);
   if (!error && data.session) {
     rememberOfflineUser(data.session.user.id);
     return {
@@ -337,7 +339,7 @@ async function apiRequest(
   request: ReturnType<typeof requestFor> | { method: 'GET'; path: string },
 ) {
   try {
-    const response = await fetch(`${apiUrl}${request.path}`, {
+    const response = await authenticatedFetch(`${apiUrl}${request.path}`, {
       ...request,
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -909,6 +911,8 @@ export async function syncOfflineMutations(options: { mutationId?: string; force
     try {
       await replayMutation(mutation, accessToken, options.force ?? false);
     } catch (error) {
+      if (isAuthDeparting() || (error instanceof DOMException && error.name === 'AbortError'))
+        return;
       if (error instanceof TypeError) return;
       await updateMutationState(
         mutation,

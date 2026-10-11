@@ -1,3 +1,4 @@
+import { getProtectedSession, authenticatedFetch } from '@/lib/auth/transport';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 import type { TripPlanScore } from '@trove/types';
@@ -32,10 +33,10 @@ export async function fetchTripPlanScore(tripId: string, signal?: AbortSignal) {
   const supabase = createBrowserSupabaseClient();
   if (!supabase) throw new PlanScoreApiError('supabase_not_configured', 500);
 
-  const { data, error } = await supabase.auth.getSession();
+  const { data, error } = await getProtectedSession(supabase);
   if (error || !data.session) throw new PlanScoreApiError('not_authenticated', 401);
 
-  const response = await fetch(`${apiUrl}/trips/${tripId}/plan-score`, {
+  const response = await authenticatedFetch(`${apiUrl}/trips/${tripId}/plan-score`, {
     headers: { Authorization: `Bearer ${data.session.access_token}` },
     signal,
   });

@@ -29,7 +29,7 @@ export function AttentionNote({
     >
       <Icons.Warning aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-status-warning" />
       <div className="min-w-0 space-y-0.5">
-        <p>{children}</p>
+        <div>{children}</div>
         {action}
       </div>
     </div>

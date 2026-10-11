@@ -1,6 +1,8 @@
 import { getTranslations } from 'next-intl/server';
 
+import { journalSerif } from '@/components/memories/journal-font';
 import { PageHeader } from '@/components/page-header';
+import { ToolsBackLink } from '@/components/tools/tools-back-link';
 import { Skeleton } from '@/components/ui/skeleton';
 
 /** The converter's heading and the shape of its card, at the size they land. */
@@ -8,28 +10,36 @@ export default async function CurrencyLoading() {
   const t = await getTranslations('currency');
 
   return (
-    <section className="mx-auto w-full max-w-3xl space-y-6">
-      <PageHeader description={t('description')} title={t('title')} />
-      <div aria-busy="true" aria-live="polite" role="status">
-        <span className="sr-only">{t('title')}</span>
-        <div
-          aria-hidden="true"
-          className="overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card shadow-[var(--shadow-surface)]"
-        >
-          <div className="space-y-6 p-5 sm:p-6">
-            <Skeleton className="h-11 w-1/2 rounded-[var(--radius-md)]" />
-            <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-3 sm:gap-4">
-              <Skeleton className="h-11 w-full rounded-[var(--radius-md)]" />
-              <Skeleton className="mt-7 h-11 w-11 shrink-0 rounded-full" />
-              <Skeleton className="h-11 w-full rounded-[var(--radius-md)]" />
+    <div className={journalSerif.variable}>
+      <section className="mx-auto w-full max-w-5xl space-y-6">
+        <div>
+          <ToolsBackLink label={t('back')} />
+          <PageHeader eyebrow={t('eyebrow')} title={t('title')} titleFont="journal" />
+        </div>
+        <div aria-busy="true" aria-live="polite" role="status">
+          <span className="sr-only">{t('loadingRates')}</span>
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(18rem,1fr)]">
+            <div
+              aria-hidden="true"
+              className="overflow-hidden rounded-[var(--radius-2xl)] border border-border-subtle bg-card shadow-[var(--shadow-surface)]"
+            >
+              <div className="space-y-3 px-5 pt-4 pb-6 sm:px-7">
+                <Skeleton className="h-9 w-36 rounded-[var(--radius-md)]" />
+                <Skeleton className="h-14 w-32 rounded-[var(--radius-md)]" />
+              </div>
+              <div className="space-y-3 border-t border-border-subtle bg-surface-tint px-5 pt-4 pb-6 sm:px-7">
+                <Skeleton className="h-9 w-44 rounded-[var(--radius-md)]" />
+                <Skeleton className="h-14 w-48 rounded-[var(--radius-md)]" />
+                <Skeleton className="h-4 w-56 rounded-[var(--radius-sm)]" />
+              </div>
             </div>
-          </div>
-          <div className="min-h-[7.5rem] space-y-3 border-t border-border-subtle bg-muted/35 px-5 py-5 sm:px-6">
-            <Skeleton className="h-4 w-32 rounded-[var(--radius-sm)]" />
-            <Skeleton className="h-8 w-48 rounded-[var(--radius-sm)]" />
+            <Skeleton
+              aria-hidden="true"
+              className="h-40 w-full rounded-[var(--radius-xl)] max-lg:hidden"
+            />
           </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
   );
 }

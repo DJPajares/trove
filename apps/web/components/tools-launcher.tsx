@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePreferences } from '@/components/preferences-provider';
 import { localToday } from '@/components/saved/saved-ready-for-trip';
 import { useRateBoard } from '@/hooks/use-rate-board';
-import { deriveRateFromBoard } from '@/lib/currency/api';
+import { deriveRateFromBoard, isSavedRateStale } from '@/lib/currency/api';
 import {
   currencyPairHref,
   readRecentCurrencyPairs,
@@ -54,12 +54,14 @@ export function ToolsLauncher() {
   const rateFor = (pair: CurrencyPair) => {
     const rate = board ? deriveRateFromBoard(board, pair.source, pair.target) : null;
     if (!rate) return null;
+    // A board served from the half-day cache is normal; only one the device
+    // could not refresh past that is worth flagging as saved.
+    const saved = rate.source === 'cache' && isSavedRateStale(rate.fetchedAt);
     return {
-      age:
-        rate.source === 'cache'
-          ? t('savedRate', { date: dateFormat.format(new Date(`${rate.date}T00:00:00`)) })
-          : t('referenceRate', { date: dateFormat.format(new Date(`${rate.date}T00:00:00`)) }),
-      saved: rate.source === 'cache',
+      age: saved
+        ? t('savedRate', { date: dateFormat.format(new Date(rate.fetchedAt)) })
+        : t('referenceRate', { date: dateFormat.format(new Date(`${rate.date}T00:00:00`)) }),
+      saved,
       text: t('rateLine', {
         rate: rate.rate.toLocaleString(locale, { maximumSignificantDigits: 5 }),
         source: rate.base,

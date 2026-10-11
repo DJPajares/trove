@@ -218,3 +218,11 @@ const COUNTRY_CURRENCY: Readonly<Record<string, string>> = {
 export function currencyForCountry(countryCode: string | null | undefined): string | null {
   return countryCode ? (COUNTRY_CURRENCY[countryCode.toUpperCase()] ?? null) : null;
 }
+
+/** Every country spending this currency, so a picker can find "yen" by "Japan". */
+export function countriesUsingCurrency(currencyCode: string): string[] {
+  const code = currencyCode.toUpperCase();
+  return Object.entries(COUNTRY_CURRENCY)
+    .filter(([, currency]) => currency === code)
+    .map(([country]) => country);
+}

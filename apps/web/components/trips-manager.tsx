@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { CircleAlert, Plus } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useEffect, useMemo } from 'react';
+import { Suspense, useEffect, useMemo } from 'react';
 
 import { AiPlanningDraftCard } from '@/components/ai-planning-draft-card';
 import { PageHeader } from '@/components/page-header';
@@ -25,8 +25,26 @@ import { libraryLedger } from '@/lib/trips/library';
 import { groupTripsForLibrary } from '@/lib/trips/lifecycle';
 import { resolveTripNextUp } from '@/lib/trips/next-up';
 import { libraryEditorialSubjects, tripEditorialSubject } from '@/lib/trips/summary';
+import { useLibraryView } from '@/lib/trips/use-library-view';
 
 const EMPTY_TRIPS: Trip[] = [];
+
+// URL intent may suspend during prerendering. Keep it inside its own boundary
+// so the library also works as the route's cache-aware loading fallback.
+function TripCreationIntent() {
+  const { openCreateTrip } = useTripCreation();
+  const pathname = usePathname();
+  const router = useRouter();
+  const shouldCreateTrip = useSearchParams().get('create') === '1';
+
+  useEffect(() => {
+    if (!shouldCreateTrip) return;
+    openCreateTrip();
+    router.replace(pathname, { scroll: false });
+  }, [openCreateTrip, pathname, router, shouldCreateTrip]);
+
+  return null;
+}
 
 /**
  * The traveller's trips, as a library in three tenses (PRD 10): the journey
@@ -42,14 +60,12 @@ export function TripsManager() {
   const t = useTranslations('trips');
   const libraryT = useTranslations('trips.library');
   const { latestCreatedTrip, openCreateTrip } = useTripCreation();
-  const pathname = usePathname();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const shouldCreateTrip = searchParams.get('create') === '1';
   const queryClient = useQueryClient();
   const tripsQuery = useQuery({ queryFn: fetchTrips, queryKey: queryKeys.trips() });
   const trips = tripsQuery.data?.trips ?? EMPTY_TRIPS;
-  const status = tripsQuery.isPending ? 'loading' : tripsQuery.error ? 'error' : 'idle';
+  // A failed background refresh must not replace a usable library with an error.
+  const status = tripsQuery.data ? 'idle' : tripsQuery.isPending ? 'loading' : 'error';
+  const view = useLibraryView(tripsQuery.data !== undefined);
 
   const library = useMemo(() => groupTripsForLibrary(trips), [trips]);
   const ledger = useMemo(() => libraryLedger(trips), [trips]);
@@ -80,12 +96,6 @@ export function TripsManager() {
   };
 
   useEffect(() => {
-    if (!shouldCreateTrip) return;
-    openCreateTrip();
-    router.replace(pathname, { scroll: false });
-  }, [openCreateTrip, pathname, router, shouldCreateTrip]);
-
-  useEffect(() => {
     if (!latestCreatedTrip) return;
     queryClient.setQueryData(queryKeys.trips(), (current: { trips: Trip[] } | undefined) => {
       if (!current) return current;
@@ -109,6 +119,9 @@ export function TripsManager() {
 
   return (
     <section className="mx-auto w-full max-w-5xl space-y-10 sm:space-y-12">
+      <Suspense fallback={null}>
+        <TripCreationIntent />
+      </Suspense>
       <PageHeader
         actions={
           // A phone already carries Create at the centre of its bottom bar,
@@ -126,7 +139,7 @@ export function TripsManager() {
         <LibrarySkeleton label={t('loading')} />
       ) : status === 'error' ? (
         <PageState
-          actions={<Button onClick={() => window.location.reload()}>{t('tryAgain')}</Button>}
+          actions={<Button onClick={() => void tripsQuery.refetch()}>{t('tryAgain')}</Button>}
           description={t('loadErrorDescription')}
           headingLevel={2}
           icon={<CircleAlert aria-hidden="true" />}
@@ -144,6 +157,7 @@ export function TripsManager() {
         <>
           {lead ? (
             <LibraryLead
+              animateEntrance={view.animateEntrance}
               editorial={editorialFor(lead)}
               nextUp={resolveTripNextUp(tripModeContextQuery.data ?? null)}
               trip={lead}
@@ -164,7 +178,12 @@ export function TripsManager() {
             />
           ) : null}
 
-          <LibraryRemembered editorialFor={editorialFor} trips={library.past} />
+          <LibraryRemembered
+            editorialFor={editorialFor}
+            expanded={view.expanded}
+            onExpandedChange={view.setExpanded}
+            trips={library.past}
+          />
         </>
       )}
     </section>

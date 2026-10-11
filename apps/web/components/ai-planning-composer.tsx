@@ -59,21 +59,26 @@ export function AiPlanningComposer({
   const {
     availability,
     availabilityError,
+    briefSelections,
     canGenerate,
     cancel,
     cancelled,
+    composedPrompt,
     generate,
     generating,
     operation,
     prompt,
     refetchAvailability,
     session,
+    setBriefSelections,
     setPrompt,
     visibleError,
   } = lifecycle;
   const errorKey = aiPlanningErrorMessageKey(visibleError);
   const busy = operation !== 'idle' || generating;
-  const hasPrompt = prompt.trim().length > 0;
+  // Words decide whether ideas still help; words or choices make a brief.
+  const hasWords = prompt.trim().length > 0;
+  const hasBrief = composedPrompt.length > 0;
   const exhausted = availability?.status === 'quota_exhausted';
   const unavailable = availability?.status === 'unavailable';
   const failedRun = session?.status === 'failed';
@@ -188,8 +193,8 @@ export function AiPlanningComposer({
           ) : null}
 
           {exhausted ? (
-            hasPrompt ? (
-              <KeptBrief prompt={prompt} />
+            hasBrief ? (
+              <KeptBrief prompt={composedPrompt} />
             ) : null
           ) : (
             <>
@@ -206,9 +211,11 @@ export function AiPlanningComposer({
                   </label>
                 }
                 mode="ingredients"
-                onValueChange={setPrompt}
+                onSelectionsChange={setBriefSelections}
+                onTextChange={setPrompt}
                 placeholder={t('promptPlaceholder')}
-                value={prompt}
+                selections={briefSelections}
+                text={prompt}
               />
               <ul
                 className="space-y-1.5 px-1 text-[length:var(--text-metadata)] leading-snug text-muted-foreground"
@@ -226,7 +233,7 @@ export function AiPlanningComposer({
             </>
           )}
 
-          {!exhausted && !hasPrompt ? (
+          {!exhausted && !hasWords ? (
             <section aria-labelledby="ai-planning-ideas" className="space-y-2">
               <div className="flex items-center justify-between gap-2 px-1">
                 <h3 className="text-sm font-semibold" id="ai-planning-ideas">
@@ -243,7 +250,7 @@ export function AiPlanningComposer({
                   {t('moreExamples')}
                 </Button>
               </div>
-              <div className="-mx-4 flex snap-x gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-3 sm:px-0">
+              <div className="-mx-4 flex snap-x scroll-px-4 gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-3 sm:px-0">
                 {examples.map((example) => (
                   <button
                     className="group/idea flex w-[9.5rem] shrink-0 snap-start flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card text-left outline-none transition-[border-color,box-shadow] duration-[var(--motion-standard)] hover:border-border-strong focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-50 sm:w-auto"
@@ -275,16 +282,12 @@ export function AiPlanningComposer({
             </section>
           ) : null}
 
-          {!exhausted && hasPrompt ? <HowGapsAreFilled /> : null}
+          {!exhausted && hasBrief ? <HowGapsAreFilled /> : null}
         </div>
 
         <div className="space-y-2.5 border-t border-border-subtle bg-background px-4 pt-3 pb-4 sm:px-6">
           {!exhausted ? (
-            <AiPlanningAllowance
-              availability={availability}
-              className="px-1"
-              spending={hasPrompt}
-            />
+            <AiPlanningAllowance availability={availability} className="px-1" spending={hasBrief} />
           ) : null}
           <div className="flex gap-2">
             {session && generating ? (

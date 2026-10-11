@@ -10,7 +10,11 @@ import { journalSerif } from '@/components/memories/journal-font';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import type { AiPlanningAvailability } from '@/lib/ai-planning/api';
-import type { AiPlanningBriefTray } from '@/lib/ai-planning/brief';
+import {
+  composeAiPlanningBrief,
+  type AiPlanningBriefIngredient,
+  type AiPlanningBriefSelection,
+} from '@/lib/ai-planning/brief';
 import { isAiPlanningPromptValid } from '@/lib/ai-planning/presentation';
 import * as Icons from '@/lib/icons';
 import { cn } from '@/lib/utils';
@@ -27,24 +31,31 @@ export function AiPlanningAdjustSheet({
   busy,
   initialTray,
   onOpenChange,
+  onSelectionsChange,
   onSubmit,
   onValueChange,
   open,
+  selections,
   tripName,
   value,
 }: Readonly<{
   availability?: AiPlanningAvailability;
   busy: boolean;
-  initialTray: AiPlanningBriefTray | null;
+  initialTray: AiPlanningBriefIngredient | null;
   onOpenChange: (open: boolean) => void;
+  onSelectionsChange: (selections: AiPlanningBriefSelection[]) => void;
   onSubmit: () => void;
   onValueChange: (value: string) => void;
   open: boolean;
+  selections: readonly AiPlanningBriefSelection[];
   tripName: string;
   value: string;
 }>) {
   const t = useTranslations('trips.aiPlanning.review');
-  const canSubmit = !busy && isAiPlanningPromptValid(value) && availability?.status === 'available';
+  const canSubmit =
+    !busy &&
+    isAiPlanningPromptValid(composeAiPlanningBrief(value, selections)) &&
+    availability?.status === 'available';
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -87,8 +98,10 @@ export function AiPlanningAdjustSheet({
                 </div>
               }
               mode="nudges"
-              onValueChange={onValueChange}
-              value={value}
+              onSelectionsChange={onSelectionsChange}
+              onTextChange={onValueChange}
+              selections={selections}
+              text={value}
             />
             <div className="flex gap-3 rounded-[var(--radius-xl)] border border-border-subtle bg-card p-4">
               <ShieldCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand" />

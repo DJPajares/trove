@@ -210,7 +210,8 @@
       "sheetTitle": "Plan a trip",
       "description": "Describe the trip in your own words. Trove drafts a plan for you to review before anything is created, or you can set it up yourself.",
       "createManually": "Set it up yourself",
-      "backToAi": "Plan with AI instead",
+      "backToAi": "Back to AI planning",
+      "planWithAi": "Plan with AI",
       "promptLabel": "Where to, and what matters?",
       "promptPlaceholder": "Tokyo and Kyoto in October: food, small museums, one work afternoon and time to wander.",
       "promptHint": "A sentence is enough. Anything you leave out, Trove fills in and shows you first.",
@@ -263,10 +264,11 @@
       "brief": {
         "addTitle": "Add to your brief",
         "nudgesTitle": "Quick changes",
-        "added": "Added “{sentence}”",
-        "undo": "Undo",
-        "removed": "Removed “{sentence}”",
-        "full": "Your brief is as long as it can be. Shorten it to add more.",
+        "backgroundHint": "Your choices go with your words when you plan. Tap × to turn one off.",
+        "chipValue": "{ingredient}: {value}",
+        "remove": "Remove {name} from your brief",
+        "turnedOn": "Added to your brief: {name}",
+        "turnedOff": "Removed from your brief: {name}",
         "ingredients": {
           "when": "When",
           "who": "Who's coming",
@@ -275,15 +277,13 @@
           "work": "Work & plans",
           "travel": "Getting there"
         },
-        "starters": {
-          "mustSee": "Must see",
-          "work": "I need to work",
-          "travel": "We arrive by"
-        },
         "trays": {
           "when": "When are you going?",
           "who": "Who's coming?",
-          "pace": "What pace suits you?"
+          "pace": "What pace suits you?",
+          "mustSee": "Anything you can't miss?",
+          "work": "Any work or plans to fit in?",
+          "travel": "How are you getting there?"
         },
         "picks": {
           "when": {
@@ -309,13 +309,42 @@
             "balanced": { "label": "Balanced", "sentence": "A balanced pace suits us." },
             "full": { "label": "Full days", "sentence": "We're happy with full days." },
             "early": { "label": "Early starts", "sentence": "We don't mind early starts." }
+          },
+          "work": {
+            "dailyHours": {
+              "label": "A few hours a day",
+              "sentence": "I need a few hours of work time each day."
+            },
+            "weekdays": {
+              "label": "Weekdays are for work",
+              "sentence": "I work during the day on weekdays, so keep those plans to evenings."
+            },
+            "meetings": {
+              "label": "A day for meetings",
+              "sentence": "Keep one day free for meetings."
+            },
+            "offline": { "label": "Fully off work", "sentence": "This trip is fully off work." }
+          },
+          "travel": {
+            "flying": { "label": "Flying in", "sentence": "We're flying in and out." },
+            "train": { "label": "By train", "sentence": "We're arriving by train." },
+            "car": { "label": "With a car", "sentence": "We'll have a car." },
+            "transit": {
+              "label": "Public transport only",
+              "sentence": "We'll get around by public transport only."
+            }
           }
         },
         "pickDates": "Or pick exact dates",
         "startDate": "First day",
         "endDate": "Last day",
-        "addDates": "Add dates",
+        "addDates": "Use these dates",
+        "datesLabel": "{start} – {end}",
         "datesSentence": "We travel from {start} to {end}.",
+        "mustSeeLabel": "Places you can't miss",
+        "mustSeePlaceholder": "Fushimi Inari, Nishiki Market",
+        "mustSeeSentence": "Must see {places}.",
+        "addMustSee": "Add to brief",
         "nudges": {
           "moreFood": { "label": "More food", "sentence": "More food stops, especially markets." },
           "slower": {

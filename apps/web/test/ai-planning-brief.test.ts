@@ -1,26 +1,71 @@
 import { expect, test } from 'vitest';
 
-import { appendToAiPlanningBrief } from '../lib/ai-planning/brief.ts';
-import { AI_PLANNING_PROMPT_MAX_LENGTH } from '../lib/ai-planning/presentation.ts';
+import {
+  composeAiPlanningBrief,
+  fixedAiPlanningBriefMatcher,
+  splitAiPlanningBrief,
+  templateAiPlanningBriefMatcher,
+  type AiPlanningBriefSelection,
+} from '../lib/ai-planning/brief.ts';
 
-test('an added sentence closes the one before it and never doubles punctuation', () => {
-  expect(appendToAiPlanningBrief('', 'Two of us.')).toBe('Two of us.');
-  expect(appendToAiPlanningBrief('Kyoto in autumn', 'Two of us.')).toBe(
-    'Kyoto in autumn. Two of us.',
+const couple: AiPlanningBriefSelection = {
+  key: 'who',
+  label: 'Two of us',
+  option: 'couple',
+  sentence: 'There are two of us.',
+};
+const slow: AiPlanningBriefSelection = {
+  key: 'pace',
+  label: 'Slow',
+  option: 'slow',
+  sentence: "We'd like a slow pace.",
+};
+const mustSee = templateAiPlanningBriefMatcher('Must see {places}.', ({ places = '' }) => ({
+  key: 'mustSee',
+  label: places,
+  option: 'written',
+  sentence: `Must see ${places}.`,
+}));
+const matchers = [fixedAiPlanningBriefMatcher(couple), fixedAiPlanningBriefMatcher(slow), mustSee];
+
+test('choices travel with the brief without touching the traveller’s own words', () => {
+  expect(composeAiPlanningBrief('  Kyoto in autumn  ', [couple, slow])).toBe(
+    "Kyoto in autumn\n\nThere are two of us. We'd like a slow pace.",
   );
-  expect(appendToAiPlanningBrief('Kyoto in autumn!  ', 'Two of us.')).toBe(
-    'Kyoto in autumn! Two of us.',
-  );
+  expect(composeAiPlanningBrief('', [couple])).toBe('There are two of us.');
+  expect(composeAiPlanningBrief('Kyoto in autumn', [])).toBe('Kyoto in autumn');
 });
 
-test('a sentence starter leaves room to keep typing', () => {
-  expect(appendToAiPlanningBrief('Kyoto, two of us.', 'Must see', { open: true })).toBe(
-    'Kyoto, two of us. Must see ',
-  );
+test('a composed brief comes back as the same words and choices', () => {
+  const sent = composeAiPlanningBrief('Kyoto in autumn.\n\nLots of food.', [
+    couple,
+    {
+      key: 'mustSee',
+      label: 'Fushimi Inari',
+      option: 'written',
+      sentence: 'Must see Fushimi Inari.',
+    },
+  ]);
+  expect(splitAiPlanningBrief(sent, matchers)).toStrictEqual({
+    selections: [
+      couple,
+      {
+        key: 'mustSee',
+        label: 'Fushimi Inari',
+        option: 'written',
+        sentence: 'Must see Fushimi Inari.',
+      },
+    ],
+    text: 'Kyoto in autumn.\n\nLots of food.',
+  });
+  expect(splitAiPlanningBrief('There are two of us.', matchers)).toStrictEqual({
+    selections: [couple],
+    text: '',
+  });
 });
 
-test('a tap never truncates or pads the brief', () => {
-  const full = 'x'.repeat(AI_PLANNING_PROMPT_MAX_LENGTH - 3);
-  expect(appendToAiPlanningBrief(full, 'Two of us.')).toBeNull();
-  expect(appendToAiPlanningBrief('Kyoto.', '   ')).toBeNull();
+test('a closing paragraph that is not all choices stays as the traveller’s text', () => {
+  const typed = "Kyoto in autumn.\n\nThere are two of us. We'll decide the rest later.";
+  expect(splitAiPlanningBrief(typed, matchers)).toStrictEqual({ selections: [], text: typed });
+  expect(splitAiPlanningBrief('There are two of us and a dog.', matchers).selections).toEqual([]);
 });

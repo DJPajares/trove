@@ -14,6 +14,7 @@ import {
   type AiPlanningAvailability,
   type AiPlanningSession,
 } from './api';
+import { composeAiPlanningBrief, type AiPlanningBriefSelection } from './brief';
 import { isAiPlanningPromptValid, isAiPlanningSessionGenerating } from './presentation';
 import { isAiPlanningSessionExpired, releasesMirroredAiPlanningSession } from './review';
 
@@ -41,9 +42,18 @@ type PendingPlanningAttempt = {
  * the sheet closes the moment a run begins, and everything the run needs has to
  * already be somewhere that stays mounted.
  */
-export function useAiPlanningLifecycle(enabled: boolean) {
+export function useAiPlanningLifecycle(
+  enabled: boolean,
+  /** Turns a composed brief back into the traveller's words and choices. */
+  splitBrief?: (prompt: string) => { selections: AiPlanningBriefSelection[]; text: string },
+) {
   const queryClient = useQueryClient();
+  // The traveller's own words, and the choices that travel with them. Both live
+  // here rather than in the drawer so a failed run reopens it exactly as it was.
   const [prompt, setPromptValue] = useState('');
+  const [briefSelections, setBriefSelectionsValue] = useState<AiPlanningBriefSelection[]>([]);
+  const splitBriefRef = useRef(splitBrief);
+  splitBriefRef.current = splitBrief;
   const [session, setSession] = useState<AiPlanningSession | null>(null);
   const [operation, setOperation] = useState<AiPlanningOperation>('idle');
   const [requestError, setRequestError] = useState<string | null>(null);
@@ -71,6 +81,7 @@ export function useAiPlanningLifecycle(enabled: boolean) {
     (expiredSessionId: string) => {
       setSession(null);
       setPromptValue('');
+      setBriefSelectionsValue([]);
       promptTouched.current = false;
       pendingPlanningAttempt.current = null;
       queryClient.setQueryData(queryKeys.aiPlanningSession(expiredSessionId), { session: null });
@@ -109,7 +120,12 @@ export function useAiPlanningLifecycle(enabled: boolean) {
     setSession(recoveredSession);
     // A recovered prompt is the traveller's own words coming back to them, but
     // it must never overwrite words they are in the middle of typing.
-    if (!promptTouched.current) setPromptValue(recoveredSession.prompt ?? '');
+    if (!promptTouched.current) {
+      const recovered = recoveredSession.prompt ?? '';
+      const brief = splitBriefRef.current?.(recovered) ?? { selections: [], text: recovered };
+      setPromptValue(brief.text);
+      setBriefSelectionsValue(brief.selections);
+    }
   }, [discardExpiredSession, recoveredSession]);
 
   useEffect(() => {
@@ -167,6 +183,7 @@ export function useAiPlanningLifecycle(enabled: boolean) {
           if (code === 'session_expired') {
             publishSession(null);
             setPromptValue('');
+            setBriefSelectionsValue([]);
             promptTouched.current = false;
           }
           setRequestError(code);
@@ -204,8 +221,9 @@ export function useAiPlanningLifecycle(enabled: boolean) {
       : availabilityQuery.error
         ? 'request_failed'
         : null;
+  const composedPrompt = composeAiPlanningBrief(prompt, briefSelections);
   const canGenerate =
-    isAiPlanningPromptValid(prompt) &&
+    isAiPlanningPromptValid(composedPrompt) &&
     !generating &&
     operation === 'idle' &&
     availability?.status === 'available';
@@ -216,6 +234,14 @@ export function useAiPlanningLifecycle(enabled: boolean) {
     pendingPlanningAttempt.current = null;
     promptTouched.current = true;
     setPromptValue(value);
+    setCancelled(false);
+    setRequestError(null);
+  }, []);
+
+  const setBriefSelections = useCallback((value: AiPlanningBriefSelection[]) => {
+    pendingPlanningAttempt.current = null;
+    promptTouched.current = true;
+    setBriefSelectionsValue(value);
     setCancelled(false);
     setRequestError(null);
   }, []);
@@ -233,7 +259,7 @@ export function useAiPlanningLifecycle(enabled: boolean) {
     setCancelled(false);
     setRequestError(null);
     setOperation('starting');
-    const trimmedPrompt = prompt.trim();
+    const trimmedPrompt = composedPrompt.trim();
     const currentAttempt = {
       prompt: trimmedPrompt,
       revision: session?.draftRevision ?? null,
@@ -270,7 +296,7 @@ export function useAiPlanningLifecycle(enabled: boolean) {
       if (attempt.current === requestAttempt) setOperation('idle');
       await refreshAvailability();
     }
-  }, [canGenerate, prompt, publishSession, refreshAvailability, session]);
+  }, [canGenerate, composedPrompt, publishSession, refreshAvailability, session]);
 
   const cancel = useCallback(async () => {
     const sessionId = session?.id;
@@ -293,6 +319,7 @@ export function useAiPlanningLifecycle(enabled: boolean) {
     setSession(null);
     pendingPlanningAttempt.current = null;
     setPromptValue('');
+    setBriefSelectionsValue([]);
     promptTouched.current = false;
     setCancelled(true);
     setOperation('idle');
@@ -302,7 +329,9 @@ export function useAiPlanningLifecycle(enabled: boolean) {
   return {
     availability,
     availabilityError,
+    briefSelections,
     canGenerate,
+    composedPrompt,
     cancel,
     cancelled,
     generate,
@@ -312,6 +341,7 @@ export function useAiPlanningLifecycle(enabled: boolean) {
     refetchAvailability: () => void availabilityQuery.refetch(),
     refreshRecovery: () => void recover(),
     session,
+    setBriefSelections,
     setPrompt,
     visibleError,
   };

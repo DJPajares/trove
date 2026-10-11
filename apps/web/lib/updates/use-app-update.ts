@@ -8,7 +8,7 @@ import {
   parseInstalledHistory,
   rememberInstalledEntries,
 } from './history';
-import { parseInstalledRelease, type ReleaseManifest } from './release';
+import { parseInstalledRelease, type InstalledRelease, type ReleaseManifest } from './release';
 import { isTroveWorker, requestWorkerRelease, TROVE_WORKER_PATH } from './worker';
 
 export const runningRelease = parseInstalledRelease(
@@ -25,6 +25,7 @@ export function useAppUpdate() {
   const { serwist } = useSerwist();
   const [waiting, setWaiting] = useState<WaitingUpdate | null>(null);
   const [installedIds, setInstalledIds] = useState<string[]>([]);
+  const [installedRelease, setInstalledRelease] = useState<InstalledRelease | null>(null);
   const [dismissed, setDismissed] = useState<Set<ServiceWorker | string>>(new Set());
   const [reloading, setReloading] = useState(false);
   const [reloadError, setReloadError] = useState(false);
@@ -32,17 +33,16 @@ export function useAppUpdate() {
   const acceptedWorker = useRef<ServiceWorker | null>(null);
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mounted = useRef(false);
+  const installedHistory = useRef<string[]>([]);
 
   useEffect(() => {
-    const known = { ids: rememberInstalledEntries(runningRelease?.entryIds ?? []) };
-    setInstalledIds(known.ids);
     const onStorage = (event: StorageEvent) => {
       if (event.key !== INSTALLED_CHANGELOG_KEY && event.key !== null) return;
-      known.ids = rememberInstalledEntries(runningRelease?.entryIds ?? [], [
-        ...known.ids,
-        ...parseInstalledHistory(event.newValue),
-      ]);
-      setInstalledIds(known.ids);
+      installedHistory.current = rememberInstalledEntries(
+        [],
+        [...installedHistory.current, ...parseInstalledHistory(event.newValue)],
+      );
+      setInstalledIds(installedHistory.current);
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
@@ -57,6 +57,16 @@ export function useAppUpdate() {
     let target: ServiceWorker | null = null;
     let registration: ServiceWorkerRegistration | undefined;
     let installing: ServiceWorker | null = null;
+    let activeWorker: ServiceWorker | null = null;
+    // Worker identities are stable for an installation. Retry missing metadata
+    // on later inspections, but avoid repeated message round trips once known.
+    const releases = new Map<ServiceWorker, ReleaseManifest>();
+    const readRelease = async (worker: ServiceWorker | null) => {
+      if (!isTroveWorker(worker)) return null;
+      const release = releases.get(worker) ?? (await requestWorkerRelease(worker));
+      if (release) releases.set(worker, release);
+      return release;
+    };
 
     const inspect = async () => {
       const token = ++request;
@@ -70,27 +80,70 @@ export function useAppUpdate() {
         registration?.addEventListener('updatefound', onUpdateFound);
         onUpdateFound();
       }
-      const worker = current?.waiting ?? null;
+      const active = current?.active ?? null;
+      if (activeWorker !== active) {
+        activeWorker?.removeEventListener('statechange', onActiveStateChange);
+        activeWorker = active;
+        activeWorker?.addEventListener('statechange', onActiveStateChange);
+      }
+      const pending = current?.waiting ?? null;
+      const [activeRelease, pendingRelease] = await Promise.all([
+        readRelease(active),
+        readRelease(pending),
+      ]);
+      if (!alive || token !== request) return;
+      // A replacement or activation during metadata lookup needs a fresh view.
+      if ((current?.active ?? null) !== active || (current?.waiting ?? null) !== pending) {
+        void inspect();
+        return;
+      }
+      const installed = active?.state === 'activated' ? activeRelease : null;
+      setInstalledRelease(installed);
+      if (installed) {
+        installedHistory.current = rememberInstalledEntries(
+          installed.entryIds,
+          installedHistory.current,
+        );
+        setInstalledIds(installedHistory.current);
+      }
+      const stalePage =
+        installed &&
+        runningRelease &&
+        installed.buildId !== runningRelease.buildId &&
+        // Distinct build IDs alone do not establish which is newer: a network
+        // navigation can load new HTML while the previous worker is active.
+        (active === target ||
+          installed.entryIds.some((id) => !runningRelease.entryIds.includes(id)));
+      const worker = pending ?? (stalePage ? active : null);
       if (!isTroveWorker(worker)) {
         target?.removeEventListener('statechange', onTargetStateChange);
         target = null;
         setWaiting(null);
         return;
       }
-      if (worker === target) return;
-      target?.removeEventListener('statechange', onTargetStateChange);
-      target = worker;
-      target.addEventListener('statechange', onTargetStateChange);
-      generation += 1;
-      const update = { worker, release: null, generation };
-      setWaiting(update);
-      setReloadError(false);
-      const release = await requestWorkerRelease(worker);
-      if (alive && worker === target && worker.state === 'installed') {
-        setWaiting({ ...update, release });
+      if (worker !== target) {
+        target?.removeEventListener('statechange', onTargetStateChange);
+        target = worker;
+        target.addEventListener('statechange', onTargetStateChange);
+        generation += 1;
+        setReloadError(false);
       }
+      const update: WaitingUpdate = {
+        worker,
+        release: pending ? pendingRelease : activeRelease,
+        generation,
+      };
+      setWaiting((previous) =>
+        previous?.worker === worker && previous.release === update.release ? previous : update,
+      );
     };
     const onTargetStateChange = () => {
+      if (acceptedWorker.current?.state === 'activated') {
+        onControlling();
+      }
+      void inspect();
+    };
+    const onActiveStateChange = () => {
       void inspect();
     };
     const onInstallingStateChange = () => {
@@ -107,6 +160,8 @@ export function useAppUpdate() {
     const onControlling = () => {
       // Activation in another tab must not refresh a traveller's open work.
       if (acceptedWorker.current && navigator.serviceWorker.controller === acceptedWorker.current) {
+        acceptedWorker.current = null;
+        if (reloadTimer.current) clearTimeout(reloadTimer.current);
         window.location.reload();
       } else {
         void inspect();
@@ -123,6 +178,7 @@ export function useAppUpdate() {
       if (reloadTimer.current) clearTimeout(reloadTimer.current);
       acceptedWorker.current = null;
       target?.removeEventListener('statechange', onTargetStateChange);
+      activeWorker?.removeEventListener('statechange', onActiveStateChange);
       installing?.removeEventListener('statechange', onInstallingStateChange);
       registration?.removeEventListener('updatefound', onUpdateFound);
       serwist.removeEventListener('waiting', onWaiting);
@@ -144,6 +200,12 @@ export function useAppUpdate() {
     try {
       const registration = await navigator.serviceWorker.getRegistration(TROVE_WORKER_PATH);
       if (!mounted.current) return;
+      // Another tab may have activated this exact update since the toast opened.
+      // The traveller still explicitly accepts refreshing their own open page.
+      if (registration?.active === waiting.worker && waiting.worker.state === 'activated') {
+        window.location.reload();
+        return;
+      }
       if (registration?.waiting !== waiting.worker || waiting.worker.state !== 'installed') {
         setReloading(false);
         await refresh.current();
@@ -161,6 +223,7 @@ export function useAppUpdate() {
   return {
     waiting,
     installedIds,
+    installedRelease,
     reloading,
     reloadError,
     visible:

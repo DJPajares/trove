@@ -12,6 +12,11 @@ type PageHeaderProps = {
   description?: string;
   eyebrow?: string;
   headingId?: string;
+  /**
+   * `journal` sets the title in the Memories serif, as the top-level library
+   * pages (Trips, Saved, Tools) do. The page must load `journalSerif.variable`.
+   */
+  titleFont?: 'journal' | 'sans';
   media?: ReactNode;
   meta?: ReactNode;
   title: string;
@@ -50,6 +55,7 @@ export function PageHeader({
   media,
   meta,
   title,
+  titleFont = 'sans',
 }: Readonly<PageHeaderProps>) {
   return (
     <header
@@ -59,11 +65,23 @@ export function PageHeader({
     >
       <div className="max-w-[var(--layout-reading)]">
         {eyebrow ? (
-          <p className="mb-2 text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
+          <p
+            className={cn(
+              'text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase',
+              titleFont === 'journal' ? 'mb-1' : 'mb-2',
+            )}
+          >
             {eyebrow}
           </p>
         ) : null}
-        <h1 className={titleVariants({ density })} id={headingId}>
+        <h1
+          className={
+            titleFont === 'journal'
+              ? 'font-journal text-[3rem] leading-[0.95] font-normal tracking-[-0.01em] text-pretty text-foreground md:text-[4rem]'
+              : titleVariants({ density })
+          }
+          id={headingId}
+        >
           {title}
         </h1>
         {meta ? (

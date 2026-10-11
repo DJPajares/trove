@@ -2806,8 +2806,8 @@
   },
   "pwaUpdate": {
     "title": "Update available",
-    "reload": "Reload",
-    "reloading": "Reloading...",
+    "reload": "Update",
+    "reloading": "Updating…",
     "later": "Later",
     "whatsNew": "What’s new",
     "showMore": "Show {count} more",

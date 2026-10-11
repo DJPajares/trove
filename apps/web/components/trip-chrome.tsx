@@ -101,7 +101,7 @@ export function TripChrome({
           className={cn(
             'relative -mx-[var(--gutter-inline-start)] -mt-8 rounded-t-[var(--trip-sheet-radius)] bg-background px-[var(--gutter-inline-start)] pt-2 lg:mx-0 lg:mt-4 lg:rounded-none lg:px-0 lg:pt-0',
             stickyNavigation &&
-              'sticky top-[calc(var(--safe-top)+var(--header-offset))] z-[var(--layer-sticky)] md:static md:z-auto',
+              'sticky top-[calc(var(--safe-top)+var(--header-offset))] z-[var(--layer-sticky)] md:relative md:top-auto md:z-auto',
           )}
         >
           {trip ? (

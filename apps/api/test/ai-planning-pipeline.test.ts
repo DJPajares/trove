@@ -10,6 +10,7 @@ import {
 import {
   abortActiveAiPlanningSession,
   addOpeningEvidence,
+  candidateDestinationContexts,
   applyGroundingToDraft,
   assembleAiPlanningDraft,
   assignAiPlannerSuggestedTimes,
@@ -1106,5 +1107,54 @@ describe('the traveller’s own Saved Places', () => {
       (place) => place.name === 'Tokyo National Museum',
     );
     expect(museum?.resolution).not.toBe('verified');
+  });
+});
+
+test('explicit destinations outrank scheduled days, while missing associations and stays use the day', () => {
+  const proposal = explicitModelProposal();
+  const museum = proposal.items.find((item) => item.candidatePlaceId === 'candidate:museum')!;
+  const draft = assembleAiPlanningDraft(proposal, NOW);
+  const day = draft.days.find((value) => value.items.some((item) => item.id === museum.id))!;
+  draft.trip.destinations.push({
+    ...draft.trip.destinations[0]!,
+    id: 'other-destination',
+    placeRefId: 'other-city',
+  });
+  day.destinationId = 'other-destination';
+  day.dailyBasePlaceRefId = 'stay';
+  proposal.places.push({ id: 'stay', name: 'Hotel', note: null, searchQuery: 'Hotel' });
+  expect(candidateDestinationContexts(proposal, draft).get('candidate:museum')).toEqual({
+    destinationPlaceId: 'candidate:tokyo',
+    contextConflict: false,
+  });
+  expect(candidateDestinationContexts(proposal, draft).get('stay')).toEqual({
+    destinationPlaceId: 'other-city',
+    contextConflict: false,
+  });
+  museum.destinationIntentId = null;
+  expect(candidateDestinationContexts(proposal, draft).get('candidate:museum')).toEqual({
+    destinationPlaceId: 'other-city',
+    contextConflict: false,
+  });
+});
+
+test('conflicting explicit destinations do not silently pick the last city, and dropped items do not interfere', () => {
+  const proposal = explicitModelProposal();
+  const museum = proposal.items.find((item) => item.candidatePlaceId === 'candidate:museum')!;
+  proposal.destinations.push({
+    ...proposal.destinations[0]!,
+    candidatePlaceId: 'other-city',
+    destinationIntentId: 'other-intent',
+  });
+  const draft = assembleAiPlanningDraft(proposal, NOW);
+  const day = draft.days.find((value) => value.items.some((item) => item.id === museum.id))!;
+  proposal.items.push({ ...museum, id: 'second-visit', destinationIntentId: 'other-intent' });
+  expect(
+    candidateDestinationContexts(proposal, draft).get('candidate:museum')?.contextConflict,
+  ).toBe(false);
+  day.items.push({ ...day.items.find((item) => item.id === museum.id)!, id: 'second-visit' });
+  expect(candidateDestinationContexts(proposal, draft).get('candidate:museum')).toEqual({
+    destinationPlaceId: undefined,
+    contextConflict: true,
   });
 });

@@ -150,7 +150,26 @@ export const aiPlannerCandidatePlaceSchema = z
     id: identifierSchema,
     name: labelSchema,
     note: noteSchema,
-    searchQuery: z.string().trim().min(1).max(300),
+    searchName: labelSchema
+      .nullable()
+      .optional()
+      .describe(
+        'A known official or local venue name, without activity wording. A search hint, never a verified provider name.',
+      ),
+    localityHint: labelSchema
+      .nullable()
+      .optional()
+      .describe(
+        'The venue locality, with region and country when known; do not substitute the trip origin.',
+      ),
+    searchQuery: z
+      .string()
+      .trim()
+      .min(1)
+      .max(300)
+      .describe(
+        'One identifiable venue followed by its city and country. Prefer its known official/local name; never invent a Google listing.',
+      ),
   })
   .strict();
 

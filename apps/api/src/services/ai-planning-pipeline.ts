@@ -43,6 +43,7 @@ import {
   AiPlaceGrounder,
   groundFromKnownPlaces,
   type AiPlaceGroundingResult,
+  type AiPlaceGroundingCandidate,
   type GroundedPlaceContext,
   type KnownPlace,
 } from './ai-place-grounding.js';
@@ -139,6 +140,7 @@ export type AiPlanningPipelineOptions = {
     scheduledPlaceIds: ReadonlySet<string>,
     signal?: AbortSignal,
     knownPlaces?: readonly KnownPlace[],
+    draft?: AiPlannerDraft,
   ) => Promise<GroundedCandidate[]>;
   lifecycle?: PlanningLifecycle;
   loadHomeLocation?: (ownerId: string) => Promise<string | null>;
@@ -246,72 +248,120 @@ function unavailableGrounding(
   };
 }
 
-function candidateLocalities(proposal: AiPlannerModelProposal) {
-  const destinations = new Map(
-    proposal.normalizedRequest.destinations.map((destination) => [
-      destination.id,
-      destination.name,
-    ]),
+/** Resolve explicit destinations before falling back to the effective scheduled day. */
+export function candidateDestinationContexts(
+  proposal: AiPlannerModelProposal,
+  draft?: AiPlannerDraft,
+) {
+  const destinationPlaces = new Map(
+    proposal.destinations.flatMap((destination) =>
+      destination.destinationIntentId
+        ? [[destination.destinationIntentId, destination.candidatePlaceId] as const]
+        : [],
+    ),
   );
-  const localities = new Map<string, string>();
+  const explicit = new Map<string, Set<string>>();
+  const scheduled = new Map<string, Set<string>>();
+  const add = (map: Map<string, Set<string>>, placeId: string, destinationId: string) => {
+    const values = map.get(placeId) ?? new Set<string>();
+    values.add(destinationId);
+    map.set(placeId, values);
+  };
+  const usedItems = draft
+    ? new Set(draft.days.flatMap((day) => day.items.map((item) => item.id)))
+    : null;
   for (const item of proposal.items) {
-    if (!item.candidatePlaceId || !item.destinationIntentId) continue;
-    const locality = destinations.get(item.destinationIntentId);
-    if (locality) localities.set(item.candidatePlaceId, locality);
+    if (!item.candidatePlaceId || (usedItems && !usedItems.has(item.id))) continue;
+    const destination = item.destinationIntentId
+      ? destinationPlaces.get(item.destinationIntentId)
+      : undefined;
+    if (destination) add(explicit, item.candidatePlaceId, destination);
   }
-  return localities;
+  if (draft) {
+    const destinations = new Map(
+      draft.trip.destinations.map((destination) => [destination.id, destination.placeRefId]),
+    );
+    for (const day of draft.days) {
+      const destination = day.destinationId ? destinations.get(day.destinationId) : undefined;
+      if (!destination) continue;
+      for (const id of [
+        day.dailyBasePlaceRefId,
+        day.dailyBaseDeparturePlaceRefId,
+        ...day.items.map((item) => item.placeRefId),
+      ]) {
+        if (id) add(scheduled, id, destination);
+      }
+    }
+  }
+  return new Map(
+    proposal.places.map((candidate) => {
+      const destinations =
+        explicit.get(candidate.id) ?? scheduled.get(candidate.id) ?? new Set<string>();
+      return [
+        candidate.id,
+        {
+          destinationPlaceId: destinations.size === 1 ? [...destinations][0] : undefined,
+          contextConflict: destinations.size > 1,
+        },
+      ];
+    }),
+  );
 }
 
-/**
- * Looks up only the candidates named in `targetIds`, which the assembled draft
- * decides. A candidate the model proposed and the schedule then dropped is not
- * searched at all, and deliberately carries no evidence and no warning: the
- * provider was never asked about it, so claiming it was unavailable would be a
- * lie told at the traveller's expense.
- */
-async function groundCandidates(
+/** Only places retained by the schedule reach this function's provider paths. */
+export async function groundCandidates(
   proposal: AiPlannerModelProposal,
   providerContext: ProviderContext,
   targetIds: ReadonlySet<string>,
   scheduledPlaceIds: ReadonlySet<string>,
   signal?: AbortSignal,
   knownPlaces: readonly KnownPlace[] = [],
+  draft?: AiPlannerDraft,
 ): Promise<GroundedCandidate[]> {
   const targets = proposal.places.filter((candidate) => targetIds.has(candidate.id));
   if (targets.length === 0) return [];
-
-  const localities = candidateLocalities(proposal);
-  const destinationPlaceIds = new Set(
+  const destinationIds = new Set(
     proposal.destinations.map((destination) => destination.candidatePlaceId),
   );
-  const prepared = targets.map((candidate) => ({
-    ...candidate,
-    detail: scheduledPlaceIds.has(candidate.id) ? ('evidence' as const) : ('location' as const),
-    localityHint: localities.get(candidate.id),
-    requireExactName: destinationPlaceIds.has(candidate.id),
-    signal,
-  }));
-
-  // A place the traveller already saved is grounded on what Trove stored for
-  // it, with no Text Search; only the rest go to the provider.
-  const known = new Map(
-    prepared.flatMap((candidate) => {
-      const result = groundFromKnownPlaces(candidate, knownPlaces);
-      return result ? [[candidate.id, result] as const] : [];
-    }),
-  );
-  const remaining = prepared.filter((candidate) => !known.has(candidate.id));
-  const searched = !remaining.length
-    ? []
-    : providerContext.placesProvider
-      ? await new AiPlaceGrounder(
-          providerContext.placesProvider,
-          createCanonicalPlacesService(),
-        ).groundCandidates(remaining)
+  const associations = candidateDestinationContexts(proposal, draft);
+  const byId = new Map<string, GroundedCandidate>();
+  const grounder = providerContext.placesProvider
+    ? new AiPlaceGrounder(providerContext.placesProvider, createCanonicalPlacesService())
+    : null;
+  const prepare = (
+    candidate: AiPlannerModelProposal['places'][number],
+  ): AiPlaceGroundingCandidate => {
+    const association = associations.get(candidate.id);
+    const destination = association?.destinationPlaceId;
+    const context = destination ? byId.get(destination)?.context : null;
+    return {
+      ...candidate,
+      detail: scheduledPlaceIds.has(candidate.id) ? 'evidence' : 'location',
+      localityHint:
+        candidate.localityHint ?? proposal.places.find((place) => place.id === destination)?.name,
+      locationBias: context ? { ...context.location, radiusMeters: 50_000 } : undefined,
+      countryCode: context?.countryCode,
+      contextConflict: association?.contextConflict,
+      requireExactName: destinationIds.has(candidate.id),
+      signal,
+    };
+  };
+  for (const batch of [
+    targets.filter((candidate) => destinationIds.has(candidate.id)),
+    targets.filter((candidate) => !destinationIds.has(candidate.id)),
+  ]) {
+    const remaining: AiPlaceGroundingCandidate[] = [];
+    for (const candidate of batch.map(prepare)) {
+      const known = groundFromKnownPlaces(candidate, knownPlaces);
+      if (known) byId.set(candidate.id, known);
+      else remaining.push(candidate);
+    }
+    const searched = grounder
+      ? await grounder.groundCandidates(remaining)
       : remaining.map(unavailableGrounding);
-
-  const byId = new Map(searched.map((result, index) => [remaining[index]!.id, result]));
-  return prepared.map((candidate) => known.get(candidate.id) ?? byId.get(candidate.id)!);
+    searched.forEach((result, index) => byId.set(remaining[index]!.id, result));
+  }
+  return targets.map((candidate) => byId.get(candidate.id)!);
 }
 
 function targetDayIndex(
@@ -1664,6 +1714,7 @@ export async function runAiPlanningPipeline(
       ),
       providerSignal,
       savedPlaces,
+      draft,
     );
     applyGroundingToDraft(draft, grounding);
     dropUnverifiedDraftStays(draft);

@@ -32,21 +32,32 @@ import {
   type ProviderPlaceSearchResult,
 } from './places.js';
 
-const GENERIC_LOCALITY_WORDS = new Set(['city', 'prefecture', 'province', 'region']);
-/** Short tokens ("ha", "sa", "st") match too much of an address to place a venue. */
-const LOCALITY_TOKEN_MIN_LENGTH = 4;
+import {
+  geographicallyEligible,
+  identityTokens,
+  localityMatches,
+  normalizeIdentityText,
+  rankPlaceMatches,
+  sameIdentityName,
+} from './place-identity-matching.js';
+import { normalizePlaceLanguageCode } from './place-language.js';
+import { recordAiPlanningTelemetry } from './ai-planning-telemetry.js';
+export { normalizeIdentityText } from './place-identity-matching.js';
 
 export type AiPlaceGroundingCandidate = AiPlannerCandidatePlace & {
   signal?: AbortSignal;
   requireExactName?: boolean;
   detail?: PlaceDetailLevel;
   languageCode?: string;
-  localityHint?: string;
+  localityHint?: string | null;
+  countryCode?: string;
+  contextConflict?: boolean;
   locationBias?: PlaceLocationBias;
   regionCode?: string;
 };
 
 export type GroundedPlaceContext = {
+  countryCode?: string;
   evidence?: Extract<PlaceDetailsResult, { status: 'ok' }>;
   externalPlaceId: string;
   languageCode?: string;
@@ -69,88 +80,16 @@ export type CanonicalIdentityResolver = {
   ): Promise<{ id: string }>;
 };
 
-export function normalizeIdentityText(value: string) {
-  return value
-    .replace(/[Đđ]/g, 'd')
-    .normalize('NFKD')
-    .replace(/\p{Mark}/gu, '')
-    .toLocaleLowerCase('en')
-    .replace(/[^\p{Letter}\p{Number}]+/gu, ' ')
-    .trim()
-    .replace(/\s+/g, ' ');
-}
-
-function textTokens(value: string) {
-  return normalizeIdentityText(value)
-    .split(' ')
-    .filter((token) => token.length > 0);
-}
-
-function localityTokens(localityHint: string | undefined) {
-  if (!localityHint?.trim()) return [];
-  return textTokens(localityHint).filter((token) => !GENERIC_LOCALITY_WORDS.has(token));
-}
-
-function compactText(value: string) {
-  return textTokens(value).join('');
-}
-
-/**
- * The planner writes a locality the way a traveller says it and Google writes it
- * the way the post office does: "Hanoi" against "Hà Nội", "Sapa" against
- * "Sa Pa", "Ha Long Bay" against "Hạ Long". Demanding every locality token as a
- * whole word in the address rejected entire regions of real venues, so ask
- * instead for one substantial piece of the locality to appear with spacing
- * ignored. This is a disambiguator between same-named venues, not the identity
- * claim itself - the name tiers and the single-survivor rule make that call.
- */
-function localityMatches(
-  identity: Pick<ProviderPlaceIdentity, 'formattedAddress'>,
-  localityHint: string | undefined,
-) {
-  if (!localityHint?.trim()) return true;
-  if (!identity.formattedAddress) return false;
-
-  const tokens = localityTokens(localityHint);
-  if (tokens.length === 0) return true;
-
-  const address = compactText(identity.formattedAddress);
-  const substantial = tokens.filter((token) => token.length >= LOCALITY_TOKEN_MIN_LENGTH);
-  return (substantial.length ? substantial : tokens).some((token) => address.includes(token));
-}
-
-/**
- * A provider display name and the planner's label name the same venue far more
- * often than they agree character for character: "Sensō-ji Temple" against
- * "Sensō-ji", or "Tokyo Skytree" against "Tokyo Skytree Tower". Accept a name
- * whose tokens are wholly contained in the other, which keeps an unrelated
- * venue out without reaching for fuzzy distance. The single-survivor rule in
- * `groundCandidate` remains the guard against a loose containment match.
- */
-function nameTokensContained(left: string, right: string) {
-  const leftTokens = textTokens(left);
-  const rightTokens = textTokens(right);
-  if (!leftTokens.length || !rightTokens.length) return false;
-
-  const [shorter, longer] =
-    leftTokens.length <= rightTokens.length ? [leftTokens, rightTokens] : [rightTokens, leftTokens];
-  const longerTokens = new Set(longer);
-  return shorter.every((token) => longerTokens.has(token));
-}
-
-/**
- * Google ranks on the query text it is given, so a bare venue name competes
- * with every same-named venue on earth. Naming the locality the planner already
- * chose costs nothing - Text Search is billed per request - and is what puts the
- * intended venue in the returned page at all.
- */
-function localizedTextQuery(searchQuery: string, localityHint: string | undefined) {
+function localizedTextQuery(searchQuery: string, localityHint?: string | null) {
   const locality = localityHint?.trim();
-  const tokens = localityTokens(locality);
-  if (!locality || !tokens.length) return searchQuery;
-
-  const queryTokens = new Set(textTokens(searchQuery));
-  if (tokens.every((token) => queryTokens.has(token))) return searchQuery;
+  if (!locality) return searchQuery;
+  const tokens = identityTokens(locality.split(',')[0]!);
+  const queryTokens = identityTokens(searchQuery);
+  const shared = tokens.filter((token) =>
+    queryTokens.some((other) => sameIdentityName(token, other)),
+  );
+  if (shared.length >= Math.ceil(tokens.length / 2) && shared.join('').length >= 4)
+    return searchQuery;
   return `${searchQuery}, ${locality}`;
 }
 
@@ -158,6 +97,7 @@ function memoKey(request: PlaceTextSearchRequest) {
   const bias = request.locationBias;
   return [
     normalizeIdentityText(request.textQuery),
+    request.pageSize ?? 5,
     request.languageCode?.trim().toLowerCase() ?? '',
     request.regionCode?.trim().toUpperCase() ?? '',
     bias?.latitude ?? '',
@@ -169,11 +109,15 @@ function memoKey(request: PlaceTextSearchRequest) {
 function searchRequest(candidate: AiPlaceGroundingCandidate): PlaceTextSearchRequest {
   return {
     detail: candidate.detail ?? 'location',
+    pageSize: 20,
     signal: candidate.signal,
-    languageCode: candidate.languageCode,
+    languageCode: normalizePlaceLanguageCode(candidate.languageCode),
     locationBias: candidate.locationBias,
     regionCode: candidate.regionCode,
-    textQuery: localizedTextQuery(candidate.searchQuery, candidate.localityHint),
+    textQuery: localizedTextQuery(
+      candidate.searchName?.trim() || candidate.searchQuery,
+      candidate.localityHint,
+    ),
   };
 }
 
@@ -184,11 +128,14 @@ function cacheKey(request: PlaceTextSearchRequest, candidate: AiPlaceGroundingCa
   return createHash('sha256')
     .update(
       JSON.stringify([
-        'google:grounding:v2',
+        'google:grounding:v3',
         memoKey(request),
         normalizeIdentityText(candidate.name),
         candidate.localityHint?.trim() ? normalizeIdentityText(candidate.localityHint) : null,
         candidate.requireExactName ?? false,
+        candidate.searchName ? normalizeIdentityText(candidate.searchName) : null,
+        candidate.countryCode?.toUpperCase() ?? null,
+        candidate.contextConflict ?? false,
       ]),
     )
     .digest('hex');
@@ -197,31 +144,23 @@ function cacheKey(request: PlaceTextSearchRequest, candidate: AiPlaceGroundingCa
 type GroundingIdentity = Pick<
   ProviderPlaceIdentity,
   'externalPlaceId' | 'formattedAddress' | 'location' | 'name' | 'rawTypes'
->;
+> &
+  Pick<Partial<ProviderPlaceSearchResult>, 'addressComponents'>;
 
-function eligibleMatches<
-  T extends Pick<
-    ProviderPlaceIdentity,
-    'name' | 'formattedAddress' | 'externalPlaceId' | 'rawTypes'
-  >,
->(identities: T[], candidate: AiPlaceGroundingCandidate) {
-  const expectedName = compactText(candidate.name);
-  const located = [
-    ...new Map(identities.map((identity) => [identity.externalPlaceId, identity])).values(),
-  ].filter(
-    (identity) =>
-      localityMatches(identity, candidate.localityHint) &&
-      !(
-        identity.rawTypes.some((type) =>
-          ['route', 'street_address', 'intersection'].includes(type),
-        ) && compactText(identity.name) !== expectedName
-      ),
-  );
-  const exact = located.filter((identity) => compactText(identity.name) === expectedName);
-  if (candidate.requireExactName) return exact;
-  return exact.length
-    ? exact
-    : located.filter((identity) => nameTokensContained(identity.name, candidate.name));
+/** Hash only the identity snapshot, at its persisted coordinate precision. */
+export function groundingIdentityFingerprint(identity: GroundingIdentity) {
+  return createHash('sha256')
+    .update(
+      JSON.stringify([
+        identity.externalPlaceId,
+        identity.name,
+        identity.formattedAddress,
+        Number(identity.location.latitude.toFixed(6)),
+        Number(identity.location.longitude.toFixed(6)),
+        [...identity.rawTypes].sort(),
+      ]),
+    )
+    .digest('hex');
 }
 
 function verified(
@@ -234,6 +173,9 @@ function verified(
     context: {
       externalPlaceId: identity.externalPlaceId,
       location: identity.location,
+      countryCode:
+        identity.addressComponents?.find((part) => part.types.includes('country'))?.shortText ??
+        candidate.countryCode,
       ...(candidate.languageCode ? { languageCode: candidate.languageCode } : {}),
       ...(candidate.regionCode ? { regionCode: candidate.regionCode } : {}),
     },
@@ -279,10 +221,11 @@ export function groundFromKnownPlaces(
   known: readonly KnownPlace[],
 ): AiPlaceGroundingResult | null {
   if (candidate.requireExactName || !known.length) return null;
-  const expected = compactText(candidate.name);
   const matches = known.filter(
     (place) =>
-      compactText(place.name) === expected && localityMatches(place, candidate.localityHint),
+      sameIdentityName(place.name, candidate.name) &&
+      !candidate.contextConflict &&
+      localityMatches(place, candidate.localityHint),
   );
   if (matches.length !== 1) return null;
   const match = matches[0]!;
@@ -402,7 +345,7 @@ export class AiPlaceGrounder {
         name: reference.cachedName,
         rawTypes: reference.cachedTypes ?? [],
       };
-      if (eligibleMatches([identity], candidate).length !== 1)
+      if (entry.identityFingerprint !== groundingIdentityFingerprint(identity))
         return { reason: 'grounding_match_changed' };
       recordProviderCacheEvent({
         cache: 'place-grounding',
@@ -412,7 +355,9 @@ export class AiPlaceGrounder {
         provider: 'google',
         source: 'ai-planner',
       });
-      return { result: verified(candidate, identity, reference.placeId, entry.checkedAt) };
+      const result = verified(candidate, identity, reference.placeId, entry.checkedAt);
+      if (result.context && entry.countryCode) result.context.countryCode = entry.countryCode;
+      return { result };
     } catch {
       return { reason: 'cache_read_failed' };
     }
@@ -426,97 +371,56 @@ export class AiPlaceGrounder {
     }
   }
 
-  groundCandidates(candidates: readonly AiPlaceGroundingCandidate[]) {
-    // Decide before dispatch: a destination and a visit can share one query.
-    const profiles = new Map<string, PlaceDetailLevel>();
-    for (const candidate of candidates) {
-      const request = searchRequest(candidate);
-      const key = memoKey(request);
-      if (!profiles.has(key) || request.detail === 'evidence') profiles.set(key, request.detail);
-    }
-    return mapWithConcurrency(candidates, PROVIDER_CONCURRENCY_LIMIT, (candidate) =>
-      this.groundCandidate({
-        ...candidate,
-        detail: profiles.get(memoKey(searchRequest(candidate))),
-      }),
+  private readonly autocompleteMemo = new Map<
+    string,
+    Promise<import('./places.js').PlaceSuggestion[]>
+  >();
+
+  private unavailable(candidate: AiPlaceGroundingCandidate, error?: unknown) {
+    const code = error instanceof PlaceProviderError ? error.code : 'provider_unavailable';
+    return fallback(
+      candidate,
+      'not_checked',
+      candidate.signal?.reason === 'provider_time_allowance_exhausted'
+        ? 'provider_time_allowance_exhausted'
+        : code === 'budget_exhausted'
+          ? 'provider_cap_reached'
+          : 'provider_unavailable',
+      null,
     );
   }
 
-  async groundCandidate(candidate: AiPlaceGroundingCandidate): Promise<AiPlaceGroundingResult> {
-    const request = searchRequest(candidate);
-    const persistentKey = cacheKey(request, candidate);
-    const cached = await this.readCache(persistentKey, candidate);
-    if ('result' in cached) return cached.result;
-    const skippedForTime = () => candidate.signal?.reason === 'provider_time_allowance_exhausted';
-    if (candidate.signal?.aborted) {
-      return fallback(
-        candidate,
-        'not_checked',
-        skippedForTime() ? 'provider_time_allowance_exhausted' : 'provider_unavailable',
-        null,
-      );
+  private async search(request: PlaceTextSearchRequest, reason?: ProviderCacheMissReason) {
+    const key = `${memoKey(request)}|${request.detail}`;
+    let pending = this.searchMemo.get(key);
+    if (!pending) {
+      pending = this.provider
+        .textSearch({ ...request, cacheMissReason: reason })
+        .then((identities) => ({ identities, checkedAt: this.clock() }));
+      this.searchMemo.set(key, pending);
     }
-    let identities: ProviderPlaceSearchResult[];
-    let checkedAt: Date;
-    try {
-      // The persistent identity key deliberately excludes the field profile.
-      const key = `${memoKey(request)}|${request.detail}`;
-      let pending = this.searchMemo.get(key);
-      if (!pending) {
-        pending = this.provider
-          .textSearch({ ...request, cacheMissReason: cached.reason })
-          .then((identities) => ({ identities, checkedAt: this.clock() }));
-        this.searchMemo.set(key, pending);
-      }
-      ({ identities, checkedAt } = await pending);
-    } catch (error) {
-      const code = error instanceof PlaceProviderError ? error.code : 'provider_unavailable';
-      return fallback(
-        candidate,
-        'not_checked',
-        skippedForTime()
-          ? 'provider_time_allowance_exhausted'
-          : code === 'budget_exhausted'
-            ? 'provider_cap_reached'
-            : 'provider_unavailable',
-        null,
-      );
-    }
-    if (skippedForTime()) {
-      return fallback(candidate, 'not_checked', 'provider_time_allowance_exhausted', null);
-    }
+    return pending;
+  }
 
-    // Spacing is the other half of the transliteration problem: "Sensō-ji"
-    // against "Senso ji", "Sapa" against "Sa Pa". Compare the names with it
-    // removed so an exact identity still reads as exact.
-    const matches = eligibleMatches(identities, candidate);
-
-    if (matches.length !== 1) {
-      await this.writeCache(persistentKey, {
-        checkedAt,
-        outcome: matches.length > 1 ? 'ambiguous' : 'unresolved',
-      });
-      return fallback(
-        candidate,
-        'unverified',
-        matches.length > 1 ? 'place_ambiguous' : 'place_unresolved',
-        checkedAt.toISOString(),
-      );
-    }
-
-    const { evidence, ...identity } = matches[0] as ProviderPlaceSearchResult;
+  private async accept(attempt: GroundingAttempt, match: ProviderPlaceSearchResult) {
+    const { evidence, addressComponents: _components, ...identity } = match;
+    const { candidate, checkedAt, key } = attempt;
     const canonical = await this.canonicalPlaces.resolveProviderPlaceFromIdentity(identity, {
       fetchedAt: checkedAt,
       languageCode: candidate.languageCode,
     });
-
-    await this.writeCache(persistentKey, {
+    await this.writeCache(key, {
       checkedAt,
       outcome: 'verified',
       externalPlaceId: identity.externalPlaceId,
       placeId: canonical.id,
+      identityFingerprint: groundingIdentityFingerprint(identity),
+      countryCode:
+        match.addressComponents?.find((part) => part.types.includes('country'))?.shortText ??
+        candidate.countryCode ??
+        null,
     });
-    const result = verified(candidate, identity, canonical.id, checkedAt);
+    const result = verified(candidate, match, canonical.id, checkedAt);
     if (evidence && result.context) {
       result.context.evidence = {
         freshness: { fetchedAt: checkedAt.toISOString(), source: 'live' },
@@ -528,4 +432,153 @@ export class AiPlaceGrounder {
     }
     return result;
   }
+
+  private async unresolved(attempt: GroundingAttempt, ambiguous: boolean) {
+    const outcome = ambiguous ? 'ambiguous' : 'unresolved';
+    await this.writeCache(attempt.key, { checkedAt: attempt.checkedAt, outcome });
+    return fallback(
+      attempt.candidate,
+      'unverified',
+      `place_${outcome}`,
+      attempt.checkedAt.toISOString(),
+    );
+  }
+
+  async groundCandidates(candidates: readonly AiPlaceGroundingCandidate[]) {
+    const counts = {
+      firstPassMatches: 0,
+      recoveredMatches: 0,
+      ambiguous: 0,
+      unresolved: 0,
+      skippedRetries: 0,
+    };
+    const profiles = new Map<string, PlaceDetailLevel>();
+    for (const candidate of candidates) {
+      const request = searchRequest(candidate);
+      if (!profiles.has(memoKey(request)) || request.detail === 'evidence')
+        profiles.set(memoKey(request), request.detail);
+    }
+    // Every initial lookup completes before any retry competes for the budget.
+    const initial = await mapWithConcurrency(
+      candidates,
+      PROVIDER_CONCURRENCY_LIMIT,
+      async (input): Promise<AiPlaceGroundingResult | GroundingAttempt> => {
+        const candidate = {
+          ...input,
+          languageCode: normalizePlaceLanguageCode(input.languageCode),
+          detail: profiles.get(memoKey(searchRequest(input))),
+        };
+        const request = searchRequest(candidate);
+        const key = cacheKey(request, candidate);
+        const cached = await this.readCache(key, candidate);
+        if ('result' in cached) return cached.result;
+        if (candidate.contextConflict)
+          return fallback(candidate, 'unverified', 'place_ambiguous', null);
+        if (candidate.signal?.aborted) return this.unavailable(candidate);
+        let page;
+        try {
+          page = await this.search(request, cached.reason);
+        } catch (error) {
+          return this.unavailable(candidate, error);
+        }
+        if (candidate.signal?.aborted) return this.unavailable(candidate);
+        const attempt = { candidate, request, key, ...page };
+        const matches = rankPlaceMatches(page.identities, candidate);
+        if (matches.length === 1) {
+          counts.firstPassMatches++;
+          return this.accept(attempt, matches[0]!);
+        }
+        return attempt;
+      },
+    );
+    const results = await mapWithConcurrency(
+      initial,
+      PROVIDER_CONCURRENCY_LIMIT,
+      async (initialResult) => {
+        if ('place' in initialResult) return initialResult;
+        const attempt = initialResult;
+        const { candidate, request } = attempt;
+        const aliases = new Map<string, string[]>();
+        let blockedByOtherPrediction = false;
+        if (candidate.signal?.aborted) {
+          counts.skippedRetries++;
+          return this.unavailable(candidate);
+        }
+        const plausible = attempt.identities.filter((identity) =>
+          geographicallyEligible(identity, candidate),
+        );
+        const retryQuery = localizedTextQuery(candidate.name, candidate.localityHint);
+        try {
+          if (plausible.length && this.provider.search) {
+            const memo = memoKey({ ...request, textQuery: retryQuery });
+            let pending = this.autocompleteMemo.get(memo);
+            if (!pending) {
+              pending = this.provider.search({
+                input: retryQuery,
+                signal: candidate.signal,
+                languageCode: request.languageCode,
+                locationBias: request.locationBias,
+                regionCode: request.regionCode,
+              });
+              this.autocompleteMemo.set(memo, pending);
+            }
+            const suggestions = await pending;
+            const knownIds = new Set(
+              attempt.identities.map((identity) => identity.externalPlaceId),
+            );
+            for (const suggestion of suggestions) {
+              if (knownIds.has(suggestion.externalPlaceId))
+                aliases.set(suggestion.externalPlaceId, [suggestion.name]);
+              else if (sameIdentityName(suggestion.name, candidate.name))
+                blockedByOtherPrediction = true;
+            }
+          } else if (
+            !plausible.length &&
+            (candidate.requireExactName || candidate.localityHint || candidate.locationBias) &&
+            normalizeIdentityText(retryQuery) !== normalizeIdentityText(request.textQuery)
+          ) {
+            const page = await this.search({ ...request, textQuery: retryQuery });
+            // The retry is a new identity acquisition; keep its actual age.
+            attempt.identities = page.identities;
+            attempt.checkedAt = page.checkedAt;
+          } else {
+            counts.skippedRetries++;
+          }
+        } catch (error) {
+          counts.skippedRetries++;
+          return this.unavailable(candidate, error); // No negative cache for an incomplete check.
+        }
+        if (candidate.signal?.aborted) {
+          counts.skippedRetries++;
+          return this.unavailable(candidate);
+        }
+        const matches = rankPlaceMatches(attempt.identities, candidate, aliases);
+        if (matches.length === 1 && !blockedByOtherPrediction) {
+          counts.recoveredMatches++;
+          return this.accept(attempt, matches[0]!);
+        }
+        const ambiguous = matches.length > 1 || blockedByOtherPrediction;
+        counts[ambiguous ? 'ambiguous' : 'unresolved']++;
+        return this.unresolved(attempt, ambiguous);
+      },
+    );
+    recordAiPlanningTelemetry({
+      kind: 'place_reconciliation',
+      occurredAt: this.clock().toISOString(),
+      ...counts,
+    });
+    return results;
+  }
+
+  async groundCandidate(candidate: AiPlaceGroundingCandidate): Promise<AiPlaceGroundingResult> {
+    return (await this.groundCandidates([candidate]))[0]!;
+  }
 }
+
+type GroundingAttempt = {
+  candidate: AiPlaceGroundingCandidate;
+  request: PlaceTextSearchRequest;
+  key: string;
+  checkedAt: Date;
+  identities: ProviderPlaceSearchResult[];
+};

@@ -28,6 +28,7 @@ export type PlaceLocationBias = PlaceCoordinates & {
 };
 
 export type PlaceSearchRequest = {
+  signal?: AbortSignal;
   input: string;
   languageCode?: string;
   locationBias?: PlaceLocationBias;
@@ -35,7 +36,13 @@ export type PlaceSearchRequest = {
   sessionToken: string;
 };
 
+/** Standalone grounding requests are billed individually, outside picker sessions. */
+export type PlaceAutocompleteRequest = Omit<PlaceSearchRequest, 'sessionToken'> & {
+  sessionToken?: string;
+};
+
 export type PlaceTextSearchRequest = {
+  pageSize?: number;
   signal?: AbortSignal;
   /** Identity-only searches stay on Pro; scoring evidence requires Enterprise. */
   detail: PlaceDetailLevel;
@@ -214,6 +221,8 @@ export type ProviderPlaceIdentity = Omit<
 > & { location: PlaceCoordinates };
 
 export type ProviderPlaceSearchResult = ProviderPlaceIdentity & {
+  /** Search-only geography; never persisted as canonical Place data. */
+  addressComponents?: Array<{ longText: string; shortText: string; types: string[] }>;
   /** Present when requested, even when Google has no hours or rating. */
   evidence?: Pick<
     ProviderPlaceDetails,
@@ -234,6 +243,7 @@ export type ProviderPlaceSearchResult = ProviderPlaceIdentity & {
 export interface PlaceTextSearchProvider {
   readonly name: PlaceProviderName;
   textSearch(request: PlaceTextSearchRequest): Promise<ProviderPlaceSearchResult[]>;
+  search?(request: PlaceAutocompleteRequest): Promise<PlaceSuggestion[]>;
 }
 
 /**

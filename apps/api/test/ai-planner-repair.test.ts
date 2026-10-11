@@ -229,3 +229,13 @@ describe('dayPartForLocalTime', () => {
     expect(dayPartForLocalTime('later')).toBeNull();
   });
 });
+
+test('malformed search hints are discarded without dropping the place or altering its label', () => {
+  for (const invalid of [false, 123, {}, 'x'.repeat(201), '']) {
+    const compact = compactModelProposal(explicitModelProposal());
+    const name = compact.places[0]!.name;
+    Object.assign(compact.places[0]!, { searchName: invalid, localityHint: invalid });
+    const repaired = repairCompactOutput(compact, PROMPT);
+    expect(repaired?.places[0]).toMatchObject({ name, searchName: null, localityHint: null });
+  }
+});

@@ -122,7 +122,9 @@ export function TripsManager() {
           </Button>
         }
         description={libraryT('description')}
+        eyebrow={t('eyebrow')}
         title={t('title')}
+        titleFont="journal"
       />
 
       {status === 'loading' ? (

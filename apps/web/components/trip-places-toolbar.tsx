@@ -1,12 +1,13 @@
 'use client';
 
+import { Toggle as TogglePrimitive } from '@base-ui/react/toggle';
+import { ToggleGroup as ToggleGroupPrimitive } from '@base-ui/react/toggle-group';
 import { ArrowDownUp, Plus, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
 import { SearchField } from '@/components/search-field';
 import { Button } from '@/components/ui/button';
-import { Chip, ChipGroup } from '@/components/ui/chip';
 import {
   Empty,
   EmptyContent,
@@ -22,99 +23,109 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { TripPlaceShow } from '@/lib/trip-places/list-view';
 import type { TripPlaceDaySort } from '@/lib/trip-places/signals';
 import type { TripPlacesView } from '@/lib/trip-places/use-trip-places-view';
 import * as Icons from '@/lib/icons';
 import { cn } from '@/lib/utils';
 
+export type TripPlacesLens = 'all' | 'day' | 'unplanned';
+
 /**
- * Finding a place in the trip's collection: a search, a filter for what is not
- * on a day yet, and the order - in that order of usefulness, so the sort is the
- * quietest of the three. One place is not a collection to search, so the
- * controls wait for a second; until then only the host's `action` shows.
- *
- * In a narrow host (the drawer) the search and the rest stack; on a wide page
- * they share one row.
+ * Finding a place in the trip's collection: one row for the search, the order
+ * and the host's action, then the lens - what the list is for right now. Beside
+ * a day that is the day itself; anywhere else it is what still needs a day, or
+ * everything. One place is not a collection to search, so the controls wait for
+ * a second; until then only the host's `action` shows.
  */
 export function TripPlacesToolbar({
   action,
   className,
+  dayNumber,
+  lens,
+  onLensChange,
   view,
-}: Readonly<{ action?: ReactNode; className?: string; view: TripPlacesView }>) {
+}: Readonly<{
+  action?: ReactNode;
+  className?: string;
+  /** The day being planned, when there is one; it adds the day lens. */
+  dayNumber?: number;
+  lens: TripPlacesLens;
+  onLensChange: (lens: TripPlacesLens) => void;
+  view: TripPlacesView;
+}>) {
   const t = useTranslations('tripPlaces');
   const { counts } = view;
   const searchable = counts.all > 1;
-  // The filter only earns its place when it would split the list, and stays
-  // while it is on so there is always a way back to everything.
-  const filterable = view.show !== 'all' || (counts.unplanned > 0 && counts.unplanned < counts.all);
 
   if (!searchable && !action) return null;
 
+  const lenses: { count?: number; label: string; value: TripPlacesLens }[] = [
+    ...(dayNumber ? [{ label: t('lens.day', { number: dayNumber }), value: 'day' as const }] : []),
+    { count: counts.unplanned, label: t('lens.unplanned'), value: 'unplanned' },
+    { count: counts.all, label: t('lens.all'), value: 'all' },
+  ];
+
   return (
-    <div className={cn('@container', className)}>
-      <div className="flex flex-col gap-2 @2xl:flex-row @2xl:items-center @2xl:gap-4">
-        <div className="flex items-center justify-end gap-2 @2xl:w-96 @2xl:shrink-0">
-          {searchable ? (
-            <SearchField
-              label={t('findLabel')}
-              onChange={(event) => view.setQuery(event.target.value)}
-              placeholder={t('findPlaceholder', { count: counts.all })}
-              value={view.query}
-              wrapperClassName="min-w-0 flex-1"
-            />
-          ) : null}
-          {action}
-        </div>
-
+    <div className={cn('space-y-3', className)}>
+      <div className="flex items-center gap-2">
         {searchable ? (
-          <div className="flex min-h-9 min-w-0 flex-1 items-center justify-between gap-3">
-            {filterable ? (
-              <ChipGroup
-                aria-label={t('show.label')}
-                className="interaction-scrollbar -mx-1 min-w-0 flex-nowrap overflow-x-auto px-1"
-                multiple={false}
-                onValueChange={([value]) => view.setShow((value ?? 'all') as TripPlaceShow)}
-                value={[view.show]}
-              >
-                <Chip count={counts.all} value="all">
-                  {t('show.all')}
-                </Chip>
-                <Chip count={counts.unplanned} value="unplanned">
-                  {t('show.unplanned')}
-                </Chip>
-              </ChipGroup>
-            ) : (
-              <p className="text-xs text-muted-foreground tabular-nums">
-                {view.filtering
-                  ? t('matchCount', { shown: view.visible.length, total: counts.all })
-                  : t('placeCount', { count: counts.all })}
-              </p>
-            )}
-
-            <Select
-              onValueChange={(value) => value && view.setSort(value as TripPlaceDaySort)}
-              value={view.sort}
-            >
-              <SelectTrigger
-                aria-label={t('sortBy')}
-                className="shrink-0 gap-1.5 border-transparent bg-transparent px-2 text-muted-foreground shadow-none hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:bg-transparent dark:hover:bg-muted"
-                size="sm"
-              >
-                <ArrowDownUp aria-hidden="true" className="size-3.5" />
-                <SelectValue>{t(`sortShort.${view.sort}`)}</SelectValue>
-              </SelectTrigger>
-              <SelectContent align="end" alignItemWithTrigger={false}>
-                {view.sorts.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {t(`sort.${option}`)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <SearchField
+            label={t('findLabel')}
+            onChange={(event) => view.setQuery(event.target.value)}
+            placeholder={t('findPlaceholderShort')}
+            value={view.query}
+            wrapperClassName="min-w-0 flex-1"
+          />
         ) : null}
+        {searchable ? (
+          <Select
+            onValueChange={(value) => value && view.setSort(value as TripPlaceDaySort)}
+            value={view.sort}
+          >
+            <SelectTrigger
+              aria-label={t('sortBy')}
+              className="shrink-0 gap-1.5 px-3 text-muted-foreground"
+              size="sm"
+            >
+              <ArrowDownUp aria-hidden="true" className="size-3.5" />
+              <SelectValue>{t(`sortShort.${view.sort}`)}</SelectValue>
+            </SelectTrigger>
+            <SelectContent align="end" alignItemWithTrigger={false}>
+              {view.sorts.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {t(`sort.${option}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
+        {action}
       </div>
+
+      {searchable ? (
+        <ToggleGroupPrimitive
+          aria-label={t('show.label')}
+          className="grid auto-cols-fr grid-flow-col gap-1 rounded-full bg-muted p-1"
+          onValueChange={([value]) => value && onLensChange(value as TripPlacesLens)}
+          value={[lens]}
+        >
+          {lenses.map((option) => (
+            <TogglePrimitive
+              className="h-9 min-w-0 truncate rounded-full px-2 text-[0.8125rem] font-semibold text-muted-foreground outline-none transition-[background-color,color,box-shadow] duration-[var(--motion-standard)] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 data-[pressed]:bg-card data-[pressed]:text-foreground data-[pressed]:shadow-[var(--shadow-control)]"
+              key={option.value}
+              value={option.value}
+            >
+              {option.label}
+              {option.count !== undefined ? (
+                <span className="font-medium tabular-nums">
+                  <span aria-hidden="true"> · </span>
+                  {option.count}
+                </span>
+              ) : null}
+            </TogglePrimitive>
+          ))}
+        </ToggleGroupPrimitive>
+      ) : null}
 
       <p aria-live="polite" className="sr-only" role="status">
         {view.filtering ? t('matchCount', { shown: view.visible.length, total: counts.all }) : null}
@@ -131,20 +142,22 @@ export function TripPlacesToolbar({
 export function TripPlacesNoMatches({
   className,
   onAddQuery,
+  onShowAll,
   view,
 }: Readonly<{
   className?: string;
   onAddQuery: (query: string) => void;
+  /** Offered when the lens, not the search, is what emptied the list. */
+  onShowAll?: () => void;
   view: TripPlacesView;
 }>) {
   const t = useTranslations('tripPlaces');
   const query = view.query.trim();
-  const showAll =
-    view.show === 'all' ? null : (
-      <Button onClick={() => view.setShow('all')} type="button" variant="ghost">
-        {t('showAll')}
-      </Button>
-    );
+  const showAll = onShowAll ? (
+    <Button onClick={onShowAll} type="button" variant="ghost">
+      {t('showAll')}
+    </Button>
+  ) : null;
 
   return (
     <Empty className={cn('gap-3 py-10', className)}>

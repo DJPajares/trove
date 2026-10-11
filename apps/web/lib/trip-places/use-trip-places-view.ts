@@ -29,6 +29,8 @@ export function useTripPlacesView(
       distanceOf: (tripPlace: TripPlace) => number | null;
       hoursOf: (tripPlace: TripPlace) => PlaceHoursStatus['status'] | null;
     };
+    /** Where the order starts: beside a day that is "nearest", elsewhere the name. */
+    initialSort?: TripPlaceDaySort;
     nameOf: (tripPlace: TripPlace) => string;
     placeUse?: Readonly<Record<string, ScheduledPlaceUse>>;
     sorts: readonly TripPlaceDaySort[];
@@ -36,7 +38,7 @@ export function useTripPlacesView(
 ) {
   const [query, setQueryValue] = useState('');
   const [show, setShowValue] = useState<TripPlaceShow>('all');
-  const [sort, setSort] = useState<TripPlaceDaySort>('name');
+  const [sort, setSort] = useState<TripPlaceDaySort>(options.initialSort ?? 'name');
   const [kept, setKept] = useState<ReadonlySet<string>>(NOTHING_KEPT);
 
   // A place added to a day stays in view until the traveller changes what the

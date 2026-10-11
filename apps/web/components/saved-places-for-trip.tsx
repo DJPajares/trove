@@ -70,7 +70,7 @@ export function SavedPlacesForTrip({ onAdded, tripId, tripPlaces }: Readonly<Pro
               count: group.places.length,
               destination: group.destinationName,
             })}
-            className="rounded-[var(--radius-lg)] border border-border p-4"
+            className="rounded-[var(--radius-xl)] border border-status-warning/25 bg-surface-tint p-4"
             key={group.destinationName}
           >
             <div className="flex flex-wrap items-center justify-between gap-2">

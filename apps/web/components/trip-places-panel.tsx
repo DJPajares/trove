@@ -1,23 +1,22 @@
 'use client';
 
 import {
-  CalendarCheck,
   CalendarPlus,
+  Check,
   Ellipsis,
   Eye,
   LoaderCircle,
   MapPin,
   Pencil,
-  Star,
+  Plus,
   Trash2,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useRef, useState, type ReactNode } from 'react';
+import { useRef, useState } from 'react';
 
 import { LocatePlaceSheet } from '@/components/locate-place-sheet';
 import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
 import { PlaceMedia } from '@/components/place-media';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -88,12 +87,12 @@ type TripPlacesPanelProps = {
  * hub, planner and Trip Mode drawers. One list means every entry point behaves
  * identically, with day-specific actions only beside the day being planned.
  *
- * A row reads in the order a planner asks: what the place is, where it is, how
- * it fits the day, and where it already sits in the plan. Each line appears only
- * when it has something to say, so a personal place with no address is two
- * quiet lines rather than a stack of placeholders. Beside a day, the one action
- * worth a tap of its own - adding the place to that day - sits on the row; the
- * rest stay behind the menu.
+ * A row is two lines: the place, and the one thing worth knowing about it for
+ * the day beside it, led by the other days it already sits on. Rating, saved
+ * state and the full address wait in the place's details, so a long collection
+ * scans as places rather than as metadata. Beside a day, the one action worth a
+ * tap of its own - adding the place to that day - sits on the row; the rest
+ * stay behind the menu.
  */
 export function TripPlacesPanel({
   busyPlaceIds,
@@ -113,7 +112,6 @@ export function TripPlacesPanel({
 }: Readonly<TripPlacesPanelProps>) {
   const t = useTranslations('tripPlaces');
   const nestedPlaceId = useRef<string | null>(null);
-  const signalsT = useTranslations('placeSignals');
   const mediaTranslations = useTranslations('media');
   // The locate copy belongs to the Place, not to this list, so it says the same
   // thing here as it does in the details sheet this row opens.
@@ -208,96 +206,123 @@ export function TripPlacesPanel({
     ].filter((row): row is PlaceDetailsRow => row !== null);
 
   /**
-   * How the place fits the day: how far it is, and how it is rated. Hours have a
-   * line of their own above this, because they carry their own date.
+   * The one line a row says about a place, chosen by what matters most for the
+   * day beside it: closed that day, then no location to plan around, then its
+   * hours and distance. Away from a day there is nothing to fit, so the line
+   * says where the place is. Nothing here is fetched; an unknown is left out.
    */
-  const fitFacts = (facts: TripPlaceRowSignals) => {
-    const parts: ReactNode[] = [];
-    if (facts.distance) {
-      parts.push(
-        <span
-          className={cn(
-            'whitespace-nowrap',
-            facts.distance.far && 'font-medium text-status-warning',
-          )}
-          key="distance"
-        >
-          {facts.distance.text}
-        </span>,
-      );
+  const contextOf = (
+    tripPlace: TripPlace,
+    facts: TripPlaceRowSignals,
+  ): { parts: { text: string; warning?: boolean }[]; tone?: 'warning' } => {
+    if (facts.hours?.closed) return { parts: [{ text: facts.hours.label }], tone: 'warning' };
+    if (!tripPlace.place.location) {
+      return {
+        parts: [
+          ...(tripPlace.place.kind === 'custom' ? [{ text: t('personalPlace') }] : []),
+          { text: t('notOnMap') },
+        ],
+      };
     }
-    if (facts.rating) {
-      const { count, label, value } = facts.rating;
-      const strong = (chunks: ReactNode) => (
-        <span className="font-medium text-foreground">{chunks}</span>
-      );
-      parts.push(
-        <span
-          aria-label={label}
-          className="inline-flex items-center gap-1 whitespace-nowrap"
-          key="rating"
-          role="img"
-        >
-          <Star aria-hidden="true" className="size-3 fill-current text-rating" />
-          <span>
-            {count
-              ? signalsT.rich('ratingCompact', { count, rating: value, value: strong })
-              : signalsT.rich('ratingCompactNoCount', { rating: value, value: strong })}
-          </span>
-        </span>,
-      );
-    }
-    return parts.flatMap((part, index) =>
-      index
-        ? [
-            <span aria-hidden="true" className="text-text-subtle" key={`separator-${index}`}>
-              ·
-            </span>,
-            part,
-          ]
-        : [part],
-    );
+    const fit = [
+      ...(facts.hours ? [{ text: facts.hours.label }] : []),
+      ...(facts.distance ? [{ text: facts.distance.text, warning: facts.distance.far }] : []),
+    ];
+    return { parts: fit.length ? fit : [{ text: whereOf(tripPlace) }] };
   };
 
-  /** Where the place already sits in the plan, and what the traveller has said about it. */
-  const relationships = (tripPlace: TripPlace) => {
-    const use = placeUse?.[tripPlace.id];
-    const dayNumbers = use?.dayNumbers ?? [];
-    const badges: ReactNode[] = [];
-    if (dayNumbers.length) {
-      badges.push(
-        <Badge key="days" size="sm" variant="muted">
-          <Icons.Itinerary aria-hidden="true" />
-          {t('onDays', {
-            count: dayNumbers.length,
-            days: formatDayNumbers(dayNumbers, locale),
-          })}
-        </Badge>,
-      );
-    }
-    // Only Must Go earns a badge: it is the priority the plan is checked against.
-    // Interested is what a planner gives nearly everything, so a row that said
-    // so would say nothing; the menu and the details still show any priority.
-    if (tripPlace.priority === 'must_go') {
-      badges.push(
-        <Badge className="text-foreground" key="priority" size="sm" variant="muted">
-          <Icons.MustGo aria-hidden="true" className="text-accent-strong" />
-          {t('priority.must_go')}
-        </Badge>,
-      );
-    }
-    // Saved Places and Trip Places are independent relationships to the same
-    // Place, so whether this one is also saved is worth a quiet mention.
-    if (tripPlace.isSaved) {
-      badges.push(
-        <Badge key="saved" size="sm" variant="muted">
-          <Icons.Saved aria-hidden="true" />
-          {t('alsoSaved')}
-        </Badge>,
-      );
-    }
-    return badges;
-  };
+  /** Everything a row can do besides adding to the day, behind one button. */
+  const menu = (tripPlace: TripPlace, name: string, onThisDay: boolean, busy: boolean) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            aria-label={t('actionsFor', { name })}
+            size="icon-sm"
+            type="button"
+            variant="ghost"
+          />
+        }
+      >
+        <Ellipsis aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-52">
+        {/* The row's own button adds a place once; a second visit on the same
+            day is rarer, so it waits here. */}
+        {day && onAddToDay && onThisDay ? (
+          <>
+            <DropdownMenuItem disabled={busy} onClick={() => onAddToDay(tripPlace)}>
+              <CalendarPlus aria-hidden="true" />
+              {t('addPlaceAgainToDay', { number: day.number })}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
+
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <Icons.MustGo aria-hidden="true" />
+            {t('priorityMenuLabel')}
+            {/* The current priority stays readable without opening the submenu. */}
+            <span className="ml-2 text-xs text-muted-foreground">
+              {t(`priority.${tripPlace.priority ?? 'none'}`)}
+            </span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuRadioGroup
+              onValueChange={(value) =>
+                onPriorityChange(tripPlace, value === 'none' ? null : (value as TripPlacePriority))
+              }
+              value={tripPlace.priority ?? 'none'}
+            >
+              {priorities.map((priority) => (
+                <DropdownMenuRadioItem key={priority} value={priority}>
+                  {t(`priority.${priority}`)}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem
+          onClick={() => {
+            nestedPlaceId.current = tripPlace.id;
+            setDetailsPlace(tripPlace);
+          }}
+        >
+          <Eye aria-hidden="true" />
+          {t('viewDetailsAction')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onEditPlace(tripPlace)}>
+          <Pencil aria-hidden="true" />
+          {t('editPlaceAction')}
+        </DropdownMenuItem>
+        {/* A place the planner could not resolve is repairable rather than
+            permanently unmappable, but only a Custom Place has coordinates of
+            its own to be given. */}
+        {canLocate(tripPlace) ? (
+          <DropdownMenuItem
+            onClick={() => {
+              nestedPlaceId.current = tripPlace.id;
+              setLocatePlace(tripPlace);
+            }}
+          >
+            <MapPin aria-hidden="true" />
+            {locateTranslations('locate.action')}
+          </DropdownMenuItem>
+        ) : null}
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem onClick={() => onRemove(tripPlace)} variant="destructive">
+          <Trash2 aria-hidden="true" />
+          {t('removeAction')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 
   return (
     <>
@@ -310,13 +335,18 @@ export function TripPlacesPanel({
           const onThisDay = Boolean(day && placeUse?.[tripPlace.id]?.dayDates.includes(day.date));
           const busy = busyPlaceIds?.has(tripPlace.id) ?? false;
           const facts = signalsFor?.(tripPlace) ?? {};
-          const fit = fitFacts(facts);
-          const badges = relationships(tripPlace);
+          const context = contextOf(tripPlace, facts);
+          const use = placeUse?.[tripPlace.id];
+          // The day being planned has its own state on the button, so the chip
+          // names only the other days this place already sits on.
+          const otherDays = (use?.dayNumbers ?? []).filter(
+            (_, index) => !day || use?.dayDates[index] !== day.date,
+          );
 
           return (
             <Item
               className={cn(
-                'relative flex-nowrap items-start gap-3 py-3 hover:bg-surface-hover',
+                'relative flex-nowrap items-center gap-3 py-3 hover:bg-surface-hover',
                 rowClassName,
               )}
               data-trip-place-id={tripPlace.id}
@@ -326,14 +356,20 @@ export function TripPlacesPanel({
             >
               {tripPlace.place.kind === 'custom' ? (
                 <ItemMedia
-                  className="size-12 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
+                  className={cn(
+                    'size-14 rounded-[var(--radius-lg)] bg-secondary text-secondary-foreground',
+                    !located && 'border border-dashed border-border-strong bg-muted',
+                  )}
                   variant="icon"
                 >
                   <Icons.CustomPlace aria-hidden="true" className="size-5" />
                 </ItemMedia>
               ) : (
                 <ItemMedia
-                  className="size-12 overflow-hidden rounded-[var(--radius-md)]"
+                  className={cn(
+                    'size-14 overflow-hidden rounded-[var(--radius-lg)]',
+                    facts.hours?.closed && 'opacity-60',
+                  )}
                   variant="default"
                 >
                   <PlaceMedia
@@ -344,215 +380,121 @@ export function TripPlacesPanel({
                     }
                     category={tripPlace.place.snapshot?.category}
                     className="size-full"
-                    sizes="48px"
+                    sizes="56px"
                     source={resolvePlaceMediaSource({ editorial })}
                     variant="thumbnail"
                   />
                 </ItemMedia>
               )}
 
-              <ItemContent className="min-w-0 gap-1">
-                <div className="flex items-start gap-2">
-                  <div className="min-w-0 flex-1">
-                    <ItemTitle className="line-clamp-none w-full text-base">
-                      {/* The row opens the place, but the row cannot be a button:
-                          it already contains some. The name is the button, and it
-                          stretches its own hit area over the whole row - so a tap
-                          anywhere opens the details, while the actions stay above
-                          it and a keyboard reaches each of them in turn. */}
-                      <button
-                        aria-label={t('viewDetails', { name })}
-                        className="block w-full rounded-[var(--radius-sm)] text-left outline-none after:absolute after:inset-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/40 focus-visible:after:ring-inset"
-                        onClick={() => {
-                          nestedPlaceId.current = tripPlace.id;
-                          setDetailsPlace(tripPlace);
-                        }}
-                        type="button"
-                      >
-                        <span className="line-clamp-2 break-words">{name}</span>
-                      </button>
-                    </ItemTitle>
-                    {/* A place without coordinates is still a whole place - it just
-                        is not on the map until it has some (PRD 12), which is a
-                        fact about it rather than a fault. */}
-                    <p className="mt-0.5 flex min-w-0 text-sm leading-5 text-muted-foreground">
-                      <span className="truncate">{whereOf(tripPlace)}</span>
-                      {located ? null : (
-                        <span className="shrink-0 whitespace-pre">
-                          <span aria-hidden="true"> · </span>
-                          {t('notOnMap')}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-
-                  {/* Above the name's stretched hit area, or these would be
-                      unreachable. */}
-                  <ItemActions className="relative z-10 -my-1.5 -mr-2 shrink-0 gap-0.5">
-                    {day && onAddToDay ? (
-                      // One button in both states, so focus stays put when adding
-                      // turns it into the check: a keyboard user is not dropped
-                      // back to the top of the page for having added something.
-                      // Adding it a second time is still possible, from the menu.
-                      <Button
-                        aria-busy={busy || undefined}
-                        aria-label={
-                          onThisDay
-                            ? t('onThisDay', { number: day.number })
-                            : t('addPlaceToDay', { name, number: day.number })
-                        }
-                        className={
-                          onThisDay ? 'text-brand hover:bg-transparent hover:text-brand' : undefined
-                        }
-                        disabled={onThisDay || busy}
-                        focusableWhenDisabled
-                        onClick={() => onAddToDay(tripPlace)}
-                        size="icon-sm"
-                        type="button"
-                        variant={onThisDay ? 'ghost' : 'outline'}
-                      >
-                        {onThisDay ? (
-                          <CalendarCheck
-                            aria-hidden="true"
-                            className={cn(
-                              justAddedIds?.has(tripPlace.id) &&
-                                'animate-in duration-[var(--motion-standard)] fade-in-0 zoom-in-50 motion-reduce:animate-none',
-                            )}
-                          />
-                        ) : busy ? (
-                          <LoaderCircle
-                            aria-hidden="true"
-                            className="animate-spin motion-reduce:animate-none"
-                          />
-                        ) : (
-                          <CalendarPlus aria-hidden="true" />
-                        )}
-                      </Button>
-                    ) : null}
-
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={
-                          <Button
-                            aria-label={t('actionsFor', { name })}
-                            size="icon-sm"
-                            type="button"
-                            variant="ghost"
-                          />
-                        }
-                      >
-                        <Ellipsis aria-hidden="true" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="min-w-52">
-                        {/* The row's own button adds a place once; a second visit
-                            on the same day is rarer, so it waits here. */}
-                        {day && onAddToDay && onThisDay ? (
-                          <>
-                            <DropdownMenuItem disabled={busy} onClick={() => onAddToDay(tripPlace)}>
-                              <CalendarPlus aria-hidden="true" />
-                              {t('addPlaceAgainToDay', { number: day.number })}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                          </>
-                        ) : null}
-
-                        <DropdownMenuSub>
-                          <DropdownMenuSubTrigger>
-                            <Icons.MustGo aria-hidden="true" />
-                            {t('priorityMenuLabel')}
-                            {/* The current priority stays readable without opening the submenu. */}
-                            <span className="ml-2 text-xs text-muted-foreground">
-                              {t(`priority.${tripPlace.priority ?? 'none'}`)}
-                            </span>
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuSubContent>
-                            <DropdownMenuRadioGroup
-                              onValueChange={(value) =>
-                                onPriorityChange(
-                                  tripPlace,
-                                  value === 'none' ? null : (value as TripPlacePriority),
-                                )
-                              }
-                              value={tripPlace.priority ?? 'none'}
-                            >
-                              {priorities.map((priority) => (
-                                <DropdownMenuRadioItem key={priority} value={priority}>
-                                  {t(`priority.${priority}`)}
-                                </DropdownMenuRadioItem>
-                              ))}
-                            </DropdownMenuRadioGroup>
-                          </DropdownMenuSubContent>
-                        </DropdownMenuSub>
-
-                        <DropdownMenuSeparator />
-
-                        {/* A Custom Place has details worth showing too, so this is no
-                            longer conditional on having a Google listing to link out to. */}
-                        <DropdownMenuItem
-                          onClick={() => {
-                            nestedPlaceId.current = tripPlace.id;
-                            setDetailsPlace(tripPlace);
-                          }}
-                        >
-                          <Eye aria-hidden="true" />
-                          {t('viewDetailsAction')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onEditPlace(tripPlace)}>
-                          <Pencil aria-hidden="true" />
-                          {t('editPlaceAction')}
-                        </DropdownMenuItem>
-                        {/* A place the planner could not resolve is repairable rather
-                            than permanently unmappable, but only a Custom Place has
-                            coordinates of its own to be given. */}
-                        {canLocate(tripPlace) ? (
-                          <DropdownMenuItem
-                            onClick={() => {
-                              nestedPlaceId.current = tripPlace.id;
-                              setLocatePlace(tripPlace);
-                            }}
-                          >
-                            <MapPin aria-hidden="true" />
-                            {locateTranslations('locate.action')}
-                          </DropdownMenuItem>
-                        ) : null}
-
-                        <DropdownMenuSeparator />
-
-                        <DropdownMenuItem onClick={() => onRemove(tripPlace)} variant="destructive">
-                          <Trash2 aria-hidden="true" />
-                          {t('removeAction')}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </ItemActions>
-                </div>
-
-                {/* The row keeps to the hours themselves; the date they were
-                    checked stays a hover away, and in the place's details. */}
-                {facts.hours ? (
-                  <p
-                    className={cn(
-                      'text-xs leading-5 whitespace-nowrap',
-                      facts.hours.closed
-                        ? 'font-medium text-status-warning'
-                        : 'text-muted-foreground',
-                    )}
-                    title={facts.hours.checked}
+              <ItemContent className="min-w-0 gap-0.5">
+                <ItemTitle className="line-clamp-none w-full text-base">
+                  {/* The row opens the place, but the row cannot be a button:
+                      it already contains some. The name is the button, and it
+                      stretches its own hit area over the whole row - so a tap
+                      anywhere opens the details, while the actions stay above
+                      it and a keyboard reaches each of them in turn. */}
+                  <button
+                    aria-label={t('viewDetails', { name })}
+                    className="flex w-full min-w-0 items-center gap-1.5 rounded-[var(--radius-sm)] text-left outline-none after:absolute after:inset-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/40 focus-visible:after:ring-inset"
+                    onClick={() => {
+                      nestedPlaceId.current = tripPlace.id;
+                      setDetailsPlace(tripPlace);
+                    }}
+                    type="button"
                   >
-                    {facts.hours.label}
-                  </p>
-                ) : null}
-
-                {fit.length ? (
-                  <p className="flex flex-wrap items-center gap-x-1.5 text-xs leading-5 text-muted-foreground">
-                    {fit}
-                  </p>
-                ) : null}
-
-                {badges.length ? (
-                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">{badges}</div>
-                ) : null}
+                    <span className="line-clamp-2 break-words">{name}</span>
+                    {/* Only Must Go earns a mark: it is the priority the plan is
+                        checked against. Every priority stays in the menu. */}
+                    {tripPlace.priority === 'must_go' ? (
+                      <Icons.MustGo
+                        aria-label={t('priority.must_go')}
+                        className="size-3.5 shrink-0 text-accent-strong"
+                        role="img"
+                      />
+                    ) : null}
+                  </button>
+                </ItemTitle>
+                {/* One line of context, the one that matters most for the day
+                    beside it: closed that day, then no location, then hours and
+                    distance. Rating and saved state wait in the place's details. */}
+                <p className="flex min-w-0 items-center gap-1.5 text-sm leading-5 text-muted-foreground">
+                  {otherDays.length ? (
+                    <span className="shrink-0 rounded-full bg-muted px-2 py-px text-xs font-semibold text-foreground">
+                      {t('onDays', {
+                        count: otherDays.length,
+                        days: formatDayNumbers(otherDays, locale),
+                      })}
+                    </span>
+                  ) : null}
+                  <span
+                    className={cn(
+                      'truncate',
+                      context.tone === 'warning' && 'font-medium text-status-warning',
+                    )}
+                    title={facts.hours?.checked}
+                  >
+                    {context.parts.map((part, index) => (
+                      <span
+                        className={cn(part.warning && 'font-medium text-status-warning')}
+                        key={part.text}
+                      >
+                        {index ? <span aria-hidden="true"> · </span> : null}
+                        {part.text}
+                      </span>
+                    ))}
+                  </span>
+                </p>
               </ItemContent>
+
+              {/* Above the name's stretched hit area, or these would be unreachable. */}
+              <ItemActions className="relative z-10 -mr-2 shrink-0 gap-0.5">
+                {day && onAddToDay ? (
+                  // One button in both states, so focus stays put when adding
+                  // turns it into the check: a keyboard user is not dropped
+                  // back to the top of the page for having added something.
+                  // Adding it a second time is still possible, from the menu.
+                  <Button
+                    aria-busy={busy || undefined}
+                    aria-label={
+                      onThisDay
+                        ? t('onThisDay', { number: day.number })
+                        : t('addPlaceToDay', { name, number: day.number })
+                    }
+                    className={cn(
+                      'rounded-full',
+                      onThisDay
+                        ? 'text-brand hover:bg-transparent hover:text-brand'
+                        : facts.hours?.closed && 'bg-transparent text-muted-foreground',
+                    )}
+                    disabled={onThisDay || busy}
+                    focusableWhenDisabled
+                    onClick={() => onAddToDay(tripPlace)}
+                    size="icon"
+                    type="button"
+                    variant={onThisDay ? 'ghost' : facts.hours?.closed ? 'outline' : 'secondary'}
+                  >
+                    {onThisDay ? (
+                      <Check
+                        aria-hidden="true"
+                        className={cn(
+                          'size-5',
+                          justAddedIds?.has(tripPlace.id) &&
+                            'animate-in duration-[var(--motion-standard)] fade-in-0 zoom-in-50 motion-reduce:animate-none',
+                        )}
+                      />
+                    ) : busy ? (
+                      <LoaderCircle
+                        aria-hidden="true"
+                        className="size-5 animate-spin motion-reduce:animate-none"
+                      />
+                    ) : (
+                      <Plus aria-hidden="true" className="size-5" />
+                    )}
+                  </Button>
+                ) : null}
+                {menu(tripPlace, name, onThisDay, busy)}
+              </ItemActions>
             </Item>
           );
         })}

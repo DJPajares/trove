@@ -7,6 +7,7 @@ import {
   filterTripPlaces,
   foldPlaceText,
   formatDayNumbers,
+  groupTripPlacesForDay,
   isFarFromDay,
   itineraryReferences,
   matchesPlaceQuery,
@@ -83,4 +84,22 @@ test('removal is blocked by whichever count of itinerary stops is larger', () =>
   expect(itineraryReferences(place)).toBe(0);
   expect(itineraryReferences(place, { bay: use([2, 3]) })).toBe(2);
   expect(itineraryReferences({ ...place, referenceCount: 3 }, { bay: use([2]) })).toBe(3);
+});
+
+test('the day lens folds what is on the day and splits the rest by distance', () => {
+  const distances: Record<string, number | null> = {
+    bay: null,
+    market: FAR_FROM_DAY_METRES + 1,
+    'old-quarter': 400,
+    station: 1_200,
+  };
+  const groups = groupTripPlacesForDay(places, {
+    date: '2026-10-10',
+    distanceOf: (place) => distances[place.id] ?? null,
+    placeUse: { station: use([2]), market: use([5]) },
+  });
+  expect(groups.onThisDay.map((place) => place.id)).toEqual(['station']);
+  // A place with nothing to measure stays near rather than out of sight.
+  expect(groups.near.map((place) => place.id)).toEqual(['old-quarter', 'bay']);
+  expect(groups.far.map((place) => place.id)).toEqual(['market']);
 });

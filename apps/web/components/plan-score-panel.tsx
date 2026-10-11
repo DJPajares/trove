@@ -44,6 +44,12 @@ type Props = Readonly<{
   dayId?: string;
   /** Opens with the breakdown showing, for a surface the traveller opened to read it. */
   defaultDetailsOpen?: boolean;
+  /**
+   * `compact` folds the title into the score's own row and leaves the frame to
+   * the caller - for Trip Mode, where the score is a footnote to the day being
+   * lived rather than the subject of the screen.
+   */
+  density?: 'compact' | 'default';
   disabled?: boolean;
   explanations: PlanScoreExplanationGroups;
   factors?: Record<PlanScoreFactorId, PlanScoreFactorOutcome>;
@@ -380,6 +386,7 @@ export function PlanScorePanel({
   title,
   onOpenTripPlaces,
   defaultDetailsOpen = false,
+  density = 'default',
 }: Props) {
   const t = useTranslations('planScore');
   const [detailsOpen, setDetailsOpen] = useState(defaultDetailsOpen);
@@ -456,18 +463,36 @@ export function PlanScorePanel({
   ].filter((part) => part !== null);
   const hasBreakdown = rows.length > 0 || issues.length > 0 || highlights.length > 0 || !!basis;
   const Subheading = headingLevel === 2 ? 'h3' : 'h4';
+  const compact = density === 'compact';
   return (
-    <section aria-label={title} className={cn('space-y-4', panelSurfaceClass(surface), className)}>
-      <Heading className="flex items-center gap-2 text-sm font-medium">
-        <Icons.PlanScore aria-hidden="true" className="size-4 text-muted-foreground" />
-        {title}
-      </Heading>
+    <section
+      aria-label={title}
+      className={cn(compact ? '' : cn('space-y-4', panelSurfaceClass(surface)), className)}
+    >
+      {compact ? null : (
+        <Heading className="flex items-center gap-2 text-sm font-medium">
+          <Icons.PlanScore aria-hidden="true" className="size-4 text-muted-foreground" />
+          {title}
+        </Heading>
+      )}
       <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <div className="flex items-center gap-4">
-          {displayScore !== null ? <ScoreRing label={title} score={displayScore} /> : null}
-          <div className="min-w-0 flex-1 space-y-1">
+        <div className={cn('flex items-center', compact ? 'gap-3' : 'gap-4')}>
+          {displayScore !== null ? (
+            <ScoreRing label={title} score={displayScore} size={compact ? 'sm' : 'md'} />
+          ) : null}
+          <div className={cn('min-w-0 flex-1', compact ? 'space-y-0.5' : 'space-y-1')}>
+            {compact ? (
+              <Heading className="text-xs leading-4 font-medium text-muted-foreground">
+                {title}
+              </Heading>
+            ) : null}
             {displayScore !== null ? (
-              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base font-semibold leading-snug">
+              <p
+                className={cn(
+                  'flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold leading-snug',
+                  compact ? 'text-[0.9375rem]' : 'text-base',
+                )}
+              >
                 {t(`verdict.${scoreBand(displayScore)}`)}
                 {change && !unavailable ? <ScoreDelta change={change} /> : null}
               </p>
@@ -484,7 +509,7 @@ export function PlanScorePanel({
               <SuggestedAction explanation={specificGap} resolveAction={resolveAction} />
             ) : null}
             {support.length ? (
-              <p className="text-sm text-muted-foreground">
+              <p className={cn('text-muted-foreground', compact ? 'text-[0.8125rem]' : 'text-sm')}>
                 {support.map((part, index) => (
                   <Fragment key={part}>
                     {index ? (
@@ -498,7 +523,7 @@ export function PlanScorePanel({
                 ))}
               </p>
             ) : null}
-            {hasBreakdown ? (
+            {hasBreakdown && !compact ? (
               <CollapsibleTrigger className="group pt-1 text-xs">
                 {t(detailsOpen ? 'hideDetails' : 'showDetails')}
                 <ChevronDown
@@ -508,6 +533,17 @@ export function PlanScorePanel({
               </CollapsibleTrigger>
             ) : null}
           </div>
+          {hasBreakdown && compact ? (
+            <CollapsibleTrigger
+              aria-label={t(detailsOpen ? 'hideDetails' : 'showDetails')}
+              className="group size-11 shrink-0 justify-center rounded-full hover:bg-muted"
+            >
+              <ChevronDown
+                aria-hidden="true"
+                className="size-4 transition-transform duration-[var(--motion-standard)] group-data-panel-open:rotate-180 motion-reduce:transition-none"
+              />
+            </CollapsibleTrigger>
+          ) : null}
         </div>
         {hasBreakdown ? (
           <CollapsiblePanel>

@@ -18,6 +18,7 @@ import {
   TripModeTasksNotice,
   useTripModeTasks,
 } from '@/components/trip-mode-tasks';
+import { TripModeActionButton, tripModeCardClass } from '@/components/trip-mode-ui';
 import { useOnlineStatus } from '@/components/trip-sync-status';
 import { TripWeatherContext } from '@/components/trip-weather-context';
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert';
@@ -1163,7 +1164,6 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
         isPreview={isPreview}
         selectedDate={readyContext.selectedDate}
         tripId={tripId}
-        variant="card"
       />
 
       <TripModeTasksNotice />
@@ -1171,7 +1171,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
       {taskGroups.length ? (
         <section
           aria-labelledby="trip-mode-nearby-tasks-heading"
-          className="scroll-mt-24 rounded-[var(--radius-2xl)] border border-border-subtle bg-card px-4 py-3 shadow-[var(--shadow-control)]"
+          className={cn('scroll-mt-24 px-4 py-3', tripModeCardClass)}
           id="trip-mode-nearby-tasks"
         >
           <h3 className="sr-only" id="trip-mode-nearby-tasks-heading">
@@ -1205,7 +1205,10 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
             {t('supportingContext')}
           </h3>
           <Link
-            className="flex min-h-16 items-center gap-3 rounded-[var(--radius-xl)] border border-border-subtle bg-card px-4 py-2.5 shadow-[var(--shadow-control)] outline-none transition-colors hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40"
+            className={cn(
+              'flex min-h-16 items-center gap-3 px-4 py-2.5 outline-none transition-colors hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40',
+              tripModeCardClass,
+            )}
             href={`/trips/${tripId}/reservations`}
           >
             <Icons.Reservations aria-hidden="true" className="size-5 shrink-0 text-brand" />
@@ -1229,8 +1232,8 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
 
       {/* What the day offers doing, after the day has been described. A stop on
           screen already carries its own task and capture buttons. */}
-      <div className="flex flex-wrap gap-2 pt-2">
-        <Button
+      <div className="flex flex-wrap gap-2 pt-1">
+        <TripModeActionButton
           disabled={tripModeTasks.status !== 'ready'}
           onClick={() =>
             tripModeTasks.openCreate(
@@ -1241,26 +1244,15 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
               }),
             )
           }
-          variant="outline"
         >
           <Icons.Tasks aria-hidden="true" data-icon="inline-start" />
           {tasksT('add')}
-        </Button>
-        {hasNext ? (
-          <Button
-            nativeButton={false}
-            render={<Link href={withPreviewHref(`/trips/${tripId}/mode/today`)} />}
-            variant="outline"
-          >
-            <Icons.Itinerary aria-hidden="true" data-icon="inline-start" />
-            {t('openToday')}
-          </Button>
-        ) : null}
+        </TripModeActionButton>
         {day && !currentItem && !dayComplete ? (
-          <Button onClick={() => setMemoryOpen(true)} variant="outline">
+          <TripModeActionButton onClick={() => setMemoryOpen(true)}>
             <Icons.Memories aria-hidden="true" data-icon="inline-start" />
             {memoryTranslations('quickAction')}
-          </Button>
+          </TripModeActionButton>
         ) : null}
       </div>
     </div>

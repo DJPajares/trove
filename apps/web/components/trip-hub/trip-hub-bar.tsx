@@ -43,6 +43,7 @@ import {
 } from '@/components/ui/sheet';
 import { tripSectionIcons } from '@/lib/icons';
 import type { Trip } from '@/lib/trips/api';
+import { cn } from '@/lib/utils';
 import {
   supportingTripDestinations,
   tripSectionFromPathname,
@@ -133,30 +134,47 @@ export function TripHubBar({
               {supporting.map((destination) => {
                 const Icon = tripSectionIcons[destination.section];
                 const section = destination.section as keyof typeof summary;
+                const current = destination.section === currentSection;
                 return (
-                  <li className="border-b border-border-subtle last:border-b-0" key={section}>
+                  <li className="border-b border-border-subtle py-1 last:border-b-0" key={section}>
                     <Link
-                      className="group flex min-h-18 items-center gap-4 rounded-[var(--radius-md)] py-3 outline-none focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=page]:bg-surface-tint aria-[current=page]:px-3"
-                      aria-current={destination.section === currentSection ? 'page' : undefined}
+                      className={cn(
+                        'group flex min-h-18 items-center gap-4 rounded-[var(--radius-lg)] px-3 py-3 outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none',
+                        current
+                          ? 'bg-primary/8 ring-1 ring-primary/20 ring-inset hover:bg-primary/12'
+                          : 'hover:bg-surface-hover',
+                      )}
+                      aria-current={current ? 'page' : undefined}
                       href={destination.href}
                       onClick={() => setToolsOpen(false)}
                     >
                       <span
                         aria-hidden="true"
-                        className="grid size-11 shrink-0 place-items-center rounded-[var(--radius-lg)] bg-surface-tint text-brand"
+                        className={cn(
+                          'grid size-11 shrink-0 place-items-center rounded-[var(--radius-lg)]',
+                          current
+                            ? 'bg-primary text-primary-foreground shadow-[var(--shadow-control)]'
+                            : 'bg-surface-tint text-brand',
+                        )}
                       >
                         <Icon className="size-5" />
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block font-semibold">{t(destination.labelKey)}</span>
+                        <span className={cn('block font-semibold', current && 'text-brand')}>
+                          {t(destination.labelKey)}
+                        </span>
                         <span className="block truncate text-sm text-muted-foreground">
                           {summary[section]}
                         </span>
                       </span>
-                      <ChevronRight
-                        aria-hidden="true"
-                        className="size-4 shrink-0 text-text-subtle transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
-                      />
+                      {current ? (
+                        <CircleCheck aria-hidden="true" className="size-5 shrink-0 text-brand" />
+                      ) : (
+                        <ChevronRight
+                          aria-hidden="true"
+                          className="size-4 shrink-0 text-text-subtle transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
+                        />
+                      )}
                     </Link>
                   </li>
                 );

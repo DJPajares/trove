@@ -48,7 +48,7 @@ function StoryFeature({
   return (
     <article
       aria-labelledby={`story-${trip.id}`}
-      className="group grid items-center gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-12"
+      className="group relative isolate grid items-center gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-12"
       data-slot="library-story"
     >
       <JourneyPrintFan editorial={editorial} sizes="(max-width: 767px) 52vw, 15rem" trip={trip} />
@@ -63,7 +63,12 @@ function StoryFeature({
           className="mt-3 font-journal text-[clamp(2.25rem,7vw,3.5rem)] leading-[0.95] font-normal tracking-[-0.01em] text-balance text-foreground [overflow-wrap:anywhere]"
           id={`story-${trip.id}`}
         >
-          {trip.name}
+          <Link
+            className="outline-none after:absolute after:inset-0 after:z-10 after:rounded-[var(--radius-xl)] focus-visible:after:ring-3 focus-visible:after:ring-ring/40"
+            href={`/trips/${trip.id}`}
+          >
+            {trip.name}
+          </Link>
         </h3>
         {line ? (
           <p className="mt-4 line-clamp-3 font-journal text-xl leading-[1.35] font-normal text-pretty text-muted-foreground italic">
@@ -79,7 +84,7 @@ function StoryFeature({
             />
           )}
         </p>
-        <div className="mt-6 flex flex-wrap gap-2">
+        <div className="mt-6 flex flex-wrap gap-2 [&>a]:relative [&>a]:z-20">
           <Button nativeButton={false} render={<Link href={`/trips/${trip.id}/memories`} />}>
             {trip.memoryCount ? t('openStory') : tripsT('addMemories')}
           </Button>
@@ -94,9 +99,8 @@ function StoryFeature({
 
 /**
  * An older journey as a single print with its name written beneath, the way a
- * photograph is labelled in an album. It opens the trip's story directly: a
- * finished trip's first door is its Memories (PRD 4.5), and the journal's Exit
- * leads on to the rest of the trip.
+ * photograph is labelled in an album. Like every card in the library it opens
+ * the trip's Overview, where its story and other experiences remain reachable.
  */
 function Postcard({
   editorial,
@@ -115,7 +119,7 @@ function Postcard({
     <Link
       className="group block rounded-[var(--radius-md)] outline-none focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:ring-offset-4 focus-visible:ring-offset-paper"
       data-slot="library-postcard"
-      href={`/trips/${trip.id}/memories`}
+      href={`/trips/${trip.id}`}
     >
       <JourneyPrint
         className="[@media(hover:hover)]:group-hover:-translate-y-1 [@media(hover:hover)]:group-hover:rotate-[calc(var(--tilt)*0.3)]"

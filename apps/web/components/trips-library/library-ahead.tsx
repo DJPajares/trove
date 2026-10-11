@@ -151,9 +151,11 @@ function AheadTicket({
   const when = trip.lifecycle === 'active' ? t('underway') : departsIn(trip, locale);
 
   return (
-    <article
-      className="group relative isolate flex h-full flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card shadow-[var(--shadow-card)] transition-[transform,box-shadow,border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-within:border-border-strong hover:-translate-y-0.5 hover:border-border-strong hover:shadow-[var(--shadow-elevated)] motion-reduce:transform-none motion-reduce:transition-none"
+    <Link
+      aria-label={trip.name}
+      className="group relative isolate flex h-full flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card shadow-[var(--shadow-card)] outline-none transition-[transform,box-shadow,border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-visible:border-border-strong focus-visible:ring-3 focus-visible:ring-ring/40 hover:-translate-y-0.5 hover:border-border-strong hover:shadow-[var(--shadow-elevated)] motion-reduce:transform-none motion-reduce:transition-none"
       data-slot="library-ticket"
+      href={`/trips/${trip.id}`}
     >
       <div className="relative aspect-[2/1] md:aspect-[4/3]">
         <TripMedia
@@ -176,12 +178,7 @@ function AheadTicket({
             />
           ) : null}
           <h4 className="line-clamp-2 text-lg leading-[1.15] font-semibold tracking-[-0.02em] text-balance">
-            <Link
-              className="rounded-[var(--radius-sm)] outline-none after:absolute after:inset-0 after:rounded-[inherit] focus-visible:ring-3 focus-visible:ring-ring/50"
-              href={`/trips/${trip.id}`}
-            >
-              {trip.name}
-            </Link>
+            {trip.name}
           </h4>
         </div>
       </div>
@@ -201,7 +198,7 @@ function AheadTicket({
         </span>
         <TicketStatus trip={trip} />
       </div>
-    </article>
+    </Link>
   );
 }
 

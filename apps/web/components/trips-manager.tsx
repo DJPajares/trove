@@ -21,7 +21,6 @@ import { deviceTimeZone, fetchTripModeContext } from '@/lib/itinerary/api';
 import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
 import { queryKeys } from '@/lib/query/keys';
 import { fetchTrips, type Trip } from '@/lib/trips/api';
-import { libraryLedger } from '@/lib/trips/library';
 import { groupTripsForLibrary } from '@/lib/trips/lifecycle';
 import { resolveTripNextUp } from '@/lib/trips/next-up';
 import { libraryEditorialSubjects, tripEditorialSubject } from '@/lib/trips/summary';
@@ -68,7 +67,6 @@ export function TripsManager() {
   const view = useLibraryView(tripsQuery.data !== undefined);
 
   const library = useMemo(() => groupTripsForLibrary(trips), [trips]);
-  const ledger = useMemo(() => libraryLedger(trips), [trips]);
   const lead = library.featured;
 
   // Only the lead trip says what is next, and only a trip actually under way
@@ -109,14 +107,6 @@ export function TripsManager() {
     });
   }, [latestCreatedTrip, queryClient]);
 
-  // The line under the title counts what the library holds, and leaves out
-  // whatever it holds none of rather than announcing a zero.
-  const ledgerParts = [
-    ledger.ahead ? libraryT('ledger.ahead', { count: ledger.ahead }) : null,
-    ledger.remembered ? libraryT('ledger.remembered', { count: ledger.remembered }) : null,
-    ledger.countries ? libraryT('ledger.countries', { count: ledger.countries }) : null,
-  ].filter(Boolean);
-
   return (
     <section className="mx-auto w-full max-w-5xl space-y-10 sm:space-y-12">
       <Suspense fallback={null}>
@@ -131,7 +121,7 @@ export function TripsManager() {
             {t('newTrip')}
           </Button>
         }
-        meta={status === 'idle' && ledgerParts.length ? ledgerParts.join(' · ') : undefined}
+        description={libraryT('description')}
         title={t('title')}
       />
 

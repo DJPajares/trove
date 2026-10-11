@@ -207,7 +207,7 @@ export function LibraryLead({
                   is, and stretches its hit area over the card the way every
                   clickable trip in Trove does; the actions sit above it. */}
               <Link
-                className="rounded-[var(--radius-sm)] outline-none after:absolute after:inset-0 after:rounded-[inherit] focus-visible:ring-3 focus-visible:ring-white/60"
+                className="rounded-[var(--radius-sm)] outline-none after:absolute after:inset-0 after:z-10 after:rounded-[var(--radius-2xl)] focus-visible:after:ring-3 focus-visible:after:ring-inset focus-visible:after:ring-white/60"
                 href={`/trips/${trip.id}`}
               >
                 {trip.name}
@@ -223,7 +223,7 @@ export function LibraryLead({
           <StatusLine nextUp={nextUp} trip={trip} />
 
           <TripDestinationActions
-            className="relative z-10"
+            className="[&>a]:relative [&>a]:z-20"
             destinations={withLiveTripModeFirst(
               primaryTripDestinations(trip.id, trip.lifecycle, trip.startDate),
               trip.lifecycle,

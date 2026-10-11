@@ -1,0 +1,10 @@
+{
+  "id": "reliable-update-details",
+  "date": "2026-10-11",
+  "summaries": {
+    "en": [
+      "See what’s new before installing an update, even after reopening Trove.",
+      "Refresh an older open tab when another tab has installed the latest update."
+    ]
+  }
+}

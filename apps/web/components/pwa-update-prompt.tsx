@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { motionDuration, motionEase } from '@/lib/motion';
 import { unseenSummaries } from '@/lib/updates/release';
-import { runningRelease, useAppUpdate } from '@/lib/updates/use-app-update';
+import { useAppUpdate } from '@/lib/updates/use-app-update';
 
 function UpdateDetails({ summaries }: { summaries: { id: string; text: string }[] }) {
   const t = useTranslations('pwaUpdate');
@@ -47,7 +47,7 @@ export function PwaUpdatePrompt() {
   const locale = useLocale();
   const update = useAppUpdate();
   const summaries = update.waiting?.release
-    ? unseenSummaries(update.waiting.release, runningRelease, update.installedIds, locale)
+    ? unseenSummaries(update.waiting.release, update.installedRelease, update.installedIds, locale)
     : [];
 
   return (

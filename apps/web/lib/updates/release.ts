@@ -123,15 +123,16 @@ export function parseReleaseManifest(value: unknown): ReleaseManifest | null {
 
 export function unseenSummaries(
   target: ReleaseManifest,
-  running: InstalledRelease | null,
+  installed: InstalledRelease | null,
   installedIds: readonly string[],
   locale: string,
 ): { id: string; text: string }[] {
-  // Unknown running builds cannot establish a safe historical baseline.
-  if (!running) return [];
-  const installed = new Set([...running.entryIds, ...installedIds]);
+  // Only an activated worker establishes an installed baseline. A network
+  // navigation can already load the waiting build's JavaScript before Update.
+  if (!installed) return [];
+  const known = new Set([...installed.entryIds, ...installedIds]);
   return target.entries
-    .filter((entry) => !installed.has(entry.id))
+    .filter((entry) => !known.has(entry.id))
     .flatMap((entry) =>
       (entry.summaries[locale] ?? entry.summaries.en ?? []).map((text, index) => ({
         id: `${entry.id}:${index}`,

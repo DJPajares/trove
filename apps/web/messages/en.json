@@ -499,7 +499,7 @@
     "markReady": "Mark as ready",
     "markInProgress": "Move back to in progress",
     "library": {
-      "description": "Plan your next adventure. Keep every journey close.",
+      "description": "Your journeys come together here, planned, lived and remembered.",
       "ledger": {
         "ahead": "{count} ahead",
         "remembered": "{count} remembered",

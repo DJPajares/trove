@@ -2,7 +2,6 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, CircleAlert, Plus } from 'lucide-react';
-import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import {
   createContext,
@@ -334,19 +333,5 @@ export function TripModeTaskDisclosure({
         </div>
       </CollapsiblePanel>
     </Collapsible>
-  );
-}
-
-export function ManageTasksLink({ tripId }: Readonly<{ tripId: string }>) {
-  const t = useTranslations('tripMode.tasks');
-  return (
-    <Button
-      nativeButton={false}
-      render={<Link href={`/trips/${tripId}/tasks`} />}
-      size="sm"
-      variant="ghost"
-    >
-      {t('manage')}
-    </Button>
   );
 }

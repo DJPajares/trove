@@ -144,11 +144,6 @@ type TimelineRowProps = {
   className?: string;
   connector?: 'after' | 'before' | 'both' | 'none';
   description?: ReactNode;
-  /**
-   * Controls that need the row's full width rather than the text column's - the
-   * labelled actions of the one stop a traveller is standing at.
-   */
-  footer?: ReactNode;
   /** Plan Score deep-links focus a stop by id, so this has to reach the row. */
   id?: string;
   marker?: ReactNode;
@@ -165,7 +160,6 @@ export function TimelineRow({
   className,
   connector = 'both',
   description,
-  footer,
   id,
   marker,
   meta,
@@ -212,7 +206,6 @@ export function TimelineRow({
       {actions ? (
         <div className="relative z-10 flex items-center self-center py-2">{actions}</div>
       ) : null}
-      {footer ? <div className="relative z-10 col-span-full pb-3">{footer}</div> : null}
     </div>
   );
 }

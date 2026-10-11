@@ -4,6 +4,7 @@ import { ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { isNavigationPathActive } from '@/lib/navigation';
@@ -95,9 +96,44 @@ export function TripModeTabBar({
 }
 
 /**
+ * Whether the page has scrolled at all. Read once per frame: scroll fires far
+ * more often than this answer changes.
+ */
+function usePageScrolled() {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    let frame: number | null = null;
+    const read = () => {
+      frame = null;
+      setScrolled(window.scrollY > 4);
+    };
+    const handleScroll = () => {
+      if (frame === null) frame = window.requestAnimationFrame(read);
+    };
+
+    read();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  return scrolled;
+}
+
+/**
  * Exit and the trip's name are the header's two anchors. Equal side rails keep
  * the name centered across the screen and leave room for the menu FAB. Preview
  * identifies itself in its day/time controls beneath this shared row.
+ *
+ * At rest the bar has no fill and no rule: it sits on the page, and Exit's own
+ * pill is what makes it a control. It stays pinned, because the way out has to
+ * be visible from anywhere (PRD 4.5), so once content passes under it a soft
+ * fill fades in - otherwise the trip's name would sit on top of whatever text
+ * was scrolling by. Over the map, which never scrolls, the name carries a pill
+ * of its own instead.
  */
 export function TripModeTopBar({
   tripId,
@@ -107,12 +143,22 @@ export function TripModeTopBar({
   tripName: string | null;
 }>) {
   const t = useTranslations('tripMode');
+  const pathname = usePathname();
+  const scrolled = usePageScrolled();
+  const overMap = isNavigationPathActive(pathname, `/trips/${tripId}/mode/map`);
+  const filled = scrolled && !overMap;
 
   return (
     <div
-      className="sticky top-[calc(var(--safe-top)+var(--header-offset))] z-[var(--layer-sticky)] -ms-[var(--gutter-inline-start)] -me-[var(--gutter-inline-end)] grid min-h-17 grid-cols-[5rem_minmax(0,1fr)_5rem] items-center border-b border-border-subtle bg-background/95 px-[max(var(--gutter-inline-start),var(--gutter-inline-end))] backdrop-blur supports-[backdrop-filter]:bg-background/88 md:min-h-13"
+      className={cn(
+        'sticky top-[calc(var(--safe-top)+var(--header-offset))] z-[var(--layer-sticky)] -ms-[var(--gutter-inline-start)] -me-[var(--gutter-inline-end)] grid min-h-17 grid-cols-[5rem_minmax(0,1fr)_5rem] items-center px-[max(var(--gutter-inline-start),var(--gutter-inline-end))] transition-[background-color,backdrop-filter] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none md:min-h-13',
+        filled
+          ? 'bg-background/92 backdrop-blur supports-[backdrop-filter]:bg-background/85'
+          : 'bg-transparent',
+      )}
+      data-scrolled={filled || undefined}
       data-slot="trip-mode-top-bar"
-      data-translucent-surface
+      data-translucent-surface={filled ? '' : undefined}
     >
       {/* A visible way out, drawn as a control rather than a quiet link:
           outdoors and one-handed, the edge of a word is not a target. */}
@@ -128,8 +174,14 @@ export function TripModeTopBar({
       </Link>
 
       {tripName ? (
-        <p className="min-w-0 truncate text-center text-base font-semibold text-foreground">
-          {tripName}
+        <p
+          className={cn(
+            'min-w-0 truncate text-center text-base font-semibold text-foreground',
+            overMap &&
+              'flex h-9 items-center justify-self-center rounded-full bg-background/95 px-3.5 shadow-[var(--shadow-control)]',
+          )}
+        >
+          {overMap ? <span className="min-w-0 truncate">{tripName}</span> : tripName}
         </p>
       ) : (
         <div className="flex min-w-0 justify-center">

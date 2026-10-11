@@ -11,18 +11,17 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { CSSProperties, ReactNode, Ref } from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-import { DatePicker } from '@/components/date-picker';
 import { ContentSkeleton } from '@/components/content-skeleton';
 import { PageState } from '@/components/page-state';
 import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
 import { usePreferences } from '@/components/preferences-provider';
-import { TimeInput } from '@/components/time-input';
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { TripModeTabBar, TripModeTopBar, tripModeViews } from '@/components/trip-mode-chrome';
 import { TripModeMapView } from '@/components/trip-mode-map-view';
 import { TripModeDataProvider } from '@/components/trip-mode-data';
 import { TripSyncStatus } from '@/components/trip-sync-status';
 import { TripModeTasksProvider } from '@/components/trip-mode-tasks';
+import { tripModeCardClass } from '@/components/trip-mode-ui';
 import { useTripContext } from '@/components/trip-provider';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -41,6 +40,7 @@ import { queryKeys } from '@/lib/query/keys';
 import { useTripResource } from '@/lib/query/use-trip-resource';
 import { resolveProviderPlaceName, resolveTripPlaceName } from '@/lib/trip-places/place-name';
 import { isTripModeAvailable } from '@/lib/trips/navigation';
+import { cn } from '@/lib/utils';
 import * as Icons from '@/lib/icons';
 
 type PreviewSelection = { date: string; time: string };
@@ -120,7 +120,6 @@ function adjacentPreviewDate(date: string, offset: number, startDate: string, en
 }
 
 type PreviewControlsProps = {
-  activityCounts: Readonly<Record<string, number>>;
   endDate: string;
   onChange: (next: { date?: string; time?: string }) => void;
   ref?: Ref<HTMLElement>;
@@ -130,6 +129,7 @@ type PreviewControlsProps = {
 
 const MINUTES_PER_DAY = 24 * 60;
 const PREVIEW_TIME_STEP_MINUTES = 5;
+const DAY_MS = 86_400_000;
 
 function minutesFromTime(time: string) {
   const [hour = 0, minute = 0] = time.split(':').map(Number);
@@ -145,14 +145,13 @@ function timeFromMinutes(minutes: number) {
  * The two controls that define the active Preview state, always in view.
  *
  * Preview identifies itself here rather than in the header, and neither value
- * sits behind an Edit or Change step: the day steps a tap at a time, and the
- * time scrubs. The slider moves only its own reading while it is dragged and
- * writes the URL once, on release - every committed value asks the server for
- * that moment's context, and a drag across the day should be one question, not
- * two hundred.
+ * sits behind a field or a Change step: the day moves a tap at a time on the
+ * stepper, and the time moves along the bar. The bar moves only its own reading
+ * while it is dragged and writes the URL once, on release - every committed
+ * value asks the server for that moment's context, and a drag across the day
+ * should be one question, not two hundred.
  */
 function TripModePreviewControls({
-  activityCounts,
   endDate,
   onChange,
   ref,
@@ -168,7 +167,7 @@ function TripModePreviewControls({
   const [scrubMinutes, setScrubMinutes] = useState<number | null>(null);
   const minutes = scrubMinutes ?? committedMinutes;
 
-  // A committed value replaces the scrub reading, from whichever control set it.
+  // A committed value replaces the scrub reading.
   useEffect(() => {
     setScrubMinutes(null);
   }, [selection.time]);
@@ -180,25 +179,41 @@ function TripModePreviewControls({
       minute: '2-digit',
       timeZone: 'UTC',
     }).format(new Date(Date.UTC(2000, 0, 1, Math.floor(value / 60), value % 60)));
+  // Counted on the trip's own dates, so the stepper says which day of the trip
+  // this is the same way every other Trip Mode surface does.
+  const dayNumber =
+    Math.round(
+      (Date.parse(`${selection.date}T00:00:00.000Z`) - Date.parse(`${startDate}T00:00:00.000Z`)) /
+        DAY_MS,
+    ) + 1;
+  const dayLabel = t('preview.dayLabel', {
+    date: new Intl.DateTimeFormat(locale, {
+      day: 'numeric',
+      month: 'short',
+      timeZone: 'UTC',
+      weekday: 'short',
+    }).format(new Date(`${selection.date}T00:00:00.000Z`)),
+    number: dayNumber,
+  });
 
   return (
     <section
       aria-label={t('preview.label')}
       // Above the Map view's map, which runs full screen behind the bars: the
       // controls are how Preview identifies itself, so nothing may cover them.
-      className="relative z-[3] rounded-[var(--radius-2xl)] bg-secondary px-3 pt-1.5 pb-2 text-secondary-foreground sm:px-4"
+      className="relative z-[3] rounded-[var(--radius-2xl)] bg-secondary px-4 pt-1.5 pb-3 text-secondary-foreground"
       data-slot="trip-mode-preview-controls"
       ref={ref}
     >
-      <p className="inline-flex items-center gap-1.5 text-[length:var(--text-metadata)] leading-5 font-semibold tracking-[0.08em] uppercase">
-        <Eye aria-hidden="true" className="size-4 shrink-0" />
-        {t('preview.badge')}
-      </p>
-      <div className="mt-1 flex items-center gap-1">
-        {/* Stepping a day at a time is the move Preview is made for, so it
-            costs a tap rather than a trip through the calendar. */}
+      <div className="flex items-center gap-2">
+        <p className="inline-flex min-w-0 flex-1 items-center gap-1.5 text-[0.8125rem] font-semibold">
+          <Eye aria-hidden="true" className="size-4 shrink-0" />
+          {t('preview.badge')}
+        </p>
+        {/* Stepping a day at a time is the move Preview is made for. */}
         <Button
           aria-label={t('preview.previousDay')}
+          className="-me-1 hover:bg-secondary-foreground/8"
           disabled={!previousDate}
           onClick={() => previousDate && onChange({ date: previousDate })}
           size="icon"
@@ -206,20 +221,15 @@ function TripModePreviewControls({
         >
           <ChevronLeft aria-hidden="true" />
         </Button>
-        <DatePicker
-          activityCounts={activityCounts}
-          className="min-w-0 flex-1"
-          clearable={false}
-          id="trip-mode-preview-date"
-          label={t('preview.date')}
-          max={endDate}
-          min={startDate}
-          onChange={(date) => date && onChange({ date })}
-          value={selection.date}
-          required
-        />
+        <p
+          aria-live="polite"
+          className="shrink-0 text-[0.9375rem] font-semibold whitespace-nowrap tabular-nums"
+        >
+          {dayLabel}
+        </p>
         <Button
           aria-label={t('preview.nextDay')}
+          className="-ms-1 -me-2 hover:bg-secondary-foreground/8"
           disabled={!nextDate}
           onClick={() => nextDate && onChange({ date: nextDate })}
           size="icon"
@@ -228,15 +238,18 @@ function TripModePreviewControls({
           <ChevronRight aria-hidden="true" />
         </Button>
       </div>
-      <div className="mt-1 flex items-center gap-3 ps-1">
-        <TimeInput
-          aria-label={t('preview.time')}
-          className="w-32 shrink-0"
-          id="trip-mode-preview-time"
-          onValueChange={(time) => time && onChange({ time })}
-          value={timeFromMinutes(minutes)}
-          required
-        />
+      <div className="mt-0.5 flex items-center gap-4">
+        <div className="shrink-0">
+          <p className="text-[0.6875rem] leading-4 font-semibold" id="trip-mode-preview-time-label">
+            {t('preview.time')}
+          </p>
+          <p
+            aria-hidden="true"
+            className="text-2xl leading-7 font-semibold tracking-[-0.01em] tabular-nums"
+          >
+            {formatClock(minutes)}
+          </p>
+        </div>
         <Slider
           className="min-w-0 flex-1"
           getAriaValueText={(_formatted, value) => formatClock(value)}
@@ -246,7 +259,7 @@ function TripModePreviewControls({
           onValueChange={(value) => setScrubMinutes(value as number)}
           onValueCommitted={(value) => onChange({ time: timeFromMinutes(value as number) })}
           step={PREVIEW_TIME_STEP_MINUTES}
-          thumbLabel={t('preview.timeScrub')}
+          thumbLabelledBy="trip-mode-preview-time-label"
           value={minutes}
         />
       </div>
@@ -275,7 +288,8 @@ function TripModePreviewPlanScore({
   return (
     <PlanScorePanel
       onOpenTripPlaces={openPlaces}
-      className={className}
+      className={cn(tripModeCardClass, 'p-4', className)}
+      density="compact"
       completeness={previewDayScore?.completeness ?? null}
       confidence={previewDayScore?.confidence ?? null}
       disabled={previewDayScore?.withheldReasons.includes('ADMINISTRATIVELY_DISABLED')}
@@ -503,9 +517,6 @@ export function TripModeShell({
   }
 
   const trip = contextTrip;
-  const activityCounts = Object.fromEntries(
-    itinerary.days.map((day) => [day.date, day.items.length]),
-  );
   const dateFormatter = new Intl.DateTimeFormat(locale, {
     day: 'numeric',
     month: 'short',
@@ -575,7 +586,6 @@ export function TripModeShell({
 
             {previewSelection ? (
               <TripModePreviewControls
-                activityCounts={activityCounts}
                 endDate={trip.endDate}
                 onChange={updatePreview}
                 ref={previewControlsRef}
@@ -608,7 +618,7 @@ export function TripModeShell({
                   tab bar's padding lands below it, not above it. */}
               {planScoreEnabled && previewSelection ? (
                 <TripModePreviewPlanScore
-                  className="mt-8"
+                  className="mt-4"
                   date={previewSelection.date}
                   tripId={trip.id}
                 />

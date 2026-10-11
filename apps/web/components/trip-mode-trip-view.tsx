@@ -1,6 +1,6 @@
 'use client';
 
-import { BedDouble, CalendarDays, ChevronDown, ChevronRight } from 'lucide-react';
+import { BedDouble, CalendarDays, ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, type ReactNode } from 'react';
@@ -11,12 +11,12 @@ import { OfflineReadyStatus } from '@/components/offline-ready-status';
 import { TripNotificationControl } from '@/components/trip-notification-control';
 import { useTripModeData } from '@/components/trip-mode-data';
 import {
-  ManageTasksLink,
   TripModeTaskList,
   TripModeTasksNotice,
   useTripModeTasks,
 } from '@/components/trip-mode-tasks';
 import { TripDayWeather } from '@/components/trip-day-weather';
+import { TripModeActionButton, tripModeCardClass } from '@/components/trip-mode-ui';
 import { useTripContext } from '@/components/trip-provider';
 import { useTripPlacesDrawer } from '@/components/trip-places-provider';
 import { Button } from '@/components/ui/button';
@@ -399,17 +399,23 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
       <EditorialSection
         actions={
           <>
-            <Button
+            <TripModeActionButton
               disabled={tripModeTasks.status !== 'ready'}
               onClick={() => tripModeTasks.openCreate({ kind: 'trip' })}
-              size="sm"
             >
+              <Plus aria-hidden="true" data-icon="inline-start" />
               {tasksT('add')}
-            </Button>
-            <ManageTasksLink tripId={tripId} />
+            </TripModeActionButton>
+            <TripModeActionButton
+              className="bg-transparent hover:bg-muted"
+              nativeButton={false}
+              render={<Link href={`/trips/${tripId}/tasks`} />}
+            >
+              {tasksT('manage')}
+            </TripModeActionButton>
           </>
         }
-        className="rounded-[var(--radius-2xl)] border border-border-subtle bg-card p-5 shadow-[var(--shadow-control)] sm:p-6"
+        className={cn('p-5 sm:p-6', tripModeCardClass)}
         description={tasksT('tripDescription', { count: openTripTaskCount })}
         headingId="trip-mode-tasks-heading"
         headingLevel={3}

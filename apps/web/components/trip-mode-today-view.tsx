@@ -8,20 +8,18 @@ import {
   ChevronDown,
   Ellipsis,
   MapPin,
-  Pencil,
   Plus,
   RotateCcw,
-  SkipForward,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { PageState } from '@/components/page-state';
 import { PlaceHoursNote } from '@/components/place-hours-note';
 import { StopEditorSheet } from '@/components/planner/stop-editor/stop-editor-sheet';
 import { usePreferences } from '@/components/preferences-provider';
-import { TimelineGroup, TimelineMarker, TimelineRow } from '@/components/timeline-row';
 import { useTripModeData } from '@/components/trip-mode-data';
 import { useTripPlaceHours } from '@/lib/trip-places/use-trip-place-hours';
 import { useTripModePlaceDetails, useTripModePreview } from '@/components/trip-mode-shell';
@@ -32,22 +30,21 @@ import { TripInsights } from '@/components/trip-insights';
 import { TripWeatherContext } from '@/components/trip-weather-context';
 import {
   TripModeTaskDisclosure,
+  TripModeTaskList,
   TripModeTasksNotice,
   useTripModeTasks,
 } from '@/components/trip-mode-tasks';
+import { TripModeActionButton, tripModeCardClass } from '@/components/trip-mode-ui';
 import {
   TripModeScheduleFields,
   type TripModeSchedule,
 } from '@/components/trip-mode-schedule-fields';
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLinkItem,
-  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -64,39 +61,29 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   deviceTimeZone,
+  fetchItineraryDayRoutes,
   organizeItineraryItem,
   type ItineraryItem,
+  type ItineraryRouteSegment,
   type ItineraryScheduleInput,
   type ItineraryTravelStatus,
   updateItineraryItem,
   updateItineraryItemTravelStatus,
 } from '@/lib/itinerary/api';
 import { buildDaySequence, resolveDailyBases } from '@/lib/itinerary/day-sequence';
-import { formatItineraryTimeRange } from '@/lib/itinerary/item-timing';
+import { formatDistanceValue } from '@/lib/itinerary/format-distance';
+import { formatItineraryTimeRange, itineraryLocalEndTime } from '@/lib/itinerary/item-timing';
 import { formatTravelDuration } from '@/lib/itinerary/route-format';
-import { TravelModeIcon } from '@/lib/itinerary/travel-mode';
+import { itineraryDayRouteRevision } from '@/lib/itinerary/routes';
+import { queryKeys } from '@/lib/query/keys';
 import { scheduledPlaceUse } from '@/lib/itinerary/places';
 import type { Reservation } from '@/lib/reservations/api';
 import { tasksForItem, todayTaskRollup } from '@/lib/tasks/trip-mode';
 import { cn } from '@/lib/utils';
-import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { useDayHeaderPhotos } from '@/hooks/use-day-header-photos';
 import { DayHeaderMedia } from '@/components/day-header-media';
-import { useVisibleKeys } from '@/hooks/use-visible-keys';
-import {
-  editorialCoverImage,
-  editorialSubjectKey,
-  MAX_EDITORIAL_IMAGE_SUBJECTS,
-  type EditorialSubject,
-} from '@/lib/media/editorial-images';
-import { PlaceMedia } from '@/components/place-media';
 import { dayTown } from '@/lib/itinerary/day-place';
-import { resolvePlaceMediaSource } from '@/lib/media/trip-media';
-import {
-  resolveItineraryItemPlaceName,
-  resolvePlacePhotoName,
-  resolveTripPlaceName,
-} from '@/lib/trip-places/place-name';
+import { resolveItineraryItemPlaceName, resolveTripPlaceName } from '@/lib/trip-places/place-name';
 import * as Icons from '@/lib/icons';
 
 type UndoAction =
@@ -109,9 +96,6 @@ type UndoAction =
       schedule: ItineraryScheduleInput;
     }
   | { itemId: string; kind: 'status'; travelStatus: ItineraryTravelStatus };
-
-const stopTitleClassName =
-  'rounded-[var(--radius-sm)] text-left outline-none after:absolute after:inset-0 hover:underline focus-visible:ring-3 focus-visible:ring-ring/40';
 
 function providerId(item: ItineraryItem) {
   return item.tripPlace?.place.providerRefs.find((ref) => ref.provider === 'google')
@@ -151,6 +135,8 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripMode.views.today');
   const nowT = useTranslations('tripMode.views.now');
   const itineraryT = useTranslations('itinerary');
+  const routesT = useTranslations('itinerary.routes');
+  const tripPlacesT = useTranslations('tripPlaces');
   const memoryTranslations = useTranslations('memories.capture');
   const tasksT = useTranslations('tripMode.tasks');
   const locale = useLocale();
@@ -207,6 +193,8 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
 
   useEffect(() => {
     setShowSettled(false);
+    setExpandedItemId(undefined);
+    setOpenTasksItemId(null);
   }, [previewSelection?.date, viewedDate]);
 
   // The day the traveller asked for, not the one the server has echoed back yet.
@@ -232,6 +220,25 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     return grouped;
   }, [reservations]);
 
+  const dayPhotos = useDayHeaderPhotos(day, itinerary?.tripPlaces ?? []);
+  // The legs between the stops, through the Map view's own request: the same
+  // key and the same function, so the two views share one answer and one cache
+  // entry rather than each buying the day's routes. Keyed on the day's ordering,
+  // so a reorder invalidates the legs on show; the server reuses its stored
+  // route evidence, so a planned day is mostly answered without a provider call.
+  const routeRevision = itineraryDayRouteRevision(day);
+  const routesQuery = useQuery({
+    enabled: Boolean(day && online),
+    queryFn: ({ signal }) =>
+      fetchItineraryDayRoutes(tripId, day?.id as string, {
+        includePolyline: true,
+        languageCode: locale,
+        revision: routeRevision,
+        signal,
+      }),
+    queryKey: queryKeys.itineraryDayRoutes(tripId, day?.id ?? '', routeRevision, true, locale),
+  });
+
   // "Current" is the one thing here only the server can answer, and its answer
   // is about the day it was asked for. While it is still about the last one,
   // nothing on this day is current - which is truer than accenting a row
@@ -239,70 +246,19 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   //
   // Resolved above the guards below because the scroll effect reads it, and a
   // hook may not sit after an early return.
-  /**
-   * A photograph for each stop the traveller can see.
-   *
-   * Asked for under the provider's name for the place, never the traveller's
-   * nickname - "Mum's favourite bakery" is a photograph of nothing - and only
-   * for rows near the viewport, so a seventeen-stop day resolves as it is
-   * scrolled rather than losing its tail to the cap.
-   *
-   * This is the free track. Editorial photography is decorative, hotlinked and
-   * cached for ninety days; a Google Places photo would be billable per render
-   * and is what `resolvePlaceMediaSource` has no member for.
-   */
-  const { observe: observeStop, visibleKeys: visibleItemIds } = useVisibleKeys();
-  const editorialSubjects: EditorialSubject[] = (day?.items ?? [])
-    .filter((item) => item.tripPlace && visibleItemIds.has(item.id))
-    .flatMap((item) => {
-      const providerName = item.tripPlace ? resolvePlacePhotoName(item.tripPlace) : null;
-      if (!providerName || !item.tripPlace) return [];
-
-      return [
-        {
-          category: item.tripPlace.place.snapshot?.category,
-          name: providerName,
-          placeId: item.tripPlace.place.id,
-        },
-      ];
-    })
-    .slice(0, MAX_EDITORIAL_IMAGE_SUBJECTS);
-  const editorialImages = useEditorialImages(editorialSubjects);
-  const dayPhotos = useDayHeaderPhotos(day, itinerary?.tripPlaces ?? []);
-  /**
-   * A photograph for this stop's tile, whatever kind the provider found.
-   *
-   * At 56px beside a name a photograph reads as decoration and fills the column,
-   * so a generic match earns its place here. The hero does not take one: the
-   * same picture across the top of the day, under the words naming the day, is
-   * a claim rather than decoration - and the generic pool answered
-   * Whakarewarewa Forest Park with Qutub Minar in Delhi.
-   *
-   * Seeded on the Place, because every subject with nothing of its own draws
-   * from one shared pool: taking the first of it gave a day of stops a column
-   * of the same photograph, which reads as a rendering fault rather than as
-   * decoration. An exact match is unaffected - it is a picture of the place and
-   * stays the representative one.
-   */
-  const editorialFor = (item: ItineraryItem) => {
-    const providerName = item.tripPlace ? resolvePlacePhotoName(item.tripPlace) : null;
-    if (!providerName || !item.tripPlace) return null;
-
-    const placeId = item.tripPlace.place.id;
-    return editorialCoverImage(
-      editorialImages.get(
-        editorialSubjectKey({
-          category: item.tripPlace.place.snapshot?.category,
-          name: providerName,
-          placeId,
-        }),
-      ),
-      placeId,
-    );
-  };
-
   const currentItemId =
     context?.selectedDate === day?.date ? (context?.currentOrRelevant?.itemId ?? null) : null;
+  /**
+   * Which stop shows its actions. Undefined follows the traveller: the stop in
+   * progress opens by itself, and any other opens on a tap - one at a time, so
+   * the day stays a list rather than a stack of cards.
+   */
+  const [expandedItemId, setExpandedItemId] = useState<string | null | undefined>(undefined);
+  const expandedId = expandedItemId === undefined ? currentItemId : expandedItemId;
+  // A collapsed stop's own task list, opened from its task count.
+  const [openTasksItemId, setOpenTasksItemId] = useState<string | null>(null);
+  // The stop a memory is about when it is captured from a stop's own actions.
+  const [memoryItemId, setMemoryItemId] = useState<string | null>(null);
 
   // Day 9 of a 17-day trip is off the end of the strip on a phone, so the strip
   // is scrolled to wherever the traveller actually is rather than parked at day
@@ -638,10 +594,15 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   }
 
   // The same running order, numbering and base rows the planning day uses, so
-  // a stop is the same stop whichever screen the traveller is standing on.
-  // Legs are left out here: Trip Mode never asked the API for route segments,
-  // and a day list is not worth a new round of them.
-  const allEntries = buildDaySequence({ bases: resolveDailyBases({ day }), items: day.items });
+  // a stop is the same stop whichever screen the traveller is standing on - now
+  // with the legs between them, from the routes read above.
+  const routeData = routesQuery.data ?? null;
+  const staleRoutes = routeData?.source === 'cache';
+  const allEntries = buildDaySequence({
+    bases: resolveDailyBases({ day }),
+    items: day.items,
+    routeSegments: routeData?.segments,
+  });
   // Only on the day being lived and only once it is under way: on any other day
   // nothing is behind anyone, and a finished day is read as a whole.
   const firstOpenIndex = currentItemId
@@ -655,10 +616,14 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
           .slice(0, firstOpenIndex)
           .flatMap((entry) => (entry.kind === 'stop' ? [entry.item] : []))
       : [];
-  const entries =
-    settledStops.length && !showSettled ? allEntries.slice(firstOpenIndex) : allEntries;
-  // The leg the traveller is about to walk, as the context already measured
-  // it - Today still asks for no route segments of its own.
+  // Folded, the list resumes at the leg that reaches the first stop still ahead.
+  const foldEnd =
+    firstOpenIndex > 0 && allEntries[firstOpenIndex - 1]?.kind === 'leg'
+      ? firstOpenIndex - 1
+      : firstOpenIndex;
+  const entries = settledStops.length && !showSettled ? allEntries.slice(foldEnd) : allEntries;
+  // The leg the traveller is about to walk, as the context measured it, so the
+  // leave-by time here and on Now is the same one.
   const legOut = context.selectedDate === day.date && context.leaveBy ? context.leaveBy : null;
   const legZone = isPreview ? day.defaultTimeZone : (deviceTimeZone() ?? day.defaultTimeZone);
   const legTime = (value: string) =>
@@ -668,6 +633,55 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
       minute: '2-digit',
       timeZone: legZone,
     }).format(new Date(value));
+  const wallClock = (value: string) => {
+    const [hour = 0, minute = 0] = value.split(':').map(Number);
+    return new Intl.DateTimeFormat(locale, {
+      hour: 'numeric',
+      hour12: preferences.timeFormat === '12h',
+      minute: '2-digit',
+      timeZone: 'UTC',
+    }).format(new Date(Date.UTC(2000, 0, 1, hour, minute)));
+  };
+  const travelTotal =
+    routeData &&
+    routeData.summary.localSegmentCount > 0 &&
+    routeData.summary.durationSeconds !== null
+      ? t('travelTotal', {
+          duration: formatTravelDuration(routeData.summary.durationSeconds, locale),
+        })
+      : null;
+  const legText = (segment: ItineraryRouteSegment) => {
+    const available =
+      segment.status === 'ok' &&
+      segment.durationSeconds !== null &&
+      segment.distanceMeters !== null;
+    const metrics = available
+      ? routesT(staleRoutes ? 'segmentCachedMetrics' : 'segmentEstimateMetrics', {
+          distance: formatDistanceValue(segment.distanceMeters!, preferences.distanceUnit, locale),
+          duration: formatTravelDuration(segment.durationSeconds!, locale),
+          unit: routesT(`units.${preferences.distanceUnit}`),
+        })
+      : segment.status === 'not_estimated'
+        ? routesT('segmentNotEstimatedMetrics')
+        : routesT('segmentUnavailableMetrics');
+    return [
+      routesT(`mode.${segment.mode}`),
+      metrics,
+      ...(segment.scope === 'long_distance' ? [routesT('segmentLongDistance')] : []),
+      ...(segment.destination.kind === 'daily_base'
+        ? [
+            routesT('segmentDestination', {
+              destination: segment.destination.label ?? routesT('point.daily_base'),
+            }),
+          ]
+        : []),
+      ...(legOut &&
+      segment.destination.kind === 'itinerary_item' &&
+      segment.destination.id === legOut.destinationItemId
+        ? [nowT('leaveByAt', { time: legTime(legOut.at) })]
+        : []),
+    ].join(' · ');
+  };
   // Use the day's own name, safe town, or date with the shared photo ladder.
   const dayLocalityName = dayTown(day, itinerary.tripPlaces);
   const heroTitle = day.name?.trim() || dayLocalityName || date;
@@ -683,7 +697,6 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
     if (!tripPlace) return null;
 
     return {
-      located: Boolean(tripPlace.place.location),
       // The same chain the stops use, so an accommodation the traveller renamed
       // is not called by Google's name at the head and foot of every day.
       name: resolveTripPlaceName(tripPlace, {
@@ -693,6 +706,39 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
       tripPlace,
     };
   };
+  const openMemoryFor = (itemId: string | null) => {
+    setMemoryItemId(itemId);
+    setMemoryOpen(true);
+  };
+  const moveToDayLabel = (candidate: (typeof itinerary.days)[number]) => {
+    const shortDate = new Intl.DateTimeFormat(locale, {
+      day: 'numeric',
+      month: 'short',
+      timeZone: 'UTC',
+    }).format(new Date(`${candidate.date}T00:00:00.000Z`));
+    const number = itinerary.days.indexOf(candidate) + 1;
+    return candidate.name
+      ? itineraryT('dayOptionNamed', { date: shortDate, name: candidate.name, number })
+      : t('dayOption', { date: shortDate, number });
+  };
+
+  /** The marker on the rail: what the stop's state is, readable without colour. */
+  const railNode = (kind: 'base' | 'completed' | 'current' | 'skipped' | 'upcoming'): ReactNode => (
+    <span
+      aria-hidden="true"
+      className={cn(
+        'relative z-[1] grid shrink-0 place-items-center bg-background',
+        kind === 'base' && 'size-3.5 rounded-[0.3rem] border-2 border-border-strong',
+        kind === 'completed' && 'size-[1.125rem] rounded-full bg-brand text-primary-foreground',
+        kind === 'current' && 'size-[1.125rem] rounded-full border-[5px] border-accent-strong',
+        kind === 'skipped' && 'size-3.5 rounded-full border-2 border-dotted border-border-strong',
+        kind === 'upcoming' && 'size-3.5 rounded-full border-2 border-border-strong',
+      )}
+    >
+      {kind === 'completed' ? <Check className="size-3" strokeWidth={3.5} /> : null}
+    </span>
+  );
+  const rowGrid = 'relative grid grid-cols-[3.75rem_1.25rem_minmax(0,1fr)] gap-x-3';
 
   return (
     <div className="space-y-6">
@@ -786,48 +832,28 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
       </section>
 
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm leading-5 text-muted-foreground">
+        <p className="min-w-0 text-sm leading-5 text-muted-foreground">
           {t('heroStops', { count: day.items.length })}
+          {travelTotal ? (
+            <>
+              <span aria-hidden="true"> · </span>
+              {travelTotal}
+            </>
+          ) : null}
         </p>
         {/* A task for the day is worth a control of its own here; the rest of
-            what a day collects lives under the row it belongs to. */}
-        <Button
+            what a day collects lives under the stop it belongs to. */}
+        <TripModeActionButton
+          className="h-10"
           disabled={tripModeTasks.status !== 'ready'}
           onClick={() => tripModeTasks.openCreate({ itineraryDayId: day.id, kind: 'day' })}
-          size="sm"
-          variant="outline"
         >
-          <Icons.Tasks aria-hidden="true" data-icon="inline-start" />
-          {tasksT('add')}
-        </Button>
+          <Plus aria-hidden="true" data-icon="inline-start" />
+          {t('taskShort')}
+        </TripModeActionButton>
       </header>
 
-      {/* Above the stops rather than beside them: the weather is what a
-          traveller checks before deciding how the day's list gets done. */}
-      <TripWeatherContext
-        isPreview={isPreview}
-        selectedDate={day.date}
-        tripId={tripId}
-        variant="card"
-      />
-
-      {/* What to know about the day sits beside its weather rather than in it:
-          a holiday or a month's typical pattern is not a forecast. */}
-      <TripInsights dayId={day.id} tripId={tripId} />
-
       <TripModeTasksNotice />
-
-      {day.notes ? (
-        <section className="flex items-start gap-3 border-y border-border py-4">
-          <Icons.Notes aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand" />
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-foreground">{t('dayNote')}</h3>
-            <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-              {day.notes}
-            </p>
-          </div>
-        </section>
-      ) : null}
 
       <div aria-live="polite" className="space-y-2">
         {feedback ? (
@@ -858,81 +884,92 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
       </div>
 
       {day.items.length ? (
-        <div className="space-y-2">
-          {settledStops.length ? (
-            <Button
-              aria-expanded={showSettled}
-              className="h-auto min-h-11 w-full justify-start gap-3 rounded-[var(--radius-lg)] px-3 py-2 text-left font-normal whitespace-normal text-muted-foreground"
-              onClick={() => setShowSettled((open) => !open)}
-              variant="ghost"
-            >
-              <span
-                aria-hidden="true"
-                className="grid size-6 shrink-0 place-items-center rounded-full bg-brand text-primary-foreground"
-              >
-                <Check className="size-3.5" />
-              </span>
-              <span className="min-w-0 flex-1 truncate">
-                {t('settledSummary', {
-                  count: settledStops.length,
-                  names: new Intl.ListFormat(locale, {
-                    style: 'short',
-                    type: 'conjunction',
-                  }).format(settledStops.map(itemName)),
-                })}
-              </span>
-              <ChevronDown
-                aria-hidden="true"
-                className={cn(
-                  'size-4 shrink-0 transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none',
-                  showSettled && 'rotate-180',
-                )}
-              />
-            </Button>
-          ) : null}
-          <TimelineGroup label={t('listLabel')}>
-            {entries.map((entry, index) => {
-              const connector =
-                entries.length === 1
-                  ? 'none'
-                  : index === 0
-                    ? 'after'
-                    : index === entries.length - 1
-                      ? 'before'
-                      : 'both';
+        <div className="space-y-3">
+          {/* The day as a line through time: the clock on the left, the rail and
+              its markers beside it, the stops and the legs between them on the
+              right. One rail is drawn for the whole list so it never breaks
+              between rows; each marker sits on a ring of page colour over it. */}
+          <ol aria-label={t('listLabel')} className="relative">
+            <span
+              aria-hidden="true"
+              className="absolute top-4 bottom-4 start-[calc(5.125rem-1px)] w-0.5 rounded-full bg-border"
+            />
+            {settledStops.length ? (
+              <li className={rowGrid}>
+                <span className="pt-3 text-[0.8125rem] leading-5 text-muted-foreground tabular-nums">
+                  {settledStops[0]?.localStartTime
+                    ? wallClock(settledStops[0].localStartTime)
+                    : null}
+                </span>
+                <span className="flex justify-center pt-3.5">{railNode('completed')}</span>
+                <button
+                  aria-expanded={showSettled}
+                  className="flex min-h-11 min-w-0 items-center gap-2 rounded-[var(--radius-md)] py-2 text-left text-[0.9375rem] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+                  onClick={() => setShowSettled((open) => !open)}
+                  type="button"
+                >
+                  <span className="min-w-0 flex-1 truncate">
+                    {t('settledSummary', {
+                      count: settledStops.length,
+                      names: new Intl.ListFormat(locale, {
+                        style: 'short',
+                        type: 'conjunction',
+                      }).format(settledStops.map(itemName)),
+                    })}
+                  </span>
+                  <ChevronDown
+                    aria-hidden="true"
+                    className={cn(
+                      'size-4 shrink-0 transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none',
+                      showSettled && 'rotate-180',
+                    )}
+                  />
+                </button>
+              </li>
+            ) : null}
+
+            {entries.map((entry) => {
+              if (entry.kind === 'leg') {
+                return (
+                  <li className={rowGrid} key={`leg-${entry.segment.id}`}>
+                    <span />
+                    <span />
+                    <p
+                      className={cn(
+                        'py-1.5 text-[0.8125rem] leading-5 text-muted-foreground tabular-nums',
+                        staleRoutes && entry.segment.status === 'ok' && 'text-status-warning',
+                      )}
+                    >
+                      {legText(entry.segment)}
+                    </p>
+                  </li>
+                );
+              }
 
               if (entry.kind === 'base') {
                 const base = resolveBase(entry.tripPlaceId);
                 if (!base) return null;
 
                 return (
-                  <TimelineRow
-                    connector={connector}
-                    description={entry.role === 'arrival' ? t('dayBaseStart') : t('dayBaseEnd')}
-                    key={`base-${entry.role}`}
-                    marker={
-                      <TimelineMarker
-                        label={t('stopNumber', { number: entry.stopNumber })}
-                        variant={base.located ? 'base-wide' : 'base-wide-unlocated'}
-                      >
-                        {entry.stopNumber}
-                      </TimelineMarker>
-                    }
-                    title={
+                  <li className={rowGrid} key={`base-${entry.role}`}>
+                    <span />
+                    <span className="flex justify-center pt-4">{railNode('base')}</span>
+                    <div className="min-w-0 py-2.5">
                       <button
                         aria-label={itineraryT('viewDetailsFor', { name: base.name })}
-                        className={stopTitleClassName}
+                        className="block max-w-full truncate rounded-[var(--radius-sm)] text-left text-[0.9375rem] font-semibold text-foreground outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
                         onClick={() => openPlaceDetails(base.tripPlace, day.date)}
                         type="button"
                       >
                         {base.name}
                       </button>
-                    }
-                  />
+                      <p className="text-[0.8125rem] text-muted-foreground">
+                        {entry.role === 'arrival' ? t('dayBaseStart') : t('dayBaseEnd')}
+                      </p>
+                    </div>
+                  </li>
                 );
               }
-
-              if (entry.kind === 'leg') return null;
 
               const { item } = entry;
               const name = itemName(item);
@@ -940,224 +977,137 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
               const place = itemPlace(item);
               const directions = directionsHref(item);
               const isCurrent = currentItemId === item.id;
+              const expanded = expandedId === item.id;
               const busy = mutatingItemId === item.id;
               const upcoming = item.travelStatus === 'upcoming';
-              const completed = item.travelStatus === 'completed';
               const upcomingIndex = upcomingItems.findIndex(
                 (candidate) => candidate.id === item.id,
               );
               const linkedReservations = reservationsByItem.get(item.id) ?? [];
               const linkedTasks = tasksForItem(tripModeTasks.data?.tasks ?? [], item.id);
+              const openTaskCount = linkedTasks.filter((task) => !task.completed).length;
               const tripPlace = item.tripPlace;
-              const undoLabel =
-                item.travelStatus === 'completed' ? t('undoComplete') : t('undoSkip');
-
-              const legRow =
-                isCurrent && legOut?.originItemId === item.id ? (
-                  <TimelineRow
-                    connector="both"
-                    description={nowT('leaveByAt', { time: legTime(legOut.at) })}
-                    key={`leg-${item.id}`}
-                    marker={<TimelineMarker variant="leg" />}
-                    title={
-                      <span className="inline-flex items-center gap-2 text-muted-foreground">
-                        <span aria-hidden="true" className="[&_svg]:size-3.5">
-                          <TravelModeIcon mode={legOut.mode} />
-                        </span>
-                        {nowT('travelEstimate', {
-                          duration: formatTravelDuration(legOut.routeDurationSeconds, locale),
-                          mode: nowT(`travelMode.${legOut.mode}`),
-                        })}
-                      </span>
-                    }
-                    tone="leg"
-                  />
+              const endTime = item.localStartTime ? itineraryLocalEndTime(item) : null;
+              const node = isCurrent ? 'current' : upcoming ? 'upcoming' : item.travelStatus;
+              const where =
+                place || location ? (
+                  <span className="flex min-w-0 items-start gap-1.5">
+                    <MapPin aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">
+                      {place ? <span className="font-medium text-foreground">{place}</span> : null}
+                      {place && location ? <span aria-hidden="true"> · </span> : null}
+                      {location}
+                    </span>
+                  </span>
                 ) : null;
+              const toggle = () => setExpandedItemId(expanded ? null : item.id);
 
-              return [
-                <TimelineRow
-                  actions={
-                    <div className="flex items-center gap-1">
-                      {/* The affirmative action of the whole view, one tap away.
-                        Everything else the row can do is labelled in the menu,
-                        which is what keeps the title readable at 390px. The
-                        stop in progress carries it, labelled, in its own bar. */}
-                      {isCurrent && upcoming ? null : (
-                        <Button
-                          aria-label={upcoming ? t('completeItem', { name }) : undoLabel}
-                          disabled={busy}
-                          onClick={() =>
-                            void changeStatus(item, upcoming ? 'completed' : 'upcoming')
-                          }
-                          size="icon-sm"
-                          variant={upcoming ? 'secondary' : 'ghost'}
-                        >
-                          {upcoming ? (
-                            <Check aria-hidden="true" />
-                          ) : (
-                            <RotateCcw aria-hidden="true" />
-                          )}
-                        </Button>
-                      )}
-
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          aria-label={t('moreActions', { name })}
-                          disabled={busy}
-                          render={<Button size="icon-sm" type="button" variant="ghost" />}
-                        >
-                          <Ellipsis aria-hidden="true" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="min-w-52">
-                          {upcoming ? (
-                            <DropdownMenuItem onClick={() => void changeStatus(item, 'skipped')}>
-                              <SkipForward aria-hidden="true" />
-                              {t('skip')}
-                            </DropdownMenuItem>
-                          ) : null}
-                          <DropdownMenuItem onClick={() => openSchedule(item)}>
-                            <Pencil aria-hidden="true" />
-                            {t('editTime')}
-                          </DropdownMenuItem>
-                          <DropdownMenuLinkItem render={<Link href={expenseHref(item.id)} />}>
-                            <Icons.Expenses aria-hidden="true" />
-                            {t('addExpense')}
-                          </DropdownMenuLinkItem>
-                          <DropdownMenuItem
-                            disabled={tripModeTasks.status !== 'ready'}
-                            onClick={() =>
-                              tripModeTasks.openCreate({ itineraryItemId: item.id, kind: 'item' })
-                            }
-                          >
-                            <Icons.Tasks aria-hidden="true" />
-                            {tasksT('add')}
-                          </DropdownMenuItem>
-                          {upcoming ? (
-                            <>
-                              <DropdownMenuItem
-                                disabled={upcomingIndex <= 0}
-                                onClick={() => void reorder(item, 'earlier')}
-                              >
-                                <ArrowUp aria-hidden="true" />
-                                {t('moveEarlier')}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                disabled={upcomingIndex >= upcomingItems.length - 1}
-                                onClick={() => void reorder(item, 'later')}
-                              >
-                                <ArrowDown aria-hidden="true" />
-                                {t('moveLater')}
-                              </DropdownMenuItem>
-                            </>
-                          ) : null}
-                          {itinerary.days.length > 1 ? (
-                            <DropdownMenuSub>
-                              <DropdownMenuSubTrigger>
-                                <CalendarDays aria-hidden="true" />
-                                {t('moveToDay')}
-                              </DropdownMenuSubTrigger>
-                              <DropdownMenuSubContent className="max-h-80 overflow-y-auto">
-                                {itinerary.days
-                                  .filter((candidate) => candidate.id !== day.id)
-                                  .map((candidate) => (
-                                    <DropdownMenuItem
-                                      key={candidate.id}
-                                      onClick={() => void moveToDay(item, candidate.id)}
-                                    >
-                                      {candidate.name
-                                        ? itineraryT('dayOptionNamed', {
-                                            date: new Intl.DateTimeFormat(locale, {
-                                              day: 'numeric',
-                                              month: 'short',
-                                              timeZone: 'UTC',
-                                            }).format(new Date(`${candidate.date}T00:00:00.000Z`)),
-                                            name: candidate.name,
-                                            number: itinerary.days.indexOf(candidate) + 1,
-                                          })
-                                        : t('dayOption', {
-                                            date: new Intl.DateTimeFormat(locale, {
-                                              day: 'numeric',
-                                              month: 'short',
-                                              timeZone: 'UTC',
-                                            }).format(new Date(`${candidate.date}T00:00:00.000Z`)),
-                                            number: itinerary.days.indexOf(candidate) + 1,
-                                          })}
-                                    </DropdownMenuItem>
-                                  ))}
-                              </DropdownMenuSubContent>
-                            </DropdownMenuSub>
-                          ) : null}
-                          {directions ? (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuLinkItem
-                                render={
-                                  <a
-                                    aria-label={t('directionsExternal', { name })}
-                                    href={directions}
-                                    rel="noreferrer"
-                                    target="_blank"
-                                  />
-                                }
-                              >
-                                <Icons.Directions aria-hidden="true" />
-                                {t('directions')}
-                              </DropdownMenuLinkItem>
-                            </>
-                          ) : null}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  }
-                  className={
-                    isCurrent
-                      ? 'my-1 rounded-[var(--radius-xl)] bg-card shadow-[var(--shadow-card)] ring-1 ring-accent-strong/35'
-                      : completed
-                        ? 'bg-muted/50'
-                        : undefined
-                  }
-                  connector={connector}
-                  description={
-                    <>
-                      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className="font-medium text-brand tabular-nums">
-                          {itemSchedule(item)}
+              return (
+                <li
+                  className={rowGrid}
+                  id={`trip-mode-item-${item.id}`}
+                  key={item.id}
+                  tabIndex={-1}
+                >
+                  {/* The clock, outside the stop: the column a day is read down. */}
+                  <span
+                    className={cn(
+                      'pt-3 text-[0.8125rem] leading-5 tabular-nums',
+                      expanded && 'pt-4',
+                      isCurrent
+                        ? 'text-accent-strong'
+                        : upcoming
+                          ? 'text-foreground'
+                          : 'text-muted-foreground',
+                    )}
+                  >
+                    {item.localStartTime ? (
+                      <>
+                        <span className="block font-semibold">
+                          {wallClock(item.localStartTime)}
                         </span>
-                        <PlaceHoursNote
-                          className="basis-full"
-                          status={item.tripPlace ? placeHours[item.tripPlace.id]?.hours : undefined}
-                        />
-                        {place || location ? (
-                          <span className="inline-flex min-w-0 items-start gap-1.5">
-                            <MapPin aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-                            <span className="min-w-0">
-                              {place ? (
-                                <span className="font-medium text-foreground">{place}</span>
-                              ) : null}
-                              {place && location ? <span aria-hidden="true"> · </span> : null}
-                              {location}
-                            </span>
+                        {isCurrent && endTime ? (
+                          <span className="block text-muted-foreground">{wallClock(endTime)}</span>
+                        ) : null}
+                      </>
+                    ) : (
+                      <span className="block text-xs leading-4 [overflow-wrap:anywhere] text-muted-foreground">
+                        {item.dayPart ? t(`schedule.${item.dayPart}`) : null}
+                      </span>
+                    )}
+                  </span>
+                  <span
+                    className={cn('flex justify-center', expanded ? 'pt-[1.125rem]' : 'pt-3.5')}
+                  >
+                    {railNode(node)}
+                  </span>
+
+                  {expanded ? (
+                    // The stop open: everything a traveller does at it, labelled,
+                    // in the thumb's reach rather than behind a menu.
+                    <article
+                      className={cn(
+                        'my-1 min-w-0 p-4',
+                        tripModeCardClass,
+                        isCurrent && 'border-accent-strong/30',
+                      )}
+                    >
+                      <button
+                        aria-expanded="true"
+                        aria-label={t('hideActions', { name })}
+                        className="block w-full rounded-[var(--radius-sm)] text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+                        onClick={toggle}
+                        type="button"
+                      >
+                        {isCurrent && context.currentOrRelevant ? (
+                          <span className="block text-xs font-semibold tracking-[0.08em] text-accent-strong uppercase">
+                            {nowT(`currentKind.${context.currentOrRelevant.kind}`)}
+                          </span>
+                        ) : !upcoming ? (
+                          <span className="block text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+                            {item.travelStatus === 'completed'
+                              ? t('statusCompleted')
+                              : t('statusSkipped')}
                           </span>
                         ) : null}
-                      </span>
-                      {item.notes ||
-                      (item.tripPlace?.note && item.tripPlace.note !== item.notes) ? (
-                        <span className="mt-1 flex items-start gap-1.5 text-text-subtle">
-                          <Icons.Notes aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-                          <span className="min-w-0 space-y-0.5">
-                            {item.notes ? (
-                              <span className="block line-clamp-2">{item.notes}</span>
-                            ) : null}
-                            {item.tripPlace?.note && item.tripPlace.note !== item.notes ? (
-                              <span className="block line-clamp-2">{item.tripPlace.note}</span>
-                            ) : null}
-                          </span>
+                        <span
+                          className={cn(
+                            'mt-0.5 block text-lg leading-6 font-semibold text-foreground',
+                            !upcoming && 'text-muted-foreground line-through decoration-1',
+                          )}
+                        >
+                          {name}
                         </span>
-                      ) : null}
-                      {linkedReservations.length ? (
-                        <span className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+                      </button>
+                      <div className="mt-1 space-y-1 text-[0.8125rem] leading-5 text-muted-foreground">
+                        {/* The clock is in the column beside the card; the card
+                            says only what that column cannot - and the schedule
+                            when there is no time or day part to put there. */}
+                        {item.priority || (!item.localStartTime && !item.dayPart) ? (
+                          <p>
+                            {[
+                              item.priority ? tripPlacesT(`priority.${item.priority}`) : null,
+                              !item.localStartTime && !item.dayPart ? itemSchedule(item) : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </p>
+                        ) : null}
+                        <PlaceHoursNote
+                          status={tripPlace ? placeHours[tripPlace.id]?.hours : undefined}
+                        />
+                        {where}
+                        {item.notes || (tripPlace?.note && tripPlace.note !== item.notes) ? (
+                          <p className="flex items-start gap-1.5 text-text-subtle">
+                            <Icons.Notes aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                            <span className="min-w-0 line-clamp-2">
+                              {item.notes ?? tripPlace?.note}
+                            </span>
+                          </p>
+                        ) : null}
+                        {linkedReservations.length ? (
                           <Link
-                            className="relative z-10 inline-flex min-h-8 items-center gap-1.5 rounded-[var(--radius-sm)] outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+                            className="inline-flex min-h-8 items-center gap-1.5 rounded-[var(--radius-sm)] outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
                             href={`/trips/${tripId}/reservations`}
                           >
                             <Icons.Reservations
@@ -1171,196 +1121,255 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                               </span>
                             ) : null}
                           </Link>
-                        </span>
-                      ) : null}
-                      {linkedTasks.length ? (
-                        <TripModeTaskDisclosure
-                          addContext={{ itineraryItemId: item.id, kind: 'item' }}
-                          className="relative z-10 mt-1.5 border-t border-border-subtle pt-1"
-                          tasks={linkedTasks}
-                          title={tasksT('stopTitle')}
-                        />
-                      ) : null}
-                    </>
-                  }
-                  /* The stop in progress keeps its actions out where a thumb can reach
-                     them, labelled and across the whole row, rather than behind the menu. */
-                  footer={
-                    isCurrent && upcoming ? (
-                      <span className="flex flex-col gap-2">
-                        <span className="grid grid-cols-3 gap-1.5">
-                          <Button
-                            disabled={busy}
-                            onClick={() => void changeStatus(item, 'completed')}
-                            size="sm"
-                            variant="secondary"
-                          >
-                            <Check aria-hidden="true" data-icon="inline-start" />
-                            {t('complete')}
-                          </Button>
-                          <Button
-                            disabled={busy}
-                            onClick={() => void changeStatus(item, 'skipped')}
-                            size="sm"
-                            variant="outline"
-                          >
-                            <SkipForward aria-hidden="true" data-icon="inline-start" />
-                            {t('skip')}
-                          </Button>
-                          {directions ? (
+                        ) : null}
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-3 gap-1.5">
+                        {upcoming ? (
+                          <>
                             <Button
-                              nativeButton={false}
-                              render={
-                                <a
-                                  aria-label={t('directionsExternal', { name })}
-                                  href={directions}
-                                  rel="noreferrer"
-                                  target="_blank"
-                                />
-                              }
-                              size="sm"
-                              variant="outline"
-                            >
-                              <Icons.Directions aria-hidden="true" data-icon="inline-start" />
-                              {t('directions')}
-                            </Button>
-                          ) : (
-                            <Button
+                              aria-label={t('completeItem', { name })}
+                              className="h-11 rounded-[var(--radius-lg)] border-transparent bg-secondary px-1 text-[0.8125rem] font-semibold text-secondary-foreground hover:bg-secondary/80"
                               disabled={busy}
-                              onClick={() => openSchedule(item)}
-                              size="sm"
-                              variant="outline"
+                              onClick={() => void changeStatus(item, 'completed')}
+                              variant="ghost"
                             >
-                              <Pencil aria-hidden="true" data-icon="inline-start" />
-                              {t('editTime')}
+                              {t('done')}
                             </Button>
-                          )}
-                        </span>
-                        <span className="flex flex-wrap gap-1.5">
-                          {directions ? (
                             <Button
-                              className="rounded-full"
+                              className="h-11 rounded-[var(--radius-lg)] bg-muted px-1 text-[0.8125rem] font-semibold text-foreground hover:bg-surface-hover"
                               disabled={busy}
-                              onClick={() => openSchedule(item)}
-                              size="xs"
-                              variant="outline"
+                              onClick={() => void changeStatus(item, 'skipped')}
+                              variant="ghost"
                             >
-                              {t('editTime')}
+                              {t('skip')}
                             </Button>
-                          ) : null}
+                          </>
+                        ) : (
                           <Button
-                            className="rounded-full"
+                            className="col-span-2 h-11 rounded-[var(--radius-lg)] bg-muted px-1 text-[0.8125rem] font-semibold text-foreground hover:bg-surface-hover"
+                            disabled={busy}
+                            onClick={() => void changeStatus(item, 'upcoming')}
+                            variant="ghost"
+                          >
+                            <RotateCcw aria-hidden="true" data-icon="inline-start" />
+                            {item.travelStatus === 'completed' ? t('undoComplete') : t('undoSkip')}
+                          </Button>
+                        )}
+                        {directions ? (
+                          <Button
+                            className="h-11 rounded-[var(--radius-lg)] bg-muted px-1 text-[0.8125rem] font-semibold text-foreground hover:bg-surface-hover"
                             nativeButton={false}
-                            render={<Link href={expenseHref(item.id)} />}
-                            size="xs"
+                            render={
+                              <a
+                                aria-label={t('directionsExternal', { name })}
+                                href={directions}
+                                rel="noreferrer"
+                                target="_blank"
+                              />
+                            }
+                            variant="ghost"
+                          >
+                            {t('directions')}
+                          </Button>
+                        ) : (
+                          <Button
+                            className="h-11 rounded-[var(--radius-lg)] bg-muted px-1 text-[0.8125rem] font-semibold text-foreground hover:bg-surface-hover"
+                            disabled={busy}
+                            onClick={() => openSchedule(item)}
+                            variant="ghost"
+                          >
+                            {t('timeShort')}
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {directions ? (
+                          <Button
+                            className="h-9 rounded-full px-3.5 font-normal shadow-none"
+                            disabled={busy}
+                            onClick={() => openSchedule(item)}
                             variant="outline"
                           >
-                            {t('addExpense')}
+                            {t('timeShort')}
                           </Button>
+                        ) : null}
+                        <Button
+                          className="h-9 rounded-full px-3.5 font-normal shadow-none"
+                          onClick={() => openMemoryFor(item.id)}
+                          variant="outline"
+                        >
+                          {memoryTranslations('quickAction')}
+                        </Button>
+                        <Button
+                          className="h-9 rounded-full px-3.5 font-normal shadow-none"
+                          nativeButton={false}
+                          render={<Link href={expenseHref(item.id)} />}
+                          variant="outline"
+                        >
+                          {t('expense')}
+                        </Button>
+                        {tripPlace ? (
                           <Button
-                            className="rounded-full"
+                            aria-label={itineraryT('viewDetailsFor', { name })}
+                            className="h-9 rounded-full px-3.5 font-normal shadow-none"
+                            onClick={() => openPlaceDetails(tripPlace, day.date)}
+                            variant="outline"
+                          >
+                            {t('details')}
+                          </Button>
+                        ) : null}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            aria-label={t('moreActions', { name })}
+                            disabled={busy}
+                            render={
+                              <Button
+                                className="size-9 rounded-full shadow-none"
+                                size="icon"
+                                type="button"
+                                variant="outline"
+                              />
+                            }
+                          >
+                            <Ellipsis aria-hidden="true" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="min-w-52">
+                            {upcoming ? (
+                              <>
+                                <DropdownMenuItem
+                                  disabled={upcomingIndex <= 0}
+                                  onClick={() => void reorder(item, 'earlier')}
+                                >
+                                  <ArrowUp aria-hidden="true" />
+                                  {t('moveEarlier')}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={upcomingIndex >= upcomingItems.length - 1}
+                                  onClick={() => void reorder(item, 'later')}
+                                >
+                                  <ArrowDown aria-hidden="true" />
+                                  {t('moveLater')}
+                                </DropdownMenuItem>
+                              </>
+                            ) : null}
+                            {itinerary.days.length > 1 ? (
+                              <DropdownMenuSub>
+                                <DropdownMenuSubTrigger>
+                                  <CalendarDays aria-hidden="true" />
+                                  {t('moveToDay')}
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent className="max-h-80 overflow-y-auto">
+                                  {itinerary.days
+                                    .filter((candidate) => candidate.id !== day.id)
+                                    .map((candidate) => (
+                                      <DropdownMenuItem
+                                        key={candidate.id}
+                                        onClick={() => void moveToDay(item, candidate.id)}
+                                      >
+                                        {moveToDayLabel(candidate)}
+                                      </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuSubContent>
+                              </DropdownMenuSub>
+                            ) : null}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+
+                      <TripModeTaskDisclosure
+                        addContext={{ itineraryItemId: item.id, kind: 'item' }}
+                        className="mt-3 border-t border-border-subtle pt-1"
+                        tasks={linkedTasks}
+                        title={tasksT('stopTitle')}
+                      />
+                    </article>
+                  ) : (
+                    <div className="min-w-0 py-2">
+                      <div className="flex items-start gap-2">
+                        <button
+                          aria-expanded="false"
+                          aria-label={t('showActions', { name })}
+                          className="min-h-11 min-w-0 flex-1 rounded-[var(--radius-sm)] text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+                          onClick={toggle}
+                          type="button"
+                        >
+                          <span
+                            className={cn(
+                              'block text-base leading-6 font-semibold text-foreground',
+                              !upcoming &&
+                                'font-medium text-muted-foreground line-through decoration-1',
+                            )}
+                          >
+                            {name}
+                          </span>
+                          <span className="block truncate text-[0.8125rem] leading-5 text-muted-foreground">
+                            {[
+                              item.localStartTime || item.dayPart ? null : itemSchedule(item),
+                              item.priority ? tripPlacesT(`priority.${item.priority}`) : null,
+                              place ?? location,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </span>
+                        </button>
+                        {linkedReservations.length ? (
+                          <span className="mt-1 shrink-0 rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold text-secondary-foreground">
+                            {t('booked')}
+                          </span>
+                        ) : null}
+                        {upcoming ? (
+                          <Button
+                            aria-expanded={
+                              linkedTasks.length ? openTasksItemId === item.id : undefined
+                            }
+                            aria-label={
+                              linkedTasks.length
+                                ? t('stopTasks', { count: openTaskCount, name })
+                                : t('addStopTask', { name })
+                            }
+                            className="-me-2 h-11 shrink-0 gap-1 px-2 text-xs font-semibold text-muted-foreground"
                             disabled={tripModeTasks.status !== 'ready'}
+                            onClick={() =>
+                              linkedTasks.length
+                                ? setOpenTasksItemId((open) => (open === item.id ? null : item.id))
+                                : tripModeTasks.openCreate({
+                                    itineraryItemId: item.id,
+                                    kind: 'item',
+                                  })
+                            }
+                            variant="ghost"
+                          >
+                            <Icons.Tasks aria-hidden="true" className="size-[1.125rem]" />
+                            {openTaskCount ? openTaskCount : null}
+                          </Button>
+                        ) : null}
+                      </div>
+                      <PlaceHoursNote
+                        status={tripPlace ? placeHours[tripPlace.id]?.hours : undefined}
+                      />
+                      {openTasksItemId === item.id && linkedTasks.length ? (
+                        <div className="mt-1 space-y-2 rounded-[var(--radius-lg)] bg-muted/50 px-3 py-2">
+                          <TripModeTaskList tasks={linkedTasks} />
+                          <Button
                             onClick={() =>
                               tripModeTasks.openCreate({ itineraryItemId: item.id, kind: 'item' })
                             }
                             size="xs"
-                            variant="outline"
+                            variant="ghost"
                           >
+                            <Plus aria-hidden="true" data-icon="inline-start" />
                             {tasksT('add')}
                           </Button>
-                          <Button
-                            className="rounded-full"
-                            onClick={() => setMemoryOpen(true)}
-                            size="xs"
-                            variant="outline"
-                          >
-                            {memoryTranslations('quickAction')}
-                          </Button>
-                        </span>
-                      </span>
-                    ) : undefined
-                  }
-                  id={`trip-mode-item-${item.id}`}
-                  key={item.id}
-                  marker={
-                    /* The stop, as its own photograph. A place with none shows
-                     the branded tile for its category, which is a designed
-                     object rather than a hole - so the column reads evenly
-                     whether or not a day's stops happen to be photogenic. The
-                     number moves to the corner, because the day is still read
-                     by it. */
-                    <TimelineMarker
-                      label={t('stopNumber', { number: entry.stopNumber })}
-                      variant="photo"
-                    >
-                      <span className="block" ref={observeStop(item.id)}>
-                        <PlaceMedia
-                          alt=""
-                          category={item.tripPlace?.place.snapshot?.category}
-                          className="size-14 rounded-[var(--radius-md)]"
-                          sizes="3.5rem"
-                          source={resolvePlaceMediaSource({ editorial: editorialFor(item) })}
-                          variant="thumbnail"
-                        />
-                      </span>
-                      {/* Inside the tile rather than hung off its corner, so the
-                        number costs the title none of its width and never sits
-                        between the photograph and the words. */}
-                      <span className="pointer-events-none absolute start-1 bottom-1 grid size-5 place-items-center rounded-full bg-neutral-950/65 text-[0.6875rem] leading-none font-semibold text-white backdrop-blur-sm tabular-nums">
-                        {entry.stopNumber}
-                      </span>
-                    </TimelineMarker>
-                  }
-                  meta={
-                    isCurrent || !upcoming ? (
-                      completed ? (
-                        <Badge variant="success">
-                          <Icons.Success aria-hidden="true" />
-                          {t('statusCompleted')}
-                        </Badge>
-                      ) : (
-                        <span
-                          className={cn(
-                            'font-medium text-foreground',
-                            isCurrent &&
-                              'font-semibold tracking-[0.08em] text-accent-strong uppercase',
-                          )}
-                        >
-                          {isCurrent ? t('current') : t('statusSkipped')}
-                        </span>
-                      )
-                    ) : null
-                  }
-                  selected={isCurrent}
-                  tabIndex={-1}
-                  title={
-                    tripPlace ? (
-                      <button
-                        aria-label={itineraryT('viewDetailsFor', { name })}
-                        className={cn(
-                          stopTitleClassName,
-                          !upcoming && 'text-muted-foreground line-through decoration-1',
-                        )}
-                        onClick={() => openPlaceDetails(tripPlace, day.date)}
-                        type="button"
-                      >
-                        {name}
-                      </button>
-                    ) : (
-                      <span
-                        className={cn(
-                          !upcoming && 'text-muted-foreground line-through decoration-1',
-                        )}
-                      >
-                        {name}
-                      </span>
-                    )
-                  }
-                />,
-                legRow,
-              ];
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </li>
+              );
             })}
-          </TimelineGroup>
+          </ol>
           {/* Adding to the day follows the day, where the next stop would go. */}
           <Button
             className="h-12 w-full rounded-[var(--radius-lg)] border-dashed border-border-strong bg-transparent shadow-none"
@@ -1387,10 +1396,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
         />
       )}
 
-      <section
-        aria-label={tasksT('todayTitle')}
-        className="rounded-[var(--radius-2xl)] border border-border-subtle bg-card px-4 py-1 shadow-[var(--shadow-control)]"
-      >
+      <section aria-label={tasksT('todayTitle')} className={cn('px-4 py-1', tripModeCardClass)}>
         <TripModeTaskDisclosure
           addContext={{ itineraryDayId: day.id, kind: 'day' }}
           tasks={dailyTasks}
@@ -1398,20 +1404,33 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
         />
       </section>
 
-      <div className="flex flex-wrap gap-2 pt-4">
-        <Button
-          nativeButton={false}
-          render={<Link href={expenseHref()} />}
-          size="sm"
-          variant="outline"
-        >
-          <Plus aria-hidden="true" data-icon="inline-start" />
+      <TripWeatherContext isPreview={isPreview} selectedDate={day.date} tripId={tripId} />
+
+      {/* What to know about the day sits beside its weather rather than in it:
+          a holiday or a month's typical pattern is not a forecast. */}
+      <TripInsights dayId={day.id} tripId={tripId} />
+
+      {day.notes ? (
+        <section className={cn('flex items-start gap-3 p-4', tripModeCardClass)}>
+          <Icons.Notes aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand" />
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-foreground">{t('dayNote')}</h3>
+            <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+              {day.notes}
+            </p>
+          </div>
+        </section>
+      ) : null}
+
+      <div className="flex flex-wrap gap-2">
+        <TripModeActionButton nativeButton={false} render={<Link href={expenseHref()} />}>
+          <Icons.Expenses aria-hidden="true" data-icon="inline-start" />
           {t('expense')}
-        </Button>
-        <Button onClick={() => setMemoryOpen(true)} size="sm" variant="outline">
-          <Plus aria-hidden="true" data-icon="inline-start" />
+        </TripModeActionButton>
+        <TripModeActionButton onClick={() => openMemoryFor(null)}>
+          <Icons.Memories aria-hidden="true" data-icon="inline-start" />
           {memoryTranslations('quickAction')}
-        </Button>
+        </TripModeActionButton>
       </div>
 
       <TripModePendingMemories key={pendingMemoriesKey} tripId={tripId} />
@@ -1419,7 +1438,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
       <TripModeMemorySheet
         dayDate={date}
         dayId={day.id}
-        defaultItemId={currentItemId}
+        defaultItemId={memoryItemId ?? currentItemId}
         items={day.items}
         onOpenChange={setMemoryOpen}
         onSaved={(queued) => {

@@ -83,7 +83,10 @@ function DayTiles({
   const t = useTranslations('trips.hub');
   const locale = useLocale();
   return (
-    <ol aria-label={t('daysLabel')} className="-mx-1 flex gap-2 overflow-x-auto px-1 py-1">
+    <ol
+      aria-label={t('daysLabel')}
+      className="interaction-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 py-1"
+    >
       {days.map((day) => {
         const planned = day.stopCount > 0;
         const focused = day.id === focusDayId;

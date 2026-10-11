@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { CircleAlert, Plus } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useEffect, useMemo } from 'react';
+import { Suspense, useEffect, useMemo } from 'react';
 
 import { AiPlanningDraftCard } from '@/components/ai-planning-draft-card';
 import { PageHeader } from '@/components/page-header';
@@ -29,6 +29,23 @@ import { useLibraryView } from '@/lib/trips/use-library-view';
 
 const EMPTY_TRIPS: Trip[] = [];
 
+// URL intent may suspend during prerendering. Keep it inside its own boundary
+// so the library also works as the route's cache-aware loading fallback.
+function TripCreationIntent() {
+  const { openCreateTrip } = useTripCreation();
+  const pathname = usePathname();
+  const router = useRouter();
+  const shouldCreateTrip = useSearchParams().get('create') === '1';
+
+  useEffect(() => {
+    if (!shouldCreateTrip) return;
+    openCreateTrip();
+    router.replace(pathname, { scroll: false });
+  }, [openCreateTrip, pathname, router, shouldCreateTrip]);
+
+  return null;
+}
+
 /**
  * The traveller's trips, as a library in three tenses (PRD 10): the journey
  * they are on or leaving for next, the trips ahead of them as a calendar of
@@ -43,10 +60,6 @@ export function TripsManager() {
   const t = useTranslations('trips');
   const libraryT = useTranslations('trips.library');
   const { latestCreatedTrip, openCreateTrip } = useTripCreation();
-  const pathname = usePathname();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const shouldCreateTrip = searchParams.get('create') === '1';
   const queryClient = useQueryClient();
   const tripsQuery = useQuery({ queryFn: fetchTrips, queryKey: queryKeys.trips() });
   const trips = tripsQuery.data?.trips ?? EMPTY_TRIPS;
@@ -83,12 +96,6 @@ export function TripsManager() {
   };
 
   useEffect(() => {
-    if (!shouldCreateTrip) return;
-    openCreateTrip();
-    router.replace(pathname, { scroll: false });
-  }, [openCreateTrip, pathname, router, shouldCreateTrip]);
-
-  useEffect(() => {
     if (!latestCreatedTrip) return;
     queryClient.setQueryData(queryKeys.trips(), (current: { trips: Trip[] } | undefined) => {
       if (!current) return current;
@@ -112,6 +119,9 @@ export function TripsManager() {
 
   return (
     <section className="mx-auto w-full max-w-5xl space-y-10 sm:space-y-12">
+      <Suspense fallback={null}>
+        <TripCreationIntent />
+      </Suspense>
       <PageHeader
         actions={
           // A phone already carries Create at the centre of its bottom bar,

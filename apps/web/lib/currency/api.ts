@@ -187,6 +187,14 @@ export async function fetchRateBoard() {
  * The whole day's board, so a conversion is arithmetic rather than a request.
  * Holding it is what lets the converter answer as you type, and answer offline.
  */
+/**
+ * A saved board is normal for half a day after it was fetched; past that the
+ * device could not refresh it, so a rate drawn from it deserves a quiet flag.
+ */
+export function isSavedRateStale(fetchedAt: string, now = Date.now()) {
+  return now - new Date(fetchedAt).getTime() > BOARD_CACHE_TTL_MS;
+}
+
 export async function getRateBoardWithCache(): Promise<CachedCurrencyRateBoard> {
   const value = readCache<unknown>(boardCacheKey);
   const cached = isCachedBoard(value) ? { ...value, source: 'cache' as const } : null;
